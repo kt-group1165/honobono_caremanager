@@ -317,9 +317,34 @@ function buildDefaultContent(
       };
     case "service-usage-detail":
       return {
-        creation_date: "",
-        items: [],
-        limit_management: [],
+        creation_date: fmtReiwa(today),
+        user_name: user.name,
+        insurer_number: cert?.insurer_number ?? "",
+        insured_number: cert?.insured_number ?? "",
+        care_level: cert?.care_level ?? "",
+        limit_amount: cert?.support_limit_amount ?? 0,
+        limit_period: cert ? `${fmtReiwa(cert.start_date)}〜${fmtReiwa(cert.end_date)}` : "",
+        items: services.map((sv) => ({
+          provider_name: sv.provider ?? "",
+          provider_number: "",
+          service_content: sv.service_content,
+          service_code: "",
+          units: 0,
+          discount_units: 0,
+          count: 0,
+          service_units: 0,
+          over_type_units: 0,
+          over_limit_units: 0,
+          within_limit_units: 0,
+          unit_price: 10.00,
+          total_cost: 0,
+          benefit_rate: 90,
+          insurance_claim: 0,
+          fixed_copay: 0,
+          user_copay: 0,
+          user_full_pay: 0,
+        })),
+        limit_management: [] as { service_type: string; limit: number; total_units: number; over_units: number }[],
         short_stay_days: { prev: 0, current: 0, total: 0 },
       };
     default:
@@ -905,6 +930,129 @@ function EditFormInvoice({ content, onChange }: {
         <FI label="自己負担額" value={String(n("copay_amount"))} onChange={(v) => set("copay_amount", Number(v) || 0)} />
       </div>
       <FI label="備考" value={s("notes")} onChange={(v) => set("notes", v)} textarea rows={3} />
+    </div>
+  );
+}
+
+// 第7表 専用編集フォーム
+type UsageDetailItem = {
+  provider_name: string; provider_number: string; service_content: string; service_code: string;
+  units: number; discount_units: number; count: number; service_units: number;
+  over_type_units: number; over_limit_units: number; within_limit_units: number;
+  unit_price: number; total_cost: number; benefit_rate: number; insurance_claim: number;
+  fixed_copay: number; user_copay: number; user_full_pay: number;
+};
+
+function EditFormUsageDetail({ content, onChange }: {
+  content: Record<string, unknown>;
+  onChange: (c: Record<string, unknown>) => void;
+}) {
+  const s = (k: string) => String(content[k] ?? "");
+  const set = (k: string, v: unknown) => onChange({ ...content, [k]: v });
+  const items: UsageDetailItem[] = Array.isArray(content.items) ? (content.items as UsageDetailItem[]) : [];
+  const shortStay = (content.short_stay_days as { prev: number; current: number; total: number }) ?? { prev: 0, current: 0, total: 0 };
+
+  const updateItem = (i: number, k: keyof UsageDetailItem, v: number | string) => {
+    const updated = items.map((item, idx) => {
+      if (idx !== i) return item;
+      const next = { ...item, [k]: v };
+      // 自動計算
+      next.discount_units = next.units;
+      next.service_units = next.units;
+      next.total_cost = Math.round(next.within_limit_units * next.unit_price);
+      next.insurance_claim = Math.round(next.total_cost * next.benefit_rate / 100);
+      next.user_copay = next.total_cost - next.insurance_claim;
+      return next;
+    });
+    onChange({ ...content, items: updated });
+  };
+  const addItem = () => onChange({ ...content, items: [...items, {
+    provider_name: "", provider_number: "", service_content: "", service_code: "",
+    units: 0, discount_units: 0, count: 0, service_units: 0,
+    over_type_units: 0, over_limit_units: 0, within_limit_units: 0,
+    unit_price: 10.00, total_cost: 0, benefit_rate: 90, insurance_claim: 0,
+    fixed_copay: 0, user_copay: 0, user_full_pay: 0,
+  }]});
+  const removeItem = (i: number) => onChange({ ...content, items: items.filter((_, idx) => idx !== i) });
+
+  const totalUnits = items.reduce((sum, it) => sum + it.within_limit_units, 0);
+  const totalCost = items.reduce((sum, it) => sum + it.total_cost, 0);
+  const totalInsurance = items.reduce((sum, it) => sum + it.insurance_claim, 0);
+  const totalCopay = items.reduce((sum, it) => sum + it.user_copay, 0);
+
+  return (
+    <div className="p-4 space-y-4">
+      <div className="grid grid-cols-4 gap-3">
+        <FI label="利用者名" value={s("user_name")} onChange={(v) => set("user_name", v)} />
+        <FI label="要介護度" value={s("care_level")} onChange={(v) => set("care_level", v)} />
+        <FI label="区分支給限度基準額" value={s("limit_amount")} onChange={(v) => set("limit_amount", v)} />
+        <FI label="作成年月日" value={s("creation_date")} onChange={(v) => set("creation_date", v)} />
+      </div>
+
+      {/* サマリー */}
+      <div className="grid grid-cols-4 gap-3 rounded bg-blue-50 p-3">
+        <div className="text-xs"><span className="text-gray-500">限度額内合計:</span> <b>{totalUnits.toLocaleString()}</b> 単位</div>
+        <div className="text-xs"><span className="text-gray-500">費用総額:</span> <b>{totalCost.toLocaleString()}</b> 円</div>
+        <div className="text-xs"><span className="text-gray-500">保険請求額:</span> <b>{totalInsurance.toLocaleString()}</b> 円</div>
+        <div className="text-xs"><span className="text-gray-500">利用者負担:</span> <b>{totalCopay.toLocaleString()}</b> 円</div>
+      </div>
+
+      {/* 明細テーブル */}
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs font-semibold text-gray-600">区分支給限度管理・利用者負担計算</span>
+          <button onClick={addItem} className="flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-100">
+            <Plus size={12} /> 行追加
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="text-[10px] border-collapse w-full">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="border border-gray-300 px-1 py-0.5">事業所名</th>
+                <th className="border border-gray-300 px-1 py-0.5">事業所番号</th>
+                <th className="border border-gray-300 px-1 py-0.5">サービス内容</th>
+                <th className="border border-gray-300 px-1 py-0.5">単位数</th>
+                <th className="border border-gray-300 px-1 py-0.5">回数</th>
+                <th className="border border-gray-300 px-1 py-0.5">限度額内</th>
+                <th className="border border-gray-300 px-1 py-0.5">超過</th>
+                <th className="border border-gray-300 px-1 py-0.5">単価</th>
+                <th className="border border-gray-300 px-1 py-0.5">費用総額</th>
+                <th className="border border-gray-300 px-1 py-0.5">給付率%</th>
+                <th className="border border-gray-300 px-1 py-0.5">保険請求</th>
+                <th className="border border-gray-300 px-1 py-0.5">利用者負担</th>
+                <th className="border border-gray-300 px-1 py-0.5 w-6"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, i) => (
+                <tr key={i}>
+                  <td className="border border-gray-300 px-1"><input className="w-full text-[10px] bg-transparent outline-none" value={item.provider_name} onChange={(e) => updateItem(i, "provider_name", e.target.value)} /></td>
+                  <td className="border border-gray-300 px-1"><input className="w-full text-[10px] bg-transparent outline-none" value={item.provider_number} onChange={(e) => updateItem(i, "provider_number", e.target.value)} /></td>
+                  <td className="border border-gray-300 px-1"><input className="w-full text-[10px] bg-transparent outline-none" value={item.service_content} onChange={(e) => updateItem(i, "service_content", e.target.value)} /></td>
+                  <td className="border border-gray-300 px-1 text-right"><input className="w-12 text-[10px] bg-transparent outline-none text-right" type="number" value={item.units} onChange={(e) => updateItem(i, "units", Number(e.target.value))} /></td>
+                  <td className="border border-gray-300 px-1 text-right"><input className="w-8 text-[10px] bg-transparent outline-none text-right" type="number" value={item.count} onChange={(e) => updateItem(i, "count", Number(e.target.value))} /></td>
+                  <td className="border border-gray-300 px-1 text-right"><input className="w-12 text-[10px] bg-transparent outline-none text-right" type="number" value={item.within_limit_units} onChange={(e) => updateItem(i, "within_limit_units", Number(e.target.value))} /></td>
+                  <td className="border border-gray-300 px-1 text-right">{item.over_limit_units}</td>
+                  <td className="border border-gray-300 px-1 text-right">{item.unit_price}</td>
+                  <td className="border border-gray-300 px-1 text-right font-semibold">{item.total_cost.toLocaleString()}</td>
+                  <td className="border border-gray-300 px-1 text-right">{item.benefit_rate}</td>
+                  <td className="border border-gray-300 px-1 text-right text-blue-700">{item.insurance_claim.toLocaleString()}</td>
+                  <td className="border border-gray-300 px-1 text-right">{item.user_copay.toLocaleString()}</td>
+                  <td className="border border-gray-300 px-1 text-center"><button onClick={() => removeItem(i)} className="text-gray-300 hover:text-red-400"><X size={10} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 短期入所利用日数 */}
+      <div className="grid grid-cols-3 gap-3">
+        <FI label="前月までの利用日数" value={String(shortStay.prev)} onChange={(v) => set("short_stay_days", { ...shortStay, prev: Number(v) })} />
+        <FI label="今月の計画利用日数" value={String(shortStay.current)} onChange={(v) => set("short_stay_days", { ...shortStay, current: Number(v) })} />
+        <FI label="累積利用日数" value={String(shortStay.prev + shortStay.current)} onChange={() => {}} />
+      </div>
     </div>
   );
 }
@@ -2007,7 +2155,7 @@ function EditForm({ reportType, content, onChange }: {
     case "care-plan-3":       return <EditFormCarePlan3 content={content} onChange={onChange} />;
     case "service-usage":        return <EditFormServiceTicket content={content} onChange={onChange} isProvision={false} />;
     case "service-provision":    return <EditFormServiceTicket content={content} onChange={onChange} isProvision={true} />;
-    case "service-usage-detail": return <EditFormGeneric content={content} onChange={onChange} label="内容（JSON編集）" />;
+    case "service-usage-detail": return <EditFormUsageDetail content={content} onChange={onChange} />;
     default: return <EditFormGeneric content={content} onChange={onChange} label="内容（JSON編集）" />;
   }
 }
@@ -2107,6 +2255,72 @@ async function autoGenerateDoc(
     const { data: doc, error: ie } = await supabase
       .from("kaigo_report_documents")
       .insert({ user_id: userId, report_type: reportType, title, report_month: reportMonth, care_plan_id: plan?.id ?? null, content, status: "draft" })
+      .select().single();
+    if (ie) throw new Error("帳票の保存に失敗しました: " + ie.message);
+    return doc as ReportDoc;
+  }
+
+  // 第7表: 給付管理データから自動生成
+  if (reportType === "service-usage-detail" && reportMonth) {
+    const { data: benefitData } = await supabase
+      .from("kaigo_benefit_management")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("billing_month", reportMonth);
+
+    const baseContent = buildDefaultContent(reportType, user as KaigoUser, cert, plan, services, reportMonth);
+    const limitAmount = cert?.support_limit_amount ?? 0;
+
+    if (benefitData && benefitData.length > 0) {
+      let totalWithinLimit = 0;
+      baseContent.items = benefitData.map((b: Record<string, unknown>) => {
+        const actualUnits = Number(b.actual_units ?? 0);
+        const unitPrice = 10.00;
+        const withinLimit = Math.min(actualUnits, limitAmount - totalWithinLimit);
+        const overLimit = Math.max(0, actualUnits - withinLimit);
+        totalWithinLimit += withinLimit;
+        const totalCost = Math.round(withinLimit * unitPrice);
+        const benefitRate = 90;
+        const insuranceClaim = Math.round(totalCost * benefitRate / 100);
+        const userCopay = totalCost - insuranceClaim;
+        return {
+          provider_name: String(b.provider_name ?? ""),
+          provider_number: String(b.provider_number ?? ""),
+          service_content: String(b.service_type ?? ""),
+          service_code: "",
+          units: actualUnits,
+          discount_units: actualUnits,
+          count: Number(b.planned_units ?? 0) > 0 ? 1 : 0,
+          service_units: actualUnits,
+          over_type_units: 0,
+          over_limit_units: overLimit,
+          within_limit_units: withinLimit,
+          unit_price: unitPrice,
+          total_cost: totalCost,
+          benefit_rate: benefitRate,
+          insurance_claim: insuranceClaim,
+          fixed_copay: 0,
+          user_copay: userCopay,
+          user_full_pay: 0,
+        };
+      });
+
+      // 種類別集計
+      const typeMap = new Map<string, number>();
+      for (const item of baseContent.items as { service_content: string; within_limit_units: number }[]) {
+        const t = item.service_content;
+        typeMap.set(t, (typeMap.get(t) ?? 0) + item.within_limit_units);
+      }
+      baseContent.limit_management = Array.from(typeMap.entries()).map(([t, u]) => ({
+        service_type: t, limit: 0, total_units: u, over_units: 0,
+      }));
+    }
+
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    const title = `${config.titleJa}（${fmtJaYear(reportMonth + "-01")}）`;
+    const { data: doc, error: ie } = await supabase
+      .from("kaigo_report_documents")
+      .insert({ user_id: userId, report_type: reportType, title, report_month: reportMonth, care_plan_id: plan?.id ?? null, content: baseContent, status: "draft" })
       .select().single();
     if (ie) throw new Error("帳票の保存に失敗しました: " + ie.message);
     return doc as ReportDoc;
