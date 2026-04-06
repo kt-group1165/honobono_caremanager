@@ -981,7 +981,7 @@ function PrintCarePlan1({ c }: { c: Record<string, unknown> }) {
       </table>
 
       {/* 要介護状態区分 */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "8px" }}>
         <tbody>
           <tr>
             <td style={{ ...thStyle, width: "15%" }}>要介護状態区分</td>
@@ -996,17 +996,16 @@ function PrintCarePlan1({ c }: { c: Record<string, unknown> }) {
       </table>
 
       {/* 利用者及び家族の意向を踏まえた課題分析の結果 */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "0" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "6px" }}>
         <tbody>
           <tr>
-            <td style={{ ...thStyle, width: "18%", verticalAlign: "top", height: "120px", lineHeight: "1.6" }}>
+            <td style={{ ...thStyle, width: "18%", verticalAlign: "middle", height: "140px", lineHeight: "1.8", textAlign: "center", padding: "6px 4px" }}>
               利用者及び家族の<br />生活に対する<br />意向<span style={{ color: "red" }}>を踏まえた</span><br /><span style={{ color: "red" }}>課題分析の結果</span>
             </td>
-            <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "4px 6px", position: "relative" }}>
+            <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "6px 8px", position: "relative" }}>
               {s("issue_analysis")}
-              {/* 罫線（ドット） */}
-              <div style={{ position: "absolute", top: 0, left: "6px", right: "6px", bottom: 0, pointerEvents: "none" }}>
-                {Array.from({ length: 6 }).map((_, i) => <div key={i} style={{ ...lineStyle, position: "absolute", top: `${20 + i * 18}px` }} />)}
+              <div style={{ position: "absolute", top: "4px", left: "8px", right: "8px", bottom: "4px", pointerEvents: "none", display: "flex", flexDirection: "column", justifyContent: "space-evenly" }}>
+                {Array.from({ length: 7 }).map((_, i) => <div key={i} style={lineStyle} />)}
               </div>
             </td>
           </tr>
@@ -1014,16 +1013,16 @@ function PrintCarePlan1({ c }: { c: Record<string, unknown> }) {
       </table>
 
       {/* 介護認定審査会の意見及びサービスの種類の指定 */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "0" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "6px" }}>
         <tbody>
           <tr>
-            <td style={{ ...thStyle, width: "18%", verticalAlign: "top", height: "60px", lineHeight: "1.6" }}>
+            <td style={{ ...thStyle, width: "18%", verticalAlign: "middle", height: "70px", lineHeight: "1.8", textAlign: "center", padding: "6px 4px" }}>
               介護認定審査会の<br />意見及びサービス<br />の種類の指定
             </td>
-            <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "4px 6px", position: "relative" }}>
+            <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "6px 8px", position: "relative" }}>
               {s("review_opinion")}
-              <div style={{ position: "absolute", top: 0, left: "6px", right: "6px", bottom: 0, pointerEvents: "none" }}>
-                {Array.from({ length: 3 }).map((_, i) => <div key={i} style={{ ...lineStyle, position: "absolute", top: `${20 + i * 18}px` }} />)}
+              <div style={{ position: "absolute", top: "4px", left: "8px", right: "8px", bottom: "4px", pointerEvents: "none", display: "flex", flexDirection: "column", justifyContent: "space-evenly" }}>
+                {Array.from({ length: 3 }).map((_, i) => <div key={i} style={lineStyle} />)}
               </div>
             </td>
           </tr>
@@ -1031,16 +1030,16 @@ function PrintCarePlan1({ c }: { c: Record<string, unknown> }) {
       </table>
 
       {/* 総合的な援助の方針 */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "0" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "6px" }}>
         <tbody>
           <tr>
-            <td style={{ ...thStyle, width: "18%", verticalAlign: "top", height: "120px", lineHeight: "1.6" }}>
+            <td style={{ ...thStyle, width: "18%", verticalAlign: "middle", height: "160px", lineHeight: "1.8", textAlign: "center", padding: "6px 4px" }}>
               <br />総合的な援助の<br />方　　　　針
             </td>
-            <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "4px 6px", position: "relative" }}>
+            <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "6px 8px", position: "relative" }}>
               {s("overall_policy")}
-              <div style={{ position: "absolute", top: 0, left: "6px", right: "6px", bottom: 0, pointerEvents: "none" }}>
-                {Array.from({ length: 6 }).map((_, i) => <div key={i} style={{ ...lineStyle, position: "absolute", top: `${20 + i * 18}px` }} />)}
+              <div style={{ position: "absolute", top: "4px", left: "8px", right: "8px", bottom: "4px", pointerEvents: "none", display: "flex", flexDirection: "column", justifyContent: "space-evenly" }}>
+                {Array.from({ length: 9 }).map((_, i) => <div key={i} style={lineStyle} />)}
               </div>
             </td>
           </tr>
@@ -1048,11 +1047,11 @@ function PrintCarePlan1({ c }: { c: Record<string, unknown> }) {
       </table>
 
       {/* 生活援助中心型の算定理由 */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "6px" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <tbody>
           <tr>
-            <td style={{ ...thStyle, width: "18%", height: "28px" }}>生活援助中心型の<br />算　定　理　由</td>
-            <td style={{ ...tdStyle, fontSize: "9pt" }}>
+            <td style={{ ...thStyle, width: "18%", height: "36px", textAlign: "center", padding: "4px" }}>生活援助中心型の<br />算　定　理　由</td>
+            <td style={{ ...tdStyle, fontSize: "9pt", padding: "6px 8px" }}>
               {s("living_support_reason") || "１．一人暮らし　　２．家族等が障害、疾病等　　３．その他（　　　　　　　　　　　）"}
             </td>
           </tr>
@@ -1107,10 +1106,24 @@ function PrintCarePlan2({ c }: { c: Record<string, unknown> }) {
       }
     }
   }
-  // 最低8行に
-  while (flatRows.length < 8) {
-    flatRows.push({ content: "", flag: "", type: "", provider: "", freq: "", period: "",
-      ...(flatRows.length === 0 ? { needsSpan: 8, needs: "", ltGoalSpan: 8, ltGoal: "", ltPeriod: "", stGoalSpan: 8, stGoal: "", stPeriod: "" } : {}) });
+  // 最低8行に（空行は全セル出力）
+  const dataRowCount = flatRows.length;
+  const MIN_ROWS = 8;
+  if (dataRowCount < MIN_ROWS) {
+    const emptyCount = MIN_ROWS - dataRowCount;
+    for (let ei = 0; ei < emptyCount; ei++) {
+      flatRows.push({
+        needsSpan: ei === 0 ? emptyCount : undefined,
+        needs: ei === 0 ? "" : undefined,
+        ltGoalSpan: ei === 0 ? emptyCount : undefined,
+        ltGoal: ei === 0 ? "" : undefined,
+        ltPeriod: ei === 0 ? "" : undefined,
+        stGoalSpan: ei === 0 ? emptyCount : undefined,
+        stGoal: ei === 0 ? "" : undefined,
+        stPeriod: ei === 0 ? "" : undefined,
+        content: "", flag: "", type: "", provider: "", freq: "", period: "",
+      });
+    }
   }
 
   return (
@@ -1152,11 +1165,11 @@ function PrintCarePlan2({ c }: { c: Record<string, unknown> }) {
         <tbody>
           {flatRows.map((row, i) => (
             <tr key={i} style={{ height: "28px" }}>
-              {row.needsSpan && <td rowSpan={row.needsSpan} style={{ ...tdStyle, padding: "4px" }}>{row.needs || "　"}</td>}
-              {row.ltGoalSpan && <td rowSpan={row.ltGoalSpan} style={{ ...tdStyle, padding: "4px" }}>{row.ltGoal || "　"}</td>}
-              {row.ltGoalSpan && <td rowSpan={row.ltGoalSpan} style={{ ...tdStyle, fontSize: "7pt", padding: "3px" }}>{row.ltPeriod || "　"}</td>}
-              {row.stGoalSpan && <td rowSpan={row.stGoalSpan} style={{ ...tdStyle, padding: "4px" }}>{row.stGoal || "　"}</td>}
-              {row.stGoalSpan && <td rowSpan={row.stGoalSpan} style={{ ...tdStyle, fontSize: "7pt", padding: "3px" }}>{row.stPeriod || "　"}</td>}
+              {row.needsSpan !== undefined && <td rowSpan={row.needsSpan} style={{ ...tdStyle, padding: "4px" }}>{row.needs || "　"}</td>}
+              {row.ltGoalSpan !== undefined && <td rowSpan={row.ltGoalSpan} style={{ ...tdStyle, padding: "4px" }}>{row.ltGoal || "　"}</td>}
+              {row.ltGoalSpan !== undefined && <td rowSpan={row.ltGoalSpan} style={{ ...tdStyle, fontSize: "7pt", padding: "3px" }}>{row.ltPeriod || "　"}</td>}
+              {row.stGoalSpan !== undefined && <td rowSpan={row.stGoalSpan} style={{ ...tdStyle, padding: "4px" }}>{row.stGoal || "　"}</td>}
+              {row.stGoalSpan !== undefined && <td rowSpan={row.stGoalSpan} style={{ ...tdStyle, fontSize: "7pt", padding: "3px" }}>{row.stPeriod || "　"}</td>}
               <td style={{ ...tdStyle, padding: "3px 4px" }}>{row.content || "　"}</td>
               <td style={{ ...tdStyle, textAlign: "center" }}>{row.flag || "　"}</td>
               <td style={{ ...tdStyle, padding: "3px 4px" }}>{row.type || "　"}</td>
