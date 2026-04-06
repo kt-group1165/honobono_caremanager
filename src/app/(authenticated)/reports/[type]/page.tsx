@@ -4,186 +4,74 @@ import { useParams } from "next/navigation";
 import React, { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
-  Printer,
-  ChevronLeft,
-  Loader2,
-  AlertTriangle,
-  CalendarDays,
-  FileText,
+  Printer, Loader2, AlertTriangle, FileText, Plus, ChevronLeft,
+  Save, CheckCircle, Clock, Pencil, X, CalendarDays,
 } from "lucide-react";
 import Link from "next/link";
 import { UserSidebar } from "@/components/users/user-sidebar";
-import {
-  format,
-  parseISO,
-  differenceInYears,
-  getDaysInMonth,
-  getDay,
-} from "date-fns";
+import { format, parseISO, differenceInYears } from "date-fns";
 import { ja } from "date-fns/locale";
+import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type KaigoUser = {
+type ReportDoc = {
   id: string;
-  name: string;
-  name_kana: string;
-  gender: string;
-  birth_date: string;
-  blood_type: string | null;
-  postal_code: string | null;
-  address: string | null;
-  phone: string | null;
-  mobile_phone: string | null;
-  emergency_contact_name: string | null;
-  emergency_contact_phone: string | null;
-  admission_date: string | null;
-  notes: string | null;
+  user_id: string;
+  report_type: string;
+  title: string;
+  report_month: string | null;
+  care_plan_id: string | null;
+  content: Record<string, unknown>;
+  status: "draft" | "completed";
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type KaigoUser = {
+  id: string; name: string; name_kana: string; gender: string;
+  birth_date: string; blood_type: string | null; postal_code: string | null;
+  address: string | null; phone: string | null; mobile_phone: string | null;
+  emergency_contact_name: string | null; emergency_contact_phone: string | null;
+  admission_date: string | null; notes: string | null;
 };
 
 type CareCertification = {
-  id: string;
-  care_level: string;
-  start_date: string;
-  end_date: string;
-  certification_number: string | null;
-  insurer_number: string | null;
-  insured_number: string | null;
-  support_limit_amount: number | null;
-  status: string;
-};
-
-type MedicalInsurance = {
-  id: string;
-  insurance_type: string;
-  insurer_number: string | null;
-  insured_number: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  copay_rate: number;
-};
-
-type AdlRecord = {
-  id: string;
-  assessment_date: string;
-  eating: number;
-  transfer: number;
-  grooming: number;
-  toilet: number;
-  bathing: number;
-  mobility: number;
-  stairs: number;
-  dressing: number;
-  bowel: number;
-  bladder: number;
-  total_score: number;
-  assessor_name: string | null;
-};
-
-type MedicalHistory = {
-  id: string;
-  disease_name: string;
-  onset_date: string | null;
-  status: string;
-  hospital: string | null;
-  doctor: string | null;
-};
-
-type HealthRecord = {
-  id: string;
-  record_date: string;
-  temperature: number | null;
-  blood_pressure_sys: number | null;
-  blood_pressure_dia: number | null;
-  pulse: number | null;
-  weight: number | null;
-  height: number | null;
-  spo2: number | null;
-};
-
-type FamilyContact = {
-  id: string;
-  name: string;
-  relationship: string;
-  phone: string | null;
-  address: string | null;
-  is_key_person: boolean;
+  id: string; care_level: string; start_date: string; end_date: string;
+  certification_number: string | null; insurer_number: string | null;
+  insured_number: string | null; support_limit_amount: number | null; status: string;
 };
 
 type CarePlan = {
-  id: string;
-  plan_number: string;
-  plan_type: string;
-  start_date: string;
-  end_date: string;
-  long_term_goals: string | null;
-  short_term_goals: string | null;
-  status: string;
-  created_by: string | null;
+  id: string; plan_number: string; plan_type: string;
+  start_date: string; end_date: string;
+  long_term_goals: string | null; short_term_goals: string | null;
+  status: string; created_by: string | null;
 };
 
 type CarePlanService = {
-  id: string;
-  service_type: string;
-  service_content: string;
-  frequency: string | null;
-  provider: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  notes: string | null;
-};
-
-type ServiceRecord = {
-  id: string;
-  service_date: string;
-  service_type: string;
-  start_time: string | null;
-  end_time: string | null;
-  content: string | null;
-};
-
-type BillingRecord = {
-  id: string;
-  billing_month: string;
-  service_type: string;
-  total_units: number;
-  unit_price: number;
-  total_amount: number;
-  insurance_amount: number;
-  copay_amount: number;
-  status: string;
-};
-
-type BillingDetail = {
-  id: string;
-  billing_record_id: string;
-  service_date: string;
-  service_code: string;
-  service_name: string;
-  units: number;
-  amount: number;
+  id: string; service_type: string; service_content: string;
+  frequency: string | null; provider: string | null;
+  start_date: string | null; end_date: string | null; notes: string | null;
 };
 
 // ---------------------------------------------------------------------------
-// Report meta config
+// Report config
 // ---------------------------------------------------------------------------
 
-type ReportConfig = {
-  titleJa: string;
-  needsPeriod: boolean;
-  landscape?: boolean;
-};
+type ReportConfig = { titleJa: string; needsPeriod: boolean; landscape?: boolean };
 
 const REPORT_CONFIG: Record<string, ReportConfig> = {
-  "face-sheet": { titleJa: "フェースシート", needsPeriod: false },
-  "care-plan-1": { titleJa: "居宅サービス計画書（第1表）", needsPeriod: false, landscape: true },
-  "care-plan-2": { titleJa: "居宅サービス計画書（第2表）", needsPeriod: false, landscape: true },
-  "care-plan-3": { titleJa: "週間サービス計画表（第3表）", needsPeriod: false, landscape: true },
-  "service-usage": { titleJa: "サービス利用票", needsPeriod: true, landscape: true },
-  "service-provision": { titleJa: "サービス提供票", needsPeriod: true, landscape: true },
-  invoice: { titleJa: "請求書", needsPeriod: true },
+  "face-sheet":        { titleJa: "フェースシート",                    needsPeriod: false },
+  "care-plan-1":       { titleJa: "居宅サービス計画書（第1表）",        needsPeriod: false, landscape: true },
+  "care-plan-2":       { titleJa: "居宅サービス計画書（第2表）",        needsPeriod: false, landscape: true },
+  "care-plan-3":       { titleJa: "週間サービス計画表（第3表）",        needsPeriod: false, landscape: true },
+  "service-usage":     { titleJa: "サービス利用票",                    needsPeriod: true,  landscape: true },
+  "service-provision": { titleJa: "サービス提供票",                    needsPeriod: true,  landscape: true },
+  "invoice":           { titleJa: "請求書",                           needsPeriod: true },
 };
 
 // ---------------------------------------------------------------------------
@@ -192,823 +80,418 @@ const REPORT_CONFIG: Record<string, ReportConfig> = {
 
 function fmtDate(d: string | null | undefined): string {
   if (!d) return "　";
-  try {
-    return format(parseISO(d), "yyyy年M月d日", { locale: ja });
-  } catch {
-    return d;
-  }
-}
-
-function fmtJaYear(d: string | null | undefined): string {
-  if (!d) return "　";
-  try {
-    return format(parseISO(d), "yyyy年M月", { locale: ja });
-  } catch {
-    return d ?? "　";
-  }
+  try { return format(parseISO(d), "yyyy年M月d日", { locale: ja }); } catch { return d; }
 }
 
 function fmtReiwa(d: string | null | undefined): string {
   if (!d) return "　　年　月　日";
   try {
     const date = parseISO(d);
-    const year = date.getFullYear();
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    // Reiwa starts 2019-05-01 (year 1)
-    if (year >= 2019) {
-      const reiwaYear = year - 2018;
-      return `令和${reiwaYear}年${month}月${day}日`;
-    } else if (year >= 1989) {
-      const heiseiYear = year - 1988;
-      return `平成${heiseiYear}年${month}月${day}日`;
-    } else {
-      return `${year}年${month}月${day}日`;
-    }
-  } catch {
-    return d ?? "　";
-  }
+    const y = date.getFullYear(), m = date.getMonth() + 1, day = date.getDate();
+    if (y >= 2019) return `令和${y - 2018}年${m}月${day}日`;
+    if (y >= 1989) return `平成${y - 1988}年${m}月${day}日`;
+    return `${y}年${m}月${day}日`;
+  } catch { return d ?? "　"; }
 }
 
 function fmtReiwaMonth(ym: string | null | undefined): string {
   if (!ym) return "　　年　月";
   try {
     const d = parseISO(ym + (ym.length === 7 ? "-01" : ""));
-    const year = d.getFullYear();
-    const month = d.getMonth() + 1;
-    if (year >= 2019) {
-      return `令和${year - 2018}年${month}月`;
-    } else if (year >= 1989) {
-      return `平成${year - 1988}年${month}月`;
-    }
-    return `${year}年${month}月`;
-  } catch {
-    return ym;
-  }
+    const y = d.getFullYear(), m = d.getMonth() + 1;
+    if (y >= 2019) return `令和${y - 2018}年${m}月`;
+    if (y >= 1989) return `平成${y - 1988}年${m}月`;
+    return `${y}年${m}月`;
+  } catch { return ym; }
 }
 
 function calcAge(birthDate: string): string {
-  try {
-    return `${differenceInYears(new Date(), parseISO(birthDate))}歳`;
-  } catch {
-    return "　";
-  }
+  try { return `${differenceInYears(new Date(), parseISO(birthDate))}歳`; } catch { return "　"; }
 }
 
-function fmtCurrency(n: number): string {
-  return new Intl.NumberFormat("ja-JP").format(n) + "円";
+function fmtJaYear(d: string | null | undefined): string {
+  if (!d) return "　";
+  try { return format(parseISO(d), "yyyy年M月", { locale: ja }); } catch { return d ?? "　"; }
 }
 
-const CARE_LEVELS = [
-  "要支援１",
-  "要支援２",
-  "要介護１",
-  "要介護２",
-  "要介護３",
-  "要介護４",
-  "要介護５",
-];
+const CARE_LEVELS = ["要支援１","要支援２","要介護１","要介護２","要介護３","要介護４","要介護５"];
 
 // ---------------------------------------------------------------------------
-// Common print styles
+// Table cell components
 // ---------------------------------------------------------------------------
 
-const PRINT_STYLE_PORTRAIT = `
-@media print {
-  body * { visibility: hidden !important; }
-  #print-area, #print-area * { visibility: visible !important; }
-  #print-area {
-    position: fixed !important;
-    inset: 0 !important;
-    width: 210mm !important;
-    min-height: 297mm !important;
-    padding: 8mm 10mm !important;
-    font-size: 9pt !important;
-    color: #000 !important;
-    background: #fff !important;
-    overflow: visible !important;
-  }
-  .no-print { display: none !important; }
-  table { border-collapse: collapse !important; }
-  td, th {
-    border: 1px solid #000 !important;
-    padding: 1px 2px !important;
-  }
-  @page { size: A4 portrait; margin: 0; }
-}
-`;
-
-const PRINT_STYLE_LANDSCAPE = `
-@media print {
-  body * { visibility: hidden !important; }
-  #print-area, #print-area * { visibility: visible !important; }
-  #print-area {
-    position: fixed !important;
-    inset: 0 !important;
-    width: 297mm !important;
-    min-height: 210mm !important;
-    padding: 6mm 8mm !important;
-    font-size: 8pt !important;
-    color: #000 !important;
-    background: #fff !important;
-    overflow: visible !important;
-  }
-  .no-print { display: none !important; }
-  table { border-collapse: collapse !important; }
-  td, th {
-    border: 1px solid #000 !important;
-    padding: 1px 2px !important;
-  }
-  @page { size: A4 landscape; margin: 0; }
-}
-`;
-
-// ---------------------------------------------------------------------------
-// Small reusable cell helpers
-// ---------------------------------------------------------------------------
-
-const TH = ({
-  children,
-  className = "",
-  colSpan,
-  rowSpan,
-  style,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  colSpan?: number;
-  rowSpan?: number;
-  style?: React.CSSProperties;
+const TH = ({ children, className = "", colSpan, rowSpan, style }: {
+  children?: React.ReactNode; className?: string;
+  colSpan?: number; rowSpan?: number; style?: React.CSSProperties;
 }) => (
-  <th
-    colSpan={colSpan}
-    rowSpan={rowSpan}
-    style={style}
-    className={`border border-black bg-gray-100 text-center text-xs font-medium leading-tight ${className}`}
-  >
+  <th colSpan={colSpan} rowSpan={rowSpan} style={style}
+    className={`border border-black bg-gray-100 text-center text-xs font-medium leading-tight ${className}`}>
     {children}
   </th>
 );
 
-const TD = ({
-  children,
-  className = "",
-  colSpan,
-  rowSpan,
-  style,
-}: {
-  children?: React.ReactNode;
-  className?: string;
-  colSpan?: number;
-  rowSpan?: number;
-  style?: React.CSSProperties;
+const TD = ({ children, className = "", colSpan, rowSpan, style }: {
+  children?: React.ReactNode; className?: string;
+  colSpan?: number; rowSpan?: number; style?: React.CSSProperties;
 }) => (
-  <td
-    colSpan={colSpan}
-    rowSpan={rowSpan}
-    style={style}
-    className={`border border-black text-xs leading-tight ${className}`}
-  >
+  <td colSpan={colSpan} rowSpan={rowSpan} style={style}
+    className={`border border-black text-xs leading-tight ${className}`}>
     {children ?? "　"}
   </td>
 );
 
 // ---------------------------------------------------------------------------
-// 1. フェースシート（全国社会福祉協議会版）
+// Input helpers for edit mode
 // ---------------------------------------------------------------------------
 
-function FaceSheetReport({
-  user,
-  cert,
-  adl,
-  histories,
-  contacts,
-  healthRecords,
-}: {
-  user: KaigoUser;
-  cert: CareCertification | null;
-  adl: AdlRecord | null;
-  histories: MedicalHistory[];
-  contacts: FamilyContact[];
-  healthRecords: HealthRecord[];
+function FI({ label, value, onChange, textarea, rows = 3, className = "" }: {
+  label: string; value: string; onChange: (v: string) => void;
+  textarea?: boolean; rows?: number; className?: string;
 }) {
-  const latestHealth = healthRecords[0] ?? null;
-  const today = fmtReiwa(format(new Date(), "yyyy-MM-dd"));
-
-  const ADL_ITEMS: { key: keyof AdlRecord; label: string; maxScore: number }[] = [
-    { key: "eating", label: "食事", maxScore: 10 },
-    { key: "transfer", label: "移乗", maxScore: 15 },
-    { key: "grooming", label: "整容", maxScore: 5 },
-    { key: "toilet", label: "トイレ動作", maxScore: 10 },
-    { key: "bathing", label: "入浴", maxScore: 5 },
-    { key: "mobility", label: "移動", maxScore: 15 },
-    { key: "stairs", label: "階段", maxScore: 10 },
-    { key: "dressing", label: "更衣", maxScore: 10 },
-    { key: "bowel", label: "排便管理", maxScore: 10 },
-    { key: "bladder", label: "排尿管理", maxScore: 10 },
-  ];
-
   return (
-    <div style={{ fontFamily: '"MS Mincho", "游明朝", "Hiragino Mincho ProN", serif', fontSize: "9pt", color: "#000" }}>
-      {/* Title */}
-      <div style={{ textAlign: "center", marginBottom: "4px" }}>
-        <div style={{ fontSize: "13pt", fontWeight: "bold", letterSpacing: "0.2em" }}>フェースシート（様式例）</div>
-        <div style={{ fontSize: "8pt", textAlign: "right" }}>作成日：{today}</div>
-      </div>
-
-      {/* Section 1: 基本情報 */}
-      <div style={{ marginBottom: "6px" }}>
-        <div style={{ backgroundColor: "#000", color: "#fff", padding: "1px 4px", fontSize: "9pt", fontWeight: "bold" }}>
-          第１　基本情報
-        </div>
-        <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
-          <colgroup>
-            <col style={{ width: "18%" }} />
-            <col style={{ width: "32%" }} />
-            <col style={{ width: "18%" }} />
-            <col style={{ width: "32%" }} />
-          </colgroup>
-          <tbody>
-            <tr>
-              <TH>氏名（漢字）</TH>
-              <TD className="px-1 py-0.5 font-bold" style={{ fontSize: "10pt" }}>{user.name}</TD>
-              <TH>氏名（ふりがな）</TH>
-              <TD className="px-1 py-0.5">{user.name_kana}</TD>
-            </tr>
-            <tr>
-              <TH>性別</TH>
-              <TD className="px-1 py-0.5">{user.gender}</TD>
-              <TH>生年月日</TH>
-              <TD className="px-1 py-0.5">{fmtReiwa(user.birth_date)}　（{calcAge(user.birth_date)}）</TD>
-            </tr>
-            <tr>
-              <TH>住所</TH>
-              <TD colSpan={3} className="px-1 py-0.5">
-                {user.postal_code ? `〒${user.postal_code}　` : ""}{user.address ?? "　"}
-              </TD>
-            </tr>
-            <tr>
-              <TH>電話番号</TH>
-              <TD className="px-1 py-0.5">{user.phone ?? "　"}</TD>
-              <TH>携帯電話</TH>
-              <TD className="px-1 py-0.5">{user.mobile_phone ?? "　"}</TD>
-            </tr>
-            <tr>
-              <TH>被保険者番号</TH>
-              <TD className="px-1 py-0.5">{cert?.insured_number ?? "　"}</TD>
-              <TH>保険者番号</TH>
-              <TD className="px-1 py-0.5">{cert?.insurer_number ?? "　"}</TD>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {/* Section 2: 家族構成 */}
-      <div style={{ marginBottom: "6px" }}>
-        <div style={{ backgroundColor: "#000", color: "#fff", padding: "1px 4px", fontSize: "9pt", fontWeight: "bold" }}>
-          第２　家族構成・キーパーソン
-        </div>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <TH style={{ width: "20%" }}>氏名</TH>
-              <TH style={{ width: "12%" }}>続柄</TH>
-              <TH style={{ width: "35%" }}>住所</TH>
-              <TH style={{ width: "20%" }}>電話番号</TH>
-              <TH style={{ width: "13%" }}>キーパーソン</TH>
-            </tr>
-          </thead>
-          <tbody>
-            {contacts.length > 0 ? contacts.map((c) => (
-              <tr key={c.id} style={{ height: "18px" }}>
-                <TD className="px-1">{c.name}</TD>
-                <TD className="px-1 text-center">{c.relationship}</TD>
-                <TD className="px-1">{c.address ?? "　"}</TD>
-                <TD className="px-1">{c.phone ?? "　"}</TD>
-                <TD className="px-1 text-center">{c.is_key_person ? "◎" : "　"}</TD>
-              </tr>
-            )) : (
-              <>
-                {[0, 1, 2].map((i) => (
-                  <tr key={i} style={{ height: "18px" }}>
-                    <TD /><TD /><TD /><TD /><TD />
-                  </tr>
-                ))}
-              </>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Section 3: 介護認定情報 */}
-      <div style={{ marginBottom: "6px" }}>
-        <div style={{ backgroundColor: "#000", color: "#fff", padding: "1px 4px", fontSize: "9pt", fontWeight: "bold" }}>
-          第３　介護認定情報
-        </div>
-        <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
-          <colgroup>
-            <col style={{ width: "18%" }} />
-            <col style={{ width: "32%" }} />
-            <col style={{ width: "18%" }} />
-            <col style={{ width: "32%" }} />
-          </colgroup>
-          <tbody>
-            <tr>
-              <TH>要介護状態区分</TH>
-              <TD className="px-1 py-0.5">{cert?.care_level ?? "　"}</TD>
-              <TH>認定番号</TH>
-              <TD className="px-1 py-0.5">{cert?.certification_number ?? "　"}</TD>
-            </tr>
-            <tr>
-              <TH>認定有効期間</TH>
-              <TD colSpan={3} className="px-1 py-0.5">
-                {cert ? `${fmtReiwa(cert.start_date)}　〜　${fmtReiwa(cert.end_date)}` : "　"}
-              </TD>
-            </tr>
-            <tr>
-              <TH>支給限度基準額</TH>
-              <TD colSpan={3} className="px-1 py-0.5">
-                {cert?.support_limit_amount != null ? `${cert.support_limit_amount.toLocaleString()}単位 / 月` : "　"}
-              </TD>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {/* Section 4: 既往歴 */}
-      <div style={{ marginBottom: "6px" }}>
-        <div style={{ backgroundColor: "#000", color: "#fff", padding: "1px 4px", fontSize: "9pt", fontWeight: "bold" }}>
-          第４　既往歴・現病歴
-        </div>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <TH style={{ width: "28%" }}>疾患名</TH>
-              <TH style={{ width: "18%" }}>発症時期</TH>
-              <TH style={{ width: "14%" }}>現在の状況</TH>
-              <TH style={{ width: "25%" }}>医療機関名</TH>
-              <TH style={{ width: "15%" }}>担当医師</TH>
-            </tr>
-          </thead>
-          <tbody>
-            {histories.length > 0 ? histories.map((h) => (
-              <tr key={h.id} style={{ height: "18px" }}>
-                <TD className="px-1">{h.disease_name}</TD>
-                <TD className="px-1 text-center">{h.onset_date ? fmtReiwa(h.onset_date) : "不明"}</TD>
-                <TD className="px-1 text-center">{h.status}</TD>
-                <TD className="px-1">{h.hospital ?? "　"}</TD>
-                <TD className="px-1">{h.doctor ?? "　"}</TD>
-              </tr>
-            )) : (
-              <>
-                {[0, 1, 2].map((i) => (
-                  <tr key={i} style={{ height: "18px" }}>
-                    <TD /><TD /><TD /><TD /><TD />
-                  </tr>
-                ))}
-              </>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Section 5: ADL（バーセルインデックス） */}
-      <div style={{ marginBottom: "6px" }}>
-        <div style={{ backgroundColor: "#000", color: "#fff", padding: "1px 4px", fontSize: "9pt", fontWeight: "bold" }}>
-          第５　ADL状況（バーセルインデックス）
-        </div>
-        {adl ? (
-          <>
-            <div style={{ fontSize: "8pt", padding: "1px 2px", borderLeft: "1px solid #000", borderRight: "1px solid #000", borderTop: "1px solid #000" }}>
-              評価日：{fmtReiwa(adl.assessment_date)}　／　評価者：{adl.assessor_name ?? "　"}
-            </div>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  {ADL_ITEMS.map((item) => (
-                    <TH key={item.key} style={{ width: `${100 / (ADL_ITEMS.length + 1)}%` }}>
-                      {item.label}
-                      <br />
-                      <span style={{ fontSize: "7pt" }}>（{item.maxScore}点）</span>
-                    </TH>
-                  ))}
-                  <TH style={{ backgroundColor: "#333", color: "#fff" }}>合計<br /><span style={{ fontSize: "7pt" }}>（100点）</span></TH>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  {ADL_ITEMS.map((item) => (
-                    <TD key={item.key} className="text-center py-1 font-bold">{String(adl[item.key])}</TD>
-                  ))}
-                  <TD className="text-center py-1 font-bold" style={{ backgroundColor: "#f0f0f0" }}>{adl.total_score}</TD>
-                </tr>
-              </tbody>
-            </table>
-          </>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                {ADL_ITEMS.map((item) => (
-                  <TH key={item.key}>{item.label}<br /><span style={{ fontSize: "7pt" }}>（{item.maxScore}点）</span></TH>
-                ))}
-                <TH>合計</TH>
-              </tr>
-            </thead>
-            <tbody>
-              <tr style={{ height: "22px" }}>
-                {ADL_ITEMS.map((item) => <TD key={item.key} />)}
-                <TD />
-              </tr>
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* Section 6: 健康状態 */}
-      <div style={{ marginBottom: "6px" }}>
-        <div style={{ backgroundColor: "#000", color: "#fff", padding: "1px 4px", fontSize: "9pt", fontWeight: "bold" }}>
-          第６　健康状態（直近のバイタル）
-        </div>
-        <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
-          <colgroup>
-            <col style={{ width: "12%" }} />
-            <col style={{ width: "14%" }} />
-            <col style={{ width: "13%" }} />
-            <col style={{ width: "18%" }} />
-            <col style={{ width: "11%" }} />
-            <col style={{ width: "14%" }} />
-            <col style={{ width: "11%" }} />
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "7%" }} />
-          </colgroup>
-          <thead>
-            <tr>
-              <TH>測定日</TH>
-              <TH>体温（℃）</TH>
-              <TH>脈拍（回/分）</TH>
-              <TH>血圧（mmHg）</TH>
-              <TH>SpO2（%）</TH>
-              <TH>体重（kg）</TH>
-              <TH>身長（cm）</TH>
-              <TH>BMI</TH>
-            </tr>
-          </thead>
-          <tbody>
-            <tr style={{ height: "22px" }}>
-              <TD className="px-1 text-center">{latestHealth ? fmtReiwa(latestHealth.record_date) : "　"}</TD>
-              <TD className="px-1 text-center">{latestHealth?.temperature ?? "　"}</TD>
-              <TD className="px-1 text-center">{latestHealth?.pulse ?? "　"}</TD>
-              <TD className="px-1 text-center">
-                {latestHealth?.blood_pressure_sys != null
-                  ? `${latestHealth.blood_pressure_sys} / ${latestHealth.blood_pressure_dia ?? "—"}`
-                  : "　"}
-              </TD>
-              <TD className="px-1 text-center">{latestHealth?.spo2 ?? "　"}</TD>
-              <TD className="px-1 text-center">{latestHealth?.weight ?? "　"}</TD>
-              <TD className="px-1 text-center">{latestHealth?.height ?? "　"}</TD>
-              <TD className="px-1 text-center">
-                {latestHealth?.weight != null && latestHealth?.height != null && latestHealth.height > 0
-                  ? (latestHealth.weight / Math.pow(latestHealth.height / 100, 2)).toFixed(1)
-                  : "　"}
-              </TD>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {/* Section 7: 特記事項 */}
-      <div>
-        <div style={{ backgroundColor: "#000", color: "#fff", padding: "1px 4px", fontSize: "9pt", fontWeight: "bold" }}>
-          第７　特記事項
-        </div>
-        <div style={{ border: "1px solid #000", minHeight: "40px", padding: "2px 4px", fontSize: "9pt", whiteSpace: "pre-wrap" }}>
-          {user.notes ?? "　"}
-        </div>
-      </div>
-
-      {/* Signature row */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "6px" }}>
-        <tbody>
-          <tr>
-            <TH style={{ width: "20%" }}>作成者氏名</TH>
-            <TD style={{ width: "30%" }} className="px-2" />
-            <TH style={{ width: "20%" }}>所属・事業所名</TH>
-            <TD style={{ width: "30%" }} className="px-2" />
-          </tr>
-        </tbody>
-      </table>
+    <div className={`flex flex-col gap-0.5 ${className}`}>
+      <label className="text-xs font-medium text-gray-500">{label}</label>
+      {textarea ? (
+        <textarea rows={rows} value={value} onChange={(e) => onChange(e.target.value)}
+          className="rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+      ) : (
+        <input type="text" value={value} onChange={(e) => onChange(e.target.value)}
+          className="rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+      )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// 2. 居宅サービス計画書（第1表）
+// Default content builders (for auto-generation)
 // ---------------------------------------------------------------------------
 
-function CarePlan1Report({
-  user,
-  cert,
-  plan,
-}: {
-  user: KaigoUser;
-  cert: CareCertification | null;
-  plan: CarePlan | null;
-}) {
+function buildDefaultContent(
+  reportType: string,
+  user: KaigoUser,
+  cert: CareCertification | null,
+  plan: CarePlan | null,
+  services: CarePlanService[],
+): Record<string, unknown> {
   const today = format(new Date(), "yyyy-MM-dd");
+  switch (reportType) {
+    case "care-plan-1":
+      return {
+        plan_type: plan?.plan_type ?? "継続",
+        cert_status: cert ? "認定済" : "申請中",
+        user_name: user.name,
+        birth_date: user.birth_date ?? "",
+        address: [user.postal_code ? `〒${user.postal_code}` : "", user.address ?? ""].filter(Boolean).join(" "),
+        care_level: cert?.care_level ?? "",
+        cert_period: cert ? `${fmtReiwa(cert.start_date)}　〜　${fmtReiwa(cert.end_date)}` : "",
+        creator_name: "",
+        office_name: "",
+        creation_date: fmtReiwa(plan?.start_date ?? today),
+        initial_creation_date: fmtReiwa(plan?.start_date ?? null),
+        issue_analysis: plan?.long_term_goals ?? "",
+        review_opinion: "",
+        overall_policy: plan?.short_term_goals ?? "",
+        living_support_reason: "",
+      };
+    case "care-plan-2":
+      return {
+        user_name: user.name,
+        creation_date: fmtReiwa(plan?.start_date ?? today),
+        needs: plan?.long_term_goals ?? "",
+        long_term_goal: plan?.long_term_goals ?? "",
+        long_term_period: plan ? `${fmtReiwa(plan.start_date)}〜${fmtReiwa(plan.end_date)}` : "",
+        short_term_goal: plan?.short_term_goals ?? "",
+        short_term_period: plan ? `${fmtReiwa(plan.start_date)}〜${fmtReiwa(plan.end_date)}` : "",
+        services: services.map((s) => ({
+          content: s.service_content,
+          insurance_flag: "○",
+          type: s.service_type,
+          provider: s.provider ?? "",
+          frequency: s.frequency ?? "",
+          period: s.start_date && s.end_date ? `${fmtReiwa(s.start_date)}〜${fmtReiwa(s.end_date)}` : "",
+        })),
+      };
+    case "face-sheet":
+      return {
+        user_name: user.name, birth_date: user.birth_date ?? "", gender: user.gender,
+        address: [user.postal_code ? `〒${user.postal_code}` : "", user.address ?? ""].filter(Boolean).join(" "),
+        phone: user.phone ?? "",
+        care_level: cert?.care_level ?? "", cert_period: cert ? `${fmtReiwa(cert.start_date)}〜${fmtReiwa(cert.end_date)}` : "",
+        family_members: [],
+        medical_history: [],
+        adl_summary: "", health_notes: "", special_notes: user.notes ?? "",
+      };
+    default:
+      return { notes: "", created_from: "auto" };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Edit Forms per report type
+// ---------------------------------------------------------------------------
+
+function EditFormCarePlan1({ content, onChange }: {
+  content: Record<string, unknown>;
+  onChange: (c: Record<string, unknown>) => void;
+}) {
+  const s = (key: string) => (String(content[key] ?? ""));
+  const set = (key: string, v: string) => onChange({ ...content, [key]: v });
+  return (
+    <div className="grid grid-cols-2 gap-3 p-4">
+      <div className="col-span-2 grid grid-cols-4 gap-3">
+        <FI label="初回・紹介・継続" value={s("plan_type")} onChange={(v) => set("plan_type", v)} />
+        <FI label="認定済・申請中" value={s("cert_status")} onChange={(v) => set("cert_status", v)} />
+        <FI label="作成者氏名" value={s("creator_name")} onChange={(v) => set("creator_name", v)} />
+        <FI label="事業所名" value={s("office_name")} onChange={(v) => set("office_name", v)} />
+      </div>
+      <div className="col-span-2 grid grid-cols-4 gap-3">
+        <FI label="利用者名" value={s("user_name")} onChange={(v) => set("user_name", v)} />
+        <FI label="生年月日" value={s("birth_date")} onChange={(v) => set("birth_date", v)} />
+        <FI label="住所" value={s("address")} onChange={(v) => set("address", v)} className="col-span-2" />
+      </div>
+      <div className="col-span-2 grid grid-cols-4 gap-3">
+        <FI label="要介護度" value={s("care_level")} onChange={(v) => set("care_level", v)} />
+        <FI label="認定有効期間" value={s("cert_period")} onChange={(v) => set("cert_period", v)} />
+        <FI label="計画作成（変更）日" value={s("creation_date")} onChange={(v) => set("creation_date", v)} />
+        <FI label="初回計画作成日" value={s("initial_creation_date")} onChange={(v) => set("initial_creation_date", v)} />
+      </div>
+      <FI label="利用者及び家族の生活に対する意向を踏まえた課題分析の結果" value={s("issue_analysis")}
+        onChange={(v) => set("issue_analysis", v)} textarea rows={4} className="col-span-2" />
+      <FI label="介護認定審査会の意見及びサービスの種類の指定" value={s("review_opinion")}
+        onChange={(v) => set("review_opinion", v)} textarea rows={3} className="col-span-2" />
+      <FI label="総合的な援助の方針" value={s("overall_policy")}
+        onChange={(v) => set("overall_policy", v)} textarea rows={4} className="col-span-2" />
+      <FI label="生活援助中心型の算定理由" value={s("living_support_reason")}
+        onChange={(v) => set("living_support_reason", v)} className="col-span-2" />
+    </div>
+  );
+}
+
+type Svc2 = { content: string; insurance_flag: string; type: string; provider: string; frequency: string; period: string };
+
+function EditFormCarePlan2({ content, onChange }: {
+  content: Record<string, unknown>;
+  onChange: (c: Record<string, unknown>) => void;
+}) {
+  const s = (key: string) => (String(content[key] ?? ""));
+  const set = (key: string, v: string) => onChange({ ...content, [key]: v });
+  const services: Svc2[] = Array.isArray(content.services) ? (content.services as Svc2[]) : [];
+
+  const updateSvc = (i: number, key: keyof Svc2, v: string) => {
+    const updated = services.map((svc, idx) => idx === i ? { ...svc, [key]: v } : svc);
+    onChange({ ...content, services: updated });
+  };
+  const addSvc = () => onChange({ ...content, services: [...services, { content: "", insurance_flag: "○", type: "", provider: "", frequency: "", period: "" }] });
+  const removeSvc = (i: number) => onChange({ ...content, services: services.filter((_, idx) => idx !== i) });
 
   return (
-    <div style={{ fontFamily: '"MS Mincho", "游明朝", "Hiragino Mincho ProN", serif', fontSize: "9pt", color: "#000" }}>
-      {/* Title */}
-      <div style={{ textAlign: "center", marginBottom: "4px" }}>
-        <div style={{ fontSize: "12pt", fontWeight: "bold", letterSpacing: "0.2em" }}>
-          居宅サービス計画書（1）
+    <div className="grid grid-cols-2 gap-3 p-4">
+      <div className="col-span-2 grid grid-cols-4 gap-3">
+        <FI label="利用者名" value={s("user_name")} onChange={(v) => set("user_name", v)} />
+        <FI label="計画作成日" value={s("creation_date")} onChange={(v) => set("creation_date", v)} />
+      </div>
+      <FI label="生活全般の解決すべき課題（ニーズ）" value={s("needs")}
+        onChange={(v) => set("needs", v)} textarea rows={3} className="col-span-2" />
+      <div className="col-span-2 grid grid-cols-2 gap-3">
+        <FI label="長期目標" value={s("long_term_goal")} onChange={(v) => set("long_term_goal", v)} textarea rows={2} />
+        <FI label="長期目標（期間）" value={s("long_term_period")} onChange={(v) => set("long_term_period", v)} />
+      </div>
+      <div className="col-span-2 grid grid-cols-2 gap-3">
+        <FI label="短期目標" value={s("short_term_goal")} onChange={(v) => set("short_term_goal", v)} textarea rows={2} />
+        <FI label="短期目標（期間）" value={s("short_term_period")} onChange={(v) => set("short_term_period", v)} />
+      </div>
+      <div className="col-span-2">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs font-semibold text-gray-600">援助内容・サービス一覧</span>
+          <button onClick={addSvc} className="flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-100">
+            <Plus size={12} /> 行を追加
+          </button>
+        </div>
+        <div className="space-y-2">
+          {services.map((svc, i) => (
+            <div key={i} className="relative grid grid-cols-6 gap-2 rounded border border-gray-200 bg-gray-50 p-2">
+              <button onClick={() => removeSvc(i)} className="absolute right-1 top-1 text-gray-300 hover:text-red-400"><X size={12} /></button>
+              <FI label="サービス内容" value={svc.content} onChange={(v) => updateSvc(i, "content", v)} className="col-span-2" />
+              <FI label="保険給付区分※1" value={svc.insurance_flag} onChange={(v) => updateSvc(i, "insurance_flag", v)} />
+              <FI label="サービス種別" value={svc.type} onChange={(v) => updateSvc(i, "type", v)} />
+              <FI label="事業所名※2" value={svc.provider} onChange={(v) => updateSvc(i, "provider", v)} />
+              <FI label="頻度" value={svc.frequency} onChange={(v) => updateSvc(i, "frequency", v)} />
+              <FI label="期間" value={svc.period} onChange={(v) => updateSvc(i, "period", v)} className="col-span-2" />
+            </div>
+          ))}
+          {services.length === 0 && (
+            <div className="rounded border-2 border-dashed border-gray-200 py-4 text-center text-sm text-gray-400">
+              サービスがありません。「行を追加」で追加してください。
+            </div>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Row 1: 初回・紹介・継続 / 認定済・申請中 */}
+function EditFormGeneric({ content, onChange, label = "内容（JSON編集）" }: {
+  content: Record<string, unknown>;
+  onChange: (c: Record<string, unknown>) => void;
+  label?: string;
+}) {
+  const [raw, setRaw] = useState(JSON.stringify(content, null, 2));
+  const [err, setErr] = useState<string | null>(null);
+  const handle = (v: string) => {
+    setRaw(v);
+    try { onChange(JSON.parse(v)); setErr(null); } catch { setErr("JSON形式が正しくありません"); }
+  };
+  return (
+    <div className="p-4 space-y-2">
+      <label className="text-xs font-medium text-gray-500">{label}</label>
+      <textarea rows={18} value={raw} onChange={(e) => handle(e.target.value)}
+        className={`w-full rounded border px-2 py-1 font-mono text-xs focus:outline-none ${err ? "border-red-400" : "border-gray-300"}`} />
+      {err && <p className="text-xs text-red-500">{err}</p>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Print views per report type
+// ---------------------------------------------------------------------------
+
+function PrintCarePlan1({ c }: { c: Record<string, unknown> }) {
+  const s = (k: string) => String(c[k] ?? "　");
+  return (
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000" }}>
+      <div style={{ textAlign: "center", marginBottom: "4px" }}>
+        <div style={{ fontSize: "12pt", fontWeight: "bold", letterSpacing: "0.2em" }}>居宅サービス計画書（1）</div>
+      </div>
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
         <tbody>
           <tr style={{ height: "20px" }}>
             <TH style={{ width: "18%" }}>初回・紹介・継続</TH>
             <TD style={{ width: "37%" }} className="px-2">
-              <span style={{ marginRight: "12px" }}>□ 初回</span>
-              <span style={{ marginRight: "12px" }}>□ 紹介</span>
-              <span>□ 継続</span>
+              {["初回","紹介","継続"].map((t) => <span key={t} style={{ marginRight: "12px" }}>{s("plan_type") === t ? "☑" : "□"}　{t}</span>)}
             </TD>
             <TH style={{ width: "18%" }}>認定済・申請中</TH>
             <TD style={{ width: "27%" }} className="px-2">
-              <span style={{ marginRight: "12px" }}>□ 認定済</span>
-              <span>□ 申請中</span>
+              {["認定済","申請中"].map((t) => <span key={t} style={{ marginRight: "12px" }}>{s("cert_status") === t ? "☑" : "□"}　{t}</span>)}
             </TD>
           </tr>
         </tbody>
       </table>
-
-      {/* Main user/CM table */}
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
-        <colgroup>
-          <col style={{ width: "22%" }} />
-          <col style={{ width: "28%" }} />
-          <col style={{ width: "22%" }} />
-          <col style={{ width: "28%" }} />
-        </colgroup>
+        <colgroup><col style={{ width: "22%" }} /><col style={{ width: "28%" }} /><col style={{ width: "22%" }} /><col style={{ width: "28%" }} /></colgroup>
         <tbody>
           <tr style={{ height: "22px" }}>
-            <TH>利用者名</TH>
-            <TD className="px-1 font-bold">{user.name}　様</TD>
-            <TH>居宅サービス計画作成者氏名</TH>
-            <TD className="px-1" />
+            <TH>利用者名</TH><TD className="px-1 font-bold">{s("user_name")}　様</TD>
+            <TH>居宅サービス計画作成者氏名</TH><TD className="px-1">{s("creator_name")}</TD>
           </tr>
           <tr style={{ height: "22px" }}>
-            <TH>生年月日</TH>
-            <TD className="px-1">{fmtReiwa(user.birth_date)}　({calcAge(user.birth_date)})</TD>
-            <TH>居宅介護支援事業者・事業所名及び所在地</TH>
-            <TD className="px-1" rowSpan={2} />
+            <TH>生年月日</TH><TD className="px-1">{s("birth_date") ? fmtReiwa(s("birth_date")) : "　"}　({s("birth_date") ? calcAge(s("birth_date")) : "　"})</TD>
+            <TH>居宅介護支援事業者・事業所名及び所在地</TH><TD className="px-1" rowSpan={2}>{s("office_name")}</TD>
+          </tr>
+          <tr style={{ height: "22px" }}><TH>住所</TH><TD className="px-1">{s("address")}</TD></tr>
+          <tr style={{ height: "22px" }}>
+            <TH>居宅サービス計画作成（変更）日</TH><TD className="px-1">{s("creation_date")}</TD>
+            <TH>初回居宅サービス計画作成日</TH><TD className="px-1">{s("initial_creation_date")}</TD>
           </tr>
           <tr style={{ height: "22px" }}>
-            <TH>住所</TH>
-            <TD className="px-1">
-              {user.postal_code ? `〒${user.postal_code}` : ""} {user.address ?? "　"}
-            </TD>
-          </tr>
-          <tr style={{ height: "22px" }}>
-            <TH>居宅サービス計画作成（変更）日</TH>
-            <TD className="px-1">{fmtReiwa(plan?.start_date ?? today)}</TD>
-            <TH>初回居宅サービス計画作成日</TH>
-            <TD className="px-1">{fmtReiwa(plan?.start_date ?? null)}</TD>
-          </tr>
-          <tr style={{ height: "22px" }}>
-            <TH>認定日</TH>
-            <TD className="px-1">{fmtReiwa(cert?.start_date ?? null)}</TD>
-            <TH>認定の有効期間</TH>
-            <TD className="px-1">
-              {cert ? `${fmtReiwa(cert.start_date)}　〜　${fmtReiwa(cert.end_date)}` : "　"}
-            </TD>
+            <TH>認定有効期間</TH><TD colSpan={3} className="px-2">{s("cert_period")}</TD>
           </tr>
           <tr style={{ height: "22px" }}>
             <TH>要介護状態区分</TH>
             <TD colSpan={3} className="px-2">
-              {CARE_LEVELS.map((level) => (
-                <span key={level} style={{ marginRight: "8px" }}>
-                  {cert?.care_level === level ? "☑" : "□"}　{level}
-                </span>
-              ))}
+              {CARE_LEVELS.map((lv) => <span key={lv} style={{ marginRight: "8px" }}>{s("care_level") === lv ? "☑" : "□"}　{lv}</span>)}
             </TD>
           </tr>
         </tbody>
       </table>
-
-      {/* 利用者及び家族の生活に対する意向 */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
-        <tbody>
-          <tr>
-            <TH style={{ width: "30%", writingMode: "horizontal-tb", padding: "2px 4px" }}>
-              利用者及び家族の生活に対する意向を踏まえた課題分析の結果
-            </TH>
-            <TD style={{ width: "70%", minHeight: "50px", height: "60px", verticalAlign: "top", padding: "4px" }}>
-              {plan?.long_term_goals ?? "　"}
-            </TD>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* 介護認定審査会の意見 */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
-        <tbody>
-          <tr>
-            <TH style={{ width: "30%", padding: "2px 4px" }}>
-              介護認定審査会の意見及びサービスの種類の指定
-            </TH>
-            <TD style={{ width: "70%", height: "40px", verticalAlign: "top", padding: "4px" }}>
-
-            </TD>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* 総合的な援助の方針 */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
-        <tbody>
-          <tr>
-            <TH style={{ width: "30%", padding: "2px 4px" }}>
-              総合的な援助の方針
-            </TH>
-            <TD style={{ width: "70%", height: "60px", verticalAlign: "top", padding: "4px", whiteSpace: "pre-wrap" }}>
-              {plan?.short_term_goals ?? "　"}
-            </TD>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* 生活援助中心型の算定理由 */}
+      {[
+        { label: "利用者及び家族の生活に対する意向を踏まえた課題分析の結果", key: "issue_analysis", h: "60px" },
+        { label: "介護認定審査会の意見及びサービスの種類の指定", key: "review_opinion", h: "40px" },
+        { label: "総合的な援助の方針", key: "overall_policy", h: "60px" },
+      ].map(({ label, key, h }) => (
+        <table key={key} style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
+          <tbody>
+            <tr>
+              <TH style={{ width: "30%", padding: "2px 4px" }}>{label}</TH>
+              <TD style={{ width: "70%", height: h, verticalAlign: "top", padding: "4px", whiteSpace: "pre-wrap" }}>{s(key)}</TD>
+            </tr>
+          </tbody>
+        </table>
+      ))}
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "6px" }}>
         <tbody>
           <tr style={{ height: "22px" }}>
-            <TH style={{ width: "30%", padding: "2px 4px" }}>
-              生活援助中心型の算定理由
-            </TH>
-            <TD style={{ width: "70%" }} className="px-3">
-              <span style={{ marginRight: "16px" }}>□ 1．一人暮らし</span>
-              <span style={{ marginRight: "16px" }}>□ 2．家族等が障害・疾病等</span>
-              <span>□ 3．その他（　　　　　　　　　　　　　　　　　）</span>
-            </TD>
+            <TH style={{ width: "30%", padding: "2px 4px" }}>生活援助中心型の算定理由</TH>
+            <TD style={{ width: "70%" }} className="px-3">{s("living_support_reason") || <span style={{ color: "#888" }}>□ 1．一人暮らし　□ 2．家族等が障害・疾病等　□ 3．その他（　　　　　　）</span>}</TD>
           </tr>
         </tbody>
       </table>
-
-      {/* Signature / agreement section */}
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <tbody>
-          <tr style={{ height: "24px" }}>
-            <TH style={{ width: "15%" }}>介護支援専門員氏名</TH>
-            <TD style={{ width: "35%" }} className="px-2" />
-            <TH style={{ width: "15%" }}>事業所番号</TH>
-            <TD style={{ width: "35%" }} className="px-2">{cert?.insurer_number ?? "　"}</TD>
-          </tr>
-          <tr style={{ height: "28px" }}>
-            <TH>利用者同意署名</TH>
-            <TD className="px-2" />
-            <TH>家族等署名</TH>
-            <TD className="px-2" />
-          </tr>
-          <tr style={{ height: "20px" }}>
-            <TH>同意年月日</TH>
-            <TD colSpan={3} className="px-2">
-              {fmtReiwa(today)}
-            </TD>
-          </tr>
+          <tr style={{ height: "24px" }}><TH style={{ width: "15%" }}>介護支援専門員氏名</TH><TD style={{ width: "35%" }} className="px-2" /><TH style={{ width: "15%" }}>事業所名</TH><TD style={{ width: "35%" }} className="px-2">{s("office_name")}</TD></tr>
+          <tr style={{ height: "28px" }}><TH>利用者同意署名</TH><TD className="px-2" /><TH>家族等署名</TH><TD className="px-2" /></tr>
         </tbody>
       </table>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// 3. 居宅サービス計画書（第2表）- landscape
-// ---------------------------------------------------------------------------
-
-function CarePlan2Report({
-  user,
-  cert,
-  plan,
-  services,
-}: {
-  user: KaigoUser;
-  cert: CareCertification | null;
-  plan: CarePlan | null;
-  services: CarePlanService[];
-}) {
+function PrintCarePlan2({ c }: { c: Record<string, unknown> }) {
+  const s = (k: string) => String(c[k] ?? "　");
+  const services: Svc2[] = Array.isArray(c.services) ? (c.services as Svc2[]) : [];
+  const rows = services.length > 0 ? services : [{ content: "", insurance_flag: "", type: "", provider: "", frequency: "", period: "" }];
   return (
-    <div style={{ fontFamily: '"MS Mincho", "游明朝", "Hiragino Mincho ProN", serif', fontSize: "8pt", color: "#000" }}>
-      {/* Title */}
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "8pt", color: "#000" }}>
       <div style={{ textAlign: "center", marginBottom: "4px" }}>
-        <div style={{ fontSize: "11pt", fontWeight: "bold", letterSpacing: "0.2em" }}>
-          居宅サービス計画書（2）
-        </div>
+        <div style={{ fontSize: "11pt", fontWeight: "bold", letterSpacing: "0.2em" }}>居宅サービス計画書（2）</div>
       </div>
-
-      {/* Header info */}
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "3px" }}>
         <tbody>
           <tr style={{ height: "20px" }}>
             <TH style={{ width: "10%" }}>利用者名</TH>
-            <TD style={{ width: "20%" }} className="px-1 font-bold">{user.name}　様</TD>
-            <TH style={{ width: "12%" }}>要介護度</TH>
-            <TD style={{ width: "18%" }} className="px-1">{cert?.care_level ?? "　"}</TD>
+            <TD style={{ width: "25%" }} className="px-1 font-bold">{s("user_name")}　様</TD>
             <TH style={{ width: "12%" }}>計画作成日</TH>
-            <TD style={{ width: "28%" }} className="px-1">
-              {fmtReiwa(plan?.start_date ?? null)}
-            </TD>
+            <TD className="px-1">{s("creation_date")}</TD>
           </tr>
         </tbody>
       </table>
-
-      {/* Main care plan table */}
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ height: "28px" }}>
-            <TH style={{ width: "14%" }} rowSpan={2}>
-              生活全般の解決す<br />べき課題（ニーズ）
-            </TH>
+            <TH style={{ width: "14%" }} rowSpan={2}>生活全般の解決す<br />べき課題（ニーズ）</TH>
             <TH colSpan={4}>目標</TH>
-            <TH colSpan={5}>援助内容</TH>
+            <TH colSpan={6}>援助内容</TH>
           </tr>
           <tr style={{ height: "24px" }}>
-            <TH style={{ width: "10%" }}>長期目標</TH>
-            <TH style={{ width: "5%" }}>（期間）</TH>
-            <TH style={{ width: "10%" }}>短期目標</TH>
-            <TH style={{ width: "5%" }}>（期間）</TH>
-            <TH style={{ width: "16%" }}>サービス内容</TH>
+            <TH style={{ width: "11%" }}>長期目標</TH>
+            <TH style={{ width: "7%" }}>（期間）</TH>
+            <TH style={{ width: "11%" }}>短期目標</TH>
+            <TH style={{ width: "7%" }}>（期間）</TH>
+            <TH style={{ width: "14%" }}>サービス内容</TH>
             <TH style={{ width: "3%" }}>※1</TH>
-            <TH style={{ width: "10%" }}>サービス種別</TH>
+            <TH style={{ width: "9%" }}>サービス種別</TH>
             <TH style={{ width: "3%" }}>※2</TH>
             <TH style={{ width: "5%" }}>頻度</TH>
-            <TH style={{ width: "5%" }}>期間</TH>
+            <TH style={{ width: "7%" }}>期間</TH>
           </tr>
         </thead>
         <tbody>
-          {services.length > 0 ? (
-            services.map((svc, i) => (
-              <tr key={svc.id || i} style={{ minHeight: "28px" }}>
-                {i === 0 ? (
-                  <TD rowSpan={services.length} className="px-1 align-top" style={{ verticalAlign: "top", whiteSpace: "pre-wrap" }}>
-                    {plan?.long_term_goals ?? "　"}
-                  </TD>
-                ) : null}
-                {i === 0 ? (
-                  <TD rowSpan={services.length} className="px-1 align-top" style={{ verticalAlign: "top", whiteSpace: "pre-wrap" }}>
-                    {plan?.long_term_goals ?? "　"}
-                  </TD>
-                ) : null}
-                {i === 0 ? (
-                  <TD rowSpan={services.length} className="px-1 align-top" style={{ verticalAlign: "top", fontSize: "7pt" }}>
-                    {plan?.start_date && plan?.end_date
-                      ? `${fmtReiwa(plan.start_date)}〜${fmtReiwa(plan.end_date)}`
-                      : "　"}
-                  </TD>
-                ) : null}
-                {i === 0 ? (
-                  <TD rowSpan={services.length} className="px-1 align-top" style={{ verticalAlign: "top", whiteSpace: "pre-wrap" }}>
-                    {plan?.short_term_goals ?? "　"}
-                  </TD>
-                ) : null}
-                {i === 0 ? (
-                  <TD rowSpan={services.length} className="px-1 align-top" style={{ verticalAlign: "top", fontSize: "7pt" }}>
-                    {plan?.start_date && plan?.end_date
-                      ? `${fmtReiwa(plan.start_date)}〜${fmtReiwa(plan.end_date)}`
-                      : "　"}
-                  </TD>
-                ) : null}
-                <TD className="px-1" style={{ verticalAlign: "top" }}>{svc.service_content}</TD>
-                <TD className="px-1 text-center" style={{ verticalAlign: "top" }}>○</TD>
-                <TD className="px-1 text-center" style={{ verticalAlign: "top" }}>{svc.service_type}</TD>
-                <TD className="px-1 text-center" style={{ verticalAlign: "top", fontSize: "7pt" }}>{svc.provider ?? "　"}</TD>
-                <TD className="px-1 text-center" style={{ verticalAlign: "top" }}>{svc.frequency ?? "　"}</TD>
-                <TD className="px-1 text-center" style={{ verticalAlign: "top", fontSize: "7pt" }}>
-                  {plan?.start_date && plan?.end_date
-                    ? `${fmtReiwa(plan.start_date)}〜${fmtReiwa(plan.end_date)}`
-                    : "　"}
-                </TD>
-              </tr>
-            ))
-          ) : (
-            // Empty rows
-            Array.from({ length: 6 }).map((_, i) => (
-              <tr key={i} style={{ height: "28px" }}>
-                {i === 0 ? <TD rowSpan={6} /> : null}
-                {i === 0 ? <TD rowSpan={6} /> : null}
-                {i === 0 ? <TD rowSpan={6} /> : null}
-                {i === 0 ? <TD rowSpan={6} /> : null}
-                {i === 0 ? <TD rowSpan={6} /> : null}
-                <TD /><TD /><TD /><TD /><TD /><TD />
-              </tr>
-            ))
-          )}
+          {rows.map((svc, i) => (
+            <tr key={i} style={{ minHeight: "28px" }}>
+              {i === 0 && <TD rowSpan={rows.length} className="px-1 align-top" style={{ verticalAlign: "top", whiteSpace: "pre-wrap" }}>{s("needs")}</TD>}
+              {i === 0 && <TD rowSpan={rows.length} className="px-1 align-top" style={{ verticalAlign: "top", whiteSpace: "pre-wrap" }}>{s("long_term_goal")}</TD>}
+              {i === 0 && <TD rowSpan={rows.length} className="px-1 align-top" style={{ verticalAlign: "top", fontSize: "7pt" }}>{s("long_term_period")}</TD>}
+              {i === 0 && <TD rowSpan={rows.length} className="px-1 align-top" style={{ verticalAlign: "top", whiteSpace: "pre-wrap" }}>{s("short_term_goal")}</TD>}
+              {i === 0 && <TD rowSpan={rows.length} className="px-1 align-top" style={{ verticalAlign: "top", fontSize: "7pt" }}>{s("short_term_period")}</TD>}
+              <TD className="px-1" style={{ verticalAlign: "top" }}>{svc.content}</TD>
+              <TD className="px-1 text-center">{svc.insurance_flag}</TD>
+              <TD className="px-1 text-center">{svc.type}</TD>
+              <TD className="px-1 text-center" style={{ fontSize: "7pt" }}>{svc.provider}</TD>
+              <TD className="px-1 text-center">{svc.frequency}</TD>
+              <TD className="px-1 text-center" style={{ fontSize: "7pt" }}>{svc.period}</TD>
+            </tr>
+          ))}
         </tbody>
       </table>
-
-      {/* Signature */}
       <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "6px" }}>
         <tbody>
           <tr style={{ height: "22px" }}>
@@ -1023,763 +506,253 @@ function CarePlan2Report({
   );
 }
 
-// ---------------------------------------------------------------------------
-// 4. 週間サービス計画表（第3表）- landscape
-// ---------------------------------------------------------------------------
-
-const TIME_SLOTS = [
-  { label: "深夜・早朝", range: "0:00〜6:00" },
-  { label: "午前", range: "6:00〜12:00" },
-  { label: "午後", range: "12:00〜18:00" },
-  { label: "夜間", range: "18:00〜21:00" },
-  { label: "深夜", range: "21:00〜24:00" },
-];
-
-const DAYS_JA = ["月", "火", "水", "木", "金", "土", "日"];
-
-function CarePlan3Report({
-  user,
-  cert,
-  plan,
-  services,
-}: {
-  user: KaigoUser;
-  cert: CareCertification | null;
-  plan: CarePlan | null;
-  services: CarePlanService[];
-}) {
-  // Map services to days/times for display
-  // service_type used as a simple lookup
-
+function PrintGeneric({ c, title }: { c: Record<string, unknown>; title: string }) {
   return (
-    <div style={{ fontFamily: '"MS Mincho", "游明朝", "Hiragino Mincho ProN", serif', fontSize: "8pt", color: "#000" }}>
-      {/* Title */}
-      <div style={{ textAlign: "center", marginBottom: "4px" }}>
-        <div style={{ fontSize: "11pt", fontWeight: "bold", letterSpacing: "0.2em" }}>
-          週間サービス計画表
-        </div>
-      </div>
-
-      {/* Header */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "3px" }}>
-        <tbody>
-          <tr style={{ height: "20px" }}>
-            <TH style={{ width: "10%" }}>利用者名</TH>
-            <TD style={{ width: "20%" }} className="px-1 font-bold">{user.name}　様</TD>
-            <TH style={{ width: "12%" }}>要介護度</TH>
-            <TD style={{ width: "12%" }} className="px-1">{cert?.care_level ?? "　"}</TD>
-            <TH style={{ width: "14%" }}>計画期間</TH>
-            <TD style={{ width: "32%" }} className="px-1">
-              {plan ? `${fmtReiwa(plan.start_date)}　〜　${fmtReiwa(plan.end_date)}` : "　"}
-            </TD>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* Weekly schedule table */}
-      <table style={{ width: "82%", borderCollapse: "collapse", display: "inline-table", verticalAlign: "top" }}>
-        <thead>
-          <tr style={{ height: "20px" }}>
-            <TH style={{ width: "10%" }}>時間帯</TH>
-            {DAYS_JA.map((d) => (
-              <TH key={d} style={{ width: `${90 / 7}%` }}>{d}</TH>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {TIME_SLOTS.map((slot) => (
-            <tr key={slot.range} style={{ height: "36px" }}>
-              <TD className="text-center" style={{ verticalAlign: "middle", fontSize: "7pt" }}>
-                <div style={{ fontWeight: "bold" }}>{slot.label}</div>
-                <div style={{ color: "#555" }}>{slot.range}</div>
-              </TD>
-              {DAYS_JA.map((day) => {
-                // Find services that might apply
-                const daySvcs = services.filter((s) => {
-                  if (!s.frequency) return false;
-                  return s.frequency.includes(day) || s.frequency.includes("毎日") || s.frequency.includes("週");
-                });
-                return (
-                  <TD key={day} className="px-0.5" style={{ verticalAlign: "top", fontSize: "7pt" }}>
-                    {daySvcs.length > 0 && slot.label === "午前" ? (
-                      daySvcs.map((s, i) => (
-                        <div key={i} style={{ backgroundColor: "#e8f4f8", border: "1px solid #aaa", padding: "1px 2px", marginBottom: "1px", borderRadius: "2px", fontSize: "7pt" }}>
-                          {s.service_content}
-                        </div>
-                      ))
-                    ) : null}
-                  </TD>
-                );
-              })}
-            </tr>
-          ))}
-          {/* 主な日常生活上の活動 */}
-          <tr style={{ height: "36px" }}>
-            <TD className="text-center" style={{ verticalAlign: "middle", fontSize: "7pt", fontWeight: "bold" }}>
-              主な日常<br />生活上の<br />活動
-            </TD>
-            <TD colSpan={7} className="px-2" style={{ verticalAlign: "top", fontSize: "7pt" }}>
-              起床・洗面・着替え　／　食事（朝・昼・夕）　／　レクリエーション　／　入浴　／　就寝
-            </TD>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* 週単位以外のサービス - right margin */}
-      <table style={{ width: "17%", borderCollapse: "collapse", display: "inline-table", verticalAlign: "top", marginLeft: "1%" }}>
-        <thead>
-          <tr style={{ height: "20px" }}>
-            <TH>週単位以外のサービス</TH>
-          </tr>
-        </thead>
-        <tbody>
-          {services
-            .filter((s) => s.frequency && (s.frequency.includes("月") || s.frequency.includes("隔月") || s.frequency.includes("年")))
-            .map((s, i) => (
-              <tr key={i} style={{ height: "28px" }}>
-                <TD className="px-1" style={{ fontSize: "7pt", verticalAlign: "top" }}>
-                  <div style={{ fontWeight: "bold" }}>{s.service_type}</div>
-                  <div>{s.service_content}</div>
-                  <div style={{ color: "#555" }}>{s.frequency}</div>
-                </TD>
-              </tr>
-            ))}
-          {Array.from({ length: Math.max(4, 4) }).map((_, i) => (
-            <tr key={`empty-${i}`} style={{ height: "28px" }}>
-              <TD />
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000" }}>
+      <div style={{ textAlign: "center", marginBottom: "8px", fontSize: "11pt", fontWeight: "bold" }}>{title}</div>
+      <pre style={{ fontSize: "8pt", whiteSpace: "pre-wrap", border: "1px solid #ccc", padding: "8px" }}>
+        {JSON.stringify(c, null, 2)}
+      </pre>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// 5. サービス利用票（様式第6）- landscape
-// ---------------------------------------------------------------------------
-
-const SLOTS = 9; // always render exactly 9 service rows (予定+実績 pairs = 18 rows)
-const DOW_JA = ["日", "月", "火", "水", "木", "金", "土"];
-
-function ServiceUsageReport({
-  user,
-  cert,
-  planServices,
-  records,
-  yearMonth,
-}: {
-  user: KaigoUser;
-  cert: CareCertification | null;
-  planServices: CarePlanService[];
-  records: ServiceRecord[];
-  yearMonth: string;
+function PrintView({ reportType, content, config }: {
+  reportType: string; content: Record<string, unknown>; config: ReportConfig;
 }) {
-  const monthDate = parseISO(`${yearMonth}-01`);
-  const daysInMonth = getDaysInMonth(monthDate);
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-
-  // planned days per service index (from planServices order)
-  // actual days per service_type (from serviceRecords)
-  const plannedDaysByIdx: Map<number, Set<number>> = new Map();
-  // For the 第6表, planned days come from the plan frequency. Since we don't
-  // have explicit planned dates, we mark days from service records as 予定.
-  // Actual (実績) marks are shown with a filled circle when the record exists.
-  const actualDaysByType: Record<string, Set<number>> = {};
-  for (const r of records) {
-    const day = parseInt(r.service_date.split("-")[2], 10);
-    if (!actualDaysByType[r.service_type]) actualDaysByType[r.service_type] = new Set();
-    actualDaysByType[r.service_type].add(day);
+  switch (reportType) {
+    case "care-plan-1": return <PrintCarePlan1 c={content} />;
+    case "care-plan-2": return <PrintCarePlan2 c={content} />;
+    default: return <PrintGeneric c={content} title={config.titleJa} />;
   }
+}
 
-  // Build planned days per slot index using planServices order
-  planServices.forEach((svc, idx) => {
-    plannedDaysByIdx.set(idx, actualDaysByType[svc.service_type] ?? new Set());
-  });
-
-  const today = fmtReiwa(format(new Date(), "yyyy-MM-dd"));
-
-  // Pad planServices to exactly SLOTS entries
-  const slots = Array.from({ length: SLOTS }, (_, i) => planServices[i] ?? null);
-
-  // Calendar column width: squeeze to fit 31 days + label cols + total col
-  // Label cols: 提供時間帯(8%), サービス内容(10%), 事業所名(11%) = 29%
-  // 合計回数: 4%  => calendar area = 67% over 31 cols ≈ 2.16% each
-  const calColW = `${(67 / 31).toFixed(2)}%`;
-
-  return (
-    <div style={{ fontFamily: '"MS Mincho", "游明朝", "Hiragino Mincho ProN", serif', fontSize: "7pt", color: "#000" }}>
-      {/* ── top: checkbox + title ── */}
-      <div style={{ display: "flex", alignItems: "baseline", marginBottom: "2px" }}>
-        <span style={{ fontSize: "6.5pt", marginRight: "8px" }}>
-          □ 認定済　□ 申請中
-        </span>
-        <span style={{ flex: 1, textAlign: "center", fontSize: "10pt", fontWeight: "bold", letterSpacing: "0.1em" }}>
-          {fmtReiwaMonth(yearMonth)}&nbsp; サービス利用票
-        </span>
-        <span style={{ fontSize: "6.5pt" }}>居宅介護支援事業所→利用者</span>
-      </div>
-
-      {/* ── Header block (3 rows) ── */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px", tableLayout: "fixed" }}>
-        <colgroup>
-          {/* col widths: 保険者番号 label, value, 保険者名 label+val, 事業者名+担当者 label+val, 作成年月日 label+val, 利用者確認 label+val */}
-          <col style={{ width: "7%" }} />
-          <col style={{ width: "10%" }} />
-          <col style={{ width: "6%" }} />
-          <col style={{ width: "13%" }} />
-          <col style={{ width: "20%" }} />
-          <col style={{ width: "14%" }} />
-          <col style={{ width: "8%" }} />
-          <col style={{ width: "10%" }} />
-          <col style={{ width: "6%" }} />
-          <col style={{ width: "6%" }} />
-        </colgroup>
-        <tbody>
-          {/* Row 1 */}
-          <tr style={{ height: "18px" }}>
-            <th style={{ border: "1px solid #000", backgroundColor: "#e8e8e8", fontSize: "6.5pt", textAlign: "center", padding: "1px" }}>保険者番号</th>
-            <td style={{ border: "1px solid #000", fontSize: "7pt", padding: "1px 3px", letterSpacing: "0.1em" }}>{cert?.insurer_number ?? ""}</td>
-            <th style={{ border: "1px solid #000", backgroundColor: "#e8e8e8", fontSize: "6.5pt", textAlign: "center", padding: "1px" }}>保険者名</th>
-            <td style={{ border: "1px solid #000", fontSize: "7pt", padding: "1px 3px" }}></td>
-            <th style={{ border: "1px solid #000", backgroundColor: "#e8e8e8", fontSize: "6.5pt", textAlign: "center", padding: "1px" }}>居宅介護支援事業者事業所名<br />担当者名</th>
-            <td style={{ border: "1px solid #000", fontSize: "7pt", padding: "1px 3px" }}></td>
-            <th style={{ border: "1px solid #000", backgroundColor: "#e8e8e8", fontSize: "6.5pt", textAlign: "center", padding: "1px" }}>作成年月日</th>
-            <td style={{ border: "1px solid #000", fontSize: "7pt", padding: "1px 3px" }}>{today}</td>
-            <th style={{ border: "1px solid #000", backgroundColor: "#e8e8e8", fontSize: "6.5pt", textAlign: "center", padding: "1px" }} colSpan={2}>利用者確認</th>
-          </tr>
-          {/* Row 2 */}
-          <tr style={{ height: "18px" }}>
-            <th style={{ border: "1px solid #000", backgroundColor: "#e8e8e8", fontSize: "6.5pt", textAlign: "center", padding: "1px" }}>被保険者番号</th>
-            <td style={{ border: "1px solid #000", fontSize: "7pt", padding: "1px 3px", letterSpacing: "0.1em" }}>{cert?.insured_number ?? ""}</td>
-            <th style={{ border: "1px solid #000", backgroundColor: "#e8e8e8", fontSize: "6.5pt", textAlign: "center", padding: "1px" }}>フリガナ<br />被保険者氏名</th>
-            <td style={{ border: "1px solid #000", fontSize: "7pt", padding: "1px 3px", fontWeight: "bold" }} colSpan={3}>
-              <div style={{ fontSize: "6pt", fontWeight: "normal" }}>{user.name_kana}</div>
-              <div>{user.name}</div>
-            </td>
-            <th style={{ border: "1px solid #000", backgroundColor: "#e8e8e8", fontSize: "6.5pt", textAlign: "center", padding: "1px" }}>届出年月日</th>
-            <td style={{ border: "1px solid #000", fontSize: "7pt", padding: "1px 3px" }}></td>
-            <td style={{ border: "1px solid #000" }} colSpan={2}></td>
-          </tr>
-          {/* Row 3 */}
-          <tr style={{ height: "20px" }}>
-            <th style={{ border: "1px solid #000", backgroundColor: "#e8e8e8", fontSize: "6.5pt", textAlign: "center", padding: "1px" }}>生年月日</th>
-            <td style={{ border: "1px solid #000", fontSize: "6.5pt", padding: "1px 2px" }}>{fmtReiwa(user.birth_date)}</td>
-            <th style={{ border: "1px solid #000", backgroundColor: "#e8e8e8", fontSize: "6.5pt", textAlign: "center", padding: "1px" }}>性別</th>
-            <td style={{ border: "1px solid #000", fontSize: "7pt", padding: "1px 3px" }}>{user.gender}</td>
-            <th style={{ border: "1px solid #000", backgroundColor: "#e8e8e8", fontSize: "6.5pt", textAlign: "center", padding: "1px" }}>
-              要介護状態区分<br /><span style={{ fontSize: "6pt" }}>変更後・要介護状態区分変更日</span>
-            </th>
-            <td style={{ border: "1px solid #000", fontSize: "7pt", padding: "1px 3px" }}>
-              {cert?.care_level ?? ""}
-            </td>
-            <th style={{ border: "1px solid #000", backgroundColor: "#e8e8e8", fontSize: "6.5pt", textAlign: "center", padding: "1px" }}>
-              区分支給限度基準額<br /><span style={{ fontWeight: "normal" }}>___単位/月</span>
-            </th>
-            <td style={{ border: "1px solid #000", fontSize: "7pt", padding: "1px 3px" }}>
-              {cert?.support_limit_amount != null ? `${cert.support_limit_amount.toLocaleString()}` : ""}
-            </td>
-            <th style={{ border: "1px solid #000", backgroundColor: "#e8e8e8", fontSize: "6pt", textAlign: "center", padding: "1px" }}>
-              限度額適用期間<br />から___まで
-            </th>
-            <td style={{ border: "1px solid #000", fontSize: "6pt", padding: "1px 2px" }}>
-              前月までの短期入所<br />利用日数___日
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* ── Main grid ── */}
-      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
-        <colgroup>
-          <col style={{ width: "8%" }} />   {/* 提供時間帯 */}
-          <col style={{ width: "10%" }} />  {/* サービス内容 */}
-          <col style={{ width: "11%" }} />  {/* サービス事業者・事業所名 */}
-          {days.map((d) => <col key={d} style={{ width: calColW }} />)}
-          <col style={{ width: "4%" }} />   {/* 合計回数 */}
-        </colgroup>
-        <thead>
-          {/* Day number row */}
-          <tr style={{ height: "14px" }}>
-            <th style={{ border: "1px solid #000", backgroundColor: "#d0d0d0", fontSize: "6pt", textAlign: "center", padding: "1px" }} rowSpan={2}>提供時間帯</th>
-            <th style={{ border: "1px solid #000", backgroundColor: "#d0d0d0", fontSize: "6pt", textAlign: "center", padding: "1px" }} rowSpan={2}>サービス内容</th>
-            <th style={{ border: "1px solid #000", backgroundColor: "#d0d0d0", fontSize: "6pt", textAlign: "center", padding: "1px" }} rowSpan={2}>サービス事業者<br />事業所名</th>
-            {days.map((d) => {
-              const dow = getDay(parseISO(`${yearMonth}-${String(d).padStart(2, "0")}`));
-              const isWeekend = dow === 0 || dow === 6;
-              return (
-                <th key={d} style={{
-                  border: "1px solid #000",
-                  backgroundColor: isWeekend ? "#e8f5e9" : "#d0d0d0",
-                  fontSize: "6pt",
-                  textAlign: "center",
-                  padding: "0",
-                }}>
-                  {d}
-                </th>
-              );
-            })}
-            <th style={{ border: "1px solid #000", backgroundColor: "#d0d0d0", fontSize: "6pt", textAlign: "center", padding: "1px" }} rowSpan={2}>合計<br />回数</th>
-          </tr>
-          {/* Day-of-week row */}
-          <tr style={{ height: "12px" }}>
-            {days.map((d) => {
-              const dow = getDay(parseISO(`${yearMonth}-${String(d).padStart(2, "0")}`));
-              const isWeekend = dow === 0 || dow === 6;
-              return (
-                <th key={d} style={{
-                  border: "1px solid #000",
-                  backgroundColor: isWeekend ? "#e8f5e9" : "#d0d0d0",
-                  fontSize: "5.5pt",
-                  textAlign: "center",
-                  padding: "0",
-                  color: dow === 0 ? "#cc0000" : dow === 6 ? "#0000cc" : "#000",
-                }}>
-                  {DOW_JA[dow]}
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {slots.map((svc, idx) => {
-            const plannedDays = svc ? (plannedDaysByIdx.get(idx) ?? new Set<number>()) : new Set<number>();
-            const actualDays = svc ? (actualDaysByType[svc.service_type] ?? new Set<number>()) : new Set<number>();
-            const totalCount = actualDays.size > 0 ? actualDays.size : plannedDays.size;
-
-            return (
-              <React.Fragment key={idx}>
-              {/* 予定 row */}
-              <tr style={{ height: "16px" }}>
-                <td style={{ border: "1px solid #000", fontSize: "6pt", padding: "1px 2px", textAlign: "center", verticalAlign: "middle" }} rowSpan={2}>
-                  {/* 提供時間帯 – blank for user to fill */}
-                </td>
-                <td style={{ border: "1px solid #000", fontSize: "6pt", padding: "1px 2px", verticalAlign: "middle" }}
-                    rowSpan={2}>
-                  {svc?.service_content ?? ""}
-                </td>
-                <td style={{ border: "1px solid #000", fontSize: "6pt", padding: "1px 2px", verticalAlign: "middle" }}
-                    rowSpan={2}>
-                  {svc?.provider ?? ""}
-                </td>
-                {days.map((d) => {
-                  const dow = getDay(parseISO(`${yearMonth}-${String(d).padStart(2, "0")}`));
-                  const isWeekend = dow === 0 || dow === 6;
-                  const marked = svc ? plannedDays.has(d) : false;
-                  return (
-                    <td key={d} style={{
-                      border: "1px dashed #666",
-                      backgroundColor: isWeekend ? "#e8f5e9" : "transparent",
-                      fontSize: "8pt",
-                      textAlign: "center",
-                      padding: "0",
-                    }}>
-                      {marked ? "○" : ""}
-                    </td>
-                  );
-                })}
-                <td style={{ border: "1px solid #000", fontSize: "6.5pt", textAlign: "center", verticalAlign: "middle" }}
-                    rowSpan={2}>
-                  {svc && totalCount > 0 ? totalCount : ""}
-                </td>
-              </tr>
-              {/* 実績 row */}
-              <tr style={{ height: "16px" }}>
-                {days.map((d) => {
-                  const dow = getDay(parseISO(`${yearMonth}-${String(d).padStart(2, "0")}`));
-                  const isWeekend = dow === 0 || dow === 6;
-                  const marked = svc ? actualDays.has(d) : false;
-                  return (
-                    <td key={d} style={{
-                      border: "1px solid #000",
-                      backgroundColor: isWeekend ? "#e8f5e9" : "transparent",
-                      fontSize: "8pt",
-                      textAlign: "center",
-                      padding: "0",
-                    }}>
-                      {marked ? "●" : ""}
-                    </td>
-                  );
-                })}
-              </tr>
-              </React.Fragment>
-            );
-          })}
-        </tbody>
-      </table>
-
-      {/* ── Bottom spacer for totals/signatures ── */}
-      <div style={{ marginTop: "4px", height: "20px", border: "1px solid #000", fontSize: "6.5pt", padding: "2px 4px", color: "#555" }}>
-        （給付管理・担当者確認欄）
-      </div>
-    </div>
-  );
+function EditForm({ reportType, content, onChange }: {
+  reportType: string; content: Record<string, unknown>; onChange: (c: Record<string, unknown>) => void;
+}) {
+  switch (reportType) {
+    case "care-plan-1": return <EditFormCarePlan1 content={content} onChange={onChange} />;
+    case "care-plan-2": return <EditFormCarePlan2 content={content} onChange={onChange} />;
+    default: return <EditFormGeneric content={content} onChange={onChange} label="内容（JSON編集）" />;
+  }
 }
 
 // ---------------------------------------------------------------------------
-// 6. サービス提供票（様式第7）- landscape
+// Print CSS
 // ---------------------------------------------------------------------------
 
-function ServiceProvisionReport({
-  user,
-  cert,
-  records,
-  yearMonth,
-  planServices,
-}: {
-  user: KaigoUser;
-  cert: CareCertification | null;
-  records: ServiceRecord[];
-  yearMonth: string;
-  planServices: CarePlanService[];
-}) {
-  const monthDate = parseISO(`${yearMonth}-01`);
-  const daysInMonth = getDaysInMonth(monthDate);
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+const PRINT_STYLE_PORTRAIT = `
+@media print {
+  body * { visibility: hidden !important; }
+  #print-area, #print-area * { visibility: visible !important; }
+  #print-area { position: fixed !important; inset: 0 !important; width: 210mm !important; min-height: 297mm !important; padding: 8mm 10mm !important; font-size: 9pt !important; color: #000 !important; background: #fff !important; overflow: visible !important; }
+  .no-print { display: none !important; }
+  table { border-collapse: collapse !important; }
+  td, th { border: 1px solid #000 !important; padding: 1px 2px !important; }
+  @page { size: A4 portrait; margin: 0; }
+}`;
 
-  const actualByTypeDay: Record<string, Set<number>> = {};
-  for (const r of records) {
-    if (!actualByTypeDay[r.service_type]) actualByTypeDay[r.service_type] = new Set();
-    const day = parseInt(r.service_date.split("-")[2], 10);
-    actualByTypeDay[r.service_type].add(day);
+const PRINT_STYLE_LANDSCAPE = `
+@media print {
+  body * { visibility: hidden !important; }
+  #print-area, #print-area * { visibility: visible !important; }
+  #print-area { position: fixed !important; inset: 0 !important; width: 297mm !important; min-height: 210mm !important; padding: 6mm 8mm !important; font-size: 8pt !important; color: #000 !important; background: #fff !important; overflow: visible !important; }
+  .no-print { display: none !important; }
+  table { border-collapse: collapse !important; }
+  td, th { border: 1px solid #000 !important; padding: 1px 2px !important; }
+  @page { size: A4 landscape; margin: 0; }
+}`;
+
+// ---------------------------------------------------------------------------
+// Auto-generation: fetch data then create doc
+// ---------------------------------------------------------------------------
+
+async function autoGenerateDoc(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  reportType: string,
+  reportMonth: string | null,
+  config: ReportConfig,
+): Promise<ReportDoc | null> {
+  // Fetch user
+  const { data: user, error: ue } = await supabase
+    .from("kaigo_users").select("*").eq("id", userId).single();
+  if (ue || !user) throw new Error("利用者データの取得に失敗しました");
+
+  // Fetch cert
+  const { data: certArr } = await supabase
+    .from("kaigo_care_certifications").select("*").eq("user_id", userId)
+    .eq("status", "active").order("start_date", { ascending: false }).limit(1);
+  const cert: CareCertification | null = certArr?.[0] ?? null;
+
+  // Fetch plan
+  const { data: planArr } = await supabase
+    .from("kaigo_care_plans").select("*").eq("user_id", userId)
+    .eq("status", "active").order("start_date", { ascending: false }).limit(1);
+  const plan: CarePlan | null = planArr?.[0] ?? null;
+
+  // Fetch services
+  let services: CarePlanService[] = [];
+  if (plan) {
+    const { data: svcs } = await supabase
+      .from("kaigo_care_plan_services").select("*").eq("care_plan_id", plan.id).order("service_type");
+    services = svcs ?? [];
   }
 
-  const planTypes = planServices.map((s) => s.service_type);
-  const actualTypes = Object.keys(actualByTypeDay);
-  const allTypes = [...new Set([...planTypes, ...actualTypes])];
+  const content = buildDefaultContent(reportType, user as KaigoUser, cert, plan, services);
+  const today = format(new Date(), "yyyy-MM-dd");
+  const title = config.needsPeriod && reportMonth
+    ? `${config.titleJa}（${fmtJaYear(reportMonth + "-01")}）`
+    : `${config.titleJa}　${fmtDate(today)}`;
 
-  return (
-    <div style={{ fontFamily: '"MS Mincho", "游明朝", "Hiragino Mincho ProN", serif', fontSize: "7.5pt", color: "#000" }}>
-      {/* Title */}
-      <div style={{ textAlign: "center", marginBottom: "3px" }}>
-        <div style={{ fontSize: "10pt", fontWeight: "bold", letterSpacing: "0.15em" }}>
-          サービス提供票
-        </div>
-      </div>
+  const { data: doc, error: ie } = await supabase
+    .from("kaigo_report_documents")
+    .insert({
+      user_id: userId,
+      report_type: reportType,
+      title,
+      report_month: reportMonth,
+      care_plan_id: plan?.id ?? null,
+      content,
+      status: "draft",
+    })
+    .select()
+    .single();
 
-      {/* Header */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "3px" }}>
-        <tbody>
-          <tr style={{ height: "18px" }}>
-            <TH style={{ width: "10%" }}>保険者番号</TH>
-            <TD style={{ width: "12%" }} className="px-1">{cert?.insurer_number ?? "　"}</TD>
-            <TH style={{ width: "10%" }}>被保険者番号</TH>
-            <TD style={{ width: "12%" }} className="px-1">{cert?.insured_number ?? "　"}</TD>
-            <TH style={{ width: "8%" }}>氏名</TH>
-            <TD style={{ width: "14%" }} className="px-1 font-bold">{user.name}</TD>
-            <TH style={{ width: "10%" }}>要介護度</TH>
-            <TD style={{ width: "10%" }} className="px-1">{cert?.care_level ?? "　"}</TD>
-            <TH style={{ width: "10%" }}>対象年月</TH>
-            <TD style={{ width: "14%" }} className="px-1">{fmtReiwaMonth(yearMonth)}</TD>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* Legend */}
-      <div style={{ fontSize: "7pt", marginBottom: "2px", color: "#333" }}>
-        ※上段：予定（○）　下段：実績（●）
-      </div>
-
-      {/* Main provision table */}
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ height: "20px" }}>
-            <TH style={{ width: "12%" }} rowSpan={2}>事業所名</TH>
-            <TH style={{ width: "10%" }} rowSpan={2}>サービス内容</TH>
-            <TH style={{ width: "8%" }} rowSpan={2}>サービス種類</TH>
-            {days.map((d) => {
-              const dayOfWeek = getDay(parseISO(`${yearMonth}-${String(d).padStart(2, "0")}`));
-              const isSun = dayOfWeek === 0;
-              const isSat = dayOfWeek === 6;
-              return (
-                <TH
-                  key={d}
-                  style={{
-                    width: `${62 / daysInMonth}%`,
-                    backgroundColor: isSun ? "#ffeeee" : isSat ? "#eeeeff" : "#f0f0f0",
-                    color: isSun ? "#cc0000" : isSat ? "#0000cc" : "#000",
-                    fontSize: "6.5pt",
-                    padding: "1px",
-                  }}
-                >
-                  {d}
-                </TH>
-              );
-            })}
-            <TH style={{ width: "4%" }} rowSpan={2}>予定</TH>
-            <TH style={{ width: "4%" }} rowSpan={2}>実績</TH>
-          </tr>
-          <tr style={{ height: "12px" }}>
-            {days.map((d) => {
-              const dayOfWeek = getDay(parseISO(`${yearMonth}-${String(d).padStart(2, "0")}`));
-              const DOW_JA = ["日", "月", "火", "水", "木", "金", "土"];
-              const isSun = dayOfWeek === 0;
-              const isSat = dayOfWeek === 6;
-              return (
-                <TH
-                  key={d}
-                  style={{
-                    fontSize: "6pt",
-                    backgroundColor: isSun ? "#ffeeee" : isSat ? "#eeeeff" : "#f0f0f0",
-                    color: isSun ? "#cc0000" : isSat ? "#0000cc" : "#555",
-                    padding: "0px",
-                  }}
-                >
-                  {DOW_JA[dayOfWeek]}
-                </TH>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {allTypes.length > 0 ? (
-            allTypes.map((svcType) => {
-              const planSvc = planServices.find((s) => s.service_type === svcType);
-              const actualDays = actualByTypeDay[svcType] ?? new Set<number>();
-              const plannedCount = days.filter((d) => {
-                // Assume all days in plan are planned if service exists
-                return planSvc != null;
-              }).length;
-              const actualCount = actualDays.size;
-              return (
-                <tr key={svcType} style={{ height: "24px" }}>
-                  <TD className="px-1" style={{ fontSize: "7pt" }}>{planSvc?.provider ?? "　"}</TD>
-                  <TD className="px-1" style={{ fontSize: "7pt" }}>{planSvc?.service_content ?? svcType}</TD>
-                  <TD className="px-1 text-center" style={{ fontSize: "7pt" }}>{svcType}</TD>
-                  {days.map((d) => {
-                    const hasActual = actualDays.has(d);
-                    const hasPlanned = planSvc != null;
-                    return (
-                      <TD
-                        key={d}
-                        style={{
-                          padding: "0",
-                          verticalAlign: "middle",
-                          textAlign: "center",
-                          fontSize: "8pt",
-                        }}
-                      >
-                        <div style={{ borderBottom: "1px solid #ccc", lineHeight: "11px", minHeight: "11px", backgroundColor: hasPlanned ? "#f0f8ff" : "transparent" }}>
-                          {hasPlanned ? "○" : ""}
-                        </div>
-                        <div style={{ lineHeight: "11px", minHeight: "11px", backgroundColor: hasActual ? "#fff0f0" : "transparent" }}>
-                          {hasActual ? "●" : ""}
-                        </div>
-                      </TD>
-                    );
-                  })}
-                  <TD className="text-center font-bold" style={{ fontSize: "8pt" }}>{planSvc ? "—" : "　"}</TD>
-                  <TD className="text-center font-bold" style={{ fontSize: "8pt" }}>{actualCount > 0 ? actualCount : "　"}</TD>
-                </tr>
-              );
-            })
-          ) : (
-            Array.from({ length: 5 }).map((_, i) => (
-              <tr key={i} style={{ height: "24px" }}>
-                <TD /><TD /><TD />
-                {days.map((d) => (
-                  <TD key={d} style={{ padding: "0" }}>
-                    <div style={{ borderBottom: "1px solid #ccc", minHeight: "11px" }} />
-                    <div style={{ minHeight: "11px" }} />
-                  </TD>
-                ))}
-                <TD /><TD />
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-
-      {/* 給付管理 summary */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "4px" }}>
-        <tbody>
-          <tr style={{ height: "20px" }}>
-            <TH style={{ width: "20%" }}>実績サービス日数合計</TH>
-            <TD style={{ width: "12%" }} className="px-2 font-bold text-right">
-              {Object.values(actualByTypeDay).reduce((s, set) => s + set.size, 0)}　日
-            </TD>
-            <TH style={{ width: "20%" }}>事業所番号</TH>
-            <TD style={{ width: "16%" }} className="px-1">{cert?.insurer_number ?? "　"}</TD>
-            <TH style={{ width: "12%" }}>確認印</TH>
-            <TD style={{ width: "20%" }} className="px-2" />
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  );
+  if (ie) throw new Error("帳票の保存に失敗しました: " + ie.message);
+  return doc as ReportDoc;
 }
 
 // ---------------------------------------------------------------------------
-// 7. 請求書
+// Document list panel
 // ---------------------------------------------------------------------------
 
-function InvoiceReport({
-  user,
-  billingRecords,
-  billingDetails,
-  yearMonth,
-}: {
-  user: KaigoUser;
-  billingRecords: BillingRecord[];
-  billingDetails: BillingDetail[];
-  yearMonth: string;
+function DocList({ docs, loading, selectedId, onSelect, onNew, newLoading }: {
+  docs: ReportDoc[]; loading: boolean; selectedId: string | null;
+  onSelect: (doc: ReportDoc) => void; onNew: () => void; newLoading: boolean;
 }) {
-  const totalAmount = billingRecords.reduce((s, r) => s + (r.total_amount ?? 0), 0);
-  const totalInsurance = billingRecords.reduce((s, r) => s + (r.insurance_amount ?? 0), 0);
-  const totalCopay = billingRecords.reduce((s, r) => s + (r.copay_amount ?? 0), 0);
-
-  const detailMap: Record<string, BillingDetail[]> = {};
-  for (const d of billingDetails) {
-    if (!detailMap[d.billing_record_id]) detailMap[d.billing_record_id] = [];
-    detailMap[d.billing_record_id].push(d);
-  }
-
-  const today = fmtReiwa(format(new Date(), "yyyy-MM-dd"));
-
   return (
-    <div style={{ fontFamily: '"MS Mincho", "游明朝", "Hiragino Mincho ProN", serif', fontSize: "9pt", color: "#000" }}>
-      {/* Title */}
-      <div style={{ textAlign: "center", marginBottom: "8px" }}>
-        <div style={{ fontSize: "14pt", fontWeight: "bold", letterSpacing: "0.3em" }}>請　求　書</div>
+    <div className="mb-4 rounded-xl border bg-white shadow-sm no-print">
+      <div className="flex items-center justify-between border-b px-4 py-3">
+        <h2 className="text-sm font-semibold text-gray-700">保存済み帳票</h2>
+        <button onClick={onNew} disabled={newLoading}
+          className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
+          {newLoading ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+          新規作成
+        </button>
       </div>
-
-      {/* Header: 宛先 & 発行元 */}
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
-        <div style={{ width: "55%" }}>
-          <div style={{ fontSize: "11pt", fontWeight: "bold", borderBottom: "2px solid #000", paddingBottom: "2px", marginBottom: "4px" }}>
-            {user.name}　様
-          </div>
-          <div style={{ fontSize: "8pt", color: "#555" }}>
-            〒{user.postal_code ?? "　"} {user.address ?? "　"}
-          </div>
-          <div style={{ marginTop: "8px", border: "1px solid #000", padding: "4px 8px", display: "inline-block" }}>
-            <span style={{ fontSize: "9pt" }}>ご請求金額（税込）：</span>
-            <span style={{ fontSize: "13pt", fontWeight: "bold" }}>{fmtCurrency(totalCopay)}</span>
-          </div>
+      {loading ? (
+        <div className="flex items-center justify-center py-8 text-gray-400">
+          <Loader2 size={20} className="animate-spin mr-2" /> 読み込み中...
         </div>
-        <div style={{ width: "40%", textAlign: "right", fontSize: "8.5pt" }}>
-          <div>発行日：{today}</div>
-          <div style={{ marginTop: "4px" }}>対象月：{fmtReiwaMonth(yearMonth)}</div>
-          <div style={{ marginTop: "8px", fontWeight: "bold" }}>○○介護支援事業所</div>
-          <div>担当：介護支援専門員</div>
+      ) : docs.length === 0 ? (
+        <div className="py-8 text-center text-sm text-gray-400">
+          帳票がありません。「新規作成」で自動生成できます。
         </div>
-      </div>
-
-      {/* 請求概要 */}
-      <div style={{ marginBottom: "4px", fontWeight: "bold", borderBottom: "1px solid #000", paddingBottom: "2px" }}>
-        ■ 介護保険サービス利用料明細
-      </div>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "8px" }}>
-        <thead>
-          <tr style={{ backgroundColor: "#e0e0e0", height: "22px" }}>
-            <TH style={{ width: "28%" }}>サービス種別</TH>
-            <TH style={{ width: "10%" }}>総単位数</TH>
-            <TH style={{ width: "10%" }}>単位単価（円）</TH>
-            <TH style={{ width: "13%" }}>総費用額（円）</TH>
-            <TH style={{ width: "13%" }}>保険給付額（円）</TH>
-            <TH style={{ width: "13%" }}>自己負担額（円）</TH>
-            <TH style={{ width: "13%" }}>状態</TH>
-          </tr>
-        </thead>
-        <tbody>
-          {billingRecords.length === 0 ? (
-            <tr style={{ height: "28px" }}>
-              <TD colSpan={7} className="text-center" style={{ color: "#888" }}>
-                請求データがありません
-              </TD>
-            </tr>
-          ) : (
-            billingRecords.map((rec) => (
-              <tr key={rec.id} style={{ height: "22px" }}>
-                <TD className="px-2">{rec.service_type}</TD>
-                <TD className="px-2 text-right">{rec.total_units.toLocaleString()}</TD>
-                <TD className="px-2 text-right">{rec.unit_price.toLocaleString()}</TD>
-                <TD className="px-2 text-right">{rec.total_amount.toLocaleString()}</TD>
-                <TD className="px-2 text-right">{rec.insurance_amount.toLocaleString()}</TD>
-                <TD className="px-2 text-right font-bold">{rec.copay_amount.toLocaleString()}</TD>
-                <TD className="px-2 text-center">
-                  {rec.status === "paid" ? "支払済" : rec.status === "submitted" ? "請求済" : "下書き"}
-                </TD>
-              </tr>
-            ))
-          )}
-        </tbody>
-        {billingRecords.length > 0 && (
-          <tfoot>
-            <tr style={{ backgroundColor: "#f0f0f0", height: "22px" }}>
-              <TD colSpan={3} className="px-2 text-right font-bold">合　計</TD>
-              <TD className="px-2 text-right font-bold">{totalAmount.toLocaleString()}</TD>
-              <TD className="px-2 text-right font-bold">{totalInsurance.toLocaleString()}</TD>
-              <TD className="px-2 text-right font-bold" style={{ backgroundColor: "#fff0f0" }}>
-                {totalCopay.toLocaleString()}
-              </TD>
-              <TD />
-            </tr>
-          </tfoot>
-        )}
-      </table>
-
-      {/* 請求明細 */}
-      {billingDetails.length > 0 && (
-        <>
-          <div style={{ marginBottom: "4px", fontWeight: "bold", borderBottom: "1px solid #000", paddingBottom: "2px" }}>
-            ■ 請求明細
-          </div>
-          {billingRecords.map((rec) => {
-            const details = detailMap[rec.id] ?? [];
-            if (details.length === 0) return null;
-            return (
-              <div key={rec.id} style={{ marginBottom: "8px" }}>
-                <div style={{ backgroundColor: "#e8e8e8", padding: "1px 6px", border: "1px solid #999", fontWeight: "bold", fontSize: "8.5pt" }}>
-                  {rec.service_type}
+      ) : (
+        <div className="divide-y max-h-48 overflow-y-auto">
+          {docs.map((doc) => (
+            <button key={doc.id} onClick={() => onSelect(doc)}
+              className={`w-full flex items-center justify-between px-4 py-2.5 text-left transition-colors hover:bg-gray-50 ${selectedId === doc.id ? "bg-blue-50" : ""}`}>
+              <div>
+                <div className="text-sm font-medium text-gray-800">{doc.title}</div>
+                <div className="text-xs text-gray-400 mt-0.5">
+                  {fmtDate(doc.updated_at)} 更新
                 </div>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr style={{ height: "18px", backgroundColor: "#f5f5f5" }}>
-                      <TH style={{ width: "16%" }}>サービス日</TH>
-                      <TH style={{ width: "16%" }}>サービスコード</TH>
-                      <TH style={{ width: "44%" }}>サービス名称</TH>
-                      <TH style={{ width: "12%" }}>単位数</TH>
-                      <TH style={{ width: "12%" }}>金額（円）</TH>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {details.map((d) => (
-                      <tr key={d.id} style={{ height: "18px" }}>
-                        <TD className="px-1 text-center">{fmtDate(d.service_date)}</TD>
-                        <TD className="px-1 text-center" style={{ fontFamily: "monospace" }}>{d.service_code}</TD>
-                        <TD className="px-1">{d.service_name}</TD>
-                        <TD className="px-1 text-right">{d.units.toLocaleString()}</TD>
-                        <TD className="px-1 text-right">{d.amount.toLocaleString()}</TD>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
-            );
-          })}
-        </>
+              <span className={`ml-3 flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${doc.status === "completed" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
+                {doc.status === "completed" ? <CheckCircle size={10} /> : <Clock size={10} />}
+                {doc.status === "completed" ? "完成" : "下書き"}
+              </span>
+            </button>
+          ))}
+        </div>
       )}
+    </div>
+  );
+}
 
-      {/* お振込み先 */}
-      <div style={{ marginTop: "16px", border: "1px solid #999", padding: "6px 12px" }}>
-        <div style={{ fontWeight: "bold", marginBottom: "4px", fontSize: "8.5pt" }}>【お振込み先】</div>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <tbody>
-            <tr style={{ height: "18px" }}>
-              <TH style={{ width: "20%" }}>金融機関名</TH>
-              <TD className="px-2" style={{ width: "30%" }} />
-              <TH style={{ width: "20%" }}>口座番号</TH>
-              <TD className="px-2" style={{ width: "30%" }} />
-            </tr>
-            <tr style={{ height: "18px" }}>
-              <TH>口座名義</TH>
-              <TD className="px-2" colSpan={3} />
-            </tr>
-          </tbody>
-        </table>
-        <div style={{ fontSize: "7.5pt", color: "#555", marginTop: "4px" }}>
-          ※ お支払い期限：{today}よりご請求月末　／　ご不明な点はご連絡ください。
+// ---------------------------------------------------------------------------
+// Edit/View panel
+// ---------------------------------------------------------------------------
+
+function DocEditor({ doc, config, onSave, onStatusToggle }: {
+  doc: ReportDoc; config: ReportConfig;
+  onSave: (content: Record<string, unknown>) => Promise<void>;
+  onStatusToggle: () => Promise<void>;
+}) {
+  const [content, setContent] = useState<Record<string, unknown>>(doc.content ?? {});
+  const [saving, setSaving] = useState(false);
+  const [toggling, setToggling] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const isLandscape = config.landscape ?? false;
+  const paperWidth = isLandscape ? "297mm" : "210mm";
+  const paperMinHeight = isLandscape ? "210mm" : "297mm";
+  const paperPadding = isLandscape ? "8mm 10mm" : "10mm 12mm";
+
+  // Reset when doc changes
+  useEffect(() => {
+    setContent(doc.content ?? {});
+    setDirty(false);
+  }, [doc.id, doc.content]);
+
+  const handleChange = (c: Record<string, unknown>) => { setContent(c); setDirty(true); };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try { await onSave(content); setDirty(false); } finally { setSaving(false); }
+  };
+
+  const handleToggle = async () => {
+    setToggling(true);
+    try { await onStatusToggle(); } finally { setToggling(false); }
+  };
+
+  return (
+    <div className="rounded-xl border bg-white shadow-sm">
+      {/* Toolbar */}
+      <div className="no-print flex items-center justify-between border-b px-4 py-3 gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <FileText size={16} className="text-gray-400 shrink-0" />
+          <span className="text-sm font-semibold text-gray-800 truncate">{doc.title}</span>
+          <span className={`ml-1 flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium shrink-0 ${doc.status === "completed" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
+            {doc.status === "completed" ? <CheckCircle size={10} /> : <Clock size={10} />}
+            {doc.status === "completed" ? "完成" : "下書き"}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={handleToggle} disabled={toggling}
+            className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors">
+            {toggling ? <Loader2 size={12} className="animate-spin" /> : <Pencil size={12} />}
+            {doc.status === "completed" ? "下書きに戻す" : "完成にする"}
+          </button>
+          <button onClick={handleSave} disabled={saving || !dirty}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors disabled:opacity-50 ${dirty ? "bg-green-600 hover:bg-green-700" : "bg-gray-400"}`}>
+            {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+            {saving ? "保存中..." : dirty ? "保存する" : "保存済み"}
+          </button>
+          <button onClick={() => window.print()}
+            className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+            <Printer size={12} /> 印刷
+          </button>
+        </div>
+      </div>
+
+      {/* Edit form */}
+      <div className="no-print border-b bg-gray-50">
+        <EditForm reportType={doc.report_type} content={content} onChange={handleChange} />
+      </div>
+
+      {/* Print preview */}
+      <div className="no-print px-4 py-2 text-xs text-gray-400 flex items-center gap-1">
+        <Printer size={11} /> 印刷プレビュー（A4{isLandscape ? "横" : "縦"}）
+      </div>
+      <div className="overflow-x-auto px-4 pb-4">
+        <div id="print-area" className="mx-auto bg-white shadow"
+          style={{ width: paperWidth, minHeight: paperMinHeight, padding: paperPadding,
+            fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt",
+            color: "#000", boxSizing: "border-box" }}>
+          <PrintView reportType={doc.report_type} content={content} config={config} />
         </div>
       </div>
     </div>
@@ -1794,475 +767,174 @@ export default function ReportTypePage() {
   const params = useParams();
   const reportType = typeof params.type === "string" ? params.type : "";
   const config = REPORT_CONFIG[reportType];
-  const isLandscape = config?.landscape ?? false;
-
   const supabase = createClient();
 
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [selectedYearMonth, setSelectedYearMonth] = useState(
-    format(new Date(), "yyyy-MM")
-  );
-  const [showReport, setShowReport] = useState(false);
-  const [userList, setUserList] = useState<{ id: string; name: string }[]>([]);
-  const [usersLoading, setUsersLoading] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [selectedYearMonth, setSelectedYearMonth] = useState(format(new Date(), "yyyy-MM"));
+  const [docs, setDocs] = useState<ReportDoc[]>([]);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState<ReportDoc | null>(null);
+  const [newLoading, setNewLoading] = useState(false);
 
-  // Data states
-  const [user, setUser] = useState<KaigoUser | null>(null);
-  const [cert, setCert] = useState<CareCertification | null>(null);
-  const [insurance, setInsurance] = useState<MedicalInsurance | null>(null);
-  const [adl, setAdl] = useState<AdlRecord | null>(null);
-  const [histories, setHistories] = useState<MedicalHistory[]>([]);
-  const [contacts, setContacts] = useState<FamilyContact[]>([]);
-  const [healthRecords, setHealthRecords] = useState<HealthRecord[]>([]);
-  const [carePlan, setCarePlan] = useState<CarePlan | null>(null);
-  const [planServices, setPlanServices] = useState<CarePlanService[]>([]);
-  const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
-  const [billingRecords, setBillingRecords] = useState<BillingRecord[]>([]);
-  const [billingDetails, setBillingDetails] = useState<BillingDetail[]>([]);
-
-  // Fetch user list
-  useEffect(() => {
-    async function load() {
-      setUsersLoading(true);
-      const { data } = await supabase
-        .from("kaigo_users")
-        .select("id, name")
-        .eq("status", "active")
-        .order("name_kana");
-      setUserList(data ?? []);
-      setUsersLoading(false);
-    }
-    load();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleGenerate = useCallback(async () => {
-    if (!selectedUserId) return;
-    setLoading(true);
-    setError(null);
-    setShowReport(false);
-
-    try {
-      // Always fetch user
-      const { data: userData, error: ue } = await supabase
-        .from("kaigo_users")
-        .select("*")
-        .eq("id", selectedUserId)
-        .single();
-      if (ue) throw ue;
-      setUser(userData);
-
-      // Helper to get active cert
-      const fetchCert = async () => {
-        const { data } = await supabase
-          .from("kaigo_care_certifications")
-          .select("*")
-          .eq("user_id", selectedUserId)
-          .eq("status", "active")
-          .order("start_date", { ascending: false })
-          .limit(1);
-        return data?.[0] ?? null;
-      };
-
-      // Helper to get active plan
-      const fetchPlan = async () => {
-        const { data } = await supabase
-          .from("kaigo_care_plans")
-          .select("*")
-          .eq("user_id", selectedUserId)
-          .eq("status", "active")
-          .order("start_date", { ascending: false })
-          .limit(1);
-        return data?.[0] ?? null;
-      };
-
-      // Helper to get plan services
-      const fetchPlanServices = async (planId: string) => {
-        const { data } = await supabase
-          .from("kaigo_care_plan_services")
-          .select("*")
-          .eq("care_plan_id", planId)
-          .order("service_type");
-        return data ?? [];
-      };
-
-      if (reportType === "face-sheet") {
-        const [certData, insData, adlData, histData, famData, hrData] = await Promise.all([
-          fetchCert(),
-          supabase
-            .from("kaigo_medical_insurances")
-            .select("*")
-            .eq("user_id", selectedUserId)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .then(({ data }) => data?.[0] ?? null),
-          supabase
-            .from("kaigo_adl_records")
-            .select("*")
-            .eq("user_id", selectedUserId)
-            .order("assessment_date", { ascending: false })
-            .limit(1)
-            .then(({ data }) => data?.[0] ?? null),
-          supabase
-            .from("kaigo_medical_histories")
-            .select("*")
-            .eq("user_id", selectedUserId)
-            .order("onset_date", { ascending: false })
-            .then(({ data }) => data ?? []),
-          supabase
-            .from("kaigo_family_contacts")
-            .select("*")
-            .eq("user_id", selectedUserId)
-            .order("is_key_person", { ascending: false })
-            .then(({ data }) => data ?? []),
-          supabase
-            .from("kaigo_health_records")
-            .select("*")
-            .eq("user_id", selectedUserId)
-            .order("record_date", { ascending: false })
-            .limit(1)
-            .then(({ data }) => data ?? []),
-        ]);
-        setCert(certData);
-        setInsurance(insData);
-        setAdl(adlData);
-        setHistories(histData);
-        setContacts(famData);
-        setHealthRecords(hrData);
-      }
-
-      if (reportType === "care-plan-1") {
-        const [certData, planData] = await Promise.all([fetchCert(), fetchPlan()]);
-        setCert(certData);
-        setCarePlan(planData);
-      }
-
-      if (reportType === "care-plan-2" || reportType === "care-plan-3") {
-        const certData = await fetchCert();
-        setCert(certData);
-        const planData = await fetchPlan();
-        setCarePlan(planData);
-        if (planData) {
-          const svcs = await fetchPlanServices(planData.id);
-          setPlanServices(svcs);
-        } else {
-          setPlanServices([]);
-        }
-      }
-
-      if (reportType === "service-usage" || reportType === "service-provision") {
-        const [year, month] = selectedYearMonth.split("-").map(Number);
-        const lastDay = getDaysInMonth(new Date(year, month - 1));
-        const monthStart = `${selectedYearMonth}-01`;
-        const monthEnd = `${selectedYearMonth}-${String(lastDay).padStart(2, "0")}`;
-
-        const [certData, srData] = await Promise.all([
-          fetchCert(),
-          supabase
-            .from("kaigo_service_records")
-            .select("*")
-            .eq("user_id", selectedUserId)
-            .gte("service_date", monthStart)
-            .lte("service_date", monthEnd)
-            .order("service_date", { ascending: true })
-            .then(({ data, error: e }) => {
-              if (e) throw e;
-              return data ?? [];
-            }),
-        ]);
-        setCert(certData);
-        setServiceRecords(srData);
-
-        const planData = await fetchPlan();
-        setCarePlan(planData);
-        if (planData) {
-          const svcs = await fetchPlanServices(planData.id);
-          setPlanServices(svcs);
-        } else {
-          setPlanServices([]);
-        }
-      }
-
-      if (reportType === "invoice") {
-        const [year, month] = selectedYearMonth.split("-").map(Number);
-        const lastDay = getDaysInMonth(new Date(year, month - 1));
-        const monthStart = `${selectedYearMonth}-01`;
-        const monthEnd = `${selectedYearMonth}-${String(lastDay).padStart(2, "0")}`;
-
-        const { data: brData, error: bre } = await supabase
-          .from("kaigo_billing_records")
-          .select("*")
-          .eq("user_id", selectedUserId)
-          .gte("billing_month", monthStart)
-          .lte("billing_month", monthEnd)
-          .order("created_at", { ascending: true });
-        if (bre) throw bre;
-        setBillingRecords(brData ?? []);
-
-        if (brData && brData.length > 0) {
-          const recIds = brData.map((r: BillingRecord) => r.id);
-          const { data: bdData, error: bde } = await supabase
-            .from("kaigo_billing_details")
-            .select("*")
-            .in("billing_record_id", recIds)
-            .order("service_date", { ascending: true });
-          if (bde) throw bde;
-          setBillingDetails(bdData ?? []);
-        } else {
-          setBillingDetails([]);
-        }
-      }
-
-      setShowReport(true);
-    } catch (err: unknown) {
-      setError(
-        "データの取得に失敗しました: " +
-          (err instanceof Error ? err.message : String(err))
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedUserId, selectedYearMonth, reportType, supabase]);
-
-  // Year-month options: current ± 12 months, newest first
+  // Month options
   const monthOptions: string[] = [];
   for (let i = -12; i <= 2; i++) {
-    const d = new Date();
-    d.setDate(1);
-    d.setMonth(d.getMonth() + i);
+    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + i);
     monthOptions.push(format(d, "yyyy-MM"));
   }
   monthOptions.sort((a, b) => b.localeCompare(a));
 
-  const printStyle = isLandscape ? PRINT_STYLE_LANDSCAPE : PRINT_STYLE_PORTRAIT;
+  // Load docs when user selected
+  const loadDocs = useCallback(async (userId: string) => {
+    setDocsLoading(true);
+    setSelectedDoc(null);
+    try {
+      const { data, error } = await supabase
+        .from("kaigo_report_documents")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("report_type", reportType)
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      setDocs(data as ReportDoc[] ?? []);
+    } catch (e) {
+      toast.error("帳票一覧の取得に失敗しました");
+      console.error(e);
+    } finally {
+      setDocsLoading(false);
+    }
+  }, [supabase, reportType]);
 
-  // Paper dimensions for screen preview
-  const paperWidth = isLandscape ? "297mm" : "210mm";
-  const paperMinHeight = isLandscape ? "210mm" : "297mm";
-  const paperPadding = isLandscape ? "8mm 10mm" : "10mm 12mm";
+  const handleUserSelect = (userId: string) => {
+    setSelectedUserId(userId);
+    loadDocs(userId);
+  };
+
+  const handleNewDoc = async () => {
+    if (!selectedUserId || !config) return;
+    setNewLoading(true);
+    try {
+      const doc = await autoGenerateDoc(
+        supabase, selectedUserId, reportType,
+        config.needsPeriod ? selectedYearMonth : null,
+        config,
+      );
+      if (doc) {
+        toast.success("帳票を新規作成しました");
+        await loadDocs(selectedUserId);
+        setSelectedDoc(doc);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "帳票の作成に失敗しました");
+    } finally {
+      setNewLoading(false);
+    }
+  };
+
+  const handleSelectDoc = (doc: ReportDoc) => setSelectedDoc(doc);
+
+  const handleSave = async (content: Record<string, unknown>) => {
+    if (!selectedDoc) return;
+    const { data, error } = await supabase
+      .from("kaigo_report_documents")
+      .update({ content, updated_at: new Date().toISOString() })
+      .eq("id", selectedDoc.id)
+      .select()
+      .single();
+    if (error) { toast.error("保存に失敗しました: " + error.message); throw error; }
+    toast.success("保存しました");
+    const updated = data as ReportDoc;
+    setSelectedDoc(updated);
+    setDocs((prev) => prev.map((d) => d.id === updated.id ? updated : d));
+  };
+
+  const handleStatusToggle = async () => {
+    if (!selectedDoc) return;
+    const newStatus = selectedDoc.status === "completed" ? "draft" : "completed";
+    const { data, error } = await supabase
+      .from("kaigo_report_documents")
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq("id", selectedDoc.id)
+      .select()
+      .single();
+    if (error) { toast.error("ステータスの変更に失敗しました"); return; }
+    toast.success(newStatus === "completed" ? "完成にしました" : "下書きに戻しました");
+    const updated = data as ReportDoc;
+    setSelectedDoc(updated);
+    setDocs((prev) => prev.map((d) => d.id === updated.id ? updated : d));
+  };
 
   if (!config) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-gray-500">
         <AlertTriangle size={40} className="mb-3 text-amber-400" />
         <p className="text-lg font-semibold text-gray-700">不明な帳票種別です</p>
-        <Link href="/reports" className="mt-4 text-sm text-blue-600 hover:underline">
-          帳票一覧に戻る
-        </Link>
+        <Link href="/reports" className="mt-4 text-sm text-blue-600 hover:underline">帳票一覧に戻る</Link>
       </div>
     );
   }
 
-  const handleUserSelect = (userId: string) => {
-    setSelectedUserId(userId);
-    setShowReport(false);
-  };
+  const printStyle = config.landscape ? PRINT_STYLE_LANDSCAPE : PRINT_STYLE_PORTRAIT;
 
   return (
     <>
       <style>{printStyle}</style>
-
       <div className="flex h-full -m-6">
         <UserSidebar selectedUserId={selectedUserId} onSelectUser={handleUserSelect} />
+
         <div className="flex-1 overflow-y-auto p-6">
-      <div className="space-y-6">
-        {/* Page Header */}
-        <div className="no-print flex items-center gap-4">
-          <Link
-            href="/reports"
-            className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            <ChevronLeft size={16} />
-            帳票一覧
-          </Link>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">{config.titleJa}</h1>
-            <p className="text-xs text-gray-500 mt-0.5">
-              公式様式　帳票作成・印刷
-              {isLandscape && (
-                <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-blue-700">横向き（A4 landscape）</span>
-              )}
-            </p>
-          </div>
-        </div>
-
-        {/* Control Panel */}
-        <div className="no-print rounded-xl border bg-white p-6 shadow-sm">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4 pb-2 border-b">
-            帳票条件の設定
-          </h2>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-            {/* Month select */}
-            {config.needsPeriod && (
-              <div className="w-52">
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  <CalendarDays size={12} className="inline mr-1" />
-                  対象月 <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={selectedYearMonth}
-                  onChange={(e) => {
-                    setSelectedYearMonth(e.target.value);
-                    setShowReport(false);
-                  }}
-                  className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  {monthOptions.map((ym) => (
-                    <option key={ym} value={ym}>
-                      {fmtJaYear(ym + "-01")}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Generate button */}
-            <button
-              onClick={handleGenerate}
-              disabled={!selectedUserId || loading}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
-            >
-              {loading ? (
-                <>
-                  <Loader2 size={15} className="animate-spin" />
-                  生成中...
-                </>
-              ) : (
-                <>
-                  <FileText size={15} />
-                  帳票を生成
-                </>
-              )}
-            </button>
-
-            {/* Print button */}
-            {showReport && (
-              <button
-                onClick={() => window.print()}
-                className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap"
-              >
-                <Printer size={15} />
-                印刷する
-              </button>
-            )}
-          </div>
-
-          {error && (
-            <div className="mt-4 flex items-center gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
-              <AlertTriangle size={16} />
-              {error}
-            </div>
-          )}
-        </div>
-
-        {/* Report Preview */}
-        {showReport && user && (
-          <div>
-            <div className="no-print mb-3 flex items-center justify-between">
-              <p className="text-sm text-gray-500">
-                プレビュー（印刷するとA4{isLandscape ? "横" : "縦"}サイズで出力されます）
+          {/* Header */}
+          <div className="no-print mb-5 flex items-center gap-4">
+            <Link href="/reports"
+              className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+              <ChevronLeft size={16} /> 帳票一覧
+            </Link>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">{config.titleJa}</h1>
+              <p className="text-xs text-gray-500 mt-0.5">
+                公式様式　編集・保存・印刷
+                {config.landscape && <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-blue-700">横向き（A4）</span>}
               </p>
-              <button
-                onClick={() => window.print()}
-                className="flex items-center gap-2 rounded-lg bg-gray-800 px-4 py-1.5 text-sm font-medium text-white hover:bg-gray-900 transition-colors"
-              >
-                <Printer size={14} />
-                印刷
-              </button>
-            </div>
-
-            {/* A4 paper */}
-            <div
-              id="print-area"
-              className="mx-auto bg-white shadow-md"
-              style={{
-                width: paperWidth,
-                minHeight: paperMinHeight,
-                padding: paperPadding,
-                fontFamily: '"MS Mincho", "游明朝", "Hiragino Mincho ProN", serif',
-                fontSize: "9pt",
-                color: "#000",
-                boxSizing: "border-box",
-                overflowX: isLandscape ? "auto" : "hidden",
-              }}
-            >
-              {reportType === "face-sheet" && (
-                <FaceSheetReport
-                  user={user}
-                  cert={cert}
-                  adl={adl}
-                  histories={histories}
-                  contacts={contacts}
-                  healthRecords={healthRecords}
-                />
-              )}
-
-              {reportType === "care-plan-1" && (
-                <CarePlan1Report user={user} cert={cert} plan={carePlan} />
-              )}
-
-              {reportType === "care-plan-2" && (
-                <CarePlan2Report
-                  user={user}
-                  cert={cert}
-                  plan={carePlan}
-                  services={planServices}
-                />
-              )}
-
-              {reportType === "care-plan-3" && (
-                <CarePlan3Report
-                  user={user}
-                  cert={cert}
-                  plan={carePlan}
-                  services={planServices}
-                />
-              )}
-
-              {reportType === "service-usage" && (
-                <ServiceUsageReport
-                  user={user}
-                  cert={cert}
-                  planServices={planServices}
-                  records={serviceRecords}
-                  yearMonth={selectedYearMonth}
-                />
-              )}
-
-              {reportType === "service-provision" && (
-                <ServiceProvisionReport
-                  user={user}
-                  cert={cert}
-                  records={serviceRecords}
-                  yearMonth={selectedYearMonth}
-                  planServices={planServices}
-                />
-              )}
-
-              {reportType === "invoice" && (
-                <InvoiceReport
-                  user={user}
-                  billingRecords={billingRecords}
-                  billingDetails={billingDetails}
-                  yearMonth={selectedYearMonth}
-                />
-              )}
             </div>
           </div>
-        )}
 
-        {/* Empty state */}
-        {!showReport && !loading && (
-          <div className="no-print flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 py-20 text-gray-400">
-            <FileText size={40} className="mb-3 opacity-40" />
-            <p className="text-sm">
-              利用者を選択して「帳票を生成」ボタンを押してください
-            </p>
-          </div>
-        )}
-      </div>
+          {!selectedUserId ? (
+            <div className="flex flex-col items-center justify-center py-24 text-gray-400 no-print">
+              <FileText size={48} className="mb-4 text-gray-300" />
+              <p className="text-base font-medium">左側のリストから利用者を選択してください</p>
+            </div>
+          ) : (
+            <>
+              {/* Month selector (only for period reports) */}
+              {config.needsPeriod && (
+                <div className="no-print mb-4 flex items-center gap-3">
+                  <label className="text-xs font-medium text-gray-600 flex items-center gap-1">
+                    <CalendarDays size={12} /> 対象月
+                  </label>
+                  <select value={selectedYearMonth} onChange={(e) => setSelectedYearMonth(e.target.value)}
+                    className="rounded-lg border px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    {monthOptions.map((ym) => (
+                      <option key={ym} value={ym}>{fmtJaYear(ym + "-01")}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Document list */}
+              <DocList
+                docs={docs} loading={docsLoading} selectedId={selectedDoc?.id ?? null}
+                onSelect={handleSelectDoc} onNew={handleNewDoc} newLoading={newLoading}
+              />
+
+              {/* Editor */}
+              {selectedDoc && (
+                <DocEditor
+                  doc={selectedDoc} config={config}
+                  onSave={handleSave} onStatusToggle={handleStatusToggle}
+                />
+              )}
+            </>
+          )}
         </div>
       </div>
     </>
