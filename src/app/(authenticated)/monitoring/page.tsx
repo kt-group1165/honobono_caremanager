@@ -186,25 +186,15 @@ function CheckboxPair({
   onChange: (v: "満足" | "不満" | "") => void;
 }) {
   return (
-    <div className="flex items-center gap-1 text-xs">
-      <span className="shrink-0 text-gray-500 text-[11px]">{label}：</span>
-      <label className="flex items-center gap-0.5 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={value === "満足"}
-          onChange={() => onChange(value === "満足" ? "" : "満足")}
-          className="accent-blue-600"
-        />
-        満足
+    <div className="flex items-center gap-2 text-xs whitespace-nowrap mb-0.5">
+      <span className="shrink-0 text-gray-500">{label}：</span>
+      <label className="inline-flex items-center gap-0.5 cursor-pointer">
+        <input type="checkbox" checked={value === "満足"} onChange={() => onChange(value === "満足" ? "" : "満足")} className="accent-blue-600 h-3 w-3" />
+        <span>満足</span>
       </label>
-      <label className="flex items-center gap-0.5 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={value === "不満"}
-          onChange={() => onChange(value === "不満" ? "" : "不満")}
-          className="accent-blue-600"
-        />
-        不満
+      <label className="inline-flex items-center gap-0.5 cursor-pointer">
+        <input type="checkbox" checked={value === "不満"} onChange={() => onChange(value === "不満" ? "" : "不満")} className="accent-blue-600 h-3 w-3" />
+        <span>不満</span>
       </label>
     </div>
   );
