@@ -1570,77 +1570,90 @@ function PrintServiceTicket({ c, title, isProvision = false }: { c: Record<strin
         </tbody>
       </table>
 
-      {/* サービス票テーブル */}
-      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
-        <colgroup>
-          <col style={{ width: "3%" }} />
-          <col style={{ width: "7%" }} />
-          <col style={{ width: "10%" }} />
-          <col style={{ width: "10%" }} />
-          {DAYS.map((d) => {
-            // days 6,7,13,14,20,21,27,28 → sat/sun (approx cyclic)
-            return <col key={d} style={{ width: "2.1%" }} />;
-          })}
-        </colgroup>
-        <thead>
-          <tr style={{ height: "16px" }}>
-            <th style={{ ...thStyle }} rowSpan={2}>No</th>
-            <th style={{ ...thStyle }} rowSpan={2}>提供<br />時間帯</th>
-            <th style={{ ...thStyle }} rowSpan={2}>サービス内容</th>
-            <th style={{ ...thStyle }} rowSpan={2}>事業所名</th>
-            {DAYS.map((d) => {
-              const wdi = (d - 1) % 7;
-              const isWE = wdi === 5 || wdi === 6;
-              return <th key={d} style={isWE ? thGreen : thStyle}>{d}</th>;
-            })}
-          </tr>
-          <tr style={{ height: "14px" }}>
-            {DAYS.map((d) => {
-              const wdi = (d - 1) % 7;
-              const isWE = wdi === 5 || wdi === 6;
-              return <th key={d} style={{ ...(isWE ? thGreen : thStyle), fontSize: "6pt" }}>{WDAY_JA[wdi]}</th>;
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((svc, i) => (
-            <React.Fragment key={i}>
-              {/* 予定行 */}
-              <tr style={{ height: "16px" }}>
-                <td style={{ ...thStyle }} rowSpan={2}>{i + 1}</td>
-                <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "6.5pt" }} rowSpan={2}>{svc.time || "　"}</td>
-                <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "6.5pt" }} rowSpan={2}>{svc.content || "　"}</td>
-                <td style={{ ...tdStyle, verticalAlign: "top", fontSize: "6.5pt" }} rowSpan={2}>{svc.provider || "　"}</td>
-                {svc.planned.map((v, di) => {
-                  const wdi = di % 7;
+      {/* サービス票テーブル — A4横の残り高さを使い切る */}
+      {(() => {
+        // ヘッダー部≒70px, フッター≒25px, テーブルヘッダー≒35px → 残り≒ 190mm - 130px ≒ 590px
+        // 9サービス×2行(予定+実績) = 18行
+        const ROW_H = Math.floor(560 / 18); // ≒31px per row
+        return (
+          <>
+          <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+            <colgroup>
+              <col style={{ width: "3%" }} />
+              <col style={{ width: "6%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "10%" }} />
+              {DAYS.map((d) => <col key={d} style={{ width: `${71 / 31}%` }} />)}
+              <col style={{ width: "3%" }} />
+            </colgroup>
+            <thead>
+              <tr style={{ height: "18px" }}>
+                <th style={thStyle} rowSpan={2}>No</th>
+                <th style={thStyle} rowSpan={2}>提供<br />時間帯</th>
+                <th style={thStyle} rowSpan={2}>サービス内容</th>
+                <th style={thStyle} rowSpan={2}>事業所名</th>
+                {DAYS.map((d) => {
+                  const wdi = (d - 1) % 7;
                   const isWE = wdi === 5 || wdi === 6;
-                  return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0" }}>{v ? "○" : ""}</td>;
+                  return <th key={d} style={isWE ? thGreen : thStyle}>{d}</th>;
                 })}
+                <th style={thStyle} rowSpan={2}>合計</th>
               </tr>
-              {/* 実績行 */}
               <tr style={{ height: "14px" }}>
-                {svc.actual.map((v, di) => {
-                  const wdi = di % 7;
+                {DAYS.map((d) => {
+                  const wdi = (d - 1) % 7;
                   const isWE = wdi === 5 || wdi === 6;
-                  return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", fontSize: "6.5pt" }}>{v ? "●" : ""}</td>;
+                  return <th key={d} style={{ ...(isWE ? thGreen : thStyle), fontSize: "6pt" }}>{WDAY_JA[wdi]}</th>;
                 })}
               </tr>
-            </React.Fragment>
-          ))}
-        </tbody>
-      </table>
+            </thead>
+            <tbody>
+              {rows.map((svc, i) => {
+                const plannedCount = svc.planned.filter(Boolean).length;
+                const actualCount = svc.actual.filter(Boolean).length;
+                return (
+                <React.Fragment key={i}>
+                  {/* 予定行 */}
+                  <tr style={{ height: `${ROW_H}px` }}>
+                    <td style={{ ...thStyle, fontSize: "7pt" }} rowSpan={2}>{i + 1}</td>
+                    <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "6.5pt" }} rowSpan={2}>{svc.time || "　"}</td>
+                    <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "6.5pt" }} rowSpan={2}>{svc.content || "　"}</td>
+                    <td style={{ ...tdStyle, verticalAlign: "top", fontSize: "6.5pt" }} rowSpan={2}>{svc.provider || "　"}</td>
+                    {svc.planned.map((v, di) => {
+                      const wdi = di % 7;
+                      const isWE = wdi === 5 || wdi === 6;
+                      return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", borderStyle: "dashed" }}>{v ? "○" : ""}</td>;
+                    })}
+                    <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt" }} rowSpan={2}>{(plannedCount || actualCount) ? `${plannedCount}/${actualCount}` : ""}</td>
+                  </tr>
+                  {/* 実績行 */}
+                  <tr style={{ height: `${ROW_H}px` }}>
+                    {svc.actual.map((v, di) => {
+                      const wdi = di % 7;
+                      const isWE = wdi === 5 || wdi === 6;
+                      return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0" }}>{v ? "●" : ""}</td>;
+                    })}
+                  </tr>
+                </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
 
-      {/* 届出年月日 */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "3px" }}>
-        <tbody>
-          <tr style={{ height: "18px" }}>
-            <td style={{ ...thStyle, width: "12%" }}>届出年月日</td>
-            <td style={{ ...tdStyle, width: "30%" }}>{s("submission_date")}</td>
-            <td style={{ ...thStyle, width: "10%" }}>作成者氏名</td>
-            <td style={tdStyle} />
-          </tr>
-        </tbody>
-      </table>
+          {/* 届出年月日 */}
+          <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "2px" }}>
+            <tbody>
+              <tr style={{ height: "20px" }}>
+                <td style={{ ...thStyle, width: "12%" }}>届出年月日</td>
+                <td style={{ ...tdStyle, width: "30%" }}>{s("submission_date")}</td>
+                <td style={{ ...thStyle, width: "10%" }}>作成者氏名</td>
+                <td style={tdStyle} />
+              </tr>
+            </tbody>
+          </table>
+          </>
+        );
+      })()}
     </div>
   );
 }
