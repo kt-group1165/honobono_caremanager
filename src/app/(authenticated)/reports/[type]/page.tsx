@@ -933,68 +933,127 @@ function PrintCarePlan1({ c }: { c: Record<string, unknown> }) {
 
 function PrintCarePlan2({ c }: { c: Record<string, unknown> }) {
   const s = (k: string) => String(c[k] ?? "　");
+  const B = "1px solid #000";
+  const cellBase: React.CSSProperties = { border: B, padding: "2px 4px", fontSize: "8.5pt", verticalAlign: "middle" };
+  const thStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#f0f0f0", fontWeight: "bold", textAlign: "center" };
+  const tdStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#fff" };
+  const lineStyle: React.CSSProperties = { borderBottom: "1px dotted #999", height: "18px", width: "100%" };
+
   const services: Svc2[] = Array.isArray(c.services) ? (c.services as Svc2[]) : [];
-  const rows = services.length > 0 ? services : [{ content: "", insurance_flag: "", type: "", provider: "", frequency: "", period: "" }];
+  // Ensure at least 8 data rows for the service content section
+  const MIN_SVC_ROWS = 8;
+  const svcRows = services.length >= MIN_SVC_ROWS ? services : [
+    ...services,
+    ...Array(MIN_SVC_ROWS - services.length).fill({ content: "", insurance_flag: "", type: "", provider: "", frequency: "", period: "" }),
+  ];
+
   return (
-    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "8pt", color: "#000" }}>
-      <div style={{ textAlign: "center", marginBottom: "4px" }}>
-        <div style={{ fontSize: "11pt", fontWeight: "bold", letterSpacing: "0.2em" }}>居宅サービス計画書（2）</div>
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000" }}>
+      {/* 第2表ラベル */}
+      <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "8pt", marginBottom: "4px" }}>第２表</div>
+
+      {/* タイトル行 */}
+      <div style={{ textAlign: "center", marginBottom: "2px" }}>
+        <span style={{ fontSize: "14pt", fontWeight: "bold", letterSpacing: "0.3em" }}>居宅サービス計画書（２）</span>
       </div>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "3px" }}>
+
+      {/* ヘッダー */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
         <tbody>
-          <tr style={{ height: "20px" }}>
-            <TH style={{ width: "10%" }}>利用者名</TH>
-            <TD style={{ width: "25%" }} className="px-1 font-bold">{s("user_name")}　様</TD>
-            <TH style={{ width: "12%" }}>計画作成日</TH>
-            <TD className="px-1">{s("creation_date")}</TD>
+          <tr style={{ height: "22px" }}>
+            <td style={{ ...thStyle, width: "10%" }}>利用者名</td>
+            <td style={{ ...tdStyle, width: "28%", fontWeight: "bold", fontSize: "11pt" }}>{s("user_name")}　殿</td>
+            <td style={{ ...thStyle, width: "12%" }}>作成年月日</td>
+            <td style={{ ...tdStyle }}>{s("creation_date")}</td>
           </tr>
         </tbody>
       </table>
+
+      {/* メインテーブル */}
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
-          <tr style={{ height: "28px" }}>
-            <TH style={{ width: "14%" }} rowSpan={2}>生活全般の解決す<br />べき課題（ニーズ）</TH>
-            <TH colSpan={4}>目標</TH>
-            <TH colSpan={6}>援助内容</TH>
+          <tr style={{ height: "26px" }}>
+            <th style={{ ...thStyle, width: "14%" }} rowSpan={2}>生活全般の解決す<br />べき課題（ニーズ）</th>
+            <th colSpan={4} style={{ ...thStyle }}>目　　　　標</th>
+            <th colSpan={6} style={{ ...thStyle }}>援　助　内　容</th>
           </tr>
-          <tr style={{ height: "24px" }}>
-            <TH style={{ width: "11%" }}>長期目標</TH>
-            <TH style={{ width: "7%" }}>（期間）</TH>
-            <TH style={{ width: "11%" }}>短期目標</TH>
-            <TH style={{ width: "7%" }}>（期間）</TH>
-            <TH style={{ width: "14%" }}>サービス内容</TH>
-            <TH style={{ width: "3%" }}>※1</TH>
-            <TH style={{ width: "9%" }}>サービス種別</TH>
-            <TH style={{ width: "3%" }}>※2</TH>
-            <TH style={{ width: "5%" }}>頻度</TH>
-            <TH style={{ width: "7%" }}>期間</TH>
+          <tr style={{ height: "22px" }}>
+            <th style={{ ...thStyle, width: "11%" }}>長期目標</th>
+            <th style={{ ...thStyle, width: "8%" }}>（期間）</th>
+            <th style={{ ...thStyle, width: "11%" }}>短期目標</th>
+            <th style={{ ...thStyle, width: "8%" }}>（期間）</th>
+            <th style={{ ...thStyle, width: "13%" }}>サービス内容</th>
+            <th style={{ ...thStyle, width: "3%", fontSize: "7pt" }}>※1</th>
+            <th style={{ ...thStyle, width: "9%" }}>サービス種別</th>
+            <th style={{ ...thStyle, width: "3%", fontSize: "7pt" }}>※2</th>
+            <th style={{ ...thStyle, width: "5%" }}>頻度</th>
+            <th style={{ ...thStyle, width: "7%" }}>期間</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((svc, i) => (
-            <tr key={i} style={{ minHeight: "28px" }}>
-              {i === 0 && <TD rowSpan={rows.length} className="px-1 align-top" style={{ verticalAlign: "top", whiteSpace: "pre-wrap" }}>{s("needs")}</TD>}
-              {i === 0 && <TD rowSpan={rows.length} className="px-1 align-top" style={{ verticalAlign: "top", whiteSpace: "pre-wrap" }}>{s("long_term_goal")}</TD>}
-              {i === 0 && <TD rowSpan={rows.length} className="px-1 align-top" style={{ verticalAlign: "top", fontSize: "7pt" }}>{s("long_term_period")}</TD>}
-              {i === 0 && <TD rowSpan={rows.length} className="px-1 align-top" style={{ verticalAlign: "top", whiteSpace: "pre-wrap" }}>{s("short_term_goal")}</TD>}
-              {i === 0 && <TD rowSpan={rows.length} className="px-1 align-top" style={{ verticalAlign: "top", fontSize: "7pt" }}>{s("short_term_period")}</TD>}
-              <TD className="px-1" style={{ verticalAlign: "top" }}>{svc.content}</TD>
-              <TD className="px-1 text-center">{svc.insurance_flag}</TD>
-              <TD className="px-1 text-center">{svc.type}</TD>
-              <TD className="px-1 text-center" style={{ fontSize: "7pt" }}>{svc.provider}</TD>
-              <TD className="px-1 text-center">{svc.frequency}</TD>
-              <TD className="px-1 text-center" style={{ fontSize: "7pt" }}>{svc.period}</TD>
+          {svcRows.map((svc, i) => (
+            <tr key={i} style={{ height: "32px" }}>
+              {/* ニーズ・長期目標・短期目標 — rowspan across all service rows */}
+              {i === 0 && (
+                <td rowSpan={svcRows.length} style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "4px 6px", position: "relative" }}>
+                  {s("needs")}
+                  <div style={{ position: "absolute", top: 0, left: "6px", right: "6px", bottom: 0, pointerEvents: "none" }}>
+                    {Array.from({ length: 6 }).map((_, li) => <div key={li} style={{ ...lineStyle, position: "absolute", top: `${20 + li * 18}px` }} />)}
+                  </div>
+                </td>
+              )}
+              {i === 0 && (
+                <td rowSpan={svcRows.length} style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "4px 6px", position: "relative" }}>
+                  {s("long_term_goal")}
+                  <div style={{ position: "absolute", top: 0, left: "6px", right: "6px", bottom: 0, pointerEvents: "none" }}>
+                    {Array.from({ length: 6 }).map((_, li) => <div key={li} style={{ ...lineStyle, position: "absolute", top: `${20 + li * 18}px` }} />)}
+                  </div>
+                </td>
+              )}
+              {i === 0 && (
+                <td rowSpan={svcRows.length} style={{ ...tdStyle, verticalAlign: "top", fontSize: "7.5pt", padding: "4px 4px" }}>
+                  {s("long_term_period")}
+                </td>
+              )}
+              {i === 0 && (
+                <td rowSpan={svcRows.length} style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "4px 6px", position: "relative" }}>
+                  {s("short_term_goal")}
+                  <div style={{ position: "absolute", top: 0, left: "6px", right: "6px", bottom: 0, pointerEvents: "none" }}>
+                    {Array.from({ length: 6 }).map((_, li) => <div key={li} style={{ ...lineStyle, position: "absolute", top: `${20 + li * 18}px` }} />)}
+                  </div>
+                </td>
+              )}
+              {i === 0 && (
+                <td rowSpan={svcRows.length} style={{ ...tdStyle, verticalAlign: "top", fontSize: "7.5pt", padding: "4px 4px" }}>
+                  {s("short_term_period")}
+                </td>
+              )}
+              {/* サービス内容（行ごと） */}
+              <td style={{ ...tdStyle, verticalAlign: "top", padding: "3px 4px", whiteSpace: "pre-wrap" }}>{svc.content || "　"}</td>
+              <td style={{ ...tdStyle, textAlign: "center", padding: "3px 2px" }}>{svc.insurance_flag || "　"}</td>
+              <td style={{ ...tdStyle, verticalAlign: "top", padding: "3px 4px" }}>{svc.type || "　"}</td>
+              <td style={{ ...tdStyle, verticalAlign: "top", fontSize: "7.5pt", padding: "3px 4px" }}>{svc.provider || "　"}</td>
+              <td style={{ ...tdStyle, textAlign: "center", padding: "3px 2px" }}>{svc.frequency || "　"}</td>
+              <td style={{ ...tdStyle, verticalAlign: "top", fontSize: "7.5pt", padding: "3px 4px" }}>{svc.period || "　"}</td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      {/* 脚注 */}
+      <div style={{ marginTop: "6px", fontSize: "7.5pt", lineHeight: "1.6" }}>
+        ※1「保険給付の対象となるかどうかの区分」について、保険給付対象内サービスについては○印を付す。<br />
+        ※2「当該サービス提供を行う事業所」について記入する。
+      </div>
+
+      {/* 作成者欄 */}
       <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "6px" }}>
         <tbody>
           <tr style={{ height: "22px" }}>
-            <TH style={{ width: "15%" }}>作成者（介護支援専門員）</TH>
-            <TD style={{ width: "35%" }} className="px-2" />
-            <TH style={{ width: "15%" }}>事業所名</TH>
-            <TD style={{ width: "35%" }} className="px-2" />
+            <td style={{ ...thStyle, width: "18%", textAlign: "left" }}>作成者（介護支援専門員）氏名</td>
+            <td style={{ ...tdStyle, width: "32%" }} />
+            <td style={{ ...thStyle, width: "18%", textAlign: "left" }}>居宅介護支援事業所名</td>
+            <td style={{ ...tdStyle }} />
           </tr>
         </tbody>
       </table>
@@ -1008,88 +1067,135 @@ function PrintCarePlan2({ c }: { c: Record<string, unknown> }) {
 
 function PrintFaceSheet({ c }: { c: Record<string, unknown> }) {
   const s = (k: string) => String(c[k] ?? "　");
+  const B = "1px solid #000";
+  const cellBase: React.CSSProperties = { border: B, padding: "2px 4px", fontSize: "8.5pt", verticalAlign: "middle" };
+  const thStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#f0f0f0", fontWeight: "bold", textAlign: "left" };
+  const tdStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#fff" };
+  const secHead: React.CSSProperties = { ...thStyle, backgroundColor: "#d0d0d0", textAlign: "center", fontSize: "8.5pt", letterSpacing: "0.1em" };
+  const lineStyle: React.CSSProperties = { borderBottom: "1px dotted #999", height: "18px", width: "100%" };
+
   const family: FamilyRow[] = Array.isArray(c.family) ? (c.family as FamilyRow[]) : [];
   const medical: MedRow[] = Array.isArray(c.medical_history) ? (c.medical_history as MedRow[]) : [];
+  const familyRows = family.length > 0 ? family : Array(3).fill({ name: "", relationship: "", phone: "", key_person: false });
+  const medRows   = medical.length > 0 ? medical : Array(3).fill({ disease: "", hospital: "", status: "" });
+
   return (
-    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "8.5pt", color: "#000" }}>
-      <div style={{ textAlign: "center", marginBottom: "4px", fontSize: "12pt", fontWeight: "bold", letterSpacing: "0.2em" }}>フェースシート</div>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
-        <colgroup><col style={{ width: "15%" }} /><col style={{ width: "35%" }} /><col style={{ width: "15%" }} /><col style={{ width: "35%" }} /></colgroup>
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000" }}>
+      {/* タイトル */}
+      <div style={{ textAlign: "center", marginBottom: "6px" }}>
+        <span style={{ fontSize: "14pt", fontWeight: "bold", letterSpacing: "0.3em" }}>フェースシート（様式例）</span>
+      </div>
+
+      {/* 基本情報 */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
+        <thead>
+          <tr><th colSpan={6} style={{ ...secHead, height: "20px" }}>基　本　情　報</th></tr>
+        </thead>
         <tbody>
           <tr style={{ height: "22px" }}>
-            <TH>利用者名</TH><TD className="px-2 font-bold">{s("user_name")}　様</TD>
-            <TH>フリガナ</TH><TD className="px-2">{s("name_kana")}</TD>
+            <td style={{ ...thStyle, width: "13%" }}>利用者名</td>
+            <td style={{ ...tdStyle, width: "22%", fontWeight: "bold", fontSize: "11pt" }}>{s("user_name")}　殿</td>
+            <td style={{ ...thStyle, width: "13%" }}>フリガナ</td>
+            <td style={{ ...tdStyle, width: "22%" }}>{s("name_kana")}</td>
+            <td style={{ ...thStyle, width: "10%" }}>性別</td>
+            <td style={{ ...tdStyle }}>{s("gender")}</td>
           </tr>
           <tr style={{ height: "22px" }}>
-            <TH>生年月日</TH><TD className="px-2">{s("birth_date") ? fmtReiwa(s("birth_date")) : "　"}　({s("birth_date") ? calcAge(s("birth_date")) : "　"})</TD>
-            <TH>性別</TH><TD className="px-2">{s("gender")}</TD>
+            <td style={thStyle}>生年月日</td>
+            <td style={tdStyle}>{s("birth_date") ? fmtReiwa(s("birth_date")) : "　　年　月　日"}（{s("birth_date") ? calcAge(s("birth_date")) : "　"}）</td>
+            <td style={thStyle}>電話番号</td>
+            <td style={tdStyle}>{s("phone")}</td>
+            <td style={thStyle}>血液型</td>
+            <td style={tdStyle}>{s("blood_type") || "　"}</td>
           </tr>
           <tr style={{ height: "22px" }}>
-            <TH>住所</TH><TD colSpan={3} className="px-2">{s("address")}</TD>
-          </tr>
-          <tr style={{ height: "22px" }}>
-            <TH>電話番号</TH><TD className="px-2">{s("phone")}</TD>
-            <TH>要介護度</TH><TD className="px-2">{s("care_level")}</TD>
-          </tr>
-          <tr style={{ height: "22px" }}>
-            <TH>認定期間</TH><TD className="px-2">{s("cert_period")}</TD>
-            <TH>保険者番号</TH><TD className="px-2">{s("insurer_number")}</TD>
-          </tr>
-          <tr style={{ height: "22px" }}>
-            <TH>被保険者番号</TH><TD colSpan={3} className="px-2">{s("insured_number")}</TD>
+            <td style={thStyle}>住所</td>
+            <td colSpan={5} style={tdStyle}>{s("address")}</td>
           </tr>
         </tbody>
       </table>
-      {/* Family */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
+
+      {/* 介護認定 */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
         <thead>
-          <tr style={{ height: "18px" }}>
-            <TH style={{ width: "30%" }}>氏名</TH>
-            <TH style={{ width: "20%" }}>続柄</TH>
-            <TH style={{ width: "30%" }}>電話</TH>
-            <TH style={{ width: "20%" }}>キーパーソン</TH>
+          <tr><th colSpan={8} style={{ ...secHead, height: "20px" }}>介　護　認　定</th></tr>
+        </thead>
+        <tbody>
+          <tr style={{ height: "22px" }}>
+            <td style={{ ...thStyle, width: "13%" }}>要介護度</td>
+            <td style={{ ...tdStyle, width: "12%" }}>{s("care_level")}</td>
+            <td style={{ ...thStyle, width: "13%" }}>認定有効期間</td>
+            <td style={{ ...tdStyle, width: "22%" }}>{s("cert_period")}</td>
+            <td style={{ ...thStyle, width: "13%" }}>保険者番号</td>
+            <td style={{ ...tdStyle, width: "12%" }}>{s("insurer_number")}</td>
+            <td style={{ ...thStyle, width: "13%" }}>被保険者番号</td>
+            <td style={tdStyle}>{s("insured_number")}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* 家族構成 */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
+        <thead>
+          <tr><th colSpan={4} style={{ ...secHead, height: "20px" }}>家　族　構　成</th></tr>
+          <tr style={{ height: "20px" }}>
+            <th style={{ ...thStyle, width: "30%", textAlign: "center" }}>氏名</th>
+            <th style={{ ...thStyle, width: "20%", textAlign: "center" }}>続柄</th>
+            <th style={{ ...thStyle, width: "30%", textAlign: "center" }}>電話番号</th>
+            <th style={{ ...thStyle, width: "20%", textAlign: "center" }}>キーパーソン</th>
           </tr>
         </thead>
         <tbody>
-          {(family.length > 0 ? family : [{ name: "", relationship: "", phone: "", key_person: false }]).map((r, i) => (
-            <tr key={i} style={{ height: "20px" }}>
-              <TD className="px-2">{r.name || "　"}</TD>
-              <TD className="px-2">{r.relationship || "　"}</TD>
-              <TD className="px-2">{r.phone || "　"}</TD>
-              <TD className="px-2 text-center">{r.key_person ? "★" : "　"}</TD>
+          {familyRows.map((r, i) => (
+            <tr key={i} style={{ height: "22px" }}>
+              <td style={tdStyle}>{r.name || "　"}</td>
+              <td style={{ ...tdStyle, textAlign: "center" }}>{r.relationship || "　"}</td>
+              <td style={tdStyle}>{r.phone || "　"}</td>
+              <td style={{ ...tdStyle, textAlign: "center" }}>{r.key_person ? "★" : "　"}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      {/* Medical */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
+
+      {/* 既往歴 */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
         <thead>
-          <tr style={{ height: "18px" }}>
-            <TH style={{ width: "34%" }}>疾患名</TH>
-            <TH style={{ width: "33%" }}>医療機関</TH>
-            <TH style={{ width: "33%" }}>状態</TH>
+          <tr><th colSpan={3} style={{ ...secHead, height: "20px" }}>既　往　歴</th></tr>
+          <tr style={{ height: "20px" }}>
+            <th style={{ ...thStyle, width: "34%", textAlign: "center" }}>疾患名</th>
+            <th style={{ ...thStyle, width: "33%", textAlign: "center" }}>医療機関</th>
+            <th style={{ ...thStyle, width: "33%", textAlign: "center" }}>状態</th>
           </tr>
         </thead>
         <tbody>
-          {(medical.length > 0 ? medical : [{ disease: "", hospital: "", status: "" }]).map((r, i) => (
-            <tr key={i} style={{ height: "20px" }}>
-              <TD className="px-2">{r.disease || "　"}</TD>
-              <TD className="px-2">{r.hospital || "　"}</TD>
-              <TD className="px-2">{r.status || "　"}</TD>
+          {medRows.map((r, i) => (
+            <tr key={i} style={{ height: "22px" }}>
+              <td style={tdStyle}>{r.disease || "　"}</td>
+              <td style={tdStyle}>{r.hospital || "　"}</td>
+              <td style={tdStyle}>{r.status || "　"}</td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      {/* ADL / 健康状態 / 特記事項 */}
       {[
-        { label: "ADL概要", key: "adl_summary", h: "50px" },
-        { label: "健康状態メモ", key: "health_notes", h: "50px" },
-        { label: "特記事項", key: "special_notes", h: "50px" },
-      ].map(({ label, key, h }) => (
-        <table key={key} style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
+        { label: "ADL概要",   key: "adl_summary",   sectionTitle: "ADL（日常生活動作）" },
+        { label: "健康状態",  key: "health_notes",  sectionTitle: "健康状態" },
+        { label: "特記事項",  key: "special_notes", sectionTitle: "特記事項" },
+      ].map(({ key, sectionTitle }) => (
+        <table key={key} style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
+          <thead>
+            <tr><th colSpan={2} style={{ ...secHead, height: "20px" }}>{sectionTitle}</th></tr>
+          </thead>
           <tbody>
             <tr>
-              <TH style={{ width: "20%", padding: "2px 4px" }}>{label}</TH>
-              <TD style={{ height: h, verticalAlign: "top", padding: "4px", whiteSpace: "pre-wrap" }}>{s(key)}</TD>
+              <td style={{ ...tdStyle, height: "55px", verticalAlign: "top", padding: "4px 6px", whiteSpace: "pre-wrap", position: "relative" }}>
+                {s(key)}
+                <div style={{ position: "absolute", top: 0, left: "6px", right: "6px", bottom: 0, pointerEvents: "none" }}>
+                  {Array.from({ length: 2 }).map((_, li) => <div key={li} style={{ ...lineStyle, position: "absolute", top: `${20 + li * 18}px` }} />)}
+                </div>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -1104,51 +1210,122 @@ function PrintFaceSheet({ c }: { c: Record<string, unknown> }) {
 
 function PrintCarePlan3({ c }: { c: Record<string, unknown> }) {
   const s = (k: string) => String(c[k] ?? "　");
+  const B = "1px solid #000";
+  const cellBase: React.CSSProperties = { border: B, padding: "2px 4px", fontSize: "8.5pt", verticalAlign: "middle" };
+  const thStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#f0f0f0", fontWeight: "bold", textAlign: "center" };
+  const tdStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#fff" };
+  const thGreen: React.CSSProperties = { ...thStyle, backgroundColor: "#e8f5e9" };
+  const tdGreen: React.CSSProperties = { ...tdStyle, backgroundColor: "#f1f8e9" };
+  const lineStyle: React.CSSProperties = { borderBottom: "1px dotted #999", height: "18px", width: "100%" };
   const schedule: Schedule = (c.schedule as Schedule) ?? emptySchedule();
+
+  const TIME_SLOT_LABELS = [
+    { key: "early_morning", label: "深夜・早朝", sub: "0:00〜6:00" },
+    { key: "morning",       label: "午前",       sub: "6:00〜12:00" },
+    { key: "afternoon",     label: "午後",       sub: "12:00〜18:00" },
+    { key: "evening",       label: "夜間",       sub: "18:00〜21:00" },
+    { key: "night",         label: "深夜",       sub: "21:00〜24:00" },
+  ];
+
   return (
-    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "8pt", color: "#000" }}>
-      <div style={{ textAlign: "center", marginBottom: "4px", fontSize: "11pt", fontWeight: "bold", letterSpacing: "0.2em" }}>週間サービス計画表（第3表）</div>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "3px" }}>
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000" }}>
+      {/* 第3表ラベル */}
+      <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "8pt", marginBottom: "4px" }}>第３表</div>
+
+      {/* タイトル */}
+      <div style={{ textAlign: "center", marginBottom: "2px" }}>
+        <span style={{ fontSize: "14pt", fontWeight: "bold", letterSpacing: "0.3em" }}>週間サービス計画表</span>
+      </div>
+
+      {/* ヘッダー */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
         <tbody>
+          <tr style={{ height: "22px" }}>
+            <td style={{ ...thStyle, width: "10%", textAlign: "left" }}>利用者名</td>
+            <td style={{ ...tdStyle, width: "28%", fontWeight: "bold", fontSize: "11pt" }}>{s("user_name")}　殿</td>
+            <td style={{ ...thStyle, width: "10%", textAlign: "left" }}>要介護度</td>
+            <td style={{ ...tdStyle, width: "12%" }}>{s("care_level")}</td>
+            <td style={{ ...thStyle, width: "10%", textAlign: "left" }}>計画期間</td>
+            <td style={{ ...tdStyle }}>{s("plan_period")}</td>
+          </tr>
           <tr style={{ height: "20px" }}>
-            <TH style={{ width: "12%" }}>利用者名</TH>
-            <TD style={{ width: "30%" }} className="px-2 font-bold">{s("user_name")}　様</TD>
-            <TH style={{ width: "12%" }}>作成日</TH>
-            <TD className="px-2">{s("creation_date")}</TD>
+            <td style={{ ...thStyle, textAlign: "left" }}>作成年月日</td>
+            <td colSpan={5} style={{ ...tdStyle }}>{s("creation_date")}</td>
           </tr>
         </tbody>
       </table>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "3px" }}>
+
+      {/* 週間スケジュール・グリッド */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
         <thead>
-          <tr style={{ height: "22px" }}>
-            <TH style={{ width: "11%" }}>時間帯</TH>
+          <tr style={{ height: "24px" }}>
+            <th style={{ ...thStyle, width: "10%" }}>時間帯</th>
             {WEEK_DAY_JA.map((d, i) => (
-              <TH key={i} style={{ backgroundColor: i >= 5 ? "#e8f5e9" : undefined }}>{d}曜日</TH>
+              <th key={i} style={i >= 5 ? { ...thGreen } : { ...thStyle }}>
+                {d}曜日
+              </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {TIME_SLOTS.map((slot) => (
-            <tr key={slot.key} style={{ minHeight: "40px" }}>
-              <TD className="text-center font-medium px-1 align-middle" style={{ whiteSpace: "pre-line", fontSize: "7pt" }}>{slot.label}</TD>
+          {TIME_SLOT_LABELS.map((slot) => (
+            <tr key={slot.key} style={{ height: "50px" }}>
+              <td style={{ ...thStyle, verticalAlign: "middle", lineHeight: "1.5", fontSize: "8pt" }}>
+                {slot.label}<br /><span style={{ fontSize: "7pt", fontWeight: "normal" }}>{slot.sub}</span>
+              </td>
               {WEEK_DAYS.map((d, di) => (
-                <TD key={d} style={{ backgroundColor: di >= 5 ? "#f1f8e9" : undefined, verticalAlign: "top", height: "40px", padding: "3px", whiteSpace: "pre-wrap" }}>
-                  {schedule[slot.key]?.[d] || "　"}
-                </TD>
+                <td key={d} style={{
+                  ...(di >= 5 ? tdGreen : tdStyle),
+                  verticalAlign: "top",
+                  height: "50px",
+                  padding: "3px 4px",
+                  whiteSpace: "pre-wrap",
+                  position: "relative",
+                }}>
+                  {schedule[slot.key]?.[d] || ""}
+                  {/* Dotted ruled lines */}
+                  <div style={{ position: "absolute", top: 0, left: "4px", right: "4px", bottom: 0, pointerEvents: "none" }}>
+                    {Array.from({ length: 2 }).map((_, li) => (
+                      <div key={li} style={{ ...lineStyle, position: "absolute", top: `${18 + li * 16}px` }} />
+                    ))}
+                  </div>
+                </td>
               ))}
             </tr>
           ))}
         </tbody>
       </table>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
+
+      {/* 主な日常生活上の活動 */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
         <tbody>
           <tr>
-            <TH style={{ width: "20%" }}>主な日常生活上の活動</TH>
-            <TD style={{ height: "40px", verticalAlign: "top", padding: "4px", whiteSpace: "pre-wrap" }}>{s("daily_activities")}</TD>
+            <td style={{ ...thStyle, width: "18%", verticalAlign: "top", textAlign: "left", padding: "4px" }}>
+              主な日常生活上の活動
+            </td>
+            <td style={{ ...tdStyle, height: "50px", verticalAlign: "top", padding: "4px 6px", whiteSpace: "pre-wrap", position: "relative" }}>
+              {s("daily_activities")}
+              <div style={{ position: "absolute", top: 0, left: "6px", right: "6px", bottom: 0, pointerEvents: "none" }}>
+                {Array.from({ length: 2 }).map((_, li) => <div key={li} style={{ ...lineStyle, position: "absolute", top: `${20 + li * 18}px` }} />)}
+              </div>
+            </td>
           </tr>
+        </tbody>
+      </table>
+
+      {/* 週単位以外のサービス */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
+        <tbody>
           <tr>
-            <TH>週単位以外のサービス</TH>
-            <TD style={{ height: "40px", verticalAlign: "top", padding: "4px", whiteSpace: "pre-wrap" }}>{s("other_services")}</TD>
+            <td style={{ ...thStyle, width: "18%", verticalAlign: "top", textAlign: "left", padding: "4px" }}>
+              週単位以外のサービス
+            </td>
+            <td style={{ ...tdStyle, height: "50px", verticalAlign: "top", padding: "4px 6px", whiteSpace: "pre-wrap", position: "relative" }}>
+              {s("other_services")}
+              <div style={{ position: "absolute", top: 0, left: "6px", right: "6px", bottom: 0, pointerEvents: "none" }}>
+                {Array.from({ length: 2 }).map((_, li) => <div key={li} style={{ ...lineStyle, position: "absolute", top: `${20 + li * 18}px` }} />)}
+              </div>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -1160,8 +1337,17 @@ function PrintCarePlan3({ c }: { c: Record<string, unknown> }) {
 // Print: ServiceUsage / ServiceProvision (shared layout)
 // ---------------------------------------------------------------------------
 
-function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: string }) {
+function PrintServiceTicket({ c, title, isProvision = false }: { c: Record<string, unknown>; title: string; isProvision?: boolean }) {
   const s = (k: string) => String(c[k] ?? "　");
+  const B = "1px solid #000";
+  const cellBase: React.CSSProperties = { border: B, padding: "1px 3px", fontSize: "7pt", verticalAlign: "middle" };
+  const thStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#f0f0f0", fontWeight: "bold", textAlign: "center" };
+  const tdStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#fff" };
+  const tdGreen: React.CSSProperties = { ...tdStyle, backgroundColor: "#e8f5e9" };
+  const thGreen: React.CSSProperties = { ...thStyle, backgroundColor: "#c8e6c9" };
+
+  const tableNum = isProvision ? "第７表" : "第６表";
+
   const services: SvcRow[] = Array.isArray(c.services)
     ? (c.services as SvcRow[]).map((r) => ({
         ...emptyServiceRow(), ...r,
@@ -1171,82 +1357,113 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
     : [];
   const rows = Array.from({ length: 9 }, (_, i) => services[i] ?? emptyServiceRow());
   const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
+  // Weekday names for the header row (simplified cyclic: 月火水木金土日 repeating from day 1)
+  const WDAY_JA = ["月","火","水","木","金","土","日"];
 
   return (
     <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "7pt", color: "#000" }}>
-      <div style={{ textAlign: "center", marginBottom: "3px", fontSize: "11pt", fontWeight: "bold", letterSpacing: "0.2em" }}>{title}</div>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
-        <colgroup>
-          <col style={{ width: "12%" }} /><col style={{ width: "13%" }} />
-          <col style={{ width: "12%" }} /><col style={{ width: "13%" }} />
-          <col style={{ width: "12%" }} /><col style={{ width: "13%" }} />
-          <col style={{ width: "12%" }} /><col style={{ width: "13%" }} />
-        </colgroup>
+      {/* 表番号ラベル */}
+      <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "7pt", marginBottom: "3px" }}>{tableNum}</div>
+
+      {/* タイトル */}
+      <div style={{ textAlign: "center", marginBottom: "3px" }}>
+        <span style={{ fontSize: "13pt", fontWeight: "bold", letterSpacing: "0.3em" }}>{title}</span>
+      </div>
+
+      {/* ヘッダー情報 */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "3px" }}>
         <tbody>
           <tr style={{ height: "18px" }}>
-            <TH>保険者番号</TH><TD className="px-1">{s("insurer_number")}</TD>
-            <TH>被保険者番号</TH><TD className="px-1">{s("insured_number")}</TD>
-            <TH>保険者名</TH><TD className="px-1">{s("insurer_name")}</TD>
-            <TH>要介護度</TH><TD className="px-1">{s("care_level")}</TD>
+            <td style={{ ...thStyle, width: "10%" }}>保険者番号</td>
+            <td style={{ ...tdStyle, width: "11%" }}>{s("insurer_number")}</td>
+            <td style={{ ...thStyle, width: "10%" }}>被保険者番号</td>
+            <td style={{ ...tdStyle, width: "14%" }}>{s("insured_number")}</td>
+            <td style={{ ...thStyle, width: "10%" }}>保険者名</td>
+            <td style={{ ...tdStyle, width: "13%" }}>{s("insurer_name")}</td>
+            <td style={{ ...thStyle, width: "8%" }}>要介護度</td>
+            <td style={{ ...tdStyle }}>{s("care_level")}</td>
           </tr>
           <tr style={{ height: "18px" }}>
-            <TH>利用者氏名</TH><TD className="px-1 font-bold">{s("user_name")}　様</TD>
-            <TH>区分支給限度基準額</TH><TD className="px-1">{s("limit_amount")} 単位</TD>
-            <TH>限度額適用期間</TH><TD className="px-1">{s("limit_period")}</TD>
-            <TH>作成年月日</TH><TD className="px-1">{s("creation_date")}</TD>
+            <td style={thStyle}>利用者氏名</td>
+            <td style={{ ...tdStyle, fontWeight: "bold" }}>{s("user_name")}　殿</td>
+            <td style={thStyle}>区分支給限度基準額</td>
+            <td style={tdStyle}>{s("limit_amount")}単位</td>
+            <td style={thStyle}>限度額適用期間</td>
+            <td style={tdStyle}>{s("limit_period")}</td>
+            <td style={thStyle}>作成年月日</td>
+            <td style={tdStyle}>{s("creation_date")}</td>
           </tr>
         </tbody>
       </table>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+
+      {/* サービス票テーブル */}
+      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+        <colgroup>
+          <col style={{ width: "3%" }} />
+          <col style={{ width: "7%" }} />
+          <col style={{ width: "10%" }} />
+          <col style={{ width: "10%" }} />
+          {DAYS.map((d) => {
+            // days 6,7,13,14,20,21,27,28 → sat/sun (approx cyclic)
+            return <col key={d} style={{ width: "2.1%" }} />;
+          })}
+        </colgroup>
         <thead>
-          <tr style={{ height: "18px" }}>
-            <TH style={{ width: "4%" }} rowSpan={2}>No</TH>
-            <TH style={{ width: "8%" }} rowSpan={2}>提供時間帯</TH>
-            <TH style={{ width: "12%" }} rowSpan={2}>サービス内容</TH>
-            <TH style={{ width: "12%" }} rowSpan={2}>事業所名</TH>
-            <TH colSpan={31}>日付</TH>
+          <tr style={{ height: "16px" }}>
+            <th style={{ ...thStyle }} rowSpan={2}>No</th>
+            <th style={{ ...thStyle }} rowSpan={2}>提供<br />時間帯</th>
+            <th style={{ ...thStyle }} rowSpan={2}>サービス内容</th>
+            <th style={{ ...thStyle }} rowSpan={2}>事業所名</th>
+            {DAYS.map((d) => {
+              const wdi = (d - 1) % 7;
+              const isWE = wdi === 5 || wdi === 6;
+              return <th key={d} style={isWE ? thGreen : thStyle}>{d}</th>;
+            })}
           </tr>
           <tr style={{ height: "14px" }}>
-            {DAYS.map((d) => (
-              <TH key={d} style={{ fontSize: "6pt", width: "2.1%" }}>{d}</TH>
-            ))}
+            {DAYS.map((d) => {
+              const wdi = (d - 1) % 7;
+              const isWE = wdi === 5 || wdi === 6;
+              return <th key={d} style={{ ...(isWE ? thGreen : thStyle), fontSize: "6pt" }}>{WDAY_JA[wdi]}</th>;
+            })}
           </tr>
         </thead>
         <tbody>
           {rows.map((svc, i) => (
             <React.Fragment key={i}>
-              <tr style={{ height: "18px" }}>
-                <TD className="text-center" rowSpan={3}>{i + 1}</TD>
-                <TD className="px-1" rowSpan={3} style={{ verticalAlign: "top", whiteSpace: "pre-wrap" }}>{svc.time || "　"}</TD>
-                <TD className="px-1" rowSpan={3} style={{ verticalAlign: "top", whiteSpace: "pre-wrap" }}>{svc.content || "　"}</TD>
-                <TD className="px-1" rowSpan={3} style={{ verticalAlign: "top" }}>{svc.provider || "　"}</TD>
-                {svc.planned.map((v, di) => (
-                  <TD key={di} className="text-center" style={{ fontSize: "7pt", backgroundColor: (di % 7 === 5 || di % 7 === 6) ? "#e8f5e9" : undefined }}>
-                    {v ? "○" : "　"}
-                  </TD>
-                ))}
-              </tr>
+              {/* 予定行 */}
               <tr style={{ height: "16px" }}>
-                {svc.actual.map((v, di) => (
-                  <TD key={di} className="text-center" style={{ fontSize: "7pt", backgroundColor: (di % 7 === 5 || di % 7 === 6) ? "#e8f5e9" : undefined }}>
-                    {v ? "●" : "　"}
-                  </TD>
-                ))}
+                <td style={{ ...thStyle }} rowSpan={2}>{i + 1}</td>
+                <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "6.5pt" }} rowSpan={2}>{svc.time || "　"}</td>
+                <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "6.5pt" }} rowSpan={2}>{svc.content || "　"}</td>
+                <td style={{ ...tdStyle, verticalAlign: "top", fontSize: "6.5pt" }} rowSpan={2}>{svc.provider || "　"}</td>
+                {svc.planned.map((v, di) => {
+                  const wdi = di % 7;
+                  const isWE = wdi === 5 || wdi === 6;
+                  return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0" }}>{v ? "○" : ""}</td>;
+                })}
               </tr>
+              {/* 実績行 */}
               <tr style={{ height: "14px" }}>
-                {DAYS.map((_, di) => (
-                  <TD key={di} style={{ backgroundColor: (di % 7 === 5 || di % 7 === 6) ? "#e8f5e9" : undefined }} />
-                ))}
+                {svc.actual.map((v, di) => {
+                  const wdi = di % 7;
+                  const isWE = wdi === 5 || wdi === 6;
+                  return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", fontSize: "6.5pt" }}>{v ? "●" : ""}</td>;
+                })}
               </tr>
             </React.Fragment>
           ))}
         </tbody>
       </table>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "2px" }}>
+
+      {/* 届出年月日 */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "3px" }}>
         <tbody>
-          <tr style={{ height: "16px" }}>
-            <TH style={{ width: "15%" }}>届出年月日</TH>
-            <TD className="px-1">{s("submission_date")}</TD>
+          <tr style={{ height: "18px" }}>
+            <td style={{ ...thStyle, width: "12%" }}>届出年月日</td>
+            <td style={{ ...tdStyle, width: "30%" }}>{s("submission_date")}</td>
+            <td style={{ ...thStyle, width: "10%" }}>作成者氏名</td>
+            <td style={tdStyle} />
           </tr>
         </tbody>
       </table>
@@ -1261,65 +1478,99 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
 function PrintInvoice({ c }: { c: Record<string, unknown> }) {
   const s = (k: string) => String(c[k] ?? "　");
   const n = (k: string) => Number(c[k] ?? 0).toLocaleString();
+  const B = "1px solid #000";
+  const cellBase: React.CSSProperties = { border: B, padding: "2px 6px", fontSize: "9pt", verticalAlign: "middle" };
+  const thStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#f0f0f0", fontWeight: "bold", textAlign: "left" };
+  const tdStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#fff" };
+  const lineStyle: React.CSSProperties = { borderBottom: "1px dotted #999", height: "18px", width: "100%" };
+
   const items: InvoiceItem[] = Array.isArray(c.items) ? (c.items as InvoiceItem[]) : [];
+  const MIN_ROWS = 8;
+  const itemRows: InvoiceItem[] = items.length >= MIN_ROWS
+    ? items
+    : [...items, ...Array(MIN_ROWS - items.length).fill({ content: "", units: 0, unit_price: 0, amount: 0 })];
+
+  const today = format(new Date(), "yyyy年M月d日", { locale: ja });
+
   return (
     <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000" }}>
-      <div style={{ textAlign: "center", marginBottom: "8px", fontSize: "14pt", fontWeight: "bold", letterSpacing: "0.3em" }}>請　求　書</div>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
+      {/* 発行日 */}
+      <div style={{ textAlign: "right", fontSize: "8.5pt", marginBottom: "4px" }}>{today}</div>
+
+      {/* タイトル */}
+      <div style={{ textAlign: "center", marginBottom: "10px" }}>
+        <span style={{ fontSize: "16pt", fontWeight: "bold", letterSpacing: "0.4em" }}>請　求　書</span>
+      </div>
+
+      {/* 宛先・請求者ブロック */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "8px" }}>
         <tbody>
-          <tr style={{ height: "22px" }}>
-            <TH style={{ width: "18%" }}>利用者名</TH>
-            <TD style={{ width: "32%" }} className="px-2 font-bold">{s("user_name")}　様</TD>
-            <TH style={{ width: "18%" }}>請求月</TH>
-            <TD className="px-2">{s("billing_month")}</TD>
+          <tr style={{ height: "26px" }}>
+            <td style={{ ...thStyle, width: "15%" }}>請求先（利用者）</td>
+            <td style={{ ...tdStyle, width: "35%", fontWeight: "bold", fontSize: "11pt" }}>{s("user_name")}　殿</td>
+            <td style={{ ...thStyle, width: "15%" }}>請求月</td>
+            <td style={{ ...tdStyle }}>{s("billing_month")}</td>
           </tr>
           <tr style={{ height: "22px" }}>
-            <TH>事業所名</TH>
-            <TD colSpan={3} className="px-2">{s("office_name")}</TD>
+            <td style={thStyle}>請求事業所</td>
+            <td colSpan={3} style={tdStyle}>{s("office_name")}</td>
           </tr>
         </tbody>
       </table>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
+
+      {/* 明細テーブル */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "6px" }}>
         <thead>
-          <tr style={{ height: "22px" }}>
-            <TH style={{ width: "50%" }}>サービス内容</TH>
-            <TH style={{ width: "15%" }}>単位数</TH>
-            <TH style={{ width: "15%" }}>単価（円）</TH>
-            <TH style={{ width: "20%" }}>金額（円）</TH>
+          <tr style={{ height: "24px" }}>
+            <th style={{ ...thStyle, width: "5%", textAlign: "center" }}>No.</th>
+            <th style={{ ...thStyle, width: "50%", textAlign: "center" }}>サービス内容</th>
+            <th style={{ ...thStyle, width: "13%", textAlign: "center" }}>単位数</th>
+            <th style={{ ...thStyle, width: "13%", textAlign: "center" }}>単価（円）</th>
+            <th style={{ ...thStyle, width: "19%", textAlign: "center" }}>金額（円）</th>
           </tr>
         </thead>
         <tbody>
-          {(items.length > 0 ? items : Array(6).fill({ content: "", units: 0, unit_price: 0, amount: 0 })).map((row: InvoiceItem, i) => (
-            <tr key={i} style={{ height: "22px" }}>
-              <TD className="px-2">{row.content || "　"}</TD>
-              <TD className="px-2 text-right">{row.units ? row.units.toLocaleString() : "　"}</TD>
-              <TD className="px-2 text-right">{row.unit_price ? row.unit_price.toLocaleString() : "　"}</TD>
-              <TD className="px-2 text-right">{row.amount ? row.amount.toLocaleString() : "　"}</TD>
+          {itemRows.map((row: InvoiceItem, i) => (
+            <tr key={i} style={{ height: "24px" }}>
+              <td style={{ ...tdStyle, textAlign: "center", color: "#666" }}>{i + 1}</td>
+              <td style={{ ...tdStyle, padding: "2px 8px" }}>{row.content || "　"}</td>
+              <td style={{ ...tdStyle, textAlign: "right", padding: "2px 8px" }}>{row.units ? row.units.toLocaleString() : "　"}</td>
+              <td style={{ ...tdStyle, textAlign: "right", padding: "2px 8px" }}>{row.unit_price ? row.unit_price.toLocaleString() : "　"}</td>
+              <td style={{ ...tdStyle, textAlign: "right", padding: "2px 8px" }}>{row.amount ? row.amount.toLocaleString() : "　"}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "6px" }}>
+
+      {/* 合計欄 */}
+      <table style={{ width: "60%", borderCollapse: "collapse", marginLeft: "auto", marginBottom: "8px" }}>
         <tbody>
-          <tr style={{ height: "22px" }}>
-            <TH style={{ width: "60%" }}>合計金額</TH>
-            <TD className="px-2 text-right font-bold">{n("total")}　円</TD>
+          <tr style={{ height: "26px" }}>
+            <td style={{ ...thStyle, width: "50%", textAlign: "center", backgroundColor: "#e0e0e0" }}>合　計　金　額</td>
+            <td style={{ ...tdStyle, textAlign: "right", padding: "2px 10px", fontWeight: "bold", fontSize: "11pt" }}>{n("total")}　円</td>
           </tr>
           <tr style={{ height: "22px" }}>
-            <TH>保険給付額</TH>
-            <TD className="px-2 text-right">{n("insurance_amount")}　円</TD>
+            <td style={{ ...thStyle, textAlign: "center" }}>うち保険給付額</td>
+            <td style={{ ...tdStyle, textAlign: "right", padding: "2px 10px" }}>{n("insurance_amount")}　円</td>
           </tr>
           <tr style={{ height: "22px" }}>
-            <TH>自己負担額</TH>
-            <TD className="px-2 text-right font-bold">{n("copay_amount")}　円</TD>
+            <td style={{ ...thStyle, textAlign: "center", backgroundColor: "#ffe0b2" }}>ご請求額（自己負担）</td>
+            <td style={{ ...tdStyle, textAlign: "right", padding: "2px 10px", fontWeight: "bold" }}>{n("copay_amount")}　円</td>
           </tr>
         </tbody>
       </table>
+
+      {/* 備考 */}
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <tbody>
           <tr>
-            <TH style={{ width: "15%" }}>備考</TH>
-            <TD style={{ height: "60px", verticalAlign: "top", padding: "4px", whiteSpace: "pre-wrap" }}>{s("notes")}</TD>
+            <td style={{ ...thStyle, width: "12%", verticalAlign: "top" }}>備考</td>
+            <td style={{ ...tdStyle, height: "70px", verticalAlign: "top", padding: "4px 8px", whiteSpace: "pre-wrap", position: "relative" }}>
+              {s("notes")}
+              <div style={{ position: "absolute", top: 0, left: "8px", right: "8px", bottom: 0, pointerEvents: "none" }}>
+                {Array.from({ length: 3 }).map((_, li) => <div key={li} style={{ ...lineStyle, position: "absolute", top: `${20 + li * 18}px` }} />)}
+              </div>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -1346,8 +1597,8 @@ function PrintView({ reportType, content, config }: {
     case "care-plan-2":       return <PrintCarePlan2 c={content} />;
     case "face-sheet":        return <PrintFaceSheet c={content} />;
     case "care-plan-3":       return <PrintCarePlan3 c={content} />;
-    case "service-usage":     return <PrintServiceTicket c={content} title="サービス利用票（第6表）" />;
-    case "service-provision": return <PrintServiceTicket c={content} title="サービス提供票（第7表）" />;
+    case "service-usage":     return <PrintServiceTicket c={content} title="サービス利用票" isProvision={false} />;
+    case "service-provision": return <PrintServiceTicket c={content} title="サービス提供票" isProvision={true} />;
     case "invoice":           return <PrintInvoice c={content} />;
     default: return <PrintGeneric c={content} title={config.titleJa} />;
   }
