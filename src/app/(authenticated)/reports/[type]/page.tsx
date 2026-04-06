@@ -69,9 +69,9 @@ const REPORT_CONFIG: Record<string, ReportConfig> = {
   "care-plan-1":       { titleJa: "居宅サービス計画書（第1表）",        needsPeriod: false, landscape: true },
   "care-plan-2":       { titleJa: "居宅サービス計画書（第2表）",        needsPeriod: false, landscape: true },
   "care-plan-3":       { titleJa: "週間サービス計画表（第3表）",        needsPeriod: false, landscape: true },
-  "service-usage":     { titleJa: "サービス利用票",                    needsPeriod: true,  landscape: true },
-  "service-provision": { titleJa: "サービス提供票",                    needsPeriod: true,  landscape: true },
-  "invoice":           { titleJa: "請求書",                           needsPeriod: true },
+  "service-usage":        { titleJa: "サービス利用票",                    needsPeriod: true,  landscape: true },
+  "service-provision":    { titleJa: "サービス提供票",                    needsPeriod: true,  landscape: true },
+  "service-usage-detail": { titleJa: "サービス利用票別表",                needsPeriod: true,  landscape: true },
 };
 
 // ---------------------------------------------------------------------------
@@ -315,16 +315,12 @@ function buildDefaultContent(
           actual:  Array(31).fill(false) as boolean[],
         })),
       };
-    case "invoice":
+    case "service-usage-detail":
       return {
-        user_name: user.name,
-        billing_month: reportMonth ? fmtReiwaMonth(reportMonth) : fmtReiwaMonth(format(new Date(), "yyyy-MM")),
-        office_name: "",
-        items: [] as InvoiceItem[],
-        total: 0,
-        insurance_amount: 0,
-        copay_amount: 0,
-        notes: "",
+        creation_date: "",
+        items: [],
+        limit_management: [],
+        short_stay_days: { prev: 0, current: 0, total: 0 },
       };
     default:
       return { notes: "", created_from: "auto" };
@@ -1393,111 +1389,98 @@ function PrintCarePlan3({ c }: { c: Record<string, unknown> }) {
   const lineStyle: React.CSSProperties = { borderBottom: "1px dotted #999", height: "18px", width: "100%" };
   const schedule: Schedule = (c.schedule as Schedule) ?? emptySchedule();
 
-  const TIME_SLOT_LABELS = [
-    { key: "early_morning", label: "深夜・早朝", sub: "0:00〜6:00" },
-    { key: "morning",       label: "午前",       sub: "6:00〜12:00" },
-    { key: "afternoon",     label: "午後",       sub: "12:00〜18:00" },
-    { key: "evening",       label: "夜間",       sub: "18:00〜21:00" },
-    { key: "night",         label: "深夜",       sub: "21:00〜24:00" },
+  // 2時間刻み13行、左ラベルはrowSpanで配置
+  const TIME_ROWS: { time: string; key: string; labelSpan?: number; label?: string }[] = [
+    { time: "0:00",  key: "h00", labelSpan: 3, label: "深\n夜" },
+    { time: "2:00",  key: "h02" },
+    { time: "4:00",  key: "h04" },
+    { time: "6:00",  key: "h06", labelSpan: 2, label: "早\n朝" },
+    { time: "8:00",  key: "h08", labelSpan: 2, label: "午\n前" },
+    { time: "10:00", key: "h10" },
+    { time: "12:00", key: "h12", labelSpan: 3, label: "午\n\n後" },
+    { time: "14:00", key: "h14" },
+    { time: "16:00", key: "h16" },
+    { time: "18:00", key: "h18", labelSpan: 2, label: "夜\n間" },
+    { time: "20:00", key: "h20" },
+    { time: "22:00", key: "h22", labelSpan: 2, label: "深\n夜" },
+    { time: "24:00", key: "h24" },
   ];
+  // scheduleのキーマッピング（旧形式→新形式対応）
+  const getCell = (key: string, day: string) => {
+    // 新形式（h00〜h24）があればそれを使う、なければ旧形式から取得
+    if (schedule[key]?.[day]) return schedule[key][day];
+    // 旧形式からの対応
+    const hour = parseInt(key.replace("h", ""), 10);
+    if (hour < 6 && schedule.early_morning?.[day]) return schedule.early_morning[day];
+    if (hour >= 6 && hour < 12 && schedule.morning?.[day]) return schedule.morning[day];
+    if (hour >= 12 && hour < 18 && schedule.afternoon?.[day]) return schedule.afternoon[day];
+    if (hour >= 18 && hour < 21 && schedule.evening?.[day]) return schedule.evening[day];
+    if (hour >= 21 && schedule.night?.[day]) return schedule.night[day];
+    return "";
+  };
 
   return (
     <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000", width: "277mm", height: "190mm", overflow: "hidden" }}>
-      {/* 第3表ラベル */}
       <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "8pt", marginBottom: "4px" }}>第３表</div>
-
-      {/* タイトル */}
-      <div style={{ textAlign: "center", marginBottom: "2px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "2px" }}>
+        <div />
         <span style={{ fontSize: "14pt", fontWeight: "bold", letterSpacing: "0.3em" }}>週間サービス計画表</span>
+        <span style={{ fontSize: "8pt" }}>作成年月日　{s("creation_date")}</span>
+      </div>
+      <div style={{ fontSize: "9pt", marginBottom: "4px" }}>
+        <span style={{ fontWeight: "bold", marginRight: "12px" }}>利用者名　{s("user_name")}　殿</span>
       </div>
 
-      {/* ヘッダー */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
-        <tbody>
-          <tr style={{ height: "22px" }}>
-            <td style={{ ...thStyle, width: "10%", textAlign: "left" }}>利用者名</td>
-            <td style={{ ...tdStyle, width: "28%", fontWeight: "bold", fontSize: "11pt" }}>{s("user_name")}　殿</td>
-            <td style={{ ...thStyle, width: "10%", textAlign: "left" }}>要介護度</td>
-            <td style={{ ...tdStyle, width: "12%" }}>{s("care_level")}</td>
-            <td style={{ ...thStyle, width: "10%", textAlign: "left" }}>計画期間</td>
-            <td style={{ ...tdStyle }}>{s("plan_period")}</td>
-          </tr>
-          <tr style={{ height: "20px" }}>
-            <td style={{ ...thStyle, textAlign: "left" }}>作成年月日</td>
-            <td colSpan={5} style={{ ...tdStyle }}>{s("creation_date")}</td>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* 週間スケジュール・グリッド */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
+      {/* メイングリッド */}
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
-          <tr style={{ height: "24px" }}>
-            <th style={{ ...thStyle, width: "10%" }}>時間帯</th>
+          <tr style={{ height: "22px" }}>
+            <th style={{ ...thStyle, width: "3%" }} colSpan={2}></th>
             {WEEK_DAY_JA.map((d, i) => (
-              <th key={i} style={i >= 5 ? { ...thGreen } : { ...thStyle }}>
-                {d}曜日
-              </th>
+              <th key={i} style={i >= 5 ? thGreen : thStyle}>{d}</th>
             ))}
+            <th style={{ ...thStyle, width: "13%" }}>主な日常生活上の活動</th>
           </tr>
         </thead>
         <tbody>
-          {TIME_SLOT_LABELS.map((slot) => (
-            <tr key={slot.key} style={{ height: "50px" }}>
-              <td style={{ ...thStyle, verticalAlign: "middle", lineHeight: "1.5", fontSize: "8pt" }}>
-                {slot.label}<br /><span style={{ fontSize: "7pt", fontWeight: "normal" }}>{slot.sub}</span>
-              </td>
+          {TIME_ROWS.map((row, ri) => (
+            <tr key={ri} style={{ height: "30px" }}>
+              {row.labelSpan && (
+                <td rowSpan={row.labelSpan} style={{ ...thStyle, width: "3%", textAlign: "center", fontSize: "8pt", color: "red", whiteSpace: "pre-wrap", lineHeight: "1.2", padding: "2px", borderStyle: "dashed", borderColor: "#c00" }}>
+                  {row.label}
+                </td>
+              )}
+              <td style={{ ...thStyle, width: "5%", fontSize: "8pt", textAlign: "right", padding: "2px 4px" }}>{row.time}</td>
               {WEEK_DAYS.map((d, di) => (
-                <td key={d} style={{
-                  ...(di >= 5 ? tdGreen : tdStyle),
-                  verticalAlign: "top",
-                  height: "50px",
-                  padding: "3px 4px",
-                  whiteSpace: "pre-wrap",
-                  position: "relative",
-                }}>
-                  {schedule[slot.key]?.[d] || ""}
-                  {/* Dotted ruled lines */}
-                  <div style={{ position: "absolute", top: 0, left: "4px", right: "4px", bottom: 0, pointerEvents: "none" }}>
-                    {Array.from({ length: 2 }).map((_, li) => (
-                      <div key={li} style={{ ...lineStyle, position: "absolute", top: `${18 + li * 16}px` }} />
-                    ))}
+                <td key={d} style={{ ...(di >= 5 ? tdGreen : tdStyle), verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "7pt", padding: "2px 3px", position: "relative" }}>
+                  {getCell(row.key, d)}
+                  <div style={{ position: "absolute", top: 0, left: "3px", right: "3px", bottom: 0, pointerEvents: "none", display: "flex", flexDirection: "column", justifyContent: "space-evenly" }}>
+                    <div style={lineStyle} />
                   </div>
                 </td>
               ))}
+              {ri === 0 && (
+                <td rowSpan={TIME_ROWS.length} style={{ ...tdStyle, width: "13%", verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "7pt", padding: "4px", position: "relative" }}>
+                  {s("daily_activities")}
+                  <div style={{ position: "absolute", top: "4px", left: "4px", right: "4px", bottom: "4px", pointerEvents: "none", display: "flex", flexDirection: "column", justifyContent: "space-evenly" }}>
+                    {Array.from({ length: 12 }).map((_, i) => <div key={i} style={lineStyle} />)}
+                  </div>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
       </table>
 
-      {/* 主な日常生活上の活動 */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
-        <tbody>
-          <tr>
-            <td style={{ ...thStyle, width: "18%", verticalAlign: "top", textAlign: "left", padding: "4px" }}>
-              主な日常生活上の活動
-            </td>
-            <td style={{ ...tdStyle, height: "50px", verticalAlign: "top", padding: "4px 6px", whiteSpace: "pre-wrap", position: "relative" }}>
-              {s("daily_activities")}
-              <div style={{ position: "absolute", top: 0, left: "6px", right: "6px", bottom: 0, pointerEvents: "none" }}>
-                {Array.from({ length: 2 }).map((_, li) => <div key={li} style={{ ...lineStyle, position: "absolute", top: `${20 + li * 18}px` }} />)}
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
       {/* 週単位以外のサービス */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "6px" }}>
         <tbody>
           <tr>
-            <td style={{ ...thStyle, width: "18%", verticalAlign: "top", textAlign: "left", padding: "4px" }}>
-              週単位以外のサービス
-            </td>
-            <td style={{ ...tdStyle, height: "50px", verticalAlign: "top", padding: "4px 6px", whiteSpace: "pre-wrap", position: "relative" }}>
+            <td style={{ ...thStyle, width: "8%", textAlign: "left", padding: "4px", fontSize: "8pt" }}>週単位以外<br />のサービス</td>
+            <td style={{ ...tdStyle, height: "40px", verticalAlign: "top", whiteSpace: "pre-wrap", padding: "4px 6px", position: "relative" }}>
               {s("other_services")}
-              <div style={{ position: "absolute", top: 0, left: "6px", right: "6px", bottom: 0, pointerEvents: "none" }}>
-                {Array.from({ length: 2 }).map((_, li) => <div key={li} style={{ ...lineStyle, position: "absolute", top: `${20 + li * 18}px` }} />)}
+              <div style={{ position: "absolute", top: "4px", left: "6px", right: "6px", bottom: "4px", pointerEvents: "none", display: "flex", flexDirection: "column", justifyContent: "space-evenly" }}>
+                {Array.from({ length: 2 }).map((_, i) => <div key={i} style={lineStyle} />)}
               </div>
             </td>
           </tr>
@@ -1781,6 +1764,213 @@ function PrintInvoice({ c }: { c: Record<string, unknown> }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Print: ServiceUsageDetail (第7表)
+// ---------------------------------------------------------------------------
+
+function PrintServiceUsageDetail({ c }: { c: Record<string, unknown> }) {
+  const B = "1px solid #000";
+  const cellBase: React.CSSProperties = { border: B, padding: "1px 3px", fontSize: "7pt", verticalAlign: "middle" };
+  const thStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#f0f0f0", fontWeight: "bold", textAlign: "center" };
+  const tdStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#fff", textAlign: "center" };
+
+  // Section 1 data
+  type DetailItem = {
+    office_name: string; office_number: string; service_content: string; service_code: string;
+    units: number; discounted_units: number; count: number; service_units: number;
+    category_over_units: number; limit_over_units: number; within_limit_units: number;
+    unit_price: number; total_cost: number; benefit_rate: number; insurance_claim: number;
+    fixed_copay: number; copay_insured: number; copay_full: number;
+  };
+  const items: DetailItem[] = Array.isArray(c.items) ? (c.items as DetailItem[]) : [];
+  const MAIN_ROWS = 8;
+  const dataRows = items.length < MAIN_ROWS
+    ? [...items, ...Array(MAIN_ROWS - items.length).fill(null)]
+    : items;
+
+  // Section 2: 種類別支給限度管理
+  type LimitRow = { type_name: string; limit_units: string; total_units: string; over_units: string };
+  const limitRows: LimitRow[] = Array.isArray(c.limit_management) ? (c.limit_management as LimitRow[]) : [];
+  const LEFT_TYPES = ["訪問介護","訪問入浴介護","訪問看護","訪問リハビリテーション","通所介護","通所リハビリテーション","福祉用具貸与"];
+  const RIGHT_TYPES = ["短期入所生活介護","短期入所療養介護","定期巡回随時対応型訪問介護看護","夜間対応型訪問介護","認知症対応型通所介護","小規模多機能型居宅介護"];
+
+  const getLimitRow = (typeName: string): LimitRow => {
+    const found = limitRows.find((r) => r.type_name === typeName);
+    return found ?? { type_name: typeName, limit_units: "", total_units: "", over_units: "" };
+  };
+
+  // Section 3: 短期入所利用日数
+  type ShortStayDays = { prev: number; current: number; total: number };
+  const ssd: ShortStayDays = (c.short_stay_days as ShortStayDays) ?? { prev: 0, current: 0, total: 0 };
+
+  return (
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "7pt", color: "#000", width: "277mm", height: "190mm", overflow: "hidden" }}>
+      {/* 第7表ラベル */}
+      <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "7.5pt", marginBottom: "3px" }}>第７表</div>
+
+      {/* タイトル */}
+      <div style={{ textAlign: "center", marginBottom: "3px" }}>
+        <span style={{ fontSize: "12pt", fontWeight: "bold", letterSpacing: "0.3em" }}>サービス利用票別表</span>
+      </div>
+
+      {/* Section 1: 区分支給限度管理・利用者負担計算 */}
+      <div style={{ fontSize: "7pt", fontWeight: "bold", marginBottom: "2px" }}>
+        区分支給限度管理・利用者負担計算
+      </div>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
+        <thead>
+          <tr>
+            <th style={{ ...thStyle, width: "7%" }}>事業所名</th>
+            <th style={{ ...thStyle, width: "6%" }}>事業所番号</th>
+            <th style={{ ...thStyle, width: "7%" }}>サービス内容/<br />種類</th>
+            <th style={{ ...thStyle, width: "5%" }}>サービス<br />コード</th>
+            <th style={{ ...thStyle, width: "4%" }}>単位数</th>
+            <th style={{ ...thStyle, width: "4%" }}>割引後<br />(単位数)</th>
+            <th style={{ ...thStyle, width: "3%" }}>回数</th>
+            <th style={{ ...thStyle, width: "5%" }}>サービス<br />単位/金額</th>
+            <th style={{ ...thStyle, width: "5%" }}>種類支給<br />限度基準を<br />超える単位数</th>
+            <th style={{ ...thStyle, width: "5%" }}>区分支給<br />限度基準を<br />超える単位数</th>
+            <th style={{ ...thStyle, width: "5%" }}>区分支給<br />限度基準内<br />単位数</th>
+            <th style={{ ...thStyle, width: "4%" }}>単位数<br />単価</th>
+            <th style={{ ...thStyle, width: "6%" }}>費用総額<br />(保険/事業<br />対象分)</th>
+            <th style={{ ...thStyle, width: "4%" }}>給付率<br />(%)</th>
+            <th style={{ ...thStyle, width: "6%" }}>保険/事業費<br />請求額<br />(税額控除額)</th>
+            <th style={{ ...thStyle, width: "5%" }}>定額利用者<br />負担額</th>
+            <th style={{ ...thStyle, width: "6%" }}>利用者負担<br />(保険/事業<br />対象分)</th>
+            <th style={{ ...thStyle, width: "6%" }}>利用者負担<br />(全額<br />負担分)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {dataRows.map((row, i) => (
+            <tr key={i} style={{ height: "16px" }}>
+              <td style={tdStyle}>{row?.office_name ?? "　"}</td>
+              <td style={tdStyle}>{row?.office_number ?? "　"}</td>
+              <td style={tdStyle}>{row?.service_content ?? "　"}</td>
+              <td style={tdStyle}>{row?.service_code ?? "　"}</td>
+              <td style={tdStyle}>{row?.units ?? "　"}</td>
+              <td style={tdStyle}>{row?.discounted_units ?? "　"}</td>
+              <td style={tdStyle}>{row?.count ?? "　"}</td>
+              <td style={tdStyle}>{row?.service_units ?? "　"}</td>
+              <td style={tdStyle}>{row?.category_over_units ?? "　"}</td>
+              <td style={tdStyle}>{row?.limit_over_units ?? "　"}</td>
+              <td style={tdStyle}>{row?.within_limit_units ?? "　"}</td>
+              <td style={tdStyle}>{row?.unit_price ?? "　"}</td>
+              <td style={tdStyle}>{row?.total_cost ?? "　"}</td>
+              <td style={tdStyle}>{row?.benefit_rate ?? "　"}</td>
+              <td style={tdStyle}>{row?.insurance_claim ?? "　"}</td>
+              <td style={tdStyle}>{row?.fixed_copay ?? "　"}</td>
+              <td style={tdStyle}>{row?.copay_insured ?? "　"}</td>
+              <td style={tdStyle}>{row?.copay_full ?? "　"}</td>
+            </tr>
+          ))}
+          {/* Footer row */}
+          <tr style={{ height: "16px" }}>
+            <td colSpan={8} style={{ ...thStyle, textAlign: "left" }}>
+              区分支給限度基準額（単位）　　　　　　合計
+            </td>
+            <td style={tdStyle}></td>
+            <td style={tdStyle}></td>
+            <td style={tdStyle}></td>
+            <td style={tdStyle}></td>
+            <td style={tdStyle}></td>
+            <td style={tdStyle}></td>
+            <td style={tdStyle}></td>
+            <td style={tdStyle}></td>
+            <td style={tdStyle}></td>
+            <td style={tdStyle}></td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* Section 2 + 3 side by side */}
+      <div style={{ display: "flex", gap: "6px", marginBottom: "4px" }}>
+        {/* Section 2: 種類別支給限度管理 */}
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: "7pt", fontWeight: "bold", marginBottom: "2px" }}>種類別支給限度管理</div>
+          <div style={{ display: "flex", gap: "4px" }}>
+            {/* Left table */}
+            <table style={{ flex: 1, borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={{ ...thStyle, width: "40%" }}>サービス種類</th>
+                  <th style={{ ...thStyle, width: "20%" }}>種類支給<br />限度基準額<br />(単位)</th>
+                  <th style={{ ...thStyle, width: "20%" }}>合計<br />単位数</th>
+                  <th style={{ ...thStyle, width: "20%" }}>種類支給<br />限度基準を<br />超える単位数</th>
+                </tr>
+              </thead>
+              <tbody>
+                {LEFT_TYPES.map((t) => {
+                  const r = getLimitRow(t);
+                  return (
+                    <tr key={t} style={{ height: "14px" }}>
+                      <td style={{ ...tdStyle, textAlign: "left", paddingLeft: "3px" }}>{t}</td>
+                      <td style={tdStyle}>{r.limit_units || "　"}</td>
+                      <td style={tdStyle}>{r.total_units || "　"}</td>
+                      <td style={tdStyle}>{r.over_units || "　"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {/* Right table */}
+            <table style={{ flex: 1, borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={{ ...thStyle, width: "40%" }}>サービス種類</th>
+                  <th style={{ ...thStyle, width: "20%" }}>種類支給<br />限度基準額<br />(単位)</th>
+                  <th style={{ ...thStyle, width: "20%" }}>合計<br />単位数</th>
+                  <th style={{ ...thStyle, width: "20%" }}>種類支給<br />限度基準を<br />超える単位数</th>
+                </tr>
+              </thead>
+              <tbody>
+                {RIGHT_TYPES.map((t) => {
+                  const r = getLimitRow(t);
+                  return (
+                    <tr key={t} style={{ height: "14px" }}>
+                      <td style={{ ...tdStyle, textAlign: "left", paddingLeft: "3px" }}>{t}</td>
+                      <td style={tdStyle}>{r.limit_units || "　"}</td>
+                      <td style={tdStyle}>{r.total_units || "　"}</td>
+                      <td style={tdStyle}>{r.over_units || "　"}</td>
+                    </tr>
+                  );
+                })}
+                {/* 合計行 */}
+                <tr style={{ height: "14px" }}>
+                  <td style={{ ...thStyle, textAlign: "left", paddingLeft: "3px" }}>合　計</td>
+                  <td style={tdStyle}></td>
+                  <td style={tdStyle}></td>
+                  <td style={tdStyle}></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Section 3: 短期入所利用日数 */}
+        <div style={{ width: "120px", flexShrink: 0 }}>
+          <div style={{ fontSize: "7pt", fontWeight: "bold", marginBottom: "2px" }}>要介護認定期間中の<br />短期入所利用日数</div>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={thStyle}>前月までの<br />利用日数</th>
+                <th style={thStyle}>今月の<br />計画利用<br />日数</th>
+                <th style={thStyle}>累積<br />利用日数</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style={{ height: "20px" }}>
+                <td style={tdStyle}>{ssd.prev || "　"}</td>
+                <td style={tdStyle}>{ssd.current || "　"}</td>
+                <td style={tdStyle}>{ssd.total || "　"}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PrintGeneric({ c, title }: { c: Record<string, unknown>; title: string }) {
   return (
     <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000" }}>
@@ -1800,9 +1990,9 @@ function PrintView({ reportType, content, config }: {
     case "care-plan-2":       return <PrintCarePlan2 c={content} />;
     case "face-sheet":        return <PrintFaceSheet c={content} />;
     case "care-plan-3":       return <PrintCarePlan3 c={content} />;
-    case "service-usage":     return <PrintServiceTicket c={content} title="サービス利用票" isProvision={false} />;
-    case "service-provision": return <PrintServiceTicket c={content} title="サービス提供票" isProvision={true} />;
-    case "invoice":           return <PrintInvoice c={content} />;
+    case "service-usage":        return <PrintServiceTicket c={content} title="サービス利用票" isProvision={false} />;
+    case "service-provision":    return <PrintServiceTicket c={content} title="サービス提供票" isProvision={true} />;
+    case "service-usage-detail": return <PrintServiceUsageDetail c={content} />;
     default: return <PrintGeneric c={content} title={config.titleJa} />;
   }
 }
@@ -1815,9 +2005,9 @@ function EditForm({ reportType, content, onChange }: {
     case "care-plan-2":       return <EditFormCarePlan2 content={content} onChange={onChange} />;
     case "face-sheet":        return <EditFormFaceSheet content={content} onChange={onChange} />;
     case "care-plan-3":       return <EditFormCarePlan3 content={content} onChange={onChange} />;
-    case "service-usage":     return <EditFormServiceTicket content={content} onChange={onChange} isProvision={false} />;
-    case "service-provision": return <EditFormServiceTicket content={content} onChange={onChange} isProvision={true} />;
-    case "invoice":           return <EditFormInvoice content={content} onChange={onChange} />;
+    case "service-usage":        return <EditFormServiceTicket content={content} onChange={onChange} isProvision={false} />;
+    case "service-provision":    return <EditFormServiceTicket content={content} onChange={onChange} isProvision={true} />;
+    case "service-usage-detail": return <EditFormGeneric content={content} onChange={onChange} label="内容（JSON編集）" />;
     default: return <EditFormGeneric content={content} onChange={onChange} label="内容（JSON編集）" />;
   }
 }

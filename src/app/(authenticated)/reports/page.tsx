@@ -7,7 +7,6 @@ import {
   ClipboardList,
   CalendarDays,
   Truck,
-  Receipt,
 } from "lucide-react";
 
 type ReportCard = {
@@ -89,15 +88,15 @@ const REPORT_CARDS: ReportCard[] = [
     borderColor: "border-teal-100",
   },
   {
-    type: "invoice",
-    titleJa: "請求書",
-    titleEn: "Invoice",
+    type: "service-usage-detail",
+    titleJa: "サービス利用票別表",
+    titleEn: "Service Usage Detail (Table 7)",
     description:
-      "選択した月の利用者別請求書です。サービス内容、単位数、金額、保険給付額、自己負担額を一覧表示します。",
-    icon: <Receipt size={28} />,
-    color: "text-rose-600",
-    bgColor: "bg-rose-50",
-    borderColor: "border-rose-100",
+      "区分支給限度管理・利用者負担計算、種類別支給限度管理、短期入所利用日数を記載するサービス利用票別表（第7表）です。",
+    icon: <CalendarDays size={28} />,
+    color: "text-cyan-600",
+    bgColor: "bg-cyan-50",
+    borderColor: "border-cyan-100",
   },
 ];
 
@@ -145,7 +144,9 @@ export default function ReportsPage() {
                           ? "bg-orange-600 hover:bg-orange-700"
                           : card.type === "service-provision"
                             ? "bg-teal-600 hover:bg-teal-700"
-                            : "bg-rose-600 hover:bg-rose-700"
+                            : card.type === "service-usage-detail"
+                              ? "bg-cyan-600 hover:bg-cyan-700"
+                              : "bg-gray-600 hover:bg-gray-700"
                 }`}
               >
                 <FileText size={15} />
