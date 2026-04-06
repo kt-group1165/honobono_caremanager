@@ -56,6 +56,17 @@ const REPORT_CARDS: ReportCard[] = [
     borderColor: "border-violet-100",
   },
   {
+    type: "care-plan-3",
+    titleJa: "週間サービス計画表（第3表）",
+    titleEn: "Care Plan Table 3",
+    description:
+      "週間の曜日別サービススケジュールを時間帯ごとに表示する計画表です。",
+    icon: <CalendarDays size={28} />,
+    color: "text-cyan-600",
+    bgColor: "bg-cyan-50",
+    borderColor: "border-cyan-100",
+  },
+  {
     type: "service-usage",
     titleJa: "サービス利用票",
     titleEn: "Service Usage Sheet",

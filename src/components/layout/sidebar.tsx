@@ -6,10 +6,14 @@ import {
   Users,
   CalendarDays,
   ClipboardList,
-  Receipt,
   FileText,
   LayoutDashboard,
-  UserCog,
+  ClipboardCheck,
+  BookOpen,
+  Calculator,
+  FileSpreadsheet,
+  Settings,
+  Activity,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -17,13 +21,17 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 const navigation = [
-  { name: "ダッシュボード", href: "/", icon: LayoutDashboard },
+  { name: "ダッシュボード", href: "/dashboard", icon: LayoutDashboard },
   { name: "利用者管理", href: "/users", icon: Users },
-  { name: "職員管理", href: "/staff", icon: UserCog },
-  { name: "シフト調整", href: "/shifts", icon: CalendarDays },
+  { name: "アセスメント", href: "/assessments", icon: ClipboardCheck },
   { name: "サービス管理", href: "/services", icon: ClipboardList },
-  { name: "請求データ", href: "/billing", icon: Receipt },
+  { name: "提供票", href: "/provision-sheets", icon: CalendarDays },
+  { name: "モニタリング", href: "/monitoring", icon: Activity },
+  { name: "支援経過記録", href: "/support-records", icon: BookOpen },
+  { name: "給付管理", href: "/billing/benefits", icon: Calculator },
+  { name: "レセプト", href: "/billing/claims", icon: FileSpreadsheet },
   { name: "帳票作成", href: "/reports", icon: FileText },
+  { name: "マスタ管理", href: "/master", icon: Settings },
 ];
 
 export function Sidebar() {
@@ -54,8 +62,8 @@ export function Sidebar() {
       <nav className="flex-1 space-y-1 p-2">
         {navigation.map((item) => {
           const isActive =
-            item.href === "/"
-              ? pathname === "/"
+            item.href === "/dashboard"
+              ? pathname === "/dashboard"
               : pathname.startsWith(item.href);
           return (
             <Link
@@ -75,6 +83,17 @@ export function Sidebar() {
           );
         })}
       </nav>
+      <div className="border-t px-3 py-2">
+        {!collapsed && (
+          <div className="text-[10px] text-gray-400 leading-relaxed">
+            <div>介護管理システム v0.2.0</div>
+            <div>ケアマネ版</div>
+          </div>
+        )}
+        {collapsed && (
+          <div className="text-[9px] text-gray-400 text-center">v0.1</div>
+        )}
+      </div>
     </aside>
   );
 }

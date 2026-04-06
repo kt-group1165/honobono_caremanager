@@ -1,0 +1,966 @@
+"use client";
+
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
+import { UserSidebar } from "@/components/users/user-sidebar";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  X,
+  Save,
+  Printer,
+  Download,
+  Loader2,
+  FileText,
+  Clock,
+  Phone,
+  House,
+  MapPin,
+  Mail,
+  Printer as FaxIcon,
+  Users,
+  ClipboardList,
+  Activity,
+  MoreHorizontal,
+} from "lucide-react";
+import {
+  format,
+  parseISO,
+  startOfDay,
+  endOfDay,
+} from "date-fns";
+import { ja } from "date-fns/locale";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface KaigoUser {
+  id: string;
+  name: string;
+  name_kana: string | null;
+}
+
+type RecordCategory =
+  | "電話"
+  | "訪問"
+  | "来所"
+  | "メール"
+  | "FAX"
+  | "カンファレンス"
+  | "サービス担当者会議"
+  | "モニタリング"
+  | "その他";
+
+interface SupportRecord {
+  id: string;
+  user_id: string;
+  record_date: string;
+  record_time: string | null;
+  category: RecordCategory;
+  content: string;
+  staff_name: string | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+type FormData = {
+  record_date: string;
+  record_time: string;
+  category: RecordCategory;
+  content: string;
+  staff_name: string;
+};
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const CATEGORIES: RecordCategory[] = [
+  "電話",
+  "訪問",
+  "来所",
+  "メール",
+  "FAX",
+  "カンファレンス",
+  "サービス担当者会議",
+  "モニタリング",
+  "その他",
+];
+
+const CATEGORY_COLORS: Record<RecordCategory, { bg: string; text: string; border: string }> = {
+  電話: { bg: "bg-blue-100", text: "text-blue-700", border: "border-blue-200" },
+  訪問: { bg: "bg-green-100", text: "text-green-700", border: "border-green-200" },
+  来所: { bg: "bg-purple-100", text: "text-purple-700", border: "border-purple-200" },
+  メール: { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-200" },
+  FAX: { bg: "bg-gray-100", text: "text-gray-600", border: "border-gray-200" },
+  カンファレンス: { bg: "bg-orange-100", text: "text-orange-700", border: "border-orange-200" },
+  サービス担当者会議: { bg: "bg-red-100", text: "text-red-700", border: "border-red-200" },
+  モニタリング: { bg: "bg-teal-100", text: "text-teal-700", border: "border-teal-200" },
+  その他: { bg: "bg-gray-100", text: "text-gray-500", border: "border-gray-200" },
+};
+
+const CATEGORY_TIMELINE_COLORS: Record<RecordCategory, string> = {
+  電話: "bg-blue-500",
+  訪問: "bg-green-500",
+  来所: "bg-purple-500",
+  メール: "bg-yellow-500",
+  FAX: "bg-gray-400",
+  カンファレンス: "bg-orange-500",
+  サービス担当者会議: "bg-red-500",
+  モニタリング: "bg-teal-500",
+  その他: "bg-gray-400",
+};
+
+function CategoryIcon({ category, size = 14 }: { category: RecordCategory; size?: number }) {
+  const props = { size, className: "shrink-0" };
+  switch (category) {
+    case "電話": return <Phone {...props} />;
+    case "訪問": return <House{...props} />;
+    case "来所": return <MapPin {...props} />;
+    case "メール": return <Mail {...props} />;
+    case "FAX": return <FaxIcon{...props} />;
+    case "カンファレンス": return <Users {...props} />;
+    case "サービス担当者会議": return <ClipboardList {...props} />;
+    case "モニタリング": return <Activity {...props} />;
+    default: return <MoreHorizontal {...props} />;
+  }
+}
+
+const EMPTY_FORM: FormData = {
+  record_date: format(new Date(), "yyyy-MM-dd"),
+  record_time: format(new Date(), "HH:mm"),
+  category: "電話",
+  content: "",
+  staff_name: "",
+};
+
+const inputClass =
+  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatDateTime(date: string, time: string | null): string {
+  try {
+    const d = parseISO(date);
+    const dateStr = format(d, "yyyy年M月d日(E)", { locale: ja });
+    if (time) {
+      return `${dateStr} ${time}`;
+    }
+    return dateStr;
+  } catch {
+    return date;
+  }
+}
+
+function formatDateShort(date: string): string {
+  try {
+    return format(parseISO(date), "M/d(E)", { locale: ja });
+  } catch {
+    return date;
+  }
+}
+
+function escapeCSV(val: string | null | undefined): string {
+  const s = val ?? "";
+  if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export default function SupportRecordsPage() {
+  const supabase = createClient();
+
+  // ── State ──
+  const [users, setUsers] = useState<KaigoUser[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+  const [filterCategory, setFilterCategory] = useState<string>("");
+
+  const [records, setRecords] = useState<SupportRecord[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [loadingRecords, setLoadingRecords] = useState(false);
+
+  // Dialog state
+  const [showDialog, setShowDialog] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState<FormData>(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+
+  // Delete confirm
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // ── Derived ──
+  const selectedUser = useMemo(
+    () => users.find((u) => u.id === selectedUserId) ?? null,
+    [users, selectedUserId]
+  );
+
+  const filteredRecords = useMemo(() => {
+    return records.filter((r) => {
+      if (filterCategory && r.category !== filterCategory) return false;
+      if (startDate) {
+        try {
+          const rd = parseISO(r.record_date);
+          if (rd < startOfDay(parseISO(startDate))) return false;
+        } catch { /* ignore */ }
+      }
+      if (endDate) {
+        try {
+          const rd = parseISO(r.record_date);
+          if (rd > endOfDay(parseISO(endDate))) return false;
+        } catch { /* ignore */ }
+      }
+      return true;
+    });
+  }, [records, filterCategory, startDate, endDate]);
+
+  // ── Load users ──
+  const fetchUsers = useCallback(async () => {
+    setLoadingUsers(true);
+    const { data, error } = await supabase
+      .from("kaigo_users")
+      .select("id, name, name_kana")
+      .eq("status", "active")
+      .order("name_kana", { ascending: true });
+    if (error) {
+      toast.error("利用者の取得に失敗しました: " + error.message);
+    } else {
+      setUsers(data ?? []);
+    }
+    setLoadingUsers(false);
+  }, [supabase]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  // ── Load records ──
+  const fetchRecords = useCallback(async () => {
+    if (!selectedUserId) {
+      setRecords([]);
+      return;
+    }
+    setLoadingRecords(true);
+    try {
+      const { data, error } = await supabase
+        .from("kaigo_support_records")
+        .select("*")
+        .eq("user_id", selectedUserId)
+        .order("record_date", { ascending: false })
+        .order("record_time", { ascending: false });
+      if (error) throw error;
+      setRecords(data ?? []);
+    } catch (err: unknown) {
+      toast.error(
+        "記録の取得に失敗しました: " +
+          (err instanceof Error ? err.message : String(err))
+      );
+    } finally {
+      setLoadingRecords(false);
+    }
+  }, [supabase, selectedUserId]);
+
+  useEffect(() => {
+    fetchRecords();
+  }, [fetchRecords]);
+
+  // ── Dialog open/close ──
+  const openNew = () => {
+    setEditId(null);
+    setForm({ ...EMPTY_FORM });
+    setShowDialog(true);
+  };
+
+  const openEdit = (rec: SupportRecord) => {
+    setEditId(rec.id);
+    setForm({
+      record_date: rec.record_date,
+      record_time: rec.record_time ?? "",
+      category: rec.category,
+      content: rec.content,
+      staff_name: rec.staff_name ?? "",
+    });
+    setShowDialog(true);
+  };
+
+  const closeDialog = () => {
+    setShowDialog(false);
+    setEditId(null);
+  };
+
+  // ── Save ──
+  const handleSave = async () => {
+    if (!form.record_date) {
+      toast.error("日付は必須です");
+      return;
+    }
+    if (!form.content.trim()) {
+      toast.error("内容は必須です");
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = {
+        user_id: selectedUserId,
+        record_date: form.record_date,
+        record_time: form.record_time || null,
+        category: form.category,
+        content: form.content.trim(),
+        staff_name: form.staff_name.trim() || null,
+      };
+
+      if (editId) {
+        const { error } = await supabase
+          .from("kaigo_support_records")
+          .update(payload)
+          .eq("id", editId);
+        if (error) throw error;
+        toast.success("記録を更新しました");
+      } else {
+        const { error } = await supabase
+          .from("kaigo_support_records")
+          .insert(payload);
+        if (error) throw error;
+        toast.success("記録を登録しました");
+      }
+      closeDialog();
+      fetchRecords();
+    } catch (err: unknown) {
+      toast.error(
+        "保存に失敗しました: " +
+          (err instanceof Error ? err.message : String(err))
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Delete ──
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from("kaigo_support_records")
+        .delete()
+        .eq("id", deleteId);
+      if (error) throw error;
+      toast.success("記録を削除しました");
+      setDeleteId(null);
+      fetchRecords();
+    } catch (err: unknown) {
+      toast.error(
+        "削除に失敗しました: " +
+          (err instanceof Error ? err.message : String(err))
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // ── Print ──
+  const handlePrint = () => {
+    window.print();
+  };
+
+  // ── CSV Export ──
+  const handleExportCSV = () => {
+    const header = ["日付", "時刻", "区分", "内容", "記録者"];
+    const rows = filteredRecords.map((r) => [
+      escapeCSV(r.record_date),
+      escapeCSV(r.record_time),
+      escapeCSV(r.category),
+      escapeCSV(r.content),
+      escapeCSV(r.staff_name),
+    ]);
+    const csv =
+      "\uFEFF" + // BOM for Excel
+      [header.map(escapeCSV).join(","), ...rows.map((r) => r.join(","))].join(
+        "\r\n"
+      );
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const fileName = `支援経過記録_${selectedUser?.name ?? ""}${startDate ? "_" + startDate : ""}${endDate ? "_" + endDate : ""}.csv`;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("CSVをエクスポートしました");
+  };
+
+  // ── Period label for print ──
+  const periodLabel = useMemo(() => {
+    if (startDate && endDate)
+      return `${format(parseISO(startDate), "yyyy年M月d日")} ～ ${format(parseISO(endDate), "yyyy年M月d日")}`;
+    if (startDate) return `${format(parseISO(startDate), "yyyy年M月d日")} ～`;
+    if (endDate) return `～ ${format(parseISO(endDate), "yyyy年M月d日")}`;
+    return "全期間";
+  }, [startDate, endDate]);
+
+  // ─── Render ──────────────────────────────────────────────────────────────────
+
+  return (
+    <>
+      {/* ── Print styles ── */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #support-records-print, #support-records-print * { visibility: visible !important; }
+          #support-records-print {
+            position: fixed; inset: 0;
+            padding: 12mm 14mm;
+            background: white;
+            font-size: 9pt;
+          }
+          #support-records-screen { display: none !important; }
+          @page { size: A4 portrait; margin: 0; }
+          .print-table { border-collapse: collapse; width: 100%; }
+          .print-table th, .print-table td {
+            border: 1px solid #555 !important;
+            padding: 2mm 3mm !important;
+            vertical-align: top;
+          }
+          .print-table th { background: #f0f0f0 !important; font-weight: bold; }
+        }
+      `}</style>
+
+      {/* ── Screen view ── */}
+      <div id="support-records-screen" className="flex h-full -m-6">
+        <UserSidebar selectedUserId={selectedUserId} onSelectUser={setSelectedUserId} />
+        <div className="flex-1 overflow-y-auto p-6">
+      <div className="space-y-5">
+        {/* Header */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <ClipboardList className="text-blue-600" size={24} />
+            <h1 className="text-xl font-bold text-gray-900">支援経過記録</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            {selectedUserId && (
+              <>
+                <button
+                  onClick={handleExportCSV}
+                  disabled={filteredRecords.length === 0}
+                  className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40"
+                >
+                  <Download size={14} />
+                  CSV
+                </button>
+                <button
+                  onClick={handlePrint}
+                  disabled={filteredRecords.length === 0}
+                  className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40"
+                >
+                  <Printer size={14} />
+                  印刷
+                </button>
+                <button
+                  onClick={openNew}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                >
+                  <Plus size={14} />
+                  新規記録
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="rounded-lg border bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap gap-4 items-end">
+            {/* Date range */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                開始日
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                終了日
+              </label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Category filter */}
+            <div className="min-w-[160px]">
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                区分
+              </label>
+              <select
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+              >
+                <option value="">すべて</option>
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Clear filters */}
+            {(startDate || endDate || filterCategory) && (
+              <button
+                onClick={() => {
+                  setStartDate("");
+                  setEndDate("");
+                  setFilterCategory("");
+                }}
+                className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs text-gray-500 hover:bg-gray-50 transition-colors"
+              >
+                <X size={12} />
+                絞り込み解除
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Empty state: no user selected */}
+        {!selectedUserId && (
+          <div className="rounded-lg border bg-white py-16 text-center shadow-sm">
+            <FileText size={40} className="mx-auto mb-3 text-gray-300" />
+            <p className="text-sm text-gray-500">
+              利用者を選択してください
+            </p>
+          </div>
+        )}
+
+        {/* Loading */}
+        {selectedUserId && loadingRecords && (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 size={24} className="animate-spin text-blue-500" />
+          </div>
+        )}
+
+        {/* No records */}
+        {selectedUserId && !loadingRecords && filteredRecords.length === 0 && (
+          <div className="rounded-lg border bg-white py-16 text-center shadow-sm">
+            <ClipboardList size={40} className="mx-auto mb-3 text-gray-300" />
+            <p className="text-sm text-gray-500">
+              {records.length === 0
+                ? "記録がありません"
+                : "条件に一致する記録がありません"}
+            </p>
+            {records.length === 0 && (
+              <button
+                onClick={openNew}
+                className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+              >
+                <Plus size={14} />
+                最初の記録を追加
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Timeline */}
+        {selectedUserId && !loadingRecords && filteredRecords.length > 0 && (
+          <div className="rounded-lg border bg-white shadow-sm">
+            {/* Summary bar */}
+            <div className="flex items-center justify-between px-5 py-3 border-b bg-gray-50 rounded-t-lg">
+              <span className="text-sm text-gray-600">
+                <span className="font-semibold text-gray-900">
+                  {filteredRecords.length}
+                </span>{" "}
+                件の記録
+                {(startDate || endDate || filterCategory) && (
+                  <span className="ml-2 text-xs text-gray-400">（絞り込み中）</span>
+                )}
+              </span>
+            </div>
+
+            {/* Timeline list */}
+            <div className="px-5 py-4">
+              <div className="relative">
+                {/* Vertical line */}
+                <div className="absolute left-[88px] top-0 bottom-0 w-px bg-gray-200" />
+
+                <div className="space-y-0">
+                  {filteredRecords.map((rec, idx) => {
+                    const colors = CATEGORY_COLORS[rec.category] ?? CATEGORY_COLORS["その他"];
+                    const dotColor = CATEGORY_TIMELINE_COLORS[rec.category] ?? "bg-gray-400";
+                    const isLast = idx === filteredRecords.length - 1;
+
+                    return (
+                      <div
+                        key={rec.id}
+                        className={`relative flex gap-0 ${isLast ? "" : "pb-4"}`}
+                      >
+                        {/* Left: date/time column */}
+                        <div className="w-[88px] shrink-0 pt-2 pr-4 text-right">
+                          <div className="text-xs font-semibold text-gray-700 leading-tight">
+                            {formatDateShort(rec.record_date)}
+                          </div>
+                          {rec.record_time && (
+                            <div className="text-xs text-gray-400 mt-0.5 flex items-center justify-end gap-0.5">
+                              <Clock size={10} />
+                              {rec.record_time.slice(0, 5)}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Timeline dot */}
+                        <div className="relative flex flex-col items-center shrink-0" style={{ width: 0 }}>
+                          <div
+                            className={`absolute top-2.5 -translate-x-1/2 w-3 h-3 rounded-full border-2 border-white shadow ${dotColor}`}
+                            style={{ left: 0 }}
+                          />
+                        </div>
+
+                        {/* Right: content card */}
+                        <div className="flex-1 ml-5 rounded-lg border bg-gray-50 p-3 hover:bg-white transition-colors group">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {/* Category badge */}
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium border ${colors.bg} ${colors.text} ${colors.border}`}
+                              >
+                                <CategoryIcon category={rec.category} size={11} />
+                                {rec.category}
+                              </span>
+                              {rec.staff_name && (
+                                <span className="text-xs text-gray-400">
+                                  記録者：{rec.staff_name}
+                                </span>
+                              )}
+                            </div>
+                            {/* Edit / Delete buttons */}
+                            <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => openEdit(rec)}
+                                className="rounded p-1.5 text-gray-500 hover:bg-gray-200 transition-colors"
+                                title="編集"
+                              >
+                                <Pencil size={13} />
+                              </button>
+                              <button
+                                onClick={() => setDeleteId(rec.id)}
+                                className="rounded p-1.5 text-red-400 hover:bg-red-50 transition-colors"
+                                title="削除"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                          {/* Content */}
+                          <p className="mt-2 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                            {rec.content}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+        </div>
+      </div>
+
+      {/* ── Record Form Dialog ── */}
+      {showDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={closeDialog}
+          />
+          {/* Modal */}
+          <div className="relative w-full max-w-lg rounded-xl bg-white shadow-2xl">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h2 className="text-base font-semibold text-gray-900">
+                {editId ? "支援経過記録を編集" : "新規支援経過記録"}
+              </h2>
+              <button
+                onClick={closeDialog}
+                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal body */}
+            <div className="px-6 py-5 space-y-4">
+              {/* Date / Time */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    日付 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={form.record_date}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, record_date: e.target.value }))
+                    }
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    時刻
+                  </label>
+                  <input
+                    type="time"
+                    value={form.record_time}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, record_time: e.target.value }))
+                    }
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+
+              {/* Category */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  区分 <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={form.category}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      category: e.target.value as RecordCategory,
+                    }))
+                  }
+                  className={inputClass}
+                >
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Content */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  内容 <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={form.content}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, content: e.target.value }))
+                  }
+                  rows={6}
+                  placeholder="支援内容を記入してください..."
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                />
+              </div>
+
+              {/* Staff name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  記録者
+                </label>
+                <input
+                  type="text"
+                  value={form.staff_name}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, staff_name: e.target.value }))
+                  }
+                  placeholder="担当者名"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+
+            {/* Modal footer */}
+            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t bg-gray-50 rounded-b-xl">
+              <button
+                onClick={closeDialog}
+                className="inline-flex items-center gap-1.5 rounded-lg border px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <X size={14} />
+                キャンセル
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {saving ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Save size={14} />
+                )}
+                {saving ? "保存中..." : editId ? "更新" : "登録"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Confirmation Dialog ── */}
+      {deleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setDeleteId(null)}
+          />
+          <div className="relative w-full max-w-sm rounded-xl bg-white shadow-2xl p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100">
+                <Trash2 size={18} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">記録を削除</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  この支援経過記録を削除します。この操作は取り消せません。
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setDeleteId(null)}
+                className="rounded-lg border px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {deleting ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Trash2 size={14} />
+                )}
+                {deleting ? "削除中..." : "削除する"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Print view ── */}
+      <div id="support-records-print" className="hidden">
+        {selectedUser && (
+          <>
+            {/* Print header */}
+            <div style={{ marginBottom: "8mm" }}>
+              <h1
+                style={{
+                  fontSize: "16pt",
+                  fontWeight: "bold",
+                  textAlign: "center",
+                  marginBottom: "4mm",
+                  letterSpacing: "0.1em",
+                }}
+              >
+                支援経過記録
+              </h1>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "9pt" }}>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: "1mm 3mm", border: "1px solid #555", width: "20%", background: "#f0f0f0", fontWeight: "bold" }}>
+                      利用者氏名
+                    </td>
+                    <td style={{ padding: "1mm 3mm", border: "1px solid #555", width: "30%", fontSize: "11pt", fontWeight: "bold" }}>
+                      {selectedUser.name}
+                      {selectedUser.name_kana
+                        ? `（${selectedUser.name_kana}）`
+                        : ""}
+                    </td>
+                    <td style={{ padding: "1mm 3mm", border: "1px solid #555", width: "20%", background: "#f0f0f0", fontWeight: "bold" }}>
+                      期間
+                    </td>
+                    <td style={{ padding: "1mm 3mm", border: "1px solid #555", width: "30%" }}>
+                      {periodLabel}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: "1mm 3mm", border: "1px solid #555", background: "#f0f0f0", fontWeight: "bold" }}>
+                      区分
+                    </td>
+                    <td style={{ padding: "1mm 3mm", border: "1px solid #555" }}>
+                      {filterCategory || "全区分"}
+                    </td>
+                    <td style={{ padding: "1mm 3mm", border: "1px solid #555", background: "#f0f0f0", fontWeight: "bold" }}>
+                      記録件数
+                    </td>
+                    <td style={{ padding: "1mm 3mm", border: "1px solid #555" }}>
+                      {filteredRecords.length} 件
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div style={{ fontSize: "8pt", color: "#666", textAlign: "right", marginTop: "2mm" }}>
+                出力日：{format(new Date(), "yyyy年M月d日", { locale: ja })}
+              </div>
+            </div>
+
+            {/* Print table */}
+            <table className="print-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "8.5pt" }}>
+              <thead>
+                <tr>
+                  <th style={{ border: "1px solid #555", padding: "2mm 3mm", background: "#e8e8e8", textAlign: "center", width: "22mm" }}>
+                    日時
+                  </th>
+                  <th style={{ border: "1px solid #555", padding: "2mm 3mm", background: "#e8e8e8", textAlign: "center", width: "22mm" }}>
+                    区分
+                  </th>
+                  <th style={{ border: "1px solid #555", padding: "2mm 3mm", background: "#e8e8e8", textAlign: "center" }}>
+                    内容
+                  </th>
+                  <th style={{ border: "1px solid #555", padding: "2mm 3mm", background: "#e8e8e8", textAlign: "center", width: "20mm" }}>
+                    記録者
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRecords.map((rec, idx) => (
+                  <tr key={rec.id} style={{ background: idx % 2 === 1 ? "#fafafa" : "white" }}>
+                    <td style={{ border: "1px solid #555", padding: "2mm 3mm", verticalAlign: "top", whiteSpace: "nowrap" }}>
+                      {formatDateTime(rec.record_date, rec.record_time)}
+                    </td>
+                    <td style={{ border: "1px solid #555", padding: "2mm 3mm", verticalAlign: "top", textAlign: "center" }}>
+                      {rec.category}
+                    </td>
+                    <td style={{ border: "1px solid #555", padding: "2mm 3mm", verticalAlign: "top", whiteSpace: "pre-wrap", lineHeight: "1.5" }}>
+                      {rec.content}
+                    </td>
+                    <td style={{ border: "1px solid #555", padding: "2mm 3mm", verticalAlign: "top", textAlign: "center" }}>
+                      {rec.staff_name ?? ""}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Print footer */}
+            <div style={{ marginTop: "6mm", fontSize: "8pt", color: "#666", borderTop: "1px solid #ccc", paddingTop: "3mm", display: "flex", justifyContent: "space-between" }}>
+              <span>居宅介護支援事業所　支援経過記録</span>
+              <span>— 以上 —</span>
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
