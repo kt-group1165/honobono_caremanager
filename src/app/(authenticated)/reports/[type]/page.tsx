@@ -720,49 +720,100 @@ function EditFormServiceTicket({ content, onChange, isProvision = false }: {
           <span className="text-xs font-semibold text-gray-600">サービス一覧（最大9件）</span>
           {services.length < 9 && (
             <button onClick={addSvc} className="flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-100">
-              <Plus size={12} /> 追加
+              <Plus size={12} /> サービス追加
             </button>
           )}
         </div>
-        <div className="space-y-4">
-          {services.map((svc, i) => (
-            <div key={i} className="rounded border border-gray-200 bg-gray-50 p-3">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-500">サービス {i + 1}</span>
-                <button onClick={() => removeSvc(i)} className="text-gray-300 hover:text-red-400"><X size={12} /></button>
-              </div>
-              <div className="grid grid-cols-3 gap-2 mb-3">
-                <FI label="提供時間帯" value={svc.time} onChange={(v) => updateSvc(i, "time", v)} />
-                <FI label="サービス内容" value={svc.content} onChange={(v) => updateSvc(i, "content", v)} />
-                <FI label="事業所名" value={svc.provider} onChange={(v) => updateSvc(i, "provider", v)} />
-              </div>
-              <div className="space-y-2">
-                {[
-                  { field: "planned" as const, label: isProvision ? "予定" : "予定（○）" },
-                  { field: "actual"  as const, label: isProvision ? "実績" : "実績（●）" },
-                ].map(({ field, label }) => (
-                  <div key={field}>
-                    <div className="text-xs text-gray-500 mb-1">{label}</div>
-                    <div className="flex flex-wrap gap-0.5">
-                      {DAYS.map((d, di) => (
-                        <label key={di} className="flex flex-col items-center cursor-pointer">
-                          <span className="text-[9px] text-gray-400 leading-none mb-0.5">{d}</span>
-                          <input type="checkbox" checked={!!svc[field][di]}
-                            onChange={() => toggleDay(i, field, di)}
-                            className="h-3 w-3 rounded" />
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+        <div className="overflow-x-auto">
+          <table className="border-collapse text-[10px] w-full" style={{ minWidth: 900 }}>
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">時間帯</th>
+                <th className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">サービス内容</th>
+                <th className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">事業所</th>
+                <th className="border border-gray-300 px-1 py-0.5 w-6"></th>
+                {DAYS.map((d) => (
+                  <th key={d} className="border border-gray-300 px-0 py-0.5 w-5 text-center leading-none">{d}</th>
                 ))}
-              </div>
-            </div>
-          ))}
-          {services.length === 0 && (
-            <div className="rounded border-2 border-dashed border-gray-200 py-4 text-center text-xs text-gray-400">
-              サービスを追加してください（最大9件）
-            </div>
-          )}
+                <th className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">計</th>
+                <th className="border border-gray-300 px-0 py-0.5 w-5"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {services.length === 0 && (
+                <tr>
+                  <td colSpan={37} className="border border-dashed border-gray-200 py-3 text-center text-gray-400">
+                    サービスを追加してください（最大9件）
+                  </td>
+                </tr>
+              )}
+              {services.map((svc, i) => {
+                const plannedCount = svc.planned.filter(Boolean).length;
+                const actualCount  = svc.actual.filter(Boolean).length;
+                return (
+                  <>
+                    {/* 予定 row */}
+                    <tr key={`${i}-planned`} style={{ height: 18 }}>
+                      <td rowSpan={2} className="border border-gray-300 px-1 align-middle">
+                        <input
+                          className="w-full text-[10px] bg-transparent outline-none"
+                          value={svc.time}
+                          onChange={(e) => updateSvc(i, "time", e.target.value)}
+                          placeholder="時間帯"
+                        />
+                      </td>
+                      <td rowSpan={2} className="border border-gray-300 px-1 align-middle">
+                        <input
+                          className="w-full text-[10px] bg-transparent outline-none"
+                          value={svc.content}
+                          onChange={(e) => updateSvc(i, "content", e.target.value)}
+                          placeholder="サービス内容"
+                        />
+                      </td>
+                      <td rowSpan={2} className="border border-gray-300 px-1 align-middle">
+                        <input
+                          className="w-full text-[10px] bg-transparent outline-none"
+                          value={svc.provider}
+                          onChange={(e) => updateSvc(i, "provider", e.target.value)}
+                          placeholder="事業所名"
+                        />
+                      </td>
+                      <td className="border border-dashed border-gray-300 px-0.5 text-center text-gray-500 whitespace-nowrap">予定</td>
+                      {DAYS.map((_, di) => (
+                        <td
+                          key={di}
+                          onClick={() => toggleDay(i, "planned", di)}
+                          className="border border-dashed border-gray-300 text-center cursor-pointer select-none hover:bg-blue-50"
+                          style={{ height: 18, width: 18, minWidth: 18 }}
+                        >
+                          {svc.planned[di] ? <span className="text-blue-600">○</span> : null}
+                        </td>
+                      ))}
+                      <td className="border border-dashed border-gray-300 text-center text-blue-700 font-semibold">{plannedCount || ""}</td>
+                      <td rowSpan={2} className="border border-gray-300 text-center align-middle">
+                        <button onClick={() => removeSvc(i)} className="text-gray-300 hover:text-red-400"><X size={10} /></button>
+                      </td>
+                    </tr>
+                    {/* 実績 row */}
+                    <tr key={`${i}-actual`} style={{ height: 18 }}>
+                      <td className="border border-gray-300 px-0.5 text-center text-gray-500 whitespace-nowrap">実績</td>
+                      {DAYS.map((_, di) => (
+                        <td
+                          key={di}
+                          onClick={() => toggleDay(i, "actual", di)}
+                          className="border border-gray-300 text-center cursor-pointer select-none hover:bg-green-50"
+                          style={{ height: 18, width: 18, minWidth: 18 }}
+                        >
+                          {svc.actual[di] ? <span className="text-green-700">●</span> : null}
+                        </td>
+                      ))}
+                      <td className="border border-gray-300 text-center text-green-700 font-semibold">{actualCount || ""}</td>
+                    </tr>
+                  </>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

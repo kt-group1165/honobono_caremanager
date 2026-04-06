@@ -28,7 +28,6 @@ const navigation = [
   { name: "利用者管理", href: "/users", icon: Users },
   { name: "アセスメント", href: "/assessments", icon: ClipboardCheck },
   { name: "サービス管理", href: "/services", icon: ClipboardList },
-  { name: "提供票", href: "/provision-sheets", icon: CalendarDays },
   { name: "モニタリング", href: "/monitoring", icon: Activity },
   { name: "支援経過記録", href: "/support-records", icon: BookOpen },
   { name: "給付管理", href: "/billing/benefits", icon: Calculator },
