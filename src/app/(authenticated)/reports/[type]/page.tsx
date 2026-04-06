@@ -163,6 +163,39 @@ function FI({ label, value, onChange, textarea, rows = 3, className = "" }: {
 }
 
 // ---------------------------------------------------------------------------
+// Shared types and helpers for edit/print components
+// ---------------------------------------------------------------------------
+
+type FamilyRow = { name: string; relationship: string; phone: string; key_person: boolean };
+type MedRow = { disease: string; hospital: string; status: string };
+type Schedule = Record<string, Record<string, string>>;
+type SvcRow = { time: string; content: string; provider: string; planned: boolean[]; actual: boolean[] };
+type InvoiceItem = { content: string; units: number; unit_price: number; amount: number };
+
+const WEEK_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+const WEEK_DAY_JA = ["月", "火", "水", "木", "金", "土", "日"] as const;
+const TIME_SLOTS = [
+  { key: "early_morning", label: "深夜早朝\n0〜6時" },
+  { key: "morning",       label: "午前\n6〜12時" },
+  { key: "afternoon",     label: "午後\n12〜18時" },
+  { key: "evening",       label: "夜間\n18〜21時" },
+  { key: "night",         label: "深夜\n21〜24時" },
+] as const;
+
+function emptySchedule(): Schedule {
+  const s: Schedule = {};
+  for (const slot of TIME_SLOTS) {
+    s[slot.key] = {};
+    for (const d of WEEK_DAYS) s[slot.key][d] = "";
+  }
+  return s;
+}
+
+function emptyServiceRow(): SvcRow {
+  return { time: "", content: "", provider: "", planned: Array(31).fill(false), actual: Array(31).fill(false) };
+}
+
+// ---------------------------------------------------------------------------
 // Default content builders (for auto-generation)
 // ---------------------------------------------------------------------------
 
@@ -172,6 +205,7 @@ function buildDefaultContent(
   cert: CareCertification | null,
   plan: CarePlan | null,
   services: CarePlanService[],
+  reportMonth: string | null = null,
 ): Record<string, unknown> {
   const today = format(new Date(), "yyyy-MM-dd");
   switch (reportType) {
@@ -213,13 +247,60 @@ function buildDefaultContent(
       };
     case "face-sheet":
       return {
-        user_name: user.name, birth_date: user.birth_date ?? "", gender: user.gender,
+        user_name: user.name,
+        name_kana: user.name_kana ?? "",
+        birth_date: user.birth_date ?? "",
+        gender: user.gender,
         address: [user.postal_code ? `〒${user.postal_code}` : "", user.address ?? ""].filter(Boolean).join(" "),
         phone: user.phone ?? "",
-        care_level: cert?.care_level ?? "", cert_period: cert ? `${fmtReiwa(cert.start_date)}〜${fmtReiwa(cert.end_date)}` : "",
-        family_members: [],
+        care_level: cert?.care_level ?? "",
+        cert_period: cert ? `${fmtReiwa(cert.start_date)}〜${fmtReiwa(cert.end_date)}` : "",
+        insurer_number: cert?.insurer_number ?? "",
+        insured_number: cert?.insured_number ?? "",
+        family: [],
         medical_history: [],
-        adl_summary: "", health_notes: "", special_notes: user.notes ?? "",
+        adl_summary: "",
+        health_notes: "",
+        special_notes: user.notes ?? "",
+      };
+    case "care-plan-3":
+      return {
+        user_name: user.name,
+        creation_date: fmtReiwa(plan?.start_date ?? today),
+        schedule: emptySchedule(),
+        daily_activities: "",
+        other_services: "",
+      };
+    case "service-usage":
+    case "service-provision":
+      return {
+        insurer_number: cert?.insurer_number ?? "",
+        insured_number: cert?.insured_number ?? "",
+        insurer_name: "",
+        user_name: user.name,
+        care_level: cert?.care_level ?? "",
+        limit_amount: cert?.support_limit_amount ?? 0,
+        limit_period: cert ? `${fmtReiwa(cert.start_date)}〜${fmtReiwa(cert.end_date)}` : "",
+        creation_date: fmtReiwa(today),
+        submission_date: "",
+        services: services.slice(0, 9).map((sv) => ({
+          time: sv.frequency ?? "",
+          content: sv.service_content,
+          provider: sv.provider ?? "",
+          planned: Array(31).fill(false) as boolean[],
+          actual:  Array(31).fill(false) as boolean[],
+        })),
+      };
+    case "invoice":
+      return {
+        user_name: user.name,
+        billing_month: reportMonth ? fmtReiwaMonth(reportMonth) : fmtReiwaMonth(format(new Date(), "yyyy-MM")),
+        office_name: "",
+        items: [] as InvoiceItem[],
+        total: 0,
+        insurance_amount: 0,
+        copay_amount: 0,
+        notes: "",
       };
     default:
       return { notes: "", created_from: "auto" };
@@ -326,6 +407,331 @@ function EditFormCarePlan2({ content, onChange }: {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// FaceSheet edit form
+// ---------------------------------------------------------------------------
+
+function EditFormFaceSheet({ content, onChange }: {
+  content: Record<string, unknown>;
+  onChange: (c: Record<string, unknown>) => void;
+}) {
+  const s = (k: string) => String(content[k] ?? "");
+  const set = (k: string, v: unknown) => onChange({ ...content, [k]: v });
+  const family: FamilyRow[] = Array.isArray(content.family) ? (content.family as FamilyRow[]) : [];
+  const medical: MedRow[] = Array.isArray(content.medical_history) ? (content.medical_history as MedRow[]) : [];
+
+  const addFamily = () => set("family", [...family, { name: "", relationship: "", phone: "", key_person: false }]);
+  const removeFamily = (i: number) => set("family", family.filter((_, idx) => idx !== i));
+  const updateFamily = (i: number, k: keyof FamilyRow, v: string | boolean) =>
+    set("family", family.map((r, idx) => idx === i ? { ...r, [k]: v } : r));
+
+  const addMed = () => set("medical_history", [...medical, { disease: "", hospital: "", status: "" }]);
+  const removeMed = (i: number) => set("medical_history", medical.filter((_, idx) => idx !== i));
+  const updateMed = (i: number, k: keyof MedRow, v: string) =>
+    set("medical_history", medical.map((r, idx) => idx === i ? { ...r, [k]: v } : r));
+
+  return (
+    <div className="grid grid-cols-2 gap-3 p-4">
+      <div className="col-span-2 grid grid-cols-4 gap-3">
+        <FI label="利用者名" value={s("user_name")} onChange={(v) => set("user_name", v)} className="col-span-2" />
+        <FI label="フリガナ" value={s("name_kana")} onChange={(v) => set("name_kana", v)} className="col-span-2" />
+      </div>
+      <div className="col-span-2 grid grid-cols-4 gap-3">
+        <FI label="生年月日" value={s("birth_date")} onChange={(v) => set("birth_date", v)} />
+        <FI label="性別" value={s("gender")} onChange={(v) => set("gender", v)} />
+        <FI label="電話番号" value={s("phone")} onChange={(v) => set("phone", v)} />
+        <FI label="住所" value={s("address")} onChange={(v) => set("address", v)} />
+      </div>
+      <div className="col-span-2 grid grid-cols-4 gap-3">
+        <FI label="要介護度" value={s("care_level")} onChange={(v) => set("care_level", v)} />
+        <FI label="認定期間" value={s("cert_period")} onChange={(v) => set("cert_period", v)} />
+        <FI label="保険者番号" value={s("insurer_number")} onChange={(v) => set("insurer_number", v)} />
+        <FI label="被保険者番号" value={s("insured_number")} onChange={(v) => set("insured_number", v)} />
+      </div>
+
+      {/* Family rows */}
+      <div className="col-span-2">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs font-semibold text-gray-600">家族構成</span>
+          <button onClick={addFamily} className="flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-100">
+            <Plus size={12} /> 追加
+          </button>
+        </div>
+        <div className="space-y-2">
+          {family.map((row, i) => (
+            <div key={i} className="relative grid grid-cols-5 gap-2 rounded border border-gray-200 bg-gray-50 p-2">
+              <button onClick={() => removeFamily(i)} className="absolute right-1 top-1 text-gray-300 hover:text-red-400"><X size={12} /></button>
+              <FI label="氏名" value={row.name} onChange={(v) => updateFamily(i, "name", v)} />
+              <FI label="続柄" value={row.relationship} onChange={(v) => updateFamily(i, "relationship", v)} />
+              <FI label="電話" value={row.phone} onChange={(v) => updateFamily(i, "phone", v)} className="col-span-2" />
+              <div className="flex flex-col gap-0.5 justify-end">
+                <label className="text-xs font-medium text-gray-500">キーパーソン</label>
+                <input type="checkbox" checked={!!row.key_person} onChange={(e) => updateFamily(i, "key_person", e.target.checked)}
+                  className="h-4 w-4" />
+              </div>
+            </div>
+          ))}
+          {family.length === 0 && (
+            <div className="rounded border-2 border-dashed border-gray-200 py-3 text-center text-xs text-gray-400">家族を追加してください</div>
+          )}
+        </div>
+      </div>
+
+      {/* Medical history */}
+      <div className="col-span-2">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs font-semibold text-gray-600">既往歴</span>
+          <button onClick={addMed} className="flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-100">
+            <Plus size={12} /> 追加
+          </button>
+        </div>
+        <div className="space-y-2">
+          {medical.map((row, i) => (
+            <div key={i} className="relative grid grid-cols-3 gap-2 rounded border border-gray-200 bg-gray-50 p-2">
+              <button onClick={() => removeMed(i)} className="absolute right-1 top-1 text-gray-300 hover:text-red-400"><X size={12} /></button>
+              <FI label="疾患名" value={row.disease} onChange={(v) => updateMed(i, "disease", v)} />
+              <FI label="医療機関" value={row.hospital} onChange={(v) => updateMed(i, "hospital", v)} />
+              <FI label="状態" value={row.status} onChange={(v) => updateMed(i, "status", v)} />
+            </div>
+          ))}
+          {medical.length === 0 && (
+            <div className="rounded border-2 border-dashed border-gray-200 py-3 text-center text-xs text-gray-400">既往歴を追加してください</div>
+          )}
+        </div>
+      </div>
+
+      <FI label="ADL概要" value={s("adl_summary")} onChange={(v) => set("adl_summary", v)} textarea rows={3} className="col-span-2" />
+      <FI label="健康状態メモ" value={s("health_notes")} onChange={(v) => set("health_notes", v)} textarea rows={3} className="col-span-2" />
+      <FI label="特記事項" value={s("special_notes")} onChange={(v) => set("special_notes", v)} textarea rows={3} className="col-span-2" />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// CarePlan3 (第3表) edit form
+// ---------------------------------------------------------------------------
+
+function EditFormCarePlan3({ content, onChange }: {
+  content: Record<string, unknown>;
+  onChange: (c: Record<string, unknown>) => void;
+}) {
+  const s = (k: string) => String(content[k] ?? "");
+  const set = (k: string, v: unknown) => onChange({ ...content, [k]: v });
+  const schedule: Schedule = (content.schedule as Schedule) ?? emptySchedule();
+
+  const setCell = (slot: string, day: string, v: string) => {
+    const updated = { ...schedule, [slot]: { ...schedule[slot], [day]: v } };
+    set("schedule", updated);
+  };
+
+  return (
+    <div className="p-4 space-y-3">
+      <div className="grid grid-cols-4 gap-3">
+        <FI label="利用者名" value={s("user_name")} onChange={(v) => set("user_name", v)} className="col-span-2" />
+        <FI label="作成日" value={s("creation_date")} onChange={(v) => set("creation_date", v)} />
+      </div>
+      <div>
+        <div className="text-xs font-semibold text-gray-600 mb-2">週間スケジュール</div>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-xs">
+            <thead>
+              <tr>
+                <th className="border border-gray-300 bg-gray-100 px-2 py-1 text-center w-20">時間帯</th>
+                {WEEK_DAY_JA.map((d, i) => (
+                  <th key={i} className={`border border-gray-300 bg-gray-100 px-1 py-1 text-center ${i >= 5 ? "bg-green-50" : ""}`}>{d}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {TIME_SLOTS.map((slot) => (
+                <tr key={slot.key}>
+                  <td className="border border-gray-300 bg-gray-50 px-1 py-1 text-center whitespace-pre-line text-xs font-medium leading-tight">{slot.label}</td>
+                  {WEEK_DAYS.map((d, di) => (
+                    <td key={d} className={`border border-gray-300 p-0.5 ${di >= 5 ? "bg-green-50" : ""}`}>
+                      <textarea rows={2} value={schedule[slot.key]?.[d] ?? ""}
+                        onChange={(e) => setCell(slot.key, d, e.target.value)}
+                        className="w-full resize-none rounded text-xs p-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-transparent min-w-[60px]" />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <FI label="主な日常生活上の活動" value={s("daily_activities")} onChange={(v) => set("daily_activities", v)} textarea rows={3} />
+      <FI label="週単位以外のサービス" value={s("other_services")} onChange={(v) => set("other_services", v)} textarea rows={3} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ServiceUsage / ServiceProvision edit form (shared)
+// ---------------------------------------------------------------------------
+
+
+function EditFormServiceTicket({ content, onChange, isProvision = false }: {
+  content: Record<string, unknown>;
+  onChange: (c: Record<string, unknown>) => void;
+  isProvision?: boolean;
+}) {
+  const s = (k: string) => String(content[k] ?? "");
+  const set = (k: string, v: unknown) => onChange({ ...content, [k]: v });
+  const services: SvcRow[] = Array.isArray(content.services)
+    ? (content.services as SvcRow[]).map((r) => ({
+        ...emptyServiceRow(), ...r,
+        planned: Array.isArray(r.planned) ? [...r.planned, ...Array(31).fill(false)].slice(0, 31) : Array(31).fill(false),
+        actual:  Array.isArray(r.actual)  ? [...r.actual,  ...Array(31).fill(false)].slice(0, 31) : Array(31).fill(false),
+      }))
+    : [];
+
+  const addSvc = () => onChange({ ...content, services: [...services, emptyServiceRow()] });
+  const removeSvc = (i: number) => onChange({ ...content, services: services.filter((_, idx) => idx !== i) });
+  const updateSvc = (i: number, k: keyof SvcRow, v: unknown) =>
+    onChange({ ...content, services: services.map((r, idx) => idx === i ? { ...r, [k]: v } : r) });
+  const toggleDay = (svcIdx: number, field: "planned" | "actual", dayIdx: number) => {
+    const arr = [...services[svcIdx][field]];
+    arr[dayIdx] = !arr[dayIdx];
+    updateSvc(svcIdx, field, arr);
+  };
+
+  const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
+
+  return (
+    <div className="p-4 space-y-3">
+      <div className="grid grid-cols-4 gap-3">
+        <FI label="保険者番号" value={s("insurer_number")} onChange={(v) => set("insurer_number", v)} />
+        <FI label="被保険者番号" value={s("insured_number")} onChange={(v) => set("insured_number", v)} />
+        <FI label="保険者名" value={s("insurer_name")} onChange={(v) => set("insurer_name", v)} />
+        <FI label="利用者氏名" value={s("user_name")} onChange={(v) => set("user_name", v)} />
+      </div>
+      <div className="grid grid-cols-4 gap-3">
+        <FI label="要介護度" value={s("care_level")} onChange={(v) => set("care_level", v)} />
+        <FI label="区分支給限度基準額" value={s("limit_amount")} onChange={(v) => set("limit_amount", v)} />
+        <FI label="限度額適用期間" value={s("limit_period")} onChange={(v) => set("limit_period", v)} />
+        <FI label="作成年月日" value={s("creation_date")} onChange={(v) => set("creation_date", v)} />
+      </div>
+      <FI label="届出年月日" value={s("submission_date")} onChange={(v) => set("submission_date", v)} />
+
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs font-semibold text-gray-600">サービス一覧（最大9件）</span>
+          {services.length < 9 && (
+            <button onClick={addSvc} className="flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-100">
+              <Plus size={12} /> 追加
+            </button>
+          )}
+        </div>
+        <div className="space-y-4">
+          {services.map((svc, i) => (
+            <div key={i} className="rounded border border-gray-200 bg-gray-50 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-semibold text-gray-500">サービス {i + 1}</span>
+                <button onClick={() => removeSvc(i)} className="text-gray-300 hover:text-red-400"><X size={12} /></button>
+              </div>
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <FI label="提供時間帯" value={svc.time} onChange={(v) => updateSvc(i, "time", v)} />
+                <FI label="サービス内容" value={svc.content} onChange={(v) => updateSvc(i, "content", v)} />
+                <FI label="事業所名" value={svc.provider} onChange={(v) => updateSvc(i, "provider", v)} />
+              </div>
+              <div className="space-y-2">
+                {[
+                  { field: "planned" as const, label: isProvision ? "予定" : "予定（○）" },
+                  { field: "actual"  as const, label: isProvision ? "実績" : "実績（●）" },
+                ].map(({ field, label }) => (
+                  <div key={field}>
+                    <div className="text-xs text-gray-500 mb-1">{label}</div>
+                    <div className="flex flex-wrap gap-0.5">
+                      {DAYS.map((d, di) => (
+                        <label key={di} className="flex flex-col items-center cursor-pointer">
+                          <span className="text-[9px] text-gray-400 leading-none mb-0.5">{d}</span>
+                          <input type="checkbox" checked={!!svc[field][di]}
+                            onChange={() => toggleDay(i, field, di)}
+                            className="h-3 w-3 rounded" />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          {services.length === 0 && (
+            <div className="rounded border-2 border-dashed border-gray-200 py-4 text-center text-xs text-gray-400">
+              サービスを追加してください（最大9件）
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Invoice edit form
+// ---------------------------------------------------------------------------
+
+function EditFormInvoice({ content, onChange }: {
+  content: Record<string, unknown>;
+  onChange: (c: Record<string, unknown>) => void;
+}) {
+  const s = (k: string) => String(content[k] ?? "");
+  const n = (k: string) => Number(content[k] ?? 0);
+  const set = (k: string, v: unknown) => onChange({ ...content, [k]: v });
+  const items: InvoiceItem[] = Array.isArray(content.items) ? (content.items as InvoiceItem[]) : [];
+
+  const addItem = () => set("items", [...items, { content: "", units: 0, unit_price: 0, amount: 0 }]);
+  const removeItem = (i: number) => set("items", items.filter((_, idx) => idx !== i));
+  const updateItem = (i: number, k: keyof InvoiceItem, v: string | number) => {
+    const updated = items.map((row, idx) => {
+      if (idx !== i) return row;
+      const next = { ...row, [k]: v };
+      if (k === "units" || k === "unit_price") next.amount = Number(next.units) * Number(next.unit_price);
+      return next;
+    });
+    const total = updated.reduce((sum, r) => sum + r.amount, 0);
+    onChange({ ...content, items: updated, total });
+  };
+
+  return (
+    <div className="p-4 space-y-3">
+      <div className="grid grid-cols-3 gap-3">
+        <FI label="利用者名" value={s("user_name")} onChange={(v) => set("user_name", v)} />
+        <FI label="請求月" value={s("billing_month")} onChange={(v) => set("billing_month", v)} />
+        <FI label="事業所名" value={s("office_name")} onChange={(v) => set("office_name", v)} />
+      </div>
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs font-semibold text-gray-600">明細</span>
+          <button onClick={addItem} className="flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-100">
+            <Plus size={12} /> 行を追加
+          </button>
+        </div>
+        <div className="space-y-2">
+          {items.map((row, i) => (
+            <div key={i} className="relative grid grid-cols-5 gap-2 rounded border border-gray-200 bg-gray-50 p-2">
+              <button onClick={() => removeItem(i)} className="absolute right-1 top-1 text-gray-300 hover:text-red-400"><X size={12} /></button>
+              <FI label="サービス内容" value={row.content} onChange={(v) => updateItem(i, "content", v)} className="col-span-2" />
+              <FI label="単位数" value={String(row.units)} onChange={(v) => updateItem(i, "units", Number(v) || 0)} />
+              <FI label="単価" value={String(row.unit_price)} onChange={(v) => updateItem(i, "unit_price", Number(v) || 0)} />
+              <FI label="金額" value={String(row.amount)} onChange={() => {}} />
+            </div>
+          ))}
+          {items.length === 0 && (
+            <div className="rounded border-2 border-dashed border-gray-200 py-3 text-center text-xs text-gray-400">明細を追加してください</div>
+          )}
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3 rounded border bg-gray-50 p-3">
+        <FI label="合計金額" value={String(n("total"))} onChange={(v) => set("total", Number(v) || 0)} />
+        <FI label="保険給付額" value={String(n("insurance_amount"))} onChange={(v) => set("insurance_amount", Number(v) || 0)} />
+        <FI label="自己負担額" value={String(n("copay_amount"))} onChange={(v) => set("copay_amount", Number(v) || 0)} />
+      </div>
+      <FI label="備考" value={s("notes")} onChange={(v) => set("notes", v)} textarea rows={3} />
     </div>
   );
 }
@@ -506,6 +912,331 @@ function PrintCarePlan2({ c }: { c: Record<string, unknown> }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Print: FaceSheet
+// ---------------------------------------------------------------------------
+
+function PrintFaceSheet({ c }: { c: Record<string, unknown> }) {
+  const s = (k: string) => String(c[k] ?? "　");
+  const family: FamilyRow[] = Array.isArray(c.family) ? (c.family as FamilyRow[]) : [];
+  const medical: MedRow[] = Array.isArray(c.medical_history) ? (c.medical_history as MedRow[]) : [];
+  return (
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "8.5pt", color: "#000" }}>
+      <div style={{ textAlign: "center", marginBottom: "4px", fontSize: "12pt", fontWeight: "bold", letterSpacing: "0.2em" }}>フェースシート</div>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
+        <colgroup><col style={{ width: "15%" }} /><col style={{ width: "35%" }} /><col style={{ width: "15%" }} /><col style={{ width: "35%" }} /></colgroup>
+        <tbody>
+          <tr style={{ height: "22px" }}>
+            <TH>利用者名</TH><TD className="px-2 font-bold">{s("user_name")}　様</TD>
+            <TH>フリガナ</TH><TD className="px-2">{s("name_kana")}</TD>
+          </tr>
+          <tr style={{ height: "22px" }}>
+            <TH>生年月日</TH><TD className="px-2">{s("birth_date") ? fmtReiwa(s("birth_date")) : "　"}　({s("birth_date") ? calcAge(s("birth_date")) : "　"})</TD>
+            <TH>性別</TH><TD className="px-2">{s("gender")}</TD>
+          </tr>
+          <tr style={{ height: "22px" }}>
+            <TH>住所</TH><TD colSpan={3} className="px-2">{s("address")}</TD>
+          </tr>
+          <tr style={{ height: "22px" }}>
+            <TH>電話番号</TH><TD className="px-2">{s("phone")}</TD>
+            <TH>要介護度</TH><TD className="px-2">{s("care_level")}</TD>
+          </tr>
+          <tr style={{ height: "22px" }}>
+            <TH>認定期間</TH><TD className="px-2">{s("cert_period")}</TD>
+            <TH>保険者番号</TH><TD className="px-2">{s("insurer_number")}</TD>
+          </tr>
+          <tr style={{ height: "22px" }}>
+            <TH>被保険者番号</TH><TD colSpan={3} className="px-2">{s("insured_number")}</TD>
+          </tr>
+        </tbody>
+      </table>
+      {/* Family */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
+        <thead>
+          <tr style={{ height: "18px" }}>
+            <TH style={{ width: "30%" }}>氏名</TH>
+            <TH style={{ width: "20%" }}>続柄</TH>
+            <TH style={{ width: "30%" }}>電話</TH>
+            <TH style={{ width: "20%" }}>キーパーソン</TH>
+          </tr>
+        </thead>
+        <tbody>
+          {(family.length > 0 ? family : [{ name: "", relationship: "", phone: "", key_person: false }]).map((r, i) => (
+            <tr key={i} style={{ height: "20px" }}>
+              <TD className="px-2">{r.name || "　"}</TD>
+              <TD className="px-2">{r.relationship || "　"}</TD>
+              <TD className="px-2">{r.phone || "　"}</TD>
+              <TD className="px-2 text-center">{r.key_person ? "★" : "　"}</TD>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {/* Medical */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
+        <thead>
+          <tr style={{ height: "18px" }}>
+            <TH style={{ width: "34%" }}>疾患名</TH>
+            <TH style={{ width: "33%" }}>医療機関</TH>
+            <TH style={{ width: "33%" }}>状態</TH>
+          </tr>
+        </thead>
+        <tbody>
+          {(medical.length > 0 ? medical : [{ disease: "", hospital: "", status: "" }]).map((r, i) => (
+            <tr key={i} style={{ height: "20px" }}>
+              <TD className="px-2">{r.disease || "　"}</TD>
+              <TD className="px-2">{r.hospital || "　"}</TD>
+              <TD className="px-2">{r.status || "　"}</TD>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {[
+        { label: "ADL概要", key: "adl_summary", h: "50px" },
+        { label: "健康状態メモ", key: "health_notes", h: "50px" },
+        { label: "特記事項", key: "special_notes", h: "50px" },
+      ].map(({ label, key, h }) => (
+        <table key={key} style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
+          <tbody>
+            <tr>
+              <TH style={{ width: "20%", padding: "2px 4px" }}>{label}</TH>
+              <TD style={{ height: h, verticalAlign: "top", padding: "4px", whiteSpace: "pre-wrap" }}>{s(key)}</TD>
+            </tr>
+          </tbody>
+        </table>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Print: CarePlan3 (第3表)
+// ---------------------------------------------------------------------------
+
+function PrintCarePlan3({ c }: { c: Record<string, unknown> }) {
+  const s = (k: string) => String(c[k] ?? "　");
+  const schedule: Schedule = (c.schedule as Schedule) ?? emptySchedule();
+  return (
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "8pt", color: "#000" }}>
+      <div style={{ textAlign: "center", marginBottom: "4px", fontSize: "11pt", fontWeight: "bold", letterSpacing: "0.2em" }}>週間サービス計画表（第3表）</div>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "3px" }}>
+        <tbody>
+          <tr style={{ height: "20px" }}>
+            <TH style={{ width: "12%" }}>利用者名</TH>
+            <TD style={{ width: "30%" }} className="px-2 font-bold">{s("user_name")}　様</TD>
+            <TH style={{ width: "12%" }}>作成日</TH>
+            <TD className="px-2">{s("creation_date")}</TD>
+          </tr>
+        </tbody>
+      </table>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "3px" }}>
+        <thead>
+          <tr style={{ height: "22px" }}>
+            <TH style={{ width: "11%" }}>時間帯</TH>
+            {WEEK_DAY_JA.map((d, i) => (
+              <TH key={i} style={{ backgroundColor: i >= 5 ? "#e8f5e9" : undefined }}>{d}曜日</TH>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {TIME_SLOTS.map((slot) => (
+            <tr key={slot.key} style={{ minHeight: "40px" }}>
+              <TD className="text-center font-medium px-1 align-middle" style={{ whiteSpace: "pre-line", fontSize: "7pt" }}>{slot.label}</TD>
+              {WEEK_DAYS.map((d, di) => (
+                <TD key={d} style={{ backgroundColor: di >= 5 ? "#f1f8e9" : undefined, verticalAlign: "top", height: "40px", padding: "3px", whiteSpace: "pre-wrap" }}>
+                  {schedule[slot.key]?.[d] || "　"}
+                </TD>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
+        <tbody>
+          <tr>
+            <TH style={{ width: "20%" }}>主な日常生活上の活動</TH>
+            <TD style={{ height: "40px", verticalAlign: "top", padding: "4px", whiteSpace: "pre-wrap" }}>{s("daily_activities")}</TD>
+          </tr>
+          <tr>
+            <TH>週単位以外のサービス</TH>
+            <TD style={{ height: "40px", verticalAlign: "top", padding: "4px", whiteSpace: "pre-wrap" }}>{s("other_services")}</TD>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Print: ServiceUsage / ServiceProvision (shared layout)
+// ---------------------------------------------------------------------------
+
+function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: string }) {
+  const s = (k: string) => String(c[k] ?? "　");
+  const services: SvcRow[] = Array.isArray(c.services)
+    ? (c.services as SvcRow[]).map((r) => ({
+        ...emptyServiceRow(), ...r,
+        planned: Array.isArray(r.planned) ? [...r.planned, ...Array(31).fill(false)].slice(0, 31) : Array(31).fill(false),
+        actual:  Array.isArray(r.actual)  ? [...r.actual,  ...Array(31).fill(false)].slice(0, 31) : Array(31).fill(false),
+      }))
+    : [];
+  const rows = Array.from({ length: 9 }, (_, i) => services[i] ?? emptyServiceRow());
+  const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
+
+  return (
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "7pt", color: "#000" }}>
+      <div style={{ textAlign: "center", marginBottom: "3px", fontSize: "11pt", fontWeight: "bold", letterSpacing: "0.2em" }}>{title}</div>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
+        <colgroup>
+          <col style={{ width: "12%" }} /><col style={{ width: "13%" }} />
+          <col style={{ width: "12%" }} /><col style={{ width: "13%" }} />
+          <col style={{ width: "12%" }} /><col style={{ width: "13%" }} />
+          <col style={{ width: "12%" }} /><col style={{ width: "13%" }} />
+        </colgroup>
+        <tbody>
+          <tr style={{ height: "18px" }}>
+            <TH>保険者番号</TH><TD className="px-1">{s("insurer_number")}</TD>
+            <TH>被保険者番号</TH><TD className="px-1">{s("insured_number")}</TD>
+            <TH>保険者名</TH><TD className="px-1">{s("insurer_name")}</TD>
+            <TH>要介護度</TH><TD className="px-1">{s("care_level")}</TD>
+          </tr>
+          <tr style={{ height: "18px" }}>
+            <TH>利用者氏名</TH><TD className="px-1 font-bold">{s("user_name")}　様</TD>
+            <TH>区分支給限度基準額</TH><TD className="px-1">{s("limit_amount")} 単位</TD>
+            <TH>限度額適用期間</TH><TD className="px-1">{s("limit_period")}</TD>
+            <TH>作成年月日</TH><TD className="px-1">{s("creation_date")}</TD>
+          </tr>
+        </tbody>
+      </table>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead>
+          <tr style={{ height: "18px" }}>
+            <TH style={{ width: "4%" }} rowSpan={2}>No</TH>
+            <TH style={{ width: "8%" }} rowSpan={2}>提供時間帯</TH>
+            <TH style={{ width: "12%" }} rowSpan={2}>サービス内容</TH>
+            <TH style={{ width: "12%" }} rowSpan={2}>事業所名</TH>
+            <TH colSpan={31}>日付</TH>
+          </tr>
+          <tr style={{ height: "14px" }}>
+            {DAYS.map((d) => (
+              <TH key={d} style={{ fontSize: "6pt", width: "2.1%" }}>{d}</TH>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((svc, i) => (
+            <React.Fragment key={i}>
+              <tr style={{ height: "18px" }}>
+                <TD className="text-center" rowSpan={3}>{i + 1}</TD>
+                <TD className="px-1" rowSpan={3} style={{ verticalAlign: "top", whiteSpace: "pre-wrap" }}>{svc.time || "　"}</TD>
+                <TD className="px-1" rowSpan={3} style={{ verticalAlign: "top", whiteSpace: "pre-wrap" }}>{svc.content || "　"}</TD>
+                <TD className="px-1" rowSpan={3} style={{ verticalAlign: "top" }}>{svc.provider || "　"}</TD>
+                {svc.planned.map((v, di) => (
+                  <TD key={di} className="text-center" style={{ fontSize: "7pt", backgroundColor: (di % 7 === 5 || di % 7 === 6) ? "#e8f5e9" : undefined }}>
+                    {v ? "○" : "　"}
+                  </TD>
+                ))}
+              </tr>
+              <tr style={{ height: "16px" }}>
+                {svc.actual.map((v, di) => (
+                  <TD key={di} className="text-center" style={{ fontSize: "7pt", backgroundColor: (di % 7 === 5 || di % 7 === 6) ? "#e8f5e9" : undefined }}>
+                    {v ? "●" : "　"}
+                  </TD>
+                ))}
+              </tr>
+              <tr style={{ height: "14px" }}>
+                {DAYS.map((_, di) => (
+                  <TD key={di} style={{ backgroundColor: (di % 7 === 5 || di % 7 === 6) ? "#e8f5e9" : undefined }} />
+                ))}
+              </tr>
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "2px" }}>
+        <tbody>
+          <tr style={{ height: "16px" }}>
+            <TH style={{ width: "15%" }}>届出年月日</TH>
+            <TD className="px-1">{s("submission_date")}</TD>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Print: Invoice
+// ---------------------------------------------------------------------------
+
+function PrintInvoice({ c }: { c: Record<string, unknown> }) {
+  const s = (k: string) => String(c[k] ?? "　");
+  const n = (k: string) => Number(c[k] ?? 0).toLocaleString();
+  const items: InvoiceItem[] = Array.isArray(c.items) ? (c.items as InvoiceItem[]) : [];
+  return (
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000" }}>
+      <div style={{ textAlign: "center", marginBottom: "8px", fontSize: "14pt", fontWeight: "bold", letterSpacing: "0.3em" }}>請　求　書</div>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
+        <tbody>
+          <tr style={{ height: "22px" }}>
+            <TH style={{ width: "18%" }}>利用者名</TH>
+            <TD style={{ width: "32%" }} className="px-2 font-bold">{s("user_name")}　様</TD>
+            <TH style={{ width: "18%" }}>請求月</TH>
+            <TD className="px-2">{s("billing_month")}</TD>
+          </tr>
+          <tr style={{ height: "22px" }}>
+            <TH>事業所名</TH>
+            <TD colSpan={3} className="px-2">{s("office_name")}</TD>
+          </tr>
+        </tbody>
+      </table>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
+        <thead>
+          <tr style={{ height: "22px" }}>
+            <TH style={{ width: "50%" }}>サービス内容</TH>
+            <TH style={{ width: "15%" }}>単位数</TH>
+            <TH style={{ width: "15%" }}>単価（円）</TH>
+            <TH style={{ width: "20%" }}>金額（円）</TH>
+          </tr>
+        </thead>
+        <tbody>
+          {(items.length > 0 ? items : Array(6).fill({ content: "", units: 0, unit_price: 0, amount: 0 })).map((row: InvoiceItem, i) => (
+            <tr key={i} style={{ height: "22px" }}>
+              <TD className="px-2">{row.content || "　"}</TD>
+              <TD className="px-2 text-right">{row.units ? row.units.toLocaleString() : "　"}</TD>
+              <TD className="px-2 text-right">{row.unit_price ? row.unit_price.toLocaleString() : "　"}</TD>
+              <TD className="px-2 text-right">{row.amount ? row.amount.toLocaleString() : "　"}</TD>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "6px" }}>
+        <tbody>
+          <tr style={{ height: "22px" }}>
+            <TH style={{ width: "60%" }}>合計金額</TH>
+            <TD className="px-2 text-right font-bold">{n("total")}　円</TD>
+          </tr>
+          <tr style={{ height: "22px" }}>
+            <TH>保険給付額</TH>
+            <TD className="px-2 text-right">{n("insurance_amount")}　円</TD>
+          </tr>
+          <tr style={{ height: "22px" }}>
+            <TH>自己負担額</TH>
+            <TD className="px-2 text-right font-bold">{n("copay_amount")}　円</TD>
+          </tr>
+        </tbody>
+      </table>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <tbody>
+          <tr>
+            <TH style={{ width: "15%" }}>備考</TH>
+            <TD style={{ height: "60px", verticalAlign: "top", padding: "4px", whiteSpace: "pre-wrap" }}>{s("notes")}</TD>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function PrintGeneric({ c, title }: { c: Record<string, unknown>; title: string }) {
   return (
     <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000" }}>
@@ -521,8 +1252,13 @@ function PrintView({ reportType, content, config }: {
   reportType: string; content: Record<string, unknown>; config: ReportConfig;
 }) {
   switch (reportType) {
-    case "care-plan-1": return <PrintCarePlan1 c={content} />;
-    case "care-plan-2": return <PrintCarePlan2 c={content} />;
+    case "care-plan-1":       return <PrintCarePlan1 c={content} />;
+    case "care-plan-2":       return <PrintCarePlan2 c={content} />;
+    case "face-sheet":        return <PrintFaceSheet c={content} />;
+    case "care-plan-3":       return <PrintCarePlan3 c={content} />;
+    case "service-usage":     return <PrintServiceTicket c={content} title="サービス利用票（第6表）" />;
+    case "service-provision": return <PrintServiceTicket c={content} title="サービス提供票（第7表）" />;
+    case "invoice":           return <PrintInvoice c={content} />;
     default: return <PrintGeneric c={content} title={config.titleJa} />;
   }
 }
@@ -531,8 +1267,13 @@ function EditForm({ reportType, content, onChange }: {
   reportType: string; content: Record<string, unknown>; onChange: (c: Record<string, unknown>) => void;
 }) {
   switch (reportType) {
-    case "care-plan-1": return <EditFormCarePlan1 content={content} onChange={onChange} />;
-    case "care-plan-2": return <EditFormCarePlan2 content={content} onChange={onChange} />;
+    case "care-plan-1":       return <EditFormCarePlan1 content={content} onChange={onChange} />;
+    case "care-plan-2":       return <EditFormCarePlan2 content={content} onChange={onChange} />;
+    case "face-sheet":        return <EditFormFaceSheet content={content} onChange={onChange} />;
+    case "care-plan-3":       return <EditFormCarePlan3 content={content} onChange={onChange} />;
+    case "service-usage":     return <EditFormServiceTicket content={content} onChange={onChange} isProvision={false} />;
+    case "service-provision": return <EditFormServiceTicket content={content} onChange={onChange} isProvision={true} />;
+    case "invoice":           return <EditFormInvoice content={content} onChange={onChange} />;
     default: return <EditFormGeneric content={content} onChange={onChange} label="内容（JSON編集）" />;
   }
 }
@@ -599,7 +1340,7 @@ async function autoGenerateDoc(
     services = svcs ?? [];
   }
 
-  const content = buildDefaultContent(reportType, user as KaigoUser, cert, plan, services);
+  const content = buildDefaultContent(reportType, user as KaigoUser, cert, plan, services, reportMonth);
   const today = format(new Date(), "yyyy-MM-dd");
   const title = config.needsPeriod && reportMonth
     ? `${config.titleJa}（${fmtJaYear(reportMonth + "-01")}）`
