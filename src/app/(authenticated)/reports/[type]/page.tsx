@@ -1951,13 +1951,13 @@ function PrintServiceUsageDetail({ c }: { c: Record<string, unknown> }) {
   type ShortStayDays = { prev: number; current: number; total: number };
   const ssd: ShortStayDays = (c.short_stay_days as ShortStayDays) ?? { prev: 0, current: 0, total: 0 };
 
-  // メインテーブル10行、行の高さをA4に合わせて計算
-  const MAIN_ROWS_COUNT = 10;
+  // メインテーブル8行、A4の上部約55%を使う
+  const MAIN_ROWS_COUNT = 8;
   const mainDataRows = items.length < MAIN_ROWS_COUNT
     ? [...items, ...Array(MAIN_ROWS_COUNT - items.length).fill(null)]
     : items;
-  // A4横190mm ≒ 718px。タイトル+ヘッダー≒50px、Section1ヘッダー≒40px、フッター行≒18px、Section2+3≒170px → 残り≒440px
-  const mainRowH = Math.floor(440 / MAIN_ROWS_COUNT);
+  // A4横190mm。上部（タイトル+Section1）≒55%、下部（種類別+短期入所）≒45%
+  const mainRowH = 28; // 固定高さ
 
   return (
     <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "7pt", color: "#000", width: "277mm", height: "190mm", overflow: "hidden" }}>
