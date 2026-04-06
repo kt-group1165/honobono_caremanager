@@ -19,6 +19,9 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import pkg from "../../../package.json";
+
+const APP_VERSION = pkg.version;
 
 const navigation = [
   { name: "ダッシュボード", href: "/dashboard", icon: LayoutDashboard },
@@ -86,12 +89,12 @@ export function Sidebar() {
       <div className="border-t px-3 py-2">
         {!collapsed && (
           <div className="text-[10px] text-gray-400 leading-relaxed">
-            <div>介護管理システム v0.2.0</div>
+            <div>介護管理システム v{APP_VERSION}</div>
             <div>ケアマネ版</div>
           </div>
         )}
         {collapsed && (
-          <div className="text-[9px] text-gray-400 text-center">v0.1</div>
+          <div className="text-[9px] text-gray-400 text-center">v{APP_VERSION}</div>
         )}
       </div>
     </aside>
