@@ -1951,72 +1951,79 @@ function PrintServiceUsageDetail({ c }: { c: Record<string, unknown> }) {
   type ShortStayDays = { prev: number; current: number; total: number };
   const ssd: ShortStayDays = (c.short_stay_days as ShortStayDays) ?? { prev: 0, current: 0, total: 0 };
 
+  // メインテーブル10行、行の高さをA4に合わせて計算
+  const MAIN_ROWS_COUNT = 10;
+  const mainDataRows = items.length < MAIN_ROWS_COUNT
+    ? [...items, ...Array(MAIN_ROWS_COUNT - items.length).fill(null)]
+    : items;
+  // A4横190mm ≒ 718px。タイトル+ヘッダー≒50px、Section1ヘッダー≒40px、フッター行≒18px、Section2+3≒170px → 残り≒440px
+  const mainRowH = Math.floor(440 / MAIN_ROWS_COUNT);
+
   return (
     <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "7pt", color: "#000", width: "277mm", height: "190mm", overflow: "hidden" }}>
-      {/* 第7表ラベル */}
-      <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "7.5pt", marginBottom: "3px" }}>第７表</div>
-
-      {/* タイトル */}
+      {/* ヘッダー行 */}
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
+        <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "7.5pt" }}>第７表</div>
+        <span style={{ fontSize: "8pt" }}>作成年月日　　　年　　月　　日</span>
+      </div>
       <div style={{ textAlign: "center", marginBottom: "3px" }}>
-        <span style={{ fontSize: "12pt", fontWeight: "bold", letterSpacing: "0.3em" }}>サービス利用票別表</span>
+        <span style={{ fontSize: "13pt", fontWeight: "bold", letterSpacing: "0.3em" }}>サービス利用票別表</span>
       </div>
 
-      {/* Section 1: 区分支給限度管理・利用者負担計算 */}
-      <div style={{ fontSize: "7pt", fontWeight: "bold", marginBottom: "2px" }}>
-        区分支給限度管理・利用者負担計算
-      </div>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
+      {/* Section 1 */}
+      <div style={{ fontSize: "7pt", fontWeight: "bold", marginBottom: "2px" }}>区分支給限度管理・利用者負担計算</div>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
         <thead>
           <tr>
             <th style={{ ...thStyle, width: "7%" }}>事業所名</th>
-            <th style={{ ...thStyle, width: "6%" }}>事業所番号</th>
+            <th style={{ ...thStyle, width: "5%" }}>事業所番号</th>
             <th style={{ ...thStyle, width: "7%" }}>サービス内容/<br />種類</th>
-            <th style={{ ...thStyle, width: "5%" }}>サービス<br />コード</th>
-            <th style={{ ...thStyle, width: "4%" }}>単位数</th>
-            <th style={{ ...thStyle, width: "4%" }}>割引後<br />(単位数)</th>
+            <th style={{ ...thStyle, width: "4%" }}>サービス<br />コード</th>
+            <th style={{ ...thStyle, width: "3.5%" }}>単位数</th>
+            <th style={{ ...thStyle, width: "3%" }}>割引後<br /><span style={{ fontSize: "5.5pt" }}>単位数</span></th>
             <th style={{ ...thStyle, width: "3%" }}>回数</th>
-            <th style={{ ...thStyle, width: "5%" }}>サービス<br />単位/金額</th>
-            <th style={{ ...thStyle, width: "5%" }}>種類支給<br />限度基準を<br />超える単位数</th>
-            <th style={{ ...thStyle, width: "5%" }}>区分支給<br />限度基準を<br />超える単位数</th>
-            <th style={{ ...thStyle, width: "5%" }}>区分支給<br />限度基準内<br />単位数</th>
-            <th style={{ ...thStyle, width: "4%" }}>単位数<br />単価</th>
-            <th style={{ ...thStyle, width: "6%" }}>費用総額<br />(保険/事業<br />対象分)</th>
-            <th style={{ ...thStyle, width: "4%" }}>給付率<br />(%)</th>
-            <th style={{ ...thStyle, width: "6%" }}>保険/事業費<br />請求額<br />(税額控除額)</th>
-            <th style={{ ...thStyle, width: "5%" }}>定額利用者<br />負担額</th>
-            <th style={{ ...thStyle, width: "6%" }}>利用者負担<br />(保険/事業<br />対象分)</th>
-            <th style={{ ...thStyle, width: "6%" }}>利用者負担<br />(全額<br />負担分)</th>
+            <th style={{ ...thStyle, width: "4%" }}>サービス<br />単位/<br />金額</th>
+            <th style={{ ...thStyle, width: "5%" }}>種類支給限度<br />基準を超える<br />単位数</th>
+            <th style={{ ...thStyle, width: "5%" }}>区分支給限度<br />基準を超える<br />単位数</th>
+            <th style={{ ...thStyle, width: "5%" }}>区分支給限度<br />基準内<br />単位数</th>
+            <th style={{ ...thStyle, width: "3.5%" }}>単位数<br />単価</th>
+            <th style={{ ...thStyle, width: "5.5%" }}>費用総額<br /><span style={{ fontSize: "5.5pt" }}>保険/事業対象</span></th>
+            <th style={{ ...thStyle, width: "3.5%" }}>給付率<br />(%)</th>
+            <th style={{ ...thStyle, width: "6%" }}>保険/事業費<br /><span style={{ fontSize: "5.5pt" }}>請求額<br />(税額控除額)</span></th>
+            <th style={{ ...thStyle, width: "4.5%" }}>定額利用者<br />負担額</th>
+            <th style={{ ...thStyle, width: "5.5%" }}>利用者負担<br /><span style={{ fontSize: "5.5pt" }}>保険/事業対象分</span></th>
+            <th style={{ ...thStyle, width: "5.5%" }}>利用者負担<br /><span style={{ fontSize: "5.5pt" }}>全額負担分</span></th>
           </tr>
         </thead>
         <tbody>
-          {dataRows.map((row, i) => (
-            <tr key={i} style={{ height: "16px" }}>
-              <td style={tdStyle}>{row?.office_name ?? "　"}</td>
-              <td style={tdStyle}>{row?.office_number ?? "　"}</td>
-              <td style={tdStyle}>{row?.service_content ?? "　"}</td>
-              <td style={tdStyle}>{row?.service_code ?? "　"}</td>
-              <td style={tdStyle}>{row?.units ?? "　"}</td>
-              <td style={tdStyle}>{row?.discounted_units ?? "　"}</td>
-              <td style={tdStyle}>{row?.count ?? "　"}</td>
-              <td style={tdStyle}>{row?.service_units ?? "　"}</td>
-              <td style={tdStyle}>{row?.category_over_units ?? "　"}</td>
-              <td style={tdStyle}>{row?.limit_over_units ?? "　"}</td>
-              <td style={tdStyle}>{row?.within_limit_units ?? "　"}</td>
-              <td style={tdStyle}>{row?.unit_price ?? "　"}</td>
-              <td style={tdStyle}>{row?.total_cost ?? "　"}</td>
-              <td style={tdStyle}>{row?.benefit_rate ?? "　"}</td>
-              <td style={tdStyle}>{row?.insurance_claim ?? "　"}</td>
-              <td style={tdStyle}>{row?.fixed_copay ?? "　"}</td>
-              <td style={tdStyle}>{row?.copay_insured ?? "　"}</td>
-              <td style={tdStyle}>{row?.copay_full ?? "　"}</td>
+          {mainDataRows.map((row, i) => (
+            <tr key={i} style={{ height: `${mainRowH}px` }}>
+              <td style={tdStyle}>{row?.office_name ?? row?.provider_name ?? ""}</td>
+              <td style={tdStyle}>{row?.office_number ?? row?.provider_number ?? ""}</td>
+              <td style={{ ...tdStyle, textAlign: "left", paddingLeft: "3px", fontSize: "6.5pt" }}>{row?.service_content ?? ""}</td>
+              <td style={tdStyle}>{row?.service_code ?? ""}</td>
+              <td style={tdStyle}>{row?.units || ""}</td>
+              <td style={tdStyle}>{row?.discount_units ?? row?.discounted_units ?? ""}</td>
+              <td style={tdStyle}>{row?.count || ""}</td>
+              <td style={tdStyle}>{row?.service_units || ""}</td>
+              <td style={tdStyle}>{row?.over_type_units ?? row?.category_over_units ?? ""}</td>
+              <td style={tdStyle}>{row?.over_limit_units ?? row?.limit_over_units ?? ""}</td>
+              <td style={tdStyle}>{row?.within_limit_units || ""}</td>
+              <td style={tdStyle}>{row?.unit_price || ""}</td>
+              <td style={tdStyle}>{row?.total_cost || ""}</td>
+              <td style={tdStyle}>{row?.benefit_rate || ""}</td>
+              <td style={tdStyle}>{row?.insurance_claim || ""}</td>
+              <td style={tdStyle}>{row?.fixed_copay ?? ""}</td>
+              <td style={tdStyle}>{row?.user_copay ?? row?.copay_insured ?? ""}</td>
+              <td style={tdStyle}>{row?.user_full_pay ?? row?.copay_full ?? ""}</td>
             </tr>
           ))}
-          {/* Footer row */}
-          <tr style={{ height: "16px" }}>
-            <td colSpan={8} style={{ ...thStyle, textAlign: "left" }}>
-              区分支給限度基準額（単位）　　　　　　合計
+          <tr style={{ height: "18px" }}>
+            <td colSpan={4} style={{ ...thStyle, textAlign: "left", paddingLeft: "3px", fontSize: "6.5pt" }}>
+              区分支給限度<br />基準額（単位）
             </td>
-            <td style={tdStyle}></td>
+            <td colSpan={4} style={tdStyle}></td>
+            <td style={tdStyle}>合計</td>
             <td style={tdStyle}></td>
             <td style={tdStyle}></td>
             <td style={tdStyle}></td>
@@ -2030,91 +2037,62 @@ function PrintServiceUsageDetail({ c }: { c: Record<string, unknown> }) {
         </tbody>
       </table>
 
-      {/* Section 2 + 3 side by side */}
-      <div style={{ display: "flex", gap: "6px", marginBottom: "4px" }}>
-        {/* Section 2: 種類別支給限度管理 */}
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: "7pt", fontWeight: "bold", marginBottom: "2px" }}>種類別支給限度管理</div>
-          <div style={{ display: "flex", gap: "4px" }}>
-            {/* Left table */}
-            <table style={{ flex: 1, borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={{ ...thStyle, width: "40%" }}>サービス種類</th>
-                  <th style={{ ...thStyle, width: "20%" }}>種類支給<br />限度基準額<br />(単位)</th>
-                  <th style={{ ...thStyle, width: "20%" }}>合計<br />単位数</th>
-                  <th style={{ ...thStyle, width: "20%" }}>種類支給<br />限度基準を<br />超える単位数</th>
-                </tr>
-              </thead>
-              <tbody>
-                {LEFT_TYPES.map((t) => {
-                  const r = getLimitRow(t);
-                  return (
-                    <tr key={t} style={{ height: "14px" }}>
-                      <td style={{ ...tdStyle, textAlign: "left", paddingLeft: "3px" }}>{t}</td>
-                      <td style={tdStyle}>{r.limit_units || "　"}</td>
-                      <td style={tdStyle}>{r.total_units || "　"}</td>
-                      <td style={tdStyle}>{r.over_units || "　"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {/* Right table */}
-            <table style={{ flex: 1, borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={{ ...thStyle, width: "40%" }}>サービス種類</th>
-                  <th style={{ ...thStyle, width: "20%" }}>種類支給<br />限度基準額<br />(単位)</th>
-                  <th style={{ ...thStyle, width: "20%" }}>合計<br />単位数</th>
-                  <th style={{ ...thStyle, width: "20%" }}>種類支給<br />限度基準を<br />超える単位数</th>
-                </tr>
-              </thead>
-              <tbody>
-                {RIGHT_TYPES.map((t) => {
-                  const r = getLimitRow(t);
-                  return (
-                    <tr key={t} style={{ height: "14px" }}>
-                      <td style={{ ...tdStyle, textAlign: "left", paddingLeft: "3px" }}>{t}</td>
-                      <td style={tdStyle}>{r.limit_units || "　"}</td>
-                      <td style={tdStyle}>{r.total_units || "　"}</td>
-                      <td style={tdStyle}>{r.over_units || "　"}</td>
-                    </tr>
-                  );
-                })}
-                {/* 合計行 */}
-                <tr style={{ height: "14px" }}>
-                  <td style={{ ...thStyle, textAlign: "left", paddingLeft: "3px" }}>合　計</td>
-                  <td style={tdStyle}></td>
-                  <td style={tdStyle}></td>
-                  <td style={tdStyle}></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Section 3: 短期入所利用日数 */}
-        <div style={{ width: "120px", flexShrink: 0 }}>
-          <div style={{ fontSize: "7pt", fontWeight: "bold", marginBottom: "2px" }}>要介護認定期間中の<br />短期入所利用日数</div>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      {/* Section 2: 種類別支給限度管理 */}
+      <div style={{ fontSize: "7pt", fontWeight: "bold", marginBottom: "2px" }}>種類別支給限度管理</div>
+      <div style={{ display: "flex", gap: "4px", marginBottom: "4px" }}>
+        {[LEFT_TYPES, RIGHT_TYPES].map((types, ti) => (
+          <table key={ti} style={{ flex: 1, borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                <th style={thStyle}>前月までの<br />利用日数</th>
-                <th style={thStyle}>今月の<br />計画利用<br />日数</th>
-                <th style={thStyle}>累積<br />利用日数</th>
+                <th style={{ ...thStyle, width: "35%", fontSize: "6pt" }}>サービス種類</th>
+                <th style={{ ...thStyle, width: "20%", fontSize: "6pt" }}>種類支給限度<br />基準額(単位)</th>
+                <th style={{ ...thStyle, width: "20%", fontSize: "6pt" }}>合計単位数</th>
+                <th style={{ ...thStyle, width: "25%", fontSize: "6pt" }}>種類支給限度基準<br />を超える単位数</th>
               </tr>
             </thead>
             <tbody>
-              <tr style={{ height: "20px" }}>
-                <td style={tdStyle}>{ssd.prev || "　"}</td>
-                <td style={tdStyle}>{ssd.current || "　"}</td>
-                <td style={tdStyle}>{ssd.total || "　"}</td>
-              </tr>
+              {types.map((t) => {
+                const r = getLimitRow(t);
+                return (
+                  <tr key={t} style={{ height: "13px" }}>
+                    <td style={{ ...tdStyle, textAlign: "left", paddingLeft: "2px", fontSize: "6pt", color: "red" }}>{t}</td>
+                    <td style={tdStyle}>{r.limit_units || ""}</td>
+                    <td style={tdStyle}>{r.total_units || ""}</td>
+                    <td style={tdStyle}>{r.over_units || ""}</td>
+                  </tr>
+                );
+              })}
+              {ti === 1 && (
+                <tr style={{ height: "13px" }}>
+                  <td style={{ ...thStyle, textAlign: "left", paddingLeft: "2px", fontSize: "6pt" }}>合計</td>
+                  <td style={tdStyle}></td>
+                  <td style={tdStyle}></td>
+                  <td style={tdStyle}></td>
+                </tr>
+              )}
             </tbody>
           </table>
-        </div>
+        ))}
       </div>
+
+      {/* Section 3: 短期入所 */}
+      <div style={{ fontSize: "7pt", fontWeight: "bold", marginBottom: "2px" }}>要介護認定期間中の短期入所利用日数</div>
+      <table style={{ borderCollapse: "collapse", width: "30%" }}>
+        <thead>
+          <tr>
+            <th style={{ ...thStyle, fontSize: "6pt" }}>前月までの利用日数</th>
+            <th style={{ ...thStyle, fontSize: "6pt" }}>今月の計画利用日数</th>
+            <th style={{ ...thStyle, fontSize: "6pt" }}>累積利用日数</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style={{ height: "18px" }}>
+            <td style={tdStyle}>{ssd.prev || ""}</td>
+            <td style={tdStyle}>{ssd.current || ""}</td>
+            <td style={tdStyle}>{ssd.total || ssd.prev + ssd.current || ""}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }
