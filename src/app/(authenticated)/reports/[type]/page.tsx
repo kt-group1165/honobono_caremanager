@@ -947,7 +947,7 @@ function PrintCarePlan1({ c }: { c: Record<string, unknown> }) {
   const lineStyle: React.CSSProperties = { borderBottom: "1px dotted #999", height: "18px", width: "100%" };
 
   return (
-    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000", position: "relative" }}>
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000", position: "relative", width: "277mm", height: "190mm", overflow: "hidden" }}>
       {/* 第1表ラベル */}
       <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "8pt", marginBottom: "4px" }}>第１表</div>
 
@@ -1154,8 +1154,15 @@ function PrintCarePlan2({ c }: { c: Record<string, unknown> }) {
     }
   }
 
+  // A4横に固定（297mm×210mm、余白10mm）→ 277mm×190mm
+  // ヘッダー部分 ≒ 55px、脚注+署名 ≒ 55px、残り = テーブル本体
+  // 1行の高さを均等に割り当て
+  const TOTAL_ROWS = flatRows.length;
+  const tableBodyHeight = 440; // px（A4横の本体部分に相当）
+  const rowHeight = Math.max(28, Math.floor(tableBodyHeight / TOTAL_ROWS));
+
   return (
-    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000" }}>
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000", width: "277mm", height: "190mm", position: "relative", overflow: "hidden" }}>
       <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "8pt", marginBottom: "4px" }}>第２表</div>
       <div style={{ textAlign: "center", marginBottom: "2px" }}>
         <span style={{ fontSize: "14pt", fontWeight: "bold", letterSpacing: "0.3em" }}>居宅サービス計画書（２）</span>
@@ -1192,7 +1199,7 @@ function PrintCarePlan2({ c }: { c: Record<string, unknown> }) {
         </thead>
         <tbody>
           {flatRows.map((row, i) => (
-            <tr key={i} style={{ height: "28px" }}>
+            <tr key={i} style={{ height: `${rowHeight}px` }}>
               {row.needsSpan !== undefined && <td rowSpan={row.needsSpan} style={{ ...tdStyle, padding: "4px" }}>{row.needs || "　"}</td>}
               {row.ltGoalSpan !== undefined && <td rowSpan={row.ltGoalSpan} style={{ ...tdStyle, padding: "4px" }}>{row.ltGoal || "　"}</td>}
               {row.ltGoalSpan !== undefined && <td rowSpan={row.ltGoalSpan} style={{ ...tdStyle, fontSize: "7pt", padding: "3px" }}>{row.ltPeriod || "　"}</td>}
