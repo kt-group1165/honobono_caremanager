@@ -679,6 +679,22 @@ function EditFormServiceTicket({ content, onChange, isProvision = false }: {
 }) {
   const s = (k: string) => String(content[k] ?? "");
   const set = (k: string, v: unknown) => onChange({ ...content, [k]: v });
+  const supabase = createClient();
+
+  // マスタデータ取得
+  const [serviceCodes, setServiceCodes] = useState<{ service_code: string; service_name: string; service_category_name: string }[]>([]);
+  const [providers, setProviders] = useState<{ provider_number: string; provider_name: string }[]>([]);
+
+  useEffect(() => {
+    const fetchMasters = async () => {
+      const { data: codes } = await supabase.from("kaigo_service_codes").select("service_code, service_name, service_category_name").eq("calculation_type", "基本").order("service_code");
+      setServiceCodes(codes || []);
+      const { data: provs } = await supabase.from("kaigo_service_providers").select("provider_number, provider_name").eq("status", "active").order("provider_name");
+      setProviders(provs || []);
+    };
+    fetchMasters();
+  }, [supabase]);
+
   const services: SvcRow[] = Array.isArray(content.services)
     ? (content.services as SvcRow[]).map((r) => ({
         ...emptyServiceRow(), ...r,
@@ -754,7 +770,7 @@ function EditFormServiceTicket({ content, onChange, isProvision = false }: {
                   <>
                     {/* 予定 row */}
                     <tr key={`${i}-planned`} style={{ height: 18 }}>
-                      <td rowSpan={2} className="border border-gray-300 px-1 align-middle">
+                      <td rowSpan={2} className="border border-gray-300 px-0.5 align-middle">
                         <input
                           className="w-full text-[10px] bg-transparent outline-none"
                           value={svc.time}
@@ -762,21 +778,33 @@ function EditFormServiceTicket({ content, onChange, isProvision = false }: {
                           placeholder="時間帯"
                         />
                       </td>
-                      <td rowSpan={2} className="border border-gray-300 px-1 align-middle">
-                        <input
-                          className="w-full text-[10px] bg-transparent outline-none"
+                      <td rowSpan={2} className="border border-gray-300 px-0.5 align-middle">
+                        <select
+                          className="w-full text-[10px] bg-transparent outline-none border-0 cursor-pointer"
                           value={svc.content}
                           onChange={(e) => updateSvc(i, "content", e.target.value)}
-                          placeholder="サービス内容"
-                        />
+                        >
+                          <option value="">-- 選択 --</option>
+                          {serviceCodes.map((sc) => (
+                            <option key={sc.service_code} value={sc.service_name}>
+                              {sc.service_name}
+                            </option>
+                          ))}
+                        </select>
                       </td>
-                      <td rowSpan={2} className="border border-gray-300 px-1 align-middle">
-                        <input
-                          className="w-full text-[10px] bg-transparent outline-none"
+                      <td rowSpan={2} className="border border-gray-300 px-0.5 align-middle">
+                        <select
+                          className="w-full text-[10px] bg-transparent outline-none border-0 cursor-pointer"
                           value={svc.provider}
                           onChange={(e) => updateSvc(i, "provider", e.target.value)}
-                          placeholder="事業所名"
-                        />
+                        >
+                          <option value="">-- 選択 --</option>
+                          {providers.map((p) => (
+                            <option key={p.provider_number} value={p.provider_name}>
+                              {p.provider_name}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                       <td className="border border-dashed border-gray-300 px-0.5 text-center text-gray-500 whitespace-nowrap">予定</td>
                       {DAYS.map((_, di) => (
