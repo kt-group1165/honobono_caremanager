@@ -780,79 +780,151 @@ function EditFormGeneric({ content, onChange, label = "内容（JSON編集）" }
 // ---------------------------------------------------------------------------
 
 function PrintCarePlan1({ c }: { c: Record<string, unknown> }) {
-  const s = (k: string) => String(c[k] ?? "　");
+  const s = (k: string) => String(c[k] ?? "");
+  const B = "1px solid #000";
+  const cellBase: React.CSSProperties = { border: B, padding: "2px 4px", fontSize: "8.5pt", verticalAlign: "middle" };
+  const thStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#f0f0f0", fontWeight: "bold", textAlign: "left" };
+  const tdStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#fff" };
+  const lineStyle: React.CSSProperties = { borderBottom: "1px dotted #999", height: "18px", width: "100%" };
+
   return (
-    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000" }}>
-      <div style={{ textAlign: "center", marginBottom: "4px" }}>
-        <div style={{ fontSize: "12pt", fontWeight: "bold", letterSpacing: "0.2em" }}>居宅サービス計画書（1）</div>
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000", position: "relative" }}>
+      {/* 第1表ラベル */}
+      <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "8pt", marginBottom: "4px" }}>第１表</div>
+
+      {/* タイトル行 */}
+      <div style={{ textAlign: "center", marginBottom: "2px" }}>
+        <span style={{ fontSize: "14pt", fontWeight: "bold", letterSpacing: "0.3em" }}>居宅サービス計画書（１）</span>
+        <span style={{ float: "right", fontSize: "8.5pt" }}>
+          作成年月日　　　年　　月　　日
+        </span>
       </div>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
+
+      {/* 初回・紹介・継続 / 認定済・申請中 */}
+      <div style={{ textAlign: "right", marginBottom: "4px", fontSize: "8.5pt" }}>
+        <span style={{ border: B, padding: "1px 6px", marginRight: "8px" }}>
+          {["初回","紹介","継続"].map((t, i) => <span key={t}>{i > 0 ? "　・　" : ""}{s("plan_type") === t ? <b>{t}</b> : t}</span>)}
+        </span>
+        <span style={{ border: B, padding: "1px 6px" }}>
+          {["認定済","申請中"].map((t, i) => <span key={t}>{i > 0 ? "　・　" : ""}{s("cert_status") === t ? <b>{t}</b> : t}</span>)}
+        </span>
+      </div>
+
+      {/* ヘッダー情報テーブル */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
         <tbody>
-          <tr style={{ height: "20px" }}>
-            <TH style={{ width: "18%" }}>初回・紹介・継続</TH>
-            <TD style={{ width: "37%" }} className="px-2">
-              {["初回","紹介","継続"].map((t) => <span key={t} style={{ marginRight: "12px" }}>{s("plan_type") === t ? "☑" : "□"}　{t}</span>)}
-            </TD>
-            <TH style={{ width: "18%" }}>認定済・申請中</TH>
-            <TD style={{ width: "27%" }} className="px-2">
-              {["認定済","申請中"].map((t) => <span key={t} style={{ marginRight: "12px" }}>{s("cert_status") === t ? "☑" : "□"}　{t}</span>)}
-            </TD>
+          {/* 利用者名 / 生年月日 / 住所 */}
+          <tr>
+            <td style={{ ...tdStyle, width: "12%", fontWeight: "bold" }}>利用者名</td>
+            <td style={{ ...tdStyle, width: "22%", fontWeight: "bold", fontSize: "11pt" }}>{s("user_name")}　殿</td>
+            <td style={{ ...tdStyle, width: "8%" }}>生年月日</td>
+            <td style={{ ...tdStyle, width: "14%" }}>{s("birth_date") ? fmtReiwa(s("birth_date")) : "　年　月　日"}</td>
+            <td style={{ ...tdStyle, width: "5%" }}>住所</td>
+            <td style={{ ...tdStyle, width: "39%" }}>{s("address")}</td>
+          </tr>
+          {/* 居宅サービス計画作成者氏名 */}
+          <tr>
+            <td colSpan={2} style={{ ...tdStyle, fontSize: "8pt" }}>居宅サービス計画作成者氏名</td>
+            <td colSpan={4} style={tdStyle}>{s("creator_name")}</td>
+          </tr>
+          {/* 居宅介護支援事業者 */}
+          <tr>
+            <td colSpan={2} style={{ ...tdStyle, fontSize: "8pt" }}>居宅介護支援事業者・事業所名及び所在地</td>
+            <td colSpan={4} style={tdStyle}>{s("office_name")}</td>
+          </tr>
+          {/* 計画作成日 / 初回作成日 */}
+          <tr>
+            <td colSpan={2} style={{ ...tdStyle, fontSize: "8pt" }}>居宅サービス計画作成（変更）日</td>
+            <td style={tdStyle}>{s("creation_date")}</td>
+            <td colSpan={2} style={{ ...tdStyle, fontSize: "8pt" }}>初回居宅サービス計画作成日</td>
+            <td style={tdStyle}>{s("initial_creation_date")}</td>
+          </tr>
+          {/* 認定日 / 認定の有効期間 */}
+          <tr>
+            <td style={{ ...tdStyle, fontSize: "8pt" }}>認定日</td>
+            <td style={tdStyle}></td>
+            <td style={{ ...tdStyle, fontSize: "8pt" }}>認定の有効期間</td>
+            <td colSpan={3} style={tdStyle}>{s("cert_period")}</td>
           </tr>
         </tbody>
       </table>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
-        <colgroup><col style={{ width: "22%" }} /><col style={{ width: "28%" }} /><col style={{ width: "22%" }} /><col style={{ width: "28%" }} /></colgroup>
+
+      {/* 要介護状態区分 */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
         <tbody>
-          <tr style={{ height: "22px" }}>
-            <TH>利用者名</TH><TD className="px-1 font-bold">{s("user_name")}　様</TD>
-            <TH>居宅サービス計画作成者氏名</TH><TD className="px-1">{s("creator_name")}</TD>
-          </tr>
-          <tr style={{ height: "22px" }}>
-            <TH>生年月日</TH><TD className="px-1">{s("birth_date") ? fmtReiwa(s("birth_date")) : "　"}　({s("birth_date") ? calcAge(s("birth_date")) : "　"})</TD>
-            <TH>居宅介護支援事業者・事業所名及び所在地</TH><TD className="px-1" rowSpan={2}>{s("office_name")}</TD>
-          </tr>
-          <tr style={{ height: "22px" }}><TH>住所</TH><TD className="px-1">{s("address")}</TD></tr>
-          <tr style={{ height: "22px" }}>
-            <TH>居宅サービス計画作成（変更）日</TH><TD className="px-1">{s("creation_date")}</TD>
-            <TH>初回居宅サービス計画作成日</TH><TD className="px-1">{s("initial_creation_date")}</TD>
-          </tr>
-          <tr style={{ height: "22px" }}>
-            <TH>認定有効期間</TH><TD colSpan={3} className="px-2">{s("cert_period")}</TD>
-          </tr>
-          <tr style={{ height: "22px" }}>
-            <TH>要介護状態区分</TH>
-            <TD colSpan={3} className="px-2">
-              {CARE_LEVELS.map((lv) => <span key={lv} style={{ marginRight: "8px" }}>{s("care_level") === lv ? "☑" : "□"}　{lv}</span>)}
-            </TD>
+          <tr>
+            <td style={{ ...thStyle, width: "15%" }}>要介護状態区分</td>
+            <td style={{ ...tdStyle, fontSize: "9pt", letterSpacing: "0.1em" }}>
+              {["要介護１","要介護２","要介護３","要介護４","要介護５"].map((lv, i) => {
+                const match = s("care_level").replace(/\d/, (d: string) => "１２３４５"["12345".indexOf(d)] || d);
+                return <span key={lv}>{i > 0 ? "　・　" : ""}{match === lv ? <b style={{ textDecoration: "underline" }}>{lv}</b> : lv}</span>;
+              })}
+            </td>
           </tr>
         </tbody>
       </table>
-      {[
-        { label: "利用者及び家族の生活に対する意向を踏まえた課題分析の結果", key: "issue_analysis", h: "60px" },
-        { label: "介護認定審査会の意見及びサービスの種類の指定", key: "review_opinion", h: "40px" },
-        { label: "総合的な援助の方針", key: "overall_policy", h: "60px" },
-      ].map(({ label, key, h }) => (
-        <table key={key} style={{ width: "100%", borderCollapse: "collapse", marginBottom: "2px" }}>
-          <tbody>
-            <tr>
-              <TH style={{ width: "30%", padding: "2px 4px" }}>{label}</TH>
-              <TD style={{ width: "70%", height: h, verticalAlign: "top", padding: "4px", whiteSpace: "pre-wrap" }}>{s(key)}</TD>
-            </tr>
-          </tbody>
-        </table>
-      ))}
+
+      {/* 利用者及び家族の意向を踏まえた課題分析の結果 */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "0" }}>
+        <tbody>
+          <tr>
+            <td style={{ ...thStyle, width: "18%", verticalAlign: "top", height: "120px", lineHeight: "1.6" }}>
+              利用者及び家族の<br />生活に対する<br />意向<span style={{ color: "red" }}>を踏まえた</span><br /><span style={{ color: "red" }}>課題分析の結果</span>
+            </td>
+            <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "4px 6px", position: "relative" }}>
+              {s("issue_analysis")}
+              {/* 罫線（ドット） */}
+              <div style={{ position: "absolute", top: 0, left: "6px", right: "6px", bottom: 0, pointerEvents: "none" }}>
+                {Array.from({ length: 6 }).map((_, i) => <div key={i} style={{ ...lineStyle, position: "absolute", top: `${20 + i * 18}px` }} />)}
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* 介護認定審査会の意見及びサービスの種類の指定 */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "0" }}>
+        <tbody>
+          <tr>
+            <td style={{ ...thStyle, width: "18%", verticalAlign: "top", height: "60px", lineHeight: "1.6" }}>
+              介護認定審査会の<br />意見及びサービス<br />の種類の指定
+            </td>
+            <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "4px 6px", position: "relative" }}>
+              {s("review_opinion")}
+              <div style={{ position: "absolute", top: 0, left: "6px", right: "6px", bottom: 0, pointerEvents: "none" }}>
+                {Array.from({ length: 3 }).map((_, i) => <div key={i} style={{ ...lineStyle, position: "absolute", top: `${20 + i * 18}px` }} />)}
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* 総合的な援助の方針 */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "0" }}>
+        <tbody>
+          <tr>
+            <td style={{ ...thStyle, width: "18%", verticalAlign: "top", height: "120px", lineHeight: "1.6" }}>
+              <br />総合的な援助の<br />方　　　　針
+            </td>
+            <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "4px 6px", position: "relative" }}>
+              {s("overall_policy")}
+              <div style={{ position: "absolute", top: 0, left: "6px", right: "6px", bottom: 0, pointerEvents: "none" }}>
+                {Array.from({ length: 6 }).map((_, i) => <div key={i} style={{ ...lineStyle, position: "absolute", top: `${20 + i * 18}px` }} />)}
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* 生活援助中心型の算定理由 */}
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "6px" }}>
         <tbody>
-          <tr style={{ height: "22px" }}>
-            <TH style={{ width: "30%", padding: "2px 4px" }}>生活援助中心型の算定理由</TH>
-            <TD style={{ width: "70%" }} className="px-3">{s("living_support_reason") || <span style={{ color: "#888" }}>□ 1．一人暮らし　□ 2．家族等が障害・疾病等　□ 3．その他（　　　　　　）</span>}</TD>
+          <tr>
+            <td style={{ ...thStyle, width: "18%", height: "28px" }}>生活援助中心型の<br />算　定　理　由</td>
+            <td style={{ ...tdStyle, fontSize: "9pt" }}>
+              {s("living_support_reason") || "１．一人暮らし　　２．家族等が障害、疾病等　　３．その他（　　　　　　　　　　　）"}
+            </td>
           </tr>
-        </tbody>
-      </table>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <tbody>
-          <tr style={{ height: "24px" }}><TH style={{ width: "15%" }}>介護支援専門員氏名</TH><TD style={{ width: "35%" }} className="px-2" /><TH style={{ width: "15%" }}>事業所名</TH><TD style={{ width: "35%" }} className="px-2">{s("office_name")}</TD></tr>
-          <tr style={{ height: "28px" }}><TH>利用者同意署名</TH><TD className="px-2" /><TH>家族等署名</TH><TD className="px-2" /></tr>
         </tbody>
       </table>
     </div>
