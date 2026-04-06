@@ -1254,7 +1254,7 @@ function PrintFaceSheet({ c }: { c: Record<string, unknown> }) {
   const medRows   = medical.length > 0 ? medical : Array(3).fill({ disease: "", hospital: "", status: "" });
 
   return (
-    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000" }}>
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000", width: "190mm", height: "277mm", overflow: "hidden" }}>
       {/* タイトル */}
       <div style={{ textAlign: "center", marginBottom: "6px" }}>
         <span style={{ fontSize: "14pt", fontWeight: "bold", letterSpacing: "0.3em" }}>フェースシート（様式例）</span>
@@ -1402,7 +1402,7 @@ function PrintCarePlan3({ c }: { c: Record<string, unknown> }) {
   ];
 
   return (
-    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000" }}>
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000", width: "277mm", height: "190mm", overflow: "hidden" }}>
       {/* 第3表ラベル */}
       <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "8pt", marginBottom: "4px" }}>第３表</div>
 
@@ -1535,7 +1535,7 @@ function PrintServiceTicket({ c, title, isProvision = false }: { c: Record<strin
   const WDAY_JA = ["月","火","水","木","金","土","日"];
 
   return (
-    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "7pt", color: "#000" }}>
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "7pt", color: "#000", width: "277mm", height: "190mm", overflow: "hidden" }}>
       {/* 表番号ラベル */}
       <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "7pt", marginBottom: "3px" }}>{tableNum}</div>
 
@@ -1667,7 +1667,7 @@ function PrintInvoice({ c }: { c: Record<string, unknown> }) {
   const today = format(new Date(), "yyyy年M月d日", { locale: ja });
 
   return (
-    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000" }}>
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000", width: "190mm", height: "277mm", overflow: "hidden" }}>
       {/* 発行日 */}
       <div style={{ textAlign: "right", fontSize: "8.5pt", marginBottom: "4px" }}>{today}</div>
 
