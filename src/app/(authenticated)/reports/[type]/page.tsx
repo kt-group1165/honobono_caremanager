@@ -1544,37 +1544,53 @@ function PrintServiceTicket({ c, title, isProvision = false }: { c: Record<strin
         <span style={{ fontSize: "13pt", fontWeight: "bold", letterSpacing: "0.3em" }}>{title}</span>
       </div>
 
-      {/* ヘッダー情報 */}
+      {/* ヘッダー情報（公式書式3行） */}
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "3px" }}>
         <tbody>
-          <tr style={{ height: "18px" }}>
-            <td style={{ ...thStyle, width: "10%" }}>保険者番号</td>
-            <td style={{ ...tdStyle, width: "11%" }}>{s("insurer_number")}</td>
-            <td style={{ ...thStyle, width: "10%" }}>被保険者番号</td>
-            <td style={{ ...tdStyle, width: "14%" }}>{s("insured_number")}</td>
-            <td style={{ ...thStyle, width: "10%" }}>保険者名</td>
-            <td style={{ ...tdStyle, width: "13%" }}>{s("insurer_name")}</td>
-            <td style={{ ...thStyle, width: "8%" }}>要介護度</td>
-            <td style={{ ...tdStyle }}>{s("care_level")}</td>
+          {/* 1行目: 保険者番号 / 保険者名 / 居宅介護支援事業者名 / 作成年月日 / 利用者確認 */}
+          <tr style={{ height: "28px" }}>
+            <td style={{ ...thStyle, width: "8%" }}>保険者<br />番号</td>
+            <td style={{ ...tdStyle, width: "10%" }}>{s("insurer_number")}</td>
+            <td style={{ ...thStyle, width: "8%" }}>保険者名</td>
+            <td style={{ ...tdStyle, width: "14%" }}>{s("insurer_name")}</td>
+            <td style={{ ...thStyle, width: "12%", fontSize: "6pt" }}>居宅介護支援<br />事業者事業所名<br />担当者名</td>
+            <td style={{ ...tdStyle, width: "16%" }}></td>
+            <td style={{ ...thStyle, width: "7%" }}>作成<br />年月日</td>
+            <td style={{ ...tdStyle, width: "10%" }}>{s("creation_date")}</td>
+            <td style={{ ...thStyle, width: "7%" }}>利用者確認</td>
+            <td style={{ ...tdStyle, width: "8%" }}></td>
           </tr>
-          <tr style={{ height: "18px" }}>
-            <td style={thStyle}>利用者氏名</td>
-            <td style={{ ...tdStyle, fontWeight: "bold" }}>{s("user_name")}　殿</td>
-            <td style={thStyle}>区分支給限度基準額</td>
-            <td style={tdStyle}>{s("limit_amount")}単位</td>
-            <td style={thStyle}>限度額適用期間</td>
-            <td style={tdStyle}>{s("limit_period")}</td>
-            <td style={thStyle}>作成年月日</td>
-            <td style={tdStyle}>{s("creation_date")}</td>
+          {/* 2行目: 被保険者番号 / 被保険者氏名 / 届出年月日 */}
+          <tr style={{ height: "28px" }}>
+            <td style={thStyle}>被保険者<br />番号</td>
+            <td style={tdStyle}>{s("insured_number")}</td>
+            <td style={{ ...thStyle, fontSize: "6pt" }}>フリガナ<br /><span style={{ fontSize: "7pt" }}>被保険者氏名</span></td>
+            <td style={{ ...tdStyle, fontWeight: "bold" }}>{s("user_name")}</td>
+            <td style={tdStyle} colSpan={2}></td>
+            <td style={thStyle}>届出<br />年月日</td>
+            <td style={tdStyle} colSpan={3}>{s("submission_date")}</td>
+          </tr>
+          {/* 3行目: 生年月日 / 性別 / 要介護状態区分 / 区分支給限度基準額 / 限度額適用期間 */}
+          <tr style={{ height: "36px" }}>
+            <td style={thStyle}>生年月日</td>
+            <td style={tdStyle}></td>
+            <td style={thStyle}>性別</td>
+            <td style={{ ...tdStyle, width: "4%" }}></td>
+            <td style={{ ...thStyle, fontSize: "6pt" }}>要介護状態区<br />分<br /><span style={{ fontSize: "5.5pt" }}>変更後<br />要介護状態区分<br />変更日</span></td>
+            <td style={tdStyle}>{s("care_level")}</td>
+            <td style={{ ...thStyle, fontSize: "6pt" }}>区分支給<br />限度基準額</td>
+            <td style={tdStyle}>{s("limit_amount")}<br /><span style={{ fontSize: "6pt" }}>単位/月</span></td>
+            <td style={{ ...thStyle, fontSize: "6pt" }}>限度額<br />適用期間</td>
+            <td style={{ ...tdStyle, fontSize: "6pt" }}>{s("limit_period")}</td>
           </tr>
         </tbody>
       </table>
 
       {/* サービス票テーブル — A4横の残り高さを使い切る */}
       {(() => {
-        // ヘッダー部≒70px, フッター≒25px, テーブルヘッダー≒35px → 残り≒ 190mm - 130px ≒ 590px
-        // 9サービス×2行(予定+実績) = 18行
-        const ROW_H = Math.floor(560 / 18); // ≒31px per row
+        // ヘッダー部≒140px, フッター≒25px, テーブルヘッダー≒35px, タイトル≒30px
+        // 残り ≒ 190mm(≒718px) - 230px ≒ 488px → 18行で割る
+        const ROW_H = Math.floor(488 / 18); // ≒27px per row
         return (
           <>
           <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
