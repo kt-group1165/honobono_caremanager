@@ -227,24 +227,30 @@ function buildDefaultContent(
         overall_policy: plan?.short_term_goals ?? "",
         living_support_reason: "",
       };
-    case "care-plan-2":
+    case "care-plan-2": {
+      const planPeriod = plan ? `${fmtReiwa(plan.start_date)}〜${fmtReiwa(plan.end_date)}` : "";
       return {
         user_name: user.name,
         creation_date: fmtReiwa(plan?.start_date ?? today),
-        needs: plan?.long_term_goals ?? "",
-        long_term_goal: plan?.long_term_goals ?? "",
-        long_term_period: plan ? `${fmtReiwa(plan.start_date)}〜${fmtReiwa(plan.end_date)}` : "",
-        short_term_goal: plan?.short_term_goals ?? "",
-        short_term_period: plan ? `${fmtReiwa(plan.start_date)}〜${fmtReiwa(plan.end_date)}` : "",
-        services: services.map((s) => ({
-          content: s.service_content,
-          insurance_flag: "○",
-          type: s.service_type,
-          provider: s.provider ?? "",
-          frequency: s.frequency ?? "",
-          period: s.start_date && s.end_date ? `${fmtReiwa(s.start_date)}〜${fmtReiwa(s.end_date)}` : "",
-        })),
+        blocks: [{
+          needs: plan?.long_term_goals ?? "",
+          long_term_goal: plan?.long_term_goals ?? "",
+          long_term_period: planPeriod,
+          goals: [{
+            short_term_goal: plan?.short_term_goals ?? "",
+            short_term_period: planPeriod,
+            services: services.map((sv) => ({
+              content: sv.service_content,
+              insurance_flag: "○",
+              type: sv.service_type,
+              provider: sv.provider ?? "",
+              frequency: sv.frequency ?? "",
+              period: planPeriod,
+            })),
+          }],
+        }] as NeedsBlock[],
       };
+    }
     case "face-sheet":
       return {
         user_name: user.name,
@@ -366,65 +372,139 @@ function EditFormCarePlan1({ content, onChange }: {
   );
 }
 
-type Svc2 = { content: string; insurance_flag: string; type: string; provider: string; frequency: string; period: string };
+// 第2表のデータ構造: ニーズ → 複数の目標・サービス
+type NeedsBlock = {
+  needs: string;
+  long_term_goal: string;
+  long_term_period: string;
+  goals: {
+    short_term_goal: string;
+    short_term_period: string;
+    services: { content: string; insurance_flag: string; type: string; provider: string; frequency: string; period: string }[];
+  }[];
+};
 
 function EditFormCarePlan2({ content, onChange }: {
   content: Record<string, unknown>;
   onChange: (c: Record<string, unknown>) => void;
 }) {
-  const s = (key: string) => (String(content[key] ?? ""));
-  const set = (key: string, v: string) => onChange({ ...content, [key]: v });
-  const services: Svc2[] = Array.isArray(content.services) ? (content.services as Svc2[]) : [];
+  const s = (key: string) => String(content[key] ?? "");
+  const set = (key: string, v: unknown) => onChange({ ...content, [key]: v });
 
-  const updateSvc = (i: number, key: keyof Svc2, v: string) => {
-    const updated = services.map((svc, idx) => idx === i ? { ...svc, [key]: v } : svc);
-    onChange({ ...content, services: updated });
+  // 旧形式の互換: blocks配列がなければ旧データから変換
+  const blocks: NeedsBlock[] = Array.isArray(content.blocks) ? (content.blocks as NeedsBlock[]) : [{
+    needs: s("needs"),
+    long_term_goal: s("long_term_goal"),
+    long_term_period: s("long_term_period"),
+    goals: [{
+      short_term_goal: s("short_term_goal"),
+      short_term_period: s("short_term_period"),
+      services: Array.isArray(content.services) ? (content.services as NeedsBlock["goals"][0]["services"]) : [],
+    }],
+  }];
+
+  const updateBlocks = (newBlocks: NeedsBlock[]) => set("blocks", newBlocks);
+  const updateBlock = (bi: number, key: keyof NeedsBlock, v: string) => {
+    const nb = blocks.map((b, i) => i === bi ? { ...b, [key]: v } : b);
+    updateBlocks(nb);
   };
-  const addSvc = () => onChange({ ...content, services: [...services, { content: "", insurance_flag: "○", type: "", provider: "", frequency: "", period: "" }] });
-  const removeSvc = (i: number) => onChange({ ...content, services: services.filter((_, idx) => idx !== i) });
+  const addBlock = () => updateBlocks([...blocks, {
+    needs: "", long_term_goal: "", long_term_period: "",
+    goals: [{ short_term_goal: "", short_term_period: "", services: [{ content: "", insurance_flag: "○", type: "", provider: "", frequency: "", period: "" }] }],
+  }]);
+  const removeBlock = (bi: number) => updateBlocks(blocks.filter((_, i) => i !== bi));
+
+  const updateGoal = (bi: number, gi: number, key: string, v: string) => {
+    const nb = blocks.map((b, i) => i !== bi ? b : {
+      ...b, goals: b.goals.map((g, j) => j !== gi ? g : { ...g, [key]: v }),
+    });
+    updateBlocks(nb);
+  };
+  const addGoal = (bi: number) => {
+    const nb = blocks.map((b, i) => i !== bi ? b : {
+      ...b, goals: [...b.goals, { short_term_goal: "", short_term_period: "", services: [{ content: "", insurance_flag: "○", type: "", provider: "", frequency: "", period: "" }] }],
+    });
+    updateBlocks(nb);
+  };
+  const removeGoal = (bi: number, gi: number) => {
+    const nb = blocks.map((b, i) => i !== bi ? b : { ...b, goals: b.goals.filter((_, j) => j !== gi) });
+    updateBlocks(nb);
+  };
+
+  const updateSvc = (bi: number, gi: number, si: number, key: string, v: string) => {
+    const nb = blocks.map((b, i) => i !== bi ? b : {
+      ...b, goals: b.goals.map((g, j) => j !== gi ? g : {
+        ...g, services: g.services.map((sv, k) => k !== si ? sv : { ...sv, [key]: v }),
+      }),
+    });
+    updateBlocks(nb);
+  };
+  const addSvc = (bi: number, gi: number) => {
+    const nb = blocks.map((b, i) => i !== bi ? b : {
+      ...b, goals: b.goals.map((g, j) => j !== gi ? g : {
+        ...g, services: [...g.services, { content: "", insurance_flag: "○", type: "", provider: "", frequency: "", period: "" }],
+      }),
+    });
+    updateBlocks(nb);
+  };
+  const removeSvc = (bi: number, gi: number, si: number) => {
+    const nb = blocks.map((b, i) => i !== bi ? b : {
+      ...b, goals: b.goals.map((g, j) => j !== gi ? g : {
+        ...g, services: g.services.filter((_, k) => k !== si),
+      }),
+    });
+    updateBlocks(nb);
+  };
 
   return (
-    <div className="grid grid-cols-2 gap-3 p-4">
-      <div className="col-span-2 grid grid-cols-4 gap-3">
+    <div className="p-4 space-y-4">
+      <div className="grid grid-cols-2 gap-3">
         <FI label="利用者名" value={s("user_name")} onChange={(v) => set("user_name", v)} />
         <FI label="計画作成日" value={s("creation_date")} onChange={(v) => set("creation_date", v)} />
       </div>
-      <FI label="生活全般の解決すべき課題（ニーズ）" value={s("needs")}
-        onChange={(v) => set("needs", v)} textarea rows={3} className="col-span-2" />
-      <div className="col-span-2 grid grid-cols-2 gap-3">
-        <FI label="長期目標" value={s("long_term_goal")} onChange={(v) => set("long_term_goal", v)} textarea rows={2} />
-        <FI label="長期目標（期間）" value={s("long_term_period")} onChange={(v) => set("long_term_period", v)} />
-      </div>
-      <div className="col-span-2 grid grid-cols-2 gap-3">
-        <FI label="短期目標" value={s("short_term_goal")} onChange={(v) => set("short_term_goal", v)} textarea rows={2} />
-        <FI label="短期目標（期間）" value={s("short_term_period")} onChange={(v) => set("short_term_period", v)} />
-      </div>
-      <div className="col-span-2">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-semibold text-gray-600">援助内容・サービス一覧</span>
-          <button onClick={addSvc} className="flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-100">
-            <Plus size={12} /> 行を追加
-          </button>
-        </div>
-        <div className="space-y-2">
-          {services.map((svc, i) => (
-            <div key={i} className="relative grid grid-cols-6 gap-2 rounded border border-gray-200 bg-gray-50 p-2">
-              <button onClick={() => removeSvc(i)} className="absolute right-1 top-1 text-gray-300 hover:text-red-400"><X size={12} /></button>
-              <FI label="サービス内容" value={svc.content} onChange={(v) => updateSvc(i, "content", v)} className="col-span-2" />
-              <FI label="保険給付区分※1" value={svc.insurance_flag} onChange={(v) => updateSvc(i, "insurance_flag", v)} />
-              <FI label="サービス種別" value={svc.type} onChange={(v) => updateSvc(i, "type", v)} />
-              <FI label="事業所名※2" value={svc.provider} onChange={(v) => updateSvc(i, "provider", v)} />
-              <FI label="頻度" value={svc.frequency} onChange={(v) => updateSvc(i, "frequency", v)} />
-              <FI label="期間" value={svc.period} onChange={(v) => updateSvc(i, "period", v)} className="col-span-2" />
+
+      {blocks.map((block, bi) => (
+        <div key={bi} className="rounded-lg border-2 border-blue-200 bg-blue-50/30 p-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold text-blue-700">ニーズ {bi + 1}</span>
+            {blocks.length > 1 && <button onClick={() => removeBlock(bi)} className="text-xs text-red-400 hover:text-red-600">削除</button>}
+          </div>
+          <FI label="生活全般の解決すべき課題（ニーズ）" value={block.needs} onChange={(v) => updateBlock(bi, "needs", v)} textarea rows={2} />
+          <div className="grid grid-cols-2 gap-2">
+            <FI label="長期目標" value={block.long_term_goal} onChange={(v) => updateBlock(bi, "long_term_goal", v)} textarea rows={2} />
+            <FI label="長期目標（期間）" value={block.long_term_period} onChange={(v) => updateBlock(bi, "long_term_period", v)} />
+          </div>
+
+          {block.goals.map((goal, gi) => (
+            <div key={gi} className="ml-4 rounded border border-green-200 bg-green-50/30 p-2 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-green-700">短期目標 {gi + 1}</span>
+                {block.goals.length > 1 && <button onClick={() => removeGoal(bi, gi)} className="text-xs text-red-400 hover:text-red-600">削除</button>}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <FI label="短期目標" value={goal.short_term_goal} onChange={(v) => updateGoal(bi, gi, "short_term_goal", v)} textarea rows={2} />
+                <FI label="短期目標（期間）" value={goal.short_term_period} onChange={(v) => updateGoal(bi, gi, "short_term_period", v)} />
+              </div>
+
+              {goal.services.map((svc, si) => (
+                <div key={si} className="ml-4 grid grid-cols-6 gap-1 rounded border border-gray-200 bg-white p-1.5 relative">
+                  {goal.services.length > 1 && <button onClick={() => removeSvc(bi, gi, si)} className="absolute right-1 top-0.5 text-gray-300 hover:text-red-400"><X size={10} /></button>}
+                  <FI label="サービス内容" value={svc.content} onChange={(v) => updateSvc(bi, gi, si, "content", v)} className="col-span-2" />
+                  <FI label="※1" value={svc.insurance_flag} onChange={(v) => updateSvc(bi, gi, si, "insurance_flag", v)} />
+                  <FI label="サービス種別" value={svc.type} onChange={(v) => updateSvc(bi, gi, si, "type", v)} />
+                  <FI label="頻度" value={svc.frequency} onChange={(v) => updateSvc(bi, gi, si, "frequency", v)} />
+                  <FI label="期間" value={svc.period} onChange={(v) => updateSvc(bi, gi, si, "period", v)} />
+                </div>
+              ))}
+              <button onClick={() => addSvc(bi, gi)} className="text-xs text-blue-500 hover:text-blue-700">＋ サービス追加</button>
             </div>
           ))}
-          {services.length === 0 && (
-            <div className="rounded border-2 border-dashed border-gray-200 py-4 text-center text-sm text-gray-400">
-              サービスがありません。「行を追加」で追加してください。
-            </div>
-          )}
+          <button onClick={() => addGoal(bi)} className="text-xs text-green-600 hover:text-green-800">＋ 短期目標追加</button>
         </div>
-      </div>
+      ))}
+      <button onClick={addBlock} className="flex items-center gap-1 rounded bg-blue-100 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-200">
+        <Plus size={12} /> ニーズを追加
+      </button>
     </div>
   );
 }
@@ -932,128 +1012,123 @@ function PrintCarePlan1({ c }: { c: Record<string, unknown> }) {
 }
 
 function PrintCarePlan2({ c }: { c: Record<string, unknown> }) {
-  const s = (k: string) => String(c[k] ?? "　");
+  const s = (k: string) => String(c[k] ?? "");
   const B = "1px solid #000";
-  const cellBase: React.CSSProperties = { border: B, padding: "2px 4px", fontSize: "8.5pt", verticalAlign: "middle" };
+  const cellBase: React.CSSProperties = { border: B, padding: "2px 4px", fontSize: "8pt", verticalAlign: "top" };
   const thStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#f0f0f0", fontWeight: "bold", textAlign: "center" };
-  const tdStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#fff" };
-  const lineStyle: React.CSSProperties = { borderBottom: "1px dotted #999", height: "18px", width: "100%" };
+  const tdStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#fff", whiteSpace: "pre-wrap" };
 
-  const services: Svc2[] = Array.isArray(c.services) ? (c.services as Svc2[]) : [];
-  // Ensure at least 8 data rows for the service content section
-  const MIN_SVC_ROWS = 8;
-  const svcRows = services.length >= MIN_SVC_ROWS ? services : [
-    ...services,
-    ...Array(MIN_SVC_ROWS - services.length).fill({ content: "", insurance_flag: "", type: "", provider: "", frequency: "", period: "" }),
-  ];
+  // blocksデータ構造から行を展開
+  const blocks: NeedsBlock[] = Array.isArray(c.blocks) ? (c.blocks as NeedsBlock[]) : [{
+    needs: s("needs"), long_term_goal: s("long_term_goal"), long_term_period: s("long_term_period"),
+    goals: [{ short_term_goal: s("short_term_goal"), short_term_period: s("short_term_period"),
+      services: Array.isArray(c.services) ? (c.services as NeedsBlock["goals"][0]["services"]) : [] }],
+  }];
+
+  // 全行をフラット化（ニーズ→目標→サービスの階層をrowspanで表現）
+  type FlatRow = {
+    needsSpan?: number; needs?: string;
+    ltGoalSpan?: number; ltGoal?: string; ltPeriod?: string;
+    stGoalSpan?: number; stGoal?: string; stPeriod?: string;
+    content: string; flag: string; type: string; provider: string; freq: string; period: string;
+  };
+  const flatRows: FlatRow[] = [];
+  for (const block of blocks) {
+    let needsRowCount = 0;
+    const goalRows: FlatRow[][] = [];
+    for (const goal of block.goals) {
+      const svcs = goal.services.length > 0 ? goal.services : [{ content: "", insurance_flag: "", type: "", provider: "", frequency: "", period: "" }];
+      const gRows: FlatRow[] = svcs.map((sv, si) => ({
+        ...(si === 0 ? { stGoalSpan: svcs.length, stGoal: goal.short_term_goal, stPeriod: goal.short_term_period } : {}),
+        content: sv.content, flag: sv.insurance_flag, type: sv.type, provider: sv.provider, freq: sv.frequency, period: sv.period,
+      }));
+      needsRowCount += gRows.length;
+      goalRows.push(gRows);
+    }
+    // 最初の行にニーズと長期目標のrowspanを付与
+    let first = true;
+    let ltFirst = true;
+    for (const gRows of goalRows) {
+      for (const row of gRows) {
+        if (first) { row.needsSpan = needsRowCount; row.needs = block.needs; row.ltGoalSpan = needsRowCount; row.ltGoal = block.long_term_goal; row.ltPeriod = block.long_term_period; first = false; ltFirst = false; }
+        else if (ltFirst) { ltFirst = false; }
+        flatRows.push(row);
+      }
+    }
+  }
+  // 最低8行に
+  while (flatRows.length < 8) {
+    flatRows.push({ content: "", flag: "", type: "", provider: "", freq: "", period: "",
+      ...(flatRows.length === 0 ? { needsSpan: 8, needs: "", ltGoalSpan: 8, ltGoal: "", ltPeriod: "", stGoalSpan: 8, stGoal: "", stPeriod: "" } : {}) });
+  }
 
   return (
     <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000" }}>
-      {/* 第2表ラベル */}
       <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "8pt", marginBottom: "4px" }}>第２表</div>
-
-      {/* タイトル行 */}
       <div style={{ textAlign: "center", marginBottom: "2px" }}>
         <span style={{ fontSize: "14pt", fontWeight: "bold", letterSpacing: "0.3em" }}>居宅サービス計画書（２）</span>
       </div>
-
-      {/* ヘッダー */}
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
         <tbody>
           <tr style={{ height: "22px" }}>
-            <td style={{ ...thStyle, width: "10%" }}>利用者名</td>
+            <td style={{ ...tdStyle, width: "10%", fontWeight: "bold" }}>利用者名</td>
             <td style={{ ...tdStyle, width: "28%", fontWeight: "bold", fontSize: "11pt" }}>{s("user_name")}　殿</td>
-            <td style={{ ...thStyle, width: "12%" }}>作成年月日</td>
-            <td style={{ ...tdStyle }}>{s("creation_date")}</td>
+            <td style={{ ...tdStyle, width: "50%", textAlign: "right", fontSize: "8.5pt" }}>作成年月日　{s("creation_date")}</td>
           </tr>
         </tbody>
       </table>
 
-      {/* メインテーブル */}
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
-          <tr style={{ height: "26px" }}>
-            <th style={{ ...thStyle, width: "14%" }} rowSpan={2}>生活全般の解決す<br />べき課題（ニーズ）</th>
-            <th colSpan={4} style={{ ...thStyle }}>目　　　　標</th>
-            <th colSpan={6} style={{ ...thStyle }}>援　助　内　容</th>
+          <tr>
+            <th style={{ ...thStyle, width: "13%" }} rowSpan={2}>生活全般の解決す<br />べき課題（ニーズ）</th>
+            <th colSpan={4} style={thStyle}>目　　　　標</th>
+            <th colSpan={6} style={thStyle}>援　助　内　容</th>
           </tr>
-          <tr style={{ height: "22px" }}>
-            <th style={{ ...thStyle, width: "11%" }}>長期目標</th>
-            <th style={{ ...thStyle, width: "8%" }}>（期間）</th>
-            <th style={{ ...thStyle, width: "11%" }}>短期目標</th>
-            <th style={{ ...thStyle, width: "8%" }}>（期間）</th>
-            <th style={{ ...thStyle, width: "13%" }}>サービス内容</th>
+          <tr>
+            <th style={{ ...thStyle, width: "10%" }}>長期目標</th>
+            <th style={{ ...thStyle, width: "6%" }}>（期間）</th>
+            <th style={{ ...thStyle, width: "10%" }}>短期目標</th>
+            <th style={{ ...thStyle, width: "6%" }}>（期間）</th>
+            <th style={{ ...thStyle, width: "15%" }}>サービス内容</th>
             <th style={{ ...thStyle, width: "3%", fontSize: "7pt" }}>※1</th>
-            <th style={{ ...thStyle, width: "9%" }}>サービス種別</th>
-            <th style={{ ...thStyle, width: "3%", fontSize: "7pt" }}>※2</th>
+            <th style={{ ...thStyle, width: "10%" }}>サービス種別</th>
+            <th style={{ ...thStyle, width: "5%", fontSize: "7pt" }}>※2</th>
             <th style={{ ...thStyle, width: "5%" }}>頻度</th>
-            <th style={{ ...thStyle, width: "7%" }}>期間</th>
+            <th style={{ ...thStyle, width: "6%" }}>期間</th>
           </tr>
         </thead>
         <tbody>
-          {svcRows.map((svc, i) => (
-            <tr key={i} style={{ height: "32px" }}>
-              {/* ニーズ・長期目標・短期目標 — rowspan across all service rows */}
-              {i === 0 && (
-                <td rowSpan={svcRows.length} style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "4px 6px", position: "relative" }}>
-                  {s("needs")}
-                  <div style={{ position: "absolute", top: 0, left: "6px", right: "6px", bottom: 0, pointerEvents: "none" }}>
-                    {Array.from({ length: 6 }).map((_, li) => <div key={li} style={{ ...lineStyle, position: "absolute", top: `${20 + li * 18}px` }} />)}
-                  </div>
-                </td>
-              )}
-              {i === 0 && (
-                <td rowSpan={svcRows.length} style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "4px 6px", position: "relative" }}>
-                  {s("long_term_goal")}
-                  <div style={{ position: "absolute", top: 0, left: "6px", right: "6px", bottom: 0, pointerEvents: "none" }}>
-                    {Array.from({ length: 6 }).map((_, li) => <div key={li} style={{ ...lineStyle, position: "absolute", top: `${20 + li * 18}px` }} />)}
-                  </div>
-                </td>
-              )}
-              {i === 0 && (
-                <td rowSpan={svcRows.length} style={{ ...tdStyle, verticalAlign: "top", fontSize: "7.5pt", padding: "4px 4px" }}>
-                  {s("long_term_period")}
-                </td>
-              )}
-              {i === 0 && (
-                <td rowSpan={svcRows.length} style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "4px 6px", position: "relative" }}>
-                  {s("short_term_goal")}
-                  <div style={{ position: "absolute", top: 0, left: "6px", right: "6px", bottom: 0, pointerEvents: "none" }}>
-                    {Array.from({ length: 6 }).map((_, li) => <div key={li} style={{ ...lineStyle, position: "absolute", top: `${20 + li * 18}px` }} />)}
-                  </div>
-                </td>
-              )}
-              {i === 0 && (
-                <td rowSpan={svcRows.length} style={{ ...tdStyle, verticalAlign: "top", fontSize: "7.5pt", padding: "4px 4px" }}>
-                  {s("short_term_period")}
-                </td>
-              )}
-              {/* サービス内容（行ごと） */}
-              <td style={{ ...tdStyle, verticalAlign: "top", padding: "3px 4px", whiteSpace: "pre-wrap" }}>{svc.content || "　"}</td>
-              <td style={{ ...tdStyle, textAlign: "center", padding: "3px 2px" }}>{svc.insurance_flag || "　"}</td>
-              <td style={{ ...tdStyle, verticalAlign: "top", padding: "3px 4px" }}>{svc.type || "　"}</td>
-              <td style={{ ...tdStyle, verticalAlign: "top", fontSize: "7.5pt", padding: "3px 4px" }}>{svc.provider || "　"}</td>
-              <td style={{ ...tdStyle, textAlign: "center", padding: "3px 2px" }}>{svc.frequency || "　"}</td>
-              <td style={{ ...tdStyle, verticalAlign: "top", fontSize: "7.5pt", padding: "3px 4px" }}>{svc.period || "　"}</td>
+          {flatRows.map((row, i) => (
+            <tr key={i} style={{ height: "28px" }}>
+              {row.needsSpan && <td rowSpan={row.needsSpan} style={{ ...tdStyle, padding: "4px" }}>{row.needs || "　"}</td>}
+              {row.ltGoalSpan && <td rowSpan={row.ltGoalSpan} style={{ ...tdStyle, padding: "4px" }}>{row.ltGoal || "　"}</td>}
+              {row.ltGoalSpan && <td rowSpan={row.ltGoalSpan} style={{ ...tdStyle, fontSize: "7pt", padding: "3px" }}>{row.ltPeriod || "　"}</td>}
+              {row.stGoalSpan && <td rowSpan={row.stGoalSpan} style={{ ...tdStyle, padding: "4px" }}>{row.stGoal || "　"}</td>}
+              {row.stGoalSpan && <td rowSpan={row.stGoalSpan} style={{ ...tdStyle, fontSize: "7pt", padding: "3px" }}>{row.stPeriod || "　"}</td>}
+              <td style={{ ...tdStyle, padding: "3px 4px" }}>{row.content || "　"}</td>
+              <td style={{ ...tdStyle, textAlign: "center" }}>{row.flag || "　"}</td>
+              <td style={{ ...tdStyle, padding: "3px 4px" }}>{row.type || "　"}</td>
+              <td style={{ ...tdStyle, fontSize: "7pt", padding: "3px" }}>{row.provider || "　"}</td>
+              <td style={{ ...tdStyle, textAlign: "center" }}>{row.freq || "　"}</td>
+              <td style={{ ...tdStyle, fontSize: "7pt", padding: "3px" }}>{row.period || "　"}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      {/* 脚注 */}
       <div style={{ marginTop: "6px", fontSize: "7.5pt", lineHeight: "1.6" }}>
         ※1「保険給付の対象となるかどうかの区分」について、保険給付対象内サービスについては○印を付す。<br />
         ※2「当該サービス提供を行う事業所」について記入する。
       </div>
 
-      {/* 作成者欄 */}
       <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "6px" }}>
         <tbody>
           <tr style={{ height: "22px" }}>
-            <td style={{ ...thStyle, width: "18%", textAlign: "left" }}>作成者（介護支援専門員）氏名</td>
+            <td style={{ ...thStyle, width: "18%", textAlign: "left" }}>作成者（介護支援専門員）</td>
             <td style={{ ...tdStyle, width: "32%" }} />
-            <td style={{ ...thStyle, width: "18%", textAlign: "left" }}>居宅介護支援事業所名</td>
-            <td style={{ ...tdStyle }} />
+            <td style={{ ...thStyle, width: "18%", textAlign: "left" }}>事業所名</td>
+            <td style={tdStyle} />
           </tr>
         </tbody>
       </table>
