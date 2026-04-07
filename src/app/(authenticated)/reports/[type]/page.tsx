@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { UserSidebar } from "@/components/users/user-sidebar";
+import { ServiceSelector } from "@/components/services/service-selector";
 import { format, parseISO, differenceInYears } from "date-fns";
 import { ja } from "date-fns/locale";
 import { toast } from "sonner";
@@ -69,6 +70,7 @@ const REPORT_CONFIG: Record<string, ReportConfig> = {
   "care-plan-1":       { titleJa: "居宅サービス計画書（第1表）",        needsPeriod: false, landscape: true },
   "care-plan-2":       { titleJa: "居宅サービス計画書（第2表）",        needsPeriod: false, landscape: true },
   "care-plan-3":       { titleJa: "週間サービス計画表（第3表）",        needsPeriod: false, landscape: true },
+  "support-progress":  { titleJa: "居宅介護支援経過（第5表）",          needsPeriod: true,  landscape: true },
   "service-usage":        { titleJa: "サービス利用票",                    needsPeriod: true,  landscape: true },
   "service-provision":    { titleJa: "サービス提供票",                    needsPeriod: true,  landscape: true },
   "service-usage-detail": { titleJa: "サービス利用票別表",                needsPeriod: true,  landscape: true },
@@ -295,6 +297,13 @@ function buildDefaultContent(
         other_services: services.filter((s) => s.service_type.includes("福祉用具")).map((s) => s.service_content).join("\n"),
       };
     }
+    case "support-progress":
+      return {
+        user_name: user.name,
+        creation_date: fmtReiwa(plan?.start_date ?? today),
+        creator_name: plan?.created_by ?? "",
+        entries: [],
+      };
     case "service-usage":
     case "service-provision":
       return {
@@ -703,18 +712,19 @@ function EditFormServiceTicket({ content, onChange, isProvision = false }: {
   const set = (k: string, v: unknown) => onChange({ ...content, [k]: v });
   const supabase = createClient();
 
-  // マスタデータ取得
-  const [serviceCodes, setServiceCodes] = useState<{ service_code: string; service_name: string; service_category_name: string }[]>([]);
+  // サービス選択モーダル
+  const [selectorOpen, setSelectorOpen] = useState(false);
+  const [selectorTarget, setSelectorTarget] = useState<number | null>(null);
+
+  // 事業所マスタ
   const [providers, setProviders] = useState<{ provider_number: string; provider_name: string }[]>([]);
 
   useEffect(() => {
-    const fetchMasters = async () => {
-      const { data: codes } = await supabase.from("kaigo_service_codes").select("service_code, service_name, service_category_name").eq("calculation_type", "基本").order("service_code");
-      setServiceCodes(codes || []);
+    const fetchProviders = async () => {
       const { data: provs } = await supabase.from("kaigo_service_providers").select("provider_number, provider_name").eq("status", "active").order("provider_name");
       setProviders(provs || []);
     };
-    fetchMasters();
+    fetchProviders();
   }, [supabase]);
 
   const services: SvcRow[] = Array.isArray(content.services)
@@ -801,18 +811,13 @@ function EditFormServiceTicket({ content, onChange, isProvision = false }: {
                         />
                       </td>
                       <td rowSpan={2} className="border border-gray-300 px-0.5 align-middle">
-                        <select
-                          className="w-full text-[10px] bg-transparent outline-none border-0 cursor-pointer"
-                          value={svc.content}
-                          onChange={(e) => updateSvc(i, "content", e.target.value)}
+                        <button
+                          onClick={() => { setSelectorTarget(i); setSelectorOpen(true); }}
+                          className="w-full text-left text-[10px] px-1 py-0.5 rounded hover:bg-blue-50 transition-colors truncate"
+                          title={svc.content || "クリックしてサービスを選択"}
                         >
-                          <option value="">-- 選択 --</option>
-                          {serviceCodes.map((sc) => (
-                            <option key={sc.service_code} value={sc.service_name}>
-                              {sc.service_name}
-                            </option>
-                          ))}
-                        </select>
+                          {svc.content || <span className="text-gray-400">選択...</span>}
+                        </button>
                       </td>
                       <td rowSpan={2} className="border border-gray-300 px-0.5 align-middle">
                         <select
@@ -866,6 +871,19 @@ function EditFormServiceTicket({ content, onChange, isProvision = false }: {
           </table>
         </div>
       </div>
+
+      {/* サービス選択モーダル */}
+      <ServiceSelector
+        open={selectorOpen}
+        onClose={() => { setSelectorOpen(false); setSelectorTarget(null); }}
+        onSelect={(svc) => {
+          if (selectorTarget !== null) {
+            updateSvc(selectorTarget, "content", svc.name);
+          }
+          setSelectorOpen(false);
+          setSelectorTarget(null);
+        }}
+      />
     </div>
   );
 }
@@ -1053,6 +1071,62 @@ function EditFormUsageDetail({ content, onChange }: {
         <FI label="前月までの利用日数" value={String(shortStay.prev)} onChange={(v) => set("short_stay_days", { ...shortStay, prev: Number(v) })} />
         <FI label="今月の計画利用日数" value={String(shortStay.current)} onChange={(v) => set("short_stay_days", { ...shortStay, current: Number(v) })} />
         <FI label="累積利用日数" value={String(shortStay.prev + shortStay.current)} onChange={() => {}} />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SupportProgress (第5表) edit form
+// ---------------------------------------------------------------------------
+
+type SupportEntry = { date: string; category: string; content: string };
+
+function EditFormSupportProgress({ content, onChange }: {
+  content: Record<string, unknown>;
+  onChange: (c: Record<string, unknown>) => void;
+}) {
+  const s = (k: string) => String(content[k] ?? "");
+  const set = (k: string, v: unknown) => onChange({ ...content, [k]: v });
+  const entries: SupportEntry[] = Array.isArray(content.entries) ? (content.entries as SupportEntry[]) : [];
+
+  const addEntry = () => set("entries", [...entries, { date: "", category: "", content: "" }]);
+  const removeEntry = (i: number) => set("entries", entries.filter((_, idx) => idx !== i));
+  const updateEntry = (i: number, k: keyof SupportEntry, v: string) =>
+    set("entries", entries.map((r, idx) => idx === i ? { ...r, [k]: v } : r));
+
+  return (
+    <div className="p-4 space-y-3">
+      <div className="grid grid-cols-3 gap-3">
+        <FI label="利用者名" value={s("user_name")} onChange={(v) => set("user_name", v)} />
+        <FI label="作成年月日" value={s("creation_date")} onChange={(v) => set("creation_date", v)} />
+        <FI label="居宅サービス計画作成者氏名" value={s("creator_name")} onChange={(v) => set("creator_name", v)} />
+      </div>
+
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs font-semibold text-gray-600">経過記録</span>
+          <button onClick={addEntry} className="flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-100">
+            <Plus size={12} /> 追加
+          </button>
+        </div>
+        <div className="space-y-2">
+          {entries.map((entry, i) => (
+            <div key={i} className="relative grid grid-cols-7 gap-2 rounded border border-gray-200 bg-gray-50 p-2">
+              <button onClick={() => removeEntry(i)} className="absolute right-1 top-1 text-gray-300 hover:text-red-400">
+                <X size={12} />
+              </button>
+              <FI label="年月日" value={entry.date} onChange={(v) => updateEntry(i, "date", v)} />
+              <FI label="項目" value={entry.category} onChange={(v) => updateEntry(i, "category", v)} />
+              <FI label="内容" value={entry.content} onChange={(v) => updateEntry(i, "content", v)} className="col-span-5" />
+            </div>
+          ))}
+          {entries.length === 0 && (
+            <div className="rounded border-2 border-dashed border-gray-200 py-3 text-center text-xs text-gray-400">
+              経過記録を追加してください
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -2098,6 +2172,88 @@ function PrintServiceUsageDetail({ c }: { c: Record<string, unknown> }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Print: SupportProgress (第5表)
+// ---------------------------------------------------------------------------
+
+function PrintSupportProgress({ c }: { c: Record<string, unknown> }) {
+  const s = (k: string) => String(c[k] ?? "");
+  const B = "1px solid #000";
+  const cellBase: React.CSSProperties = { border: B, padding: "1px 3px", fontSize: "7.5pt", verticalAlign: "top" };
+  const thStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#f0f0f0", fontWeight: "bold", textAlign: "center" };
+  const tdStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#fff", whiteSpace: "pre-wrap" };
+
+  const entries: SupportEntry[] = Array.isArray(c.entries) ? (c.entries as SupportEntry[]) : [];
+
+  // Fill to 50 entries total (25 per half)
+  const TOTAL = 50;
+  const filled: SupportEntry[] = [...entries];
+  while (filled.length < TOTAL) filled.push({ date: "", category: "", content: "" });
+
+  const leftEntries = filled.slice(0, 25);
+  const rightEntries = filled.slice(25, 50);
+
+  // A4 landscape: 190mm usable height
+  // Header ≈ 50px, table header ≈ 20px, remaining ≈ 650px / 25 rows ≈ 26px per row
+  const ROW_H = 26;
+
+  const halfTableStyle: React.CSSProperties = { flex: 1, borderCollapse: "collapse" as const };
+
+  const renderHalf = (rows: SupportEntry[]) => (
+    <table style={halfTableStyle}>
+      <thead>
+        <tr style={{ height: "20px" }}>
+          <th style={{ ...thStyle, width: "16%" }}>年月日</th>
+          <th style={{ ...thStyle, width: "18%", color: "red" }}>項目</th>
+          <th style={{ ...thStyle, width: "66%" }}>内容</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((entry, i) => (
+          <tr key={i} style={{ height: `${ROW_H}px` }}>
+            <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt" }}>
+              {entry.date ? fmtReiwa(entry.date) : "　"}
+            </td>
+            <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt", color: entry.category ? "#000" : undefined }}>
+              {entry.category || "　"}
+            </td>
+            <td style={{ ...tdStyle, fontSize: "7pt" }}>
+              {entry.content || "　"}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
+  return (
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "8pt", color: "#000", width: "277mm", height: "190mm", overflow: "hidden" }}>
+      {/* 第5表ラベル */}
+      <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "8pt", marginBottom: "3px" }}>第５表</div>
+
+      {/* タイトル行 */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "3px" }}>
+        <div />
+        <span style={{ fontSize: "14pt", fontWeight: "bold", letterSpacing: "0.3em" }}>居宅介護支援経過</span>
+        <span style={{ fontSize: "8pt" }}>作成年月日　{s("creation_date") || "　　年　月　日"}</span>
+      </div>
+
+      {/* 利用者名・作成者 */}
+      <div style={{ display: "flex", gap: "32px", fontSize: "8.5pt", marginBottom: "4px", borderBottom: B, paddingBottom: "3px" }}>
+        <span>利用者名　<span style={{ fontWeight: "bold" }}>{s("user_name") || "　　　　　　　"}</span>　殿</span>
+        <span>居宅サービス計画作成者氏名　{s("creator_name") || "　　　　　　　"}</span>
+      </div>
+
+      {/* メイン2カラムテーブル */}
+      <div style={{ display: "flex", gap: "4px", border: B }}>
+        {renderHalf(leftEntries)}
+        <div style={{ width: "1px", backgroundColor: "#000", flexShrink: 0 }} />
+        {renderHalf(rightEntries)}
+      </div>
+    </div>
+  );
+}
+
 function PrintGeneric({ c, title }: { c: Record<string, unknown>; title: string }) {
   return (
     <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000" }}>
@@ -2117,6 +2273,7 @@ function PrintView({ reportType, content, config }: {
     case "care-plan-2":       return <PrintCarePlan2 c={content} />;
     case "face-sheet":        return <PrintFaceSheet c={content} />;
     case "care-plan-3":       return <PrintCarePlan3 c={content} />;
+    case "support-progress":  return <PrintSupportProgress c={content} />;
     case "service-usage":        return <PrintServiceTicket c={content} title="サービス利用票" isProvision={false} />;
     case "service-provision":    return <PrintServiceTicket c={content} title="サービス提供票" isProvision={true} />;
     case "service-usage-detail": return <PrintServiceUsageDetail c={content} />;
@@ -2132,6 +2289,7 @@ function EditForm({ reportType, content, onChange }: {
     case "care-plan-2":       return <EditFormCarePlan2 content={content} onChange={onChange} />;
     case "face-sheet":        return <EditFormFaceSheet content={content} onChange={onChange} />;
     case "care-plan-3":       return <EditFormCarePlan3 content={content} onChange={onChange} />;
+    case "support-progress":  return <EditFormSupportProgress content={content} onChange={onChange} />;
     case "service-usage":        return <EditFormServiceTicket content={content} onChange={onChange} isProvision={false} />;
     case "service-provision":    return <EditFormServiceTicket content={content} onChange={onChange} isProvision={true} />;
     case "service-usage-detail": return <EditFormUsageDetail content={content} onChange={onChange} />;
@@ -2296,6 +2454,42 @@ async function autoGenerateDoc(
     }
 
     const todayStr = format(new Date(), "yyyy-MM-dd");
+    const title = `${config.titleJa}（${fmtJaYear(reportMonth + "-01")}）`;
+    const { data: doc, error: ie } = await supabase
+      .from("kaigo_report_documents")
+      .insert({ user_id: userId, report_type: reportType, title, report_month: reportMonth, care_plan_id: plan?.id ?? null, content: baseContent, status: "draft" })
+      .select().single();
+    if (ie) throw new Error("帳票の保存に失敗しました: " + ie.message);
+    return doc as ReportDoc;
+  }
+
+  // 第5表: 居宅介護支援経過 — 支援記録から自動生成
+  if (reportType === "support-progress" && reportMonth) {
+    const startDate = reportMonth + "-01";
+    const endDateObj = new Date(startDate);
+    endDateObj.setMonth(endDateObj.getMonth() + 1);
+    endDateObj.setDate(0);
+    const endDate = format(endDateObj, "yyyy-MM-dd");
+
+    const { data: supportData } = await supabase
+      .from("kaigo_support_records")
+      .select("*")
+      .eq("user_id", userId)
+      .gte("record_date", startDate)
+      .lte("record_date", endDate)
+      .order("record_date", { ascending: true });
+
+    const baseContent = buildDefaultContent(reportType, user as KaigoUser, cert, plan, services, reportMonth);
+    if (supportData && supportData.length > 0) {
+      baseContent.entries = supportData.map((r: Record<string, unknown>) => ({
+        date: String(r.record_date ?? ""),
+        category: String(r.category ?? ""),
+        content: String(r.content ?? ""),
+      }));
+    }
+
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    baseContent.creation_date = fmtReiwa(todayStr);
     const title = `${config.titleJa}（${fmtJaYear(reportMonth + "-01")}）`;
     const { data: doc, error: ie } = await supabase
       .from("kaigo_report_documents")

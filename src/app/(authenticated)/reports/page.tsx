@@ -7,6 +7,7 @@ import {
   ClipboardList,
   CalendarDays,
   Truck,
+  BookOpen,
 } from "lucide-react";
 
 type ReportCard = {
@@ -64,6 +65,17 @@ const REPORT_CARDS: ReportCard[] = [
     color: "text-cyan-600",
     bgColor: "bg-cyan-50",
     borderColor: "border-cyan-100",
+  },
+  {
+    type: "support-progress",
+    titleJa: "居宅介護支援経過（第5表）",
+    titleEn: "Support Progress (Table 5)",
+    description:
+      "居宅介護支援の経過を時系列で記録する第5表です。支援記録から自動取込し、年月日・項目・内容を一覧表示します。",
+    icon: <BookOpen size={28} />,
+    color: "text-indigo-600",
+    bgColor: "bg-indigo-50",
+    borderColor: "border-indigo-100",
   },
   {
     type: "service-usage",
@@ -140,13 +152,17 @@ export default function ReportsPage() {
                       ? "bg-emerald-600 hover:bg-emerald-700"
                       : card.type === "care-plan-2"
                         ? "bg-violet-600 hover:bg-violet-700"
-                        : card.type === "service-usage"
-                          ? "bg-orange-600 hover:bg-orange-700"
-                          : card.type === "service-provision"
-                            ? "bg-teal-600 hover:bg-teal-700"
-                            : card.type === "service-usage-detail"
-                              ? "bg-cyan-600 hover:bg-cyan-700"
-                              : "bg-gray-600 hover:bg-gray-700"
+                        : card.type === "care-plan-3"
+                          ? "bg-cyan-600 hover:bg-cyan-700"
+                          : card.type === "support-progress"
+                            ? "bg-indigo-600 hover:bg-indigo-700"
+                            : card.type === "service-usage"
+                              ? "bg-orange-600 hover:bg-orange-700"
+                              : card.type === "service-provision"
+                                ? "bg-teal-600 hover:bg-teal-700"
+                                : card.type === "service-usage-detail"
+                                  ? "bg-cyan-600 hover:bg-cyan-700"
+                                  : "bg-gray-600 hover:bg-gray-700"
                 }`}
               >
                 <FileText size={15} />
