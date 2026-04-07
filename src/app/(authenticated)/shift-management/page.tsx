@@ -1242,41 +1242,34 @@ function TimelineView({
     fetchData();
   }, [fetchData]);
 
-  // Build rows based on tab
+  // Build rows based on tab — show ALL users/staff, not just those with schedules
   const rows = useMemo(() => {
     if (tab === "user") {
-      // Row per user who has schedules on this day
-      const userIds = [...new Set(schedules.map((s) => s.user_id))];
-      return userIds.map((uid) => {
-        const user = users.find((u) => u.id === uid);
-        const userScheds = schedules.filter((s) => s.user_id === uid);
-        return {
-          id: uid,
-          name: user?.name ?? "不明",
-          schedules: userScheds,
-        };
-      });
+      return users.map((u) => ({
+        id: u.id,
+        name: u.name,
+        schedules: schedules.filter((s) => s.user_id === u.id),
+      }));
     } else {
-      // Row per staff who has schedules on this day
-      const staffIds = [...new Set(schedules.filter((s) => s.staff_id).map((s) => s.staff_id!))];
-      return staffIds.map((sid) => {
-        const st = staff.find((s) => s.id === sid);
-        const staffScheds = schedules.filter((s) => s.staff_id === sid);
-        return {
-          id: sid,
-          name: st?.name ?? "不明",
-          schedules: staffScheds,
-        };
-      });
+      return staff.map((s) => ({
+        id: s.id,
+        name: s.name,
+        schedules: schedules.filter((sc) => sc.staff_id === s.id),
+      }));
     }
   }, [tab, schedules, users, staff]);
 
   // For staff view: determine unavailable hour ranges
   const getUnavailableRanges = (staffId: string) => {
-    const slots = availability.filter(
-      (a) => a.staff_id === staffId && !a.is_available
-    );
-    return slots.map((slot) => {
+    const staffAllSlots = availability.filter((a) => a.staff_id === staffId);
+    if (staffAllSlots.length === 0) return []; // No monthly data at all
+    const daySlots = staffAllSlots.filter((a) => a.available_date === dateStr);
+    if (daySlots.length === 0) {
+      // Has monthly data but no record for this day = entire day unavailable
+      return [{ left: "0%", width: "100%" }];
+    }
+    const unavailSlots = daySlots.filter((a) => !a.is_available);
+    return unavailSlots.map((slot) => {
       const sMin = timeToMinutes(slot.start_time) - TIMELINE_START_HOUR * 60;
       const eMin = timeToMinutes(slot.end_time) - TIMELINE_START_HOUR * 60;
       const left = Math.max(0, (sMin / TIMELINE_TOTAL_MINUTES) * 100);
@@ -1356,10 +1349,6 @@ function TimelineView({
       {loading ? (
         <div className="flex flex-1 items-center justify-center">
           <Loader2 size={24} className="animate-spin text-blue-500" />
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-gray-400">
-          この日の{tab === "user" ? "利用者" : "職員"}の予定はありません
         </div>
       ) : (
         <div className="flex-1 overflow-auto">
