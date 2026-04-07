@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
@@ -1147,8 +1147,9 @@ function UrlManagementModal({ onClose }: UrlManagementModalProps) {
 
 // ─── Timeline View ───────────────────────────────────────────────────────────
 
-const TIMELINE_START_HOUR = 8;
-const TIMELINE_END_HOUR = 18;
+const TIMELINE_START_HOUR = 0;
+const TIMELINE_END_HOUR = 24;
+const TIMELINE_DEFAULT_SCROLL_HOUR = 8;
 const TIMELINE_HOURS = Array.from(
   { length: TIMELINE_END_HOUR - TIMELINE_START_HOUR },
   (_, i) => TIMELINE_START_HOUR + i
@@ -1202,6 +1203,7 @@ function TimelineView({
   const [schedules, setSchedules] = useState<VisitSchedule[]>([]);
   const [availability, setAvailability] = useState<StaffAvailabilitySlot[]>([]);
   const [loading, setLoading] = useState(false);
+  const timelineScrollRef = useRef<HTMLDivElement>(null);
 
   const dateStr = format(selectedDate, "yyyy-MM-dd");
 
@@ -1218,7 +1220,8 @@ function TimelineView({
       supabase
         .from("kaigo_staff_availability_monthly")
         .select("staff_id, available_date, start_time, end_time, is_available")
-        .eq("available_date", dateStr),
+        .gte("available_date", format(startOfMonth(selectedDate), "yyyy-MM-dd"))
+        .lte("available_date", format(endOfMonth(selectedDate), "yyyy-MM-dd")),
     ]);
 
     const mapped: VisitSchedule[] = (schedRes.data || []).map((r: any) => ({
@@ -1241,6 +1244,14 @@ function TimelineView({
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Scroll to 8:00 by default
+  useEffect(() => {
+    if (timelineScrollRef.current && !loading) {
+      const scrollPct = TIMELINE_DEFAULT_SCROLL_HOUR / 24;
+      timelineScrollRef.current.scrollLeft = timelineScrollRef.current.scrollWidth * scrollPct;
+    }
+  }, [loading]);
 
   // Build rows based on tab — show ALL users/staff, not just those with schedules
   const rows = useMemo(() => {
@@ -1351,9 +1362,9 @@ function TimelineView({
           <Loader2 size={24} className="animate-spin text-blue-500" />
         </div>
       ) : (
-        <div className="flex-1 overflow-auto">
-          {/* Timeline grid */}
-          <div className="min-w-[700px]">
+        <div className="flex-1 overflow-auto" ref={timelineScrollRef}>
+          {/* Timeline grid - 24h wide, scrollable */}
+          <div style={{ minWidth: "1800px" }}>
             {/* Time header */}
             <div className="flex border-b bg-gray-50 sticky top-0 z-10">
               <div className="w-28 shrink-0 border-r px-2 py-2 text-xs font-semibold text-gray-600">
@@ -1416,7 +1427,7 @@ function TimelineView({
                         <div
                           key={sched.id}
                           className={cn(
-                            "absolute rounded border px-1 py-0.5 text-[10px] leading-tight truncate",
+                            "absolute rounded border px-1 text-[10px] leading-tight truncate flex items-center",
                             colors.bg,
                             colors.border,
                             colors.text
@@ -1424,12 +1435,12 @@ function TimelineView({
                           style={{
                             left: style.left,
                             width: style.width,
-                            top: `${0.25 + row.schedules.indexOf(sched) * 1.25}rem`,
-                            height: "1.1rem",
+                            top: 0,
+                            bottom: 0,
                           }}
                           title={`${sched.start_time?.slice(0, 5)}~${sched.end_time?.slice(0, 5)} ${label} ${sched.service_type}`}
                         >
-                          {sched.start_time?.slice(0, 5)}~{sched.end_time?.slice(0, 5)} {label} {sched.service_type}
+                          {label} {sched.service_type}
                         </div>
                       );
                     })}
