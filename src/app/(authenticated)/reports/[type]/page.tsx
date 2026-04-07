@@ -2389,18 +2389,18 @@ function PreviewScaler({ paperWidth, paperMinHeight, paperPadding, children }: {
   const [scale, setScale] = useState(1);
 
   useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
     const updateScale = () => {
-      if (!containerRef.current) return;
-      const containerW = containerRef.current.clientWidth - 32; // px padding
-      // paperWidth in mm → px (1mm ≈ 3.78px at 96dpi)
+      const containerW = el.clientWidth - 32;
       const mmVal = parseFloat(paperWidth);
       const paperPx = mmVal * 3.78;
-      const newScale = Math.min(1, containerW / paperPx);
-      setScale(newScale);
+      setScale(Math.min(1, containerW / paperPx));
     };
     updateScale();
-    window.addEventListener("resize", updateScale);
-    return () => window.removeEventListener("resize", updateScale);
+    const ro = new ResizeObserver(updateScale);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [paperWidth]);
 
   const mmVal = parseFloat(paperWidth);
@@ -2699,7 +2699,12 @@ export default function ReportTypePage() {
               if (hasUnsavedChanges) {
                 if (!window.confirm("保存されていない変更があります。破棄して移動しますか？")) return;
               }
-              window.location.href = `/reports/${type}${selectedUserId ? `?user=${selectedUserId}` : ""}`;
+              const sp = new URLSearchParams();
+              if (selectedUserId) sp.set("user", selectedUserId);
+              // メインサイドバーの開閉状態を引き継ぎ
+              const currentSp = new URLSearchParams(window.location.search);
+              if (currentSp.has("nav")) sp.set("nav", currentSp.get("nav")!);
+              window.location.href = `/reports/${type}?${sp.toString()}`;
             };
             return (
               <div className="no-print mb-4 flex items-center justify-between">

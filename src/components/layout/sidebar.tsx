@@ -38,7 +38,17 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("sidebar-collapsed") === "true";
+    }
+    return false;
+  });
+  const toggleCollapsed = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    localStorage.setItem("sidebar-collapsed", String(next));
+  };
 
   return (
     <aside
@@ -52,7 +62,7 @@ export function Sidebar() {
           <h1 className="text-lg font-bold text-blue-700">介護管理システム</h1>
         )}
         <button
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={toggleCollapsed}
           className={cn(
             "rounded p-1 hover:bg-gray-100",
             collapsed ? "mx-auto" : "ml-auto"
