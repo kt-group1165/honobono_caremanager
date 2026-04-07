@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Database, Building2 } from "lucide-react";
+import { Database, Building2, Settings } from "lucide-react";
 
 export default function MasterPage() {
   return (
@@ -33,6 +33,18 @@ export default function MasterPage() {
           <div>
             <h2 className="font-bold text-gray-900">サービス事業所マスタ</h2>
             <p className="text-sm text-gray-500">事業所番号・提供サービス・連絡先の管理</p>
+          </div>
+        </Link>
+        <Link
+          href="/master/office"
+          className="flex items-center gap-4 rounded-xl border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+        >
+          <div className="rounded-lg bg-purple-50 p-3">
+            <Settings size={24} className="text-purple-600" />
+          </div>
+          <div>
+            <h2 className="font-bold text-gray-900">自事業所設定</h2>
+            <p className="text-sm text-gray-500">事業所情報・特定事業所加算・地域区分の設定</p>
           </div>
         </Link>
       </div>

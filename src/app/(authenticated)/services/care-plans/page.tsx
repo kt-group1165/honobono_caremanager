@@ -110,6 +110,16 @@ export default function CarePlansPage() {
   const [services, setServices] = useState<CarePlanService[]>([{ ...EMPTY_SERVICE }]);
   const [filterStatus, setFilterStatus] = useState<PlanStatus | "">("");
   const [filterUser, setFilterUser] = useState("");
+  const [providersMaster, setProvidersMaster] = useState<{ provider_name: string; service_categories: string[] }[]>([]);
+
+  // 事業所マスタ取得
+  useEffect(() => {
+    const fetchProviders = async () => {
+      const { data } = await supabase.from("kaigo_service_providers").select("provider_name, service_categories").eq("status", "active").order("provider_name");
+      setProvidersMaster(data || []);
+    };
+    fetchProviders();
+  }, [supabase]);
 
   const fetchPlans = useCallback(async () => {
     setLoading(true);
@@ -620,13 +630,22 @@ export default function CarePlansPage() {
                           <label className="block text-xs font-medium text-gray-600 mb-1">
                             サービス種別
                           </label>
-                          <input
-                            type="text"
+                          <select
                             value={svc.service_type}
                             onChange={(e) => updateService(idx, "service_type", e.target.value)}
                             className="w-full rounded-lg border px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-                            placeholder="例: 訪問介護"
-                          />
+                          >
+                            <option value="">選択してください</option>
+                            <option value="訪問介護">訪問介護</option>
+                            <option value="訪問看護">訪問看護</option>
+                            <option value="訪問リハビリテーション">訪問リハビリテーション</option>
+                            <option value="通所介護">通所介護</option>
+                            <option value="通所リハビリテーション">通所リハビリテーション</option>
+                            <option value="短期入所生活介護">短期入所生活介護</option>
+                            <option value="福祉用具貸与">福祉用具貸与</option>
+                            <option value="居宅療養管理指導">居宅療養管理指導</option>
+                            <option value="その他">その他</option>
+                          </select>
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -657,15 +676,18 @@ export default function CarePlansPage() {
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-gray-600 mb-1">
-                            提供者
+                            提供事業所
                           </label>
-                          <input
-                            type="text"
+                          <select
                             value={svc.provider}
                             onChange={(e) => updateService(idx, "provider", e.target.value)}
                             className="w-full rounded-lg border px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-                            placeholder="事業所名・機関名"
-                          />
+                          >
+                            <option value="">選択してください</option>
+                            {providersMaster.map((p) => (
+                              <option key={p.provider_name} value={p.provider_name}>{p.provider_name}</option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     </div>
