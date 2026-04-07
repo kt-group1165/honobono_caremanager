@@ -716,6 +716,10 @@ function EditFormServiceTicket({ content, onChange, isProvision = false }: {
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [selectorTarget, setSelectorTarget] = useState<number | null>(null);
 
+  // 時間帯選択モーダル
+  const [timeModalOpen, setTimeModalOpen] = useState(false);
+  const [timeModalTarget, setTimeModalTarget] = useState<number | null>(null);
+
   // 事業所マスタ
   const [providers, setProviders] = useState<{ provider_number: string; provider_name: string }[]>([]);
 
@@ -744,6 +748,25 @@ function EditFormServiceTicket({ content, onChange, isProvision = false }: {
     arr[dayIdx] = !arr[dayIdx];
     updateSvc(svcIdx, field, arr);
   };
+  const fillAll = (svcIdx: number, field: "planned" | "actual") => {
+    updateSvc(svcIdx, field, Array(31).fill(true));
+  };
+  const clearAll = (svcIdx: number, field: "planned" | "actual") => {
+    updateSvc(svcIdx, field, Array(31).fill(false));
+  };
+  const fillWeekdays = (svcIdx: number, field: "planned" | "actual") => {
+    // 対象月の曜日を計算して平日のみ
+    const [y, m] = (String(content.report_month ?? selectedYearMonth ?? format(new Date(), "yyyy-MM"))).split("-").map(Number);
+    const arr = Array(31).fill(false);
+    for (let d = 1; d <= 31; d++) {
+      const date = new Date(y, m - 1, d);
+      if (date.getMonth() !== m - 1) break; // 月を超えた
+      const dow = date.getDay();
+      if (dow !== 0 && dow !== 6) arr[d - 1] = true;
+    }
+    updateSvc(svcIdx, field, arr);
+  };
+  const selectedYearMonth = String(content.report_month ?? format(new Date(), "yyyy-MM"));
 
   const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 
@@ -803,12 +826,13 @@ function EditFormServiceTicket({ content, onChange, isProvision = false }: {
                     {/* 予定 row */}
                     <tr key={`${i}-planned`} style={{ height: 18 }}>
                       <td rowSpan={2} className="border border-gray-300 px-0.5 align-middle">
-                        <input
-                          className="w-full text-[10px] bg-transparent outline-none"
-                          value={svc.time}
-                          onChange={(e) => updateSvc(i, "time", e.target.value)}
-                          placeholder="時間帯"
-                        />
+                        <button
+                          onClick={() => { setTimeModalTarget(i); setTimeModalOpen(true); }}
+                          className="w-full text-left text-[10px] px-1 py-0.5 rounded hover:bg-blue-50 transition-colors truncate"
+                          title="クリックして時間帯を選択"
+                        >
+                          {svc.time || <span className="text-gray-400">選択...</span>}
+                        </button>
                       </td>
                       <td rowSpan={2} className="border border-gray-300 px-0.5 align-middle">
                         <button
@@ -833,7 +857,14 @@ function EditFormServiceTicket({ content, onChange, isProvision = false }: {
                           ))}
                         </select>
                       </td>
-                      <td className="border border-dashed border-gray-300 px-0.5 text-center text-gray-500 whitespace-nowrap">予定</td>
+                      <td className="border border-dashed border-gray-300 px-0.5 text-center whitespace-nowrap">
+                        <div className="flex items-center gap-0.5 justify-center">
+                          <span className="text-gray-500 text-[10px]">予定</span>
+                          <button onClick={() => fillAll(i, "planned")} title="全日" className="text-[8px] text-blue-500 hover:text-blue-700 px-0.5 rounded hover:bg-blue-50">全</button>
+                          <button onClick={() => fillWeekdays(i, "planned")} title="平日" className="text-[8px] text-blue-500 hover:text-blue-700 px-0.5 rounded hover:bg-blue-50">平</button>
+                          <button onClick={() => clearAll(i, "planned")} title="クリア" className="text-[8px] text-red-400 hover:text-red-600 px-0.5 rounded hover:bg-red-50">消</button>
+                        </div>
+                      </td>
                       {DAYS.map((_, di) => (
                         <td
                           key={di}
@@ -851,7 +882,14 @@ function EditFormServiceTicket({ content, onChange, isProvision = false }: {
                     </tr>
                     {/* 実績 row */}
                     <tr key={`${i}-actual`} style={{ height: 18 }}>
-                      <td className="border border-gray-300 px-0.5 text-center text-gray-500 whitespace-nowrap">実績</td>
+                      <td className="border border-gray-300 px-0.5 text-center whitespace-nowrap">
+                        <div className="flex items-center gap-0.5 justify-center">
+                          <span className="text-gray-500 text-[10px]">実績</span>
+                          <button onClick={() => fillAll(i, "actual")} title="全日" className="text-[8px] text-green-600 hover:text-green-800 px-0.5 rounded hover:bg-green-50">全</button>
+                          <button onClick={() => fillWeekdays(i, "actual")} title="平日" className="text-[8px] text-green-600 hover:text-green-800 px-0.5 rounded hover:bg-green-50">平</button>
+                          <button onClick={() => clearAll(i, "actual")} title="クリア" className="text-[8px] text-red-400 hover:text-red-600 px-0.5 rounded hover:bg-red-50">消</button>
+                        </div>
+                      </td>
                       {DAYS.map((_, di) => (
                         <td
                           key={di}
@@ -884,6 +922,67 @@ function EditFormServiceTicket({ content, onChange, isProvision = false }: {
           setSelectorTarget(null);
         }}
       />
+
+      {/* 時間帯選択モーダル */}
+      {timeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setTimeModalOpen(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-80 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b px-4 py-3">
+              <h3 className="text-sm font-bold text-gray-800">提供時間帯</h3>
+              <button onClick={() => setTimeModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+            </div>
+            <div className="p-3 space-y-1">
+              {[
+                { label: "週1回", value: "週1回" },
+                { label: "週2回", value: "週2回" },
+                { label: "週3回", value: "週3回" },
+                { label: "週4回", value: "週4回" },
+                { label: "週5回", value: "週5回" },
+                { label: "週6回", value: "週6回" },
+                { label: "週7回（毎日）", value: "毎日" },
+                { label: "月2回", value: "月2回" },
+                { label: "月4回", value: "月4回" },
+                { label: "常時", value: "常時" },
+                { label: "6:00〜8:00", value: "6:00〜8:00" },
+                { label: "8:00〜10:00", value: "8:00〜10:00" },
+                { label: "9:00〜12:00", value: "9:00〜12:00" },
+                { label: "9:00〜16:00", value: "9:00〜16:00" },
+                { label: "9:00〜17:00", value: "9:00〜17:00" },
+                { label: "10:00〜16:00", value: "10:00〜16:00" },
+                { label: "13:00〜16:00", value: "13:00〜16:00" },
+                { label: "14:00〜16:00", value: "14:00〜16:00" },
+                { label: "16:00〜18:00", value: "16:00〜18:00" },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => {
+                    if (timeModalTarget !== null) updateSvc(timeModalTarget, "time", opt.value);
+                    setTimeModalOpen(false);
+                    setTimeModalTarget(null);
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <div className="border-t px-4 py-3">
+              <input
+                type="text"
+                placeholder="その他（自由入力）"
+                className="w-full rounded-md border px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && e.currentTarget.value) {
+                    if (timeModalTarget !== null) updateSvc(timeModalTarget, "time", e.currentTarget.value);
+                    setTimeModalOpen(false);
+                    setTimeModalTarget(null);
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
