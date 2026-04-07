@@ -278,6 +278,9 @@ export default function OfficeSettingsPage() {
             <div className="rounded-lg bg-blue-50 p-3 text-xs text-blue-700">
               <b>料金目安：</b>ケアプラン1件の生成あたり約3〜9円（Claude Sonnet使用）。月20件で約60〜180円程度です。
             </div>
+
+            {/* AI使用量表示 */}
+            <AiUsagePanel />
           </div>
         )}
       </div>
@@ -310,6 +313,130 @@ function Field({ label, value, onChange, placeholder, className }: {
         className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         placeholder={placeholder}
       />
+    </div>
+  );
+}
+
+// AI使用量パネル
+function AiUsagePanel() {
+  const supabase = createClient();
+  const [logs, setLogs] = useState<{ month: string; count: number; input_tokens: number; output_tokens: number; cost: number }[]>([]);
+  const [recentLogs, setRecentLogs] = useState<{ user_name: string; action: string; mode: string; input_tokens: number; output_tokens: number; estimated_cost: number; created_at: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      // 直近のログ10件
+      const { data: recent } = await supabase
+        .from("kaigo_ai_usage_logs")
+        .select("user_name, action, mode, input_tokens, output_tokens, estimated_cost, created_at")
+        .order("created_at", { ascending: false })
+        .limit(10);
+      setRecentLogs((recent || []) as typeof recentLogs);
+
+      // 月別集計（直近6ヶ月）
+      const { data: all } = await supabase
+        .from("kaigo_ai_usage_logs")
+        .select("input_tokens, output_tokens, estimated_cost, created_at")
+        .order("created_at", { ascending: false })
+        .limit(500);
+
+      const monthMap = new Map<string, { count: number; input_tokens: number; output_tokens: number; cost: number }>();
+      for (const log of (all || []) as { input_tokens: number; output_tokens: number; estimated_cost: number; created_at: string }[]) {
+        const month = log.created_at.slice(0, 7); // YYYY-MM
+        const existing = monthMap.get(month) || { count: 0, input_tokens: 0, output_tokens: 0, cost: 0 };
+        existing.count += 1;
+        existing.input_tokens += log.input_tokens;
+        existing.output_tokens += log.output_tokens;
+        existing.cost += Number(log.estimated_cost);
+        monthMap.set(month, existing);
+      }
+      const monthlyData = Array.from(monthMap.entries())
+        .map(([month, data]) => ({ month, ...data }))
+        .sort((a, b) => b.month.localeCompare(a.month))
+        .slice(0, 6);
+      setLogs(monthlyData);
+      setLoading(false);
+    };
+    fetchLogs();
+  }, [supabase]);
+
+  if (loading) return <div className="text-xs text-gray-400 py-2">使用量を読み込み中...</div>;
+
+  const totalCost = logs.reduce((sum, l) => sum + l.cost, 0);
+  const totalCount = logs.reduce((sum, l) => sum + l.count, 0);
+
+  return (
+    <div className="space-y-3">
+      <div className="text-xs font-semibold text-gray-700">AI使用量</div>
+
+      {/* サマリー */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-lg bg-purple-50 p-2 text-center">
+          <div className="text-lg font-bold text-purple-700">{totalCount}</div>
+          <div className="text-[10px] text-purple-500">累計生成回数</div>
+        </div>
+        <div className="rounded-lg bg-purple-50 p-2 text-center">
+          <div className="text-lg font-bold text-purple-700">{Math.round(totalCost * 10) / 10}円</div>
+          <div className="text-[10px] text-purple-500">累計コスト</div>
+        </div>
+        <div className="rounded-lg bg-purple-50 p-2 text-center">
+          <div className="text-lg font-bold text-purple-700">{totalCount > 0 ? Math.round(totalCost / totalCount * 10) / 10 : 0}円</div>
+          <div className="text-[10px] text-purple-500">1回あたり平均</div>
+        </div>
+      </div>
+
+      {/* 月別テーブル */}
+      {logs.length > 0 && (
+        <div>
+          <div className="text-[10px] font-semibold text-gray-600 mb-1">月別使用量</div>
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="border px-2 py-1 text-left">月</th>
+                <th className="border px-2 py-1 text-right">回数</th>
+                <th className="border px-2 py-1 text-right">入力トークン</th>
+                <th className="border px-2 py-1 text-right">出力トークン</th>
+                <th className="border px-2 py-1 text-right">コスト</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((l) => (
+                <tr key={l.month}>
+                  <td className="border px-2 py-1">{l.month}</td>
+                  <td className="border px-2 py-1 text-right">{l.count}回</td>
+                  <td className="border px-2 py-1 text-right">{l.input_tokens.toLocaleString()}</td>
+                  <td className="border px-2 py-1 text-right">{l.output_tokens.toLocaleString()}</td>
+                  <td className="border px-2 py-1 text-right font-semibold">{Math.round(l.cost * 10) / 10}円</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* 直近ログ */}
+      {recentLogs.length > 0 && (
+        <div>
+          <div className="text-[10px] font-semibold text-gray-600 mb-1">直近の使用履歴</div>
+          <div className="max-h-40 overflow-y-auto space-y-1">
+            {recentLogs.map((log, i) => (
+              <div key={i} className="flex items-center justify-between rounded bg-gray-50 px-2 py-1 text-[10px]">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400">{new Date(log.created_at).toLocaleDateString("ja-JP")}</span>
+                  <span className="font-medium">{log.user_name}</span>
+                  <span className="text-gray-500">{log.mode === "from-services" ? "サービス→プラン" : "全体提案"}</span>
+                </div>
+                <span className="font-semibold text-purple-600">{Math.round(Number(log.estimated_cost) * 10) / 10}円</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {logs.length === 0 && recentLogs.length === 0 && (
+        <div className="text-xs text-gray-400 text-center py-2">まだAI生成の使用履歴がありません</div>
+      )}
     </div>
   );
 }

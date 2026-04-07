@@ -129,12 +129,18 @@ ${serviceList}
 
     const parsed = JSON.parse(jsonMatch[0]);
 
+    // コスト計算（Claude Sonnet: 入力$3/100万, 出力$15/100万, 1$=150円）
+    const inputCost = (message.usage.input_tokens / 1_000_000) * 3 * 150;
+    const outputCost = (message.usage.output_tokens / 1_000_000) * 15 * 150;
+    const totalCostYen = Math.round((inputCost + outputCost) * 100) / 100;
+
     return NextResponse.json({
       success: true,
       data: parsed,
       usage: {
         input_tokens: message.usage.input_tokens,
         output_tokens: message.usage.output_tokens,
+        estimated_cost_yen: totalCostYen,
       },
     });
   } catch (error: unknown) {

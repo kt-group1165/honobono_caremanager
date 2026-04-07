@@ -522,7 +522,18 @@ function EditFormCarePlan2({ content, onChange }: {
         if (result.data?.overall_policy) {
           // 第1表の総合的援助方針も更新可能
         }
-        toast.success(`AIがケアプランを生成しました（入力:${result.usage?.input_tokens}トークン、出力:${result.usage?.output_tokens}トークン）`);
+        // 使用ログをDBに保存
+        await supabaseForAi.from("kaigo_ai_usage_logs").insert({
+          user_id: userId || null,
+          user_name: userName,
+          action: "care-plan-generate",
+          mode: aiMode,
+          input_tokens: result.usage?.input_tokens ?? 0,
+          output_tokens: result.usage?.output_tokens ?? 0,
+          estimated_cost: result.usage?.estimated_cost_yen ?? 0,
+        });
+        const costStr = result.usage?.estimated_cost_yen ? `約${result.usage.estimated_cost_yen}円` : "";
+        toast.success(`AIがケアプランを生成しました（入力:${result.usage?.input_tokens} 出力:${result.usage?.output_tokens}トークン ${costStr}）`);
       }
     } catch (e) {
       toast.error("AI生成に失敗しました: " + (e instanceof Error ? e.message : ""));
