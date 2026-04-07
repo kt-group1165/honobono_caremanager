@@ -31,11 +31,17 @@ export function UserSidebar({ selectedUserId, onSelectUser }: UserSidebarProps) 
         .select("id, name, name_kana, status")
         .eq("status", "active")
         .order("name_kana", { ascending: true });
-      setUsers(data || []);
+      const list = data || [];
+      setUsers(list);
       setLoading(false);
+      // 未選択なら最初の利用者を自動選択
+      if (!selectedUserId && list.length > 0) {
+        onSelectUser(list[0].id);
+      }
     };
     fetchUsers();
-  }, [supabase]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filtered = useMemo(() => {
     if (!search) return users;

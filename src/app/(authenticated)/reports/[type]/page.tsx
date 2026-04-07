@@ -508,11 +508,12 @@ function EditFormCarePlan2({ content, onChange }: {
               </div>
 
               {goal.services.map((svc, si) => (
-                <div key={si} className="ml-4 grid grid-cols-6 gap-1 rounded border border-gray-200 bg-white p-1.5 relative">
+                <div key={si} className="ml-4 grid grid-cols-7 gap-1 rounded border border-gray-200 bg-white p-1.5 relative">
                   {goal.services.length > 1 && <button onClick={() => removeSvc(bi, gi, si)} className="absolute right-1 top-0.5 text-gray-300 hover:text-red-400"><X size={10} /></button>}
                   <FI label="サービス内容" value={svc.content} onChange={(v) => updateSvc(bi, gi, si, "content", v)} className="col-span-2" />
                   <FI label="※1" value={svc.insurance_flag} onChange={(v) => updateSvc(bi, gi, si, "insurance_flag", v)} />
                   <FI label="サービス種別" value={svc.type} onChange={(v) => updateSvc(bi, gi, si, "type", v)} />
+                  <FI label="※2 事業所" value={svc.provider} onChange={(v) => updateSvc(bi, gi, si, "provider", v)} />
                   <FI label="頻度" value={svc.frequency} onChange={(v) => updateSvc(bi, gi, si, "frequency", v)} />
                   <FI label="期間" value={svc.period} onChange={(v) => updateSvc(bi, gi, si, "period", v)} />
                 </div>
@@ -2381,6 +2382,59 @@ function DocList({ docs, loading, selectedId, onSelect, onNew, newLoading }: {
 // Edit/View panel
 // ---------------------------------------------------------------------------
 
+function PreviewScaler({ paperWidth, paperMinHeight, paperPadding, children }: {
+  paperWidth: string; paperMinHeight: string; paperPadding: string; children: React.ReactNode;
+}) {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const updateScale = () => {
+      if (!containerRef.current) return;
+      const containerW = containerRef.current.clientWidth - 32; // px padding
+      // paperWidth in mm → px (1mm ≈ 3.78px at 96dpi)
+      const mmVal = parseFloat(paperWidth);
+      const paperPx = mmVal * 3.78;
+      const newScale = Math.min(1, containerW / paperPx);
+      setScale(newScale);
+    };
+    updateScale();
+    window.addEventListener("resize", updateScale);
+    return () => window.removeEventListener("resize", updateScale);
+  }, [paperWidth]);
+
+  const mmVal = parseFloat(paperWidth);
+  const paperPx = mmVal * 3.78;
+  const mmH = parseFloat(paperMinHeight);
+  const paperHPx = mmH * 3.78;
+
+  return (
+    <div ref={containerRef} className="no-print px-4 pb-4" style={{ overflow: "hidden" }}>
+      <div style={{ width: `${paperPx * scale}px`, height: `${paperHPx * scale}px`, margin: "0 auto" }}>
+        <div
+          id="print-area"
+          className="bg-white shadow"
+          style={{
+            width: paperWidth,
+            minHeight: paperMinHeight,
+            padding: paperPadding,
+            fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif',
+            fontSize: "9pt",
+            color: "#000",
+            boxSizing: "border-box",
+            transform: `scale(${scale})`,
+            transformOrigin: "top left",
+          }}
+        >
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
 function DocEditor({ doc, config, onSave, onStatusToggle }: {
   doc: ReportDoc; config: ReportConfig;
   onSave: (content: Record<string, unknown>) => Promise<void>;
@@ -2448,18 +2502,13 @@ function DocEditor({ doc, config, onSave, onStatusToggle }: {
         <EditForm reportType={doc.report_type} content={content} onChange={handleChange} />
       </div>
 
-      {/* Print preview */}
+      {/* Print preview — scales to fit container width */}
       <div className="no-print px-4 py-2 text-xs text-gray-400 flex items-center gap-1">
         <Printer size={11} /> 印刷プレビュー（A4{isLandscape ? "横" : "縦"}）
       </div>
-      <div className="overflow-x-auto px-4 pb-4">
-        <div id="print-area" className="mx-auto bg-white shadow"
-          style={{ width: paperWidth, minHeight: paperMinHeight, padding: paperPadding,
-            fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt",
-            color: "#000", boxSizing: "border-box" }}>
-          <PrintView reportType={doc.report_type} content={content} config={config} />
-        </div>
-      </div>
+      <PreviewScaler paperWidth={paperWidth} paperMinHeight={paperMinHeight} paperPadding={paperPadding}>
+        <PrintView reportType={doc.report_type} content={content} config={config} />
+      </PreviewScaler>
     </div>
   );
 }
