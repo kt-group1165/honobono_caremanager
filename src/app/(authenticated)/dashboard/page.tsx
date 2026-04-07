@@ -132,7 +132,7 @@ export default function DashboardPage() {
           .lte("billing_month", monthEnd);
         if (e2) throw e2;
         const monthlyBilling = (billingData ?? []).reduce(
-          (sum, r) => sum + (r.total_amount ?? 0),
+          (sum: number, r: Record<string, number>) => sum + (r.total_amount ?? 0),
           0
         );
 
@@ -171,7 +171,7 @@ export default function DashboardPage() {
         if (e5) throw e5;
 
         // Fetch latest active care certifications for those users
-        const userIds = (usersData ?? []).map((u) => u.id);
+        const userIds = (usersData ?? []).map((u: any) => u.id);
         let certMap: Record<string, string> = {};
         if (userIds.length > 0) {
           const { data: certData } = await supabase
@@ -181,14 +181,14 @@ export default function DashboardPage() {
             .eq("status", "active")
             .order("start_date", { ascending: false });
           if (certData) {
-            certData.forEach((c) => {
+            certData.forEach((c: any) => {
               if (!certMap[c.user_id]) certMap[c.user_id] = c.care_level;
             });
           }
         }
 
         setRecentUsers(
-          (usersData ?? []).map((u) => ({
+          (usersData ?? []).map((u: any) => ({
             ...u,
             care_level: certMap[u.id] ?? null,
           }))
@@ -203,7 +203,7 @@ export default function DashboardPage() {
         if (e6) throw e6;
 
         const serviceUserIds = [
-          ...new Set((serviceData ?? []).map((s) => s.user_id).filter(Boolean)),
+          ...new Set((serviceData ?? []).map((s: any) => s.user_id).filter(Boolean)),
         ];
         let userNameMap: Record<string, string> = {};
         if (serviceUserIds.length > 0) {
@@ -212,14 +212,14 @@ export default function DashboardPage() {
             .select("id, name")
             .in("id", serviceUserIds);
           if (serviceUsersData) {
-            serviceUsersData.forEach((u) => {
+            serviceUsersData.forEach((u: any) => {
               userNameMap[u.id] = u.name;
             });
           }
         }
 
         setRecentServiceRecords(
-          (serviceData ?? []).map((s) => ({
+          (serviceData ?? []).map((s: any) => ({
             id: s.id,
             service_date: s.service_date,
             user_name: userNameMap[s.user_id] ?? "—",

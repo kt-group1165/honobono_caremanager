@@ -318,12 +318,12 @@ function EditModal({ claim, certEntry, onClose, onSave }: EditModalProps) {
       .select("tokutei_kassan_type, medical_cooperation_kassan")
       .limit(1)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(({ data }: { data: Record<string, unknown> | null }) => {
         if (!data) return;
         setAddings((prev) => ({
           ...prev,
           tokutei_kassan: (data.tokutei_kassan_type as TokuteiKassanType | null) ?? prev.tokutei_kassan,
-          medical_coop_kassan: data.medical_cooperation_kassan ?? prev.medical_coop_kassan,
+          medical_coop_kassan: (data.medical_cooperation_kassan as boolean | null) ?? prev.medical_coop_kassan,
         }));
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps

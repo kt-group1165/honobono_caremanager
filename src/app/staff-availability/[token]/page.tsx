@@ -52,13 +52,12 @@ interface BaseSlot {
   day_of_week: number;
   start_time: string;
   end_time: string;
-  is_available: boolean;
 }
 
 interface MonthlySlot {
   id?: string;
   tempId: string;
-  target_date: string;
+  available_date: string;
   start_time: string;
   end_time: string;
   is_available: boolean;
@@ -76,14 +75,13 @@ function emptyBaseSlot(dow: number): BaseSlot {
     day_of_week: dow,
     start_time: "09:00",
     end_time: "18:00",
-    is_available: true,
   };
 }
 
 function emptyMonthlySlot(dateStr: string): MonthlySlot {
   return {
     tempId: genId(),
-    target_date: dateStr,
+    available_date: dateStr,
     start_time: "09:00",
     end_time: "18:00",
     is_available: true,
@@ -107,7 +105,7 @@ function BaseSettingsTab({ staffId }: BaseSettingsTabProps) {
       setLoading(true);
       const { data } = await supabase
         .from("kaigo_staff_availability_base")
-        .select("id, staff_id, day_of_week, start_time, end_time, is_available")
+        .select("id, staff_id, day_of_week, start_time, end_time")
         .eq("staff_id", staffId)
         .order("day_of_week")
         .order("start_time");
@@ -119,7 +117,6 @@ function BaseSettingsTab({ staffId }: BaseSettingsTabProps) {
           day_of_week: r.day_of_week,
           start_time: r.start_time,
           end_time: r.end_time,
-          is_available: r.is_available,
         }));
         setSlots(mapped);
       } else {
@@ -129,7 +126,6 @@ function BaseSettingsTab({ staffId }: BaseSettingsTabProps) {
           day_of_week: dow,
           start_time: "09:00",
           end_time: "18:00",
-          is_available: true,
         }));
         setSlots(defaults);
       }
@@ -168,7 +164,6 @@ function BaseSettingsTab({ staffId }: BaseSettingsTabProps) {
           day_of_week: s.day_of_week,
           start_time: s.start_time,
           end_time: s.end_time,
-          is_available: s.is_available,
         }));
         const { error } = await supabase
           .from("kaigo_staff_availability_base")
@@ -228,25 +223,10 @@ function BaseSettingsTab({ staffId }: BaseSettingsTabProps) {
                 {daySlots.map((slot) => (
                   <div
                     key={slot.tempId}
-                    className={cn(
-                      "rounded-lg border p-2 text-xs space-y-1",
-                      slot.is_available
-                        ? "bg-white border-gray-200"
-                        : "bg-gray-100 border-gray-300"
-                    )}
+                    className="rounded-lg border p-2 text-xs space-y-1 bg-white border-gray-200"
                   >
                     <div className="flex items-center justify-between">
-                      <label className="flex items-center gap-1 text-[10px] cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={slot.is_available}
-                          onChange={(e) =>
-                            changeSlot(slot.tempId, "is_available", e.target.checked)
-                          }
-                          className="rounded"
-                        />
-                        対応可
-                      </label>
+                      <span className="text-[10px] text-green-600 font-medium">対応可</span>
                       <button
                         onClick={() => removeSlot(slot.tempId)}
                         className="text-gray-300 hover:text-red-400 transition-colors"
@@ -260,8 +240,7 @@ function BaseSettingsTab({ staffId }: BaseSettingsTabProps) {
                       onChange={(e) =>
                         changeSlot(slot.tempId, "start_time", e.target.value)
                       }
-                      disabled={!slot.is_available}
-                      className="w-full rounded border px-1 py-0.5 text-[11px] focus:border-blue-500 focus:outline-none disabled:opacity-40"
+                      className="w-full rounded border px-1 py-0.5 text-[11px] focus:border-blue-500 focus:outline-none"
                     />
                     <span className="block text-center text-[10px] text-gray-400">〜</span>
                     <input
@@ -270,8 +249,7 @@ function BaseSettingsTab({ staffId }: BaseSettingsTabProps) {
                       onChange={(e) =>
                         changeSlot(slot.tempId, "end_time", e.target.value)
                       }
-                      disabled={!slot.is_available}
-                      className="w-full rounded border px-1 py-0.5 text-[11px] focus:border-blue-500 focus:outline-none disabled:opacity-40"
+                      className="w-full rounded border px-1 py-0.5 text-[11px] focus:border-blue-500 focus:outline-none"
                     />
                   </div>
                 ))}
@@ -337,17 +315,17 @@ function MonthlySettingsTab({ staffId }: MonthlySettingsTabProps) {
       const to = format(endOfMonth(month), "yyyy-MM-dd");
       const { data } = await supabase
         .from("kaigo_staff_availability_monthly")
-        .select("id, staff_id, target_date, start_time, end_time, is_available")
+        .select("id, staff_id, available_date, start_time, end_time, is_available")
         .eq("staff_id", staffId)
-        .gte("target_date", from)
-        .lte("target_date", to)
-        .order("target_date")
+        .gte("available_date", from)
+        .lte("available_date", to)
+        .order("available_date")
         .order("start_time");
 
       const mapped: MonthlySlot[] = (data || []).map((r: any) => ({
         id: r.id,
         tempId: genId(),
-        target_date: r.target_date,
+        available_date: r.available_date,
         start_time: r.start_time,
         end_time: r.end_time,
         is_available: r.is_available,
@@ -369,7 +347,7 @@ function MonthlySettingsTab({ staffId }: MonthlySettingsTabProps) {
       // Fetch base slots
       const { data: baseData } = await supabase
         .from("kaigo_staff_availability_base")
-        .select("day_of_week, start_time, end_time, is_available")
+        .select("day_of_week, start_time, end_time")
         .eq("staff_id", staffId);
 
       const base = baseData || [];
@@ -387,8 +365,8 @@ function MonthlySettingsTab({ staffId }: MonthlySettingsTabProps) {
         .from("kaigo_staff_availability_monthly")
         .delete()
         .eq("staff_id", staffId)
-        .gte("target_date", from)
-        .lte("target_date", to);
+        .gte("available_date", from)
+        .lte("available_date", to);
 
       // Generate rows for each day in the month
       const rows: Record<string, unknown>[] = [];
@@ -399,19 +377,21 @@ function MonthlySettingsTab({ staffId }: MonthlySettingsTabProps) {
           // No base slot for this DoW → mark as unavailable
           rows.push({
             staff_id: staffId,
-            target_date: format(day, "yyyy-MM-dd"),
+            available_date: format(day, "yyyy-MM-dd"),
             start_time: "00:00",
             end_time: "23:59",
             is_available: false,
+            source: "base",
           });
         } else {
           for (const b of matchingBase) {
             rows.push({
               staff_id: staffId,
-              target_date: format(day, "yyyy-MM-dd"),
+              available_date: format(day, "yyyy-MM-dd"),
               start_time: (b as any).start_time,
               end_time: (b as any).end_time,
-              is_available: (b as any).is_available,
+              is_available: true,
+              source: "base",
             });
           }
         }
@@ -456,16 +436,17 @@ function MonthlySettingsTab({ staffId }: MonthlySettingsTabProps) {
         .from("kaigo_staff_availability_monthly")
         .delete()
         .eq("staff_id", staffId)
-        .gte("target_date", from)
-        .lte("target_date", to);
+        .gte("available_date", from)
+        .lte("available_date", to);
 
       if (monthlySlots.length > 0) {
         const rows = monthlySlots.map((s) => ({
           staff_id: staffId,
-          target_date: s.target_date,
+          available_date: s.available_date,
           start_time: s.start_time,
           end_time: s.end_time,
           is_available: s.is_available,
+          source: "manual" as const,
         }));
         const { error } = await supabase
           .from("kaigo_staff_availability_monthly")
@@ -484,7 +465,7 @@ function MonthlySettingsTab({ staffId }: MonthlySettingsTabProps) {
   };
 
   const slotsForDate = (dateStr: string) =>
-    monthlySlots.filter((s) => s.target_date === dateStr);
+    monthlySlots.filter((s) => s.available_date === dateStr);
 
   const isDayUnavailable = (dateStr: string) => {
     const slots = slotsForDate(dateStr);

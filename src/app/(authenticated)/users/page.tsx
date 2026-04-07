@@ -61,7 +61,7 @@ export default function UsersPage() {
       }
 
       // Fetch latest care certifications for all users
-      const userIds = userData.map((u) => u.id);
+      const userIds = userData.map((u: any) => u.id);
       const { data: certData } = await supabase
         .from("kaigo_care_certifications")
         .select("user_id, care_level, start_date, end_date")
@@ -79,7 +79,7 @@ export default function UsersPage() {
         }
       }
 
-      const enriched: UserWithCareLevel[] = userData.map((u) => ({
+      const enriched: UserWithCareLevel[] = userData.map((u: any) => ({
         ...u,
         care_level: latestCertMap[u.id] ?? null,
       }));

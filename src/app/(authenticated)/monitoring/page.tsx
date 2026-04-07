@@ -468,7 +468,7 @@ export default function MonitoringPage() {
       return;
     }
 
-    const mapped: MonitoringItem[] = (dbItems ?? []).map((r) => ({
+    const mapped: MonitoringItem[] = (dbItems ?? []).map((r: any) => ({
       id: r.id,
       monitoring_sheet_id: r.monitoring_sheet_id,
       item_number: r.item_number,
