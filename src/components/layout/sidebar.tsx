@@ -41,6 +41,7 @@ const NAV_CARE_MANAGER: NavItem[] = [
   { name: "レセプト", href: "/billing/claims", icon: FileSpreadsheet },
   { name: "帳票作成", href: "/reports", icon: FileText },
   { name: "マスタ管理", href: "/master", icon: Settings },
+  { name: "設定", href: "/settings", icon: UserCog },
 ];
 
 // 訪問介護版メニュー
@@ -54,6 +55,7 @@ const NAV_HOME_CARE: NavItem[] = [
   { name: "実績管理", href: "/visit-billing", icon: Calculator },
   { name: "帳票作成", href: "/reports-visit", icon: FileText },
   { name: "マスタ管理", href: "/master", icon: Settings },
+  { name: "設定", href: "/settings", icon: UserCog },
 ];
 
 const BUSINESS_TYPE_LABELS: Record<string, { label: string; color: string }> = {

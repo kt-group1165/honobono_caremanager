@@ -11,6 +11,7 @@ import {
   Users,
   UserCog,
   CalendarDays,
+  Clock,
   Download,
   Link2,
   X,
@@ -112,10 +113,10 @@ function isStaffUnavailableAtTime(
   availability: StaffAvailabilitySlot[]
 ): boolean {
   if (!startTime) return false;
-  const slots = availability.filter(
-    (a) => a.staff_id === staffId && a.available_date === dateStr
-  );
-  if (slots.length === 0) return false;
+  const staffSlots = availability.filter((a) => a.staff_id === staffId);
+  if (staffSlots.length === 0) return false; // No monthly data at all
+  const slots = staffSlots.filter((a) => a.available_date === dateStr);
+  if (slots.length === 0) return true; // Has monthly data but no record for this day = unavailable
   const sMin = timeToMinutes(startTime);
   const eMin = endTime ? timeToMinutes(endTime) : sMin + 60;
   // Check if any slot is unavailable that overlaps with schedule time
@@ -489,16 +490,8 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
                           )}
                           title={unavail ? "職員が対応不可のため、クリックして代替候補を表示" : undefined}
                         >
-                          {sched.start_time?.slice(0, 5)} {sched.service_type}
-                          {sched.staff_name && (
-                            <span className="block text-[9px] opacity-70">{sched.staff_name}</span>
-                          )}
-                          {unavail && (
-                            <span className="text-[9px]">
-                              <AlertTriangle size={8} className="inline mr-0.5" />
-                              対応不可
-                            </span>
-                          )}
+                          {sched.start_time?.slice(0, 5)}~{sched.end_time?.slice(0, 5)} {sched.staff_name ?? ""} {sched.service_type}
+                          {unavail && <AlertTriangle size={9} className="inline ml-0.5" />}
                         </button>
                       );
                     })}
@@ -729,9 +722,7 @@ function StaffCalendar({ staffId, staffName, currentMonth, onMonthChange }: Staf
                   >
                     {format(day, "d")}
                   </span>
-                  {dayUnavail && daySchedules.length === 0 && (
-                    <div className="text-[9px] text-gray-400 text-center">対応不可</div>
-                  )}
+                  {/* Grey background indicates unavailable - no text needed */}
                   <div className="space-y-0.5">
                     {daySchedules.map((sched) => {
                       const onUnavail = isScheduleOnUnavailableSlot(sched);
@@ -747,12 +738,9 @@ function StaffCalendar({ staffId, staffName, currentMonth, onMonthChange }: Staf
                             isRed ? "bg-red-50 text-red-600 font-semibold" : col
                           )}
                         >
-                          {sched.start_time?.slice(0, 5)} {sched.user_name}
-                          {conflict && (
-                            <span className="ml-0.5 rounded bg-red-200 px-0.5 text-[9px]">
-                              重複
-                            </span>
-                          )}
+                          {sched.start_time?.slice(0, 5)}~{sched.end_time?.slice(0, 5)} {sched.user_name ?? ""} {sched.service_type}
+                          {isRed && <AlertTriangle size={9} className="inline ml-0.5" />}
+                          {conflict && <span className="ml-0.5 text-[9px]">重複</span>}
                         </div>
                       );
                     })}
@@ -1157,6 +1145,332 @@ function UrlManagementModal({ onClose }: UrlManagementModalProps) {
   );
 }
 
+// ─── Timeline View ───────────────────────────────────────────────────────────
+
+const TIMELINE_START_HOUR = 8;
+const TIMELINE_END_HOUR = 18;
+const TIMELINE_HOURS = Array.from(
+  { length: TIMELINE_END_HOUR - TIMELINE_START_HOUR },
+  (_, i) => TIMELINE_START_HOUR + i
+);
+const TIMELINE_TOTAL_MINUTES =
+  (TIMELINE_END_HOUR - TIMELINE_START_HOUR) * 60;
+
+const SERVICE_BAR_COLORS: Record<string, { bg: string; border: string; text: string }> = {
+  身体介護: { bg: "bg-orange-100", border: "border-orange-300", text: "text-orange-800" },
+  生活援助: { bg: "bg-green-100", border: "border-green-300", text: "text-green-800" },
+  "身体・生活": { bg: "bg-purple-100", border: "border-purple-300", text: "text-purple-800" },
+  通院等乗降介助: { bg: "bg-cyan-100", border: "border-cyan-300", text: "text-cyan-800" },
+};
+
+function getBarStyle(startTime: string | null, endTime: string | null) {
+  if (!startTime) return { left: "0%", width: "0%" };
+  const sMin = timeToMinutes(startTime) - TIMELINE_START_HOUR * 60;
+  const eMin = endTime
+    ? timeToMinutes(endTime) - TIMELINE_START_HOUR * 60
+    : sMin + 60;
+  const left = Math.max(0, (sMin / TIMELINE_TOTAL_MINUTES) * 100);
+  const width = Math.min(
+    100 - left,
+    ((eMin - Math.max(sMin, 0)) / TIMELINE_TOTAL_MINUTES) * 100
+  );
+  return { left: `${left}%`, width: `${Math.max(width, 1)}%` };
+}
+
+type ViewMode = "calendar" | "timeline";
+
+interface TimelineViewProps {
+  tab: SidebarTab;
+  users: KaigoUser[];
+  staff: KaigoStaff[];
+  selectedDate: Date;
+  onDateChange: (d: Date) => void;
+  currentMonth: Date;
+  onMonthChange: (d: Date) => void;
+}
+
+function TimelineView({
+  tab,
+  users,
+  staff,
+  selectedDate,
+  onDateChange,
+  currentMonth,
+  onMonthChange,
+}: TimelineViewProps) {
+  const supabase = createClient();
+  const [schedules, setSchedules] = useState<VisitSchedule[]>([]);
+  const [availability, setAvailability] = useState<StaffAvailabilitySlot[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const dateStr = format(selectedDate, "yyyy-MM-dd");
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const [schedRes, availRes] = await Promise.all([
+      supabase
+        .from("kaigo_visit_schedule")
+        .select(
+          "id, user_id, staff_id, visit_date, start_time, end_time, service_type, kaigo_staff(name), kaigo_users(name)"
+        )
+        .eq("visit_date", dateStr)
+        .order("start_time"),
+      supabase
+        .from("kaigo_staff_availability_monthly")
+        .select("staff_id, available_date, start_time, end_time, is_available")
+        .eq("available_date", dateStr),
+    ]);
+
+    const mapped: VisitSchedule[] = (schedRes.data || []).map((r: any) => ({
+      id: r.id,
+      user_id: r.user_id,
+      staff_id: r.staff_id,
+      visit_date: r.visit_date,
+      start_time: r.start_time,
+      end_time: r.end_time,
+      service_type: r.service_type,
+      staff_name: r.kaigo_staff?.name ?? null,
+      user_name: r.kaigo_users?.name ?? null,
+    }));
+
+    setSchedules(mapped);
+    setAvailability((availRes.data || []) as StaffAvailabilitySlot[]);
+    setLoading(false);
+  }, [dateStr, supabase]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Build rows based on tab
+  const rows = useMemo(() => {
+    if (tab === "user") {
+      // Row per user who has schedules on this day
+      const userIds = [...new Set(schedules.map((s) => s.user_id))];
+      return userIds.map((uid) => {
+        const user = users.find((u) => u.id === uid);
+        const userScheds = schedules.filter((s) => s.user_id === uid);
+        return {
+          id: uid,
+          name: user?.name ?? "不明",
+          schedules: userScheds,
+        };
+      });
+    } else {
+      // Row per staff who has schedules on this day
+      const staffIds = [...new Set(schedules.filter((s) => s.staff_id).map((s) => s.staff_id!))];
+      return staffIds.map((sid) => {
+        const st = staff.find((s) => s.id === sid);
+        const staffScheds = schedules.filter((s) => s.staff_id === sid);
+        return {
+          id: sid,
+          name: st?.name ?? "不明",
+          schedules: staffScheds,
+        };
+      });
+    }
+  }, [tab, schedules, users, staff]);
+
+  // For staff view: determine unavailable hour ranges
+  const getUnavailableRanges = (staffId: string) => {
+    const slots = availability.filter(
+      (a) => a.staff_id === staffId && !a.is_available
+    );
+    return slots.map((slot) => {
+      const sMin = timeToMinutes(slot.start_time) - TIMELINE_START_HOUR * 60;
+      const eMin = timeToMinutes(slot.end_time) - TIMELINE_START_HOUR * 60;
+      const left = Math.max(0, (sMin / TIMELINE_TOTAL_MINUTES) * 100);
+      const width = Math.min(
+        100 - left,
+        ((eMin - Math.max(sMin, 0)) / TIMELINE_TOTAL_MINUTES) * 100
+      );
+      return { left: `${left}%`, width: `${width}%` };
+    });
+  };
+
+  // Calendar days for date picker
+  const days = useMemo(
+    () =>
+      eachDayOfInterval({
+        start: startOfMonth(currentMonth),
+        end: endOfMonth(currentMonth),
+      }),
+    [currentMonth]
+  );
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Header with date navigation */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b bg-white">
+        <button
+          onClick={() => onMonthChange(subMonths(currentMonth, 1))}
+          className="rounded border p-1 hover:bg-gray-50"
+        >
+          <ChevronLeft size={16} />
+        </button>
+        <span className="min-w-[6rem] text-center font-semibold text-sm text-gray-900">
+          {format(currentMonth, "yyyy年M月", { locale: ja })}
+        </span>
+        <button
+          onClick={() => onMonthChange(addMonths(currentMonth, 1))}
+          className="rounded border p-1 hover:bg-gray-50"
+        >
+          <ChevronRight size={16} />
+        </button>
+        <div className="ml-2 text-sm text-gray-600">
+          選択日: <span className="font-semibold text-gray-900">{format(selectedDate, "M月d日(E)", { locale: ja })}</span>
+        </div>
+      </div>
+
+      {/* Mini date selector strip */}
+      <div className="flex items-center gap-1 px-4 py-2 border-b bg-gray-50 overflow-x-auto">
+        {days.map((day) => {
+          const ds = format(day, "yyyy-MM-dd");
+          const isSelected = ds === dateStr;
+          const dow = getDay(day);
+          const isToday = isSameDay(day, new Date());
+          return (
+            <button
+              key={ds}
+              onClick={() => onDateChange(day)}
+              className={cn(
+                "flex flex-col items-center rounded px-1.5 py-1 text-[10px] leading-tight min-w-[2rem] transition-colors",
+                isSelected
+                  ? "bg-blue-600 text-white"
+                  : isToday
+                  ? "bg-blue-50 text-blue-700 hover:bg-blue-100"
+                  : dow === 0
+                  ? "text-red-500 hover:bg-red-50"
+                  : dow === 6
+                  ? "text-blue-500 hover:bg-blue-50"
+                  : "text-gray-600 hover:bg-gray-100"
+              )}
+            >
+              <span className="font-bold">{format(day, "d")}</span>
+              <span>{DOW_LABELS[dow]}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {loading ? (
+        <div className="flex flex-1 items-center justify-center">
+          <Loader2 size={24} className="animate-spin text-blue-500" />
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center text-sm text-gray-400">
+          この日の{tab === "user" ? "利用者" : "職員"}の予定はありません
+        </div>
+      ) : (
+        <div className="flex-1 overflow-auto">
+          {/* Timeline grid */}
+          <div className="min-w-[700px]">
+            {/* Time header */}
+            <div className="flex border-b bg-gray-50 sticky top-0 z-10">
+              <div className="w-28 shrink-0 border-r px-2 py-2 text-xs font-semibold text-gray-600">
+                {tab === "user" ? "利用者" : "職員"}
+              </div>
+              <div className="flex-1 flex">
+                {TIMELINE_HOURS.map((h) => (
+                  <div
+                    key={h}
+                    className="flex-1 border-r px-1 py-2 text-center text-[10px] font-medium text-gray-500"
+                  >
+                    {h}時
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Rows */}
+            {rows.map((row) => (
+              <div key={row.id} className="flex border-b hover:bg-gray-50/50">
+                {/* Name column */}
+                <div className="w-28 shrink-0 border-r px-2 py-2 text-xs font-medium text-gray-800 truncate flex items-center">
+                  {row.name}
+                </div>
+                {/* Timeline bar area */}
+                <div className="flex-1 relative" style={{ minHeight: "3rem" }}>
+                  {/* Hour grid lines */}
+                  <div className="absolute inset-0 flex pointer-events-none">
+                    {TIMELINE_HOURS.map((h) => (
+                      <div key={h} className="flex-1 border-r border-gray-100" />
+                    ))}
+                  </div>
+
+                  {/* Unavailable ranges (staff view) */}
+                  {tab === "staff" &&
+                    getUnavailableRanges(row.id).map((range, i) => (
+                      <div
+                        key={`unavail-${i}`}
+                        className="absolute top-0 bottom-0 bg-gray-200/60"
+                        style={{ left: range.left, width: range.width }}
+                        title="対応不可"
+                      />
+                    ))}
+
+                  {/* Schedule bars */}
+                  <div className="relative py-1 flex flex-col gap-0.5 px-0.5">
+                    {row.schedules.map((sched) => {
+                      const style = getBarStyle(sched.start_time, sched.end_time);
+                      const colors =
+                        SERVICE_BAR_COLORS[sched.service_type] ?? {
+                          bg: "bg-gray-100",
+                          border: "border-gray-300",
+                          text: "text-gray-700",
+                        };
+                      const label =
+                        tab === "user"
+                          ? sched.staff_name ?? "未割当"
+                          : sched.user_name ?? "不明";
+                      return (
+                        <div
+                          key={sched.id}
+                          className={cn(
+                            "absolute rounded border px-1 py-0.5 text-[10px] leading-tight truncate",
+                            colors.bg,
+                            colors.border,
+                            colors.text
+                          )}
+                          style={{
+                            left: style.left,
+                            width: style.width,
+                            top: `${0.25 + row.schedules.indexOf(sched) * 1.25}rem`,
+                            height: "1.1rem",
+                          }}
+                          title={`${sched.start_time?.slice(0, 5)}~${sched.end_time?.slice(0, 5)} ${label} ${sched.service_type}`}
+                        >
+                          {sched.start_time?.slice(0, 5)}~{sched.end_time?.slice(0, 5)} {label} {sched.service_type}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center gap-4 px-4 py-2 border-t bg-gray-50 text-[10px]">
+            {Object.entries(SERVICE_BAR_COLORS).map(([type, colors]) => (
+              <div key={type} className="flex items-center gap-1">
+                <div className={cn("w-3 h-3 rounded border", colors.bg, colors.border)} />
+                <span className="text-gray-600">{type}</span>
+              </div>
+            ))}
+            {tab === "staff" && (
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded bg-gray-200 border border-gray-300" />
+                <span className="text-gray-600">対応不可</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ShiftManagementPage() {
@@ -1173,6 +1487,8 @@ export default function ShiftManagementPage() {
   const [loadingLists, setLoadingLists] = useState(true);
   const [showPatternModal, setShowPatternModal] = useState(false);
   const [showUrlModal, setShowUrlModal] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("calendar");
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
 
   useEffect(() => {
     const fetch = async () => {
@@ -1205,6 +1521,33 @@ export default function ShiftManagementPage() {
           <h1 className="text-lg font-bold text-gray-900">シフト管理</h1>
         </div>
         <div className="flex items-center gap-2">
+          {/* View mode toggle */}
+          <div className="flex rounded-lg border overflow-hidden">
+            <button
+              onClick={() => setViewMode("calendar")}
+              className={cn(
+                "flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition-colors",
+                viewMode === "calendar"
+                  ? "bg-blue-600 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              <CalendarDays size={14} />
+              カレンダー
+            </button>
+            <button
+              onClick={() => setViewMode("timeline")}
+              className={cn(
+                "flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition-colors",
+                viewMode === "timeline"
+                  ? "bg-blue-600 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              <Clock size={14} />
+              タイムライン
+            </button>
+          </div>
           <button
             onClick={() => setShowPatternModal(true)}
             className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
@@ -1243,9 +1586,19 @@ export default function ShiftManagementPage() {
           loading={loadingLists}
         />
 
-        {/* Calendar area */}
+        {/* Calendar / Timeline area */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          {sidebarTab === "user" ? (
+          {viewMode === "timeline" ? (
+            <TimelineView
+              tab={sidebarTab}
+              users={users}
+              staff={staff}
+              selectedDate={selectedDate}
+              onDateChange={setSelectedDate}
+              currentMonth={currentMonth}
+              onMonthChange={setCurrentMonth}
+            />
+          ) : sidebarTab === "user" ? (
             selectedUserId && selectedUser ? (
               <UserCalendar
                 userId={selectedUserId}
