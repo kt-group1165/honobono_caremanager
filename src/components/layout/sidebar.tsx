@@ -14,16 +14,23 @@ import {
   FileSpreadsheet,
   Settings,
   Activity,
+  UserCog,
+  Clock,
+  Home,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useBusinessType } from "@/lib/business-type-context";
 import pkg from "../../../package.json";
 
 const APP_VERSION = pkg.version;
 
-const navigation = [
+type NavItem = { name: string; href: string; icon: React.ComponentType<{ size?: number }> };
+
+// ケアマネ版メニュー
+const NAV_CARE_MANAGER: NavItem[] = [
   { name: "ダッシュボード", href: "/dashboard", icon: LayoutDashboard },
   { name: "利用者管理", href: "/users", icon: Users },
   { name: "アセスメント", href: "/assessments", icon: ClipboardCheck },
@@ -36,8 +43,29 @@ const navigation = [
   { name: "マスタ管理", href: "/master", icon: Settings },
 ];
 
+// 訪問介護版メニュー
+const NAV_HOME_CARE: NavItem[] = [
+  { name: "ダッシュボード", href: "/dashboard", icon: LayoutDashboard },
+  { name: "利用者管理", href: "/users", icon: Users },
+  { name: "職員管理", href: "/staff", icon: UserCog },
+  { name: "シフト管理", href: "/shifts", icon: CalendarDays },
+  { name: "サービス実施記録", href: "/visit-records", icon: ClipboardCheck },
+  { name: "予定管理", href: "/visit-schedule", icon: Clock },
+  { name: "提供票確認", href: "/provision-confirm", icon: FileText },
+  { name: "実績管理", href: "/visit-billing", icon: Calculator },
+  { name: "帳票作成", href: "/reports-visit", icon: FileText },
+  { name: "マスタ管理", href: "/master", icon: Settings },
+];
+
+const BUSINESS_TYPE_LABELS: Record<string, { label: string; color: string }> = {
+  "居宅介護支援": { label: "ケアマネ版", color: "text-blue-600" },
+  "訪問介護": { label: "訪問介護版", color: "text-green-600" },
+  "通所介護": { label: "通所介護版", color: "text-orange-600" },
+};
+
 export function Sidebar() {
   const pathname = usePathname();
+  const { businessType } = useBusinessType();
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("sidebar-collapsed") === "true";
@@ -50,6 +78,9 @@ export function Sidebar() {
     localStorage.setItem("sidebar-collapsed", String(next));
   };
 
+  const navigation = businessType === "訪問介護" ? NAV_HOME_CARE : NAV_CARE_MANAGER;
+  const typeInfo = BUSINESS_TYPE_LABELS[businessType] ?? BUSINESS_TYPE_LABELS["居宅介護支援"];
+
   return (
     <aside
       className={cn(
@@ -59,7 +90,9 @@ export function Sidebar() {
     >
       <div className="flex h-14 items-center border-b px-4">
         {!collapsed && (
-          <h1 className="text-lg font-bold text-blue-700">介護管理システム</h1>
+          <div>
+            <h1 className="text-lg font-bold text-blue-700">介護管理システム</h1>
+          </div>
         )}
         <button
           onClick={toggleCollapsed}
@@ -99,7 +132,7 @@ export function Sidebar() {
         {!collapsed && (
           <div className="text-[10px] text-gray-400 leading-relaxed">
             <div>介護管理システム v{APP_VERSION}</div>
-            <div>ケアマネ版</div>
+            <div className={typeInfo.color}>{typeInfo.label}</div>
           </div>
         )}
         {collapsed && (

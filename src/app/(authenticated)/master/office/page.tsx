@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Save, Building2, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const TOKUTEI_OPTIONS = [
   { value: "なし", label: "なし", units: 0 },
@@ -43,6 +44,7 @@ type OfficeSettings = {
   notes: string;
   ai_enabled: boolean;
   ai_api_key: string;
+  business_type: string;
 };
 
 export default function OfficeSettingsPage() {
@@ -108,6 +110,7 @@ export default function OfficeSettingsPage() {
         notes: form.notes,
         ai_enabled: form.ai_enabled,
         ai_api_key: form.ai_api_key,
+        business_type: form.business_type,
       })
       .eq("id", form.id);
     setSaving(false);
@@ -148,6 +151,32 @@ export default function OfficeSettingsPage() {
           {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
           保存
         </button>
+      </div>
+
+      {/* 事業種別 */}
+      <div className="rounded-xl border-2 border-blue-200 bg-blue-50/30 p-6 shadow-sm space-y-4">
+        <h2 className="text-sm font-bold text-blue-700 border-b border-blue-200 pb-2">事業種別</h2>
+        <div className="flex items-center gap-4">
+          {["居宅介護支援", "訪問介護", "通所介護"].map((type) => (
+            <label key={type} className={cn(
+              "flex items-center gap-2 rounded-lg border-2 px-4 py-3 cursor-pointer transition-all",
+              form.business_type === type
+                ? "border-blue-500 bg-blue-50 text-blue-700 font-bold"
+                : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+            )}>
+              <input
+                type="radio"
+                name="business_type"
+                value={type}
+                checked={form.business_type === type}
+                onChange={(e) => handleChange("business_type", e.target.value)}
+                className="accent-blue-600"
+              />
+              {type}
+            </label>
+          ))}
+        </div>
+        <p className="text-xs text-gray-500">事業種別を切り替えると、サイドバーのメニューや利用可能な機能が変わります。保存後にページをリロードしてください。</p>
       </div>
 
       {/* 基本情報 */}
