@@ -172,7 +172,8 @@ function BaseSettingsTab({ staffId }: BaseSettingsTabProps) {
       }
       toast.success("ベース設定を保存しました");
     } catch (err: unknown) {
-      toast.error("保存に失敗しました: " + (err instanceof Error ? err.message : String(err)));
+      const msg = err instanceof Error ? err.message : typeof err === 'object' && err !== null ? JSON.stringify(err) : String(err);
+      toast.error("保存に失敗しました: " + msg);
     } finally {
       setSaving(false);
     }
@@ -361,12 +362,13 @@ function MonthlySettingsTab({ staffId }: MonthlySettingsTabProps) {
       const to = format(endOfMonth(currentMonth), "yyyy-MM-dd");
 
       // Delete existing monthly slots for this month
-      await supabase
+      const { error: delErr } = await supabase
         .from("kaigo_staff_availability_monthly")
         .delete()
         .eq("staff_id", staffId)
         .gte("available_date", from)
         .lte("available_date", to);
+      if (delErr) throw delErr;
 
       // Generate rows for each day in the month
       const rows: Record<string, unknown>[] = [];
@@ -405,7 +407,8 @@ function MonthlySettingsTab({ staffId }: MonthlySettingsTabProps) {
       toast.success("ベース設定を取り込みました");
       fetchMonthly(currentMonth);
     } catch (err: unknown) {
-      toast.error("取り込みに失敗しました: " + (err instanceof Error ? err.message : String(err)));
+      const msg = err instanceof Error ? err.message : typeof err === 'object' && err !== null ? JSON.stringify(err) : String(err);
+      toast.error("取り込みに失敗しました: " + msg);
     } finally {
       setImporting(false);
     }
@@ -458,7 +461,8 @@ function MonthlySettingsTab({ staffId }: MonthlySettingsTabProps) {
       // Refresh
       await fetchMonthly(currentMonth);
     } catch (err: unknown) {
-      toast.error("保存に失敗しました: " + (err instanceof Error ? err.message : String(err)));
+      const msg = err instanceof Error ? err.message : typeof err === 'object' && err !== null ? JSON.stringify(err) : String(err);
+      toast.error("保存に失敗しました: " + msg);
     } finally {
       setSaving(false);
     }
