@@ -71,8 +71,7 @@ const REPORT_CONFIG: Record<string, ReportConfig> = {
   "care-plan-2":       { titleJa: "居宅サービス計画書（第2表）",        needsPeriod: false, landscape: true },
   "care-plan-3":       { titleJa: "週間サービス計画表（第3表）",        needsPeriod: false, landscape: true },
   "support-progress":  { titleJa: "居宅介護支援経過（第5表）",          needsPeriod: true,  landscape: true },
-  "service-usage":        { titleJa: "サービス利用票",                    needsPeriod: true,  landscape: true },
-  "service-provision":    { titleJa: "サービス提供票",                    needsPeriod: true,  landscape: true },
+  "service-usage":        { titleJa: "利用票・提供票",                    needsPeriod: true,  landscape: true },
   "service-usage-detail": { titleJa: "サービス利用票別表",                needsPeriod: true,  landscape: true },
 };
 
@@ -305,7 +304,6 @@ function buildDefaultContent(
         entries: [],
       };
     case "service-usage":
-    case "service-provision":
       return {
         insurer_number: cert?.insurer_number ?? "",
         insured_number: cert?.insured_number ?? "",
@@ -703,10 +701,9 @@ function EditFormCarePlan3({ content, onChange }: {
 // ---------------------------------------------------------------------------
 
 
-function EditFormServiceTicket({ content, onChange, isProvision = false }: {
+function EditFormServiceTicket({ content, onChange }: {
   content: Record<string, unknown>;
   onChange: (c: Record<string, unknown>) => void;
-  isProvision?: boolean;
 }) {
   const s = (k: string) => String(content[k] ?? "");
   const set = (k: string, v: unknown) => onChange({ ...content, [k]: v });
@@ -872,7 +869,7 @@ function EditFormServiceTicket({ content, onChange, isProvision = false }: {
                           className="border border-dashed border-gray-300 text-center cursor-pointer select-none hover:bg-blue-50"
                           style={{ height: 18, width: 18, minWidth: 18 }}
                         >
-                          {svc.planned[di] ? <span className="text-blue-600">○</span> : null}
+                          {svc.planned[di] ? <span className="text-blue-600 font-semibold">1</span> : null}
                         </td>
                       ))}
                       <td className="border border-dashed border-gray-300 text-center text-blue-700 font-semibold">{plannedCount || ""}</td>
@@ -897,7 +894,7 @@ function EditFormServiceTicket({ content, onChange, isProvision = false }: {
                           className="border border-gray-300 text-center cursor-pointer select-none hover:bg-green-50"
                           style={{ height: 18, width: 18, minWidth: 18 }}
                         >
-                          {svc.actual[di] ? <span className="text-green-700">●</span> : null}
+                          {svc.actual[di] ? <span className="text-green-700 font-semibold">1</span> : null}
                         </td>
                       ))}
                       <td className="border border-gray-300 text-center text-green-700 font-semibold">{actualCount || ""}</td>
@@ -905,6 +902,41 @@ function EditFormServiceTicket({ content, onChange, isProvision = false }: {
                   </>
                 );
               })}
+              {/* 合計行 */}
+              {services.length > 0 && (
+                <>
+                  <tr style={{ height: 18 }}>
+                    <td colSpan={4} className="border border-gray-300 bg-gray-100 px-1 text-center text-[10px] font-semibold text-blue-700">予定合計</td>
+                    {DAYS.map((_, di) => {
+                      const count = services.filter((svc) => svc.planned[di]).length;
+                      return (
+                        <td key={di} className="border border-dashed border-gray-300 text-center text-[10px] text-blue-700 font-semibold bg-blue-50" style={{ width: 18, minWidth: 18 }}>
+                          {count > 0 ? count : ""}
+                        </td>
+                      );
+                    })}
+                    <td className="border border-gray-300 text-center text-[10px] text-blue-700 font-semibold bg-blue-50">
+                      {services.reduce((sum, svc) => sum + svc.planned.filter(Boolean).length, 0) || ""}
+                    </td>
+                    <td className="border border-gray-300" />
+                  </tr>
+                  <tr style={{ height: 18 }}>
+                    <td colSpan={4} className="border border-gray-300 bg-gray-100 px-1 text-center text-[10px] font-semibold text-green-700">実績合計</td>
+                    {DAYS.map((_, di) => {
+                      const count = services.filter((svc) => svc.actual[di]).length;
+                      return (
+                        <td key={di} className="border border-gray-300 text-center text-[10px] text-green-700 font-semibold bg-green-50" style={{ width: 18, minWidth: 18 }}>
+                          {count > 0 ? count : ""}
+                        </td>
+                      );
+                    })}
+                    <td className="border border-gray-300 text-center text-[10px] text-green-700 font-semibold bg-green-50">
+                      {services.reduce((sum, svc) => sum + svc.actual.filter(Boolean).length, 0) || ""}
+                    </td>
+                    <td className="border border-gray-300" />
+                  </tr>
+                </>
+              )}
             </tbody>
           </table>
         </div>
@@ -1816,7 +1848,7 @@ function PrintCarePlan3({ c }: { c: Record<string, unknown> }) {
 // Print: ServiceUsage / ServiceProvision (shared layout)
 // ---------------------------------------------------------------------------
 
-function PrintServiceTicket({ c, title, isProvision = false }: { c: Record<string, unknown>; title: string; isProvision?: boolean }) {
+function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: string }) {
   const s = (k: string) => String(c[k] ?? "　");
   const B = "1px solid #000";
   const cellBase: React.CSSProperties = { border: B, padding: "1px 3px", fontSize: "7pt", verticalAlign: "middle" };
@@ -1825,7 +1857,7 @@ function PrintServiceTicket({ c, title, isProvision = false }: { c: Record<strin
   const tdGreen: React.CSSProperties = { ...tdStyle, backgroundColor: "#e8f5e9" };
   const thGreen: React.CSSProperties = { ...thStyle, backgroundColor: "#c8e6c9" };
 
-  const tableNum = isProvision ? "第７表" : "第６表";
+  const tableNum = "第６表";
 
   const services: SvcRow[] = Array.isArray(c.services)
     ? (c.services as SvcRow[]).map((r) => ({
@@ -1943,7 +1975,7 @@ function PrintServiceTicket({ c, title, isProvision = false }: { c: Record<strin
                     {svc.planned.map((v, di) => {
                       const wdi = di % 7;
                       const isWE = wdi === 5 || wdi === 6;
-                      return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", borderStyle: "dashed" }}>{v ? "○" : ""}</td>;
+                      return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", borderStyle: "dashed", fontWeight: "bold" }}>{v ? "1" : ""}</td>;
                     })}
                     <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt" }} rowSpan={2}>{(plannedCount || actualCount) ? `${plannedCount}/${actualCount}` : ""}</td>
                   </tr>
@@ -1952,12 +1984,38 @@ function PrintServiceTicket({ c, title, isProvision = false }: { c: Record<strin
                     {svc.actual.map((v, di) => {
                       const wdi = di % 7;
                       const isWE = wdi === 5 || wdi === 6;
-                      return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0" }}>{v ? "●" : ""}</td>;
+                      return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", fontWeight: "bold" }}>{v ? "1" : ""}</td>;
                     })}
                   </tr>
                 </React.Fragment>
                 );
               })}
+              {/* 予定合計行 */}
+              <tr style={{ height: `${ROW_H}px` }}>
+                <td colSpan={4} style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>予定合計</td>
+                {DAYS.map((_, di) => {
+                  const count = rows.filter((svc) => svc.planned[di]).length;
+                  const wdi = di % 7;
+                  const isWE = wdi === 5 || wdi === 6;
+                  return <td key={di} style={{ ...(isWE ? thGreen : thStyle), color: "#1565c0", backgroundColor: isWE ? "#bbdefb" : "#e3f2fd", fontWeight: "bold", textAlign: "center", padding: "0" }}>{count > 0 ? count : ""}</td>;
+                })}
+                <td style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>
+                  {rows.reduce((sum, svc) => sum + svc.planned.filter(Boolean).length, 0) || ""}
+                </td>
+              </tr>
+              {/* 実績合計行 */}
+              <tr style={{ height: `${ROW_H}px` }}>
+                <td colSpan={4} style={{ ...thStyle, color: "#1b5e20", backgroundColor: "#e8f5e9" }}>実績合計</td>
+                {DAYS.map((_, di) => {
+                  const count = rows.filter((svc) => svc.actual[di]).length;
+                  const wdi = di % 7;
+                  const isWE = wdi === 5 || wdi === 6;
+                  return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), color: "#1b5e20", backgroundColor: isWE ? "#a5d6a7" : "#e8f5e9", fontWeight: "bold", textAlign: "center", padding: "0" }}>{count > 0 ? count : ""}</td>;
+                })}
+                <td style={{ ...tdStyle, color: "#1b5e20", backgroundColor: "#e8f5e9", fontWeight: "bold", textAlign: "center" }}>
+                  {rows.reduce((sum, svc) => sum + svc.actual.filter(Boolean).length, 0) || ""}
+                </td>
+              </tr>
             </tbody>
           </table>
 
@@ -2405,8 +2463,7 @@ function PrintView({ reportType, content, config }: {
     case "face-sheet":        return <PrintFaceSheet c={content} />;
     case "care-plan-3":       return <PrintCarePlan3 c={content} />;
     case "support-progress":  return <PrintSupportProgress c={content} />;
-    case "service-usage":        return <PrintServiceTicket c={content} title="サービス利用票" isProvision={false} />;
-    case "service-provision":    return <PrintServiceTicket c={content} title="サービス提供票" isProvision={true} />;
+    case "service-usage":        return <PrintServiceTicket c={content} title="サービス利用票・提供票" />;
     case "service-usage-detail": return <PrintServiceUsageDetail c={content} />;
     default: return <PrintGeneric c={content} title={config.titleJa} />;
   }
@@ -2421,8 +2478,7 @@ function EditForm({ reportType, content, onChange }: {
     case "face-sheet":        return <EditFormFaceSheet content={content} onChange={onChange} />;
     case "care-plan-3":       return <EditFormCarePlan3 content={content} onChange={onChange} />;
     case "support-progress":  return <EditFormSupportProgress content={content} onChange={onChange} />;
-    case "service-usage":        return <EditFormServiceTicket content={content} onChange={onChange} isProvision={false} />;
-    case "service-provision":    return <EditFormServiceTicket content={content} onChange={onChange} isProvision={true} />;
+    case "service-usage":        return <EditFormServiceTicket content={content} onChange={onChange} />;
     case "service-usage-detail": return <EditFormUsageDetail content={content} onChange={onChange} />;
     default: return <EditFormGeneric content={content} onChange={onChange} label="内容（JSON編集）" />;
   }

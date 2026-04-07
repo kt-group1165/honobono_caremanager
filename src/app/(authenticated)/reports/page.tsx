@@ -6,7 +6,6 @@ import {
   FileText,
   ClipboardList,
   CalendarDays,
-  Truck,
   BookOpen,
 } from "lucide-react";
 
@@ -79,25 +78,14 @@ const REPORT_CARDS: ReportCard[] = [
   },
   {
     type: "service-usage",
-    titleJa: "サービス利用票",
-    titleEn: "Service Usage Sheet",
+    titleJa: "利用票・提供票",
+    titleEn: "Service Usage & Provision Sheet",
     description:
-      "月次カレンダー形式で、利用者がどの日にどのサービスを利用したかを表示する利用票です。",
+      "サービスの月間計画（予定）と実績を管理する利用票・提供票です。予定と実績を一画面で入力・印刷できます。",
     icon: <CalendarDays size={28} />,
     color: "text-orange-600",
     bgColor: "bg-orange-50",
     borderColor: "border-orange-100",
-  },
-  {
-    type: "service-provision",
-    titleJa: "サービス提供票",
-    titleEn: "Service Provision Sheet",
-    description:
-      "事業者視点で計画と実績を対比表示するサービス提供票です。予定と実際の提供状況を確認できます。",
-    icon: <Truck size={28} />,
-    color: "text-teal-600",
-    bgColor: "bg-teal-50",
-    borderColor: "border-teal-100",
   },
   {
     type: "service-usage-detail",
@@ -158,11 +146,9 @@ export default function ReportsPage() {
                             ? "bg-indigo-600 hover:bg-indigo-700"
                             : card.type === "service-usage"
                               ? "bg-orange-600 hover:bg-orange-700"
-                              : card.type === "service-provision"
-                                ? "bg-teal-600 hover:bg-teal-700"
-                                : card.type === "service-usage-detail"
-                                  ? "bg-cyan-600 hover:bg-cyan-700"
-                                  : "bg-gray-600 hover:bg-gray-700"
+                              : card.type === "service-usage-detail"
+                                ? "bg-cyan-600 hover:bg-cyan-700"
+                                : "bg-gray-600 hover:bg-gray-700"
                 }`}
               >
                 <FileText size={15} />
