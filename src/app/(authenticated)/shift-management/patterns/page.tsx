@@ -396,7 +396,7 @@ export default function PatternsPage() {
         )
       );
     } catch (err: unknown) {
-      toast.error("保存に失敗: " + (err instanceof Error ? err.message : String(err)));
+      toast.error("保存に失敗: " + (err instanceof Error ? err.message : typeof err === 'object' && err !== null && 'message' in err ? (err as any).message : JSON.stringify(err)));
     } finally {
       setSavingId(null);
     }

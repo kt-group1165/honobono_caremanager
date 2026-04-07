@@ -886,15 +886,29 @@ function PatternImportModal({ onClose }: PatternImportModalProps) {
         return;
       }
 
+      // 既存の予定を削除してから挿入（重複防止）
+      const [y2, m2] = selectedMonth.split("-").map(Number);
+      const mStart = format(startOfMonth(new Date(y2, m2 - 1, 1)), "yyyy-MM-dd");
+      const mEnd = format(endOfMonth(new Date(y2, m2 - 1, 1)), "yyyy-MM-dd");
+      for (const userId of userIds) {
+        await supabase
+          .from("kaigo_visit_schedule")
+          .delete()
+          .eq("user_id", userId)
+          .gte("visit_date", mStart)
+          .lte("visit_date", mEnd)
+          .eq("status", "scheduled");
+      }
+
       const { error } = await supabase
         .from("kaigo_visit_schedule")
-        .upsert(toInsert, { onConflict: "user_id,visit_date,start_time" });
+        .insert(toInsert);
 
       if (error) throw error;
       toast.success(`${toInsert.length}件の予定を取り込みました`);
       onClose();
     } catch (err: unknown) {
-      toast.error("取り込みに失敗: " + (err instanceof Error ? err.message : String(err)));
+      toast.error("取り込みに失敗: " + (err instanceof Error ? err.message : typeof err === 'object' && err !== null && 'message' in err ? (err as any).message : JSON.stringify(err)));
     } finally {
       setImporting(false);
     }
@@ -1053,7 +1067,7 @@ function UrlManagementModal({ onClose }: UrlManagementModalProps) {
       });
       toast.success("URLを発行しました");
     } catch (err: unknown) {
-      toast.error("URL発行に失敗: " + (err instanceof Error ? err.message : String(err)));
+      toast.error("URL発行に失敗: " + (err instanceof Error ? err.message : typeof err === 'object' && err !== null && 'message' in err ? (err as any).message : JSON.stringify(err)));
     } finally {
       setGenerating(null);
     }
