@@ -1367,7 +1367,7 @@ function TimelineView({
           <div style={{ minWidth: "1800px" }}>
             {/* Time header */}
             <div className="flex border-b bg-gray-50 sticky top-0 z-10">
-              <div className="w-28 shrink-0 border-r px-2 py-2 text-xs font-semibold text-gray-600">
+              <div className="w-28 shrink-0 border-r sticky left-0 z-30 bg-gray-50 px-2 py-2 text-xs font-semibold text-gray-600">
                 {tab === "user" ? "利用者" : "職員"}
               </div>
               <div className="flex-1 flex">
@@ -1386,11 +1386,11 @@ function TimelineView({
             {rows.map((row) => (
               <div key={row.id} className="flex border-b hover:bg-gray-50/50">
                 {/* Name column */}
-                <div className="w-28 shrink-0 border-r px-2 py-2 text-xs font-medium text-gray-800 truncate flex items-center">
+                <div className="w-28 shrink-0 border-r sticky left-0 z-20 bg-white px-2 py-2 text-xs font-medium text-gray-800 truncate flex items-center">
                   {row.name}
                 </div>
                 {/* Timeline bar area */}
-                <div className="flex-1 relative" style={{ minHeight: "3rem" }}>
+                <div className="flex-1 relative" style={{ minHeight: "2.5rem" }}>
                   {/* Hour grid lines */}
                   <div className="absolute inset-0 flex pointer-events-none">
                     {TIMELINE_HOURS.map((h) => (
@@ -1410,7 +1410,7 @@ function TimelineView({
                     ))}
 
                   {/* Schedule bars */}
-                  <div className="relative py-1 flex flex-col gap-0.5 px-0.5">
+                  <div className="absolute inset-0">
                     {row.schedules.map((sched) => {
                       const style = getBarStyle(sched.start_time, sched.end_time);
                       const colors =
@@ -1427,7 +1427,7 @@ function TimelineView({
                         <div
                           key={sched.id}
                           className={cn(
-                            "absolute rounded border px-1 text-[10px] leading-tight truncate flex items-center",
+                            "absolute rounded border px-1 text-[10px] leading-tight overflow-hidden flex flex-col justify-center",
                             colors.bg,
                             colors.border,
                             colors.text
@@ -1440,7 +1440,8 @@ function TimelineView({
                           }}
                           title={`${sched.start_time?.slice(0, 5)}~${sched.end_time?.slice(0, 5)} ${label} ${sched.service_type}`}
                         >
-                          {label} {sched.service_type}
+                          <span className="truncate font-semibold">{label}</span>
+                          <span className="truncate">{sched.service_type}</span>
                         </div>
                       );
                     })}
