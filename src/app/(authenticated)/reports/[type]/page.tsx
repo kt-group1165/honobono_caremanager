@@ -2742,20 +2742,28 @@ export default function ReportTypePage() {
             </div>
           ) : (
             <>
-              {/* Month selector (only for period reports) */}
-              {config.needsPeriod && (
-                <div className="no-print mb-4 flex items-center gap-3">
-                  <label className="text-xs font-medium text-gray-600 flex items-center gap-1">
-                    <CalendarDays size={12} /> 対象月
-                  </label>
-                  <select value={selectedYearMonth} onChange={(e) => setSelectedYearMonth(e.target.value)}
-                    className="rounded-lg border px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
-                    {monthOptions.map((ym) => (
-                      <option key={ym} value={ym}>{fmtJaYear(ym + "-01")}</option>
-                    ))}
-                  </select>
+              {/* Month selector + 帳票一覧ボタン */}
+              <div className="no-print mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {config.needsPeriod && (
+                    <>
+                      <label className="text-xs font-medium text-gray-600 flex items-center gap-1">
+                        <CalendarDays size={12} /> 対象月
+                      </label>
+                      <select value={selectedYearMonth} onChange={(e) => setSelectedYearMonth(e.target.value)}
+                        className="rounded-lg border px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        {monthOptions.map((ym) => (
+                          <option key={ym} value={ym}>{fmtJaYear(ym + "-01")}</option>
+                        ))}
+                      </select>
+                    </>
+                  )}
                 </div>
-              )}
+                <Link href="/reports"
+                  className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-50 transition-colors">
+                  <FileText size={14} /> 帳票一覧
+                </Link>
+              </div>
 
               {/* Document list */}
               <DocList
