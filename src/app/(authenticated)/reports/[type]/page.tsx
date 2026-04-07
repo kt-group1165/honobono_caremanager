@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import React, { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
-  Printer, Loader2, AlertTriangle, FileText, Plus, ChevronLeft,
+  Printer, Loader2, AlertTriangle, FileText, Plus, ChevronLeft, ChevronRight,
   Save, CheckCircle, Clock, Pencil, X, CalendarDays,
 } from "lucide-react";
 import Link from "next/link";
@@ -2435,10 +2435,11 @@ function PreviewScaler({ paperWidth, paperMinHeight, paperPadding, children }: {
 
 // ---------------------------------------------------------------------------
 
-function DocEditor({ doc, config, onSave, onStatusToggle }: {
+function DocEditor({ doc, config, onSave, onStatusToggle, onDirtyChange }: {
   doc: ReportDoc; config: ReportConfig;
   onSave: (content: Record<string, unknown>) => Promise<void>;
   onStatusToggle: () => Promise<void>;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [content, setContent] = useState<Record<string, unknown>>(doc.content ?? {});
   const [saving, setSaving] = useState(false);
@@ -2455,7 +2456,7 @@ function DocEditor({ doc, config, onSave, onStatusToggle }: {
     setDirty(false);
   }, [doc.id, doc.content]);
 
-  const handleChange = (c: Record<string, unknown>) => { setContent(c); setDirty(true); };
+  const handleChange = (c: Record<string, unknown>) => { setContent(c); setDirty(true); onDirtyChange?.(true); };
 
   const handleSave = async () => {
     setSaving(true);
@@ -2529,6 +2530,7 @@ export default function ReportTypePage() {
   const [docsLoading, setDocsLoading] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<ReportDoc | null>(null);
   const [newLoading, setNewLoading] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // Month options
   const monthOptions: string[] = [];
@@ -2634,6 +2636,7 @@ export default function ReportTypePage() {
     const updated = data as ReportDoc;
     setSelectedDoc(updated);
     setDocs((prev) => prev.map((d) => d.id === updated.id ? updated : d));
+    setHasUnsavedChanges(false);
   };
 
   const handleStatusToggle = async () => {
@@ -2671,20 +2674,46 @@ export default function ReportTypePage() {
         <UserSidebar selectedUserId={selectedUserId} onSelectUser={handleUserSelect} />
 
         <div className="flex-1 overflow-y-auto p-6">
-          {/* Header */}
-          <div className="no-print mb-5 flex items-center gap-4">
-            <Link href="/reports"
-              className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-              <ChevronLeft size={16} /> 帳票一覧
-            </Link>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">{config.titleJa}</h1>
-              <p className="text-xs text-gray-500 mt-0.5">
-                公式様式　編集・保存・印刷
-                {config.landscape && <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-blue-700">横向き（A4）</span>}
-              </p>
-            </div>
-          </div>
+          {/* Header with report navigation */}
+          {(() => {
+            const reportOrder = Object.keys(REPORT_CONFIG);
+            const currentIdx = reportOrder.indexOf(reportType);
+            const prevType = currentIdx > 0 ? reportOrder[currentIdx - 1] : null;
+            const nextType = currentIdx < reportOrder.length - 1 ? reportOrder[currentIdx + 1] : null;
+            const navigateTo = (type: string) => {
+              if (hasUnsavedChanges) {
+                if (!window.confirm("保存されていない変更があります。破棄して移動しますか？")) return;
+              }
+              window.location.href = `/reports/${type}`;
+            };
+            return (
+              <div className="no-print mb-4 flex items-center justify-between">
+                <button
+                  onClick={() => prevType && navigateTo(prevType)}
+                  disabled={!prevType}
+                  className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft size={16} />
+                  {prevType ? REPORT_CONFIG[prevType]?.titleJa ?? "" : ""}
+                </button>
+                <div className="text-center">
+                  <h1 className="text-lg font-bold text-gray-900">{config.titleJa}</h1>
+                  <p className="text-xs text-gray-400">
+                    {currentIdx + 1} / {reportOrder.length}
+                    {config.landscape && <span className="ml-2 rounded bg-blue-100 px-1 py-0.5 text-blue-600 text-[10px]">A4横</span>}
+                  </p>
+                </div>
+                <button
+                  onClick={() => nextType && navigateTo(nextType)}
+                  disabled={!nextType}
+                  className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  {nextType ? REPORT_CONFIG[nextType]?.titleJa ?? "" : ""}
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            );
+          })()}
 
           {!selectedUserId ? (
             <div className="flex flex-col items-center justify-center py-24 text-gray-400 no-print">
@@ -2719,6 +2748,7 @@ export default function ReportTypePage() {
                 <DocEditor
                   doc={selectedDoc} config={config}
                   onSave={handleSave} onStatusToggle={handleStatusToggle}
+                  onDirtyChange={setHasUnsavedChanges}
                 />
               )}
             </>
