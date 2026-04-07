@@ -418,6 +418,118 @@ function EditFormCarePlan2({ content, onChange }: {
 }) {
   const s = (key: string) => String(content[key] ?? "");
   const set = (key: string, v: unknown) => onChange({ ...content, [key]: v });
+  const supabaseForAi = createClient();
+
+  // AI生成
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiApiKey, setAiApiKey] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiMode, setAiMode] = useState<"from-services" | "full">("from-services");
+
+  useEffect(() => {
+    const checkAi = async () => {
+      const { data } = await supabaseForAi.from("kaigo_office_settings").select("ai_enabled, ai_api_key").limit(1).single();
+      if (data) {
+        setAiEnabled(!!data.ai_enabled);
+        setAiApiKey(String(data.ai_api_key ?? ""));
+      }
+    };
+    checkAi();
+  }, [supabaseForAi]);
+
+  const handleAiGenerate = async () => {
+    if (!aiApiKey) { toast.error("APIキーが設定されていません。マスタ管理→自事業所設定で設定してください。"); return; }
+    setAiGenerating(true);
+    try {
+      // 利用者情報を取得（contentからuser_nameを使ってDBから取得）
+      const userName = s("user_name");
+      const { data: users } = await supabaseForAi.from("kaigo_users").select("*").eq("name", userName).limit(1);
+      const user = users?.[0];
+      const userId = user?.id;
+
+      let adlSummary = "";
+      let medicalHistory = "";
+      let familySituation = "";
+      let careLevel = "";
+
+      if (userId) {
+        const { data: adl } = await supabaseForAi.from("kaigo_adl_records").select("*").eq("user_id", userId).order("assessment_date", { ascending: false }).limit(1);
+        if (adl?.[0]) {
+          const a = adl[0];
+          adlSummary = `食事:${a.eating} 移乗:${a.transfer} 整容:${a.grooming} トイレ:${a.toilet} 入浴:${a.bathing} 移動:${a.mobility} 階段:${a.stairs} 更衣:${a.dressing} 排便:${a.bowel} 排尿:${a.bladder} 合計:${a.total_score}/100`;
+        }
+        const { data: history } = await supabaseForAi.from("kaigo_medical_history").select("disease_name, status").eq("user_id", userId);
+        medicalHistory = (history || []).map((h: Record<string, unknown>) => `${h.disease_name}(${h.status})`).join("、");
+        const { data: family } = await supabaseForAi.from("kaigo_family_contacts").select("name, relationship").eq("user_id", userId);
+        familySituation = (family || []).map((f: Record<string, unknown>) => `${f.relationship}:${f.name}`).join("、");
+        const { data: cert } = await supabaseForAi.from("kaigo_care_certifications").select("care_level").eq("user_id", userId).eq("status", "active").limit(1);
+        careLevel = cert?.[0]?.care_level ?? "";
+      }
+
+      // 現在のサービス一覧
+      const currentServices = (Array.isArray(content.blocks) ? content.blocks as NeedsBlock[] : [])
+        .flatMap((b) => b.goals.flatMap((g) => g.services))
+        .filter((sv) => sv.content || sv.type)
+        .map((sv) => ({ type: sv.type, content: sv.content, frequency: sv.frequency, provider: sv.provider }));
+
+      const res = await fetch("/api/ai/generate-care-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey: aiApiKey,
+          mode: aiMode,
+          userInfo: {
+            name: userName,
+            age: user?.birth_date ? String(differenceInYears(new Date(), parseISO(user.birth_date))) : "",
+            gender: user?.gender ?? "",
+            careLevel,
+            medicalHistory,
+            adlSummary,
+            familySituation,
+            notes: user?.notes ?? "",
+          },
+          services: currentServices,
+        }),
+      });
+
+      const result = await res.json();
+      if (!res.ok || result.error) {
+        toast.error("AI生成エラー: " + (result.error || "不明なエラー"));
+        return;
+      }
+
+      // 生成結果をフォームに反映
+      const aiBlocks = result.data?.blocks;
+      if (aiBlocks && Array.isArray(aiBlocks)) {
+        const newBlocks: NeedsBlock[] = aiBlocks.map((ab: Record<string, unknown>) => ({
+          needs: String(ab.needs ?? ""),
+          long_term_goal: String(ab.long_term_goal ?? ""),
+          long_term_period: "",
+          goals: [{
+            short_term_goal: String(ab.short_term_goal ?? ""),
+            short_term_period: "",
+            services: Array.isArray(ab.services) ? (ab.services as Record<string, unknown>[]).map((sv) => ({
+              content: String(sv.content ?? ""),
+              insurance_flag: "○",
+              type: String(sv.type ?? ""),
+              provider: String(sv.provider ?? ""),
+              frequency: String(sv.frequency ?? ""),
+              period: "",
+            })) : [],
+          }],
+        }));
+        set("blocks", newBlocks);
+        if (result.data?.overall_policy) {
+          // 第1表の総合的援助方針も更新可能
+        }
+        toast.success(`AIがケアプランを生成しました（入力:${result.usage?.input_tokens}トークン、出力:${result.usage?.output_tokens}トークン）`);
+      }
+    } catch (e) {
+      toast.error("AI生成に失敗しました: " + (e instanceof Error ? e.message : ""));
+    } finally {
+      setAiGenerating(false);
+    }
+  };
 
   // 旧形式の互換: blocks配列がなければ旧データから変換
   const blocks: NeedsBlock[] = Array.isArray(content.blocks) ? (content.blocks as NeedsBlock[]) : [{
@@ -490,6 +602,47 @@ function EditFormCarePlan2({ content, onChange }: {
         <FI label="利用者名" value={s("user_name")} onChange={(v) => set("user_name", v)} />
         <FI label="計画作成日" value={s("creation_date")} onChange={(v) => set("creation_date", v)} />
       </div>
+
+      {/* AI生成パネル */}
+      {aiEnabled && (
+        <div className="rounded-lg border-2 border-purple-200 bg-purple-50/50 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-purple-700">🤖 AIケアプラン生成</span>
+              <span className="text-[10px] text-purple-500">Claude Sonnet</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <select
+              value={aiMode}
+              onChange={(e) => setAiMode(e.target.value as "from-services" | "full")}
+              className="rounded-lg border px-3 py-1.5 text-sm bg-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+            >
+              <option value="from-services">サービスから逆引き（右→左）</option>
+              <option value="full">利用者情報から全体提案</option>
+            </select>
+            <button
+              onClick={handleAiGenerate}
+              disabled={aiGenerating}
+              className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50 transition-colors"
+            >
+              {aiGenerating ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  生成中...
+                </>
+              ) : (
+                <>AIで生成</>
+              )}
+            </button>
+          </div>
+          <p className="mt-2 text-[10px] text-purple-500">
+            {aiMode === "from-services"
+              ? "現在入力されているサービスから、ニーズ・目標文章を自動生成します"
+              : "利用者のアセスメント情報から、ケアプラン全体を提案します"}
+          </p>
+        </div>
+      )}
 
       {blocks.map((block, bi) => (
         <div key={bi} className="rounded-lg border-2 border-blue-200 bg-blue-50/30 p-3 space-y-3">

@@ -41,6 +41,8 @@ type OfficeSettings = {
   area_category: string;
   unit_price: number;
   notes: string;
+  ai_enabled: boolean;
+  ai_api_key: string;
 };
 
 export default function OfficeSettingsPage() {
@@ -104,6 +106,8 @@ export default function OfficeSettingsPage() {
         area_category: form.area_category,
         unit_price: form.unit_price,
         notes: form.notes,
+        ai_enabled: form.ai_enabled,
+        ai_api_key: form.ai_api_key,
       })
       .eq("id", form.id);
     setSaving(false);
@@ -232,6 +236,50 @@ export default function OfficeSettingsPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* AI機能設定 */}
+      <div className="rounded-xl border bg-white p-6 shadow-sm space-y-4">
+        <h2 className="text-sm font-bold text-gray-700 border-b pb-2">AI機能設定</h2>
+
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.ai_enabled ?? false}
+              onChange={(e) => handleChange("ai_enabled", e.target.checked)}
+              className="h-5 w-5 rounded accent-blue-600"
+            />
+            <div>
+              <span className="text-sm font-medium text-gray-800">AIケアプラン生成を有効にする</span>
+              <p className="text-xs text-gray-500">ケアプラン作成時にAIが文章案を自動生成します（Anthropic API使用、従量課金）</p>
+            </div>
+          </label>
+        </div>
+
+        {form.ai_enabled && (
+          <div className="ml-8 space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Anthropic APIキー</label>
+              <input
+                type="password"
+                value={form.ai_api_key ?? ""}
+                onChange={(e) => handleChange("ai_api_key", e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="sk-ant-api03-..."
+              />
+              <p className="mt-1 text-xs text-gray-400">
+                <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                  Anthropic Console
+                </a>
+                でAPIキーを取得してください
+              </p>
+            </div>
+            <div className="rounded-lg bg-blue-50 p-3 text-xs text-blue-700">
+              <b>料金目安：</b>ケアプラン1件の生成あたり約3〜9円（Claude Sonnet使用）。月20件で約60〜180円程度です。
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 備考 */}
