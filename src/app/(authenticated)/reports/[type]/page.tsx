@@ -2278,76 +2278,108 @@ function PrintServiceUsageDetail({ c }: { c: Record<string, unknown> }) {
 function PrintSupportProgress({ c }: { c: Record<string, unknown> }) {
   const s = (k: string) => String(c[k] ?? "");
   const B = "1px solid #000";
-  const cellBase: React.CSSProperties = { border: B, padding: "1px 3px", fontSize: "7.5pt", verticalAlign: "top" };
-  const thStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#f0f0f0", fontWeight: "bold", textAlign: "center" };
+  const cellBase: React.CSSProperties = { border: B, padding: "2px 4px", fontSize: "8pt", verticalAlign: "top" };
+  const thStyle: React.CSSProperties = { ...cellBase, fontWeight: "bold", textAlign: "center" };
   const tdStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#fff", whiteSpace: "pre-wrap" };
 
   const entries: SupportEntry[] = Array.isArray(c.entries) ? (c.entries as SupportEntry[]) : [];
 
-  // Fill to 50 entries total (25 per half)
-  const TOTAL = 50;
-  const filled: SupportEntry[] = [...entries];
-  while (filled.length < TOTAL) filled.push({ date: "", category: "", content: "" });
+  // 左右に分配（データがある分だけ。左を先に埋め、右に溢れる）
+  const ROWS_PER_HALF = 8; // 最低表示行数
+  const dataLeft: SupportEntry[] = [];
+  const dataRight: SupportEntry[] = [];
+  const splitPoint = Math.ceil(entries.length / 2);
+  entries.forEach((e, i) => {
+    if (i < splitPoint) dataLeft.push(e);
+    else dataRight.push(e);
+  });
+  // パディング
+  while (dataLeft.length < ROWS_PER_HALF) dataLeft.push({ date: "", category: "", content: "" });
+  while (dataRight.length < ROWS_PER_HALF) dataRight.push({ date: "", category: "", content: "" });
 
-  const leftEntries = filled.slice(0, 25);
-  const rightEntries = filled.slice(25, 50);
-
-  // A4 landscape: 190mm usable height
-  // Header ≈ 50px, table header ≈ 20px, remaining ≈ 650px / 25 rows ≈ 26px per row
-  const ROW_H = 26;
-
-  const halfTableStyle: React.CSSProperties = { flex: 1, borderCollapse: "collapse" as const };
+  const today = format(new Date(), "yyyy-MM-dd");
 
   const renderHalf = (rows: SupportEntry[]) => (
-    <table style={halfTableStyle}>
+    <table style={{ flex: 1, borderCollapse: "collapse" }}>
       <thead>
-        <tr style={{ height: "20px" }}>
-          <th style={{ ...thStyle, width: "16%" }}>年月日</th>
-          <th style={{ ...thStyle, width: "18%", color: "red" }}>項目</th>
-          <th style={{ ...thStyle, width: "66%" }}>内容</th>
+        <tr>
+          <th style={{ ...thStyle, width: "14%", borderTop: "none" }}>年月日</th>
+          <th style={{ ...thStyle, width: "14%", borderTop: "none", color: "red" }}>項　目</th>
+          <th style={{ ...thStyle, width: "72%", borderTop: "none" }}>内　　容</th>
         </tr>
       </thead>
       <tbody>
-        {rows.map((entry, i) => (
-          <tr key={i} style={{ height: `${ROW_H}px` }}>
-            <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt" }}>
-              {entry.date ? fmtReiwa(entry.date) : "　"}
-            </td>
-            <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt", color: entry.category ? "#000" : undefined }}>
-              {entry.category || "　"}
-            </td>
-            <td style={{ ...tdStyle, fontSize: "7pt" }}>
-              {entry.content || "　"}
-            </td>
-          </tr>
-        ))}
+        {rows.map((entry, i) => {
+          // 行の高さ：内容の長さに応じて可変（最低40px）
+          const contentLen = (entry.content || "").length;
+          const minH = Math.max(40, Math.min(120, contentLen * 1.2));
+          return (
+            <tr key={i} style={{ minHeight: `${minH}px` }}>
+              <td style={{ ...tdStyle, fontSize: "7.5pt", textAlign: "left", lineHeight: "1.4" }}>
+                {entry.date ? (
+                  <>
+                    {fmtReiwa(entry.date)}<br />
+                    {(() => {
+                      const d = new Date(entry.date);
+                      const dow = ["日","月","火","水","木","金","土"][d.getDay()];
+                      return `${dow}曜日`;
+                    })()}
+                    {entry.category && <><br />（{entry.category}）</>}
+                  </>
+                ) : "　"}
+              </td>
+              <td style={{ ...tdStyle, fontSize: "7.5pt", textAlign: "left", lineHeight: "1.4" }}>
+                {entry.category && !entry.date ? entry.category : (entry.category ? (
+                  entry.category.includes("モニタリング") ? "モニタリン\nグ" : entry.category
+                ) : "　")}
+              </td>
+              <td style={{ ...tdStyle, fontSize: "7.5pt", lineHeight: "1.5", padding: "3px 5px" }}>
+                {entry.content || "　"}
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );
 
   return (
-    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "8pt", color: "#000", width: "277mm", height: "190mm", overflow: "hidden" }}>
-      {/* 第5表ラベル */}
-      <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "8pt", marginBottom: "3px" }}>第５表</div>
-
-      {/* タイトル行 */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "3px" }}>
-        <div />
-        <span style={{ fontSize: "14pt", fontWeight: "bold", letterSpacing: "0.3em" }}>居宅介護支援経過</span>
-        <span style={{ fontSize: "8pt" }}>作成年月日　{s("creation_date") || "　　年　月　日"}</span>
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "8pt", color: "#000", width: "277mm", height: "190mm", overflow: "hidden", position: "relative" }}>
+      {/* ヘッダー */}
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div style={{ width: "14px", height: "14px", backgroundColor: "#000" }} />
+          <span style={{ fontSize: "13pt", fontWeight: "bold", letterSpacing: "0.2em" }}>居宅介護支援経過</span>
+        </div>
+        <div style={{ textAlign: "right", fontSize: "8pt", lineHeight: "1.5" }}>
+          {fmtReiwa(today)}<br />
+          {s("office_name") || "　"}
+        </div>
       </div>
 
-      {/* 利用者名・作成者 */}
-      <div style={{ display: "flex", gap: "32px", fontSize: "8.5pt", marginBottom: "4px", borderBottom: B, paddingBottom: "3px" }}>
-        <span>利用者名　<span style={{ fontWeight: "bold" }}>{s("user_name") || "　　　　　　　"}</span>　殿</span>
-        <span>居宅サービス計画作成者氏名　{s("creator_name") || "　　　　　　　"}</span>
+      {/* 要介護度・利用者名・作成者 */}
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "8.5pt", marginBottom: "4px" }}>
+        <div style={{ display: "flex", gap: "24px" }}>
+          <span>要介護度　　<b>{s("care_level") || "　　"}</b></span>
+          <span>利用者名　　<b>{s("user_name") || "　　　　　"}</b>　殿</span>
+        </div>
+        <div style={{ display: "flex", gap: "16px" }}>
+          <span>作成年月日　{s("creation_date") || "　　年　月　日"}</span>
+        </div>
+      </div>
+      <div style={{ fontSize: "8.5pt", marginBottom: "4px", display: "flex", justifyContent: "flex-end" }}>
+        <span>居宅サービス計画作成者氏名　{s("creator_name") || "　　　　　"}</span>
       </div>
 
       {/* メイン2カラムテーブル */}
-      <div style={{ display: "flex", gap: "4px", border: B }}>
-        {renderHalf(leftEntries)}
-        <div style={{ width: "1px", backgroundColor: "#000", flexShrink: 0 }} />
-        {renderHalf(rightEntries)}
+      <div style={{ display: "flex", border: B }}>
+        {renderHalf(dataLeft)}
+        {renderHalf(dataRight)}
+      </div>
+
+      {/* ページ番号 */}
+      <div style={{ position: "absolute", bottom: "4px", left: "50%", transform: "translateX(-50%)", fontSize: "7pt", color: "#666" }}>
+        1 / 1
       </div>
     </div>
   );
