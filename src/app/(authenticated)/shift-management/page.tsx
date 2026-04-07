@@ -624,8 +624,10 @@ function StaffCalendar({ staffId, staffName, currentMonth, onMonthChange }: Staf
   }, [fetchData]);
 
   const isDayUnavailable = (dateStr: string) => {
+    // If staff has ANY monthly records, days without records are unavailable
+    if (availability.length === 0) return false; // No monthly data at all → don't grey out
     const slots = availability.filter((a) => a.available_date === dateStr);
-    if (slots.length === 0) return false;
+    if (slots.length === 0) return true; // No record for this day → unavailable
     return slots.every((s) => !s.is_available);
   };
 
