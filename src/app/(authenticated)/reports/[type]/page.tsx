@@ -424,7 +424,7 @@ function EditFormCarePlan2({ content, onChange }: {
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
-  const [aiMode, setAiMode] = useState<"from-services" | "full">("from-services");
+  const [aiMode, setAiMode] = useState<"from-services" | "from-services-grouped" | "full">("from-services-grouped");
 
   useEffect(() => {
     const checkAi = async () => {
@@ -626,11 +626,12 @@ function EditFormCarePlan2({ content, onChange }: {
           <div className="flex items-center gap-3">
             <select
               value={aiMode}
-              onChange={(e) => setAiMode(e.target.value as "from-services" | "full")}
+              onChange={(e) => setAiMode(e.target.value as "from-services" | "from-services-grouped" | "full")}
               className="rounded-lg border px-3 py-1.5 text-sm bg-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
             >
-              <option value="from-services">サービスから逆引き（右→左）</option>
-              <option value="full">利用者情報から全体提案</option>
+              <option value="from-services">①サービスから逆引き（種類別に分ける）</option>
+              <option value="from-services-grouped">②サービスから逆引き（できるだけまとめる）</option>
+              <option value="full">③利用者情報から全体提案</option>
             </select>
             <button
               onClick={handleAiGenerate}
@@ -649,8 +650,10 @@ function EditFormCarePlan2({ content, onChange }: {
           </div>
           <p className="mt-2 text-[10px] text-purple-500">
             {aiMode === "from-services"
-              ? "現在入力されているサービスから、ニーズ・目標文章を自動生成します"
-              : "利用者のアセスメント情報から、ケアプラン全体を提案します"}
+              ? "①サービスごとに個別のニーズ・目標を生成（詳細なプラン向き）"
+              : aiMode === "from-services-grouped"
+              ? "②関連するサービスを1つのニーズにまとめて生成（シンプルなプラン向き）"
+              : "③利用者のアセスメント情報からケアプラン全体を提案"}
           </p>
         </div>
       )}
