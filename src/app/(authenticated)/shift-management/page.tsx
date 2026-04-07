@@ -63,7 +63,7 @@ interface VisitSchedule {
 
 interface StaffAvailabilitySlot {
   staff_id: string;
-  target_date: string;
+  available_date: string;
   start_time: string;
   end_time: string;
   is_available: boolean;
@@ -113,7 +113,7 @@ function isStaffUnavailableAtTime(
 ): boolean {
   if (!startTime) return false;
   const slots = availability.filter(
-    (a) => a.staff_id === staffId && a.target_date === dateStr
+    (a) => a.staff_id === staffId && a.available_date === dateStr
   );
   if (slots.length === 0) return false;
   const sMin = timeToMinutes(startTime);
@@ -316,9 +316,9 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
         .order("start_time"),
       supabase
         .from("kaigo_staff_availability_monthly")
-        .select("staff_id, target_date, start_time, end_time, is_available")
-        .gte("target_date", from)
-        .lte("target_date", to),
+        .select("staff_id, available_date, start_time, end_time, is_available")
+        .gte("available_date", from)
+        .lte("available_date", to),
       supabase.from("kaigo_staff").select("id, name, name_kana, status").eq("status", "active"),
       supabase
         .from("kaigo_visit_schedule")
@@ -597,10 +597,10 @@ function StaffCalendar({ staffId, staffName, currentMonth, onMonthChange }: Staf
         .order("start_time"),
       supabase
         .from("kaigo_staff_availability_monthly")
-        .select("staff_id, target_date, start_time, end_time, is_available")
+        .select("staff_id, available_date, start_time, end_time, is_available")
         .eq("staff_id", staffId)
-        .gte("target_date", from)
-        .lte("target_date", to),
+        .gte("available_date", from)
+        .lte("available_date", to),
     ]);
 
     const mapped: VisitSchedule[] = (schedRes.data || []).map((r: any) => ({
@@ -624,7 +624,7 @@ function StaffCalendar({ staffId, staffName, currentMonth, onMonthChange }: Staf
   }, [fetchData]);
 
   const isDayUnavailable = (dateStr: string) => {
-    const slots = availability.filter((a) => a.target_date === dateStr);
+    const slots = availability.filter((a) => a.available_date === dateStr);
     if (slots.length === 0) return false;
     return slots.every((s) => !s.is_available);
   };
