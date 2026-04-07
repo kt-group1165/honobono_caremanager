@@ -29,11 +29,23 @@ import { ja } from "date-fns/locale";
 
 type ClaimStatus = "draft" | "confirmed" | "submitted";
 
+type TokuteiKassanType = "none" | "A" | "B" | "C";
+type HospitalCoordType = "none" | "i" | "ii";
+type DischargeType = "none" | "i_i" | "i_ro" | "ii_i" | "ii_ro" | "iii";
+
 interface Addings {
-  initial: boolean;          // 初回加算 300単位
-  hospitalization: boolean;  // 入院時情報連携加算 200単位
-  discharge: boolean;        // 退院・退所加算 600単位
-  outpatient: boolean;       // 通院時情報連携加算 50単位
+  // 加算
+  initial: boolean;                      // 初回加算 300単位
+  tokutei_kassan: TokuteiKassanType;     // 特定事業所加算
+  medical_coop_kassan: boolean;          // 特定事業所医療介護連携加算 125単位
+  hospitalization: HospitalCoordType;   // 入院時情報連携加算
+  discharge: DischargeType;             // 退院・退所加算
+  outpatient: boolean;                  // 通院時情報連携加算 50単位
+  terminal_care: boolean;               // ターミナルケアマネジメント加算 400単位
+  emergency_conference: boolean;        // 緊急時等居宅カンファレンス加算 200単位/回
+  // 減算
+  bcp_not_prepared: boolean;            // 業務継続計画未策定減算
+  abuse_prevention_not_implemented: boolean; // 高齢者虐待防止措置未実施減算
 }
 
 interface ClaimRow {
@@ -46,6 +58,7 @@ interface ClaimRow {
   unit_price: number;
   total_amount: number;
   insurance_amount: number;
+  // existing addition columns
   initial_addition: boolean;
   initial_addition_units: number;
   hospital_coordination: boolean;
@@ -54,6 +67,20 @@ interface ClaimRow {
   discharge_addition_units: number;
   medical_coordination: boolean;
   medical_coordination_units: number;
+  // new columns (migration 008)
+  tokutei_kassan_type: TokuteiKassanType | null;
+  tokutei_kassan_units: number;
+  medical_coop_kassan: boolean;
+  medical_coop_kassan_units: number;
+  discharge_type: DischargeType | null;
+  terminal_care: boolean;
+  terminal_care_units: number;
+  emergency_conference: boolean;
+  emergency_conference_units: number;
+  bcp_not_prepared: boolean;
+  bcp_reduction_pct: number;
+  abuse_prevention_not_implemented: boolean;
+  abuse_reduction_pct: number;
   status: ClaimStatus;
   notes: string | null;
   kaigo_users?: { name: string };
@@ -76,12 +103,36 @@ const CARE_LEVEL_MAP: Record<
   要介護5: { units: 1398, code: "431100", name: "居宅介護支援費(ii)" },
 };
 
-const ADDITION_UNITS = {
-  initial: 300,
-  hospitalization: 200,
-  discharge: 600,
-  outpatient: 50,
-} as const;
+const TOKUTEI_KASSAN_UNITS: Record<TokuteiKassanType, number> = {
+  none: 0,
+  A: 505,
+  B: 407,
+  C: 309,
+};
+
+const HOSPITAL_COORD_UNITS: Record<HospitalCoordType, number> = {
+  none: 0,
+  i: 250,
+  ii: 200,
+};
+
+const DISCHARGE_UNITS: Record<DischargeType, number> = {
+  none: 0,
+  i_i: 450,
+  i_ro: 600,
+  ii_i: 600,
+  ii_ro: 750,
+  iii: 900,
+};
+
+const DISCHARGE_LABELS: Record<DischargeType, string> = {
+  none: "なし",
+  i_i: "(i)イ 450単位",
+  i_ro: "(i)ロ 600単位",
+  ii_i: "(ii)イ 600単位",
+  ii_ro: "(ii)ロ 750単位",
+  iii: "(iii) 900単位",
+};
 
 const STATUS_LABELS: Record<ClaimStatus, string> = {
   draft: "未確定",
@@ -119,19 +170,31 @@ function formatAmount(n: number): string {
 
 function calcAdditionUnits(addings: Addings): number {
   return (
-    (addings.initial ? ADDITION_UNITS.initial : 0) +
-    (addings.hospitalization ? ADDITION_UNITS.hospitalization : 0) +
-    (addings.discharge ? ADDITION_UNITS.discharge : 0) +
-    (addings.outpatient ? ADDITION_UNITS.outpatient : 0)
+    (addings.initial ? 300 : 0) +
+    TOKUTEI_KASSAN_UNITS[addings.tokutei_kassan] +
+    (addings.medical_coop_kassan ? 125 : 0) +
+    HOSPITAL_COORD_UNITS[addings.hospitalization] +
+    DISCHARGE_UNITS[addings.discharge] +
+    (addings.outpatient ? 50 : 0) +
+    (addings.terminal_care ? 400 : 0) +
+    (addings.emergency_conference ? 200 : 0)
   );
+}
+
+function calcReductionUnits(baseUnits: number, addings: Addings): number {
+  // Each reduction is floor(baseUnits * 1%)
+  const bcpRed = addings.bcp_not_prepared ? Math.floor(baseUnits * 1 / 100) : 0;
+  const abuseRed = addings.abuse_prevention_not_implemented ? Math.floor(baseUnits * 1 / 100) : 0;
+  return bcpRed + abuseRed;
 }
 
 function calcTotals(
   baseUnits: number,
   addUnits: number,
+  reductionUnits: number,
   unitPrice: number
 ): { total_units: number; total_amount: number; insurance_amount: number } {
-  const total_units = baseUnits + addUnits;
+  const total_units = baseUnits + addUnits - reductionUnits;
   const total_amount = Math.floor(total_units * unitPrice);
   return { total_units, total_amount, insurance_amount: total_amount };
 }
@@ -173,7 +236,14 @@ function generateCSV(
       (c.initial_addition ? c.initial_addition_units : 0) +
       (c.hospital_coordination ? c.hospital_coordination_units : 0) +
       (c.discharge_addition ? c.discharge_addition_units : 0) +
-      (c.medical_coordination ? c.medical_coordination_units : 0);
+      (c.medical_coordination ? c.medical_coordination_units : 0) +
+      (c.tokutei_kassan_units ?? 0) +
+      (c.medical_coop_kassan ? (c.medical_coop_kassan_units ?? 125) : 0) +
+      (c.terminal_care ? (c.terminal_care_units ?? 400) : 0) +
+      (c.emergency_conference ? (c.emergency_conference_units ?? 200) : 0);
+    const reductionUnitsSum =
+      (c.bcp_not_prepared ? Math.floor(c.units * (c.bcp_reduction_pct ?? 1) / 100) : 0) +
+      (c.abuse_prevention_not_implemented ? Math.floor(c.units * (c.abuse_reduction_pct ?? 1) / 100) : 0);
     const row = [
       "明細",
       billingMonth.replace("-", ""),
@@ -181,7 +251,7 @@ function generateCSV(
       cert?.insured_number ?? "",
       "43", // 居宅介護支援
       c.care_support_code,
-      c.units + additionUnitsSum,
+      c.units + additionUnitsSum - reductionUnitsSum,
       "1",
       c.total_amount,
       c.insurance_amount,
@@ -221,23 +291,54 @@ interface EditModalProps {
 }
 
 function EditModal({ claim, certEntry, onClose, onSave }: EditModalProps) {
+  const supabase = createClient();
+
   const [addings, setAddings] = useState<Addings>({
     initial: claim.initial_addition,
-    hospitalization: claim.hospital_coordination,
-    discharge: claim.discharge_addition,
+    tokutei_kassan: (claim.tokutei_kassan_type as TokuteiKassanType) ?? "none",
+    medical_coop_kassan: claim.medical_coop_kassan ?? false,
+    hospitalization: (() => {
+      if (!claim.hospital_coordination) return "none";
+      return claim.hospital_coordination_units >= 250 ? "i" : "ii";
+    })() as HospitalCoordType,
+    discharge: (claim.discharge_type as DischargeType) ?? (claim.discharge_addition ? "i_ro" : "none"),
     outpatient: claim.medical_coordination,
+    terminal_care: claim.terminal_care ?? false,
+    emergency_conference: claim.emergency_conference ?? false,
+    bcp_not_prepared: claim.bcp_not_prepared ?? false,
+    abuse_prevention_not_implemented: claim.abuse_prevention_not_implemented ?? false,
   });
   const [unitPrice, setUnitPrice] = useState(claim.unit_price);
   const [saving, setSaving] = useState(false);
 
+  // Auto-fill tokutei_kassan and medical_coop_kassan from office settings
+  useEffect(() => {
+    supabase
+      .from("kaigo_office_settings")
+      .select("tokutei_kassan_type, medical_cooperation_kassan")
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return;
+        setAddings((prev) => ({
+          ...prev,
+          tokutei_kassan: (data.tokutei_kassan_type as TokuteiKassanType | null) ?? prev.tokutei_kassan,
+          medical_coop_kassan: data.medical_cooperation_kassan ?? prev.medical_coop_kassan,
+        }));
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const addUnits = calcAdditionUnits(addings);
+  const reductionUnits = calcReductionUnits(claim.units, addings);
   const { total_units, total_amount } = calcTotals(
     claim.units,
     addUnits,
+    reductionUnits,
     unitPrice
   );
 
-  const toggle = (key: keyof Addings) =>
+  const toggleBool = (key: keyof Addings) =>
     setAddings((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const handleSave = async () => {
@@ -248,8 +349,8 @@ function EditModal({ claim, certEntry, onClose, onSave }: EditModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-md rounded-xl border bg-white shadow-xl p-6 space-y-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-lg rounded-xl border bg-white shadow-xl p-6 space-y-5 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-gray-900">
             レセプト編集 — {claim.kaigo_users?.name}
@@ -281,32 +382,157 @@ function EditModal({ claim, certEntry, onClose, onSave }: EditModalProps) {
 
         {/* Additions */}
         <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase mb-2">
-            加算
-          </p>
+          <p className="text-xs font-semibold text-gray-500 uppercase mb-2 tracking-wide">加算</p>
           <div className="space-y-2">
-            {(
-              [
-                ["initial", "初回加算", ADDITION_UNITS.initial],
-                ["hospitalization", "入院時情報連携加算", ADDITION_UNITS.hospitalization],
-                ["discharge", "退院・退所加算", ADDITION_UNITS.discharge],
-                ["outpatient", "通院時情報連携加算", ADDITION_UNITS.outpatient],
-              ] as [keyof Addings, string, number][]
-            ).map(([key, label, units]) => (
-              <label
-                key={key}
-                className="flex items-center gap-3 rounded-lg border px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors"
+
+            {/* 1. 初回加算 */}
+            <label className="flex items-center gap-3 rounded-lg border px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors">
+              <input
+                type="checkbox"
+                checked={addings.initial}
+                onChange={() => toggleBool("initial")}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="flex-1 text-sm text-gray-700">初回加算</span>
+              <span className="text-xs text-gray-400">+300単位</span>
+            </label>
+
+            {/* 2. 特定事業所加算 */}
+            <div className="flex items-center gap-3 rounded-lg border px-3 py-2">
+              <span className="flex-1 text-sm text-gray-700">特定事業所加算</span>
+              <select
+                value={addings.tokutei_kassan}
+                onChange={(e) =>
+                  setAddings((prev) => ({
+                    ...prev,
+                    tokutei_kassan: e.target.value as TokuteiKassanType,
+                  }))
+                }
+                className="rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
-                <input
-                  type="checkbox"
-                  checked={addings[key]}
-                  onChange={() => toggle(key)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="flex-1 text-sm text-gray-700">{label}</span>
-                <span className="text-xs text-gray-400">+{units}単位</span>
-              </label>
-            ))}
+                <option value="none">なし</option>
+                <option value="A">A (+505単位)</option>
+                <option value="B">B (+407単位)</option>
+                <option value="C">C (+309単位)</option>
+              </select>
+            </div>
+
+            {/* 3. 特定事業所医療介護連携加算 */}
+            <label className="flex items-center gap-3 rounded-lg border px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors">
+              <input
+                type="checkbox"
+                checked={addings.medical_coop_kassan}
+                onChange={() => toggleBool("medical_coop_kassan")}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="flex-1 text-sm text-gray-700">特定事業所医療介護連携加算</span>
+              <span className="text-xs text-gray-400">+125単位</span>
+            </label>
+
+            {/* 4. 入院時情報連携加算 */}
+            <div className="flex items-center gap-3 rounded-lg border px-3 py-2">
+              <span className="flex-1 text-sm text-gray-700">入院時情報連携加算</span>
+              <select
+                value={addings.hospitalization}
+                onChange={(e) =>
+                  setAddings((prev) => ({
+                    ...prev,
+                    hospitalization: e.target.value as HospitalCoordType,
+                  }))
+                }
+                className="rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="none">なし</option>
+                <option value="i">(i) +250単位</option>
+                <option value="ii">(ii) +200単位</option>
+              </select>
+            </div>
+
+            {/* 5. 退院・退所加算 */}
+            <div className="flex items-center gap-3 rounded-lg border px-3 py-2">
+              <span className="flex-1 text-sm text-gray-700">退院・退所加算</span>
+              <select
+                value={addings.discharge}
+                onChange={(e) =>
+                  setAddings((prev) => ({
+                    ...prev,
+                    discharge: e.target.value as DischargeType,
+                  }))
+                }
+                className="rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                {(Object.keys(DISCHARGE_LABELS) as DischargeType[]).map((k) => (
+                  <option key={k} value={k}>{DISCHARGE_LABELS[k]}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* 6. 通院時情報連携加算 */}
+            <label className="flex items-center gap-3 rounded-lg border px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors">
+              <input
+                type="checkbox"
+                checked={addings.outpatient}
+                onChange={() => toggleBool("outpatient")}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="flex-1 text-sm text-gray-700">通院時情報連携加算</span>
+              <span className="text-xs text-gray-400">+50単位</span>
+            </label>
+
+            {/* 7. ターミナルケアマネジメント加算 */}
+            <label className="flex items-center gap-3 rounded-lg border px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors">
+              <input
+                type="checkbox"
+                checked={addings.terminal_care}
+                onChange={() => toggleBool("terminal_care")}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="flex-1 text-sm text-gray-700">ターミナルケアマネジメント加算</span>
+              <span className="text-xs text-gray-400">+400単位</span>
+            </label>
+
+            {/* 8. 緊急時等居宅カンファレンス加算 */}
+            <label className="flex items-center gap-3 rounded-lg border px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors">
+              <input
+                type="checkbox"
+                checked={addings.emergency_conference}
+                onChange={() => toggleBool("emergency_conference")}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="flex-1 text-sm text-gray-700">緊急時等居宅カンファレンス加算</span>
+              <span className="text-xs text-gray-400">+200単位/回</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Reductions */}
+        <div>
+          <p className="text-xs font-semibold text-red-500 uppercase mb-2 tracking-wide">減算</p>
+          <div className="space-y-2">
+
+            {/* 9. 業務継続計画未策定減算 */}
+            <label className="flex items-center gap-3 rounded-lg border border-red-100 px-3 py-2 cursor-pointer hover:bg-red-50 transition-colors">
+              <input
+                type="checkbox"
+                checked={addings.bcp_not_prepared}
+                onChange={() => toggleBool("bcp_not_prepared")}
+                className="rounded border-gray-300 text-red-500 focus:ring-red-400"
+              />
+              <span className="flex-1 text-sm text-gray-700">業務継続計画未策定減算</span>
+              <span className="text-xs text-red-400">所定単位数×1%減</span>
+            </label>
+
+            {/* 10. 高齢者虐待防止措置未実施減算 */}
+            <label className="flex items-center gap-3 rounded-lg border border-red-100 px-3 py-2 cursor-pointer hover:bg-red-50 transition-colors">
+              <input
+                type="checkbox"
+                checked={addings.abuse_prevention_not_implemented}
+                onChange={() => toggleBool("abuse_prevention_not_implemented")}
+                className="rounded border-gray-300 text-red-500 focus:ring-red-400"
+              />
+              <span className="flex-1 text-sm text-gray-700">高齢者虐待防止措置未実施減算</span>
+              <span className="text-xs text-red-400">所定単位数×1%減</span>
+            </label>
           </div>
         </div>
 
@@ -329,8 +555,14 @@ function EditModal({ claim, certEntry, onClose, onSave }: EditModalProps) {
         <div className="rounded-lg bg-gray-50 p-3 space-y-1 text-sm">
           <div className="flex justify-between text-gray-600">
             <span>加算単位合計</span>
-            <span>+{addUnits.toLocaleString("ja-JP")} 単位</span>
+            <span className="text-indigo-600">+{addUnits.toLocaleString("ja-JP")} 単位</span>
           </div>
+          {reductionUnits > 0 && (
+            <div className="flex justify-between text-gray-600">
+              <span>減算単位合計</span>
+              <span className="text-red-500">−{reductionUnits.toLocaleString("ja-JP")} 単位</span>
+            </div>
+          )}
           <div className="flex justify-between font-medium text-gray-900">
             <span>合計単位数</span>
             <span>{total_units.toLocaleString("ja-JP")} 単位</span>
@@ -514,13 +746,25 @@ export default function ClaimsPage() {
         }
       }
 
-      // 4. Delete existing claims for this month
+      // 4. Fetch office settings for auto-apply
+      const { data: officeSettings } = await supabase
+        .from("kaigo_office_settings")
+        .select("tokutei_kassan_type, medical_cooperation_kassan")
+        .limit(1)
+        .maybeSingle();
+
+      const officeTokutei = (officeSettings?.tokutei_kassan_type as TokuteiKassanType | null) ?? "none";
+      const officeMedicalCoop = officeSettings?.medical_cooperation_kassan ?? false;
+      const officeTokuteiUnits = TOKUTEI_KASSAN_UNITS[officeTokutei];
+      const officeMedicalCoopUnits = officeMedicalCoop ? 125 : 0;
+
+      // 5. Delete existing claims for this month
       await supabase
         .from("kaigo_care_support_claims")
         .delete()
         .eq("billing_month", billingMonth);
 
-      // 5. Build insert rows
+      // 6. Build insert rows
       const now = new Date().toISOString();
       const rows: Record<string, unknown>[] = [];
 
@@ -532,11 +776,8 @@ export default function ClaimsPage() {
         const levelInfo = CARE_LEVEL_MAP[cert.care_level];
         if (!levelInfo) continue;
 
-        const { total_amount } = calcTotals(
-          levelInfo.units,
-          0,
-          10
-        );
+        const autoAddUnits = officeTokuteiUnits + officeMedicalCoopUnits;
+        const { total_amount } = calcTotals(levelInfo.units, autoAddUnits, 0, 10);
 
         rows.push({
           user_id: user.id,
@@ -555,7 +796,21 @@ export default function ClaimsPage() {
           discharge_addition_units: 0,
           medical_coordination: false,
           medical_coordination_units: 0,
+          tokutei_kassan_type: officeTokutei === "none" ? null : officeTokutei,
+          tokutei_kassan_units: officeTokuteiUnits,
+          medical_coop_kassan: officeMedicalCoop,
+          medical_coop_kassan_units: officeMedicalCoopUnits,
+          discharge_type: null,
+          terminal_care: false,
+          terminal_care_units: 0,
+          emergency_conference: false,
+          emergency_conference_units: 0,
+          bcp_not_prepared: false,
+          bcp_reduction_pct: 0,
+          abuse_prevention_not_implemented: false,
+          abuse_reduction_pct: 0,
           status: "draft",
+          created_at: now,
         });
       }
 
@@ -651,9 +906,11 @@ export default function ClaimsPage() {
     if (!claim) return;
 
     const addUnits = calcAdditionUnits(addings);
+    const reductionUnits = calcReductionUnits(claim.units, addings);
     const { total_amount, insurance_amount } = calcTotals(
       claim.units,
       addUnits,
+      reductionUnits,
       unitPrice
     );
 
@@ -664,14 +921,29 @@ export default function ClaimsPage() {
           unit_price: unitPrice,
           total_amount,
           insurance_amount,
+          // existing columns
           initial_addition: addings.initial,
-          initial_addition_units: addings.initial ? ADDITION_UNITS.initial : 0,
-          hospital_coordination: addings.hospitalization,
-          hospital_coordination_units: addings.hospitalization ? ADDITION_UNITS.hospitalization : 0,
-          discharge_addition: addings.discharge,
-          discharge_addition_units: addings.discharge ? ADDITION_UNITS.discharge : 0,
+          initial_addition_units: addings.initial ? 300 : 0,
+          hospital_coordination: addings.hospitalization !== "none",
+          hospital_coordination_units: HOSPITAL_COORD_UNITS[addings.hospitalization],
+          discharge_addition: addings.discharge !== "none",
+          discharge_addition_units: DISCHARGE_UNITS[addings.discharge],
           medical_coordination: addings.outpatient,
-          medical_coordination_units: addings.outpatient ? ADDITION_UNITS.outpatient : 0,
+          medical_coordination_units: addings.outpatient ? 50 : 0,
+          // new columns
+          tokutei_kassan_type: addings.tokutei_kassan === "none" ? null : addings.tokutei_kassan,
+          tokutei_kassan_units: TOKUTEI_KASSAN_UNITS[addings.tokutei_kassan],
+          medical_coop_kassan: addings.medical_coop_kassan,
+          medical_coop_kassan_units: addings.medical_coop_kassan ? 125 : 0,
+          discharge_type: addings.discharge === "none" ? null : addings.discharge,
+          terminal_care: addings.terminal_care,
+          terminal_care_units: addings.terminal_care ? 400 : 0,
+          emergency_conference: addings.emergency_conference,
+          emergency_conference_units: addings.emergency_conference ? 200 : 0,
+          bcp_not_prepared: addings.bcp_not_prepared,
+          bcp_reduction_pct: addings.bcp_not_prepared ? 1 : 0,
+          abuse_prevention_not_implemented: addings.abuse_prevention_not_implemented,
+          abuse_reduction_pct: addings.abuse_prevention_not_implemented ? 1 : 0,
           updated_at: new Date().toISOString(),
         })
         .eq("id", id);
@@ -899,14 +1171,26 @@ export default function ClaimsPage() {
                   const isExpanded = expandedRows.has(claim.id);
                   const additionLabels: string[] = [];
                   if (claim.initial_addition) additionLabels.push("初回");
+                  if (claim.tokutei_kassan_type && claim.tokutei_kassan_type !== "none") additionLabels.push(`特定${claim.tokutei_kassan_type}`);
+                  if (claim.medical_coop_kassan) additionLabels.push("医療連携");
                   if (claim.hospital_coordination) additionLabels.push("入院連携");
                   if (claim.discharge_addition) additionLabels.push("退院加算");
                   if (claim.medical_coordination) additionLabels.push("通院連携");
+                  if (claim.terminal_care) additionLabels.push("ターミナル");
+                  if (claim.emergency_conference) additionLabels.push("緊急会議");
+                  const hasReduction = (claim.bcp_not_prepared || claim.abuse_prevention_not_implemented);
                   const additionUnitsSum =
                     (claim.initial_addition ? claim.initial_addition_units : 0) +
+                    (claim.tokutei_kassan_units ?? 0) +
+                    (claim.medical_coop_kassan ? (claim.medical_coop_kassan_units ?? 125) : 0) +
                     (claim.hospital_coordination ? claim.hospital_coordination_units : 0) +
                     (claim.discharge_addition ? claim.discharge_addition_units : 0) +
-                    (claim.medical_coordination ? claim.medical_coordination_units : 0);
+                    (claim.medical_coordination ? claim.medical_coordination_units : 0) +
+                    (claim.terminal_care ? (claim.terminal_care_units ?? 400) : 0) +
+                    (claim.emergency_conference ? (claim.emergency_conference_units ?? 200) : 0);
+                  const reductionUnitsSum =
+                    (claim.bcp_not_prepared ? Math.floor(claim.units * (claim.bcp_reduction_pct ?? 1) / 100) : 0) +
+                    (claim.abuse_prevention_not_implemented ? Math.floor(claim.units * (claim.abuse_reduction_pct ?? 1) / 100) : 0);
                   const certEntry = certMap.get(claim.user_id);
 
                   return (
@@ -940,11 +1224,16 @@ export default function ClaimsPage() {
                         {/* 単位数 */}
                         <td className="px-4 py-3 text-right text-gray-800 whitespace-nowrap">
                           <span className="font-medium">
-                            {(claim.units + additionUnitsSum).toLocaleString("ja-JP")}
+                            {(claim.units + additionUnitsSum - reductionUnitsSum).toLocaleString("ja-JP")}
                           </span>
                           {additionUnitsSum > 0 && (
                             <span className="ml-1 text-xs text-indigo-500">
                               (+{additionUnitsSum})
+                            </span>
+                          )}
+                          {reductionUnitsSum > 0 && (
+                            <span className="ml-1 text-xs text-red-400">
+                              (−{reductionUnitsSum})
                             </span>
                           )}
                         </td>
@@ -960,23 +1249,33 @@ export default function ClaimsPage() {
                         <td className="px-4 py-3 text-right font-medium text-blue-700 whitespace-nowrap">
                           {formatAmount(claim.insurance_amount)}
                         </td>
-                        {/* 加算 */}
+                        {/* 加算・減算 */}
                         <td className="px-4 py-3 text-center">
-                          {additionLabels.length > 0 ? (
-                            <button
-                              onClick={() => toggleExpand(claim.id)}
-                              className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700 hover:bg-indigo-100"
-                            >
-                              {additionLabels.length}件
-                              {isExpanded ? (
-                                <ChevronUp size={11} />
-                              ) : (
-                                <ChevronDown size={11} />
-                              )}
-                            </button>
-                          ) : (
-                            <span className="text-xs text-gray-300">なし</span>
-                          )}
+                          <div className="inline-flex flex-col items-center gap-0.5">
+                            {additionLabels.length > 0 ? (
+                              <button
+                                onClick={() => toggleExpand(claim.id)}
+                                className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700 hover:bg-indigo-100"
+                              >
+                                +{additionUnitsSum}単位
+                                {isExpanded ? (
+                                  <ChevronUp size={11} />
+                                ) : (
+                                  <ChevronDown size={11} />
+                                )}
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-300">なし</span>
+                            )}
+                            {hasReduction && (
+                              <button
+                                onClick={() => toggleExpand(claim.id)}
+                                className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-600 hover:bg-red-100"
+                              >
+                                −{reductionUnitsSum}単位
+                              </button>
+                            )}
+                          </div>
                         </td>
                         {/* ステータス */}
                         <td className="px-4 py-3 text-center whitespace-nowrap">
@@ -1023,29 +1322,59 @@ export default function ClaimsPage() {
                         </td>
                       </tr>
 
-                      {/* Expanded addition detail */}
-                      {isExpanded && additionLabels.length > 0 && (
+                      {/* Expanded addition/reduction detail */}
+                      {isExpanded && (additionLabels.length > 0 || hasReduction) && (
                         <tr key={`${claim.id}-expand`} className="bg-indigo-50/40">
                           <td colSpan={12} className="px-8 py-2">
-                            <div className="flex flex-wrap gap-2 text-xs text-indigo-700">
+                            <div className="flex flex-wrap gap-2 text-xs">
                               {claim.initial_addition && (
-                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5">
+                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-indigo-700">
                                   初回加算 +{claim.initial_addition_units}単位
                                 </span>
                               )}
+                              {claim.tokutei_kassan_type && claim.tokutei_kassan_type !== "none" && (
+                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-indigo-700">
+                                  特定事業所加算{claim.tokutei_kassan_type} +{claim.tokutei_kassan_units}単位
+                                </span>
+                              )}
+                              {claim.medical_coop_kassan && (
+                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-indigo-700">
+                                  特定医療介護連携加算 +{claim.medical_coop_kassan_units ?? 125}単位
+                                </span>
+                              )}
                               {claim.hospital_coordination && (
-                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5">
+                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-indigo-700">
                                   入院時情報連携加算 +{claim.hospital_coordination_units}単位
                                 </span>
                               )}
                               {claim.discharge_addition && (
-                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5">
-                                  退院・退所加算 +{claim.discharge_addition_units}単位
+                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-indigo-700">
+                                  退院・退所加算{claim.discharge_type ? `(${DISCHARGE_LABELS[claim.discharge_type as DischargeType]})` : ""} +{claim.discharge_addition_units}単位
                                 </span>
                               )}
                               {claim.medical_coordination && (
-                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5">
+                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-indigo-700">
                                   通院時情報連携加算 +{claim.medical_coordination_units}単位
+                                </span>
+                              )}
+                              {claim.terminal_care && (
+                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-indigo-700">
+                                  ターミナルケアマネジメント加算 +{claim.terminal_care_units ?? 400}単位
+                                </span>
+                              )}
+                              {claim.emergency_conference && (
+                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-indigo-700">
+                                  緊急時等居宅カンファレンス加算 +{claim.emergency_conference_units ?? 200}単位
+                                </span>
+                              )}
+                              {claim.bcp_not_prepared && (
+                                <span className="rounded border border-red-200 bg-white px-2 py-0.5 text-red-600">
+                                  業務継続計画未策定減算 −{Math.floor(claim.units * (claim.bcp_reduction_pct ?? 1) / 100)}単位
+                                </span>
+                              )}
+                              {claim.abuse_prevention_not_implemented && (
+                                <span className="rounded border border-red-200 bg-white px-2 py-0.5 text-red-600">
+                                  虐待防止措置未実施減算 −{Math.floor(claim.units * (claim.abuse_reduction_pct ?? 1) / 100)}単位
                                 </span>
                               )}
                             </div>
