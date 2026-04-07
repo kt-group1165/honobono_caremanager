@@ -5,10 +5,10 @@ import { createClient } from "@/lib/supabase/client";
 import {
   Users,
   Receipt,
-  CalendarDays,
+  ClipboardList,
   AlertTriangle,
   TrendingUp,
-  Clock,
+  FileText,
 } from "lucide-react";
 import { format, differenceInYears, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -18,7 +18,7 @@ import { ja } from "date-fns/locale";
 type SummaryStats = {
   activeUsers: number;
   monthlyBilling: number;
-  todayShiftCount: number;
+  monthlyServiceCount: number;
   expiringCarePlans: number;
 };
 
@@ -31,12 +31,12 @@ type RecentUser = {
   created_at: string;
 };
 
-type TodayShift = {
+type RecentServiceRecord = {
   id: string;
-  staff_name: string;
-  shift_type: string;
-  start_time: string | null;
-  end_time: string | null;
+  service_date: string;
+  user_name: string;
+  service_type: string | null;
+  content: string | null;
 };
 
 // ---- Helper ----
@@ -44,11 +44,6 @@ type TodayShift = {
 function calcAge(birthDate: string | null): string {
   if (!birthDate) return "—";
   return `${differenceInYears(new Date(), parseISO(birthDate))}歳`;
-}
-
-function formatTime(t: string | null): string {
-  if (!t) return "—";
-  return t.slice(0, 5);
 }
 
 function formatCurrency(amount: number): string {
@@ -63,16 +58,6 @@ const statusLabel: Record<string, { text: string; cls: string }> = {
   active: { text: "在籍", cls: "bg-green-100 text-green-700" },
   inactive: { text: "退所", cls: "bg-gray-100 text-gray-600" },
   deceased: { text: "死亡", cls: "bg-red-100 text-red-700" },
-};
-
-const shiftTypeColors: Record<string, string> = {
-  早番: "bg-orange-100 text-orange-700",
-  日勤: "bg-blue-100 text-blue-700",
-  遅番: "bg-purple-100 text-purple-700",
-  夜勤: "bg-indigo-100 text-indigo-700",
-  休み: "bg-gray-100 text-gray-500",
-  有給: "bg-teal-100 text-teal-700",
-  公休: "bg-slate-100 text-slate-600",
 };
 
 // ---- Summary Card ----
@@ -106,11 +91,11 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<SummaryStats>({
     activeUsers: 0,
     monthlyBilling: 0,
-    todayShiftCount: 0,
+    monthlyServiceCount: 0,
     expiringCarePlans: 0,
   });
   const [recentUsers, setRecentUsers] = useState<RecentUser[]>([]);
-  const [todayShifts, setTodayShifts] = useState<TodayShift[]>([]);
+  const [recentServiceRecords, setRecentServiceRecords] = useState<RecentServiceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -151,12 +136,12 @@ export default function DashboardPage() {
           0
         );
 
-        // 3. Today's shift count (non-休み shifts)
-        const { count: todayShiftCount, error: e3 } = await supabase
-          .from("kaigo_shifts")
+        // 3. This month's service record count
+        const { count: monthlyServiceCount, error: e3 } = await supabase
+          .from("kaigo_service_records")
           .select("*", { count: "exact", head: true })
-          .eq("shift_date", todayStr)
-          .not("shift_type", "in", '("休み","有給","公休")');
+          .gte("service_date", monthStart)
+          .lte("service_date", monthEnd);
         if (e3) throw e3;
 
         // 4. Expiring care certifications within 30 days
@@ -171,7 +156,7 @@ export default function DashboardPage() {
         setStats({
           activeUsers: activeUsers ?? 0,
           monthlyBilling,
-          todayShiftCount: todayShiftCount ?? 0,
+          monthlyServiceCount: monthlyServiceCount ?? 0,
           expiringCarePlans: expiringCarePlans ?? 0,
         });
 
@@ -209,37 +194,37 @@ export default function DashboardPage() {
           }))
         );
 
-        // 6. Today's shifts with staff names
-        const { data: shiftsData, error: e6 } = await supabase
-          .from("kaigo_shifts")
-          .select("id, shift_type, start_time, end_time, staff_id")
-          .eq("shift_date", todayStr)
-          .not("shift_type", "in", '("休み","有給","公休")')
-          .order("start_time", { ascending: true })
+        // 6. Recent service records with user names (latest 10)
+        const { data: serviceData, error: e6 } = await supabase
+          .from("kaigo_service_records")
+          .select("id, service_date, service_type, content, user_id")
+          .order("service_date", { ascending: false })
           .limit(10);
         if (e6) throw e6;
 
-        const staffIds = [...new Set((shiftsData ?? []).map((s) => s.staff_id).filter(Boolean))];
-        let staffMap: Record<string, string> = {};
-        if (staffIds.length > 0) {
-          const { data: staffData } = await supabase
-            .from("kaigo_staff")
+        const serviceUserIds = [
+          ...new Set((serviceData ?? []).map((s) => s.user_id).filter(Boolean)),
+        ];
+        let userNameMap: Record<string, string> = {};
+        if (serviceUserIds.length > 0) {
+          const { data: serviceUsersData } = await supabase
+            .from("kaigo_users")
             .select("id, name")
-            .in("id", staffIds);
-          if (staffData) {
-            staffData.forEach((s) => {
-              staffMap[s.id] = s.name;
+            .in("id", serviceUserIds);
+          if (serviceUsersData) {
+            serviceUsersData.forEach((u) => {
+              userNameMap[u.id] = u.name;
             });
           }
         }
 
-        setTodayShifts(
-          (shiftsData ?? []).map((s) => ({
+        setRecentServiceRecords(
+          (serviceData ?? []).map((s) => ({
             id: s.id,
-            staff_name: staffMap[s.staff_id] ?? "—",
-            shift_type: s.shift_type,
-            start_time: s.start_time,
-            end_time: s.end_time,
+            service_date: s.service_date,
+            user_name: userNameMap[s.user_id] ?? "—",
+            service_type: s.service_type ?? null,
+            content: s.content ?? null,
           }))
         );
       } catch (err: unknown) {
@@ -298,11 +283,11 @@ export default function DashboardPage() {
             sub={format(today, "yyyy年M月", { locale: ja })}
           />
           <SummaryCard
-            title="今日のシフト人数"
-            value={`${stats.todayShiftCount}名`}
-            icon={<CalendarDays size={22} className="text-violet-600" />}
+            title="今月のサービス件数"
+            value={`${stats.monthlyServiceCount}件`}
+            icon={<ClipboardList size={22} className="text-violet-600" />}
             iconBg="bg-violet-50"
-            sub="勤務予定スタッフ"
+            sub={format(today, "yyyy年M月", { locale: ja })}
           />
           <SummaryCard
             title="ケアプラン期限切れ"
@@ -377,15 +362,15 @@ export default function DashboardPage() {
           )}
         </section>
 
-        {/* Today's shifts */}
+        {/* Recent service records */}
         <section className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <div className="flex items-center gap-2">
-              <Clock size={18} className="text-violet-500" />
-              <h2 className="font-semibold text-gray-700">今日のシフト</h2>
+              <FileText size={18} className="text-violet-500" />
+              <h2 className="font-semibold text-gray-700">直近のサービス実績</h2>
             </div>
             <span className="rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-600">
-              {dateLabel}
+              直近10件
             </span>
           </div>
 
@@ -395,41 +380,36 @@ export default function DashboardPage() {
                 <div key={i} className="h-8 animate-pulse rounded-lg bg-gray-100" />
               ))}
             </div>
-          ) : todayShifts.length === 0 ? (
+          ) : recentServiceRecords.length === 0 ? (
             <p className="px-5 py-8 text-center text-sm text-gray-400">
-              本日のシフトはありません
+              サービス実績がありません
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500">
-                    <th className="px-4 py-3">職員名</th>
-                    <th className="px-4 py-3">シフト区分</th>
-                    <th className="px-4 py-3">時間帯</th>
+                    <th className="px-4 py-3">日付</th>
+                    <th className="px-4 py-3">利用者名</th>
+                    <th className="px-4 py-3">サービス種別</th>
+                    <th className="px-4 py-3">内容</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {todayShifts.map((s) => {
-                    const shiftCls = shiftTypeColors[s.shift_type] ?? "bg-gray-100 text-gray-600";
-                    const timeRange =
-                      s.start_time && s.end_time
-                        ? `${formatTime(s.start_time)} 〜 ${formatTime(s.end_time)}`
-                        : s.start_time
-                        ? `${formatTime(s.start_time)}〜`
-                        : "—";
-                    return (
-                      <tr key={s.id} className="hover:bg-gray-50/60 transition-colors">
-                        <td className="px-4 py-3 font-medium text-gray-800">{s.staff_name}</td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${shiftCls}`}>
-                            {s.shift_type}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{timeRange}</td>
-                      </tr>
-                    );
-                  })}
+                  {recentServiceRecords.map((s) => (
+                    <tr key={s.id} className="hover:bg-gray-50/60 transition-colors">
+                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                        {format(parseISO(s.service_date), "M/d", { locale: ja })}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-gray-800">{s.user_name}</td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                        {s.service_type ?? <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 max-w-[180px] truncate">
+                        {s.content ?? <span className="text-gray-300">—</span>}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

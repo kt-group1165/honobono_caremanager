@@ -2524,7 +2524,14 @@ export default function ReportTypePage() {
   const config = REPORT_CONFIG[reportType];
   const supabase = createClient();
 
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  // URLパラメータから利用者IDを復元
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search);
+      return sp.get("user") || null;
+    }
+    return null;
+  });
   const [selectedYearMonth, setSelectedYearMonth] = useState(format(new Date(), "yyyy-MM"));
   const [docs, setDocs] = useState<ReportDoc[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
@@ -2539,6 +2546,14 @@ export default function ReportTypePage() {
     monthOptions.push(format(d, "yyyy-MM"));
   }
   monthOptions.sort((a, b) => b.localeCompare(a));
+
+  // URLパラメータからの初期ユーザーがいればデータをロード
+  useEffect(() => {
+    if (selectedUserId) {
+      handleUserSelect(selectedUserId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load docs when user selected
   const loadDocs = useCallback(async (userId: string) => {
@@ -2684,7 +2699,7 @@ export default function ReportTypePage() {
               if (hasUnsavedChanges) {
                 if (!window.confirm("保存されていない変更があります。破棄して移動しますか？")) return;
               }
-              window.location.href = `/reports/${type}`;
+              window.location.href = `/reports/${type}${selectedUserId ? `?user=${selectedUserId}` : ""}`;
             };
             return (
               <div className="no-print mb-4 flex items-center justify-between">
