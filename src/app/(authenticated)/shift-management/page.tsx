@@ -483,7 +483,7 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
                           key={sched.id}
                           onClick={() => unavail && setReassignModal(sched)}
                           className={cn(
-                            "w-full text-left rounded px-1 py-0.5 text-[10px] leading-tight",
+                            "w-full text-left rounded px-1 py-0.5 text-[8px] leading-tight whitespace-nowrap overflow-hidden text-ellipsis",
                             unavail
                               ? "bg-red-50 text-red-600 font-semibold cursor-pointer hover:bg-red-100"
                               : "bg-blue-50 text-blue-700 cursor-default"
@@ -491,7 +491,7 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
                           title={unavail ? "職員が対応不可のため、クリックして代替候補を表示" : undefined}
                         >
                           {sched.start_time?.slice(0, 5)}~{sched.end_time?.slice(0, 5)} {sched.staff_name ?? ""} {sched.service_type}
-                          {unavail && <AlertTriangle size={9} className="inline ml-0.5" />}
+                          {unavail && <AlertTriangle size={8} className="inline ml-0.5" />}
                         </button>
                       );
                     })}
@@ -734,13 +734,13 @@ function StaffCalendar({ staffId, staffName, currentMonth, onMonthChange }: Staf
                         <div
                           key={sched.id}
                           className={cn(
-                            "w-full text-left rounded px-1 py-0.5 text-[10px] leading-tight",
+                            "w-full text-left rounded px-1 py-0.5 text-[8px] leading-tight whitespace-nowrap overflow-hidden text-ellipsis",
                             isRed ? "bg-red-50 text-red-600 font-semibold" : col
                           )}
                         >
                           {sched.start_time?.slice(0, 5)}~{sched.end_time?.slice(0, 5)} {sched.user_name ?? ""} {sched.service_type}
-                          {isRed && <AlertTriangle size={9} className="inline ml-0.5" />}
-                          {conflict && <span className="ml-0.5 text-[9px]">重複</span>}
+                          {isRed && <AlertTriangle size={8} className="inline ml-0.5" />}
+                          {conflict && <span className="ml-0.5">重複</span>}
                         </div>
                       );
                     })}
