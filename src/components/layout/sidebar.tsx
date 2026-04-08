@@ -51,6 +51,7 @@ const NAV_HOME_CARE: NavItem[] = [
   { name: "職員管理", href: "/staff", icon: UserCog },
   { name: "シフト管理", href: "/shift-management", icon: CalendarDays },
   { name: "パターン登録", href: "/shift-management/patterns", icon: Clock },
+  { name: "提供票", href: "/provision-tickets", icon: FileSpreadsheet },
   { name: "サービス実施記録", href: "/visit-records", icon: ClipboardCheck },
   { name: "実績管理", href: "/visit-billing", icon: Calculator },
   { name: "帳票作成", href: "/reports-visit", icon: FileText },
