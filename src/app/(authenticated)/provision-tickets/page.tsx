@@ -44,10 +44,6 @@ interface KaigoStaff {
   name: string;
 }
 
-interface KaigoProvider {
-  id: string;
-  provider_name: string;
-}
 
 interface VisitSchedule {
   id: string;
@@ -61,13 +57,12 @@ interface VisitSchedule {
   staff_name?: string | null;
 }
 
-// A "row" in the provision ticket grid = unique combination of service + time + provider
+// A "row" in the provision ticket grid = unique combination of service + time
 interface ServiceRow {
   key: string; // e.g. "身体介護1__09:00__10:00"
   service_type: string;
   start_time: string;
   end_time: string;
-  provider_name: string;
   staff_id?: string;
   staff_name?: string;
 }
@@ -113,7 +108,6 @@ export default function ProvisionTicketsPage() {
   const [selectedMonth, setSelectedMonth] = useState(() => new Date());
   const [userData, setUserData] = useState<KaigoUser | null>(null);
   const [allStaff, setAllStaff] = useState<KaigoStaff[]>([]);
-  const [providers, setProviders] = useState<KaigoProvider[]>([]);
   const [serviceUnits, setServiceUnits] = useState<Record<string, number>>({}); // service_name -> units
 
   const [serviceRows, setServiceRows] = useState<ServiceRow[]>([]);
@@ -127,7 +121,7 @@ export default function ProvisionTicketsPage() {
 
   // Add service row modal
   const [showAddRow, setShowAddRow] = useState(false);
-  const [addRowForm, setAddRowForm] = useState({ start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", provider_id: "", staff_id: "" });
+  const [addRowForm, setAddRowForm] = useState({ start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", staff_id: "" });
   const [showAddServiceSelector, setShowAddServiceSelector] = useState(false);
   // Edit row modal
   const [editRowKey, setEditRowKey] = useState<string | null>(null);
@@ -144,13 +138,11 @@ export default function ProvisionTicketsPage() {
   // ── Load master data ──────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
-      const [staffRes, providerRes, serviceCodeRes] = await Promise.all([
+      const [staffRes, serviceCodeRes] = await Promise.all([
         supabase.from("kaigo_staff").select("id, name").eq("status", "active").order("name"),
-        supabase.from("kaigo_service_providers").select("id, provider_name").order("provider_name"),
         supabase.from("kaigo_service_codes").select("service_name, units").eq("calculation_type", "基本"),
       ]);
       setAllStaff(staffRes.data || []);
-      setProviders(providerRes.data || []);
       // Build units lookup: service_name -> units
       const unitsMap: Record<string, number> = {};
       for (const sc of (serviceCodeRes.data || []) as { service_name: string; units: number }[]) {
@@ -225,7 +217,7 @@ export default function ProvisionTicketsPage() {
           service_type: s.service_type,
           start_time: s.start_time,
           end_time: s.end_time,
-          provider_name: "",
+
           staff_id: s.staff_id ?? undefined,
           staff_name: s.staff_name ?? undefined,
         });
@@ -390,14 +382,12 @@ export default function ProvisionTicketsPage() {
       toast.error("同じサービス行が既に存在します");
       return;
     }
-    const provObj = providers.find((p) => p.id === addRowForm.provider_id);
     const staffObj = allStaff.find((s) => s.id === addRowForm.staff_id);
     setServiceRows((prev) => [...prev, {
       key,
       service_type: addRowForm.service_name,
       start_time: addRowForm.start_time + ":00",
       end_time: addRowForm.end_time + ":00",
-      provider_name: provObj?.provider_name ?? "",
       staff_id: addRowForm.staff_id || undefined,
       staff_name: staffObj?.name ?? undefined,
     }]);
@@ -744,7 +734,7 @@ export default function ProvisionTicketsPage() {
                 </h2>
                 <button
                   onClick={() => {
-                    setAddRowForm({ start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", provider_id: "", staff_id: "" });
+                    setAddRowForm({ start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", staff_id: "" });
                     setShowAddRow(true);
                   }}
                   className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 no-print"
@@ -1044,13 +1034,6 @@ export default function ProvisionTicketsPage() {
                     setShowAddServiceSelector(false);
                   }}
                 />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">事業所</label>
-                <select value={addRowForm.provider_id} onChange={(e) => setAddRowForm((f) => ({ ...f, provider_id: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
-                  <option value="">-- 選択 --</option>
-                  {providers.map((p) => <option key={p.id} value={p.id}>{p.provider_name}</option>)}
-                </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">担当職員</label>
