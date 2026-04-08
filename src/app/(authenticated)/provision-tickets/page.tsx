@@ -598,7 +598,7 @@ export default function ProvisionTicketsPage() {
 
   // ── CSV Export (ケアプランデータ連携システム標準仕様 第6表 実績) ────────
   const handleCsvExport = () => {
-    if (!selectedUserId || !userData) {
+    if (!selectedUserId) {
       toast.error("利用者を選択してください");
       return;
     }
@@ -617,8 +617,8 @@ export default function ProvisionTicketsPage() {
     }
 
     const csvVersion = "202407"; // Version 4.1 (令和6年10月改定)
-    const insurerNo = userData.insurer_no ?? "";
-    const insuredNo = userData.insured_no ?? "";
+    const insurerNo = userData?.insurer_no ?? "";
+    const insuredNo = userData?.insured_no ?? "";
     const periodYm = `${year}${String(month).padStart(2, "0")}`;
     const providerCode = officeInfo?.provider_number ?? "";
     const now = new Date();
