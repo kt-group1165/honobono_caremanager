@@ -19,6 +19,8 @@ import {
   Check,
   Loader2,
   AlertTriangle,
+  Save,
+  Undo2,
 } from "lucide-react";
 import {
   format,
@@ -1147,6 +1149,11 @@ function UrlManagementModal({ onClose }: UrlManagementModalProps) {
 
 // ─── Timeline View ───────────────────────────────────────────────────────────
 
+interface PendingChange {
+  schedId: string;
+  updates: Record<string, string>;
+}
+
 const TIMELINE_START_HOUR = 0;
 const TIMELINE_END_HOUR = 24;
 const TIMELINE_DEFAULT_SCROLL_HOUR = 8;
@@ -1188,6 +1195,7 @@ interface TimelineViewProps {
   onDateChange: (d: Date) => void;
   currentMonth: Date;
   onMonthChange: (d: Date) => void;
+  onPendingChangesChange?: (hasPending: boolean) => void;
 }
 
 function TimelineView({
@@ -1198,12 +1206,31 @@ function TimelineView({
   onDateChange,
   currentMonth,
   onMonthChange,
+  onPendingChangesChange,
 }: TimelineViewProps) {
   const supabase = createClient();
   const [schedules, setSchedules] = useState<VisitSchedule[]>([]);
   const [availability, setAvailability] = useState<StaffAvailabilitySlot[]>([]);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
+
+  // ─── Pending changes (saved on button click) ──────────────────────
+  const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
+
+  // Notify parent & guard browser navigation when pending changes exist
+  useEffect(() => {
+    onPendingChangesChange?.(pendingChanges.length > 0);
+  }, [pendingChanges.length, onPendingChangesChange]);
+
+  useEffect(() => {
+    if (pendingChanges.length === 0) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [pendingChanges.length]);
 
   // ─── Drag-and-drop state ───────────────────────────────────────────
   const [dragging, setDragging] = useState<{
@@ -1376,8 +1403,8 @@ function TimelineView({
       const origLeft = parseFloat(origStyle.left);
       const origWidth = parseFloat(origStyle.width);
 
-      // Snap to 30-min intervals: each 30 min = (30 / TIMELINE_TOTAL_MINUTES) * 100 percent
-      const snapPercent = (30 / TIMELINE_TOTAL_MINUTES) * 100;
+      // Snap to 15-min intervals: each 15 min = (15 / TIMELINE_TOTAL_MINUTES) * 100 percent
+      const snapPercent = (15 / TIMELINE_TOTAL_MINUTES) * 100;
       let newLeft = origLeft + deltaPercent;
       newLeft = Math.round(newLeft / snapPercent) * snapPercent;
       newLeft = Math.max(0, Math.min(100 - origWidth, newLeft));
@@ -1412,9 +1439,9 @@ function TimelineView({
         (preview.width / 100) * TIMELINE_TOTAL_MINUTES;
       const newEndMinutes = newStartMinutes + durationMinutes;
 
-      // Snap to 30-min
-      const snappedStart = Math.round(newStartMinutes / 30) * 30;
-      const snappedEnd = Math.round(newEndMinutes / 30) * 30;
+      // Snap to 15-min
+      const snappedStart = Math.round(newStartMinutes / 15) * 15;
+      const snappedEnd = Math.round(newEndMinutes / 15) * 15;
 
       const formatTime = (totalMins: number) => {
         const h = Math.floor(totalMins / 60);
@@ -1439,7 +1466,7 @@ function TimelineView({
 
       if (!timeChanged && !rowChanged) return;
 
-      // Update Supabase
+      // Build update data
       const updateData: Record<string, string> = {};
       if (timeChanged) {
         updateData.start_time = newStartTime;
@@ -1449,22 +1476,66 @@ function TimelineView({
         updateData[rowField] = newRowId;
       }
 
-      const { error } = await supabase
-        .from("kaigo_visit_schedule")
-        .update(updateData)
-        .eq("id", drag.schedId);
+      // Add to pending changes (merge if same schedId already pending)
+      setPendingChanges((prev) => {
+        const existing = prev.find((p) => p.schedId === drag.schedId);
+        if (existing) {
+          return prev.map((p) =>
+            p.schedId === drag.schedId
+              ? { ...p, updates: { ...p.updates, ...updateData } }
+              : p
+          );
+        }
+        return [...prev, { schedId: drag.schedId, updates: updateData }];
+      });
 
-      if (error) {
-        toast.error("スケジュール更新に失敗しました");
-        console.error(error);
-      } else {
-        toast.success("スケジュールを更新しました");
-      }
+      // Apply change locally for immediate visual feedback
+      setSchedules((prev) =>
+        prev.map((s) => {
+          if (s.id !== drag.schedId) return s;
+          const updated = { ...s };
+          if (updateData.start_time) updated.start_time = updateData.start_time;
+          if (updateData.end_time) updated.end_time = updateData.end_time;
+          if (updateData.user_id) updated.user_id = updateData.user_id;
+          if (updateData.staff_id) updated.staff_id = updateData.staff_id;
+          return updated;
+        })
+      );
 
-      fetchData();
+      toast.info("変更あり — 保存ボタンで確定してください");
     },
     [dragPreview, rows, tab, supabase, fetchData]
   );
+
+  // ─── Save / Discard pending changes ────────────────────────────────
+  const handleSavePendingChanges = useCallback(async () => {
+    if (pendingChanges.length === 0) return;
+    setSaving(true);
+    let hasError = false;
+    for (const change of pendingChanges) {
+      const { error } = await supabase
+        .from("kaigo_visit_schedule")
+        .update(change.updates)
+        .eq("id", change.schedId);
+      if (error) {
+        console.error(error);
+        hasError = true;
+      }
+    }
+    if (hasError) {
+      toast.error("一部の変更の保存に失敗しました");
+    } else {
+      toast.success(`${pendingChanges.length}件の変更を保存しました`);
+    }
+    setPendingChanges([]);
+    setSaving(false);
+    fetchData();
+  }, [pendingChanges, supabase, fetchData]);
+
+  const handleDiscardPendingChanges = useCallback(() => {
+    setPendingChanges([]);
+    fetchData();
+  }, [fetchData]);
 
   // Cancel drag on escape or mouse leaving window
   useEffect(() => {
@@ -1521,6 +1592,29 @@ function TimelineView({
         <div className="ml-2 text-sm text-gray-600">
           選択日: <span className="font-semibold text-gray-900">{format(selectedDate, "M月d日(E)", { locale: ja })}</span>
         </div>
+        {pendingChanges.length > 0 && (
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs text-amber-600 font-medium">
+              {pendingChanges.length}件の未保存の変更
+            </span>
+            <button
+              onClick={handleDiscardPendingChanges}
+              disabled={saving}
+              className="flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              <Undo2 size={14} />
+              取消
+            </button>
+            <button
+              onClick={handleSavePendingChanges}
+              disabled={saving}
+              className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              保存
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Mini date selector strip */}
@@ -1533,7 +1627,13 @@ function TimelineView({
           return (
             <button
               key={ds}
-              onClick={() => onDateChange(day)}
+              onClick={() => {
+                if (pendingChanges.length > 0) {
+                  if (!window.confirm("未保存の変更があります。破棄して日付を変更しますか？")) return;
+                  setPendingChanges([]);
+                }
+                onDateChange(day);
+              }}
               className={cn(
                 "flex flex-col items-center rounded px-1.5 py-1 text-[10px] leading-tight min-w-[2rem] transition-colors",
                 isSelected
@@ -1729,6 +1829,14 @@ export default function ShiftManagementPage() {
   const [showUrlModal, setShowUrlModal] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("calendar");
   const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [hasPendingChanges, setHasPendingChanges] = useState(false);
+
+  const confirmIfPending = (action: () => void) => {
+    if (hasPendingChanges) {
+      if (!window.confirm("未保存の変更があります。破棄しますか？")) return;
+    }
+    action();
+  };
 
   useEffect(() => {
     const fetch = async () => {
@@ -1765,7 +1873,7 @@ export default function ShiftManagementPage() {
           {sidebarTab === "staff" && (
             <div className="flex rounded-lg border overflow-hidden">
               <button
-                onClick={() => setViewMode("calendar")}
+                onClick={() => confirmIfPending(() => setViewMode("calendar"))}
                 className={cn(
                   "flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition-colors",
                   viewMode === "calendar"
@@ -1777,7 +1885,7 @@ export default function ShiftManagementPage() {
                 カレンダー
               </button>
               <button
-                onClick={() => setViewMode("timeline")}
+                onClick={() => confirmIfPending(() => setViewMode("timeline"))}
                 className={cn(
                   "flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition-colors",
                   viewMode === "timeline"
@@ -1812,19 +1920,19 @@ export default function ShiftManagementPage() {
         {/* Sidebar */}
         <DualSidebar
           tab={sidebarTab}
-          onTabChange={setSidebarTab}
+          onTabChange={(t) => confirmIfPending(() => setSidebarTab(t))}
           users={users}
           staff={staff}
           selectedUserId={selectedUserId}
           selectedStaffId={selectedStaffId}
-          onSelectUser={(id) => {
+          onSelectUser={(id) => confirmIfPending(() => {
             setSelectedUserId(id);
             setSidebarTab("user");
-          }}
-          onSelectStaff={(id) => {
+          })}
+          onSelectStaff={(id) => confirmIfPending(() => {
             setSelectedStaffId(id);
             setSidebarTab("staff");
-          }}
+          })}
           loading={loadingLists}
         />
 
@@ -1839,6 +1947,7 @@ export default function ShiftManagementPage() {
               onDateChange={setSelectedDate}
               currentMonth={currentMonth}
               onMonthChange={setCurrentMonth}
+              onPendingChangesChange={setHasPendingChanges}
             />
           ) : sidebarTab === "user" ? (
             selectedUserId && selectedUser ? (

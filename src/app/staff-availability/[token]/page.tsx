@@ -1077,7 +1077,7 @@ function MyShiftTab({ staffId }: { staffId: string }) {
         </>
       )}
 
-      {/* Selected day detail - full-width card */}
+      {/* Selected day detail - vertical timeline */}
       {selectedDate && (
         <div className="rounded-2xl border bg-white shadow-lg overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
@@ -1097,68 +1097,83 @@ function MyShiftTab({ staffId }: { staffId: string }) {
             </button>
           </div>
 
-          <div className="p-4">
+          <div className="px-4 py-3">
             {selectedSchedules.length === 0 ? (
               <div className="text-center py-8 text-gray-400">
                 <Calendar size={32} className="mx-auto mb-2 opacity-50" />
                 <p className="text-sm">この日の予定はありません</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {selectedSchedules.map((sched) => {
+              <div className="space-y-0">
+                {selectedSchedules.map((sched, idx) => {
                   const color = getServiceColor(sched.service_type);
+                  const lineColor =
+                    sched.service_type === "身体介護"
+                      ? "bg-orange-400"
+                      : sched.service_type === "生活援助"
+                      ? "bg-green-500"
+                      : sched.service_type === "身体・生活"
+                      ? "bg-purple-500"
+                      : sched.service_type === "通院等乗降介助"
+                      ? "bg-sky-500"
+                      : "bg-gray-400";
+                  const dotColor = lineColor.replace("bg-", "text-").replace("-400", "-500").replace("-500", "-500");
+                  const isLast = idx === selectedSchedules.length - 1;
+
                   return (
-                    <div
-                      key={sched.id}
-                      className={cn(
-                        "rounded-xl border p-4",
-                        color.bg,
-                        color.border
-                      )}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2">
-                            <Clock size={14} className={color.text} />
-                            <span
-                              className={cn(
-                                "text-sm font-bold",
-                                color.text
-                              )}
-                            >
-                              {sched.start_time.slice(0, 5)}〜
-                              {sched.end_time.slice(0, 5)}
+                    <div key={sched.id} className="flex gap-3">
+                      {/* Timeline track */}
+                      <div className="flex flex-col items-center w-5 shrink-0">
+                        {/* Start dot */}
+                        <div className={cn("w-2.5 h-2.5 rounded-full shrink-0 mt-1", lineColor)} />
+                        {/* Connecting line */}
+                        <div className={cn("w-0.5 flex-1 min-h-[3rem]", lineColor)} />
+                        {/* End dot */}
+                        <div className={cn("w-2.5 h-2.5 rounded-full shrink-0 mb-1", lineColor)} />
+                      </div>
+
+                      {/* Content */}
+                      <div className={cn("flex-1 pb-5", isLast ? "pb-2" : "")}>
+                        {/* Start time + name + service type */}
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-sm font-bold text-gray-900 tabular-nums">
+                            {sched.start_time.slice(0, 5)}
+                          </span>
+                          <span className="text-sm font-semibold text-gray-800">
+                            {sched.user_name}
+                          </span>
+                          {sched.service_type !== "身体介護" && sched.service_type !== "生活援助" && (
+                            <span className={cn("text-xs", color.text)}>
+                              ({sched.service_type.replace("通院等乗降介助", "障")})
                             </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <User size={14} className="text-gray-500" />
-                            <span className="text-sm font-medium text-gray-800">
-                              {sched.user_name}
-                            </span>
-                          </div>
+                          )}
+                        </div>
+                        {/* Service badge for non-default types */}
+                        {(sched.service_type === "身体・生活" || sched.service_type === "通院等乗降介助") && (
                           <span
                             className={cn(
-                              "inline-block text-xs font-medium px-2.5 py-1 rounded-full",
-                              color.bg,
-                              color.text,
-                              "border",
-                              color.border
+                              "inline-block text-[10px] font-medium px-2 py-0.5 rounded-full mt-1",
+                              color.bg, color.text, "border", color.border
                             )}
                           >
                             {sched.service_type}
                           </span>
-                          {sched.status === "changed" && (
-                            <span className="inline-block text-xs font-medium px-2.5 py-1 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200 ml-1">
-                              変更あり
-                            </span>
-                          )}
+                        )}
+                        {sched.status === "changed" && (
+                          <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200 mt-1 ml-1">
+                            変更あり
+                          </span>
+                        )}
+                        {sched.notes && (
+                          <p className="text-xs text-gray-500 mt-1">{sched.notes}</p>
+                        )}
+                        {/* End time */}
+                        <div className="mt-auto pt-2">
+                          <span className="text-sm text-gray-500 tabular-nums">
+                            {sched.end_time.slice(0, 5)}
+                          </span>
                         </div>
                       </div>
-                      {sched.notes && (
-                        <p className="mt-2 text-xs text-gray-600 bg-white/60 rounded-lg p-2">
-                          {sched.notes}
-                        </p>
-                      )}
                     </div>
                   );
                 })}
