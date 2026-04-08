@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { UserSidebar } from "@/components/users/user-sidebar";
@@ -18,6 +18,7 @@ import {
   Clock as ClockIcon,
   AlertTriangle,
   Download,
+  Upload,
 } from "lucide-react";
 import {
   format,
@@ -717,6 +718,111 @@ export default function ProvisionTicketsPage() {
     toast.success("CSVファイルをダウンロードしました");
   };
 
+  // ── CSV Import (ケアプランデータ連携 第6表 予定CSV取込) ──────────────────
+  const csvImportRef = useRef<HTMLInputElement>(null);
+
+  const handleCsvImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (csvImportRef.current) csvImportRef.current.value = "";
+
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter((l) => l.trim());
+      if (lines.length === 0) { toast.error("CSVファイルが空です"); return; }
+
+      // ヘッダー行判定
+      const firstLine = lines[0];
+      const isHeader = !firstLine.match(/^\d/) && !firstLine.startsWith('"2');
+      const dataLines = isHeader ? lines.slice(1) : lines;
+
+      const parseCSVLine = (line: string): string[] => {
+        const result: string[] = [];
+        let current = "";
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (inQuotes) {
+            if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
+            else if (ch === '"') { inQuotes = false; }
+            else { current += ch; }
+          } else {
+            if (ch === '"') { inQuotes = true; }
+            else if (ch === ",") { result.push(current); current = ""; }
+            else { current += ch; }
+          }
+        }
+        result.push(current);
+        return result;
+      };
+
+      let importedRows = 0;
+      const newServiceRows = [...serviceRows];
+      const newGrid = { ...grid };
+
+      for (const line of dataLines) {
+        const cols = parseCSVLine(line);
+        if (cols.length < 10) continue;
+
+        // 第6表CSV: cols[9]=サービス内容, cols[10]=開始時刻(HHMM), cols[11]=終了時刻(HHMM), cols[15-45]=日別フラグ
+        const serviceName = cols[9]?.trim() || cols[6]?.trim() || "";
+        const startHHMM = cols[10]?.trim() || cols[7]?.trim() || "";
+        const endHHMM = cols[11]?.trim() || cols[8]?.trim() || "";
+
+        if (!serviceName || !startHHMM) continue;
+
+        // 時刻をHH:MM:00形式に変換
+        const startTime = startHHMM.length === 4
+          ? `${startHHMM.slice(0, 2)}:${startHHMM.slice(2)}:00`
+          : startHHMM.includes(":") ? (startHHMM.length === 5 ? startHHMM + ":00" : startHHMM) : startHHMM;
+        const endTime = endHHMM.length === 4
+          ? `${endHHMM.slice(0, 2)}:${endHHMM.slice(2)}:00`
+          : endHHMM.includes(":") ? (endHHMM.length === 5 ? endHHMM + ":00" : endHHMM) : endHHMM;
+
+        const key = makeRowKey(serviceName, startTime, endTime);
+
+        // サービス行がなければ追加
+        if (!newServiceRows.some((r) => r.key === key)) {
+          newServiceRows.push({
+            key,
+            service_type: serviceName,
+            start_time: startTime,
+            end_time: endTime,
+          });
+        }
+        if (!newGrid[key]) newGrid[key] = {};
+
+        // 日別予定フラグを取り込み (cols[15]〜cols[45] or cols[9+offset])
+        // フレキシブルに: 数字列の後ろの方にある1/空白の連続31個を探す
+        const dayOffset = cols.length > 46 ? 15 : 9;
+        for (let d = 1; d <= daysCount; d++) {
+          const idx = dayOffset + (d - 1);
+          if (idx < cols.length) {
+            const val = cols[idx]?.trim();
+            if (val === "1") {
+              if (!newGrid[key][d]) newGrid[key][d] = { planned: false, actual: false };
+              newGrid[key][d].planned = true;
+              importedRows++;
+            }
+          }
+        }
+      }
+
+      setServiceRows(newServiceRows);
+      setGrid(newGrid);
+      markDirty();
+
+      if (importedRows > 0) {
+        toast.success(`CSV取込完了: ${importedRows}件の予定を反映しました`);
+      } else {
+        toast.info("取り込み可能なデータがありませんでした");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("CSVの読み込みに失敗しました");
+    }
+  };
+
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <>
@@ -781,6 +887,15 @@ export default function ProvisionTicketsPage() {
                 >
                   {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                   保存
+                </button>
+                <input ref={csvImportRef} type="file" accept=".csv" className="hidden" onChange={handleCsvImport} />
+                <button
+                  onClick={() => csvImportRef.current?.click()}
+                  disabled={!selectedUserId}
+                  className="flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  <Upload size={14} />
+                  CSV取込
                 </button>
                 <button
                   onClick={handleCsvExport}
