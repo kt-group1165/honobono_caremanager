@@ -49,6 +49,7 @@ const NAV_HOME_CARE: NavItem[] = [
   { name: "ダッシュボード", href: "/dashboard", icon: LayoutDashboard },
   { name: "利用者管理", href: "/users", icon: Users },
   { name: "職員管理", href: "/staff", icon: UserCog },
+  { name: "ケアプラン取込", href: "/careplan-import", icon: FileText },
   { name: "シフト管理", href: "/shift-management", icon: CalendarDays },
   { name: "パターン登録", href: "/shift-management/patterns", icon: Clock },
   { name: "サービス提供表（実績）", href: "/provision-tickets", icon: FileSpreadsheet },
