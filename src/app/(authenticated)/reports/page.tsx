@@ -127,9 +127,6 @@ interface KaigoUser {
   gender?: string;
   address?: string;
   phone?: string;
-  care_level?: string;
-  insurer_no?: string;
-  insured_no?: string;
 }
 
 const CSV_TABLES = [
@@ -151,7 +148,7 @@ export default function ReportsPage() {
   useEffect(() => {
     const load = async () => {
       const [userRes, officeRes] = await Promise.all([
-        supabase.from("kaigo_users").select("id, name, name_kana, birth_date, gender, address, phone, care_level, insurer_no, insured_no").eq("status", "active").order("name_kana"),
+        supabase.from("kaigo_users").select("id, name, name_kana, birth_date, gender, address, phone").eq("status", "active").order("name_kana"),
         supabase.from("kaigo_office_settings").select("provider_number, office_name").limit(1).single(),
       ]);
       setUsers(userRes.data || []);
@@ -179,9 +176,6 @@ export default function ReportsPage() {
         gender: user.gender,
         address: user.address,
         phone: user.phone,
-        care_level: user.care_level,
-        insurer_no: user.insurer_no,
-        insured_no: user.insured_no,
       };
       const office = officeInfo ?? {};
       const ts = generateTimestamp();

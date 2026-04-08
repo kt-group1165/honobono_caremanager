@@ -165,7 +165,7 @@ export default function ProvisionTicketsPage() {
     const load = async () => {
       const { data } = await supabase
         .from("kaigo_users")
-        .select("id, name, name_kana, care_level, insurer_no, insured_no")
+        .select("id, name, name_kana")
         .eq("id", selectedUserId)
         .single();
       setUserData(data as KaigoUser | null);
