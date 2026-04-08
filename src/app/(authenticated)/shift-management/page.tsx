@@ -292,6 +292,7 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
   const [schedules, setSchedules] = useState<VisitSchedule[]>([]);
   const [availability, setAvailability] = useState<StaffAvailabilitySlot[]>([]);
   const [allStaff, setAllStaff] = useState<KaigoStaff[]>([]);
+  const [allProviders, setAllProviders] = useState<{ id: string; provider_name: string }[]>([]);
   const [allSchedules, setAllSchedules] = useState<VisitSchedule[]>([]);
   const [loading, setLoading] = useState(false);
   const [editModal, setEditModal] = useState<VisitSchedule | null>(null);
@@ -319,7 +320,7 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
     const from = format(startOfMonth(currentMonth), "yyyy-MM-dd");
     const to = format(endOfMonth(currentMonth), "yyyy-MM-dd");
 
-    const [schedRes, availRes, allStaffRes, allSchedRes] = await Promise.all([
+    const [schedRes, availRes, allStaffRes, allSchedRes, provRes] = await Promise.all([
       supabase
         .from("kaigo_visit_schedule")
         .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, kaigo_staff(name)")
@@ -338,6 +339,7 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
         .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type")
         .gte("visit_date", from)
         .lte("visit_date", to),
+      supabase.from("kaigo_service_providers").select("id, provider_name").eq("status", "active").order("provider_name"),
     ]);
 
     const mapped: VisitSchedule[] = (schedRes.data || []).map((r: any) => ({
@@ -354,6 +356,7 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
     setSchedules(mapped);
     setAvailability((availRes.data || []) as StaffAvailabilitySlot[]);
     setAllStaff(allStaffRes.data || []);
+    setAllProviders(provRes.data || []);
     setAllSchedules((allSchedRes.data || []) as VisitSchedule[]);
     setLoading(false);
   }, [userId, currentMonth, supabase]);

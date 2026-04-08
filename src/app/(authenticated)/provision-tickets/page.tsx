@@ -112,6 +112,7 @@ export default function ProvisionTicketsPage() {
   const [userData, setUserData] = useState<KaigoUser | null>(null);
   const [allStaff, setAllStaff] = useState<KaigoStaff[]>([]);
   const [providers, setProviders] = useState<KaigoProvider[]>([]);
+  const [serviceUnits, setServiceUnits] = useState<Record<string, number>>({}); // service_name -> units
 
   const [serviceRows, setServiceRows] = useState<ServiceRow[]>([]);
   const [grid, setGrid] = useState<GridState>({});
@@ -141,12 +142,19 @@ export default function ProvisionTicketsPage() {
   // ── Load master data ──────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
-      const [staffRes, providerRes] = await Promise.all([
+      const [staffRes, providerRes, serviceCodeRes] = await Promise.all([
         supabase.from("kaigo_staff").select("id, name").eq("status", "active").order("name"),
-        supabase.from("kaigo_providers").select("id, provider_name").order("provider_name"),
+        supabase.from("kaigo_service_providers").select("id, provider_name").order("provider_name"),
+        supabase.from("kaigo_service_codes").select("service_name, units").eq("calculation_type", "基本"),
       ]);
       setAllStaff(staffRes.data || []);
       setProviders(providerRes.data || []);
+      // Build units lookup: service_name -> units
+      const unitsMap: Record<string, number> = {};
+      for (const sc of (serviceCodeRes.data || []) as { service_name: string; units: number }[]) {
+        unitsMap[sc.service_name] = sc.units;
+      }
+      setServiceUnits(unitsMap);
     };
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -546,6 +554,42 @@ export default function ProvisionTicketsPage() {
   const totalPlanned = useMemo(() => Object.values(daySummary.planned).reduce((a, b) => a + b, 0), [daySummary]);
   const totalActual = useMemo(() => Object.values(daySummary.actual).reduce((a, b) => a + b, 0), [daySummary]);
 
+  // ── Unit calculation ───────────────────────────────────────────────────────
+  const unitSummary = useMemo(() => {
+    const rows: { service_type: string; plannedCount: number; actualCount: number; units: number; plannedUnits: number; actualUnits: number }[] = [];
+    for (const row of serviceRows) {
+      const rowGrid = grid[row.key] || {};
+      const pCount = days.reduce((s, d) => s + (rowGrid[d]?.planned ? 1 : 0), 0);
+      const aCount = days.reduce((s, d) => s + (rowGrid[d]?.actual ? 1 : 0), 0);
+      const units = serviceUnits[row.service_type] ?? 0;
+      rows.push({
+        service_type: row.service_type,
+        plannedCount: pCount,
+        actualCount: aCount,
+        units,
+        plannedUnits: pCount * units,
+        actualUnits: aCount * units,
+      });
+    }
+    // Group by service_type
+    const grouped = new Map<string, { service_type: string; plannedCount: number; actualCount: number; units: number; plannedUnits: number; actualUnits: number }>();
+    for (const r of rows) {
+      const existing = grouped.get(r.service_type);
+      if (existing) {
+        existing.plannedCount += r.plannedCount;
+        existing.actualCount += r.actualCount;
+        existing.plannedUnits += r.plannedUnits;
+        existing.actualUnits += r.actualUnits;
+      } else {
+        grouped.set(r.service_type, { ...r });
+      }
+    }
+    return Array.from(grouped.values());
+  }, [serviceRows, grid, days, serviceUnits]);
+
+  const totalPlannedUnits = useMemo(() => unitSummary.reduce((s, r) => s + r.plannedUnits, 0), [unitSummary]);
+  const totalActualUnits = useMemo(() => unitSummary.reduce((s, r) => s + r.actualUnits, 0), [unitSummary]);
+
   // ── Print ──────────────────────────────────────────────────────────────────
   const handlePrint = () => window.print();
 
@@ -893,6 +937,66 @@ export default function ProvisionTicketsPage() {
                         </tbody>
                       )}
                   </table>
+                </div>
+              )}
+
+              {/* ── Unit calculation summary ── */}
+              {serviceRows.length > 0 && (
+                <div className="mt-6">
+                  <h2 className="text-sm font-semibold text-gray-800 mb-2">単位数計算</h2>
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="border border-gray-300 px-3 py-2 text-left text-xs font-medium text-gray-600">サービス内容</th>
+                          <th className="border border-gray-300 px-3 py-2 text-center text-xs font-medium text-gray-600 w-20">単位数</th>
+                          <th className="border border-gray-300 px-3 py-2 text-center text-xs font-medium text-blue-600 w-20">予定回数</th>
+                          <th className="border border-gray-300 px-3 py-2 text-center text-xs font-medium text-blue-600 w-24">予定単位</th>
+                          <th className="border border-gray-300 px-3 py-2 text-center text-xs font-medium text-green-600 w-20">実績回数</th>
+                          <th className="border border-gray-300 px-3 py-2 text-center text-xs font-medium text-green-600 w-24">実績単位</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {unitSummary.map((row) => (
+                          <tr key={row.service_type} className="hover:bg-gray-50">
+                            <td className="border border-gray-300 px-3 py-1.5 text-sm">{row.service_type}</td>
+                            <td className="border border-gray-300 px-3 py-1.5 text-center text-sm tabular-nums">
+                              {row.units > 0 ? row.units.toLocaleString() : <span className="text-gray-400">—</span>}
+                            </td>
+                            <td className="border border-gray-300 px-3 py-1.5 text-center text-sm text-blue-700 tabular-nums font-medium">
+                              {row.plannedCount > 0 ? row.plannedCount : ""}
+                            </td>
+                            <td className="border border-gray-300 px-3 py-1.5 text-center text-sm text-blue-700 tabular-nums font-bold">
+                              {row.plannedUnits > 0 ? row.plannedUnits.toLocaleString() : ""}
+                            </td>
+                            <td className="border border-gray-300 px-3 py-1.5 text-center text-sm text-green-700 tabular-nums font-medium">
+                              {row.actualCount > 0 ? row.actualCount : ""}
+                            </td>
+                            <td className="border border-gray-300 px-3 py-1.5 text-center text-sm text-green-700 tabular-nums font-bold">
+                              {row.actualUnits > 0 ? row.actualUnits.toLocaleString() : ""}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-gray-50 font-bold">
+                          <td className="border border-gray-300 px-3 py-2 text-sm text-right" colSpan={2}>合計</td>
+                          <td className="border border-gray-300 px-3 py-2 text-center text-sm text-blue-700 tabular-nums">
+                            {totalPlanned > 0 ? totalPlanned : ""}
+                          </td>
+                          <td className="border border-gray-300 px-3 py-2 text-center text-sm text-blue-700 tabular-nums">
+                            {totalPlannedUnits > 0 ? totalPlannedUnits.toLocaleString() : ""}
+                          </td>
+                          <td className="border border-gray-300 px-3 py-2 text-center text-sm text-green-700 tabular-nums">
+                            {totalActual > 0 ? totalActual : ""}
+                          </td>
+                          <td className="border border-gray-300 px-3 py-2 text-center text-sm text-green-700 tabular-nums">
+                            {totalActualUnits > 0 ? totalActualUnits.toLocaleString() : ""}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>
