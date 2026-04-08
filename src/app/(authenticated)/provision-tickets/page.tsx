@@ -68,6 +68,8 @@ interface ServiceRow {
   start_time: string;
   end_time: string;
   provider_name: string;
+  staff_id?: string;
+  staff_name?: string;
 }
 
 // Grid: rowKey -> day -> { planned: bool, actual: bool }
@@ -125,7 +127,7 @@ export default function ProvisionTicketsPage() {
 
   // Add service row modal
   const [showAddRow, setShowAddRow] = useState(false);
-  const [addRowForm, setAddRowForm] = useState({ start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", provider_id: "" });
+  const [addRowForm, setAddRowForm] = useState({ start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", provider_id: "", staff_id: "" });
   const [showAddServiceSelector, setShowAddServiceSelector] = useState(false);
   // Edit row modal
   const [editRowKey, setEditRowKey] = useState<string | null>(null);
@@ -224,6 +226,8 @@ export default function ProvisionTicketsPage() {
           start_time: s.start_time,
           end_time: s.end_time,
           provider_name: "",
+          staff_id: s.staff_id ?? undefined,
+          staff_name: s.staff_name ?? undefined,
         });
       }
     }
@@ -387,12 +391,15 @@ export default function ProvisionTicketsPage() {
       return;
     }
     const provObj = providers.find((p) => p.id === addRowForm.provider_id);
+    const staffObj = allStaff.find((s) => s.id === addRowForm.staff_id);
     setServiceRows((prev) => [...prev, {
       key,
       service_type: addRowForm.service_name,
       start_time: addRowForm.start_time + ":00",
       end_time: addRowForm.end_time + ":00",
       provider_name: provObj?.provider_name ?? "",
+      staff_id: addRowForm.staff_id || undefined,
+      staff_name: staffObj?.name ?? undefined,
     }]);
     setGrid((prev) => ({ ...prev, [key]: {} }));
     setShowAddRow(false);
@@ -501,6 +508,7 @@ export default function ProvisionTicketsPage() {
           if (cell.planned) {
             toInsert.push({
               user_id: selectedUserId,
+              staff_id: row.staff_id || null,
               visit_date: dateStr,
               start_time: row.start_time,
               end_time: row.end_time,
@@ -511,6 +519,7 @@ export default function ProvisionTicketsPage() {
           if (cell.actual) {
             toInsert.push({
               user_id: selectedUserId,
+              staff_id: row.staff_id || null,
               visit_date: dateStr,
               start_time: row.start_time,
               end_time: row.end_time,
@@ -735,7 +744,7 @@ export default function ProvisionTicketsPage() {
                 </h2>
                 <button
                   onClick={() => {
-                    setAddRowForm({ start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", provider_id: "" });
+                    setAddRowForm({ start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", provider_id: "", staff_id: "" });
                     setShowAddRow(true);
                   }}
                   className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 no-print"
@@ -820,7 +829,8 @@ export default function ProvisionTicketsPage() {
                                 onClick={() => openEditRow(row)}
                                 title="クリックして編集"
                               >
-                                {row.service_type}
+                                <div>{row.service_type}</div>
+                                {row.staff_name && <div className="text-[9px] text-gray-400">{row.staff_name}</div>}
                               </td>
                               <td className="border border-gray-300 px-1 py-0.5 text-center text-[10px]">
                                 <div className="flex items-center gap-1">
@@ -1040,6 +1050,13 @@ export default function ProvisionTicketsPage() {
                 <select value={addRowForm.provider_id} onChange={(e) => setAddRowForm((f) => ({ ...f, provider_id: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
                   <option value="">-- 選択 --</option>
                   {providers.map((p) => <option key={p.id} value={p.id}>{p.provider_name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">担当職員</label>
+                <select value={addRowForm.staff_id} onChange={(e) => setAddRowForm((f) => ({ ...f, staff_id: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                  <option value="">-- 選択 --</option>
+                  {allStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
             </div>
