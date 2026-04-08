@@ -362,6 +362,12 @@ export default function PatternsPage() {
 
   const handleSavePattern = async (pattern: VisitPattern) => {
     if (!selectedUserId) return;
+    // Validate: all entries must have a staff assigned
+    const noStaff = pattern.days.filter((d) => !d.staff_id);
+    if (noStaff.length > 0) {
+      toast.error("担当者が未設定の曜日があります。全ての曜日に担当者を設定してください。");
+      return;
+    }
     setSavingId(pattern.tempId);
     try {
       // Delete existing rows for this pattern (by original name if it exists)

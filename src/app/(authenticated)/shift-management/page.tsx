@@ -1370,15 +1370,24 @@ function TimelineView({
               <div className="w-28 shrink-0 border-r sticky left-0 z-30 bg-gray-50 px-2 py-2 text-xs font-semibold text-gray-600">
                 {tab === "user" ? "利用者" : "職員"}
               </div>
-              <div className="flex-1 flex">
-                {TIMELINE_HOURS.map((h) => (
-                  <div
-                    key={h}
-                    className="flex-1 border-r px-1 py-2 text-center text-[10px] font-medium text-gray-500"
-                  >
-                    {h}時
-                  </div>
-                ))}
+              <div className="flex-1 relative">
+                <div className="flex h-full">
+                  {TIMELINE_HOURS.map((h) => (
+                    <div key={h} className="flex-1 border-l border-gray-300" />
+                  ))}
+                  <div className="border-l border-gray-300" />
+                </div>
+                <div className="absolute inset-0 flex">
+                  {TIMELINE_HOURS.map((h) => (
+                    <div
+                      key={h}
+                      className="flex-1 py-1 text-[10px] font-medium text-gray-500"
+                      style={{ paddingLeft: "2px" }}
+                    >
+                      {h}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -1432,7 +1441,7 @@ function TimelineView({
                         <div
                           key={sched.id}
                           className={cn(
-                            "absolute rounded border text-[10px] leading-tight overflow-hidden flex items-center",
+                            "absolute rounded border px-1 text-[10px] leading-tight overflow-hidden flex flex-col justify-center",
                             isOnUnavail
                               ? "bg-red-50 border-red-400 text-red-600 font-semibold"
                               : cn(colors.bg, colors.border, colors.text)
@@ -1445,11 +1454,8 @@ function TimelineView({
                           }}
                           title={`${sched.start_time?.slice(0, 5)}~${sched.end_time?.slice(0, 5)} ${label} ${sched.service_type}${isOnUnavail ? " ⚠勤務不可" : ""}`}
                         >
-                          <span className="shrink-0 text-[8px] opacity-60 px-0.5">{sched.start_time?.slice(0, 5)}</span>
-                          <span className="flex-1 truncate text-center">
-                            {isOnUnavail && "⚠"}{label} {sched.service_type}
-                          </span>
-                          <span className="shrink-0 text-[8px] opacity-60 px-0.5">{sched.end_time?.slice(0, 5)}</span>
+                          <span className="truncate font-semibold">{isOnUnavail && "⚠ "}{label}</span>
+                          <span className="truncate">{sched.service_type}</span>
                         </div>
                       );
                     })}
@@ -1530,33 +1536,35 @@ export default function ShiftManagementPage() {
           <h1 className="text-lg font-bold text-gray-900">シフト管理</h1>
         </div>
         <div className="flex items-center gap-2">
-          {/* View mode toggle */}
-          <div className="flex rounded-lg border overflow-hidden">
-            <button
-              onClick={() => setViewMode("calendar")}
-              className={cn(
-                "flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition-colors",
-                viewMode === "calendar"
-                  ? "bg-blue-600 text-white"
-                  : "bg-white text-gray-600 hover:bg-gray-50"
-              )}
-            >
-              <CalendarDays size={14} />
-              カレンダー
-            </button>
-            <button
-              onClick={() => setViewMode("timeline")}
-              className={cn(
-                "flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition-colors",
-                viewMode === "timeline"
-                  ? "bg-blue-600 text-white"
-                  : "bg-white text-gray-600 hover:bg-gray-50"
-              )}
-            >
-              <Clock size={14} />
-              タイムライン
-            </button>
-          </div>
+          {/* View mode toggle - only show for staff tab */}
+          {sidebarTab === "staff" && (
+            <div className="flex rounded-lg border overflow-hidden">
+              <button
+                onClick={() => setViewMode("calendar")}
+                className={cn(
+                  "flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition-colors",
+                  viewMode === "calendar"
+                    ? "bg-blue-600 text-white"
+                    : "bg-white text-gray-600 hover:bg-gray-50"
+                )}
+              >
+                <CalendarDays size={14} />
+                カレンダー
+              </button>
+              <button
+                onClick={() => setViewMode("timeline")}
+                className={cn(
+                  "flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition-colors",
+                  viewMode === "timeline"
+                    ? "bg-blue-600 text-white"
+                    : "bg-white text-gray-600 hover:bg-gray-50"
+                )}
+              >
+                <Clock size={14} />
+                タイムライン
+              </button>
+            </div>
+          )}
           <button
             onClick={() => setShowPatternModal(true)}
             className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
@@ -1597,7 +1605,7 @@ export default function ShiftManagementPage() {
 
         {/* Calendar / Timeline area */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          {viewMode === "timeline" ? (
+          {viewMode === "timeline" && sidebarTab === "staff" ? (
             <TimelineView
               tab={sidebarTab}
               users={users}
