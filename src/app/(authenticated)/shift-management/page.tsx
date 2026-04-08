@@ -1472,8 +1472,11 @@ function UrlManagementModal({ onClose }: UrlManagementModalProps) {
 // ─── Timeline View ───────────────────────────────────────────────────────────
 
 interface PendingChange {
+  type: "update" | "copy";
   schedId: string;
   updates: Record<string, string>;
+  // For copy: full data needed to insert a new record
+  copyData?: Record<string, string | null>;
 }
 
 const TIMELINE_START_HOUR = 0;
@@ -1574,6 +1577,16 @@ function TimelineView({
   } | null>(null);
   const draggingRef = useRef(dragging);
   draggingRef.current = dragging;
+
+  // ─── Move/Copy choice dialog after drop ───────────────────────────
+  const [dragDropChoice, setDragDropChoice] = useState<{
+    schedId: string;
+    origSchedule: VisitSchedule;
+    updateData: Record<string, string>;
+    newRowId: string;
+    newStartTime: string;
+    newEndTime: string;
+  } | null>(null);
 
   const dateStr = format(selectedDate, "yyyy-MM-dd");
 
@@ -1798,36 +1811,102 @@ function TimelineView({
         updateData[rowField] = newRowId;
       }
 
-      // Add to pending changes (merge if same schedId already pending)
-      setPendingChanges((prev) => {
-        const existing = prev.find((p) => p.schedId === drag.schedId);
-        if (existing) {
-          return prev.map((p) =>
-            p.schedId === drag.schedId
-              ? { ...p, updates: { ...p.updates, ...updateData } }
-              : p
-          );
-        }
-        return [...prev, { schedId: drag.schedId, updates: updateData }];
+      // Find the original schedule object
+      const origSchedule = schedules.find((s) => s.id === drag.schedId);
+      if (!origSchedule) return;
+
+      // Show move/copy choice dialog
+      setDragDropChoice({
+        schedId: drag.schedId,
+        origSchedule,
+        updateData,
+        newRowId,
+        newStartTime,
+        newEndTime,
       });
-
-      // Apply change locally for immediate visual feedback
-      setSchedules((prev) =>
-        prev.map((s) => {
-          if (s.id !== drag.schedId) return s;
-          const updated = { ...s };
-          if (updateData.start_time) updated.start_time = updateData.start_time;
-          if (updateData.end_time) updated.end_time = updateData.end_time;
-          if (updateData.user_id) updated.user_id = updateData.user_id;
-          if (updateData.staff_id) updated.staff_id = updateData.staff_id;
-          return updated;
-        })
-      );
-
-      toast.info("変更あり — 保存ボタンで確定してください");
     },
     [dragPreview, rows, tab, supabase, fetchData]
   );
+
+  // ─── Handle Move/Copy choice ───────────────────────────────────────
+  const handleDragChoiceMove = useCallback(() => {
+    if (!dragDropChoice) return;
+    const { schedId, updateData } = dragDropChoice;
+
+    // Add to pending changes as update
+    setPendingChanges((prev) => {
+      const existing = prev.find((p) => p.schedId === schedId);
+      if (existing) {
+        return prev.map((p) =>
+          p.schedId === schedId
+            ? { ...p, updates: { ...p.updates, ...updateData } }
+            : p
+        );
+      }
+      return [...prev, { type: "update", schedId, updates: updateData }];
+    });
+
+    // Apply locally
+    setSchedules((prev) =>
+      prev.map((s) => {
+        if (s.id !== schedId) return s;
+        const updated = { ...s };
+        if (updateData.start_time) updated.start_time = updateData.start_time;
+        if (updateData.end_time) updated.end_time = updateData.end_time;
+        if (updateData.user_id) updated.user_id = updateData.user_id;
+        if (updateData.staff_id) updated.staff_id = updateData.staff_id;
+        return updated;
+      })
+    );
+
+    setDragDropChoice(null);
+    toast.info("移動 — 保存ボタンで確定してください");
+  }, [dragDropChoice]);
+
+  const handleDragChoiceCopy = useCallback(() => {
+    if (!dragDropChoice) return;
+    const { origSchedule, newStartTime, newEndTime, newRowId } = dragDropChoice;
+    const rowField = tab === "user" ? "user_id" : "staff_id";
+
+    // Build copy data: same schedule but at new position
+    const copyData: Record<string, string | null> = {
+      user_id: origSchedule.user_id,
+      staff_id: origSchedule.staff_id,
+      visit_date: origSchedule.visit_date,
+      start_time: newStartTime,
+      end_time: newEndTime,
+      service_type: origSchedule.service_type,
+    };
+    // Override the row field with the new target
+    copyData[rowField] = newRowId;
+
+    const tempId = "temp-" + Math.random().toString(36).slice(2);
+
+    setPendingChanges((prev) => [
+      ...prev,
+      { type: "copy", schedId: tempId, updates: {}, copyData },
+    ]);
+
+    // Add locally for visual feedback
+    const targetRow = rows.find((r) => r.id === newRowId);
+    setSchedules((prev) => [
+      ...prev,
+      {
+        id: tempId,
+        user_id: copyData.user_id as string,
+        staff_id: copyData.staff_id,
+        visit_date: copyData.visit_date as string,
+        start_time: newStartTime,
+        end_time: newEndTime,
+        service_type: origSchedule.service_type,
+        staff_name: tab === "staff" ? targetRow?.name : origSchedule.staff_name,
+        user_name: tab === "user" ? targetRow?.name : origSchedule.user_name,
+      },
+    ]);
+
+    setDragDropChoice(null);
+    toast.info("コピー — 保存ボタンで確定してください");
+  }, [dragDropChoice, rows, tab]);
 
   // ─── Save / Discard pending changes ────────────────────────────────
   const handleSavePendingChanges = useCallback(async () => {
@@ -1835,13 +1914,23 @@ function TimelineView({
     setSaving(true);
     let hasError = false;
     for (const change of pendingChanges) {
-      const { error } = await supabase
-        .from("kaigo_visit_schedule")
-        .update(change.updates)
-        .eq("id", change.schedId);
-      if (error) {
-        console.error(error);
-        hasError = true;
+      if (change.type === "copy" && change.copyData) {
+        const { error } = await supabase
+          .from("kaigo_visit_schedule")
+          .insert(change.copyData);
+        if (error) {
+          console.error(error);
+          hasError = true;
+        }
+      } else {
+        const { error } = await supabase
+          .from("kaigo_visit_schedule")
+          .update(change.updates)
+          .eq("id", change.schedId);
+        if (error) {
+          console.error(error);
+          hasError = true;
+        }
       }
     }
     if (hasError) {
@@ -2126,6 +2215,51 @@ function TimelineView({
                 <span className="text-gray-600">対応不可</span>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Move/Copy choice dialog */}
+      {dragDropChoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-xs rounded-xl bg-white shadow-xl">
+            <div className="px-5 py-4 border-b">
+              <h2 className="font-semibold text-gray-900 text-center">移動 or コピー</h2>
+            </div>
+            <div className="p-5 space-y-3">
+              <button
+                onClick={handleDragChoiceMove}
+                className="w-full flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3 text-sm font-medium text-gray-900 hover:bg-blue-50 hover:border-blue-300 transition-colors"
+              >
+                <span className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                  <ChevronRight size={16} />
+                </span>
+                <div className="text-left">
+                  <div className="font-semibold">移動</div>
+                  <div className="text-xs text-gray-500">予定を新しい位置に移動</div>
+                </div>
+              </button>
+              <button
+                onClick={handleDragChoiceCopy}
+                className="w-full flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3 text-sm font-medium text-gray-900 hover:bg-green-50 hover:border-green-300 transition-colors"
+              >
+                <span className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 shrink-0">
+                  <Copy size={16} />
+                </span>
+                <div className="text-left">
+                  <div className="font-semibold">コピー</div>
+                  <div className="text-xs text-gray-500">元の予定を残して複製（担当2人体制）</div>
+                </div>
+              </button>
+            </div>
+            <div className="flex justify-center border-t px-5 py-3">
+              <button
+                onClick={() => setDragDropChoice(null)}
+                className="rounded-lg border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                キャンセル
+              </button>
+            </div>
           </div>
         </div>
       )}
