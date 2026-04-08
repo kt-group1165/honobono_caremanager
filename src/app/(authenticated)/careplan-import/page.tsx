@@ -174,12 +174,15 @@ export default function CareplanImportPage() {
   // ── File upload handler ───────────────────────────────────────────────────
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFiles = e.target.files;
-    if (!uploadedFiles) return;
-    if (fileRef.current) fileRef.current.value = "";
+    if (!uploadedFiles || uploadedFiles.length === 0) return;
+
+    const fileList = Array.from(uploadedFiles);
+    // Reset input after capturing files
+    setTimeout(() => { if (fileRef.current) fileRef.current.value = ""; }, 0);
 
     const newFiles: ImportedFile[] = [];
 
-    for (const file of Array.from(uploadedFiles)) {
+    for (const file of fileList) {
       try {
         // Shift-JIS / UTF-8 両対応で読み込み
         const buf = await file.arrayBuffer();
@@ -236,6 +239,8 @@ export default function CareplanImportPage() {
     setFiles((prev) => [...prev, ...newFiles]);
     if (newFiles.length > 0) {
       toast.success(`${newFiles.length}件のCSVを読み込みました`);
+    } else {
+      toast.error("CSVファイルを読み込めませんでした。ファイル形式を確認してください。");
     }
   };
 
@@ -360,18 +365,18 @@ export default function CareplanImportPage() {
       </div>
 
       {/* Upload area */}
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".csv"
+        multiple
+        className="hidden"
+        onChange={handleFileUpload}
+      />
       <div
         className="rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center hover:border-blue-400 hover:bg-blue-50/30 transition-colors cursor-pointer"
         onClick={() => fileRef.current?.click()}
       >
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".csv"
-          multiple
-          className="hidden"
-          onChange={handleFileUpload}
-        />
         <Upload size={40} className="mx-auto mb-3 text-gray-400" />
         <p className="text-sm font-medium text-gray-700">
           CSVファイルをクリックして選択
