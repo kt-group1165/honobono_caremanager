@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Settings, Eye, EyeOff } from "lucide-react";
+import { Settings, Eye, EyeOff, Building2, ChevronRight } from "lucide-react";
+import Link from "next/link";
 
 export default function SettingsPage() {
   const supabase = createClient();
@@ -79,9 +80,26 @@ export default function SettingsPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">設定</h1>
         <p className="mt-1 text-sm text-gray-500">
-          アカウント設定・パスワード変更
+          アカウント設定・事業所設定・パスワード変更
         </p>
       </div>
+
+      {/* Office Settings Link */}
+      <Link
+        href="/master/office"
+        className="flex items-center justify-between rounded-lg border bg-white p-5 shadow-sm hover:shadow-md transition-shadow max-w-lg"
+      >
+        <div className="flex items-center gap-3">
+          <div className="rounded-lg bg-purple-50 p-2.5">
+            <Building2 size={20} className="text-purple-600" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-gray-900">自事業所設定</h2>
+            <p className="text-xs text-gray-500">事業所情報・特定事業所加算・地域区分の設定</p>
+          </div>
+        </div>
+        <ChevronRight size={18} className="text-gray-400" />
+      </Link>
 
       {/* Password Change Card */}
       <div className="rounded-lg border bg-white p-6 shadow-sm max-w-lg">
