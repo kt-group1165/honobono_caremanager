@@ -598,8 +598,21 @@ export default function ProvisionTicketsPage() {
 
   // ── CSV Export (ケアプランデータ連携システム標準仕様 第6表 実績) ────────
   const handleCsvExport = () => {
-    if (!selectedUserId || !userData || serviceRows.length === 0) {
-      toast.error("出力するデータがありません");
+    if (!selectedUserId || !userData) {
+      toast.error("利用者を選択してください");
+      return;
+    }
+    if (serviceRows.length === 0) {
+      toast.error("サービス行がありません。サービスを追加するか、シフト管理からデータを作成してください。");
+      return;
+    }
+    // 予定or実績が1つもなければ警告
+    const hasAnyData = serviceRows.some((row) => {
+      const rowGrid = grid[row.key] || {};
+      return days.some((d) => rowGrid[d]?.planned || rowGrid[d]?.actual);
+    });
+    if (!hasAnyData) {
+      toast.error("予定・実績が入力されていません");
       return;
     }
 

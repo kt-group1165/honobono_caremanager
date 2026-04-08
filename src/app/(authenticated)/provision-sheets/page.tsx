@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { UserSidebar } from "@/components/users/user-sidebar";
@@ -11,6 +11,7 @@ import {
   Printer,
   RefreshCw,
   CalendarDays,
+  Upload,
 } from "lucide-react";
 import { format, getDaysInMonth, parseISO, startOfMonth } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -376,6 +377,160 @@ export default function ProvisionSheetsPage() {
     window.print();
   };
 
+  // ── CSV Import (ケアプランデータ連携 第6表 実績CSV取り込み) ─────────────
+  const csvFileRef = useRef<HTMLInputElement>(null);
+
+  const handleCsvImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset input
+    if (csvFileRef.current) csvFileRef.current.value = "";
+
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter((l) => l.trim());
+
+      if (lines.length === 0) {
+        toast.error("CSVファイルが空です");
+        return;
+      }
+
+      // ヘッダー行があるか判定（1行目が数字で始まらない場合はヘッダー）
+      const firstLine = lines[0];
+      const isHeader = !firstLine.match(/^\d/) && !firstLine.startsWith('"2');
+      const dataLines = isHeader ? lines.slice(1) : lines;
+
+      if (dataLines.length === 0) {
+        toast.error("データ行がありません");
+        return;
+      }
+
+      // CSV解析
+      const parseCSVLine = (line: string): string[] => {
+        const result: string[] = [];
+        let current = "";
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (inQuotes) {
+            if (ch === '"' && line[i + 1] === '"') {
+              current += '"';
+              i++;
+            } else if (ch === '"') {
+              inQuotes = false;
+            } else {
+              current += ch;
+            }
+          } else {
+            if (ch === '"') {
+              inQuotes = true;
+            } else if (ch === ",") {
+              result.push(current);
+              current = "";
+            } else {
+              current += ch;
+            }
+          }
+        }
+        result.push(current);
+        return result;
+      };
+
+      // 取り込みカウント
+      let importedCount = 0;
+      const newGrid = { ...grid };
+
+      for (const line of dataLines) {
+        const cols = parseCSVLine(line);
+        if (cols.length < 9) continue;
+
+        // 標準様式: CSVバージョン, 保険者番号, 被保険者番号, 利用対象年月,
+        //           サービス事業者コード, サービス種類コード, サービス内容/名称,
+        //           開始時刻, 終了時刻, 1日予定...31日予定, 1日実績...31日実績, ...
+        // または独自形式を柔軟に解析
+
+        const serviceNameCol = cols[6]?.trim() || "";
+        // サービス名称からservice_typeを特定
+        let matchedType = "";
+        for (const svc of services) {
+          if (serviceNameCol.includes(svc.service_type) || svc.service_type.includes(serviceNameCol)) {
+            matchedType = svc.service_type;
+            break;
+          }
+        }
+        // サービス種類コードからマッチ
+        if (!matchedType && cols[5]) {
+          const code = cols[5].trim();
+          const codeMap: Record<string, string> = {
+            "11": "訪問介護", "12": "訪問入浴介護", "13": "訪問看護",
+            "14": "訪問リハビリテーション", "15": "通所介護", "16": "通所リハビリテーション",
+            "17": "福祉用具貸与", "21": "短期入所",
+          };
+          const codeName = codeMap[code];
+          if (codeName) {
+            for (const svc of services) {
+              if (svc.service_type.includes(codeName) || codeName.includes(svc.service_type)) {
+                matchedType = svc.service_type;
+                break;
+              }
+            }
+          }
+        }
+        // サービス名で直接マッチ
+        if (!matchedType && serviceNameCol) {
+          for (const svc of services) {
+            if (svc.service_type === serviceNameCol) {
+              matchedType = svc.service_type;
+              break;
+            }
+          }
+        }
+
+        if (!matchedType) continue;
+
+        // グリッドにない行は初期化
+        if (!newGrid[matchedType]) {
+          newGrid[matchedType] = {};
+        }
+
+        // 日別の実績フラグを解析
+        // 予定: cols[9]〜cols[9+30] (1日〜31日)
+        // 実績: cols[9+31]〜cols[9+61] (1日〜31日)
+        const plannedOffset = 9;
+        const actualOffset = 9 + daysInMonth;
+
+        for (let d = 1; d <= daysInMonth; d++) {
+          const pIdx = plannedOffset + (d - 1);
+          const aIdx = actualOffset + (d - 1);
+          const pVal = cols[pIdx]?.trim();
+          const aVal = cols[aIdx]?.trim();
+
+          const current = newGrid[matchedType][d] ?? "empty";
+
+          // 実績が「1」→ actual に設定
+          if (aVal === "1") {
+            newGrid[matchedType][d] = "actual";
+            importedCount++;
+          } else if (pVal === "1" && current === "empty") {
+            newGrid[matchedType][d] = "planned";
+            importedCount++;
+          }
+        }
+      }
+
+      setGrid(newGrid);
+
+      if (importedCount > 0) {
+        toast.success(`CSV取り込み完了: ${importedCount}件の予定/実績を反映しました`);
+      } else {
+        toast.info("取り込み可能なデータがありませんでした。サービス種別が一致するか確認してください。");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("CSVの読み込みに失敗しました");
+    }
+  };
+
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -408,6 +563,21 @@ export default function ProvisionSheetsPage() {
             <h1 className="text-xl font-bold text-gray-900">提供票管理</h1>
           </div>
           <div className="flex items-center gap-2">
+            <input
+              ref={csvFileRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={handleCsvImport}
+            />
+            <button
+              onClick={() => csvFileRef.current?.click()}
+              disabled={!selectedUserId || services.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              <Upload size={14} />
+              CSV取込
+            </button>
             <button
               onClick={fetchGridData}
               disabled={loadingGrid}
