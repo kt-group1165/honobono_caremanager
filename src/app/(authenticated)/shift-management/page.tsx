@@ -1102,6 +1102,7 @@ function PatternImportModal({ onClose }: PatternImportModalProps) {
   const [importing, setImporting] = useState(false);
   // { userId: { 1: true, 2: true, ... } }
   const [weekChecks, setWeekChecks] = useState<Record<string, Record<number, boolean>>>({});
+  const [userChecks, setUserChecks] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const fetch = async () => {
@@ -1119,13 +1120,16 @@ function PatternImportModal({ onClose }: PatternImportModalProps) {
       }));
       setPatterns(pats);
       setUsers(userRes.data || []);
-      // Initialize checks: all weeks checked for all users
+      // Initialize checks: all weeks checked, all users unchecked
       const checks: Record<string, Record<number, boolean>> = {};
+      const uChecks: Record<string, boolean> = {};
       const userIds = [...new Set(pats.map((p) => p.user_id))];
       for (const uid of userIds) {
         checks[uid] = { 1: true, 2: true, 3: true, 4: true, 5: true };
+        uChecks[uid] = false;
       }
       setWeekChecks(checks);
+      setUserChecks(uChecks);
       setLoading(false);
     };
     fetch();
@@ -1261,33 +1265,70 @@ function PatternImportModal({ onClose }: PatternImportModalProps) {
             </p>
           ) : (
             <div className="space-y-3">
-              {usersWithPatterns.map(({ user, patterns: upats }) => (
-                <div key={user.id} className="rounded-lg border p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-900">{user.name}</span>
-                    <span className="text-xs text-gray-500">
-                      {upats.length}パターン
-                    </span>
+              {/* Select all / deselect all */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setUserChecks((prev) => {
+                    const next = { ...prev };
+                    for (const key of Object.keys(next)) next[key] = true;
+                    return next;
+                  })}
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  全員選択
+                </button>
+                <button
+                  onClick={() => setUserChecks((prev) => {
+                    const next = { ...prev };
+                    for (const key of Object.keys(next)) next[key] = false;
+                    return next;
+                  })}
+                  className="text-xs text-gray-500 hover:underline"
+                >
+                  全員解除
+                </button>
+              </div>
+
+              {usersWithPatterns.map(({ user, patterns: upats }) => {
+                const isUserChecked = userChecks[user.id] ?? false;
+                return (
+                  <div key={user.id} className={cn("rounded-lg border p-3 transition-colors", isUserChecked ? "border-blue-300 bg-blue-50/30" : "")}>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isUserChecked}
+                          onChange={() => setUserChecks((prev) => ({ ...prev, [user.id]: !prev[user.id] }))}
+                          className="rounded w-4 h-4"
+                        />
+                        <span className="text-sm font-medium text-gray-900">{user.name}</span>
+                      </label>
+                      <span className="text-xs text-gray-500">
+                        {upats.length}パターン
+                      </span>
+                    </div>
+                    {isUserChecked && (
+                      <div className="flex gap-3 flex-wrap ml-6">
+                        {WEEK_LABELS.slice(0, weeksInMonth).map((label, i) => {
+                          const week = i + 1;
+                          const checked = weekChecks[user.id]?.[week] ?? true;
+                          return (
+                            <label key={week} className="flex items-center gap-1 text-xs cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleWeek(user.id, week)}
+                                className="rounded"
+                              />
+                              {label}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex gap-3 flex-wrap">
-                    {WEEK_LABELS.slice(0, weeksInMonth).map((label, i) => {
-                      const week = i + 1;
-                      const checked = weekChecks[user.id]?.[week] ?? true;
-                      return (
-                        <label key={week} className="flex items-center gap-1 text-xs cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleWeek(user.id, week)}
-                            className="rounded"
-                          />
-                          {label}
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -1299,19 +1340,17 @@ function PatternImportModal({ onClose }: PatternImportModalProps) {
             キャンセル
           </button>
           <button
-            disabled={importing || usersWithPatterns.length === 0}
+            disabled={importing || !Object.values(userChecks).some(Boolean)}
             onClick={() => {
               const selected = usersWithPatterns
-                .filter(({ user }) =>
-                  Object.values(weekChecks[user.id] || {}).some(Boolean)
-                )
+                .filter(({ user }) => userChecks[user.id])
                 .map(({ user }) => user.id);
               doImport(selected);
             }}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
           >
             {importing && <Loader2 size={14} className="animate-spin" />}
-            選択取り込み
+            選択取り込み（{Object.values(userChecks).filter(Boolean).length}名）
           </button>
           <button
             disabled={importing || usersWithPatterns.length === 0}
