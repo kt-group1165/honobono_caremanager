@@ -1423,14 +1423,19 @@ function TimelineView({
                         tab === "user"
                           ? sched.staff_name ?? "未割当"
                           : sched.user_name ?? "不明";
+                      // Check if this schedule is on unavailable time
+                      const staffIdForCheck = tab === "staff" ? row.id : sched.staff_id;
+                      const isOnUnavail = staffIdForCheck
+                        ? isStaffUnavailableAtTime(staffIdForCheck, dateStr, sched.start_time, sched.end_time, availability)
+                        : false;
                       return (
                         <div
                           key={sched.id}
                           className={cn(
-                            "absolute rounded border px-1 text-[10px] leading-tight overflow-hidden flex flex-col justify-center",
-                            colors.bg,
-                            colors.border,
-                            colors.text
+                            "absolute rounded border text-[10px] leading-tight overflow-hidden flex items-center",
+                            isOnUnavail
+                              ? "bg-red-50 border-red-400 text-red-600 font-semibold"
+                              : cn(colors.bg, colors.border, colors.text)
                           )}
                           style={{
                             left: style.left,
@@ -1438,10 +1443,13 @@ function TimelineView({
                             top: 0,
                             bottom: 0,
                           }}
-                          title={`${sched.start_time?.slice(0, 5)}~${sched.end_time?.slice(0, 5)} ${label} ${sched.service_type}`}
+                          title={`${sched.start_time?.slice(0, 5)}~${sched.end_time?.slice(0, 5)} ${label} ${sched.service_type}${isOnUnavail ? " ⚠勤務不可" : ""}`}
                         >
-                          <span className="truncate font-semibold">{label}</span>
-                          <span className="truncate">{sched.service_type}</span>
+                          <span className="shrink-0 text-[8px] opacity-60 px-0.5">{sched.start_time?.slice(0, 5)}</span>
+                          <span className="flex-1 truncate text-center">
+                            {isOnUnavail && "⚠"}{label} {sched.service_type}
+                          </span>
+                          <span className="shrink-0 text-[8px] opacity-60 px-0.5">{sched.end_time?.slice(0, 5)}</span>
                         </div>
                       );
                     })}
