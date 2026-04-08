@@ -122,43 +122,42 @@ function DayCell({ dow, days, staff, onAddDay, onRemoveDay, onChangeDay }: DayCe
         {dayEntries.map((entry) => {
           const colCls = SERVICE_TYPE_COLORS[entry.service_type] ?? "bg-gray-50 border-gray-200";
           return (
-            <div
-              key={entry.tempId}
-              className={cn("rounded border p-1 text-[10px] space-y-0.5", colCls)}
-            >
-              <div className="flex items-center gap-1">
-                <input
-                  type="time"
-                  value={entry.start_time}
-                  onChange={(e) => onChangeDay(entry.tempId, "start_time", e.target.value)}
-                  className="w-16 rounded border-0 bg-transparent text-[10px] focus:outline-none"
-                />
-                <span className="text-gray-400">〜</span>
-                <input
-                  type="time"
-                  value={entry.end_time}
-                  onChange={(e) => onChangeDay(entry.tempId, "end_time", e.target.value)}
-                  className="w-16 rounded border-0 bg-transparent text-[10px] focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemoveDay(entry.tempId); }}
-                  className="ml-auto w-5 h-5 flex items-center justify-center rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition-colors shrink-0"
-                  title="この枠を削除"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-              <select
-                value={entry.service_type}
-                onChange={(e) => onChangeDay(entry.tempId, "service_type", e.target.value)}
-                className="w-full rounded border-0 bg-transparent text-[10px] focus:outline-none"
+            <div key={entry.tempId} className="relative group">
+              {/* Delete button - positioned outside the card */}
+              <button
+                type="button"
+                onClick={() => onRemoveDay(entry.tempId)}
+                className="absolute -top-1.5 -right-1.5 z-10 w-5 h-5 rounded-full bg-white border border-gray-300 flex items-center justify-center text-gray-400 hover:text-red-500 hover:border-red-400 hover:bg-red-50 transition-colors shadow-sm opacity-0 group-hover:opacity-100"
+                title="この枠を削除"
               >
-                {SERVICE_TYPES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-              <select
+                <X size={10} />
+              </button>
+              <div className={cn("rounded border p-1 text-[10px] space-y-0.5", colCls)}>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="time"
+                    value={entry.start_time}
+                    onChange={(e) => onChangeDay(entry.tempId, "start_time", e.target.value)}
+                    className="w-16 rounded border-0 bg-transparent text-[10px] focus:outline-none"
+                  />
+                  <span className="text-gray-400">〜</span>
+                  <input
+                    type="time"
+                    value={entry.end_time}
+                    onChange={(e) => onChangeDay(entry.tempId, "end_time", e.target.value)}
+                    className="w-16 rounded border-0 bg-transparent text-[10px] focus:outline-none"
+                  />
+                </div>
+                <select
+                  value={entry.service_type}
+                  onChange={(e) => onChangeDay(entry.tempId, "service_type", e.target.value)}
+                  className="w-full rounded border-0 bg-transparent text-[10px] focus:outline-none"
+                >
+                  {SERVICE_TYPES.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+                <select
                 value={entry.staff_id ?? ""}
                 onChange={(e) =>
                   onChangeDay(entry.tempId, "staff_id", e.target.value || null)
@@ -170,6 +169,7 @@ function DayCell({ dow, days, staff, onAddDay, onRemoveDay, onChangeDay }: DayCe
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
+              </div>
             </div>
           );
         })}

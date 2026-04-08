@@ -125,6 +125,10 @@ export default function ProvisionTicketsPage() {
   const [showAddRow, setShowAddRow] = useState(false);
   const [addRowForm, setAddRowForm] = useState({ start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", provider_id: "" });
   const [showAddServiceSelector, setShowAddServiceSelector] = useState(false);
+  // Edit row modal
+  const [editRowKey, setEditRowKey] = useState<string | null>(null);
+  const [editRowForm, setEditRowForm] = useState({ start_time: "", end_time: "", service_name: "", service_code: "" });
+  const [showEditServiceSelector, setShowEditServiceSelector] = useState(false);
 
   // Derived
   const year = selectedMonth.getFullYear();
@@ -375,6 +379,44 @@ export default function ProvisionTicketsPage() {
     });
   };
 
+  // ── Edit row ───────────────────────────────────────────────────────────────
+  const openEditRow = (row: ServiceRow) => {
+    setEditRowKey(row.key);
+    setEditRowForm({
+      start_time: row.start_time.slice(0, 5),
+      end_time: row.end_time.slice(0, 5),
+      service_name: row.service_type,
+      service_code: "",
+    });
+  };
+
+  const handleEditRowSave = () => {
+    if (!editRowKey || !editRowForm.service_name) return;
+    const oldRow = serviceRows.find((r) => r.key === editRowKey);
+    if (!oldRow) return;
+
+    const newKey = makeRowKey(editRowForm.service_name, editRowForm.start_time + ":00", editRowForm.end_time + ":00");
+
+    // Update service row
+    setServiceRows((prev) => prev.map((r) =>
+      r.key === editRowKey
+        ? { ...r, key: newKey, service_type: editRowForm.service_name, start_time: editRowForm.start_time + ":00", end_time: editRowForm.end_time + ":00" }
+        : r
+    ));
+
+    // Move grid data to new key if key changed
+    if (newKey !== editRowKey) {
+      setGrid((prev) => {
+        const next = { ...prev };
+        next[newKey] = next[editRowKey] || {};
+        delete next[editRowKey];
+        return next;
+      });
+    }
+
+    setEditRowKey(null);
+  };
+
   // ── Save handler ──────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!selectedUserId) return;
@@ -483,7 +525,7 @@ export default function ProvisionTicketsPage() {
               <div className="flex items-center gap-3">
                 <FileText size={22} className="text-blue-600" />
                 <h1 className="text-lg font-bold text-gray-900">
-                  サービス提供票（{format(selectedMonth, "yyyy年M月", { locale: ja })}）
+                  サービス提供表（実績）（{format(selectedMonth, "yyyy年M月", { locale: ja })}）
                 </h1>
                 <span className={cn(
                   "text-xs font-medium px-2 py-0.5 rounded-full",
@@ -608,7 +650,6 @@ export default function ProvisionTicketsPage() {
                   <table className="text-[10px] border-collapse" style={{ tableLayout: "fixed", width: "100%" }}>
                     <colgroup>
                       <col style={{ width: "52px" }} />
-                      <col style={{ width: "72px" }} />
                       <col style={{ width: "80px" }} />
                       <col style={{ width: "38px" }} />
                       {days.map((d) => <col key={d} style={{ width: "22px" }} />)}
@@ -620,7 +661,6 @@ export default function ProvisionTicketsPage() {
                       <tr className="bg-gray-50">
                         <th className="border border-gray-300 px-1 py-0.5 text-left text-[9px] sticky left-0 bg-gray-50 z-10">時間帯</th>
                         <th className="border border-gray-300 px-1 py-0.5 text-left text-[9px]">サービス内容</th>
-                        <th className="border border-gray-300 px-1 py-0.5 text-left text-[9px]">事業所</th>
                         <th className="border border-gray-300 px-0 py-0.5 text-[8px]"></th>
                         {days.map((d) => (
                           <th key={d} className={cn(
@@ -635,7 +675,7 @@ export default function ProvisionTicketsPage() {
                       </tr>
                       {/* Day of week */}
                       <tr className="bg-gray-50">
-                        <th className="border border-gray-300 sticky left-0 bg-gray-50 z-10" colSpan={4}></th>
+                        <th className="border border-gray-300 sticky left-0 bg-gray-50 z-10" colSpan={3}></th>
                         {days.map((d) => {
                           const dow = getDayOfWeek(year, month, d);
                           return (
@@ -660,28 +700,22 @@ export default function ProvisionTicketsPage() {
                           <tbody key={row.key}>
                             {/* Planned row */}
                             <tr>
-                              <td className="border border-gray-300 px-1 py-0 text-[9px] text-gray-600 sticky left-0 bg-white z-10" rowSpan={2}>
+                              <td
+                                className="border border-gray-300 px-1 py-0 text-[9px] text-gray-600 sticky left-0 bg-white z-10 cursor-pointer hover:bg-blue-50 no-print:cursor-pointer"
+                                rowSpan={2}
+                                onClick={() => openEditRow(row)}
+                                title="クリックして編集"
+                              >
                                 {row.start_time.slice(0, 5)}
                                 <br />〜{row.end_time.slice(0, 5)}
                               </td>
-                              <td className="border border-gray-300 px-1 py-0 text-[9px]" rowSpan={2}>
+                              <td
+                                className="border border-gray-300 px-1 py-0 text-[9px] cursor-pointer hover:bg-blue-50"
+                                rowSpan={2}
+                                onClick={() => openEditRow(row)}
+                                title="クリックして編集"
+                              >
                                 {row.service_type}
-                              </td>
-                              <td className="border border-gray-300 px-1 py-0 text-[9px]" rowSpan={2}>
-                                <select
-                                  value={row.provider_name}
-                                  onChange={(e) => {
-                                    setServiceRows((prev) => prev.map((r) =>
-                                      r.key === row.key ? { ...r, provider_name: e.target.value } : r
-                                    ));
-                                  }}
-                                  className="w-full text-[9px] border-0 bg-transparent focus:outline-none py-0"
-                                >
-                                  <option value="">-- 選択 --</option>
-                                  {providers.map((p) => (
-                                    <option key={p.id} value={p.provider_name}>{p.provider_name}</option>
-                                  ))}
-                                </select>
                               </td>
                               <td className="border border-gray-300 px-0 py-0 text-center text-[8px]">
                                 <div className="flex items-center justify-center gap-0.5">
@@ -757,7 +791,7 @@ export default function ProvisionTicketsPage() {
                       {serviceRows.length === 0 && (
                         <tbody>
                           <tr>
-                            <td colSpan={4 + days.length + 2} className="border border-gray-300 px-4 py-8 text-center text-gray-400">
+                            <td colSpan={3 + days.length + 2} className="border border-gray-300 px-4 py-8 text-center text-gray-400">
                               サービスの予定がありません。「＋サービス追加」で追加するか、シフト管理から予定を作成してください。
                             </td>
                           </tr>
@@ -768,7 +802,7 @@ export default function ProvisionTicketsPage() {
                       {serviceRows.length > 0 && (
                         <tbody>
                           <tr className="bg-blue-50/50">
-                            <td colSpan={4} className="border border-gray-300 px-2 py-0.5 text-right font-bold text-blue-700 text-[10px]">
+                            <td colSpan={3} className="border border-gray-300 px-2 py-0.5 text-right font-bold text-blue-700 text-[10px]">
                               予定合計
                             </td>
                             {days.map((d) => (
@@ -780,7 +814,7 @@ export default function ProvisionTicketsPage() {
                             <td className="border border-gray-300 no-print"></td>
                           </tr>
                           <tr className="bg-green-50/50">
-                            <td colSpan={4} className="border border-gray-300 px-2 py-0.5 text-right font-bold text-green-700 text-[10px]">
+                            <td colSpan={3} className="border border-gray-300 px-2 py-0.5 text-right font-bold text-green-700 text-[10px]">
                               実績合計
                             </td>
                             {days.map((d) => (
@@ -854,6 +888,58 @@ export default function ProvisionTicketsPage() {
               <button onClick={() => setShowAddRow(false)} className="rounded-lg border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">キャンセル</button>
               <button onClick={handleAddRow} className="flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">
                 <Plus size={14} /> 追加
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit row modal */}
+      {editRowKey && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <h2 className="font-semibold text-gray-900">サービス行を編集</h2>
+              <button onClick={() => setEditRowKey(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">開始時間</label>
+                  <input type="time" value={editRowForm.start_time} onChange={(e) => setEditRowForm((f) => ({ ...f, start_time: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">終了時間</label>
+                  <input type="time" value={editRowForm.end_time} onChange={(e) => setEditRowForm((f) => ({ ...f, end_time: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">サービス</label>
+                <button
+                  type="button"
+                  onClick={() => setShowEditServiceSelector(true)}
+                  className="w-full flex items-center justify-between rounded-lg border border-gray-300 px-3 py-2 text-sm text-left hover:bg-gray-50"
+                >
+                  <span className={editRowForm.service_name ? "text-gray-900" : "text-gray-400"}>
+                    {editRowForm.service_name || "サービスを選択..."}
+                  </span>
+                </button>
+                <ServiceSelector
+                  open={showEditServiceSelector}
+                  onClose={() => setShowEditServiceSelector(false)}
+                  onSelect={(service) => {
+                    setEditRowForm((f) => ({ ...f, service_name: service.name, service_code: service.code }));
+                    setShowEditServiceSelector(false);
+                  }}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t px-5 py-4">
+              <button onClick={() => setEditRowKey(null)} className="rounded-lg border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">キャンセル</button>
+              <button onClick={handleEditRowSave} className="flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">
+                <Save size={14} /> 変更
               </button>
             </div>
           </div>
