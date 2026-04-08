@@ -1008,11 +1008,17 @@ export default function ProvisionTicketsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">開始時間</label>
-                  <input type="time" value={addRowForm.start_time} onChange={(e) => setAddRowForm((f) => ({ ...f, start_time: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                  <input type="time" value={addRowForm.start_time} onChange={(e) => {
+                    const v = e.target.value;
+                    setAddRowForm((f) => ({ ...f, start_time: v, end_time: f.end_time <= v ? v : f.end_time }));
+                  }} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">終了時間</label>
-                  <input type="time" value={addRowForm.end_time} onChange={(e) => setAddRowForm((f) => ({ ...f, end_time: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                  <input type="time" value={addRowForm.end_time} min={addRowForm.start_time} onChange={(e) => {
+                    const v = e.target.value;
+                    setAddRowForm((f) => ({ ...f, end_time: v < f.start_time ? f.start_time : v }));
+                  }} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
                 </div>
               </div>
               <div>
@@ -1067,11 +1073,17 @@ export default function ProvisionTicketsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">開始時間</label>
-                  <input type="time" value={editRowForm.start_time} onChange={(e) => setEditRowForm((f) => ({ ...f, start_time: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                  <input type="time" value={editRowForm.start_time} onChange={(e) => {
+                    const v = e.target.value;
+                    setEditRowForm((f) => ({ ...f, start_time: v, end_time: f.end_time <= v ? v : f.end_time }));
+                  }} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">終了時間</label>
-                  <input type="time" value={editRowForm.end_time} onChange={(e) => setEditRowForm((f) => ({ ...f, end_time: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                  <input type="time" value={editRowForm.end_time} min={editRowForm.start_time} onChange={(e) => {
+                    const v = e.target.value;
+                    setEditRowForm((f) => ({ ...f, end_time: v < f.start_time ? f.start_time : v }));
+                  }} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
                 </div>
               </div>
               <div>

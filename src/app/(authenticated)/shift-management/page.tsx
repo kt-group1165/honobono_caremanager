@@ -631,7 +631,7 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
                   <input
                     type="time"
                     value={editForm.start_time}
-                    onChange={(e) => setEditForm((f) => ({ ...f, start_time: e.target.value }))}
+                    onChange={(e) => { const v = e.target.value; setEditForm((f) => ({ ...f, start_time: v, end_time: f.end_time <= v ? v : f.end_time })); }}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
@@ -640,7 +640,8 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
                   <input
                     type="time"
                     value={editForm.end_time}
-                    onChange={(e) => setEditForm((f) => ({ ...f, end_time: e.target.value }))}
+                    min={editForm.start_time}
+                    onChange={(e) => { const v = e.target.value; setEditForm((f) => ({ ...f, end_time: v < f.start_time ? f.start_time : v })); }}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
@@ -772,7 +773,7 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
                   <input
                     type="time"
                     value={addForm.start_time}
-                    onChange={(e) => setAddForm((f) => ({ ...f, start_time: e.target.value }))}
+                    onChange={(e) => { const v = e.target.value; setAddForm((f) => ({ ...f, start_time: v, end_time: f.end_time <= v ? v : f.end_time })); }}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
@@ -781,7 +782,8 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
                   <input
                     type="time"
                     value={addForm.end_time}
-                    onChange={(e) => setAddForm((f) => ({ ...f, end_time: e.target.value }))}
+                    min={addForm.start_time}
+                    onChange={(e) => { const v = e.target.value; setAddForm((f) => ({ ...f, end_time: v < f.start_time ? f.start_time : v })); }}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
