@@ -141,10 +141,12 @@ function DayCell({ dow, days, staff, onAddDay, onRemoveDay, onChangeDay }: DayCe
                   className="w-16 rounded border-0 bg-transparent text-[10px] focus:outline-none"
                 />
                 <button
-                  onClick={() => onRemoveDay(entry.tempId)}
-                  className="ml-auto text-gray-300 hover:text-red-400 transition-colors"
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemoveDay(entry.tempId); }}
+                  className="ml-auto w-5 h-5 flex items-center justify-center rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition-colors shrink-0"
+                  title="この枠を削除"
                 >
-                  <X size={10} />
+                  <X size={12} />
                 </button>
               </div>
               <select
