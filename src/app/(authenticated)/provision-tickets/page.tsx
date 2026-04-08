@@ -61,14 +61,12 @@ interface VisitSchedule {
   staff_name?: string | null;
 }
 
-// A "row" in the provision ticket grid = unique combination of service + time + staff
+// A "row" in the provision ticket grid = unique combination of service + time + provider
 interface ServiceRow {
-  key: string; // e.g. "身体介護1__09:00__10:00__staffId"
+  key: string; // e.g. "身体介護1__09:00__10:00"
   service_type: string;
   start_time: string;
   end_time: string;
-  staff_id: string | null;
-  staff_name: string;
   provider_name: string;
 }
 
@@ -94,8 +92,8 @@ function isDowColor(year: number, month: number, day: number): string {
   return "text-gray-700";
 }
 
-function makeRowKey(serviceType: string, startTime: string, endTime: string, staffId: string | null): string {
-  return `${serviceType}__${startTime}__${endTime}__${staffId || "none"}`;
+function makeRowKey(serviceType: string, startTime: string, endTime: string): string {
+  return `${serviceType}__${startTime}__${endTime}`;
 }
 
 function toWareki(date: Date): string {
@@ -125,7 +123,7 @@ export default function ProvisionTicketsPage() {
 
   // Add service row modal
   const [showAddRow, setShowAddRow] = useState(false);
-  const [addRowForm, setAddRowForm] = useState({ start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", staff_id: "", provider_id: "" });
+  const [addRowForm, setAddRowForm] = useState({ start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", provider_id: "" });
   const [showAddServiceSelector, setShowAddServiceSelector] = useState(false);
 
   // Derived
@@ -202,18 +200,16 @@ export default function ProvisionTicketsPage() {
       staff_name: r.kaigo_staff?.name ?? null,
     }));
 
-    // Build unique rows
+    // Build unique rows — group by service_type + start_time + end_time
     const rowMap = new Map<string, ServiceRow>();
     for (const s of schedules) {
-      const key = makeRowKey(s.service_type, s.start_time, s.end_time, s.staff_id);
+      const key = makeRowKey(s.service_type, s.start_time, s.end_time);
       if (!rowMap.has(key)) {
         rowMap.set(key, {
           key,
           service_type: s.service_type,
           start_time: s.start_time,
           end_time: s.end_time,
-          staff_id: s.staff_id,
-          staff_name: s.staff_name ?? "未割当",
           provider_name: "",
         });
       }
@@ -227,7 +223,7 @@ export default function ProvisionTicketsPage() {
     }
 
     for (const s of schedules) {
-      const key = makeRowKey(s.service_type, s.start_time, s.end_time, s.staff_id);
+      const key = makeRowKey(s.service_type, s.start_time, s.end_time);
       const day = parseInt(s.visit_date.split("-")[2], 10);
       if (!newGrid[key]) newGrid[key] = {};
       if (!newGrid[key][day]) newGrid[key][day] = { planned: false, actual: false };
@@ -353,20 +349,18 @@ export default function ProvisionTicketsPage() {
       toast.error("サービスを選択してください");
       return;
     }
-    const staffObj = allStaff.find((s) => s.id === addRowForm.staff_id);
-    const key = makeRowKey(addRowForm.service_name, addRowForm.start_time + ":00", addRowForm.end_time + ":00", addRowForm.staff_id || null);
+    const key = makeRowKey(addRowForm.service_name, addRowForm.start_time + ":00", addRowForm.end_time + ":00");
     if (serviceRows.some((r) => r.key === key)) {
       toast.error("同じサービス行が既に存在します");
       return;
     }
+    const provObj = providers.find((p) => p.id === addRowForm.provider_id);
     setServiceRows((prev) => [...prev, {
       key,
       service_type: addRowForm.service_name,
       start_time: addRowForm.start_time + ":00",
       end_time: addRowForm.end_time + ":00",
-      staff_id: addRowForm.staff_id || null,
-      staff_name: staffObj?.name ?? "未割当",
-      provider_name: "",
+      provider_name: provObj?.provider_name ?? "",
     }]);
     setGrid((prev) => ({ ...prev, [key]: {} }));
     setShowAddRow(false);
@@ -409,7 +403,6 @@ export default function ProvisionTicketsPage() {
           if (cell.planned) {
             toInsert.push({
               user_id: selectedUserId,
-              staff_id: row.staff_id || null,
               visit_date: dateStr,
               start_time: row.start_time,
               end_time: row.end_time,
@@ -420,7 +413,6 @@ export default function ProvisionTicketsPage() {
           if (cell.actual) {
             toInsert.push({
               user_id: selectedUserId,
-              staff_id: row.staff_id || null,
               visit_date: dateStr,
               start_time: row.start_time,
               end_time: row.end_time,
@@ -596,7 +588,7 @@ export default function ProvisionTicketsPage() {
                 </h2>
                 <button
                   onClick={() => {
-                    setAddRowForm({ start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", staff_id: "", provider_id: "" });
+                    setAddRowForm({ start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", provider_id: "" });
                     setShowAddRow(true);
                   }}
                   className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 no-print"
@@ -613,23 +605,50 @@ export default function ProvisionTicketsPage() {
                 </div>
               ) : (
                 <div className="overflow-x-auto border rounded-lg">
-                  <table className="w-full text-[10px] border-collapse min-w-[1200px]">
+                  <table className="text-[10px] border-collapse" style={{ tableLayout: "fixed", width: "100%" }}>
+                    <colgroup>
+                      <col style={{ width: "52px" }} />
+                      <col style={{ width: "72px" }} />
+                      <col style={{ width: "80px" }} />
+                      <col style={{ width: "38px" }} />
+                      {days.map((d) => <col key={d} style={{ width: "22px" }} />)}
+                      <col style={{ width: "26px" }} />
+                      <col className="no-print" style={{ width: "20px" }} />
+                    </colgroup>
                     <thead>
+                      {/* Day numbers */}
                       <tr className="bg-gray-50">
-                        <th className="border border-gray-300 px-1 py-1 text-left w-16 sticky left-0 bg-gray-50 z-10">時間帯</th>
-                        <th className="border border-gray-300 px-1 py-1 text-left w-20">サービス内容</th>
-                        <th className="border border-gray-300 px-1 py-1 text-left w-24">事業所</th>
-                        <th className="border border-gray-300 px-1 py-1 w-6"></th>
+                        <th className="border border-gray-300 px-1 py-0.5 text-left text-[9px] sticky left-0 bg-gray-50 z-10">時間帯</th>
+                        <th className="border border-gray-300 px-1 py-0.5 text-left text-[9px]">サービス内容</th>
+                        <th className="border border-gray-300 px-1 py-0.5 text-left text-[9px]">事業所</th>
+                        <th className="border border-gray-300 px-0 py-0.5 text-[8px]"></th>
                         {days.map((d) => (
                           <th key={d} className={cn(
-                            "border border-gray-300 px-0 py-0.5 text-center w-6 font-semibold",
+                            "border border-gray-300 px-0 py-0.5 text-center font-semibold text-[9px]",
                             isDowColor(year, month, d)
                           )}>
                             {d}
                           </th>
                         ))}
-                        <th className="border border-gray-300 px-1 py-1 text-center w-8 font-bold text-blue-700">計</th>
-                        <th className="border border-gray-300 px-0.5 py-1 w-4 no-print"></th>
+                        <th className="border border-gray-300 px-0 py-0.5 text-center font-bold text-blue-700 text-[9px]">計</th>
+                        <th className="border border-gray-300 no-print"></th>
+                      </tr>
+                      {/* Day of week */}
+                      <tr className="bg-gray-50">
+                        <th className="border border-gray-300 sticky left-0 bg-gray-50 z-10" colSpan={4}></th>
+                        {days.map((d) => {
+                          const dow = getDayOfWeek(year, month, d);
+                          return (
+                            <th key={`dow-${d}`} className={cn(
+                              "border border-gray-300 px-0 py-0 text-center text-[8px] font-normal",
+                              isDowColor(year, month, d)
+                            )}>
+                              {dow}
+                            </th>
+                          );
+                        })}
+                        <th className="border border-gray-300"></th>
+                        <th className="border border-gray-300 no-print"></th>
                       </tr>
                     </thead>
                       {serviceRows.map((row) => {
@@ -824,10 +843,10 @@ export default function ProvisionTicketsPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">担当職員</label>
-                <select value={addRowForm.staff_id} onChange={(e) => setAddRowForm((f) => ({ ...f, staff_id: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
-                  <option value="">未割当</option>
-                  {allStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                <label className="block text-xs font-medium text-gray-500 mb-1">事業所</label>
+                <select value={addRowForm.provider_id} onChange={(e) => setAddRowForm((f) => ({ ...f, provider_id: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                  <option value="">-- 選択 --</option>
+                  {providers.map((p) => <option key={p.id} value={p.id}>{p.provider_name}</option>)}
                 </select>
               </div>
             </div>
