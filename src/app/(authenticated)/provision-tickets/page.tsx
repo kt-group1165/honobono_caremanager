@@ -120,6 +120,7 @@ export default function ProvisionTicketsPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<"draft" | "confirmed">("draft");
+  const [isDirty, setIsDirty] = useState(false);
 
   // Add service row modal
   const [showAddRow, setShowAddRow] = useState(false);
@@ -253,8 +254,20 @@ export default function ProvisionTicketsPage() {
     fetchGridData();
   }, [fetchGridData]);
 
+  // ── Dirty tracking & beforeunload ──────────────────────────────────────────
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
+
+  // Mark dirty on any grid/row change (wrap setters)
+  const markDirty = () => setIsDirty(true);
+
   // ── Cell toggle handlers ──────────────────────────────────────────────────
   const togglePlanned = (rowKey: string, day: number) => {
+    markDirty();
     setGrid((prev) => {
       const cell = prev[rowKey]?.[day] ?? { planned: false, actual: false };
       return {
@@ -268,6 +281,7 @@ export default function ProvisionTicketsPage() {
   };
 
   const toggleActual = (rowKey: string, day: number) => {
+    markDirty();
     setGrid((prev) => {
       const cell = prev[rowKey]?.[day] ?? { planned: false, actual: false };
       return {
@@ -282,6 +296,7 @@ export default function ProvisionTicketsPage() {
 
   // Bulk: set all days planned/actual for a row
   const setAllPlanned = (rowKey: string) => {
+    markDirty();
     setGrid((prev) => {
       const rowData = { ...(prev[rowKey] || {}) };
       for (const day of days) {
@@ -292,6 +307,7 @@ export default function ProvisionTicketsPage() {
   };
 
   const setWeekdaysPlanned = (rowKey: string) => {
+    markDirty();
     setGrid((prev) => {
       const rowData = { ...(prev[rowKey] || {}) };
       for (const day of days) {
@@ -305,6 +321,7 @@ export default function ProvisionTicketsPage() {
   };
 
   const clearPlanned = (rowKey: string) => {
+    markDirty();
     setGrid((prev) => {
       const rowData = { ...(prev[rowKey] || {}) };
       for (const day of days) {
@@ -315,6 +332,7 @@ export default function ProvisionTicketsPage() {
   };
 
   const setAllActual = (rowKey: string) => {
+    markDirty();
     setGrid((prev) => {
       const rowData = { ...(prev[rowKey] || {}) };
       for (const day of days) {
@@ -325,6 +343,7 @@ export default function ProvisionTicketsPage() {
   };
 
   const setWeekdaysActual = (rowKey: string) => {
+    markDirty();
     setGrid((prev) => {
       const rowData = { ...(prev[rowKey] || {}) };
       for (const day of days) {
@@ -338,6 +357,7 @@ export default function ProvisionTicketsPage() {
   };
 
   const clearActual = (rowKey: string) => {
+    markDirty();
     setGrid((prev) => {
       const rowData = { ...(prev[rowKey] || {}) };
       for (const day of days) {
@@ -371,6 +391,7 @@ export default function ProvisionTicketsPage() {
   };
 
   const removeRow = (rowKey: string) => {
+    markDirty();
     setServiceRows((prev) => prev.filter((r) => r.key !== rowKey));
     setGrid((prev) => {
       const next = { ...prev };
@@ -395,23 +416,50 @@ export default function ProvisionTicketsPage() {
     const oldRow = serviceRows.find((r) => r.key === editRowKey);
     if (!oldRow) return;
 
+    markDirty();
     const newKey = makeRowKey(editRowForm.service_name, editRowForm.start_time + ":00", editRowForm.end_time + ":00");
+    const existingRow = serviceRows.find((r) => r.key === newKey && r.key !== editRowKey);
 
-    // Update service row
-    setServiceRows((prev) => prev.map((r) =>
-      r.key === editRowKey
-        ? { ...r, key: newKey, service_type: editRowForm.service_name, start_time: editRowForm.start_time + ":00", end_time: editRowForm.end_time + ":00" }
-        : r
-    ));
-
-    // Move grid data to new key if key changed
-    if (newKey !== editRowKey) {
+    if (existingRow) {
+      // Merge: combine grid data from old row into existing row
       setGrid((prev) => {
         const next = { ...prev };
-        next[newKey] = next[editRowKey] || {};
+        const oldData = next[editRowKey] || {};
+        const existingData = { ...(next[newKey] || {}) };
+        // Merge: OR the planned/actual flags
+        for (const [dayStr, cell] of Object.entries(oldData)) {
+          const d = parseInt(dayStr, 10);
+          if (!existingData[d]) {
+            existingData[d] = { ...cell };
+          } else {
+            existingData[d] = {
+              planned: existingData[d].planned || cell.planned,
+              actual: existingData[d].actual || cell.actual,
+            };
+          }
+        }
+        next[newKey] = existingData;
         delete next[editRowKey];
         return next;
       });
+      // Remove old row
+      setServiceRows((prev) => prev.filter((r) => r.key !== editRowKey));
+    } else {
+      // Simple rename
+      setServiceRows((prev) => prev.map((r) =>
+        r.key === editRowKey
+          ? { ...r, key: newKey, service_type: editRowForm.service_name, start_time: editRowForm.start_time + ":00", end_time: editRowForm.end_time + ":00" }
+          : r
+      ));
+
+      if (newKey !== editRowKey) {
+        setGrid((prev) => {
+          const next = { ...prev };
+          next[newKey] = next[editRowKey] || {};
+          delete next[editRowKey];
+          return next;
+        });
+      }
     }
 
     setEditRowKey(null);
@@ -471,6 +519,7 @@ export default function ProvisionTicketsPage() {
       }
 
       toast.success("提供票を保存しました");
+      setIsDirty(false);
       fetchGridData();
     } catch (err: unknown) {
       toast.error("保存に失敗しました: " + (err instanceof Error ? err.message : String(err)));
@@ -516,7 +565,11 @@ export default function ProvisionTicketsPage() {
       `}</style>
 
       <div className="flex h-full -m-6">
-        <UserSidebar selectedUserId={selectedUserId} onSelectUser={setSelectedUserId} />
+        <UserSidebar selectedUserId={selectedUserId} onSelectUser={(id) => {
+          if (isDirty && !window.confirm("未保存の変更があります。破棄しますか？")) return;
+          setIsDirty(false);
+          setSelectedUserId(id);
+        }} />
 
         <div className="flex-1 overflow-y-auto">
           {/* Header */}
@@ -610,9 +663,17 @@ export default function ProvisionTicketsPage() {
                 <div>
                   <label className="block text-[10px] text-gray-500 mb-0.5">提供月</label>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))} className="rounded border p-1 hover:bg-gray-50"><ChevronLeft size={16} /></button>
+                    <button onClick={() => {
+                      if (isDirty && !window.confirm("未保存の変更があります。破棄しますか？")) return;
+                      setIsDirty(false);
+                      setSelectedMonth(subMonths(selectedMonth, 1));
+                    }} className="rounded border p-1 hover:bg-gray-50"><ChevronLeft size={16} /></button>
                     <span className="text-sm font-semibold">{format(selectedMonth, "yyyy年M月", { locale: ja })}</span>
-                    <button onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))} className="rounded border p-1 hover:bg-gray-50"><ChevronRight size={16} /></button>
+                    <button onClick={() => {
+                      if (isDirty && !window.confirm("未保存の変更があります。破棄しますか？")) return;
+                      setIsDirty(false);
+                      setSelectedMonth(addMonths(selectedMonth, 1));
+                    }} className="rounded border p-1 hover:bg-gray-50"><ChevronRight size={16} /></button>
                   </div>
                 </div>
                 <div>
@@ -649,11 +710,11 @@ export default function ProvisionTicketsPage() {
                 <div className="overflow-x-auto border rounded-lg">
                   <table className="text-[10px] border-collapse" style={{ tableLayout: "fixed", width: "100%" }}>
                     <colgroup>
-                      <col style={{ width: "52px" }} />
-                      <col style={{ width: "80px" }} />
-                      <col style={{ width: "38px" }} />
-                      {days.map((d) => <col key={d} style={{ width: "22px" }} />)}
-                      <col style={{ width: "26px" }} />
+                      <col style={{ width: "54px" }} />
+                      <col style={{ width: "78px" }} />
+                      <col style={{ width: "56px" }} />
+                      {days.map((d) => <col key={d} style={{ width: "21px" }} />)}
+                      <col style={{ width: "24px" }} />
                       <col className="no-print" style={{ width: "20px" }} />
                     </colgroup>
                     <thead>
@@ -717,12 +778,14 @@ export default function ProvisionTicketsPage() {
                               >
                                 {row.service_type}
                               </td>
-                              <td className="border border-gray-300 px-0 py-0 text-center text-[8px]">
-                                <div className="flex items-center justify-center gap-0.5">
-                                  <span className="text-gray-500">予定</span>
-                                  <button onClick={() => setAllPlanned(row.key)} className="text-blue-500 hover:underline no-print" title="全日">全</button>
-                                  <button onClick={() => setWeekdaysPlanned(row.key)} className="text-green-600 hover:underline no-print" title="平日">平</button>
-                                  <button onClick={() => clearPlanned(row.key)} className="text-red-500 hover:underline no-print" title="消去">消</button>
+                              <td className="border border-gray-300 px-0.5 py-0 text-center text-[8px]">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-gray-500 shrink-0">予定</span>
+                                  <div className="flex gap-0.5 no-print">
+                                    <button onClick={() => setAllPlanned(row.key)} className="text-blue-500 hover:underline" title="全日">全</button>
+                                    <button onClick={() => setWeekdaysPlanned(row.key)} className="text-green-600 hover:underline" title="平日">平</button>
+                                    <button onClick={() => clearPlanned(row.key)} className="text-red-500 hover:underline" title="消去">消</button>
+                                  </div>
                                 </div>
                               </td>
                               {days.map((d) => {
@@ -756,12 +819,14 @@ export default function ProvisionTicketsPage() {
                             </tr>
                             {/* Actual row */}
                             <tr>
-                              <td className="border border-gray-300 px-0 py-0 text-center text-[8px]">
-                                <div className="flex items-center justify-center gap-0.5">
-                                  <span className="text-gray-500">実績</span>
-                                  <button onClick={() => setAllActual(row.key)} className="text-blue-500 hover:underline no-print" title="全日">全</button>
-                                  <button onClick={() => setWeekdaysActual(row.key)} className="text-green-600 hover:underline no-print" title="平日">平</button>
-                                  <button onClick={() => clearActual(row.key)} className="text-red-500 hover:underline no-print" title="消去">消</button>
+                              <td className="border border-gray-300 px-0.5 py-0 text-center text-[8px]">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-gray-500 shrink-0">実績</span>
+                                  <div className="flex gap-0.5 no-print">
+                                    <button onClick={() => setAllActual(row.key)} className="text-blue-500 hover:underline" title="全日">全</button>
+                                    <button onClick={() => setWeekdaysActual(row.key)} className="text-green-600 hover:underline" title="平日">平</button>
+                                    <button onClick={() => clearActual(row.key)} className="text-red-500 hover:underline" title="消去">消</button>
+                                  </div>
                                 </div>
                               </td>
                               {days.map((d) => {
