@@ -17,6 +17,7 @@ import {
   Check,
   Clock as ClockIcon,
   AlertTriangle,
+  Download,
 } from "lucide-react";
 import {
   format,
@@ -109,6 +110,7 @@ export default function ProvisionTicketsPage() {
   const [userData, setUserData] = useState<KaigoUser | null>(null);
   const [allStaff, setAllStaff] = useState<KaigoStaff[]>([]);
   const [serviceUnits, setServiceUnits] = useState<Record<string, number>>({}); // service_name -> units
+  const [officeInfo, setOfficeInfo] = useState<{ provider_number?: string; office_name?: string } | null>(null);
 
   const [serviceRows, setServiceRows] = useState<ServiceRow[]>([]);
   const [grid, setGrid] = useState<GridState>({});
@@ -138,11 +140,13 @@ export default function ProvisionTicketsPage() {
   // ── Load master data ──────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
-      const [staffRes, serviceCodeRes] = await Promise.all([
+      const [staffRes, serviceCodeRes, officeRes] = await Promise.all([
         supabase.from("kaigo_staff").select("id, name").eq("status", "active").order("name"),
         supabase.from("kaigo_service_codes").select("service_name, units").eq("calculation_type", "基本"),
+        supabase.from("kaigo_office_settings").select("provider_number, office_name").limit(1).single(),
       ]);
       setAllStaff(staffRes.data || []);
+      if (officeRes.data) setOfficeInfo(officeRes.data as { provider_number?: string; office_name?: string });
       // Build units lookup: service_name -> units
       const unitsMap: Record<string, number> = {};
       for (const sc of (serviceCodeRes.data || []) as { service_name: string; units: number }[]) {
@@ -592,6 +596,114 @@ export default function ProvisionTicketsPage() {
   // ── Print ──────────────────────────────────────────────────────────────────
   const handlePrint = () => window.print();
 
+  // ── CSV Export (ケアプランデータ連携システム標準仕様 第6表 実績) ────────
+  const handleCsvExport = () => {
+    if (!selectedUserId || !userData || serviceRows.length === 0) {
+      toast.error("出力するデータがありません");
+      return;
+    }
+
+    const csvVersion = "202407"; // Version 4.1 (令和6年10月改定)
+    const insurerNo = userData.insurer_no ?? "";
+    const insuredNo = userData.insured_no ?? "";
+    const periodYm = `${year}${String(month).padStart(2, "0")}`;
+    const providerCode = officeInfo?.provider_number ?? "";
+    const now = new Date();
+    const timestamp = format(now, "yyyyMMddHHmmss");
+
+    // サービス種類コードのマッピング
+    const getServiceCategoryCode = (serviceType: string): string => {
+      if (serviceType.includes("訪問介護") || serviceType.includes("身体") || serviceType.includes("生活")) return "11";
+      if (serviceType.includes("訪問看護")) return "13";
+      if (serviceType.includes("訪問リハ")) return "14";
+      if (serviceType.includes("通所介護")) return "15";
+      if (serviceType.includes("通所リハ")) return "16";
+      if (serviceType.includes("福祉用具")) return "17";
+      if (serviceType.includes("短期入所")) return "21";
+      return "11"; // デフォルト: 訪問介護
+    };
+
+    // ヘッダー行
+    const headers = [
+      "CSVバージョン",
+      "保険者番号",
+      "被保険者番号",
+      "利用対象年月",
+      "サービス事業者コード",
+      "サービス種類コード",
+      "サービス内容/名称",
+      "開始時刻",
+      "終了時刻",
+      ...days.map((d) => `${d}日予定`),
+      ...days.map((d) => `${d}日実績`),
+      "予定回数合計",
+      "実績回数合計",
+      "単位数",
+      "予定単位合計",
+      "実績単位合計",
+    ];
+
+    // データ行
+    const dataRows: string[][] = [];
+    for (const row of serviceRows) {
+      const rowGrid = grid[row.key] || {};
+      const categoryCode = getServiceCategoryCode(row.service_type);
+      const plannedDays = days.map((d) => (rowGrid[d]?.planned ? "1" : ""));
+      const actualDays = days.map((d) => (rowGrid[d]?.actual ? "1" : ""));
+      const plannedCount = days.reduce((s, d) => s + (rowGrid[d]?.planned ? 1 : 0), 0);
+      const actualCount = days.reduce((s, d) => s + (rowGrid[d]?.actual ? 1 : 0), 0);
+      const units = serviceUnits[row.service_type] ?? 0;
+
+      dataRows.push([
+        csvVersion,
+        insurerNo,
+        insuredNo,
+        periodYm,
+        providerCode,
+        categoryCode,
+        row.service_type,
+        row.start_time.slice(0, 5).replace(":", ""),
+        row.end_time.slice(0, 5).replace(":", ""),
+        ...plannedDays,
+        ...actualDays,
+        String(plannedCount),
+        String(actualCount),
+        String(units),
+        String(plannedCount * units),
+        String(actualCount * units),
+      ]);
+    }
+
+    // CSV文字列を作成 (Shift-JIS互換のためBOMなしUTF-8で出力、必要に応じてShift-JISに変換)
+    const escapeField = (v: string) => {
+      if (v.includes(",") || v.includes('"') || v.includes("\n")) {
+        return '"' + v.replace(/"/g, '""') + '"';
+      }
+      return v;
+    };
+
+    const csvLines = [
+      headers.map(escapeField).join(","),
+      ...dataRows.map((row) => row.map(escapeField).join(",")),
+    ];
+    const csvContent = csvLines.join("\r\n") + "\r\n";
+
+    // Shift-JIS対応: TextEncoderではShift-JISにできないため、UTF-8 BOM付きで出力
+    // (Excelで開くため)
+    const bom = "\uFEFF";
+    const blob = new Blob([bom + csvContent], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const serviceCategoryCode = serviceRows.length > 0 ? getServiceCategoryCode(serviceRows[0].service_type) : "11";
+    a.href = url;
+    a.download = `DLTJSK_${periodYm}_${providerCode || "0000000000"}_${serviceCategoryCode}_${timestamp}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("CSVファイルをダウンロードしました");
+  };
+
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <>
@@ -656,6 +768,14 @@ export default function ProvisionTicketsPage() {
                 >
                   {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                   保存
+                </button>
+                <button
+                  onClick={handleCsvExport}
+                  disabled={!selectedUserId || serviceRows.length === 0}
+                  className="flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  <Download size={14} />
+                  CSV出力
                 </button>
                 <button
                   onClick={handlePrint}
