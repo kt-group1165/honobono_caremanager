@@ -292,8 +292,10 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
   const [allStaff, setAllStaff] = useState<KaigoStaff[]>([]);
   const [allSchedules, setAllSchedules] = useState<VisitSchedule[]>([]);
   const [loading, setLoading] = useState(false);
-  const [reassignModal, setReassignModal] = useState<VisitSchedule | null>(null);
-  const [reassigning, setReassigning] = useState(false);
+  const [editModal, setEditModal] = useState<VisitSchedule | null>(null);
+  const [editForm, setEditForm] = useState({ start_time: "", end_time: "", service_type: "", staff_id: "" });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editDeleting, setEditDeleting] = useState(false);
 
   const days = useMemo(
     () =>
@@ -363,42 +365,75 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
     );
   };
 
-  // Candidates for reassignment
-  const getCandidates = (sched: VisitSchedule) => {
-    return allStaff.map((s) => {
-      const unavail = isStaffUnavailableAtTime(
-        s.id,
-        sched.visit_date,
-        sched.start_time,
-        sched.end_time,
-        availability
-      );
-      const hasConflict = allSchedules.some(
-        (sc) =>
-          sc.id !== sched.id &&
-          sc.staff_id === s.id &&
-          sc.visit_date === sched.visit_date &&
-          sc.start_time === sched.start_time
-      );
-      return { staff: s, unavail, hasConflict };
+  const openEditModal = (sched: VisitSchedule) => {
+    setEditModal(sched);
+    setEditForm({
+      start_time: sched.start_time?.slice(0, 5) ?? "09:00",
+      end_time: sched.end_time?.slice(0, 5) ?? "10:00",
+      service_type: sched.service_type,
+      staff_id: sched.staff_id ?? "",
     });
   };
 
-  const handleReassign = async (newStaffId: string) => {
-    if (!reassignModal) return;
-    setReassigning(true);
+  const handleEditSave = async () => {
+    if (!editModal) return;
+    setEditSaving(true);
+    const updateData: Record<string, string | null> = {
+      start_time: editForm.start_time + ":00",
+      end_time: editForm.end_time + ":00",
+      service_type: editForm.service_type,
+      staff_id: editForm.staff_id || null,
+    };
     const { error } = await supabase
       .from("kaigo_visit_schedule")
-      .update({ staff_id: newStaffId })
-      .eq("id", reassignModal.id);
+      .update(updateData)
+      .eq("id", editModal.id);
     if (error) {
-      toast.error("再割当てに失敗しました");
+      toast.error("更新に失敗しました");
     } else {
-      toast.success("担当職員を変更しました");
-      setReassignModal(null);
+      toast.success("予定を更新しました");
+      setEditModal(null);
       fetchData();
     }
-    setReassigning(false);
+    setEditSaving(false);
+  };
+
+  const handleEditDelete = async () => {
+    if (!editModal) return;
+    if (!window.confirm("この予定を削除しますか？")) return;
+    setEditDeleting(true);
+    const { error } = await supabase
+      .from("kaigo_visit_schedule")
+      .delete()
+      .eq("id", editModal.id);
+    if (error) {
+      toast.error("削除に失敗しました");
+    } else {
+      toast.success("予定を削除しました");
+      setEditModal(null);
+      fetchData();
+    }
+    setEditDeleting(false);
+  };
+
+  // Staff availability info for edit modal
+  const getStaffStatusForEdit = (staffId: string) => {
+    if (!editModal || !staffId) return { unavail: false, conflict: false };
+    const unavail = isStaffUnavailableAtTime(
+      staffId,
+      editModal.visit_date,
+      editForm.start_time + ":00",
+      editForm.end_time + ":00",
+      availability
+    );
+    const conflict = allSchedules.some(
+      (sc) =>
+        sc.id !== editModal.id &&
+        sc.staff_id === staffId &&
+        sc.visit_date === editModal.visit_date &&
+        sc.start_time === editForm.start_time + ":00"
+    );
+    return { unavail, conflict };
   };
 
   const firstDow = days.length > 0 ? getDay(days[0]) : 0;
@@ -483,14 +518,14 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
                       return (
                         <button
                           key={sched.id}
-                          onClick={() => unavail && setReassignModal(sched)}
+                          onClick={() => openEditModal(sched)}
                           className={cn(
-                            "w-full text-left rounded px-1 py-0.5 text-[8px] leading-tight whitespace-nowrap overflow-hidden text-ellipsis",
+                            "w-full text-left rounded px-1 py-0.5 text-[8px] leading-tight whitespace-nowrap overflow-hidden text-ellipsis cursor-pointer transition-colors",
                             unavail
-                              ? "bg-red-50 text-red-600 font-semibold cursor-pointer hover:bg-red-100"
-                              : "bg-blue-50 text-blue-700 cursor-default"
+                              ? "bg-red-50 text-red-600 font-semibold hover:bg-red-100"
+                              : "bg-blue-50 text-blue-700 hover:bg-blue-100"
                           )}
-                          title={unavail ? "職員が対応不可のため、クリックして代替候補を表示" : undefined}
+                          title="クリックして編集"
                         >
                           {sched.start_time?.slice(0, 5)}~{sched.end_time?.slice(0, 5)} {sched.staff_name ?? ""} {sched.service_type}
                           {unavail && <AlertTriangle size={8} className="inline ml-0.5" />}
@@ -505,45 +540,123 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
         </div>
       )}
 
-      {/* Reassign Modal */}
-      {reassignModal && (
+      {/* Edit Schedule Modal */}
+      {editModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
             <div className="flex items-center justify-between border-b px-5 py-4">
-              <h2 className="font-semibold text-gray-900">代替職員候補</h2>
-              <button onClick={() => setReassignModal(null)} className="text-gray-400 hover:text-gray-600">
+              <h2 className="font-semibold text-gray-900">予定を編集</h2>
+              <button onClick={() => setEditModal(null)} className="text-gray-400 hover:text-gray-600">
                 <X size={18} />
               </button>
             </div>
-            <div className="p-5">
-              <p className="text-xs text-gray-500 mb-1">
-                {reassignModal.visit_date} {reassignModal.start_time?.slice(0, 5)} — {reassignModal.service_type}
-              </p>
-              <p className="text-sm text-red-600 font-medium mb-3">
-                担当:{reassignModal.staff_name ?? "未割当"} が対応不可
-              </p>
-              <div className="space-y-2 max-h-72 overflow-y-auto">
-                {getCandidates(reassignModal).map(({ staff: s, unavail, hasConflict }) => {
-                  const disabled = unavail || hasConflict;
-                  return (
-                    <button
-                      key={s.id}
-                      disabled={disabled || reassigning}
-                      onClick={() => handleReassign(s.id)}
-                      className={cn(
-                        "flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors",
-                        disabled
-                          ? "bg-gray-50 text-gray-400 cursor-not-allowed"
-                          : "bg-green-50 text-green-700 hover:bg-green-100 cursor-pointer"
-                      )}
-                    >
-                      <span className="font-medium">{s.name}</span>
-                      <span className="text-xs">
-                        {hasConflict ? "重複" : unavail ? "対応不可" : "対応可"}
-                      </span>
-                    </button>
+            <div className="p-5 space-y-4">
+              {/* Date (read-only) */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">日付</label>
+                <p className="text-sm font-semibold text-gray-900">
+                  {format(new Date(editModal.visit_date + "T00:00:00"), "yyyy年M月d日(E)", { locale: ja })}
+                </p>
+              </div>
+
+              {/* Time */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">開始時間</label>
+                  <input
+                    type="time"
+                    value={editForm.start_time}
+                    onChange={(e) => setEditForm((f) => ({ ...f, start_time: e.target.value }))}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">終了時間</label>
+                  <input
+                    type="time"
+                    value={editForm.end_time}
+                    onChange={(e) => setEditForm((f) => ({ ...f, end_time: e.target.value }))}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Service type */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">サービス種類</label>
+                <select
+                  value={editForm.service_type}
+                  onChange={(e) => setEditForm((f) => ({ ...f, service_type: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="身体介護">身体介護</option>
+                  <option value="生活援助">生活援助</option>
+                  <option value="身体・生活">身体・生活</option>
+                  <option value="通院等乗降介助">通院等乗降介助</option>
+                </select>
+              </div>
+
+              {/* Staff */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">担当職員</label>
+                <select
+                  value={editForm.staff_id}
+                  onChange={(e) => setEditForm((f) => ({ ...f, staff_id: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">未割当</option>
+                  {allStaff.map((s) => {
+                    const status = getStaffStatusForEdit(s.id);
+                    return (
+                      <option key={s.id} value={s.id}>
+                        {s.name}{status.unavail ? " (対応不可)" : status.conflict ? " (重複)" : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+                {/* Warning if selected staff is unavailable */}
+                {editForm.staff_id && (() => {
+                  const status = getStaffStatusForEdit(editForm.staff_id);
+                  if (status.unavail) return (
+                    <p className="mt-1 flex items-center gap-1 text-xs text-red-600">
+                      <AlertTriangle size={12} />この職員はこの時間帯は対応不可です
+                    </p>
                   );
-                })}
+                  if (status.conflict) return (
+                    <p className="mt-1 flex items-center gap-1 text-xs text-amber-600">
+                      <AlertTriangle size={12} />この職員は同時間帯に別の予定があります
+                    </p>
+                  );
+                  return null;
+                })()}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-between border-t px-5 py-4">
+              <button
+                onClick={handleEditDelete}
+                disabled={editSaving || editDeleting}
+                className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+              >
+                {editDeleting ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
+                削除
+              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setEditModal(null)}
+                  className="rounded-lg border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={handleEditSave}
+                  disabled={editSaving || editDeleting}
+                  className="flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {editSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  保存
+                </button>
               </div>
             </div>
           </div>
