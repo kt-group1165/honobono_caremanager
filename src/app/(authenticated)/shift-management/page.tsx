@@ -35,6 +35,7 @@ import {
 } from "date-fns";
 import { ja } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { ServiceSelector } from "@/components/services/service-selector";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -293,9 +294,10 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
   const [allSchedules, setAllSchedules] = useState<VisitSchedule[]>([]);
   const [loading, setLoading] = useState(false);
   const [editModal, setEditModal] = useState<VisitSchedule | null>(null);
-  const [editForm, setEditForm] = useState({ start_time: "", end_time: "", service_type: "", staff_id: "" });
+  const [editForm, setEditForm] = useState({ start_time: "", end_time: "", service_type: "", staff_id: "", service_code: "", service_name: "" });
   const [editSaving, setEditSaving] = useState(false);
   const [editDeleting, setEditDeleting] = useState(false);
+  const [showServiceSelector, setShowServiceSelector] = useState(false);
 
   const days = useMemo(
     () =>
@@ -372,6 +374,8 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
       end_time: sched.end_time?.slice(0, 5) ?? "10:00",
       service_type: sched.service_type,
       staff_id: sched.staff_id ?? "",
+      service_code: "",
+      service_name: sched.service_type,
     });
   };
 
@@ -381,7 +385,7 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
     const updateData: Record<string, string | null> = {
       start_time: editForm.start_time + ":00",
       end_time: editForm.end_time + ":00",
-      service_type: editForm.service_type,
+      service_type: editForm.service_name || editForm.service_type,
       staff_id: editForm.staff_id || null,
     };
     const { error } = await supabase
@@ -583,17 +587,35 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
 
               {/* Service type */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">サービス種類</label>
-                <select
-                  value={editForm.service_type}
-                  onChange={(e) => setEditForm((f) => ({ ...f, service_type: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                <label className="block text-xs font-medium text-gray-500 mb-1">サービス</label>
+                <button
+                  type="button"
+                  onClick={() => setShowServiceSelector(true)}
+                  className="w-full flex items-center justify-between rounded-lg border border-gray-300 px-3 py-2 text-sm text-left hover:bg-gray-50 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
                 >
-                  <option value="身体介護">身体介護</option>
-                  <option value="生活援助">生活援助</option>
-                  <option value="身体・生活">身体・生活</option>
-                  <option value="通院等乗降介助">通院等乗降介助</option>
-                </select>
+                  <span className={editForm.service_name ? "text-gray-900" : "text-gray-400"}>
+                    {editForm.service_name || "サービスを選択..."}
+                  </span>
+                  {editForm.service_code && (
+                    <span className="text-xs text-gray-400 font-mono">{editForm.service_code}</span>
+                  )}
+                  {!editForm.service_code && (
+                    <ChevronRight size={14} className="text-gray-400" />
+                  )}
+                </button>
+                <ServiceSelector
+                  open={showServiceSelector}
+                  onClose={() => setShowServiceSelector(false)}
+                  onSelect={(service) => {
+                    setEditForm((f) => ({
+                      ...f,
+                      service_type: service.categoryName,
+                      service_code: service.code,
+                      service_name: service.name,
+                    }));
+                    setShowServiceSelector(false);
+                  }}
+                />
               </div>
 
               {/* Staff */}
