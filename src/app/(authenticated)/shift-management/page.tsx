@@ -1205,6 +1205,27 @@ function TimelineView({
   const [loading, setLoading] = useState(false);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
 
+  // ─── Drag-and-drop state ───────────────────────────────────────────
+  const [dragging, setDragging] = useState<{
+    schedId: string;
+    origRowId: string;
+    origStartTime: string | null;
+    origEndTime: string | null;
+    origServiceType: string;
+    mouseStartX: number;
+    mouseStartY: number;
+    barContainerRect: DOMRect;
+    rowHeight: number;
+    rowStartY: number; // Y position of the first row's top
+  } | null>(null);
+  const [dragPreview, setDragPreview] = useState<{
+    rowIndex: number;
+    left: number; // percentage
+    width: number; // percentage
+  } | null>(null);
+  const draggingRef = useRef(dragging);
+  draggingRef.current = dragging;
+
   const dateStr = format(selectedDate, "yyyy-MM-dd");
 
   const fetchData = useCallback(async () => {
@@ -1292,6 +1313,182 @@ function TimelineView({
     });
   };
 
+  // ─── Drag handlers ──────────────────────────────────────────────────
+  const handleBarMouseDown = useCallback(
+    (
+      e: React.MouseEvent,
+      sched: VisitSchedule,
+      rowId: string,
+      barContainerEl: HTMLElement
+    ) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const containerRect = barContainerEl.getBoundingClientRect();
+      // Find the rows container: walk up to find the rows wrapper
+      const rowsContainer = barContainerEl.closest("[data-timeline-rows]");
+      const rowEls = rowsContainer
+        ? Array.from(rowsContainer.querySelectorAll("[data-row-id]"))
+        : [];
+      const firstRowRect = rowEls[0]?.getBoundingClientRect();
+      const rowHeight = rowEls.length > 1
+        ? rowEls[1].getBoundingClientRect().top - rowEls[0].getBoundingClientRect().top
+        : firstRowRect?.height ?? 40;
+
+      setDragging({
+        schedId: sched.id,
+        origRowId: rowId,
+        origStartTime: sched.start_time,
+        origEndTime: sched.end_time,
+        origServiceType: sched.service_type,
+        mouseStartX: e.clientX,
+        mouseStartY: e.clientY,
+        barContainerRect: containerRect,
+        rowHeight,
+        rowStartY: firstRowRect?.top ?? containerRect.top,
+      });
+
+      // Initial preview position
+      const style = getBarStyle(sched.start_time, sched.end_time);
+      const rowIndex = rows.findIndex((r) => r.id === rowId);
+      setDragPreview({
+        rowIndex,
+        left: parseFloat(style.left),
+        width: parseFloat(style.width),
+      });
+    },
+    [rows]
+  );
+
+  const handleTimelineMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      const drag = draggingRef.current;
+      if (!drag) return;
+
+      const deltaX = e.clientX - drag.mouseStartX;
+      const deltaY = e.clientY - drag.mouseStartY;
+
+      // Calculate new horizontal position (percentage)
+      const containerWidth = drag.barContainerRect.width;
+      const deltaPercent = (deltaX / containerWidth) * 100;
+
+      // Original bar left/width
+      const origStyle = getBarStyle(drag.origStartTime, drag.origEndTime);
+      const origLeft = parseFloat(origStyle.left);
+      const origWidth = parseFloat(origStyle.width);
+
+      // Snap to 30-min intervals: each 30 min = (30 / TIMELINE_TOTAL_MINUTES) * 100 percent
+      const snapPercent = (30 / TIMELINE_TOTAL_MINUTES) * 100;
+      let newLeft = origLeft + deltaPercent;
+      newLeft = Math.round(newLeft / snapPercent) * snapPercent;
+      newLeft = Math.max(0, Math.min(100 - origWidth, newLeft));
+
+      // Calculate row index from vertical mouse position
+      const mouseY = e.clientY;
+      let rowIndex = Math.floor((mouseY - drag.rowStartY) / drag.rowHeight);
+      rowIndex = Math.max(0, Math.min(rows.length - 1, rowIndex));
+
+      setDragPreview({ rowIndex, left: newLeft, width: origWidth });
+    },
+    [rows.length]
+  );
+
+  const handleTimelineMouseUp = useCallback(
+    async (e: React.MouseEvent) => {
+      const drag = draggingRef.current;
+      const preview = dragPreview;
+      if (!drag || !preview) {
+        setDragging(null);
+        setDragPreview(null);
+        return;
+      }
+
+      setDragging(null);
+      setDragPreview(null);
+
+      // Convert preview left% back to time
+      const newStartMinutes =
+        (preview.left / 100) * TIMELINE_TOTAL_MINUTES + TIMELINE_START_HOUR * 60;
+      const durationMinutes =
+        (preview.width / 100) * TIMELINE_TOTAL_MINUTES;
+      const newEndMinutes = newStartMinutes + durationMinutes;
+
+      // Snap to 30-min
+      const snappedStart = Math.round(newStartMinutes / 30) * 30;
+      const snappedEnd = Math.round(newEndMinutes / 30) * 30;
+
+      const formatTime = (totalMins: number) => {
+        const h = Math.floor(totalMins / 60);
+        const m = totalMins % 60;
+        return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
+      };
+
+      const newStartTime = formatTime(snappedStart);
+      const newEndTime = formatTime(snappedEnd);
+      const targetRow = rows[preview.rowIndex];
+      const newRowId = targetRow?.id ?? drag.origRowId;
+
+      // Determine which field to update based on tab
+      const rowField = tab === "user" ? "user_id" : "staff_id";
+
+      // Check if anything actually changed
+      const origStartStr = drag.origStartTime;
+      const origEndStr = drag.origEndTime;
+      const timeChanged =
+        newStartTime !== origStartStr || newEndTime !== origEndStr;
+      const rowChanged = newRowId !== drag.origRowId;
+
+      if (!timeChanged && !rowChanged) return;
+
+      // Update Supabase
+      const updateData: Record<string, string> = {};
+      if (timeChanged) {
+        updateData.start_time = newStartTime;
+        updateData.end_time = newEndTime;
+      }
+      if (rowChanged) {
+        updateData[rowField] = newRowId;
+      }
+
+      const { error } = await supabase
+        .from("kaigo_visit_schedule")
+        .update(updateData)
+        .eq("id", drag.schedId);
+
+      if (error) {
+        toast.error("スケジュール更新に失敗しました");
+        console.error(error);
+      } else {
+        toast.success("スケジュールを更新しました");
+      }
+
+      fetchData();
+    },
+    [dragPreview, rows, tab, supabase, fetchData]
+  );
+
+  // Cancel drag on escape or mouse leaving window
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && draggingRef.current) {
+        setDragging(null);
+        setDragPreview(null);
+      }
+    };
+    const handleMouseUp = () => {
+      // If mouse up happens outside timeline, cancel drag
+      if (draggingRef.current) {
+        setDragging(null);
+        setDragPreview(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
+
   // Calendar days for date picker
   const days = useMemo(
     () =>
@@ -1364,7 +1561,11 @@ function TimelineView({
       ) : (
         <div className="flex-1 overflow-auto" ref={timelineScrollRef}>
           {/* Timeline grid - 24h wide, scrollable */}
-          <div style={{ minWidth: "1800px" }}>
+          <div
+            style={{ minWidth: "1800px", cursor: dragging ? "grabbing" : undefined }}
+            onMouseMove={dragging ? handleTimelineMouseMove : undefined}
+            onMouseUp={dragging ? handleTimelineMouseUp : undefined}
+          >
             {/* Time header */}
             <div className="flex border-b bg-gray-50 sticky top-0 z-10">
               <div className="w-28 shrink-0 border-r sticky left-0 z-30 bg-gray-50 px-2 py-2 text-xs font-semibold text-gray-600">
@@ -1392,8 +1593,9 @@ function TimelineView({
             </div>
 
             {/* Rows */}
-            {rows.map((row) => (
-              <div key={row.id} className="flex border-b hover:bg-gray-50/50">
+            <div data-timeline-rows>
+            {rows.map((row, rowIdx) => (
+              <div key={row.id} className="flex border-b hover:bg-gray-50/50" data-row-id={row.id}>
                 {/* Name column */}
                 <div className="w-28 shrink-0 border-r sticky left-0 z-20 bg-white px-2 py-2 text-xs font-medium text-gray-800 truncate flex items-center">
                   {row.name}
@@ -1419,7 +1621,7 @@ function TimelineView({
                     ))}
 
                   {/* Schedule bars */}
-                  <div className="absolute inset-0">
+                  <div className="absolute inset-0" data-bar-container={row.id}>
                     {row.schedules.map((sched) => {
                       const style = getBarStyle(sched.start_time, sched.end_time);
                       const colors =
@@ -1437,32 +1639,55 @@ function TimelineView({
                       const isOnUnavail = staffIdForCheck
                         ? isStaffUnavailableAtTime(staffIdForCheck, dateStr, sched.start_time, sched.end_time, availability)
                         : false;
+                      const isDraggingThis = dragging?.schedId === sched.id;
                       return (
                         <div
                           key={sched.id}
                           className={cn(
-                            "absolute rounded border px-1 text-[10px] leading-tight overflow-hidden flex flex-col justify-center",
+                            "absolute rounded border px-1 text-[10px] leading-tight overflow-hidden flex flex-col justify-center select-none",
                             isOnUnavail
                               ? "bg-red-50 border-red-400 text-red-600 font-semibold"
-                              : cn(colors.bg, colors.border, colors.text)
+                              : cn(colors.bg, colors.border, colors.text),
+                            isDraggingThis ? "opacity-40" : ""
                           )}
                           style={{
                             left: style.left,
                             width: style.width,
                             top: 0,
                             bottom: 0,
+                            cursor: dragging ? "grabbing" : "grab",
+                            zIndex: isDraggingThis ? 5 : undefined,
                           }}
                           title={`${sched.start_time?.slice(0, 5)}~${sched.end_time?.slice(0, 5)} ${label} ${sched.service_type}${isOnUnavail ? " ⚠勤務不可" : ""}`}
+                          onMouseDown={(e) => {
+                            const container = e.currentTarget.parentElement;
+                            if (container) handleBarMouseDown(e, sched, row.id, container);
+                          }}
                         >
                           <span className="truncate font-semibold">{isOnUnavail && "⚠ "}{label}</span>
                           <span className="truncate">{sched.service_type}</span>
                         </div>
                       );
                     })}
+
+                    {/* Drag preview ghost bar */}
+                    {dragging && dragPreview && dragPreview.rowIndex === rowIdx && (
+                      <div
+                        className="absolute rounded border-2 border-blue-500 bg-blue-200/50 pointer-events-none"
+                        style={{
+                          left: `${dragPreview.left}%`,
+                          width: `${dragPreview.width}%`,
+                          top: 0,
+                          bottom: 0,
+                          zIndex: 10,
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
             ))}
+            </div>
           </div>
 
           {/* Legend */}
