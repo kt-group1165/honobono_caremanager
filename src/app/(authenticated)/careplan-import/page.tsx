@@ -181,8 +181,26 @@ export default function CareplanImportPage() {
 
     for (const file of Array.from(uploadedFiles)) {
       try {
-        const text = await file.text();
+        // Shift-JIS / UTF-8 両対応で読み込み
+        const buf = await file.arrayBuffer();
+        let text = "";
+        try {
+          // まずShift-JIS(cp932)で試す
+          const decoder = new TextDecoder("shift-jis");
+          text = decoder.decode(buf);
+        } catch {
+          // 失敗したらUTF-8
+          text = new TextDecoder("utf-8").decode(buf);
+        }
+        // BOM除去
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+
         const lines = text.split(/\r?\n/).filter((l) => l.trim());
+
+        if (lines.length === 0) {
+          toast.error(`${file.name}: データが空です`);
+          continue;
+        }
 
         // ヘッダー行判定
         const firstLine = lines[0] ?? "";

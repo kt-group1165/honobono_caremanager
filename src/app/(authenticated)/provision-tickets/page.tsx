@@ -727,7 +727,10 @@ export default function ProvisionTicketsPage() {
     if (csvImportRef.current) csvImportRef.current.value = "";
 
     try {
-      const text = await file.text();
+      const buf = await file.arrayBuffer();
+      let text = "";
+      try { text = new TextDecoder("shift-jis").decode(buf); } catch { text = new TextDecoder("utf-8").decode(buf); }
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
       const lines = text.split(/\r?\n/).filter((l) => l.trim());
       if (lines.length === 0) { toast.error("CSVファイルが空です"); return; }
 
