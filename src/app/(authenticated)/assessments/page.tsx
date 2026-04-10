@@ -33,11 +33,19 @@ interface KaigoUser {
   name_kana: string | null;
 }
 
+interface Certification {
+  id: string;
+  care_level: string;
+  start_date: string;
+  end_date: string;
+}
+
 type AssessmentStatus = "draft" | "completed";
 
 interface Assessment {
   id: string;
   user_id: string;
+  certification_id: string | null;
   assessment_date: string;
   assessor_name: string | null;
   status: AssessmentStatus;
@@ -71,11 +79,14 @@ export default function AssessmentPage() {
 
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<KaigoUser | null>(null);
+  const [certifications, setCertifications] = useState<Certification[]>([]);
+  const [selectedCertId, setSelectedCertId] = useState<string | null>(null);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [loadingList, setLoadingList] = useState(false);
 
   const [mode, setMode] = useState<"list" | "edit">("list");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingCertId, setEditingCertId] = useState<string | null>(null);
   const [assessmentDate, setAssessmentDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [assessorName, setAssessorName] = useState("");
   const [status, setStatus] = useState<AssessmentStatus>("draft");
@@ -85,19 +96,32 @@ export default function AssessmentPage() {
 
   // Load user info when selected
   useEffect(() => {
-    if (!selectedUserId) { setSelectedUser(null); return; }
+    if (!selectedUserId) { setSelectedUser(null); setCertifications([]); setSelectedCertId(null); return; }
     supabase.from("kaigo_users").select("id, name, name_kana").eq("id", selectedUserId).single().then(({ data }: { data: KaigoUser | null }) => setSelectedUser(data));
+    // Load all certifications for this user
+    supabase.from("kaigo_care_certifications")
+      .select("id, care_level, start_date, end_date")
+      .eq("user_id", selectedUserId)
+      .order("start_date", { ascending: false })
+      .then(({ data }: { data: Certification[] | null }) => {
+        const certs = data ?? [];
+        setCertifications(certs);
+        // Auto-select the most recent certification
+        if (certs.length > 0 && !selectedCertId) setSelectedCertId(certs[0].id);
+      });
     setMode("list");
   }, [selectedUserId, supabase]);
 
-  // Fetch assessments list
+  // Fetch assessments list (filtered by certification_id if selected)
   const fetchAssessments = useCallback(async () => {
     if (!selectedUserId) { setAssessments([]); return; }
     setLoadingList(true);
-    const { data } = await supabase.from("kaigo_assessments").select("*").eq("user_id", selectedUserId).order("assessment_date", { ascending: false });
+    let query = supabase.from("kaigo_assessments").select("*").eq("user_id", selectedUserId);
+    if (selectedCertId) query = query.eq("certification_id", selectedCertId);
+    const { data } = await query.order("assessment_date", { ascending: false });
     setAssessments((data as Assessment[]) ?? []);
     setLoadingList(false);
-  }, [selectedUserId, supabase]);
+  }, [selectedUserId, selectedCertId, supabase]);
 
   useEffect(() => {
     if (mode === "list") fetchAssessments();
@@ -105,7 +129,12 @@ export default function AssessmentPage() {
 
   // Open new
   const openNew = () => {
+    if (!selectedCertId) {
+      toast.error("認定期間を選択してください。介護認定情報がない場合は、先に利用者情報で登録してください。");
+      return;
+    }
     setEditingId(null);
+    setEditingCertId(selectedCertId);
     setAssessmentDate(format(new Date(), "yyyy-MM-dd"));
     setAssessorName("");
     setStatus("draft");
@@ -117,10 +146,10 @@ export default function AssessmentPage() {
   // Open existing
   const openEdit = (a: Assessment) => {
     setEditingId(a.id);
+    setEditingCertId(a.certification_id);
     setAssessmentDate(a.assessment_date);
     setAssessorName(a.assessor_name ?? "");
     setStatus(a.status);
-    // 既存データをマージして新形式にフォールバック
     const merged = { ...emptyAssessment(), ...(a.form_data ?? {}) };
     setFormData(merged as AssessmentFormData);
     setActiveTab("1");
@@ -134,6 +163,7 @@ export default function AssessmentPage() {
     try {
       const payload = {
         user_id: selectedUserId,
+        certification_id: editingCertId,
         assessment_date: assessmentDate,
         assessor_name: assessorName || null,
         status,
@@ -193,10 +223,41 @@ export default function AssessmentPage() {
                 <h1 className="text-xl font-bold text-gray-900">アセスメント</h1>
                 {selectedUser && <span className="text-gray-500 text-sm">— {selectedUser.name} 様</span>}
               </div>
-              <button onClick={openNew} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors">
+              <button onClick={openNew} disabled={!selectedCertId} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors disabled:opacity-50">
                 <Plus size={16} /> 新規作成
               </button>
             </div>
+
+            {/* 認定期間タブ */}
+            {certifications.length > 0 ? (
+              <div className="border-b overflow-x-auto">
+                <div className="flex gap-1 min-w-max">
+                  {certifications.map((cert) => {
+                    const fmt = (d: string) => format(parseISO(d), "yyyy/M/d");
+                    const isActive = selectedCertId === cert.id;
+                    return (
+                      <button
+                        key={cert.id}
+                        onClick={() => setSelectedCertId(cert.id)}
+                        className={cn(
+                          "flex flex-col px-4 py-2 text-xs border-b-2 whitespace-nowrap transition-colors",
+                          isActive
+                            ? "border-blue-600 text-blue-700 bg-blue-50 font-semibold"
+                            : "border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                        )}
+                      >
+                        <span className="font-bold">{cert.care_level}</span>
+                        <span className="text-[10px] text-gray-500">{fmt(cert.start_date)} 〜 {fmt(cert.end_date)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                介護認定情報が登録されていません。先に利用者情報で認定情報を登録してください。
+              </div>
+            )}
 
             {loadingList ? (
               <div className="flex items-center justify-center py-16"><Loader2 size={24} className="animate-spin text-blue-500" /></div>
