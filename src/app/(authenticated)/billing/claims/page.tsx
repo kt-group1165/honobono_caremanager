@@ -98,7 +98,13 @@ interface ClaimRow {
   abuse_reduction_pct: number;
   status: ClaimStatus;
   notes: string | null;
-  kaigo_users?: { name: string };
+  kaigo_users?: {
+    name: string;
+    name_kana?: string | null;
+    gender?: string | null;
+    phone?: string | null;
+    mobile_phone?: string | null;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -652,6 +658,27 @@ export default function ClaimsPage() {
   const [confirmingAll, setConfirmingAll] = useState(false);
   const [editTarget, setEditTarget] = useState<ClaimRow | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [officeInfo, setOfficeInfo] = useState<{
+    tokutei_kassan_type: string | null;
+    medical_cooperation_kassan: boolean;
+    area_category: string | null;
+    unit_price: number;
+    provider_number: string | null;
+  } | null>(null);
+
+  // 事業所設定を取得（画面上部の加算バッジ表示用）
+  useEffect(() => {
+    const fetchOffice = async () => {
+      const { data } = await supabase
+        .from("kaigo_office_settings")
+        .select("tokutei_kassan_type, medical_cooperation_kassan, area_category, unit_price, provider_number")
+        .limit(1)
+        .maybeSingle();
+      if (data) setOfficeInfo(data as typeof officeInfo);
+    };
+    fetchOffice();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
 
@@ -660,7 +687,7 @@ export default function ClaimsPage() {
     try {
       const { data, error } = await supabase
         .from("kaigo_care_support_claims")
-        .select("*, kaigo_users(name)")
+        .select("*, kaigo_users(name, name_kana, gender, phone, mobile_phone)")
         .eq("billing_month", billingMonth)
         .order("created_at", { ascending: true });
 
@@ -1043,6 +1070,30 @@ export default function ClaimsPage() {
     }
   };
 
+  // ClaimRow から現在の Addings を抽出
+  const claimToAddings = (c: ClaimRow): Addings => ({
+    initial: c.initial_addition,
+    tokutei_kassan: normalizeTokuteiKassan(c.tokutei_kassan_type as string | null),
+    medical_coop_kassan: c.medical_coop_kassan ?? false,
+    hospitalization: (() => {
+      if (!c.hospital_coordination) return "none";
+      return c.hospital_coordination_units >= 250 ? "i" : "ii";
+    })() as HospitalCoordType,
+    discharge: (c.discharge_type as DischargeType) ?? (c.discharge_addition ? "i_ro" : "none"),
+    outpatient: c.medical_coordination,
+    terminal_care: c.terminal_care ?? false,
+    emergency_conference: c.emergency_conference ?? false,
+    bcp_not_prepared: c.bcp_not_prepared ?? false,
+    abuse_prevention_not_implemented: c.abuse_prevention_not_implemented ?? false,
+  });
+
+  // 一カラムだけを即時更新する（チェックボックス・プルダウン操作用）
+  const handleQuickPatch = async (claim: ClaimRow, patch: Partial<Addings>) => {
+    const current = claimToAddings(claim);
+    const next = { ...current, ...patch };
+    await handleEditSave(claim.id, next, claim.unit_price);
+  };
+
   // ── CSV Export ────────────────────────────────────────────────────────────
 
   const handleCSVExport = () => {
@@ -1388,6 +1439,63 @@ export default function ClaimsPage() {
         </div>
       </div>
 
+      {/* 事業所単位の加減算バー */}
+      {officeInfo && (
+        <div className="rounded-lg border bg-white p-3 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-semibold text-gray-700 mr-2">事業所単位の加減算:</span>
+            {(() => {
+              const tokutei = normalizeTokuteiKassan(officeInfo.tokutei_kassan_type);
+              const badges: { label: string; active: boolean; color: string }[] = [
+                {
+                  label: tokutei !== "none" ? `特定事業所加算${tokutei}` : "特定事業所加算",
+                  active: tokutei !== "none",
+                  color: "indigo",
+                },
+                {
+                  label: "医療介護連携加算",
+                  active: officeInfo.medical_cooperation_kassan,
+                  color: "cyan",
+                },
+                {
+                  label: `地域区分: ${officeInfo.area_category ?? "その他"}`,
+                  active: true,
+                  color: "gray",
+                },
+                {
+                  label: `単価 ${Number(officeInfo.unit_price).toFixed(2)}円`,
+                  active: true,
+                  color: "gray",
+                },
+              ];
+              return badges.map((b, i) => (
+                <span
+                  key={i}
+                  className={
+                    b.active
+                      ? b.color === "indigo"
+                        ? "rounded-full border border-indigo-300 bg-indigo-50 px-2.5 py-0.5 font-medium text-indigo-700"
+                        : b.color === "cyan"
+                          ? "rounded-full border border-cyan-300 bg-cyan-50 px-2.5 py-0.5 font-medium text-cyan-700"
+                          : "rounded-full border border-gray-300 bg-gray-50 px-2.5 py-0.5 font-medium text-gray-700"
+                      : "rounded-full border border-gray-200 px-2.5 py-0.5 text-gray-400"
+                  }
+                >
+                  {b.active && (b.color === "indigo" || b.color === "cyan") && "● "}
+                  {b.label}
+                </span>
+              ));
+            })()}
+            <a
+              href="/master/office"
+              className="ml-auto text-xs text-blue-600 hover:underline"
+            >
+              事業所設定を編集 →
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
         {loading ? (
@@ -1404,290 +1512,281 @@ export default function ClaimsPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b bg-gray-50">
+            <table className="w-full text-xs border-collapse">
+              <thead className="border-b bg-gray-100">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">
+                  <th className="sticky left-0 bg-gray-100 border-r border-gray-200 px-2 py-2 text-left font-semibold text-gray-700 whitespace-nowrap" style={{ minWidth: 160 }}>
                     利用者名
+                    <div className="text-[10px] font-normal text-gray-500">フリガナ</div>
                   </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">
-                    被保険者番号
+                  <th className="border-r border-gray-200 px-1 py-2 text-center font-semibold text-gray-700 whitespace-nowrap" style={{ width: 40 }}>
+                    性別
                   </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">
+                  <th className="border-r border-gray-200 px-2 py-2 text-left font-semibold text-gray-700 whitespace-nowrap" style={{ minWidth: 120 }}>
+                    電話番号
+                  </th>
+                  <th className="border-r border-gray-200 px-1 py-2 text-center font-semibold text-gray-700 whitespace-nowrap" style={{ width: 50 }}>
                     要介護度
                   </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">
-                    サービスコード
+                  {/* 加算カラム */}
+                  <th className="border-r border-gray-200 px-1 py-2 text-center font-semibold text-blue-700 whitespace-nowrap" style={{ width: 48 }}>
+                    初回<br/>加算
                   </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap max-w-xs">
-                    サービス名称
+                  <th className="border-r border-gray-200 px-1 py-2 text-center font-semibold text-blue-700 whitespace-nowrap" style={{ width: 70 }}>
+                    退院・退所<br/>加算
                   </th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">
-                    単位数
+                  <th className="border-r border-gray-200 px-1 py-2 text-center font-semibold text-blue-700 whitespace-nowrap" style={{ width: 70 }}>
+                    入院時情報<br/>連携加算
                   </th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">
-                    単価
+                  <th className="border-r border-gray-200 px-1 py-2 text-center font-semibold text-blue-700 whitespace-nowrap" style={{ width: 56 }}>
+                    緊急時等<br/>カンファ
                   </th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">
-                    費用合計
+                  <th className="border-r border-gray-200 px-1 py-2 text-center font-semibold text-blue-700 whitespace-nowrap" style={{ width: 56 }}>
+                    ターミナル<br/>ケア
                   </th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">
+                  <th className="border-r border-gray-200 px-1 py-2 text-center font-semibold text-blue-700 whitespace-nowrap" style={{ width: 56 }}>
+                    通院時情報<br/>連携加算
+                  </th>
+                  <th className="border-r border-gray-200 px-1 py-2 text-center font-semibold text-blue-700 whitespace-nowrap" style={{ width: 56 }}>
+                    医療介護<br/>連携
+                  </th>
+                  {/* 減算カラム */}
+                  <th className="border-r border-gray-200 px-1 py-2 text-center font-semibold text-red-700 whitespace-nowrap bg-red-50/40" style={{ width: 48 }}>
+                    業務<br/>未策定
+                  </th>
+                  <th className="border-r border-gray-200 px-1 py-2 text-center font-semibold text-red-700 whitespace-nowrap bg-red-50/40" style={{ width: 48 }}>
+                    虐待<br/>未実施
+                  </th>
+                  {/* 合計 */}
+                  <th className="border-r border-gray-200 px-2 py-2 text-right font-semibold text-gray-700 whitespace-nowrap" style={{ width: 80 }}>
                     保険請求額
                   </th>
-                  <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap">
-                    加算
-                  </th>
-                  <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap">
-                    ステータス
-                  </th>
-                  <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap">
-                    操作
+                  <th className="px-2 py-2 text-center font-semibold text-gray-700 whitespace-nowrap" style={{ width: 90 }}>
+                    状態
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y">
+              <tbody>
                 {claims.map((claim) => {
-                  const isExpanded = expandedRows.has(claim.id);
-                  const additionLabels: string[] = [];
-                  if (claim.initial_addition) additionLabels.push("初回");
-                  if (claim.tokutei_kassan_type && String(claim.tokutei_kassan_type) !== "none" && String(claim.tokutei_kassan_type) !== "なし") additionLabels.push(`特定${claim.tokutei_kassan_type}`);
-                  if (claim.medical_coop_kassan) additionLabels.push("医療連携");
-                  if (claim.hospital_coordination) additionLabels.push("入院連携");
-                  if (claim.discharge_addition) additionLabels.push("退院加算");
-                  if (claim.medical_coordination) additionLabels.push("通院連携");
-                  if (claim.terminal_care) additionLabels.push("ターミナル");
-                  if (claim.emergency_conference) additionLabels.push("緊急会議");
-                  const hasReduction = (claim.bcp_not_prepared || claim.abuse_prevention_not_implemented);
-                  const additionUnitsSum =
-                    (claim.initial_addition ? claim.initial_addition_units : 0) +
-                    (claim.tokutei_kassan_units ?? 0) +
-                    (claim.medical_coop_kassan ? (claim.medical_coop_kassan_units ?? 125) : 0) +
-                    (claim.hospital_coordination ? claim.hospital_coordination_units : 0) +
-                    (claim.discharge_addition ? claim.discharge_addition_units : 0) +
-                    (claim.medical_coordination ? claim.medical_coordination_units : 0) +
-                    (claim.terminal_care ? (claim.terminal_care_units ?? 400) : 0) +
-                    (claim.emergency_conference ? (claim.emergency_conference_units ?? 200) : 0);
-                  const reductionUnitsSum =
-                    (claim.bcp_not_prepared ? Math.floor(claim.units * (claim.bcp_reduction_pct ?? 1) / 100) : 0) +
-                    (claim.abuse_prevention_not_implemented ? Math.floor(claim.units * (claim.abuse_reduction_pct ?? 1) / 100) : 0);
                   const certEntry = certMap.get(claim.user_id);
-
+                  const user = claim.kaigo_users;
+                  const disabled = claim.status !== "draft"; // 確定済みはロック
+                  const inputCls = "w-full border border-gray-300 rounded px-1 py-0.5 text-[11px] bg-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed";
                   return (
-                    <>
-                      <tr
-                        key={claim.id}
-                        className="hover:bg-gray-50 transition-colors"
-                      >
-                        {/* 利用者名 */}
-                        <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
-                          {claim.kaigo_users?.name ?? "—"}
-                        </td>
-                        {/* 被保険者番号 */}
-                        <td className="px-4 py-3 text-gray-600 font-mono whitespace-nowrap">
-                          {certEntry?.insured_number ?? "—"}
-                        </td>
-                        {/* 要介護度 */}
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className="rounded-full bg-purple-50 px-2.5 py-0.5 text-xs font-medium text-purple-700">
-                            {certEntry?.care_level ?? "—"}
-                          </span>
-                        </td>
-                        {/* サービスコード */}
-                        <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">
-                          {claim.care_support_code}
-                        </td>
-                        {/* サービス名称 */}
-                        <td className="px-4 py-3 text-gray-700 max-w-xs truncate">
-                          {claim.care_support_name}
-                        </td>
-                        {/* 単位数 */}
-                        <td className="px-4 py-3 text-right text-gray-800 whitespace-nowrap">
-                          <span className="font-bold">{claim.units.toLocaleString("ja-JP")}</span>
-                        </td>
-                        {/* 単価 */}
-                        <td className="px-4 py-3 text-right text-gray-600 whitespace-nowrap">
-                          {claim.unit_price.toFixed(2)}
-                        </td>
-                        {/* 費用合計 */}
-                        <td className="px-4 py-3 text-right font-medium text-gray-900 whitespace-nowrap">
-                          {formatAmount(claim.total_amount)}
-                        </td>
-                        {/* 保険請求額 */}
-                        <td className="px-4 py-3 text-right font-medium text-blue-700 whitespace-nowrap">
-                          {formatAmount(claim.insurance_amount)}
-                        </td>
-                        {/* 加算 */}
-                        <td className="px-4 py-3 text-right whitespace-nowrap">
-                          {additionUnitsSum > 0 ? (
-                            <span className="text-xs font-medium text-indigo-600">+{additionUnitsSum.toLocaleString()}</span>
-                          ) : reductionUnitsSum > 0 ? (
-                            <span className="text-xs font-medium text-red-500">−{reductionUnitsSum}</span>
-                          ) : (
-                            <span className="text-xs text-gray-300">—</span>
-                          )}
-                        </td>
-                        {/* ステータス */}
-                        <td className="px-4 py-3 text-center whitespace-nowrap">
+                    <tr
+                      key={claim.id}
+                      className="border-b border-gray-200 hover:bg-blue-50/30 transition-colors"
+                    >
+                      {/* 利用者名 / フリガナ */}
+                      <td className="sticky left-0 bg-white border-r border-gray-200 px-2 py-1.5 whitespace-nowrap">
+                        <button
+                          onClick={() => setEditTarget(claim)}
+                          className="text-left hover:underline"
+                          title="詳細編集"
+                        >
+                          <div className="text-[10px] text-gray-400 leading-tight">
+                            {user?.name_kana ?? ""}
+                          </div>
+                          <div className="font-medium text-gray-900 leading-tight">
+                            {user?.name ?? "—"}
+                          </div>
+                        </button>
+                      </td>
+                      {/* 性別 */}
+                      <td className="border-r border-gray-200 px-1 py-1.5 text-center whitespace-nowrap">
+                        <span className={user?.gender === "女" ? "text-pink-600" : "text-blue-600"}>
+                          {user?.gender ?? "—"}
+                        </span>
+                      </td>
+                      {/* 電話番号 */}
+                      <td className="border-r border-gray-200 px-2 py-1.5 text-gray-600 whitespace-nowrap">
+                        {user?.phone || user?.mobile_phone ? (
+                          <>
+                            <div className="text-[10px] leading-tight">{user?.phone ?? ""}</div>
+                            <div className="text-[10px] leading-tight text-gray-400">{user?.mobile_phone ?? ""}</div>
+                          </>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
+                      {/* 要介護度 */}
+                      <td className="border-r border-gray-200 px-1 py-1.5 text-center whitespace-nowrap">
+                        <span className="rounded bg-purple-50 px-1 py-0.5 text-[10px] font-medium text-purple-700">
+                          {certEntry?.care_level?.replace("要介護", "介").replace("要支援", "支") ?? "—"}
+                        </span>
+                      </td>
+                      {/* 初回加算 (checkbox) */}
+                      <td className="border-r border-gray-200 px-1 py-1.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={claim.initial_addition}
+                          disabled={disabled}
+                          onChange={(e) =>
+                            handleQuickPatch(claim, { initial: e.target.checked })
+                          }
+                          className="h-4 w-4 accent-blue-600 cursor-pointer disabled:cursor-not-allowed"
+                        />
+                      </td>
+                      {/* 退院・退所加算 (dropdown) */}
+                      <td className="border-r border-gray-200 px-1 py-1.5">
+                        <select
+                          value={claim.discharge_type ?? "none"}
+                          disabled={disabled}
+                          onChange={(e) =>
+                            handleQuickPatch(claim, { discharge: e.target.value as DischargeType })
+                          }
+                          className={inputCls}
+                        >
+                          <option value="none">—</option>
+                          <option value="i_i">(i)イ</option>
+                          <option value="i_ro">(i)ロ</option>
+                          <option value="ii_i">(ii)イ</option>
+                          <option value="ii_ro">(ii)ロ</option>
+                          <option value="iii">(iii)</option>
+                        </select>
+                      </td>
+                      {/* 入院時情報連携加算 (dropdown) */}
+                      <td className="border-r border-gray-200 px-1 py-1.5">
+                        <select
+                          value={(() => {
+                            if (!claim.hospital_coordination) return "none";
+                            return claim.hospital_coordination_units >= 250 ? "i" : "ii";
+                          })()}
+                          disabled={disabled}
+                          onChange={(e) =>
+                            handleQuickPatch(claim, { hospitalization: e.target.value as HospitalCoordType })
+                          }
+                          className={inputCls}
+                        >
+                          <option value="none">—</option>
+                          <option value="i">Ⅰ</option>
+                          <option value="ii">Ⅱ</option>
+                        </select>
+                      </td>
+                      {/* 緊急時等カンファ (checkbox) */}
+                      <td className="border-r border-gray-200 px-1 py-1.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={claim.emergency_conference ?? false}
+                          disabled={disabled}
+                          onChange={(e) =>
+                            handleQuickPatch(claim, { emergency_conference: e.target.checked })
+                          }
+                          className="h-4 w-4 accent-blue-600 cursor-pointer disabled:cursor-not-allowed"
+                        />
+                      </td>
+                      {/* ターミナルケア (checkbox) */}
+                      <td className="border-r border-gray-200 px-1 py-1.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={claim.terminal_care ?? false}
+                          disabled={disabled}
+                          onChange={(e) =>
+                            handleQuickPatch(claim, { terminal_care: e.target.checked })
+                          }
+                          className="h-4 w-4 accent-blue-600 cursor-pointer disabled:cursor-not-allowed"
+                        />
+                      </td>
+                      {/* 通院時情報連携加算 (checkbox) */}
+                      <td className="border-r border-gray-200 px-1 py-1.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={claim.medical_coordination}
+                          disabled={disabled}
+                          onChange={(e) =>
+                            handleQuickPatch(claim, { outpatient: e.target.checked })
+                          }
+                          className="h-4 w-4 accent-blue-600 cursor-pointer disabled:cursor-not-allowed"
+                        />
+                      </td>
+                      {/* 特定事業所医療介護連携 (checkbox) */}
+                      <td className="border-r border-gray-200 px-1 py-1.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={claim.medical_coop_kassan ?? false}
+                          disabled={disabled}
+                          onChange={(e) =>
+                            handleQuickPatch(claim, { medical_coop_kassan: e.target.checked })
+                          }
+                          className="h-4 w-4 accent-blue-600 cursor-pointer disabled:cursor-not-allowed"
+                        />
+                      </td>
+                      {/* 業務継続計画未策定減算 (checkbox) */}
+                      <td className="border-r border-gray-200 px-1 py-1.5 text-center bg-red-50/20">
+                        <input
+                          type="checkbox"
+                          checked={claim.bcp_not_prepared ?? false}
+                          disabled={disabled}
+                          onChange={(e) =>
+                            handleQuickPatch(claim, { bcp_not_prepared: e.target.checked })
+                          }
+                          className="h-4 w-4 accent-red-600 cursor-pointer disabled:cursor-not-allowed"
+                        />
+                      </td>
+                      {/* 虐待防止措置未実施減算 (checkbox) */}
+                      <td className="border-r border-gray-200 px-1 py-1.5 text-center bg-red-50/20">
+                        <input
+                          type="checkbox"
+                          checked={claim.abuse_prevention_not_implemented ?? false}
+                          disabled={disabled}
+                          onChange={(e) =>
+                            handleQuickPatch(claim, { abuse_prevention_not_implemented: e.target.checked })
+                          }
+                          className="h-4 w-4 accent-red-600 cursor-pointer disabled:cursor-not-allowed"
+                        />
+                      </td>
+                      {/* 保険請求額 */}
+                      <td className="border-r border-gray-200 px-2 py-1.5 text-right font-semibold text-blue-700 whitespace-nowrap">
+                        {formatAmount(claim.insurance_amount)}
+                      </td>
+                      {/* 状態 + 操作 */}
+                      <td className="px-2 py-1.5 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1">
                           <span
-                            className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[claim.status]}`}
+                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${STATUS_COLORS[claim.status]}`}
                           >
                             {STATUS_LABELS[claim.status]}
                           </span>
-                        </td>
-                        {/* 操作 */}
-                        <td className="px-4 py-3 text-center whitespace-nowrap">
-                          <div className="inline-flex items-center gap-1">
-                            {/* Edit */}
+                          {claim.status === "draft" ? (
                             <button
-                              onClick={() => setEditTarget(claim)}
-                              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-                              title="編集"
+                              onClick={() => handleSetStatus(claim.id, "confirmed")}
+                              className="rounded p-0.5 text-green-500 hover:bg-green-50 hover:text-green-700 transition-colors"
+                              title="確定"
                             >
-                              <Pencil size={14} />
+                              <Check size={12} />
                             </button>
-                            {/* Confirm / Cancel */}
-                            {claim.status === "draft" ? (
-                              <button
-                                onClick={() =>
-                                  handleSetStatus(claim.id, "confirmed")
-                                }
-                                className="rounded p-1 text-green-500 hover:bg-green-50 hover:text-green-700 transition-colors"
-                                title="確定"
-                              >
-                                <Check size={14} />
-                              </button>
-                            ) : claim.status === "confirmed" ? (
-                              <button
-                                onClick={() =>
-                                  handleSetStatus(claim.id, "draft")
-                                }
-                                className="rounded p-1 text-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 transition-colors"
-                                title="取消（下書きに戻す）"
-                              >
-                                <X size={14} />
-                              </button>
-                            ) : null}
-                          </div>
-                        </td>
-                      </tr>
-
-                      {/* 加算行（各加算を個別の行で表示） */}
-                      {(claim.tokutei_kassan_units ?? 0) > 0 && (
-                        <tr key={`${claim.id}-tokutei`} className="bg-indigo-50/30">
-                          <td colSpan={5} className="px-4 py-1.5 text-xs text-indigo-700 pl-12">
-                            ┗ 特定事業所加算({claim.tokutei_kassan_type})
-                          </td>
-                          <td className="px-4 py-1.5 text-right text-xs font-medium text-indigo-700">+{claim.tokutei_kassan_units}</td>
-                          <td colSpan={6}></td>
-                        </tr>
-                      )}
-                      {claim.medical_coop_kassan && (
-                        <tr key={`${claim.id}-medcoop`} className="bg-indigo-50/30">
-                          <td colSpan={5} className="px-4 py-1.5 text-xs text-indigo-700 pl-12">
-                            ┗ 特定事業所医療介護連携加算
-                          </td>
-                          <td className="px-4 py-1.5 text-right text-xs font-medium text-indigo-700">+{claim.medical_coop_kassan_units ?? 125}</td>
-                          <td colSpan={6}></td>
-                        </tr>
-                      )}
-                      {claim.initial_addition && (
-                        <tr key={`${claim.id}-initial`} className="bg-indigo-50/30">
-                          <td colSpan={5} className="px-4 py-1.5 text-xs text-indigo-700 pl-12">
-                            ┗ 初回加算
-                          </td>
-                          <td className="px-4 py-1.5 text-right text-xs font-medium text-indigo-700">+{claim.initial_addition_units}</td>
-                          <td colSpan={6}></td>
-                        </tr>
-                      )}
-                      {claim.hospital_coordination && (
-                        <tr key={`${claim.id}-hospital`} className="bg-indigo-50/30">
-                          <td colSpan={5} className="px-4 py-1.5 text-xs text-indigo-700 pl-12">
-                            ┗ 入院時情報連携加算
-                          </td>
-                          <td className="px-4 py-1.5 text-right text-xs font-medium text-indigo-700">+{claim.hospital_coordination_units}</td>
-                          <td colSpan={6}></td>
-                        </tr>
-                      )}
-                      {claim.discharge_addition && (
-                        <tr key={`${claim.id}-discharge`} className="bg-indigo-50/30">
-                          <td colSpan={5} className="px-4 py-1.5 text-xs text-indigo-700 pl-12">
-                            ┗ 退院・退所加算{claim.discharge_type ? `(${DISCHARGE_LABELS[claim.discharge_type as DischargeType]})` : ""}
-                          </td>
-                          <td className="px-4 py-1.5 text-right text-xs font-medium text-indigo-700">+{claim.discharge_addition_units}</td>
-                          <td colSpan={6}></td>
-                        </tr>
-                      )}
-                      {claim.medical_coordination && (
-                        <tr key={`${claim.id}-outpatient`} className="bg-indigo-50/30">
-                          <td colSpan={5} className="px-4 py-1.5 text-xs text-indigo-700 pl-12">
-                            ┗ 通院時情報連携加算
-                          </td>
-                          <td className="px-4 py-1.5 text-right text-xs font-medium text-indigo-700">+{claim.medical_coordination_units}</td>
-                          <td colSpan={6}></td>
-                        </tr>
-                      )}
-                      {claim.terminal_care && (
-                        <tr key={`${claim.id}-terminal`} className="bg-indigo-50/30">
-                          <td colSpan={5} className="px-4 py-1.5 text-xs text-indigo-700 pl-12">
-                            ┗ ターミナルケアマネジメント加算
-                          </td>
-                          <td className="px-4 py-1.5 text-right text-xs font-medium text-indigo-700">+{claim.terminal_care_units ?? 400}</td>
-                          <td colSpan={6}></td>
-                        </tr>
-                      )}
-                      {claim.emergency_conference && (
-                        <tr key={`${claim.id}-emergency`} className="bg-indigo-50/30">
-                          <td colSpan={5} className="px-4 py-1.5 text-xs text-indigo-700 pl-12">
-                            ┗ 緊急時等居宅カンファレンス加算
-                          </td>
-                          <td className="px-4 py-1.5 text-right text-xs font-medium text-indigo-700">+{claim.emergency_conference_units ?? 200}</td>
-                          <td colSpan={6}></td>
-                        </tr>
-                      )}
-                      {claim.bcp_not_prepared && (
-                        <tr key={`${claim.id}-bcp`} className="bg-red-50/30">
-                          <td colSpan={5} className="px-4 py-1.5 text-xs text-red-600 pl-12">
-                            ┗ 業務継続計画未策定減算
-                          </td>
-                          <td className="px-4 py-1.5 text-right text-xs font-medium text-red-600">−{Math.floor(claim.units * (claim.bcp_reduction_pct ?? 1) / 100)}</td>
-                          <td colSpan={6}></td>
-                        </tr>
-                      )}
-                      {claim.abuse_prevention_not_implemented && (
-                        <tr key={`${claim.id}-abuse`} className="bg-red-50/30">
-                          <td colSpan={5} className="px-4 py-1.5 text-xs text-red-600 pl-12">
-                            ┗ 虐待防止措置未実施減算
-                          </td>
-                          <td className="px-4 py-1.5 text-right text-xs font-medium text-red-600">−{Math.floor(claim.units * (claim.abuse_reduction_pct ?? 1) / 100)}</td>
-                          <td colSpan={6}></td>
-                        </tr>
-                      )}
-                    </>
+                          ) : claim.status === "confirmed" ? (
+                            <button
+                              onClick={() => handleSetStatus(claim.id, "draft")}
+                              className="rounded p-0.5 text-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 transition-colors"
+                              title="取消"
+                            >
+                              <X size={12} />
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
 
               {/* Footer totals */}
               {claims.length > 0 && (
-                <tfoot className="border-t bg-gray-50">
+                <tfoot className="border-t-2 border-gray-300 bg-gray-100">
                   <tr>
                     <td
-                      colSpan={7}
-                      className="px-4 py-3 text-sm font-medium text-gray-600"
+                      colSpan={13}
+                      className="px-2 py-2 text-xs font-medium text-gray-700 text-right"
                     >
                       合計 ({claims.length}件)
                     </td>
-                    <td className="px-4 py-3 text-right text-sm font-bold text-gray-900 whitespace-nowrap">
-                      {formatAmount(
-                        claims.reduce((s, c) => s + c.total_amount, 0)
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm font-bold text-blue-700 whitespace-nowrap">
+                    <td className="px-2 py-2 text-right text-sm font-bold text-blue-700 whitespace-nowrap">
                       {formatAmount(
                         claims.reduce((s, c) => s + c.insurance_amount, 0)
                       )}
                     </td>
-                    <td colSpan={3} />
+                    <td />
                   </tr>
                 </tfoot>
               )}
