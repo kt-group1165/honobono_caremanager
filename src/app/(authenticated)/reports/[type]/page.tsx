@@ -3177,7 +3177,12 @@ export default function ReportTypePage() {
       .then(({ data }: { data: Certification[] | null }) => {
         const certs = data ?? [];
         setCertifications(certs);
-        if (certs.length > 0 && !selectedCertId) setSelectedCertId(certs[0].id);
+        // 切替先利用者の認定一覧に現在のCertIdが無ければ最新認定を自動選択
+        if (certs.length === 0) {
+          setSelectedCertId(null);
+        } else if (!selectedCertId || !certs.some((c) => c.id === selectedCertId)) {
+          setSelectedCertId(certs[0].id);
+        }
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUserId, isCertLinked]);

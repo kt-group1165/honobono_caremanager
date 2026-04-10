@@ -55,6 +55,7 @@ type RecordCategory =
 interface SupportRecord {
   id: string;
   user_id: string;
+  care_plan_id: string | null;
   record_date: string;
   record_time: string | null;
   category: RecordCategory;
@@ -62,6 +63,15 @@ interface SupportRecord {
   staff_name: string | null;
   created_at: string;
   updated_at: string | null;
+}
+
+interface CarePlanSummary {
+  id: string;
+  plan_number: string | null;
+  plan_type: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  status: string;
 }
 
 type FormData = {
@@ -183,6 +193,11 @@ export default function SupportRecordsPage() {
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
 
+  // 計画期間タブ
+  const [carePlans, setCarePlans] = useState<CarePlanSummary[]>([]);
+  const [selectedCarePlanId, setSelectedCarePlanId] = useState<string | null>(null);
+  const [loadingCarePlans, setLoadingCarePlans] = useState(false);
+
   // Dialog state
   const [showDialog, setShowDialog] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -238,6 +253,41 @@ export default function SupportRecordsPage() {
     fetchUsers();
   }, [fetchUsers]);
 
+  // ── Load care plans ──
+  const fetchCarePlans = useCallback(async () => {
+    if (!selectedUserId) {
+      setCarePlans([]);
+      setSelectedCarePlanId(null);
+      return;
+    }
+    setLoadingCarePlans(true);
+    try {
+      const { data } = await supabase
+        .from("kaigo_care_plans")
+        .select("id, plan_number, plan_type, start_date, end_date, status")
+        .eq("user_id", selectedUserId)
+        .order("start_date", { ascending: false });
+      const plans = (data as CarePlanSummary[]) ?? [];
+      setCarePlans(plans);
+      // 切替先利用者の計画一覧に現在のプランIDが含まれていなければ最新を選択
+      if (plans.length === 0) {
+        setSelectedCarePlanId(null);
+      } else {
+        setSelectedCarePlanId((prev) => {
+          if (prev && plans.some((p) => p.id === prev)) return prev;
+          const active = plans.find((p) => p.status === "active");
+          return active?.id ?? plans[0].id;
+        });
+      }
+    } finally {
+      setLoadingCarePlans(false);
+    }
+  }, [supabase, selectedUserId]);
+
+  useEffect(() => {
+    fetchCarePlans();
+  }, [fetchCarePlans]);
+
   // ── Load records ──
   const fetchRecords = useCallback(async () => {
     if (!selectedUserId) {
@@ -246,10 +296,14 @@ export default function SupportRecordsPage() {
     }
     setLoadingRecords(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("kaigo_support_records")
         .select("*")
-        .eq("user_id", selectedUserId)
+        .eq("user_id", selectedUserId);
+      if (selectedCarePlanId) {
+        query = query.eq("care_plan_id", selectedCarePlanId);
+      }
+      const { data, error } = await query
         .order("record_date", { ascending: false })
         .order("record_time", { ascending: false });
       if (error) throw error;
@@ -262,7 +316,7 @@ export default function SupportRecordsPage() {
     } finally {
       setLoadingRecords(false);
     }
-  }, [supabase, selectedUserId]);
+  }, [supabase, selectedUserId, selectedCarePlanId]);
 
   useEffect(() => {
     fetchRecords();
@@ -306,6 +360,7 @@ export default function SupportRecordsPage() {
     try {
       const payload = {
         user_id: selectedUserId,
+        care_plan_id: selectedCarePlanId,
         record_date: form.record_date,
         record_time: form.record_time || null,
         category: form.category,
@@ -432,7 +487,10 @@ export default function SupportRecordsPage() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <ClipboardList className="text-blue-600" size={24} />
-            <h1 className="text-xl font-bold text-gray-900">支援経過記録</h1>
+            <h1 className="text-xl font-bold text-gray-900">支援経過記録（第5表）</h1>
+            {selectedUser && (
+              <span className="text-gray-500 text-sm">— {selectedUser.name} 様</span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {selectedUserId && (
@@ -455,7 +513,9 @@ export default function SupportRecordsPage() {
                 </button>
                 <button
                   onClick={openNew}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                  disabled={!selectedCarePlanId}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  title={!selectedCarePlanId ? "ケアプラン期間を選択してください" : ""}
                 >
                   <Plus size={14} />
                   新規記録
@@ -464,6 +524,58 @@ export default function SupportRecordsPage() {
             )}
           </div>
         </div>
+
+        {/* 計画期間タブ */}
+        {selectedUserId && (loadingCarePlans ? (
+          <div className="rounded-lg border bg-white p-4 text-center text-xs text-gray-400">
+            ケアプランを読み込み中...
+          </div>
+        ) : carePlans.length === 0 ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            有効なケアプランがありません。先にケアプランを作成してください。
+          </div>
+        ) : (
+          <div>
+            <div className="text-xs text-gray-500 mb-1">対応する計画期間を選択</div>
+            <div className="border-b border-gray-200 overflow-x-auto">
+              <div className="flex gap-1 min-w-max">
+                {carePlans.map((plan) => {
+                  const isActive = selectedCarePlanId === plan.id;
+                  const fmt = (d: string | null) =>
+                    d ? format(parseISO(d), "yyyy/M/d") : "—";
+                  return (
+                    <button
+                      key={plan.id}
+                      onClick={() => setSelectedCarePlanId(plan.id)}
+                      className={`flex flex-col items-start px-4 py-2 text-xs border-b-2 whitespace-nowrap transition-colors ${
+                        isActive
+                          ? "border-blue-600 text-blue-700 bg-blue-50 font-semibold"
+                          : "border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                      }`}
+                    >
+                      <span className="font-bold">
+                        {plan.plan_type ?? "ケアプラン"}
+                        {plan.plan_number && (
+                          <span className="ml-1 font-normal text-gray-500">
+                            #{plan.plan_number}
+                          </span>
+                        )}
+                        {plan.status === "active" && (
+                          <span className="ml-2 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+                            有効
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-[10px] text-gray-500 mt-0.5">
+                        {fmt(plan.start_date)} 〜 {fmt(plan.end_date)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        ))}
 
         {/* Filters */}
         <div className="rounded-lg border bg-white p-4 shadow-sm">
