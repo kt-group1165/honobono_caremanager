@@ -788,9 +788,11 @@ export default function ClaimsPage() {
       // 4. Fetch office settings for auto-apply
       const { data: officeSettings } = await supabase
         .from("kaigo_office_settings")
-        .select("tokutei_kassan_type, medical_cooperation_kassan")
+        .select("tokutei_kassan_type, medical_cooperation_kassan, unit_price, area_category")
         .limit(1)
         .maybeSingle();
+
+      const officeUnitPrice = Number(officeSettings?.unit_price ?? 10);
 
       // 5. Fetch fiscal year rates from DB
       const fy = getFiscalYear(billingMonth);
@@ -849,7 +851,7 @@ export default function ClaimsPage() {
         if (!levelInfo) continue;
 
         const autoAddUnits = officeTokuteiUnits + officeMedicalCoopUnits;
-        const { total_amount } = calcTotals(levelInfo.units, autoAddUnits, 0, 10);
+        const { total_amount } = calcTotals(levelInfo.units, autoAddUnits, 0, officeUnitPrice);
 
         rows.push({
           user_id: user.id,
@@ -857,7 +859,7 @@ export default function ClaimsPage() {
           care_support_code: levelInfo.code,
           care_support_name: levelInfo.name,
           units: levelInfo.units,
-          unit_price: 10,
+          unit_price: officeUnitPrice,
           total_amount,
           insurance_amount: total_amount,
           initial_addition: false,
