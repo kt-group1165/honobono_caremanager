@@ -24,6 +24,20 @@ import { Tab6Medical } from "./_components/Tab6Medical";
 import { Tab6Doctor } from "./_components/Tab6Doctor";
 import { Tab7Summary } from "./_components/Tab7Summary";
 import { Tab7Schedule } from "./_components/Tab7Schedule";
+import { PreviewTab1 } from "./_previews/PreviewTab1";
+import { PreviewTab2 } from "./_previews/PreviewTab2";
+import { PreviewTab3 } from "./_previews/PreviewTab3";
+import { PreviewTab4 } from "./_previews/PreviewTab4";
+import { PreviewTab5 } from "./_previews/PreviewTab5";
+import { PreviewTab6Basic } from "./_previews/PreviewTab6Basic";
+import { PreviewTab6LifeFunction } from "./_previews/PreviewTab6LifeFunction";
+import { PreviewTab6Cognition } from "./_previews/PreviewTab6Cognition";
+import { PreviewTab6Social } from "./_previews/PreviewTab6Social";
+import { PreviewTab6Medical } from "./_previews/PreviewTab6Medical";
+import { PreviewTab6Doctor } from "./_previews/PreviewTab6Doctor";
+import { PreviewTab7Summary } from "./_previews/PreviewTab7Summary";
+import { PreviewTab7Schedule } from "./_previews/PreviewTab7Schedule";
+import { PREVIEW_PRINT_CSS } from "./_preview";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -205,6 +219,7 @@ export default function AssessmentPage() {
 
   return (
     <div className="flex h-full -m-6">
+      <style>{PREVIEW_PRINT_CSS}</style>
       <UserSidebar selectedUserId={selectedUserId} onSelectUser={setSelectedUserId} />
 
       <div className="flex-1 overflow-y-auto">
@@ -323,6 +338,9 @@ export default function AssessmentPage() {
                 <button onClick={() => setStatus(status === "draft" ? "completed" : "draft")} className="flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
                   {status === "draft" ? <><Edit3 size={14} /> 下書き</> : <><Check size={14} /> 完了</>}
                 </button>
+                <button onClick={() => window.print()} className="flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+                  <Printer size={14} /> 印刷
+                </button>
                 <button onClick={handleSave} disabled={saving} className="flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                   {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                   保存
@@ -350,19 +368,75 @@ export default function AssessmentPage() {
 
             {/* Tab Content */}
             <div className="flex-1 overflow-y-auto p-6">
-              {activeTab === "1" && <Tab1FaceSheet data={formData.face_sheet!} onChange={(v) => updFormData("face_sheet", v)} />}
-              {activeTab === "2" && <Tab2Family data={formData.family_support!} onChange={(v) => updFormData("family_support", v)} />}
-              {activeTab === "3" && <Tab3Services data={formData.service_usage!} onChange={(v) => updFormData("service_usage", v)} />}
-              {activeTab === "4" && <Tab4Housing data={formData.housing!} onChange={(v) => updFormData("housing", v)} />}
-              {activeTab === "5" && <Tab5Health data={formData.health!} onChange={(v) => updFormData("health", v)} />}
-              {activeTab === "6-1" && <Tab6Basic data={formData.basic_motion!} onChange={(v) => updFormData("basic_motion", v)} />}
-              {activeTab === "6-2" && <Tab6LifeFunction data={formData.life_function!} onChange={(v) => updFormData("life_function", v)} />}
-              {activeTab === "6-34" && <Tab6Cognition data={formData.cognition_behavior!} onChange={(v) => updFormData("cognition_behavior", v)} />}
-              {activeTab === "6-5" && <Tab6Social data={formData.social!} onChange={(v) => updFormData("social", v)} />}
-              {activeTab === "6-6" && <Tab6Medical data={formData.medical_health!} onChange={(v) => updFormData("medical_health", v)} />}
-              {activeTab === "6-dr" && <Tab6Doctor data={formData.doctor_opinion!} onChange={(v) => updFormData("doctor_opinion", v)} />}
-              {activeTab === "7s" && <Tab7Summary data={formData.summary!} onChange={(v) => updFormData("summary", v)} />}
-              {activeTab === "7sch" && <Tab7Schedule data={formData.daily_schedule!} onChange={(v) => updFormData("daily_schedule", v)} />}
+              {(() => {
+                const uname = selectedUser?.name ?? "";
+                const dstr = assessmentDate ? format(parseISO(assessmentDate), "令和y'年' M'月' d'日'", { locale: ja }).replace(/令和/, (m) => {
+                  const y = parseISO(assessmentDate).getFullYear();
+                  return y >= 2019 ? `令和${y - 2018}年` : `${y}年`;
+                }).replace(/令和\d+年\d+/, "令和") : "";
+                const dFormatted = assessmentDate ? (() => {
+                  const d = parseISO(assessmentDate);
+                  const y = d.getFullYear();
+                  const era = y >= 2019 ? `令和${y - 2018}` : `平成${y - 1988}`;
+                  return `${era}年 ${d.getMonth() + 1}月${d.getDate()}日`;
+                })() : "";
+                return (
+                  <>
+                    {activeTab === "1" && (<>
+                      <Tab1FaceSheet data={formData.face_sheet!} onChange={(v) => updFormData("face_sheet", v)} />
+                      <PreviewTab1 data={formData.face_sheet!} userName={uname} date={dFormatted} />
+                    </>)}
+                    {activeTab === "2" && (<>
+                      <Tab2Family data={formData.family_support!} onChange={(v) => updFormData("family_support", v)} />
+                      <PreviewTab2 data={formData.family_support!} userName={uname} date={dFormatted} />
+                    </>)}
+                    {activeTab === "3" && (<>
+                      <Tab3Services data={formData.service_usage!} onChange={(v) => updFormData("service_usage", v)} />
+                      <PreviewTab3 data={formData.service_usage!} userName={uname} date={dFormatted} />
+                    </>)}
+                    {activeTab === "4" && (<>
+                      <Tab4Housing data={formData.housing!} onChange={(v) => updFormData("housing", v)} />
+                      <PreviewTab4 data={formData.housing!} userName={uname} date={dFormatted} />
+                    </>)}
+                    {activeTab === "5" && (<>
+                      <Tab5Health data={formData.health!} onChange={(v) => updFormData("health", v)} />
+                      <PreviewTab5 data={formData.health!} userName={uname} date={dFormatted} />
+                    </>)}
+                    {activeTab === "6-1" && (<>
+                      <Tab6Basic data={formData.basic_motion!} onChange={(v) => updFormData("basic_motion", v)} />
+                      <PreviewTab6Basic data={formData.basic_motion!} userName={uname} date={dFormatted} />
+                    </>)}
+                    {activeTab === "6-2" && (<>
+                      <Tab6LifeFunction data={formData.life_function!} onChange={(v) => updFormData("life_function", v)} />
+                      <PreviewTab6LifeFunction data={formData.life_function!} userName={uname} date={dFormatted} />
+                    </>)}
+                    {activeTab === "6-34" && (<>
+                      <Tab6Cognition data={formData.cognition_behavior!} onChange={(v) => updFormData("cognition_behavior", v)} />
+                      <PreviewTab6Cognition data={formData.cognition_behavior!} userName={uname} date={dFormatted} />
+                    </>)}
+                    {activeTab === "6-5" && (<>
+                      <Tab6Social data={formData.social!} onChange={(v) => updFormData("social", v)} />
+                      <PreviewTab6Social data={formData.social!} userName={uname} date={dFormatted} />
+                    </>)}
+                    {activeTab === "6-6" && (<>
+                      <Tab6Medical data={formData.medical_health!} onChange={(v) => updFormData("medical_health", v)} />
+                      <PreviewTab6Medical data={formData.medical_health!} userName={uname} date={dFormatted} />
+                    </>)}
+                    {activeTab === "6-dr" && (<>
+                      <Tab6Doctor data={formData.doctor_opinion!} onChange={(v) => updFormData("doctor_opinion", v)} />
+                      <PreviewTab6Doctor data={formData.doctor_opinion!} userName={uname} date={dFormatted} />
+                    </>)}
+                    {activeTab === "7s" && (<>
+                      <Tab7Summary data={formData.summary!} onChange={(v) => updFormData("summary", v)} />
+                      <PreviewTab7Summary data={formData.summary!} userName={uname} date={dFormatted} />
+                    </>)}
+                    {activeTab === "7sch" && (<>
+                      <Tab7Schedule data={formData.daily_schedule!} onChange={(v) => updFormData("daily_schedule", v)} />
+                      <PreviewTab7Schedule data={formData.daily_schedule!} userName={uname} date={dFormatted} />
+                    </>)}
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}
