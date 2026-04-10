@@ -1,10 +1,205 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Settings, Eye, EyeOff, Building2, ChevronRight } from "lucide-react";
+import { Settings, Eye, EyeOff, Building2, ChevronRight, CalendarDays, Plus, Save, Loader2, Trash2 } from "lucide-react";
 import Link from "next/link";
+
+// ─── 年度別単位数管理 ──────────────────────────────────────────────────────
+
+interface CareSupportRate {
+  id?: string;
+  fiscal_year: string;
+  care_level: string;
+  units: number;
+  service_code: string;
+  service_name: string;
+}
+
+const CARE_LEVELS = ["要支援1", "要支援2", "要介護1", "要介護2", "要介護3", "要介護4", "要介護5"];
+
+function FiscalYearRatesSection() {
+  const supabase = createClient();
+  const [rates, setRates] = useState<CareSupportRate[]>([]);
+  const [loadingRates, setLoadingRates] = useState(true);
+  const [savingRates, setSavingRates] = useState(false);
+  const [newFy, setNewFy] = useState("");
+
+  useEffect(() => {
+    const load = async () => {
+      setLoadingRates(true);
+      const { data } = await supabase
+        .from("kaigo_care_support_rates")
+        .select("*")
+        .order("fiscal_year", { ascending: false })
+        .order("care_level");
+      setRates((data as CareSupportRate[]) ?? []);
+      setLoadingRates(false);
+    };
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fiscalYears = [...new Set(rates.map((r) => r.fiscal_year))].sort().reverse();
+
+  const updateRate = (fy: string, cl: string, field: keyof CareSupportRate, value: string | number) => {
+    setRates((prev) =>
+      prev.map((r) =>
+        r.fiscal_year === fy && r.care_level === cl ? { ...r, [field]: value } : r
+      )
+    );
+  };
+
+  const addFiscalYear = () => {
+    if (!newFy || fiscalYears.includes(newFy)) {
+      toast.error("年度を正しく入力してください");
+      return;
+    }
+    const newRows: CareSupportRate[] = CARE_LEVELS.map((cl) => ({
+      fiscal_year: newFy,
+      care_level: cl,
+      units: 0,
+      service_code: "",
+      service_name: "",
+    }));
+    setRates((prev) => [...newRows, ...prev]);
+    setNewFy("");
+  };
+
+  const deleteFiscalYear = async (fy: string) => {
+    if (!window.confirm(`${fy}年度のデータを削除しますか？`)) return;
+    await supabase.from("kaigo_care_support_rates").delete().eq("fiscal_year", fy);
+    setRates((prev) => prev.filter((r) => r.fiscal_year !== fy));
+    toast.success(`${fy}年度を削除しました`);
+  };
+
+  const saveRates = async () => {
+    setSavingRates(true);
+    try {
+      for (const r of rates) {
+        if (r.id) {
+          await supabase.from("kaigo_care_support_rates").update({
+            units: r.units,
+            service_code: r.service_code,
+            service_name: r.service_name,
+          }).eq("id", r.id);
+        } else {
+          const { data } = await supabase.from("kaigo_care_support_rates").upsert({
+            fiscal_year: r.fiscal_year,
+            care_level: r.care_level,
+            units: r.units,
+            service_code: r.service_code,
+            service_name: r.service_name,
+          }, { onConflict: "fiscal_year,care_level" }).select("id").single();
+          if (data) r.id = data.id;
+        }
+      }
+      toast.success("年度別単位数を保存しました");
+    } catch (err) {
+      toast.error("保存に失敗しました");
+      console.error(err);
+    } finally {
+      setSavingRates(false);
+    }
+  };
+
+  if (loadingRates) {
+    return (
+      <div className="rounded-lg border bg-white p-6 shadow-sm">
+        <div className="flex items-center gap-2 mb-4">
+          <CalendarDays size={20} className="text-blue-600" />
+          <h2 className="text-lg font-semibold text-gray-900">年度別 居宅介護支援費 単位数</h2>
+        </div>
+        <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-blue-500" /></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border bg-white p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <CalendarDays size={20} className="text-blue-600" />
+          <h2 className="text-lg font-semibold text-gray-900">年度別 居宅介護支援費 単位数</h2>
+        </div>
+        <button onClick={saveRates} disabled={savingRates} className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50">
+          {savingRates ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} 保存
+        </button>
+      </div>
+      <p className="text-xs text-gray-500 mb-4">介護報酬改定（約2年ごと）に合わせて年度別の単位数を管理します。レセプト生成時に請求月の年度から自動判定されます。</p>
+
+      {/* Add fiscal year */}
+      <div className="flex items-center gap-2 mb-4">
+        <input
+          type="text"
+          value={newFy}
+          onChange={(e) => setNewFy(e.target.value)}
+          placeholder="年度（例: 2027）"
+          className="rounded border px-3 py-1.5 text-sm w-40 focus:border-blue-500 focus:outline-none"
+        />
+        <button onClick={addFiscalYear} className="flex items-center gap-1 rounded border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+          <Plus size={14} /> 年度追加
+        </button>
+      </div>
+
+      {/* Tables per fiscal year */}
+      <div className="space-y-6">
+        {fiscalYears.map((fy) => {
+          const fyRates = rates.filter((r) => r.fiscal_year === fy);
+          return (
+            <div key={fy} className="rounded-lg border overflow-hidden">
+              <div className="flex items-center justify-between bg-gray-50 px-4 py-2">
+                <h3 className="text-sm font-bold text-gray-800">{fy}年度（{fy}年4月〜{Number(fy) + 1}年3月）</h3>
+                <button onClick={() => deleteFiscalYear(fy)} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1">
+                  <Trash2 size={12} /> 削除
+                </button>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-t">
+                    <th className="px-3 py-2 text-left text-xs text-gray-600 w-24">要介護度</th>
+                    <th className="px-3 py-2 text-right text-xs text-gray-600 w-24">単位数</th>
+                    <th className="px-3 py-2 text-left text-xs text-gray-600 w-28">サービスコード</th>
+                    <th className="px-3 py-2 text-left text-xs text-gray-600">サービス名称</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {CARE_LEVELS.map((cl) => {
+                    const r = fyRates.find((x) => x.care_level === cl);
+                    if (!r) return null;
+                    return (
+                      <tr key={cl}>
+                        <td className="px-3 py-1.5 text-sm font-medium">{cl}</td>
+                        <td className="px-3 py-1.5">
+                          <input type="number" value={r.units} onChange={(e) => updateRate(fy, cl, "units", parseInt(e.target.value) || 0)}
+                            className="w-full text-right rounded border px-2 py-1 text-sm focus:border-blue-500 focus:outline-none" />
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <input type="text" value={r.service_code} onChange={(e) => updateRate(fy, cl, "service_code", e.target.value)}
+                            className="w-full rounded border px-2 py-1 text-sm font-mono focus:border-blue-500 focus:outline-none" />
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <input type="text" value={r.service_name} onChange={(e) => updateRate(fy, cl, "service_name", e.target.value)}
+                            className="w-full rounded border px-2 py-1 text-sm focus:border-blue-500 focus:outline-none" />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
+        {fiscalYears.length === 0 && (
+          <p className="text-sm text-gray-400 text-center py-4">年度データがありません。Supabaseでマイグレーション014を実行してください。</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main ────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
   const supabase = createClient();
@@ -192,6 +387,9 @@ export default function SettingsPage() {
           </div>
         </form>
       </div>
+
+      {/* 年度別単位数管理 */}
+      <FiscalYearRatesSection />
     </div>
   );
 }

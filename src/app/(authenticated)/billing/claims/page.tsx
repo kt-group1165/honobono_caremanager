@@ -90,11 +90,11 @@ interface ClaimRow {
 // Constants
 // ---------------------------------------------------------------------------
 
-const CARE_LEVEL_MAP: Record<
+// 年度別単位数テーブル（kaigo_care_support_rates）から取得。フォールバック用の静的マップ。
+const CARE_LEVEL_MAP_FALLBACK: Record<
   string,
   { units: number; code: string; name: string }
 > = {
-  // 令和7年度（2025年4月〜）改定単位数
   要支援1: { units: 443, code: "461000", name: "介護予防支援費" },
   要支援2: { units: 443, code: "461000", name: "介護予防支援費" },
   要介護1: { units: 1086, code: "432301", name: "居宅介護支援費Ⅰⅰ１" },
@@ -103,6 +103,13 @@ const CARE_LEVEL_MAP: Record<
   要介護4: { units: 1411, code: "432271", name: "居宅介護支援費Ⅰⅰ２" },
   要介護5: { units: 1411, code: "432271", name: "居宅介護支援費Ⅰⅰ２" },
 };
+
+type CareLevelInfo = { units: number; code: string; name: string };
+
+function getFiscalYear(billingMonth: string): string {
+  const [y, m] = billingMonth.split("-").map(Number);
+  return m >= 4 ? String(y) : String(y - 1);
+}
 
 const TOKUTEI_KASSAN_UNITS: Record<TokuteiKassanType, number> = {
   none: 0,
@@ -767,13 +774,31 @@ export default function ClaimsPage() {
       const officeTokuteiUnits = TOKUTEI_KASSAN_UNITS[officeTokutei];
       const officeMedicalCoopUnits = officeMedicalCoop ? 125 : 0;
 
-      // 5. Delete existing claims for this month
+      // 5. Fetch fiscal year rates from DB
+      const fy = getFiscalYear(billingMonth);
+      const { data: ratesData } = await supabase
+        .from("kaigo_care_support_rates")
+        .select("care_level, units, service_code, service_name")
+        .eq("fiscal_year", fy);
+
+      const CARE_LEVEL_MAP: Record<string, CareLevelInfo> = { ...CARE_LEVEL_MAP_FALLBACK };
+      if (ratesData && ratesData.length > 0) {
+        for (const r of ratesData) {
+          CARE_LEVEL_MAP[r.care_level] = {
+            units: r.units,
+            code: r.service_code,
+            name: r.service_name,
+          };
+        }
+      }
+
+      // 6. Delete existing claims for this month
       await supabase
         .from("kaigo_care_support_claims")
         .delete()
         .eq("billing_month", billingMonth);
 
-      // 6. Build insert rows
+      // 7. Build insert rows
       const now = new Date().toISOString();
       const rows: Record<string, unknown>[] = [];
 
