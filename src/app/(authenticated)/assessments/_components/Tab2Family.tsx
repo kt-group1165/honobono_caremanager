@@ -4,13 +4,16 @@ import { Trash2, Plus } from "lucide-react";
 import type { FamilySupport, FamilyMember } from "../_types";
 import { emptyFamilyMember } from "../_types";
 import { Section, Field, TextInput, Textarea, Radio, Checkbox } from "../_shared";
+import { Genogram } from "./Genogram";
 
 interface Props {
   data: FamilySupport;
   onChange: (data: FamilySupport) => void;
+  userName?: string;
+  userGender?: string | null;
 }
 
-export function Tab2Family({ data, onChange }: Props) {
+export function Tab2Family({ data, onChange, userName, userGender }: Props) {
   const upd = <K extends keyof FamilySupport>(k: K, v: FamilySupport[K]) => onChange({ ...data, [k]: v });
 
   const updMember = (i: number, patch: Partial<FamilyMember>) => {
@@ -29,12 +32,20 @@ export function Tab2Family({ data, onChange }: Props) {
       <Section title="2. 家族状況とインフォーマルな支援の状況">
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-gray-600 block mb-1">■家族構成図</label>
-            <Textarea value={data.family_composition_diagram} onChange={(v) => upd("family_composition_diagram", v)} rows={6} placeholder="家族構成を文章・記号で入力" />
+            <label className="text-xs text-gray-600 block mb-1">■家族構成図（自動生成）</label>
+            <Genogram
+              userName={userName ?? ""}
+              userGender={userGender ?? null}
+              members={data.family_members}
+            />
+            <div className="mt-2">
+              <label className="text-[10px] text-gray-500 block mb-0.5">補足メモ</label>
+              <Textarea value={data.family_composition_diagram} onChange={(v) => upd("family_composition_diagram", v)} rows={2} placeholder="図に表現できない情報を補足" />
+            </div>
           </div>
           <div>
             <label className="text-xs text-gray-600 block mb-1">家族の介護の状況・課題</label>
-            <Textarea value={data.family_care_situation} onChange={(v) => upd("family_care_situation", v)} rows={6} />
+            <Textarea value={data.family_care_situation} onChange={(v) => upd("family_care_situation", v)} rows={10} />
           </div>
         </div>
 

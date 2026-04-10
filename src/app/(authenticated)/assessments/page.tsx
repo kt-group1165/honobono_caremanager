@@ -45,6 +45,7 @@ interface KaigoUser {
   id: string;
   name: string;
   name_kana: string | null;
+  gender: string | null;
 }
 
 interface Certification {
@@ -111,7 +112,7 @@ export default function AssessmentPage() {
   // Load user info when selected
   useEffect(() => {
     if (!selectedUserId) { setSelectedUser(null); setCertifications([]); setSelectedCertId(null); return; }
-    supabase.from("kaigo_users").select("id, name, name_kana").eq("id", selectedUserId).single().then(({ data }: { data: KaigoUser | null }) => setSelectedUser(data));
+    supabase.from("kaigo_users").select("id, name, name_kana, gender").eq("id", selectedUserId).single().then(({ data }: { data: KaigoUser | null }) => setSelectedUser(data));
     // Load all certifications for this user
     supabase.from("kaigo_care_certifications")
       .select("id, care_level, start_date, end_date")
@@ -392,7 +393,12 @@ export default function AssessmentPage() {
                       <PreviewTab1 data={formData.face_sheet!} userName={uname} date={dFormatted} />
                     </>)}
                     {activeTab === "2" && (<>
-                      <Tab2Family data={formData.family_support!} onChange={(v) => updFormData("family_support", v)} />
+                      <Tab2Family
+                        data={formData.family_support!}
+                        onChange={(v) => updFormData("family_support", v)}
+                        userName={selectedUser?.name ?? ""}
+                        userGender={selectedUser?.gender ?? null}
+                      />
                       <PreviewTab2 data={formData.family_support!} userName={uname} date={dFormatted} />
                     </>)}
                     {activeTab === "3" && (<>
