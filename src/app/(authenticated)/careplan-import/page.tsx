@@ -274,47 +274,67 @@ export default function CareplanImportPage() {
     try {
       let savedCount = 0;
 
-      // 利用者を特定: 基本情報CSVまたはドロップダウンから
-      const userInfoFile = files.find((f) => f.type === "user-info");
+      // 利用者を特定: ドロップダウン > 基本情報CSV > 他CSVの被保険者番号/名前
       let userId: string | null = selectedUserId || null;
 
-      if (userInfoFile && !userId) {
-        const info = userInfoFile.parsed;
-        // 同名の利用者を検索
-        const { data: matchedUsers } = await supabase
+      // 全CSVから被保険者番号・利用者名を抽出
+      let detectedInsuredNo = "";
+      let detectedName = "";
+      const userInfoFile = files.find((f) => f.type === "user-info");
+      if (userInfoFile) {
+        detectedInsuredNo = userInfoFile.parsed.insured_no ?? "";
+        detectedName = userInfoFile.parsed.name ?? "";
+      }
+      // 利用者基本情報がなくても、他CSVの先頭行から被保険者番号を取得
+      if (!detectedInsuredNo) {
+        for (const f of files) {
+          if (f.rows.length > 0 && f.rows[0].length >= 3) {
+            const candidate = f.rows[0][2]?.trim(); // 多くのCSVで3列目が被保険者番号
+            if (candidate && candidate.length >= 8 && /^[HhＨ]?\d+$/.test(candidate)) {
+              detectedInsuredNo = candidate;
+              break;
+            }
+          }
+        }
+      }
+
+      // 自動マッチ: 名前で検索
+      if (!userId && detectedName) {
+        const { data } = await supabase
           .from("kaigo_users")
           .select("id, name")
-          .eq("name", info.name)
+          .eq("name", detectedName)
           .eq("status", "active")
           .limit(1);
-
-        if (matchedUsers && matchedUsers.length > 0) {
-          userId = matchedUsers[0].id;
-          toast.info(`利用者「${info.name}」に紐付けます`);
-        } else if (info.name) {
-          // 新規作成
-          const { data: newUser, error } = await supabase
-            .from("kaigo_users")
-            .insert({
-              name: info.name,
-              name_kana: info.name_kana || "",
-              gender: info.gender || "男",
-              birth_date: info.birth_date || "2000-01-01",
-              address: info.address || "",
-              phone: info.phone || "",
-            })
-            .select("id")
-            .single();
-
-          if (error) throw error;
-          userId = newUser.id;
-          toast.success(`利用者「${info.name}」を新規登録しました`);
+        if (data && data.length > 0) {
+          userId = data[0].id;
+          toast.info(`利用者「${detectedName}」に自動紐付けしました`);
         }
+      }
+
+      // 利用者基本情報CSVがあり、マッチしなければ新規作成
+      if (!userId && userInfoFile && detectedName) {
+        const info = userInfoFile.parsed;
+        const { data: newUser, error } = await supabase
+          .from("kaigo_users")
+          .insert({
+            name: info.name,
+            name_kana: info.name_kana || "",
+            gender: info.gender || "男",
+            birth_date: info.birth_date || "2000-01-01",
+            address: info.address || "",
+            phone: info.phone || "",
+          })
+          .select("id")
+          .single();
+        if (error) throw error;
+        userId = newUser.id;
+        toast.success(`利用者「${info.name}」を新規登録しました`);
         savedCount++;
       }
 
       if (!userId) {
-        toast.error("利用者を選択してください（またはCSVに利用者基本情報を含めてください）");
+        toast.error("利用者を特定できませんでした。ドロップダウンから選択してください。");
         setSaving(false);
         return;
       }
@@ -422,12 +442,11 @@ export default function CareplanImportPage() {
             </button>
           </div>
 
-          {/* 利用者選択（基本情報CSVがない場合） */}
-          {!files.some((f) => f.type === "user-info") && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-              <p className="text-sm text-amber-800 font-medium mb-2">
-                利用者基本情報CSVがありません。保存先の利用者を選択してください。
-              </p>
+          {/* 利用者選択（任意：自動特定できない場合に使用） */}
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <p className="text-sm text-gray-700 font-medium mb-2">
+              保存先の利用者（CSVから自動特定しますが、手動で指定も可能です）
+            </p>
               <select
                 value={selectedUserId}
                 onChange={(e) => setSelectedUserId(e.target.value)}
@@ -439,7 +458,6 @@ export default function CareplanImportPage() {
                 ))}
               </select>
             </div>
-          )}
 
           <div className="space-y-3">
             {files.map((file) => {
