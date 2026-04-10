@@ -1132,6 +1132,88 @@ export default function MonitoringPage() {
               </div>
             </div>
           )}
+
+          {/* ── SCREEN PREVIEW ── */}
+          {selectedUserId && mode === "edit" && selectedUser && (
+            <div className="mt-6 space-y-3 no-print">
+              <div className="flex items-center gap-2">
+                <Printer size={18} className="text-gray-500" />
+                <h2 className="text-base font-semibold text-gray-700">印刷プレビュー</h2>
+              </div>
+              <div className="rounded-lg border bg-white shadow-sm overflow-auto" style={{ maxHeight: "80vh" }}>
+                <div
+                  id="monitoring-screen-preview"
+                  style={{
+                    padding: "6mm",
+                    fontFamily: '"MS Mincho", "ＭＳ 明朝", "Noto Serif JP", serif',
+                    fontSize: "7pt",
+                    color: "#000",
+                    background: "#fff",
+                    minWidth: "1100px",
+                    transform: "scale(0.85)",
+                    transformOrigin: "top left",
+                  }}
+                >
+                  {/* Title */}
+                  <div style={{ textAlign: "center", marginBottom: "3mm" }}>
+                    <div style={{ fontSize: "11pt", fontWeight: "bold", letterSpacing: "0.2em", marginBottom: "2mm" }}>
+                      居宅サービス計画実施状況報告書（モニタリングシート）
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "8pt" }}>
+                      <span>利用者名: {selectedUser.name} 様</span>
+                      <span>居宅介護支援事業者: {officeName}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "8pt" }}>
+                      <span>モニタリング実施日: {monitoringDate ? toWareki(monitoringDate) : ""}</span>
+                      <span>担当者: {assessorName}</span>
+                    </div>
+                  </div>
+
+                  {/* Table */}
+                  <table style={{ width: "100%", borderCollapse: "collapse", border: "0.8pt solid #333" }}>
+                    <thead>
+                      <tr>
+                        <th style={{ border: "0.8pt solid #333", padding: "1mm", width: "3%", textAlign: "center" }}>No</th>
+                        <th style={{ border: "0.8pt solid #333", padding: "1mm", width: "14%" }}>短期目標</th>
+                        <th style={{ border: "0.8pt solid #333", padding: "1mm", width: "8%", textAlign: "center" }}>目標期間</th>
+                        <th style={{ border: "0.8pt solid #333", padding: "1mm", width: "8%" }}>サービス種別</th>
+                        <th style={{ border: "0.8pt solid #333", padding: "1mm", width: "8%" }}>事業所</th>
+                        <th style={{ border: "0.8pt solid #333", padding: "1mm", width: "14%" }}>サービス実施状況</th>
+                        <th style={{ border: "0.8pt solid #333", padding: "1mm", width: "8%", textAlign: "center" }}>満足度</th>
+                        <th style={{ border: "0.8pt solid #333", padding: "1mm", width: "8%", textAlign: "center" }}>達成度</th>
+                        <th style={{ border: "0.8pt solid #333", padding: "1mm", width: "7%", textAlign: "center" }}>ADL変化</th>
+                        <th style={{ border: "0.8pt solid #333", padding: "1mm", width: "7%", textAlign: "center" }}>見直し</th>
+                        <th style={{ border: "0.8pt solid #333", padding: "1mm", width: "15%" }}>見直し理由</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((item) => (
+                        <tr key={item.item_number} style={{ verticalAlign: "top" }}>
+                          <td style={{ border: "0.8pt solid #333", padding: "1mm", textAlign: "center" }}>{item.item_number}</td>
+                          <td style={{ border: "0.8pt solid #333", padding: "1mm", whiteSpace: "pre-wrap", fontSize: "6.5pt" }}>{item.short_term_goal}</td>
+                          <td style={{ border: "0.8pt solid #333", padding: "1mm", fontSize: "6pt", textAlign: "center", whiteSpace: "pre-wrap" }}>
+                            {formatPeriod(item.goal_period_start, item.goal_period_end)}
+                          </td>
+                          <td style={{ border: "0.8pt solid #333", padding: "1mm", fontSize: "6.5pt" }}>{item.service_type}</td>
+                          <td style={{ border: "0.8pt solid #333", padding: "1mm", fontSize: "6.5pt" }}>{item.provider_name}</td>
+                          <td style={{ border: "0.8pt solid #333", padding: "1mm", fontSize: "6.5pt", whiteSpace: "pre-wrap" }}>{item.implementation_status}</td>
+                          <td style={{ border: "0.8pt solid #333", padding: "1mm", fontSize: "6pt", textAlign: "center" }}>
+                            {item.user_satisfaction && <div>本人: {item.user_satisfaction}</div>}
+                            {item.family_satisfaction && <div>家族: {item.family_satisfaction}</div>}
+                            {item.satisfaction_comment && <div style={{ fontSize: "5.5pt", marginTop: "0.5mm" }}>{item.satisfaction_comment}</div>}
+                          </td>
+                          <td style={{ border: "0.8pt solid #333", padding: "1mm", fontSize: "6.5pt", textAlign: "center" }}>{item.achievement}</td>
+                          <td style={{ border: "0.8pt solid #333", padding: "1mm", fontSize: "6.5pt", textAlign: "center" }}>{item.adl_change}</td>
+                          <td style={{ border: "0.8pt solid #333", padding: "1mm", fontSize: "6.5pt", textAlign: "center" }}>{item.plan_revision_needed}</td>
+                          <td style={{ border: "0.8pt solid #333", padding: "1mm", fontSize: "6.5pt", whiteSpace: "pre-wrap" }}>{item.revision_reason}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
