@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
@@ -165,11 +165,29 @@ function parseCarePlan3(rows: string[][]): Record<string, any> {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+interface ExistingUser {
+  id: string;
+  name: string;
+  name_kana: string;
+}
+
 export default function CareplanImportPage() {
   const supabase = createClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<ImportedFile[]>([]);
   const [saving, setSaving] = useState(false);
+  const [existingUsers, setExistingUsers] = useState<ExistingUser[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
+
+  // Load existing users
+  useEffect(() => {
+    const load = async () => {
+      const { data } = await supabase.from("kaigo_users").select("id, name, name_kana").eq("status", "active").order("name_kana");
+      setExistingUsers(data || []);
+    };
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── File upload handler ───────────────────────────────────────────────────
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -256,29 +274,29 @@ export default function CareplanImportPage() {
     try {
       let savedCount = 0;
 
-      // 利用者基本情報があれば、利用者を特定or作成
+      // 利用者を特定: 基本情報CSVまたはドロップダウンから
       const userInfoFile = files.find((f) => f.type === "user-info");
-      let userId: string | null = null;
+      let userId: string | null = selectedUserId || null;
 
-      if (userInfoFile) {
+      if (userInfoFile && !userId) {
         const info = userInfoFile.parsed;
         // 同名の利用者を検索
-        const { data: existingUsers } = await supabase
+        const { data: matchedUsers } = await supabase
           .from("kaigo_users")
           .select("id, name")
           .eq("name", info.name)
           .eq("status", "active")
           .limit(1);
 
-        if (existingUsers && existingUsers.length > 0) {
-          userId = existingUsers[0].id;
-          toast.info(`利用者「${info.name}」は既に登録されています。データを更新します。`);
-        } else {
+        if (matchedUsers && matchedUsers.length > 0) {
+          userId = matchedUsers[0].id;
+          toast.info(`利用者「${info.name}」に紐付けます`);
+        } else if (info.name) {
           // 新規作成
           const { data: newUser, error } = await supabase
             .from("kaigo_users")
             .insert({
-              name: info.name || "取込利用者",
+              name: info.name,
               name_kana: info.name_kana || "",
               gender: info.gender || "男",
               birth_date: info.birth_date || "2000-01-01",
@@ -295,19 +313,22 @@ export default function CareplanImportPage() {
         savedCount++;
       }
 
+      if (!userId) {
+        toast.error("利用者を選択してください（またはCSVに利用者基本情報を含めてください）");
+        setSaving(false);
+        return;
+      }
+
       // ケアプランデータを保存 (kaigo_report_documentsに保存)
       for (const file of files) {
-        if (file.type === "user-info") continue; // 既に処理済み
-
-        if (!userId) {
-          toast.error("利用者基本情報CSVがないため、ケアプランを保存できません");
-          break;
-        }
+        if (file.type === "user-info") continue;
+        if (file.type === "unknown") continue;
 
         const reportTypeMap: Record<string, string> = {
           "care-plan-1": "care-plan-1",
           "care-plan-2": "care-plan-2",
           "care-plan-3": "care-plan-3",
+          "table-6": "service-usage",
           "table-7": "service-usage-detail",
         };
 
@@ -400,6 +421,25 @@ export default function CareplanImportPage() {
               全てクリア
             </button>
           </div>
+
+          {/* 利用者選択（基本情報CSVがない場合） */}
+          {!files.some((f) => f.type === "user-info") && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm text-amber-800 font-medium mb-2">
+                利用者基本情報CSVがありません。保存先の利用者を選択してください。
+              </p>
+              <select
+                value={selectedUserId}
+                onChange={(e) => setSelectedUserId(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              >
+                <option value="">-- 利用者を選択 --</option>
+                {existingUsers.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}（{u.name_kana}）</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="space-y-3">
             {files.map((file) => {
