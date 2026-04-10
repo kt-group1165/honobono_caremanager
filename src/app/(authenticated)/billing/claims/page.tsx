@@ -29,7 +29,22 @@ import { ja } from "date-fns/locale";
 
 type ClaimStatus = "draft" | "confirmed" | "submitted";
 
-type TokuteiKassanType = "none" | "A" | "B" | "C";
+type TokuteiKassanType = "none" | "Ⅰ" | "Ⅱ" | "Ⅲ" | "A";
+
+// 旧形式 (A/B/C) や事業所設定の "なし" を新形式にマッピング
+function normalizeTokuteiKassan(v: string | null | undefined): TokuteiKassanType {
+  if (!v) return "none";
+  const s = String(v);
+  if (s === "なし" || s === "none") return "none";
+  if (s === "Ⅰ" || s === "Ⅱ" || s === "Ⅲ") return s;
+  // 旧形式（令和3年度）のマッピング: 旧A/B/C → 新Ⅰ/Ⅱ/Ⅲ
+  if (s === "B") return "Ⅱ";
+  if (s === "C") return "Ⅲ";
+  // 新区分"A"（令和6年度新設114単位）か旧"A"(505単位)かは文脈不明だが、
+  // 新区分として扱う（ユーザーは設定画面で編集可能）
+  if (s === "A") return "A";
+  return "none";
+}
 type HospitalCoordType = "none" | "i" | "ii";
 type DischargeType = "none" | "i_i" | "i_ro" | "ii_i" | "ii_ro" | "iii";
 
@@ -111,12 +126,21 @@ function getFiscalYear(billingMonth: string): string {
   return m >= 4 ? String(y) : String(y - 1);
 }
 
-const TOKUTEI_KASSAN_UNITS: Record<TokuteiKassanType, number> = {
+// 令和6年度改定 居宅介護支援 特定事業所加算単位数（フォールバック）
+// 本来は kaigo_tokutei_kassan_rates テーブルから取得
+const TOKUTEI_KASSAN_UNITS_FALLBACK: Record<string, number> = {
   none: 0,
-  A: 505,
-  B: 407,
-  C: 309,
+  "Ⅰ": 519,
+  "Ⅱ": 421,
+  "Ⅲ": 323,
+  A: 114,
+  // 旧区分も残す（既存データ対応）
+  B: 421,
+  C: 323,
 };
+
+// 実際の単位数（一括生成時にDBから読み込み後に上書き）
+const TOKUTEI_KASSAN_UNITS: Record<string, number> = { ...TOKUTEI_KASSAN_UNITS_FALLBACK };
 
 const HOSPITAL_COORD_UNITS: Record<HospitalCoordType, number> = {
   none: 0,
@@ -309,7 +333,7 @@ function EditModal({ claim, certEntry, onClose, onSave }: EditModalProps) {
 
   const [addings, setAddings] = useState<Addings>({
     initial: claim.initial_addition,
-    tokutei_kassan: (String(claim.tokutei_kassan_type) === "なし" || !claim.tokutei_kassan_type) ? "none" : (claim.tokutei_kassan_type as TokuteiKassanType),
+    tokutei_kassan: normalizeTokuteiKassan(claim.tokutei_kassan_type as string | null),
     medical_coop_kassan: claim.medical_coop_kassan ?? false,
     hospitalization: (() => {
       if (!claim.hospital_coordination) return "none";
@@ -336,7 +360,7 @@ function EditModal({ claim, certEntry, onClose, onSave }: EditModalProps) {
         if (!data) return;
         setAddings((prev) => ({
           ...prev,
-          tokutei_kassan: data.tokutei_kassan_type === "なし" ? "none" : (data.tokutei_kassan_type as TokuteiKassanType | null) ?? prev.tokutei_kassan,
+          tokutei_kassan: data.tokutei_kassan_type ? normalizeTokuteiKassan(String(data.tokutei_kassan_type)) : prev.tokutei_kassan,
           medical_coop_kassan: (data.medical_cooperation_kassan as boolean | null) ?? prev.medical_coop_kassan,
         }));
       });
@@ -425,9 +449,10 @@ function EditModal({ claim, certEntry, onClose, onSave }: EditModalProps) {
                 className="rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="none">なし</option>
-                <option value="A">A (+505単位)</option>
-                <option value="B">B (+407単位)</option>
-                <option value="C">C (+309単位)</option>
+                <option value="Ⅰ">Ⅰ (+{TOKUTEI_KASSAN_UNITS["Ⅰ"] ?? 519}単位)</option>
+                <option value="Ⅱ">Ⅱ (+{TOKUTEI_KASSAN_UNITS["Ⅱ"] ?? 421}単位)</option>
+                <option value="Ⅲ">Ⅲ (+{TOKUTEI_KASSAN_UNITS["Ⅲ"] ?? 323}単位)</option>
+                <option value="A">A (+{TOKUTEI_KASSAN_UNITS["A"] ?? 114}単位)</option>
               </select>
             </div>
 
@@ -767,23 +792,23 @@ export default function ClaimsPage() {
         .limit(1)
         .maybeSingle();
 
-      // 事業所設定は "なし"/"A"/"B"/"C"、レセプトは "none"/"A"/"B"/"C"
-      const rawTokutei = officeSettings?.tokutei_kassan_type ?? "なし";
-      const officeTokutei: TokuteiKassanType = rawTokutei === "なし" ? "none" : (rawTokutei as TokuteiKassanType);
-      const officeMedicalCoop = officeSettings?.medical_cooperation_kassan ?? false;
-      const officeTokuteiUnits = TOKUTEI_KASSAN_UNITS[officeTokutei];
-      const officeMedicalCoopUnits = officeMedicalCoop ? 125 : 0;
-
       // 5. Fetch fiscal year rates from DB
       const fy = getFiscalYear(billingMonth);
-      const { data: ratesData } = await supabase
-        .from("kaigo_care_support_rates")
-        .select("care_level, units, service_code, service_name")
-        .eq("fiscal_year", fy);
+      const [ratesRes, tkRatesRes] = await Promise.all([
+        supabase
+          .from("kaigo_care_support_rates")
+          .select("care_level, units, service_code, service_name")
+          .eq("fiscal_year", fy),
+        supabase
+          .from("kaigo_tokutei_kassan_rates")
+          .select("kassan_type, units")
+          .eq("fiscal_year", fy)
+          .eq("business_type", "居宅介護支援"),
+      ]);
 
       const CARE_LEVEL_MAP: Record<string, CareLevelInfo> = { ...CARE_LEVEL_MAP_FALLBACK };
-      if (ratesData && ratesData.length > 0) {
-        for (const r of ratesData) {
+      if (ratesRes.data && ratesRes.data.length > 0) {
+        for (const r of ratesRes.data) {
           CARE_LEVEL_MAP[r.care_level] = {
             units: r.units,
             code: r.service_code,
@@ -791,6 +816,19 @@ export default function ClaimsPage() {
           };
         }
       }
+
+      // 特定事業所加算単位数をDBから上書き
+      if (tkRatesRes.data && tkRatesRes.data.length > 0) {
+        for (const r of tkRatesRes.data) {
+          TOKUTEI_KASSAN_UNITS[r.kassan_type] = r.units;
+        }
+      }
+
+      // 事業所設定は "なし"/"Ⅰ"/"Ⅱ"/"Ⅲ"/"A"、レセプトは "none"/"Ⅰ"/"Ⅱ"/"Ⅲ"/"A"
+      const officeTokutei: TokuteiKassanType = normalizeTokuteiKassan(officeSettings?.tokutei_kassan_type);
+      const officeMedicalCoop = officeSettings?.medical_cooperation_kassan ?? false;
+      const officeTokuteiUnits = TOKUTEI_KASSAN_UNITS[officeTokutei] ?? 0;
+      const officeMedicalCoopUnits = officeMedicalCoop ? 125 : 0;
 
       // 6. Delete existing claims for this month
       await supabase

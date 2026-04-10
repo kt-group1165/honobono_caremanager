@@ -199,6 +199,217 @@ function FiscalYearRatesSection() {
   );
 }
 
+// ─── 年度別特定事業所加算 ──────────────────────────────────────────────────
+
+interface TokuteiKassanRate {
+  id?: string;
+  fiscal_year: string;
+  business_type: string;
+  kassan_type: string;
+  units: number;
+}
+
+const KASSAN_TYPES = ["Ⅰ", "Ⅱ", "Ⅲ", "A"];
+const BUSINESS_TYPES = ["居宅介護支援", "訪問介護"];
+
+function FiscalYearTokuteiKassanSection() {
+  const supabase = createClient();
+  const [rates, setRates] = useState<TokuteiKassanRate[]>([]);
+  const [loadingRates, setLoadingRates] = useState(true);
+  const [savingRates, setSavingRates] = useState(false);
+  const [newFy, setNewFy] = useState("");
+  const [newBt, setNewBt] = useState(BUSINESS_TYPES[0]);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoadingRates(true);
+      const { data } = await supabase
+        .from("kaigo_tokutei_kassan_rates")
+        .select("*")
+        .order("fiscal_year", { ascending: false })
+        .order("business_type")
+        .order("kassan_type");
+      setRates((data as TokuteiKassanRate[]) ?? []);
+      setLoadingRates(false);
+    };
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Unique [fiscal_year, business_type] combinations
+  const groups = [...new Set(rates.map((r) => `${r.fiscal_year}|${r.business_type}`))]
+    .sort()
+    .reverse();
+
+  const updateRate = (fy: string, bt: string, kt: string, units: number) => {
+    setRates((prev) =>
+      prev.map((r) =>
+        r.fiscal_year === fy && r.business_type === bt && r.kassan_type === kt
+          ? { ...r, units }
+          : r
+      )
+    );
+  };
+
+  const addGroup = () => {
+    if (!newFy) { toast.error("年度を入力してください"); return; }
+    if (groups.includes(`${newFy}|${newBt}`)) { toast.error("既に存在します"); return; }
+    const newRows: TokuteiKassanRate[] = KASSAN_TYPES.map((kt) => ({
+      fiscal_year: newFy,
+      business_type: newBt,
+      kassan_type: kt,
+      units: 0,
+    }));
+    setRates((prev) => [...newRows, ...prev]);
+    setNewFy("");
+  };
+
+  const deleteGroup = async (fy: string, bt: string) => {
+    if (!window.confirm(`${fy}年度 ${bt} のデータを削除しますか？`)) return;
+    await supabase
+      .from("kaigo_tokutei_kassan_rates")
+      .delete()
+      .eq("fiscal_year", fy)
+      .eq("business_type", bt);
+    setRates((prev) => prev.filter((r) => !(r.fiscal_year === fy && r.business_type === bt)));
+    toast.success("削除しました");
+  };
+
+  const saveRates = async () => {
+    setSavingRates(true);
+    try {
+      for (const r of rates) {
+        if (r.id) {
+          await supabase
+            .from("kaigo_tokutei_kassan_rates")
+            .update({ units: r.units })
+            .eq("id", r.id);
+        } else {
+          const { data } = await supabase
+            .from("kaigo_tokutei_kassan_rates")
+            .upsert(
+              {
+                fiscal_year: r.fiscal_year,
+                business_type: r.business_type,
+                kassan_type: r.kassan_type,
+                units: r.units,
+              },
+              { onConflict: "fiscal_year,business_type,kassan_type" }
+            )
+            .select("id")
+            .single();
+          if (data) r.id = data.id;
+        }
+      }
+      toast.success("特定事業所加算単位数を保存しました");
+    } catch (err) {
+      toast.error("保存に失敗しました");
+      console.error(err);
+    } finally {
+      setSavingRates(false);
+    }
+  };
+
+  if (loadingRates) {
+    return (
+      <div className="rounded-lg border bg-white p-6 shadow-sm">
+        <div className="flex items-center gap-2 mb-4">
+          <CalendarDays size={20} className="text-purple-600" />
+          <h2 className="text-lg font-semibold text-gray-900">年度別 特定事業所加算 単位数</h2>
+        </div>
+        <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-purple-500" /></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border bg-white p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <CalendarDays size={20} className="text-purple-600" />
+          <h2 className="text-lg font-semibold text-gray-900">年度別 特定事業所加算 単位数</h2>
+        </div>
+        <button onClick={saveRates} disabled={savingRates} className="flex items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-sm text-white hover:bg-purple-700 disabled:opacity-50">
+          {savingRates ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} 保存
+        </button>
+      </div>
+      <p className="text-xs text-gray-500 mb-4">居宅介護支援・訪問介護などサービス種別・年度ごとに特定事業所加算の単位数を管理します。</p>
+
+      {/* Add group */}
+      <div className="flex items-center gap-2 mb-4">
+        <input
+          type="text"
+          value={newFy}
+          onChange={(e) => setNewFy(e.target.value)}
+          placeholder="年度（例: 2027）"
+          className="rounded border px-3 py-1.5 text-sm w-32 focus:border-purple-500 focus:outline-none"
+        />
+        <select
+          value={newBt}
+          onChange={(e) => setNewBt(e.target.value)}
+          className="rounded border px-3 py-1.5 text-sm focus:border-purple-500 focus:outline-none"
+        >
+          {BUSINESS_TYPES.map((bt) => <option key={bt} value={bt}>{bt}</option>)}
+        </select>
+        <button onClick={addGroup} className="flex items-center gap-1 rounded border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+          <Plus size={14} /> 追加
+        </button>
+      </div>
+
+      {/* Tables */}
+      <div className="space-y-4">
+        {groups.map((key) => {
+          const [fy, bt] = key.split("|");
+          const groupRates = rates.filter((r) => r.fiscal_year === fy && r.business_type === bt);
+          return (
+            <div key={key} className="rounded-lg border overflow-hidden">
+              <div className="flex items-center justify-between bg-gray-50 px-4 py-2">
+                <h3 className="text-sm font-bold text-gray-800">
+                  {fy}年度 - <span className="text-purple-700">{bt}</span>
+                </h3>
+                <button onClick={() => deleteGroup(fy, bt)} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1">
+                  <Trash2 size={12} /> 削除
+                </button>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-t">
+                    <th className="px-3 py-2 text-left text-xs text-gray-600">区分</th>
+                    <th className="px-3 py-2 text-right text-xs text-gray-600">単位数</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {KASSAN_TYPES.map((kt) => {
+                    const r = groupRates.find((x) => x.kassan_type === kt);
+                    if (!r) return null;
+                    return (
+                      <tr key={kt}>
+                        <td className="px-3 py-1.5 text-sm font-medium">特定事業所加算 {kt}</td>
+                        <td className="px-3 py-1.5">
+                          <input
+                            type="number"
+                            value={r.units}
+                            onChange={(e) => updateRate(fy, bt, kt, parseInt(e.target.value) || 0)}
+                            className="w-32 text-right rounded border px-2 py-1 text-sm focus:border-purple-500 focus:outline-none"
+                          />
+                          <span className="ml-2 text-xs text-gray-400">単位</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
+        {groups.length === 0 && (
+          <p className="text-sm text-gray-400 text-center py-4">データがありません。Supabaseでマイグレーション015を実行してください。</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -390,6 +601,9 @@ export default function SettingsPage() {
 
       {/* 年度別単位数管理 */}
       <FiscalYearRatesSection />
+
+      {/* 年度別特定事業所加算管理 */}
+      <FiscalYearTokuteiKassanSection />
     </div>
   );
 }
