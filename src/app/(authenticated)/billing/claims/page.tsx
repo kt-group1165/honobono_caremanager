@@ -655,7 +655,7 @@ export default function ClaimsPage() {
     } catch (err: unknown) {
       toast.error(
         "レセプトデータの取得に失敗しました: " +
-          (err instanceof Error ? err.message : String(err))
+          (err instanceof Error ? err.message : typeof err === "object" && err !== null && "message" in err ? String((err as any).message) : JSON.stringify(err))
       );
     } finally {
       setLoading(false);
@@ -819,20 +819,50 @@ export default function ClaimsPage() {
         return;
       }
 
-      const { error: insertErr } = await supabase
+      let { error: insertErr } = await supabase
         .from("kaigo_care_support_claims")
         .insert(rows);
-      if (insertErr) throw insertErr;
+
+      // 拡張カラム（migration 008）が未適用の場合、基本カラムのみでリトライ
+      if (insertErr) {
+        console.warn("Full insert failed, retrying with base columns only:", insertErr);
+        const baseRows = rows.map((r) => ({
+          user_id: r.user_id,
+          billing_month: r.billing_month,
+          care_support_code: r.care_support_code,
+          care_support_name: r.care_support_name,
+          units: r.units,
+          unit_price: r.unit_price,
+          total_amount: r.total_amount,
+          insurance_amount: r.insurance_amount,
+          initial_addition: r.initial_addition,
+          initial_addition_units: r.initial_addition_units,
+          hospital_coordination: r.hospital_coordination,
+          hospital_coordination_units: r.hospital_coordination_units,
+          discharge_addition: r.discharge_addition,
+          discharge_addition_units: r.discharge_addition_units,
+          medical_coordination: r.medical_coordination,
+          medical_coordination_units: r.medical_coordination_units,
+          status: r.status,
+          created_at: r.created_at,
+        }));
+        const { error: retryErr } = await supabase
+          .from("kaigo_care_support_claims")
+          .insert(baseRows);
+        if (retryErr) throw retryErr;
+        toast.info("基本カラムのみで生成しました（拡張加算カラムのマイグレーションを実行してください）");
+      }
 
       toast.success(
         `${formatMonth(billingMonth)}のレセプトを${rows.length}件生成しました`
       );
       fetchClaims();
     } catch (err: unknown) {
-      toast.error(
-        "一括生成に失敗しました: " +
-          (err instanceof Error ? err.message : String(err))
-      );
+      const msg = err instanceof Error ? err.message
+        : typeof err === "object" && err !== null && "message" in err ? String((err as any).message)
+        : JSON.stringify(err);
+      toast.error("一括生成に失敗しました: " + msg);
+      console.error("一括生成エラー:", err);
     } finally {
       setGenerating(false);
     }
@@ -854,7 +884,7 @@ export default function ClaimsPage() {
     } catch (err: unknown) {
       toast.error(
         "更新に失敗しました: " +
-          (err instanceof Error ? err.message : String(err))
+          (err instanceof Error ? err.message : typeof err === "object" && err !== null && "message" in err ? String((err as any).message) : JSON.stringify(err))
       );
     }
   };
@@ -888,7 +918,7 @@ export default function ClaimsPage() {
     } catch (err: unknown) {
       toast.error(
         "全件確定に失敗しました: " +
-          (err instanceof Error ? err.message : String(err))
+          (err instanceof Error ? err.message : typeof err === "object" && err !== null && "message" in err ? String((err as any).message) : JSON.stringify(err))
       );
     } finally {
       setConfirmingAll(false);
@@ -953,7 +983,7 @@ export default function ClaimsPage() {
     } catch (err: unknown) {
       toast.error(
         "更新に失敗しました: " +
-          (err instanceof Error ? err.message : String(err))
+          (err instanceof Error ? err.message : typeof err === "object" && err !== null && "message" in err ? String((err as any).message) : JSON.stringify(err))
       );
     }
   };
