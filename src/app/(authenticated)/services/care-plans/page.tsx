@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { UserSidebar } from "@/components/users/user-sidebar";
 import {
   Plus,
   Pencil,
@@ -109,7 +110,7 @@ export default function CarePlansPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [services, setServices] = useState<CarePlanService[]>([{ ...EMPTY_SERVICE }]);
   const [filterStatus, setFilterStatus] = useState<PlanStatus | "">("");
-  const [filterUser, setFilterUser] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [providersMaster, setProvidersMaster] = useState<{ provider_name: string; service_categories: string[] }[]>([]);
 
   // 事業所マスタ取得
@@ -122,14 +123,19 @@ export default function CarePlansPage() {
   }, [supabase]);
 
   const fetchPlans = useCallback(async () => {
+    if (!selectedUserId) {
+      setPlans([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     let query = supabase
       .from("kaigo_care_plans")
       .select("*, kaigo_users(name), kaigo_care_plan_services(*)")
+      .eq("user_id", selectedUserId)
       .order("created_at", { ascending: false });
 
     if (filterStatus) query = query.eq("status", filterStatus);
-    if (filterUser) query = query.eq("user_id", filterUser);
 
     const { data, error } = await query;
     if (error) {
@@ -138,7 +144,7 @@ export default function CarePlansPage() {
       setPlans(data || []);
     }
     setLoading(false);
-  }, [supabase, filterStatus, filterUser]);
+  }, [supabase, filterStatus, selectedUserId]);
 
   const fetchUsers = useCallback(async () => {
     const { data } = await supabase
@@ -158,7 +164,7 @@ export default function CarePlansPage() {
 
   const openCreateDialog = () => {
     setEditingPlan(null);
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, user_id: selectedUserId ?? "" });
     setServices([{ ...EMPTY_SERVICE }]);
     setDialogOpen(true);
   };
@@ -188,6 +194,17 @@ export default function CarePlansPage() {
     );
     setDialogOpen(true);
   };
+
+  // 選択中ユーザーが変わったら展開・編集状態をリセット
+  useEffect(() => {
+    setExpandedPlan(null);
+    setEditingPlan(null);
+    setDialogOpen(false);
+  }, [selectedUserId]);
+
+  // 選択中ユーザーの名前
+  const selectedUserName =
+    users.find((u) => u.id === selectedUserId)?.name ?? "";
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -292,70 +309,126 @@ export default function CarePlansPage() {
     }
   };
 
+  // プレビュー対象: 編集中ならフォーム、そうでなければ展開中プラン
+  const previewTarget: {
+    user_name: string;
+    plan_number: string;
+    plan_type: string;
+    start_date: string;
+    end_date: string;
+    long_term_goals: string;
+    short_term_goals: string;
+    status: PlanStatus;
+    services: CarePlanService[];
+  } | null = dialogOpen
+    ? {
+        user_name: selectedUserName,
+        plan_number: form.plan_number,
+        plan_type: form.plan_type,
+        start_date: form.start_date,
+        end_date: form.end_date,
+        long_term_goals: form.long_term_goals,
+        short_term_goals: form.short_term_goals,
+        status: form.status,
+        services,
+      }
+    : expandedPlan
+      ? (() => {
+          const p = plans.find((pl) => pl.id === expandedPlan);
+          if (!p) return null;
+          return {
+            user_name: p.kaigo_users?.name ?? "",
+            plan_number: p.plan_number,
+            plan_type: p.plan_type,
+            start_date: p.start_date,
+            end_date: p.end_date,
+            long_term_goals: p.long_term_goals,
+            short_term_goals: p.short_term_goals,
+            status: p.status,
+            services: p.kaigo_care_plan_services ?? [],
+          };
+        })()
+      : null;
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <FileText className="text-blue-600" size={24} />
-          <h1 className="text-xl font-bold text-gray-900">ケアプラン管理</h1>
-          <span className="ml-2 rounded-full bg-gray-100 px-2.5 py-0.5 text-sm text-gray-600">
-            {plans.length}件
-          </span>
-        </div>
-        <button
-          onClick={openCreateDialog}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={16} />
-          新規作成
-        </button>
-      </div>
+    <div className="flex h-full -m-6">
+      <UserSidebar selectedUserId={selectedUserId} onSelectUser={setSelectedUserId} />
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value as PlanStatus | "")}
-          className="rounded-lg border px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        >
-          <option value="">すべてのステータス</option>
-          {(Object.entries(STATUS_CONFIG) as [PlanStatus, { label: string }][]).map(
-            ([key, { label }]) => (
-              <option key={key} value={key}>{label}</option>
-            )
-          )}
-        </select>
-        <select
-          value={filterUser}
-          onChange={(e) => setFilterUser(e.target.value)}
-          className="rounded-lg border px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        >
-          <option value="">すべての利用者</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>{u.name}</option>
-          ))}
-        </select>
-        {(filterStatus || filterUser) && (
+      {/* 中央: プラン一覧 + フォーム */}
+      <div className="flex-1 flex flex-col min-w-0 border-r border-gray-200 overflow-y-auto">
+        <div className="border-b bg-white px-5 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FileText className="text-blue-600" size={20} />
+            <h1 className="text-base font-bold text-gray-900">ケアプラン管理</h1>
+            {selectedUserName && (
+              <span className="text-sm text-gray-500">
+                — {selectedUserName}
+              </span>
+            )}
+            <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+              {plans.length}件
+            </span>
+          </div>
           <button
-            onClick={() => { setFilterStatus(""); setFilterUser(""); }}
-            className="text-sm text-blue-600 hover:underline"
+            onClick={openCreateDialog}
+            disabled={!selectedUserId}
+            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            リセット
+            <Plus size={14} />
+            新規作成
           </button>
-        )}
-      </div>
+        </div>
 
-      {/* Plan List */}
-      {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 size={24} className="animate-spin text-blue-500" />
-        </div>
-      ) : plans.length === 0 ? (
-        <div className="rounded-lg border bg-white py-16 text-center text-sm text-gray-500">
-          ケアプランがありません
-        </div>
-      ) : (
+        <div className="p-5 space-y-4">
+          {/* Filter */}
+          {selectedUserId && (
+            <div className="flex items-center gap-2">
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value as PlanStatus | "")}
+                className="rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">すべてのステータス</option>
+                {(Object.entries(STATUS_CONFIG) as [PlanStatus, { label: string }][]).map(
+                  ([key, { label }]) => (
+                    <option key={key} value={key}>{label}</option>
+                  )
+                )}
+              </select>
+              {filterStatus && (
+                <button
+                  onClick={() => setFilterStatus("")}
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  リセット
+                </button>
+              )}
+            </div>
+          )}
+
+          {!selectedUserId ? (
+            <div className="rounded-lg border bg-white py-16 text-center">
+              <FileText size={40} className="mx-auto mb-3 text-gray-300" />
+              <p className="text-sm text-gray-500">左の一覧から利用者を選択してください</p>
+            </div>
+          ) : loading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 size={24} className="animate-spin text-blue-500" />
+            </div>
+          ) : plans.length === 0 ? (
+            <div className="rounded-lg border bg-white py-10 text-center text-sm text-gray-500">
+              {selectedUserName} さんのケアプランはまだありません
+              <div className="mt-2">
+                <button
+                  onClick={openCreateDialog}
+                  className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                >
+                  <Plus size={12} />
+                  新規作成
+                </button>
+              </div>
+            </div>
+          ) : (
         <div className="space-y-3">
           {plans.map((plan) => {
             const isExpanded = expandedPlan === plan.id;
@@ -467,41 +540,33 @@ export default function CarePlansPage() {
         </div>
       )}
 
-      {/* Create/Edit Dialog */}
+      {/* Create/Edit Form (inline) */}
       {dialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto">
-          <div className="w-full max-w-3xl rounded-xl bg-white shadow-xl my-4">
-            <div className="flex items-center justify-between border-b px-6 py-4 sticky top-0 bg-white z-10 rounded-t-xl">
-              <h2 className="text-base font-semibold text-gray-900">
-                {editingPlan ? "ケアプランを編集" : "新規ケアプラン作成"}
-              </h2>
-              <button
-                onClick={() => setDialogOpen(false)}
-                className="rounded p-1 text-gray-400 hover:text-gray-600"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <form onSubmit={handleSave} className="p-6 space-y-6">
+        <div className="rounded-lg border bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b px-5 py-3">
+            <h2 className="text-sm font-semibold text-gray-900">
+              {editingPlan ? "ケアプランを編集" : "新規ケアプラン作成"}
+            </h2>
+            <button
+              onClick={() => setDialogOpen(false)}
+              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              title="閉じる"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <form onSubmit={handleSave} className="p-5 space-y-5">
               {/* Basic Info */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 mb-3 pb-1 border-b">基本情報</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      利用者 <span className="text-red-500">*</span>
+                      利用者
                     </label>
-                    <select
-                      required
-                      value={form.user_id}
-                      onChange={(e) => setForm({ ...form, user_id: e.target.value })}
-                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    >
-                      <option value="">選択してください</option>
-                      {users.map((u) => (
-                        <option key={u.id} value={u.id}>{u.name}</option>
-                      ))}
-                    </select>
+                    <div className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                      {selectedUserName || "—"}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -695,27 +760,126 @@ export default function CarePlansPage() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-2">
+              <div className="flex justify-end gap-2 pt-2 border-t">
                 <button
                   type="button"
                   onClick={() => setDialogOpen(false)}
-                  className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="rounded border border-gray-300 bg-white px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   キャンセル
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  className="flex items-center gap-1 rounded bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
-                  {saving && <Loader2 size={14} className="animate-spin" />}
+                  {saving && <Loader2 size={12} className="animate-spin" />}
                   {editingPlan ? "更新する" : "登録する"}
                 </button>
               </div>
             </form>
-          </div>
         </div>
       )}
+
+        </div>
+      </div>
+
+      {/* 右側: プレビューパネル */}
+      <div className="w-[420px] shrink-0 overflow-y-auto bg-gray-50">
+        <div className="border-b bg-white px-4 py-3 flex items-center gap-2">
+          <FileText className="text-indigo-600" size={16} />
+          <h2 className="text-sm font-semibold text-gray-900">ケアプランプレビュー</h2>
+        </div>
+        <div className="p-4">
+          {!previewTarget ? (
+            <div className="rounded-lg border border-dashed bg-white py-12 text-center text-xs text-gray-400">
+              プランを選択または編集するとプレビューが表示されます
+            </div>
+          ) : (
+            <div className="space-y-3 rounded-lg border bg-white p-4 shadow-sm text-xs">
+              {/* 第1表風プレビュー */}
+              <div className="border-b pb-2">
+                <div className="text-[10px] text-gray-500 mb-0.5">居宅サービス計画書（第1表）</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <div className="text-[9px] text-gray-500">利用者氏名</div>
+                    <div className="font-semibold">{previewTarget.user_name || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] text-gray-500">計画番号</div>
+                    <div>{previewTarget.plan_number || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] text-gray-500">計画種別</div>
+                    <div>{previewTarget.plan_type || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] text-gray-500">ステータス</div>
+                    <div>
+                      <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${STATUS_CONFIG[previewTarget.status].cls}`}>
+                        {STATUS_CONFIG[previewTarget.status].label}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <div className="text-[9px] text-gray-500">計画期間</div>
+                  <div>
+                    {formatDate(previewTarget.start_date)} 〜 {formatDate(previewTarget.end_date)}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[9px] text-gray-500 mb-0.5">長期目標</div>
+                <div className="whitespace-pre-wrap rounded bg-gray-50 p-2 min-h-[40px]">
+                  {previewTarget.long_term_goals || "（未入力）"}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[9px] text-gray-500 mb-0.5">短期目標</div>
+                <div className="whitespace-pre-wrap rounded bg-gray-50 p-2 min-h-[40px]">
+                  {previewTarget.short_term_goals || "（未入力）"}
+                </div>
+              </div>
+
+              {/* 第2表風: サービス内容 */}
+              <div className="border-t pt-2">
+                <div className="text-[10px] text-gray-500 mb-1">サービス内容（第2表）</div>
+                {previewTarget.services.filter((s) => s.service_type).length === 0 ? (
+                  <div className="text-center text-[10px] text-gray-400 py-2">
+                    サービスが登録されていません
+                  </div>
+                ) : (
+                  <table className="w-full border-collapse text-[10px]">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="border border-gray-300 px-1 py-1 text-left">種別</th>
+                        <th className="border border-gray-300 px-1 py-1 text-left">内容</th>
+                        <th className="border border-gray-300 px-1 py-1 text-left">頻度</th>
+                        <th className="border border-gray-300 px-1 py-1 text-left">提供者</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewTarget.services
+                        .filter((s) => s.service_type)
+                        .map((svc, i) => (
+                          <tr key={i}>
+                            <td className="border border-gray-300 px-1 py-1">{svc.service_type}</td>
+                            <td className="border border-gray-300 px-1 py-1">{svc.service_content || "—"}</td>
+                            <td className="border border-gray-300 px-1 py-1">{svc.frequency || "—"}</td>
+                            <td className="border border-gray-300 px-1 py-1">{svc.provider || "—"}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Delete Dialog */}
       {deleteDialogOpen && deleteTarget && (
