@@ -906,8 +906,11 @@ function EditFormCarePlan3({ content, onChange }: {
                       {row.period}
                     </td>
                   )}
-                  <td className="border border-gray-300 bg-gray-50 text-right text-[11px] text-gray-600 px-1 py-0.5 w-12 align-top tabular-nums">
+                  <td className="border border-gray-300 bg-gray-50 text-right text-[11px] text-gray-600 px-1 py-0.5 w-12 align-top tabular-nums relative">
                     {row.time}
+                    {ri === CARE_PLAN3_TIME_ROWS.length - 1 && (
+                      <span className="absolute bottom-0.5 right-1 text-[11px] text-gray-600">24:00</span>
+                    )}
                   </td>
                   {WEEK_DAYS.map((d, di) => (
                     <td
@@ -937,12 +940,6 @@ function EditFormCarePlan3({ content, onChange }: {
                   )}
                 </tr>
               ))}
-              <tr>
-                <td className="border border-gray-300 bg-gray-50 text-right text-[11px] text-gray-400 px-1 py-0 tabular-nums" colSpan={2}>
-                  24:00
-                </td>
-                <td className="border-0" colSpan={8}></td>
-              </tr>
             </tbody>
           </table>
         </div>
@@ -1211,66 +1208,109 @@ function EditFormServiceTicket({ content, onChange }: {
         }}
       />
 
-      {/* 時間帯選択モーダル */}
+      {/* 提供時間帯モーダル（開始時刻・終了時刻を直接入力） */}
       {timeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setTimeModalOpen(false)}>
-          <div className="bg-white rounded-xl shadow-xl w-80 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b px-4 py-3">
-              <h3 className="text-sm font-bold text-gray-800">提供時間帯</h3>
-              <button onClick={() => setTimeModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
-            </div>
-            <div className="p-3 space-y-1">
-              {[
-                { label: "週1回", value: "週1回" },
-                { label: "週2回", value: "週2回" },
-                { label: "週3回", value: "週3回" },
-                { label: "週4回", value: "週4回" },
-                { label: "週5回", value: "週5回" },
-                { label: "週6回", value: "週6回" },
-                { label: "週7回（毎日）", value: "毎日" },
-                { label: "月2回", value: "月2回" },
-                { label: "月4回", value: "月4回" },
-                { label: "常時", value: "常時" },
-                { label: "6:00〜8:00", value: "6:00〜8:00" },
-                { label: "8:00〜10:00", value: "8:00〜10:00" },
-                { label: "9:00〜12:00", value: "9:00〜12:00" },
-                { label: "9:00〜16:00", value: "9:00〜16:00" },
-                { label: "9:00〜17:00", value: "9:00〜17:00" },
-                { label: "10:00〜16:00", value: "10:00〜16:00" },
-                { label: "13:00〜16:00", value: "13:00〜16:00" },
-                { label: "14:00〜16:00", value: "14:00〜16:00" },
-                { label: "16:00〜18:00", value: "16:00〜18:00" },
-              ].map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => {
-                    if (timeModalTarget !== null) updateSvc(timeModalTarget, "time", opt.value);
-                    setTimeModalOpen(false);
-                    setTimeModalTarget(null);
-                  }}
-                  className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-colors"
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            <div className="border-t px-4 py-3">
+        <TimeRangeModal
+          initial={timeModalTarget !== null ? (services[timeModalTarget]?.time ?? "") : ""}
+          onCancel={() => { setTimeModalOpen(false); setTimeModalTarget(null); }}
+          onSubmit={(value) => {
+            if (timeModalTarget !== null) updateSvc(timeModalTarget, "time", value);
+            setTimeModalOpen(false);
+            setTimeModalTarget(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 時間帯入力モーダル（開始〜終了を直接入力）
+// ---------------------------------------------------------------------------
+function TimeRangeModal({
+  initial,
+  onCancel,
+  onSubmit,
+}: {
+  initial: string;
+  onCancel: () => void;
+  onSubmit: (value: string) => void;
+}) {
+  const parseInitial = (raw: string): { start: string; end: string } => {
+    const m = raw.match(/^(\d{1,2}):?(\d{2})?\s*[〜~\-]\s*(\d{1,2}):?(\d{2})?$/);
+    if (m) {
+      const sh = m[1].padStart(2, "0");
+      const sm = (m[2] ?? "00").padStart(2, "0");
+      const eh = m[3].padStart(2, "0");
+      const em = (m[4] ?? "00").padStart(2, "0");
+      return { start: `${sh}:${sm}`, end: `${eh}:${em}` };
+    }
+    return { start: "", end: "" };
+  };
+  const parsed = parseInitial(initial);
+  const [start, setStart] = useState(parsed.start || "09:00");
+  const [end, setEnd] = useState(parsed.end || "10:00");
+
+  const handleOk = () => {
+    if (!start || !end) return;
+    onSubmit(`${start}〜${end}`);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      onClick={onCancel}
+    >
+      <div
+        className="bg-white rounded-xl shadow-xl w-80"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <h3 className="text-sm font-bold text-gray-800">提供時間帯</h3>
+          <button onClick={onCancel} className="text-gray-400 hover:text-gray-600">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">開始時刻</label>
               <input
-                type="text"
-                placeholder="その他（自由入力）"
-                className="w-full rounded-md border px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && e.currentTarget.value) {
-                    if (timeModalTarget !== null) updateSvc(timeModalTarget, "time", e.currentTarget.value);
-                    setTimeModalOpen(false);
-                    setTimeModalTarget(null);
-                  }
-                }}
+                type="time"
+                value={start}
+                onChange={(e) => setStart(e.target.value)}
+                className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">終了時刻</label>
+              <input
+                type="time"
+                value={end}
+                onChange={(e) => setEnd(e.target.value)}
+                className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
           </div>
+          <div className="text-xs text-gray-500 text-center">
+            プレビュー: <span className="font-semibold text-gray-800">{start}〜{end}</span>
+          </div>
         </div>
-      )}
+        <div className="flex justify-end gap-2 border-t px-4 py-3">
+          <button
+            onClick={onCancel}
+            className="rounded-md border border-gray-300 bg-white px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            キャンセル
+          </button>
+          <button
+            onClick={handleOk}
+            className="rounded-md bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+          >
+            OK
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -2034,7 +2074,7 @@ function PrintCarePlan3({ c }: { c: Record<string, unknown> }) {
         </thead>
         <tbody>
           {CARE_PLAN3_TIME_ROWS.map((row, ri) => (
-            <tr key={row.key} style={{ height: "30px" }}>
+            <tr key={row.key} style={{ height: ri === CARE_PLAN3_TIME_ROWS.length - 1 ? "36px" : "30px" }}>
               {row.periodSpan && (
                 <td
                   rowSpan={row.periodSpan}
@@ -2052,8 +2092,11 @@ function PrintCarePlan3({ c }: { c: Record<string, unknown> }) {
                   {row.period}
                 </td>
               )}
-              <td style={{ ...thStyle, fontSize: "8pt", textAlign: "right", padding: "2px 4px", backgroundColor: "#fff", fontWeight: "normal", verticalAlign: "top" }}>
+              <td style={{ ...thStyle, fontSize: "8pt", textAlign: "right", padding: "2px 4px", backgroundColor: "#fff", fontWeight: "normal", verticalAlign: "top", position: "relative" }}>
                 {row.time}
+                {ri === CARE_PLAN3_TIME_ROWS.length - 1 && (
+                  <span style={{ position: "absolute", bottom: "2px", right: "4px", fontSize: "8pt" }}>24:00</span>
+                )}
               </td>
               {WEEK_DAYS.map((d) => (
                 <td
@@ -2079,13 +2122,6 @@ function PrintCarePlan3({ c }: { c: Record<string, unknown> }) {
               )}
             </tr>
           ))}
-          {/* 最終行の下辺に 24:00 を表示（様式準拠） */}
-          <tr style={{ height: "12px" }}>
-            <td colSpan={2} style={{ ...thStyle, fontSize: "8pt", textAlign: "right", padding: "0 4px", backgroundColor: "#fff", fontWeight: "normal", borderTop: "none" }}>
-              24:00
-            </td>
-            <td colSpan={8} style={{ border: "none" }}></td>
-          </tr>
         </tbody>
       </table>
 
