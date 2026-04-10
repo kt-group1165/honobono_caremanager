@@ -327,7 +327,65 @@ export default function MonitoringPage() {
         .eq("user_id", selectedUserId)
         .order("start_date", { ascending: false });
       if (error) throw error;
-      const plans = (data as CarePlanSummary[]) ?? [];
+      let plans = (data as CarePlanSummary[]) ?? [];
+
+      // 自動移行: kaigo_care_plans が空でも帳票画面の計画書が存在すれば
+      // それを元に kaigo_care_plans レコードを作成する
+      if (plans.length === 0) {
+        const { data: existingDocs } = await supabase
+          .from("kaigo_report_documents")
+          .select("id, certification_id, content, updated_at")
+          .eq("user_id", selectedUserId)
+          .eq("report_type", "care-plan-1")
+          .order("updated_at", { ascending: false })
+          .limit(1);
+
+        if (existingDocs && existingDocs.length > 0) {
+          // 認定情報から期間を取得
+          const { data: certArr } = await supabase
+            .from("kaigo_care_certifications")
+            .select("start_date, end_date")
+            .eq("user_id", selectedUserId)
+            .order("start_date", { ascending: false })
+            .limit(1);
+          const cert = certArr?.[0];
+          const today = format(new Date(), "yyyy-MM-dd");
+          const startDate = cert?.start_date ?? today;
+          let endDate = cert?.end_date ?? "";
+          if (!endDate) {
+            const d = new Date(startDate);
+            d.setFullYear(d.getFullYear() + 1);
+            d.setDate(d.getDate() - 1);
+            endDate = format(d, "yyyy-MM-dd");
+          }
+
+          const { data: newPlan, error: insErr } = await supabase
+            .from("kaigo_care_plans")
+            .insert({
+              user_id: selectedUserId,
+              plan_number: "",
+              plan_type: "居宅サービス計画",
+              start_date: startDate,
+              end_date: endDate,
+              long_term_goals: "",
+              short_term_goals: "",
+              status: "active",
+            })
+            .select("id, plan_number, plan_type, start_date, end_date, status, short_term_goals")
+            .single();
+          if (!insErr && newPlan) {
+            plans = [newPlan as CarePlanSummary];
+            // 既存の計画書ドキュメントに care_plan_id を紐づけ
+            const docId = (existingDocs[0] as { id: string }).id;
+            await supabase
+              .from("kaigo_report_documents")
+              .update({ care_plan_id: (newPlan as { id: string }).id })
+              .eq("id", docId);
+            toast.success("既存の計画書からケアプラン情報を復元しました");
+          }
+        }
+      }
+
       setCarePlans(plans);
       // 初期選択: active の最新、なければ先頭
       if (plans.length > 0) {
