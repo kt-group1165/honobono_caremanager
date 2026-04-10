@@ -51,7 +51,19 @@ interface MonitoringSheet {
   monitoring_date: string;
   assessor_name: string;
   status: MonitoringStatus;
+  care_plan_id: string | null;
   created_at: string;
+}
+
+/** ケアプラン選択タブ表示用の軽量型 */
+interface CarePlanSummary {
+  id: string;
+  plan_number: string | null;
+  plan_type: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  status: string;
+  short_term_goals: string | null;
 }
 
 // Exactly mirrors kaigo_monitoring_items columns
@@ -249,6 +261,11 @@ export default function MonitoringPage() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<KaigoUser | null>(null);
 
+  // Care plan selection
+  const [carePlans, setCarePlans] = useState<CarePlanSummary[]>([]);
+  const [selectedCarePlanId, setSelectedCarePlanId] = useState<string | null>(null);
+  const [loadingCarePlans, setLoadingCarePlans] = useState(false);
+
   // List
   const [sheets, setSheets] = useState<MonitoringSheet[]>([]);
   const [loadingSheets, setLoadingSheets] = useState(false);
@@ -288,9 +305,53 @@ export default function MonitoringPage() {
       setMode("list");
     } else {
       setSelectedUser(null);
+      setCarePlans([]);
+      setSelectedCarePlanId(null);
       setMode("list");
     }
   }, [selectedUserId, fetchUser]);
+
+  // ── Care plans for selected user ────────────────────────────────────────────
+
+  const fetchCarePlans = useCallback(async () => {
+    if (!selectedUserId) {
+      setCarePlans([]);
+      setSelectedCarePlanId(null);
+      return;
+    }
+    setLoadingCarePlans(true);
+    try {
+      const { data, error } = await supabase
+        .from("kaigo_care_plans")
+        .select("id, plan_number, plan_type, start_date, end_date, status, short_term_goals")
+        .eq("user_id", selectedUserId)
+        .order("start_date", { ascending: false });
+      if (error) throw error;
+      const plans = (data as CarePlanSummary[]) ?? [];
+      setCarePlans(plans);
+      // 初期選択: active の最新、なければ先頭
+      if (plans.length > 0) {
+        setSelectedCarePlanId((prev) => {
+          if (prev && plans.some((p) => p.id === prev)) return prev;
+          const activePlan = plans.find((p) => p.status === "active");
+          return activePlan?.id ?? plans[0].id;
+        });
+      } else {
+        setSelectedCarePlanId(null);
+      }
+    } catch (err: unknown) {
+      toast.error(
+        "ケアプランの取得に失敗しました: " +
+          (err instanceof Error ? err.message : String(err))
+      );
+    } finally {
+      setLoadingCarePlans(false);
+    }
+  }, [supabase, selectedUserId]);
+
+  useEffect(() => {
+    fetchCarePlans();
+  }, [fetchCarePlans]);
 
   // ── Sheet list ───────────────────────────────────────────────────────────────
 
@@ -300,21 +361,27 @@ export default function MonitoringPage() {
       return;
     }
     setLoadingSheets(true);
-    const { data, error } = await supabase
+    let query = supabase
       .from("kaigo_monitoring_sheets")
       .select(
-        "id, user_id, monitoring_date, assessor_name, status, created_at"
+        "id, user_id, monitoring_date, assessor_name, status, care_plan_id, created_at"
       )
       .eq("user_id", selectedUserId)
       .order("monitoring_date", { ascending: false });
 
+    // 選択中のケアプランでフィルター（未選択時は全件）
+    if (selectedCarePlanId) {
+      query = query.eq("care_plan_id", selectedCarePlanId);
+    }
+
+    const { data, error } = await query;
     if (error) {
       toast.error("モニタリングシートの取得に失敗しました: " + error.message);
     } else {
       setSheets((data as MonitoringSheet[]) ?? []);
     }
     setLoadingSheets(false);
-  }, [supabase, selectedUserId]);
+  }, [supabase, selectedUserId, selectedCarePlanId]);
 
   useEffect(() => {
     if (mode === "list") fetchSheets();
@@ -323,55 +390,51 @@ export default function MonitoringPage() {
   // ── Care plan auto-fill ──────────────────────────────────────────────────────
 
   const loadCarePlanItems = useCallback(async () => {
-    if (!selectedUserId) return;
+    if (!selectedCarePlanId) {
+      toast.info("対応する計画期間を先に選択してください");
+      return;
+    }
     setLoadingCarePlan(true);
     try {
-      const { data: plans, error } = await supabase
+      const { data: plan, error } = await supabase
         .from("kaigo_care_plans")
         .select(
           "id, user_id, status, short_term_goals, start_date, end_date, kaigo_care_plan_services(*)"
         )
-        .eq("user_id", selectedUserId)
-        .eq("status", "active");
+        .eq("id", selectedCarePlanId)
+        .single();
 
       if (error) throw error;
-
-      const activePlans = (plans ?? []) as CarePlan[];
-      if (activePlans.length === 0) {
-        toast.info("有効なケアプランが見つかりません");
+      if (!plan) {
+        toast.info("ケアプランが見つかりません");
         return;
       }
 
+      const p = plan as CarePlan;
+      const services = p.kaigo_care_plan_services ?? [];
       const sourced: MonitoringItem[] = [];
       let num = 1;
 
-      for (const plan of activePlans) {
-        const services = plan.kaigo_care_plan_services ?? [];
-        if (services.length === 0) {
-          if (num <= FIXED_ROWS) {
-            sourced.push({
-              ...emptyItem(num),
-              short_term_goal: plan.short_term_goals ?? "",
-              goal_period_start: plan.start_date ?? "",
-              goal_period_end: plan.end_date ?? "",
-            });
-            num++;
-          }
-        } else {
-          for (const svc of services) {
-            if (num > FIXED_ROWS) break;
-            sourced.push({
-              ...emptyItem(num),
-              short_term_goal: plan.short_term_goals ?? "",
-              goal_period_start: plan.start_date ?? "",
-              goal_period_end: plan.end_date ?? "",
-              service_type: svc.service_type ?? "",
-              provider_name: svc.provider ?? "",
-            });
-            num++;
-          }
+      if (services.length === 0) {
+        sourced.push({
+          ...emptyItem(num),
+          short_term_goal: p.short_term_goals ?? "",
+          goal_period_start: p.start_date ?? "",
+          goal_period_end: p.end_date ?? "",
+        });
+      } else {
+        for (const svc of services) {
+          if (num > FIXED_ROWS) break;
+          sourced.push({
+            ...emptyItem(num),
+            short_term_goal: p.short_term_goals ?? "",
+            goal_period_start: p.start_date ?? "",
+            goal_period_end: p.end_date ?? "",
+            service_type: svc.service_type ?? "",
+            provider_name: svc.provider ?? "",
+          });
+          num++;
         }
-        if (num > FIXED_ROWS) break;
       }
 
       setItems(buildFixedRows(sourced));
@@ -384,11 +447,15 @@ export default function MonitoringPage() {
     } finally {
       setLoadingCarePlan(false);
     }
-  }, [supabase, selectedUserId]);
+  }, [supabase, selectedCarePlanId]);
 
   // ── Open new ─────────────────────────────────────────────────────────────────
 
   const openNew = async () => {
+    if (!selectedCarePlanId) {
+      toast.error("先に対応するケアプラン期間を選択してください");
+      return;
+    }
     setEditingSheetId(null);
     setMonitoringDate(format(new Date(), "yyyy-MM-dd"));
     setOfficeName("");
@@ -397,48 +464,42 @@ export default function MonitoringPage() {
     setItems(Array.from({ length: FIXED_ROWS }, (_, i) => emptyItem(i + 1)));
     setMode("edit");
 
-    // Auto-load care plan
+    // 選択されたケアプランから短期目標・サービス情報を自動セット
     setLoadingCarePlan(true);
     try {
-      const { data: plans, error } = await supabase
+      const { data: plan, error } = await supabase
         .from("kaigo_care_plans")
         .select(
           "id, user_id, status, short_term_goals, start_date, end_date, kaigo_care_plan_services(*)"
         )
-        .eq("user_id", selectedUserId!)
-        .eq("status", "active");
+        .eq("id", selectedCarePlanId)
+        .single();
 
-      if (!error && plans && plans.length > 0) {
-        const activePlans = plans as CarePlan[];
+      if (!error && plan) {
+        const p = plan as CarePlan;
+        const services = p.kaigo_care_plan_services ?? [];
         const sourced: MonitoringItem[] = [];
         let num = 1;
-        for (const plan of activePlans) {
-          const services = plan.kaigo_care_plan_services ?? [];
-          if (services.length === 0) {
-            if (num <= FIXED_ROWS) {
-              sourced.push({
-                ...emptyItem(num),
-                short_term_goal: plan.short_term_goals ?? "",
-                goal_period_start: plan.start_date ?? "",
-                goal_period_end: plan.end_date ?? "",
-              });
-              num++;
-            }
-          } else {
-            for (const svc of services) {
-              if (num > FIXED_ROWS) break;
-              sourced.push({
-                ...emptyItem(num),
-                short_term_goal: plan.short_term_goals ?? "",
-                goal_period_start: plan.start_date ?? "",
-                goal_period_end: plan.end_date ?? "",
-                service_type: svc.service_type ?? "",
-                provider_name: svc.provider ?? "",
-              });
-              num++;
-            }
+        if (services.length === 0) {
+          sourced.push({
+            ...emptyItem(num),
+            short_term_goal: p.short_term_goals ?? "",
+            goal_period_start: p.start_date ?? "",
+            goal_period_end: p.end_date ?? "",
+          });
+        } else {
+          for (const svc of services) {
+            if (num > FIXED_ROWS) break;
+            sourced.push({
+              ...emptyItem(num),
+              short_term_goal: p.short_term_goals ?? "",
+              goal_period_start: p.start_date ?? "",
+              goal_period_end: p.end_date ?? "",
+              service_type: svc.service_type ?? "",
+              provider_name: svc.provider ?? "",
+            });
+            num++;
           }
-          if (num > FIXED_ROWS) break;
         }
         if (sourced.length > 0) setItems(buildFixedRows(sourced));
       }
@@ -456,6 +517,7 @@ export default function MonitoringPage() {
     setMonitoringDate(sheet.monitoring_date);
     setAssessorName(sheet.assessor_name);
     setSheetStatus(sheet.status);
+    if (sheet.care_plan_id) setSelectedCarePlanId(sheet.care_plan_id);
 
     const { data: dbItems, error } = await supabase
       .from("kaigo_monitoring_items")
@@ -516,6 +578,7 @@ export default function MonitoringPage() {
             monitoring_date: monitoringDate,
             assessor_name: assessorName,
             status: sheetStatus,
+            care_plan_id: selectedCarePlanId,
           })
           .eq("id", sheetId);
         if (error) throw error;
@@ -527,6 +590,7 @@ export default function MonitoringPage() {
             monitoring_date: monitoringDate,
             assessor_name: assessorName,
             status: sheetStatus,
+            care_plan_id: selectedCarePlanId,
           })
           .select("id")
           .single();
@@ -633,12 +697,66 @@ export default function MonitoringPage() {
                 </div>
                 <button
                   onClick={openNew}
-                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                  disabled={!selectedCarePlanId}
+                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  title={!selectedCarePlanId ? "ケアプラン期間を選択してください" : ""}
                 >
                   <Plus size={16} />
                   新規作成
                 </button>
               </div>
+
+              {/* ケアプラン期間タブ */}
+              {loadingCarePlans ? (
+                <div className="rounded-lg border bg-white p-4 text-center text-xs text-gray-400">
+                  ケアプランを読み込み中...
+                </div>
+              ) : carePlans.length === 0 ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  有効なケアプランがありません。先にケアプランを作成してください。
+                </div>
+              ) : (
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">対応する計画期間を選択</div>
+                  <div className="border-b border-gray-200 overflow-x-auto">
+                    <div className="flex gap-1 min-w-max">
+                      {carePlans.map((plan) => {
+                        const isActive = selectedCarePlanId === plan.id;
+                        const fmt = (d: string | null) =>
+                          d ? format(parseISO(d), "yyyy/M/d") : "—";
+                        return (
+                          <button
+                            key={plan.id}
+                            onClick={() => setSelectedCarePlanId(plan.id)}
+                            className={`flex flex-col items-start px-4 py-2 text-xs border-b-2 whitespace-nowrap transition-colors ${
+                              isActive
+                                ? "border-blue-600 text-blue-700 bg-blue-50 font-semibold"
+                                : "border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                            }`}
+                          >
+                            <span className="font-bold">
+                              {plan.plan_type ?? "ケアプラン"}
+                              {plan.plan_number && (
+                                <span className="ml-1 font-normal text-gray-500">
+                                  #{plan.plan_number}
+                                </span>
+                              )}
+                              {plan.status === "active" && (
+                                <span className="ml-2 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+                                  有効
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-[10px] text-gray-500 mt-0.5">
+                              {fmt(plan.start_date)} 〜 {fmt(plan.end_date)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {loadingSheets ? (
                 <div className="flex items-center justify-center py-16">
@@ -752,6 +870,17 @@ export default function MonitoringPage() {
                       </span>
                     )}
                   </h1>
+                  {(() => {
+                    const plan = carePlans.find((p) => p.id === selectedCarePlanId);
+                    if (!plan) return null;
+                    const fmt = (d: string | null) => (d ? format(parseISO(d), "yyyy/M/d") : "—");
+                    return (
+                      <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs text-blue-700">
+                        <FileText size={10} />
+                        対象計画期間: {fmt(plan.start_date)} 〜 {fmt(plan.end_date)}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
