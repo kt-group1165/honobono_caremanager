@@ -48,7 +48,7 @@ const NAV_CARE_MANAGER: NavEntry[] = [
     icon: Briefcase,
     children: [
       { name: "アセスメント", href: "/assessments", icon: ClipboardCheck },
-      { name: "計画書", href: "/services/care-plans", icon: ClipboardList },
+      { name: "計画書", href: "/reports/care-plan-1", icon: ClipboardList },
       { name: "会議録", href: "/meeting-minutes", icon: MessagesSquare },
       { name: "利用・提供票", href: "/provision-sheets", icon: CalendarDays },
       { name: "モニタリング", href: "/monitoring", icon: Activity },
