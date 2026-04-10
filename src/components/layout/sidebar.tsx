@@ -51,13 +51,14 @@ const NAV_CARE_MANAGER: NavEntry[] = [
       { name: "計画書", href: "/reports/care-plan-1", icon: ClipboardList },
       { name: "会議録", href: "/meeting-minutes", icon: MessagesSquare },
       { name: "利用・提供票", href: "/reports/service-usage", icon: CalendarDays },
+      { name: "利用票別表", href: "/reports/service-usage-detail", icon: FileSpreadsheet },
       { name: "モニタリング", href: "/monitoring", icon: Activity },
       { name: "支援経過", href: "/support-records", icon: NotebookPen },
     ],
   },
   { name: "給付管理", href: "/billing/benefits", icon: Calculator },
   { name: "レセプト", href: "/billing/claims", icon: FileSpreadsheet },
-  { name: "帳票作成", href: "/reports", icon: FileText },
+  // 帳票作成: 全帳票がケアマネ業務メニューに移動したため非表示
   { name: "マスタ管理", href: "/master", icon: Settings },
   { name: "設定", href: "/settings", icon: UserCog },
 ];
