@@ -6,11 +6,13 @@ import { toast } from "sonner";
 import { Save, Building2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// 令和6年度改定 居宅介護支援 特定事業所加算
 const TOKUTEI_OPTIONS = [
   { value: "なし", label: "なし", units: 0 },
-  { value: "A", label: "特定事業所加算(A)", units: 505 },
-  { value: "B", label: "特定事業所加算(B)", units: 407 },
-  { value: "C", label: "特定事業所加算(C)", units: 309 },
+  { value: "Ⅰ", label: "特定事業所加算(Ⅰ)", units: 519 },
+  { value: "Ⅱ", label: "特定事業所加算(Ⅱ)", units: 421 },
+  { value: "Ⅲ", label: "特定事業所加算(Ⅲ)", units: 323 },
+  { value: "A", label: "特定事業所加算(A)", units: 114 },
 ];
 
 const AREA_CATEGORIES = [
@@ -56,6 +58,20 @@ export default function OfficeSettingsPage() {
   useEffect(() => {
     const fetch = async () => {
       const { data } = await supabase.from("kaigo_office_settings").select("*").limit(1).single();
+      if (data) {
+        // 旧区分（A/B/C）を新区分（Ⅰ/Ⅱ/Ⅲ）にマッピング
+        const raw = data.tokutei_kassan_type;
+        const mapping: Record<string, string> = {
+          A: "Ⅰ",  // 旧A(505) → 新Ⅰ(519)
+          B: "Ⅱ",  // 旧B(407) → 新Ⅱ(421)
+          C: "Ⅲ",  // 旧C(309) → 新Ⅲ(323)
+        };
+        if (raw && mapping[raw]) {
+          data.tokutei_kassan_type = mapping[raw];
+          const opt = TOKUTEI_OPTIONS.find((o) => o.value === data.tokutei_kassan_type);
+          if (opt) data.tokutei_kassan_units = opt.units;
+        }
+      }
       setForm(data as OfficeSettings | null);
       setLoading(false);
     };
