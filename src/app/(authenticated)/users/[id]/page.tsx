@@ -2,28 +2,15 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { differenceInYears, parseISO, format } from "date-fns";
+import { parseISO, format } from "date-fns";
 import {
-  ChevronLeft,
   Pencil,
   Save,
   X,
-  User,
 } from "lucide-react";
 import type { KaigoUser } from "@/types/database";
-
-const TABS = [
-  { label: "基本情報", href: "" },
-  { label: "介護認定", href: "/care-cert" },
-  { label: "医療保険", href: "/medical" },
-  { label: "ADL", href: "/adl" },
-  { label: "健康管理", href: "/health" },
-  { label: "親族・関係者", href: "/family" },
-  { label: "既往歴", href: "/history" },
-];
 
 const STATUS_LABELS: Record<string, string> = {
   active: "在籍中",
@@ -172,12 +159,6 @@ export default function UserDetailPage() {
 
   const baseHref = `/users/${id}`;
 
-  // Determine active tab
-  const activeTabHref = TABS.find((t) => {
-    if (t.href === "") return pathname === baseHref;
-    return pathname.startsWith(baseHref + t.href);
-  })?.href ?? "";
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 text-gray-400">
@@ -188,79 +169,9 @@ export default function UserDetailPage() {
 
   if (!user) return null;
 
-  const age = differenceInYears(new Date(), parseISO(user.birth_date));
-
   return (
-    <div className="space-y-4">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-3">
-        <Link
-          href="/users"
-          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
-        >
-          <ChevronLeft size={16} />
-          利用者一覧
-        </Link>
-      </div>
-
-      {/* User header */}
-      <div className="rounded-lg border bg-white p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100">
-              <User size={28} className="text-blue-600" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">{user.name}</h1>
-              <p className="text-sm text-gray-500">{user.name_kana}</p>
-              <div className="mt-1 flex items-center gap-2 text-sm text-gray-600">
-                <span>{user.gender}</span>
-                <span>·</span>
-                <span>{age}歳</span>
-                <span>·</span>
-                <span>
-                  {format(parseISO(user.birth_date), "yyyy年M月d日")} 生
-                </span>
-              </div>
-            </div>
-          </div>
-          <span
-            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-              user.status === "active"
-                ? "bg-green-100 text-green-800"
-                : user.status === "deceased"
-                  ? "bg-red-100 text-red-700"
-                  : "bg-gray-100 text-gray-600"
-            }`}
-          >
-            {STATUS_LABELS[user.status] ?? user.status}
-          </span>
-        </div>
-      </div>
-
-      {/* Tab navigation */}
-      <div className="border-b bg-white rounded-t-lg shadow-sm overflow-x-auto">
-        <nav className="flex min-w-max">
-          {TABS.map((tab) => {
-            const isActive = tab.href === activeTabHref;
-            return (
-              <Link
-                key={tab.href}
-                href={baseHref + tab.href}
-                className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  isActive
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300"
-                }`}
-              >
-                {tab.label}
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
-
-      {/* Basic info tab content (only rendered when on this route) */}
+    <>
+      {/* Basic info form（layout.tsx がヘッダー・タブを描画） */}
       {pathname === baseHref && (
         <div className="rounded-b-lg border border-t-0 bg-white p-6 shadow-sm space-y-6">
           <div className="flex items-center justify-between">
@@ -571,6 +482,6 @@ export default function UserDetailPage() {
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }
