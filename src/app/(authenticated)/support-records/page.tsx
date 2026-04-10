@@ -198,6 +198,9 @@ export default function SupportRecordsPage() {
   const [selectedCarePlanId, setSelectedCarePlanId] = useState<string | null>(null);
   const [loadingCarePlans, setLoadingCarePlans] = useState(false);
 
+  // 第5表プレビュー表示
+  const [showPreview, setShowPreview] = useState(false);
+
   // Dialog state
   const [showDialog, setShowDialog] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -504,6 +507,19 @@ export default function SupportRecordsPage() {
                   CSV
                 </button>
                 <button
+                  onClick={() => setShowPreview((v) => !v)}
+                  disabled={filteredRecords.length === 0}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-40 ${
+                    showPreview
+                      ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+                      : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                  title="第5表プレビューを画面上で確認"
+                >
+                  <FileText size={14} />
+                  {showPreview ? "プレビュー閉じる" : "プレビュー"}
+                </button>
+                <button
                   onClick={handlePrint}
                   disabled={filteredRecords.length === 0}
                   className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40"
@@ -654,6 +670,126 @@ export default function SupportRecordsPage() {
         {selectedUserId && loadingRecords && (
           <div className="flex items-center justify-center py-16">
             <Loader2 size={24} className="animate-spin text-blue-500" />
+          </div>
+        )}
+
+        {/* 第5表 プレビュー（画面表示） */}
+        {selectedUserId && !loadingRecords && showPreview && filteredRecords.length > 0 && selectedUser && (
+          <div className="rounded-lg border-2 border-indigo-200 bg-white shadow-md">
+            <div className="flex items-center justify-between border-b border-indigo-100 bg-indigo-50 px-4 py-2">
+              <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700">
+                <FileText size={16} />
+                第5表 居宅介護支援経過 プレビュー
+              </div>
+              <button
+                onClick={() => setShowPreview(false)}
+                className="text-xs text-indigo-600 hover:underline"
+              >
+                閉じる
+              </button>
+            </div>
+            <div className="p-6 overflow-x-auto" style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif' }}>
+              {(() => {
+                const B = "1px solid #000";
+                const cellBase: React.CSSProperties = {
+                  border: B,
+                  padding: "1mm 2mm",
+                  fontSize: "9pt",
+                  verticalAlign: "top",
+                  lineHeight: 1.3,
+                };
+                const thStyle: React.CSSProperties = {
+                  ...cellBase,
+                  textAlign: "center",
+                  fontWeight: "bold",
+                  background: "#fff",
+                };
+                const fmtYmd = (d: string | null | undefined) => {
+                  if (!d) return "";
+                  try {
+                    const dt = parseISO(d);
+                    return `${dt.getFullYear()}/${dt.getMonth() + 1}/${dt.getDate()}`;
+                  } catch {
+                    return d;
+                  }
+                };
+                const half = Math.ceil(filteredRecords.length / 2);
+                const leftRecords = filteredRecords.slice(0, half);
+                const rightRecords = filteredRecords.slice(half);
+                const rowCount = Math.max(leftRecords.length, rightRecords.length, 22);
+
+                return (
+                  <div style={{ minWidth: "260mm", color: "#000" }}>
+                    {/* ヘッダー */}
+                    <div style={{ position: "relative", marginBottom: "3mm" }}>
+                      <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "9pt" }}>
+                        第５表
+                      </div>
+                      <div
+                        style={{
+                          position: "absolute", left: 0, right: 0, top: 0,
+                          textAlign: "center", fontSize: "14pt", fontWeight: "bold",
+                          letterSpacing: "0.2em",
+                        }}
+                      >
+                        居宅介護支援経過
+                      </div>
+                      <div style={{ position: "absolute", right: 0, top: "2px", fontSize: "9pt" }}>
+                        作成年月日　　年　　月　　日
+                      </div>
+                    </div>
+
+                    {/* 利用者名・計画作成者 */}
+                    <div style={{ display: "flex", gap: "16px", fontSize: "10pt", marginBottom: "4mm" }}>
+                      <div style={{ flex: 1, borderBottom: B, paddingBottom: "1mm" }}>
+                        利用者名　{selectedUser.name}　殿
+                      </div>
+                      <div style={{ flex: 1, borderBottom: B, paddingBottom: "1mm" }}>
+                        居宅サービス計画作成者氏名
+                      </div>
+                    </div>
+
+                    {/* 2カラムグループのテーブル */}
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <colgroup>
+                        <col style={{ width: "7%" }} />
+                        <col style={{ width: "11%" }} />
+                        <col style={{ width: "32%" }} />
+                        <col style={{ width: "7%" }} />
+                        <col style={{ width: "11%" }} />
+                        <col style={{ width: "32%" }} />
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th style={thStyle}>年月日</th>
+                          <th style={{ ...thStyle, color: "#c00" }}>項　目</th>
+                          <th style={thStyle}>内　容</th>
+                          <th style={thStyle}>年月日</th>
+                          <th style={{ ...thStyle, color: "#c00" }}>項　目</th>
+                          <th style={thStyle}>内　容</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Array.from({ length: rowCount }).map((_, i) => {
+                          const left = leftRecords[i];
+                          const right = rightRecords[i];
+                          return (
+                            <tr key={i} style={{ height: "6mm" }}>
+                              <td style={cellBase}>{fmtYmd(left?.record_date)}</td>
+                              <td style={cellBase}>{left?.category ?? ""}</td>
+                              <td style={{ ...cellBase, whiteSpace: "pre-wrap" }}>{left?.content ?? ""}</td>
+                              <td style={cellBase}>{fmtYmd(right?.record_date)}</td>
+                              <td style={cellBase}>{right?.category ?? ""}</td>
+                              <td style={{ ...cellBase, whiteSpace: "pre-wrap" }}>{right?.content ?? ""}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         )}
 
