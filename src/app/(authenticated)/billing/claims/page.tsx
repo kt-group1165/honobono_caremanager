@@ -220,7 +220,10 @@ function generateCSV(
       "被保険者番号",
       "サービス種類コード",
       "サービスコード",
-      "単位数",
+      "基本単位数",
+      "加算単位数",
+      "減算単位数",
+      "合計単位数",
       "日数",
       "費用合計",
       "保険請求額",
@@ -251,6 +254,9 @@ function generateCSV(
       cert?.insured_number ?? "",
       "43", // 居宅介護支援
       c.care_support_code,
+      c.units,
+      additionUnitsSum,
+      reductionUnitsSum,
       c.units + additionUnitsSum - reductionUnitsSum,
       "1",
       c.total_amount,
@@ -1174,7 +1180,13 @@ export default function ClaimsPage() {
                     サービス名称
                   </th>
                   <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">
-                    単位数
+                    基本単位
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium text-indigo-600 whitespace-nowrap">
+                    加算/減算
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">
+                    合計単位
                   </th>
                   <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">
                     単価
@@ -1251,21 +1263,24 @@ export default function ClaimsPage() {
                         <td className="px-4 py-3 text-gray-700 max-w-xs truncate">
                           {claim.care_support_name}
                         </td>
-                        {/* 単位数 */}
+                        {/* 基本単位 */}
                         <td className="px-4 py-3 text-right text-gray-800 whitespace-nowrap">
-                          <span className="font-medium">
-                            {(claim.units + additionUnitsSum - reductionUnitsSum).toLocaleString("ja-JP")}
-                          </span>
-                          {additionUnitsSum > 0 && (
-                            <span className="ml-1 text-xs text-indigo-500">
-                              (+{additionUnitsSum})
-                            </span>
+                          <span className="font-medium">{claim.units.toLocaleString("ja-JP")}</span>
+                        </td>
+                        {/* 加算単位 */}
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          {additionUnitsSum > 0 ? (
+                            <span className="font-medium text-indigo-600">+{additionUnitsSum.toLocaleString("ja-JP")}</span>
+                          ) : (
+                            <span className="text-gray-300">—</span>
                           )}
                           {reductionUnitsSum > 0 && (
-                            <span className="ml-1 text-xs text-red-400">
-                              (−{reductionUnitsSum})
-                            </span>
+                            <div className="text-xs text-red-500">−{reductionUnitsSum}</div>
                           )}
+                        </td>
+                        {/* 合計単位 */}
+                        <td className="px-4 py-3 text-right text-gray-900 whitespace-nowrap">
+                          <span className="font-bold">{(claim.units + additionUnitsSum - reductionUnitsSum).toLocaleString("ja-JP")}</span>
                         </td>
                         {/* 単価 */}
                         <td className="px-4 py-3 text-right text-gray-600 whitespace-nowrap">
