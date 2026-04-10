@@ -94,13 +94,14 @@ const CARE_LEVEL_MAP: Record<
   string,
   { units: number; code: string; name: string }
 > = {
-  要支援1: { units: 438, code: "461000", name: "居宅介護支援費（要支援）" },
-  要支援2: { units: 438, code: "461000", name: "居宅介護支援費（要支援）" },
-  要介護1: { units: 1076, code: "431000", name: "居宅介護支援費(i)" },
-  要介護2: { units: 1076, code: "431000", name: "居宅介護支援費(i)" },
-  要介護3: { units: 1398, code: "431100", name: "居宅介護支援費(ii)" },
-  要介護4: { units: 1398, code: "431100", name: "居宅介護支援費(ii)" },
-  要介護5: { units: 1398, code: "431100", name: "居宅介護支援費(ii)" },
+  // 令和7年度（2025年4月〜）改定単位数
+  要支援1: { units: 443, code: "461000", name: "介護予防支援費" },
+  要支援2: { units: 443, code: "461000", name: "介護予防支援費" },
+  要介護1: { units: 1086, code: "432301", name: "居宅介護支援費Ⅰⅰ１" },
+  要介護2: { units: 1086, code: "432301", name: "居宅介護支援費Ⅰⅰ１" },
+  要介護3: { units: 1411, code: "432271", name: "居宅介護支援費Ⅰⅰ２" },
+  要介護4: { units: 1411, code: "432271", name: "居宅介護支援費Ⅰⅰ２" },
+  要介護5: { units: 1411, code: "432271", name: "居宅介護支援費Ⅰⅰ２" },
 };
 
 const TOKUTEI_KASSAN_UNITS: Record<TokuteiKassanType, number> = {
