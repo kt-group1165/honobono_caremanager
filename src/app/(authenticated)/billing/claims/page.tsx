@@ -1335,13 +1335,43 @@ export default function ClaimsPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Billing month */}
-          <input
-            type="month"
-            value={billingMonth}
-            onChange={(e) => setBillingMonth(e.target.value)}
-            className="rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
+          {/* Billing month with prev/next arrows */}
+          <div className="inline-flex items-center gap-1">
+            <button
+              onClick={() => {
+                const [y, m] = billingMonth.split("-").map(Number);
+                const d = new Date(y, m - 2, 1);
+                setBillingMonth(
+                  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+                );
+              }}
+              className="rounded-lg border px-2 py-2 text-gray-600 hover:bg-gray-50 transition-colors"
+              title="前月"
+              aria-label="前月"
+            >
+              ‹
+            </button>
+            <input
+              type="month"
+              value={billingMonth}
+              onChange={(e) => setBillingMonth(e.target.value)}
+              className="rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <button
+              onClick={() => {
+                const [y, m] = billingMonth.split("-").map(Number);
+                const d = new Date(y, m, 1);
+                setBillingMonth(
+                  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+                );
+              }}
+              className="rounded-lg border px-2 py-2 text-gray-600 hover:bg-gray-50 transition-colors"
+              title="翌月"
+              aria-label="翌月"
+            >
+              ›
+            </button>
+          </div>
 
           {/* Refresh */}
           <button
