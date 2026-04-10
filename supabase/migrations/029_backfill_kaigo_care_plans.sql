@@ -23,7 +23,7 @@ INSERT INTO kaigo_care_plans (
 )
 SELECT DISTINCT
   d.user_id,
-  '',
+  1,
   '居宅サービス計画',
   COALESCE(
     (SELECT c.start_date FROM kaigo_care_certifications c
