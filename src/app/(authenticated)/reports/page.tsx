@@ -93,17 +93,7 @@ const REPORT_CARDS: ReportCard[] = [
     bgColor: "bg-indigo-50",
     borderColor: "border-indigo-100",
   },
-  {
-    type: "service-usage",
-    titleJa: "利用票・提供票",
-    titleEn: "Service Usage & Provision Sheet",
-    description:
-      "サービスの月間計画（予定）と実績を管理する利用票・提供票です。予定と実績を一画面で入力・印刷できます。",
-    icon: <CalendarDays size={28} />,
-    color: "text-orange-600",
-    bgColor: "bg-orange-50",
-    borderColor: "border-orange-100",
-  },
+  // 「利用票・提供票」(service-usage) はケアマネ業務メニューから直接アクセスするため帳票一覧からは非表示
   {
     type: "service-usage-detail",
     titleJa: "サービス利用票別表",

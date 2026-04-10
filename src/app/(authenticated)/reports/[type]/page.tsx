@@ -183,22 +183,57 @@ type InvoiceItem = { content: string; units: number; unit_price: number; amount:
 
 const WEEK_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 const WEEK_DAY_JA = ["月", "火", "水", "木", "金", "土", "日"] as const;
-const TIME_SLOTS = [
-  { key: "early_morning", label: "深夜早朝\n0〜6時" },
-  { key: "morning",       label: "午前\n6〜12時" },
-  { key: "afternoon",     label: "午後\n12〜18時" },
-  { key: "evening",       label: "夜間\n18〜21時" },
-  { key: "night",         label: "深夜\n21〜24時" },
-] as const;
+
+/**
+ * 第3表の時間行（公式様式準拠）
+ * - 2時間刻み×12行（0:00〜22:00 の開始時刻を持つ時間帯）
+ * - 各行は periodLabel の区分にまとまり、先頭行のみ periodSpan を持つ
+ * - key は h00..h22（新形式）
+ */
+const CARE_PLAN3_TIME_ROWS: ReadonlyArray<{
+  key: string;
+  time: string;        // 行の開始時刻表示
+  period?: string;     // 深夜 / 早朝 / 午前 / 午後 / 夜間
+  periodSpan?: number; // rowSpan 数（区分の先頭行のみ）
+}> = [
+  { key: "h00", time: "0:00",  period: "深夜", periodSpan: 3 },
+  { key: "h02", time: "2:00" },
+  { key: "h04", time: "4:00" },
+  { key: "h06", time: "6:00",  period: "早朝", periodSpan: 1 },
+  { key: "h08", time: "8:00",  period: "午前", periodSpan: 2 },
+  { key: "h10", time: "10:00" },
+  { key: "h12", time: "12:00", period: "午後", periodSpan: 3 },
+  { key: "h14", time: "14:00" },
+  { key: "h16", time: "16:00" },
+  { key: "h18", time: "18:00", period: "夜間", periodSpan: 2 },
+  { key: "h20", time: "20:00" },
+  { key: "h22", time: "22:00", period: "深夜", periodSpan: 1 },
+];
+
+/** 旧5区分形式との互換: 既存 schedule から新形式セルを取得 */
+function getSchedCell(schedule: Schedule, rowKey: string, day: string): string {
+  if (schedule[rowKey]?.[day]) return schedule[rowKey][day];
+  const hour = parseInt(rowKey.replace("h", ""), 10);
+  if (Number.isNaN(hour)) return "";
+  if (hour < 6  && schedule.early_morning?.[day]) return schedule.early_morning[day];
+  if (hour >= 6  && hour < 12 && schedule.morning?.[day])   return schedule.morning[day];
+  if (hour >= 12 && hour < 18 && schedule.afternoon?.[day]) return schedule.afternoon[day];
+  if (hour >= 18 && hour < 21 && schedule.evening?.[day])   return schedule.evening[day];
+  if (hour >= 21 && schedule.night?.[day])                   return schedule.night[day];
+  return "";
+}
 
 function emptySchedule(): Schedule {
   const s: Schedule = {};
-  for (const slot of TIME_SLOTS) {
-    s[slot.key] = {};
-    for (const d of WEEK_DAYS) s[slot.key][d] = "";
+  for (const row of CARE_PLAN3_TIME_ROWS) {
+    s[row.key] = {};
+    for (const d of WEEK_DAYS) s[row.key][d] = "";
   }
   return s;
 }
+
+// 旧コードからの参照を維持（auto-generate時に使われている）
+const TIME_SLOTS = CARE_PLAN3_TIME_ROWS.map((r) => ({ key: r.key, label: r.time }));
 
 function emptyServiceRow(): SvcRow {
   return { time: "", content: "", provider: "", planned: Array(31).fill(false), actual: Array(31).fill(false) };
@@ -280,18 +315,23 @@ function buildDefaultContent(
       };
     case "care-plan-3": {
       const sch = emptySchedule();
-      // サービスを午前の時間帯に自動配置
+      // サービスを午前（h10: 10:00〜12:00）の時間帯に自動配置
+      const DEFAULT_ROW = "h10";
+      const appendCell = (row: string, day: string, text: string) => {
+        if (!sch[row]) sch[row] = {};
+        sch[row][day] = (sch[row][day] ? sch[row][day] + "\n" : "") + text;
+      };
       services.forEach((sv) => {
         const text = `${sv.service_type}（${sv.service_content}）`;
         const freq = sv.frequency ?? "";
         if (freq.includes("毎日") || freq.includes("週7")) {
-          WEEK_DAYS.forEach((d) => { sch.morning[d] = (sch.morning[d] ? sch.morning[d] + "\n" : "") + text; });
+          WEEK_DAYS.forEach((d) => appendCell(DEFAULT_ROW, d, text));
         } else if (freq.includes("週3")) {
-          ["mon", "wed", "fri"].forEach((d) => { sch.morning[d] = (sch.morning[d] ? sch.morning[d] + "\n" : "") + text; });
+          ["mon", "wed", "fri"].forEach((d) => appendCell(DEFAULT_ROW, d, text));
         } else if (freq.includes("週2")) {
-          ["tue", "thu"].forEach((d) => { sch.morning[d] = (sch.morning[d] ? sch.morning[d] + "\n" : "") + text; });
+          ["tue", "thu"].forEach((d) => appendCell(DEFAULT_ROW, d, text));
         } else if (freq.includes("週1")) {
-          sch.morning.mon = (sch.morning.mon ? sch.morning.mon + "\n" : "") + text;
+          appendCell(DEFAULT_ROW, "mon", text);
         }
       });
       return {
@@ -825,8 +865,8 @@ function EditFormCarePlan3({ content, onChange }: {
   const set = (k: string, v: unknown) => onChange({ ...content, [k]: v });
   const schedule: Schedule = (content.schedule as Schedule) ?? emptySchedule();
 
-  const setCell = (slot: string, day: string, v: string) => {
-    const updated = { ...schedule, [slot]: { ...schedule[slot], [day]: v } };
+  const setCell = (rowKey: string, day: string, v: string) => {
+    const updated = { ...schedule, [rowKey]: { ...(schedule[rowKey] ?? {}), [day]: v } };
     set("schedule", updated);
   };
 
@@ -837,35 +877,76 @@ function EditFormCarePlan3({ content, onChange }: {
         <FI label="作成日" value={s("creation_date")} onChange={(v) => set("creation_date", v)} />
       </div>
       <div>
-        <div className="text-xs font-semibold text-gray-600 mb-2">週間スケジュール</div>
+        <div className="text-xs font-semibold text-gray-600 mb-2">週間スケジュール（第3表）</div>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-xs">
             <thead>
               <tr>
-                <th className="border border-gray-300 bg-gray-100 px-2 py-1 text-center w-20">時間帯</th>
+                <th className="border border-gray-300 bg-gray-100 px-1 py-1 text-center w-10" colSpan={2}>時間</th>
                 {WEEK_DAY_JA.map((d, i) => (
-                  <th key={i} className={`border border-gray-300 bg-gray-100 px-1 py-1 text-center ${i >= 5 ? "bg-green-50" : ""}`}>{d}</th>
+                  <th
+                    key={i}
+                    className={`border border-gray-300 bg-gray-100 px-1 py-1 text-center ${i === 5 ? "text-blue-600" : ""} ${i === 6 ? "text-red-600" : ""}`}
+                  >
+                    {d}
+                  </th>
                 ))}
+                <th className="border border-gray-300 bg-gray-100 px-1 py-1 text-center w-36">主な日常生活上の活動</th>
               </tr>
             </thead>
             <tbody>
-              {TIME_SLOTS.map((slot) => (
-                <tr key={slot.key}>
-                  <td className="border border-gray-300 bg-gray-50 px-1 py-1 text-center whitespace-pre-line text-xs font-medium leading-tight">{slot.label}</td>
+              {CARE_PLAN3_TIME_ROWS.map((row, ri) => (
+                <tr key={row.key}>
+                  {row.periodSpan && (
+                    <td
+                      rowSpan={row.periodSpan}
+                      className="border border-gray-300 bg-red-50 text-red-600 text-center font-medium px-1 py-1 w-6 align-middle"
+                      style={{ writingMode: "vertical-rl", letterSpacing: "0.1em" }}
+                    >
+                      {row.period}
+                    </td>
+                  )}
+                  <td className="border border-gray-300 bg-gray-50 text-right text-[11px] text-gray-600 px-1 py-0.5 w-12 align-top tabular-nums">
+                    {row.time}
+                  </td>
                   {WEEK_DAYS.map((d, di) => (
-                    <td key={d} className={`border border-gray-300 p-0.5 ${di >= 5 ? "bg-green-50" : ""}`}>
-                      <textarea rows={2} value={schedule[slot.key]?.[d] ?? ""}
-                        onChange={(e) => setCell(slot.key, d, e.target.value)}
-                        className="w-full resize-none rounded text-xs p-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-transparent min-w-[60px]" />
+                    <td
+                      key={d}
+                      className={`border border-gray-300 p-0 ${di === 5 ? "bg-blue-50/30" : ""} ${di === 6 ? "bg-red-50/30" : ""}`}
+                    >
+                      <textarea
+                        rows={2}
+                        value={getSchedCell(schedule, row.key, d)}
+                        onChange={(e) => setCell(row.key, d, e.target.value)}
+                        className="w-full resize-none text-[11px] leading-tight p-1 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-transparent min-w-[70px]"
+                      />
                     </td>
                   ))}
+                  {ri === 0 && (
+                    <td
+                      rowSpan={CARE_PLAN3_TIME_ROWS.length}
+                      className="border border-gray-300 p-0 align-top"
+                    >
+                      <textarea
+                        value={s("daily_activities")}
+                        onChange={(e) => set("daily_activities", e.target.value)}
+                        className="w-full h-full min-h-[280px] resize-none text-[11px] leading-snug p-2 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-transparent"
+                        placeholder="起床・食事・入浴等の日常生活上の活動"
+                      />
+                    </td>
+                  )}
                 </tr>
               ))}
+              <tr>
+                <td className="border border-gray-300 bg-gray-50 text-right text-[11px] text-gray-400 px-1 py-0 tabular-nums" colSpan={2}>
+                  24:00
+                </td>
+                <td className="border-0" colSpan={8}></td>
+              </tr>
             </tbody>
           </table>
         </div>
       </div>
-      <FI label="主な日常生活上の活動" value={s("daily_activities")} onChange={(v) => set("daily_activities", v)} textarea rows={3} />
       <FI label="週単位以外のサービス" value={s("other_services")} onChange={(v) => set("other_services", v)} textarea rows={3} />
     </div>
   );
@@ -1913,83 +1994,83 @@ function PrintCarePlan3({ c }: { c: Record<string, unknown> }) {
   const cellBase: React.CSSProperties = { border: B, padding: "2px 4px", fontSize: "8.5pt", verticalAlign: "middle" };
   const thStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#f0f0f0", fontWeight: "bold", textAlign: "center" };
   const tdStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#fff" };
-  const thGreen: React.CSSProperties = { ...thStyle, backgroundColor: "#e8f5e9" };
-  const tdGreen: React.CSSProperties = { ...tdStyle, backgroundColor: "#f1f8e9" };
   const lineStyle: React.CSSProperties = { borderBottom: "1px dotted #999", height: "18px", width: "100%" };
   const schedule: Schedule = (c.schedule as Schedule) ?? emptySchedule();
 
-  // 2時間刻み13行、左ラベルはrowSpanで配置
-  const TIME_ROWS: { time: string; key: string; labelSpan?: number; label?: string }[] = [
-    { time: "0:00",  key: "h00", labelSpan: 3, label: "深\n夜" },
-    { time: "2:00",  key: "h02" },
-    { time: "4:00",  key: "h04" },
-    { time: "6:00",  key: "h06", labelSpan: 2, label: "早\n朝" },
-    { time: "8:00",  key: "h08", labelSpan: 2, label: "午\n前" },
-    { time: "10:00", key: "h10" },
-    { time: "12:00", key: "h12", labelSpan: 3, label: "午\n\n後" },
-    { time: "14:00", key: "h14" },
-    { time: "16:00", key: "h16" },
-    { time: "18:00", key: "h18", labelSpan: 2, label: "夜\n間" },
-    { time: "20:00", key: "h20" },
-    { time: "22:00", key: "h22", labelSpan: 2, label: "深\n夜" },
-    { time: "24:00", key: "h24" },
-  ];
-  // scheduleのキーマッピング（旧形式→新形式対応）
-  const getCell = (key: string, day: string) => {
-    // 新形式（h00〜h24）があればそれを使う、なければ旧形式から取得
-    if (schedule[key]?.[day]) return schedule[key][day];
-    // 旧形式からの対応
-    const hour = parseInt(key.replace("h", ""), 10);
-    if (hour < 6 && schedule.early_morning?.[day]) return schedule.early_morning[day];
-    if (hour >= 6 && hour < 12 && schedule.morning?.[day]) return schedule.morning[day];
-    if (hour >= 12 && hour < 18 && schedule.afternoon?.[day]) return schedule.afternoon[day];
-    if (hour >= 18 && hour < 21 && schedule.evening?.[day]) return schedule.evening[day];
-    if (hour >= 21 && schedule.night?.[day]) return schedule.night[day];
-    return "";
-  };
-
   return (
     <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000", width: "277mm", height: "190mm", overflow: "hidden" }}>
-      <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "8pt", marginBottom: "4px" }}>第３表</div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "2px" }}>
-        <div />
-        <span style={{ fontSize: "14pt", fontWeight: "bold", letterSpacing: "0.3em" }}>週間サービス計画表</span>
-        <span style={{ fontSize: "8pt" }}>作成年月日　{s("creation_date")}</span>
+      {/* ヘッダー: 第3表 / タイトル / 作成年月日 */}
+      <div style={{ position: "relative", marginBottom: "4px" }}>
+        <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "8pt" }}>第３表</div>
+        <div style={{ position: "absolute", left: 0, right: 0, top: 0, textAlign: "center", fontSize: "14pt", fontWeight: "bold", letterSpacing: "0.3em" }}>
+          週間サービス計画表
+        </div>
+        <div style={{ position: "absolute", right: 0, top: "2px", fontSize: "8pt" }}>
+          作成年月日　{s("creation_date")}
+        </div>
       </div>
       <div style={{ fontSize: "9pt", marginBottom: "4px" }}>
-        <span style={{ fontWeight: "bold", marginRight: "12px" }}>利用者名　{s("user_name")}　殿</span>
+        <span style={{ fontWeight: "bold" }}>利用者名　{s("user_name")}　殿</span>
       </div>
 
       {/* メイングリッド */}
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <colgroup>
+          <col style={{ width: "3%" }} />
+          <col style={{ width: "5%" }} />
+          {WEEK_DAY_JA.map((_, i) => (
+            <col key={i} style={{ width: "11.3%" }} />
+          ))}
+          <col style={{ width: "13%" }} />
+        </colgroup>
         <thead>
           <tr style={{ height: "22px" }}>
-            <th style={{ ...thStyle, width: "3%" }} colSpan={2}></th>
+            <th style={thStyle} colSpan={2}></th>
             {WEEK_DAY_JA.map((d, i) => (
-              <th key={i} style={i >= 5 ? thGreen : thStyle}>{d}</th>
+              <th key={i} style={thStyle}>{d}</th>
             ))}
-            <th style={{ ...thStyle, width: "13%" }}>主な日常生活上の活動</th>
+            <th style={thStyle}>主な日常生活上の活動</th>
           </tr>
         </thead>
         <tbody>
-          {TIME_ROWS.map((row, ri) => (
-            <tr key={ri} style={{ height: "30px" }}>
-              {row.labelSpan && (
-                <td rowSpan={row.labelSpan} style={{ ...thStyle, width: "3%", textAlign: "center", fontSize: "8pt", color: "red", whiteSpace: "pre-wrap", lineHeight: "1.2", padding: "2px", borderStyle: "dashed", borderColor: "#c00" }}>
-                  {row.label}
+          {CARE_PLAN3_TIME_ROWS.map((row, ri) => (
+            <tr key={row.key} style={{ height: "30px" }}>
+              {row.periodSpan && (
+                <td
+                  rowSpan={row.periodSpan}
+                  style={{
+                    ...thStyle,
+                    fontSize: "8pt",
+                    color: "#c00",
+                    fontWeight: "normal",
+                    writingMode: "vertical-rl",
+                    letterSpacing: "0.2em",
+                    padding: "2px 0",
+                    backgroundColor: "#fff",
+                  }}
+                >
+                  {row.period}
                 </td>
               )}
-              <td style={{ ...thStyle, width: "5%", fontSize: "8pt", textAlign: "right", padding: "2px 4px" }}>{row.time}</td>
-              {WEEK_DAYS.map((d, di) => (
-                <td key={d} style={{ ...(di >= 5 ? tdGreen : tdStyle), verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "7pt", padding: "2px 3px", position: "relative" }}>
-                  {getCell(row.key, d)}
+              <td style={{ ...thStyle, fontSize: "8pt", textAlign: "right", padding: "2px 4px", backgroundColor: "#fff", fontWeight: "normal", verticalAlign: "top" }}>
+                {row.time}
+              </td>
+              {WEEK_DAYS.map((d) => (
+                <td
+                  key={d}
+                  style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "7pt", padding: "2px 3px", position: "relative" }}
+                >
+                  {getSchedCell(schedule, row.key, d)}
                   <div style={{ position: "absolute", top: 0, left: "3px", right: "3px", bottom: 0, pointerEvents: "none", display: "flex", flexDirection: "column", justifyContent: "space-evenly" }}>
                     <div style={lineStyle} />
                   </div>
                 </td>
               ))}
               {ri === 0 && (
-                <td rowSpan={TIME_ROWS.length} style={{ ...tdStyle, width: "13%", verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "7pt", padding: "4px", position: "relative" }}>
+                <td
+                  rowSpan={CARE_PLAN3_TIME_ROWS.length}
+                  style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "7pt", padding: "4px", position: "relative" }}
+                >
                   {s("daily_activities")}
                   <div style={{ position: "absolute", top: "4px", left: "4px", right: "4px", bottom: "4px", pointerEvents: "none", display: "flex", flexDirection: "column", justifyContent: "space-evenly" }}>
                     {Array.from({ length: 12 }).map((_, i) => <div key={i} style={lineStyle} />)}
@@ -1998,6 +2079,13 @@ function PrintCarePlan3({ c }: { c: Record<string, unknown> }) {
               )}
             </tr>
           ))}
+          {/* 最終行の下辺に 24:00 を表示（様式準拠） */}
+          <tr style={{ height: "12px" }}>
+            <td colSpan={2} style={{ ...thStyle, fontSize: "8pt", textAlign: "right", padding: "0 4px", backgroundColor: "#fff", fontWeight: "normal", borderTop: "none" }}>
+              24:00
+            </td>
+            <td colSpan={8} style={{ border: "none" }}></td>
+          </tr>
         </tbody>
       </table>
 
