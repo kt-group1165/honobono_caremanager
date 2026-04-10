@@ -831,34 +831,13 @@ export default function ClaimsPage() {
         .from("kaigo_care_support_claims")
         .insert(rows);
 
-      // 拡張カラム（migration 008）が未適用の場合、基本カラムのみでリトライ
       if (insertErr) {
-        console.warn("Full insert failed, retrying with base columns only:", insertErr);
-        const baseRows = rows.map((r) => ({
-          user_id: r.user_id,
-          billing_month: r.billing_month,
-          care_support_code: r.care_support_code,
-          care_support_name: r.care_support_name,
-          units: r.units,
-          unit_price: r.unit_price,
-          total_amount: r.total_amount,
-          insurance_amount: r.insurance_amount,
-          initial_addition: r.initial_addition,
-          initial_addition_units: r.initial_addition_units,
-          hospital_coordination: r.hospital_coordination,
-          hospital_coordination_units: r.hospital_coordination_units,
-          discharge_addition: r.discharge_addition,
-          discharge_addition_units: r.discharge_addition_units,
-          medical_coordination: r.medical_coordination,
-          medical_coordination_units: r.medical_coordination_units,
-          status: r.status,
-          created_at: r.created_at,
-        }));
-        const { error: retryErr } = await supabase
-          .from("kaigo_care_support_claims")
-          .insert(baseRows);
-        if (retryErr) throw retryErr;
-        toast.info("基本カラムのみで生成しました（拡張加算カラムのマイグレーションを実行してください）");
+        // マイグレーション008が未適用の可能性 — エラーメッセージを表示してSQL案内
+        console.error("Insert failed:", insertErr);
+        toast.error(
+          "レセプト生成に失敗しました。Supabaseで以下のマイグレーションを実行してください: supabase/migrations/008_kassan_expansion.sql"
+        );
+        throw insertErr;
       }
 
       toast.success(
@@ -1182,13 +1161,7 @@ export default function ClaimsPage() {
                     サービス名称
                   </th>
                   <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">
-                    基本単位
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-indigo-600 whitespace-nowrap">
-                    加算/減算
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">
-                    合計単位
+                    単位数
                   </th>
                   <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">
                     単価
@@ -1265,24 +1238,9 @@ export default function ClaimsPage() {
                         <td className="px-4 py-3 text-gray-700 max-w-xs truncate">
                           {claim.care_support_name}
                         </td>
-                        {/* 基本単位 */}
+                        {/* 単位数 */}
                         <td className="px-4 py-3 text-right text-gray-800 whitespace-nowrap">
-                          <span className="font-medium">{claim.units.toLocaleString("ja-JP")}</span>
-                        </td>
-                        {/* 加算単位 */}
-                        <td className="px-4 py-3 text-right whitespace-nowrap">
-                          {additionUnitsSum > 0 ? (
-                            <span className="font-medium text-indigo-600">+{additionUnitsSum.toLocaleString("ja-JP")}</span>
-                          ) : (
-                            <span className="text-gray-300">—</span>
-                          )}
-                          {reductionUnitsSum > 0 && (
-                            <div className="text-xs text-red-500">−{reductionUnitsSum}</div>
-                          )}
-                        </td>
-                        {/* 合計単位 */}
-                        <td className="px-4 py-3 text-right text-gray-900 whitespace-nowrap">
-                          <span className="font-bold">{(claim.units + additionUnitsSum - reductionUnitsSum).toLocaleString("ja-JP")}</span>
+                          <span className="font-bold">{claim.units.toLocaleString("ja-JP")}</span>
                         </td>
                         {/* 単価 */}
                         <td className="px-4 py-3 text-right text-gray-600 whitespace-nowrap">
@@ -1296,33 +1254,15 @@ export default function ClaimsPage() {
                         <td className="px-4 py-3 text-right font-medium text-blue-700 whitespace-nowrap">
                           {formatAmount(claim.insurance_amount)}
                         </td>
-                        {/* 加算・減算 */}
-                        <td className="px-4 py-3 text-center">
-                          <div className="inline-flex flex-col items-center gap-0.5">
-                            {additionLabels.length > 0 ? (
-                              <button
-                                onClick={() => toggleExpand(claim.id)}
-                                className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700 hover:bg-indigo-100"
-                              >
-                                +{additionUnitsSum}単位
-                                {isExpanded ? (
-                                  <ChevronUp size={11} />
-                                ) : (
-                                  <ChevronDown size={11} />
-                                )}
-                              </button>
-                            ) : (
-                              <span className="text-xs text-gray-300">なし</span>
-                            )}
-                            {hasReduction && (
-                              <button
-                                onClick={() => toggleExpand(claim.id)}
-                                className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-600 hover:bg-red-100"
-                              >
-                                −{reductionUnitsSum}単位
-                              </button>
-                            )}
-                          </div>
+                        {/* 加算 */}
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          {additionUnitsSum > 0 ? (
+                            <span className="text-xs font-medium text-indigo-600">+{additionUnitsSum.toLocaleString()}</span>
+                          ) : reductionUnitsSum > 0 ? (
+                            <span className="text-xs font-medium text-red-500">−{reductionUnitsSum}</span>
+                          ) : (
+                            <span className="text-xs text-gray-300">—</span>
+                          )}
                         </td>
                         {/* ステータス */}
                         <td className="px-4 py-3 text-center whitespace-nowrap">
@@ -1369,63 +1309,95 @@ export default function ClaimsPage() {
                         </td>
                       </tr>
 
-                      {/* Expanded addition/reduction detail */}
-                      {isExpanded && (additionLabels.length > 0 || hasReduction) && (
-                        <tr key={`${claim.id}-expand`} className="bg-indigo-50/40">
-                          <td colSpan={12} className="px-8 py-2">
-                            <div className="flex flex-wrap gap-2 text-xs">
-                              {claim.initial_addition && (
-                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-indigo-700">
-                                  初回加算 +{claim.initial_addition_units}単位
-                                </span>
-                              )}
-                              {claim.tokutei_kassan_type && String(claim.tokutei_kassan_type) !== "none" && String(claim.tokutei_kassan_type) !== "なし" && (
-                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-indigo-700">
-                                  特定事業所加算{claim.tokutei_kassan_type} +{claim.tokutei_kassan_units}単位
-                                </span>
-                              )}
-                              {claim.medical_coop_kassan && (
-                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-indigo-700">
-                                  特定医療介護連携加算 +{claim.medical_coop_kassan_units ?? 125}単位
-                                </span>
-                              )}
-                              {claim.hospital_coordination && (
-                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-indigo-700">
-                                  入院時情報連携加算 +{claim.hospital_coordination_units}単位
-                                </span>
-                              )}
-                              {claim.discharge_addition && (
-                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-indigo-700">
-                                  退院・退所加算{claim.discharge_type ? `(${DISCHARGE_LABELS[claim.discharge_type as DischargeType]})` : ""} +{claim.discharge_addition_units}単位
-                                </span>
-                              )}
-                              {claim.medical_coordination && (
-                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-indigo-700">
-                                  通院時情報連携加算 +{claim.medical_coordination_units}単位
-                                </span>
-                              )}
-                              {claim.terminal_care && (
-                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-indigo-700">
-                                  ターミナルケアマネジメント加算 +{claim.terminal_care_units ?? 400}単位
-                                </span>
-                              )}
-                              {claim.emergency_conference && (
-                                <span className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-indigo-700">
-                                  緊急時等居宅カンファレンス加算 +{claim.emergency_conference_units ?? 200}単位
-                                </span>
-                              )}
-                              {claim.bcp_not_prepared && (
-                                <span className="rounded border border-red-200 bg-white px-2 py-0.5 text-red-600">
-                                  業務継続計画未策定減算 −{Math.floor(claim.units * (claim.bcp_reduction_pct ?? 1) / 100)}単位
-                                </span>
-                              )}
-                              {claim.abuse_prevention_not_implemented && (
-                                <span className="rounded border border-red-200 bg-white px-2 py-0.5 text-red-600">
-                                  虐待防止措置未実施減算 −{Math.floor(claim.units * (claim.abuse_reduction_pct ?? 1) / 100)}単位
-                                </span>
-                              )}
-                            </div>
+                      {/* 加算行（各加算を個別の行で表示） */}
+                      {(claim.tokutei_kassan_units ?? 0) > 0 && (
+                        <tr key={`${claim.id}-tokutei`} className="bg-indigo-50/30">
+                          <td colSpan={5} className="px-4 py-1.5 text-xs text-indigo-700 pl-12">
+                            ┗ 特定事業所加算({claim.tokutei_kassan_type})
                           </td>
+                          <td className="px-4 py-1.5 text-right text-xs font-medium text-indigo-700">+{claim.tokutei_kassan_units}</td>
+                          <td colSpan={6}></td>
+                        </tr>
+                      )}
+                      {claim.medical_coop_kassan && (
+                        <tr key={`${claim.id}-medcoop`} className="bg-indigo-50/30">
+                          <td colSpan={5} className="px-4 py-1.5 text-xs text-indigo-700 pl-12">
+                            ┗ 特定事業所医療介護連携加算
+                          </td>
+                          <td className="px-4 py-1.5 text-right text-xs font-medium text-indigo-700">+{claim.medical_coop_kassan_units ?? 125}</td>
+                          <td colSpan={6}></td>
+                        </tr>
+                      )}
+                      {claim.initial_addition && (
+                        <tr key={`${claim.id}-initial`} className="bg-indigo-50/30">
+                          <td colSpan={5} className="px-4 py-1.5 text-xs text-indigo-700 pl-12">
+                            ┗ 初回加算
+                          </td>
+                          <td className="px-4 py-1.5 text-right text-xs font-medium text-indigo-700">+{claim.initial_addition_units}</td>
+                          <td colSpan={6}></td>
+                        </tr>
+                      )}
+                      {claim.hospital_coordination && (
+                        <tr key={`${claim.id}-hospital`} className="bg-indigo-50/30">
+                          <td colSpan={5} className="px-4 py-1.5 text-xs text-indigo-700 pl-12">
+                            ┗ 入院時情報連携加算
+                          </td>
+                          <td className="px-4 py-1.5 text-right text-xs font-medium text-indigo-700">+{claim.hospital_coordination_units}</td>
+                          <td colSpan={6}></td>
+                        </tr>
+                      )}
+                      {claim.discharge_addition && (
+                        <tr key={`${claim.id}-discharge`} className="bg-indigo-50/30">
+                          <td colSpan={5} className="px-4 py-1.5 text-xs text-indigo-700 pl-12">
+                            ┗ 退院・退所加算{claim.discharge_type ? `(${DISCHARGE_LABELS[claim.discharge_type as DischargeType]})` : ""}
+                          </td>
+                          <td className="px-4 py-1.5 text-right text-xs font-medium text-indigo-700">+{claim.discharge_addition_units}</td>
+                          <td colSpan={6}></td>
+                        </tr>
+                      )}
+                      {claim.medical_coordination && (
+                        <tr key={`${claim.id}-outpatient`} className="bg-indigo-50/30">
+                          <td colSpan={5} className="px-4 py-1.5 text-xs text-indigo-700 pl-12">
+                            ┗ 通院時情報連携加算
+                          </td>
+                          <td className="px-4 py-1.5 text-right text-xs font-medium text-indigo-700">+{claim.medical_coordination_units}</td>
+                          <td colSpan={6}></td>
+                        </tr>
+                      )}
+                      {claim.terminal_care && (
+                        <tr key={`${claim.id}-terminal`} className="bg-indigo-50/30">
+                          <td colSpan={5} className="px-4 py-1.5 text-xs text-indigo-700 pl-12">
+                            ┗ ターミナルケアマネジメント加算
+                          </td>
+                          <td className="px-4 py-1.5 text-right text-xs font-medium text-indigo-700">+{claim.terminal_care_units ?? 400}</td>
+                          <td colSpan={6}></td>
+                        </tr>
+                      )}
+                      {claim.emergency_conference && (
+                        <tr key={`${claim.id}-emergency`} className="bg-indigo-50/30">
+                          <td colSpan={5} className="px-4 py-1.5 text-xs text-indigo-700 pl-12">
+                            ┗ 緊急時等居宅カンファレンス加算
+                          </td>
+                          <td className="px-4 py-1.5 text-right text-xs font-medium text-indigo-700">+{claim.emergency_conference_units ?? 200}</td>
+                          <td colSpan={6}></td>
+                        </tr>
+                      )}
+                      {claim.bcp_not_prepared && (
+                        <tr key={`${claim.id}-bcp`} className="bg-red-50/30">
+                          <td colSpan={5} className="px-4 py-1.5 text-xs text-red-600 pl-12">
+                            ┗ 業務継続計画未策定減算
+                          </td>
+                          <td className="px-4 py-1.5 text-right text-xs font-medium text-red-600">−{Math.floor(claim.units * (claim.bcp_reduction_pct ?? 1) / 100)}</td>
+                          <td colSpan={6}></td>
+                        </tr>
+                      )}
+                      {claim.abuse_prevention_not_implemented && (
+                        <tr key={`${claim.id}-abuse`} className="bg-red-50/30">
+                          <td colSpan={5} className="px-4 py-1.5 text-xs text-red-600 pl-12">
+                            ┗ 虐待防止措置未実施減算
+                          </td>
+                          <td className="px-4 py-1.5 text-right text-xs font-medium text-red-600">−{Math.floor(claim.units * (claim.abuse_reduction_pct ?? 1) / 100)}</td>
+                          <td colSpan={6}></td>
                         </tr>
                       )}
                     </>
