@@ -50,7 +50,7 @@ const NAV_CARE_MANAGER: NavEntry[] = [
       { name: "アセスメント", href: "/assessments", icon: ClipboardCheck },
       { name: "計画書", href: "/reports/care-plan-1", icon: ClipboardList },
       { name: "会議録", href: "/meeting-minutes", icon: MessagesSquare },
-      { name: "利用・提供票", href: "/reports/service-usage", icon: CalendarDays },
+      { name: "利用・提供票", href: "/reports/care-plan-3", icon: CalendarDays },
       { name: "利用票別表", href: "/reports/service-usage-detail", icon: FileSpreadsheet },
       { name: "モニタリング", href: "/monitoring", icon: Activity },
       { name: "支援経過", href: "/support-records", icon: NotebookPen },
