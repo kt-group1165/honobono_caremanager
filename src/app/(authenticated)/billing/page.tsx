@@ -13,6 +13,7 @@ import {
   TrendingUp,
   Wallet,
   CreditCard,
+  Download,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -61,6 +62,57 @@ function formatMonth(yyyyMm: string): string {
 
 function getCurrentMonth(): string {
   return format(new Date(), "yyyy-MM");
+}
+
+// 訪問系サービス種別→国保連サービス種類コード
+const SERVICE_TYPE_TO_KOKUHO_CODE: Record<string, string> = {
+  訪問介護: "11",
+  訪問入浴介護: "12",
+  訪問看護: "13",
+  訪問リハビリ: "14",
+  訪問リハビリテーション: "14",
+  通所介護: "15",
+  通所リハビリ: "16",
+  通所リハビリテーション: "16",
+  福祉用具貸与: "17",
+  居宅療養管理指導: "31",
+  短期入所生活介護: "21",
+  短期入所療養介護: "22",
+  定期巡回: "73",
+  夜間対応型訪問介護: "72",
+};
+
+// サービス種別→代表サービス項目コード（Phase1簡易版）
+const SERVICE_TYPE_TO_ITEM_CODE: Record<string, string> = {
+  訪問介護: "1111",           // 身体介護1
+  訪問入浴介護: "1211",
+  訪問看護: "1311",
+  訪問リハビリ: "1411",
+  訪問リハビリテーション: "1411",
+  通所介護: "1511",
+  通所リハビリ: "1611",
+  通所リハビリテーション: "1611",
+  福祉用具貸与: "1711",
+  居宅療養管理指導: "3111",
+};
+
+// 要介護度→コード変換
+function careLevelToCode(careLevel: string): string {
+  const map: Record<string, string> = {
+    要支援1: "12", 要支援2: "13",
+    要介護1: "21", 要介護2: "22", 要介護3: "23",
+    要介護4: "24", 要介護5: "25",
+  };
+  return map[careLevel] ?? "00";
+}
+
+// 地域区分→コード変換
+function areaCategoryToCode(area: string): number {
+  const map: Record<string, number> = {
+    "1級地": 1, "2級地": 2, "3級地": 3, "4級地": 4,
+    "5級地": 5, "6級地": 6, "7級地": 7, "その他": 8,
+  };
+  return map[area] ?? 8;
 }
 
 export default function BillingPage() {
@@ -128,6 +180,168 @@ export default function BillingPage() {
     }
   };
 
+  // ── 国保連伝送用 固定長テキスト出力 ──────────────────────────────────
+  const handleKokuhoExport = async () => {
+    // 確定済み（下書き以外）のみ対象
+    const confirmed = records.filter((r) => r.status !== "draft");
+    if (confirmed.length === 0) {
+      toast.error("確定済みの請求データがありません。ステータスを「請求済」以上に変更してください。");
+      return;
+    }
+    if (!filterMonth) {
+      toast.error("請求月を指定してください");
+      return;
+    }
+
+    try {
+      // 1. 自事業所設定
+      const { data: officeData } = await supabase
+        .from("kaigo_office_settings")
+        .select("provider_number, area_category, unit_price")
+        .limit(1)
+        .maybeSingle();
+      const providerNumber = officeData?.provider_number ?? "0000000000";
+      const unitPrice = Number(officeData?.unit_price ?? 10);
+      const areaCode = areaCategoryToCode(officeData?.area_category ?? "その他");
+
+      // 2. 利用者情報（生年月日・性別）
+      const userIds = [...new Set(confirmed.map((r) => r.user_id))];
+      const { data: usersData } = await supabase
+        .from("kaigo_users")
+        .select("id, name, birth_date, gender")
+        .in("id", userIds);
+      const userInfoMap = new Map<
+        string,
+        { name: string; birth_date: string | null; gender: string | null }
+      >();
+      for (const u of usersData || []) {
+        userInfoMap.set(u.id, {
+          name: u.name ?? "",
+          birth_date: u.birth_date ?? null,
+          gender: u.gender ?? null,
+        });
+      }
+
+      // 3. 認定情報
+      const { data: certs } = await supabase
+        .from("kaigo_care_certifications")
+        .select("user_id, care_level, insurer_number, insured_number, start_date, end_date")
+        .in("user_id", userIds)
+        .order("certification_date", { ascending: false });
+      const certMap = new Map<
+        string,
+        {
+          care_level: string;
+          insurer_number: string | null;
+          insured_number: string | null;
+          start_date: string | null;
+          end_date: string | null;
+        }
+      >();
+      for (const cert of certs || []) {
+        if (!certMap.has(cert.user_id)) {
+          certMap.set(cert.user_id, {
+            care_level: cert.care_level,
+            insurer_number: cert.insurer_number ?? null,
+            insured_number: cert.insured_number ?? null,
+            start_date: cert.start_date ?? null,
+            end_date: cert.end_date ?? null,
+          });
+        }
+      }
+
+      // 4. Dynamic import
+      const { downloadHomeCareFile } = await import("@/lib/kokuho-renkei");
+      const serviceYearMonth = filterMonth.replace("-", "");
+
+      // 5. service_type ごとにグルーピング
+      const byServiceType = new Map<string, BillingRecord[]>();
+      for (const r of confirmed) {
+        const code = SERVICE_TYPE_TO_KOKUHO_CODE[r.service_type];
+        if (!code) continue; // マッピング無しはスキップ
+        if (!byServiceType.has(code)) byServiceType.set(code, []);
+        byServiceType.get(code)!.push(r);
+      }
+
+      if (byServiceType.size === 0) {
+        toast.error("国保連コードに対応したサービス種別がありません");
+        return;
+      }
+
+      // 6. 各サービス種別コードごとにファイル生成
+      let fileCount = 0;
+      for (const [serviceTypeCode, group] of byServiceType) {
+        const homeCareClaims = group.map((r) => {
+          const user = userInfoMap.get(r.user_id);
+          const cert = certMap.get(r.user_id);
+          const insuredNumber = cert?.insured_number ?? "";
+          const insurerNumber = cert?.insurer_number ?? "";
+          const careLevelCode = careLevelToCode(cert?.care_level ?? "");
+          const birthDate = (user?.birth_date ?? "").replace(/-/g, "") || "19500101";
+          const genderCode: "1" | "2" = user?.gender === "女" ? "2" : "1";
+          const itemCode = SERVICE_TYPE_TO_ITEM_CODE[r.service_type] ?? "0000";
+
+          return {
+            base: {
+              exchangeId: "7131",
+              serviceYearMonth,
+              providerNumber,
+              serviceTypeCode,
+              areaCode,
+              insuredNumber,
+              userName: user?.name ?? "",
+              birthDate,
+              gender: genderCode,
+              careLevelCode,
+              certStartDate: (cert?.start_date ?? "20240401").replace(/-/g, ""),
+              certEndDate: (cert?.end_date ?? "20270331").replace(/-/g, ""),
+              insurerNumber,
+              totalUnits: r.total_units,
+            },
+            services: [
+              {
+                serviceItemCode: itemCode,
+                units: r.total_units,
+                count: 1,
+                serviceUnits: r.total_units,
+                note: r.service_type,
+              },
+            ],
+            shukei: {
+              actualDays: 1,
+              plannedUnits: r.total_units,
+              limitManagementUnits: r.total_units,
+              nonLimitUnits: 0,
+              benefitUnits: r.total_units,
+              unitPrice,
+              totalCost: r.total_amount,
+              insuranceClaim: r.insurance_amount,
+              userCopay: r.copay_amount,
+            },
+          };
+        });
+
+        downloadHomeCareFile({
+          serviceYearMonth,
+          providerNumber,
+          serviceTypeCode,
+          areaCode,
+          unitPrice,
+          claims: homeCareClaims,
+        });
+        fileCount++;
+      }
+
+      toast.success(
+        `${fileCount}件の国保連伝送用ファイルを出力しました（${confirmed.length}レセプト）`
+      );
+    } catch (err) {
+      console.error(err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error("伝送用ファイルの出力に失敗しました: " + msg);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -146,6 +360,15 @@ export default function BillingPage() {
           >
             <RefreshCw size={14} />
             更新
+          </button>
+          <button
+            onClick={handleKokuhoExport}
+            disabled={records.filter((r) => r.status !== "draft").length === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 transition-colors disabled:opacity-50"
+            title="確定済み請求データから国保連伝送用ファイル（固定長テキスト・Shift-JIS）を出力"
+          >
+            <Download size={14} />
+            国保連伝送用
           </button>
           <Link
             href="/billing/create"
