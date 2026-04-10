@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { format, parseISO, addYears } from "date-fns";
-import { Trash2, RefreshCw, Save, FileCheck, ArrowRightLeft, X } from "lucide-react";
+import { Trash2, RefreshCw, Save, FileCheck } from "lucide-react";
 import type { CareCertification, CareLevel } from "@/types/database";
 
 // ─── 定数 ────────────────────────────────────────────────────────────────────
@@ -141,16 +141,6 @@ export default function CareCertPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
-
-  // 区分変更モーダル
-  const [showClassChangeModal, setShowClassChangeModal] = useState(false);
-  const [classChangeForm, setClassChangeForm] = useState({
-    newCareLevel: "要介護1" as CareLevel,
-    changeDate: "",           // 区分変更認定日（＝新認定の start_date）
-    newEndDate: "",           // 新認定の end_date
-    certificationDate: "",    // 認定年月日
-    supportLimitAmount: "",   // 区分支給限度額
-  });
 
   // ── データ取得 ──────────────────────────────────────────────────────────────
 
@@ -289,115 +279,6 @@ export default function CareCertPage() {
     }
   };
 
-  // ── 区分変更モーダルを開く ─────────────────────────────────────────────────
-
-  const openClassChangeModal = () => {
-    if (!selectedId) {
-      toast.error("現在の認定レコードを選択してください");
-      return;
-    }
-    if (!form.end_date) {
-      toast.error("現在の認定終了日が設定されていません");
-      return;
-    }
-    // デフォルト値: 今日を区分変更日、新有効期間は今日〜現在の終了日
-    const today = format(new Date(), "yyyy-MM-dd");
-    setClassChangeForm({
-      newCareLevel: form.care_level,
-      changeDate: today,
-      newEndDate: form.end_date,
-      certificationDate: today,
-      supportLimitAmount: form.support_limit_amount,
-    });
-    setShowClassChangeModal(true);
-  };
-
-  // ── 区分変更実行 ──────────────────────────────────────────────────────────
-
-  const handleClassChange = async () => {
-    if (!selectedId) {
-      toast.error("現在の認定レコードが選択されていません");
-      return;
-    }
-    const { newCareLevel, changeDate, newEndDate, certificationDate, supportLimitAmount } =
-      classChangeForm;
-
-    if (!changeDate || !newEndDate) {
-      toast.error("区分変更日と新しい認定有効期間の終了日は必須です");
-      return;
-    }
-    if (newEndDate < changeDate) {
-      toast.error("終了日は区分変更日以降を指定してください");
-      return;
-    }
-
-    // 旧認定の終了日 = 区分変更日の前日
-    const changeDateObj = parseISO(changeDate);
-    const oldEndDate = new Date(changeDateObj);
-    oldEndDate.setDate(oldEndDate.getDate() - 1);
-    const oldEndDateStr = format(oldEndDate, "yyyy-MM-dd");
-
-    if (oldEndDateStr < form.start_date) {
-      toast.error("区分変更日が旧認定の開始日以前です。開始日より後を指定してください");
-      return;
-    }
-
-    const confirmed = confirm(
-      `区分変更を実行します:\n\n` +
-      `旧認定: ${form.care_level}（${form.start_date} 〜 ${oldEndDateStr} に終了）\n` +
-      `新認定: ${newCareLevel}（${changeDate} 〜 ${newEndDate}）\n\n` +
-      `よろしいですか？`
-    );
-    if (!confirmed) return;
-
-    setSaving(true);
-    try {
-      // 1. 旧認定の end_date を区分変更日の前日に更新
-      const { error: updateErr } = await supabase
-        .from("kaigo_care_certifications")
-        .update({
-          end_date: oldEndDateStr,
-          status: "expired",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", selectedId);
-      if (updateErr) throw updateErr;
-
-      // 2. 新しい区分変更認定レコードを挿入
-      const payload = {
-        user_id: userId,
-        care_level: newCareLevel,
-        start_date: changeDate,
-        end_date: newEndDate,
-        certification_date: certificationDate || changeDate,
-        insurer_number: form.insurer_number || null,
-        insured_number: form.insured_number || null,
-        support_limit_amount: supportLimitAmount ? Number(supportLimitAmount) : null,
-        status: "active" as const,
-        certification_number: null,
-      };
-      const { data, error: insertErr } = await supabase
-        .from("kaigo_care_certifications")
-        .insert(payload)
-        .select()
-        .single();
-      if (insertErr) throw insertErr;
-
-      toast.success(`区分変更を登録しました（${form.care_level} → ${newCareLevel}）`);
-      setShowClassChangeModal(false);
-      await fetchRecords();
-      // 新規作成レコードを選択
-      if (data) {
-        setSelectedId(data.id);
-        setForm(recToForm(data));
-      }
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "区分変更に失敗しました");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   // ── 削除 ──────────────────────────────────────────────────────────────────
 
   const handleDelete = async (id: string) => {
@@ -529,15 +410,6 @@ export default function CareCertPage() {
             >
               <Save size={11} />
               保険変更
-            </button>
-            <button
-              onClick={openClassChangeModal}
-              disabled={saving || !selectedId}
-              className="inline-flex items-center gap-1 rounded bg-orange-600 px-3 py-1 text-xs font-medium text-white hover:bg-orange-700 disabled:opacity-40 transition-colors"
-              title="要介護度を変更して新しい認定レコードを作成します"
-            >
-              <ArrowRightLeft size={11} />
-              区分変更
             </button>
             <button
               onClick={handleRenewal}
@@ -893,173 +765,6 @@ export default function CareCertPage() {
           </div>
         </div>
       </div>
-
-      {/* ══════════════════════════════════════════
-          区分変更モーダル
-      ══════════════════════════════════════════ */}
-      {showClassChangeModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => setShowClassChangeModal(false)}
-        >
-          <div
-            className="w-full max-w-lg rounded-lg bg-white shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* モーダルヘッダー */}
-            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3 bg-orange-50">
-              <div className="flex items-center gap-2">
-                <ArrowRightLeft size={16} className="text-orange-600" />
-                <h3 className="text-sm font-semibold text-gray-800">区分変更</h3>
-              </div>
-              <button
-                onClick={() => setShowClassChangeModal(false)}
-                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* モーダル本体 */}
-            <div className="px-5 py-4 space-y-4">
-              {/* 現在の認定情報 */}
-              <div className="rounded border border-gray-200 bg-gray-50 p-3">
-                <div className="text-xs font-semibold text-gray-600 mb-1">
-                  現在の認定情報
-                </div>
-                <div className="text-xs text-gray-700 space-y-0.5">
-                  <div>
-                    要介護度：
-                    <span className={`ml-1 inline-block px-1.5 py-0.5 rounded font-medium ${
-                      form.care_level.startsWith("要介護")
-                        ? "bg-orange-100 text-orange-800"
-                        : form.care_level.startsWith("要支援")
-                        ? "bg-green-100 text-green-800"
-                        : "bg-gray-100 text-gray-600"
-                    }`}>{form.care_level}</span>
-                  </div>
-                  <div>
-                    認定有効期間：{formatDate(form.start_date)} 〜 {formatDate(form.end_date)}
-                  </div>
-                </div>
-                <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                  ⚠ 現在の認定は「区分変更日の前日」で終了扱いになります
-                </div>
-              </div>
-
-              {/* 新しい要介護度 */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  新しい要介護度 <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={classChangeForm.newCareLevel}
-                  onChange={(e) =>
-                    setClassChangeForm((prev) => ({
-                      ...prev,
-                      newCareLevel: e.target.value as CareLevel,
-                    }))
-                  }
-                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-                >
-                  {CARE_LEVELS.filter((l) => l !== "申請中" && l !== "非該当").map((l) => (
-                    <option key={l} value={l}>{l}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 区分変更日 */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  区分変更日（新認定の開始日） <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={classChangeForm.changeDate}
-                  onChange={(e) =>
-                    setClassChangeForm((prev) => ({ ...prev, changeDate: e.target.value }))
-                  }
-                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-                />
-              </div>
-
-              {/* 新しい認定有効期間（終了日） */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  新認定の有効期間終了日 <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={classChangeForm.newEndDate}
-                  onChange={(e) =>
-                    setClassChangeForm((prev) => ({ ...prev, newEndDate: e.target.value }))
-                  }
-                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-                />
-                <p className="mt-0.5 text-[10px] text-gray-400">
-                  通常は区分変更日から6ヶ月〜12ヶ月後を指定します
-                </p>
-              </div>
-
-              {/* 認定年月日 */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  認定年月日
-                </label>
-                <input
-                  type="date"
-                  value={classChangeForm.certificationDate}
-                  onChange={(e) =>
-                    setClassChangeForm((prev) => ({
-                      ...prev,
-                      certificationDate: e.target.value,
-                    }))
-                  }
-                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-                />
-              </div>
-
-              {/* 区分支給限度額 */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  区分支給限度額（円）
-                </label>
-                <input
-                  type="number"
-                  value={classChangeForm.supportLimitAmount}
-                  onChange={(e) =>
-                    setClassChangeForm((prev) => ({
-                      ...prev,
-                      supportLimitAmount: e.target.value,
-                    }))
-                  }
-                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
-                  placeholder="例: 167650"
-                />
-              </div>
-            </div>
-
-            {/* モーダルフッター */}
-            <div className="flex items-center justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-3">
-              <button
-                onClick={() => setShowClassChangeModal(false)}
-                disabled={saving}
-                className="rounded border border-gray-300 bg-white px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={handleClassChange}
-                disabled={saving}
-                className="inline-flex items-center gap-1 rounded bg-orange-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-orange-700 transition-colors disabled:opacity-50"
-              >
-                <ArrowRightLeft size={12} />
-                {saving ? "登録中..." : "区分変更を登録"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
