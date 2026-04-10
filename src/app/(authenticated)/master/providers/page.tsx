@@ -1,19 +1,18 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
   Plus,
-  Pencil,
   Trash2,
-  X,
   Search,
   Building2,
   Loader2,
-  Phone,
-  Printer,
+  Save,
+  X,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type ProviderStatus = "active" | "inactive";
 
@@ -71,17 +70,125 @@ const EMPTY_FORM: Omit<ServiceProvider, "id" | "created_at"> = {
   status: "active",
 };
 
+// ────────────────────────────────────────────────────────────────────────────
+// Provider sidebar (vertical list on the left, mirrors UserSidebar pattern)
+// ────────────────────────────────────────────────────────────────────────────
+function ProviderSidebar({
+  providers,
+  selectedId,
+  onSelect,
+  onCreate,
+  loading,
+}: {
+  providers: ServiceProvider[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onCreate: () => void;
+  loading: boolean;
+}) {
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | ProviderStatus>("active");
+
+  const filtered = useMemo(() => {
+    return providers.filter((p) => {
+      const matchesSearch =
+        !search ||
+        p.provider_name.includes(search) ||
+        p.provider_name_kana.includes(search) ||
+        p.provider_number.includes(search);
+      const matchesStatus = statusFilter === "all" || p.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [providers, search, statusFilter]);
+
+  return (
+    <div className="flex h-full w-56 flex-col border-r bg-white">
+      <div className="border-b p-2 space-y-2">
+        <div className="relative">
+          <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="事業所検索"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-md border bg-gray-50 py-1.5 pl-7 pr-2 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as "all" | ProviderStatus)}
+          className="w-full rounded-md border bg-white py-1 px-2 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        >
+          <option value="active">有効のみ</option>
+          <option value="inactive">無効のみ</option>
+          <option value="all">全ステータス</option>
+        </select>
+        <button
+          onClick={onCreate}
+          className="w-full inline-flex items-center justify-center gap-1 rounded-md bg-blue-600 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
+        >
+          <Plus size={12} />
+          新規登録
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {loading ? (
+          <div className="p-3 text-center text-xs text-gray-400">読込中...</div>
+        ) : filtered.length === 0 ? (
+          <div className="p-3 text-center text-xs text-gray-400">該当なし</div>
+        ) : (
+          <ul className="py-1">
+            {filtered.map((p) => (
+              <li key={p.id}>
+                <button
+                  onClick={() => onSelect(p.id)}
+                  className={cn(
+                    "flex w-full items-start gap-2 px-3 py-2 text-left transition-colors",
+                    selectedId === p.id
+                      ? "bg-blue-50 text-blue-700 border-r-2 border-blue-600"
+                      : "text-gray-700 hover:bg-gray-50"
+                  )}
+                >
+                  <Building2 size={13} className="mt-0.5 shrink-0 text-gray-400" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium leading-tight">
+                      {p.provider_name}
+                    </div>
+                    {p.provider_name_kana && (
+                      <div className="truncate text-[10px] text-gray-400 leading-tight">
+                        {p.provider_name_kana}
+                      </div>
+                    )}
+                    {p.status === "inactive" && (
+                      <span className="inline-block mt-0.5 rounded bg-gray-100 px-1 text-[9px] text-gray-500">
+                        無効
+                      </span>
+                    )}
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="border-t px-3 py-1.5 text-[10px] text-gray-400">
+        {filtered.length}件
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Main page
+// ────────────────────────────────────────────────────────────────────────────
 export default function ProvidersPage() {
   const supabase = createClient();
   const [providers, setProviders] = useState<ServiceProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | ProviderStatus>("all");
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [editingProvider, setEditingProvider] = useState<ServiceProvider | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<ServiceProvider | null>(null);
   const [form, setForm] = useState<Omit<ServiceProvider, "id" | "created_at">>(EMPTY_FORM);
 
   const fetchProviders = useCallback(async () => {
@@ -102,27 +209,54 @@ export default function ProvidersPage() {
     fetchProviders();
   }, [fetchProviders]);
 
-  const openCreateDialog = () => {
-    setEditingProvider(null);
+  // 最初の有効な事業所を自動選択
+  useEffect(() => {
+    if (loading || isCreating) return;
+    if (selectedId && providers.some((p) => p.id === selectedId)) return;
+    const firstActive = providers.find((p) => p.status === "active") ?? providers[0];
+    if (firstActive) {
+      setSelectedId(firstActive.id);
+    }
+  }, [loading, providers, selectedId, isCreating]);
+
+  const selectedProvider = providers.find((p) => p.id === selectedId) ?? null;
+
+  // 選択された事業所の内容をフォームに反映
+  useEffect(() => {
+    if (isCreating) return;
+    if (selectedProvider) {
+      setForm({
+        provider_number: selectedProvider.provider_number,
+        provider_name: selectedProvider.provider_name,
+        provider_name_kana: selectedProvider.provider_name_kana,
+        service_categories: selectedProvider.service_categories ?? [],
+        address: selectedProvider.address,
+        phone: selectedProvider.phone,
+        fax: selectedProvider.fax,
+        manager_name: selectedProvider.manager_name,
+        unit_price: selectedProvider.unit_price,
+        status: selectedProvider.status,
+      });
+    }
+  }, [selectedProvider, isCreating]);
+
+  const openCreate = () => {
+    setIsCreating(true);
+    setSelectedId(null);
     setForm(EMPTY_FORM);
-    setDialogOpen(true);
   };
 
-  const openEditDialog = (provider: ServiceProvider) => {
-    setEditingProvider(provider);
-    setForm({
-      provider_number: provider.provider_number,
-      provider_name: provider.provider_name,
-      provider_name_kana: provider.provider_name_kana,
-      service_categories: provider.service_categories ?? [],
-      address: provider.address,
-      phone: provider.phone,
-      fax: provider.fax,
-      manager_name: provider.manager_name,
-      unit_price: provider.unit_price,
-      status: provider.status,
-    });
-    setDialogOpen(true);
+  const cancelCreate = () => {
+    setIsCreating(false);
+    if (providers.length > 0) {
+      const firstActive = providers.find((p) => p.status === "active") ?? providers[0];
+      setSelectedId(firstActive?.id ?? null);
+    }
+  };
+
+  const handleSelect = (id: string) => {
+    setIsCreating(false);
+    setSelectedId(id);
   };
 
   const toggleServiceCategory = (code: string) => {
@@ -145,22 +279,26 @@ export default function ProvidersPage() {
         ...form,
         service_categories: form.service_categories as string[],
       };
-      if (editingProvider) {
+      if (isCreating) {
+        const { data, error } = await supabase
+          .from("kaigo_service_providers")
+          .insert([payload])
+          .select()
+          .single();
+        if (error) throw error;
+        toast.success("事業所を登録しました");
+        await fetchProviders();
+        setIsCreating(false);
+        if (data) setSelectedId(data.id);
+      } else if (selectedId) {
         const { error } = await supabase
           .from("kaigo_service_providers")
           .update(payload)
-          .eq("id", editingProvider.id);
+          .eq("id", selectedId);
         if (error) throw error;
         toast.success("事業所情報を更新しました");
-      } else {
-        const { error } = await supabase
-          .from("kaigo_service_providers")
-          .insert([payload]);
-        if (error) throw error;
-        toast.success("事業所を登録しました");
+        await fetchProviders();
       }
-      setDialogOpen(false);
-      fetchProviders();
     } catch (err: unknown) {
       toast.error(
         "保存に失敗しました: " + (err instanceof Error ? err.message : String(err))
@@ -171,17 +309,17 @@ export default function ProvidersPage() {
   };
 
   const handleDelete = async () => {
-    if (!deleteTarget) return;
+    if (!selectedProvider) return;
     setSaving(true);
     try {
       const { error } = await supabase
         .from("kaigo_service_providers")
         .delete()
-        .eq("id", deleteTarget.id);
+        .eq("id", selectedProvider.id);
       if (error) throw error;
       toast.success("事業所を削除しました");
       setDeleteDialogOpen(false);
-      setDeleteTarget(null);
+      setSelectedId(null);
       fetchProviders();
     } catch (err: unknown) {
       toast.error(
@@ -192,224 +330,86 @@ export default function ProvidersPage() {
     }
   };
 
-  const filtered = providers.filter((p) => {
-    const matchesSearch =
-      searchQuery === "" ||
-      p.provider_name.includes(searchQuery) ||
-      p.provider_name_kana.includes(searchQuery) ||
-      p.provider_number.includes(searchQuery);
-    const matchesStatus =
-      statusFilter === "all" || p.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
-  const statusBadge = (status: ProviderStatus) => (
-    <span
-      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-        status === "active"
-          ? "bg-green-100 text-green-700"
-          : "bg-gray-100 text-gray-500"
-      }`}
-    >
-      {status === "active" ? "有効" : "無効"}
-    </span>
-  );
+  const showForm = isCreating || !!selectedProvider;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Building2 className="text-blue-600" size={24} />
-          <h1 className="text-xl font-bold text-gray-900">サービス事業所マスタ</h1>
-          <span className="ml-2 rounded-full bg-gray-100 px-2.5 py-0.5 text-sm text-gray-600">
-            {providers.length}件
-          </span>
-        </div>
-        <button
-          onClick={openCreateDialog}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={16} />
-          新規登録
-        </button>
-      </div>
+    <div className="flex h-full -m-6">
+      <ProviderSidebar
+        providers={providers}
+        selectedId={selectedId}
+        onSelect={handleSelect}
+        onCreate={openCreate}
+        loading={loading}
+      />
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative">
-          <Search
-            size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-          />
-          <input
-            type="text"
-            placeholder="事業所名・番号で検索"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-64 rounded-lg border pl-9 pr-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as "all" | ProviderStatus)}
-          className="rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        >
-          <option value="all">全ステータス</option>
-          <option value="active">有効</option>
-          <option value="inactive">無効</option>
-        </select>
-      </div>
-
-      {/* Table */}
-      <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 size={24} className="animate-spin text-blue-500" />
+      <div className="flex-1 overflow-y-auto p-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <Building2 className="text-blue-600" size={24} />
+            <h1 className="text-xl font-bold text-gray-900">サービス事業所マスタ</h1>
+            <span className="ml-2 rounded-full bg-gray-100 px-2.5 py-0.5 text-sm text-gray-600">
+              {providers.length}件
+            </span>
           </div>
-        ) : filtered.length === 0 ? (
-          <div className="py-16 text-center text-sm text-gray-500">
+          {!isCreating && selectedProvider && (
+            <button
+              onClick={() => setDeleteDialogOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"
+            >
+              <Trash2 size={13} />
+              削除
+            </button>
+          )}
+        </div>
+
+        {/* Empty state */}
+        {!loading && providers.length === 0 && !isCreating && (
+          <div className="rounded-lg border bg-white py-16 text-center text-sm text-gray-500">
+            <Building2 size={40} className="mx-auto mb-3 text-gray-300" />
             事業所データがありません
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">
-                    事業所番号
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">
-                    事業所名
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">
-                    提供サービス
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">
-                    住所
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">
-                    電話 / FAX
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">
-                    管理者
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">
-                    地域区分単価
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">
-                    状態
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">
-                    操作
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {filtered.map((provider) => (
-                  <tr
-                    key={provider.id}
-                    className="hover:bg-gray-50 transition-colors"
-                  >
-                    <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">
-                      {provider.provider_number}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900">
-                        {provider.provider_name}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {provider.provider_name_kana}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1 max-w-[200px]">
-                        {(provider.service_categories ?? []).map((code) => (
-                          <span
-                            key={code}
-                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                              SERVICE_BADGE_COLORS[code] ??
-                              "bg-gray-100 text-gray-600"
-                            }`}
-                          >
-                            {SERVICE_CATEGORY_MAP[code] ?? code}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 max-w-[180px] truncate" title={provider.address}>
-                      {provider.address || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
-                      {provider.phone && (
-                        <div className="flex items-center gap-1">
-                          <Phone size={12} className="text-gray-400" />
-                          {provider.phone}
-                        </div>
-                      )}
-                      {provider.fax && (
-                        <div className="flex items-center gap-1 text-xs">
-                          <Printer size={12} className="text-gray-400" />
-                          {provider.fax}
-                        </div>
-                      )}
-                      {!provider.phone && !provider.fax && "—"}
-                    </td>
-                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
-                      {provider.manager_name || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
-                      {provider.unit_price != null
-                        ? provider.unit_price.toFixed(2)
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3">{statusBadge(provider.status)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => openEditDialog(provider)}
-                          className="rounded p-1.5 text-gray-500 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                          title="編集"
-                        >
-                          <Pencil size={15} />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setDeleteTarget(provider);
-                            setDeleteDialogOpen(true);
-                          }}
-                          className="rounded p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors"
-                          title="削除"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Create / Edit Dialog */}
-      {dialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 py-8">
-          <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b px-6 py-4">
-              <h2 className="text-base font-semibold text-gray-900">
-                {editingProvider ? "事業所情報を編集" : "事業所を新規登録"}
-              </h2>
+            <div className="mt-3">
               <button
-                onClick={() => setDialogOpen(false)}
-                className="rounded p-1 text-gray-400 hover:text-gray-600"
+                onClick={openCreate}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
               >
-                <X size={20} />
+                <Plus size={14} />
+                新規登録
               </button>
             </div>
-            <form onSubmit={handleSave} className="p-6 space-y-5">
-              {/* 事業所番号・事業所名 */}
+          </div>
+        )}
+
+        {/* Detail / Edit form */}
+        {showForm && (
+          <form onSubmit={handleSave} className="space-y-5">
+            <div className="rounded-lg border bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-gray-800">
+                  {isCreating ? "新規事業所登録" : "事業所情報"}
+                </h2>
+                <div className="flex items-center gap-2">
+                  {isCreating && (
+                    <button
+                      type="button"
+                      onClick={cancelCreate}
+                      className="rounded-md border px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      キャンセル
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                    {isCreating ? "登録" : "保存"}
+                  </button>
+                </div>
+              </div>
+
+              {/* 事業所番号・ステータス */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -477,7 +477,7 @@ export default function ProvidersPage() {
               </div>
 
               {/* 提供サービス */}
-              <div>
+              <div className="mt-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   提供サービス
                 </label>
@@ -487,11 +487,12 @@ export default function ProvidersPage() {
                     return (
                       <label
                         key={code}
-                        className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                        className={cn(
+                          "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
                           checked
                             ? "border-blue-400 bg-blue-50 text-blue-700"
                             : "border-gray-200 text-gray-700 hover:bg-gray-50"
-                        }`}
+                        )}
                       >
                         <input
                           type="checkbox"
@@ -500,6 +501,9 @@ export default function ProvidersPage() {
                           onChange={() => toggleServiceCategory(code)}
                         />
                         <span className="leading-tight">
+                          <span className={cn("mr-1 rounded px-1 text-[10px]", SERVICE_BADGE_COLORS[code])}>
+                            {code}
+                          </span>
                           {SERVICE_CATEGORY_MAP[code]}
                         </span>
                       </label>
@@ -507,125 +511,113 @@ export default function ProvidersPage() {
                   })}
                 </div>
               </div>
+            </div>
 
-              {/* 住所 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  住所
-                </label>
-                <input
-                  type="text"
-                  value={form.address}
-                  onChange={(e) => setForm({ ...form, address: e.target.value })}
-                  className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  placeholder="東京都○○区○○町1-2-3"
-                />
-              </div>
-
-              {/* 電話・FAX・管理者・単価 */}
-              <div className="grid grid-cols-2 gap-4">
+            {/* 連絡先・住所 */}
+            <div className="rounded-lg border bg-white p-5 shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-800 mb-3">連絡先</h3>
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    電話番号
-                  </label>
-                  <input
-                    type="tel"
-                    value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="03-0000-0000"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    FAX番号
-                  </label>
-                  <input
-                    type="tel"
-                    value={form.fax}
-                    onChange={(e) => setForm({ ...form, fax: e.target.value })}
-                    className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="03-0000-0001"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    管理者名
+                    住所
                   </label>
                   <input
                     type="text"
-                    value={form.manager_name}
-                    onChange={(e) =>
-                      setForm({ ...form, manager_name: e.target.value })
-                    }
+                    value={form.address}
+                    onChange={(e) => setForm({ ...form, address: e.target.value })}
                     className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="田中 一郎"
+                    placeholder="東京都○○区○○町1-2-3"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    地域区分単価
-                  </label>
-                  <select
-                    value={form.unit_price}
-                    onChange={(e) =>
-                      setForm({ ...form, unit_price: parseFloat(e.target.value) })
-                    }
-                    className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    {UNIT_PRICE_OPTIONS.map((p) => (
-                      <option key={p} value={p}>
-                        {p.toFixed(2)}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-xs text-gray-400">
-                    1単位あたりの単価（円）
-                  </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      電話番号
+                    </label>
+                    <input
+                      type="tel"
+                      value={form.phone}
+                      onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="03-0000-0000"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      FAX番号
+                    </label>
+                    <input
+                      type="tel"
+                      value={form.fax}
+                      onChange={(e) => setForm({ ...form, fax: e.target.value })}
+                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="03-0000-0001"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      管理者名
+                    </label>
+                    <input
+                      type="text"
+                      value={form.manager_name}
+                      onChange={(e) =>
+                        setForm({ ...form, manager_name: e.target.value })
+                      }
+                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="田中 一郎"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      地域区分単価
+                    </label>
+                    <select
+                      value={form.unit_price}
+                      onChange={(e) =>
+                        setForm({ ...form, unit_price: parseFloat(e.target.value) })
+                      }
+                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      {UNIT_PRICE_OPTIONS.map((p) => (
+                        <option key={p} value={p}>
+                          {p.toFixed(2)}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-gray-400">
+                      1単位あたりの単価（円）
+                    </p>
+                  </div>
                 </div>
               </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setDialogOpen(false)}
-                  className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  キャンセル
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                >
-                  {saving && <Loader2 size={14} className="animate-spin" />}
-                  {editingProvider ? "更新する" : "登録する"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </div>
+          </form>
+        )}
+      </div>
 
       {/* Delete Confirmation Dialog */}
-      {deleteDialogOpen && deleteTarget && (
+      {deleteDialogOpen && selectedProvider && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-sm rounded-xl bg-white shadow-xl p-6">
-            <h2 className="text-base font-semibold text-gray-900 mb-2">
-              事業所を削除
-            </h2>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-base font-semibold text-gray-900">事業所を削除</h2>
+              <button
+                onClick={() => setDeleteDialogOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
             <p className="text-sm text-gray-600 mb-6">
               <span className="font-medium text-gray-900">
-                {deleteTarget.provider_name}
+                {selectedProvider.provider_name}
               </span>{" "}
               を削除しますか？この操作は取り消せません。
             </p>
             <div className="flex justify-end gap-3">
               <button
-                onClick={() => {
-                  setDeleteDialogOpen(false);
-                  setDeleteTarget(null);
-                }}
+                onClick={() => setDeleteDialogOpen(false)}
                 className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 キャンセル
