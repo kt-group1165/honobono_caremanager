@@ -120,10 +120,15 @@ export default function AssessmentPage() {
       .then(({ data }: { data: Certification[] | null }) => {
         const certs = data ?? [];
         setCertifications(certs);
-        // Auto-select the most recent certification
-        if (certs.length > 0 && !selectedCertId) setSelectedCertId(certs[0].id);
+        // Auto-select: 現在選択中の cert がこの利用者のものでなければ最新に切替
+        if (certs.length === 0) {
+          setSelectedCertId(null);
+        } else if (!selectedCertId || !certs.some((c) => c.id === selectedCertId)) {
+          setSelectedCertId(certs[0].id);
+        }
       });
     setMode("list");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUserId, supabase]);
 
   // Fetch assessments list (filtered by certification_id if selected)
