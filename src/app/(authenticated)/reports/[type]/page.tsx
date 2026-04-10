@@ -2502,109 +2502,76 @@ function PrintServiceUsageDetail({ c }: { c: Record<string, unknown> }) {
 
 function PrintSupportProgress({ c }: { c: Record<string, unknown> }) {
   const s = (k: string) => String(c[k] ?? "");
-  const B = "1px solid #000";
-  const cellBase: React.CSSProperties = { border: B, padding: "2px 4px", fontSize: "8pt", verticalAlign: "top" };
-  const thStyle: React.CSSProperties = { ...cellBase, fontWeight: "bold", textAlign: "center" };
-  const tdStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#fff", whiteSpace: "pre-wrap" };
+  const B = "1pt solid #000";
+  const BD = "0.5pt dashed #999"; // 点線
 
   const entries: SupportEntry[] = Array.isArray(c.entries) ? (c.entries as SupportEntry[]) : [];
 
-  // 左右に分配（データがある分だけ。左を先に埋め、右に溢れる）
-  const ROWS_PER_HALF = 8; // 最低表示行数
-  const dataLeft: SupportEntry[] = [];
-  const dataRight: SupportEntry[] = [];
+  // 左右に分配
+  const MIN_ROWS = 10;
   const splitPoint = Math.ceil(entries.length / 2);
-  entries.forEach((e, i) => {
-    if (i < splitPoint) dataLeft.push(e);
-    else dataRight.push(e);
-  });
-  // パディング
-  while (dataLeft.length < ROWS_PER_HALF) dataLeft.push({ date: "", category: "", content: "" });
-  while (dataRight.length < ROWS_PER_HALF) dataRight.push({ date: "", category: "", content: "" });
+  const dataLeft = entries.slice(0, splitPoint);
+  const dataRight = entries.slice(splitPoint);
+  while (dataLeft.length < MIN_ROWS) dataLeft.push({ date: "", category: "", content: "" });
+  while (dataRight.length < MIN_ROWS) dataRight.push({ date: "", category: "", content: "" });
 
-  const today = format(new Date(), "yyyy-MM-dd");
-
-  const renderHalf = (rows: SupportEntry[]) => (
-    <table style={{ flex: 1, borderCollapse: "collapse" }}>
-      <thead>
-        <tr>
-          <th style={{ ...thStyle, width: "14%", borderTop: "none" }}>年月日</th>
-          <th style={{ ...thStyle, width: "14%", borderTop: "none", color: "red" }}>項　目</th>
-          <th style={{ ...thStyle, width: "72%", borderTop: "none" }}>内　　容</th>
-        </tr>
-      </thead>
-      <tbody>
+  const renderHalf = (rows: SupportEntry[]) => {
+    // 各行の前の行と日付が同じか判定
+    return (
+      <div style={{ flex: 1 }}>
+        {/* Column header */}
+        <div style={{ display: "flex", borderBottom: B, background: "#f0f0f0" }}>
+          <div style={{ width: "12%", padding: "1.5mm 1mm", textAlign: "center", fontWeight: "bold", fontSize: "8pt", borderRight: B }}>年</div>
+          <div style={{ width: "5%", padding: "1.5mm 0.5mm", textAlign: "center", fontWeight: "bold", fontSize: "8pt", borderRight: B }}>月</div>
+          <div style={{ width: "5%", padding: "1.5mm 0.5mm", textAlign: "center", fontWeight: "bold", fontSize: "8pt", borderRight: B }}>日</div>
+          <div style={{ flex: 1, padding: "1.5mm 2mm", textAlign: "center", fontWeight: "bold", fontSize: "8pt" }}>内　　容</div>
+        </div>
+        {/* Rows */}
         {rows.map((entry, i) => {
-          // 行の高さ：内容の長さに応じて可変（最低40px）
-          const contentLen = (entry.content || "").length;
-          const minH = Math.max(40, Math.min(120, contentLen * 1.2));
+          const prevDate = i > 0 ? rows[i - 1].date : "";
+          const sameDate = entry.date === prevDate && entry.date !== "";
+          const borderTop = (i === 0 || !sameDate) ? B : BD;
+          const d = entry.date ? new Date(entry.date) : null;
+
           return (
-            <tr key={i} style={{ minHeight: `${minH}px` }}>
-              <td style={{ ...tdStyle, fontSize: "7.5pt", textAlign: "left", lineHeight: "1.4" }}>
-                {entry.date ? (
-                  <>
-                    {fmtReiwa(entry.date)}<br />
-                    {(() => {
-                      const d = new Date(entry.date);
-                      const dow = ["日","月","火","水","木","金","土"][d.getDay()];
-                      return `${dow}曜日`;
-                    })()}
-                    {entry.category && <><br />（{entry.category}）</>}
-                  </>
-                ) : "　"}
-              </td>
-              <td style={{ ...tdStyle, fontSize: "7.5pt", textAlign: "left", lineHeight: "1.4" }}>
-                {entry.category && !entry.date ? entry.category : (entry.category ? (
-                  entry.category.includes("モニタリング") ? "モニタリン\nグ" : entry.category
-                ) : "　")}
-              </td>
-              <td style={{ ...tdStyle, fontSize: "7.5pt", lineHeight: "1.5", padding: "3px 5px" }}>
-                {entry.content || "　"}
-              </td>
-            </tr>
+            <div key={i} style={{ display: "flex", borderTop, minHeight: "14mm" }}>
+              <div style={{ width: "12%", padding: "1mm", fontSize: "7.5pt", borderRight: B, display: "flex", alignItems: "flex-start" }}>
+                {entry.date && !sameDate ? (d ? `${d.getFullYear()}` : "") : ""}
+              </div>
+              <div style={{ width: "5%", padding: "1mm 0.5mm", fontSize: "7.5pt", textAlign: "center", borderRight: B }}>
+                {entry.date && !sameDate ? (d ? `${d.getMonth() + 1}` : "") : ""}
+              </div>
+              <div style={{ width: "5%", padding: "1mm 0.5mm", fontSize: "7.5pt", textAlign: "center", borderRight: B }}>
+                {entry.date && !sameDate ? (d ? `${d.getDate()}` : "") : ""}
+              </div>
+              <div style={{ flex: 1, padding: "1mm 2mm", fontSize: "7.5pt", whiteSpace: "pre-wrap", lineHeight: "1.5" }}>
+                {entry.content || "\u00A0"}
+              </div>
+            </div>
           );
         })}
-      </tbody>
-    </table>
-  );
+      </div>
+    );
+  };
 
   return (
-    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "8pt", color: "#000", width: "277mm", height: "190mm", overflow: "hidden", position: "relative" }}>
-      {/* ヘッダー */}
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <div style={{ width: "14px", height: "14px", backgroundColor: "#000" }} />
-          <span style={{ fontSize: "13pt", fontWeight: "bold", letterSpacing: "0.2em" }}>居宅介護支援経過</span>
-        </div>
-        <div style={{ textAlign: "right", fontSize: "8pt", lineHeight: "1.5" }}>
-          {fmtReiwa(today)}<br />
-          {s("office_name") || "　"}
-        </div>
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "8pt", color: "#000", width: "285mm", minHeight: "198mm", display: "flex", flexDirection: "column" }}>
+      {/* タイトル */}
+      <div style={{ textAlign: "center", fontSize: "12pt", fontWeight: "bold", letterSpacing: "0.3em", marginBottom: "3mm" }}>
+        居宅介護支援経過記録(サービス担当者会議の要点を含む)
       </div>
 
-      {/* 要介護度・利用者名・作成者 */}
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "8.5pt", marginBottom: "4px" }}>
-        <div style={{ display: "flex", gap: "24px" }}>
-          <span>要介護度　　<b>{s("care_level") || "　　"}</b></span>
-          <span>利用者名　　<b>{s("user_name") || "　　　　　"}</b>　殿</span>
-        </div>
-        <div style={{ display: "flex", gap: "16px" }}>
-          <span>作成年月日　{s("creation_date") || "　　年　月　日"}</span>
-        </div>
-      </div>
-      <div style={{ fontSize: "8.5pt", marginBottom: "4px", display: "flex", justifyContent: "flex-end" }}>
-        <span>居宅サービス計画作成者氏名　{s("creator_name") || "　　　　　"}</span>
+      {/* ヘッダー情報 */}
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9pt", marginBottom: "2mm", paddingLeft: "2mm", paddingRight: "2mm" }}>
+        <span>利用者氏名　<b>{s("user_name") || "＿＿＿＿＿"}</b></span>
+        <span>計画作成者氏名　<b>{s("creator_name") || "＿＿＿＿"}</b>　居宅介護支援事業所　<b>{s("office_name") || "＿＿＿＿＿"}</b></span>
       </div>
 
-      {/* メイン2カラムテーブル */}
-      <div style={{ display: "flex", border: B }}>
+      {/* メイン2カラム */}
+      <div style={{ display: "flex", border: B, flex: 1 }}>
         {renderHalf(dataLeft)}
+        <div style={{ width: "0", borderLeft: B }} />
         {renderHalf(dataRight)}
-      </div>
-
-      {/* ページ番号 */}
-      <div style={{ position: "absolute", bottom: "4px", left: "50%", transform: "translateX(-50%)", fontSize: "7pt", color: "#666" }}>
-        1 / 1
       </div>
     </div>
   );
