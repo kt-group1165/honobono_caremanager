@@ -301,7 +301,7 @@ function EditModal({ claim, certEntry, onClose, onSave }: EditModalProps) {
 
   const [addings, setAddings] = useState<Addings>({
     initial: claim.initial_addition,
-    tokutei_kassan: (claim.tokutei_kassan_type as TokuteiKassanType) ?? "none",
+    tokutei_kassan: (String(claim.tokutei_kassan_type) === "なし" || !claim.tokutei_kassan_type) ? "none" : (claim.tokutei_kassan_type as TokuteiKassanType),
     medical_coop_kassan: claim.medical_coop_kassan ?? false,
     hospitalization: (() => {
       if (!claim.hospital_coordination) return "none";
@@ -328,7 +328,7 @@ function EditModal({ claim, certEntry, onClose, onSave }: EditModalProps) {
         if (!data) return;
         setAddings((prev) => ({
           ...prev,
-          tokutei_kassan: (data.tokutei_kassan_type as TokuteiKassanType | null) ?? prev.tokutei_kassan,
+          tokutei_kassan: data.tokutei_kassan_type === "なし" ? "none" : (data.tokutei_kassan_type as TokuteiKassanType | null) ?? prev.tokutei_kassan,
           medical_coop_kassan: (data.medical_cooperation_kassan as boolean | null) ?? prev.medical_coop_kassan,
         }));
       });
@@ -759,7 +759,9 @@ export default function ClaimsPage() {
         .limit(1)
         .maybeSingle();
 
-      const officeTokutei = (officeSettings?.tokutei_kassan_type as TokuteiKassanType | null) ?? "none";
+      // 事業所設定は "なし"/"A"/"B"/"C"、レセプトは "none"/"A"/"B"/"C"
+      const rawTokutei = officeSettings?.tokutei_kassan_type ?? "なし";
+      const officeTokutei: TokuteiKassanType = rawTokutei === "なし" ? "none" : (rawTokutei as TokuteiKassanType);
       const officeMedicalCoop = officeSettings?.medical_cooperation_kassan ?? false;
       const officeTokuteiUnits = TOKUTEI_KASSAN_UNITS[officeTokutei];
       const officeMedicalCoopUnits = officeMedicalCoop ? 125 : 0;
@@ -1213,7 +1215,7 @@ export default function ClaimsPage() {
                   const isExpanded = expandedRows.has(claim.id);
                   const additionLabels: string[] = [];
                   if (claim.initial_addition) additionLabels.push("初回");
-                  if (claim.tokutei_kassan_type && claim.tokutei_kassan_type !== "none") additionLabels.push(`特定${claim.tokutei_kassan_type}`);
+                  if (claim.tokutei_kassan_type && String(claim.tokutei_kassan_type) !== "none" && String(claim.tokutei_kassan_type) !== "なし") additionLabels.push(`特定${claim.tokutei_kassan_type}`);
                   if (claim.medical_coop_kassan) additionLabels.push("医療連携");
                   if (claim.hospital_coordination) additionLabels.push("入院連携");
                   if (claim.discharge_addition) additionLabels.push("退院加算");
@@ -1377,7 +1379,7 @@ export default function ClaimsPage() {
                                   初回加算 +{claim.initial_addition_units}単位
                                 </span>
                               )}
-                              {claim.tokutei_kassan_type && claim.tokutei_kassan_type !== "none" && (
+                              {claim.tokutei_kassan_type && String(claim.tokutei_kassan_type) !== "none" && String(claim.tokutei_kassan_type) !== "なし" && (
                                 <span className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-indigo-700">
                                   特定事業所加算{claim.tokutei_kassan_type} +{claim.tokutei_kassan_units}単位
                                 </span>
