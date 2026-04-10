@@ -413,19 +413,13 @@ export default function SupportRecordsPage() {
           #support-records-print, #support-records-print * { visibility: visible !important; }
           #support-records-print {
             position: fixed; inset: 0;
-            padding: 12mm 14mm;
+            padding: 8mm;
             background: white;
-            font-size: 9pt;
+            font-family: "MS Mincho","游明朝","Hiragino Mincho ProN",serif;
+            color: #000;
           }
           #support-records-screen { display: none !important; }
-          @page { size: A4 portrait; margin: 0; }
-          .print-table { border-collapse: collapse; width: 100%; }
-          .print-table th, .print-table td {
-            border: 1px solid #555 !important;
-            padding: 2mm 3mm !important;
-            vertical-align: top;
-          }
-          .print-table th { background: #f0f0f0 !important; font-weight: bold; }
+          @page { size: A4 landscape; margin: 0; }
         }
       `}</style>
 
@@ -858,108 +852,110 @@ export default function SupportRecordsPage() {
         </div>
       )}
 
-      {/* ── Print view ── */}
+      {/* ── Print view (第5表 居宅介護支援経過) ── */}
       <div id="support-records-print" className="hidden">
-        {selectedUser && (
-          <>
-            {/* Print header */}
-            <div style={{ marginBottom: "8mm" }}>
-              <h1
-                style={{
-                  fontSize: "16pt",
-                  fontWeight: "bold",
-                  textAlign: "center",
-                  marginBottom: "4mm",
-                  letterSpacing: "0.1em",
-                }}
-              >
-                支援経過記録
-              </h1>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "9pt" }}>
+        {selectedUser && (() => {
+          const B = "1px solid #000";
+          const cellBase: React.CSSProperties = {
+            border: B,
+            padding: "1mm 2mm",
+            fontSize: "8pt",
+            verticalAlign: "top",
+            lineHeight: 1.3,
+          };
+          const thStyle: React.CSSProperties = {
+            ...cellBase,
+            textAlign: "center",
+            fontWeight: "bold",
+            background: "#fff",
+          };
+          const fmtYmd = (d: string | null | undefined) => {
+            if (!d) return "";
+            try {
+              const dt = parseISO(d);
+              return `${dt.getFullYear()}/${dt.getMonth() + 1}/${dt.getDate()}`;
+            } catch {
+              return d;
+            }
+          };
+          // レコードを2列に半分ずつ分割（左→右の順で上から埋めていく）
+          const half = Math.ceil(filteredRecords.length / 2);
+          const leftRecords = filteredRecords.slice(0, half);
+          const rightRecords = filteredRecords.slice(half);
+          // 最低行数を揃える
+          const rowCount = Math.max(leftRecords.length, rightRecords.length, 22);
+
+          return (
+            <>
+              {/* ヘッダー: 第5表ラベル / タイトル / 作成年月日 */}
+              <div style={{ position: "relative", marginBottom: "3mm" }}>
+                <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "8pt" }}>
+                  第５表
+                </div>
+                <div
+                  style={{
+                    position: "absolute", left: 0, right: 0, top: 0,
+                    textAlign: "center", fontSize: "13pt", fontWeight: "bold",
+                    letterSpacing: "0.2em",
+                  }}
+                >
+                  居宅介護支援経過
+                </div>
+                <div style={{ position: "absolute", right: 0, top: "2px", fontSize: "8pt" }}>
+                  作成年月日　　年　　月　　日
+                </div>
+              </div>
+
+              {/* 利用者名・計画作成者 */}
+              <div style={{ display: "flex", gap: "16px", fontSize: "9pt", marginBottom: "4mm" }}>
+                <div style={{ flex: 1, borderBottom: B, paddingBottom: "1mm" }}>
+                  利用者名　{selectedUser.name}　殿
+                </div>
+                <div style={{ flex: 1, borderBottom: B, paddingBottom: "1mm" }}>
+                  居宅サービス計画作成者氏名
+                </div>
+              </div>
+
+              {/* 2カラムグループのテーブル */}
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <colgroup>
+                  <col style={{ width: "7%" }} />
+                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "32%" }} />
+                  <col style={{ width: "7%" }} />
+                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "32%" }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>年月日</th>
+                    <th style={{ ...thStyle, color: "#c00" }}>項　目</th>
+                    <th style={thStyle}>内　容</th>
+                    <th style={thStyle}>年月日</th>
+                    <th style={{ ...thStyle, color: "#c00" }}>項　目</th>
+                    <th style={thStyle}>内　容</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  <tr>
-                    <td style={{ padding: "1mm 3mm", border: "1px solid #555", width: "20%", background: "#f0f0f0", fontWeight: "bold" }}>
-                      利用者氏名
-                    </td>
-                    <td style={{ padding: "1mm 3mm", border: "1px solid #555", width: "30%", fontSize: "11pt", fontWeight: "bold" }}>
-                      {selectedUser.name}
-                      {selectedUser.name_kana
-                        ? `（${selectedUser.name_kana}）`
-                        : ""}
-                    </td>
-                    <td style={{ padding: "1mm 3mm", border: "1px solid #555", width: "20%", background: "#f0f0f0", fontWeight: "bold" }}>
-                      期間
-                    </td>
-                    <td style={{ padding: "1mm 3mm", border: "1px solid #555", width: "30%" }}>
-                      {periodLabel}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: "1mm 3mm", border: "1px solid #555", background: "#f0f0f0", fontWeight: "bold" }}>
-                      区分
-                    </td>
-                    <td style={{ padding: "1mm 3mm", border: "1px solid #555" }}>
-                      {filterCategory || "全区分"}
-                    </td>
-                    <td style={{ padding: "1mm 3mm", border: "1px solid #555", background: "#f0f0f0", fontWeight: "bold" }}>
-                      記録件数
-                    </td>
-                    <td style={{ padding: "1mm 3mm", border: "1px solid #555" }}>
-                      {filteredRecords.length} 件
-                    </td>
-                  </tr>
+                  {Array.from({ length: rowCount }).map((_, i) => {
+                    const left = leftRecords[i];
+                    const right = rightRecords[i];
+                    return (
+                      <tr key={i} style={{ height: "6mm" }}>
+                        <td style={cellBase}>{fmtYmd(left?.record_date)}</td>
+                        <td style={cellBase}>{left?.category ?? ""}</td>
+                        <td style={{ ...cellBase, whiteSpace: "pre-wrap" }}>{left?.content ?? ""}</td>
+                        <td style={cellBase}>{fmtYmd(right?.record_date)}</td>
+                        <td style={cellBase}>{right?.category ?? ""}</td>
+                        <td style={{ ...cellBase, whiteSpace: "pre-wrap" }}>{right?.content ?? ""}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
-              <div style={{ fontSize: "8pt", color: "#666", textAlign: "right", marginTop: "2mm" }}>
-                出力日：{format(new Date(), "yyyy年M月d日", { locale: ja })}
-              </div>
-            </div>
-
-            {/* Print table */}
-            <table className="print-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "8.5pt" }}>
-              <thead>
-                <tr>
-                  <th style={{ border: "1px solid #555", padding: "2mm 3mm", background: "#e8e8e8", textAlign: "center", width: "22mm" }}>
-                    日時
-                  </th>
-                  <th style={{ border: "1px solid #555", padding: "2mm 3mm", background: "#e8e8e8", textAlign: "center", width: "22mm" }}>
-                    区分
-                  </th>
-                  <th style={{ border: "1px solid #555", padding: "2mm 3mm", background: "#e8e8e8", textAlign: "center" }}>
-                    内容
-                  </th>
-                  <th style={{ border: "1px solid #555", padding: "2mm 3mm", background: "#e8e8e8", textAlign: "center", width: "20mm" }}>
-                    記録者
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRecords.map((rec, idx) => (
-                  <tr key={rec.id} style={{ background: idx % 2 === 1 ? "#fafafa" : "white" }}>
-                    <td style={{ border: "1px solid #555", padding: "2mm 3mm", verticalAlign: "top", whiteSpace: "nowrap" }}>
-                      {formatDateTime(rec.record_date, rec.record_time)}
-                    </td>
-                    <td style={{ border: "1px solid #555", padding: "2mm 3mm", verticalAlign: "top", textAlign: "center" }}>
-                      {rec.category}
-                    </td>
-                    <td style={{ border: "1px solid #555", padding: "2mm 3mm", verticalAlign: "top", whiteSpace: "pre-wrap", lineHeight: "1.5" }}>
-                      {rec.content}
-                    </td>
-                    <td style={{ border: "1px solid #555", padding: "2mm 3mm", verticalAlign: "top", textAlign: "center" }}>
-                      {rec.staff_name ?? ""}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {/* Print footer */}
-            <div style={{ marginTop: "6mm", fontSize: "8pt", color: "#666", borderTop: "1px solid #ccc", paddingTop: "3mm", display: "flex", justifyContent: "space-between" }}>
-              <span>居宅介護支援事業所　支援経過記録</span>
-              <span>— 以上 —</span>
-            </div>
-          </>
-        )}
+            </>
+          );
+        })()}
       </div>
     </>
   );

@@ -38,62 +38,12 @@ type ReportCard = {
 };
 
 const REPORT_CARDS: ReportCard[] = [
-  {
-    type: "face-sheet",
-    titleJa: "フェースシート",
-    titleEn: "Face Sheet",
-    description:
-      "利用者の基本情報、介護認定、医療保険、ADLスコア、既往歴、家族連絡先、健康記録をまとめた総合情報シートです。",
-    icon: <User size={28} />,
-    color: "text-blue-600",
-    bgColor: "bg-blue-50",
-    borderColor: "border-blue-100",
-  },
-  {
-    type: "care-plan-1",
-    titleJa: "居宅サービス計画書（第1表）",
-    titleEn: "Care Plan Table 1",
-    description:
-      "利用者情報、介護度、総合的な援助の方針、長期目標など、ケアプランの概要を記載した第1表です。",
-    icon: <FileText size={28} />,
-    color: "text-emerald-600",
-    bgColor: "bg-emerald-50",
-    borderColor: "border-emerald-100",
-  },
-  {
-    type: "care-plan-2",
-    titleJa: "居宅サービス計画書（第2表）",
-    titleEn: "Care Plan Table 2",
-    description:
-      "長期目標・短期目標および各サービスの内容・頻度・提供者を記載したケアプラン第2表です。",
-    icon: <ClipboardList size={28} />,
-    color: "text-violet-600",
-    bgColor: "bg-violet-50",
-    borderColor: "border-violet-100",
-  },
-  {
-    type: "care-plan-3",
-    titleJa: "週間サービス計画表（第3表）",
-    titleEn: "Care Plan Table 3",
-    description:
-      "週間の曜日別サービススケジュールを時間帯ごとに表示する計画表です。",
-    icon: <CalendarDays size={28} />,
-    color: "text-cyan-600",
-    bgColor: "bg-cyan-50",
-    borderColor: "border-cyan-100",
-  },
-  {
-    type: "support-progress",
-    titleJa: "居宅介護支援経過（第5表）",
-    titleEn: "Support Progress (Table 5)",
-    description:
-      "居宅介護支援の経過を時系列で記録する第5表です。支援記録から自動取込し、年月日・項目・内容を一覧表示します。",
-    icon: <BookOpen size={28} />,
-    color: "text-indigo-600",
-    bgColor: "bg-indigo-50",
-    borderColor: "border-indigo-100",
-  },
-  // 「利用票・提供票」(service-usage) はケアマネ業務メニューから直接アクセスするため帳票一覧からは非表示
+  // 以下の帳票はケアマネ業務メニューから直接アクセスするため帳票一覧からは非表示:
+  //   - フェースシート (face-sheet) [削除予定]
+  //   - 居宅サービス計画書 第1表/第2表/第3表 (ケアマネ業務 > 計画書)
+  //   - 居宅介護支援経過 第5表 (ケアマネ業務 > 支援経過)
+  //   - 利用票・提供票 (ケアマネ業務 > 利用・提供票)
+  //   - 会議録 第4表 (ケアマネ業務 > 会議録)
   {
     type: "service-usage-detail",
     titleJa: "サービス利用票別表",

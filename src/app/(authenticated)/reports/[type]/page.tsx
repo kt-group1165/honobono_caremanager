@@ -2707,7 +2707,6 @@ function PrintView({ reportType, content, config }: {
   switch (reportType) {
     case "care-plan-1":       return <PrintCarePlan1 c={content} />;
     case "care-plan-2":       return <PrintCarePlan2 c={content} />;
-    case "face-sheet":        return <PrintFaceSheet c={content} />;
     case "care-plan-3":       return <PrintCarePlan3 c={content} />;
     case "support-progress":  return <PrintSupportProgress c={content} />;
     case "service-usage":        return <PrintServiceTicket c={content} title="サービス利用票・提供票" />;
@@ -2722,7 +2721,6 @@ function EditForm({ reportType, content, onChange }: {
   switch (reportType) {
     case "care-plan-1":       return <EditFormCarePlan1 content={content} onChange={onChange} />;
     case "care-plan-2":       return <EditFormCarePlan2 content={content} onChange={onChange} />;
-    case "face-sheet":        return <EditFormFaceSheet content={content} onChange={onChange} />;
     case "care-plan-3":       return <EditFormCarePlan3 content={content} onChange={onChange} />;
     case "support-progress":  return <EditFormSupportProgress content={content} onChange={onChange} />;
     case "service-usage":        return <EditFormServiceTicket content={content} onChange={onChange} />;
