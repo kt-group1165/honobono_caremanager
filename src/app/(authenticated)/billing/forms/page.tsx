@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { UserSidebar } from "@/components/users/user-sidebar";
 import { FileText, Printer, Loader2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import { MeisaiForm } from "./_meisai";
+import { SeikyuForm } from "./_seikyu";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -348,12 +350,27 @@ export default function BillingFormsPage() {
                     </span>
                   </div>
                   <div className="p-4 overflow-x-auto" style={{ fontFamily: '"MS Mincho","游明朝",serif' }}>
-                    <MeisaiPreview
-                      office={office}
-                      user={userInfo}
-                      cert={certInfo}
-                      detail={meisaiDetail}
+                    <MeisaiForm
+                      providerNumber={office?.provider_number ?? ""}
+                      officeName={office?.office_name ?? ""}
+                      officeAddress={office?.address ?? ""}
+                      officePhone={office?.phone ?? ""}
+                      postalCode={office?.postal_code ?? ""}
+                      insurerNumber={certInfo?.insurer_number ?? ""}
+                      insuredNumber={certInfo?.insured_number ?? ""}
+                      userName={userInfo?.name ?? ""}
+                      userKana={userInfo?.name_kana ?? ""}
+                      birthDate={userInfo?.birth_date ?? ""}
+                      gender={userInfo?.gender ?? ""}
+                      careLevel={certInfo?.care_level ?? ""}
+                      certStart={certInfo?.start_date ?? ""}
+                      certEnd={certInfo?.end_date ?? ""}
                       billingMonth={billingMonth}
+                      unitPrice={meisaiDetail.unitPrice}
+                      lines={meisaiDetail.lines}
+                      totalUnits={meisaiDetail.totalUnits}
+                      totalAmount={meisaiDetail.totalAmount}
+                      insuranceAmount={meisaiDetail.insuranceAmount}
                     />
                   </div>
                 </div>
@@ -367,10 +384,18 @@ export default function BillingFormsPage() {
                   </span>
                 </div>
                 <div className="p-4 overflow-x-auto" style={{ fontFamily: '"MS Mincho","游明朝",serif' }}>
-                  <SeikyuPreview
-                    office={office}
-                    summary={seikyuSummary}
+                  <SeikyuForm
+                    providerNumber={office?.provider_number ?? ""}
+                    officeName={office?.office_name ?? ""}
+                    officeAddress={office?.address ?? ""}
+                    officePhone={office?.phone ?? ""}
+                    postalCode={office?.postal_code ?? ""}
                     billingMonth={billingMonth}
+                    totalCount={seikyuSummary.totalCount}
+                    totalUnits={seikyuSummary.grandUnits}
+                    totalAmount={seikyuSummary.totalAmount}
+                    insuranceAmount={seikyuSummary.insuranceAmount}
+                    userCopay={seikyuSummary.userCopay}
                   />
                 </div>
               </div>
@@ -380,21 +405,54 @@ export default function BillingFormsPage() {
       </div>
 
       {/* Print area */}
-      <div id="billing-form-print">
+      <div id="billing-form-print" style={{ padding: "8mm" }}>
         {activeTab === "meisai" && meisaiDetail && (
-          <MeisaiPreview office={office} user={userInfo} cert={certInfo} detail={meisaiDetail} billingMonth={billingMonth} />
+          <MeisaiForm
+            providerNumber={office?.provider_number ?? ""}
+            officeName={office?.office_name ?? ""}
+            officeAddress={office?.address ?? ""}
+            officePhone={office?.phone ?? ""}
+            postalCode={office?.postal_code ?? ""}
+            insurerNumber={certInfo?.insurer_number ?? ""}
+            insuredNumber={certInfo?.insured_number ?? ""}
+            userName={userInfo?.name ?? ""}
+            userKana={userInfo?.name_kana ?? ""}
+            birthDate={userInfo?.birth_date ?? ""}
+            gender={userInfo?.gender ?? ""}
+            careLevel={certInfo?.care_level ?? ""}
+            certStart={certInfo?.start_date ?? ""}
+            certEnd={certInfo?.end_date ?? ""}
+            billingMonth={billingMonth}
+            unitPrice={meisaiDetail.unitPrice}
+            lines={meisaiDetail.lines}
+            totalUnits={meisaiDetail.totalUnits}
+            totalAmount={meisaiDetail.totalAmount}
+            insuranceAmount={meisaiDetail.insuranceAmount}
+          />
         )}
         {activeTab === "seikyu" && (
-          <SeikyuPreview office={office} summary={seikyuSummary} billingMonth={billingMonth} />
+          <SeikyuForm
+            providerNumber={office?.provider_number ?? ""}
+            officeName={office?.office_name ?? ""}
+            officeAddress={office?.address ?? ""}
+            officePhone={office?.phone ?? ""}
+            postalCode={office?.postal_code ?? ""}
+            billingMonth={billingMonth}
+            totalCount={seikyuSummary.totalCount}
+            totalUnits={seikyuSummary.grandUnits}
+            totalAmount={seikyuSummary.totalAmount}
+            insuranceAmount={seikyuSummary.insuranceAmount}
+            userCopay={seikyuSummary.userCopay}
+          />
         )}
       </div>
     </>
   );
 }
 
-// ─── 介護給付費明細書（様式第七）─────────────────────────────────────────────────
-
-function MeisaiPreview({
+// ─── 旧コンポーネント（_meisai.tsx / _seikyu.tsx に移行済み・削除予定）────────
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _DEPRECATED_MeisaiPreview({
   office,
   user,
   cert,
@@ -543,7 +601,8 @@ function MeisaiPreview({
 
 // ─── 介護給付費請求書 ───────────────────────────────────────────────────────────
 
-function SeikyuPreview({
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _DEPRECATED_SeikyuPreview({
   office,
   summary,
   billingMonth,
