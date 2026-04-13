@@ -229,7 +229,7 @@ export function MeisaiForm(props: Props) {
       </table>
 
       {/* ──── 給付費明細欄 ──── */}
-      <table style={{ width: "60%", borderCollapse: "collapse", border: B2, marginBottom: "0.5mm" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", border: B2, marginBottom: "0.5mm" }}>
         <tbody>
           <tr style={{ height: 20 }}>
             <td style={{ ...h, width: "4%", textAlign: "center", borderRight: B2 }} rowSpan={8}>
