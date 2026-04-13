@@ -11,10 +11,27 @@ export interface ContactInfo {
   mobile: string;
 }
 
+/**
+ * 続柄タイプ（構造化プルダウン用）
+ * 家系図の配置・性別を正確に決定するために使用
+ */
+export type RelationshipType =
+  | "夫" | "妻"
+  | "父" | "母" | "義父" | "義母"
+  | "長男" | "長女" | "次男" | "次女" | "三男" | "三女"
+  | "長男の妻" | "長女の夫" | "次男の妻" | "次女の夫"
+  | "孫（男）" | "孫（女）"
+  | "兄" | "姉" | "弟" | "妹"
+  | "甥" | "姪" | "叔父" | "叔母" | "いとこ"
+  | "友人・知人"
+  | "その他";
+
 export interface FamilyMember {
   name: string;
   is_primary_caregiver: boolean;
-  relationship: string;
+  relationship: string;           // 自由入力テキスト（従来互換・表示用）
+  relationship_type?: RelationshipType; // 構造化プルダウン値
+  parent_member_index?: number;   // 孫の場合: 親にあたるメンバーのindex (-1=未指定)
   living: "同" | "別" | "";
   employment: "有" | "無" | "";
   health_status: string;
@@ -431,6 +448,8 @@ export function emptyFamilyMember(): FamilyMember {
     name: "",
     is_primary_caregiver: false,
     relationship: "",
+    relationship_type: "その他",
+    parent_member_index: -1,
     living: "",
     employment: "",
     health_status: "",

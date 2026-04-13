@@ -62,9 +62,30 @@ function isDeceased(rel: string): boolean {
   return /(故|死亡|†)/.test(rel);
 }
 
+// relationship_type から直接判定（構造化プルダウン対応）
+function roleFromType(rt: string | undefined): Role {
+  if (!rt) return "other";
+  if (["夫", "妻"].includes(rt)) return "spouse";
+  if (["父", "母", "義父", "義母"].includes(rt)) return "parent";
+  if (["長男", "長女", "次男", "次女", "三男", "三女"].includes(rt)) return "child";
+  if (["長男の妻", "長女の夫", "次男の妻", "次女の夫"].includes(rt)) return "child"; // 子の配偶者も子の横に
+  if (["孫（男）", "孫（女）"].includes(rt)) return "child"; // 孫は後で特別処理
+  if (["兄", "姉", "弟", "妹"].includes(rt)) return "sibling";
+  return "other";
+}
+
+function genderFromType(rt: string | undefined): "男" | "女" | "?" {
+  if (!rt) return "?";
+  if (["夫", "父", "義父", "長男", "次男", "三男", "長女の夫", "次女の夫", "孫（男）", "兄", "弟", "甥", "叔父"].includes(rt)) return "男";
+  if (["妻", "母", "義母", "長女", "次女", "三女", "長男の妻", "次男の妻", "孫（女）", "姉", "妹", "姪", "叔母"].includes(rt)) return "女";
+  return "?";
+}
+
 function memberToNode(m: FamilyMember, idx: number): Node {
-  const role = inferRole(m.relationship);
-  const gender = inferGender(m.relationship);
+  // 構造化 relationship_type があればそちらを優先
+  const rt = m.relationship_type;
+  const role = rt ? roleFromType(rt) : inferRole(m.relationship);
+  const gender = rt ? genderFromType(rt) : inferGender(m.relationship);
   return {
     id: `m${idx}`,
     name: m.name || "",
@@ -72,7 +93,7 @@ function memberToNode(m: FamilyMember, idx: number): Node {
     role,
     isPrimaryCaregiver: !!m.is_primary_caregiver,
     living: (m.living as "同" | "別" | "") ?? "",
-    relationship: m.relationship,
+    relationship: rt || m.relationship,
     deceased: isDeceased(m.relationship),
   };
 }
