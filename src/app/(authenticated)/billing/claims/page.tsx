@@ -1587,9 +1587,12 @@ export default function ClaimsPage() {
                   <th className="border-r border-gray-200 px-1 py-2 text-center font-semibold text-red-700 whitespace-nowrap bg-red-50/40" style={{ width: 48 }}>
                     虐待<br/>未実施
                   </th>
-                  {/* 合計 */}
+                  {/* 単位数・請求額 */}
+                  <th className="border-r border-gray-200 px-2 py-2 text-right font-semibold text-gray-700 whitespace-nowrap" style={{ width: 60 }}>
+                    単位数
+                  </th>
                   <th className="border-r border-gray-200 px-2 py-2 text-right font-semibold text-gray-700 whitespace-nowrap" style={{ width: 80 }}>
-                    保険請求額
+                    請求額
                   </th>
                   <th className="px-2 py-2 text-center font-semibold text-gray-700 whitespace-nowrap" style={{ width: 90 }}>
                     状態
@@ -1765,7 +1768,11 @@ export default function ClaimsPage() {
                           className="h-4 w-4 accent-red-600 cursor-pointer disabled:cursor-not-allowed"
                         />
                       </td>
-                      {/* 保険請求額 */}
+                      {/* 単位数 */}
+                      <td className="border-r border-gray-200 px-2 py-1.5 text-right text-gray-800 whitespace-nowrap tabular-nums">
+                        {claim.units.toLocaleString("ja-JP")}
+                      </td>
+                      {/* 請求額 */}
                       <td className="border-r border-gray-200 px-2 py-1.5 text-right font-semibold text-blue-700 whitespace-nowrap">
                         {formatAmount(claim.insurance_amount)}
                       </td>
@@ -1810,6 +1817,9 @@ export default function ClaimsPage() {
                       className="px-2 py-2 text-xs font-medium text-gray-700 text-right"
                     >
                       合計 ({claims.length}件)
+                    </td>
+                    <td className="px-2 py-2 text-right text-sm font-bold text-gray-800 whitespace-nowrap tabular-nums">
+                      {claims.reduce((s, c) => s + c.units, 0).toLocaleString("ja-JP")}
                     </td>
                     <td className="px-2 py-2 text-right text-sm font-bold text-blue-700 whitespace-nowrap">
                       {formatAmount(
