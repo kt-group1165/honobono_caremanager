@@ -773,8 +773,9 @@ export default function SupportRecordsPage() {
                         {Array.from({ length: rowCount }).map((_, i) => {
                           const left = leftRecords[i];
                           const right = rightRecords[i];
+                          const isEmpty = !left && !right;
                           return (
-                            <tr key={i} style={{ height: "6mm" }}>
+                            <tr key={i} style={{ height: isEmpty ? "18mm" : "6mm" }}>
                               <td style={cellBase}>{fmtYmd(left?.record_date)}</td>
                               <td style={cellBase}>{left?.category ?? ""}</td>
                               <td style={{ ...cellBase, whiteSpace: "pre-wrap" }}>{left?.content ?? ""}</td>
@@ -1188,8 +1189,9 @@ export default function SupportRecordsPage() {
                   {Array.from({ length: rowCount }).map((_, i) => {
                     const left = leftRecords[i];
                     const right = rightRecords[i];
+                    const isEmpty = !left && !right;
                     return (
-                      <tr key={i} style={{ height: "6mm" }}>
+                      <tr key={i} style={{ height: isEmpty ? "18mm" : "6mm" }}>
                         <td style={cellBase}>{fmtYmd(left?.record_date)}</td>
                         <td style={cellBase}>{left?.category ?? ""}</td>
                         <td style={{ ...cellBase, whiteSpace: "pre-wrap" }}>{left?.content ?? ""}</td>

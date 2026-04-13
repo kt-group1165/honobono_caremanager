@@ -572,7 +572,8 @@ function EditFormCarePlan2({ content, onChange }: {
   };
 
   // 旧形式の互換: blocks配列がなければ旧データから変換
-  const blocks: NeedsBlock[] = Array.isArray(content.blocks) ? (content.blocks as NeedsBlock[]) : [{
+  const rawBlocksEdit = Array.isArray(content.needs_blocks) ? content.needs_blocks : Array.isArray(content.blocks) ? content.blocks : null;
+  const blocks: NeedsBlock[] = rawBlocksEdit ? (rawBlocksEdit as NeedsBlock[]) : [{
     needs: s("needs"),
     long_term_goal: s("long_term_goal"),
     long_term_period: s("long_term_period"),
@@ -583,7 +584,7 @@ function EditFormCarePlan2({ content, onChange }: {
     }],
   }];
 
-  const updateBlocks = (newBlocks: NeedsBlock[]) => set("blocks", newBlocks);
+  const updateBlocks = (newBlocks: NeedsBlock[]) => set("needs_blocks", newBlocks);
   const updateBlock = (bi: number, key: keyof NeedsBlock, v: string) => {
     const nb = blocks.map((b, i) => i === bi ? { ...b, [key]: v } : b);
     updateBlocks(nb);
@@ -1623,8 +1624,9 @@ function PrintCarePlan2({ c }: { c: Record<string, unknown> }) {
   const thStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#f0f0f0", fontWeight: "bold", textAlign: "center" };
   const tdStyle: React.CSSProperties = { ...cellBase, backgroundColor: "#fff", whiteSpace: "pre-wrap" };
 
-  // blocksデータ構造から行を展開
-  const blocks: NeedsBlock[] = Array.isArray(c.blocks) ? (c.blocks as NeedsBlock[]) : [{
+  // blocksデータ構造から行を展開（needs_blocks / blocks の両方に対応）
+  const rawBlocks = Array.isArray(c.needs_blocks) ? c.needs_blocks : Array.isArray(c.blocks) ? c.blocks : null;
+  const blocks: NeedsBlock[] = rawBlocks ? (rawBlocks as NeedsBlock[]) : [{
     needs: s("needs"), long_term_goal: s("long_term_goal"), long_term_period: s("long_term_period"),
     goals: [{ short_term_goal: s("short_term_goal"), short_term_period: s("short_term_period"),
       services: Array.isArray(c.services) ? (c.services as NeedsBlock["goals"][0]["services"]) : [] }],
@@ -1690,19 +1692,20 @@ function PrintCarePlan2({ c }: { c: Record<string, unknown> }) {
 
   return (
     <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "9pt", color: "#000", width: "277mm", height: "190mm", position: "relative", overflow: "hidden" }}>
-      <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "8pt", marginBottom: "4px" }}>第２表</div>
-      <div style={{ textAlign: "center", marginBottom: "2px" }}>
-        <span style={{ fontSize: "14pt", fontWeight: "bold", letterSpacing: "0.3em" }}>居宅サービス計画書（２）</span>
+      {/* ヘッダー: 第2表ラベル / タイトル / 作成年月日 */}
+      <div style={{ position: "relative", marginBottom: "4px" }}>
+        <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "8pt" }}>第２表</div>
+        <div style={{ position: "absolute", left: 0, right: 0, top: 0, textAlign: "center", fontSize: "14pt", fontWeight: "bold", letterSpacing: "0.3em" }}>
+          居宅サービス計画書（２）
+        </div>
+        <div style={{ position: "absolute", right: 0, top: "2px", fontSize: "8pt" }}>
+          作成年月日　{s("creation_date") || "　　年　　月　　日"}
+        </div>
       </div>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
-        <tbody>
-          <tr style={{ height: "22px" }}>
-            <td style={{ ...tdStyle, width: "10%", fontWeight: "bold" }}>利用者名</td>
-            <td style={{ ...tdStyle, width: "28%", fontWeight: "bold", fontSize: "11pt" }}>{s("user_name")}　殿</td>
-            <td style={{ ...tdStyle, width: "50%", textAlign: "right", fontSize: "8.5pt" }}>作成年月日　{s("creation_date")}</td>
-          </tr>
-        </tbody>
-      </table>
+      {/* 利用者名 */}
+      <div style={{ fontSize: "9pt", marginBottom: "4px" }}>
+        <span style={{ fontWeight: "bold" }}>利用者名　{s("user_name")}　殿</span>
+      </div>
 
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
@@ -1747,17 +1750,6 @@ function PrintCarePlan2({ c }: { c: Record<string, unknown> }) {
         ※1「保険給付の対象となるかどうかの区分」について、保険給付対象内サービスについては○印を付す。<br />
         ※2「当該サービス提供を行う事業所」について記入する。
       </div>
-
-      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "6px" }}>
-        <tbody>
-          <tr style={{ height: "22px" }}>
-            <td style={{ ...thStyle, width: "18%", textAlign: "left" }}>作成者（介護支援専門員）</td>
-            <td style={{ ...tdStyle, width: "32%" }} />
-            <td style={{ ...thStyle, width: "18%", textAlign: "left" }}>事業所名</td>
-            <td style={tdStyle} />
-          </tr>
-        </tbody>
-      </table>
     </div>
   );
 }

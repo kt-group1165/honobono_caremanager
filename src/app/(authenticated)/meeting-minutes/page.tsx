@@ -846,6 +846,29 @@ function EditView({
           />
         </div>
       </div>
+
+      {/* ── 第4表 プレビュー（画面表示） ── */}
+      <div className="rounded-lg border-2 border-indigo-200 bg-white shadow-md">
+        <div className="flex items-center justify-between border-b border-indigo-100 bg-indigo-50 px-4 py-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700">
+            <FileText size={16} />
+            第4表 サービス担当者会議の要点 プレビュー
+          </div>
+          <button
+            type="button"
+            onClick={onPrint}
+            className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline"
+          >
+            <Printer size={11} />
+            印刷
+          </button>
+        </div>
+        <div className="p-4 overflow-x-auto bg-gray-50">
+          <div className="bg-white shadow-sm" style={{ minWidth: "260mm" }}>
+            <PrintView content={content} userName={user?.name ?? ""} />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
