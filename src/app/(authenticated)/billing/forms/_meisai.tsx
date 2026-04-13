@@ -228,75 +228,101 @@ export function MeisaiForm(props: Props) {
         </tbody>
       </table>
 
-      {/* ──── 給付費明細欄 ──── */}
+      {/* ──── 給付費明細欄（複数サービス種類を横並び + 右端に給付率/合計） ──── */}
       <table style={{ width: "100%", borderCollapse: "collapse", border: B2, marginBottom: "0.5mm" }}>
         <tbody>
-          <tr style={{ height: 20 }}>
-            <td style={{ ...h, width: "4%", textAlign: "center", borderRight: B2 }} rowSpan={8}>
+          {/* ①サービス種類 */}
+          <tr style={{ height: 22 }}>
+            <td style={{ ...h, width: "3%", textAlign: "center", borderRight: B2 }} rowSpan={9}>
               <span style={{ writingMode: "vertical-rl", fontSize: "6pt", fontWeight: "bold", letterSpacing: "0.1em" }}>給付費明細欄</span>
             </td>
-            <td style={{ ...h, width: "4%" }} rowSpan={2}></td>
-            <td style={{ ...h, width: "20%", fontSize: "5.5pt" }}>①サービス種類<br />　コード/名称</td>
-            <td style={{ ...cC, width: "8%" }}>43</td>
-            <td style={{ ...c, width: "24%" }}>居宅介護支援</td>
+            <td style={{ ...h, width: "3%" }} rowSpan={2}></td>
+            <td style={{ ...h, width: "12%", fontSize: "5.5pt" }}>①サービス種類<br />　コード/②名称</td>
+            <td style={{ ...cC, width: "3%" }}>43</td>
+            <td style={{ ...c, width: "10%" }}>居宅介護支援</td>
+            <td style={c} colSpan={3}></td>
+            <td style={c} colSpan={3}></td>
           </tr>
+          {/* ③サービス実日数 */}
           <tr style={{ height: 20 }}>
             <td style={{ ...h, fontSize: "5.5pt" }}>③サービス実日数</td>
             <td style={cR} colSpan={2}><D v="01" n={2} s={12} />日</td>
+            <td style={cR} colSpan={2}>日</td>
+            <td style={cR} colSpan={2}>日</td>
           </tr>
+          {/* ④計画単位数 */}
           <tr style={{ height: 20 }}>
-            <td style={{ ...h, width: "4%", borderRight: B }} rowSpan={6}>
+            <td style={{ ...h, width: "3%", borderRight: B }} rowSpan={7}>
               <span style={{ writingMode: "vertical-rl", fontSize: "5pt", letterSpacing: "0.05em" }}>請求額集計欄</span>
             </td>
             <td style={{ ...h, fontSize: "5.5pt" }}>④計画単位数</td>
             <td style={cR} colSpan={2}>{totalUnits.toLocaleString()}</td>
+            <td style={c} colSpan={2}></td>
+            <td style={c} colSpan={2}></td>
           </tr>
+          {/* ⑤限度額管理 */}
           <tr style={{ height: 20 }}>
-            <td style={{ ...h, fontSize: "5.5pt" }}>⑤限度額管理対象<br />　単位数</td>
+            <td style={{ ...h, fontSize: "5pt" }}>⑤限度額管理対象<br />　単位数</td>
             <td style={cR} colSpan={2}>0</td>
+            <td style={c} colSpan={2}></td>
+            <td style={{ ...c, textAlign: "right", fontSize: "6pt" }} colSpan={2}>給付率(/100)</td>
           </tr>
+          {/* ⑥+⑦ */}
           <tr style={{ height: 20 }}>
-            <td style={{ ...h, fontSize: "5.5pt" }}>⑥限度額管理対象外<br />　単位数</td>
+            <td style={{ ...h, fontSize: "5pt" }}>⑦給付単位数(④⑤の<br />　うちいずれか小)+⑥</td>
             <td style={cR} colSpan={2}>{totalUnits.toLocaleString()}</td>
+            <td style={c} colSpan={2}></td>
+            <td style={{ ...c, fontSize: "7pt" }}>保険</td>
+            <td style={cR}><D v="100" n={3} s={11} /></td>
           </tr>
+          {/* ⑧公費分単位数 */}
+          <tr style={{ height: 18 }}>
+            <td style={{ ...h, fontSize: "5.5pt" }}>⑧公費分単位数</td>
+            <td style={c} colSpan={2}></td>
+            <td style={c} colSpan={2}></td>
+            <td style={{ ...c, fontSize: "7pt" }}>公費</td>
+            <td style={c}></td>
+          </tr>
+          {/* ⑨単位数単価 */}
           <tr style={{ height: 20 }}>
             <td style={{ ...h, fontSize: "5.5pt" }}>⑨単位数単価</td>
-            <td style={cR} colSpan={2}>{unitPrice.toFixed(2)} 円/単位</td>
+            <td style={cR}>{unitPrice.toFixed(2)}</td>
+            <td style={{ ...c, fontSize: "6pt" }}>円/単位</td>
+            <td style={c}></td>
+            <td style={{ ...c, fontSize: "6pt" }}>円/単位</td>
+            <td style={{ ...c, fontSize: "6pt" }}>円/単位</td>
+            <td style={{ ...h, fontSize: "6pt" }}>合計</td>
           </tr>
-          <tr style={{ height: 20 }}>
-            <td style={{ ...h, fontSize: "5.5pt" }}>⑧費用合計(⑦×⑨)</td>
-            <td style={{ ...cR, fontWeight: "bold" }} colSpan={2}>{totalAmount.toLocaleString()} 円</td>
-          </tr>
-          <tr style={{ height: 20 }}>
-            <td colSpan={4} style={{ ...c, textAlign: "right", fontSize: "6pt" }}>
-              給付率(/100)　保険 <b>100</b>　公費
-            </td>
+          {/* ⑩保険請求額 〜 ⑬ */}
+          <tr style={{ height: 22 }}>
+            <td style={{ ...h, fontSize: "5.5pt" }}>⑩保険請求額</td>
+            <td style={{ ...cR, fontWeight: "bold" }} colSpan={2}>{insuranceAmount.toLocaleString()}</td>
+            <td style={c} colSpan={2}></td>
+            <td style={c}></td>
+            <td style={{ ...cR, fontWeight: "bold", fontSize: "10pt" }}>{insuranceAmount.toLocaleString()}</td>
           </tr>
         </tbody>
       </table>
 
-      {/* ──── 請求額 ──── */}
+      {/* ──── ⑪⑫⑬ 請求額（明細欄の続き） ──── */}
       <table style={{ width: "100%", borderCollapse: "collapse", border: B2 }}>
         <tbody>
-          <tr style={{ height: 22 }}>
-            <td style={{ ...h, width: "20%", fontSize: "6.5pt" }}>⑦給付単位数(⑤+⑥)</td>
-            <td style={{ ...cR, width: "13%" }}>{totalUnits.toLocaleString()}</td>
-            <td style={{ ...h, width: "16%", borderLeft: B2, fontSize: "6.5pt" }}>⑩保険請求額</td>
-            <td style={{ ...cR, width: "15%", fontWeight: "bold", fontSize: "10pt" }}>{insuranceAmount.toLocaleString()}</td>
-          </tr>
           <tr style={{ height: 20 }}>
-            <td style={h}></td><td style={c}></td>
-            <td style={{ ...h, borderLeft: B2, fontSize: "6.5pt" }}>⑪利用者負担額</td>
+            <td style={{ ...h, width: "18%", fontSize: "5.5pt" }}>⑪利用者負担額</td>
+            <td style={{ ...cR, width: "14%" }}>0</td>
+            <td style={c} colSpan={3}></td>
             <td style={cR}>0</td>
           </tr>
           <tr style={{ height: 20 }}>
-            <td style={h}></td><td style={c}></td>
-            <td style={{ ...h, borderLeft: B2, fontSize: "6.5pt" }}>⑫公費請求額</td>
-            <td style={cR}>0</td>
+            <td style={{ ...h, fontSize: "5.5pt" }}>⑫公費請求額</td>
+            <td style={cR}></td>
+            <td style={c} colSpan={3}></td>
+            <td style={cR}></td>
           </tr>
           <tr style={{ height: 20 }}>
-            <td style={h}></td><td style={c}></td>
-            <td style={{ ...h, borderLeft: B2, fontSize: "6.5pt" }}>⑬公費分本人負担</td>
+            <td style={{ ...h, fontSize: "5.5pt" }}>⑬公費分本人負担</td>
+            <td style={cR}></td>
+            <td style={c} colSpan={3}></td>
             <td style={cR}>0</td>
           </tr>
         </tbody>
