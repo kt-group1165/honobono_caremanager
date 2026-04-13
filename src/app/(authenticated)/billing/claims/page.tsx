@@ -1768,9 +1768,20 @@ export default function ClaimsPage() {
                           className="h-4 w-4 accent-red-600 cursor-pointer disabled:cursor-not-allowed"
                         />
                       </td>
-                      {/* 単位数 */}
+                      {/* 単位数（基本+加算-減算） */}
                       <td className="border-r border-gray-200 px-2 py-1.5 text-right text-gray-800 whitespace-nowrap tabular-nums">
-                        {claim.units.toLocaleString("ja-JP")}
+                        {(() => {
+                          let total = claim.units;
+                          if (claim.initial_addition) total += claim.initial_addition_units;
+                          if (claim.tokutei_kassan_units) total += claim.tokutei_kassan_units;
+                          if (claim.medical_coop_kassan) total += (claim.medical_coop_kassan_units ?? 125);
+                          if (claim.hospital_coordination) total += claim.hospital_coordination_units;
+                          if (claim.discharge_addition) total += claim.discharge_addition_units;
+                          if (claim.medical_coordination) total += (claim.medical_coordination_units ?? 50);
+                          if (claim.terminal_care) total += (claim.terminal_care_units ?? 400);
+                          if (claim.emergency_conference) total += (claim.emergency_conference_units ?? 200);
+                          return total.toLocaleString("ja-JP");
+                        })()}
                       </td>
                       {/* 請求額 */}
                       <td className="border-r border-gray-200 px-2 py-1.5 text-right font-semibold text-blue-700 whitespace-nowrap">
@@ -1819,7 +1830,18 @@ export default function ClaimsPage() {
                       合計 ({claims.length}件)
                     </td>
                     <td className="px-2 py-2 text-right text-sm font-bold text-gray-800 whitespace-nowrap tabular-nums">
-                      {claims.reduce((s, c) => s + c.units, 0).toLocaleString("ja-JP")}
+                      {claims.reduce((s, c) => {
+                        let t = c.units;
+                        if (c.initial_addition) t += c.initial_addition_units;
+                        if (c.tokutei_kassan_units) t += c.tokutei_kassan_units;
+                        if (c.medical_coop_kassan) t += (c.medical_coop_kassan_units ?? 125);
+                        if (c.hospital_coordination) t += c.hospital_coordination_units;
+                        if (c.discharge_addition) t += c.discharge_addition_units;
+                        if (c.medical_coordination) t += (c.medical_coordination_units ?? 50);
+                        if (c.terminal_care) t += (c.terminal_care_units ?? 400);
+                        if (c.emergency_conference) t += (c.emergency_conference_units ?? 200);
+                        return s + t;
+                      }, 0).toLocaleString("ja-JP")}
                     </td>
                     <td className="px-2 py-2 text-right text-sm font-bold text-blue-700 whitespace-nowrap">
                       {formatAmount(
