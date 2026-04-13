@@ -35,7 +35,8 @@ function periodLabel(hour: number): string {
 }
 
 export function Tab7Schedule({ data, onChange }: Props) {
-  const entries = ensureEntries(data.entries);
+  // DB から読み込んだデータに entries が無い場合のセーフガード
+  const entries = ensureEntries(Array.isArray(data?.entries) ? data.entries : []);
 
   const updEntry = (idx: number, patch: Partial<ScheduleEntry>) => {
     const next = [...entries];

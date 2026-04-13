@@ -8,7 +8,27 @@ interface Props {
   onChange: (data: SummarySection) => void;
 }
 
-export function Tab7Summary({ data, onChange }: Props) {
+export function Tab7Summary({ data: rawData, onChange }: Props) {
+  // DB から取得したデータに災害時対応等のネスト構造が無い場合のセーフガード
+  const data: SummarySection = {
+    notes: rawData.notes ?? "",
+    disaster_response: {
+      needed: rawData.disaster_response?.needed ?? "",
+      individual_plan: rawData.disaster_response?.individual_plan ?? "",
+      contact: {
+        name: rawData.disaster_response?.contact?.name ?? "",
+        relationship: rawData.disaster_response?.contact?.relationship ?? "",
+        tel: rawData.disaster_response?.contact?.tel ?? "",
+        fax: rawData.disaster_response?.contact?.fax ?? "",
+        email: rawData.disaster_response?.contact?.email ?? "",
+      },
+      notes: rawData.disaster_response?.notes ?? "",
+    },
+    rights_protection: {
+      needed: rawData.rights_protection?.needed ?? "",
+      notes: rawData.rights_protection?.notes ?? "",
+    },
+  };
   const upd = <K extends keyof SummarySection>(k: K, v: SummarySection[K]) => onChange({ ...data, [k]: v });
 
   return (
