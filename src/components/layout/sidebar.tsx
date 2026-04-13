@@ -216,9 +216,9 @@ export function Sidebar() {
                     })}
                   </div>
                 )}
-                {/* 折りたたみ時は子を横並びで表示 */}
+                {/* 折りたたみ時は子をアイコンで表示 */}
                 {collapsed && (
-                  <div className="space-y-0.5">
+                  <div className="space-y-1">
                     {entry.children.map((child) => {
                       const isActive = pathname.startsWith(child.href);
                       const ChildIcon = child.icon;
@@ -227,14 +227,14 @@ export function Sidebar() {
                           key={child.href}
                           href={child.href}
                           className={cn(
-                            "flex items-center justify-center rounded-md py-2 text-sm font-medium transition-colors",
+                            "flex items-center justify-center rounded-md py-2 transition-colors",
                             isActive
                               ? "bg-blue-50 text-blue-700"
                               : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                           )}
                           title={child.name}
                         >
-                          <ChildIcon size={18} />
+                          <ChildIcon size={20} />
                         </Link>
                       );
                     })}
