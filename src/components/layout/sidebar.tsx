@@ -179,7 +179,7 @@ export function Sidebar() {
                   )}
                   title={collapsed ? entry.name : undefined}
                 >
-                  <GroupIcon size={20} />
+                  <GroupIcon size={22} />
                   {!collapsed && (
                     <>
                       <span className="flex-1 text-left">{entry.name}</span>
@@ -209,7 +209,7 @@ export function Sidebar() {
                               : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                           )}
                         >
-                          <ChildIcon size={15} />
+                          <ChildIcon size={18} />
                           <span>{child.name}</span>
                         </Link>
                       );
@@ -234,7 +234,7 @@ export function Sidebar() {
                           )}
                           title={child.name}
                         >
-                          <ChildIcon size={20} />
+                          <ChildIcon size={22} />
                         </Link>
                       );
                     })}
@@ -261,7 +261,7 @@ export function Sidebar() {
               )}
               title={collapsed ? entry.name : undefined}
             >
-              <entry.icon size={20} />
+              <entry.icon size={22} />
               {!collapsed && <span>{entry.name}</span>}
             </Link>
           );
