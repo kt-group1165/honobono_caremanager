@@ -26,7 +26,7 @@ interface GenogramProps {
   members: FamilyMember[];
 }
 
-type Role = "self" | "spouse" | "child" | "parent" | "sibling" | "other";
+type Role = "self" | "spouse" | "child" | "parent" | "sibling" | "grandchild" | "child_spouse" | "other";
 
 interface Node {
   id: string;
@@ -37,6 +37,7 @@ interface Node {
   living: "同" | "別" | "";
   relationship: string;
   deceased: boolean;
+  parentMemberIndex: number; // 孫の場合: 親メンバーのindex (-1=未指定)
 }
 
 function inferRole(rel: string): Role {
@@ -68,8 +69,8 @@ function roleFromType(rt: string | undefined): Role {
   if (["夫", "妻"].includes(rt)) return "spouse";
   if (["父", "母", "義父", "義母"].includes(rt)) return "parent";
   if (["長男", "長女", "次男", "次女", "三男", "三女"].includes(rt)) return "child";
-  if (["長男の妻", "長女の夫", "次男の妻", "次女の夫"].includes(rt)) return "child"; // 子の配偶者も子の横に
-  if (["孫（男）", "孫（女）"].includes(rt)) return "child"; // 孫は後で特別処理
+  if (["長男の妻", "長女の夫", "次男の妻", "次女の夫"].includes(rt)) return "child_spouse";
+  if (["孫（男）", "孫（女）"].includes(rt)) return "grandchild";
   if (["兄", "姉", "弟", "妹"].includes(rt)) return "sibling";
   return "other";
 }
@@ -95,6 +96,7 @@ function memberToNode(m: FamilyMember, idx: number): Node {
     living: (m.living as "同" | "別" | "") ?? "",
     relationship: rt || m.relationship,
     deceased: isDeceased(m.relationship),
+    parentMemberIndex: m.parent_member_index ?? -1,
   };
 }
 
@@ -201,21 +203,25 @@ export function Genogram({ userName, userGender, members }: GenogramProps) {
     living: "同",
     relationship: "本人",
     deceased: false,
+    parentMemberIndex: -1,
   };
 
   const spouses = nodes.filter((n) => n.role === "spouse");
-  const children = nodes.filter((n) => n.role === "child");
+  const children = nodes.filter((n) => n.role === "child" || n.role === "child_spouse");
+  const grandchildren = nodes.filter((n) => n.role === "grandchild");
   const parents = nodes.filter((n) => n.role === "parent");
   const siblings = nodes.filter((n) => n.role === "sibling");
   const others = nodes.filter((n) => n.role === "other");
 
   // ──── レイアウト計算 ────
   const W = 480;
-  const H = 280;
+  const hasGrandchildren = grandchildren.length > 0;
+  const H = hasGrandchildren ? 360 : 280;
   const centerX = W / 2;
-  const selfY = H / 2;
+  const selfY = hasGrandchildren ? H / 2 - 30 : H / 2;
   const parentY = selfY - 90;
   const childY = selfY + 90;
+  const grandchildY = childY + 90;
   const NODE_W = 60;
 
   // 本人 + 配偶者 + 兄弟 を中段に並べる
@@ -381,6 +387,55 @@ export function Genogram({ userName, userGender, members }: GenogramProps) {
             </g>
           );
         })}
+
+        {/* 孫と子をつなぐ線 + 孫の描画 */}
+        {grandchildren.length > 0 && children.length > 0 && (
+          <>
+            {grandchildren.map((gc, gi) => {
+              // 親メンバーの位置を特定
+              const parentIdx = gc.parentMemberIndex;
+              let parentX = coupleCenterX; // デフォルト: 中央
+              if (parentIdx >= 0) {
+                // parentIdx は元の members 配列のインデックス
+                // children 配列内で対応するノードを探す
+                const parentNodeId = `m${parentIdx}`;
+                const childIdx = children.findIndex((ch) => ch.id === parentNodeId);
+                if (childIdx >= 0) {
+                  parentX = childStartX + childIdx * NODE_W;
+                }
+              }
+              // 孫の X 位置（同じ親を持つ孫が複数なら横にずらす）
+              const sameParentGrandchildren = grandchildren.filter((g) => g.parentMemberIndex === gc.parentMemberIndex);
+              const gcIdxInGroup = sameParentGrandchildren.indexOf(gc);
+              const gcGroupSize = sameParentGrandchildren.length;
+              const gcX = parentX + (gcIdxInGroup - (gcGroupSize - 1) / 2) * (NODE_W * 0.7);
+
+              return (
+                <g key={gc.id}>
+                  {/* 子→孫の縦線 */}
+                  <line x1={parentX} y1={childY + 14} x2={parentX} y2={grandchildY - 30} stroke="#000" strokeWidth={1} />
+                  {gcGroupSize > 1 && gcIdxInGroup === 0 && (
+                    <line
+                      x1={parentX + (0 - (gcGroupSize - 1) / 2) * (NODE_W * 0.7)}
+                      y1={grandchildY - 30}
+                      x2={parentX + ((gcGroupSize - 1) - (gcGroupSize - 1) / 2) * (NODE_W * 0.7)}
+                      y2={grandchildY - 30}
+                      stroke="#000" strokeWidth={1}
+                    />
+                  )}
+                  <line x1={gcX} y1={grandchildY - 30} x2={gcX} y2={grandchildY - 14} stroke="#000" strokeWidth={1} />
+                  <PersonShape cx={gcX} cy={grandchildY} gender={gc.gender} isSelf={false} deceased={gc.deceased} living={gc.living} />
+                  <text x={gcX} y={grandchildY + 26} textAnchor="middle" fontSize="9" fill="#333">
+                    {gc.name || gc.relationship}
+                  </text>
+                  {gc.isPrimaryCaregiver && (
+                    <text x={gcX + 16} y={grandchildY - 12} fontSize="11" fill="#dc2626">★</text>
+                  )}
+                </g>
+              );
+            })}
+          </>
+        )}
 
         {/* その他の親族（右下に列挙） */}
         {others.length > 0 && (
