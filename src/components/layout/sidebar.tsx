@@ -58,6 +58,7 @@ const NAV_CARE_MANAGER: NavEntry[] = [
   },
   { name: "給付管理", href: "/billing/benefits", icon: Calculator },
   { name: "レセプト", href: "/billing/claims", icon: FileSpreadsheet },
+  { name: "明細書・請求書", href: "/billing/forms", icon: FileText },
   // 帳票作成: 全帳票がケアマネ業務メニューに移動したため非表示
   { name: "マスタ管理", href: "/master", icon: Settings },
   { name: "設定", href: "/settings", icon: UserCog },
