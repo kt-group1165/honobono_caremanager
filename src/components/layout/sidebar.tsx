@@ -141,7 +141,7 @@ export function Sidebar() {
     <aside
       className={cn(
         "flex flex-col border-r bg-white transition-all duration-200",
-        collapsed ? "w-16" : "w-60"
+        collapsed ? "w-[72px]" : "w-60"
       )}
     >
       <div className="flex h-14 items-center border-b px-4">
@@ -179,7 +179,7 @@ export function Sidebar() {
                   )}
                   title={collapsed ? entry.name : undefined}
                 >
-                  <GroupIcon size={22} />
+                  <GroupIcon size={collapsed ? 26 : 20} />
                   {!collapsed && (
                     <>
                       <span className="flex-1 text-left">{entry.name}</span>
@@ -234,7 +234,7 @@ export function Sidebar() {
                           )}
                           title={child.name}
                         >
-                          <ChildIcon size={22} />
+                          <ChildIcon size={26} />
                         </Link>
                       );
                     })}
@@ -261,7 +261,7 @@ export function Sidebar() {
               )}
               title={collapsed ? entry.name : undefined}
             >
-              <entry.icon size={22} />
+              <entry.icon size={collapsed ? 26 : 20} />
               {!collapsed && <span>{entry.name}</span>}
             </Link>
           );
