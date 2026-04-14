@@ -1639,8 +1639,32 @@ function MyShiftTab({ staffId }: { staffId: string }) {
   const [loading, setLoading] = useState(false);
   const [records, setRecords] = useState<ExistingRecord[]>([]);
   const [recordFormTarget, setRecordFormTarget] = useState<VisitScheduleEntry | null>(null);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calMonth, setCalMonth] = useState(() => new Date());
+  const [shiftDates, setShiftDates] = useState<Set<string>>(new Set());
 
   const dateStr = format(currentDate, "yyyy-MM-dd");
+
+  // Fetch which dates in a month have shifts (for calendar dots)
+  const fetchShiftDates = useCallback(async (month: Date) => {
+    const from = format(startOfMonth(month), "yyyy-MM-dd");
+    const to = format(endOfMonth(month), "yyyy-MM-dd");
+    const { data } = await supabase
+      .from("kaigo_visit_schedule")
+      .select("visit_date")
+      .eq("staff_id", staffId)
+      .gte("visit_date", from)
+      .lte("visit_date", to)
+      .neq("status", "cancelled");
+    const dates = new Set<string>();
+    (data || []).forEach((r: { visit_date: string }) => dates.add(r.visit_date));
+    setShiftDates(dates);
+  }, [staffId, supabase]);
+
+  // When calendar opens or month changes, fetch shift dates
+  useEffect(() => {
+    if (showCalendar) fetchShiftDates(calMonth);
+  }, [showCalendar, calMonth, fetchShiftDates]);
 
   const fetchSchedules = useCallback(
     async (date: Date) => {
@@ -1709,7 +1733,10 @@ function MyShiftTab({ staffId }: { staffId: string }) {
         <button onClick={prevDay} className="flex items-center justify-center w-10 h-10 rounded-xl border border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors">
           <ChevronLeft size={20} />
         </button>
-        <label className="relative cursor-pointer text-center">
+        <button
+          onClick={() => { setCalMonth(currentDate); setShowCalendar(true); }}
+          className="text-center"
+        >
           <div className="flex items-center gap-2 justify-center">
             <span className={cn(
               "text-lg font-bold border-b-2 border-dashed border-blue-300 pb-0.5",
@@ -1719,17 +1746,85 @@ function MyShiftTab({ staffId }: { staffId: string }) {
             </span>
             {isToday && <span className="text-[10px] font-bold bg-blue-600 text-white px-1.5 py-0.5 rounded">今日</span>}
           </div>
-          <input
-            type="date"
-            value={dateStr}
-            onChange={(e) => { if (e.target.value) setCurrentDate(new Date(e.target.value + "T00:00:00")); }}
-            className="absolute inset-0 opacity-0 cursor-pointer"
-          />
-        </label>
+        </button>
         <button onClick={nextDay} className="flex items-center justify-center w-10 h-10 rounded-xl border border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors">
           <ChevronRight size={20} />
         </button>
       </div>
+
+      {/* Custom Calendar Picker Modal */}
+      {showCalendar && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick={() => setShowCalendar(false)}>
+          <div className="w-full max-w-sm bg-white rounded-t-2xl sm:rounded-2xl shadow-xl p-4 pb-8" onClick={(e) => e.stopPropagation()}>
+            {/* Calendar month nav */}
+            <div className="flex items-center justify-between mb-3">
+              <button onClick={() => setCalMonth(subMonths(calMonth, 1))} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 active:bg-gray-200">
+                <ChevronLeft size={18} />
+              </button>
+              <span className="text-base font-bold text-gray-900">
+                {format(calMonth, "yyyy年M月", { locale: ja })}
+              </span>
+              <button onClick={() => setCalMonth(addMonths(calMonth, 1))} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 active:bg-gray-200">
+                <ChevronRight size={18} />
+              </button>
+            </div>
+            {/* DoW header */}
+            <div className="grid grid-cols-7 gap-0.5 mb-1">
+              {DOW_LABELS.map((d, i) => (
+                <div key={d} className={cn("text-center text-xs font-bold py-1", i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-gray-400")}>
+                  {d}
+                </div>
+              ))}
+            </div>
+            {/* Day cells */}
+            <div className="grid grid-cols-7 gap-0.5">
+              {(() => {
+                const monthDays = eachDayOfInterval({ start: startOfMonth(calMonth), end: endOfMonth(calMonth) });
+                const blanks = getDay(monthDays[0]);
+                return (
+                  <>
+                    {Array.from({ length: blanks }).map((_, i) => <div key={`b-${i}`} className="aspect-square" />)}
+                    {monthDays.map((day) => {
+                      const ds = format(day, "yyyy-MM-dd");
+                      const dw = getDay(day);
+                      const isSelected = ds === dateStr;
+                      const hasShift = shiftDates.has(ds);
+                      const isTd = isSameDay(day, new Date());
+                      return (
+                        <button
+                          key={ds}
+                          onClick={() => { setCurrentDate(day); setShowCalendar(false); }}
+                          className={cn(
+                            "aspect-square flex flex-col items-center justify-center rounded-lg transition-all relative min-h-[40px]",
+                            isSelected ? "bg-blue-600 text-white" : isTd ? "bg-blue-50 ring-1 ring-blue-300" : "hover:bg-gray-100 active:bg-gray-200"
+                          )}
+                        >
+                          <span className={cn(
+                            "text-sm font-semibold",
+                            isSelected ? "text-white" : isTd ? "text-blue-700" : dw === 0 ? "text-red-500" : dw === 6 ? "text-blue-500" : "text-gray-700"
+                          )}>
+                            {format(day, "d")}
+                          </span>
+                          {hasShift && (
+                            <div className={cn("w-1.5 h-1.5 rounded-full mt-0.5", isSelected ? "bg-white" : "bg-green-500")} />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </>
+                );
+              })()}
+            </div>
+            {/* Today button */}
+            <button
+              onClick={() => { setCurrentDate(new Date()); setShowCalendar(false); }}
+              className="w-full mt-3 py-2.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-sm font-bold active:bg-blue-100"
+            >
+              今日に戻る
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Today button */}
       {!isToday && (
