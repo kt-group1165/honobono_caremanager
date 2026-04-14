@@ -145,25 +145,58 @@ export default function EmergencySheetsPage() {
 
   const fetchData = useCallback(async (userId: string) => {
     setLoading(true);
-    // Fetch user info
-    const { data: userData } = await supabase
-      .from("kaigo_users")
-      .select("name, name_kana, birth_date, gender, address, phone")
-      .eq("id", userId)
-      .single();
-    setUserInfo(userData as UserInfo | null);
+    // Fetch user info + 既往歴 + アセスメント（家族情報）を並行取得
+    const [{ data: userData }, { data: sheetData }, { data: historyData }, { data: familyData }] = await Promise.all([
+      supabase.from("kaigo_users").select("name, name_kana, birth_date, gender, address, phone").eq("id", userId).single(),
+      supabase.from("kaigo_emergency_sheets").select("*").eq("user_id", userId).single(),
+      supabase.from("kaigo_medical_history").select("disease_name, onset_date, status, hospital, doctor, notes").eq("user_id", userId).order("created_at", { ascending: false }),
+      supabase.from("kaigo_assessments").select("form_data").eq("user_id", userId).order("created_at", { ascending: false }).limit(1).single(),
+    ]);
 
-    // Fetch emergency sheet
-    const { data: sheetData } = await supabase
-      .from("kaigo_emergency_sheets")
-      .select("*")
-      .eq("user_id", userId)
-      .single();
+    setUserInfo(userData as UserInfo | null);
 
     if (sheetData) {
       setSheet(sheetData as EmergencySheet);
     } else {
-      setSheet(emptySheet(userId));
+      // 新規: 既存データから自動反映
+      const s = emptySheet(userId);
+
+      // 既往歴から かかりつけ医 + 既往歴テキスト を反映
+      if (historyData && historyData.length > 0) {
+        // 治療中の最初のレコードからかかりつけ医を取得
+        const treating = historyData.filter((h: any) => h.status === "治療中"); // eslint-disable-line @typescript-eslint/no-explicit-any
+        if (treating.length > 0 && treating[0].doctor) {
+          s.doctor_name = treating[0].doctor;
+          s.doctor_hospital = treating[0].hospital || "";
+        }
+        if (treating.length > 1 && treating[1].doctor) {
+          s.doctor2_name = treating[1].doctor;
+          s.doctor2_hospital = treating[1].hospital || "";
+        }
+        // 既往歴テキスト
+        s.medical_history = historyData.map((h: any) => // eslint-disable-line @typescript-eslint/no-explicit-any
+          `${h.disease_name}${h.status ? ` (${h.status})` : ""}${h.hospital ? ` - ${h.hospital}` : ""}`
+        ).join("\n");
+      }
+
+      // アセスメントの家族情報から緊急連絡先を反映
+      if (familyData?.form_data) {
+        const fd = familyData.form_data as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+        const members = fd?.tab2?.family_members || [];
+        // 緊急連絡先として主介護者や近親者を反映
+        let contactIdx = 0;
+        for (const m of members) {
+          if (!m.name || contactIdx >= 3) break;
+          const key = contactIdx === 0 ? "1" : contactIdx === 1 ? "2" : "3";
+          (s as any)[`emergency_contact${key}_name`] = m.name || ""; // eslint-disable-line @typescript-eslint/no-explicit-any
+          (s as any)[`emergency_contact${key}_relation`] = m.relationship || m.relationship_detail || ""; // eslint-disable-line @typescript-eslint/no-explicit-any
+          (s as any)[`emergency_contact${key}_phone`] = m.phone || ""; // eslint-disable-line @typescript-eslint/no-explicit-any
+          (s as any)[`emergency_contact${key}_address`] = m.address || ""; // eslint-disable-line @typescript-eslint/no-explicit-any
+          contactIdx++;
+        }
+      }
+
+      setSheet(s);
     }
     setLoading(false);
   }, [supabase]);
