@@ -2,15 +2,12 @@
 
 import React from "react";
 
-// ─── Style constants ──────────────────────────────────────────────────────────
-
-const F = '"MS Mincho","ＭＳ 明朝","游明朝","Yu Mincho","Hiragino Mincho ProN",serif';
+const F = '"MS Mincho","ＭＳ 明朝","游明朝",serif';
 const B = "1px solid #333";
 const B2 = "1.5px solid #000";
+const BG = "#f5f5f5";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function D({ v, n, s = 18 }: { v: string; n: number; s?: number }) {
+function D({ v, n, s = 16 }: { v: string; n: number; s?: number }) {
   const cs = v.padEnd(n, " ").slice(0, n).split("");
   return (
     <span style={{ display: "inline-flex" }}>
@@ -18,11 +15,9 @@ function D({ v, n, s = 18 }: { v: string; n: number; s?: number }) {
         <span key={i} style={{
           display: "inline-block", width: s, height: s + 1,
           border: B, textAlign: "center", lineHeight: `${s + 1}px`,
-          fontSize: s > 14 ? "9pt" : "7.5pt", fontFamily: "monospace",
+          fontSize: s > 14 ? "9pt" : "7pt", fontFamily: "monospace",
           marginRight: -1, background: "#fff",
-        }}>
-          {c.trim()}
-        </span>
+        }}>{c.trim()}</span>
       ))}
     </span>
   );
@@ -34,11 +29,10 @@ function era(d: string) {
   const yr = dt.getFullYear(), m = dt.getMonth() + 1, day = dt.getDate();
   if (yr >= 2019) return { e: 5, y: yr - 2018, m, day };
   if (yr >= 1989) return { e: 4, y: yr - 1988, m, day };
-  if (yr >= 1926) return { e: 3, y: yr - 1925, m, day };
-  return { e: 2, y: yr - 1911, m, day };
+  return { e: 3, y: yr - 1925, m, day };
 }
 
-function p(n: number, l = 2) { return String(n).padStart(l, "0"); }
+function p(n: number) { return String(n).padStart(2, "0"); }
 
 function Cir({ on, text }: { on: boolean; text: string }) {
   return on ? (
@@ -46,307 +40,362 @@ function Cir({ on, text }: { on: boolean; text: string }) {
   ) : <span>{text}</span>;
 }
 
+// 斜線セル
+const SLASH: React.CSSProperties = {
+  border: B, background: "repeating-linear-gradient(135deg, transparent, transparent 2px, #bbb 2px, #bbb 3px)",
+};
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Props {
-  providerNumber: string; officeName: string; officeAddress: string;
-  officePhone: string; postalCode: string;
-  insurerNumber: string; insuredNumber: string;
-  userName: string; userKana: string; birthDate: string; gender: string;
-  careLevel: string; certStart: string; certEnd: string;
-  billingMonth: string; unitPrice: number;
-  lines: { name: string; code: string; units: number; count: number }[];
-  totalUnits: number; totalAmount: number; insuranceAmount: number;
+interface PersonData {
+  insuredNumber: string;
+  userName: string;
+  userKana: string;
+  birthDate: string;
+  gender: string;
+  careLevel: string;
+  certStart: string;
+  certEnd: string;
+  lines: { name: string; code: string; units: number; count: number; serviceUnits: number }[];
+  totalServiceUnits: number;
+  claimAmount: number;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+interface Props {
+  providerNumber: string;
+  officeName: string;
+  officeAddress: string;
+  officePhone: string;
+  postalCode: string;
+  insurerNumber: string;
+  unitPrice: number;
+  billingMonth: string;
+  person1: PersonData | null;
+  person2: PersonData | null;
+}
+
+// ─── 1人分の被保険者ブロック ──────────────────────────────────────────────────
+
+function PersonBlock({
+  num,
+  person,
+  providerNumber,
+  billingMonth,
+}: {
+  num: 1 | 2;
+  person: PersonData | null;
+  providerNumber: string;
+  billingMonth: string;
+}) {
+  const h: React.CSSProperties = { border: B, padding: "1px 3px", fontSize: "6pt", verticalAlign: "middle", fontFamily: F, background: BG };
+  const c: React.CSSProperties = { border: B, padding: "1px 3px", fontSize: "7.5pt", verticalAlign: "middle", fontFamily: F, background: "#fff" };
+  const cR: React.CSSProperties = { ...c, textAlign: "right" };
+
+  if (!person) {
+    // 空の被保険者ブロック
+    return (
+      <table style={{ width: "100%", borderCollapse: "collapse", border: B2, marginBottom: "1mm" }}>
+        <tbody>
+          <tr style={{ height: 20 }}>
+            <td style={{ ...h, width: "3%", textAlign: "center", borderRight: B2 }} rowSpan={6}>
+              <span style={{ fontSize: "10pt", fontWeight: "bold" }}>{num}</span>
+            </td>
+            <td style={{ ...h, width: "10%" }}>被保険者番号</td>
+            <td style={{ ...c, width: "22%" }}><D v="" n={10} /></td>
+            <td style={{ ...h, width: "6%", fontSize: "5pt" }}>(ﾌﾘｶﾞﾅ)</td>
+            <td style={{ ...c, width: "20%" }}></td>
+            <td style={{ ...c, width: "10%", textAlign: "center" }}>性別 1.男 2.女</td>
+          </tr>
+          <tr style={{ height: 18 }}>
+            <td style={h}>公費受給者番号</td>
+            <td style={c}></td>
+            <td style={h}>氏名</td>
+            <td style={c} colSpan={2}></td>
+          </tr>
+          <tr style={{ height: 24 }}>
+            <td style={{ ...h, fontSize: "5pt" }}>生年<br />月日</td>
+            <td style={c} colSpan={2}>
+              <span style={{ fontSize: "6pt" }}>1.明治 2.大正 3.昭和</span>
+              <br />
+              <span style={{ fontSize: "7pt" }}>　年　月　日</span>
+            </td>
+            <td style={{ ...c, fontSize: "6pt" }}>
+              要介護<br />状態区分　1・2・3・4・5
+            </td>
+            <td style={{ ...c, fontSize: "6pt" }}>
+              認定<br />有効期間　年　月　日から<br />　　　　　年　月　日まで
+            </td>
+          </tr>
+          <tr style={{ height: 18 }}>
+            <td style={{ ...h, fontSize: "5pt" }}>居宅介護支援<br />事業所番号</td>
+            <td style={c}><D v="" n={10} s={11} /></td>
+            <td style={{ ...h, fontSize: "5pt" }}>サービス計<br />画作成依頼<br />届出年月日</td>
+            <td style={c} colSpan={2}>令和　年　月　日</td>
+          </tr>
+          {/* サービス明細ヘッダー */}
+          <tr style={{ height: 16 }}>
+            <td style={{ ...h, textAlign: "center" }} colSpan={2}>サービス内容</td>
+            <td style={{ ...h, textAlign: "center" }}>サービスコード</td>
+            <td style={{ ...h, textAlign: "center" }}>単位数</td>
+            <td style={{ ...h, textAlign: "center", fontSize: "5pt" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>回数</span><span>サービス単位数</span><span>摘要</span><span>サービス単位数合計</span>
+              </div>
+            </td>
+          </tr>
+          {/* 空の明細行 */}
+          <tr style={{ height: 40 }}>
+            <td style={c} colSpan={5}>
+              <div style={{ height: 40, display: "flex", alignItems: "flex-end", justifyContent: "flex-end", fontSize: "6pt", color: "#999" }}>
+                請求額合計
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    );
+  }
+
+  const b = era(person.birthDate);
+  const cs = era(person.certStart);
+  const ce = era(person.certEnd);
+  const clNum = person.careLevel.match(/\d/)?.[0] ?? "";
+  const isK = person.careLevel.includes("要介護");
+
+  // サービス明細行（最低3行）
+  const svc = [...person.lines];
+  while (svc.length < 3) svc.push({ name: "", code: "", units: 0, count: 0, serviceUnits: 0 });
+
+  const bm = era(billingMonth + "-01");
+
+  return (
+    <table style={{ width: "100%", borderCollapse: "collapse", border: B2, marginBottom: "1mm" }}>
+      <tbody>
+        {/* 被保険者番号 + フリガナ + 性別 */}
+        <tr style={{ height: 20 }}>
+          <td style={{ ...h, width: "3%", textAlign: "center", borderRight: B2 }} rowSpan={4}>
+            <span style={{ fontSize: "10pt", fontWeight: "bold" }}>{num}</span>
+          </td>
+          <td style={{ ...h, width: "10%", fontSize: "5.5pt" }}>被保険者番号</td>
+          <td style={{ ...c, width: "22%" }}><D v={person.insuredNumber} n={10} /></td>
+          <td style={{ ...h, width: "6%", fontSize: "5pt" }}>(ﾌﾘｶﾞﾅ)</td>
+          <td style={{ ...c, width: "15%", fontSize: "7pt" }}>{person.userKana}</td>
+          <td style={{ ...c, width: "15%", textAlign: "center", fontSize: "7pt" }}>
+            性別 <Cir on={person.gender==="男"} text="1.男" /> <Cir on={person.gender==="女"} text="2.女" />
+          </td>
+        </tr>
+        {/* 公費 + 氏名 */}
+        <tr style={{ height: 18 }}>
+          <td style={{ ...h, fontSize: "5.5pt" }}>公費受給者番号</td>
+          <td style={c}></td>
+          <td style={{ ...h, fontSize: "5.5pt" }}>氏名</td>
+          <td style={{ ...c, fontWeight: "bold", fontSize: "10pt" }} colSpan={2}>{person.userName}</td>
+        </tr>
+        {/* 生年月日 + 要介護度 + 認定有効期間 */}
+        <tr style={{ height: 26 }}>
+          <td style={{ ...h, fontSize: "5pt" }}>
+            <span style={{ writingMode: "vertical-rl" }}>被保険者</span>
+          </td>
+          <td style={{ ...c, fontSize: "6.5pt" }}>
+            <div style={{ fontSize: "6pt" }}>生年月日</div>
+            <Cir on={b.e===1} text="1.明治" /> <Cir on={b.e===2} text="2.大正" /> <Cir on={b.e===3} text="3.昭和" />
+            <br />
+            <D v={p(b.y)} n={2} s={11} />年<D v={p(b.m)} n={2} s={11} />月<D v={p(b.day)} n={2} s={11} />日
+          </td>
+          <td style={{ ...c, fontSize: "6.5pt" }} colSpan={2}>
+            <div style={{ fontSize: "5.5pt" }}>要介護　　　　認定</div>
+            <div>
+              状態区分
+              {["1","2","3","4","5"].map((n,i) => (
+                <React.Fragment key={n}><Cir on={isK && clNum===n} text={n} />{i<4 && "・"}</React.Fragment>
+              ))}
+            </div>
+          </td>
+          <td style={{ ...c, fontSize: "6.5pt" }}>
+            <div style={{ fontSize: "5pt" }}>認定<br />有効期間</div>
+            <D v={p(cs.y)} n={2} s={10} />年<D v={p(cs.m)} n={2} s={10} />月<D v={p(cs.day)} n={2} s={10} />日から
+            <br />
+            <D v={p(ce.y)} n={2} s={10} />年<D v={p(ce.m)} n={2} s={10} />月<D v={p(ce.day)} n={2} s={10} />日まで
+          </td>
+        </tr>
+        {/* 居宅介護支援事業所番号 + 届出年月日 */}
+        <tr style={{ height: 18 }}>
+          <td style={{ ...h, fontSize: "5pt" }}>居宅介護支援<br />事業所番号</td>
+          <td style={c}><D v={providerNumber} n={10} s={11} /></td>
+          <td style={{ ...h, fontSize: "5pt" }}>サービス計画<br />作成依頼届出<br />年月日</td>
+          <td style={{ ...c, fontSize: "7pt" }} colSpan={2}>
+            令和<D v={p(bm.y)} n={2} s={10} />年<D v={p(bm.m)} n={2} s={10} />月<D v="" n={2} s={10} />日
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
+// ─── メイン: 居宅介護支援介護給付費明細書 ──────────────────────────────────────
 
 export function MeisaiForm(props: Props) {
   const {
     providerNumber, officeName, officeAddress, officePhone, postalCode,
-    insurerNumber, insuredNumber, userName, userKana,
-    birthDate, gender, careLevel, certStart, certEnd,
-    billingMonth, unitPrice, lines, totalUnits, totalAmount, insuranceAmount,
+    insurerNumber, unitPrice, billingMonth, person1, person2,
   } = props;
 
-  const h: React.CSSProperties = { border: B, padding: "1px 3px", fontSize: "6.5pt", verticalAlign: "middle", fontFamily: F, background: "#f5f5f5" };
-  const c: React.CSSProperties = { border: B, padding: "1px 4px", fontSize: "8pt", verticalAlign: "middle", fontFamily: F, background: "#fff" };
+  const h: React.CSSProperties = { border: B, padding: "1px 3px", fontSize: "6pt", verticalAlign: "middle", fontFamily: F, background: BG };
+  const c: React.CSSProperties = { border: B, padding: "1px 3px", fontSize: "7.5pt", verticalAlign: "middle", fontFamily: F, background: "#fff" };
   const cR: React.CSSProperties = { ...c, textAlign: "right" };
-  const cC: React.CSSProperties = { ...c, textAlign: "center" };
 
-  const b = era(birthDate), cs = era(certStart), ce = era(certEnd), bm = era(billingMonth + "-01");
-  const clNum = careLevel.match(/\d/)?.[0] ?? "";
-  const isK = careLevel.includes("要介護");
+  const bm = era(billingMonth + "-01");
 
-  const svc = [...lines];
-  while (svc.length < 6) svc.push({ name: "", code: "", units: 0, count: 0 });
+  // サービス明細テーブルを描画する関数
+  const renderServiceTable = (person: PersonData | null) => {
+    if (!person) {
+      return (
+        <table style={{ width: "100%", borderCollapse: "collapse", border: B2, marginBottom: "1mm" }}>
+          <thead>
+            <tr>
+              <th style={{ ...h, width: "3%", textAlign: "center" }} rowSpan={2}>
+                <span style={{ writingMode: "vertical-rl", fontSize: "6pt" }}>給付費明細欄</span>
+              </th>
+              <th style={{ ...h, width: "20%", textAlign: "center" }}>サービス内容</th>
+              <th style={{ ...h, width: "14%", textAlign: "center" }}>サービスコード</th>
+              <th style={{ ...h, width: "8%", textAlign: "center" }}>単位数</th>
+              <th style={{ ...h, width: "7%", textAlign: "center" }}>回数</th>
+              <th style={{ ...h, width: "12%", textAlign: "center" }}>サービス単位数</th>
+              <th style={{ ...h, width: "15%", textAlign: "center" }}>摘要</th>
+              <th style={{ ...h, width: "14%", textAlign: "center" }}>サービス単位数合計</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: 3 }).map((_, i) => (
+              <tr key={i} style={{ height: 18 }}>
+                {i === 0 && <td style={c} rowSpan={4}></td>}
+                <td style={c}></td><td style={c}></td><td style={c}></td><td style={c}></td><td style={c}></td><td style={c}></td>
+                {i === 0 && <td style={cR} rowSpan={3}></td>}
+              </tr>
+            ))}
+            <tr style={{ height: 18 }}>
+              <td style={c} colSpan={5} />
+              <td style={{ ...cR, fontWeight: "bold", fontSize: "6pt" }}>請求額合計</td>
+              <td style={cR}></td>
+            </tr>
+          </tbody>
+        </table>
+      );
+    }
 
-  return (
-    <div style={{ fontFamily: F, fontSize: "7.5pt", color: "#000", width: "195mm" }}>
-      {/* ──── タイトル ──── */}
-      <div style={{ textAlign: "center", fontWeight: "bold", fontSize: "10pt", marginBottom: "1mm", letterSpacing: "0.1em" }}>
-        居宅サービス・地域密着型サービス介護給付費明細書
-      </div>
-      <div style={{ fontSize: "4.5pt", textAlign: "center", marginBottom: "1.5mm", color: "#555" }}>
-        （訪問介護・訪問入浴介護・訪問看護・訪問リハ・居宅療養管理指導・通所介護・通所リハ・福祉用具貸与・定期巡回・夜間対応型訪問介護・認知症対応型通所介護・小規模多機能・看多機・居宅介護支援・介護予防支援）
-      </div>
+    const svc = [...person.lines];
+    while (svc.length < 3) svc.push({ name: "", code: "", units: 0, count: 0, serviceUnits: 0 });
 
-      {/* ──── 上段: 公費 + 年月 ──── */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "0.5mm" }}>
-        <tbody>
-          <tr style={{ height: 20 }}>
-            <td style={{ ...h, width: "13%", borderTop: B2, borderLeft: B2 }}>公費負担者番号</td>
-            <td style={{ ...c, width: "25%", borderTop: B2 }}><D v="" n={8} /></td>
-            <td style={{ ...c, borderTop: B2, borderRight: B2, textAlign: "right" }} rowSpan={2}>
-              {bm.e === 5 ? "令和" : "平成"}<D v={p(bm.y)} n={2} s={14} />年<D v={p(bm.m)} n={2} s={14} />月分
-            </td>
-          </tr>
-          <tr style={{ height: 20 }}>
-            <td style={{ ...h, borderLeft: B2, borderBottom: B2 }}>公費受給者番号</td>
-            <td style={{ ...c, borderBottom: B2 }}><D v="" n={7} /></td>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* ──── 被保険者 + 事業所 (公式様式の2列レイアウト) ──── */}
-      <table style={{ width: "100%", borderCollapse: "collapse", border: B2, marginBottom: "0.5mm" }}>
-        <tbody>
-          <tr style={{ height: 22 }}>
-            <td style={{ ...h, width: "10%", fontSize: "6pt" }}>被保険者<br />番号</td>
-            <td style={{ ...c, width: "28%" }}><D v={insuredNumber} n={10} /></td>
-            <td style={{ ...h, width: "8%", borderLeft: B2, fontSize: "6pt" }}>事業所<br />番号</td>
-            <td style={{ ...c, width: "28%" }}><D v={providerNumber} n={10} /></td>
-          </tr>
-          <tr style={{ height: 18 }}>
-            <td style={{ ...h, fontSize: "5.5pt" }}>（フリガナ）</td>
-            <td style={{ ...c, fontSize: "7pt" }}>{userKana}</td>
-            <td style={{ ...h, borderLeft: B2, fontSize: "6pt" }} rowSpan={2}>請求<br />事業所</td>
-            <td style={{ ...c, fontSize: "7pt", lineHeight: 1.3 }} rowSpan={2}>
-              <div style={{ fontWeight: "bold", fontSize: "8pt" }}>{officeName}</div>
-              <div>〒{postalCode}</div>
-              <div>{officeAddress}</div>
-            </td>
-          </tr>
-          <tr style={{ height: 26 }}>
-            <td style={h}>氏名</td>
-            <td style={{ ...c, fontWeight: "bold", fontSize: "11pt" }}>{userName}</td>
-          </tr>
-          <tr style={{ height: 32 }}>
-            <td style={{ ...h, fontSize: "5.5pt" }}>
-              <div>生年月日</div>
-            </td>
-            <td style={c}>
-              <div style={{ fontSize: "6.5pt" }}>
-                <Cir on={b.e===1} text="1.明治" /> <Cir on={b.e===2} text="2.大正" /> <Cir on={b.e===3} text="3.昭和" /> <Cir on={b.e===4} text="4.平成" /> <Cir on={b.e===5} text="5.令和" />
-              </div>
-              <div style={{ marginTop: 2 }}>
-                <D v={p(b.y)} n={2} s={13} />年<D v={p(b.m)} n={2} s={13} />月<D v={p(b.day)} n={2} s={13} />日
-                <span style={{ marginLeft: 8 }}>
-                  性別 <Cir on={gender==="男"} text="1.男" /> <Cir on={gender==="女"} text="2.女" />
-                </span>
-              </div>
-            </td>
-            <td style={{ ...h, borderLeft: B2, fontSize: "6pt" }}>保険者番号</td>
-            <td style={c}><D v={insurerNumber} n={6} /></td>
-          </tr>
-          <tr style={{ height: 22 }}>
-            <td style={{ ...h, fontSize: "6pt" }}>要介護<br />状態区分</td>
-            <td style={c}>
-              <span style={{ fontSize: "7.5pt" }}>
-                要介護・
-                {["1","2","3","4","5"].map((n,i) => (
-                  <React.Fragment key={n}>
-                    <Cir on={isK && clNum===n} text={n} />
-                    {i < 4 && "・"}
-                  </React.Fragment>
-                ))}
-              </span>
-            </td>
-            <td style={{ ...h, borderLeft: B2, fontSize: "5.5pt" }}>連絡先</td>
-            <td style={{ ...c, fontSize: "7.5pt" }}>電話番号　{officePhone}</td>
-          </tr>
-          <tr style={{ height: 30 }}>
-            <td style={{ ...h, fontSize: "6pt" }}>認定有効<br />期間</td>
-            <td style={{ ...c, fontSize: "7pt", lineHeight: 1.5 }}>
-              {cs.e===5?"令和":"平成"}<D v={p(cs.y)} n={2} s={12} />年<D v={p(cs.m)} n={2} s={12} />月<D v={p(cs.day)} n={2} s={12} />日　から<br />
-              {ce.e===5?"令和":"平成"}<D v={p(ce.y)} n={2} s={12} />年<D v={p(ce.m)} n={2} s={12} />月<D v={p(ce.day)} n={2} s={12} />日　まで
-            </td>
-            <td style={{ ...h, borderLeft: B2, fontSize: "5.5pt" }}>居宅<br />サービス<br />計画</td>
-            <td style={{ ...c, fontSize: "6pt" }}>
-              ①　居宅介護支援事業者作成<br />
-              事業所番号 <D v={providerNumber} n={10} s={11} />
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* ──── サービス明細（保険分） ──── */}
-      <table style={{ width: "100%", borderCollapse: "collapse", border: B2, marginBottom: "0.5mm" }}>
+    return (
+      <table style={{ width: "100%", borderCollapse: "collapse", border: B2, marginBottom: "1mm" }}>
         <thead>
           <tr>
-            <th style={{ ...h, width: "24%", textAlign: "center" }}>サービス内容</th>
-            <th style={{ ...h, width: "13%", textAlign: "center" }}>サービスコード</th>
-            <th style={{ ...h, width: "9%", textAlign: "center" }}>単位数</th>
+            <th style={{ ...h, width: "3%", textAlign: "center" }} rowSpan={svc.length + 2}>
+              <span style={{ writingMode: "vertical-rl", fontSize: "6pt" }}>給付費明細欄</span>
+            </th>
+            <th style={{ ...h, width: "20%", textAlign: "center" }}>サービス内容</th>
+            <th style={{ ...h, width: "14%", textAlign: "center" }}>サービスコード</th>
+            <th style={{ ...h, width: "8%", textAlign: "center" }}>単位数</th>
             <th style={{ ...h, width: "7%", textAlign: "center" }}>回数</th>
-            <th style={{ ...h, width: "11%", textAlign: "center" }}>サービス単位数</th>
-            <th style={{ ...h, width: "5%", textAlign: "center", fontSize: "5pt" }}>公費<br />分</th>
-            <th style={{ ...h, width: "11%", textAlign: "center" }}>公費対象単位数</th>
-            <th style={{ ...h, width: "20%", textAlign: "center" }}>摘要</th>
+            <th style={{ ...h, width: "12%", textAlign: "center" }}>サービス単位数</th>
+            <th style={{ ...h, width: "15%", textAlign: "center" }}>摘要</th>
+            <th style={{ ...h, width: "14%", textAlign: "center" }}>サービス単位数合計</th>
           </tr>
         </thead>
         <tbody>
           {svc.map((l, i) => (
             <tr key={i} style={{ height: 18 }}>
-              <td style={{ ...c, fontSize: "7.5pt" }}>{l.name}</td>
-              <td style={{ ...cC, fontFamily: "monospace", letterSpacing: 1 }}>{l.code}</td>
+              <td style={{ ...c, fontSize: "7pt" }}>{l.name}</td>
+              <td style={{ ...c, fontFamily: "monospace", textAlign: "center", letterSpacing: 1 }}>{l.code}</td>
               <td style={cR}>{l.units > 0 ? l.units.toLocaleString() : ""}</td>
               <td style={cR}>{l.count > 0 ? l.count : ""}</td>
-              <td style={cR}>{l.units > 0 ? (l.units * l.count).toLocaleString() : ""}</td>
-              <td style={cC}></td>
-              <td style={cR}></td>
+              <td style={cR}>{l.serviceUnits > 0 ? l.serviceUnits.toLocaleString() : ""}</td>
               <td style={c}></td>
+              {i === 0 && (
+                <td style={{ ...cR, fontWeight: "bold" }} rowSpan={svc.length}>
+                  {person.totalServiceUnits > 0 ? person.totalServiceUnits.toLocaleString() : ""}
+                </td>
+              )}
             </tr>
           ))}
-        </tbody>
-      </table>
-
-      {/* ──── サービス明細（公費分）空テーブル ──── */}
-      <table style={{ width: "100%", borderCollapse: "collapse", border: B2, marginBottom: "0.5mm" }}>
-        <thead>
-          <tr>
-            <th style={{ ...h, width: "24%", textAlign: "center", fontSize: "5.5pt" }}>サービス内容</th>
-            <th style={{ ...h, width: "13%", textAlign: "center", fontSize: "5.5pt" }}>サービスコード</th>
-            <th style={{ ...h, width: "9%", textAlign: "center", fontSize: "5.5pt" }}>単位数</th>
-            <th style={{ ...h, width: "7%", textAlign: "center", fontSize: "5.5pt" }}>回数</th>
-            <th style={{ ...h, width: "11%", textAlign: "center", fontSize: "5.5pt" }}>サービス単位数</th>
-            <th style={{ ...h, width: "11%", textAlign: "center", fontSize: "5.5pt" }}>公費対象単位数</th>
-            <th style={{ ...h, width: "25%", textAlign: "center", fontSize: "5.5pt" }}>摘要</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr style={{ height: 16 }}><td style={c} colSpan={7}></td></tr>
-        </tbody>
-      </table>
-
-      {/* ──── 給付費明細欄（複数サービス種類を横並び + 右端に給付率/合計） ──── */}
-      <table style={{ width: "100%", borderCollapse: "collapse", border: B2, marginBottom: "0.5mm" }}>
-        <tbody>
-          {/* ①サービス種類 */}
-          <tr style={{ height: 22 }}>
-            <td style={{ ...h, width: "3%", textAlign: "center", borderRight: B2 }} rowSpan={9}>
-              <span style={{ writingMode: "vertical-rl", fontSize: "6pt", fontWeight: "bold", letterSpacing: "0.1em" }}>給付費明細欄</span>
-            </td>
-            <td style={{ ...h, width: "3%" }} rowSpan={2}></td>
-            <td style={{ ...h, width: "12%", fontSize: "5.5pt" }}>①サービス種類<br />　コード/②名称</td>
-            <td style={{ ...cC, width: "3%" }}>43</td>
-            <td style={{ ...c, width: "10%" }}>居宅介護支援</td>
-            <td style={c} colSpan={3}></td>
-            <td style={c} colSpan={3}></td>
-          </tr>
-          {/* ③サービス実日数 */}
-          <tr style={{ height: 20 }}>
-            <td style={{ ...h, fontSize: "5.5pt" }}>③サービス実日数</td>
-            <td style={cR} colSpan={2}><D v="01" n={2} s={12} />日</td>
-            <td style={cR} colSpan={2}>日</td>
-            <td style={cR} colSpan={2}>日</td>
-          </tr>
-          {/* ④計画単位数 */}
-          <tr style={{ height: 20 }}>
-            <td style={{ ...h, width: "3%", borderRight: B }} rowSpan={7}>
-              <span style={{ writingMode: "vertical-rl", fontSize: "5pt", letterSpacing: "0.05em" }}>請求額集計欄</span>
-            </td>
-            <td style={{ ...h, fontSize: "5.5pt" }}>④計画単位数</td>
-            <td style={cR} colSpan={2}>{totalUnits.toLocaleString()}</td>
-            <td style={c} colSpan={2}></td>
-            <td style={c} colSpan={2}></td>
-          </tr>
-          {/* ⑤限度額管理 */}
-          <tr style={{ height: 20 }}>
-            <td style={{ ...h, fontSize: "5pt" }}>⑤限度額管理対象<br />　単位数</td>
-            <td style={cR} colSpan={2}>0</td>
-            <td style={c} colSpan={2}></td>
-            <td style={{ ...c, textAlign: "right", fontSize: "6pt" }} colSpan={2}>給付率(/100)</td>
-          </tr>
-          {/* ⑥+⑦ */}
-          <tr style={{ height: 20 }}>
-            <td style={{ ...h, fontSize: "5pt" }}>⑦給付単位数(④⑤の<br />　うちいずれか小)+⑥</td>
-            <td style={cR} colSpan={2}>{totalUnits.toLocaleString()}</td>
-            <td style={c} colSpan={2}></td>
-            <td style={{ ...c, fontSize: "7pt" }}>保険</td>
-            <td style={cR}><D v="100" n={3} s={11} /></td>
-          </tr>
-          {/* ⑧公費分単位数 */}
           <tr style={{ height: 18 }}>
-            <td style={{ ...h, fontSize: "5.5pt" }}>⑧公費分単位数</td>
-            <td style={c} colSpan={2}></td>
-            <td style={c} colSpan={2}></td>
-            <td style={{ ...c, fontSize: "7pt" }}>公費</td>
-            <td style={c}></td>
-          </tr>
-          {/* ⑨単位数単価 */}
-          <tr style={{ height: 20 }}>
-            <td style={{ ...h, fontSize: "5.5pt" }}>⑨単位数単価</td>
-            <td style={cR}>{unitPrice.toFixed(2)}</td>
-            <td style={{ ...c, fontSize: "6pt" }}>円/単位</td>
-            <td style={c}></td>
-            <td style={{ ...c, fontSize: "6pt" }}>円/単位</td>
-            <td style={{ ...c, fontSize: "6pt" }}>円/単位</td>
-            <td style={{ ...h, fontSize: "6pt" }}>合計</td>
-          </tr>
-          {/* ⑩保険請求額 〜 ⑬ */}
-          <tr style={{ height: 22 }}>
-            <td style={{ ...h, fontSize: "5.5pt" }}>⑩保険請求額</td>
-            <td style={{ ...cR, fontWeight: "bold" }} colSpan={2}>{insuranceAmount.toLocaleString()}</td>
-            <td style={c} colSpan={2}></td>
-            <td style={c}></td>
-            <td style={{ ...cR, fontWeight: "bold", fontSize: "10pt" }}>{insuranceAmount.toLocaleString()}</td>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* ──── ⑪⑫⑬ 請求額（明細欄の続き） ──── */}
-      <table style={{ width: "100%", borderCollapse: "collapse", border: B2 }}>
-        <tbody>
-          <tr style={{ height: 20 }}>
-            <td style={{ ...h, width: "18%", fontSize: "5.5pt" }}>⑪利用者負担額</td>
-            <td style={{ ...cR, width: "14%" }}>0</td>
-            <td style={c} colSpan={3}></td>
-            <td style={cR}>0</td>
-          </tr>
-          <tr style={{ height: 20 }}>
-            <td style={{ ...h, fontSize: "5.5pt" }}>⑫公費請求額</td>
-            <td style={cR}></td>
-            <td style={c} colSpan={3}></td>
-            <td style={cR}></td>
-          </tr>
-          <tr style={{ height: 20 }}>
-            <td style={{ ...h, fontSize: "5.5pt" }}>⑬公費分本人負担</td>
-            <td style={cR}></td>
-            <td style={c} colSpan={3}></td>
-            <td style={cR}>0</td>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* ──── 社会福祉法人等による軽減 ──── */}
-      <table style={{ width: "100%", borderCollapse: "collapse", border: B2, marginTop: "0.5mm" }}>
-        <tbody>
-          <tr style={{ height: 28 }}>
-            <td style={{ ...h, width: "8%", fontSize: "5pt", textAlign: "center" }}>
-              社会福祉<br />法人等に<br />よる軽減
+            <td style={c} colSpan={5} />
+            <td style={{ ...cR, fontWeight: "bold", fontSize: "6pt" }}>請求額合計</td>
+            <td style={{ ...cR, fontWeight: "bold", fontSize: "9pt" }}>
+              {person.claimAmount > 0 ? person.claimAmount.toLocaleString() : ""}
             </td>
-            <td style={{ ...h, width: "8%", fontSize: "5.5pt" }}>軽減率</td>
-            <td style={{ ...c, width: "8%" }}>%</td>
-            <td style={{ ...h, width: "14%", fontSize: "5pt" }}>受領すべき利用者<br />負担の総額（円）</td>
-            <td style={{ ...c, width: "12%" }}></td>
-            <td style={{ ...h, width: "10%", fontSize: "5.5pt" }}>軽減額（円）</td>
-            <td style={{ ...c, width: "12%" }}></td>
-            <td style={{ ...h, width: "12%", fontSize: "5pt" }}>軽減後利用者<br />負担額（円）</td>
-            <td style={{ ...c, width: "10%" }}></td>
-            <td style={{ ...h, width: "6%", fontSize: "5.5pt" }}>備考</td>
           </tr>
         </tbody>
       </table>
+    );
+  };
+
+  return (
+    <div style={{ fontFamily: F, fontSize: "7.5pt", color: "#000", width: "195mm" }}>
+      {/* ──── タイトル + 年月 ──── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2mm" }}>
+        <div style={{ textAlign: "center", flex: 1, fontWeight: "bold", fontSize: "11pt", letterSpacing: "0.1em" }}>
+          居宅介護支援介護給付費明細書
+        </div>
+        <div style={{ border: B2, padding: "2px 4px", fontSize: "8pt" }}>
+          令和<D v={p(bm.y)} n={2} s={14} />年<D v={p(bm.m)} n={2} s={14} />月分
+        </div>
+      </div>
+
+      {/* ──── 公費負担者番号 + 保険者番号 ──── */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "1mm" }}>
+        <tbody>
+          <tr style={{ height: 18 }}>
+            <td style={{ ...h, width: "12%", borderTop: B2, borderLeft: B2 }}>公費負担者番号</td>
+            <td style={{ ...c, width: "20%", borderTop: B2 }}><D v="" n={8} s={14} /></td>
+            <td style={{ ...c, width: "5%", borderTop: B2 }} />
+            <td style={{ ...h, width: "10%", borderTop: B2 }}>保険者番号</td>
+            <td style={{ ...c, borderTop: B2, borderRight: B2 }}><D v={insurerNumber} n={6} s={14} /></td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* ──── 事業所情報 ──── */}
+      <table style={{ width: "100%", borderCollapse: "collapse", border: B2, marginBottom: "1mm" }}>
+        <tbody>
+          <tr style={{ height: 20 }}>
+            <td style={{ ...h, width: "10%", fontSize: "5.5pt" }}>居宅介護<br />支援事業者</td>
+            <td style={{ ...h, width: "8%", fontSize: "5.5pt" }}>事業所<br />番号</td>
+            <td style={{ ...c, width: "22%" }}><D v={providerNumber} n={10} /></td>
+            <td style={{ ...h, width: "8%", fontSize: "5.5pt" }}>所在地</td>
+            <td style={{ ...c, width: "22%" }} rowSpan={2}>
+              〒{postalCode}<br />{officeAddress}
+            </td>
+          </tr>
+          <tr style={{ height: 18 }}>
+            <td style={h}></td>
+            <td style={{ ...h, fontSize: "5.5pt" }}>事業所<br />名称</td>
+            <td style={{ ...c, fontWeight: "bold" }}>{officeName}</td>
+            <td style={h}></td>
+          </tr>
+          <tr style={{ height: 18 }}>
+            <td style={h} colSpan={2}></td>
+            <td style={c}></td>
+            <td style={{ ...h, fontSize: "5.5pt" }}>連絡先</td>
+            <td style={c}>電話番号　{officePhone}</td>
+          </tr>
+          <tr style={{ height: 18 }}>
+            <td style={h} colSpan={2}></td>
+            <td style={c} colSpan={2}></td>
+            <td style={c}>
+              単位数単価　<D v={unitPrice.toFixed(2).replace(".", "")} n={4} s={12} />（円/単位）
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* ──── 被保険者1 ──── */}
+      <PersonBlock num={1} person={person1} providerNumber={providerNumber} billingMonth={billingMonth} />
+      {renderServiceTable(person1)}
+
+      {/* ──── 被保険者2 ──── */}
+      <PersonBlock num={2} person={person2} providerNumber={providerNumber} billingMonth={billingMonth} />
+      {renderServiceTable(person2)}
     </div>
   );
 }

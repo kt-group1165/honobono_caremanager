@@ -357,20 +357,22 @@ export default function BillingFormsPage() {
                       officePhone={office?.phone ?? ""}
                       postalCode={office?.postal_code ?? ""}
                       insurerNumber={certInfo?.insurer_number ?? ""}
-                      insuredNumber={certInfo?.insured_number ?? ""}
-                      userName={userInfo?.name ?? ""}
-                      userKana={userInfo?.name_kana ?? ""}
-                      birthDate={userInfo?.birth_date ?? ""}
-                      gender={userInfo?.gender ?? ""}
-                      careLevel={certInfo?.care_level ?? ""}
-                      certStart={certInfo?.start_date ?? ""}
-                      certEnd={certInfo?.end_date ?? ""}
-                      billingMonth={billingMonth}
                       unitPrice={meisaiDetail.unitPrice}
-                      lines={meisaiDetail.lines}
-                      totalUnits={meisaiDetail.totalUnits}
-                      totalAmount={meisaiDetail.totalAmount}
-                      insuranceAmount={meisaiDetail.insuranceAmount}
+                      billingMonth={billingMonth}
+                      person1={{
+                        insuredNumber: certInfo?.insured_number ?? "",
+                        userName: userInfo?.name ?? "",
+                        userKana: userInfo?.name_kana ?? "",
+                        birthDate: userInfo?.birth_date ?? "",
+                        gender: userInfo?.gender ?? "",
+                        careLevel: certInfo?.care_level ?? "",
+                        certStart: certInfo?.start_date ?? "",
+                        certEnd: certInfo?.end_date ?? "",
+                        lines: meisaiDetail.lines.map((l) => ({ ...l, serviceUnits: l.units * l.count })),
+                        totalServiceUnits: meisaiDetail.totalUnits,
+                        claimAmount: meisaiDetail.insuranceAmount,
+                      }}
+                      person2={null}
                     />
                   </div>
                 </div>
@@ -414,20 +416,22 @@ export default function BillingFormsPage() {
             officePhone={office?.phone ?? ""}
             postalCode={office?.postal_code ?? ""}
             insurerNumber={certInfo?.insurer_number ?? ""}
-            insuredNumber={certInfo?.insured_number ?? ""}
-            userName={userInfo?.name ?? ""}
-            userKana={userInfo?.name_kana ?? ""}
-            birthDate={userInfo?.birth_date ?? ""}
-            gender={userInfo?.gender ?? ""}
-            careLevel={certInfo?.care_level ?? ""}
-            certStart={certInfo?.start_date ?? ""}
-            certEnd={certInfo?.end_date ?? ""}
-            billingMonth={billingMonth}
             unitPrice={meisaiDetail.unitPrice}
-            lines={meisaiDetail.lines}
-            totalUnits={meisaiDetail.totalUnits}
-            totalAmount={meisaiDetail.totalAmount}
-            insuranceAmount={meisaiDetail.insuranceAmount}
+            billingMonth={billingMonth}
+            person1={{
+              insuredNumber: certInfo?.insured_number ?? "",
+              userName: userInfo?.name ?? "",
+              userKana: userInfo?.name_kana ?? "",
+              birthDate: userInfo?.birth_date ?? "",
+              gender: userInfo?.gender ?? "",
+              careLevel: certInfo?.care_level ?? "",
+              certStart: certInfo?.start_date ?? "",
+              certEnd: certInfo?.end_date ?? "",
+              lines: meisaiDetail.lines.map((l) => ({ ...l, serviceUnits: l.units * l.count })),
+              totalServiceUnits: meisaiDetail.totalUnits,
+              claimAmount: meisaiDetail.insuranceAmount,
+            }}
+            person2={null}
           />
         )}
         {activeTab === "seikyu" && (
