@@ -887,9 +887,10 @@ interface StaffCalendarProps {
   staffName: string;
   currentMonth: Date;
   onMonthChange: (d: Date) => void;
+  onEditSchedule?: (sched: VisitSchedule) => void;
 }
 
-function StaffCalendar({ staffId, staffName, currentMonth, onMonthChange }: StaffCalendarProps) {
+function StaffCalendar({ staffId, staffName, currentMonth, onMonthChange, onEditSchedule }: StaffCalendarProps) {
   const supabase = createClient();
   const [schedules, setSchedules] = useState<VisitSchedule[]>([]);
   const [availability, setAvailability] = useState<StaffAvailabilitySlot[]>([]);
@@ -1060,17 +1061,19 @@ function StaffCalendar({ staffId, staffName, currentMonth, onMonthChange }: Staf
                       const col =
                         SERVICE_TYPE_COLORS[sched.service_type] ?? "bg-gray-100 text-gray-700";
                       return (
-                        <div
+                        <button
                           key={sched.id}
+                          onClick={() => onEditSchedule?.(sched)}
                           className={cn(
-                            "w-full text-left rounded px-1 py-0.5 text-[8px] leading-tight whitespace-nowrap overflow-hidden text-ellipsis",
-                            isRed ? "bg-red-50 text-red-600 font-semibold" : col
+                            "w-full text-left rounded px-1 py-0.5 text-[8px] leading-tight whitespace-nowrap overflow-hidden text-ellipsis cursor-pointer transition-colors",
+                            isRed ? "bg-red-50 text-red-600 font-semibold hover:bg-red-100" : cn(col, "hover:opacity-80")
                           )}
+                          title="クリックして編集"
                         >
                           {sched.start_time?.slice(0, 5)}~{sched.end_time?.slice(0, 5)} {sched.user_name ?? ""} {sched.service_type}
                           {isRed && <AlertTriangle size={8} className="inline ml-0.5" />}
                           {conflict && <span className="ml-0.5">重複</span>}
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -1565,6 +1568,7 @@ interface TimelineViewProps {
   currentMonth: Date;
   onMonthChange: (d: Date) => void;
   onPendingChangesChange?: (hasPending: boolean) => void;
+  onEditSchedule?: (sched: VisitSchedule) => void;
 }
 
 function TimelineView({
@@ -1576,6 +1580,7 @@ function TimelineView({
   currentMonth,
   onMonthChange,
   onPendingChangesChange,
+  onEditSchedule,
 }: TimelineViewProps) {
   const supabase = createClient();
   const [schedules, setSchedules] = useState<VisitSchedule[]>([]);
@@ -2213,10 +2218,14 @@ function TimelineView({
                             cursor: dragging ? "grabbing" : "grab",
                             zIndex: isDraggingThis ? 5 : undefined,
                           }}
-                          title={`${sched.start_time?.slice(0, 5)}~${sched.end_time?.slice(0, 5)} ${label} ${sched.service_type}${isOnUnavail ? " ⚠勤務不可" : ""}`}
+                          title={`${sched.start_time?.slice(0, 5)}~${sched.end_time?.slice(0, 5)} ${label} ${sched.service_type}${isOnUnavail ? " ⚠勤務不可" : ""}\nダブルクリックで編集`}
                           onMouseDown={(e) => {
                             const container = e.currentTarget.parentElement;
                             if (container) handleBarMouseDown(e, sched, row.id, container);
+                          }}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            onEditSchedule?.(sched);
                           }}
                         >
                           <span className="truncate font-semibold">{isOnUnavail && "⚠ "}{label}</span>
@@ -2330,6 +2339,56 @@ export default function ShiftManagementPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("calendar");
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
+
+  // ── Page-level edit modal (shared across all views) ──
+  const [pageEditModal, setPageEditModal] = useState<VisitSchedule | null>(null);
+  const [pageEditForm, setPageEditForm] = useState({ start_time: "", end_time: "", service_type: "", staff_id: "" });
+  const [pageEditSaving, setPageEditSaving] = useState(false);
+
+  const openPageEditModal = (sched: VisitSchedule) => {
+    setPageEditModal(sched);
+    setPageEditForm({
+      start_time: sched.start_time?.slice(0, 5) ?? "",
+      end_time: sched.end_time?.slice(0, 5) ?? "",
+      service_type: sched.service_type ?? "",
+      staff_id: sched.staff_id ?? "",
+    });
+  };
+
+  const handlePageEditSave = async () => {
+    if (!pageEditModal) return;
+    setPageEditSaving(true);
+    const { error } = await supabase
+      .from("kaigo_visit_schedule")
+      .update({
+        start_time: pageEditForm.start_time + ":00",
+        end_time: pageEditForm.end_time + ":00",
+        service_type: pageEditForm.service_type,
+        staff_id: pageEditForm.staff_id || null,
+      })
+      .eq("id", pageEditModal.id);
+    if (error) {
+      toast.error("更新に失敗しました: " + error.message);
+    } else {
+      toast.success("更新しました");
+      setPageEditModal(null);
+    }
+    setPageEditSaving(false);
+  };
+
+  const handlePageEditDelete = async () => {
+    if (!pageEditModal || !confirm("この予定を削除しますか？")) return;
+    const { error } = await supabase
+      .from("kaigo_visit_schedule")
+      .delete()
+      .eq("id", pageEditModal.id);
+    if (error) {
+      toast.error("削除に失敗しました: " + error.message);
+    } else {
+      toast.success("削除しました");
+      setPageEditModal(null);
+    }
+  };
 
   const confirmIfPending = (action: () => void) => {
     if (hasPendingChanges) {
@@ -2448,6 +2507,7 @@ export default function ShiftManagementPage() {
               currentMonth={currentMonth}
               onMonthChange={setCurrentMonth}
               onPendingChangesChange={setHasPendingChanges}
+              onEditSchedule={openPageEditModal}
             />
           ) : sidebarTab === "user" ? (
             selectedUserId && selectedUser ? (
@@ -2468,6 +2528,7 @@ export default function ShiftManagementPage() {
               staffName={selectedStaffMember.name}
               currentMonth={currentMonth}
               onMonthChange={setCurrentMonth}
+              onEditSchedule={openPageEditModal}
             />
           ) : (
             <div className="flex flex-1 items-center justify-center text-sm text-gray-400">
@@ -2479,6 +2540,91 @@ export default function ShiftManagementPage() {
 
       {showPatternModal && <PatternImportModal onClose={() => setShowPatternModal(false)} />}
       {showUrlModal && <UrlManagementModal onClose={() => setShowUrlModal(false)} />}
+
+      {/* Page-level edit modal */}
+      {pageEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setPageEditModal(null)}>
+          <div className="w-full max-w-md rounded-xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <h2 className="font-semibold text-gray-900">予定を編集</h2>
+              <button onClick={() => setPageEditModal(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">日付</label>
+                <div className="font-semibold text-gray-900">
+                  {pageEditModal.visit_date ? format(parseISO(pageEditModal.visit_date), "yyyy年M月d日(E)", { locale: ja }) : "—"}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">開始時間</label>
+                  <input
+                    type="time"
+                    value={pageEditForm.start_time}
+                    onChange={(e) => setPageEditForm({ ...pageEditForm, start_time: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">終了時間</label>
+                  <input
+                    type="time"
+                    value={pageEditForm.end_time}
+                    onChange={(e) => setPageEditForm({ ...pageEditForm, end_time: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">サービス</label>
+                <input
+                  type="text"
+                  value={pageEditForm.service_type}
+                  onChange={(e) => setPageEditForm({ ...pageEditForm, service_type: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">担当職員</label>
+                <select
+                  value={pageEditForm.staff_id}
+                  onChange={(e) => setPageEditForm({ ...pageEditForm, staff_id: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">-- 選択 --</option>
+                  {staff.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex items-center justify-between border-t px-5 py-4">
+              <button
+                onClick={handlePageEditDelete}
+                className="text-sm text-red-600 hover:underline"
+              >
+                ✕ 削除
+              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPageEditModal(null)}
+                  className="rounded-lg border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={handlePageEditSave}
+                  disabled={pageEditSaving}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  保存
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
