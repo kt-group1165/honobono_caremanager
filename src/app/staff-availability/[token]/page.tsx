@@ -1321,14 +1321,19 @@ function CareRecordModal({
             {/* 入室 */}
             {data.entry ? (
               <div className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
-                <LogIn size={16} className="text-emerald-600" />
-                <div>
+                <LogIn size={16} className="text-emerald-600 shrink-0" />
+                <div className="flex-1">
                   <span className="text-xs text-emerald-600 font-bold">入室済み</span>
                   <div className="text-sm font-bold text-emerald-800 tabular-nums">
                     {(() => { try { return format(new Date(data.entry.time), "HH:mm"); } catch { return ""; } })()}
                   </div>
                 </div>
-                {data.entry.lat && <MapPin size={12} className="text-emerald-400 ml-auto" />}
+                {data.entry.lat && (
+                  <a href={`https://maps.google.com/?q=${data.entry.lat},${data.entry.lng}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-0.5 text-blue-500 active:text-blue-700 shrink-0">
+                    <MapPin size={14} />
+                    <span className="text-[10px] underline">地図</span>
+                  </a>
+                )}
               </div>
             ) : (
               <button
@@ -1360,14 +1365,19 @@ function CareRecordModal({
             {/* 退室 */}
             {data.exit ? (
               <div className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-orange-50 border border-orange-200">
-                <LogOut size={16} className="text-orange-600" />
-                <div>
+                <LogOut size={16} className="text-orange-600 shrink-0" />
+                <div className="flex-1">
                   <span className="text-xs text-orange-600 font-bold">退室済み</span>
                   <div className="text-sm font-bold text-orange-800 tabular-nums">
                     {(() => { try { return format(new Date(data.exit.time), "HH:mm"); } catch { return ""; } })()}
                   </div>
                 </div>
-                {data.exit.lat && <MapPin size={12} className="text-orange-400 ml-auto" />}
+                {data.exit.lat && (
+                  <a href={`https://maps.google.com/?q=${data.exit.lat},${data.exit.lng}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-0.5 text-blue-500 active:text-blue-700 shrink-0">
+                    <MapPin size={14} />
+                    <span className="text-[10px] underline">地図</span>
+                  </a>
+                )}
               </div>
             ) : (
               <button
@@ -2090,17 +2100,27 @@ function MyShiftTab({ staffId }: { staffId: string }) {
                     </button>
                   </div>
 
-                  {/* 入退室ステータス表示（小さく） */}
+                  {/* 入退室ステータス表示 */}
                   {(ee.entry || ee.exit) && (
-                    <div className="flex items-center gap-2 mt-1.5">
+                    <div className="flex items-center gap-3 mt-1.5">
                       {ee.entry && (
                         <span className="flex items-center gap-1 text-[10px] text-emerald-600">
                           <LogIn size={10} />入室 {format(new Date(ee.entry.time), "HH:mm")}
+                          {ee.entry.lat && (
+                            <a href={`https://maps.google.com/?q=${ee.entry.lat},${ee.entry.lng}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline ml-0.5">
+                              <MapPin size={10} />
+                            </a>
+                          )}
                         </span>
                       )}
                       {ee.exit && (
                         <span className="flex items-center gap-1 text-[10px] text-orange-600">
                           <LogOut size={10} />退室 {format(new Date(ee.exit.time), "HH:mm")}
+                          {ee.exit.lat && (
+                            <a href={`https://maps.google.com/?q=${ee.exit.lat},${ee.exit.lng}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline ml-0.5">
+                              <MapPin size={10} />
+                            </a>
+                          )}
                         </span>
                       )}
                     </div>
