@@ -2417,7 +2417,8 @@ function MonthlyIndividualView({
           status: "completed",
         });
         if (error) {
-          toast.error("実績登録に失敗しました");
+          toast.error("実績登録に失敗しました: " + error.message);
+          console.error("visit_records insert error:", error);
           setTogglingId(null);
           return;
         }
