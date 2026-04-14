@@ -125,6 +125,15 @@ export function Sidebar() {
     businessType === "訪問介護" ? NAV_HOME_CARE : NAV_CARE_MANAGER;
   const typeInfo = BUSINESS_TYPE_LABELS[businessType] ?? BUSINESS_TYPE_LABELS["居宅介護支援"];
 
+  // ?mode= がURLにある場合、全リンクに自動付加して遷移しても維持する
+  const modeParam = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("mode")
+    : null;
+  const appendMode = (href: string) => {
+    if (!modeParam) return href;
+    return `${href}?mode=${encodeURIComponent(modeParam)}`;
+  };
+
   // 子ページを開いていたら親グループは自動で開く
   useEffect(() => {
     for (const entry of navigation) {
@@ -205,7 +214,7 @@ export function Sidebar() {
                       return (
                         <Link
                           key={child.href}
-                          href={child.href}
+                          href={appendMode(child.href)}
                           className={cn(
                             "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors",
                             isActive
@@ -229,7 +238,7 @@ export function Sidebar() {
                       return (
                         <Link
                           key={child.href}
-                          href={child.href}
+                          href={appendMode(child.href)}
                           className={cn(
                             "flex items-center justify-center rounded-md py-2 transition-colors",
                             isActive
@@ -256,7 +265,7 @@ export function Sidebar() {
           return (
             <Link
               key={entry.href}
-              href={entry.href}
+              href={appendMode(entry.href)}
               className={cn(
                 "flex items-center rounded-md py-2 text-sm font-medium transition-colors",
                 collapsed
