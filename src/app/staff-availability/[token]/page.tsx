@@ -847,61 +847,211 @@ function MonthlySettingsTab({ staffId }: { staffId: string }) {
 // ─── My Shift Tab (Mobile) ───────────────────────────────────────────────────
 
 // ─── Care Record Types & Form ────────────────────────────────────────────────
+// ケアパレット準拠: 各カテゴリにサブ項目（量・種類・自立度等）を持つ
+// DBにはJSONBで保存するため、フォーム全体を1つのオブジェクトで管理
 
-interface CareRecordForm {
-  // vitals
-  temperature: string;
-  bp_sys: string;
-  bp_dia: string;
-  pulse: string;
-  spo2: string;
-  respiration: string;   // 呼吸数
-  blood_sugar: string;   // 血糖値
-  // body care (JSONB keys)
-  care_excretion: boolean;
-  care_meal: boolean;
-  care_bath: boolean;
-  care_body_wash: boolean;    // 洗身
-  care_hair_wash: boolean;    // 洗髪
-  care_wipe: boolean;
-  care_positioning: boolean;
-  care_transfer: boolean;
-  care_dressing: boolean;
-  care_oral: boolean;
-  care_medication: boolean;
-  care_grooming: boolean;     // 整容
-  care_incontinence: boolean; // 失禁処理
-  care_other: boolean;        // その他身体介護
-  // living support (JSONB keys)
-  support_cooking: boolean;
-  support_laundry: boolean;
-  support_cleaning: boolean;
-  support_shopping: boolean;
-  support_trash: boolean;
-  support_clothing: boolean;
-  support_medication_mgmt: boolean;  // 服薬管理
-  support_health_mgmt: boolean;      // 健康管理
-  support_other: boolean;            // その他生活援助
-  // notes
+interface CareRecordData {
+  // 1. 事前チェック
+  pre_check: {
+    complexion: string;     // 顔色（良好/やや不良/不良）
+    condition: string;      // 体調（良好/普通/不良）
+    room_temp: string;      // 室温
+    humidity: string;       // 湿度
+    notes: string;          // その他チェック
+  };
+  // 2. バイタルサイン・身体測定
+  vitals: {
+    temperature: string;
+    bp_sys: string;
+    bp_dia: string;
+    pulse: string;
+    spo2: string;
+    respiration: string;
+    blood_sugar: string;
+    weight: string;         // 体重
+    notes: string;
+  };
+  // 3. 排泄介助
+  excretion: {
+    done: boolean;
+    urine: boolean;         // 尿
+    stool: boolean;         // 便
+    urine_amount: string;   // 尿量（少量/普通/多量）
+    stool_amount: string;   // 便量（少量/普通/多量）
+    stool_type: string;     // 便性状（普通/硬い/軟便/水様便）
+    independence: string;   // 自立度（自立/一部介助/全介助）
+    device: string;         // 使用器具（トイレ/ポータブルトイレ/おむつ/パッド）
+    notes: string;
+  };
+  // 4. 水分摂取
+  hydration: {
+    done: boolean;
+    drink_type: string;     // 飲み物の種類
+    amount: string;         // 量(ml)
+    thickener: string;      // とろみ（なし/薄い/中間/濃い）
+    notes: string;
+  };
+  // 5. 食事介助
+  meal: {
+    done: boolean;
+    staple_amount: string;  // 主食摂取量（全量/3/4/半分/1/4/なし）
+    side_amount: string;    // 副食摂取量
+    meal_form: string;      // 食事形態（普通/きざみ/ミキサー/ペースト/流動食）
+    independence: string;   // 自立度
+    notes: string;
+  };
+  // 6. 口腔ケア
+  oral_care: {
+    done: boolean;
+    denture: string;        // 義歯（なし/上のみ/下のみ/上下）
+    brushing: boolean;      // 歯磨き
+    gargling: boolean;      // うがい
+    denture_cleaning: boolean; // 義歯洗浄
+    mouth_wipe: boolean;    // 口腔清拭
+    notes: string;
+  };
+  // 7. 清拭・入浴
+  bathing: {
+    done: boolean;
+    bath_type: string;      // 入浴種類（一般浴/シャワー浴/清拭/足浴/手浴）
+    independence: string;   // 自立度
+    skin_condition: string; // 皮膚状態（異常なし/発赤/褥瘡/湿疹/乾燥/その他）
+    notes: string;
+  };
+  // 8. 身体整容
+  grooming: {
+    done: boolean;
+    face_wash: boolean;     // 洗顔
+    hair: boolean;          // 整髪
+    nail: boolean;          // 爪切り
+    ear: boolean;           // 耳掃除
+    shaving: boolean;       // 髭剃り
+    notes: string;
+  };
+  // 9. 更衣介助
+  dressing: {
+    done: boolean;
+    upper: boolean;         // 上衣
+    lower: boolean;         // 下衣
+    independence: string;   // 自立度
+    notes: string;
+  };
+  // 10. 体位変換・移動
+  positioning: {
+    done: boolean;
+    position_type: string;  // 体位（仰臥位/側臥位/座位/その他）
+    mobility_device: string; // 移動手段（徒歩/杖/歩行器/車椅子/ストレッチャー）
+    notes: string;
+  };
+  // 11. 服薬介助
+  medication: {
+    done: boolean;
+    med_type: string;       // 投与方法（内服/外用/点眼/吸入/座薬/その他）
+    confirmed: boolean;     // 服薬確認済み
+    notes: string;
+  };
+  // 12. 通院・外出介助
+  outing: {
+    done: boolean;
+    outing_type: string;    // 種類（通院/買物同行/散歩/外出付添/その他）
+    transport: string;      // 移動手段（徒歩/車/公共交通/車椅子）
+    notes: string;
+  };
+  // 13. 起床・就寝介助
+  wake_sleep: {
+    done: boolean;
+    wake_up: boolean;       // 起床介助
+    go_to_bed: boolean;     // 就寝介助
+    bed_making: boolean;    // ベッドメイキング
+    notes: string;
+  };
+  // 14. 医療的ケア
+  medical_care: {
+    done: boolean;
+    suction: boolean;       // 吸引
+    tube_feeding: boolean;  // 経管栄養
+    stoma: boolean;         // ストーマ管理
+    catheter: boolean;      // カテーテル管理
+    wound_care: boolean;    // 創傷処置
+    oxygen: boolean;        // 酸素管理
+    notes: string;
+  };
+  // 15. 自立支援
+  independence_support: {
+    done: boolean;
+    exercise: boolean;      // 運動・リハビリ
+    cognitive: boolean;     // 認知機能訓練
+    communication: boolean; // コミュニケーション支援
+    social: boolean;        // 社会参加支援
+    notes: string;
+  };
+  // 16. 生活援助
+  living_support: {
+    cooking: boolean;
+    cooking_notes: string;
+    cleaning: boolean;
+    cleaning_notes: string;
+    laundry: boolean;
+    laundry_notes: string;
+    shopping: boolean;
+    shopping_notes: string;
+    trash: boolean;
+    clothing: boolean;
+    medication_mgmt: boolean;
+    health_mgmt: boolean;
+    other_notes: string;
+  };
+  // 17. 退出確認
+  exit_check: {
+    fire_check: boolean;    // 火の元確認
+    lock_check: boolean;    // 施錠確認
+    appliance_check: boolean; // 電化製品確認
+    user_condition: string; // 退出時の利用者の状態
+    notes: string;
+  };
+  // 18. 経過記録
+  progress_notes: string;
+  // 19. 申し送り
+  handover: {
+    priority: string;       // 優先度（通常/重要）
+    notes: string;
+  };
+  // 20. 詳細報告
+  detailed_report: string;
+  // 21. 写真
+  photos: string[];         // 写真URL配列（Supabase Storageに保存）
+  // 22. サイン（署名）
+  signature: string;        // 署名データ（base64 PNG）
+  // その他
   user_condition: string;
-  handover_notes: string;
   notes: string;
-  // progress
-  progress_notes: string;  // 経過記録
 }
 
-const emptyCareRecordForm = (): CareRecordForm => ({
-  temperature: "", bp_sys: "", bp_dia: "", pulse: "", spo2: "",
-  respiration: "", blood_sugar: "",
-  care_excretion: false, care_meal: false, care_bath: false,
-  care_body_wash: false, care_hair_wash: false,
-  care_wipe: false, care_positioning: false, care_transfer: false,
-  care_dressing: false, care_oral: false, care_medication: false,
-  care_grooming: false, care_incontinence: false, care_other: false,
-  support_cooking: false, support_laundry: false, support_cleaning: false,
-  support_shopping: false, support_trash: false, support_clothing: false,
-  support_medication_mgmt: false, support_health_mgmt: false, support_other: false,
-  user_condition: "", handover_notes: "", notes: "", progress_notes: "",
+const emptyCareRecord = (): CareRecordData => ({
+  pre_check: { complexion: "", condition: "", room_temp: "", humidity: "", notes: "" },
+  vitals: { temperature: "", bp_sys: "", bp_dia: "", pulse: "", spo2: "", respiration: "", blood_sugar: "", weight: "", notes: "" },
+  excretion: { done: false, urine: false, stool: false, urine_amount: "", stool_amount: "", stool_type: "", independence: "", device: "", notes: "" },
+  hydration: { done: false, drink_type: "", amount: "", thickener: "", notes: "" },
+  meal: { done: false, staple_amount: "", side_amount: "", meal_form: "", independence: "", notes: "" },
+  oral_care: { done: false, denture: "", brushing: false, gargling: false, denture_cleaning: false, mouth_wipe: false, notes: "" },
+  bathing: { done: false, bath_type: "", independence: "", skin_condition: "", notes: "" },
+  grooming: { done: false, face_wash: false, hair: false, nail: false, ear: false, shaving: false, notes: "" },
+  dressing: { done: false, upper: false, lower: false, independence: "", notes: "" },
+  positioning: { done: false, position_type: "", mobility_device: "", notes: "" },
+  medication: { done: false, med_type: "", confirmed: false, notes: "" },
+  outing: { done: false, outing_type: "", transport: "", notes: "" },
+  wake_sleep: { done: false, wake_up: false, go_to_bed: false, bed_making: false, notes: "" },
+  medical_care: { done: false, suction: false, tube_feeding: false, stoma: false, catheter: false, wound_care: false, oxygen: false, notes: "" },
+  independence_support: { done: false, exercise: false, cognitive: false, communication: false, social: false, notes: "" },
+  living_support: { cooking: false, cooking_notes: "", cleaning: false, cleaning_notes: "", laundry: false, laundry_notes: "", shopping: false, shopping_notes: "", trash: false, clothing: false, medication_mgmt: false, health_mgmt: false, other_notes: "" },
+  exit_check: { fire_check: false, lock_check: false, appliance_check: false, user_condition: "", notes: "" },
+  progress_notes: "",
+  handover: { priority: "通常", notes: "" },
+  detailed_report: "",
+  photos: [],
+  signature: "",
+  user_condition: "",
+  notes: "",
 });
 
 interface ExistingRecord {
@@ -911,8 +1061,8 @@ interface ExistingRecord {
   visit_date: string;
   start_time: string;
   end_time: string;
-  body_care: Record<string, boolean>;
-  living_support: Record<string, boolean>;
+  body_care: Record<string, unknown>;
+  living_support: Record<string, unknown>;
   vital_temperature: number | null;
   vital_bp_sys: number | null;
   vital_bp_dia: number | null;
@@ -924,36 +1074,118 @@ interface ExistingRecord {
   handover_notes: string | null;
   notes: string | null;
   progress_notes: string | null;
+  care_record_data: CareRecordData | null;  // JSONB列に全データ保存
 }
 
-const BODY_CARE_ITEMS: { key: string; label: string }[] = [
-  { key: "care_excretion", label: "排泄介助" },
-  { key: "care_incontinence", label: "失禁処理" },
-  { key: "care_meal", label: "食事介助" },
-  { key: "care_bath", label: "入浴" },
-  { key: "care_body_wash", label: "洗身" },
-  { key: "care_hair_wash", label: "洗髪" },
-  { key: "care_wipe", label: "清拭" },
-  { key: "care_oral", label: "口腔ケア" },
-  { key: "care_grooming", label: "整容" },
-  { key: "care_dressing", label: "更衣介助" },
-  { key: "care_positioning", label: "体位変換" },
-  { key: "care_transfer", label: "移動介助" },
-  { key: "care_medication", label: "服薬介助" },
-  { key: "care_other", label: "その他" },
-];
+// ─── Helper UI Components ──────────────────────────────────────────────────
 
-const LIVING_SUPPORT_ITEMS: { key: string; label: string }[] = [
-  { key: "support_cooking", label: "調理" },
-  { key: "support_laundry", label: "洗濯" },
-  { key: "support_cleaning", label: "掃除" },
-  { key: "support_shopping", label: "買物" },
-  { key: "support_trash", label: "ゴミ出し" },
-  { key: "support_clothing", label: "衣類の整理" },
-  { key: "support_medication_mgmt", label: "服薬管理" },
-  { key: "support_health_mgmt", label: "健康管理" },
-  { key: "support_other", label: "その他" },
-];
+function SectionBtn({ id, label, active, onClick }: { id: string; label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex items-center justify-between w-full px-4 py-3 bg-gray-50 border-y border-gray-200 active:bg-gray-100",
+      )}
+    >
+      <span className={cn("text-sm font-bold", active ? "text-blue-700" : "text-gray-700")}>{label}</span>
+      <ChevronDownIcon size={16} className={cn("text-gray-400 transition-transform", active && "rotate-180")} />
+    </button>
+  );
+}
+
+function CareCheckbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={cn(
+        "flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all active:scale-95",
+        checked ? "bg-blue-50 border-blue-300 text-blue-700" : "bg-white border-gray-200 text-gray-600"
+      )}
+    >
+      <span className={cn(
+        "w-5 h-5 rounded flex items-center justify-center shrink-0 border",
+        checked ? "bg-blue-500 border-blue-500" : "bg-white border-gray-300"
+      )}>
+        {checked && <Check size={14} className="text-white" />}
+      </span>
+      {label}
+    </button>
+  );
+}
+
+function CareSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+  return (
+    <div>
+      <label className="block text-xs text-gray-500 mb-1">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base bg-white focus:border-blue-500 focus:outline-none"
+      >
+        <option value="">選択してください</option>
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function CareInput({ label, value, onChange, placeholder, type = "text", inputMode }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string; inputMode?: "numeric" | "decimal" | "text" }) {
+  return (
+    <div>
+      <label className="block text-xs text-gray-500 mb-1">{label}</label>
+      <input
+        type={type}
+        inputMode={inputMode}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+      />
+    </div>
+  );
+}
+
+function CareTextarea({ label, value, onChange, placeholder, rows = 3 }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; rows?: number }) {
+  return (
+    <div>
+      <label className="block text-xs text-gray-500 mb-1">{label}</label>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        rows={rows}
+        className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base resize-none focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+      />
+    </div>
+  );
+}
+
+// セクション定義（ケアパレット準拠 20カテゴリ）
+const CARE_SECTIONS = [
+  { id: "pre_check", label: "事前チェック" },
+  { id: "vitals", label: "バイタルサイン・身体測定" },
+  { id: "excretion", label: "排泄介助" },
+  { id: "hydration", label: "水分摂取" },
+  { id: "meal", label: "食事介助" },
+  { id: "oral_care", label: "口腔ケア" },
+  { id: "bathing", label: "清拭・入浴" },
+  { id: "grooming", label: "身体整容" },
+  { id: "dressing", label: "更衣介助" },
+  { id: "positioning", label: "体位変換・移動" },
+  { id: "medication", label: "服薬介助" },
+  { id: "outing", label: "通院・外出介助" },
+  { id: "wake_sleep", label: "起床・就寝介助" },
+  { id: "medical_care", label: "医療的ケア" },
+  { id: "independence_support", label: "自立支援" },
+  { id: "living", label: "生活援助" },
+  { id: "exit_check", label: "退出確認" },
+  { id: "progress", label: "経過記録" },
+  { id: "handover", label: "申し送り等" },
+  { id: "detailed_report", label: "詳細報告" },
+  { id: "photos", label: "写真" },
+  { id: "signature", label: "サイン" },
+] as const;
 
 function CareRecordModal({
   sched,
@@ -968,62 +1200,38 @@ function CareRecordModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  // New comprehensive care record form — stores everything in care_record_data JSONB
   const supabase = createAnonClient();
-  const [form, setForm] = useState<CareRecordForm>(() => {
+  const [data, setData] = useState<CareRecordData>(() => {
+    if (existingRecord?.care_record_data) return { ...emptyCareRecord(), ...existingRecord.care_record_data };
+    // Legacy fallback: migrate from old columns
     if (existingRecord) {
-      const bc = existingRecord.body_care || {};
-      const ls = existingRecord.living_support || {};
-      return {
-        temperature: existingRecord.vital_temperature?.toString() ?? "",
-        bp_sys: existingRecord.vital_bp_sys?.toString() ?? "",
-        bp_dia: existingRecord.vital_bp_dia?.toString() ?? "",
-        pulse: existingRecord.vital_pulse?.toString() ?? "",
-        spo2: existingRecord.vital_spo2?.toString() ?? "",
-        respiration: existingRecord.vital_respiration?.toString() ?? "",
-        blood_sugar: existingRecord.vital_blood_sugar?.toString() ?? "",
-        care_excretion: bc.care_excretion ?? false,
-        care_meal: bc.care_meal ?? false,
-        care_bath: bc.care_bath ?? false,
-        care_body_wash: bc.care_body_wash ?? false,
-        care_hair_wash: bc.care_hair_wash ?? false,
-        care_wipe: bc.care_wipe ?? false,
-        care_positioning: bc.care_positioning ?? false,
-        care_transfer: bc.care_transfer ?? false,
-        care_dressing: bc.care_dressing ?? false,
-        care_oral: bc.care_oral ?? false,
-        care_medication: bc.care_medication ?? false,
-        care_grooming: bc.care_grooming ?? false,
-        care_incontinence: bc.care_incontinence ?? false,
-        care_other: bc.care_other ?? false,
-        support_cooking: ls.support_cooking ?? false,
-        support_laundry: ls.support_laundry ?? false,
-        support_cleaning: ls.support_cleaning ?? false,
-        support_shopping: ls.support_shopping ?? false,
-        support_trash: ls.support_trash ?? false,
-        support_clothing: ls.support_clothing ?? false,
-        support_medication_mgmt: ls.support_medication_mgmt ?? false,
-        support_health_mgmt: ls.support_health_mgmt ?? false,
-        support_other: ls.support_other ?? false,
-        user_condition: existingRecord.user_condition ?? "",
-        handover_notes: existingRecord.handover_notes ?? "",
-        notes: existingRecord.notes ?? "",
-        progress_notes: existingRecord.progress_notes ?? "",
-      };
+      const d = emptyCareRecord();
+      d.vitals.temperature = existingRecord.vital_temperature?.toString() ?? "";
+      d.vitals.bp_sys = existingRecord.vital_bp_sys?.toString() ?? "";
+      d.vitals.bp_dia = existingRecord.vital_bp_dia?.toString() ?? "";
+      d.vitals.pulse = existingRecord.vital_pulse?.toString() ?? "";
+      d.vitals.spo2 = existingRecord.vital_spo2?.toString() ?? "";
+      d.vitals.respiration = existingRecord.vital_respiration?.toString() ?? "";
+      d.vitals.blood_sugar = existingRecord.vital_blood_sugar?.toString() ?? "";
+      d.user_condition = existingRecord.user_condition ?? "";
+      d.handover.notes = existingRecord.handover_notes ?? "";
+      d.notes = existingRecord.notes ?? "";
+      d.progress_notes = existingRecord.progress_notes ?? "";
+      return d;
     }
-    return emptyCareRecordForm();
+    return emptyCareRecord();
   });
   const [saving, setSaving] = useState(false);
-  const [expandedSection, setExpandedSection] = useState<string | null>("vitals");
+  const [openSection, setOpenSection] = useState<string | null>("pre_check");
 
-  const toggleSection = (s: string) => setExpandedSection(expandedSection === s ? null : s);
+  // Helper to update nested data
+  const upd = <K extends keyof CareRecordData>(key: K, val: Partial<CareRecordData[K]>) => {
+    setData((prev) => ({ ...prev, [key]: typeof prev[key] === "object" && !Array.isArray(prev[key]) ? { ...(prev[key] as Record<string, unknown>), ...val } : val }));
+  };
 
   const handleSave = async () => {
     setSaving(true);
-    const bodyCare: Record<string, boolean> = {};
-    BODY_CARE_ITEMS.forEach(({ key }) => { bodyCare[key] = form[key as keyof CareRecordForm] as boolean; });
-    const livingSupport: Record<string, boolean> = {};
-    LIVING_SUPPORT_ITEMS.forEach(({ key }) => { livingSupport[key] = form[key as keyof CareRecordForm] as boolean; });
-
     const payload = {
       user_id: sched.user_id,
       visit_date: sched.visit_date,
@@ -1032,285 +1240,390 @@ function CareRecordModal({
       start_time: sched.start_time,
       end_time: sched.end_time,
       schedule_id: sched.id,
-      body_care: bodyCare,
-      living_support: livingSupport,
-      vital_temperature: form.temperature ? parseFloat(form.temperature) : null,
-      vital_bp_sys: form.bp_sys ? parseInt(form.bp_sys) : null,
-      vital_bp_dia: form.bp_dia ? parseInt(form.bp_dia) : null,
-      vital_pulse: form.pulse ? parseInt(form.pulse) : null,
-      vital_spo2: form.spo2 ? parseInt(form.spo2) : null,
-      vital_respiration: form.respiration ? parseInt(form.respiration) : null,
-      vital_blood_sugar: form.blood_sugar ? parseInt(form.blood_sugar) : null,
-      user_condition: form.user_condition || null,
-      handover_notes: form.handover_notes || null,
-      notes: form.notes || null,
-      progress_notes: form.progress_notes || null,
+      care_record_data: data,
+      // Also write to legacy columns for backward compat
+      vital_temperature: data.vitals.temperature ? parseFloat(data.vitals.temperature) : null,
+      vital_bp_sys: data.vitals.bp_sys ? parseInt(data.vitals.bp_sys) : null,
+      vital_bp_dia: data.vitals.bp_dia ? parseInt(data.vitals.bp_dia) : null,
+      vital_pulse: data.vitals.pulse ? parseInt(data.vitals.pulse) : null,
+      vital_spo2: data.vitals.spo2 ? parseInt(data.vitals.spo2) : null,
+      vital_respiration: data.vitals.respiration ? parseInt(data.vitals.respiration) : null,
+      vital_blood_sugar: data.vitals.blood_sugar ? parseInt(data.vitals.blood_sugar) : null,
+      user_condition: data.user_condition || null,
+      handover_notes: data.handover.notes || null,
+      notes: data.notes || null,
+      progress_notes: data.progress_notes || null,
       status: "draft",
     };
-
     let error;
     if (existingRecord) {
       ({ error } = await supabase.from("kaigo_visit_records").update(payload).eq("id", existingRecord.id));
     } else {
       ({ error } = await supabase.from("kaigo_visit_records").insert(payload));
     }
-
-    if (error) {
-      toast.error("保存に失敗しました: " + error.message);
-    } else {
-      toast.success(existingRecord ? "記録を更新しました" : "記録を保存しました");
-      onSaved();
-      onClose();
-    }
+    if (error) { toast.error("保存に失敗しました: " + error.message); }
+    else { toast.success(existingRecord ? "記録を更新しました" : "記録を保存しました"); onSaved(); onClose(); }
     setSaving(false);
   };
 
-  const SectionHeader = ({ id, icon, title }: { id: string; icon: React.ReactNode; title: string }) => (
-    <button
-      onClick={() => toggleSection(id)}
-      className="flex items-center justify-between w-full px-4 py-3 bg-gray-50 border-y border-gray-200 active:bg-gray-100"
-    >
-      <div className="flex items-center gap-2 text-sm font-bold text-gray-700">
-        {icon}
-        {title}
-      </div>
-      <ChevronDownIcon size={16} className={cn("text-gray-400 transition-transform", expandedSection === id && "rotate-180")} />
-    </button>
-  );
-
-  const CheckItem = ({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) => (
-    <button
-      type="button"
-      onClick={() => onChange(!checked)}
-      className={cn(
-        "flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all active:scale-95",
-        checked
-          ? "bg-blue-50 border-blue-300 text-blue-700"
-          : "bg-white border-gray-200 text-gray-600"
-      )}
-    >
-      <span className={cn(
-        "w-5 h-5 rounded flex items-center justify-center shrink-0 border",
-        checked ? "bg-blue-500 border-blue-500" : "bg-white border-gray-300"
-      )}>
-        {checked && <Check size={14} className="text-white" />}
-      </span>
-      {label}
-    </button>
-  );
+  const toggle = (id: string) => setOpenSection(openSection === id ? null : id);
+  const isOpen = (id: string) => openSection === id;
 
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b bg-white shrink-0 safe-area-top">
-        <button onClick={onClose} className="text-gray-500 active:text-gray-700 p-1">
-          <X size={24} />
-        </button>
-        <h2 className="text-base font-bold text-gray-900">
-          {existingRecord ? "記録を編集" : "記録入力"}
-        </h2>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-1 px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold active:bg-blue-700 disabled:opacity-50"
-        >
-          {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-          保存
+      <div className="flex items-center justify-between px-4 py-3 border-b bg-white shrink-0">
+        <button onClick={onClose} className="text-gray-500 active:text-gray-700 p-1"><X size={24} /></button>
+        <h2 className="text-base font-bold text-gray-900">{existingRecord ? "記録を編集" : "記録入力"}</h2>
+        <button onClick={handleSave} disabled={saving} className="flex items-center gap-1 px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold active:bg-blue-700 disabled:opacity-50">
+          {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}保存
         </button>
       </div>
 
       {/* Schedule info */}
-      <div className="px-4 py-3 bg-blue-50 border-b border-blue-100 shrink-0">
+      <div className="px-4 py-2 bg-blue-50 border-b border-blue-100 shrink-0">
         <div className="flex items-center gap-2">
-          <User size={16} className="text-blue-600" />
+          <User size={14} className="text-blue-600" />
           <span className="text-sm font-bold text-blue-900">{sched.user_name}</span>
-          <span className={cn(
-            "text-xs px-2 py-0.5 rounded-full font-medium",
-            getServiceColor(sched.service_type).bg,
-            getServiceColor(sched.service_type).text,
-            "border",
-            getServiceColor(sched.service_type).border,
-          )}>
-            {sched.service_type}
-          </span>
+          <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", getServiceColor(sched.service_type).bg, getServiceColor(sched.service_type).text, "border", getServiceColor(sched.service_type).border)}>{sched.service_type}</span>
         </div>
-        <div className="flex items-center gap-2 mt-1 text-sm text-blue-700">
-          <Clock size={14} />
-          {format(new Date(sched.visit_date + "T00:00:00"), "M月d日(E)", { locale: ja })}
-          {" "}
-          {sched.start_time.slice(0, 5)} ~ {sched.end_time.slice(0, 5)}
+        <div className="flex items-center gap-1 mt-0.5 text-xs text-blue-700">
+          <Clock size={12} />
+          {format(new Date(sched.visit_date + "T00:00:00"), "M月d日(E)", { locale: ja })} {sched.start_time.slice(0, 5)}~{sched.end_time.slice(0, 5)}
         </div>
       </div>
 
-      {/* Form body */}
+      {/* Form body — 22 sections */}
       <div className="flex-1 overflow-auto">
-        {/* バイタル */}
-        <SectionHeader id="vitals" icon={<Thermometer size={16} className="text-red-500" />} title="バイタルサイン" />
-        {expandedSection === "vitals" && (
+
+        {/* 1. 事前チェック */}
+        <SectionBtn id="pre_check" label="事前チェック" active={isOpen("pre_check")} onClick={() => toggle("pre_check")} />
+        {isOpen("pre_check") && (
+          <div className="p-4 space-y-3">
+            <CareSelect label="顔色" value={data.pre_check.complexion} onChange={(v) => upd("pre_check", { complexion: v })} options={["良好", "やや不良", "不良"]} />
+            <CareSelect label="体調" value={data.pre_check.condition} onChange={(v) => upd("pre_check", { condition: v })} options={["良好", "普通", "不良"]} />
+            <div className="grid grid-cols-2 gap-3">
+              <CareInput label="室温 (℃)" value={data.pre_check.room_temp} onChange={(v) => upd("pre_check", { room_temp: v })} placeholder="25" inputMode="decimal" />
+              <CareInput label="湿度 (%)" value={data.pre_check.humidity} onChange={(v) => upd("pre_check", { humidity: v })} placeholder="50" inputMode="numeric" />
+            </div>
+            <CareTextarea label="その他" value={data.pre_check.notes} onChange={(v) => upd("pre_check", { notes: v })} rows={2} />
+          </div>
+        )}
+
+        {/* 2. バイタルサイン・身体測定 */}
+        <SectionBtn id="vitals" label="バイタルサイン・身体測定" active={isOpen("vitals")} onClick={() => toggle("vitals")} />
+        {isOpen("vitals") && (
           <div className="p-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">体温 (℃)</label>
-                <input
-                  type="number" step="0.1" inputMode="decimal"
-                  value={form.temperature}
-                  onChange={(e) => setForm({ ...form, temperature: e.target.value })}
-                  placeholder="36.5"
-                  className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">SpO2 (%)</label>
-                <input
-                  type="number" inputMode="numeric"
-                  value={form.spo2}
-                  onChange={(e) => setForm({ ...form, spo2: e.target.value })}
-                  placeholder="98"
-                  className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
+              <CareInput label="体温 (℃)" value={data.vitals.temperature} onChange={(v) => upd("vitals", { temperature: v })} placeholder="36.5" inputMode="decimal" />
+              <CareInput label="SpO2 (%)" value={data.vitals.spo2} onChange={(v) => upd("vitals", { spo2: v })} placeholder="98" inputMode="numeric" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">血圧 (mmHg)</label>
               <div className="flex items-center gap-2">
-                <input
-                  type="number" inputMode="numeric"
-                  value={form.bp_sys}
-                  onChange={(e) => setForm({ ...form, bp_sys: e.target.value })}
-                  placeholder="120"
-                  className="flex-1 rounded-xl border border-gray-300 px-3 py-3 text-base text-center focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
+                <input type="number" inputMode="numeric" value={data.vitals.bp_sys} onChange={(e) => upd("vitals", { bp_sys: e.target.value })} placeholder="120" className="flex-1 rounded-xl border border-gray-300 px-3 py-3 text-base text-center focus:border-blue-500 focus:outline-none" />
                 <span className="text-gray-400 font-bold">/</span>
-                <input
-                  type="number" inputMode="numeric"
-                  value={form.bp_dia}
-                  onChange={(e) => setForm({ ...form, bp_dia: e.target.value })}
-                  placeholder="80"
-                  className="flex-1 rounded-xl border border-gray-300 px-3 py-3 text-base text-center focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
+                <input type="number" inputMode="numeric" value={data.vitals.bp_dia} onChange={(e) => upd("vitals", { bp_dia: e.target.value })} placeholder="80" className="flex-1 rounded-xl border border-gray-300 px-3 py-3 text-base text-center focus:border-blue-500 focus:outline-none" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">脈拍 (bpm)</label>
-                <input
-                  type="number" inputMode="numeric"
-                  value={form.pulse}
-                  onChange={(e) => setForm({ ...form, pulse: e.target.value })}
-                  placeholder="72"
-                  className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">呼吸数 (回/分)</label>
-                <input
-                  type="number" inputMode="numeric"
-                  value={form.respiration}
-                  onChange={(e) => setForm({ ...form, respiration: e.target.value })}
-                  placeholder="18"
-                  className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
+              <CareInput label="脈拍 (bpm)" value={data.vitals.pulse} onChange={(v) => upd("vitals", { pulse: v })} placeholder="72" inputMode="numeric" />
+              <CareInput label="呼吸数 (回/分)" value={data.vitals.respiration} onChange={(v) => upd("vitals", { respiration: v })} placeholder="18" inputMode="numeric" />
             </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">血糖値 (mg/dL)</label>
-              <input
-                type="number" inputMode="numeric"
-                value={form.blood_sugar}
-                onChange={(e) => setForm({ ...form, blood_sugar: e.target.value })}
-                placeholder="100"
-                className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <CareInput label="血糖値 (mg/dL)" value={data.vitals.blood_sugar} onChange={(v) => upd("vitals", { blood_sugar: v })} placeholder="100" inputMode="numeric" />
+              <CareInput label="体重 (kg)" value={data.vitals.weight} onChange={(v) => upd("vitals", { weight: v })} placeholder="60.0" inputMode="decimal" />
             </div>
+            <CareTextarea label="備考" value={data.vitals.notes} onChange={(v) => upd("vitals", { notes: v })} rows={2} />
           </div>
         )}
 
-        {/* 身体介護 */}
-        <SectionHeader id="body_care" icon={<Heart size={16} className="text-orange-500" />} title="身体介護" />
-        {expandedSection === "body_care" && (
-          <div className="p-4">
-            <div className="grid grid-cols-2 gap-2">
-              {BODY_CARE_ITEMS.map(({ key, label }) => (
-                <CheckItem
-                  key={key}
-                  label={label}
-                  checked={form[key as keyof CareRecordForm] as boolean}
-                  onChange={(v) => setForm({ ...form, [key]: v })}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 生活援助 */}
-        <SectionHeader id="living_support" icon={<ClipboardList size={16} className="text-green-500" />} title="生活援助" />
-        {expandedSection === "living_support" && (
-          <div className="p-4">
-            <div className="grid grid-cols-2 gap-2">
-              {LIVING_SUPPORT_ITEMS.map(({ key, label }) => (
-                <CheckItem
-                  key={key}
-                  label={label}
-                  checked={form[key as keyof CareRecordForm] as boolean}
-                  onChange={(v) => setForm({ ...form, [key]: v })}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 経過記録 */}
-        <SectionHeader id="progress" icon={<Calendar size={16} className="text-purple-500" />} title="経過記録" />
-        {expandedSection === "progress" && (
-          <div className="p-4">
-            <textarea
-              value={form.progress_notes}
-              onChange={(e) => setForm({ ...form, progress_notes: e.target.value })}
-              placeholder="サービス提供中の経過を記録..."
-              rows={5}
-              className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base resize-none focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-        )}
-
-        {/* 状態・申し送り */}
-        <SectionHeader id="notes" icon={<Edit3 size={16} className="text-blue-500" />} title="状態・申し送り" />
-        {expandedSection === "notes" && (
+        {/* 3. 排泄介助 */}
+        <SectionBtn id="excretion" label="排泄介助" active={isOpen("excretion")} onClick={() => toggle("excretion")} />
+        {isOpen("excretion") && (
           <div className="p-4 space-y-3">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">利用者の状態</label>
-              <textarea
-                value={form.user_condition}
-                onChange={(e) => setForm({ ...form, user_condition: e.target.value })}
-                placeholder="利用者の状態を記入..."
-                rows={3}
-                className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base resize-none focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+            <div className="grid grid-cols-2 gap-2">
+              <CareCheckbox label="尿" checked={data.excretion.urine} onChange={(v) => upd("excretion", { urine: v, done: v || data.excretion.stool })} />
+              <CareCheckbox label="便" checked={data.excretion.stool} onChange={(v) => upd("excretion", { stool: v, done: data.excretion.urine || v })} />
             </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">申し送り事項</label>
-              <textarea
-                value={form.handover_notes}
-                onChange={(e) => setForm({ ...form, handover_notes: e.target.value })}
-                placeholder="次の担当者への申し送り..."
-                rows={3}
-                className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base resize-none focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <CareSelect label="尿量" value={data.excretion.urine_amount} onChange={(v) => upd("excretion", { urine_amount: v })} options={["少量", "普通", "多量"]} />
+              <CareSelect label="便量" value={data.excretion.stool_amount} onChange={(v) => upd("excretion", { stool_amount: v })} options={["少量", "普通", "多量"]} />
             </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">特記事項</label>
-              <textarea
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                placeholder="その他特記事項..."
-                rows={2}
-                className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base resize-none focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
+            <CareSelect label="便性状" value={data.excretion.stool_type} onChange={(v) => upd("excretion", { stool_type: v })} options={["普通", "硬い", "軟便", "水様便"]} />
+            <CareSelect label="自立度" value={data.excretion.independence} onChange={(v) => upd("excretion", { independence: v })} options={["自立", "見守り", "一部介助", "全介助"]} />
+            <CareSelect label="使用器具" value={data.excretion.device} onChange={(v) => upd("excretion", { device: v })} options={["トイレ", "ポータブルトイレ", "おむつ", "パッド", "尿器"]} />
+            <CareTextarea label="備考" value={data.excretion.notes} onChange={(v) => upd("excretion", { notes: v })} rows={2} />
           </div>
         )}
 
-        {/* Bottom spacer for safe area */}
+        {/* 4. 水分摂取 */}
+        <SectionBtn id="hydration" label="水分摂取" active={isOpen("hydration")} onClick={() => toggle("hydration")} />
+        {isOpen("hydration") && (
+          <div className="p-4 space-y-3">
+            <CareInput label="飲み物の種類" value={data.hydration.drink_type} onChange={(v) => upd("hydration", { drink_type: v, done: true })} placeholder="お茶、水、ジュース等" />
+            <CareInput label="量 (ml)" value={data.hydration.amount} onChange={(v) => upd("hydration", { amount: v })} placeholder="200" inputMode="numeric" />
+            <CareSelect label="とろみ" value={data.hydration.thickener} onChange={(v) => upd("hydration", { thickener: v })} options={["なし", "薄い", "中間", "濃い"]} />
+            <CareTextarea label="備考" value={data.hydration.notes} onChange={(v) => upd("hydration", { notes: v })} rows={2} />
+          </div>
+        )}
+
+        {/* 5. 食事介助 */}
+        <SectionBtn id="meal" label="食事介助" active={isOpen("meal")} onClick={() => toggle("meal")} />
+        {isOpen("meal") && (
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <CareSelect label="主食摂取量" value={data.meal.staple_amount} onChange={(v) => upd("meal", { staple_amount: v, done: true })} options={["全量", "3/4", "半分", "1/4", "少量", "なし"]} />
+              <CareSelect label="副食摂取量" value={data.meal.side_amount} onChange={(v) => upd("meal", { side_amount: v })} options={["全量", "3/4", "半分", "1/4", "少量", "なし"]} />
+            </div>
+            <CareSelect label="食事形態" value={data.meal.meal_form} onChange={(v) => upd("meal", { meal_form: v })} options={["普通", "きざみ", "ミキサー", "ペースト", "流動食"]} />
+            <CareSelect label="自立度" value={data.meal.independence} onChange={(v) => upd("meal", { independence: v })} options={["自立", "見守り", "一部介助", "全介助"]} />
+            <CareTextarea label="備考" value={data.meal.notes} onChange={(v) => upd("meal", { notes: v })} rows={2} />
+          </div>
+        )}
+
+        {/* 6. 口腔ケア */}
+        <SectionBtn id="oral_care" label="口腔ケア" active={isOpen("oral_care")} onClick={() => toggle("oral_care")} />
+        {isOpen("oral_care") && (
+          <div className="p-4 space-y-3">
+            <CareSelect label="義歯" value={data.oral_care.denture} onChange={(v) => upd("oral_care", { denture: v })} options={["なし", "上のみ", "下のみ", "上下"]} />
+            <div className="grid grid-cols-2 gap-2">
+              <CareCheckbox label="歯磨き" checked={data.oral_care.brushing} onChange={(v) => upd("oral_care", { brushing: v, done: true })} />
+              <CareCheckbox label="うがい" checked={data.oral_care.gargling} onChange={(v) => upd("oral_care", { gargling: v, done: true })} />
+              <CareCheckbox label="義歯洗浄" checked={data.oral_care.denture_cleaning} onChange={(v) => upd("oral_care", { denture_cleaning: v, done: true })} />
+              <CareCheckbox label="口腔清拭" checked={data.oral_care.mouth_wipe} onChange={(v) => upd("oral_care", { mouth_wipe: v, done: true })} />
+            </div>
+            <CareTextarea label="備考" value={data.oral_care.notes} onChange={(v) => upd("oral_care", { notes: v })} rows={2} />
+          </div>
+        )}
+
+        {/* 7. 清拭・入浴 */}
+        <SectionBtn id="bathing" label="清拭・入浴" active={isOpen("bathing")} onClick={() => toggle("bathing")} />
+        {isOpen("bathing") && (
+          <div className="p-4 space-y-3">
+            <CareSelect label="入浴種類" value={data.bathing.bath_type} onChange={(v) => upd("bathing", { bath_type: v, done: true })} options={["一般浴", "シャワー浴", "清拭", "足浴", "手浴", "部分浴"]} />
+            <CareSelect label="自立度" value={data.bathing.independence} onChange={(v) => upd("bathing", { independence: v })} options={["自立", "見守り", "一部介助", "全介助"]} />
+            <CareSelect label="皮膚状態" value={data.bathing.skin_condition} onChange={(v) => upd("bathing", { skin_condition: v })} options={["異常なし", "発赤", "褥瘡", "湿疹", "乾燥", "傷", "その他"]} />
+            <CareTextarea label="備考" value={data.bathing.notes} onChange={(v) => upd("bathing", { notes: v })} rows={2} />
+          </div>
+        )}
+
+        {/* 8. 身体整容 */}
+        <SectionBtn id="grooming" label="身体整容" active={isOpen("grooming")} onClick={() => toggle("grooming")} />
+        {isOpen("grooming") && (
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <CareCheckbox label="洗顔" checked={data.grooming.face_wash} onChange={(v) => upd("grooming", { face_wash: v, done: true })} />
+              <CareCheckbox label="整髪" checked={data.grooming.hair} onChange={(v) => upd("grooming", { hair: v, done: true })} />
+              <CareCheckbox label="爪切り" checked={data.grooming.nail} onChange={(v) => upd("grooming", { nail: v, done: true })} />
+              <CareCheckbox label="耳掃除" checked={data.grooming.ear} onChange={(v) => upd("grooming", { ear: v, done: true })} />
+              <CareCheckbox label="髭剃り" checked={data.grooming.shaving} onChange={(v) => upd("grooming", { shaving: v, done: true })} />
+            </div>
+            <CareTextarea label="備考" value={data.grooming.notes} onChange={(v) => upd("grooming", { notes: v })} rows={2} />
+          </div>
+        )}
+
+        {/* 9. 更衣介助 */}
+        <SectionBtn id="dressing" label="更衣介助" active={isOpen("dressing")} onClick={() => toggle("dressing")} />
+        {isOpen("dressing") && (
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <CareCheckbox label="上衣" checked={data.dressing.upper} onChange={(v) => upd("dressing", { upper: v, done: true })} />
+              <CareCheckbox label="下衣" checked={data.dressing.lower} onChange={(v) => upd("dressing", { lower: v, done: true })} />
+            </div>
+            <CareSelect label="自立度" value={data.dressing.independence} onChange={(v) => upd("dressing", { independence: v })} options={["自立", "見守り", "一部介助", "全介助"]} />
+            <CareTextarea label="備考" value={data.dressing.notes} onChange={(v) => upd("dressing", { notes: v })} rows={2} />
+          </div>
+        )}
+
+        {/* 10. 体位変換・移動 */}
+        <SectionBtn id="positioning" label="体位変換・移動" active={isOpen("positioning")} onClick={() => toggle("positioning")} />
+        {isOpen("positioning") && (
+          <div className="p-4 space-y-3">
+            <CareSelect label="体位" value={data.positioning.position_type} onChange={(v) => upd("positioning", { position_type: v, done: true })} options={["仰臥位", "側臥位", "座位", "半座位", "起立位", "その他"]} />
+            <CareSelect label="移動手段" value={data.positioning.mobility_device} onChange={(v) => upd("positioning", { mobility_device: v })} options={["徒歩", "杖", "歩行器", "車椅子", "ストレッチャー", "その他"]} />
+            <CareTextarea label="備考" value={data.positioning.notes} onChange={(v) => upd("positioning", { notes: v })} rows={2} />
+          </div>
+        )}
+
+        {/* 11. 服薬介助 */}
+        <SectionBtn id="medication" label="服薬介助" active={isOpen("medication")} onClick={() => toggle("medication")} />
+        {isOpen("medication") && (
+          <div className="p-4 space-y-3">
+            <CareSelect label="投与方法" value={data.medication.med_type} onChange={(v) => upd("medication", { med_type: v, done: true })} options={["内服", "外用", "点眼", "吸入", "座薬", "注射", "その他"]} />
+            <CareCheckbox label="服薬確認済み" checked={data.medication.confirmed} onChange={(v) => upd("medication", { confirmed: v })} />
+            <CareTextarea label="備考" value={data.medication.notes} onChange={(v) => upd("medication", { notes: v })} rows={2} />
+          </div>
+        )}
+
+        {/* 12. 通院・外出介助 */}
+        <SectionBtn id="outing" label="通院・外出介助" active={isOpen("outing")} onClick={() => toggle("outing")} />
+        {isOpen("outing") && (
+          <div className="p-4 space-y-3">
+            <CareSelect label="種類" value={data.outing.outing_type} onChange={(v) => upd("outing", { outing_type: v, done: true })} options={["通院", "買物同行", "散歩", "外出付添", "その他"]} />
+            <CareSelect label="移動手段" value={data.outing.transport} onChange={(v) => upd("outing", { transport: v })} options={["徒歩", "車", "公共交通", "車椅子", "その他"]} />
+            <CareTextarea label="備考" value={data.outing.notes} onChange={(v) => upd("outing", { notes: v })} rows={2} />
+          </div>
+        )}
+
+        {/* 13. 起床・就寝介助 */}
+        <SectionBtn id="wake_sleep" label="起床・就寝介助" active={isOpen("wake_sleep")} onClick={() => toggle("wake_sleep")} />
+        {isOpen("wake_sleep") && (
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <CareCheckbox label="起床介助" checked={data.wake_sleep.wake_up} onChange={(v) => upd("wake_sleep", { wake_up: v, done: true })} />
+              <CareCheckbox label="就寝介助" checked={data.wake_sleep.go_to_bed} onChange={(v) => upd("wake_sleep", { go_to_bed: v, done: true })} />
+              <CareCheckbox label="ベッドメイキング" checked={data.wake_sleep.bed_making} onChange={(v) => upd("wake_sleep", { bed_making: v, done: true })} />
+            </div>
+            <CareTextarea label="備考" value={data.wake_sleep.notes} onChange={(v) => upd("wake_sleep", { notes: v })} rows={2} />
+          </div>
+        )}
+
+        {/* 14. 医療的ケア */}
+        <SectionBtn id="medical_care" label="医療的ケア" active={isOpen("medical_care")} onClick={() => toggle("medical_care")} />
+        {isOpen("medical_care") && (
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <CareCheckbox label="吸引" checked={data.medical_care.suction} onChange={(v) => upd("medical_care", { suction: v, done: true })} />
+              <CareCheckbox label="経管栄養" checked={data.medical_care.tube_feeding} onChange={(v) => upd("medical_care", { tube_feeding: v, done: true })} />
+              <CareCheckbox label="ストーマ管理" checked={data.medical_care.stoma} onChange={(v) => upd("medical_care", { stoma: v, done: true })} />
+              <CareCheckbox label="カテーテル管理" checked={data.medical_care.catheter} onChange={(v) => upd("medical_care", { catheter: v, done: true })} />
+              <CareCheckbox label="創傷処置" checked={data.medical_care.wound_care} onChange={(v) => upd("medical_care", { wound_care: v, done: true })} />
+              <CareCheckbox label="酸素管理" checked={data.medical_care.oxygen} onChange={(v) => upd("medical_care", { oxygen: v, done: true })} />
+            </div>
+            <CareTextarea label="備考" value={data.medical_care.notes} onChange={(v) => upd("medical_care", { notes: v })} rows={2} />
+          </div>
+        )}
+
+        {/* 15. 自立支援 */}
+        <SectionBtn id="independence" label="自立支援" active={isOpen("independence")} onClick={() => toggle("independence")} />
+        {isOpen("independence") && (
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <CareCheckbox label="運動・リハビリ" checked={data.independence_support.exercise} onChange={(v) => upd("independence_support", { exercise: v, done: true })} />
+              <CareCheckbox label="認知機能訓練" checked={data.independence_support.cognitive} onChange={(v) => upd("independence_support", { cognitive: v, done: true })} />
+              <CareCheckbox label="コミュニケーション" checked={data.independence_support.communication} onChange={(v) => upd("independence_support", { communication: v, done: true })} />
+              <CareCheckbox label="社会参加支援" checked={data.independence_support.social} onChange={(v) => upd("independence_support", { social: v, done: true })} />
+            </div>
+            <CareTextarea label="備考" value={data.independence_support.notes} onChange={(v) => upd("independence_support", { notes: v })} rows={2} />
+          </div>
+        )}
+
+        {/* 16. 生活援助 */}
+        <SectionBtn id="living" label="生活援助" active={isOpen("living")} onClick={() => toggle("living")} />
+        {isOpen("living") && (
+          <div className="p-4 space-y-3">
+            <CareCheckbox label="調理" checked={data.living_support.cooking} onChange={(v) => upd("living_support", { cooking: v })} />
+            {data.living_support.cooking && <CareTextarea label="調理の内容" value={data.living_support.cooking_notes} onChange={(v) => upd("living_support", { cooking_notes: v })} rows={2} />}
+            <CareCheckbox label="掃除" checked={data.living_support.cleaning} onChange={(v) => upd("living_support", { cleaning: v })} />
+            {data.living_support.cleaning && <CareTextarea label="掃除の内容" value={data.living_support.cleaning_notes} onChange={(v) => upd("living_support", { cleaning_notes: v })} rows={2} />}
+            <CareCheckbox label="洗濯" checked={data.living_support.laundry} onChange={(v) => upd("living_support", { laundry: v })} />
+            {data.living_support.laundry && <CareTextarea label="洗濯の内容" value={data.living_support.laundry_notes} onChange={(v) => upd("living_support", { laundry_notes: v })} rows={2} />}
+            <CareCheckbox label="買物" checked={data.living_support.shopping} onChange={(v) => upd("living_support", { shopping: v })} />
+            {data.living_support.shopping && <CareTextarea label="買物の内容" value={data.living_support.shopping_notes} onChange={(v) => upd("living_support", { shopping_notes: v })} rows={2} />}
+            <div className="grid grid-cols-2 gap-2">
+              <CareCheckbox label="ゴミ出し" checked={data.living_support.trash} onChange={(v) => upd("living_support", { trash: v })} />
+              <CareCheckbox label="衣類の整理" checked={data.living_support.clothing} onChange={(v) => upd("living_support", { clothing: v })} />
+              <CareCheckbox label="服薬管理" checked={data.living_support.medication_mgmt} onChange={(v) => upd("living_support", { medication_mgmt: v })} />
+              <CareCheckbox label="健康管理" checked={data.living_support.health_mgmt} onChange={(v) => upd("living_support", { health_mgmt: v })} />
+            </div>
+            <CareTextarea label="その他" value={data.living_support.other_notes} onChange={(v) => upd("living_support", { other_notes: v })} rows={2} />
+          </div>
+        )}
+
+        {/* 17. 退出確認 */}
+        <SectionBtn id="exit_check" label="退出確認" active={isOpen("exit_check")} onClick={() => toggle("exit_check")} />
+        {isOpen("exit_check") && (
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <CareCheckbox label="火の元確認" checked={data.exit_check.fire_check} onChange={(v) => upd("exit_check", { fire_check: v })} />
+              <CareCheckbox label="施錠確認" checked={data.exit_check.lock_check} onChange={(v) => upd("exit_check", { lock_check: v })} />
+              <CareCheckbox label="電化製品確認" checked={data.exit_check.appliance_check} onChange={(v) => upd("exit_check", { appliance_check: v })} />
+            </div>
+            <CareTextarea label="退出時の利用者の状態" value={data.exit_check.user_condition} onChange={(v) => upd("exit_check", { user_condition: v })} rows={2} />
+            <CareTextarea label="備考" value={data.exit_check.notes} onChange={(v) => upd("exit_check", { notes: v })} rows={2} />
+          </div>
+        )}
+
+        {/* 18. 経過記録 */}
+        <SectionBtn id="progress" label="経過記録" active={isOpen("progress")} onClick={() => toggle("progress")} />
+        {isOpen("progress") && (
+          <div className="p-4">
+            <CareTextarea label="経過記録" value={data.progress_notes} onChange={(v) => setData({ ...data, progress_notes: v })} placeholder="サービス提供中の経過を記録..." rows={5} />
+          </div>
+        )}
+
+        {/* 19. 申し送り等 */}
+        <SectionBtn id="handover" label="申し送り等" active={isOpen("handover")} onClick={() => toggle("handover")} />
+        {isOpen("handover") && (
+          <div className="p-4 space-y-3">
+            <CareSelect label="優先度" value={data.handover.priority} onChange={(v) => upd("handover", { priority: v })} options={["通常", "重要"]} />
+            <CareTextarea label="申し送り内容" value={data.handover.notes} onChange={(v) => upd("handover", { notes: v })} placeholder="次の担当者への申し送り..." rows={4} />
+            <CareTextarea label="利用者の状態" value={data.user_condition} onChange={(v) => setData({ ...data, user_condition: v })} rows={3} />
+            <CareTextarea label="特記事項" value={data.notes} onChange={(v) => setData({ ...data, notes: v })} rows={2} />
+          </div>
+        )}
+
+        {/* 20. 詳細報告 */}
+        <SectionBtn id="detailed_report" label="詳細報告" active={isOpen("detailed_report")} onClick={() => toggle("detailed_report")} />
+        {isOpen("detailed_report") && (
+          <div className="p-4">
+            <CareTextarea label="詳細報告" value={data.detailed_report} onChange={(v) => setData({ ...data, detailed_report: v })} placeholder="詳細な報告内容を記入..." rows={6} />
+          </div>
+        )}
+
+        {/* 21. 写真 */}
+        <SectionBtn id="photos" label="写真" active={isOpen("photos")} onClick={() => toggle("photos")} />
+        {isOpen("photos") && (
+          <div className="p-4 space-y-3">
+            <p className="text-xs text-gray-500">サービス中の写真を撮影・添付できます</p>
+            <label className="flex items-center justify-center gap-2 w-full py-4 rounded-xl border-2 border-dashed border-gray-300 text-gray-500 active:bg-gray-50 cursor-pointer">
+              <Plus size={20} />
+              <span className="text-sm font-medium">写真を追加</span>
+              <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = () => {
+                  setData((prev) => ({ ...prev, photos: [...prev.photos, reader.result as string] }));
+                };
+                reader.readAsDataURL(file);
+              }} />
+            </label>
+            {data.photos.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {data.photos.map((p, i) => (
+                  <div key={i} className="relative aspect-square rounded-lg overflow-hidden border">
+                    <img src={p} alt="" className="w-full h-full object-cover" />
+                    <button onClick={() => setData((prev) => ({ ...prev, photos: prev.photos.filter((_, j) => j !== i) }))} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/50 flex items-center justify-center text-white"><X size={12} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 22. サイン */}
+        <SectionBtn id="signature" label="サイン" active={isOpen("signature")} onClick={() => toggle("signature")} />
+        {isOpen("signature") && (
+          <div className="p-4 space-y-3">
+            <p className="text-xs text-gray-500">サービス提供の確認サインを記入してください</p>
+            {data.signature ? (
+              <div className="space-y-2">
+                <div className="border rounded-xl p-2 bg-gray-50">
+                  <img src={data.signature} alt="署名" className="w-full h-24 object-contain" />
+                </div>
+                <button onClick={() => setData({ ...data, signature: "" })} className="text-xs text-red-500 font-medium">署名をクリア</button>
+              </div>
+            ) : (
+              <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center text-gray-400 text-sm">
+                <p>署名機能は次期アップデートで追加予定です</p>
+                <p className="text-xs mt-1">（Canvas署名パッド）</p>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="h-8" />
       </div>
     </div>
@@ -1388,7 +1701,7 @@ function MyShiftTab({ staffId }: { staffId: string }) {
       const to = format(endOfMonth(month), "yyyy-MM-dd");
       const { data } = await supabase
         .from("kaigo_visit_records")
-        .select("id, schedule_id, user_id, visit_date, start_time, end_time, body_care, living_support, vital_temperature, vital_bp_sys, vital_bp_dia, vital_pulse, vital_spo2, vital_respiration, vital_blood_sugar, user_condition, handover_notes, notes, progress_notes")
+        .select("id, schedule_id, user_id, visit_date, start_time, end_time, body_care, living_support, vital_temperature, vital_bp_sys, vital_bp_dia, vital_pulse, vital_spo2, vital_respiration, vital_blood_sugar, user_condition, handover_notes, notes, progress_notes, care_record_data")
         .eq("staff_id", staffId)
         .gte("visit_date", from)
         .lte("visit_date", to);
