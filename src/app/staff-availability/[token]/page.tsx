@@ -1311,8 +1311,98 @@ function CareRecordModal({
         </div>
       </div>
 
-      {/* Form body — 22 sections */}
+      {/* Form body */}
       <div className="flex-1 overflow-auto">
+
+        {/* 入退室ボタン（常に表示） */}
+        <div className="px-4 py-3 border-b bg-white">
+          <p className="text-xs font-bold text-gray-500 mb-2">入退室記録</p>
+          <div className="flex items-center gap-3">
+            {/* 入室 */}
+            {data.entry ? (
+              <div className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
+                <LogIn size={16} className="text-emerald-600" />
+                <div>
+                  <span className="text-xs text-emerald-600 font-bold">入室済み</span>
+                  <div className="text-sm font-bold text-emerald-800 tabular-nums">
+                    {(() => { try { return format(new Date(data.entry.time), "HH:mm"); } catch { return ""; } })()}
+                  </div>
+                </div>
+                {data.entry.lat && <MapPin size={12} className="text-emerald-400 ml-auto" />}
+              </div>
+            ) : (
+              <button
+                onClick={async () => {
+                  try {
+                    toast.info("位置情報を取得中...");
+                    const pos = await new Promise<GeolocationPosition>((res, rej) =>
+                      navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 10000 })
+                    );
+                    const entryData = {
+                      time: new Date().toISOString(),
+                      lat: pos.coords.latitude,
+                      lng: pos.coords.longitude,
+                      accuracy: Math.round(pos.coords.accuracy),
+                    };
+                    setData((prev) => ({ ...prev, entry: entryData }));
+                    toast.success("入室を記録しました");
+                  } catch {
+                    toast.error("位置情報を取得できませんでした");
+                  }
+                }}
+                className="flex-1 flex items-center justify-center gap-2 px-3 py-3 rounded-xl bg-emerald-600 text-white font-bold text-sm active:bg-emerald-700 active:scale-95 transition-all"
+              >
+                <LogIn size={18} />
+                入室
+              </button>
+            )}
+
+            {/* 退室 */}
+            {data.exit ? (
+              <div className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-orange-50 border border-orange-200">
+                <LogOut size={16} className="text-orange-600" />
+                <div>
+                  <span className="text-xs text-orange-600 font-bold">退室済み</span>
+                  <div className="text-sm font-bold text-orange-800 tabular-nums">
+                    {(() => { try { return format(new Date(data.exit.time), "HH:mm"); } catch { return ""; } })()}
+                  </div>
+                </div>
+                {data.exit.lat && <MapPin size={12} className="text-orange-400 ml-auto" />}
+              </div>
+            ) : (
+              <button
+                onClick={async () => {
+                  try {
+                    toast.info("位置情報を取得中...");
+                    const pos = await new Promise<GeolocationPosition>((res, rej) =>
+                      navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 10000 })
+                    );
+                    const exitData = {
+                      time: new Date().toISOString(),
+                      lat: pos.coords.latitude,
+                      lng: pos.coords.longitude,
+                      accuracy: Math.round(pos.coords.accuracy),
+                    };
+                    setData((prev) => ({ ...prev, exit: exitData }));
+                    toast.success("退室を記録しました");
+                  } catch {
+                    toast.error("位置情報を取得できませんでした");
+                  }
+                }}
+                disabled={!data.entry}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 px-3 py-3 rounded-xl font-bold text-sm active:scale-95 transition-all",
+                  data.entry
+                    ? "bg-orange-500 text-white active:bg-orange-600"
+                    : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                )}
+              >
+                <LogOut size={18} />
+                退室
+              </button>
+            )}
+          </div>
+        </div>
 
         {/* 1. 事前チェック */}
         <SectionBtn id="pre_check" label="事前チェック" active={isOpen("pre_check")} onClick={() => toggle("pre_check")} />
@@ -2000,50 +2090,21 @@ function MyShiftTab({ staffId }: { staffId: string }) {
                     </button>
                   </div>
 
-                  {/* 入室・退室ボタン */}
-                  <div className="flex items-center gap-2 mt-2">
-                    {/* 入室 */}
-                    {ee.entry ? (
-                      <div className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs">
-                        <LogIn size={12} />
-                        <span className="font-bold">入室</span>
-                        <span className="tabular-nums">{format(new Date(ee.entry.time), "HH:mm")}</span>
-                        <MapPin size={10} className="ml-0.5" />
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => handleEntry(sched)}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold active:bg-emerald-700 active:scale-95 transition-all"
-                      >
-                        <LogIn size={12} />
-                        入室
-                      </button>
-                    )}
-
-                    {/* 退室 */}
-                    {ee.exit ? (
-                      <div className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-200 text-orange-700 text-xs">
-                        <LogOut size={12} />
-                        <span className="font-bold">退室</span>
-                        <span className="tabular-nums">{format(new Date(ee.exit.time), "HH:mm")}</span>
-                        <MapPin size={10} className="ml-0.5" />
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => handleExit(sched)}
-                        disabled={!ee.entry}
-                        className={cn(
-                          "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold active:scale-95 transition-all",
-                          ee.entry
-                            ? "bg-orange-500 text-white active:bg-orange-600"
-                            : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                        )}
-                      >
-                        <LogOut size={12} />
-                        退室
-                      </button>
-                    )}
-                  </div>
+                  {/* 入退室ステータス表示（小さく） */}
+                  {(ee.entry || ee.exit) && (
+                    <div className="flex items-center gap-2 mt-1.5">
+                      {ee.entry && (
+                        <span className="flex items-center gap-1 text-[10px] text-emerald-600">
+                          <LogIn size={10} />入室 {format(new Date(ee.entry.time), "HH:mm")}
+                        </span>
+                      )}
+                      {ee.exit && (
+                        <span className="flex items-center gap-1 text-[10px] text-orange-600">
+                          <LogOut size={10} />退室 {format(new Date(ee.exit.time), "HH:mm")}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
