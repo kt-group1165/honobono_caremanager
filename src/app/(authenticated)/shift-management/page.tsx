@@ -68,6 +68,7 @@ interface VisitSchedule {
   status?: string; // scheduled=予定, completed=実績, cancelled, changed
   staff_name?: string | null;
   user_name?: string | null;
+  _isCopy?: boolean; // ローカル複写行（未保存）
 }
 
 interface StaffAvailabilitySlot {
@@ -2498,29 +2499,55 @@ function MonthlyIndividualView({
     setBulkProcessing(false);
   };
 
-  // 一括: 複写（翌月にコピー）
-  const bulkCopy = async () => {
+  // 一括: 複写（行のすぐ下に日付なしでコピーを挿入）
+  // 実績は複写不可。予定のみ。
+  const bulkCopy = () => {
     if (selectedIds.size === 0) { toast.error("対象を選択してください"); return; }
-    const targets = schedules.filter((s) => selectedIds.has(s.id));
-    const nextMonth = addMonths(currentMonth, 1);
-    setBulkProcessing(true);
-    let copied = 0;
-    for (const sched of targets) {
-      const origDate = parseISO(sched.visit_date);
-      const newDate = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), origDate.getDate());
-      // 翌月に同日がない場合はスキップ（例: 31日）
-      if (newDate.getMonth() !== nextMonth.getMonth()) continue;
-      await supabase.from("kaigo_visit_schedule").insert({
-        user_id: sched.user_id, staff_id: sched.staff_id,
-        visit_date: format(newDate, "yyyy-MM-dd"),
-        start_time: sched.start_time, end_time: sched.end_time,
-        service_type: sched.service_type, status: "scheduled",
-      });
-      copied++;
+    const targets = schedules.filter((s) => selectedIds.has(s.id) && s.status !== "completed");
+    if (targets.length === 0) { toast.error("予定のみ複写できます（実績は不可）"); return; }
+    // 各対象行のすぐ下にコピー行を挿入（日付なし）
+    const newSchedules: VisitSchedule[] = [];
+    for (const sched of schedules) {
+      newSchedules.push(sched);
+      if (targets.some((t) => t.id === sched.id)) {
+        // コピー行（日付なし、_isCopy フラグ付き）
+        const copyId = `copy-${sched.id}-${Date.now()}`;
+        newSchedules.push({
+          ...sched,
+          id: copyId,
+          visit_date: "", // 日付なし
+          status: "scheduled",
+          _isCopy: true,
+        });
+      }
     }
-    toast.success(`${copied}件を${format(nextMonth, "M月")}に複写しました`);
+    setSchedules(newSchedules);
     setSelectedIds(new Set());
-    setBulkProcessing(false);
+    toast.success(`${targets.length}件を複写しました（日付を設定してください）`);
+  };
+
+  // コピー行に日付を設定してDBに保存
+  const saveCopyDate = async (copyRow: VisitSchedule, dateStr: string) => {
+    const { data, error } = await supabase.from("kaigo_visit_schedule").insert({
+      user_id: copyRow.user_id, staff_id: copyRow.staff_id,
+      visit_date: dateStr,
+      start_time: copyRow.start_time, end_time: copyRow.end_time,
+      service_type: copyRow.service_type, status: "scheduled",
+    }).select("id").single();
+    if (error) {
+      toast.error("保存に失敗しました");
+      return;
+    }
+    // ローカル更新: コピー行を正式な行に変換
+    setSchedules((prev) => prev.map((s) =>
+      s.id === copyRow.id ? { ...s, id: data.id, visit_date: dateStr, _isCopy: false } : s
+    ));
+    toast.success("予定を保存しました");
+  };
+
+  // コピー行を削除（キャンセル）
+  const removeCopyRow = (copyId: string) => {
+    setSchedules((prev) => prev.filter((s) => s.id !== copyId));
   };
 
   // 一括: 削除
@@ -2654,8 +2681,10 @@ function MonthlyIndividualView({
             </thead>
             <tbody>
               {schedules.map((sched) => {
-                const day = sched.visit_date ? parseInt(sched.visit_date.split("-")[2], 10) : 0;
-                const dow = dowStr(sched.visit_date);
+                const isCopy = sched._isCopy === true;
+                const hasDate = !!sched.visit_date;
+                const day = hasDate ? parseInt(sched.visit_date.split("-")[2], 10) : 0;
+                const dow = hasDate ? dowStr(sched.visit_date) : "";
                 const isSat = dow === "土";
                 const isSun = dow === "日";
                 const isCompleted = sched.status === "completed";
@@ -2666,54 +2695,105 @@ function MonthlyIndividualView({
                     key={sched.id}
                     className={cn(
                       "hover:bg-yellow-50/50 transition-colors",
-                      isSun ? "bg-red-50/20" : isSat ? "bg-blue-50/20" : ""
+                      isCopy ? "bg-green-50/40" : isSun ? "bg-red-50/20" : isSat ? "bg-blue-50/20" : ""
                     )}
                   >
                     {/* 選択チェックボックス */}
                     <td className="border border-gray-300 px-1 py-1 text-center">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(sched.id)}
-                        onChange={() => toggleSelect(sched.id)}
-                        className="h-3.5 w-3.5 accent-blue-600 cursor-pointer"
-                      />
+                      {!isCopy ? (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(sched.id)}
+                          onChange={() => toggleSelect(sched.id)}
+                          className="h-3.5 w-3.5 accent-blue-600 cursor-pointer"
+                        />
+                      ) : (
+                        <button
+                          onClick={() => removeCopyRow(sched.id)}
+                          className="text-red-400 hover:text-red-600"
+                          title="複写を取消"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
                     </td>
                     {/* 予定/実績 トグルスイッチ */}
                     <td className="border border-gray-300 px-1 py-1 text-center">
-                      <button
-                        onClick={() => toggleStatus(sched)}
-                        disabled={isToggling}
-                        className="inline-flex items-center gap-1 group"
-                        title={isCompleted ? "実績 → 予定に戻す" : "予定 → 実績に変更"}
-                      >
-                        {/* toggle switch */}
-                        <span className={cn(
-                          "relative inline-block w-8 h-4 rounded-full transition-colors",
-                          isCompleted ? "bg-orange-500" : "bg-gray-300",
-                          isToggling && "opacity-50"
-                        )}>
+                      {isCopy ? (
+                        <span className="text-[10px] text-green-600 font-bold">複写</span>
+                      ) : (
+                        <button
+                          onClick={() => toggleStatus(sched)}
+                          disabled={isToggling}
+                          className="inline-flex items-center gap-1 group"
+                          title={isCompleted ? "実績 → 予定に戻す" : "予定 → 実績に変更"}
+                        >
                           <span className={cn(
-                            "absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform",
-                            isCompleted ? "translate-x-4" : "translate-x-0.5"
-                          )} />
-                        </span>
-                        <span className={cn(
-                          "text-[10px] font-bold min-w-[1.2rem]",
-                          isCompleted ? "text-orange-700" : "text-blue-600"
-                        )}>
-                          {isCompleted ? "実" : "予"}
-                        </span>
-                      </button>
+                            "relative inline-block w-8 h-4 rounded-full transition-colors",
+                            isCompleted ? "bg-orange-500" : "bg-gray-300",
+                            isToggling && "opacity-50"
+                          )}>
+                            <span className={cn(
+                              "absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform",
+                              isCompleted ? "translate-x-4" : "translate-x-0.5"
+                            )} />
+                          </span>
+                          <span className={cn(
+                            "text-[10px] font-bold min-w-[1.2rem]",
+                            isCompleted ? "text-orange-700" : "text-blue-600"
+                          )}>
+                            {isCompleted ? "実" : "予"}
+                          </span>
+                        </button>
+                      )}
                     </td>
-                    {/* 利用日 */}
+                    {/* 利用日 + カレンダーアイコン */}
                     <td className="border border-gray-300 px-2 py-1 whitespace-nowrap">
-                      <span className="font-bold">{day}</span>
-                      <span className={cn(
-                        "ml-0.5",
-                        isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-gray-500"
-                      )}>
-                        ({dow})
-                      </span>
+                      {isCopy && !hasDate ? (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400 italic text-[10px]">日付未設定</span>
+                          <label className="cursor-pointer text-blue-500 hover:text-blue-700" title="日付を選択">
+                            <CalendarDays size={14} />
+                            <input
+                              type="date"
+                              className="sr-only"
+                              onChange={(e) => {
+                                if (e.target.value) saveCopyDate(sched, e.target.value);
+                              }}
+                            />
+                          </label>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <span className="font-bold">{day}</span>
+                          <span className={cn(
+                            "ml-0.5",
+                            isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-gray-500"
+                          )}>
+                            ({dow})
+                          </span>
+                          {!isCopy && (
+                            <label className="cursor-pointer text-gray-300 hover:text-blue-500 ml-auto" title="日付を変更">
+                              <CalendarDays size={12} />
+                              <input
+                                type="date"
+                                className="sr-only"
+                                defaultValue={sched.visit_date}
+                                onChange={async (e) => {
+                                  if (!e.target.value || e.target.value === sched.visit_date) return;
+                                  const { error } = await supabase.from("kaigo_visit_schedule")
+                                    .update({ visit_date: e.target.value }).eq("id", sched.id);
+                                  if (error) { toast.error("日付変更に失敗"); return; }
+                                  setSchedules((prev) => prev.map((s) =>
+                                    s.id === sched.id ? { ...s, visit_date: e.target.value } : s
+                                  ));
+                                  toast.success("日付を変更しました");
+                                }}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      )}
                     </td>
                     {/* 利用時間 */}
                     <td
