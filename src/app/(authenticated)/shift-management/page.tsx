@@ -63,6 +63,7 @@ interface VisitSchedule {
   start_time: string | null;
   end_time: string | null;
   service_type: string;
+  status?: string; // scheduled=予定, completed=実績, cancelled, changed
   staff_name?: string | null;
   user_name?: string | null;
 }
@@ -2321,8 +2322,6 @@ function TimelineView({
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
-
 // ─── 月間個別ビュー ─────────────────────────────────────────────────────────
 
 interface MonthlyIndividualViewProps {
@@ -2347,6 +2346,7 @@ function MonthlyIndividualView({
   const supabase = createClient();
   const [schedules, setSchedules] = useState<VisitSchedule[]>([]);
   const [loading, setLoading] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -2356,7 +2356,7 @@ function MonthlyIndividualView({
     const col = entityType === "user" ? "user_id" : "staff_id";
     const { data } = await supabase
       .from("kaigo_visit_schedule")
-      .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, kaigo_users(name), kaigo_staff(name)")
+      .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, kaigo_users(name), kaigo_staff(name)")
       .eq(col, entityId)
       .gte("visit_date", from)
       .lte("visit_date", to)
@@ -2364,44 +2364,65 @@ function MonthlyIndividualView({
       .order("start_time");
 
     const mapped: VisitSchedule[] = (data || []).map((r: any) => ({  // eslint-disable-line @typescript-eslint/no-explicit-any
-      id: r.id,
-      user_id: r.user_id,
-      staff_id: r.staff_id,
-      visit_date: r.visit_date,
-      start_time: r.start_time,
-      end_time: r.end_time,
-      service_type: r.service_type,
-      user_name: r.kaigo_users?.name ?? null,
-      staff_name: r.kaigo_staff?.name ?? null,
+      id: r.id, user_id: r.user_id, staff_id: r.staff_id,
+      visit_date: r.visit_date, start_time: r.start_time, end_time: r.end_time,
+      service_type: r.service_type, status: r.status ?? "scheduled",
+      user_name: r.kaigo_users?.name ?? null, staff_name: r.kaigo_staff?.name ?? null,
     }));
-
     setSchedules(mapped);
     setLoading(false);
   }, [entityId, entityType, currentMonth, supabase]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  // 曜日
-  const dowStr = (dateStr: string) => {
-    try {
-      return format(parseISO(dateStr), "E", { locale: ja });
-    } catch {
-      return "";
+  // 予定⇔実績 切替
+  const toggleStatus = async (sched: VisitSchedule) => {
+    const newStatus = sched.status === "completed" ? "scheduled" : "completed";
+    setTogglingId(sched.id);
+    const { error } = await supabase
+      .from("kaigo_visit_schedule")
+      .update({ status: newStatus })
+      .eq("id", sched.id);
+    if (error) {
+      toast.error("切替に失敗しました");
+    } else {
+      // 提供表(kaigo_visit_records)にも反映
+      if (newStatus === "completed") {
+        // 実績に変更 → visit_records に INSERT（なければ）
+        const { data: existing } = await supabase
+          .from("kaigo_visit_records")
+          .select("id")
+          .eq("user_id", sched.user_id)
+          .eq("visit_date", sched.visit_date)
+          .eq("start_time", sched.start_time)
+          .limit(1);
+        if (!existing || existing.length === 0) {
+          await supabase.from("kaigo_visit_records").insert({
+            user_id: sched.user_id,
+            staff_id: sched.staff_id,
+            visit_date: sched.visit_date,
+            start_time: sched.start_time,
+            end_time: sched.end_time,
+            service_type: sched.service_type,
+            status: "completed",
+          });
+        }
+      } else {
+        // 予定に戻す → visit_records から DELETE
+        await supabase
+          .from("kaigo_visit_records")
+          .delete()
+          .eq("user_id", sched.user_id)
+          .eq("visit_date", sched.visit_date)
+          .eq("start_time", sched.start_time);
+      }
+      setSchedules((prev) => prev.map((s) => s.id === sched.id ? { ...s, status: newStatus } : s));
     }
+    setTogglingId(null);
   };
 
-  // 時間の長さ計算
-  const calcDuration = (start: string | null, end: string | null) => {
-    if (!start || !end) return "";
-    const [sh, sm] = start.split(":").map(Number);
-    const [eh, em] = end.split(":").map(Number);
-    const mins = (eh * 60 + em) - (sh * 60 + sm);
-    if (mins <= 0) return "";
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    return `(${h > 0 ? h + "h" : ""}${m > 0 ? m > 0 && h > 0 ? "-" : "" : ""}${m > 0 ? m / 60 + "h" : ""})`.replace(/\(0h\)/, "").replace("(-", "(") || `(${(mins / 60).toFixed(1)}h)`;
+  const dowStr = (dateStr: string) => {
+    try { return format(parseISO(dateStr), "E", { locale: ja }); } catch { return ""; }
   };
 
   const durationText = (start: string | null, end: string | null) => {
@@ -2410,114 +2431,136 @@ function MonthlyIndividualView({
     const [eh, em] = end.split(":").map(Number);
     const totalMins = (eh * 60 + em) - (sh * 60 + sm);
     if (totalMins <= 0) return "";
-    const hours = (totalMins / 60).toFixed(2);
-    return `(${hours}h)`;
+    const h = (totalMins / 60).toFixed(1);
+    const units = Math.ceil(totalMins / 30); // 30分=1単位想定
+    return `(${h}h-${totalMins / 60 < 1 ? "0.5h" : h + "h"})  ${units * 100}単位`;
+  };
+
+  const durationShort = (start: string | null, end: string | null) => {
+    if (!start || !end) return "";
+    const [sh, sm] = start.split(":").map(Number);
+    const [eh, em] = end.split(":").map(Number);
+    const totalMins = (eh * 60 + em) - (sh * 60 + sm);
+    if (totalMins <= 0) return "";
+    return `(${(totalMins / 60).toFixed(1)}h)`;
   };
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Header with month nav */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b bg-white">
-        <button
-          onClick={() => onMonthChange(subMonths(currentMonth, 1))}
-          className="rounded border p-1 hover:bg-gray-50"
-        >
-          <ChevronLeft size={16} />
-        </button>
-        <span className="min-w-[10rem] text-center font-semibold text-sm text-gray-900">
-          {format(currentMonth, "yyyy年M月", { locale: ja })} — {entityName}
-        </span>
-        <button
-          onClick={() => onMonthChange(addMonths(currentMonth, 1))}
-          className="rounded border p-1 hover:bg-gray-50"
-        >
-          <ChevronRight size={16} />
-        </button>
-        <span className="ml-2 text-xs text-gray-500">
-          {schedules.length}件
-        </span>
+      {/* ヘッダー: 月ナビ + ボタン群 */}
+      <div className="flex items-center justify-between px-4 py-2 border-b bg-white">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold text-gray-900">{entityName}</span>
+          <button onClick={() => onMonthChange(subMonths(currentMonth, 1))} className="rounded border p-1 hover:bg-gray-50"><ChevronLeft size={14} /></button>
+          <span className="text-sm font-semibold">{format(currentMonth, "yyyy年M月", { locale: ja })}</span>
+          <button onClick={() => onMonthChange(addMonths(currentMonth, 1))} className="rounded border p-1 hover:bg-gray-50"><ChevronRight size={14} /></button>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-gray-500">
+          予定 {schedules.filter((s) => s.status !== "completed").length}件
+          / 実績 {schedules.filter((s) => s.status === "completed").length}件
+          / 合計 {schedules.length}件
+        </div>
       </div>
 
       {loading ? (
-        <div className="flex flex-1 items-center justify-center">
-          <Loader2 size={24} className="animate-spin text-blue-500" />
-        </div>
+        <div className="flex flex-1 items-center justify-center"><Loader2 size={24} className="animate-spin text-blue-500" /></div>
       ) : schedules.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-gray-400">
-          この月の予定はありません
-        </div>
+        <div className="flex flex-1 items-center justify-center text-sm text-gray-400">この月の予定はありません</div>
       ) : (
         <div className="flex-1 overflow-auto">
-          <table className="w-full text-sm border-collapse">
-            <thead className="bg-gray-50 border-b sticky top-0 z-10">
+          <table className="w-full text-xs border-collapse">
+            <thead className="bg-yellow-50 border-b sticky top-0 z-10">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 w-6"></th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600">利用日</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600">利用時間</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600">サービス内容</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600">
-                  {entityType === "user" ? "職員" : "利用者"}
+                <th className="border border-gray-300 px-1 py-1.5 text-center font-bold text-red-700 w-8">*</th>
+                <th className="border border-gray-300 px-2 py-1.5 text-left font-bold text-red-700">利用日</th>
+                <th className="border border-gray-300 px-2 py-1.5 text-left font-bold">利用時間</th>
+                <th className="border border-gray-300 px-2 py-1.5 text-left font-bold text-red-700">*サービス内容</th>
+                <th className="border border-gray-300 px-2 py-1.5 text-center font-bold">
+                  {entityType === "user" ? "職員 1" : "利用者"}
                 </th>
+                <th className="border border-gray-300 px-2 py-1.5 text-center font-bold w-12">記録</th>
               </tr>
             </thead>
-            <tbody className="divide-y">
-              {schedules.map((sched, i) => {
+            <tbody>
+              {schedules.map((sched) => {
                 const day = sched.visit_date ? parseInt(sched.visit_date.split("-")[2], 10) : 0;
                 const dow = dowStr(sched.visit_date);
                 const isSat = dow === "土";
                 const isSun = dow === "日";
+                const isCompleted = sched.status === "completed";
+                const isToggling = togglingId === sched.id;
+
                 return (
                   <tr
                     key={sched.id}
                     className={cn(
-                      "hover:bg-blue-50/50 cursor-pointer transition-colors",
-                      isSun ? "bg-red-50/30" : isSat ? "bg-blue-50/30" : i % 2 === 1 ? "bg-gray-50/30" : ""
+                      "hover:bg-yellow-50/50 transition-colors",
+                      isSun ? "bg-red-50/20" : isSat ? "bg-blue-50/20" : ""
                     )}
-                    onClick={() => onEditSchedule?.(sched)}
                   >
-                    <td className="px-3 py-2 text-center">
-                      <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-orange-100 text-[9px] font-bold text-orange-700">
-                        実
-                      </span>
+                    {/* 予定/実績 切替チェックボックス */}
+                    <td className="border border-gray-300 px-1 py-1 text-center">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <input
+                          type="checkbox"
+                          checked={isCompleted}
+                          disabled={isToggling}
+                          onChange={() => toggleStatus(sched)}
+                          className="h-3.5 w-3.5 accent-orange-600 cursor-pointer"
+                          title={isCompleted ? "実績 → 予定に戻す" : "予定 → 実績に変更"}
+                        />
+                        <span className={cn(
+                          "text-[9px] font-bold",
+                          isCompleted ? "text-orange-700" : "text-blue-600"
+                        )}>
+                          {isCompleted ? "実" : "予"}
+                        </span>
+                      </div>
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <span className="font-semibold">{day}</span>
+                    {/* 利用日 */}
+                    <td className="border border-gray-300 px-2 py-1 whitespace-nowrap">
+                      <span className="font-bold">{day}</span>
                       <span className={cn(
-                        "ml-1 text-xs",
+                        "ml-0.5",
                         isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-gray-500"
                       )}>
                         ({dow})
                       </span>
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap font-mono text-gray-800">
-                      {sched.start_time?.slice(0, 5)}〜{sched.end_time?.slice(0, 5)}
-                      <span className="ml-2 text-xs text-gray-400">
-                        {durationText(sched.start_time, sched.end_time)}
-                      </span>
+                    {/* 利用時間 */}
+                    <td
+                      className="border border-gray-300 px-2 py-1 whitespace-nowrap cursor-pointer hover:bg-blue-50"
+                      onClick={() => onEditSchedule?.(sched)}
+                    >
+                      <span className="font-mono">{sched.start_time?.slice(0, 5)}-{sched.end_time?.slice(0, 5)}</span>
+                      <span className="ml-1 text-gray-400">{durationShort(sched.start_time, sched.end_time)}</span>
                     </td>
-                    <td className="px-3 py-2">
+                    {/* サービス内容 */}
+                    <td className="border border-gray-300 px-2 py-1">
                       <span className={cn(
-                        "inline-block rounded px-2 py-0.5 text-xs font-medium",
+                        "inline-block rounded px-1.5 py-0.5 text-[10px] font-medium",
                         SERVICE_TYPE_COLORS[sched.service_type] ?? "bg-gray-100 text-gray-700"
                       )}>
                         {sched.service_type}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-gray-700">
+                    {/* 職員/利用者 */}
+                    <td className="border border-gray-300 px-2 py-1 text-center">
                       {entityType === "user"
                         ? sched.staff_name ?? "未割当"
                         : sched.user_name ?? "不明"}
+                    </td>
+                    {/* 記録 */}
+                    <td className="border border-gray-300 px-1 py-1 text-center">
+                      {isCompleted && (
+                        <span className="inline-block w-3 h-3 rounded-sm bg-orange-200 border border-orange-400" title="実績記録あり" />
+                      )}
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-
-          {/* Summary */}
-          <div className="border-t bg-gray-50 px-4 py-2 text-xs text-gray-600">
-            合計 {schedules.length}件
-          </div>
         </div>
       )}
     </div>
