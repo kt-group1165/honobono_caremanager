@@ -248,26 +248,65 @@ function getActiveCareItems(record: VisitRecord): string[] {
 
 // 22カテゴリ展開表示コンポーネント
 function CareRecordDetail({ record }: { record: VisitRecord }) {
-  const crd = (record as any).care_record_data;  // eslint-disable-line @typescript-eslint/no-explicit-any
-  if (!crd || typeof crd !== "object") {
-    // Legacy display
+  const r = record as any;  // eslint-disable-line @typescript-eslint/no-explicit-any
+  const crd = r.care_record_data;
+
+  // care_record_dataが空or未使用 → レガシー個別列 + バイタル列で表示
+  const hasNewData = crd && typeof crd === "object" && Object.keys(crd).some((k) => {
+    const v = crd[k];
+    if (v === null || v === undefined || v === "" || v === false) return false;
+    if (typeof v === "object" && !Array.isArray(v)) return Object.values(v).some((sv) => sv !== null && sv !== undefined && sv !== "" && sv !== false);
+    if (Array.isArray(v)) return v.length > 0;
+    return true;
+  });
+
+  if (!hasNewData) {
+    // Legacy + バイタル個別列で表示
+    const temp = r.vital_temperature ?? r.temperature;
+    const bpSys = r.vital_bp_sys ?? r.bp_sys;
+    const bpDia = r.vital_bp_dia ?? r.bp_dia;
+    const pulse = r.vital_pulse ?? r.pulse;
+    const spo2 = r.vital_spo2;
+    const resp = r.vital_respiration;
+    const bs = r.vital_blood_sugar;
+    const uc = r.user_condition;
+    const notes = r.notes;
+    const ho = r.handover_notes;
+    const pn = r.progress_notes;
+
+    const hasVitals = temp || bpSys || pulse || spo2 || resp || bs;
+    const hasAnything = hasVitals || uc || notes || ho || pn || r.care_excretion || r.care_meal || r.care_bath;
+
+    if (!hasAnything) {
+      return <p className="text-sm text-gray-400">記録内容がありません</p>;
+    }
+
     return (
       <div className="space-y-3">
-        {(record.temperature || record.bp_sys || record.pulse) && (
+        {hasVitals && (
           <div>
-            <p className="mb-1 text-xs font-semibold text-gray-600">バイタル</p>
-            <div className="flex flex-wrap gap-4 text-sm text-gray-700">
-              {record.temperature && <span>体温: <strong>{record.temperature}℃</strong></span>}
-              {record.bp_sys && record.bp_dia && <span>血圧: <strong>{record.bp_sys}/{record.bp_dia}</strong></span>}
-              {record.pulse && <span>脈拍: <strong>{record.pulse} bpm</strong></span>}
+            <p className="mb-1.5 text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded">バイタルサイン</p>
+            <div className="flex flex-wrap gap-4 text-sm text-gray-700 pl-2">
+              {temp && <span>体温: <strong>{temp}℃</strong></span>}
+              {bpSys && bpDia && <span>血圧: <strong>{bpSys}/{bpDia} mmHg</strong></span>}
+              {pulse && <span>脈拍: <strong>{pulse} bpm</strong></span>}
+              {spo2 && <span>SpO2: <strong>{spo2}%</strong></span>}
+              {resp && <span>呼吸: <strong>{resp} 回/分</strong></span>}
+              {bs && <span>血糖: <strong>{bs} mg/dL</strong></span>}
             </div>
           </div>
         )}
-        {record.user_condition && (
-          <div><p className="mb-1 text-xs font-semibold text-gray-600">利用者の状態</p><p className="text-sm text-gray-700 whitespace-pre-wrap">{record.user_condition}</p></div>
+        {uc && (
+          <div><p className="mb-1 text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded">利用者の状態</p><p className="text-sm text-gray-700 whitespace-pre-wrap pl-2">{uc}</p></div>
         )}
-        {record.notes && (
-          <div><p className="mb-1 text-xs font-semibold text-gray-600">特記事項</p><p className="text-sm text-gray-700 whitespace-pre-wrap">{record.notes}</p></div>
+        {ho && (
+          <div><p className="mb-1 text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded">申し送り</p><p className="text-sm text-gray-700 whitespace-pre-wrap pl-2">{ho}</p></div>
+        )}
+        {pn && (
+          <div><p className="mb-1 text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded">経過記録</p><p className="text-sm text-gray-700 whitespace-pre-wrap pl-2">{pn}</p></div>
+        )}
+        {notes && (
+          <div><p className="mb-1 text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded">特記事項</p><p className="text-sm text-gray-700 whitespace-pre-wrap pl-2">{notes}</p></div>
         )}
       </div>
     );
