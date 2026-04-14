@@ -23,6 +23,8 @@ import {
   Undo2,
   Plus,
   FileText,
+  RotateCcw,
+  Trash2,
 } from "lucide-react";
 import {
   format,
@@ -2352,6 +2354,8 @@ function MonthlyIndividualView({
   const [schedules, setSchedules] = useState<VisitSchedule[]>([]);
   const [loading, setLoading] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkProcessing, setBulkProcessing] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -2432,6 +2436,109 @@ function MonthlyIndividualView({
     setTogglingId(null);
   };
 
+  // 選択の切替
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = () => {
+    if (selectedIds.size === schedules.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(schedules.map((s) => s.id)));
+    }
+  };
+
+  // 一括: 実績変換
+  const bulkToCompleted = async () => {
+    if (selectedIds.size === 0) { toast.error("対象を選択してください"); return; }
+    const targets = schedules.filter((s) => selectedIds.has(s.id) && s.status !== "completed");
+    if (targets.length === 0) { toast.info("選択された予定はすべて実績済みです"); return; }
+    setBulkProcessing(true);
+    for (const sched of targets) {
+      const { data: existing } = await supabase
+        .from("kaigo_visit_records").select("id")
+        .eq("user_id", sched.user_id).eq("visit_date", sched.visit_date).eq("start_time", sched.start_time).limit(1);
+      if (!existing || existing.length === 0) {
+        await supabase.from("kaigo_visit_records").insert({
+          user_id: sched.user_id, staff_id: sched.staff_id,
+          visit_date: sched.visit_date, start_time: sched.start_time, end_time: sched.end_time,
+          service_type: sched.service_type, status: "completed",
+        });
+      }
+      await supabase.from("kaigo_visit_schedule").update({ status: "completed" }).eq("id", sched.id);
+    }
+    setSchedules((prev) => prev.map((s) => selectedIds.has(s.id) ? { ...s, status: "completed" } : s));
+    toast.success(`${targets.length}件を実績に変換しました`);
+    setSelectedIds(new Set());
+    setBulkProcessing(false);
+  };
+
+  // 一括: 予定に戻す
+  const bulkToScheduled = async () => {
+    if (selectedIds.size === 0) { toast.error("対象を選択してください"); return; }
+    const targets = schedules.filter((s) => selectedIds.has(s.id) && s.status === "completed");
+    if (targets.length === 0) { toast.info("選択された予定はすべて予定状態です"); return; }
+    setBulkProcessing(true);
+    for (const sched of targets) {
+      await supabase.from("kaigo_visit_records").delete()
+        .eq("user_id", sched.user_id).eq("visit_date", sched.visit_date).eq("start_time", sched.start_time);
+      await supabase.from("kaigo_visit_schedule").update({ status: "scheduled" }).eq("id", sched.id);
+    }
+    setSchedules((prev) => prev.map((s) => selectedIds.has(s.id) ? { ...s, status: "scheduled" } : s));
+    toast.success(`${targets.length}件を予定に戻しました`);
+    setSelectedIds(new Set());
+    setBulkProcessing(false);
+  };
+
+  // 一括: 複写（翌月にコピー）
+  const bulkCopy = async () => {
+    if (selectedIds.size === 0) { toast.error("対象を選択してください"); return; }
+    const targets = schedules.filter((s) => selectedIds.has(s.id));
+    const nextMonth = addMonths(currentMonth, 1);
+    setBulkProcessing(true);
+    let copied = 0;
+    for (const sched of targets) {
+      const origDate = parseISO(sched.visit_date);
+      const newDate = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), origDate.getDate());
+      // 翌月に同日がない場合はスキップ（例: 31日）
+      if (newDate.getMonth() !== nextMonth.getMonth()) continue;
+      await supabase.from("kaigo_visit_schedule").insert({
+        user_id: sched.user_id, staff_id: sched.staff_id,
+        visit_date: format(newDate, "yyyy-MM-dd"),
+        start_time: sched.start_time, end_time: sched.end_time,
+        service_type: sched.service_type, status: "scheduled",
+      });
+      copied++;
+    }
+    toast.success(`${copied}件を${format(nextMonth, "M月")}に複写しました`);
+    setSelectedIds(new Set());
+    setBulkProcessing(false);
+  };
+
+  // 一括: 削除
+  const bulkDelete = async () => {
+    if (selectedIds.size === 0) { toast.error("対象を選択してください"); return; }
+    const ok = window.confirm(`選択された${selectedIds.size}件を削除します。\n予定も実績も削除されますが、本当によろしいですか？`);
+    if (!ok) return;
+    setBulkProcessing(true);
+    const targets = schedules.filter((s) => selectedIds.has(s.id));
+    for (const sched of targets) {
+      // 実績も削除
+      await supabase.from("kaigo_visit_records").delete()
+        .eq("user_id", sched.user_id).eq("visit_date", sched.visit_date).eq("start_time", sched.start_time);
+      // 予定を削除
+      await supabase.from("kaigo_visit_schedule").delete().eq("id", sched.id);
+    }
+    setSchedules((prev) => prev.filter((s) => !selectedIds.has(s.id)));
+    toast.success(`${targets.length}件を削除しました`);
+    setSelectedIds(new Set());
+    setBulkProcessing(false);
+  };
+
   const dowStr = (dateStr: string) => {
     try { return format(parseISO(dateStr), "E", { locale: ja }); } catch { return ""; }
   };
@@ -2458,7 +2565,7 @@ function MonthlyIndividualView({
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* ヘッダー: 月ナビ + ボタン群 */}
+      {/* ヘッダー: 月ナビ + 件数 */}
       <div className="flex items-center justify-between px-4 py-2 border-b bg-white">
         <div className="flex items-center gap-2">
           <span className="text-sm font-bold text-gray-900">{entityName}</span>
@@ -2473,6 +2580,46 @@ function MonthlyIndividualView({
         </div>
       </div>
 
+      {/* 一括操作ツールバー */}
+      <div className="flex items-center gap-2 px-4 py-1.5 border-b bg-gray-50 shrink-0">
+        <span className="text-xs text-gray-500 mr-1">
+          {selectedIds.size > 0 ? `${selectedIds.size}件選択中` : "一括操作"}
+        </span>
+        <button
+          onClick={bulkToCompleted}
+          disabled={bulkProcessing || selectedIds.size === 0}
+          className="inline-flex items-center gap-1 rounded border border-orange-300 bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700 hover:bg-orange-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          <Check size={12} />
+          実績変換
+        </button>
+        <button
+          onClick={bulkToScheduled}
+          disabled={bulkProcessing || selectedIds.size === 0}
+          className="inline-flex items-center gap-1 rounded border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          <RotateCcw size={12} />
+          予定に戻す
+        </button>
+        <button
+          onClick={bulkCopy}
+          disabled={bulkProcessing || selectedIds.size === 0}
+          className="inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          <Copy size={12} />
+          複写
+        </button>
+        <button
+          onClick={bulkDelete}
+          disabled={bulkProcessing || selectedIds.size === 0}
+          className="inline-flex items-center gap-1 rounded border border-red-300 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          <Trash2 size={12} />
+          削除
+        </button>
+        {bulkProcessing && <Loader2 size={14} className="animate-spin text-blue-500 ml-1" />}
+      </div>
+
       {loading ? (
         <div className="flex flex-1 items-center justify-center"><Loader2 size={24} className="animate-spin text-blue-500" /></div>
       ) : schedules.length === 0 ? (
@@ -2482,7 +2629,16 @@ function MonthlyIndividualView({
           <table className="w-full text-xs border-collapse">
             <thead className="bg-yellow-50 border-b sticky top-0 z-10">
               <tr>
-                <th className="border border-gray-300 px-1 py-1.5 text-center font-bold text-red-700 w-8">*</th>
+                <th className="border border-gray-300 px-1 py-1.5 text-center font-bold w-8">
+                  <input
+                    type="checkbox"
+                    checked={schedules.length > 0 && selectedIds.size === schedules.length}
+                    onChange={toggleSelectAll}
+                    className="h-3.5 w-3.5 accent-blue-600 cursor-pointer"
+                    title="全選択/解除"
+                  />
+                </th>
+                <th className="border border-gray-300 px-1 py-1.5 text-center font-bold w-16">予実</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-left font-bold text-red-700">利用日</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-left font-bold">利用時間</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-left font-bold text-red-700">*サービス内容</th>
@@ -2509,24 +2665,41 @@ function MonthlyIndividualView({
                       isSun ? "bg-red-50/20" : isSat ? "bg-blue-50/20" : ""
                     )}
                   >
-                    {/* 予定/実績 切替チェックボックス */}
+                    {/* 選択チェックボックス */}
                     <td className="border border-gray-300 px-1 py-1 text-center">
-                      <div className="flex flex-col items-center gap-0.5">
-                        <input
-                          type="checkbox"
-                          checked={isCompleted}
-                          disabled={isToggling}
-                          onChange={() => toggleStatus(sched)}
-                          className="h-3.5 w-3.5 accent-orange-600 cursor-pointer"
-                          title={isCompleted ? "実績 → 予定に戻す" : "予定 → 実績に変更"}
-                        />
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(sched.id)}
+                        onChange={() => toggleSelect(sched.id)}
+                        className="h-3.5 w-3.5 accent-blue-600 cursor-pointer"
+                      />
+                    </td>
+                    {/* 予定/実績 トグルスイッチ */}
+                    <td className="border border-gray-300 px-1 py-1 text-center">
+                      <button
+                        onClick={() => toggleStatus(sched)}
+                        disabled={isToggling}
+                        className="inline-flex items-center gap-1 group"
+                        title={isCompleted ? "実績 → 予定に戻す" : "予定 → 実績に変更"}
+                      >
+                        {/* toggle switch */}
                         <span className={cn(
-                          "text-[9px] font-bold",
+                          "relative inline-block w-8 h-4 rounded-full transition-colors",
+                          isCompleted ? "bg-orange-500" : "bg-gray-300",
+                          isToggling && "opacity-50"
+                        )}>
+                          <span className={cn(
+                            "absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform",
+                            isCompleted ? "translate-x-4" : "translate-x-0.5"
+                          )} />
+                        </span>
+                        <span className={cn(
+                          "text-[10px] font-bold min-w-[1.2rem]",
                           isCompleted ? "text-orange-700" : "text-blue-600"
                         )}>
                           {isCompleted ? "実" : "予"}
                         </span>
-                      </div>
+                      </button>
                     </td>
                     {/* 利用日 */}
                     <td className="border border-gray-300 px-2 py-1 whitespace-nowrap">
