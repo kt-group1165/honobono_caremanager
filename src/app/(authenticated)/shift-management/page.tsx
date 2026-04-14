@@ -22,6 +22,7 @@ import {
   Save,
   Undo2,
   Plus,
+  FileText,
 } from "lucide-react";
 import {
   format,
@@ -1557,7 +1558,7 @@ function getBarStyle(startTime: string | null, endTime: string | null) {
   return { left: `${left}%`, width: `${Math.max(width, 1)}%` };
 }
 
-type ViewMode = "calendar" | "timeline";
+type ViewMode = "calendar" | "timeline" | "monthly-individual";
 
 interface TimelineViewProps {
   tab: SidebarTab;
@@ -2322,6 +2323,209 @@ function TimelineView({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+// ─── 月間個別ビュー ─────────────────────────────────────────────────────────
+
+interface MonthlyIndividualViewProps {
+  entityId: string;
+  entityName: string;
+  entityType: "user" | "staff";
+  currentMonth: Date;
+  onMonthChange: (d: Date) => void;
+  staff: KaigoStaff[];
+  onEditSchedule?: (sched: VisitSchedule) => void;
+}
+
+function MonthlyIndividualView({
+  entityId,
+  entityName,
+  entityType,
+  currentMonth,
+  onMonthChange,
+  staff,
+  onEditSchedule,
+}: MonthlyIndividualViewProps) {
+  const supabase = createClient();
+  const [schedules, setSchedules] = useState<VisitSchedule[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const from = format(startOfMonth(currentMonth), "yyyy-MM-dd");
+    const to = format(endOfMonth(currentMonth), "yyyy-MM-dd");
+
+    const col = entityType === "user" ? "user_id" : "staff_id";
+    const { data } = await supabase
+      .from("kaigo_visit_schedule")
+      .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, kaigo_users(name), kaigo_staff(name)")
+      .eq(col, entityId)
+      .gte("visit_date", from)
+      .lte("visit_date", to)
+      .order("visit_date")
+      .order("start_time");
+
+    const mapped: VisitSchedule[] = (data || []).map((r: any) => ({  // eslint-disable-line @typescript-eslint/no-explicit-any
+      id: r.id,
+      user_id: r.user_id,
+      staff_id: r.staff_id,
+      visit_date: r.visit_date,
+      start_time: r.start_time,
+      end_time: r.end_time,
+      service_type: r.service_type,
+      user_name: r.kaigo_users?.name ?? null,
+      staff_name: r.kaigo_staff?.name ?? null,
+    }));
+
+    setSchedules(mapped);
+    setLoading(false);
+  }, [entityId, entityType, currentMonth, supabase]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // 曜日
+  const dowStr = (dateStr: string) => {
+    try {
+      return format(parseISO(dateStr), "E", { locale: ja });
+    } catch {
+      return "";
+    }
+  };
+
+  // 時間の長さ計算
+  const calcDuration = (start: string | null, end: string | null) => {
+    if (!start || !end) return "";
+    const [sh, sm] = start.split(":").map(Number);
+    const [eh, em] = end.split(":").map(Number);
+    const mins = (eh * 60 + em) - (sh * 60 + sm);
+    if (mins <= 0) return "";
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `(${h > 0 ? h + "h" : ""}${m > 0 ? m > 0 && h > 0 ? "-" : "" : ""}${m > 0 ? m / 60 + "h" : ""})`.replace(/\(0h\)/, "").replace("(-", "(") || `(${(mins / 60).toFixed(1)}h)`;
+  };
+
+  const durationText = (start: string | null, end: string | null) => {
+    if (!start || !end) return "";
+    const [sh, sm] = start.split(":").map(Number);
+    const [eh, em] = end.split(":").map(Number);
+    const totalMins = (eh * 60 + em) - (sh * 60 + sm);
+    if (totalMins <= 0) return "";
+    const hours = (totalMins / 60).toFixed(2);
+    return `(${hours}h)`;
+  };
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Header with month nav */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b bg-white">
+        <button
+          onClick={() => onMonthChange(subMonths(currentMonth, 1))}
+          className="rounded border p-1 hover:bg-gray-50"
+        >
+          <ChevronLeft size={16} />
+        </button>
+        <span className="min-w-[10rem] text-center font-semibold text-sm text-gray-900">
+          {format(currentMonth, "yyyy年M月", { locale: ja })} — {entityName}
+        </span>
+        <button
+          onClick={() => onMonthChange(addMonths(currentMonth, 1))}
+          className="rounded border p-1 hover:bg-gray-50"
+        >
+          <ChevronRight size={16} />
+        </button>
+        <span className="ml-2 text-xs text-gray-500">
+          {schedules.length}件
+        </span>
+      </div>
+
+      {loading ? (
+        <div className="flex flex-1 items-center justify-center">
+          <Loader2 size={24} className="animate-spin text-blue-500" />
+        </div>
+      ) : schedules.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center text-sm text-gray-400">
+          この月の予定はありません
+        </div>
+      ) : (
+        <div className="flex-1 overflow-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead className="bg-gray-50 border-b sticky top-0 z-10">
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600 w-6"></th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">利用日</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">利用時間</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">サービス内容</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600">
+                  {entityType === "user" ? "職員" : "利用者"}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {schedules.map((sched, i) => {
+                const day = sched.visit_date ? parseInt(sched.visit_date.split("-")[2], 10) : 0;
+                const dow = dowStr(sched.visit_date);
+                const isSat = dow === "土";
+                const isSun = dow === "日";
+                return (
+                  <tr
+                    key={sched.id}
+                    className={cn(
+                      "hover:bg-blue-50/50 cursor-pointer transition-colors",
+                      isSun ? "bg-red-50/30" : isSat ? "bg-blue-50/30" : i % 2 === 1 ? "bg-gray-50/30" : ""
+                    )}
+                    onClick={() => onEditSchedule?.(sched)}
+                  >
+                    <td className="px-3 py-2 text-center">
+                      <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-orange-100 text-[9px] font-bold text-orange-700">
+                        実
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span className="font-semibold">{day}</span>
+                      <span className={cn(
+                        "ml-1 text-xs",
+                        isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-gray-500"
+                      )}>
+                        ({dow})
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap font-mono text-gray-800">
+                      {sched.start_time?.slice(0, 5)}〜{sched.end_time?.slice(0, 5)}
+                      <span className="ml-2 text-xs text-gray-400">
+                        {durationText(sched.start_time, sched.end_time)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className={cn(
+                        "inline-block rounded px-2 py-0.5 text-xs font-medium",
+                        SERVICE_TYPE_COLORS[sched.service_type] ?? "bg-gray-100 text-gray-700"
+                      )}>
+                        {sched.service_type}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-gray-700">
+                      {entityType === "user"
+                        ? sched.staff_name ?? "未割当"
+                        : sched.user_name ?? "不明"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {/* Summary */}
+          <div className="border-t bg-gray-50 px-4 py-2 text-xs text-gray-600">
+            合計 {schedules.length}件
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Page ──────────────────────────────────────────────────────────────
+
 export default function ShiftManagementPage() {
   const supabase = createClient();
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("user");
@@ -2429,20 +2633,32 @@ export default function ShiftManagementPage() {
         </div>
         <div className="flex items-center gap-2">
           {/* View mode toggle - only show for staff tab */}
-          {sidebarTab === "staff" && (
-            <div className="flex rounded-lg border overflow-hidden">
-              <button
-                onClick={() => confirmIfPending(() => setViewMode("calendar"))}
-                className={cn(
-                  "flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition-colors",
-                  viewMode === "calendar"
-                    ? "bg-blue-600 text-white"
-                    : "bg-white text-gray-600 hover:bg-gray-50"
-                )}
-              >
-                <CalendarDays size={14} />
-                カレンダー
-              </button>
+          <div className="flex rounded-lg border overflow-hidden">
+            <button
+              onClick={() => confirmIfPending(() => setViewMode("calendar"))}
+              className={cn(
+                "flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition-colors",
+                viewMode === "calendar"
+                  ? "bg-blue-600 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              <CalendarDays size={14} />
+              カレンダー
+            </button>
+            <button
+              onClick={() => confirmIfPending(() => setViewMode("monthly-individual"))}
+              className={cn(
+                "flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition-colors",
+                viewMode === "monthly-individual"
+                  ? "bg-blue-600 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              <FileText size={14} />
+              月間個別
+            </button>
+            {sidebarTab === "staff" && (
               <button
                 onClick={() => confirmIfPending(() => setViewMode("timeline"))}
                 className={cn(
@@ -2455,8 +2671,8 @@ export default function ShiftManagementPage() {
                 <Clock size={14} />
                 タイムライン
               </button>
-            </div>
-          )}
+            )}
+          </div>
           <button
             onClick={() => setShowPatternModal(true)}
             className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
@@ -2509,6 +2725,39 @@ export default function ShiftManagementPage() {
               onPendingChangesChange={setHasPendingChanges}
               onEditSchedule={openPageEditModal}
             />
+          ) : viewMode === "monthly-individual" ? (
+            /* 月間個別ビュー */
+            sidebarTab === "user" ? (
+              selectedUserId && selectedUser ? (
+                <MonthlyIndividualView
+                  entityId={selectedUserId}
+                  entityName={selectedUser.name}
+                  entityType="user"
+                  currentMonth={currentMonth}
+                  onMonthChange={setCurrentMonth}
+                  staff={staff}
+                  onEditSchedule={openPageEditModal}
+                />
+              ) : (
+                <div className="flex flex-1 items-center justify-center text-sm text-gray-400">
+                  利用者を選択してください
+                </div>
+              )
+            ) : selectedStaffId && selectedStaffMember ? (
+              <MonthlyIndividualView
+                entityId={selectedStaffId}
+                entityName={selectedStaffMember.name}
+                entityType="staff"
+                currentMonth={currentMonth}
+                onMonthChange={setCurrentMonth}
+                staff={staff}
+                onEditSchedule={openPageEditModal}
+              />
+            ) : (
+              <div className="flex flex-1 items-center justify-center text-sm text-gray-400">
+                職員を選択してください
+              </div>
+            )
           ) : sidebarTab === "user" ? (
             selectedUserId && selectedUser ? (
               <UserCalendar
