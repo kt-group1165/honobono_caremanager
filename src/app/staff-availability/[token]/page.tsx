@@ -1634,115 +1634,62 @@ function CareRecordModal({
 
 function MyShiftTab({ staffId }: { staffId: string }) {
   const supabase = createAnonClient();
-  const [currentMonth, setCurrentMonth] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  });
+  const [currentDate, setCurrentDate] = useState(() => new Date());
   const [schedules, setSchedules] = useState<VisitScheduleEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [records, setRecords] = useState<ExistingRecord[]>([]);
   const [recordFormTarget, setRecordFormTarget] = useState<VisitScheduleEntry | null>(null);
 
-  const days = useMemo(
-    () =>
-      eachDayOfInterval({
-        start: startOfMonth(currentMonth),
-        end: endOfMonth(currentMonth),
-      }),
-    [currentMonth]
-  );
+  const dateStr = format(currentDate, "yyyy-MM-dd");
 
   const fetchSchedules = useCallback(
-    async (month: Date) => {
+    async (date: Date) => {
       setLoading(true);
-      const from = format(startOfMonth(month), "yyyy-MM-dd");
-      const to = format(endOfMonth(month), "yyyy-MM-dd");
-
+      const ds = format(date, "yyyy-MM-dd");
       const { data, error } = await supabase
         .from("kaigo_visit_schedule")
-        .select(
-          "id, user_id, visit_date, start_time, end_time, service_type, status, notes, kaigo_users(name)"
-        )
+        .select("id, user_id, visit_date, start_time, end_time, service_type, status, notes, kaigo_users(name)")
         .eq("staff_id", staffId)
-        .gte("visit_date", from)
-        .lte("visit_date", to)
+        .eq("visit_date", ds)
         .neq("status", "cancelled")
-        .order("visit_date")
         .order("start_time");
-
-      if (error) {
-        console.error("Failed to fetch schedules:", error);
-        setSchedules([]);
-      } else {
-        setSchedules(
-          (data || []).map((r: any) => ({
-            id: r.id,
-            user_id: r.user_id,
-            visit_date: r.visit_date,
-            start_time: r.start_time,
-            end_time: r.end_time,
-            service_type: r.service_type,
-            status: r.status,
-            notes: r.notes,
-            user_name: r.kaigo_users?.name || "不明",
-          }))
-        );
+      if (error) { setSchedules([]); }
+      else {
+        setSchedules((data || []).map((r: any) => ({
+          id: r.id, user_id: r.user_id, visit_date: r.visit_date,
+          start_time: r.start_time, end_time: r.end_time,
+          service_type: r.service_type, status: r.status, notes: r.notes,
+          user_name: r.kaigo_users?.name || "不明",
+        })));
       }
       setLoading(false);
     },
     [staffId, supabase]
   );
 
-  // Fetch records for the selected month
   const fetchRecords = useCallback(
-    async (month: Date) => {
-      const from = format(startOfMonth(month), "yyyy-MM-dd");
-      const to = format(endOfMonth(month), "yyyy-MM-dd");
+    async (date: Date) => {
+      const ds = format(date, "yyyy-MM-dd");
       const { data } = await supabase
         .from("kaigo_visit_records")
         .select("id, schedule_id, user_id, visit_date, start_time, end_time, body_care, living_support, vital_temperature, vital_bp_sys, vital_bp_dia, vital_pulse, vital_spo2, vital_respiration, vital_blood_sugar, user_condition, handover_notes, notes, progress_notes, care_record_data")
         .eq("staff_id", staffId)
-        .gte("visit_date", from)
-        .lte("visit_date", to);
+        .eq("visit_date", ds);
       setRecords((data || []) as ExistingRecord[]);
     },
     [staffId, supabase]
   );
 
-  const refreshRecords = () => fetchRecords(currentMonth);
+  const refreshRecords = () => fetchRecords(currentDate);
 
   useEffect(() => {
-    fetchSchedules(currentMonth);
-    fetchRecords(currentMonth);
-    setSelectedDate(null);
-  }, [currentMonth, fetchSchedules, fetchRecords]);
-
-  const schedulesForDate = (dateStr: string) =>
-    schedules.filter((s) => s.visit_date === dateStr);
-
-  const firstDow = days.length > 0 ? getDay(days[0]) : 0;
-
-  // Count visits per day for quick summary
-  const visitCountMap = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const s of schedules) {
-      map[s.visit_date] = (map[s.visit_date] || 0) + 1;
-    }
-    return map;
-  }, [schedules]);
-
-  // Unique service types per day for color dots
-  const serviceTypesForDate = (dateStr: string) => {
-    const types = new Set(schedulesForDate(dateStr).map((s) => s.service_type));
-    return Array.from(types);
-  };
+    fetchSchedules(currentDate);
+    fetchRecords(currentDate);
+  }, [currentDate, fetchSchedules, fetchRecords]);
 
   const getRecordForSchedule = (sched: VisitScheduleEntry): ExistingRecord | null => {
-    // First try to match by schedule_id
     const byId = records.find((r) => r.schedule_id === sched.id);
     if (byId) return byId;
-    // Fallback: match by user_id + visit_date + start_time
     return records.find(
       (r) => r.user_id === sched.user_id && r.visit_date === sched.visit_date && r.start_time === sched.start_time
     ) ?? null;
@@ -1750,55 +1697,54 @@ function MyShiftTab({ staffId }: { staffId: string }) {
 
   const hasRecord = (sched: VisitScheduleEntry) => getRecordForSchedule(sched) !== null;
 
-  // Count recorded visits per day for calendar dots
-  const recordedDates = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of records) set.add(r.visit_date);
-    return set;
-  }, [records]);
-
-  const selectedSchedules = selectedDate
-    ? schedulesForDate(selectedDate)
-    : [];
+  const prevDay = () => setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1));
+  const nextDay = () => setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1));
+  const isToday = isSameDay(currentDate, new Date());
+  const dow = getDay(currentDate);
 
   return (
     <div className="space-y-4 pb-6">
       {/* Date navigation */}
       <div className="flex items-center justify-between">
-        <button
-          onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-          className="flex items-center justify-center w-10 h-10 rounded-xl border border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors"
-        >
+        <button onClick={prevDay} className="flex items-center justify-center w-10 h-10 rounded-xl border border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors">
           <ChevronLeft size={20} />
         </button>
-        <label className="relative cursor-pointer">
-          <span className="text-lg font-bold text-gray-900 border-b-2 border-dashed border-blue-300 pb-0.5">
-            {format(currentMonth, "yyyy年M月", { locale: ja })}
-          </span>
+        <label className="relative cursor-pointer text-center">
+          <div className="flex items-center gap-2 justify-center">
+            <span className={cn(
+              "text-lg font-bold border-b-2 border-dashed border-blue-300 pb-0.5",
+              isToday ? "text-blue-700" : dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-gray-900"
+            )}>
+              {format(currentDate, "yyyy年M月d日(E)", { locale: ja })}
+            </span>
+            {isToday && <span className="text-[10px] font-bold bg-blue-600 text-white px-1.5 py-0.5 rounded">今日</span>}
+          </div>
           <input
-            type="month"
-            value={format(currentMonth, "yyyy-MM")}
-            onChange={(e) => {
-              if (e.target.value) {
-                const [y, m] = e.target.value.split("-").map(Number);
-                setCurrentMonth(new Date(y, m - 1, 1));
-              }
-            }}
+            type="date"
+            value={dateStr}
+            onChange={(e) => { if (e.target.value) setCurrentDate(new Date(e.target.value + "T00:00:00")); }}
             className="absolute inset-0 opacity-0 cursor-pointer"
           />
         </label>
-        <button
-          onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-          className="flex items-center justify-center w-10 h-10 rounded-xl border border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors"
-        >
+        <button onClick={nextDay} className="flex items-center justify-center w-10 h-10 rounded-xl border border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors">
           <ChevronRight size={20} />
         </button>
       </div>
 
-      {/* Monthly summary */}
+      {/* Today button */}
+      {!isToday && (
+        <button
+          onClick={() => setCurrentDate(new Date())}
+          className="w-full text-center text-xs text-blue-600 font-medium py-1 active:text-blue-800"
+        >
+          今日に戻る
+        </button>
+      )}
+
+      {/* Day summary */}
       <div className="rounded-xl bg-gray-50 border border-gray-200 p-3">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-600">今月の訪問件数</span>
+          <span className="text-gray-600">この日の訪問件数</span>
           <span className="font-bold text-gray-900 text-lg">{schedules.length}件</span>
         </div>
       </div>
@@ -1810,65 +1756,35 @@ function MyShiftTab({ staffId }: { staffId: string }) {
       ) : schedules.length === 0 ? (
         <div className="text-center py-12 text-gray-400">
           <Calendar size={32} className="mx-auto mb-2 opacity-50" />
-          <p className="text-sm">今月の予定はありません</p>
+          <p className="text-sm">この日の予定はありません</p>
         </div>
       ) : (
-        /* 日付ごとにグループ化した予定リスト */
-        <div className="space-y-3">
-          {(() => {
-            // 日付でグループ化
-            const grouped: Record<string, VisitScheduleEntry[]> = {};
-            for (const s of schedules) {
-              if (!grouped[s.visit_date]) grouped[s.visit_date] = [];
-              grouped[s.visit_date].push(s);
-            }
-            return Object.entries(grouped).map(([dateStr, daySchedules]) => {
-              const dayDate = new Date(dateStr + "T00:00:00");
-              const dow = getDay(dayDate);
-              const isToday = isSameDay(dayDate, new Date());
+        /* 予定リスト（1日分） */
+        <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+          <div className="divide-y divide-gray-100">
+            {schedules.map((sched) => {
+              const color = getServiceColor(sched.service_type);
+              const recorded = hasRecord(sched);
               return (
-                <div key={dateStr} className="rounded-2xl border bg-white shadow-sm overflow-hidden">
-                  {/* 日付ヘッダー */}
-                  <div className={cn(
-                    "flex items-center justify-between px-4 py-2.5 border-b",
-                    isToday ? "bg-blue-50" : "bg-gray-50"
-                  )}>
-                    <div className="flex items-center gap-2">
-                      <span className={cn(
-                        "text-base font-bold",
-                        isToday ? "text-blue-700" : dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-gray-900"
-                      )}>
-                        {format(dayDate, "M/d(E)", { locale: ja })}
-                      </span>
-                      {isToday && <span className="text-[10px] font-bold bg-blue-600 text-white px-1.5 py-0.5 rounded">今日</span>}
+                <div key={sched.id} className="px-4 py-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-gray-900 tabular-nums">
+                          {sched.start_time.slice(0, 5)}~{sched.end_time.slice(0, 5)}
+                        </span>
+                        <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", color.bg, color.text, "border", color.border)}>
+                          {sched.service_type}
+                        </span>
+                        {recorded && (
+                          <span className="text-[10px] font-bold bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full">記録済</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 mt-1">
+                        <User size={12} className="text-gray-400" />
+                        <span className="text-sm text-gray-700">{sched.user_name}</span>
+                      </div>
                     </div>
-                    <span className="text-xs text-gray-500">{daySchedules.length}件</span>
-                  </div>
-                  {/* 予定カード */}
-                  <div className="divide-y divide-gray-100">
-                    {daySchedules.map((sched) => {
-                      const color = getServiceColor(sched.service_type);
-                      const recorded = hasRecord(sched);
-                      return (
-                        <div key={sched.id} className="px-4 py-3">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-bold text-gray-900 tabular-nums">
-                                  {sched.start_time.slice(0, 5)}~{sched.end_time.slice(0, 5)}
-                                </span>
-                                <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", color.bg, color.text, "border", color.border)}>
-                                  {sched.service_type}
-                                </span>
-                                {recorded && (
-                                  <span className="text-[10px] font-bold bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full">記録済</span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-1 mt-1">
-                                <User size={12} className="text-gray-400" />
-                                <span className="text-sm text-gray-700">{sched.user_name}</span>
-                              </div>
-                            </div>
                             <button
                               onClick={() => setRecordFormTarget(sched)}
                               className={cn(
@@ -1882,13 +1798,9 @@ function MyShiftTab({ staffId }: { staffId: string }) {
                             </button>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
               );
-            });
-          })()}
+            })}
+          </div>
         </div>
       )}
 
