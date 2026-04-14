@@ -327,7 +327,7 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
     const [schedRes, availRes, allStaffRes, allSchedRes, provRes] = await Promise.all([
       supabase
         .from("kaigo_visit_schedule")
-        .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, kaigo_staff(name)")
+        .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, kaigo_staff(name)")
         .eq("user_id", userId)
         .gte("visit_date", from)
         .lte("visit_date", to)
@@ -354,6 +354,7 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
       start_time: r.start_time,
       end_time: r.end_time,
       service_type: r.service_type,
+      status: r.status ?? "scheduled",
       staff_name: r.kaigo_staff?.name ?? null,
     }));
 
@@ -584,6 +585,7 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
                   <div className="space-y-0.5">
                     {daySchedules.map((sched) => {
                       const unavail = isUnavailable(sched);
+                      const isCompleted = sched.status === "completed";
                       return (
                         <button
                           key={sched.id}
@@ -591,10 +593,12 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
                           className={cn(
                             "w-full text-left rounded px-1 py-0.5 text-[8px] leading-tight whitespace-nowrap overflow-hidden text-ellipsis cursor-pointer transition-colors",
                             unavail
+                              ? "bg-yellow-50 text-yellow-700 font-semibold hover:bg-yellow-100"
+                              : isCompleted
                               ? "bg-red-50 text-red-600 font-semibold hover:bg-red-100"
                               : "bg-blue-50 text-blue-700 hover:bg-blue-100"
                           )}
-                          title="クリックして編集"
+                          title={isCompleted ? "実績（クリックして編集）" : "予定（クリックして編集）"}
                         >
                           {sched.start_time?.slice(0, 5)}~{sched.end_time?.slice(0, 5)} {sched.staff_name ?? ""} {sched.service_type}
                           {unavail && <AlertTriangle size={8} className="inline ml-0.5" />}
