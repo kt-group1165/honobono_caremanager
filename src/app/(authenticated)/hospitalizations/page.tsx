@@ -113,10 +113,10 @@ export default function HospitalizationsPage() {
       .select("*, kaigo_users(name)")
       .eq("status", "admitted")
       .order("admission_date", { ascending: true });
-    const rows = (data ?? []).map((r: Record<string, unknown>) => ({
-      ...(r as Hospitalization),
-      user_name: (r.kaigo_users as { name: string } | null)?.name ?? "—",
-    }));
+    const rows = (data ?? []).map((r: any) => ({  // eslint-disable-line @typescript-eslint/no-explicit-any
+      ...r,
+      user_name: r.kaigo_users?.name ?? "—",
+    })) as (Hospitalization & { user_name: string })[];
     setAllAdmitted(rows);
     setLoadingAllAdmitted(false);
     setShowAllAdmitted(true);
