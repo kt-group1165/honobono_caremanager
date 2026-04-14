@@ -15,6 +15,9 @@ import {
   Heart,
   FileText,
   Printer,
+  Link2,
+  Copy,
+  X,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -105,6 +108,40 @@ export default function EmergencySheetsPage() {
   const [sheet, setSheet] = useState<EmergencySheet | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showUrlModal, setShowUrlModal] = useState(false);
+  const [urls, setUrls] = useState<{ id: string; token: string; name: string }[]>([]);
+  const [newUrlName, setNewUrlName] = useState("災害時用");
+  const [urlLoading, setUrlLoading] = useState(false);
+
+  // URL management
+  const fetchUrls = useCallback(async () => {
+    const { data } = await supabase.from("kaigo_emergency_tokens").select("id, token, name").order("created_at", { ascending: false });
+    setUrls(data || []);
+  }, [supabase]);
+
+  useEffect(() => { if (showUrlModal) fetchUrls(); }, [showUrlModal, fetchUrls]);
+
+  const createUrl = async () => {
+    if (!newUrlName.trim()) { toast.error("名前を入力してください"); return; }
+    setUrlLoading(true);
+    const { error } = await supabase.from("kaigo_emergency_tokens").insert({ name: newUrlName.trim() });
+    if (error) toast.error("発行に失敗: " + error.message);
+    else { toast.success("URLを発行しました"); setNewUrlName("災害時用"); fetchUrls(); }
+    setUrlLoading(false);
+  };
+
+  const copyUrl = (token: string) => {
+    const url = `${window.location.origin}/emergency/${token}`;
+    navigator.clipboard.writeText(url);
+    toast.success("URLをコピーしました");
+  };
+
+  const deleteUrl = async (id: string) => {
+    if (!confirm("このURLを削除しますか？")) return;
+    await supabase.from("kaigo_emergency_tokens").delete().eq("id", id);
+    fetchUrls();
+    toast.success("削除しました");
+  };
 
   const fetchData = useCallback(async (userId: string) => {
     setLoading(true);
@@ -194,18 +231,24 @@ export default function EmergencySheetsPage() {
               <p className="text-xs text-gray-500">居宅緊急時対応シート</p>
             </div>
           </div>
-          {selectedUserId && sheet && (
-            <div className="flex items-center gap-2">
-              <button onClick={handlePrint} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                <Printer size={15} />
-                印刷
-              </button>
-              <button onClick={handleSave} disabled={saving} className="flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60">
-                {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                保存
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowUrlModal(true)} className="flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100">
+              <Link2 size={15} />
+              スマホURL発行
+            </button>
+            {selectedUserId && sheet && (
+              <>
+                <button onClick={handlePrint} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                  <Printer size={15} />
+                  印刷
+                </button>
+                <button onClick={handleSave} disabled={saving} className="flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60">
+                  {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                  保存
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Body */}
@@ -362,6 +405,52 @@ export default function EmergencySheetsPage() {
           ) : null}
         </div>
       </div>
+      {/* URL発行モーダル */}
+      {showUrlModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowUrlModal(false)}>
+          <div className="w-full max-w-md rounded-xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <h2 className="font-bold text-gray-900">スマホURL管理</h2>
+              <button onClick={() => setShowUrlModal(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              {/* 新規発行 */}
+              <div className="flex gap-2">
+                <input
+                  value={newUrlName}
+                  onChange={(e) => setNewUrlName(e.target.value)}
+                  placeholder="URL名（例: 災害時用）"
+                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+                <button onClick={createUrl} disabled={urlLoading} className="flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60">
+                  {urlLoading ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />}
+                  発行
+                </button>
+              </div>
+
+              {/* URL一覧 */}
+              <div className="space-y-3">
+                {urls.map((u) => {
+                  const url = `${typeof window !== "undefined" ? window.location.origin : ""}/emergency/${u.token}`;
+                  return (
+                    <div key={u.id} className="rounded-lg border p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-bold text-gray-900">{u.name}</span>
+                        <button onClick={() => deleteUrl(u.id)} className="text-xs text-red-500 hover:underline">削除</button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input readOnly value={url} className="flex-1 text-xs bg-gray-50 border rounded px-2 py-1.5 text-gray-600" />
+                        <button onClick={() => copyUrl(u.token)} className="shrink-0 p-1.5 rounded hover:bg-gray-100"><Copy size={14} className="text-gray-500" /></button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {urls.length === 0 && <p className="text-sm text-gray-400 text-center py-4">URLがまだ発行されていません</p>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
