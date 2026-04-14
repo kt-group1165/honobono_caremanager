@@ -23,6 +23,9 @@ import {
   Heart,
   Thermometer,
   Edit3,
+  MapPin,
+  LogIn,
+  LogOut,
 } from "lucide-react";
 import {
   format,
@@ -1022,6 +1025,19 @@ interface CareRecordData {
   photos: string[];         // 写真URL配列（Supabase Storageに保存）
   // 22. サイン（署名）
   signature: string;        // 署名データ（base64 PNG）
+  // 23. 入退室記録
+  entry: {
+    time: string;           // ISO string
+    lat: number | null;
+    lng: number | null;
+    accuracy: number | null; // メートル
+  } | null;
+  exit: {
+    time: string;
+    lat: number | null;
+    lng: number | null;
+    accuracy: number | null;
+  } | null;
   // その他
   user_condition: string;
   notes: string;
@@ -1050,6 +1066,8 @@ const emptyCareRecord = (): CareRecordData => ({
   detailed_report: "",
   photos: [],
   signature: "",
+  entry: null,
+  exit: null,
   user_condition: "",
   notes: "",
 });
@@ -1721,6 +1739,93 @@ function MyShiftTab({ staffId }: { staffId: string }) {
 
   const hasRecord = (sched: VisitScheduleEntry) => getRecordForSchedule(sched) !== null;
 
+  // 入退室記録の取得（care_record_dataから）
+  const getEntryExit = (sched: VisitScheduleEntry) => {
+    const rec = getRecordForSchedule(sched);
+    const crd = (rec as any)?.care_record_data;  // eslint-disable-line @typescript-eslint/no-explicit-any
+    return { entry: crd?.entry ?? null, exit: crd?.exit ?? null, recordId: rec?.id ?? null };
+  };
+
+  // GPS取得ヘルパー
+  const getPosition = (): Promise<{ lat: number; lng: number; accuracy: number }> => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) { reject(new Error("位置情報に対応していません")); return; }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+        (err) => reject(new Error(err.code === 1 ? "位置情報の許可が必要です" : "位置情報を取得できませんでした")),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    });
+  };
+
+  // 入室ボタン
+  const handleEntry = async (sched: VisitScheduleEntry) => {
+    try {
+      toast.info("位置情報を取得中...");
+      const pos = await getPosition();
+      const now = new Date().toISOString();
+      const entryData = { time: now, lat: pos.lat, lng: pos.lng, accuracy: Math.round(pos.accuracy) };
+
+      const existing = getRecordForSchedule(sched);
+      if (existing) {
+        // 既存レコードを更新
+        const crd = (existing as any).care_record_data || emptyCareRecord();  // eslint-disable-line @typescript-eslint/no-explicit-any
+        crd.entry = entryData;
+        await supabase.from("kaigo_visit_records").update({
+          care_record_data: crd,
+          start_time: format(new Date(), "HH:mm:ss"),
+        }).eq("id", existing.id);
+      } else {
+        // 新規レコード作成
+        const crd = emptyCareRecord();
+        crd.entry = entryData;
+        await supabase.from("kaigo_visit_records").insert({
+          user_id: sched.user_id, visit_date: sched.visit_date, staff_id: staffId,
+          service_type: sched.service_type, schedule_id: sched.id,
+          start_time: format(new Date(), "HH:mm:ss"), end_time: sched.end_time,
+          care_record_data: crd, status: "draft",
+        });
+      }
+      toast.success("入室を記録しました");
+      refreshRecords();
+    } catch (err: any) {  // eslint-disable-line @typescript-eslint/no-explicit-any
+      toast.error(err.message || "入室記録に失敗しました");
+    }
+  };
+
+  // 退室ボタン
+  const handleExit = async (sched: VisitScheduleEntry) => {
+    try {
+      toast.info("位置情報を取得中...");
+      const pos = await getPosition();
+      const now = new Date().toISOString();
+      const exitData = { time: now, lat: pos.lat, lng: pos.lng, accuracy: Math.round(pos.accuracy) };
+
+      const existing = getRecordForSchedule(sched);
+      if (existing) {
+        const crd = (existing as any).care_record_data || emptyCareRecord();  // eslint-disable-line @typescript-eslint/no-explicit-any
+        crd.exit = exitData;
+        await supabase.from("kaigo_visit_records").update({
+          care_record_data: crd,
+          end_time: format(new Date(), "HH:mm:ss"),
+        }).eq("id", existing.id);
+      } else {
+        const crd = emptyCareRecord();
+        crd.exit = exitData;
+        await supabase.from("kaigo_visit_records").insert({
+          user_id: sched.user_id, visit_date: sched.visit_date, staff_id: staffId,
+          service_type: sched.service_type, schedule_id: sched.id,
+          start_time: sched.start_time, end_time: format(new Date(), "HH:mm:ss"),
+          care_record_data: crd, status: "draft",
+        });
+      }
+      toast.success("退室を記録しました");
+      refreshRecords();
+    } catch (err: any) {  // eslint-disable-line @typescript-eslint/no-explicit-any
+      toast.error(err.message || "退室記録に失敗しました");
+    }
+  };
+
   const prevDay = () => setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1));
   const nextDay = () => setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1));
   const isToday = isSameDay(currentDate, new Date());
@@ -1860,8 +1965,10 @@ function MyShiftTab({ staffId }: { staffId: string }) {
             {schedules.map((sched) => {
               const color = getServiceColor(sched.service_type);
               const recorded = hasRecord(sched);
+              const ee = getEntryExit(sched);
               return (
                 <div key={sched.id} className="px-4 py-3">
+                  {/* 基本情報 */}
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -1880,19 +1987,64 @@ function MyShiftTab({ staffId }: { staffId: string }) {
                         <span className="text-sm text-gray-700">{sched.user_name}</span>
                       </div>
                     </div>
-                            <button
-                              onClick={() => setRecordFormTarget(sched)}
-                              className={cn(
-                                "flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold active:scale-95 transition-all shrink-0 ml-2",
-                                recorded
-                                  ? "bg-green-50 text-green-700 border border-green-200 active:bg-green-100"
-                                  : "bg-blue-600 text-white active:bg-blue-700"
-                              )}
-                            >
-                              {recorded ? (<><Edit3 size={12} />編集</>) : (<><ClipboardList size={12} />記録</>)}
-                            </button>
-                          </div>
-                        </div>
+                    <button
+                      onClick={() => setRecordFormTarget(sched)}
+                      className={cn(
+                        "flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold active:scale-95 transition-all shrink-0 ml-2",
+                        recorded
+                          ? "bg-green-50 text-green-700 border border-green-200 active:bg-green-100"
+                          : "bg-blue-600 text-white active:bg-blue-700"
+                      )}
+                    >
+                      {recorded ? (<><Edit3 size={12} />編集</>) : (<><ClipboardList size={12} />記録</>)}
+                    </button>
+                  </div>
+
+                  {/* 入室・退室ボタン */}
+                  <div className="flex items-center gap-2 mt-2">
+                    {/* 入室 */}
+                    {ee.entry ? (
+                      <div className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs">
+                        <LogIn size={12} />
+                        <span className="font-bold">入室</span>
+                        <span className="tabular-nums">{format(new Date(ee.entry.time), "HH:mm")}</span>
+                        <MapPin size={10} className="ml-0.5" />
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleEntry(sched)}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold active:bg-emerald-700 active:scale-95 transition-all"
+                      >
+                        <LogIn size={12} />
+                        入室
+                      </button>
+                    )}
+
+                    {/* 退室 */}
+                    {ee.exit ? (
+                      <div className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-200 text-orange-700 text-xs">
+                        <LogOut size={12} />
+                        <span className="font-bold">退室</span>
+                        <span className="tabular-nums">{format(new Date(ee.exit.time), "HH:mm")}</span>
+                        <MapPin size={10} className="ml-0.5" />
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleExit(sched)}
+                        disabled={!ee.entry}
+                        className={cn(
+                          "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold active:scale-95 transition-all",
+                          ee.entry
+                            ? "bg-orange-500 text-white active:bg-orange-600"
+                            : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                        )}
+                      >
+                        <LogOut size={12} />
+                        退室
+                      </button>
+                    )}
+                  </div>
+                </div>
               );
             })}
           </div>

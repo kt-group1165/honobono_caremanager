@@ -478,6 +478,35 @@ function CareRecordDetail({ record }: { record: VisitRecord }) {
           </div>
         </Section>
       )}
+      {/* 入退室記録 */}
+      {(crd.entry || crd.exit) && (
+        <Section title="入退室記録">
+          {crd.entry && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200">入室</span>
+              <span className="tabular-nums">{(() => { try { return format(new Date(crd.entry.time), "HH:mm"); } catch { return crd.entry.time; } })()}</span>
+              {crd.entry.lat && (
+                <a href={`https://maps.google.com/?q=${crd.entry.lat},${crd.entry.lng}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs flex items-center gap-0.5">
+                  <span>📍地図</span>
+                  <span className="text-gray-400">(±{crd.entry.accuracy}m)</span>
+                </a>
+              )}
+            </div>
+          )}
+          {crd.exit && (
+            <div className="flex items-center gap-2 text-sm mt-1">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-orange-50 text-orange-700 text-xs font-bold border border-orange-200">退室</span>
+              <span className="tabular-nums">{(() => { try { return format(new Date(crd.exit.time), "HH:mm"); } catch { return crd.exit.time; } })()}</span>
+              {crd.exit.lat && (
+                <a href={`https://maps.google.com/?q=${crd.exit.lat},${crd.exit.lng}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs flex items-center gap-0.5">
+                  <span>📍地図</span>
+                  <span className="text-gray-400">(±{crd.exit.accuracy}m)</span>
+                </a>
+              )}
+            </div>
+          )}
+        </Section>
+      )}
     </div>
   );
 }
