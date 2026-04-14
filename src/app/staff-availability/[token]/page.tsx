@@ -855,36 +855,53 @@ interface CareRecordForm {
   bp_dia: string;
   pulse: string;
   spo2: string;
-  // body care
+  respiration: string;   // 呼吸数
+  blood_sugar: string;   // 血糖値
+  // body care (JSONB keys)
   care_excretion: boolean;
   care_meal: boolean;
   care_bath: boolean;
+  care_body_wash: boolean;    // 洗身
+  care_hair_wash: boolean;    // 洗髪
   care_wipe: boolean;
   care_positioning: boolean;
   care_transfer: boolean;
   care_dressing: boolean;
   care_oral: boolean;
   care_medication: boolean;
-  // living support
+  care_grooming: boolean;     // 整容
+  care_incontinence: boolean; // 失禁処理
+  care_other: boolean;        // その他身体介護
+  // living support (JSONB keys)
   support_cooking: boolean;
   support_laundry: boolean;
   support_cleaning: boolean;
   support_shopping: boolean;
   support_trash: boolean;
   support_clothing: boolean;
+  support_medication_mgmt: boolean;  // 服薬管理
+  support_health_mgmt: boolean;      // 健康管理
+  support_other: boolean;            // その他生活援助
   // notes
   user_condition: string;
   handover_notes: string;
   notes: string;
+  // progress
+  progress_notes: string;  // 経過記録
 }
 
 const emptyCareRecordForm = (): CareRecordForm => ({
   temperature: "", bp_sys: "", bp_dia: "", pulse: "", spo2: "",
-  care_excretion: false, care_meal: false, care_bath: false, care_wipe: false,
-  care_positioning: false, care_transfer: false, care_dressing: false, care_oral: false, care_medication: false,
+  respiration: "", blood_sugar: "",
+  care_excretion: false, care_meal: false, care_bath: false,
+  care_body_wash: false, care_hair_wash: false,
+  care_wipe: false, care_positioning: false, care_transfer: false,
+  care_dressing: false, care_oral: false, care_medication: false,
+  care_grooming: false, care_incontinence: false, care_other: false,
   support_cooking: false, support_laundry: false, support_cleaning: false,
   support_shopping: false, support_trash: false, support_clothing: false,
-  user_condition: "", handover_notes: "", notes: "",
+  support_medication_mgmt: false, support_health_mgmt: false, support_other: false,
+  user_condition: "", handover_notes: "", notes: "", progress_notes: "",
 });
 
 interface ExistingRecord {
@@ -901,21 +918,29 @@ interface ExistingRecord {
   vital_bp_dia: number | null;
   vital_pulse: number | null;
   vital_spo2: number | null;
+  vital_respiration: number | null;
+  vital_blood_sugar: number | null;
   user_condition: string | null;
   handover_notes: string | null;
   notes: string | null;
+  progress_notes: string | null;
 }
 
 const BODY_CARE_ITEMS: { key: string; label: string }[] = [
   { key: "care_excretion", label: "排泄介助" },
+  { key: "care_incontinence", label: "失禁処理" },
   { key: "care_meal", label: "食事介助" },
-  { key: "care_bath", label: "入浴介助" },
+  { key: "care_bath", label: "入浴" },
+  { key: "care_body_wash", label: "洗身" },
+  { key: "care_hair_wash", label: "洗髪" },
   { key: "care_wipe", label: "清拭" },
+  { key: "care_oral", label: "口腔ケア" },
+  { key: "care_grooming", label: "整容" },
+  { key: "care_dressing", label: "更衣介助" },
   { key: "care_positioning", label: "体位変換" },
   { key: "care_transfer", label: "移動介助" },
-  { key: "care_dressing", label: "更衣介助" },
-  { key: "care_oral", label: "口腔ケア" },
   { key: "care_medication", label: "服薬介助" },
+  { key: "care_other", label: "その他" },
 ];
 
 const LIVING_SUPPORT_ITEMS: { key: string; label: string }[] = [
@@ -925,6 +950,9 @@ const LIVING_SUPPORT_ITEMS: { key: string; label: string }[] = [
   { key: "support_shopping", label: "買物" },
   { key: "support_trash", label: "ゴミ出し" },
   { key: "support_clothing", label: "衣類の整理" },
+  { key: "support_medication_mgmt", label: "服薬管理" },
+  { key: "support_health_mgmt", label: "健康管理" },
+  { key: "support_other", label: "その他" },
 ];
 
 function CareRecordModal({
@@ -951,24 +979,35 @@ function CareRecordModal({
         bp_dia: existingRecord.vital_bp_dia?.toString() ?? "",
         pulse: existingRecord.vital_pulse?.toString() ?? "",
         spo2: existingRecord.vital_spo2?.toString() ?? "",
+        respiration: existingRecord.vital_respiration?.toString() ?? "",
+        blood_sugar: existingRecord.vital_blood_sugar?.toString() ?? "",
         care_excretion: bc.care_excretion ?? false,
         care_meal: bc.care_meal ?? false,
         care_bath: bc.care_bath ?? false,
+        care_body_wash: bc.care_body_wash ?? false,
+        care_hair_wash: bc.care_hair_wash ?? false,
         care_wipe: bc.care_wipe ?? false,
         care_positioning: bc.care_positioning ?? false,
         care_transfer: bc.care_transfer ?? false,
         care_dressing: bc.care_dressing ?? false,
         care_oral: bc.care_oral ?? false,
         care_medication: bc.care_medication ?? false,
+        care_grooming: bc.care_grooming ?? false,
+        care_incontinence: bc.care_incontinence ?? false,
+        care_other: bc.care_other ?? false,
         support_cooking: ls.support_cooking ?? false,
         support_laundry: ls.support_laundry ?? false,
         support_cleaning: ls.support_cleaning ?? false,
         support_shopping: ls.support_shopping ?? false,
         support_trash: ls.support_trash ?? false,
         support_clothing: ls.support_clothing ?? false,
+        support_medication_mgmt: ls.support_medication_mgmt ?? false,
+        support_health_mgmt: ls.support_health_mgmt ?? false,
+        support_other: ls.support_other ?? false,
         user_condition: existingRecord.user_condition ?? "",
         handover_notes: existingRecord.handover_notes ?? "",
         notes: existingRecord.notes ?? "",
+        progress_notes: existingRecord.progress_notes ?? "",
       };
     }
     return emptyCareRecordForm();
@@ -1000,9 +1039,12 @@ function CareRecordModal({
       vital_bp_dia: form.bp_dia ? parseInt(form.bp_dia) : null,
       vital_pulse: form.pulse ? parseInt(form.pulse) : null,
       vital_spo2: form.spo2 ? parseInt(form.spo2) : null,
+      vital_respiration: form.respiration ? parseInt(form.respiration) : null,
+      vital_blood_sugar: form.blood_sugar ? parseInt(form.blood_sugar) : null,
       user_condition: form.user_condition || null,
       handover_notes: form.handover_notes || null,
       notes: form.notes || null,
+      progress_notes: form.progress_notes || null,
       status: "draft",
     };
 
@@ -1148,13 +1190,35 @@ function CareRecordModal({
                 />
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">脈拍 (bpm)</label>
+                <input
+                  type="number" inputMode="numeric"
+                  value={form.pulse}
+                  onChange={(e) => setForm({ ...form, pulse: e.target.value })}
+                  placeholder="72"
+                  className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">呼吸数 (回/分)</label>
+                <input
+                  type="number" inputMode="numeric"
+                  value={form.respiration}
+                  onChange={(e) => setForm({ ...form, respiration: e.target.value })}
+                  placeholder="18"
+                  className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">脈拍 (bpm)</label>
+              <label className="block text-xs text-gray-500 mb-1">血糖値 (mg/dL)</label>
               <input
                 type="number" inputMode="numeric"
-                value={form.pulse}
-                onChange={(e) => setForm({ ...form, pulse: e.target.value })}
-                placeholder="72"
+                value={form.blood_sugar}
+                onChange={(e) => setForm({ ...form, blood_sugar: e.target.value })}
+                placeholder="100"
                 className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
@@ -1192,6 +1256,20 @@ function CareRecordModal({
                 />
               ))}
             </div>
+          </div>
+        )}
+
+        {/* 経過記録 */}
+        <SectionHeader id="progress" icon={<Calendar size={16} className="text-purple-500" />} title="経過記録" />
+        {expandedSection === "progress" && (
+          <div className="p-4">
+            <textarea
+              value={form.progress_notes}
+              onChange={(e) => setForm({ ...form, progress_notes: e.target.value })}
+              placeholder="サービス提供中の経過を記録..."
+              rows={5}
+              className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base resize-none focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
           </div>
         )}
 
@@ -1310,7 +1388,7 @@ function MyShiftTab({ staffId }: { staffId: string }) {
       const to = format(endOfMonth(month), "yyyy-MM-dd");
       const { data } = await supabase
         .from("kaigo_visit_records")
-        .select("id, schedule_id, user_id, visit_date, start_time, end_time, body_care, living_support, vital_temperature, vital_bp_sys, vital_bp_dia, vital_pulse, vital_spo2, user_condition, handover_notes, notes")
+        .select("id, schedule_id, user_id, visit_date, start_time, end_time, body_care, living_support, vital_temperature, vital_bp_sys, vital_bp_dia, vital_pulse, vital_spo2, vital_respiration, vital_blood_sugar, user_condition, handover_notes, notes, progress_notes")
         .eq("staff_id", staffId)
         .gte("visit_date", from)
         .lte("visit_date", to);
