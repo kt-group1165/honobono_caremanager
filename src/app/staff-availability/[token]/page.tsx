@@ -1298,16 +1298,21 @@ function CareRecordModal({
         </button>
       </div>
 
-      {/* Schedule info */}
+      {/* Schedule info + サービス内容 */}
       <div className="px-4 py-2 bg-blue-50 border-b border-blue-100 shrink-0">
         <div className="flex items-center gap-2">
           <User size={14} className="text-blue-600" />
           <span className="text-sm font-bold text-blue-900">{sched.user_name}</span>
-          <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", getServiceColor(sched.service_type).bg, getServiceColor(sched.service_type).text, "border", getServiceColor(sched.service_type).border)}>{sched.service_type}</span>
         </div>
         <div className="flex items-center gap-1 mt-0.5 text-xs text-blue-700">
           <Clock size={12} />
           {format(new Date(sched.visit_date + "T00:00:00"), "M月d日(E)", { locale: ja })} {sched.start_time.slice(0, 5)}~{sched.end_time.slice(0, 5)}
+        </div>
+        <div className="mt-1.5 px-2 py-1.5 rounded-lg bg-white/70 border border-blue-200">
+          <span className="text-[10px] text-blue-500 font-bold">サービス内容</span>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className={cn("text-xs px-2 py-0.5 rounded-full font-bold", getServiceColor(sched.service_type).bg, getServiceColor(sched.service_type).text, "border", getServiceColor(sched.service_type).border)}>{sched.service_type}</span>
+          </div>
         </div>
       </div>
 

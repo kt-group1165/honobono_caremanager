@@ -304,6 +304,14 @@ function CareRecordDetail({ record }: { record: VisitRecord }) {
 
   return (
     <div className="space-y-1">
+      {/* サービス内容 */}
+      {r.service_type && (
+        <Section title="サービス内容">
+          <div className="flex items-center gap-2">
+            <span className="font-medium">{r.service_type}</span>
+          </div>
+        </Section>
+      )}
       {/* 事前チェック */}
       {(crd.pre_check?.complexion || crd.pre_check?.condition) && (
         <Section title="事前チェック">
