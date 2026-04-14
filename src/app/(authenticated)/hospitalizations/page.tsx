@@ -52,6 +52,9 @@ export default function HospitalizationsPage() {
   // Form
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showAllAdmitted, setShowAllAdmitted] = useState(false);
+  const [allAdmitted, setAllAdmitted] = useState<(Hospitalization & { user_name: string })[]>([]);
+  const [loadingAllAdmitted, setLoadingAllAdmitted] = useState(false);
   const [form, setForm] = useState({
     hospital_name: "",
     department: "",
@@ -102,6 +105,23 @@ export default function HospitalizationsPage() {
     fetchRecords();
   }, [fetchRecords]);
 
+  // ── Fetch all admitted ──
+  const fetchAllAdmitted = async () => {
+    setLoadingAllAdmitted(true);
+    const { data } = await supabase
+      .from("kaigo_hospitalizations")
+      .select("*, kaigo_users(name)")
+      .eq("status", "admitted")
+      .order("admission_date", { ascending: true });
+    const rows = (data ?? []).map((r: Record<string, unknown>) => ({
+      ...(r as Hospitalization),
+      user_name: (r.kaigo_users as { name: string } | null)?.name ?? "—",
+    }));
+    setAllAdmitted(rows);
+    setLoadingAllAdmitted(false);
+    setShowAllAdmitted(true);
+  };
+
   // ── Open form ──
   const openNew = () => {
     setEditingId(null);
@@ -134,10 +154,6 @@ export default function HospitalizationsPage() {
   // ── Save ──
   const handleSave = async () => {
     if (!selectedUserId) return;
-    if (!form.hospital_name.trim()) {
-      toast.error("病院名は必須です");
-      return;
-    }
     if (!form.admission_date) {
       toast.error("入院日は必須です");
       return;
@@ -148,7 +164,7 @@ export default function HospitalizationsPage() {
       const status = form.discharge_date ? "discharged" : "admitted";
       const payload = {
         user_id: selectedUserId,
-        hospital_name: form.hospital_name.trim(),
+        hospital_name: form.hospital_name.trim() || "（未入力）",
         department: form.department.trim() || null,
         admission_date: form.admission_date,
         discharge_date: form.discharge_date || null,
@@ -301,15 +317,24 @@ export default function HospitalizationsPage() {
                 <span className="text-gray-500 text-sm">— {selectedUser.name} 様</span>
               )}
             </div>
-            {selectedUserId && (
+            <div className="flex items-center gap-2">
               <button
-                onClick={openNew}
-                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                onClick={fetchAllAdmitted}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 transition-colors"
               >
-                <Plus size={16} />
-                入院登録
+                <LogIn size={14} />
+                入院中一覧
               </button>
-            )}
+              {selectedUserId && (
+                <button
+                  onClick={openNew}
+                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                >
+                  <Plus size={16} />
+                  入院登録
+                </button>
+              )}
+            </div>
           </div>
 
           {!selectedUserId ? (
@@ -505,7 +530,7 @@ export default function HospitalizationsPage() {
             <div className="p-5 space-y-4">
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
-                  病院名 <span className="text-red-500">*</span>
+                  病院名
                 </label>
                 <input
                   type="text"
@@ -527,7 +552,7 @@ export default function HospitalizationsPage() {
                   placeholder="整形外科、3階東病棟 等"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className={editingId ? "grid grid-cols-2 gap-3" : ""}>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
                     入院日 <span className="text-red-500">*</span>
@@ -539,18 +564,20 @@ export default function HospitalizationsPage() {
                     className={inp}
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    退院日
-                  </label>
-                  <input
-                    type="date"
-                    value={form.discharge_date}
-                    onChange={(e) => setForm({ ...form, discharge_date: e.target.value })}
-                    className={inp}
-                  />
-                  <p className="mt-0.5 text-[10px] text-gray-400">空欄 = 入院中</p>
-                </div>
+                {/* 退院日は編集時のみ表示（新規登録時は退院登録ボタンで対応） */}
+                {editingId && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      退院日
+                    </label>
+                    <input
+                      type="date"
+                      value={form.discharge_date}
+                      onChange={(e) => setForm({ ...form, discharge_date: e.target.value })}
+                      className={inp}
+                    />
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -564,7 +591,7 @@ export default function HospitalizationsPage() {
                   placeholder="骨折、手術、検査入院 等"
                 />
               </div>
-              {form.discharge_date && (
+              {editingId && form.discharge_date && (
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
                     退院先
@@ -605,6 +632,83 @@ export default function HospitalizationsPage() {
                 {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
                 {editingId ? "更新" : "登録"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 入院中一覧モーダル ── */}
+      {showAllAdmitted && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setShowAllAdmitted(false)}
+        >
+          <div
+            className="w-full max-w-2xl rounded-lg bg-white shadow-xl max-h-[80vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b px-5 py-3 bg-red-50">
+              <h2 className="text-sm font-semibold text-red-700 flex items-center gap-1.5">
+                <LogIn size={16} />
+                現在入院中の利用者一覧
+              </h2>
+              <button
+                onClick={() => setShowAllAdmitted(false)}
+                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {loadingAllAdmitted ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 size={20} className="animate-spin text-red-500" />
+                </div>
+              ) : allAdmitted.length === 0 ? (
+                <div className="py-12 text-center text-sm text-gray-500">
+                  現在入院中の利用者はいません
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b sticky top-0">
+                    <tr>
+                      <th className="px-4 py-2.5 text-left font-semibold text-gray-600">利用者名</th>
+                      <th className="px-4 py-2.5 text-left font-semibold text-gray-600">病院名</th>
+                      <th className="px-4 py-2.5 text-left font-semibold text-gray-600">入院日</th>
+                      <th className="px-4 py-2.5 text-left font-semibold text-gray-600">入院日数</th>
+                      <th className="px-4 py-2.5 text-left font-semibold text-gray-600">理由</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {allAdmitted.map((rec) => {
+                      const days = differenceInDays(new Date(), parseISO(rec.admission_date));
+                      return (
+                        <tr
+                          key={rec.id}
+                          className="hover:bg-red-50/30 cursor-pointer"
+                          onClick={() => {
+                            setSelectedUserId(rec.user_id);
+                            setShowAllAdmitted(false);
+                          }}
+                        >
+                          <td className="px-4 py-2.5 font-medium">{rec.user_name}</td>
+                          <td className="px-4 py-2.5 text-gray-700">{rec.hospital_name}</td>
+                          <td className="px-4 py-2.5 text-gray-700">{fmtDate(rec.admission_date)}</td>
+                          <td className="px-4 py-2.5">
+                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                              {days}日目
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-gray-600 max-w-xs truncate">{rec.reason ?? "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <div className="border-t bg-gray-50 px-5 py-2 text-xs text-gray-500">
+              {allAdmitted.length}名が入院中 — クリックで該当利用者の詳細に移動
             </div>
           </div>
         </div>
