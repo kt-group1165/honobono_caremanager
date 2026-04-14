@@ -17,6 +17,12 @@ import {
   Clock,
   User,
   Calendar,
+  ClipboardList,
+  Check,
+  ChevronDown as ChevronDownIcon,
+  Heart,
+  Thermometer,
+  Edit3,
 } from "lucide-react";
 import {
   format,
@@ -840,6 +846,401 @@ function MonthlySettingsTab({ staffId }: { staffId: string }) {
 
 // ─── My Shift Tab (Mobile) ───────────────────────────────────────────────────
 
+// ─── Care Record Types & Form ────────────────────────────────────────────────
+
+interface CareRecordForm {
+  // vitals
+  temperature: string;
+  bp_sys: string;
+  bp_dia: string;
+  pulse: string;
+  spo2: string;
+  // body care
+  care_excretion: boolean;
+  care_meal: boolean;
+  care_bath: boolean;
+  care_wipe: boolean;
+  care_positioning: boolean;
+  care_transfer: boolean;
+  care_dressing: boolean;
+  care_oral: boolean;
+  care_medication: boolean;
+  // living support
+  support_cooking: boolean;
+  support_laundry: boolean;
+  support_cleaning: boolean;
+  support_shopping: boolean;
+  support_trash: boolean;
+  support_clothing: boolean;
+  // notes
+  user_condition: string;
+  handover_notes: string;
+  notes: string;
+}
+
+const emptyCareRecordForm = (): CareRecordForm => ({
+  temperature: "", bp_sys: "", bp_dia: "", pulse: "", spo2: "",
+  care_excretion: false, care_meal: false, care_bath: false, care_wipe: false,
+  care_positioning: false, care_transfer: false, care_dressing: false, care_oral: false, care_medication: false,
+  support_cooking: false, support_laundry: false, support_cleaning: false,
+  support_shopping: false, support_trash: false, support_clothing: false,
+  user_condition: "", handover_notes: "", notes: "",
+});
+
+interface ExistingRecord {
+  id: string;
+  schedule_id: string | null;
+  user_id: string;
+  visit_date: string;
+  start_time: string;
+  end_time: string;
+  body_care: Record<string, boolean>;
+  living_support: Record<string, boolean>;
+  vital_temperature: number | null;
+  vital_bp_sys: number | null;
+  vital_bp_dia: number | null;
+  vital_pulse: number | null;
+  vital_spo2: number | null;
+  user_condition: string | null;
+  handover_notes: string | null;
+  notes: string | null;
+}
+
+const BODY_CARE_ITEMS: { key: string; label: string }[] = [
+  { key: "care_excretion", label: "排泄介助" },
+  { key: "care_meal", label: "食事介助" },
+  { key: "care_bath", label: "入浴介助" },
+  { key: "care_wipe", label: "清拭" },
+  { key: "care_positioning", label: "体位変換" },
+  { key: "care_transfer", label: "移動介助" },
+  { key: "care_dressing", label: "更衣介助" },
+  { key: "care_oral", label: "口腔ケア" },
+  { key: "care_medication", label: "服薬介助" },
+];
+
+const LIVING_SUPPORT_ITEMS: { key: string; label: string }[] = [
+  { key: "support_cooking", label: "調理" },
+  { key: "support_laundry", label: "洗濯" },
+  { key: "support_cleaning", label: "掃除" },
+  { key: "support_shopping", label: "買物" },
+  { key: "support_trash", label: "ゴミ出し" },
+  { key: "support_clothing", label: "衣類の整理" },
+];
+
+function CareRecordModal({
+  sched,
+  staffId,
+  existingRecord,
+  onClose,
+  onSaved,
+}: {
+  sched: VisitScheduleEntry;
+  staffId: string;
+  existingRecord: ExistingRecord | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const supabase = createAnonClient();
+  const [form, setForm] = useState<CareRecordForm>(() => {
+    if (existingRecord) {
+      const bc = existingRecord.body_care || {};
+      const ls = existingRecord.living_support || {};
+      return {
+        temperature: existingRecord.vital_temperature?.toString() ?? "",
+        bp_sys: existingRecord.vital_bp_sys?.toString() ?? "",
+        bp_dia: existingRecord.vital_bp_dia?.toString() ?? "",
+        pulse: existingRecord.vital_pulse?.toString() ?? "",
+        spo2: existingRecord.vital_spo2?.toString() ?? "",
+        care_excretion: bc.care_excretion ?? false,
+        care_meal: bc.care_meal ?? false,
+        care_bath: bc.care_bath ?? false,
+        care_wipe: bc.care_wipe ?? false,
+        care_positioning: bc.care_positioning ?? false,
+        care_transfer: bc.care_transfer ?? false,
+        care_dressing: bc.care_dressing ?? false,
+        care_oral: bc.care_oral ?? false,
+        care_medication: bc.care_medication ?? false,
+        support_cooking: ls.support_cooking ?? false,
+        support_laundry: ls.support_laundry ?? false,
+        support_cleaning: ls.support_cleaning ?? false,
+        support_shopping: ls.support_shopping ?? false,
+        support_trash: ls.support_trash ?? false,
+        support_clothing: ls.support_clothing ?? false,
+        user_condition: existingRecord.user_condition ?? "",
+        handover_notes: existingRecord.handover_notes ?? "",
+        notes: existingRecord.notes ?? "",
+      };
+    }
+    return emptyCareRecordForm();
+  });
+  const [saving, setSaving] = useState(false);
+  const [expandedSection, setExpandedSection] = useState<string | null>("vitals");
+
+  const toggleSection = (s: string) => setExpandedSection(expandedSection === s ? null : s);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const bodyCare: Record<string, boolean> = {};
+    BODY_CARE_ITEMS.forEach(({ key }) => { bodyCare[key] = form[key as keyof CareRecordForm] as boolean; });
+    const livingSupport: Record<string, boolean> = {};
+    LIVING_SUPPORT_ITEMS.forEach(({ key }) => { livingSupport[key] = form[key as keyof CareRecordForm] as boolean; });
+
+    const payload = {
+      user_id: sched.user_id,
+      visit_date: sched.visit_date,
+      staff_id: staffId,
+      service_type: sched.service_type,
+      start_time: sched.start_time,
+      end_time: sched.end_time,
+      schedule_id: sched.id,
+      body_care: bodyCare,
+      living_support: livingSupport,
+      vital_temperature: form.temperature ? parseFloat(form.temperature) : null,
+      vital_bp_sys: form.bp_sys ? parseInt(form.bp_sys) : null,
+      vital_bp_dia: form.bp_dia ? parseInt(form.bp_dia) : null,
+      vital_pulse: form.pulse ? parseInt(form.pulse) : null,
+      vital_spo2: form.spo2 ? parseInt(form.spo2) : null,
+      user_condition: form.user_condition || null,
+      handover_notes: form.handover_notes || null,
+      notes: form.notes || null,
+      status: "draft",
+    };
+
+    let error;
+    if (existingRecord) {
+      ({ error } = await supabase.from("kaigo_visit_records").update(payload).eq("id", existingRecord.id));
+    } else {
+      ({ error } = await supabase.from("kaigo_visit_records").insert(payload));
+    }
+
+    if (error) {
+      toast.error("保存に失敗しました: " + error.message);
+    } else {
+      toast.success(existingRecord ? "記録を更新しました" : "記録を保存しました");
+      onSaved();
+      onClose();
+    }
+    setSaving(false);
+  };
+
+  const SectionHeader = ({ id, icon, title }: { id: string; icon: React.ReactNode; title: string }) => (
+    <button
+      onClick={() => toggleSection(id)}
+      className="flex items-center justify-between w-full px-4 py-3 bg-gray-50 border-y border-gray-200 active:bg-gray-100"
+    >
+      <div className="flex items-center gap-2 text-sm font-bold text-gray-700">
+        {icon}
+        {title}
+      </div>
+      <ChevronDownIcon size={16} className={cn("text-gray-400 transition-transform", expandedSection === id && "rotate-180")} />
+    </button>
+  );
+
+  const CheckItem = ({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) => (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={cn(
+        "flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all active:scale-95",
+        checked
+          ? "bg-blue-50 border-blue-300 text-blue-700"
+          : "bg-white border-gray-200 text-gray-600"
+      )}
+    >
+      <span className={cn(
+        "w-5 h-5 rounded flex items-center justify-center shrink-0 border",
+        checked ? "bg-blue-500 border-blue-500" : "bg-white border-gray-300"
+      )}>
+        {checked && <Check size={14} className="text-white" />}
+      </span>
+      {label}
+    </button>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 bg-white flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b bg-white shrink-0 safe-area-top">
+        <button onClick={onClose} className="text-gray-500 active:text-gray-700 p-1">
+          <X size={24} />
+        </button>
+        <h2 className="text-base font-bold text-gray-900">
+          {existingRecord ? "記録を編集" : "記録入力"}
+        </h2>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-1 px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold active:bg-blue-700 disabled:opacity-50"
+        >
+          {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+          保存
+        </button>
+      </div>
+
+      {/* Schedule info */}
+      <div className="px-4 py-3 bg-blue-50 border-b border-blue-100 shrink-0">
+        <div className="flex items-center gap-2">
+          <User size={16} className="text-blue-600" />
+          <span className="text-sm font-bold text-blue-900">{sched.user_name}</span>
+          <span className={cn(
+            "text-xs px-2 py-0.5 rounded-full font-medium",
+            getServiceColor(sched.service_type).bg,
+            getServiceColor(sched.service_type).text,
+            "border",
+            getServiceColor(sched.service_type).border,
+          )}>
+            {sched.service_type}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 mt-1 text-sm text-blue-700">
+          <Clock size={14} />
+          {format(new Date(sched.visit_date + "T00:00:00"), "M月d日(E)", { locale: ja })}
+          {" "}
+          {sched.start_time.slice(0, 5)} ~ {sched.end_time.slice(0, 5)}
+        </div>
+      </div>
+
+      {/* Form body */}
+      <div className="flex-1 overflow-auto">
+        {/* バイタル */}
+        <SectionHeader id="vitals" icon={<Thermometer size={16} className="text-red-500" />} title="バイタルサイン" />
+        {expandedSection === "vitals" && (
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">体温 (℃)</label>
+                <input
+                  type="number" step="0.1" inputMode="decimal"
+                  value={form.temperature}
+                  onChange={(e) => setForm({ ...form, temperature: e.target.value })}
+                  placeholder="36.5"
+                  className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">SpO2 (%)</label>
+                <input
+                  type="number" inputMode="numeric"
+                  value={form.spo2}
+                  onChange={(e) => setForm({ ...form, spo2: e.target.value })}
+                  placeholder="98"
+                  className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">血圧 (mmHg)</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number" inputMode="numeric"
+                  value={form.bp_sys}
+                  onChange={(e) => setForm({ ...form, bp_sys: e.target.value })}
+                  placeholder="120"
+                  className="flex-1 rounded-xl border border-gray-300 px-3 py-3 text-base text-center focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <span className="text-gray-400 font-bold">/</span>
+                <input
+                  type="number" inputMode="numeric"
+                  value={form.bp_dia}
+                  onChange={(e) => setForm({ ...form, bp_dia: e.target.value })}
+                  placeholder="80"
+                  className="flex-1 rounded-xl border border-gray-300 px-3 py-3 text-base text-center focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">脈拍 (bpm)</label>
+              <input
+                type="number" inputMode="numeric"
+                value={form.pulse}
+                onChange={(e) => setForm({ ...form, pulse: e.target.value })}
+                placeholder="72"
+                className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* 身体介護 */}
+        <SectionHeader id="body_care" icon={<Heart size={16} className="text-orange-500" />} title="身体介護" />
+        {expandedSection === "body_care" && (
+          <div className="p-4">
+            <div className="grid grid-cols-2 gap-2">
+              {BODY_CARE_ITEMS.map(({ key, label }) => (
+                <CheckItem
+                  key={key}
+                  label={label}
+                  checked={form[key as keyof CareRecordForm] as boolean}
+                  onChange={(v) => setForm({ ...form, [key]: v })}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 生活援助 */}
+        <SectionHeader id="living_support" icon={<ClipboardList size={16} className="text-green-500" />} title="生活援助" />
+        {expandedSection === "living_support" && (
+          <div className="p-4">
+            <div className="grid grid-cols-2 gap-2">
+              {LIVING_SUPPORT_ITEMS.map(({ key, label }) => (
+                <CheckItem
+                  key={key}
+                  label={label}
+                  checked={form[key as keyof CareRecordForm] as boolean}
+                  onChange={(v) => setForm({ ...form, [key]: v })}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 状態・申し送り */}
+        <SectionHeader id="notes" icon={<Edit3 size={16} className="text-blue-500" />} title="状態・申し送り" />
+        {expandedSection === "notes" && (
+          <div className="p-4 space-y-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">利用者の状態</label>
+              <textarea
+                value={form.user_condition}
+                onChange={(e) => setForm({ ...form, user_condition: e.target.value })}
+                placeholder="利用者の状態を記入..."
+                rows={3}
+                className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base resize-none focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">申し送り事項</label>
+              <textarea
+                value={form.handover_notes}
+                onChange={(e) => setForm({ ...form, handover_notes: e.target.value })}
+                placeholder="次の担当者への申し送り..."
+                rows={3}
+                className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base resize-none focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">特記事項</label>
+              <textarea
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                placeholder="その他特記事項..."
+                rows={2}
+                className="w-full rounded-xl border border-gray-300 px-3 py-3 text-base resize-none focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Bottom spacer for safe area */}
+        <div className="h-8" />
+      </div>
+    </div>
+  );
+}
+
+// ─── My Shift Tab ────────────────────────────────────────────────────────────
+
 function MyShiftTab({ staffId }: { staffId: string }) {
   const supabase = createAnonClient();
   const [currentMonth, setCurrentMonth] = useState(() => {
@@ -849,6 +1250,8 @@ function MyShiftTab({ staffId }: { staffId: string }) {
   const [schedules, setSchedules] = useState<VisitScheduleEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [records, setRecords] = useState<ExistingRecord[]>([]);
+  const [recordFormTarget, setRecordFormTarget] = useState<VisitScheduleEntry | null>(null);
 
   const days = useMemo(
     () =>
@@ -900,10 +1303,29 @@ function MyShiftTab({ staffId }: { staffId: string }) {
     [staffId, supabase]
   );
 
+  // Fetch records for the selected month
+  const fetchRecords = useCallback(
+    async (month: Date) => {
+      const from = format(startOfMonth(month), "yyyy-MM-dd");
+      const to = format(endOfMonth(month), "yyyy-MM-dd");
+      const { data } = await supabase
+        .from("kaigo_visit_records")
+        .select("id, schedule_id, user_id, visit_date, start_time, end_time, body_care, living_support, vital_temperature, vital_bp_sys, vital_bp_dia, vital_pulse, vital_spo2, user_condition, handover_notes, notes")
+        .eq("staff_id", staffId)
+        .gte("visit_date", from)
+        .lte("visit_date", to);
+      setRecords((data || []) as ExistingRecord[]);
+    },
+    [staffId, supabase]
+  );
+
+  const refreshRecords = () => fetchRecords(currentMonth);
+
   useEffect(() => {
     fetchSchedules(currentMonth);
+    fetchRecords(currentMonth);
     setSelectedDate(null);
-  }, [currentMonth, fetchSchedules]);
+  }, [currentMonth, fetchSchedules, fetchRecords]);
 
   const schedulesForDate = (dateStr: string) =>
     schedules.filter((s) => s.visit_date === dateStr);
@@ -924,6 +1346,25 @@ function MyShiftTab({ staffId }: { staffId: string }) {
     const types = new Set(schedulesForDate(dateStr).map((s) => s.service_type));
     return Array.from(types);
   };
+
+  const getRecordForSchedule = (sched: VisitScheduleEntry): ExistingRecord | null => {
+    // First try to match by schedule_id
+    const byId = records.find((r) => r.schedule_id === sched.id);
+    if (byId) return byId;
+    // Fallback: match by user_id + visit_date + start_time
+    return records.find(
+      (r) => r.user_id === sched.user_id && r.visit_date === sched.visit_date && r.start_time === sched.start_time
+    ) ?? null;
+  };
+
+  const hasRecord = (sched: VisitScheduleEntry) => getRecordForSchedule(sched) !== null;
+
+  // Count recorded visits per day for calendar dots
+  const recordedDates = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of records) set.add(r.visit_date);
+    return set;
+  }, [records]);
 
   const selectedSchedules = selectedDate
     ? schedulesForDate(selectedDate)
@@ -1016,6 +1457,12 @@ function MyShiftTab({ staffId }: { staffId: string }) {
                   >
                     {format(day, "d")}
                   </span>
+                  {/* Record indicator */}
+                  {recordedDates.has(dateStr) && (
+                    <div className="absolute top-0.5 right-0.5">
+                      <Check size={10} className="text-green-500" />
+                    </div>
+                  )}
                   {/* Service type color dots */}
                   {count > 0 && (
                     <div className="flex items-center gap-0.5 mt-0.5">
@@ -1164,14 +1611,41 @@ function MyShiftTab({ staffId }: { staffId: string }) {
                             変更あり
                           </span>
                         )}
+                        {/* Record badge */}
+                        {hasRecord(sched) && (
+                          <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 mt-1 ml-1">
+                            記録済
+                          </span>
+                        )}
                         {sched.notes && (
                           <p className="text-xs text-gray-500 mt-1">{sched.notes}</p>
                         )}
-                        {/* End time */}
-                        <div className="mt-auto pt-2">
+                        {/* End time + record button */}
+                        <div className="flex items-center justify-between mt-auto pt-2">
                           <span className="text-sm text-gray-500 tabular-nums">
                             {sched.end_time.slice(0, 5)}
                           </span>
+                          <button
+                            onClick={() => setRecordFormTarget(sched)}
+                            className={cn(
+                              "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold active:scale-95 transition-all",
+                              hasRecord(sched)
+                                ? "bg-green-50 text-green-700 border border-green-200 active:bg-green-100"
+                                : "bg-blue-600 text-white active:bg-blue-700"
+                            )}
+                          >
+                            {hasRecord(sched) ? (
+                              <>
+                                <Edit3 size={12} />
+                                編集
+                              </>
+                            ) : (
+                              <>
+                                <ClipboardList size={12} />
+                                記録
+                              </>
+                            )}
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -1181,6 +1655,16 @@ function MyShiftTab({ staffId }: { staffId: string }) {
             )}
           </div>
         </div>
+      )}
+      {/* Care Record Modal */}
+      {recordFormTarget && (
+        <CareRecordModal
+          sched={recordFormTarget}
+          staffId={staffId}
+          existingRecord={getRecordForSchedule(recordFormTarget)}
+          onClose={() => setRecordFormTarget(null)}
+          onSaved={refreshRecords}
+        />
       )}
     </div>
   );
