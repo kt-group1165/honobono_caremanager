@@ -915,7 +915,7 @@ function StaffCalendar({ staffId, staffName, currentMonth, onMonthChange, onEdit
     const [schedRes, availRes] = await Promise.all([
       supabase
         .from("kaigo_visit_schedule")
-        .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, kaigo_users(name)")
+        .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, kaigo_users(name)")
         .eq("staff_id", staffId)
         .gte("visit_date", from)
         .lte("visit_date", to)
@@ -936,6 +936,7 @@ function StaffCalendar({ staffId, staffName, currentMonth, onMonthChange, onEdit
       start_time: r.start_time,
       end_time: r.end_time,
       service_type: r.service_type,
+      status: r.status ?? "scheduled",
       user_name: r.kaigo_users?.name ?? null,
     }));
 
@@ -1059,7 +1060,7 @@ function StaffCalendar({ staffId, staffName, currentMonth, onMonthChange, onEdit
                     {daySchedules.map((sched) => {
                       const onUnavail = isScheduleOnUnavailableSlot(sched);
                       const conflict = isScheduleConflict(sched);
-                      const isRed = onUnavail || conflict;
+                      const isCompleted = sched.status === "completed";
                       const col =
                         SERVICE_TYPE_COLORS[sched.service_type] ?? "bg-gray-100 text-gray-700";
                       return (
@@ -1068,12 +1069,16 @@ function StaffCalendar({ staffId, staffName, currentMonth, onMonthChange, onEdit
                           onClick={() => onEditSchedule?.(sched)}
                           className={cn(
                             "w-full text-left rounded px-1 py-0.5 text-[8px] leading-tight whitespace-nowrap overflow-hidden text-ellipsis cursor-pointer transition-colors",
-                            isRed ? "bg-red-50 text-red-600 font-semibold hover:bg-red-100" : cn(col, "hover:opacity-80")
+                            onUnavail || conflict
+                              ? "bg-yellow-50 text-yellow-700 font-semibold hover:bg-yellow-100"  // 勤務不可=黄色
+                              : isCompleted
+                              ? "bg-red-50 text-red-600 font-semibold hover:bg-red-100"  // 実績=赤字
+                              : cn(col, "hover:opacity-80")  // 予定=通常色
                           )}
-                          title="クリックして編集"
+                          title={`クリックして編集${isCompleted ? "（実績）" : "（予定）"}${onUnavail ? " ⚠勤務不可" : ""}`}
                         >
                           {sched.start_time?.slice(0, 5)}~{sched.end_time?.slice(0, 5)} {sched.user_name ?? ""} {sched.service_type}
-                          {isRed && <AlertTriangle size={8} className="inline ml-0.5" />}
+                          {(onUnavail || conflict) && <AlertTriangle size={8} className="inline ml-0.5" />}
                           {conflict && <span className="ml-0.5">重複</span>}
                         </button>
                       );
@@ -2775,7 +2780,7 @@ export default function ShiftManagementPage() {
               onEditSchedule={openPageEditModal}
             />
           ) : viewMode === "monthly-individual" ? (
-            /* 月間個別ビュー */
+            /* 月間個別ビュー（利用者タブのみ） */
             sidebarTab === "user" ? (
               selectedUserId && selectedUser ? (
                 <MonthlyIndividualView
@@ -2792,20 +2797,21 @@ export default function ShiftManagementPage() {
                   利用者を選択してください
                 </div>
               )
-            ) : selectedStaffId && selectedStaffMember ? (
-              <MonthlyIndividualView
-                entityId={selectedStaffId}
-                entityName={selectedStaffMember.name}
-                entityType="staff"
-                currentMonth={currentMonth}
-                onMonthChange={setCurrentMonth}
-                staff={staff}
-                onEditSchedule={openPageEditModal}
-              />
             ) : (
-              <div className="flex flex-1 items-center justify-center text-sm text-gray-400">
-                職員を選択してください
-              </div>
+              // 職員タブで月間個別が選ばれた場合はカレンダーにフォールバック
+              selectedStaffId && selectedStaffMember ? (
+                <StaffCalendar
+                  staffId={selectedStaffId}
+                  staffName={selectedStaffMember.name}
+                  currentMonth={currentMonth}
+                  onMonthChange={setCurrentMonth}
+                  onEditSchedule={openPageEditModal}
+                />
+              ) : (
+                <div className="flex flex-1 items-center justify-center text-sm text-gray-400">
+                  職員を選択してください
+                </div>
+              )
             )
           ) : sidebarTab === "user" ? (
             selectedUserId && selectedUser ? (
