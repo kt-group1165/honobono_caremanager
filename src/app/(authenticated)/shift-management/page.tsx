@@ -2376,47 +2376,53 @@ function MonthlyIndividualView({
   useEffect(() => { fetchData(); }, [fetchData]);
 
   // 予定⇔実績 切替
+  // 予定⇔実績 切替
+  // 予定(kaigo_visit_schedule)は常に残す。実績は kaigo_visit_records に追加/削除のみ。
+  // → 提供表で予定=1、実績=1の両方が入る
   const toggleStatus = async (sched: VisitSchedule) => {
-    const newStatus = sched.status === "completed" ? "scheduled" : "completed";
+    const isCurrentlyCompleted = sched.status === "completed";
     setTogglingId(sched.id);
-    const { error } = await supabase
-      .from("kaigo_visit_schedule")
-      .update({ status: newStatus })
-      .eq("id", sched.id);
-    if (error) {
-      toast.error("切替に失敗しました");
-    } else {
-      // 提供表(kaigo_visit_records)にも反映
-      if (newStatus === "completed") {
-        // 実績に変更 → visit_records に INSERT（なければ）
-        const { data: existing } = await supabase
-          .from("kaigo_visit_records")
-          .select("id")
-          .eq("user_id", sched.user_id)
-          .eq("visit_date", sched.visit_date)
-          .eq("start_time", sched.start_time)
-          .limit(1);
-        if (!existing || existing.length === 0) {
-          await supabase.from("kaigo_visit_records").insert({
-            user_id: sched.user_id,
-            staff_id: sched.staff_id,
-            visit_date: sched.visit_date,
-            start_time: sched.start_time,
-            end_time: sched.end_time,
-            service_type: sched.service_type,
-            status: "completed",
-          });
+
+    if (!isCurrentlyCompleted) {
+      // 予定→実績: visit_records に INSERT（予定の schedule はそのまま残す）
+      const { data: existing } = await supabase
+        .from("kaigo_visit_records")
+        .select("id")
+        .eq("user_id", sched.user_id)
+        .eq("visit_date", sched.visit_date)
+        .eq("start_time", sched.start_time)
+        .limit(1);
+      if (!existing || existing.length === 0) {
+        const { error } = await supabase.from("kaigo_visit_records").insert({
+          user_id: sched.user_id,
+          staff_id: sched.staff_id,
+          visit_date: sched.visit_date,
+          start_time: sched.start_time,
+          end_time: sched.end_time,
+          service_type: sched.service_type,
+          status: "completed",
+        });
+        if (error) {
+          toast.error("実績登録に失敗しました");
+          setTogglingId(null);
+          return;
         }
-      } else {
-        // 予定に戻す → visit_records から DELETE
-        await supabase
-          .from("kaigo_visit_records")
-          .delete()
-          .eq("user_id", sched.user_id)
-          .eq("visit_date", sched.visit_date)
-          .eq("start_time", sched.start_time);
       }
-      setSchedules((prev) => prev.map((s) => s.id === sched.id ? { ...s, status: newStatus } : s));
+      // schedule の status も更新（表示用）ただし予定自体は削除しない
+      await supabase.from("kaigo_visit_schedule").update({ status: "completed" }).eq("id", sched.id);
+      setSchedules((prev) => prev.map((s) => s.id === sched.id ? { ...s, status: "completed" } : s));
+      toast.success("実績に変更しました（提供表にも反映）");
+    } else {
+      // 実績→予定に戻す: visit_records から DELETE（schedule は残す）
+      await supabase
+        .from("kaigo_visit_records")
+        .delete()
+        .eq("user_id", sched.user_id)
+        .eq("visit_date", sched.visit_date)
+        .eq("start_time", sched.start_time);
+      await supabase.from("kaigo_visit_schedule").update({ status: "scheduled" }).eq("id", sched.id);
+      setSchedules((prev) => prev.map((s) => s.id === sched.id ? { ...s, status: "scheduled" } : s));
+      toast.success("予定に戻しました（提供表の実績も削除）");
     }
     setTogglingId(null);
   };
