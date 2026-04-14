@@ -67,38 +67,59 @@ interface VisitRecord {
   created_at: string;
 }
 
-type FormData = {
-  visit_date: string;
-  staff_id: string;
-  service_type: ServiceType;
-  start_time: string;
-  end_time: string;
-  // body care
-  care_excretion: boolean;
-  care_meal: boolean;
-  care_bath: boolean;
-  care_wipe: boolean;
-  care_positioning: boolean;
-  care_transfer: boolean;
-  care_dressing: boolean;
-  care_oral: boolean;
-  care_medication: boolean;
-  // living support
-  support_cooking: boolean;
-  support_laundry: boolean;
-  support_cleaning: boolean;
-  support_shopping: boolean;
-  support_trash: boolean;
-  support_clothing: boolean;
-  // vitals
-  temperature: string;
-  bp_sys: string;
-  bp_dia: string;
-  pulse: string;
-  // notes
+// 新形式: care_record_data JSONB にすべて格納
+interface CareData {
+  pre_check: { complexion: string; condition: string; room_temp: string; humidity: string; notes: string };
+  vitals: { temperature: string; bp_sys: string; bp_dia: string; pulse: string; spo2: string; respiration: string; blood_sugar: string; weight: string; notes: string };
+  excretion: { done: boolean; urine: boolean; stool: boolean; urine_amount: string; stool_amount: string; stool_type: string; independence: string; device: string; notes: string };
+  hydration: { done: boolean; drink_type: string; amount: string; thickener: string; notes: string };
+  meal: { done: boolean; staple_amount: string; side_amount: string; meal_form: string; independence: string; notes: string };
+  oral_care: { done: boolean; denture: string; brushing: boolean; gargling: boolean; denture_cleaning: boolean; mouth_wipe: boolean; notes: string };
+  bathing: { done: boolean; bath_type: string; independence: string; skin_condition: string; notes: string };
+  grooming: { done: boolean; face_wash: boolean; hair: boolean; nail: boolean; ear: boolean; shaving: boolean; notes: string };
+  dressing: { done: boolean; upper: boolean; lower: boolean; independence: string; notes: string };
+  positioning: { done: boolean; position_type: string; mobility_device: string; notes: string };
+  medication: { done: boolean; med_type: string; confirmed: boolean; notes: string };
+  outing: { done: boolean; outing_type: string; transport: string; notes: string };
+  wake_sleep: { done: boolean; wake_up: boolean; go_to_bed: boolean; bed_making: boolean; notes: string };
+  medical_care: { done: boolean; suction: boolean; tube_feeding: boolean; stoma: boolean; catheter: boolean; wound_care: boolean; oxygen: boolean; notes: string };
+  independence_support: { done: boolean; exercise: boolean; cognitive: boolean; communication: boolean; social: boolean; notes: string };
+  living_support: { cooking: boolean; cooking_notes: string; cleaning: boolean; cleaning_notes: string; laundry: boolean; laundry_notes: string; shopping: boolean; shopping_notes: string; trash: boolean; clothing: boolean; medication_mgmt: boolean; health_mgmt: boolean; other_notes: string };
+  exit_check: { fire_check: boolean; lock_check: boolean; appliance_check: boolean; user_condition: string; notes: string };
+  progress_notes: string;
+  handover: { priority: string; notes: string };
+  detailed_report: string;
   user_condition: string;
   notes: string;
-};
+}
+
+const emptyCareData = (): CareData => ({
+  pre_check: { complexion: "", condition: "", room_temp: "", humidity: "", notes: "" },
+  vitals: { temperature: "", bp_sys: "", bp_dia: "", pulse: "", spo2: "", respiration: "", blood_sugar: "", weight: "", notes: "" },
+  excretion: { done: false, urine: false, stool: false, urine_amount: "", stool_amount: "", stool_type: "", independence: "", device: "", notes: "" },
+  hydration: { done: false, drink_type: "", amount: "", thickener: "", notes: "" },
+  meal: { done: false, staple_amount: "", side_amount: "", meal_form: "", independence: "", notes: "" },
+  oral_care: { done: false, denture: "", brushing: false, gargling: false, denture_cleaning: false, mouth_wipe: false, notes: "" },
+  bathing: { done: false, bath_type: "", independence: "", skin_condition: "", notes: "" },
+  grooming: { done: false, face_wash: false, hair: false, nail: false, ear: false, shaving: false, notes: "" },
+  dressing: { done: false, upper: false, lower: false, independence: "", notes: "" },
+  positioning: { done: false, position_type: "", mobility_device: "", notes: "" },
+  medication: { done: false, med_type: "", confirmed: false, notes: "" },
+  outing: { done: false, outing_type: "", transport: "", notes: "" },
+  wake_sleep: { done: false, wake_up: false, go_to_bed: false, bed_making: false, notes: "" },
+  medical_care: { done: false, suction: false, tube_feeding: false, stoma: false, catheter: false, wound_care: false, oxygen: false, notes: "" },
+  independence_support: { done: false, exercise: false, cognitive: false, communication: false, social: false, notes: "" },
+  living_support: { cooking: false, cooking_notes: "", cleaning: false, cleaning_notes: "", laundry: false, laundry_notes: "", shopping: false, shopping_notes: "", trash: false, clothing: false, medication_mgmt: false, health_mgmt: false, other_notes: "" },
+  exit_check: { fire_check: false, lock_check: false, appliance_check: false, user_condition: "", notes: "" },
+  progress_notes: "",
+  handover: { priority: "通常", notes: "" },
+  detailed_report: "",
+  user_condition: "",
+  notes: "",
+});
+
+// Legacy FormData (kept for type compat)
+type FormData = Record<string, unknown>;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -116,55 +137,7 @@ const SERVICE_TYPE_COLORS: Record<ServiceType, { bg: string; text: string; borde
   通院等乗降介助: { bg: "bg-orange-100", text: "text-orange-700", border: "border-orange-200" },
 };
 
-const BODY_CARE_ITEMS: { key: keyof FormData; label: string }[] = [
-  { key: "care_excretion", label: "排泄介助" },
-  { key: "care_meal", label: "食事介助" },
-  { key: "care_bath", label: "入浴介助" },
-  { key: "care_wipe", label: "清拭" },
-  { key: "care_positioning", label: "体位変換" },
-  { key: "care_transfer", label: "移動介助" },
-  { key: "care_dressing", label: "更衣介助" },
-  { key: "care_oral", label: "口腔ケア" },
-  { key: "care_medication", label: "服薬介助" },
-];
-
-const LIVING_SUPPORT_ITEMS: { key: keyof FormData; label: string }[] = [
-  { key: "support_cooking", label: "調理" },
-  { key: "support_laundry", label: "洗濯" },
-  { key: "support_cleaning", label: "掃除" },
-  { key: "support_shopping", label: "買物" },
-  { key: "support_trash", label: "ゴミ出し" },
-  { key: "support_clothing", label: "衣類の整理" },
-];
-
-const EMPTY_FORM: FormData = {
-  visit_date: format(new Date(), "yyyy-MM-dd"),
-  staff_id: "",
-  service_type: "身体介護",
-  start_time: "",
-  end_time: "",
-  care_excretion: false,
-  care_meal: false,
-  care_bath: false,
-  care_wipe: false,
-  care_positioning: false,
-  care_transfer: false,
-  care_dressing: false,
-  care_oral: false,
-  care_medication: false,
-  support_cooking: false,
-  support_laundry: false,
-  support_cleaning: false,
-  support_shopping: false,
-  support_trash: false,
-  support_clothing: false,
-  temperature: "",
-  bp_sys: "",
-  bp_dia: "",
-  pulse: "",
-  user_condition: "",
-  notes: "",
-};
+// (旧 BODY_CARE_ITEMS / LIVING_SUPPORT_ITEMS / EMPTY_FORM は削除済み — 新形式 CareData を使用)
 
 const inputClass =
   "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
@@ -561,7 +534,9 @@ export default function VisitRecordsPage() {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<FormData>(EMPTY_FORM);
+  const [formBase, setFormBase] = useState({ visit_date: format(new Date(), "yyyy-MM-dd"), staff_id: "", service_type: "身体介護" as ServiceType, start_time: "", end_time: "" });
+  const [formCare, setFormCare] = useState<CareData>(emptyCareData());
+  const [formSection, setFormSection] = useState<string | null>("pre_check");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Fetch staff list once
@@ -607,52 +582,42 @@ export default function VisitRecordsPage() {
   }, [selectedUserId, fetchRecords]);
 
   // Form helpers
-  const setField = <K extends keyof FormData>(key: K, value: FormData[K]) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const toggleBool = (key: keyof FormData) => {
-    setForm((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
   const handleOpenForm = () => {
-    setForm(EMPTY_FORM);
+    setFormBase({ visit_date: format(new Date(), "yyyy-MM-dd"), staff_id: "", service_type: "身体介護", start_time: "", end_time: "" });
+    setFormCare(emptyCareData());
+    setFormSection("pre_check");
     setShowForm(true);
+  };
+
+  const updCare = <K extends keyof CareData>(key: K, val: Partial<CareData[K]>) => {
+    setFormCare((prev) => ({ ...prev, [key]: typeof prev[key] === "object" && !Array.isArray(prev[key]) ? { ...(prev[key] as Record<string, unknown>), ...val } : val }));
   };
 
   const handleSave = async () => {
     if (!selectedUserId) return;
-    if (!form.visit_date) { toast.error("訪問日を入力してください"); return; }
+    if (!formBase.visit_date) { toast.error("訪問日を入力してください"); return; }
 
     setSaving(true);
     const payload = {
       user_id: selectedUserId,
-      visit_date: form.visit_date,
-      staff_id: form.staff_id || null,
-      service_type: form.service_type,
-      start_time: form.start_time || null,
-      end_time: form.end_time || null,
-      care_excretion: form.care_excretion,
-      care_meal: form.care_meal,
-      care_bath: form.care_bath,
-      care_wipe: form.care_wipe,
-      care_positioning: form.care_positioning,
-      care_transfer: form.care_transfer,
-      care_dressing: form.care_dressing,
-      care_oral: form.care_oral,
-      care_medication: form.care_medication,
-      support_cooking: form.support_cooking,
-      support_laundry: form.support_laundry,
-      support_cleaning: form.support_cleaning,
-      support_shopping: form.support_shopping,
-      support_trash: form.support_trash,
-      support_clothing: form.support_clothing,
-      temperature: form.temperature ? parseFloat(form.temperature) : null,
-      bp_sys: form.bp_sys ? parseInt(form.bp_sys) : null,
-      bp_dia: form.bp_dia ? parseInt(form.bp_dia) : null,
-      pulse: form.pulse ? parseInt(form.pulse) : null,
-      user_condition: form.user_condition || null,
-      notes: form.notes || null,
+      visit_date: formBase.visit_date,
+      staff_id: formBase.staff_id || null,
+      service_type: formBase.service_type,
+      start_time: formBase.start_time || null,
+      end_time: formBase.end_time || null,
+      care_record_data: formCare,
+      vital_temperature: formCare.vitals.temperature ? parseFloat(formCare.vitals.temperature) : null,
+      vital_bp_sys: formCare.vitals.bp_sys ? parseInt(formCare.vitals.bp_sys) : null,
+      vital_bp_dia: formCare.vitals.bp_dia ? parseInt(formCare.vitals.bp_dia) : null,
+      vital_pulse: formCare.vitals.pulse ? parseInt(formCare.vitals.pulse) : null,
+      vital_spo2: formCare.vitals.spo2 ? parseInt(formCare.vitals.spo2) : null,
+      vital_respiration: formCare.vitals.respiration ? parseInt(formCare.vitals.respiration) : null,
+      vital_blood_sugar: formCare.vitals.blood_sugar ? parseInt(formCare.vitals.blood_sugar) : null,
+      user_condition: formCare.user_condition || null,
+      handover_notes: formCare.handover.notes || null,
+      notes: formCare.notes || null,
+      progress_notes: formCare.progress_notes || null,
+      status: "draft",
     };
 
     const { error } = await supabase.from("kaigo_visit_records").insert(payload);
@@ -666,6 +631,45 @@ export default function VisitRecordsPage() {
       fetchRecords(selectedUserId);
     }
   };
+
+  // Section toggle for form
+  const isFormOpen = (id: string) => formSection === id;
+  const toggleFormSection = (id: string) => setFormSection(formSection === id ? null : id);
+
+  // Reusable form components
+  const FSelect = ({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) => (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-gray-700">{label}</label>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={inputClass}>
+        <option value="">選択してください</option>
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+  const FInput = ({ label, value, onChange, placeholder, type = "text" }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) => (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-gray-700">{label}</label>
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={inputClass} />
+    </div>
+  );
+  const FTextarea = ({ label, value, onChange, placeholder, rows = 2 }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; rows?: number }) => (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-gray-700">{label}</label>
+      <textarea rows={rows} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={inputClass} />
+    </div>
+  );
+  const FCheck = ({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) => (
+    <label className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${checked ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+      <input type="checkbox" checked={checked} onChange={() => onChange(!checked)} className="accent-blue-600" />
+      {label}
+    </label>
+  );
+  const FSectionBtn = ({ id, label }: { id: string; label: string }) => (
+    <button onClick={() => toggleFormSection(id)} className="flex items-center justify-between w-full px-3 py-2.5 bg-gray-100 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-200 transition-colors">
+      {label}
+      <ChevronDown size={14} className={`text-gray-400 transition-transform ${isFormOpen(id) ? "rotate-180" : ""}`} />
+    </button>
+  );
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -795,234 +799,292 @@ export default function VisitRecordsPage() {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Modal — 22カテゴリ対応の新規記録フォーム */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-start justify-end overflow-auto bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl flex flex-col max-h-[calc(100vh-2rem)]">
-            {/* Modal header */}
             <div className="flex items-center justify-between border-b px-5 py-4">
               <h2 className="text-base font-bold text-gray-900">サービス実施記録 — 新規</h2>
-              <button
-                onClick={() => setShowForm(false)}
-                className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-              >
-                <X size={18} />
-              </button>
+              <button onClick={() => setShowForm(false)} className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><X size={18} /></button>
             </div>
 
-            {/* Modal body */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
               {/* 基本情報 */}
               <section>
                 <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">基本情報</h3>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="col-span-2">
                     <label className="mb-1 block text-xs font-medium text-gray-700">訪問日 <span className="text-red-500">*</span></label>
-                    <input
-                      type="date"
-                      value={form.visit_date}
-                      onChange={(e) => setField("visit_date", e.target.value)}
-                      className={inputClass}
-                    />
+                    <input type="date" value={formBase.visit_date} onChange={(e) => setFormBase({ ...formBase, visit_date: e.target.value })} className={inputClass} />
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-medium text-gray-700">開始時刻</label>
-                    <input
-                      type="time"
-                      value={form.start_time}
-                      onChange={(e) => setField("start_time", e.target.value)}
-                      className={inputClass}
-                    />
+                    <input type="time" value={formBase.start_time} onChange={(e) => setFormBase({ ...formBase, start_time: e.target.value })} className={inputClass} />
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-medium text-gray-700">終了時刻</label>
-                    <input
-                      type="time"
-                      value={form.end_time}
-                      onChange={(e) => setField("end_time", e.target.value)}
-                      className={inputClass}
-                    />
+                    <input type="time" value={formBase.end_time} onChange={(e) => setFormBase({ ...formBase, end_time: e.target.value })} className={inputClass} />
                   </div>
                   <div className="col-span-2">
                     <label className="mb-1 block text-xs font-medium text-gray-700">サービス種別</label>
-                    <select
-                      value={form.service_type}
-                      onChange={(e) => setField("service_type", e.target.value as ServiceType)}
-                      className={inputClass}
-                    >
-                      {SERVICE_TYPES.map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
+                    <select value={formBase.service_type} onChange={(e) => setFormBase({ ...formBase, service_type: e.target.value as ServiceType })} className={inputClass}>
+                      {SERVICE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
                   <div className="col-span-2">
                     <label className="mb-1 block text-xs font-medium text-gray-700">担当職員</label>
-                    <select
-                      value={form.staff_id}
-                      onChange={(e) => setField("staff_id", e.target.value)}
-                      className={inputClass}
-                    >
+                    <select value={formBase.staff_id} onChange={(e) => setFormBase({ ...formBase, staff_id: e.target.value })} className={inputClass}>
                       <option value="">— 選択してください —</option>
-                      {staffList.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
+                      {staffList.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   </div>
                 </div>
               </section>
 
-              {/* 身体介護 */}
-              <section>
-                <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">身体介護</h3>
-                <div className="grid grid-cols-3 gap-2">
-                  {BODY_CARE_ITEMS.map(({ key, label }) => (
-                    <label
-                      key={key}
-                      className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                        form[key]
-                          ? "border-blue-400 bg-blue-50 text-blue-700"
-                          : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={form[key] as boolean}
-                        onChange={() => toggleBool(key)}
-                        className="accent-blue-600"
-                      />
-                      {label}
-                    </label>
-                  ))}
+              {/* 1. 事前チェック */}
+              <FSectionBtn id="pre_check" label="事前チェック" />
+              {isFormOpen("pre_check") && (
+                <div className="space-y-2 pl-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    <FSelect label="顔色" value={formCare.pre_check.complexion} onChange={(v) => updCare("pre_check", { complexion: v })} options={["良好", "やや不良", "不良"]} />
+                    <FSelect label="体調" value={formCare.pre_check.condition} onChange={(v) => updCare("pre_check", { condition: v })} options={["良好", "普通", "不良"]} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <FInput label="室温 (℃)" value={formCare.pre_check.room_temp} onChange={(v) => updCare("pre_check", { room_temp: v })} placeholder="25" type="number" />
+                    <FInput label="湿度 (%)" value={formCare.pre_check.humidity} onChange={(v) => updCare("pre_check", { humidity: v })} placeholder="50" type="number" />
+                  </div>
+                  <FTextarea label="備考" value={formCare.pre_check.notes} onChange={(v) => updCare("pre_check", { notes: v })} />
                 </div>
-              </section>
+              )}
 
-              {/* 生活援助 */}
-              <section>
-                <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">生活援助</h3>
-                <div className="grid grid-cols-3 gap-2">
-                  {LIVING_SUPPORT_ITEMS.map(({ key, label }) => (
-                    <label
-                      key={key}
-                      className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                        form[key]
-                          ? "border-green-400 bg-green-50 text-green-700"
-                          : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={form[key] as boolean}
-                        onChange={() => toggleBool(key)}
-                        className="accent-green-600"
-                      />
-                      {label}
-                    </label>
-                  ))}
+              {/* 2. バイタル */}
+              <FSectionBtn id="vitals" label="バイタルサイン・身体測定" />
+              {isFormOpen("vitals") && (
+                <div className="space-y-2 pl-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    <FInput label="体温 (℃)" value={formCare.vitals.temperature} onChange={(v) => updCare("vitals", { temperature: v })} placeholder="36.5" type="number" />
+                    <FInput label="SpO2 (%)" value={formCare.vitals.spo2} onChange={(v) => updCare("vitals", { spo2: v })} placeholder="98" type="number" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <FInput label="収縮期血圧" value={formCare.vitals.bp_sys} onChange={(v) => updCare("vitals", { bp_sys: v })} placeholder="120" type="number" />
+                    <FInput label="拡張期血圧" value={formCare.vitals.bp_dia} onChange={(v) => updCare("vitals", { bp_dia: v })} placeholder="80" type="number" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <FInput label="脈拍 (bpm)" value={formCare.vitals.pulse} onChange={(v) => updCare("vitals", { pulse: v })} placeholder="72" type="number" />
+                    <FInput label="呼吸数" value={formCare.vitals.respiration} onChange={(v) => updCare("vitals", { respiration: v })} placeholder="18" type="number" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <FInput label="血糖値 (mg/dL)" value={formCare.vitals.blood_sugar} onChange={(v) => updCare("vitals", { blood_sugar: v })} placeholder="100" type="number" />
+                    <FInput label="体重 (kg)" value={formCare.vitals.weight} onChange={(v) => updCare("vitals", { weight: v })} placeholder="60.0" type="number" />
+                  </div>
                 </div>
-              </section>
+              )}
 
-              {/* バイタル */}
-              <section>
-                <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">バイタルサイン</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-700">体温 (℃)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="33"
-                      max="42"
-                      placeholder="36.5"
-                      value={form.temperature}
-                      onChange={(e) => setField("temperature", e.target.value)}
-                      className={inputClass}
-                    />
+              {/* 3. 排泄 */}
+              <FSectionBtn id="excretion" label="排泄介助" />
+              {isFormOpen("excretion") && (
+                <div className="space-y-2 pl-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    <FCheck label="尿" checked={formCare.excretion.urine} onChange={(v) => updCare("excretion", { urine: v, done: v || formCare.excretion.stool })} />
+                    <FCheck label="便" checked={formCare.excretion.stool} onChange={(v) => updCare("excretion", { stool: v, done: formCare.excretion.urine || v })} />
                   </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-700">脈拍 (bpm)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="250"
-                      placeholder="72"
-                      value={form.pulse}
-                      onChange={(e) => setField("pulse", e.target.value)}
-                      className={inputClass}
-                    />
+                  <div className="grid grid-cols-2 gap-2">
+                    <FSelect label="尿量" value={formCare.excretion.urine_amount} onChange={(v) => updCare("excretion", { urine_amount: v })} options={["少量", "普通", "多量"]} />
+                    <FSelect label="便量" value={formCare.excretion.stool_amount} onChange={(v) => updCare("excretion", { stool_amount: v })} options={["少量", "普通", "多量"]} />
                   </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-700">収縮期血圧 (mmHg)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="300"
-                      placeholder="120"
-                      value={form.bp_sys}
-                      onChange={(e) => setField("bp_sys", e.target.value)}
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-700">拡張期血圧 (mmHg)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="200"
-                      placeholder="80"
-                      value={form.bp_dia}
-                      onChange={(e) => setField("bp_dia", e.target.value)}
-                      className={inputClass}
-                    />
-                  </div>
+                  <FSelect label="便性状" value={formCare.excretion.stool_type} onChange={(v) => updCare("excretion", { stool_type: v })} options={["普通", "硬い", "軟便", "水様便"]} />
+                  <FSelect label="自立度" value={formCare.excretion.independence} onChange={(v) => updCare("excretion", { independence: v })} options={["自立", "見守り", "一部介助", "全介助"]} />
+                  <FSelect label="使用器具" value={formCare.excretion.device} onChange={(v) => updCare("excretion", { device: v })} options={["トイレ", "ポータブルトイレ", "おむつ", "パッド", "尿器"]} />
+                  <FTextarea label="備考" value={formCare.excretion.notes} onChange={(v) => updCare("excretion", { notes: v })} />
                 </div>
-              </section>
+              )}
 
-              {/* 状態・特記 */}
-              <section>
-                <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">状態・特記事項</h3>
-                <div className="space-y-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-700">利用者の状態</label>
-                    <textarea
-                      rows={3}
-                      placeholder="訪問時の利用者の状態・様子を記入してください"
-                      value={form.user_condition}
-                      onChange={(e) => setField("user_condition", e.target.value)}
-                      className={inputClass}
-                    />
+              {/* 4. 水分 */}
+              <FSectionBtn id="hydration" label="水分摂取" />
+              {isFormOpen("hydration") && (
+                <div className="space-y-2 pl-1">
+                  <FInput label="飲み物の種類" value={formCare.hydration.drink_type} onChange={(v) => updCare("hydration", { drink_type: v, done: true })} placeholder="お茶、水等" />
+                  <FInput label="量 (ml)" value={formCare.hydration.amount} onChange={(v) => updCare("hydration", { amount: v })} placeholder="200" type="number" />
+                  <FSelect label="とろみ" value={formCare.hydration.thickener} onChange={(v) => updCare("hydration", { thickener: v })} options={["なし", "薄い", "中間", "濃い"]} />
+                </div>
+              )}
+
+              {/* 5. 食事 */}
+              <FSectionBtn id="meal" label="食事介助" />
+              {isFormOpen("meal") && (
+                <div className="space-y-2 pl-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    <FSelect label="主食摂取量" value={formCare.meal.staple_amount} onChange={(v) => updCare("meal", { staple_amount: v, done: true })} options={["全量", "3/4", "半分", "1/4", "少量", "なし"]} />
+                    <FSelect label="副食摂取量" value={formCare.meal.side_amount} onChange={(v) => updCare("meal", { side_amount: v })} options={["全量", "3/4", "半分", "1/4", "少量", "なし"]} />
                   </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-700">特記事項</label>
-                    <textarea
-                      rows={3}
-                      placeholder="申し送り事項・連絡事項など"
-                      value={form.notes}
-                      onChange={(e) => setField("notes", e.target.value)}
-                      className={inputClass}
-                    />
+                  <FSelect label="食事形態" value={formCare.meal.meal_form} onChange={(v) => updCare("meal", { meal_form: v })} options={["普通", "きざみ", "ミキサー", "ペースト", "流動食"]} />
+                  <FSelect label="自立度" value={formCare.meal.independence} onChange={(v) => updCare("meal", { independence: v })} options={["自立", "見守り", "一部介助", "全介助"]} />
+                </div>
+              )}
+
+              {/* 6. 口腔ケア */}
+              <FSectionBtn id="oral_care" label="口腔ケア" />
+              {isFormOpen("oral_care") && (
+                <div className="space-y-2 pl-1">
+                  <FSelect label="義歯" value={formCare.oral_care.denture} onChange={(v) => updCare("oral_care", { denture: v })} options={["なし", "上のみ", "下のみ", "上下"]} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <FCheck label="歯磨き" checked={formCare.oral_care.brushing} onChange={(v) => updCare("oral_care", { brushing: v, done: true })} />
+                    <FCheck label="うがい" checked={formCare.oral_care.gargling} onChange={(v) => updCare("oral_care", { gargling: v, done: true })} />
+                    <FCheck label="義歯洗浄" checked={formCare.oral_care.denture_cleaning} onChange={(v) => updCare("oral_care", { denture_cleaning: v, done: true })} />
+                    <FCheck label="口腔清拭" checked={formCare.oral_care.mouth_wipe} onChange={(v) => updCare("oral_care", { mouth_wipe: v, done: true })} />
                   </div>
                 </div>
-              </section>
+              )}
+
+              {/* 7. 清拭・入浴 */}
+              <FSectionBtn id="bathing" label="清拭・入浴" />
+              {isFormOpen("bathing") && (
+                <div className="space-y-2 pl-1">
+                  <FSelect label="入浴種類" value={formCare.bathing.bath_type} onChange={(v) => updCare("bathing", { bath_type: v, done: true })} options={["一般浴", "シャワー浴", "清拭", "足浴", "手浴", "部分浴"]} />
+                  <FSelect label="自立度" value={formCare.bathing.independence} onChange={(v) => updCare("bathing", { independence: v })} options={["自立", "見守り", "一部介助", "全介助"]} />
+                  <FSelect label="皮膚状態" value={formCare.bathing.skin_condition} onChange={(v) => updCare("bathing", { skin_condition: v })} options={["異常なし", "発赤", "褥瘡", "湿疹", "乾燥", "傷", "その他"]} />
+                </div>
+              )}
+
+              {/* 8. 身体整容 */}
+              <FSectionBtn id="grooming" label="身体整容" />
+              {isFormOpen("grooming") && (
+                <div className="grid grid-cols-3 gap-2 pl-1">
+                  <FCheck label="洗顔" checked={formCare.grooming.face_wash} onChange={(v) => updCare("grooming", { face_wash: v, done: true })} />
+                  <FCheck label="整髪" checked={formCare.grooming.hair} onChange={(v) => updCare("grooming", { hair: v, done: true })} />
+                  <FCheck label="爪切り" checked={formCare.grooming.nail} onChange={(v) => updCare("grooming", { nail: v, done: true })} />
+                  <FCheck label="耳掃除" checked={formCare.grooming.ear} onChange={(v) => updCare("grooming", { ear: v, done: true })} />
+                  <FCheck label="髭剃り" checked={formCare.grooming.shaving} onChange={(v) => updCare("grooming", { shaving: v, done: true })} />
+                </div>
+              )}
+
+              {/* 9. 更衣 */}
+              <FSectionBtn id="dressing" label="更衣介助" />
+              {isFormOpen("dressing") && (
+                <div className="space-y-2 pl-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    <FCheck label="上衣" checked={formCare.dressing.upper} onChange={(v) => updCare("dressing", { upper: v, done: true })} />
+                    <FCheck label="下衣" checked={formCare.dressing.lower} onChange={(v) => updCare("dressing", { lower: v, done: true })} />
+                  </div>
+                  <FSelect label="自立度" value={formCare.dressing.independence} onChange={(v) => updCare("dressing", { independence: v })} options={["自立", "見守り", "一部介助", "全介助"]} />
+                </div>
+              )}
+
+              {/* 10. 体位・移動 */}
+              <FSectionBtn id="positioning" label="体位変換・移動" />
+              {isFormOpen("positioning") && (
+                <div className="space-y-2 pl-1">
+                  <FSelect label="体位" value={formCare.positioning.position_type} onChange={(v) => updCare("positioning", { position_type: v, done: true })} options={["仰臥位", "側臥位", "座位", "半座位", "起立位", "その他"]} />
+                  <FSelect label="移動手段" value={formCare.positioning.mobility_device} onChange={(v) => updCare("positioning", { mobility_device: v })} options={["徒歩", "杖", "歩行器", "車椅子", "ストレッチャー", "その他"]} />
+                </div>
+              )}
+
+              {/* 11. 服薬 */}
+              <FSectionBtn id="medication" label="服薬介助" />
+              {isFormOpen("medication") && (
+                <div className="space-y-2 pl-1">
+                  <FSelect label="投与方法" value={formCare.medication.med_type} onChange={(v) => updCare("medication", { med_type: v, done: true })} options={["内服", "外用", "点眼", "吸入", "座薬", "注射", "その他"]} />
+                  <FCheck label="服薬確認済み" checked={formCare.medication.confirmed} onChange={(v) => updCare("medication", { confirmed: v })} />
+                </div>
+              )}
+
+              {/* 12. 通院・外出 */}
+              <FSectionBtn id="outing" label="通院・外出介助" />
+              {isFormOpen("outing") && (
+                <div className="space-y-2 pl-1">
+                  <FSelect label="種類" value={formCare.outing.outing_type} onChange={(v) => updCare("outing", { outing_type: v, done: true })} options={["通院", "買物同行", "散歩", "外出付添", "その他"]} />
+                  <FSelect label="移動手段" value={formCare.outing.transport} onChange={(v) => updCare("outing", { transport: v })} options={["徒歩", "車", "公共交通", "車椅子", "その他"]} />
+                </div>
+              )}
+
+              {/* 13. 起床・就寝 */}
+              <FSectionBtn id="wake_sleep" label="起床・就寝介助" />
+              {isFormOpen("wake_sleep") && (
+                <div className="grid grid-cols-3 gap-2 pl-1">
+                  <FCheck label="起床介助" checked={formCare.wake_sleep.wake_up} onChange={(v) => updCare("wake_sleep", { wake_up: v, done: true })} />
+                  <FCheck label="就寝介助" checked={formCare.wake_sleep.go_to_bed} onChange={(v) => updCare("wake_sleep", { go_to_bed: v, done: true })} />
+                  <FCheck label="ベッドメイク" checked={formCare.wake_sleep.bed_making} onChange={(v) => updCare("wake_sleep", { bed_making: v, done: true })} />
+                </div>
+              )}
+
+              {/* 14. 医療的ケア */}
+              <FSectionBtn id="medical_care" label="医療的ケア" />
+              {isFormOpen("medical_care") && (
+                <div className="grid grid-cols-3 gap-2 pl-1">
+                  <FCheck label="吸引" checked={formCare.medical_care.suction} onChange={(v) => updCare("medical_care", { suction: v, done: true })} />
+                  <FCheck label="経管栄養" checked={formCare.medical_care.tube_feeding} onChange={(v) => updCare("medical_care", { tube_feeding: v, done: true })} />
+                  <FCheck label="ストーマ" checked={formCare.medical_care.stoma} onChange={(v) => updCare("medical_care", { stoma: v, done: true })} />
+                  <FCheck label="カテーテル" checked={formCare.medical_care.catheter} onChange={(v) => updCare("medical_care", { catheter: v, done: true })} />
+                  <FCheck label="創傷処置" checked={formCare.medical_care.wound_care} onChange={(v) => updCare("medical_care", { wound_care: v, done: true })} />
+                  <FCheck label="酸素管理" checked={formCare.medical_care.oxygen} onChange={(v) => updCare("medical_care", { oxygen: v, done: true })} />
+                </div>
+              )}
+
+              {/* 15. 自立支援 */}
+              <FSectionBtn id="independence" label="自立支援" />
+              {isFormOpen("independence") && (
+                <div className="grid grid-cols-2 gap-2 pl-1">
+                  <FCheck label="運動・リハビリ" checked={formCare.independence_support.exercise} onChange={(v) => updCare("independence_support", { exercise: v, done: true })} />
+                  <FCheck label="認知機能訓練" checked={formCare.independence_support.cognitive} onChange={(v) => updCare("independence_support", { cognitive: v, done: true })} />
+                  <FCheck label="コミュニケーション" checked={formCare.independence_support.communication} onChange={(v) => updCare("independence_support", { communication: v, done: true })} />
+                  <FCheck label="社会参加" checked={formCare.independence_support.social} onChange={(v) => updCare("independence_support", { social: v, done: true })} />
+                </div>
+              )}
+
+              {/* 16. 生活援助 */}
+              <FSectionBtn id="living" label="生活援助" />
+              {isFormOpen("living") && (
+                <div className="space-y-2 pl-1">
+                  <div className="grid grid-cols-3 gap-2">
+                    <FCheck label="調理" checked={formCare.living_support.cooking} onChange={(v) => updCare("living_support", { cooking: v })} />
+                    <FCheck label="掃除" checked={formCare.living_support.cleaning} onChange={(v) => updCare("living_support", { cleaning: v })} />
+                    <FCheck label="洗濯" checked={formCare.living_support.laundry} onChange={(v) => updCare("living_support", { laundry: v })} />
+                    <FCheck label="買物" checked={formCare.living_support.shopping} onChange={(v) => updCare("living_support", { shopping: v })} />
+                    <FCheck label="ゴミ出し" checked={formCare.living_support.trash} onChange={(v) => updCare("living_support", { trash: v })} />
+                    <FCheck label="衣類整理" checked={formCare.living_support.clothing} onChange={(v) => updCare("living_support", { clothing: v })} />
+                    <FCheck label="服薬管理" checked={formCare.living_support.medication_mgmt} onChange={(v) => updCare("living_support", { medication_mgmt: v })} />
+                    <FCheck label="健康管理" checked={formCare.living_support.health_mgmt} onChange={(v) => updCare("living_support", { health_mgmt: v })} />
+                  </div>
+                </div>
+              )}
+
+              {/* 17. 退出確認 */}
+              <FSectionBtn id="exit_check" label="退出確認" />
+              {isFormOpen("exit_check") && (
+                <div className="space-y-2 pl-1">
+                  <div className="grid grid-cols-3 gap-2">
+                    <FCheck label="火の元確認" checked={formCare.exit_check.fire_check} onChange={(v) => updCare("exit_check", { fire_check: v })} />
+                    <FCheck label="施錠確認" checked={formCare.exit_check.lock_check} onChange={(v) => updCare("exit_check", { lock_check: v })} />
+                    <FCheck label="電化製品確認" checked={formCare.exit_check.appliance_check} onChange={(v) => updCare("exit_check", { appliance_check: v })} />
+                  </div>
+                  <FTextarea label="退出時の状態" value={formCare.exit_check.user_condition} onChange={(v) => updCare("exit_check", { user_condition: v })} />
+                </div>
+              )}
+
+              {/* 18-20. テキスト系 */}
+              <FSectionBtn id="text_sections" label="経過記録・申し送り・詳細報告" />
+              {isFormOpen("text_sections") && (
+                <div className="space-y-3 pl-1">
+                  <FTextarea label="経過記録" value={formCare.progress_notes} onChange={(v) => setFormCare({ ...formCare, progress_notes: v })} placeholder="サービス提供中の経過を記録..." rows={3} />
+                  <div className="grid grid-cols-4 gap-2">
+                    <div className="col-span-1">
+                      <FSelect label="優先度" value={formCare.handover.priority} onChange={(v) => updCare("handover", { priority: v })} options={["通常", "重要"]} />
+                    </div>
+                    <div className="col-span-3">
+                      <FTextarea label="申し送り" value={formCare.handover.notes} onChange={(v) => updCare("handover", { notes: v })} placeholder="次の担当者への申し送り..." />
+                    </div>
+                  </div>
+                  <FTextarea label="利用者の状態" value={formCare.user_condition} onChange={(v) => setFormCare({ ...formCare, user_condition: v })} placeholder="訪問時の状態・様子..." rows={3} />
+                  <FTextarea label="特記事項" value={formCare.notes} onChange={(v) => setFormCare({ ...formCare, notes: v })} placeholder="その他特記事項..." />
+                  <FTextarea label="詳細報告" value={formCare.detailed_report} onChange={(v) => setFormCare({ ...formCare, detailed_report: v })} placeholder="詳細な報告内容..." rows={3} />
+                </div>
+              )}
             </div>
 
-            {/* Modal footer */}
             <div className="flex justify-end gap-3 border-t bg-gray-50 px-5 py-4">
-              <button
-                onClick={() => setShowForm(false)}
-                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60 transition-colors"
-              >
-                {saving ? (
-                  <><Loader2 size={15} className="animate-spin" /> 保存中...</>
-                ) : (
-                  <><Save size={15} /> 保存</>
-                )}
+              <button onClick={() => setShowForm(false)} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">キャンセル</button>
+              <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60 transition-colors">
+                {saving ? <><Loader2 size={15} className="animate-spin" /> 保存中...</> : <><Save size={15} /> 保存</>}
               </button>
             </div>
           </div>
