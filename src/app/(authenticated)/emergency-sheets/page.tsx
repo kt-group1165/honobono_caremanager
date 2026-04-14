@@ -68,6 +68,28 @@ interface EmergencySheet {
   care_manager_office: string;
   care_manager_phone: string;
   notes: string;
+  // 追加項目（PDF準拠）
+  home_phone: string;
+  mobile_phone: string;
+  family_members: string;
+  adl_summary: string;
+  current_disease_notes: string;
+  oral_medications: string;
+  special_situation: string;
+  sudden_change_response: string;
+  evacuation_place_name: string;
+  evacuation_place_address: string;
+  evacuation_notes: string;
+  emergency_contact4_name: string;
+  emergency_contact4_relation: string;
+  emergency_contact4_phone: string;
+  emergency_contact4_address: string;
+  emergency_contact5_name: string;
+  emergency_contact5_relation: string;
+  emergency_contact5_phone: string;
+  emergency_contact5_address: string;
+  services_in_use: { service_type: string; provider_name: string; phone: string; schedule: string }[];
+  medical_devices: { item: string; provider: string; phone: string; notes: string }[];
 }
 
 interface UserInfo {
@@ -95,6 +117,13 @@ const emptySheet = (userId: string): EmergencySheet => ({
   emergency_instructions: "", hospital_preference: "",
   care_manager_name: "", care_manager_office: "", care_manager_phone: "",
   notes: "",
+  home_phone: "", mobile_phone: "", family_members: "",
+  adl_summary: "", current_disease_notes: "", oral_medications: "",
+  special_situation: "", sudden_change_response: "",
+  evacuation_place_name: "", evacuation_place_address: "", evacuation_notes: "",
+  emergency_contact4_name: "", emergency_contact4_relation: "", emergency_contact4_phone: "", emergency_contact4_address: "",
+  emergency_contact5_name: "", emergency_contact5_relation: "", emergency_contact5_phone: "", emergency_contact5_address: "",
+  services_in_use: [], medical_devices: [],
 });
 
 const inputClass = "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
@@ -299,140 +328,164 @@ export default function EmergencySheetsPage() {
             </div>
           ) : sheet ? (
             <div className="max-w-3xl mx-auto">
-              {/* 利用者基本情報（自動表示） */}
+              {/* ===== PDFフォーマット準拠レイアウト ===== */}
+
+              {/* タイトル */}
+              <div className="mb-4 text-center">
+                <h2 className="text-xl font-bold text-red-800 flex items-center justify-center gap-2">
+                  <AlertTriangle size={20} />緊急時シート
+                </h2>
+              </div>
+
+              {/* 基本情報 */}
               {userInfo && (
-                <div className="mb-6 rounded-xl border-2 border-red-200 bg-red-50 p-4">
-                  <h2 className="text-lg font-bold text-red-800 mb-2 flex items-center gap-2">
-                    <AlertTriangle size={18} />
-                    居宅緊急時シート
-                  </h2>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <span className="text-gray-500">氏名:</span>{" "}
-                      <strong className="text-lg">{userInfo.name}</strong>
-                      <span className="ml-2 text-gray-400 text-xs">({userInfo.name_kana})</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">生年月日:</span>{" "}
-                      <strong>{userInfo.birth_date ?? "未登録"}</strong>
-                      {userInfo.gender && <span className="ml-2">({userInfo.gender})</span>}
-                    </div>
-                    <div className="col-span-2">
-                      <span className="text-gray-500">住所:</span>{" "}
-                      <strong>{userInfo.address ?? "未登録"}</strong>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">電話:</span>{" "}
-                      <strong>{userInfo.phone ?? "未登録"}</strong>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field label="血液型" field="blood_type" placeholder="A型" />
-                      <Field label="アレルギー" field="allergies" placeholder="なし / 薬剤名等" />
-                    </div>
+                <Section icon={<User size={16} />} title="基本情報" color="bg-red-50 text-red-800">
+                  <div className="grid grid-cols-2 gap-3 text-sm mb-2">
+                    <div><span className="text-gray-500">フリガナ:</span> {userInfo.name_kana}</div>
+                    <div><span className="text-gray-500">生年月日:</span> {userInfo.birth_date ?? "未登録"}</div>
+                    <div className="col-span-2"><span className="text-gray-500">氏名:</span> <strong className="text-lg">{userInfo.name}</strong></div>
+                    <div className="col-span-2"><span className="text-gray-500">住所:</span> {userInfo.address ?? "未登録"}</div>
                   </div>
-                </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="固定電話" field="home_phone" type="tel" />
+                    <Field label="携帯電話" field="mobile_phone" type="tel" />
+                  </div>
+                  <Field label="同居家族" field="family_members" placeholder="妻・次男" />
+                </Section>
               )}
 
-              {/* かかりつけ医 */}
-              <Section icon={<Hospital size={16} />} title="かかりつけ医" color="bg-blue-50 text-blue-800">
+              {/* ADL（簡潔に） */}
+              <Section icon={<User size={16} />} title="ADL（簡潔に）" color="bg-green-50 text-green-800">
+                <Field label="" field="adl_summary" type="textarea" placeholder="杖歩行、排泄自立、認知症なし..." />
+              </Section>
+
+              {/* 現病と注意点 */}
+              <Section icon={<Heart size={16} />} title="現病と注意点" color="bg-purple-50 text-purple-800">
+                <Field label="" field="current_disease_notes" type="textarea" placeholder="高血圧、糖尿病。血糖値に注意..." />
+              </Section>
+
+              {/* 内服薬 */}
+              <Section icon={<Pill size={16} />} title="内服薬" color="bg-yellow-50 text-yellow-800">
+                <Field label="" field="oral_medications" type="textarea" placeholder="アムロジピン5mg 朝食後&#10;メトホルミン250mg 朝夕食後..." />
+              </Section>
+
+              {/* 特別な状況 */}
+              <Section icon={<FileText size={16} />} title="特別な状況" color="bg-blue-50 text-blue-800">
+                <Field label="" field="special_situation" type="textarea" placeholder="ペースメーカー使用、透析中..." />
+              </Section>
+
+              {/* 急変時の対応 */}
+              <Section icon={<AlertTriangle size={16} />} title="急変時の対応" color="bg-red-50 text-red-800">
+                <Field label="" field="sudden_change_response" type="textarea" placeholder="①かかりつけ医に連絡&#10;②家族に連絡&#10;③状況により119番..." />
+              </Section>
+
+              {/* 避難場所 */}
+              <Section icon={<FileText size={16} />} title="避難場所" color="bg-orange-50 text-orange-800">
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="主治医名" field="doctor_name" placeholder="山田太郎" />
-                  <Field label="医療機関名" field="doctor_hospital" placeholder="○○クリニック" />
-                  <Field label="電話番号" field="doctor_phone" placeholder="03-1234-5678" type="tel" />
-                  <Field label="住所" field="doctor_address" placeholder="東京都..." />
+                  <Field label="避難場所（名称）" field="evacuation_place_name" placeholder="○○小学校" />
+                  <Field label="避難場所（住所）" field="evacuation_place_address" />
                 </div>
-                <hr className="my-3" />
-                <p className="text-xs text-gray-500 mb-2">かかりつけ医②</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="医師名" field="doctor2_name" />
-                  <Field label="医療機関名" field="doctor2_hospital" />
-                  <Field label="電話番号" field="doctor2_phone" type="tel" />
+                <Field label="避難時の注意事項・持参するもの・停電リスクなど" field="evacuation_notes" type="textarea" />
+              </Section>
+
+              {/* 緊急連絡先（5件） */}
+              <Section icon={<Phone size={16} />} title="緊急連絡先（優先順位順）" color="bg-orange-50 text-orange-800">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <div key={n}>
+                    {n > 1 && <hr className="my-2" />}
+                    <p className="text-xs text-gray-500 mb-1">連絡先{n}</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      <Field label="氏名" field={`emergency_contact${n}_name` as keyof EmergencySheet} />
+                      <Field label="続柄" field={`emergency_contact${n}_relation` as keyof EmergencySheet} />
+                      <Field label="所在地" field={`emergency_contact${n}_address` as keyof EmergencySheet} />
+                      <Field label="連絡先" field={`emergency_contact${n}_phone` as keyof EmergencySheet} type="tel" />
+                    </div>
+                  </div>
+                ))}
+                <p className="text-xs text-gray-400 mt-2">※ 必要な連絡先のみ記載（5件全て埋める必要はなし）</p>
+              </Section>
+
+              {/* 主治医 */}
+              <Section icon={<Hospital size={16} />} title="主治医" color="bg-blue-50 text-blue-800">
+                <div className="grid grid-cols-3 gap-3">
+                  <Field label="医療機関名" field="doctor_hospital" />
+                  <Field label="氏名" field="doctor_name" />
+                  <Field label="連絡先" field="doctor_phone" type="tel" />
                 </div>
-                <hr className="my-3" />
-                <p className="text-xs text-gray-500 mb-2">かかりつけ歯科</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="歯科医名" field="dentist_name" />
-                  <Field label="医療機関名" field="dentist_hospital" />
-                  <Field label="電話番号" field="dentist_phone" type="tel" />
-                </div>
-                <hr className="my-3" />
-                <p className="text-xs text-gray-500 mb-2">かかりつけ薬局</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="薬局名" field="pharmacy_name" />
-                  <Field label="電話番号" field="pharmacy_phone" type="tel" />
+                <div className="grid grid-cols-3 gap-3 mt-2">
+                  <Field label="医療機関名②" field="doctor2_hospital" />
+                  <Field label="氏名" field="doctor2_name" />
+                  <Field label="連絡先" field="doctor2_phone" type="tel" />
                 </div>
               </Section>
 
-              {/* 緊急連絡先 */}
-              <Section icon={<Phone size={16} />} title="緊急連絡先" color="bg-orange-50 text-orange-800">
-                <p className="text-xs text-gray-500 mb-1">連絡先①</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="氏名" field="emergency_contact1_name" />
-                  <Field label="続柄" field="emergency_contact1_relation" placeholder="長男" />
-                  <Field label="電話番号" field="emergency_contact1_phone" type="tel" />
-                  <Field label="住所" field="emergency_contact1_address" />
+              {/* 利用中サービス */}
+              <Section icon={<FileText size={16} />} title="利用中サービス" color="bg-green-50 text-green-800">
+                <div className="space-y-2">
+                  {(sheet.services_in_use || []).map((svc, i) => (
+                    <div key={i} className="grid grid-cols-4 gap-2 items-end">
+                      <div>
+                        <label className="text-xs text-gray-500">サービス種別</label>
+                        <input value={svc.service_type} onChange={(e) => { const arr = [...(sheet.services_in_use || [])]; arr[i] = { ...arr[i], service_type: e.target.value }; setSheet({ ...sheet, services_in_use: arr }); }} className={inputClass} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">事業所名</label>
+                        <input value={svc.provider_name} onChange={(e) => { const arr = [...(sheet.services_in_use || [])]; arr[i] = { ...arr[i], provider_name: e.target.value }; setSheet({ ...sheet, services_in_use: arr }); }} className={inputClass} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">連絡先</label>
+                        <input value={svc.phone} onChange={(e) => { const arr = [...(sheet.services_in_use || [])]; arr[i] = { ...arr[i], phone: e.target.value }; setSheet({ ...sheet, services_in_use: arr }); }} className={inputClass} />
+                      </div>
+                      <div className="flex gap-1 items-end">
+                        <div className="flex-1">
+                          <label className="text-xs text-gray-500">利用曜日</label>
+                          <input value={svc.schedule} onChange={(e) => { const arr = [...(sheet.services_in_use || [])]; arr[i] = { ...arr[i], schedule: e.target.value }; setSheet({ ...sheet, services_in_use: arr }); }} className={inputClass} />
+                        </div>
+                        <button onClick={() => { const arr = (sheet.services_in_use || []).filter((_, j) => j !== i); setSheet({ ...sheet, services_in_use: arr }); }} className="text-red-400 hover:text-red-600 p-2">×</button>
+                      </div>
+                    </div>
+                  ))}
+                  <button onClick={() => setSheet({ ...sheet, services_in_use: [...(sheet.services_in_use || []), { service_type: "", provider_name: "", phone: "", schedule: "" }] })} className="text-xs text-blue-600 hover:underline">+ サービスを追加</button>
                 </div>
-                <hr className="my-3" />
-                <p className="text-xs text-gray-500 mb-1">連絡先②</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="氏名" field="emergency_contact2_name" />
-                  <Field label="続柄" field="emergency_contact2_relation" />
-                  <Field label="電話番号" field="emergency_contact2_phone" type="tel" />
-                  <Field label="住所" field="emergency_contact2_address" />
+              </Section>
+
+              {/* 充電式を含む電動の医療・介護機器 */}
+              <Section icon={<FileText size={16} />} title="充電式を含む電動の医療・介護機器" color="bg-yellow-50 text-yellow-800">
+                <div className="space-y-2">
+                  {(sheet.medical_devices || []).map((dev, i) => (
+                    <div key={i} className="grid grid-cols-4 gap-2 items-end">
+                      <div>
+                        <label className="text-xs text-gray-500">品目</label>
+                        <input value={dev.item} onChange={(e) => { const arr = [...(sheet.medical_devices || [])]; arr[i] = { ...arr[i], item: e.target.value }; setSheet({ ...sheet, medical_devices: arr }); }} className={inputClass} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">対応事業者名</label>
+                        <input value={dev.provider} onChange={(e) => { const arr = [...(sheet.medical_devices || [])]; arr[i] = { ...arr[i], provider: e.target.value }; setSheet({ ...sheet, medical_devices: arr }); }} className={inputClass} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">連絡先</label>
+                        <input value={dev.phone} onChange={(e) => { const arr = [...(sheet.medical_devices || [])]; arr[i] = { ...arr[i], phone: e.target.value }; setSheet({ ...sheet, medical_devices: arr }); }} className={inputClass} />
+                      </div>
+                      <div className="flex gap-1 items-end">
+                        <div className="flex-1">
+                          <label className="text-xs text-gray-500">備考</label>
+                          <input value={dev.notes} onChange={(e) => { const arr = [...(sheet.medical_devices || [])]; arr[i] = { ...arr[i], notes: e.target.value }; setSheet({ ...sheet, medical_devices: arr }); }} className={inputClass} />
+                        </div>
+                        <button onClick={() => { const arr = (sheet.medical_devices || []).filter((_, j) => j !== i); setSheet({ ...sheet, medical_devices: arr }); }} className="text-red-400 hover:text-red-600 p-2">×</button>
+                      </div>
+                    </div>
+                  ))}
+                  <button onClick={() => setSheet({ ...sheet, medical_devices: [...(sheet.medical_devices || []), { item: "", provider: "", phone: "", notes: "" }] })} className="text-xs text-blue-600 hover:underline">+ 機器を追加</button>
                 </div>
-                <hr className="my-3" />
-                <p className="text-xs text-gray-500 mb-1">連絡先③</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="氏名" field="emergency_contact3_name" />
-                  <Field label="続柄" field="emergency_contact3_relation" />
-                  <Field label="電話番号" field="emergency_contact3_phone" type="tel" />
-                </div>
               </Section>
 
-              {/* 既往歴・現病歴 */}
-              <Section icon={<Heart size={16} />} title="既往歴・現病歴" color="bg-purple-50 text-purple-800">
-                <Field label="既往歴" field="medical_history" type="textarea" placeholder="高血圧、糖尿病..." colSpan />
-                <Field label="現病歴" field="current_illness" type="textarea" placeholder="現在治療中の疾患..." colSpan />
-              </Section>
-
-              {/* ADL */}
-              <Section icon={<User size={16} />} title="ADL（日常生活動作）" color="bg-green-50 text-green-800">
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="移動" field="adl_mobility" placeholder="自立 / 杖使用 / 車椅子" />
-                  <Field label="食事" field="adl_eating" placeholder="自立 / 一部介助 / 全介助" />
-                  <Field label="排泄" field="adl_toileting" placeholder="自立 / 一部介助 / おむつ" />
-                  <Field label="入浴" field="adl_bathing" placeholder="自立 / 一部介助 / 全介助" />
-                  <Field label="更衣" field="adl_dressing" placeholder="自立 / 一部介助" />
-                  <Field label="コミュニケーション" field="adl_communication" placeholder="問題なし / やや困難" />
-                  <Field label="認知" field="adl_cognition" placeholder="問題なし / 軽度認知症" />
-                </div>
-                <Field label="ADL備考" field="adl_notes" type="textarea" colSpan />
-              </Section>
-
-              {/* 服薬 */}
-              <Section icon={<Pill size={16} />} title="服薬情報" color="bg-yellow-50 text-yellow-800">
-                <Field label="服薬一覧" field="medications" type="textarea" placeholder="薬品名 / 用法・用量" colSpan />
-                <Field label="服薬上の注意" field="medication_notes" type="textarea" placeholder="食前服用、血液凝固剤使用中..." colSpan />
-              </Section>
-
-              {/* 緊急時対応 */}
-              <Section icon={<AlertTriangle size={16} />} title="緊急時の対応" color="bg-red-50 text-red-800">
-                <Field label="緊急時の対応方法" field="emergency_instructions" type="textarea" placeholder="①まず○○に連絡&#10;②救急車を呼ぶ場合は..." colSpan />
-                <Field label="搬送先希望病院" field="hospital_preference" placeholder="○○総合病院" colSpan />
-              </Section>
-
-              {/* ケアマネ */}
+              {/* 担当ケアマネジャー */}
               <Section icon={<FileText size={16} />} title="担当ケアマネジャー" color="bg-gray-100 text-gray-800">
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="氏名" field="care_manager_name" />
+                <div className="grid grid-cols-3 gap-3">
                   <Field label="事業所名" field="care_manager_office" />
-                  <Field label="電話番号" field="care_manager_phone" type="tel" />
+                  <Field label="氏名" field="care_manager_name" />
+                  <Field label="連絡先" field="care_manager_phone" type="tel" />
                 </div>
-              </Section>
-
-              {/* 備考 */}
-              <Section icon={<FileText size={16} />} title="備考" color="bg-gray-100 text-gray-800">
-                <Field label="その他" field="notes" type="textarea" colSpan />
               </Section>
             </div>
           ) : null}

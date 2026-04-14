@@ -208,7 +208,9 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
   // ─── Sheet View ─────────────────────────────────────────────────────────────
 
   if (screen === "sheet" && sheetData) {
-    const s = sheetData.sheet || {};
+    const s = sheetData.sheet || {} as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const svcs = (s.services_in_use || []) as { service_type: string; provider_name: string; phone: string; schedule: string }[];
+    const devs = (s.medical_devices || []) as { item: string; provider: string; phone: string; notes: string }[];
     const Row = ({ label, value }: { label: string; value: string | null | undefined }) => {
       if (!value) return null;
       return <div className="flex py-1.5 border-b border-gray-100"><span className="text-gray-500 w-24 shrink-0 text-xs">{label}</span><span className="text-sm font-medium">{value}</span></div>;
@@ -241,82 +243,119 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
             <Row label="生年月日" value={sheetData.birth_date} />
             <Row label="性別" value={sheetData.gender} />
             <Row label="住所" value={sheetData.address} />
-            <Row label="電話" value={sheetData.phone} />
+            <Row label="固定電話" value={s.home_phone || sheetData.phone} />
+            <Row label="携帯電話" value={s.mobile_phone} />
+            <Row label="同居家族" value={s.family_members} />
             <Row label="血液型" value={s.blood_type} />
             <Row label="アレルギー" value={s.allergies} />
           </div>
 
-          {/* かかりつけ医 */}
-          <SectionTitle color="bg-blue-50 text-blue-800"><Hospital size={14} className="inline mr-1" />かかりつけ医</SectionTitle>
-          <div className="bg-white rounded-xl border p-3 space-y-0">
-            <Row label="主治医" value={s.doctor_name} />
-            <Row label="医療機関" value={s.doctor_hospital} />
-            <Row label="電話" value={s.doctor_phone} />
-            <Row label="住所" value={s.doctor_address} />
-            {s.doctor2_name && <><hr className="my-2" /><Row label="医師②" value={s.doctor2_name} /><Row label="医療機関" value={s.doctor2_hospital} /><Row label="電話" value={s.doctor2_phone} /></>}
-            {s.dentist_name && <><hr className="my-2" /><Row label="歯科医" value={s.dentist_name} /><Row label="医療機関" value={s.dentist_hospital} /><Row label="電話" value={s.dentist_phone} /></>}
-            {s.pharmacy_name && <><hr className="my-2" /><Row label="薬局" value={s.pharmacy_name} /><Row label="電話" value={s.pharmacy_phone} /></>}
-          </div>
+          {/* ADL */}
+          {s.adl_summary && (
+            <><SectionTitle color="bg-green-50 text-green-800"><User size={14} className="inline mr-1" />ADL（簡潔に）</SectionTitle>
+            <div className="bg-white rounded-xl border p-3"><p className="text-sm whitespace-pre-wrap">{s.adl_summary}</p></div></>
+          )}
 
-          {/* 緊急連絡先 */}
+          {/* 現病と注意点 */}
+          {s.current_disease_notes && (
+            <><SectionTitle color="bg-purple-50 text-purple-800"><Heart size={14} className="inline mr-1" />現病と注意点</SectionTitle>
+            <div className="bg-white rounded-xl border p-3"><p className="text-sm whitespace-pre-wrap">{s.current_disease_notes}</p></div></>
+          )}
+
+          {/* 内服薬 */}
+          {s.oral_medications && (
+            <><SectionTitle color="bg-yellow-50 text-yellow-800"><Pill size={14} className="inline mr-1" />内服薬</SectionTitle>
+            <div className="bg-white rounded-xl border p-3"><p className="text-sm whitespace-pre-wrap">{s.oral_medications}</p></div></>
+          )}
+
+          {/* 特別な状況 */}
+          {s.special_situation && (
+            <><SectionTitle color="bg-blue-50 text-blue-800">特別な状況</SectionTitle>
+            <div className="bg-white rounded-xl border p-3"><p className="text-sm whitespace-pre-wrap">{s.special_situation}</p></div></>
+          )}
+
+          {/* 急変時の対応 */}
+          {s.sudden_change_response && (
+            <><SectionTitle color="bg-red-50 text-red-800"><AlertTriangle size={14} className="inline mr-1" />急変時の対応</SectionTitle>
+            <div className="bg-white rounded-xl border p-3"><p className="text-sm whitespace-pre-wrap">{s.sudden_change_response}</p></div></>
+          )}
+
+          {/* 避難場所 */}
+          {(s.evacuation_place_name || s.evacuation_place_address) && (
+            <><SectionTitle color="bg-orange-50 text-orange-800">避難場所</SectionTitle>
+            <div className="bg-white rounded-xl border p-3">
+              <Row label="名称" value={s.evacuation_place_name} />
+              <Row label="住所" value={s.evacuation_place_address} />
+              {s.evacuation_notes && <p className="text-xs text-gray-500 mt-2 whitespace-pre-wrap">{s.evacuation_notes}</p>}
+            </div></>
+          )}
+
+          {/* 緊急連絡先（5件まで） */}
           <SectionTitle color="bg-orange-50 text-orange-800"><Phone size={14} className="inline mr-1" />緊急連絡先</SectionTitle>
           <div className="bg-white rounded-xl border p-3 space-y-0">
-            <Row label="氏名①" value={s.emergency_contact1_name} />
-            <Row label="続柄" value={s.emergency_contact1_relation} />
-            <Row label="電話" value={s.emergency_contact1_phone} />
-            {s.emergency_contact2_name && <><hr className="my-2" /><Row label="氏名②" value={s.emergency_contact2_name} /><Row label="続柄" value={s.emergency_contact2_relation} /><Row label="電話" value={s.emergency_contact2_phone} /></>}
-            {s.emergency_contact3_name && <><hr className="my-2" /><Row label="氏名③" value={s.emergency_contact3_name} /><Row label="続柄" value={s.emergency_contact3_relation} /><Row label="電話" value={s.emergency_contact3_phone} /></>}
+            {[1, 2, 3, 4, 5].map((n) => {
+              const name = s[`emergency_contact${n}_name`];
+              if (!name) return null;
+              return (
+                <div key={n}>
+                  {n > 1 && <hr className="my-2" />}
+                  <Row label={`氏名${n}`} value={name} />
+                  <Row label="続柄" value={s[`emergency_contact${n}_relation`]} />
+                  <Row label="所在地" value={s[`emergency_contact${n}_address`]} />
+                  <Row label="連絡先" value={s[`emergency_contact${n}_phone`]} />
+                </div>
+              );
+            })}
           </div>
 
-          {/* 既往歴 */}
-          {(s.medical_history || s.current_illness) && (
-            <><SectionTitle color="bg-purple-50 text-purple-800"><Heart size={14} className="inline mr-1" />既往歴・現病歴</SectionTitle>
-            <div className="bg-white rounded-xl border p-3">
-              <Row label="既往歴" value={s.medical_history} />
-              <Row label="現病歴" value={s.current_illness} />
+          {/* 主治医 */}
+          <SectionTitle color="bg-blue-50 text-blue-800"><Hospital size={14} className="inline mr-1" />主治医</SectionTitle>
+          <div className="bg-white rounded-xl border p-3">
+            <Row label="医療機関" value={s.doctor_hospital} />
+            <Row label="氏名" value={s.doctor_name} />
+            <Row label="連絡先" value={s.doctor_phone} />
+            {s.doctor2_name && <><hr className="my-2" /><Row label="医療機関②" value={s.doctor2_hospital} /><Row label="氏名" value={s.doctor2_name} /><Row label="連絡先" value={s.doctor2_phone} /></>}
+          </div>
+
+          {/* 利用中サービス */}
+          {svcs.length > 0 && (
+            <><SectionTitle color="bg-green-50 text-green-800">利用中サービス</SectionTitle>
+            <div className="bg-white rounded-xl border divide-y">
+              {svcs.map((svc, i) => (
+                <div key={i} className="p-3 text-sm">
+                  <div className="font-medium">{svc.service_type}</div>
+                  <div className="text-gray-600">{svc.provider_name}</div>
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>{svc.phone}</span><span>{svc.schedule}</span>
+                  </div>
+                </div>
+              ))}
             </div></>
           )}
 
-          {/* ADL */}
-          <SectionTitle color="bg-green-50 text-green-800"><User size={14} className="inline mr-1" />ADL</SectionTitle>
-          <div className="bg-white rounded-xl border p-3">
-            <Row label="移動" value={s.adl_mobility} />
-            <Row label="食事" value={s.adl_eating} />
-            <Row label="排泄" value={s.adl_toileting} />
-            <Row label="入浴" value={s.adl_bathing} />
-            <Row label="更衣" value={s.adl_dressing} />
-            <Row label="認知" value={s.adl_cognition} />
-            <Row label="備考" value={s.adl_notes} />
-          </div>
-
-          {/* 服薬 */}
-          {(s.medications || s.medication_notes) && (
-            <><SectionTitle color="bg-yellow-50 text-yellow-800"><Pill size={14} className="inline mr-1" />服薬情報</SectionTitle>
-            <div className="bg-white rounded-xl border p-3">
-              <Row label="服薬一覧" value={s.medications} />
-              <Row label="注意事項" value={s.medication_notes} />
+          {/* 電動医療・介護機器 */}
+          {devs.length > 0 && (
+            <><SectionTitle color="bg-yellow-50 text-yellow-800">充電式を含む電動の医療・介護機器</SectionTitle>
+            <div className="bg-white rounded-xl border divide-y">
+              {devs.map((dev, i) => (
+                <div key={i} className="p-3 text-sm">
+                  <div className="font-medium">{dev.item}</div>
+                  <div className="text-gray-600">{dev.provider}</div>
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>{dev.phone}</span>{dev.notes && <span>{dev.notes}</span>}
+                  </div>
+                </div>
+              ))}
             </div></>
           )}
 
-          {/* 緊急時対応 */}
-          <SectionTitle color="bg-red-50 text-red-800"><AlertTriangle size={14} className="inline mr-1" />緊急時の対応</SectionTitle>
+          {/* 担当ケアマネ */}
+          <SectionTitle color="bg-gray-100 text-gray-800"><Shield size={14} className="inline mr-1" />担当ケアマネジャー</SectionTitle>
           <div className="bg-white rounded-xl border p-3">
-            <Row label="対応方法" value={s.emergency_instructions} />
-            <Row label="搬送先" value={s.hospital_preference} />
-          </div>
-
-          {/* ケアマネ */}
-          <SectionTitle color="bg-gray-100 text-gray-800"><Shield size={14} className="inline mr-1" />担当ケアマネ</SectionTitle>
-          <div className="bg-white rounded-xl border p-3">
-            <Row label="氏名" value={s.care_manager_name} />
             <Row label="事業所" value={s.care_manager_office} />
-            <Row label="電話" value={s.care_manager_phone} />
+            <Row label="氏名" value={s.care_manager_name} />
+            <Row label="連絡先" value={s.care_manager_phone} />
           </div>
-
-          {s.notes && (
-            <><SectionTitle color="bg-gray-100 text-gray-800">備考</SectionTitle>
-            <div className="bg-white rounded-xl border p-3"><p className="text-sm whitespace-pre-wrap">{s.notes}</p></div></>
-          )}
 
           <div className="h-8" />
         </div>
