@@ -1380,7 +1380,7 @@ export default function ClaimsPage() {
             className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-            更新
+            再読込
           </button>
 
           {/* Generate */}
