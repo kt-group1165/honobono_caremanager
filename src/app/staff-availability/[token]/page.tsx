@@ -1763,290 +1763,135 @@ function MyShiftTab({ staffId }: { staffId: string }) {
 
   return (
     <div className="space-y-4 pb-6">
-      {/* Month navigation */}
+      {/* Date navigation */}
       <div className="flex items-center justify-between">
         <button
           onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-          className="flex items-center justify-center w-12 h-12 rounded-xl border border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+          className="flex items-center justify-center w-10 h-10 rounded-xl border border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors"
         >
-          <ChevronLeft size={22} />
+          <ChevronLeft size={20} />
         </button>
-        <span className="text-lg font-bold text-gray-900">
-          {format(currentMonth, "yyyy年M月", { locale: ja })}
-        </span>
+        <label className="relative cursor-pointer">
+          <span className="text-lg font-bold text-gray-900 border-b-2 border-dashed border-blue-300 pb-0.5">
+            {format(currentMonth, "yyyy年M月", { locale: ja })}
+          </span>
+          <input
+            type="month"
+            value={format(currentMonth, "yyyy-MM")}
+            onChange={(e) => {
+              if (e.target.value) {
+                const [y, m] = e.target.value.split("-").map(Number);
+                setCurrentMonth(new Date(y, m - 1, 1));
+              }
+            }}
+            className="absolute inset-0 opacity-0 cursor-pointer"
+          />
+        </label>
         <button
           onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-          className="flex items-center justify-center w-12 h-12 rounded-xl border border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+          className="flex items-center justify-center w-10 h-10 rounded-xl border border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors"
         >
-          <ChevronRight size={22} />
+          <ChevronRight size={20} />
         </button>
+      </div>
+
+      {/* Monthly summary */}
+      <div className="rounded-xl bg-gray-50 border border-gray-200 p-3">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-600">今月の訪問件数</span>
+          <span className="font-bold text-gray-900 text-lg">{schedules.length}件</span>
+        </div>
       </div>
 
       {loading ? (
         <div className="flex h-40 items-center justify-center">
           <Loader2 size={28} className="animate-spin text-blue-500" />
         </div>
+      ) : schedules.length === 0 ? (
+        <div className="text-center py-12 text-gray-400">
+          <Calendar size={32} className="mx-auto mb-2 opacity-50" />
+          <p className="text-sm">今月の予定はありません</p>
+        </div>
       ) : (
-        <>
-          {/* Calendar grid */}
-          <div className="grid grid-cols-7 gap-0.5">
-            {/* DoW header */}
-            {DOW_LABELS.map((d, i) => (
-              <div
-                key={d}
-                className={cn(
-                  "text-center text-xs font-bold py-2",
-                  i === 0
-                    ? "text-red-500"
-                    : i === 6
-                    ? "text-blue-500"
-                    : "text-gray-500"
-                )}
-              >
-                {d}
-              </div>
-            ))}
-            {/* Leading blanks */}
-            {Array.from({ length: firstDow }).map((_, i) => (
-              <div key={`blank-${i}`} className="aspect-square" />
-            ))}
-            {/* Day cells */}
-            {days.map((day) => {
-              const dateStr = format(day, "yyyy-MM-dd");
-              const dow = getDay(day);
-              const isToday = isSameDay(day, new Date());
-              const isSelected = selectedDate === dateStr;
-              const count = visitCountMap[dateStr] || 0;
-              const types = serviceTypesForDate(dateStr);
-
+        /* 日付ごとにグループ化した予定リスト */
+        <div className="space-y-3">
+          {(() => {
+            // 日付でグループ化
+            const grouped: Record<string, VisitScheduleEntry[]> = {};
+            for (const s of schedules) {
+              if (!grouped[s.visit_date]) grouped[s.visit_date] = [];
+              grouped[s.visit_date].push(s);
+            }
+            return Object.entries(grouped).map(([dateStr, daySchedules]) => {
+              const dayDate = new Date(dateStr + "T00:00:00");
+              const dow = getDay(dayDate);
+              const isToday = isSameDay(dayDate, new Date());
               return (
-                <button
-                  key={dateStr}
-                  onClick={() =>
-                    setSelectedDate(isSelected ? null : dateStr)
-                  }
-                  className={cn(
-                    "aspect-square flex flex-col items-center justify-center rounded-lg transition-all relative min-h-[44px]",
-                    isSelected
-                      ? "bg-blue-100 ring-2 ring-blue-500"
-                      : count > 0
-                      ? "bg-blue-50"
-                      : "bg-white"
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "text-sm font-semibold leading-none",
-                      isToday
-                        ? "bg-blue-600 text-white w-7 h-7 rounded-full flex items-center justify-center"
-                        : dow === 0
-                        ? "text-red-500"
-                        : dow === 6
-                        ? "text-blue-500"
-                        : "text-gray-700"
-                    )}
-                  >
-                    {format(day, "d")}
-                  </span>
-                  {/* Record indicator */}
-                  {recordedDates.has(dateStr) && (
-                    <div className="absolute top-0.5 right-0.5">
-                      <Check size={10} className="text-green-500" />
+                <div key={dateStr} className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+                  {/* 日付ヘッダー */}
+                  <div className={cn(
+                    "flex items-center justify-between px-4 py-2.5 border-b",
+                    isToday ? "bg-blue-50" : "bg-gray-50"
+                  )}>
+                    <div className="flex items-center gap-2">
+                      <span className={cn(
+                        "text-base font-bold",
+                        isToday ? "text-blue-700" : dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-gray-900"
+                      )}>
+                        {format(dayDate, "M/d(E)", { locale: ja })}
+                      </span>
+                      {isToday && <span className="text-[10px] font-bold bg-blue-600 text-white px-1.5 py-0.5 rounded">今日</span>}
                     </div>
-                  )}
-                  {/* Service type color dots */}
-                  {count > 0 && (
-                    <div className="flex items-center gap-0.5 mt-0.5">
-                      {types.slice(0, 3).map((t, idx) => {
-                        const color = getServiceColor(t);
-                        return (
-                          <div
-                            key={idx}
-                            className={cn(
-                              "w-1.5 h-1.5 rounded-full",
-                              t === "身体介護"
-                                ? "bg-orange-400"
-                                : t === "生活援助"
-                                ? "bg-green-500"
-                                : t === "身体・生活"
-                                ? "bg-purple-500"
-                                : "bg-sky-500"
-                            )}
-                          />
-                        );
-                      })}
-                      {count > 1 && (
-                        <span className="text-[9px] text-gray-500 ml-0.5 font-medium">
-                          {count}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </button>
+                    <span className="text-xs text-gray-500">{daySchedules.length}件</span>
+                  </div>
+                  {/* 予定カード */}
+                  <div className="divide-y divide-gray-100">
+                    {daySchedules.map((sched) => {
+                      const color = getServiceColor(sched.service_type);
+                      const recorded = hasRecord(sched);
+                      return (
+                        <div key={sched.id} className="px-4 py-3">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold text-gray-900 tabular-nums">
+                                  {sched.start_time.slice(0, 5)}~{sched.end_time.slice(0, 5)}
+                                </span>
+                                <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", color.bg, color.text, "border", color.border)}>
+                                  {sched.service_type}
+                                </span>
+                                {recorded && (
+                                  <span className="text-[10px] font-bold bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full">記録済</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 mt-1">
+                                <User size={12} className="text-gray-400" />
+                                <span className="text-sm text-gray-700">{sched.user_name}</span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => setRecordFormTarget(sched)}
+                              className={cn(
+                                "flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold active:scale-95 transition-all shrink-0 ml-2",
+                                recorded
+                                  ? "bg-green-50 text-green-700 border border-green-200 active:bg-green-100"
+                                  : "bg-blue-600 text-white active:bg-blue-700"
+                              )}
+                            >
+                              {recorded ? (<><Edit3 size={12} />編集</>) : (<><ClipboardList size={12} />記録</>)}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               );
-            })}
-          </div>
-
-          {/* Service type legend */}
-          <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-gray-500">
-            {Object.entries(SERVICE_TYPE_COLORS).map(([type, colors]) => (
-              <span key={type} className="flex items-center gap-1">
-                <span
-                  className={cn(
-                    "w-3 h-3 rounded border",
-                    colors.bg,
-                    colors.border
-                  )}
-                />
-                {type}
-              </span>
-            ))}
-          </div>
-
-          {/* Monthly summary */}
-          <div className="rounded-xl bg-gray-50 border border-gray-200 p-4">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600">今月の訪問件数</span>
-              <span className="font-bold text-gray-900 text-lg">
-                {schedules.length}件
-              </span>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Selected day detail - vertical timeline */}
-      {selectedDate && (
-        <div className="rounded-2xl border bg-white shadow-lg overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
-            <h3 className="text-base font-bold text-gray-900">
-              {format(
-                new Date(selectedDate + "T00:00:00"),
-                "M月d日(E)",
-                { locale: ja }
-              )}
-              の予定
-            </h3>
-            <button
-              onClick={() => setSelectedDate(null)}
-              className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 active:bg-gray-200"
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          <div className="px-4 py-3">
-            {selectedSchedules.length === 0 ? (
-              <div className="text-center py-8 text-gray-400">
-                <Calendar size={32} className="mx-auto mb-2 opacity-50" />
-                <p className="text-sm">この日の予定はありません</p>
-              </div>
-            ) : (
-              <div className="space-y-0">
-                {selectedSchedules.map((sched, idx) => {
-                  const color = getServiceColor(sched.service_type);
-                  const lineColor =
-                    sched.service_type === "身体介護"
-                      ? "bg-orange-400"
-                      : sched.service_type === "生活援助"
-                      ? "bg-green-500"
-                      : sched.service_type === "身体・生活"
-                      ? "bg-purple-500"
-                      : sched.service_type === "通院等乗降介助"
-                      ? "bg-sky-500"
-                      : "bg-gray-400";
-                  const dotColor = lineColor.replace("bg-", "text-").replace("-400", "-500").replace("-500", "-500");
-                  const isLast = idx === selectedSchedules.length - 1;
-
-                  return (
-                    <div key={sched.id} className="flex gap-3">
-                      {/* Timeline track */}
-                      <div className="flex flex-col items-center w-5 shrink-0">
-                        {/* Start dot */}
-                        <div className={cn("w-2.5 h-2.5 rounded-full shrink-0 mt-1", lineColor)} />
-                        {/* Connecting line */}
-                        <div className={cn("w-0.5 flex-1 min-h-[3rem]", lineColor)} />
-                        {/* End dot */}
-                        <div className={cn("w-2.5 h-2.5 rounded-full shrink-0 mb-1", lineColor)} />
-                      </div>
-
-                      {/* Content */}
-                      <div className={cn("flex-1 pb-5", isLast ? "pb-2" : "")}>
-                        {/* Start time + name + service type */}
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-sm font-bold text-gray-900 tabular-nums">
-                            {sched.start_time.slice(0, 5)}
-                          </span>
-                          <span className="text-sm font-semibold text-gray-800">
-                            {sched.user_name}
-                          </span>
-                          {sched.service_type !== "身体介護" && sched.service_type !== "生活援助" && (
-                            <span className={cn("text-xs", color.text)}>
-                              ({sched.service_type.replace("通院等乗降介助", "障")})
-                            </span>
-                          )}
-                        </div>
-                        {/* Service badge for non-default types */}
-                        {(sched.service_type === "身体・生活" || sched.service_type === "通院等乗降介助") && (
-                          <span
-                            className={cn(
-                              "inline-block text-[10px] font-medium px-2 py-0.5 rounded-full mt-1",
-                              color.bg, color.text, "border", color.border
-                            )}
-                          >
-                            {sched.service_type}
-                          </span>
-                        )}
-                        {sched.status === "changed" && (
-                          <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200 mt-1 ml-1">
-                            変更あり
-                          </span>
-                        )}
-                        {/* Record badge */}
-                        {hasRecord(sched) && (
-                          <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 mt-1 ml-1">
-                            記録済
-                          </span>
-                        )}
-                        {sched.notes && (
-                          <p className="text-xs text-gray-500 mt-1">{sched.notes}</p>
-                        )}
-                        {/* End time + record button */}
-                        <div className="flex items-center justify-between mt-auto pt-2">
-                          <span className="text-sm text-gray-500 tabular-nums">
-                            {sched.end_time.slice(0, 5)}
-                          </span>
-                          <button
-                            onClick={() => setRecordFormTarget(sched)}
-                            className={cn(
-                              "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold active:scale-95 transition-all",
-                              hasRecord(sched)
-                                ? "bg-green-50 text-green-700 border border-green-200 active:bg-green-100"
-                                : "bg-blue-600 text-white active:bg-blue-700"
-                            )}
-                          >
-                            {hasRecord(sched) ? (
-                              <>
-                                <Edit3 size={12} />
-                                編集
-                              </>
-                            ) : (
-                              <>
-                                <ClipboardList size={12} />
-                                記録
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+            });
+          })()}
         </div>
       )}
+
       {/* Care Record Modal */}
       {recordFormTarget && (
         <CareRecordModal
