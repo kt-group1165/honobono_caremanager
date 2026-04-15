@@ -212,19 +212,73 @@ export default function EmergencySheetsPage() {
       supabase.from("kaigo_care_plans").select("id").eq("user_id", userId).eq("status", "active").order("created_at", { ascending: false }).limit(1).single(),
     ]);
 
-    // ケアプランサービスから利用中サービスを取得
-    if (activePlan?.id && (!s.services_in_use || s.services_in_use.length === 0)) {
-      const { data: planServices } = await supabase
-        .from("kaigo_care_plan_services")
-        .select("service_type, service_content, frequency, provider")
-        .eq("care_plan_id", activePlan.id);
-      if (planServices && planServices.length > 0) {
-        s.services_in_use = planServices.map((ps: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-          service_type: ps.service_type || "",
-          provider_name: ps.provider || "",
-          phone: "",
-          schedule: ps.frequency || "",
-        }));
+    // ケアプランサービスから利用中サービスを取得（2ソース統合）
+    if (!s.services_in_use || s.services_in_use.length === 0) {
+      const combined: { service_type: string; provider_name: string; phone: string; schedule: string }[] = [];
+
+      // 1) 旧形式 kaigo_care_plan_services
+      if (activePlan?.id) {
+        const { data: planServices } = await supabase
+          .from("kaigo_care_plan_services")
+          .select("service_type, service_content, frequency, provider")
+          .eq("care_plan_id", activePlan.id);
+        (planServices || []).forEach((ps: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+          if (ps.service_type || ps.provider) {
+            combined.push({
+              service_type: ps.service_type || "",
+              provider_name: ps.provider || "",
+              phone: "",
+              schedule: ps.frequency || "",
+            });
+          }
+        });
+      }
+
+      // 2) 第2表（care-plan-2）のJSONB content.blocks から
+      const { data: reportDocs } = await supabase
+        .from("kaigo_report_documents")
+        .select("content, created_at")
+        .eq("user_id", userId)
+        .eq("report_type", "care-plan-2")
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (reportDocs && reportDocs.length > 0) {
+        const content = reportDocs[0].content as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+        const blocks = Array.isArray(content?.blocks) ? content.blocks : [];
+        for (const block of blocks) {
+          for (const goal of (block.goals || [])) {
+            for (const svc of (goal.services || [])) {
+              if (svc.type || svc.provider) {
+                // 重複除去: 同じ事業所・種別があればスキップ
+                const dup = combined.find((c) => c.service_type === svc.type && c.provider_name === svc.provider);
+                if (!dup) {
+                  combined.push({
+                    service_type: svc.type || "",
+                    provider_name: svc.provider || "",
+                    phone: "",
+                    schedule: svc.frequency || "",
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // 3) 事業所マスタから電話番号を紐付け
+      if (combined.length > 0) {
+        const providerNames = combined.map((c) => c.provider_name).filter(Boolean);
+        if (providerNames.length > 0) {
+          const { data: provRows } = await supabase
+            .from("kaigo_service_providers")
+            .select("provider_name, phone")
+            .in("provider_name", providerNames);
+          const phoneMap = new Map<string, string>();
+          (provRows || []).forEach((p: any) => phoneMap.set(p.provider_name, p.phone || "")); // eslint-disable-line @typescript-eslint/no-explicit-any
+          combined.forEach((c) => { if (!c.phone && phoneMap.has(c.provider_name)) c.phone = phoneMap.get(c.provider_name)!; });
+        }
+        s.services_in_use = combined;
       }
     }
 

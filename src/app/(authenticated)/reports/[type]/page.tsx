@@ -290,49 +290,56 @@ function ProviderTypeSelector({ type, provider, onTypeChange, onProviderChange }
     }
   };
 
+  const selectCls = "w-full rounded border border-gray-300 pl-2 pr-6 py-1 text-sm bg-white appearance-none focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 truncate";
+  const wrapCls = "relative";
+  const arrowCls = "pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px]";
+
   return (
     <>
       {/* サービス種別 */}
-      <div className="flex flex-col gap-0.5">
+      <div className="flex flex-col gap-0.5 min-w-0">
         <label className="text-xs font-medium text-gray-500">サービス種別</label>
-        <select
-          value={type}
-          onChange={(e) => handleTypeChange(e.target.value)}
-          className="rounded border border-gray-300 px-1 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-        >
-          <option value="">—</option>
-          {categories.map((c) => {
-            // 事業所が選択されている場合、その事業所が持つ種別のみ濃色、他はグレー
-            const available = providerAvailableCats.length === 0 || providerAvailableCats.includes(c.code);
-            return (
-              <option key={c.code} value={c.name} style={{ color: available ? "inherit" : "#999" }}>
-                {c.name}{!available && providerAvailableCats.length > 0 ? " (該当なし)" : ""}
-              </option>
-            );
-          })}
-          {/* 現在の値がマスタにない場合の保持 */}
-          {type && !categories.some((c) => c.name === type) && (
-            <option value={type}>{type}（手入力）</option>
-          )}
-        </select>
+        <div className={wrapCls}>
+          <select
+            value={type}
+            onChange={(e) => handleTypeChange(e.target.value)}
+            className={selectCls}
+          >
+            <option value="">—</option>
+            {categories.map((c) => {
+              const available = providerAvailableCats.length === 0 || providerAvailableCats.includes(c.code);
+              return (
+                <option key={c.code} value={c.name} style={{ color: available ? "inherit" : "#999" }}>
+                  {c.name}{!available && providerAvailableCats.length > 0 ? " (該当なし)" : ""}
+                </option>
+              );
+            })}
+            {type && !categories.some((c) => c.name === type) && (
+              <option value={type}>{type}（手入力）</option>
+            )}
+          </select>
+          <span className={arrowCls}>▼</span>
+        </div>
       </div>
       {/* 事業所 */}
-      <div className="flex flex-col gap-0.5">
+      <div className="flex flex-col gap-0.5 min-w-0">
         <label className="text-xs font-medium text-gray-500">※2 事業所</label>
-        <select
-          value={provider}
-          onChange={(e) => handleProviderChange(e.target.value)}
-          className="rounded border border-gray-300 px-1 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-        >
-          <option value="">—</option>
-          {filteredProviders.map((p) => (
-            <option key={p.id} value={p.provider_name}>{p.provider_name}</option>
-          ))}
-          {/* 現在の値がフィルタ外・マスタ外の場合の保持 */}
-          {provider && !filteredProviders.some((p) => p.provider_name === provider) && (
-            <option value={provider}>{provider}{providers.some((p) => p.provider_name === provider) ? "（種別外）" : "（手入力）"}</option>
-          )}
-        </select>
+        <div className={wrapCls}>
+          <select
+            value={provider}
+            onChange={(e) => handleProviderChange(e.target.value)}
+            className={selectCls}
+          >
+            <option value="">—</option>
+            {filteredProviders.map((p) => (
+              <option key={p.id} value={p.provider_name}>{p.provider_name}</option>
+            ))}
+            {provider && !filteredProviders.some((p) => p.provider_name === provider) && (
+              <option value={provider}>{provider}{providers.some((p) => p.provider_name === provider) ? "（種別外）" : "（手入力）"}</option>
+            )}
+          </select>
+          <span className={arrowCls}>▼</span>
+        </div>
       </div>
     </>
   );
@@ -880,10 +887,23 @@ function EditFormCarePlan2({ content, onChange }: {
               </div>
 
               {goal.services.map((svc, si) => (
-                <div key={si} className="ml-4 grid grid-cols-7 gap-1 rounded border border-gray-200 bg-white p-1.5 relative">
+                <div
+                  key={si}
+                  className="ml-4 grid gap-2 rounded border border-gray-200 bg-white p-1.5 relative"
+                  style={{ gridTemplateColumns: "2fr 0.5fr 1.5fr 1.8fr 1fr 1fr" }}
+                >
                   {goal.services.length > 1 && <button onClick={() => removeSvc(bi, gi, si)} className="absolute right-1 top-0.5 text-gray-300 hover:text-red-400"><X size={10} /></button>}
-                  <FI label="サービス内容" value={svc.content} onChange={(v) => updateSvc(bi, gi, si, "content", v)} className="col-span-2" />
-                  <FI label="※1" value={svc.insurance_flag} onChange={(v) => updateSvc(bi, gi, si, "insurance_flag", v)} />
+                  <FI label="サービス内容" value={svc.content} onChange={(v) => updateSvc(bi, gi, si, "content", v)} />
+                  {/* ※1 を中央寄せ・コンパクトに */}
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-xs font-medium text-gray-500 text-center">※1</label>
+                    <input
+                      type="text"
+                      value={svc.insurance_flag}
+                      onChange={(e) => updateSvc(bi, gi, si, "insurance_flag", e.target.value)}
+                      className="rounded border border-gray-300 px-1 py-1 text-sm text-center focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
                   <ProviderTypeSelector
                     type={svc.type}
                     provider={svc.provider}
