@@ -273,8 +273,9 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
           (provRows || []).forEach((p: any) => phoneMap.set(p.provider_name, p.phone || "")); // eslint-disable-line @typescript-eslint/no-explicit-any
           collected.forEach((c) => { if (!c.phone && phoneMap.has(c.provider_name)) c.phone = phoneMap.get(c.provider_name)!; });
         }
-        merged.services_in_use = collected;
       }
+      // 第2表の内容で完全置換（空なら空）
+      merged.services_in_use = collected;
     }
 
     setSheetData({

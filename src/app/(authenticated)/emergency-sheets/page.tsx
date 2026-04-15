@@ -253,8 +253,8 @@ export default function EmergencySheetsPage() {
         }
       }
 
+      // 事業所マスタから電話番号を紐付け
       if (collected.length > 0) {
-        // 事業所マスタから電話番号を紐付け
         const providerNames = collected.map((c) => c.provider_name).filter(Boolean);
         if (providerNames.length > 0) {
           const { data: provRows } = await supabase
@@ -265,10 +265,9 @@ export default function EmergencySheetsPage() {
           (provRows || []).forEach((p: any) => phoneMap.set(p.provider_name, p.phone || "")); // eslint-disable-line @typescript-eslint/no-explicit-any
           collected.forEach((c) => { if (!c.phone && phoneMap.has(c.provider_name)) c.phone = phoneMap.get(c.provider_name)!; });
         }
-        // 第2表データで完全上書き
-        s.services_in_use = collected;
       }
-      // 第2表にデータが無ければ既存の services_in_use をそのまま保持
+      // 第2表の内容で完全置換（空なら空になる）
+      s.services_in_use = collected;
     }
 
     // 電話番号
