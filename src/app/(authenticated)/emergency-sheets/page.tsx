@@ -128,6 +128,36 @@ const emptySheet = (userId: string): EmergencySheet => ({
 
 const inputClass = "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
+// ─── Module-level components (must be outside main to keep focus) ─────────────
+
+function Section({ icon, title, color, children }: { icon: React.ReactNode; title: string; color: string; children: React.ReactNode }) {
+  return (
+    <section className="mb-6">
+      <h3 className={`flex items-center gap-2 text-sm font-bold mb-3 px-3 py-2 rounded-lg ${color}`}>
+        {icon}{title}
+      </h3>
+      <div className="space-y-3 px-1">{children}</div>
+    </section>
+  );
+}
+
+function Field({
+  label, value, onChange, placeholder, type = "text", colSpan,
+}: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string; colSpan?: boolean;
+}) {
+  return (
+    <div className={colSpan ? "col-span-2" : ""}>
+      {label && <label className="mb-1 block text-xs font-medium text-gray-700">{label}</label>}
+      {type === "textarea" ? (
+        <textarea rows={3} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={inputClass} />
+      ) : (
+        <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={inputClass} />
+      )}
+    </div>
+  );
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function EmergencySheetsPage() {
@@ -277,27 +307,6 @@ export default function EmergencySheetsPage() {
 
   const handlePrint = () => window.print();
 
-  // Form section helper
-  const Section = ({ icon, title, color, children }: { icon: React.ReactNode; title: string; color: string; children: React.ReactNode }) => (
-    <section className="mb-6">
-      <h3 className={`flex items-center gap-2 text-sm font-bold mb-3 px-3 py-2 rounded-lg ${color}`}>
-        {icon}{title}
-      </h3>
-      <div className="space-y-3 px-1">{children}</div>
-    </section>
-  );
-
-  const Field = ({ label, field, placeholder, type = "text", colSpan }: { label: string; field: keyof EmergencySheet; placeholder?: string; type?: string; colSpan?: boolean }) => (
-    <div className={colSpan ? "col-span-2" : ""}>
-      <label className="mb-1 block text-xs font-medium text-gray-700">{label}</label>
-      {type === "textarea" ? (
-        <textarea rows={3} value={(sheet?.[field] as string) ?? ""} onChange={(e) => updateField(field, e.target.value)} placeholder={placeholder} className={inputClass} />
-      ) : (
-        <input type={type} value={(sheet?.[field] as string) ?? ""} onChange={(e) => updateField(field, e.target.value)} placeholder={placeholder} className={inputClass} />
-      )}
-    </div>
-  );
-
   return (
     <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
       <UserSidebar selectedUserId={selectedUserId} onSelectUser={setSelectedUserId} />
@@ -369,45 +378,45 @@ export default function EmergencySheetsPage() {
                     <div className="col-span-2"><span className="text-gray-500">住所:</span> {userInfo.address ?? "未登録"}</div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="固定電話" field="home_phone" type="tel" />
-                    <Field label="携帯電話" field="mobile_phone" type="tel" />
+                    <Field label="固定電話" value={(sheet.home_phone as string) ?? ""} onChange={(v) => updateField("home_phone", v)} type="tel" />
+                    <Field label="携帯電話" value={(sheet.mobile_phone as string) ?? ""} onChange={(v) => updateField("mobile_phone", v)} type="tel" />
                   </div>
-                  <Field label="同居家族" field="family_members" placeholder="妻・次男" />
+                  <Field label="同居家族" value={(sheet.family_members as string) ?? ""} onChange={(v) => updateField("family_members", v)} placeholder="妻・次男" />
                 </Section>
               )}
 
               {/* ADL（簡潔に） */}
               <Section icon={<User size={16} />} title="ADL（簡潔に）" color="bg-green-50 text-green-800">
-                <Field label="" field="adl_summary" type="textarea" placeholder="杖歩行、排泄自立、認知症なし..." />
+                <Field label="" value={(sheet.adl_summary as string) ?? ""} onChange={(v) => updateField("adl_summary", v)} type="textarea" placeholder="杖歩行、排泄自立、認知症なし..." />
               </Section>
 
               {/* 現病と注意点 */}
               <Section icon={<Heart size={16} />} title="現病と注意点" color="bg-purple-50 text-purple-800">
-                <Field label="" field="current_disease_notes" type="textarea" placeholder="高血圧、糖尿病。血糖値に注意..." />
+                <Field label="" value={(sheet.current_disease_notes as string) ?? ""} onChange={(v) => updateField("current_disease_notes", v)} type="textarea" placeholder="高血圧、糖尿病。血糖値に注意..." />
               </Section>
 
               {/* 内服薬 */}
               <Section icon={<Pill size={16} />} title="内服薬" color="bg-yellow-50 text-yellow-800">
-                <Field label="" field="oral_medications" type="textarea" placeholder="アムロジピン5mg 朝食後&#10;メトホルミン250mg 朝夕食後..." />
+                <Field label="" value={(sheet.oral_medications as string) ?? ""} onChange={(v) => updateField("oral_medications", v)} type="textarea" placeholder="アムロジピン5mg 朝食後&#10;メトホルミン250mg 朝夕食後..." />
               </Section>
 
               {/* 特別な状況 */}
               <Section icon={<FileText size={16} />} title="特別な状況" color="bg-blue-50 text-blue-800">
-                <Field label="" field="special_situation" type="textarea" placeholder="ペースメーカー使用、透析中..." />
+                <Field label="" value={(sheet.special_situation as string) ?? ""} onChange={(v) => updateField("special_situation", v)} type="textarea" placeholder="ペースメーカー使用、透析中..." />
               </Section>
 
               {/* 急変時の対応 */}
               <Section icon={<AlertTriangle size={16} />} title="急変時の対応" color="bg-red-50 text-red-800">
-                <Field label="" field="sudden_change_response" type="textarea" placeholder="①かかりつけ医に連絡&#10;②家族に連絡&#10;③状況により119番..." />
+                <Field label="" value={(sheet.sudden_change_response as string) ?? ""} onChange={(v) => updateField("sudden_change_response", v)} type="textarea" placeholder="①かかりつけ医に連絡&#10;②家族に連絡&#10;③状況により119番..." />
               </Section>
 
               {/* 避難場所 */}
               <Section icon={<FileText size={16} />} title="避難場所" color="bg-orange-50 text-orange-800">
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="避難場所（名称）" field="evacuation_place_name" placeholder="○○小学校" />
-                  <Field label="避難場所（住所）" field="evacuation_place_address" />
+                  <Field label="避難場所（名称）" value={(sheet.evacuation_place_name as string) ?? ""} onChange={(v) => updateField("evacuation_place_name", v)} placeholder="○○小学校" />
+                  <Field label="避難場所（住所）" value={(sheet.evacuation_place_address as string) ?? ""} onChange={(v) => updateField("evacuation_place_address", v)} />
                 </div>
-                <Field label="避難時の注意事項・持参するもの・停電リスクなど" field="evacuation_notes" type="textarea" />
+                <Field label="避難時の注意事項・持参するもの・停電リスクなど" value={(sheet.evacuation_notes as string) ?? ""} onChange={(v) => updateField("evacuation_notes", v)} type="textarea" />
               </Section>
 
               {/* 緊急連絡先（5件） */}
@@ -417,10 +426,10 @@ export default function EmergencySheetsPage() {
                     {n > 1 && <hr className="my-2" />}
                     <p className="text-xs text-gray-500 mb-1">連絡先{n}</p>
                     <div className="grid grid-cols-4 gap-2">
-                      <Field label="氏名" field={`emergency_contact${n}_name` as keyof EmergencySheet} />
-                      <Field label="続柄" field={`emergency_contact${n}_relation` as keyof EmergencySheet} />
-                      <Field label="所在地" field={`emergency_contact${n}_address` as keyof EmergencySheet} />
-                      <Field label="連絡先" field={`emergency_contact${n}_phone` as keyof EmergencySheet} type="tel" />
+                      <Field label="氏名" value={(sheet[`emergency_contact${n}_name` as keyof EmergencySheet] as string) ?? ""} onChange={(v) => updateField(`emergency_contact${n}_name` as keyof EmergencySheet, v)} />
+                      <Field label="続柄" value={(sheet[`emergency_contact${n}_relation` as keyof EmergencySheet] as string) ?? ""} onChange={(v) => updateField(`emergency_contact${n}_relation` as keyof EmergencySheet, v)} />
+                      <Field label="所在地" value={(sheet[`emergency_contact${n}_address` as keyof EmergencySheet] as string) ?? ""} onChange={(v) => updateField(`emergency_contact${n}_address` as keyof EmergencySheet, v)} />
+                      <Field label="連絡先" value={(sheet[`emergency_contact${n}_phone` as keyof EmergencySheet] as string) ?? ""} onChange={(v) => updateField(`emergency_contact${n}_phone` as keyof EmergencySheet, v)} type="tel" />
                     </div>
                   </div>
                 ))}
@@ -430,14 +439,14 @@ export default function EmergencySheetsPage() {
               {/* 主治医 */}
               <Section icon={<Hospital size={16} />} title="主治医" color="bg-blue-50 text-blue-800">
                 <div className="grid grid-cols-3 gap-3">
-                  <Field label="医療機関名" field="doctor_hospital" />
-                  <Field label="氏名" field="doctor_name" />
-                  <Field label="連絡先" field="doctor_phone" type="tel" />
+                  <Field label="医療機関名" value={(sheet.doctor_hospital as string) ?? ""} onChange={(v) => updateField("doctor_hospital", v)} />
+                  <Field label="氏名" value={(sheet.doctor_name as string) ?? ""} onChange={(v) => updateField("doctor_name", v)} />
+                  <Field label="連絡先" value={(sheet.doctor_phone as string) ?? ""} onChange={(v) => updateField("doctor_phone", v)} type="tel" />
                 </div>
                 <div className="grid grid-cols-3 gap-3 mt-2">
-                  <Field label="医療機関名②" field="doctor2_hospital" />
-                  <Field label="氏名" field="doctor2_name" />
-                  <Field label="連絡先" field="doctor2_phone" type="tel" />
+                  <Field label="医療機関名②" value={(sheet.doctor2_hospital as string) ?? ""} onChange={(v) => updateField("doctor2_hospital", v)} />
+                  <Field label="氏名" value={(sheet.doctor2_name as string) ?? ""} onChange={(v) => updateField("doctor2_name", v)} />
+                  <Field label="連絡先" value={(sheet.doctor2_phone as string) ?? ""} onChange={(v) => updateField("doctor2_phone", v)} type="tel" />
                 </div>
               </Section>
 
@@ -504,9 +513,9 @@ export default function EmergencySheetsPage() {
               {/* 担当ケアマネジャー */}
               <Section icon={<FileText size={16} />} title="担当ケアマネジャー" color="bg-gray-100 text-gray-800">
                 <div className="grid grid-cols-3 gap-3">
-                  <Field label="事業所名" field="care_manager_office" />
-                  <Field label="氏名" field="care_manager_name" />
-                  <Field label="連絡先" field="care_manager_phone" type="tel" />
+                  <Field label="事業所名" value={(sheet.care_manager_office as string) ?? ""} onChange={(v) => updateField("care_manager_office", v)} />
+                  <Field label="氏名" value={(sheet.care_manager_name as string) ?? ""} onChange={(v) => updateField("care_manager_name", v)} />
+                  <Field label="連絡先" value={(sheet.care_manager_phone as string) ?? ""} onChange={(v) => updateField("care_manager_phone", v)} type="tel" />
                 </div>
               </Section>
             </div>
