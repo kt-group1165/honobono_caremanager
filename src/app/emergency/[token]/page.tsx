@@ -241,11 +241,11 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
 
       const { data: reportDocs } = await supabase
         .from("kaigo_report_documents")
-        .select("content")
+        .select("content, updated_at")
         .eq("user_id", userId)
         .eq("report_type", "care-plan-2")
-        .order("created_at", { ascending: false })
-        .limit(5);
+        .order("updated_at", { ascending: false })
+        .limit(1);
       for (const doc of (reportDocs || [])) {
         const content = doc.content as any; // eslint-disable-line @typescript-eslint/no-explicit-any
         const blockArr = Array.isArray(content?.needs_blocks) ? content.needs_blocks
