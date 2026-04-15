@@ -263,25 +263,32 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
         .eq("report_type", "care-plan-2")
         .order("created_at", { ascending: false })
         .limit(5);
+      const addSvc = (svc: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+        if (!svc) return;
+        if (!(svc.type || svc.provider)) return;
+        const dup = combined.find((c) => c.service_type === (svc.type || "") && c.provider_name === (svc.provider || ""));
+        if (!dup) {
+          combined.push({
+            service_type: svc.type || "",
+            provider_name: svc.provider || "",
+            phone: "",
+            schedule: svc.frequency || "",
+          });
+        }
+      };
       for (const doc of (reportDocs || [])) {
         const content = doc.content as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-        const blocks = Array.isArray(content?.blocks) ? content.blocks : [];
-        for (const block of blocks) {
-          for (const goal of (block.goals || [])) {
-            for (const svc of (goal.services || [])) {
-              if (svc.type || svc.provider) {
-                const dup = combined.find((c) => c.service_type === (svc.type || "") && c.provider_name === (svc.provider || ""));
-                if (!dup) {
-                  combined.push({
-                    service_type: svc.type || "",
-                    provider_name: svc.provider || "",
-                    phone: "",
-                    schedule: svc.frequency || "",
-                  });
-                }
-              }
+        const blockArr = Array.isArray(content?.needs_blocks) ? content.needs_blocks
+          : Array.isArray(content?.blocks) ? content.blocks
+          : null;
+        if (blockArr) {
+          for (const block of blockArr) {
+            for (const goal of (block.goals || [])) {
+              for (const svc of (goal.services || [])) addSvc(svc);
             }
           }
+        } else if (Array.isArray(content?.services)) {
+          for (const svc of content.services) addSvc(svc);
         }
       }
 

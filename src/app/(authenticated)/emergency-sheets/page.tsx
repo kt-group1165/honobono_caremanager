@@ -254,25 +254,34 @@ export default function EmergencySheetsPage() {
         .order("created_at", { ascending: false })
         .limit(5);  // 複数プランから取得
 
+      const addSvc = (svc: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+        if (!svc) return;
+        if (!(svc.type || svc.provider)) return;
+        const dup = combined.find((c) => c.service_type === (svc.type || "") && c.provider_name === (svc.provider || ""));
+        if (!dup) {
+          combined.push({
+            service_type: svc.type || "",
+            provider_name: svc.provider || "",
+            phone: "",
+            schedule: svc.frequency || "",
+          });
+        }
+      };
       for (const doc of (reportDocs || [])) {
         const content = doc.content as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-        const blocks = Array.isArray(content?.blocks) ? content.blocks : [];
-        for (const block of blocks) {
-          for (const goal of (block.goals || [])) {
-            for (const svc of (goal.services || [])) {
-              if (svc.type || svc.provider) {
-                const dup = combined.find((c) => c.service_type === (svc.type || "") && c.provider_name === (svc.provider || ""));
-                if (!dup) {
-                  combined.push({
-                    service_type: svc.type || "",
-                    provider_name: svc.provider || "",
-                    phone: "",
-                    schedule: svc.frequency || "",
-                  });
-                }
-              }
+        // 第2表の構造は3パターン: needs_blocks / blocks / services 直下
+        const blockArr = Array.isArray(content?.needs_blocks) ? content.needs_blocks
+          : Array.isArray(content?.blocks) ? content.blocks
+          : null;
+        if (blockArr) {
+          for (const block of blockArr) {
+            for (const goal of (block.goals || [])) {
+              for (const svc of (goal.services || [])) addSvc(svc);
             }
           }
+        } else if (Array.isArray(content?.services)) {
+          // 旧々形式: content.services に直接配列
+          for (const svc of content.services) addSvc(svc);
         }
       }
 
