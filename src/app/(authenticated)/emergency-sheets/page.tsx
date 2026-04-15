@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { UserSidebar } from "@/components/users/user-sidebar";
@@ -161,7 +161,7 @@ function Field({
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function EmergencySheetsPage() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [sheet, setSheet] = useState<EmergencySheet | null>(null);

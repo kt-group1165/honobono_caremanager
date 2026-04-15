@@ -170,6 +170,137 @@ function FI({ label, value, onChange, textarea, rows = 3, className = "" }: {
   );
 }
 
+// ── Provider/Type Linked Selector (マスタ連動) ──────────────────────────────
+// 種別⇔事業所が双方向に連動する選択フィールド
+type ProviderRow = { id: string; provider_name: string; service_categories: string[] };
+type CategoryRow = { code: string; name: string };
+
+// モジュールレベルでキャッシュ（複数のインスタンスで共有）
+let __providerCache: ProviderRow[] | null = null;
+let __categoryCache: CategoryRow[] | null = null;
+let __cacheLoading: Promise<void> | null = null;
+
+async function loadProviderMasterCache() {
+  if (__providerCache && __categoryCache) return;
+  if (__cacheLoading) { await __cacheLoading; return; }
+  __cacheLoading = (async () => {
+    const supabase = createClient();
+    const [{ data: provs }, { data: codes }] = await Promise.all([
+      supabase.from("kaigo_service_providers").select("id, provider_name, service_categories").eq("status", "active").order("provider_name"),
+      supabase.from("kaigo_service_codes").select("service_category, service_category_name"),
+    ]);
+    __providerCache = (provs || []) as ProviderRow[];
+    const catMap = new Map<string, string>();
+    (codes || []).forEach((c: Record<string, unknown>) => {
+      catMap.set(String(c.service_category), String(c.service_category_name));
+    });
+    __categoryCache = Array.from(catMap.entries()).map(([code, name]) => ({ code, name }))
+      .sort((a, b) => a.code.localeCompare(b.code));
+  })();
+  await __cacheLoading;
+  __cacheLoading = null;
+}
+
+function ProviderTypeSelector({ type, provider, onTypeChange, onProviderChange }: {
+  type: string; provider: string;
+  onTypeChange: (v: string) => void;
+  onProviderChange: (v: string) => void;
+}) {
+  const [providers, setProviders] = useState<ProviderRow[]>([]);
+  const [categories, setCategories] = useState<CategoryRow[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadProviderMasterCache().then(() => {
+      if (cancelled) return;
+      setProviders(__providerCache ?? []);
+      setCategories(__categoryCache ?? []);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // 現在の種別（名前）から対応するcategoryコードを逆引き
+  const currentCatCode = categories.find((c) => c.name === type)?.code ?? "";
+
+  // 種別でフィルタされた事業所一覧
+  const filteredProviders = currentCatCode
+    ? providers.filter((p) => (p.service_categories || []).includes(currentCatCode))
+    : providers;
+
+  // 事業所から利用可能な種別一覧を逆引き
+  const currentProvider = providers.find((p) => p.provider_name === provider);
+  const providerAvailableCats = currentProvider?.service_categories ?? [];
+
+  // 事業所選択時: 種別が未選択 or 対象事業所が持たない種別なら、最初の種別を自動設定
+  const handleProviderChange = (newProvider: string) => {
+    onProviderChange(newProvider);
+    const prv = providers.find((p) => p.provider_name === newProvider);
+    if (prv && prv.service_categories && prv.service_categories.length > 0) {
+      if (!type || !prv.service_categories.includes(currentCatCode)) {
+        const firstCatCode = prv.service_categories[0];
+        const firstCat = categories.find((c) => c.code === firstCatCode);
+        if (firstCat) onTypeChange(firstCat.name);
+      }
+    }
+  };
+
+  const handleTypeChange = (newType: string) => {
+    onTypeChange(newType);
+    // 種別を変えたとき、現在の事業所がその種別を持っていなければクリア
+    const newCatCode = categories.find((c) => c.name === newType)?.code ?? "";
+    if (currentProvider && newCatCode && !currentProvider.service_categories.includes(newCatCode)) {
+      onProviderChange("");
+    }
+  };
+
+  return (
+    <>
+      {/* サービス種別 */}
+      <div className="flex flex-col gap-0.5">
+        <label className="text-xs font-medium text-gray-500">サービス種別</label>
+        <select
+          value={type}
+          onChange={(e) => handleTypeChange(e.target.value)}
+          className="rounded border border-gray-300 px-1 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+        >
+          <option value="">—</option>
+          {categories.map((c) => {
+            // 事業所が選択されている場合、その事業所が持つ種別のみ濃色、他はグレー
+            const available = providerAvailableCats.length === 0 || providerAvailableCats.includes(c.code);
+            return (
+              <option key={c.code} value={c.name} style={{ color: available ? "inherit" : "#999" }}>
+                {c.name}{!available && providerAvailableCats.length > 0 ? " (該当なし)" : ""}
+              </option>
+            );
+          })}
+          {/* 現在の値がマスタにない場合の保持 */}
+          {type && !categories.some((c) => c.name === type) && (
+            <option value={type}>{type}（手入力）</option>
+          )}
+        </select>
+      </div>
+      {/* 事業所 */}
+      <div className="flex flex-col gap-0.5">
+        <label className="text-xs font-medium text-gray-500">※2 事業所</label>
+        <select
+          value={provider}
+          onChange={(e) => handleProviderChange(e.target.value)}
+          className="rounded border border-gray-300 px-1 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+        >
+          <option value="">—</option>
+          {filteredProviders.map((p) => (
+            <option key={p.id} value={p.provider_name}>{p.provider_name}</option>
+          ))}
+          {/* 現在の値がフィルタ外・マスタ外の場合の保持 */}
+          {provider && !filteredProviders.some((p) => p.provider_name === provider) && (
+            <option value={provider}>{provider}{providers.some((p) => p.provider_name === provider) ? "（種別外）" : "（手入力）"}</option>
+          )}
+        </select>
+      </div>
+    </>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Shared types and helpers for edit/print components
 // ---------------------------------------------------------------------------
@@ -716,8 +847,12 @@ function EditFormCarePlan2({ content, onChange }: {
                   {goal.services.length > 1 && <button onClick={() => removeSvc(bi, gi, si)} className="absolute right-1 top-0.5 text-gray-300 hover:text-red-400"><X size={10} /></button>}
                   <FI label="サービス内容" value={svc.content} onChange={(v) => updateSvc(bi, gi, si, "content", v)} className="col-span-2" />
                   <FI label="※1" value={svc.insurance_flag} onChange={(v) => updateSvc(bi, gi, si, "insurance_flag", v)} />
-                  <FI label="サービス種別" value={svc.type} onChange={(v) => updateSvc(bi, gi, si, "type", v)} />
-                  <FI label="※2 事業所" value={svc.provider} onChange={(v) => updateSvc(bi, gi, si, "provider", v)} />
+                  <ProviderTypeSelector
+                    type={svc.type}
+                    provider={svc.provider}
+                    onTypeChange={(v) => updateSvc(bi, gi, si, "type", v)}
+                    onProviderChange={(v) => updateSvc(bi, gi, si, "provider", v)}
+                  />
                   <FI label="頻度" value={svc.frequency} onChange={(v) => updateSvc(bi, gi, si, "frequency", v)} />
                   <FI label="期間" value={svc.period} onChange={(v) => updateSvc(bi, gi, si, "period", v)} />
                 </div>
