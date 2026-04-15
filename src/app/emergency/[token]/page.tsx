@@ -172,12 +172,11 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
   // Fetch sheet（保存済みに加えて、既往歴・家族情報から自動反映）
   const openSheet = async (userId: string) => {
     setLoadingSheet(true);
-    const [{ data: userData }, { data: sheetRow }, { data: historyData }, { data: familyData }, { data: activePlan }] = await Promise.all([
+    const [{ data: userData }, { data: sheetRow }, { data: historyData }, { data: familyData }] = await Promise.all([
       supabase.from("kaigo_users").select("name, name_kana, birth_date, gender, address, phone").eq("id", userId).single(),
       supabase.from("kaigo_emergency_sheets").select("*").eq("user_id", userId).single(),
       supabase.from("kaigo_medical_history").select("disease_name, status, hospital, doctor").eq("user_id", userId).order("created_at", { ascending: false }),
       supabase.from("kaigo_assessments").select("form_data").eq("user_id", userId).order("created_at", { ascending: false }).limit(1).single(),
-      supabase.from("kaigo_care_plans").select("id").eq("user_id", userId).eq("status", "active").order("created_at", { ascending: false }).limit(1).single(),
     ]);
 
     // 保存済みシートをベースに、空欄のみ既往歴・家族情報から補完
@@ -223,52 +222,15 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
       }
     }
 
-    // ケアプランから利用中サービスを反映（常にマージ）
+    // 第2表から利用中サービスを取得して services_in_use を完全上書き
     {
-      const combined: { service_type: string; provider_name: string; phone: string; schedule: string }[] = [];
-
-      // 既存データ
-      if (Array.isArray(merged.services_in_use)) {
-        for (const svc of merged.services_in_use) {
-          if (svc?.service_type || svc?.provider_name) combined.push(svc);
-        }
-      }
-
-      // 1) 旧形式 kaigo_care_plan_services
-      if (activePlan?.id) {
-        const { data: planServices } = await supabase
-          .from("kaigo_care_plan_services")
-          .select("service_type, service_content, frequency, provider")
-          .eq("care_plan_id", activePlan.id);
-        (planServices || []).forEach((ps: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-          if (ps.service_type || ps.provider) {
-            const dup = combined.find((c) => c.service_type === (ps.service_type || "") && c.provider_name === (ps.provider || ""));
-            if (!dup) {
-              combined.push({
-                service_type: ps.service_type || "",
-                provider_name: ps.provider || "",
-                phone: "",
-                schedule: ps.frequency || "",
-              });
-            }
-          }
-        });
-      }
-
-      // 2) 第2表(care-plan-2)のJSONBから
-      const { data: reportDocs } = await supabase
-        .from("kaigo_report_documents")
-        .select("content")
-        .eq("user_id", userId)
-        .eq("report_type", "care-plan-2")
-        .order("created_at", { ascending: false })
-        .limit(5);
+      const collected: { service_type: string; provider_name: string; phone: string; schedule: string }[] = [];
       const addSvc = (svc: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
         if (!svc) return;
         if (!(svc.type || svc.provider)) return;
-        const dup = combined.find((c) => c.service_type === (svc.type || "") && c.provider_name === (svc.provider || ""));
+        const dup = collected.find((c) => c.service_type === (svc.type || "") && c.provider_name === (svc.provider || ""));
         if (!dup) {
-          combined.push({
+          collected.push({
             service_type: svc.type || "",
             provider_name: svc.provider || "",
             phone: "",
@@ -276,6 +238,14 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
           });
         }
       };
+
+      const { data: reportDocs } = await supabase
+        .from("kaigo_report_documents")
+        .select("content")
+        .eq("user_id", userId)
+        .eq("report_type", "care-plan-2")
+        .order("created_at", { ascending: false })
+        .limit(5);
       for (const doc of (reportDocs || [])) {
         const content = doc.content as any; // eslint-disable-line @typescript-eslint/no-explicit-any
         const blockArr = Array.isArray(content?.needs_blocks) ? content.needs_blocks
@@ -292,9 +262,8 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
         }
       }
 
-      // 3) 事業所マスタから電話番号
-      if (combined.length > 0) {
-        const names = combined.map((c) => c.provider_name).filter(Boolean);
+      if (collected.length > 0) {
+        const names = collected.map((c) => c.provider_name).filter(Boolean);
         if (names.length > 0) {
           const { data: provRows } = await supabase
             .from("kaigo_service_providers")
@@ -302,9 +271,9 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
             .in("provider_name", names);
           const phoneMap = new Map<string, string>();
           (provRows || []).forEach((p: any) => phoneMap.set(p.provider_name, p.phone || "")); // eslint-disable-line @typescript-eslint/no-explicit-any
-          combined.forEach((c) => { if (!c.phone && phoneMap.has(c.provider_name)) c.phone = phoneMap.get(c.provider_name)!; });
+          collected.forEach((c) => { if (!c.phone && phoneMap.has(c.provider_name)) c.phone = phoneMap.get(c.provider_name)!; });
         }
-        merged.services_in_use = combined;
+        merged.services_in_use = collected;
       }
     }
 

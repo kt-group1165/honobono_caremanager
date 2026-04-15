@@ -205,61 +205,22 @@ export default function EmergencySheetsPage() {
   // 基本情報から自動反映する関数
   const autoFillFromBaseData = useCallback(async (userId: string, baseSheet: EmergencySheet): Promise<EmergencySheet> => {
     const s = { ...baseSheet };
-    const [{ data: userData }, { data: historyData }, { data: familyData }, { data: activePlan }] = await Promise.all([
+    const [{ data: userData }, { data: historyData }, { data: familyData }] = await Promise.all([
       supabase.from("kaigo_users").select("phone").eq("id", userId).single(),
       supabase.from("kaigo_medical_history").select("disease_name, onset_date, status, hospital, doctor, notes").eq("user_id", userId).order("created_at", { ascending: false }),
       supabase.from("kaigo_assessments").select("form_data").eq("user_id", userId).order("created_at", { ascending: false }).limit(1).single(),
-      supabase.from("kaigo_care_plans").select("id").eq("user_id", userId).eq("status", "active").order("created_at", { ascending: false }).limit(1).single(),
     ]);
 
-    // ケアプランサービスから利用中サービスを取得・マージ（常に実行）
-    // 既存のservices_in_useをベースに、第2表・旧テーブルから不足分を追加
+    // 第2表から利用中サービスを取得して services_in_use を完全上書き
+    // （既存データ・旧 kaigo_care_plan_services は使わず、第2表のみが正）
     {
-      const combined: { service_type: string; provider_name: string; phone: string; schedule: string }[] = [];
-
-      // 既存データをそのまま引き継ぐ
-      if (Array.isArray(s.services_in_use)) {
-        for (const svc of s.services_in_use) {
-          if (svc?.service_type || svc?.provider_name) combined.push(svc);
-        }
-      }
-
-      // 1) 旧形式 kaigo_care_plan_services
-      if (activePlan?.id) {
-        const { data: planServices } = await supabase
-          .from("kaigo_care_plan_services")
-          .select("service_type, service_content, frequency, provider")
-          .eq("care_plan_id", activePlan.id);
-        (planServices || []).forEach((ps: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-          if (ps.service_type || ps.provider) {
-            const dup = combined.find((c) => c.service_type === (ps.service_type || "") && c.provider_name === (ps.provider || ""));
-            if (!dup) {
-              combined.push({
-                service_type: ps.service_type || "",
-                provider_name: ps.provider || "",
-                phone: "",
-                schedule: ps.frequency || "",
-              });
-            }
-          }
-        });
-      }
-
-      // 2) 第2表（care-plan-2）のJSONB content.blocks から
-      const { data: reportDocs } = await supabase
-        .from("kaigo_report_documents")
-        .select("content, created_at")
-        .eq("user_id", userId)
-        .eq("report_type", "care-plan-2")
-        .order("created_at", { ascending: false })
-        .limit(5);  // 複数プランから取得
-
+      const collected: { service_type: string; provider_name: string; phone: string; schedule: string }[] = [];
       const addSvc = (svc: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
         if (!svc) return;
         if (!(svc.type || svc.provider)) return;
-        const dup = combined.find((c) => c.service_type === (svc.type || "") && c.provider_name === (svc.provider || ""));
+        const dup = collected.find((c) => c.service_type === (svc.type || "") && c.provider_name === (svc.provider || ""));
         if (!dup) {
-          combined.push({
+          collected.push({
             service_type: svc.type || "",
             provider_name: svc.provider || "",
             phone: "",
@@ -267,9 +228,17 @@ export default function EmergencySheetsPage() {
           });
         }
       };
+
+      // 第2表（care-plan-2）のJSONB から取得
+      const { data: reportDocs } = await supabase
+        .from("kaigo_report_documents")
+        .select("content")
+        .eq("user_id", userId)
+        .eq("report_type", "care-plan-2")
+        .order("created_at", { ascending: false })
+        .limit(5);
       for (const doc of (reportDocs || [])) {
         const content = doc.content as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-        // 第2表の構造は3パターン: needs_blocks / blocks / services 直下
         const blockArr = Array.isArray(content?.needs_blocks) ? content.needs_blocks
           : Array.isArray(content?.blocks) ? content.blocks
           : null;
@@ -280,14 +249,13 @@ export default function EmergencySheetsPage() {
             }
           }
         } else if (Array.isArray(content?.services)) {
-          // 旧々形式: content.services に直接配列
           for (const svc of content.services) addSvc(svc);
         }
       }
 
-      // 3) 事業所マスタから電話番号を紐付け（空の phone を補完）
-      if (combined.length > 0) {
-        const providerNames = combined.map((c) => c.provider_name).filter(Boolean);
+      if (collected.length > 0) {
+        // 事業所マスタから電話番号を紐付け
+        const providerNames = collected.map((c) => c.provider_name).filter(Boolean);
         if (providerNames.length > 0) {
           const { data: provRows } = await supabase
             .from("kaigo_service_providers")
@@ -295,10 +263,12 @@ export default function EmergencySheetsPage() {
             .in("provider_name", providerNames);
           const phoneMap = new Map<string, string>();
           (provRows || []).forEach((p: any) => phoneMap.set(p.provider_name, p.phone || "")); // eslint-disable-line @typescript-eslint/no-explicit-any
-          combined.forEach((c) => { if (!c.phone && phoneMap.has(c.provider_name)) c.phone = phoneMap.get(c.provider_name)!; });
+          collected.forEach((c) => { if (!c.phone && phoneMap.has(c.provider_name)) c.phone = phoneMap.get(c.provider_name)!; });
         }
-        s.services_in_use = combined;
+        // 第2表データで完全上書き
+        s.services_in_use = collected;
       }
+      // 第2表にデータが無ければ既存の services_in_use をそのまま保持
     }
 
     // 電話番号
@@ -369,85 +339,6 @@ export default function EmergencySheetsPage() {
     toast.success("基本情報から再取得しました");
   };
 
-  // 「第2表から利用中サービスだけ上書き」ボタン用
-  const handleSyncServices = async () => {
-    if (!selectedUserId || !sheet) return;
-    toast.info("第2表から取得中...");
-    const collected: { service_type: string; provider_name: string; phone: string; schedule: string }[] = [];
-
-    // kaigo_care_plan_services から
-    const { data: plans } = await supabase
-      .from("kaigo_care_plans")
-      .select("id")
-      .eq("user_id", selectedUserId)
-      .eq("status", "active")
-      .order("created_at", { ascending: false })
-      .limit(1);
-    const planId = plans?.[0]?.id;
-    if (planId) {
-      const { data: planServices } = await supabase
-        .from("kaigo_care_plan_services")
-        .select("service_type, frequency, provider")
-        .eq("care_plan_id", planId);
-      (planServices || []).forEach((ps: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-        if (ps.service_type || ps.provider) {
-          const dup = collected.find((c) => c.service_type === (ps.service_type || "") && c.provider_name === (ps.provider || ""));
-          if (!dup) collected.push({ service_type: ps.service_type || "", provider_name: ps.provider || "", phone: "", schedule: ps.frequency || "" });
-        }
-      });
-    }
-
-    // 第2表（care-plan-2）から
-    const { data: docs } = await supabase
-      .from("kaigo_report_documents")
-      .select("content")
-      .eq("user_id", selectedUserId)
-      .eq("report_type", "care-plan-2")
-      .order("created_at", { ascending: false })
-      .limit(5);
-    const addSvc = (svc: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-      if (!svc) return;
-      if (!(svc.type || svc.provider)) return;
-      const dup = collected.find((c) => c.service_type === (svc.type || "") && c.provider_name === (svc.provider || ""));
-      if (!dup) collected.push({ service_type: svc.type || "", provider_name: svc.provider || "", phone: "", schedule: svc.frequency || "" });
-    };
-    for (const doc of (docs || [])) {
-      const content = doc.content as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-      const blockArr = Array.isArray(content?.needs_blocks) ? content.needs_blocks
-        : Array.isArray(content?.blocks) ? content.blocks : null;
-      if (blockArr) {
-        for (const block of blockArr) {
-          for (const goal of (block.goals || [])) {
-            for (const svc of (goal.services || [])) addSvc(svc);
-          }
-        }
-      } else if (Array.isArray(content?.services)) {
-        for (const svc of content.services) addSvc(svc);
-      }
-    }
-
-    // 事業所マスタから電話番号
-    if (collected.length > 0) {
-      const names = collected.map((c) => c.provider_name).filter(Boolean);
-      if (names.length > 0) {
-        const { data: provRows } = await supabase
-          .from("kaigo_service_providers")
-          .select("provider_name, phone")
-          .in("provider_name", names);
-        const phoneMap = new Map<string, string>();
-        (provRows || []).forEach((p: any) => phoneMap.set(p.provider_name, p.phone || "")); // eslint-disable-line @typescript-eslint/no-explicit-any
-        collected.forEach((c) => { if (!c.phone && phoneMap.has(c.provider_name)) c.phone = phoneMap.get(c.provider_name)!; });
-      }
-    }
-
-    // services_in_use だけを完全に上書き（他の項目には触らない）
-    setSheet((prev) => prev ? { ...prev, services_in_use: collected } : prev);
-    if (collected.length === 0) {
-      toast.error("第2表に事業所情報がありません");
-    } else {
-      toast.success(`${collected.length}件の利用中サービスで上書きしました。保存ボタンを押して確定してください`);
-    }
-  };
 
   useEffect(() => {
     if (selectedUserId) fetchData(selectedUserId);
@@ -498,9 +389,6 @@ export default function EmergencySheetsPage() {
             </button>
             {selectedUserId && sheet && (
               <>
-                <button onClick={handleSyncServices} className="flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100" title="利用中サービスを第2表の内容だけで上書きします">
-                  第2表から同期
-                </button>
                 <button onClick={handleReimport} className="flex items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-medium text-orange-700 hover:bg-orange-100">
                   基本情報から再取得
                 </button>
