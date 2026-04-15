@@ -49,6 +49,120 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
+// ─── 利用中の自事業所サービス ─────────────────────────────────────────────
+type OfficeServiceRow = {
+  id: string;
+  office_id: string;
+  start_date: string | null;
+  end_date: string | null;
+  is_active: boolean;
+  service_notes: string | null;
+};
+
+function UserOfficeServices({ userId }: { userId: string }) {
+  const supabase = createClient();
+  const [offices, setOffices] = useState<{ id: string; office_name: string; business_type: string }[]>([]);
+  const [services, setServices] = useState<OfficeServiceRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    const [{ data: offs }, { data: svcs }] = await Promise.all([
+      supabase.from("kaigo_office_settings").select("id, office_name, business_type").order("office_name"),
+      supabase.from("kaigo_user_office_services").select("*").eq("user_id", userId),
+    ]);
+    setOffices(offs || []);
+    setServices((svcs || []) as OfficeServiceRow[]);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [userId]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleOffice = async (officeId: string, currentlyUsing: boolean) => {
+    const existing = services.find((s) => s.office_id === officeId);
+    if (currentlyUsing && existing) {
+      // 利用終了（is_active=false + end_date=今日）にする
+      const { error } = await supabase.from("kaigo_user_office_services").update({
+        is_active: false,
+        end_date: existing.end_date ?? format(new Date(), "yyyy-MM-dd"),
+      }).eq("id", existing.id);
+      if (error) toast.error("更新に失敗: " + error.message);
+      else { toast.success("サービス終了を登録しました"); load(); }
+    } else if (existing) {
+      // 再開（is_active=true + end_date=null）
+      const { error } = await supabase.from("kaigo_user_office_services").update({
+        is_active: true,
+        end_date: null,
+      }).eq("id", existing.id);
+      if (error) toast.error("更新に失敗: " + error.message);
+      else { toast.success("サービス再開を登録しました"); load(); }
+    } else {
+      // 新規
+      const { error } = await supabase.from("kaigo_user_office_services").insert({
+        user_id: userId,
+        office_id: officeId,
+        start_date: format(new Date(), "yyyy-MM-dd"),
+        is_active: true,
+      });
+      if (error) toast.error("登録に失敗: " + error.message);
+      else { toast.success("サービスを開始しました"); load(); }
+    }
+  };
+
+  const updateDate = async (id: string, field: "start_date" | "end_date", value: string) => {
+    const { error } = await supabase.from("kaigo_user_office_services").update({ [field]: value || null }).eq("id", id);
+    if (error) toast.error("更新に失敗: " + error.message);
+    else { toast.success("保存しました"); load(); }
+  };
+
+  if (loading) return <div className="py-2 text-xs text-gray-400">読み込み中...</div>;
+
+  return (
+    <div>
+      <h3 className="text-sm font-bold text-gray-700 mb-2">利用中の自事業所サービス</h3>
+      <p className="text-xs text-gray-500 mb-3">この利用者に自事業所のサービスを提供中/提供予定の場合にチェックしてください。</p>
+      {offices.length === 0 ? (
+        <p className="text-xs text-gray-400">自事業所が登録されていません（設定から追加してください）</p>
+      ) : (
+        <div className="space-y-2">
+          {offices.map((o) => {
+            const svc = services.find((s) => s.office_id === o.id);
+            const using = !!svc && svc.is_active;
+            return (
+              <div key={o.id} className={`rounded-lg border p-3 ${using ? "border-blue-300 bg-blue-50/30" : "border-gray-200"}`}>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={using}
+                    onChange={() => toggleOffice(o.id, using)}
+                    className="w-4 h-4 accent-blue-600 cursor-pointer"
+                  />
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold text-gray-900">{o.office_name || "(名称未設定)"}</div>
+                    <div className="text-xs text-gray-500">{o.business_type}</div>
+                  </div>
+                </div>
+                {svc && (
+                  <div className="flex items-center gap-2 mt-2 text-xs">
+                    <label className="flex items-center gap-1">
+                      <span className="text-gray-500">開始日:</span>
+                      <input type="date" value={svc.start_date ?? ""} onChange={(e) => updateDate(svc.id, "start_date", e.target.value)} className="rounded border border-gray-300 px-2 py-1 text-xs" />
+                    </label>
+                    <label className="flex items-center gap-1">
+                      <span className="text-gray-500">終了日:</span>
+                      <input type="date" value={svc.end_date ?? ""} onChange={(e) => updateDate(svc.id, "end_date", e.target.value)} className="rounded border border-gray-300 px-2 py-1 text-xs" />
+                    </label>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function UserDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
@@ -281,6 +395,10 @@ export default function UserDetailPage() {
                   </p>
                 </div>
               )}
+              {/* 利用中の自事業所サービス */}
+              <div className="sm:col-span-2 mt-4 pt-4 border-t">
+                <UserOfficeServices userId={id} />
+              </div>
             </div>
           ) : (
             <div className="space-y-4">

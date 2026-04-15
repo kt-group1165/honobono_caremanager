@@ -92,7 +92,7 @@ const BUSINESS_TYPE_LABELS: Record<string, { label: string; color: string }> = {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { businessType } = useBusinessType();
+  const { businessType, currentOffice } = useBusinessType();
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("sidebar-collapsed") === "true";
@@ -291,6 +291,11 @@ export function Sidebar() {
           <div className="text-[10px] text-gray-400 leading-relaxed">
             <div>介護管理システム v{APP_VERSION}</div>
             <div className={typeInfo.color}>{typeInfo.label}</div>
+            {currentOffice && (
+              <div className="mt-1 pt-1 border-t border-gray-100 text-gray-600 truncate" title={currentOffice.office_name}>
+                🏢 {currentOffice.office_name || "(名称未設定)"}
+              </div>
+            )}
           </div>
         )}
         {collapsed && (

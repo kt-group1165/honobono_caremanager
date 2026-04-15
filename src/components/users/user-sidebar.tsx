@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Search, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useBusinessType } from "@/lib/business-type-context";
 
 interface KaigoUser {
   id: string;
@@ -17,45 +18,79 @@ interface UserSidebarProps {
   onSelectUser: (userId: string) => void;
 }
 
+const FILTER_KEY = "kaigo.user_filter_mode";
+
 export function UserSidebar({ selectedUserId, onSelectUser }: UserSidebarProps) {
   const [users, setUsers] = useState<KaigoUser[]>([]);
+  const [officeUserIds, setOfficeUserIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
+  const { currentOfficeId } = useBusinessType();
+
+  // 表示モード: all (全利用者) / office (自事業所の利用者のみ)
+  const [filterMode, setFilterMode] = useState<"all" | "office">(() => {
+    if (typeof window === "undefined") return "office";
+    const stored = localStorage.getItem(FILTER_KEY);
+    return stored === "all" ? "all" : "office";
+  });
+
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("kaigo_users")
+      .select("id, name, name_kana, status")
+      .eq("status", "active")
+      .order("name_kana", { ascending: true });
+    const list = (data || []) as KaigoUser[];
+    setUsers(list);
+
+    // 自事業所に紐付く利用者を取得
+    if (currentOfficeId) {
+      const { data: svc } = await supabase
+        .from("kaigo_user_office_services")
+        .select("user_id")
+        .eq("office_id", currentOfficeId)
+        .eq("is_active", true);
+      const set = new Set<string>((svc || []).map((s: { user_id: string }) => s.user_id));
+      setOfficeUserIds(set);
+    } else {
+      setOfficeUserIds(new Set());
+    }
+    setLoading(false);
+  }, [supabase, currentOfficeId]);
+
+  useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
   useEffect(() => {
-    const fetchUsers = async () => {
-      setLoading(true);
-      const { data } = await supabase
-        .from("kaigo_users")
-        .select("id, name, name_kana, status")
-        .eq("status", "active")
-        .order("name_kana", { ascending: true });
-      const list = data || [];
-      setUsers(list);
-      setLoading(false);
-      // 未選択なら最初の利用者を自動選択
-      if (!selectedUserId && list.length > 0) {
-        onSelectUser(list[0].id);
-      }
-    };
-    fetchUsers();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!loading && !selectedUserId && users.length > 0) {
+      onSelectUser(users[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, users]);
 
   const filtered = useMemo(() => {
-    if (!search) return users;
-    const q = search.toLowerCase();
-    return users.filter(
-      (u) =>
-        u.name.toLowerCase().includes(q) ||
-        u.name_kana.toLowerCase().includes(q)
-    );
-  }, [users, search]);
+    let list = users;
+    if (filterMode === "office" && currentOfficeId) {
+      list = list.filter((u) => officeUserIds.has(u.id));
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter((u) =>
+        u.name.toLowerCase().includes(q) || u.name_kana.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [users, search, filterMode, currentOfficeId, officeUserIds]);
+
+  const setMode = (m: "all" | "office") => {
+    setFilterMode(m);
+    if (typeof window !== "undefined") localStorage.setItem(FILTER_KEY, m);
+  };
 
   return (
     <div className="flex h-full w-36 flex-col border-r bg-white">
-      <div className="border-b p-2">
+      <div className="border-b p-2 space-y-1.5">
         <div className="relative">
           <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
@@ -66,12 +101,35 @@ export function UserSidebar({ selectedUserId, onSelectUser }: UserSidebarProps) 
             className="w-full rounded-md border bg-gray-50 py-1.5 pl-7 pr-2 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
+        {/* フィルタ切替 */}
+        <div className="flex rounded-md border overflow-hidden text-[10px] font-medium">
+          <button
+            onClick={() => setMode("office")}
+            className={cn(
+              "flex-1 py-1 transition-colors",
+              filterMode === "office" ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-500 hover:bg-gray-100"
+            )}
+          >
+            自事業所
+          </button>
+          <button
+            onClick={() => setMode("all")}
+            className={cn(
+              "flex-1 py-1 transition-colors",
+              filterMode === "all" ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-500 hover:bg-gray-100"
+            )}
+          >
+            全利用者
+          </button>
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="p-3 text-center text-xs text-gray-400">読込中...</div>
         ) : filtered.length === 0 ? (
-          <div className="p-3 text-center text-xs text-gray-400">該当なし</div>
+          <div className="p-3 text-center text-xs text-gray-400">
+            {filterMode === "office" ? "自事業所の利用者なし" : "該当なし"}
+          </div>
         ) : (
           <ul className="py-1">
             {filtered.map((user) => (

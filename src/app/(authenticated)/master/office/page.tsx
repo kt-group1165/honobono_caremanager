@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Save, Building2, Loader2 } from "lucide-react";
+import { Save, Building2, Loader2, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // 令和6年度改定 居宅介護支援 特定事業所加算
@@ -50,33 +50,71 @@ type OfficeSettings = {
 };
 
 export default function OfficeSettingsPage() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [offices, setOffices] = useState<OfficeSettings[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<OfficeSettings | null>(null);
 
-  useEffect(() => {
-    const fetch = async () => {
-      const { data } = await supabase.from("kaigo_office_settings").select("*").limit(1).single();
-      if (data) {
-        // 旧区分（A/B/C）を新区分（Ⅰ/Ⅱ/Ⅲ）にマッピング
-        const raw = data.tokutei_kassan_type;
-        const mapping: Record<string, string> = {
-          A: "Ⅰ",  // 旧A(505) → 新Ⅰ(519)
-          B: "Ⅱ",  // 旧B(407) → 新Ⅱ(421)
-          C: "Ⅲ",  // 旧C(309) → 新Ⅲ(323)
-        };
-        if (raw && mapping[raw]) {
-          data.tokutei_kassan_type = mapping[raw];
-          const opt = TOKUTEI_OPTIONS.find((o) => o.value === data.tokutei_kassan_type);
-          if (opt) data.tokutei_kassan_units = opt.units;
-        }
+  const loadOffices = async () => {
+    const { data } = await supabase.from("kaigo_office_settings").select("*").order("office_name");
+    const list = (data || []).map((d: OfficeSettings) => {
+      // 旧区分マッピング
+      const mapping: Record<string, string> = { A: "Ⅰ", B: "Ⅱ", C: "Ⅲ" };
+      if (d.tokutei_kassan_type && mapping[d.tokutei_kassan_type]) {
+        d.tokutei_kassan_type = mapping[d.tokutei_kassan_type];
+        const opt = TOKUTEI_OPTIONS.find((o) => o.value === d.tokutei_kassan_type);
+        if (opt) d.tokutei_kassan_units = opt.units;
       }
-      setForm(data as OfficeSettings | null);
+      return d;
+    });
+    setOffices(list);
+    return list;
+  };
+
+  useEffect(() => {
+    const init = async () => {
+      const list = await loadOffices();
+      if (list.length > 0) {
+        setEditingId(list[0].id);
+        setForm(list[0]);
+      }
       setLoading(false);
     };
-    fetch();
-  }, [supabase]);
+    init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const selectOffice = (id: string) => {
+    const o = offices.find((x) => x.id === id);
+    if (o) { setEditingId(id); setForm(o); }
+  };
+
+  const handleAddNew = async () => {
+    const newName = prompt("新規事業所の名前を入力してください", "新規事業所");
+    if (!newName?.trim()) return;
+    const { data, error } = await supabase
+      .from("kaigo_office_settings")
+      .insert({ office_name: newName.trim(), business_type: "居宅介護支援", tokutei_kassan_type: "なし", tokutei_kassan_units: 0 })
+      .select("*").single();
+    if (error) { toast.error("追加に失敗: " + error.message); return; }
+    toast.success("事業所を追加しました");
+    await loadOffices();
+    setEditingId(data.id);
+    setForm(data as OfficeSettings);
+  };
+
+  const handleDelete = async () => {
+    if (!form || offices.length <= 1) { toast.error("最低1つの事業所が必要です"); return; }
+    if (!confirm(`「${form.office_name}」を削除しますか？\n関連するデータは残りますが、この事業所を選択できなくなります。`)) return;
+    const { error } = await supabase.from("kaigo_office_settings").delete().eq("id", form.id);
+    if (error) { toast.error("削除に失敗: " + error.message); return; }
+    toast.success("削除しました");
+    const list = await loadOffices();
+    if (list.length > 0) { setEditingId(list[0].id); setForm(list[0]); }
+    else { setEditingId(null); setForm(null); }
+  };
 
   const handleChange = (key: keyof OfficeSettings, value: string | number | boolean) => {
     if (!form) return;
@@ -146,7 +184,17 @@ export default function OfficeSettingsPage() {
   }
 
   if (!form) {
-    return <div className="py-24 text-center text-gray-400">設定データがありません</div>;
+    return (
+      <div className="max-w-3xl mx-auto space-y-6 py-24 text-center">
+        <p className="text-gray-400">事業所がまだ登録されていません</p>
+        <button
+          onClick={handleAddNew}
+          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          <Plus size={14} /> 新規事業所を追加
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -155,19 +203,51 @@ export default function OfficeSettingsPage() {
         <div className="flex items-center gap-3">
           <Building2 size={24} className="text-blue-600" />
           <div>
-            <h1 className="text-xl font-bold text-gray-900">自事業所設定</h1>
-            <p className="text-xs text-gray-500">居宅介護支援事業所の基本情報と加算設定</p>
+            <h1 className="text-xl font-bold text-gray-900">自事業所管理</h1>
+            <p className="text-xs text-gray-500">複数の自事業所の登録・編集</p>
           </div>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-        >
-          {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-          保存
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleAddNew}
+            className="flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+          >
+            <Plus size={14} /> 新規事業所
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            保存
+          </button>
+        </div>
       </div>
+
+      {/* 事業所選択 */}
+      {offices.length > 1 && (
+        <div className="rounded-xl border bg-white p-4 shadow-sm">
+          <label className="block text-xs font-medium text-gray-500 mb-2">編集中の事業所</label>
+          <div className="flex items-center gap-2">
+            <select
+              value={editingId ?? ""}
+              onChange={(e) => selectOffice(e.target.value)}
+              className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            >
+              {offices.map((o) => (
+                <option key={o.id} value={o.id}>{o.office_name || "(名称未設定)"}（{o.business_type}）</option>
+              ))}
+            </select>
+            <button
+              onClick={handleDelete}
+              className="flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
+            >
+              <Trash2 size={14} /> 削除
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 事業種別 */}
       <div className="rounded-xl border-2 border-blue-200 bg-blue-50/30 p-6 shadow-sm space-y-4">

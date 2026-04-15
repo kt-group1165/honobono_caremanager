@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Settings, Eye, EyeOff, Building2, ChevronRight, CalendarDays, Plus, Save, Loader2, Trash2 } from "lucide-react";
+import { Settings, Eye, EyeOff, Building2, ChevronRight, CalendarDays, Plus, Save, Loader2, Trash2, Link2, Copy } from "lucide-react";
 import Link from "next/link";
+import { useBusinessType } from "@/lib/business-type-context";
 
 // ─── 年度別単位数管理 ──────────────────────────────────────────────────────
 
@@ -412,6 +413,86 @@ function FiscalYearTokuteiKassanSection() {
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
+// ─── 自事業所切替 ──────────────────────────────────────────────────────────
+
+function OfficeSwitcher() {
+  const { offices, currentOfficeId, setCurrentOfficeId, currentOffice } = useBusinessType();
+  const typeLabel = (bt: string) =>
+    bt === "care_manager" || bt === "居宅介護支援" ? "居宅介護支援"
+    : bt === "home_care" || bt === "訪問介護" ? "訪問介護"
+    : bt === "day_service" || bt === "通所介護" ? "通所介護"
+    : bt;
+  const shareUrl = typeof window !== "undefined" && currentOfficeId
+    ? `${window.location.origin}/dashboard?office=${currentOfficeId}`
+    : "";
+
+  if (offices.length === 0) {
+    return (
+      <div className="rounded-lg border bg-yellow-50 p-4 max-w-lg">
+        <p className="text-sm text-yellow-800">自事業所が登録されていません。下の「自事業所管理」から追加してください。</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border bg-white p-5 shadow-sm max-w-2xl">
+      <div className="flex items-center gap-2 mb-3">
+        <Building2 size={18} className="text-blue-600" />
+        <h2 className="font-semibold text-gray-900">自事業所を選択</h2>
+      </div>
+      <p className="text-xs text-gray-500 mb-3">現在操作している自事業所を選択します。切り替えると事業種別が追従します。</p>
+      <div className="space-y-2">
+        {offices.map((o) => {
+          const isCurrent = o.id === currentOfficeId;
+          return (
+            <label
+              key={o.id}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all ${
+                isCurrent ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:bg-gray-50"
+              }`}
+            >
+              <input
+                type="radio"
+                name="office"
+                checked={isCurrent}
+                onChange={() => setCurrentOfficeId(o.id)}
+                className="accent-blue-600"
+              />
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-gray-900">{o.office_name || "(名称未設定)"}</div>
+                <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500">
+                  <span className="inline-block px-2 py-0.5 rounded-full bg-gray-100">{typeLabel(o.business_type)}</span>
+                  {o.provider_number && <span>事業所番号: {o.provider_number}</span>}
+                  {!o.is_active && <span className="text-red-500">停止中</span>}
+                </div>
+              </div>
+            </label>
+          );
+        })}
+      </div>
+      {currentOffice && (
+        <div className="mt-4 pt-3 border-t">
+          <p className="text-xs text-gray-500 mb-1">共有用URL（別事業所として開く）</p>
+          <div className="flex items-center gap-2">
+            <input
+              readOnly
+              value={shareUrl}
+              className="flex-1 text-xs bg-gray-50 border rounded px-2 py-1.5 text-gray-600"
+            />
+            <button
+              onClick={() => { navigator.clipboard.writeText(shareUrl); toast.success("URLをコピーしました"); }}
+              className="shrink-0 p-1.5 rounded hover:bg-gray-100"
+            >
+              <Copy size={14} className="text-gray-500" />
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-400 mt-1">このURLを開くと、選択中の自事業所として操作できます</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const supabase = createClient();
   const [currentPassword, setCurrentPassword] = useState("");
@@ -490,6 +571,9 @@ export default function SettingsPage() {
         </p>
       </div>
 
+      {/* 自事業所切替 */}
+      <OfficeSwitcher />
+
       {/* Office Settings Link */}
       <Link
         href="/master/office"
@@ -500,8 +584,8 @@ export default function SettingsPage() {
             <Building2 size={20} className="text-purple-600" />
           </div>
           <div>
-            <h2 className="font-semibold text-gray-900">自事業所設定</h2>
-            <p className="text-xs text-gray-500">事業所情報・特定事業所加算・地域区分の設定</p>
+            <h2 className="font-semibold text-gray-900">自事業所管理</h2>
+            <p className="text-xs text-gray-500">複数の自事業所の登録・編集・切替</p>
           </div>
         </div>
         <ChevronRight size={18} className="text-gray-400" />
