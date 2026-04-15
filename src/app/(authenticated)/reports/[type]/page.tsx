@@ -238,10 +238,18 @@ async function loadProviderMasterCache() {
   __cacheLoading = null;
 }
 
-function ProviderTypeSelector({ type, provider, onTypeChange, onProviderChange }: {
+function PTSTypeOnly(props: { type: string; provider: string; onTypeChange: (v: string) => void; onProviderChange: (v: string) => void }) {
+  return <ProviderTypeSelector {...props} mode="type" />;
+}
+function PTSProviderOnly(props: { type: string; provider: string; onTypeChange: (v: string) => void; onProviderChange: (v: string) => void }) {
+  return <ProviderTypeSelector {...props} mode="provider" />;
+}
+
+function ProviderTypeSelector({ type, provider, onTypeChange, onProviderChange, mode }: {
   type: string; provider: string;
   onTypeChange: (v: string) => void;
   onProviderChange: (v: string) => void;
+  mode?: "both" | "type" | "provider";
 }) {
   const [providers, setProviders] = useState<ProviderRow[]>([]);
   const [categories, setCategories] = useState<CategoryRow[]>([]);
@@ -294,53 +302,58 @@ function ProviderTypeSelector({ type, provider, onTypeChange, onProviderChange }
   const wrapCls = "relative";
   const arrowCls = "pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px]";
 
+  const showType = mode !== "provider";
+  const showProvider = mode !== "type";
+
   return (
     <>
-      {/* サービス種別 */}
-      <div className="flex flex-col gap-0.5 min-w-0">
-        <label className="text-xs font-medium text-gray-500">サービス種別</label>
-        <div className={wrapCls}>
-          <select
-            value={type}
-            onChange={(e) => handleTypeChange(e.target.value)}
-            className={selectCls}
-          >
-            <option value="">—</option>
-            {categories.map((c) => {
-              const available = providerAvailableCats.length === 0 || providerAvailableCats.includes(c.code);
-              return (
-                <option key={c.code} value={c.name} style={{ color: available ? "inherit" : "#999" }}>
-                  {c.name}{!available && providerAvailableCats.length > 0 ? " (該当なし)" : ""}
-                </option>
-              );
-            })}
-            {type && !categories.some((c) => c.name === type) && (
-              <option value={type}>{type}（手入力）</option>
-            )}
-          </select>
-          <span className={arrowCls}>▼</span>
+      {showType && (
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <label className="text-xs font-medium text-gray-500">サービス種別</label>
+          <div className={wrapCls}>
+            <select
+              value={type}
+              onChange={(e) => handleTypeChange(e.target.value)}
+              className={selectCls}
+            >
+              <option value="">—</option>
+              {categories.map((c) => {
+                const available = providerAvailableCats.length === 0 || providerAvailableCats.includes(c.code);
+                return (
+                  <option key={c.code} value={c.name} style={{ color: available ? "inherit" : "#999" }}>
+                    {c.name}{!available && providerAvailableCats.length > 0 ? " (該当なし)" : ""}
+                  </option>
+                );
+              })}
+              {type && !categories.some((c) => c.name === type) && (
+                <option value={type}>{type}（手入力）</option>
+              )}
+            </select>
+            <span className={arrowCls}>▼</span>
+          </div>
         </div>
-      </div>
-      {/* 事業所 */}
-      <div className="flex flex-col gap-0.5 min-w-0">
-        <label className="text-xs font-medium text-gray-500">※2 事業所</label>
-        <div className={wrapCls}>
-          <select
-            value={provider}
-            onChange={(e) => handleProviderChange(e.target.value)}
-            className={selectCls}
-          >
-            <option value="">—</option>
-            {filteredProviders.map((p) => (
-              <option key={p.id} value={p.provider_name}>{p.provider_name}</option>
-            ))}
-            {provider && !filteredProviders.some((p) => p.provider_name === provider) && (
-              <option value={provider}>{provider}{providers.some((p) => p.provider_name === provider) ? "（種別外）" : "（手入力）"}</option>
-            )}
-          </select>
-          <span className={arrowCls}>▼</span>
+      )}
+      {showProvider && (
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <label className="text-xs font-medium text-gray-500">※2 事業所</label>
+          <div className={wrapCls}>
+            <select
+              value={provider}
+              onChange={(e) => handleProviderChange(e.target.value)}
+              className={selectCls}
+            >
+              <option value="">—</option>
+              {filteredProviders.map((p) => (
+                <option key={p.id} value={p.provider_name}>{p.provider_name}</option>
+              ))}
+              {provider && !filteredProviders.some((p) => p.provider_name === provider) && (
+                <option value={provider}>{provider}{providers.some((p) => p.provider_name === provider) ? "（種別外）" : "（手入力）"}</option>
+              )}
+            </select>
+            <span className={arrowCls}>▼</span>
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 }
@@ -889,29 +902,38 @@ function EditFormCarePlan2({ content, onChange }: {
               {goal.services.map((svc, si) => (
                 <div
                   key={si}
-                  className="ml-4 grid gap-2 rounded border border-gray-200 bg-white p-1.5 relative"
-                  style={{ gridTemplateColumns: "2fr 0.5fr 1.5fr 1.8fr 1fr 1fr" }}
+                  className="ml-4 flex flex-wrap gap-2 rounded border border-gray-200 bg-white p-1.5 relative pr-5"
                 >
-                  {goal.services.length > 1 && <button onClick={() => removeSvc(bi, gi, si)} className="absolute right-1 top-0.5 text-gray-300 hover:text-red-400"><X size={10} /></button>}
-                  <FI label="サービス内容" value={svc.content} onChange={(v) => updateSvc(bi, gi, si, "content", v)} />
-                  {/* ※1 を中央寄せ・コンパクトに */}
-                  <div className="flex flex-col gap-0.5">
+                  {goal.services.length > 1 && <button onClick={() => removeSvc(bi, gi, si)} className="absolute right-1 top-0.5 text-gray-300 hover:text-red-400 z-10"><X size={10} /></button>}
+                  {/* サービス内容 (広め) */}
+                  <div className="flex-1 min-w-[180px]">
+                    <FI label="サービス内容" value={svc.content} onChange={(v) => updateSvc(bi, gi, si, "content", v)} />
+                  </div>
+                  {/* ※1 (極細) */}
+                  <div className="flex flex-col gap-0.5 w-12 shrink-0">
                     <label className="text-xs font-medium text-gray-500 text-center">※1</label>
                     <input
                       type="text"
                       value={svc.insurance_flag}
                       onChange={(e) => updateSvc(bi, gi, si, "insurance_flag", e.target.value)}
-                      className="rounded border border-gray-300 px-1 py-1 text-sm text-center focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-full rounded border border-gray-300 px-1 py-1 text-sm text-center focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
-                  <ProviderTypeSelector
-                    type={svc.type}
-                    provider={svc.provider}
-                    onTypeChange={(v) => updateSvc(bi, gi, si, "type", v)}
-                    onProviderChange={(v) => updateSvc(bi, gi, si, "provider", v)}
-                  />
-                  <FI label="頻度" value={svc.frequency} onChange={(v) => updateSvc(bi, gi, si, "frequency", v)} />
-                  <FI label="期間" value={svc.period} onChange={(v) => updateSvc(bi, gi, si, "period", v)} />
+                  {/* サービス種別 + 事業所 */}
+                  <div className="flex-1 min-w-[130px]">
+                    <PTSTypeOnly type={svc.type} provider={svc.provider} onTypeChange={(v) => updateSvc(bi, gi, si, "type", v)} onProviderChange={(v) => updateSvc(bi, gi, si, "provider", v)} />
+                  </div>
+                  <div className="flex-1 min-w-[140px]">
+                    <PTSProviderOnly type={svc.type} provider={svc.provider} onTypeChange={(v) => updateSvc(bi, gi, si, "type", v)} onProviderChange={(v) => updateSvc(bi, gi, si, "provider", v)} />
+                  </div>
+                  {/* 頻度 */}
+                  <div className="w-24 shrink-0">
+                    <FI label="頻度" value={svc.frequency} onChange={(v) => updateSvc(bi, gi, si, "frequency", v)} />
+                  </div>
+                  {/* 期間 */}
+                  <div className="w-36 shrink-0">
+                    <FI label="期間" value={svc.period} onChange={(v) => updateSvc(bi, gi, si, "period", v)} />
+                  </div>
                 </div>
               ))}
               <button onClick={() => addSvc(bi, gi)} className="text-xs text-blue-500 hover:text-blue-700">＋ サービス追加</button>
