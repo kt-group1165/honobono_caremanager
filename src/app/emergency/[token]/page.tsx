@@ -171,11 +171,12 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
   // Fetch sheet（保存済みに加えて、既往歴・家族情報から自動反映）
   const openSheet = async (userId: string) => {
     setLoadingSheet(true);
-    const [{ data: userData }, { data: sheetRow }, { data: historyData }, { data: familyData }] = await Promise.all([
+    const [{ data: userData }, { data: sheetRow }, { data: historyData }, { data: familyData }, { data: activePlan }] = await Promise.all([
       supabase.from("kaigo_users").select("name, name_kana, birth_date, gender, address, phone").eq("id", userId).single(),
       supabase.from("kaigo_emergency_sheets").select("*").eq("user_id", userId).single(),
       supabase.from("kaigo_medical_history").select("disease_name, status, hospital, doctor").eq("user_id", userId).order("created_at", { ascending: false }),
       supabase.from("kaigo_assessments").select("form_data").eq("user_id", userId).order("created_at", { ascending: false }).limit(1).single(),
+      supabase.from("kaigo_care_plans").select("id").eq("user_id", userId).eq("status", "active").order("created_at", { ascending: false }).limit(1).single(),
     ]);
 
     // 保存済みシートをベースに、空欄のみ既往歴・家族情報から補完
@@ -218,6 +219,22 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
           merged[`emergency_contact${k}_address`] = m.address || "";
         }
         idx++;
+      }
+    }
+
+    // ケアプランから利用中サービスを反映
+    if (activePlan?.id && (!merged.services_in_use || (Array.isArray(merged.services_in_use) && merged.services_in_use.length === 0))) {
+      const { data: planServices } = await supabase
+        .from("kaigo_care_plan_services")
+        .select("service_type, service_content, frequency, provider")
+        .eq("care_plan_id", activePlan.id);
+      if (planServices && planServices.length > 0) {
+        merged.services_in_use = planServices.map((ps: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+          service_type: ps.service_type || "",
+          provider_name: ps.provider || "",
+          phone: "",
+          schedule: ps.frequency || "",
+        }));
       }
     }
 

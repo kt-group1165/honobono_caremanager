@@ -205,11 +205,28 @@ export default function EmergencySheetsPage() {
   // 基本情報から自動反映する関数
   const autoFillFromBaseData = useCallback(async (userId: string, baseSheet: EmergencySheet): Promise<EmergencySheet> => {
     const s = { ...baseSheet };
-    const [{ data: userData }, { data: historyData }, { data: familyData }] = await Promise.all([
+    const [{ data: userData }, { data: historyData }, { data: familyData }, { data: activePlan }] = await Promise.all([
       supabase.from("kaigo_users").select("phone").eq("id", userId).single(),
       supabase.from("kaigo_medical_history").select("disease_name, onset_date, status, hospital, doctor, notes").eq("user_id", userId).order("created_at", { ascending: false }),
       supabase.from("kaigo_assessments").select("form_data").eq("user_id", userId).order("created_at", { ascending: false }).limit(1).single(),
+      supabase.from("kaigo_care_plans").select("id").eq("user_id", userId).eq("status", "active").order("created_at", { ascending: false }).limit(1).single(),
     ]);
+
+    // ケアプランサービスから利用中サービスを取得
+    if (activePlan?.id && (!s.services_in_use || s.services_in_use.length === 0)) {
+      const { data: planServices } = await supabase
+        .from("kaigo_care_plan_services")
+        .select("service_type, service_content, frequency, provider")
+        .eq("care_plan_id", activePlan.id);
+      if (planServices && planServices.length > 0) {
+        s.services_in_use = planServices.map((ps: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+          service_type: ps.service_type || "",
+          provider_name: ps.provider || "",
+          phone: "",
+          schedule: ps.frequency || "",
+        }));
+      }
+    }
 
     // 電話番号
     if (userData?.phone && !s.home_phone) s.home_phone = userData.phone;
