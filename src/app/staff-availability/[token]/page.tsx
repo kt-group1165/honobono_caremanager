@@ -1245,7 +1245,37 @@ function CareRecordModal({
     return emptyCareRecord();
   });
   const [saving, setSaving] = useState(false);
-  const [openSection, setOpenSection] = useState<string | null>("pre_check");
+  // セクションの手動開閉状態（null = 未操作でデータ有無から自動判定）
+  const [openSections, setOpenSections] = useState<Record<string, boolean | null>>({});
+
+  // データが入っているか判定
+  const hasData = (id: string): boolean => {
+    switch (id) {
+      case "pre_check": return !!(data.pre_check.complexion || data.pre_check.condition || data.pre_check.room_temp || data.pre_check.humidity || data.pre_check.notes);
+      case "vitals": return !!(data.vitals.temperature || data.vitals.bp_sys || data.vitals.bp_dia || data.vitals.pulse || data.vitals.spo2 || data.vitals.respiration || data.vitals.blood_sugar || data.vitals.weight || data.vitals.notes);
+      case "excretion": return data.excretion.done || !!(data.excretion.urine || data.excretion.stool || data.excretion.notes);
+      case "hydration": return data.hydration.done || !!(data.hydration.drink_type || data.hydration.amount || data.hydration.notes);
+      case "meal": return data.meal.done || !!(data.meal.staple_amount || data.meal.side_amount || data.meal.notes);
+      case "oral_care": return data.oral_care.done || !!(data.oral_care.denture || data.oral_care.notes);
+      case "bathing": return data.bathing.done || !!(data.bathing.bath_type || data.bathing.notes);
+      case "grooming": return data.grooming.done || !!data.grooming.notes;
+      case "dressing": return data.dressing.done || !!data.dressing.notes;
+      case "positioning": return data.positioning.done || !!(data.positioning.position_type || data.positioning.notes);
+      case "medication": return data.medication.done || !!data.medication.notes;
+      case "outing": return data.outing.done || !!data.outing.notes;
+      case "wake_sleep": return data.wake_sleep.done || !!data.wake_sleep.notes;
+      case "medical_care": return data.medical_care.done || !!data.medical_care.notes;
+      case "independence": return data.independence_support.done || !!data.independence_support.notes;
+      case "living": return !!(data.living_support.cooking || data.living_support.cleaning || data.living_support.laundry || data.living_support.shopping || data.living_support.trash || data.living_support.clothing || data.living_support.medication_mgmt || data.living_support.health_mgmt || data.living_support.other_notes);
+      case "exit_check": return !!(data.exit_check.fire_check || data.exit_check.lock_check || data.exit_check.appliance_check || data.exit_check.user_condition || data.exit_check.notes);
+      case "progress": return !!data.progress_notes;
+      case "handover": return !!(data.handover.notes || data.user_condition || data.notes);
+      case "detailed_report": return !!data.detailed_report;
+      case "photos": return data.photos.length > 0;
+      case "signature": return !!data.signature;
+      default: return false;
+    }
+  };
 
   // Helper to update nested data
   const upd = <K extends keyof CareRecordData>(key: K, val: Partial<CareRecordData[K]>) => {
@@ -1288,8 +1318,18 @@ function CareRecordModal({
     setSaving(false);
   };
 
-  const toggle = (id: string) => setOpenSection(openSection === id ? null : id);
-  const isOpen = (id: string) => openSection === id;
+  const toggle = (id: string) => {
+    const currentOpen = openSections[id] !== undefined && openSections[id] !== null
+      ? openSections[id]
+      : hasData(id);
+    setOpenSections({ ...openSections, [id]: !currentOpen });
+  };
+  const isOpen = (id: string) => {
+    // 手動操作があればそれを優先、なければデータ有無で自動判定
+    const manual = openSections[id];
+    if (manual !== undefined && manual !== null) return manual;
+    return hasData(id);
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col">
