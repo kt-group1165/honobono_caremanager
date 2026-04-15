@@ -186,14 +186,15 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
 
     // 既往歴から主治医
     if (historyData && historyData.length > 0) {
-      const treating = historyData.filter((h: any) => h.status === "治療中"); // eslint-disable-line @typescript-eslint/no-explicit-any
-      if (treating.length > 0 && treating[0].doctor && !merged.doctor_name) {
-        merged.doctor_name = treating[0].doctor;
-        merged.doctor_hospital = treating[0].hospital || "";
+      // 医師または医療機関が記載されているレコードを優先（ステータス不問）
+      const withDoctor = historyData.filter((h: any) => h.doctor || h.hospital); // eslint-disable-line @typescript-eslint/no-explicit-any
+      if (withDoctor.length > 0 && !merged.doctor_name && !merged.doctor_hospital) {
+        merged.doctor_name = withDoctor[0].doctor || "";
+        merged.doctor_hospital = withDoctor[0].hospital || "";
       }
-      if (treating.length > 1 && treating[1].doctor && !merged.doctor2_name) {
-        merged.doctor2_name = treating[1].doctor;
-        merged.doctor2_hospital = treating[1].hospital || "";
+      if (withDoctor.length > 1 && !merged.doctor2_name && !merged.doctor2_hospital) {
+        merged.doctor2_name = withDoctor[1].doctor || "";
+        merged.doctor2_hospital = withDoctor[1].hospital || "";
       }
       if (!merged.current_disease_notes) {
         merged.current_disease_notes = historyData.map((h: any) => // eslint-disable-line @typescript-eslint/no-explicit-any

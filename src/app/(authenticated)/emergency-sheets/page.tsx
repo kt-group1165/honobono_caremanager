@@ -186,14 +186,15 @@ export default function EmergencySheetsPage() {
 
     // 既往歴から かかりつけ医 + 既往歴テキスト を反映
     if (historyData && historyData.length > 0) {
-      const treating = historyData.filter((h: any) => h.status === "治療中"); // eslint-disable-line @typescript-eslint/no-explicit-any
-      if (treating.length > 0 && treating[0].doctor && !s.doctor_name) {
-        s.doctor_name = treating[0].doctor;
-        s.doctor_hospital = treating[0].hospital || "";
+      // 医師または医療機関が記載されているレコードを優先（ステータス不問）
+      const withDoctor = historyData.filter((h: any) => h.doctor || h.hospital); // eslint-disable-line @typescript-eslint/no-explicit-any
+      if (withDoctor.length > 0 && !s.doctor_name && !s.doctor_hospital) {
+        s.doctor_name = withDoctor[0].doctor || "";
+        s.doctor_hospital = withDoctor[0].hospital || "";
       }
-      if (treating.length > 1 && treating[1].doctor && !s.doctor2_name) {
-        s.doctor2_name = treating[1].doctor;
-        s.doctor2_hospital = treating[1].hospital || "";
+      if (withDoctor.length > 1 && !s.doctor2_name && !s.doctor2_hospital) {
+        s.doctor2_name = withDoctor[1].doctor || "";
+        s.doctor2_hospital = withDoctor[1].hospital || "";
       }
       if (!s.current_disease_notes) {
         s.current_disease_notes = historyData.map((h: any) => // eslint-disable-line @typescript-eslint/no-explicit-any
