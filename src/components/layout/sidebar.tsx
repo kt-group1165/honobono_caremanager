@@ -58,6 +58,7 @@ const NAV_CARE_MANAGER: NavEntry[] = [
     ],
   },
   // { name: "給付管理", href: "/billing/benefits", icon: Calculator }, // 非表示（後日削除検討）
+  { name: "職員管理", href: "/staff", icon: UserCog },
   { name: "入退院管理", href: "/hospitalizations", icon: CalendarDays },
   { name: "緊急時シート", href: "/emergency-sheets", icon: AlertTriangle },
   { name: "レセプト", href: "/billing/claims", icon: FileSpreadsheet },
