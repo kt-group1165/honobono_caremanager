@@ -190,7 +190,22 @@ export default function HospitalizationsPage() {
         // ── 支援経過に自動追加 ──
         const userName = selectedUser?.name ?? "";
 
+        // 該当日のケアプランを検索
+        const findPlanId = async (dateStr: string) => {
+          const { data: plans } = await supabase
+            .from("kaigo_care_plans")
+            .select("id, start_date, end_date")
+            .eq("user_id", selectedUserId!)
+            .lte("start_date", dateStr)
+            .order("start_date", { ascending: false });
+          const p = (plans || []).find((x: { id: string; start_date: string; end_date: string | null }) =>
+            !x.end_date || x.end_date >= dateStr
+          );
+          return p?.id ?? null;
+        };
+
         // 入院の記録
+        const admissionPlanId = await findPlanId(form.admission_date);
         await supabase.from("kaigo_support_records").insert({
           user_id: selectedUserId,
           record_date: form.admission_date,
@@ -198,10 +213,12 @@ export default function HospitalizationsPage() {
           category: "その他",
           content: `【入院】${userName} 様が ${form.hospital_name}${form.department ? "（" + form.department + "）" : ""} に入院。${form.reason ? "理由: " + form.reason : ""}`.trim(),
           staff_name: null,
+          care_plan_id: admissionPlanId,
         });
 
         // 退院の記録（退院日があれば）
         if (form.discharge_date) {
+          const dischargePlanId = await findPlanId(form.discharge_date);
           await supabase.from("kaigo_support_records").insert({
             user_id: selectedUserId,
             record_date: form.discharge_date,
@@ -209,6 +226,7 @@ export default function HospitalizationsPage() {
             category: "その他",
             content: `【退院】${userName} 様が ${form.hospital_name} を退院。${form.discharge_destination ? "退院先: " + form.discharge_destination : ""}`.trim(),
             staff_name: null,
+            care_plan_id: dischargePlanId,
           });
         }
 
@@ -248,8 +266,20 @@ export default function HospitalizationsPage() {
         .eq("id", rec.id);
       if (error) throw error;
 
+      // 該当利用者の退院日を含むケアプランを検索（care_plan_idを紐付けて支援経過画面で見えるように）
+      const { data: userName2 } = await supabase.from("kaigo_users").select("name").eq("id", rec.user_id).single();
+      const userName = userName2?.name ?? selectedUser?.name ?? "";
+      const { data: plans } = await supabase
+        .from("kaigo_care_plans")
+        .select("id, start_date, end_date")
+        .eq("user_id", rec.user_id)
+        .lte("start_date", dischargeDate)
+        .order("start_date", { ascending: false });
+      const activePlan = (plans || []).find((p: { id: string; start_date: string; end_date: string | null }) =>
+        !p.end_date || p.end_date >= dischargeDate
+      );
+
       // 支援経過に退院記録を追加
-      const userName = selectedUser?.name ?? "";
       await supabase.from("kaigo_support_records").insert({
         user_id: rec.user_id,
         record_date: dischargeDate,
@@ -257,6 +287,7 @@ export default function HospitalizationsPage() {
         category: "その他",
         content: `【退院】${userName} 様が ${rec.hospital_name} を退院。${dest ? "退院先: " + dest : ""}`.trim(),
         staff_name: null,
+        care_plan_id: activePlan?.id ?? null,
       });
 
       toast.success("退院を登録し、支援経過に自動追加しました");

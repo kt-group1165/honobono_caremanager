@@ -24,6 +24,8 @@ import {
   ClipboardList,
   Activity,
   MoreHorizontal,
+  Link2,
+  Copy,
 } from "lucide-react";
 import {
   format,
@@ -180,7 +182,42 @@ function escapeCSV(val: string | null | undefined): string {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function SupportRecordsPage() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
+
+  // ── スマホURL管理 ──
+  const [showUrlModal, setShowUrlModal] = useState(false);
+  const [urls, setUrls] = useState<{ id: string; token: string; name: string }[]>([]);
+  const [newUrlName, setNewUrlName] = useState("訪問記録用");
+  const [urlLoading, setUrlLoading] = useState(false);
+
+  const fetchUrls = useCallback(async () => {
+    const { data } = await supabase.from("kaigo_support_tokens").select("id, token, name").order("created_at", { ascending: false });
+    setUrls(data || []);
+  }, [supabase]);
+
+  useEffect(() => { if (showUrlModal) fetchUrls(); }, [showUrlModal, fetchUrls]);
+
+  const createUrl = async () => {
+    if (!newUrlName.trim()) { toast.error("名前を入力してください"); return; }
+    setUrlLoading(true);
+    const { error } = await supabase.from("kaigo_support_tokens").insert({ name: newUrlName.trim() });
+    if (error) toast.error("発行に失敗: " + error.message);
+    else { toast.success("URLを発行しました"); setNewUrlName("訪問記録用"); fetchUrls(); }
+    setUrlLoading(false);
+  };
+
+  const copyUrl = (token: string) => {
+    const url = `${window.location.origin}/support/${token}`;
+    navigator.clipboard.writeText(url);
+    toast.success("URLをコピーしました");
+  };
+
+  const deleteUrl = async (id: string) => {
+    if (!confirm("このURLを削除しますか？")) return;
+    await supabase.from("kaigo_support_tokens").delete().eq("id", id);
+    fetchUrls();
+    toast.success("削除しました");
+  };
 
   // ── State ──
   const [users, setUsers] = useState<KaigoUser[]>([]);
@@ -526,6 +563,13 @@ export default function SupportRecordsPage() {
                 >
                   <Printer size={14} />
                   印刷
+                </button>
+                <button
+                  onClick={() => setShowUrlModal(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700 hover:bg-blue-100 transition-colors"
+                >
+                  <Link2 size={14} />
+                  スマホURL発行
                 </button>
                 <button
                   onClick={openNew}
@@ -1207,6 +1251,50 @@ export default function SupportRecordsPage() {
           );
         })()}
       </div>
+
+      {/* スマホURL発行モーダル */}
+      {showUrlModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowUrlModal(false)}>
+          <div className="w-full max-w-md rounded-xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <h2 className="font-bold text-gray-900">支援経過スマホURL管理</h2>
+              <button onClick={() => setShowUrlModal(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="flex gap-2">
+                <input
+                  value={newUrlName}
+                  onChange={(e) => setNewUrlName(e.target.value)}
+                  placeholder="URL名（例: 訪問記録用）"
+                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+                <button onClick={createUrl} disabled={urlLoading} className="flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60">
+                  {urlLoading ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />}
+                  発行
+                </button>
+              </div>
+              <div className="space-y-3">
+                {urls.map((u) => {
+                  const url = `${typeof window !== "undefined" ? window.location.origin : ""}/support/${u.token}`;
+                  return (
+                    <div key={u.id} className="rounded-lg border p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-bold text-gray-900">{u.name}</span>
+                        <button onClick={() => deleteUrl(u.id)} className="text-xs text-red-500 hover:underline">削除</button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input readOnly value={url} className="flex-1 text-xs bg-gray-50 border rounded px-2 py-1.5 text-gray-600" />
+                        <button onClick={() => copyUrl(u.token)} className="shrink-0 p-1.5 rounded hover:bg-gray-100"><Copy size={14} className="text-gray-500" /></button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {urls.length === 0 && <p className="text-sm text-gray-400 text-center py-4">URLがまだ発行されていません</p>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
