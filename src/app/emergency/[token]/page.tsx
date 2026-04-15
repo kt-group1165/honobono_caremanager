@@ -168,13 +168,58 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
     }
   };
 
-  // Fetch sheet
+  // Fetch sheet（保存済みに加えて、既往歴・家族情報から自動反映）
   const openSheet = async (userId: string) => {
     setLoadingSheet(true);
-    const [{ data: userData }, { data: sheetRow }] = await Promise.all([
+    const [{ data: userData }, { data: sheetRow }, { data: historyData }, { data: familyData }] = await Promise.all([
       supabase.from("kaigo_users").select("name, name_kana, birth_date, gender, address, phone").eq("id", userId).single(),
       supabase.from("kaigo_emergency_sheets").select("*").eq("user_id", userId).single(),
+      supabase.from("kaigo_medical_history").select("disease_name, status, hospital, doctor").eq("user_id", userId).order("created_at", { ascending: false }),
+      supabase.from("kaigo_assessments").select("form_data").eq("user_id", userId).order("created_at", { ascending: false }).limit(1).single(),
     ]);
+
+    // 保存済みシートをベースに、空欄のみ既往歴・家族情報から補完
+    const merged: Record<string, any> = { ...(sheetRow || {}) }; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+    // 電話番号
+    if (userData?.phone && !merged.home_phone) merged.home_phone = userData.phone;
+
+    // 既往歴から主治医
+    if (historyData && historyData.length > 0) {
+      const treating = historyData.filter((h: any) => h.status === "治療中"); // eslint-disable-line @typescript-eslint/no-explicit-any
+      if (treating.length > 0 && treating[0].doctor && !merged.doctor_name) {
+        merged.doctor_name = treating[0].doctor;
+        merged.doctor_hospital = treating[0].hospital || "";
+      }
+      if (treating.length > 1 && treating[1].doctor && !merged.doctor2_name) {
+        merged.doctor2_name = treating[1].doctor;
+        merged.doctor2_hospital = treating[1].hospital || "";
+      }
+      if (!merged.current_disease_notes) {
+        merged.current_disease_notes = historyData.map((h: any) => // eslint-disable-line @typescript-eslint/no-explicit-any
+          `${h.disease_name}${h.status ? ` (${h.status})` : ""}${h.hospital ? ` - ${h.hospital}` : ""}`
+        ).join("\n");
+      }
+    }
+
+    // アセスメントの家族情報から緊急連絡先
+    if (familyData?.form_data) {
+      const fd = familyData.form_data as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+      const members = fd?.tab2?.family_members || [];
+      let idx = 0;
+      for (const m of members) {
+        if (!m.name || idx >= 5) break;
+        const k = String(idx + 1);
+        if (!merged[`emergency_contact${k}_name`]) {
+          merged[`emergency_contact${k}_name`] = m.name || "";
+          merged[`emergency_contact${k}_relation`] = m.relationship || m.relationship_detail || "";
+          merged[`emergency_contact${k}_phone`] = m.phone || "";
+          merged[`emergency_contact${k}_address`] = m.address || "";
+        }
+        idx++;
+      }
+    }
+
     setSheetData({
       user_name: userData?.name ?? "",
       user_kana: userData?.name_kana ?? "",
@@ -182,7 +227,7 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
       gender: userData?.gender,
       address: userData?.address,
       phone: userData?.phone,
-      sheet: sheetRow as Record<string, string> | null,
+      sheet: merged as Record<string, string>,
     });
     setScreen("sheet");
     setLoadingSheet(false);
