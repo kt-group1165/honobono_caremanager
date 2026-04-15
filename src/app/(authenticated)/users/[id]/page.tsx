@@ -193,7 +193,7 @@ export default function UserDetailPage() {
     care_manager_staff_id: "",
   });
 
-  // 職員一覧（担当ケアマネ選択用）
+  // 職員一覧（担当ケアマネ選択用 — ケアマネージャーのみ）
   const [staffList, setStaffList] = useState<{ id: string; name: string; role: string }[]>([]);
   useEffect(() => {
     const fetch = async () => {
@@ -201,6 +201,7 @@ export default function UserDetailPage() {
         .from("kaigo_staff")
         .select("id, name, role")
         .eq("status", "active")
+        .in("role", ["ケアマネージャー", "介護支援専門員", "主任介護支援専門員"])
         .order("name_kana");
       setStaffList(data || []);
     };
