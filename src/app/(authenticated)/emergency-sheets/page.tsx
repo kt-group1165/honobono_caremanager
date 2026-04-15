@@ -212,9 +212,17 @@ export default function EmergencySheetsPage() {
       supabase.from("kaigo_care_plans").select("id").eq("user_id", userId).eq("status", "active").order("created_at", { ascending: false }).limit(1).single(),
     ]);
 
-    // ケアプランサービスから利用中サービスを取得（2ソース統合）
-    if (!s.services_in_use || s.services_in_use.length === 0) {
+    // ケアプランサービスから利用中サービスを取得・マージ（常に実行）
+    // 既存のservices_in_useをベースに、第2表・旧テーブルから不足分を追加
+    {
       const combined: { service_type: string; provider_name: string; phone: string; schedule: string }[] = [];
+
+      // 既存データをそのまま引き継ぐ
+      if (Array.isArray(s.services_in_use)) {
+        for (const svc of s.services_in_use) {
+          if (svc?.service_type || svc?.provider_name) combined.push(svc);
+        }
+      }
 
       // 1) 旧形式 kaigo_care_plan_services
       if (activePlan?.id) {
@@ -224,12 +232,15 @@ export default function EmergencySheetsPage() {
           .eq("care_plan_id", activePlan.id);
         (planServices || []).forEach((ps: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
           if (ps.service_type || ps.provider) {
-            combined.push({
-              service_type: ps.service_type || "",
-              provider_name: ps.provider || "",
-              phone: "",
-              schedule: ps.frequency || "",
-            });
+            const dup = combined.find((c) => c.service_type === (ps.service_type || "") && c.provider_name === (ps.provider || ""));
+            if (!dup) {
+              combined.push({
+                service_type: ps.service_type || "",
+                provider_name: ps.provider || "",
+                phone: "",
+                schedule: ps.frequency || "",
+              });
+            }
           }
         });
       }
@@ -241,17 +252,16 @@ export default function EmergencySheetsPage() {
         .eq("user_id", userId)
         .eq("report_type", "care-plan-2")
         .order("created_at", { ascending: false })
-        .limit(1);
+        .limit(5);  // 複数プランから取得
 
-      if (reportDocs && reportDocs.length > 0) {
-        const content = reportDocs[0].content as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+      for (const doc of (reportDocs || [])) {
+        const content = doc.content as any; // eslint-disable-line @typescript-eslint/no-explicit-any
         const blocks = Array.isArray(content?.blocks) ? content.blocks : [];
         for (const block of blocks) {
           for (const goal of (block.goals || [])) {
             for (const svc of (goal.services || [])) {
               if (svc.type || svc.provider) {
-                // 重複除去: 同じ事業所・種別があればスキップ
-                const dup = combined.find((c) => c.service_type === svc.type && c.provider_name === svc.provider);
+                const dup = combined.find((c) => c.service_type === (svc.type || "") && c.provider_name === (svc.provider || ""));
                 if (!dup) {
                   combined.push({
                     service_type: svc.type || "",
@@ -266,7 +276,7 @@ export default function EmergencySheetsPage() {
         }
       }
 
-      // 3) 事業所マスタから電話番号を紐付け
+      // 3) 事業所マスタから電話番号を紐付け（空の phone を補完）
       if (combined.length > 0) {
         const providerNames = combined.map((c) => c.provider_name).filter(Boolean);
         if (providerNames.length > 0) {

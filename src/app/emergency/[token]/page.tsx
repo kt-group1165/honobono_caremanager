@@ -223,9 +223,16 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
       }
     }
 
-    // ケアプランから利用中サービスを反映（2ソース統合）
-    if (!merged.services_in_use || (Array.isArray(merged.services_in_use) && merged.services_in_use.length === 0)) {
+    // ケアプランから利用中サービスを反映（常にマージ）
+    {
       const combined: { service_type: string; provider_name: string; phone: string; schedule: string }[] = [];
+
+      // 既存データ
+      if (Array.isArray(merged.services_in_use)) {
+        for (const svc of merged.services_in_use) {
+          if (svc?.service_type || svc?.provider_name) combined.push(svc);
+        }
+      }
 
       // 1) 旧形式 kaigo_care_plan_services
       if (activePlan?.id) {
@@ -235,12 +242,15 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
           .eq("care_plan_id", activePlan.id);
         (planServices || []).forEach((ps: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
           if (ps.service_type || ps.provider) {
-            combined.push({
-              service_type: ps.service_type || "",
-              provider_name: ps.provider || "",
-              phone: "",
-              schedule: ps.frequency || "",
-            });
+            const dup = combined.find((c) => c.service_type === (ps.service_type || "") && c.provider_name === (ps.provider || ""));
+            if (!dup) {
+              combined.push({
+                service_type: ps.service_type || "",
+                provider_name: ps.provider || "",
+                phone: "",
+                schedule: ps.frequency || "",
+              });
+            }
           }
         });
       }
@@ -252,15 +262,15 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
         .eq("user_id", userId)
         .eq("report_type", "care-plan-2")
         .order("created_at", { ascending: false })
-        .limit(1);
-      if (reportDocs && reportDocs.length > 0) {
-        const content = reportDocs[0].content as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+        .limit(5);
+      for (const doc of (reportDocs || [])) {
+        const content = doc.content as any; // eslint-disable-line @typescript-eslint/no-explicit-any
         const blocks = Array.isArray(content?.blocks) ? content.blocks : [];
         for (const block of blocks) {
           for (const goal of (block.goals || [])) {
             for (const svc of (goal.services || [])) {
               if (svc.type || svc.provider) {
-                const dup = combined.find((c) => c.service_type === svc.type && c.provider_name === svc.provider);
+                const dup = combined.find((c) => c.service_type === (svc.type || "") && c.provider_name === (svc.provider || ""));
                 if (!dup) {
                   combined.push({
                     service_type: svc.type || "",
