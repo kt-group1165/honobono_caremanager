@@ -25,6 +25,7 @@ import {
 import { format, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { TemplatePicker } from "@/components/templates/template-picker";
 
 function createAnonClient() {
   return createBrowserClient(
@@ -331,7 +332,10 @@ export default function SupportMobilePage({ params }: { params: Promise<Params> 
 
               {/* 内容 */}
               <div>
-                <label className="block text-xs text-gray-500 mb-1">内容 <span className="text-red-500">*</span></label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs text-gray-500">内容 <span className="text-red-500">*</span></label>
+                  <TemplatePicker category="support_record" currentText={form.content} onInsert={(v) => setForm({ ...form, content: v })} anon />
+                </div>
                 <textarea
                   rows={8}
                   value={form.content}

@@ -19,6 +19,7 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import { TemplatePicker } from "@/components/templates/template-picker";
 import { ja } from "date-fns/locale";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -662,7 +663,10 @@ export default function VisitRecordsPage() {
   );
   const FTextarea = ({ label, value, onChange, placeholder, rows = 2 }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; rows?: number }) => (
     <div>
-      <label className="mb-1 block text-xs font-medium text-gray-700">{label}</label>
+      <div className="flex items-center justify-between mb-1">
+        <label className="block text-xs font-medium text-gray-700">{label}</label>
+        <TemplatePicker category="visit_record" currentText={value} onInsert={onChange} />
+      </div>
       <textarea rows={rows} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={inputClass} />
     </div>
   );

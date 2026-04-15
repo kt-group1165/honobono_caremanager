@@ -34,6 +34,7 @@ import {
   endOfDay,
 } from "date-fns";
 import { ja } from "date-fns/locale";
+import { TemplatePicker } from "@/components/templates/template-picker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1045,9 +1046,12 @@ export default function SupportRecordsPage() {
 
               {/* Content */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  内容 <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-gray-700">
+                    内容 <span className="text-red-500">*</span>
+                  </label>
+                  <TemplatePicker category="support_record" currentText={form.content} onInsert={(v) => setForm((p) => ({ ...p, content: v }))} />
+                </div>
                 <textarea
                   value={form.content}
                   onChange={(e) =>

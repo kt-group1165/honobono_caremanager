@@ -40,6 +40,7 @@ import {
 import { ja } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { use } from "react";
+import { TemplatePicker } from "@/components/templates/template-picker";
 
 // ─── Supabase (anon, no auth) ─────────────────────────────────────────────────
 
@@ -1167,7 +1168,10 @@ function CareInput({ label, value, onChange, placeholder, type = "text", inputMo
 function CareTextarea({ label, value, onChange, placeholder, rows = 3 }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; rows?: number }) {
   return (
     <div>
-      <label className="block text-xs text-gray-500 mb-1">{label}</label>
+      <div className="flex items-center justify-between mb-1">
+        {label && <label className="block text-xs text-gray-500">{label}</label>}
+        <TemplatePicker category="visit_record" currentText={value} onInsert={onChange} anon />
+      </div>
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
