@@ -175,6 +175,40 @@ function FI({ label, value, onChange, textarea, rows = 3, className = "" }: {
 type ProviderRow = { id: string; provider_name: string; service_categories: string[] };
 type CategoryRow = { code: string; name: string };
 
+// 介護保険サービス種別の標準マスタ（種類コード順）
+const STANDARD_SERVICE_CATEGORIES: CategoryRow[] = [
+  { code: "11", name: "訪問介護" },
+  { code: "12", name: "訪問入浴介護" },
+  { code: "13", name: "訪問看護" },
+  { code: "14", name: "訪問リハビリテーション" },
+  { code: "15", name: "通所介護" },
+  { code: "16", name: "通所リハビリテーション" },
+  { code: "17", name: "福祉用具貸与" },
+  { code: "21", name: "短期入所生活介護" },
+  { code: "22", name: "短期入所療養介護" },
+  { code: "23", name: "特定施設入居者生活介護" },
+  { code: "24", name: "福祉用具購入" },
+  { code: "25", name: "住宅改修" },
+  { code: "31", name: "居宅療養管理指導" },
+  { code: "32", name: "介護老人福祉施設" },
+  { code: "33", name: "介護老人保健施設" },
+  { code: "34", name: "介護療養型医療施設" },
+  { code: "36", name: "認知症対応型共同生活介護" },
+  { code: "43", name: "居宅介護支援" },
+  { code: "46", name: "介護予防支援" },
+  { code: "71", name: "定期巡回・随時対応型訪問介護看護" },
+  { code: "72", name: "夜間対応型訪問介護" },
+  { code: "73", name: "認知症対応型通所介護" },
+  { code: "74", name: "小規模多機能型居宅介護" },
+  { code: "75", name: "看護小規模多機能型居宅介護" },
+  { code: "76", name: "地域密着型通所介護" },
+  { code: "77", name: "地域密着型特定施設入居者生活介護" },
+  { code: "78", name: "地域密着型介護老人福祉施設入所者生活介護" },
+  { code: "A1", name: "訪問型サービス(総合事業)" },
+  { code: "A2", name: "通所型サービス(総合事業)" },
+  { code: "A3", name: "その他生活支援サービス(総合事業)" },
+];
+
 // モジュールレベルでキャッシュ（複数のインスタンスで共有）
 let __providerCache: ProviderRow[] | null = null;
 let __categoryCache: CategoryRow[] | null = null;
@@ -190,7 +224,10 @@ async function loadProviderMasterCache() {
       supabase.from("kaigo_service_codes").select("service_category, service_category_name"),
     ]);
     __providerCache = (provs || []) as ProviderRow[];
+
+    // 標準マスタ + DBから取得した種別をマージ（DBにないものは標準を使う）
     const catMap = new Map<string, string>();
+    STANDARD_SERVICE_CATEGORIES.forEach((c) => catMap.set(c.code, c.name));
     (codes || []).forEach((c: Record<string, unknown>) => {
       catMap.set(String(c.service_category), String(c.service_category_name));
     });
