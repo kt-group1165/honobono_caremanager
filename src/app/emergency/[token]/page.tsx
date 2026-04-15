@@ -116,11 +116,12 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
   // Fetch users for selected manager
   const fetchUsers = useCallback(async (managerId: string) => {
     setLoadingUsers(true);
-    // Get all active users (filter by care_manager if available, else show all)
+    // 選択したケアマネが担当している利用者のみ取得
     const { data: usersData } = await supabase
       .from("kaigo_users")
-      .select("id, name, name_kana")
+      .select("id, name, name_kana, care_manager_staff_id")
       .eq("status", "active")
+      .eq("care_manager_staff_id", managerId)
       .order("name_kana");
 
     // Get existing statuses

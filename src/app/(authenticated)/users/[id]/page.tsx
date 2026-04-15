@@ -37,6 +37,7 @@ type EditForm = {
   admission_date: string;
   status: string;
   notes: string;
+  care_manager_staff_id: string;
 };
 
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
@@ -75,7 +76,23 @@ export default function UserDetailPage() {
     admission_date: "",
     status: "active",
     notes: "",
+    care_manager_staff_id: "",
   });
+
+  // 職員一覧（担当ケアマネ選択用）
+  const [staffList, setStaffList] = useState<{ id: string; name: string; role: string }[]>([]);
+  useEffect(() => {
+    const fetch = async () => {
+      const { data } = await supabase
+        .from("kaigo_staff")
+        .select("id, name, role")
+        .eq("status", "active")
+        .order("name_kana");
+      setStaffList(data || []);
+    };
+    fetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fetchUser = useCallback(async () => {
     setLoading(true);
@@ -103,6 +120,7 @@ export default function UserDetailPage() {
         admission_date: data.admission_date ?? "",
         status: data.status ?? "active",
         notes: data.notes ?? "",
+        care_manager_staff_id: (data as { care_manager_staff_id?: string }).care_manager_staff_id ?? "",
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "取得に失敗しました";
@@ -142,6 +160,7 @@ export default function UserDetailPage() {
           admission_date: form.admission_date || null,
           status: form.status,
           notes: form.notes || null,
+          care_manager_staff_id: form.care_manager_staff_id || null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", id);
@@ -463,6 +482,21 @@ export default function UserDetailPage() {
                     }
                     className={inputClass}
                   />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    担当ケアマネジャー
+                  </label>
+                  <select
+                    value={form.care_manager_staff_id}
+                    onChange={(e) => setForm((p) => ({ ...p, care_manager_staff_id: e.target.value }))}
+                    className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">— 未選択 —</option>
+                    {staffList.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}（{s.role}）</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
