@@ -51,7 +51,7 @@ const REPORT_CARDS: ReportCard[] = [
     bgColor: "bg-emerald-50",
     borderColor: "border-emerald-100",
     buttonColor: "bg-emerald-600 hover:bg-emerald-700",
-    badge: "準備中",
+    badge: null,
   },
   {
     type: "visit-results",
