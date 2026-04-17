@@ -440,7 +440,11 @@ function OfficeSwitcher() {
         <Building2 size={18} className="text-blue-600" />
         <h2 className="font-semibold text-gray-900">自事業所を選択</h2>
       </div>
-      <p className="text-xs text-gray-500 mb-3">現在操作している自事業所を選択します。切り替えると事業種別が追従します。</p>
+      <p className="text-xs text-gray-500 mb-3">
+        現在操作している自事業所を選択します。事業種別（居宅介護支援／訪問介護）は事業所ごとに設定され、切り替えると自動的に追従します。
+        <br />
+        <span className="text-gray-400">※ 事業種別を変更したい場合は「マスタ管理 → 自事業所管理」で事業所ごとに設定してください。</span>
+      </p>
       <div className="space-y-2">
         {offices.map((o) => {
           const isCurrent = o.id === currentOfficeId;

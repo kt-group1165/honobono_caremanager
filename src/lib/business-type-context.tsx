@@ -15,10 +15,11 @@ export interface OfficeRow {
 
 interface BusinessTypeContextValue {
   businessType: BusinessType;
+  /** @deprecated 事業種別は自事業所のbusiness_typeから自動取得。直接変更不可。 */
   setBusinessType: (type: BusinessType) => void;
   loading: boolean;
   isLocked: boolean;
-  // 複数事業所対応
+  // 複数事業所対応 — こちらが公式の切替手段
   offices: OfficeRow[];          // 全自事業所一覧
   currentOfficeId: string | null; // 現在選択されている自事業所ID
   setCurrentOfficeId: (id: string) => void;
