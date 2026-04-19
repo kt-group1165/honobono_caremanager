@@ -80,9 +80,10 @@ export default function OfficeSettingsPage() {
       const list = await loadOffices();
       if (list.length > 0) {
         // 現在の自事業所（context）を優先、なければ先頭
-        const initial = currentOfficeId && list.find((o) => o.id === currentOfficeId)
-          ? list.find((o) => o.id === currentOfficeId)!
-          : list[0];
+        const found: OfficeSettings | undefined = currentOfficeId
+          ? list.find((o: OfficeSettings) => o.id === currentOfficeId)
+          : undefined;
+        const initial: OfficeSettings = found ?? list[0];
         setEditingId(initial.id);
         setForm(initial);
       }
@@ -95,13 +96,13 @@ export default function OfficeSettingsPage() {
   // currentOfficeIdが変わったら編集中もそれに追従（他画面で切替えた場合に同期）
   useEffect(() => {
     if (!currentOfficeId || offices.length === 0) return;
-    const o = offices.find((x) => x.id === currentOfficeId);
+    const o = offices.find((x: OfficeSettings) => x.id === currentOfficeId);
     if (o && o.id !== editingId) { setEditingId(o.id); setForm(o); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentOfficeId, offices]);
 
   const selectOffice = (id: string) => {
-    const o = offices.find((x) => x.id === id);
+    const o = offices.find((x: OfficeSettings) => x.id === id);
     if (o) {
       setEditingId(id);
       setForm(o);
