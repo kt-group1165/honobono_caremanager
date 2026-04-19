@@ -88,7 +88,16 @@ export function BusinessTypeProvider({ children }: { children: ReactNode }) {
         officeId = (list.find((o) => o.is_active) ?? list[0]).id;
       }
       setCurrentOfficeIdState(officeId);
-      if (officeId) localStorage.setItem(STORAGE_KEY, officeId);
+      if (officeId) {
+        localStorage.setItem(STORAGE_KEY, officeId);
+        // URLに ?office=<ID> を強制的に反映（未指定 or 古い場合）
+        if (officeParam !== officeId) {
+          const url = new URL(window.location.href);
+          url.searchParams.set("office", officeId);
+          url.searchParams.delete("mode");
+          window.history.replaceState(null, "", url.toString());
+        }
+      }
 
       // 事業種別は「現在選択中の自事業所」から自動取得（優先）
       // URL ?mode= は事業所が未選択の場合のみフォールバックとして使用
@@ -106,6 +115,17 @@ export function BusinessTypeProvider({ children }: { children: ReactNode }) {
 
     init();
   }, [supabase]);
+
+  // ページ遷移や外部遷移でURLから ?office= が消えた場合に補填する
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!currentOfficeId) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("office") !== currentOfficeId) {
+      url.searchParams.set("office", currentOfficeId);
+      window.history.replaceState(null, "", url.toString());
+    }
+  });
 
   const setBusinessType = async (type: BusinessType) => {
     if (isLocked) return;
