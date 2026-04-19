@@ -125,7 +125,7 @@ export function BusinessTypeProvider({ children }: { children: ReactNode }) {
       url.searchParams.set("office", currentOfficeId);
       window.history.replaceState(null, "", url.toString());
     }
-  });
+  }, [currentOfficeId]);
 
   const setBusinessType = async (type: BusinessType) => {
     if (isLocked) return;

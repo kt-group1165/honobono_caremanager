@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Save, Building2, Loader2, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useBusinessType } from "@/lib/business-type-context";
 
 // 令和6年度改定 居宅介護支援 特定事業所加算
 const TOKUTEI_OPTIONS = [
@@ -51,6 +52,7 @@ type OfficeSettings = {
 
 export default function OfficeSettingsPage() {
   const supabase = useMemo(() => createClient(), []);
+  const { currentOfficeId, setCurrentOfficeId } = useBusinessType();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [offices, setOffices] = useState<OfficeSettings[]>([]);
@@ -77,8 +79,12 @@ export default function OfficeSettingsPage() {
     const init = async () => {
       const list = await loadOffices();
       if (list.length > 0) {
-        setEditingId(list[0].id);
-        setForm(list[0]);
+        // 現在の自事業所（context）を優先、なければ先頭
+        const initial = currentOfficeId && list.find((o) => o.id === currentOfficeId)
+          ? list.find((o) => o.id === currentOfficeId)!
+          : list[0];
+        setEditingId(initial.id);
+        setForm(initial);
       }
       setLoading(false);
     };
@@ -86,9 +92,22 @@ export default function OfficeSettingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // currentOfficeIdが変わったら編集中もそれに追従（他画面で切替えた場合に同期）
+  useEffect(() => {
+    if (!currentOfficeId || offices.length === 0) return;
+    const o = offices.find((x) => x.id === currentOfficeId);
+    if (o && o.id !== editingId) { setEditingId(o.id); setForm(o); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentOfficeId, offices]);
+
   const selectOffice = (id: string) => {
     const o = offices.find((x) => x.id === id);
-    if (o) { setEditingId(id); setForm(o); }
+    if (o) {
+      setEditingId(id);
+      setForm(o);
+      // ドロップダウンで選んだら「現在の自事業所」も切り替える
+      setCurrentOfficeId(id);
+    }
   };
 
   const handleAddNew = async () => {
