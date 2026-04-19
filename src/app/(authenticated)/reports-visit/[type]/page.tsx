@@ -338,9 +338,24 @@ export default function ReportsVisitEditorPage() {
               <EditVisitCarePlan content={content} update={update} />
             </div>
 
-            {/* 印刷プレビュー */}
-            <div className="hidden print:block">
-              <PrintVisitCarePlan content={content} />
+            {/* プレビュー区切り（画面のみ） */}
+            <div className="print:hidden px-6 pb-2">
+              <div className="max-w-5xl mx-auto flex items-center gap-3 border-t pt-6">
+                <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                  <ArrowDown size={16} className="text-emerald-600" />
+                  印刷プレビュー
+                </div>
+                <span className="text-xs text-gray-400">
+                  下のプレビューはA4印刷時のレイアウトです。編集内容は自動で反映されます。
+                </span>
+              </div>
+            </div>
+
+            {/* 印刷プレビュー（画面・印刷 共通表示） */}
+            <div className="px-6 pb-10 print:p-0">
+              <div className="max-w-5xl mx-auto bg-white shadow-md ring-1 ring-gray-200 print:shadow-none print:ring-0 print:max-w-none">
+                <PrintVisitCarePlan content={content} />
+              </div>
             </div>
           </>
         )}
