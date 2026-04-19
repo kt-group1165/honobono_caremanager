@@ -128,14 +128,9 @@ export function Sidebar() {
     businessType === "訪問介護" ? NAV_HOME_CARE : NAV_CARE_MANAGER;
   const typeInfo = BUSINESS_TYPE_LABELS[businessType] ?? BUSINESS_TYPE_LABELS["居宅介護支援"];
 
-  // ?mode= がURLにある場合、全リンクに自動付加して遷移しても維持する
-  const modeParam = typeof window !== "undefined"
-    ? new URLSearchParams(window.location.search).get("mode")
-    : null;
-  const appendMode = (href: string) => {
-    if (!modeParam) return href;
-    return `${href}?mode=${encodeURIComponent(modeParam)}`;
-  };
+  // 事業種別は「現在選択中の自事業所」から自動追従する設計のため、
+  // URLパラメータ（?mode=）の引き継ぎは廃止。リンクはそのままのhrefを使う。
+  const appendMode = (href: string) => href;
 
   // 子ページを開いていたら親グループは自動で開く
   useEffect(() => {

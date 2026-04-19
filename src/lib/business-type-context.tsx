@@ -90,16 +90,16 @@ export function BusinessTypeProvider({ children }: { children: ReactNode }) {
       setCurrentOfficeIdState(officeId);
       if (officeId) localStorage.setItem(STORAGE_KEY, officeId);
 
-      // 事業種別を決定
-      if (modeParam === "訪問介護" || modeParam === "居宅介護支援" || modeParam === "通所介護") {
+      // 事業種別は「現在選択中の自事業所」から自動取得（優先）
+      // URL ?mode= は事業所が未選択の場合のみフォールバックとして使用
+      const selected = list.find((o) => o.id === officeId);
+      if (selected?.business_type) {
+        setBusinessTypeState(mapBusinessType(selected.business_type));
+        setIsLocked(false);
+      } else if (modeParam === "訪問介護" || modeParam === "居宅介護支援" || modeParam === "通所介護") {
+        // 事業所未登録時のフォールバック（開発・テスト用）
         setBusinessTypeState(modeParam as BusinessType);
         setIsLocked(true);
-      } else {
-        setIsLocked(false);
-        const selected = list.find((o) => o.id === officeId);
-        if (selected?.business_type) {
-          setBusinessTypeState(mapBusinessType(selected.business_type));
-        }
       }
       setLoading(false);
     };
