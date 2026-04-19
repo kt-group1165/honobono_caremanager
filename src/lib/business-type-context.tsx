@@ -120,11 +120,20 @@ export function BusinessTypeProvider({ children }: { children: ReactNode }) {
 
   const setCurrentOfficeId = (id: string) => {
     setCurrentOfficeIdState(id);
-    if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, id);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(STORAGE_KEY, id);
+      // URLに ?office=<ID> を反映（リロードやブックマークにも追従）
+      const url = new URL(window.location.href);
+      url.searchParams.set("office", id);
+      // mode= の残骸があれば削除
+      url.searchParams.delete("mode");
+      window.history.replaceState(null, "", url.toString());
+    }
     // 選択した事業所の種別に追従
     const selected = offices.find((o) => o.id === id);
-    if (selected?.business_type && !isLocked) {
+    if (selected?.business_type) {
       setBusinessTypeState(mapBusinessType(selected.business_type));
+      setIsLocked(false);
     }
   };
 
