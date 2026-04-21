@@ -2,10 +2,11 @@
 
 import type { FamilySupport } from "../_types";
 import { PVFrame, PVTitle, PVBar, PVCircle, cellBase, cellHead, cellLabel } from "../_preview";
+import { Genogram } from "../_components/Genogram";
 
-interface Props { data: FamilySupport; userName: string; date: string; }
+interface Props { data: FamilySupport; userName: string; userGender?: string | null; date: string; }
 
-export function PreviewTab2({ data, userName, date }: Props) {
+export function PreviewTab2({ data, userName, userGender, date }: Props) {
   const members = [...(data.family_members ?? [])];
   while (members.length < 5) members.push({ name: "", is_primary_caregiver: false, relationship: "", living: "", employment: "", health_status: "", notes: "" });
 
@@ -17,7 +18,18 @@ export function PreviewTab2({ data, userName, date }: Props) {
       <div className="grid grid-cols-2 gap-0">
         <div className="border border-black">
           <div style={cellHead as React.CSSProperties}>家族構成図</div>
-          <div className="p-1 text-xs whitespace-pre-wrap" style={{ minHeight: "40mm" }}>{data.family_composition_diagram}</div>
+          <div className="p-1" style={{ minHeight: "40mm" }}>
+            <Genogram
+              userName={userName}
+              userGender={userGender ?? null}
+              members={data.family_members ?? []}
+            />
+            {data.family_composition_diagram && (
+              <div className="mt-1 text-[10px] whitespace-pre-wrap text-gray-700">
+                {data.family_composition_diagram}
+              </div>
+            )}
+          </div>
         </div>
         <div className="border border-black border-l-0">
           <div style={cellHead as React.CSSProperties}>家族の介護の状況・課題</div>

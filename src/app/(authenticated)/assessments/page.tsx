@@ -399,7 +399,7 @@ export default function AssessmentPage() {
                         userName={selectedUser?.name ?? ""}
                         userGender={selectedUser?.gender ?? null}
                       />
-                      <PreviewTab2 data={formData.family_support!} userName={uname} date={dFormatted} />
+                      <PreviewTab2 data={formData.family_support!} userName={uname} userGender={selectedUser?.gender ?? null} date={dFormatted} />
                     </>)}
                     {activeTab === "3" && (<>
                       <Tab3Services data={formData.service_usage!} onChange={(v) => updFormData("service_usage", v)} />
