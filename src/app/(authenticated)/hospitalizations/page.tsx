@@ -302,7 +302,60 @@ export default function HospitalizationsPage() {
 
   // ── Delete ──
   const handleDelete = async (id: string) => {
-    if (!confirm("この入退院記録を削除しますか？")) return;
+    if (!confirm("この入退院記録を削除しますか？\n（登録時に自動作成された支援経過も併せて削除されます）")) return;
+
+    // ① 削除対象の入退院情報を先に取得（自動生成された支援経過を特定するため）
+    const { data: target, error: fetchErr } = await supabase
+      .from("kaigo_hospitalizations")
+      .select("user_id, hospital_name, admission_date, discharge_date")
+      .eq("id", id)
+      .single<{
+        user_id: string;
+        hospital_name: string;
+        admission_date: string;
+        discharge_date: string | null;
+      }>();
+    if (fetchErr || !target) {
+      toast.error("削除対象の取得に失敗しました: " + (fetchErr?.message ?? "not found"));
+      return;
+    }
+
+    // ② 自動生成された支援経過を削除
+    //    識別条件: user_id + record_date(入院日 or 退院日) + 病院名を含む
+    //              + content が 【入院】 または 【退院】 で始まる
+    let supportDeleted = 0;
+    const dates = [target.admission_date, target.discharge_date].filter(
+      (d): d is string => !!d,
+    );
+    if (dates.length > 0) {
+      const { data: candidates } = await supabase
+        .from("kaigo_support_records")
+        .select("id, content, record_date")
+        .eq("user_id", target.user_id)
+        .in("record_date", dates);
+      const matchIds = (candidates ?? [])
+        .filter((r: { id: string; content: string | null }) => {
+          const c = r.content ?? "";
+          return (
+            (c.startsWith("【入院】") || c.startsWith("【退院】")) &&
+            c.includes(target.hospital_name)
+          );
+        })
+        .map((r: { id: string }) => r.id);
+      if (matchIds.length > 0) {
+        const { error: delErr } = await supabase
+          .from("kaigo_support_records")
+          .delete()
+          .in("id", matchIds);
+        if (delErr) {
+          toast.error("支援経過の削除に失敗しました: " + delErr.message);
+          return;
+        }
+        supportDeleted = matchIds.length;
+      }
+    }
+
+    // ③ 入退院レコードを削除
     const { error } = await supabase
       .from("kaigo_hospitalizations")
       .delete()
@@ -311,7 +364,12 @@ export default function HospitalizationsPage() {
       toast.error("削除に失敗しました: " + error.message);
       return;
     }
-    toast.success("削除しました");
+
+    toast.success(
+      supportDeleted > 0
+        ? `削除しました（支援経過 ${supportDeleted} 件も併せて削除）`
+        : "削除しました",
+    );
     fetchRecords();
   };
 
