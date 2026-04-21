@@ -931,19 +931,19 @@ export default function SupportRecordsPage() {
                                 </span>
                               )}
                             </div>
-                            {/* Edit / Delete buttons */}
-                            <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {/* Edit / Delete buttons（常時表示、ホバーで強調） */}
+                            <div className="flex gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity">
                               <button
                                 onClick={() => openEdit(rec)}
-                                className="rounded p-1.5 text-gray-500 hover:bg-gray-200 transition-colors"
+                                className="rounded border border-transparent p-1.5 text-gray-500 hover:border-gray-200 hover:bg-white transition-colors"
                                 title="編集"
                               >
                                 <Pencil size={13} />
                               </button>
                               <button
                                 onClick={() => setDeleteId(rec.id)}
-                                className="rounded p-1.5 text-red-400 hover:bg-red-50 transition-colors"
-                                title="削除"
+                                className="rounded border border-transparent p-1.5 text-red-500 hover:border-red-200 hover:bg-red-50 transition-colors"
+                                title="削除（誤入力時）"
                               >
                                 <Trash2 size={13} />
                               </button>
@@ -1107,24 +1107,47 @@ export default function SupportRecordsPage() {
       )}
 
       {/* ── Delete Confirmation Dialog ── */}
-      {deleteId && (
+      {deleteId && (() => {
+        const target = records.find((r) => r.id === deleteId);
+        return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setDeleteId(null)}
           />
-          <div className="relative w-full max-w-sm rounded-xl bg-white shadow-2xl p-6">
+          <div className="relative w-full max-w-md rounded-xl bg-white shadow-2xl p-6">
             <div className="flex items-start gap-3 mb-4">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100">
                 <Trash2 size={18} className="text-red-600" />
               </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">記録を削除</h3>
+              <div className="flex-1">
+                <h3 className="font-semibold text-gray-900">本当にこの支援経過を削除しますか？</h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  この支援経過記録を削除します。この操作は取り消せません。
+                  誤って入力した記録を取り消す場合に使用します。<br />
+                  <span className="text-red-600 font-medium">この操作は取り消せません。</span>
                 </p>
               </div>
             </div>
+
+            {/* 削除対象プレビュー */}
+            {target && (
+              <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-3 py-2.5">
+                <div className="flex items-center gap-2 text-xs text-gray-600 mb-1">
+                  <Clock size={11} />
+                  <span className="font-semibold">{formatDateTime(target.record_date, target.record_time)}</span>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-gray-700 border">
+                    {target.category}
+                  </span>
+                  {target.staff_name && (
+                    <span className="text-[10px] text-gray-400">記録者：{target.staff_name}</span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-700 whitespace-pre-wrap line-clamp-3 leading-relaxed">
+                  {target.content}
+                </p>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setDeleteId(null)}
@@ -1147,7 +1170,8 @@ export default function SupportRecordsPage() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ── Print view (第5表 居宅介護支援経過) ── */}
       <div id="support-records-print" className="hidden">
