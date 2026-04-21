@@ -175,18 +175,24 @@ export function Tab2Family({ data, onChange, userName, userGender }: Props) {
                         </optgroup>
                       ))}
                     </select>
-                    {/* 孫の場合: 親の選択 */}
-                    {isGrandchild && childMembers.length > 0 && (
-                      <select
-                        value={m.parent_member_index ?? -1}
-                        onChange={(e) => updMember(i, { parent_member_index: Number(e.target.value) })}
-                        className="w-full mt-0.5 border border-orange-300 rounded px-1 py-0.5 text-[10px] bg-orange-50 focus:border-orange-500 focus:outline-none"
-                      >
-                        <option value={-1}>親は？</option>
-                        {childMembers.map((cm) => (
-                          <option key={cm.idx} value={cm.idx}>{cm.name || cm.rt}の子</option>
-                        ))}
-                      </select>
+                    {/* 孫の場合: 親の選択（子が未登録でも案内のため表示） */}
+                    {isGrandchild && (
+                      childMembers.length > 0 ? (
+                        <select
+                          value={m.parent_member_index ?? -1}
+                          onChange={(e) => updMember(i, { parent_member_index: Number(e.target.value) })}
+                          className="w-full mt-0.5 border border-orange-300 rounded px-1 py-0.5 text-[10px] bg-orange-50 focus:border-orange-500 focus:outline-none"
+                        >
+                          <option value={-1}>親は？</option>
+                          {childMembers.map((cm) => (
+                            <option key={cm.idx} value={cm.idx}>{cm.name || cm.rt}の子</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="w-full mt-0.5 px-1 py-0.5 text-[10px] border border-orange-300 rounded bg-orange-50 text-orange-700">
+                          親となる「長男/長女…」を先に登録してください
+                        </div>
+                      )
                     )}
                     {/* その他の場合: 自由入力 */}
                     {isOther && (
