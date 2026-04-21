@@ -21,6 +21,8 @@ import {
   Activity,
   MoreHorizontal,
   Printer as FaxIcon,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -112,6 +114,10 @@ export default function SupportMobilePage({ params }: { params: Promise<Params> 
     staff_name: "",
   });
 
+  // 削除確認
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   // Validate token
   useEffect(() => {
     const validate = async () => {
@@ -157,6 +163,23 @@ export default function SupportMobilePage({ params }: { params: Promise<Params> 
     setSelectedUser(u);
     setScreen("records");
     fetchRecords(u.id);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTargetId || !selectedUser) return;
+    setDeleting(true);
+    const { error } = await supabase
+      .from("kaigo_support_records")
+      .delete()
+      .eq("id", deleteTargetId);
+    if (error) {
+      toast.error("削除に失敗: " + error.message);
+    } else {
+      toast.success("支援経過を削除しました");
+      setDeleteTargetId(null);
+      fetchRecords(selectedUser.id);
+    }
+    setDeleting(false);
   };
 
   const handleAdd = async () => {
@@ -255,14 +278,87 @@ export default function SupportMobilePage({ params }: { params: Promise<Params> 
                     </span>
                   </div>
                   <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{r.content}</p>
-                  {r.staff_name && (
-                    <p className="mt-1.5 text-xs text-gray-400">記録者: {r.staff_name}</p>
-                  )}
+                  <div className="mt-2 flex items-center justify-between">
+                    <p className="text-xs text-gray-400">
+                      {r.staff_name ? `記録者: ${r.staff_name}` : ""}
+                    </p>
+                    <button
+                      onClick={() => setDeleteTargetId(r.id)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 active:bg-red-100"
+                      title="この記録を削除（誤入力時）"
+                    >
+                      <Trash2 size={12} />
+                      削除
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
+
+        {/* 削除確認モーダル */}
+        {deleteTargetId && (() => {
+          const target = records.find((r) => r.id === deleteTargetId);
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+              onClick={() => !deleting && setDeleteTargetId(null)}
+            >
+              <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-5"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-start gap-3 mb-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100">
+                    <AlertTriangle size={20} className="text-red-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-base font-bold text-gray-900">
+                      本当に削除しますか？
+                    </h3>
+                    <p className="mt-1 text-xs text-gray-500">
+                      誤入力の取り消し用です。<br />
+                      <span className="font-medium text-red-600">この操作は取り消せません。</span>
+                    </p>
+                  </div>
+                </div>
+                {target && (
+                  <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-3 py-2">
+                    <div className="flex items-center gap-2 text-xs text-gray-600 mb-1">
+                      <Clock size={11} />
+                      <span className="font-semibold">
+                        {format(parseISO(target.record_date), "M月d日(E)", { locale: ja })}
+                        {target.record_time ? ` ${target.record_time.slice(0, 5)}` : ""}
+                      </span>
+                      <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-gray-700 border">
+                        {target.category}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-700 whitespace-pre-wrap line-clamp-3 leading-relaxed">
+                      {target.content}
+                    </p>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setDeleteTargetId(null)}
+                    disabled={deleting}
+                    className="flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-50 disabled:opacity-50"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="flex-1 inline-flex items-center justify-center gap-1 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white active:bg-red-700 disabled:opacity-50"
+                  >
+                    {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                    削除する
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* 新規追加モーダル */}
         {showForm && (
