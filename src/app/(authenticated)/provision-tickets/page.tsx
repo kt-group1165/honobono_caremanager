@@ -1073,10 +1073,10 @@ export default function ProvisionTicketsPage() {
                                 <div>{row.service_type}</div>
                                 {row.staff_name && <div className="text-[9px] text-gray-400">{row.staff_name}</div>}
                               </td>
-                              <td className="border border-gray-300 px-1 py-0.5 text-center text-[10px]">
+                              <td className="border border-gray-300 pl-1 pr-1.5 py-0.5 text-center text-[10px]">
                                 <div className="flex items-center gap-1">
                                   <span className="text-gray-500 shrink-0">予定</span>
-                                  <div className="flex gap-0.5 no-print">
+                                  <div className="flex gap-1 no-print">
                                     <button onClick={() => setAllPlanned(row.key)} className="text-blue-500 hover:underline" title="全日">全</button>
                                     <button onClick={() => setWeekdaysPlanned(row.key)} className="text-green-600 hover:underline" title="平日">平</button>
                                     <button onClick={() => clearPlanned(row.key)} className="text-red-500 hover:underline" title="消去">消</button>
@@ -1114,10 +1114,10 @@ export default function ProvisionTicketsPage() {
                             </tr>
                             {/* Actual row */}
                             <tr>
-                              <td className="border border-gray-300 px-1 py-0.5 text-center text-[10px]">
+                              <td className="border border-gray-300 pl-1 pr-1.5 py-0.5 text-center text-[10px]">
                                 <div className="flex items-center gap-1">
                                   <span className="text-gray-500 shrink-0">実績</span>
-                                  <div className="flex gap-0.5 no-print">
+                                  <div className="flex gap-1 no-print">
                                     <button onClick={() => setAllActual(row.key)} className="text-blue-500 hover:underline" title="全日">全</button>
                                     <button onClick={() => setWeekdaysActual(row.key)} className="text-green-600 hover:underline" title="平日">平</button>
                                     <button onClick={() => clearActual(row.key)} className="text-red-500 hover:underline" title="消去">消</button>
