@@ -931,21 +931,23 @@ export default function SupportRecordsPage() {
                                 </span>
                               )}
                             </div>
-                            {/* Edit / Delete buttons（常時表示、ホバーで強調） */}
-                            <div className="flex gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity">
+                            {/* Edit / Delete buttons（常時表示） */}
+                            <div className="flex gap-1 shrink-0">
                               <button
                                 onClick={() => openEdit(rec)}
-                                className="rounded border border-transparent p-1.5 text-gray-500 hover:border-gray-200 hover:bg-white transition-colors"
+                                className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-600 hover:border-gray-400 hover:bg-gray-50 transition-colors"
                                 title="編集"
                               >
-                                <Pencil size={13} />
+                                <Pencil size={12} />
+                                編集
                               </button>
                               <button
                                 onClick={() => setDeleteId(rec.id)}
-                                className="rounded border border-transparent p-1.5 text-red-500 hover:border-red-200 hover:bg-red-50 transition-colors"
-                                title="削除（誤入力時）"
+                                className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-white px-2 py-1 text-xs font-medium text-red-600 hover:border-red-500 hover:bg-red-50 transition-colors"
+                                title="この記録を削除（誤入力時用）"
                               >
-                                <Trash2 size={13} />
+                                <Trash2 size={12} />
+                                削除
                               </button>
                             </div>
                           </div>
