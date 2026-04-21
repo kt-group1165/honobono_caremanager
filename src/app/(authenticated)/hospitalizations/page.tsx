@@ -305,20 +305,21 @@ export default function HospitalizationsPage() {
     if (!confirm("この入退院記録を削除しますか？\n（登録時に自動作成された支援経過も併せて削除されます）")) return;
 
     // ① 削除対象の入退院情報を先に取得（自動生成された支援経過を特定するため）
-    const { data: target, error: fetchErr } = await supabase
+    const { data: targetRaw, error: fetchErr } = await supabase
       .from("kaigo_hospitalizations")
       .select("user_id, hospital_name, admission_date, discharge_date")
       .eq("id", id)
-      .single<{
-        user_id: string;
-        hospital_name: string;
-        admission_date: string;
-        discharge_date: string | null;
-      }>();
-    if (fetchErr || !target) {
+      .single();
+    if (fetchErr || !targetRaw) {
       toast.error("削除対象の取得に失敗しました: " + (fetchErr?.message ?? "not found"));
       return;
     }
+    const target = targetRaw as {
+      user_id: string;
+      hospital_name: string;
+      admission_date: string;
+      discharge_date: string | null;
+    };
 
     // ② 自動生成された支援経過を削除
     //    識別条件: user_id + record_date(入院日 or 退院日) + 病院名を含む
