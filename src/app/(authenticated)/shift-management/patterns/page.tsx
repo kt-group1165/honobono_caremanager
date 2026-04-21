@@ -100,7 +100,7 @@ function DayCell({ dow, days, staff, onAddDay, onRemoveDay, onChangeDay }: DayCe
   const isSat = dow === 6;
 
   return (
-    <div className="flex flex-col gap-1 min-h-[80px]">
+    <div className="flex flex-col gap-1 min-h-[80px] min-w-0">
       <div className="flex items-center justify-between mb-0.5">
         <span
           className={cn(
@@ -122,7 +122,7 @@ function DayCell({ dow, days, staff, onAddDay, onRemoveDay, onChangeDay }: DayCe
         {dayEntries.map((entry) => {
           const colCls = SERVICE_TYPE_COLORS[entry.service_type] ?? "bg-gray-50 border-gray-200";
           return (
-            <div key={entry.tempId} className="relative group">
+            <div key={entry.tempId} className="relative group min-w-0">
               {/* Delete button - positioned outside the card */}
               <button
                 type="button"
@@ -132,26 +132,26 @@ function DayCell({ dow, days, staff, onAddDay, onRemoveDay, onChangeDay }: DayCe
               >
                 <X size={10} />
               </button>
-              <div className={cn("rounded border p-1 text-[10px] space-y-0.5", colCls)}>
-                <div className="flex items-center gap-1">
+              <div className={cn("rounded border p-1 text-[10px] space-y-0.5 overflow-hidden", colCls)}>
+                <div className="flex items-center gap-0.5 min-w-0">
                   <input
                     type="time"
                     value={entry.start_time}
                     onChange={(e) => onChangeDay(entry.tempId, "start_time", e.target.value)}
-                    className="w-16 rounded border-0 bg-transparent text-[10px] focus:outline-none"
+                    className="min-w-0 flex-1 rounded border-0 bg-transparent text-[10px] px-0 focus:outline-none appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
                   />
-                  <span className="text-gray-400">〜</span>
+                  <span className="text-gray-400 shrink-0">〜</span>
                   <input
                     type="time"
                     value={entry.end_time}
                     onChange={(e) => onChangeDay(entry.tempId, "end_time", e.target.value)}
-                    className="w-16 rounded border-0 bg-transparent text-[10px] focus:outline-none"
+                    className="min-w-0 flex-1 rounded border-0 bg-transparent text-[10px] px-0 focus:outline-none appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
                   />
                 </div>
                 <select
                   value={entry.service_type}
                   onChange={(e) => onChangeDay(entry.tempId, "service_type", e.target.value)}
-                  className="w-full rounded border-0 bg-transparent text-[10px] focus:outline-none"
+                  className="w-full max-w-full rounded border-0 bg-transparent text-[10px] focus:outline-none"
                 >
                   {SERVICE_TYPES.map((t) => (
                     <option key={t} value={t}>{t}</option>
@@ -162,7 +162,7 @@ function DayCell({ dow, days, staff, onAddDay, onRemoveDay, onChangeDay }: DayCe
                 onChange={(e) =>
                   onChangeDay(entry.tempId, "staff_id", e.target.value || null)
                 }
-                className="w-full rounded border-0 bg-transparent text-[10px] focus:outline-none"
+                className="w-full max-w-full rounded border-0 bg-transparent text-[10px] focus:outline-none"
               >
                 <option value="">担当未設定</option>
                 {staff.map((s) => (
