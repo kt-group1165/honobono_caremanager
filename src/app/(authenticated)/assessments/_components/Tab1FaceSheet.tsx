@@ -12,16 +12,25 @@ function ContactBlock({ title, value, onChange }: { title: string; value: Contac
   const upd = <K extends keyof ContactInfo>(k: K, v: ContactInfo[K]) => onChange({ ...value, [k]: v });
   return (
     <SubSection title={title}>
-      <div className="grid grid-cols-3 gap-2">
-        <Field label="氏名"><TextInput value={value.name} onChange={(v) => upd("name", v)} className="w-full" /></Field>
-        <Field label="性別">
+      {/* 氏名は独立行で幅を確保 */}
+      <Field label="氏名">
+        <TextInput value={value.name} onChange={(v) => upd("name", v)} className="w-full" />
+      </Field>
+      {/* 性別 / 年齢 は下段に横並び */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <Field label="性別" className="shrink-0">
           <Radio name={`${title}-gender`} options={["男", "女"] as const} value={value.gender} onChange={(v) => upd("gender", v)} />
         </Field>
-        <Field label="年齢"><TextInput value={value.age} onChange={(v) => upd("age", v)} className="w-16" /> 歳</Field>
+        <Field label="年齢" className="shrink-0">
+          <div className="flex items-center gap-1">
+            <TextInput value={value.age} onChange={(v) => upd("age", v)} className="w-14" />
+            <span className="text-sm text-gray-600">歳</span>
+          </div>
+        </Field>
       </div>
       <Field label="続柄"><TextInput value={value.relationship} onChange={(v) => upd("relationship", v)} className="w-full" /></Field>
       <Field label="住所"><TextInput value={value.address} onChange={(v) => upd("address", v)} className="w-full" /></Field>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-3">
         <Field label="TEL"><TextInput value={value.tel} onChange={(v) => upd("tel", v)} className="w-full" /></Field>
         <Field label="携帯"><TextInput value={value.mobile} onChange={(v) => upd("mobile", v)} className="w-full" /></Field>
       </div>
