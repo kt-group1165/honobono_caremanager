@@ -50,6 +50,26 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
 }
 
 // ─── 利用中の自事業所サービス ─────────────────────────────────────────────
+
+/** 訪問介護のサービス種別 */
+const HOME_CARE_CATEGORIES = [
+  "介護",
+  "総合事業",
+  "居宅介護",
+  "重度訪問介護",
+  "同行援護",
+  "移動支援",
+  "自費",
+] as const;
+type HomeCareCategoryName = (typeof HOME_CARE_CATEGORIES)[number];
+
+type HomeCareCategory = {
+  category: HomeCareCategoryName;
+  active: boolean;
+  start_date: string | null;
+  end_date: string | null;
+};
+
 type OfficeServiceRow = {
   id: string;
   office_id: string;
@@ -57,7 +77,25 @@ type OfficeServiceRow = {
   end_date: string | null;
   is_active: boolean;
   service_notes: string | null;
+  home_care_categories: HomeCareCategory[];
 };
+
+const isHomeCareType = (bt: string | null | undefined) =>
+  bt === "home_care" || bt === "訪問介護";
+
+/** DBから取得した値を7カテゴリ全てが揃った配列に正規化 */
+function normalizeCategories(raw: unknown): HomeCareCategory[] {
+  const list = Array.isArray(raw) ? (raw as Partial<HomeCareCategory>[]) : [];
+  return HOME_CARE_CATEGORIES.map((name) => {
+    const found = list.find((c) => c?.category === name);
+    return {
+      category: name,
+      active: !!found?.active,
+      start_date: found?.start_date ?? null,
+      end_date: found?.end_date ?? null,
+    };
+  });
+}
 
 function UserOfficeServices({ userId }: { userId: string }) {
   const supabase = createClient();
@@ -72,7 +110,11 @@ function UserOfficeServices({ userId }: { userId: string }) {
       supabase.from("kaigo_user_office_services").select("*").eq("user_id", userId),
     ]);
     setOffices(offs || []);
-    setServices((svcs || []) as OfficeServiceRow[]);
+    const normalized = (svcs || []).map((s: Record<string, unknown>) => ({
+      ...s,
+      home_care_categories: normalizeCategories(s.home_care_categories),
+    })) as OfficeServiceRow[];
+    setServices(normalized);
     setLoading(false);
   };
 
@@ -115,6 +157,31 @@ function UserOfficeServices({ userId }: { userId: string }) {
     else { toast.success("保存しました"); load(); }
   };
 
+  /** 訪問介護のサービス種別を更新 */
+  const updateCategory = async (
+    serviceId: string,
+    categoryName: HomeCareCategoryName,
+    patch: Partial<Omit<HomeCareCategory, "category">>,
+  ) => {
+    const svc = services.find((s) => s.id === serviceId);
+    if (!svc) return;
+    const next = svc.home_care_categories.map((c) =>
+      c.category === categoryName ? { ...c, ...patch } : c,
+    );
+    // 楽観更新（即時反映）
+    setServices((prev) =>
+      prev.map((s) => (s.id === serviceId ? { ...s, home_care_categories: next } : s)),
+    );
+    const { error } = await supabase
+      .from("kaigo_user_office_services")
+      .update({ home_care_categories: next })
+      .eq("id", serviceId);
+    if (error) {
+      toast.error("更新に失敗: " + error.message);
+      load(); // 失敗時は再読み込みで戻す
+    }
+  };
+
   if (loading) return <div className="py-2 text-xs text-gray-400">読み込み中...</div>;
 
   return (
@@ -152,6 +219,62 @@ function UserOfficeServices({ userId }: { userId: string }) {
                       <span className="text-gray-500">終了日:</span>
                       <input type="date" value={svc.end_date ?? ""} onChange={(e) => updateDate(svc.id, "end_date", e.target.value)} className="rounded border border-gray-300 px-2 py-1 text-xs" />
                     </label>
+                  </div>
+                )}
+                {svc && using && isHomeCareType(o.business_type) && (
+                  <div className="mt-3 rounded-md border border-blue-200 bg-white p-3">
+                    <div className="text-xs font-semibold text-gray-700 mb-2">提供サービス種別</div>
+                    <div className="space-y-1">
+                      {svc.home_care_categories.map((c) => (
+                        <div key={c.category} className="flex items-center gap-2 text-xs">
+                          <label className="flex items-center gap-2 w-32 shrink-0 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={c.active}
+                              onChange={(e) =>
+                                updateCategory(svc.id, c.category, {
+                                  active: e.target.checked,
+                                  start_date:
+                                    e.target.checked && !c.start_date
+                                      ? format(new Date(), "yyyy-MM-dd")
+                                      : c.start_date,
+                                })
+                              }
+                              className="w-3.5 h-3.5 accent-blue-600"
+                            />
+                            <span className="text-gray-700">{c.category}</span>
+                          </label>
+                          <label className="flex items-center gap-1">
+                            <span className="text-gray-500">開始日:</span>
+                            <input
+                              type="date"
+                              value={c.start_date ?? ""}
+                              disabled={!c.active}
+                              onChange={(e) =>
+                                updateCategory(svc.id, c.category, {
+                                  start_date: e.target.value || null,
+                                })
+                              }
+                              className="rounded border border-gray-300 px-2 py-0.5 text-xs disabled:bg-gray-50 disabled:text-gray-400"
+                            />
+                          </label>
+                          <label className="flex items-center gap-1">
+                            <span className="text-gray-500">終了日:</span>
+                            <input
+                              type="date"
+                              value={c.end_date ?? ""}
+                              disabled={!c.active}
+                              onChange={(e) =>
+                                updateCategory(svc.id, c.category, {
+                                  end_date: e.target.value || null,
+                                })
+                              }
+                              className="rounded border border-gray-300 px-2 py-0.5 text-xs disabled:bg-gray-50 disabled:text-gray-400"
+                            />
+                          </label>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
