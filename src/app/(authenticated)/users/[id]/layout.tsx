@@ -58,6 +58,7 @@ export default function UserDetailLayout({
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [hasDisabilityService, setHasDisabilityService] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -79,6 +80,38 @@ export default function UserDetailLayout({
       cancelled = true;
     };
   }, [id, supabase]);
+
+  // 「障害」タブを表示するかどうか:
+  // 訪問介護事業所のサービス種別で「居宅介護」「重度訪問介護」「同行援護」のいずれかがアクティブな場合のみ
+  // pathname 変更時に再評価することで、サブタブ切替えのタイミングで反映される
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("kaigo_user_office_services")
+        .select("home_care_categories, is_active")
+        .eq("user_id", id);
+      if (cancelled) return;
+      const TRIGGER = ["居宅介護", "重度訪問介護", "同行援護"];
+      const has = (data || []).some(
+        (row: { home_care_categories: unknown; is_active: boolean }) => {
+          if (!row.is_active) return false;
+          const cats = Array.isArray(row.home_care_categories)
+            ? row.home_care_categories
+            : [];
+          return cats.some(
+            (c: { category?: string; active?: boolean }) =>
+              !!c?.active && TRIGGER.includes(c?.category ?? "")
+          );
+        }
+      );
+      setHasDisabilityService(has);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, pathname, supabase]);
 
   // サイドバーで別の利用者を選んだらルートを切り替え
   const handleSelectUser = (newId: string) => {
@@ -436,7 +469,9 @@ export default function UserDetailLayout({
             {([
               { id: "basic" as const, label: "基本情報", defaultHref: "" },
               { id: "insurance" as const, label: "介護保険", defaultHref: "/care-cert" },
-              { id: "disability" as const, label: "障害", defaultHref: "/disability" },
+              ...(hasDisabilityService || activeMainTab === "disability"
+                ? [{ id: "disability" as const, label: "障害", defaultHref: "/disability" }]
+                : []),
             ]).map((main) => {
               const isActive = activeMainTab === main.id;
               return (

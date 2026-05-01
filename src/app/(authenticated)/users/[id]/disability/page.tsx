@@ -5,16 +5,90 @@ import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
-import { Plus, Copy, Trash2, Save } from "lucide-react";
+import { Plus, Copy, Trash2, Save, X } from "lucide-react";
+
+// ─── 所得区分 ─────────────────────────────────────────────────────────────────
+
+const INCOME_CATEGORIES = [
+  "生活保護",
+  "低所得1",
+  "低所得2",
+  "一般1（一般）",
+  "一般2",
+] as const;
+type IncomeCategoryName = (typeof INCOME_CATEGORIES)[number];
+
+/** 所得区分ごとの 利用者負担上限月額（円） */
+const INCOME_CATEGORY_CAP: Record<IncomeCategoryName, number> = {
+  生活保護: 0,
+  低所得1: 0,
+  低所得2: 0,
+  "一般1（一般）": 9300,
+  一般2: 37200,
+};
 
 // ─── 型定義 ───────────────────────────────────────────────────────────────────
 
+/** 事業者記入欄の1スロット分のデータ */
 type BusinessEntry = {
-  slot: number;
-  business_no: string;
-  business_name: string;
+  slot: number;                  // 1-6: 通常スロット、7-9: 予備1-3
+  business_name: string;         // 事業所略称
+  business_no: string;           // 番号
+  contract_date: string | null;  // 契約日
+  contract_type: "新規契約" | "契約変更" | "";  // 契約区分
+  service_content: string;       // サービス内容
+  contract_amount_hours: number; // 契約支給量(時間)
+  contract_amount_minutes: number;
+  service_end_date: string | null;          // 提供終了日
+  end_type: string;                          // 終了区分
+  pre_provided_hours: number;                // 提供終了月中の終了日までの既提供量(時間)
+  pre_provided_minutes: number;
   note: string;
 };
+
+const TOTAL_BUSINESS_SLOTS = 9; // 1-6 + 予備1-3
+
+const slotLabel = (slot: number) =>
+  slot <= 6 ? String(slot) : `予備${slot - 6}`;
+
+const emptyEntry = (slot: number): BusinessEntry => ({
+  slot,
+  business_name: "",
+  business_no: slot <= 6 ? String(slot) : "",
+  contract_date: null,
+  contract_type: "",
+  service_content: "",
+  contract_amount_hours: 0,
+  contract_amount_minutes: 0,
+  service_end_date: null,
+  end_type: "",
+  pre_provided_hours: 0,
+  pre_provided_minutes: 0,
+  note: "",
+});
+
+/** 既存スロットを9個に正規化（不足分は空で埋める） */
+function normalizeBusinessEntries(raw: unknown): BusinessEntry[] {
+  const list = Array.isArray(raw) ? (raw as Partial<BusinessEntry>[]) : [];
+  return Array.from({ length: TOTAL_BUSINESS_SLOTS }, (_, i) => {
+    const slot = i + 1;
+    const found = list.find((e) => e?.slot === slot);
+    return { ...emptyEntry(slot), ...(found ?? {}) };
+  });
+}
+
+/** スロットに何か入力があるか判定（ボタンの状態表示用） */
+function hasEntryContent(e: BusinessEntry): boolean {
+  return !!(
+    e.business_name ||
+    e.contract_date ||
+    e.service_content ||
+    e.contract_amount_hours ||
+    e.contract_amount_minutes ||
+    e.service_end_date ||
+    e.note
+  );
+}
 
 type DisabilityCert = {
   id: string;
@@ -120,12 +194,7 @@ const EMPTY_FORM: FormData = {
   is_household_cap_management: false,
   cap_management_office: "",
   municipality_amount: 0,
-  business_entries: Array.from({ length: 6 }, (_, i) => ({
-    slot: i + 1,
-    business_no: "",
-    business_name: "",
-    note: "",
-  })),
+  business_entries: Array.from({ length: TOTAL_BUSINESS_SLOTS }, (_, i) => emptyEntry(i + 1)),
   reserve1: "",
   reserve2: "",
   reserve3: "",
@@ -245,6 +314,8 @@ export default function UserDisabilityPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isNew, setIsNew] = useState(false);
+  // 事業者記入欄モーダル: 編集中スロット番号 (null = 閉じている)
+  const [editingSlot, setEditingSlot] = useState<number | null>(null);
 
   // ─── データ読み込み ──────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -261,13 +332,9 @@ export default function UserDisabilityPage() {
       return;
     }
     const list = (data || []) as DisabilityCert[];
-    // business_entries の不足分を補完
+    // business_entries の不足分を9スロットに補完（1-6 + 予備1-3）
     list.forEach((r) => {
-      const entries = Array.isArray(r.business_entries) ? r.business_entries : [];
-      r.business_entries = Array.from({ length: 6 }, (_, i) => {
-        const found = entries.find((e: BusinessEntry) => e.slot === i + 1);
-        return found ?? { slot: i + 1, business_no: "", business_name: "", note: "" };
-      });
+      r.business_entries = normalizeBusinessEntries(r.business_entries);
     });
     setRecords(list);
     if (list.length > 0) {
@@ -375,11 +442,25 @@ export default function UserDisabilityPage() {
     setForm((f) => ({ ...f, [key]: value }));
   };
 
-  const updEntry = (slot: number, field: keyof BusinessEntry, value: string) => {
+  const updEntry = <K extends keyof BusinessEntry>(
+    slot: number,
+    field: K,
+    value: BusinessEntry[K],
+  ) => {
     setForm((f) => ({
       ...f,
       business_entries: f.business_entries.map((e) =>
         e.slot === slot ? { ...e, [field]: value } : e
+      ),
+    }));
+  };
+
+  /** 編集中スロットのデータをクリア（モーダルから呼び出す削除ボタン用） */
+  const clearEntry = (slot: number) => {
+    setForm((f) => ({
+      ...f,
+      business_entries: f.business_entries.map((e) =>
+        e.slot === slot ? emptyEntry(slot) : e
       ),
     }));
   };
@@ -701,12 +782,29 @@ export default function UserDisabilityPage() {
             </div>
           </FieldRow>
           <FieldRow label="所得区分">
-            <input
-              type="text"
+            <select
               value={form.income_category ?? ""}
-              onChange={(e) => upd("income_category", e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setForm((f) => ({
+                  ...f,
+                  income_category: v || null,
+                  // 既知の区分なら 利用者負担上限月額 を自動セット
+                  monthly_burden_cap:
+                    v && v in INCOME_CATEGORY_CAP
+                      ? INCOME_CATEGORY_CAP[v as IncomeCategoryName]
+                      : f.monthly_burden_cap,
+                }));
+              }}
               className={`${inputCls} w-48`}
-            />
+            >
+              <option value="">未選択</option>
+              {INCOME_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
           </FieldRow>
           <FieldRow label="利用者負担上限月額">
             <div className="flex items-center gap-1">
@@ -781,80 +879,35 @@ export default function UserDisabilityPage() {
       {/* ─── 事業者記入欄 ─────────────────────────────────────── */}
       <div className="rounded-lg border bg-white p-4 shadow-sm">
         <h3 className="mb-3 border-b pb-2 text-sm font-bold text-gray-800">事業者記入欄</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="border px-2 py-1 text-left font-medium text-gray-600">No.</th>
-                <th className="border px-2 py-1 text-left font-medium text-gray-600">事業者番号</th>
-                <th className="border px-2 py-1 text-left font-medium text-gray-600">事業者名</th>
-                <th className="border px-2 py-1 text-left font-medium text-gray-600">備考</th>
-              </tr>
-            </thead>
-            <tbody>
-              {form.business_entries.map((entry) => (
-                <tr key={entry.slot}>
-                  <td className="border px-2 py-1 text-center font-semibold text-gray-700">
-                    {entry.slot}
-                  </td>
-                  <td className="border px-1 py-0.5">
-                    <input
-                      type="text"
-                      value={entry.business_no}
-                      onChange={(e) => updEntry(entry.slot, "business_no", e.target.value)}
-                      className="w-full rounded border-0 px-1 py-0.5 text-xs focus:bg-blue-50 focus:outline-none"
-                    />
-                  </td>
-                  <td className="border px-1 py-0.5">
-                    <input
-                      type="text"
-                      value={entry.business_name}
-                      onChange={(e) => updEntry(entry.slot, "business_name", e.target.value)}
-                      className="w-full rounded border-0 px-1 py-0.5 text-xs focus:bg-blue-50 focus:outline-none"
-                    />
-                  </td>
-                  <td className="border px-1 py-0.5">
-                    <input
-                      type="text"
-                      value={entry.note}
-                      onChange={(e) => updEntry(entry.slot, "note", e.target.value)}
-                      className="w-full rounded border-0 px-1 py-0.5 text-xs focus:bg-blue-50 focus:outline-none"
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-3">
-          <label className="flex items-center gap-2">
-            <span className="w-12 text-xs text-gray-600">予備1</span>
-            <input
-              type="text"
-              value={form.reserve1 ?? ""}
-              onChange={(e) => upd("reserve1", e.target.value)}
-              className={`${inputCls} flex-1`}
-            />
-          </label>
-          <label className="flex items-center gap-2">
-            <span className="w-12 text-xs text-gray-600">予備2</span>
-            <input
-              type="text"
-              value={form.reserve2 ?? ""}
-              onChange={(e) => upd("reserve2", e.target.value)}
-              className={`${inputCls} flex-1`}
-            />
-          </label>
-          <label className="flex items-center gap-2">
-            <span className="w-12 text-xs text-gray-600">予備3</span>
-            <input
-              type="text"
-              value={form.reserve3 ?? ""}
-              onChange={(e) => upd("reserve3", e.target.value)}
-              className={`${inputCls} flex-1`}
-            />
-          </label>
+        <p className="mb-3 text-xs text-gray-500">
+          各スロットをクリックすると詳細入力画面が開きます。
+        </p>
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 lg:grid-cols-9">
+          {form.business_entries.map((entry) => {
+            const filled = hasEntryContent(entry);
+            return (
+              <button
+                key={entry.slot}
+                type="button"
+                onClick={() => setEditingSlot(entry.slot)}
+                className={`flex flex-col items-center justify-center rounded-md border px-2 py-3 text-xs transition-colors ${
+                  filled
+                    ? "border-blue-400 bg-blue-50 text-blue-800 hover:bg-blue-100"
+                    : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <span className="font-semibold">{slotLabel(entry.slot)}</span>
+                <span
+                  className={`mt-1 truncate w-full text-center text-[10px] ${
+                    filled ? "text-blue-600" : "text-gray-400"
+                  }`}
+                  title={entry.business_name || ""}
+                >
+                  {entry.business_name || "（未入力）"}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -868,6 +921,174 @@ export default function UserDisabilityPage() {
           className={`${inputCls} w-full`}
         />
       </div>
+
+      {/* ─── 事業者記入欄モーダル ───────────────────────────────── */}
+      {editingSlot !== null &&
+        (() => {
+          const entry = form.business_entries.find((e) => e.slot === editingSlot);
+          if (!entry) return null;
+          return (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+              onClick={() => setEditingSlot(null)}
+            >
+              <div
+                className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* モーダルヘッダ */}
+                <div className="flex items-center justify-between border-b bg-gray-50 px-4 py-3">
+                  <h3 className="text-sm font-bold text-gray-900">
+                    事業者記入欄 — {slotLabel(entry.slot)}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setEditingSlot(null)}
+                    className="rounded p-1 text-gray-500 hover:bg-gray-200"
+                    aria-label="閉じる"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                {/* モーダル本体 */}
+                <div className="space-y-1 p-4">
+                  <FieldRow label="事業所略称">
+                    <input
+                      type="text"
+                      value={entry.business_name}
+                      onChange={(e) => updEntry(entry.slot, "business_name", e.target.value)}
+                      className={`${inputCls} w-full`}
+                    />
+                  </FieldRow>
+                  <FieldRow label="番号">
+                    <input
+                      type="text"
+                      value={entry.business_no}
+                      onChange={(e) => updEntry(entry.slot, "business_no", e.target.value)}
+                      className={`${inputCls} w-32`}
+                    />
+                  </FieldRow>
+                  <FieldRow label="契約日">
+                    <input
+                      type="date"
+                      value={entry.contract_date ?? ""}
+                      onChange={(e) =>
+                        updEntry(entry.slot, "contract_date", e.target.value || null)
+                      }
+                      className={inputCls}
+                    />
+                  </FieldRow>
+                  <FieldRow label="契約区分">
+                    <div className="flex items-center gap-4">
+                      {(["新規契約", "契約変更"] as const).map((opt) => (
+                        <label key={opt} className="flex items-center gap-1 text-sm cursor-pointer">
+                          <input
+                            type="radio"
+                            name={`contract_type_${entry.slot}`}
+                            value={opt}
+                            checked={entry.contract_type === opt}
+                            onChange={() => updEntry(entry.slot, "contract_type", opt)}
+                            className="accent-blue-600"
+                          />
+                          <span>{opt}</span>
+                        </label>
+                      ))}
+                      {entry.contract_type !== "" && (
+                        <button
+                          type="button"
+                          onClick={() => updEntry(entry.slot, "contract_type", "")}
+                          className="text-xs text-gray-500 underline hover:text-gray-700"
+                        >
+                          クリア
+                        </button>
+                      )}
+                    </div>
+                  </FieldRow>
+                  <FieldRow label="サービス内容">
+                    <input
+                      type="text"
+                      value={entry.service_content}
+                      onChange={(e) => updEntry(entry.slot, "service_content", e.target.value)}
+                      className={`${inputCls} w-full`}
+                    />
+                  </FieldRow>
+                  <FieldRow label="契約支給量">
+                    <HoursMinutesInput
+                      hours={entry.contract_amount_hours}
+                      minutes={entry.contract_amount_minutes}
+                      onChange={(h, m) => {
+                        updEntry(entry.slot, "contract_amount_hours", h);
+                        updEntry(entry.slot, "contract_amount_minutes", m);
+                      }}
+                    />
+                  </FieldRow>
+                  <FieldRow label="提供終了日">
+                    <input
+                      type="date"
+                      value={entry.service_end_date ?? ""}
+                      onChange={(e) =>
+                        updEntry(entry.slot, "service_end_date", e.target.value || null)
+                      }
+                      className={inputCls}
+                    />
+                  </FieldRow>
+                  <FieldRow label="終了区分">
+                    <input
+                      type="text"
+                      value={entry.end_type}
+                      onChange={(e) => updEntry(entry.slot, "end_type", e.target.value)}
+                      className={`${inputCls} w-48`}
+                    />
+                  </FieldRow>
+                  <FieldRow label="終了月既提供量">
+                    <HoursMinutesInput
+                      hours={entry.pre_provided_hours}
+                      minutes={entry.pre_provided_minutes}
+                      onChange={(h, m) => {
+                        updEntry(entry.slot, "pre_provided_hours", h);
+                        updEntry(entry.slot, "pre_provided_minutes", m);
+                      }}
+                    />
+                  </FieldRow>
+                  <FieldRow label="備考">
+                    <textarea
+                      value={entry.note}
+                      onChange={(e) => updEntry(entry.slot, "note", e.target.value)}
+                      rows={2}
+                      className={`${inputCls} w-full`}
+                    />
+                  </FieldRow>
+                </div>
+
+                {/* モーダルフッタ */}
+                <div className="flex items-center justify-between border-t bg-gray-50 px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!confirm("この事業者記入欄をクリアします。よろしいですか？")) return;
+                      clearEntry(entry.slot);
+                      setEditingSlot(null);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
+                  >
+                    <Trash2 size={14} /> クリア
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingSlot(null)}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-gray-400 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
+                  >
+                    閉じる
+                  </button>
+                </div>
+                <p className="px-4 pb-3 text-[11px] text-gray-500">
+                  画面下部の「保存」ボタンを押すまで DB には保存されません。
+                </p>
+              </div>
+            </div>
+          );
+        })()}
     </div>
   );
 }

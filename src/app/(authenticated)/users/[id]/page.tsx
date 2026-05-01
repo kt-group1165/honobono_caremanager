@@ -234,10 +234,14 @@ function UserOfficeServices({ userId }: { userId: string }) {
                               onChange={(e) =>
                                 updateCategory(svc.id, c.category, {
                                   active: e.target.checked,
-                                  start_date:
-                                    e.target.checked && !c.start_date
-                                      ? format(new Date(), "yyyy-MM-dd")
-                                      : c.start_date,
+                                  // チェックON: 未入力なら親事業所の開始日（無ければ今日）をデフォルトに
+                                  // チェックOFF: 開始日・終了日をクリア
+                                  start_date: e.target.checked
+                                    ? (c.start_date ??
+                                       svc.start_date ??
+                                       format(new Date(), "yyyy-MM-dd"))
+                                    : null,
+                                  end_date: e.target.checked ? c.end_date : null,
                                 })
                               }
                               className="w-3.5 h-3.5 accent-blue-600"
