@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
 import {
   Upload,
@@ -173,6 +174,7 @@ interface ExistingUser {
 
 export default function CareplanImportPage() {
   const supabase = createClient();
+  const { currentOffice } = useBusinessType();
   const fileRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<ImportedFile[]>([]);
   const [saving, setSaving] = useState(false);
@@ -315,16 +317,41 @@ export default function CareplanImportPage() {
 
       // 利用者基本情報CSVがあり、マッチしなければ新規作成
       if (!userId && userInfoFile && detectedName) {
+        if (!currentOffice?.tenant_id) {
+          toast.error("自事業所が選択されていないため、新規利用者を登録できません。サイドバーの事業所セレクタで選択してください。");
+          setSaving(false);
+          return;
+        }
         const info = userInfoFile.parsed;
+        // user_number 採番（tenant 単位 max+1）— users/new と同算法
+        // TODO(§5-3): Phase 2-X で monorepo 化して共通 util に集約予定
+        const { data: existingClients, error: numErr } = await supabase
+          .from("clients")
+          .select("user_number")
+          .eq("tenant_id", currentOffice.tenant_id);
+        if (numErr) throw numErr;
+        const maxNum = (existingClients ?? []).reduce<number>((mx, c) => {
+          const n = parseInt(c.user_number ?? "0");
+          return Number.isNaN(n) ? mx : Math.max(mx, n);
+        }, 0);
+        const userNumber = String(maxNum + 1);
+
+        // 共通マスタ clients への INSERT。
+        // カラム名対応: name_kana → furigana / phone はそのまま
         const { data: newUser, error } = await supabase
           .from("clients")
           .insert({
+            tenant_id: currentOffice.tenant_id,
+            user_number: userNumber,
             name: info.name,
-            name_kana: info.name_kana || "",
+            furigana: info.name_kana || "",
             gender: info.gender || "男",
             birth_date: info.birth_date || "2000-01-01",
-            address: info.address || "",
-            phone: info.phone || "",
+            address: info.address || null,
+            phone: info.phone || null,
+            status: "active",
+            is_facility: false,
+            is_provisional: false,
           })
           .select("id")
           .single();
