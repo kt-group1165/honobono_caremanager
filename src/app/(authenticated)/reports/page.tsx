@@ -78,7 +78,7 @@ export default function ReportsPage() {
   useEffect(() => {
     const load = async () => {
       const [userRes, officeRes] = await Promise.all([
-        supabase.from("clients").select("id, name, name_kana:furigana, birth_date, gender, address, phone").eq("status", "active").is("deleted_at", null).order("furigana", { nullsFirst: false }),
+        supabase.from("clients").select("id, name, name_kana:furigana, birth_date, gender, address, phone").eq("status", "active").eq("is_facility", false).is("deleted_at", null).order("furigana", { nullsFirst: false }),
         // 共通マスタ offices, kaigo-app の自事業所だけ。PostgREST 列エイリアスで旧フィールド名維持
         supabase.from("offices").select("provider_number:business_number, office_name:name").eq("app_type", "kaigo-app").limit(1).single(),
       ]);

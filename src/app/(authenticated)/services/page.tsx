@@ -110,7 +110,7 @@ export default function ServicesPage() {
 
   const fetchMasters = useCallback(async () => {
     const [usersRes, staffRes] = await Promise.all([
-      supabase.from("clients").select("id, name").is("deleted_at", null).order("name"),
+      supabase.from("clients").select("id, name").eq("is_facility", false).is("deleted_at", null).order("name"),
       supabase.from("members").select("id, name").eq("status", "active").order("furigana", { nullsFirst: false }),
     ]);
     if (!usersRes.error) setUsers(usersRes.data || []);

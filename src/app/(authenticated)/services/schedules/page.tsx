@@ -70,6 +70,7 @@ export default function SchedulesPage() {
     const { data } = await supabase
       .from("clients")
       .select("id, name")
+      .eq("is_facility", false)
       .is("deleted_at", null)
       .order("name");
     setUsers(data || []);

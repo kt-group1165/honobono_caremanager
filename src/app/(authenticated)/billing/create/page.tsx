@@ -113,6 +113,7 @@ export default function BillingCreatePage() {
         .from("clients")
         .select("id, name, furigana")
         .eq("status", "active")
+        .eq("is_facility", false)
         .is("deleted_at", null)
         .order("furigana", { nullsFirst: false });
       if (error) throw error;

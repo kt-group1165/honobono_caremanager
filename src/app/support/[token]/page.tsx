@@ -140,6 +140,7 @@ export default function SupportMobilePage({ params }: { params: Promise<Params> 
         .from("clients")
         .select("id, name, name_kana:furigana")
         .eq("status", "active")
+        .eq("is_facility", false)
         .order("furigana");
       setUsers(data || []);
     };

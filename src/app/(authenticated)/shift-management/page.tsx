@@ -1134,7 +1134,7 @@ function PatternImportModal({ onClose }: PatternImportModalProps) {
           .from("kaigo_visit_patterns")
           .select("id, user_id, pattern_name, day_of_week, start_time, end_time, service_type, staff_id, clients(name)")
           .order("user_id"),
-        supabase.from("clients").select("id, name, name_kana:furigana, status").eq("status", "active"),
+        supabase.from("clients").select("id, name, name_kana:furigana, status").eq("status", "active").eq("is_facility", false),
       ]);
       const pats: VisitPattern[] = (patRes.data || []).map((r: any) => ({
         ...r,
@@ -2917,7 +2917,7 @@ export default function ShiftManagementPage() {
     const fetch = async () => {
       setLoadingLists(true);
       const [userRes, staffRes] = await Promise.all([
-        supabase.from("clients").select("id, name, name_kana:furigana, status").eq("status", "active").order("furigana", { nullsFirst: false }),
+        supabase.from("clients").select("id, name, name_kana:furigana, status").eq("status", "active").eq("is_facility", false).order("furigana", { nullsFirst: false }),
         supabase.from("members").select("id, name, name_kana:furigana, status").eq("status", "active").order("furigana", { nullsFirst: false }),
       ]);
       const u = userRes.data || [];

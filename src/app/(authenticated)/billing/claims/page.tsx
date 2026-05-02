@@ -767,11 +767,12 @@ export default function ClaimsPage() {
 
     setGenerating(true);
     try {
-      // 1. Fetch active users（clients）
+      // 1. Fetch active users（clients、is_facility=false で法人エントリ除外）
       const { data: users, error: usersErr } = await supabase
         .from("clients")
         .select("id, name")
         .eq("status", "active")
+        .eq("is_facility", false)
         .is("deleted_at", null);
       if (usersErr) throw usersErr;
       if (!users || users.length === 0) {

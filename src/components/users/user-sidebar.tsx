@@ -63,21 +63,25 @@ export function UserSidebar({ selectedUserId, onSelectUser }: UserSidebarProps) 
       }
 
       // 2) その client_id 群だけ clients を fetch
+      // is_facility = false: 法人/事業所エントリ（包括支援センター等）を除外
       const { data } = await supabase
         .from("clients")
         .select("id, name, furigana, status")
         .in("id", clientIds)
         .eq("status", "active")
+        .eq("is_facility", false)
         .is("deleted_at", null)
         .order("furigana", { ascending: true, nullsFirst: false });
       setUsers((data || []) as ClientRow[]);
       setOfficeUserIds(new Set<string>(clientIds));
     } else {
       // 全利用者モード: 通常の clients 取得（最大 db.max_rows まで）
+      // is_facility = false: 法人/事業所エントリを除外
       const { data } = await supabase
         .from("clients")
         .select("id, name, furigana, status")
         .eq("status", "active")
+        .eq("is_facility", false)
         .is("deleted_at", null)
         .order("furigana", { ascending: true, nullsFirst: false })
         .range(0, 9999);

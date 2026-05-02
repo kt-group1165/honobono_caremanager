@@ -121,6 +121,7 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
       .from("clients")
       .select("id, name, name_kana:furigana, care_manager_staff_id")
       .eq("status", "active")
+      .eq("is_facility", false)
       .eq("care_manager_staff_id", managerId)
       .order("furigana");
 

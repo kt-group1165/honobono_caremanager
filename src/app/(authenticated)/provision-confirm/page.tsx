@@ -68,6 +68,7 @@ export default function ProvisionConfirmPage() {
       .from("clients")
       .select("id, name, name_kana:furigana, care_level, status")
       .eq("status", "active")
+      .eq("is_facility", false)
       .order("furigana");
 
     if (userError) {

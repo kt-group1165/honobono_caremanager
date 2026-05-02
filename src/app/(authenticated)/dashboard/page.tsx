@@ -117,11 +117,12 @@ export default function DashboardPage() {
       setError(null);
 
       try {
-        // 1. Active user count
+        // 1. Active user count（is_facility=false で法人/事業所エントリを除外）
         const { count: activeUsers, error: e1 } = await supabase
           .from("clients")
           .select("*", { count: "exact", head: true })
-          .eq("status", "active");
+          .eq("status", "active")
+          .eq("is_facility", false);
         if (e1) throw e1;
 
         // 2. This month's billing total
@@ -160,12 +161,13 @@ export default function DashboardPage() {
           expiringCarePlans: expiringCarePlans ?? 0,
         });
 
-        // 5. Recently registered users (latest 8)
+        // 5. Recently registered users (latest 8)（法人/事業所エントリを除外）
         const { data: usersData, error: e5 } = await supabase
           .from("clients")
           .select(
             "id, name, birth_date, status, created_at"
           )
+          .eq("is_facility", false)
           .order("created_at", { ascending: false })
           .limit(8);
         if (e5) throw e5;

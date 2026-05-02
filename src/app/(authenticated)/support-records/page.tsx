@@ -281,6 +281,7 @@ export default function SupportRecordsPage() {
       .from("clients")
       .select("id, name, name_kana:furigana")
       .eq("status", "active")
+      .eq("is_facility", false)
       .order("furigana", { ascending: true });
     if (error) {
       toast.error("利用者の取得に失敗しました: " + error.message);

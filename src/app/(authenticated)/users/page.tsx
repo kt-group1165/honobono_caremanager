@@ -24,6 +24,7 @@ export default function UsersIndexPage() {
         .from("clients")
         .select("id")
         .eq("status", "active")
+        .eq("is_facility", false)
         .is("deleted_at", null)
         .order("furigana", { ascending: true, nullsFirst: false })
         .limit(1);

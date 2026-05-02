@@ -209,6 +209,7 @@ export default function BenefitsPage() {
           "id, name, client_insurance_records(id, client_id, insured_number, care_level, service_limit_amount, insurer_number)"
         )
         .eq("status", "active")
+        .eq("is_facility", false)
         .is("deleted_at", null)
         .order("name");
 
