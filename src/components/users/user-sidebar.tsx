@@ -38,12 +38,18 @@ export function UserSidebar({ selectedUserId, onSelectUser }: UserSidebarProps) 
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
+    // 注: クライアント側で .range(0, 9999) を指定しても、Supabase 側の
+    // db.max_rows 設定（デフォルト 1000）でサーバ側でキャップされる場合がある。
+    // 本番運用では Supabase ダッシュボード Settings→API で max_rows を引き上げる
+    // か、自事業所フィルタを「先に client_office_assignments を取得して
+    // .in('id', [...])」する方式へ刷新する必要がある（§5-3 参照）。
     const { data } = await supabase
       .from("clients")
       .select("id, name, furigana, status")
       .eq("status", "active")
       .is("deleted_at", null)
-      .order("furigana", { ascending: true, nullsFirst: false });
+      .order("furigana", { ascending: true, nullsFirst: false })
+      .range(0, 9999);
     const list = (data || []) as ClientRow[];
     setUsers(list);
 

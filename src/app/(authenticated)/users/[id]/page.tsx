@@ -432,26 +432,34 @@ export default function UserDetailPage() {
       if (error) throw error;
 
       // 備考の保存（client_memos の scope='tenant'、自事業所スコープ）
+      // PostgREST/Supabase エラーは Error instanceof を通らないので明示的に
+      // throw して catch まで届かせる（silent failure 防止）。
       if (currentOffice?.tenant_id) {
         const trimmedNotes = form.notes.trim();
         if (tenantMemoId) {
           // 既存メモを UPDATE（空なら DELETE）
           if (trimmedNotes === "") {
-            await supabase.from("client_memos").delete().eq("id", tenantMemoId);
+            const { error: delErr } = await supabase
+              .from("client_memos")
+              .delete()
+              .eq("id", tenantMemoId);
+            if (delErr) throw new Error(`備考の削除に失敗: ${delErr.message}`);
           } else {
-            await supabase
+            const { error: updErr } = await supabase
               .from("client_memos")
               .update({ body: trimmedNotes })
               .eq("id", tenantMemoId);
+            if (updErr) throw new Error(`備考の更新に失敗: ${updErr.message}`);
           }
         } else if (trimmedNotes !== "") {
           // 新規メモを INSERT
-          await supabase.from("client_memos").insert({
+          const { error: insErr } = await supabase.from("client_memos").insert({
             client_id: id,
             scope: "tenant",
             tenant_id: currentOffice.tenant_id,
             body: trimmedNotes,
           });
+          if (insErr) throw new Error(`備考の保存に失敗: ${insErr.message}`);
         }
       }
 
