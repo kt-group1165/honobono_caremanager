@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { format, parseISO, addYears } from "date-fns";
-import { Trash2, RefreshCw, Save, FileCheck } from "lucide-react";
+import { Trash2, RefreshCw, Save, FileCheck, Plus } from "lucide-react";
 import type { CareCertification, CareLevel } from "@/types/database";
 
 // ─── 定数 ────────────────────────────────────────────────────────────────────
@@ -146,6 +146,8 @@ export default function CareCertPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  // 新規入力中フラグ（履歴 0 件のときの初回登録、および明示的「+ 新規」入力中の保存先分岐用）
+  const [isNew, setIsNew] = useState(false);
 
   // ── データ取得 ──────────────────────────────────────────────────────────────
 
@@ -181,6 +183,7 @@ export default function CareCertPage() {
   const selectRow = (rec: CareCertification) => {
     setSelectedId(rec.id);
     setForm(recToForm(rec));
+    setIsNew(false);
   };
 
   // ── フォームフィールド更新 ─────────────────────────────────────────────────
@@ -188,13 +191,17 @@ export default function CareCertPage() {
   const setField = <K extends keyof FormData>(key: K, value: FormData[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
-  // ── 保険変更（上書き保存） ────────────────────────────────────────────────
+  // ── 新規入力モードへ ──────────────────────────────────────────────────────
+
+  const handleNew = () => {
+    setSelectedId(null);
+    setForm(EMPTY_FORM);
+    setIsNew(true);
+  };
+
+  // ── 保険変更（既存 UPDATE） / 新規 INSERT ────────────────────────────────
 
   const handleSave = async () => {
-    if (!selectedId) {
-      toast.error("レコードが選択されていません");
-      return;
-    }
     if (!form.start_date || !form.end_date) {
       toast.error("認定有効期間（開始・終了）は必須です");
       return;
@@ -203,7 +210,7 @@ export default function CareCertPage() {
     try {
       // DB 列名（client_insurance_records）にマッピング
       // updated_at はトリガで自動更新されるため省略
-      const payload = {
+      const payload: Record<string, unknown> = {
         care_level: form.care_level,
         certification_start_date: form.start_date,
         certification_end_date: form.end_date,
@@ -216,12 +223,37 @@ export default function CareCertPage() {
         certification_status: form.status,
         certification_number: form.certification_number || null,
       };
-      const { error } = await supabase
-        .from("client_insurance_records")
-        .update(payload)
-        .eq("id", selectedId);
-      if (error) throw error;
-      toast.success("保存しました");
+
+      if (selectedId && !isNew) {
+        // 既存レコードの上書き保存
+        const { error } = await supabase
+          .from("client_insurance_records")
+          .update(payload)
+          .eq("id", selectedId);
+        if (error) throw error;
+        toast.success("保存しました");
+      } else {
+        // 新規 INSERT — tenant_id を clients から取得して補完
+        const { data: clientRow, error: clientErr } = await supabase
+          .from("clients")
+          .select("tenant_id")
+          .eq("id", userId)
+          .single();
+        if (clientErr) throw clientErr;
+        payload.tenant_id = clientRow?.tenant_id ?? "";
+        payload.client_id = userId;
+        const { data, error } = await supabase
+          .from("client_insurance_records")
+          .insert(payload)
+          .select()
+          .single();
+        if (error) throw error;
+        toast.success("登録しました");
+        if (data) {
+          setSelectedId(data.id);
+          setIsNew(false);
+        }
+      }
       await fetchRecords();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "保存に失敗しました");
@@ -370,13 +402,13 @@ export default function CareCertPage() {
                       </td>
                       <td className="border-b border-gray-100 px-3 py-1.5 whitespace-nowrap">
                         <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${
-                          rec.care_level.startsWith("要介護")
+                          rec.care_level?.startsWith("要介護")
                             ? "bg-orange-100 text-orange-800"
-                            : rec.care_level.startsWith("要支援")
+                            : rec.care_level?.startsWith("要支援")
                             ? "bg-green-100 text-green-800"
                             : "bg-gray-100 text-gray-600"
                         }`}>
-                          {rec.care_level}
+                          {rec.care_level ?? "—"}
                         </span>
                       </td>
                       <td className="border-b border-gray-100 px-3 py-1.5 whitespace-nowrap text-gray-700">
@@ -413,20 +445,32 @@ export default function CareCertPage() {
         {/* フォームヘッダー・ボタン */}
         <div className="bg-gray-100 border-b border-gray-200 px-4 py-1.5 flex items-center justify-between">
           <span className="text-xs font-semibold text-gray-700">
-            {selectedId ? "介護認定 詳細" : "介護認定 詳細（レコードを選択してください）"}
+            {isNew
+              ? "介護認定 詳細（新規入力中）"
+              : selectedId
+              ? "介護認定 詳細"
+              : "介護認定 詳細（レコードを選択してください）"}
           </span>
           <div className="flex gap-2">
             <button
+              onClick={handleNew}
+              disabled={saving}
+              className="inline-flex items-center gap-1 rounded border border-blue-300 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-40 transition-colors"
+            >
+              <Plus size={11} />
+              新規
+            </button>
+            <button
               onClick={handleSave}
-              disabled={saving || !selectedId}
+              disabled={saving || (!selectedId && !isNew)}
               className="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-40 transition-colors"
             >
               <Save size={11} />
-              保険変更
+              {isNew ? "登録" : "保険変更"}
             </button>
             <button
               onClick={handleRenewal}
-              disabled={saving || !selectedId}
+              disabled={saving || !selectedId || isNew}
               className="inline-flex items-center gap-1 rounded bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-40 transition-colors"
             >
               <RefreshCw size={11} />
