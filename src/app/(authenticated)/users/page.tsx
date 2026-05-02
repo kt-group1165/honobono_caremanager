@@ -21,10 +21,11 @@ export default function UsersIndexPage() {
     let cancelled = false;
     (async () => {
       const { data } = await supabase
-        .from("kaigo_users")
+        .from("clients")
         .select("id")
         .eq("status", "active")
-        .order("name_kana", { ascending: true })
+        .is("deleted_at", null)
+        .order("furigana", { ascending: true, nullsFirst: false })
         .limit(1);
       if (cancelled) return;
       const first = data?.[0];

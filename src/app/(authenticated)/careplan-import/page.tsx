@@ -182,7 +182,7 @@ export default function CareplanImportPage() {
   // Load existing users
   useEffect(() => {
     const load = async () => {
-      const { data } = await supabase.from("kaigo_users").select("id, name, name_kana").eq("status", "active").order("name_kana");
+      const { data } = await supabase.from("clients").select("id, name, name_kana:furigana").eq("status", "active").order("furigana");
       setExistingUsers(data || []);
     };
     load();
@@ -301,7 +301,7 @@ export default function CareplanImportPage() {
       // 自動マッチ: 名前で検索
       if (!userId && detectedName) {
         const { data } = await supabase
-          .from("kaigo_users")
+          .from("clients")
           .select("id, name")
           .eq("name", detectedName)
           .eq("status", "active")
@@ -316,7 +316,7 @@ export default function CareplanImportPage() {
       if (!userId && userInfoFile && detectedName) {
         const info = userInfoFile.parsed;
         const { data: newUser, error } = await supabase
-          .from("kaigo_users")
+          .from("clients")
           .insert({
             name: info.name,
             name_kana: info.name_kana || "",

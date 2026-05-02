@@ -16,10 +16,12 @@ import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+// 共通マスタ members の subset。Phase 2-3-8 で kaigo_staff から張替え。
+//   kaigo_staff.name_kana → members.furigana
 interface KaigoStaff {
   id: string;
   name: string;
-  name_kana: string;
+  furigana: string | null;
 }
 
 interface PatternDay {
@@ -275,10 +277,10 @@ export default function PatternsPage() {
   useEffect(() => {
     const fetch = async () => {
       const { data } = await supabase
-        .from("kaigo_staff")
-        .select("id, name, name_kana")
+        .from("members")
+        .select("id, name, furigana")
         .eq("status", "active")
-        .order("name_kana");
+        .order("furigana", { nullsFirst: false });
       setStaff(data || []);
     };
     fetch();

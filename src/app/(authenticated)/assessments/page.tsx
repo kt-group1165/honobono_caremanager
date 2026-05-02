@@ -112,12 +112,13 @@ export default function AssessmentPage() {
   // Load user info when selected
   useEffect(() => {
     if (!selectedUserId) { setSelectedUser(null); setCertifications([]); setSelectedCertId(null); return; }
-    supabase.from("kaigo_users").select("id, name, name_kana, gender").eq("id", selectedUserId).single().then(({ data }: { data: KaigoUser | null }) => setSelectedUser(data));
-    // Load all certifications for this user
-    supabase.from("kaigo_care_certifications")
-      .select("id, care_level, start_date, end_date")
-      .eq("user_id", selectedUserId)
-      .order("start_date", { ascending: false })
+    // 共通マスタ clients、PostgREST 列エイリアスで name_kana を維持
+    supabase.from("clients").select("id, name, name_kana:furigana, gender").eq("id", selectedUserId).single().then(({ data }: { data: KaigoUser | null }) => setSelectedUser(data));
+    // Load all certifications for this user（client_insurance_records、列エイリアスで旧フィールド名維持）
+    supabase.from("client_insurance_records")
+      .select("id, care_level, start_date:certification_start_date, end_date:certification_end_date")
+      .eq("client_id", selectedUserId)
+      .order("certification_start_date", { ascending: false, nullsFirst: false })
       .then(({ data }: { data: Certification[] | null }) => {
         const certs = data ?? [];
         setCertifications(certs);

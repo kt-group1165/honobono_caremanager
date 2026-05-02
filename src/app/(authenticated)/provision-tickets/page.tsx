@@ -142,9 +142,10 @@ export default function ProvisionTicketsPage() {
   useEffect(() => {
     const load = async () => {
       const [staffRes, serviceCodeRes, officeRes] = await Promise.all([
-        supabase.from("kaigo_staff").select("id, name").eq("status", "active").order("name"),
+        supabase.from("members").select("id, name").eq("status", "active").order("name"),
         supabase.from("kaigo_service_codes").select("service_name, units").eq("calculation_type", "基本"),
-        supabase.from("kaigo_office_settings").select("provider_number, office_name").limit(1).single(),
+        // PostgREST 列エイリアスで旧フィールド名維持
+        supabase.from("offices").select("provider_number:business_number, office_name:name").eq("app_type", "kaigo-app").limit(1).single(),
       ]);
       setAllStaff(staffRes.data || []);
       if (officeRes.data) setOfficeInfo(officeRes.data as { provider_number?: string; office_name?: string });
@@ -164,7 +165,7 @@ export default function ProvisionTicketsPage() {
     if (!selectedUserId) { setUserData(null); return; }
     const load = async () => {
       const { data } = await supabase
-        .from("kaigo_users")
+        .from("clients")
         .select("id, name, name_kana")
         .eq("id", selectedUserId)
         .single();
@@ -188,7 +189,7 @@ export default function ProvisionTicketsPage() {
 
     const { data, error } = await supabase
       .from("kaigo_visit_schedule")
-      .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, kaigo_staff(name)")
+      .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, members(name)")
       .eq("user_id", selectedUserId)
       .gte("visit_date", from)
       .lte("visit_date", to)
@@ -209,7 +210,7 @@ export default function ProvisionTicketsPage() {
       end_time: r.end_time,
       service_type: r.service_type,
       status: r.status,
-      staff_name: r.kaigo_staff?.name ?? null,
+      staff_name: r.members?.name ?? null,
     }));
 
     // Build unique rows — group by service_type + start_time + end_time

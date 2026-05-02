@@ -10,7 +10,8 @@ import {
   Save,
   X,
 } from "lucide-react";
-import type { KaigoUser } from "@/types/database";
+import type { Client } from "@/types/database";
+import { useBusinessType } from "@/lib/business-type-context";
 
 const STATUS_LABELS: Record<string, string> = {
   active: "在籍中",
@@ -21,6 +22,11 @@ const STATUS_LABELS: Record<string, string> = {
 const inputClass =
   "w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
+// EditForm は UI 入力用の中間型。DB カラム名（共通 clients）にマッピングして保存。
+//   name_kana    → clients.furigana
+//   mobile_phone → clients.mobile
+//   notes        → client_memos.body (scope='tenant')
+// Phase 2-3-1 スコープ外: care_manager_staff_id（ケアマネ統合は別フェーズで再設計）
 type EditForm = {
   name: string;
   name_kana: string;
@@ -37,7 +43,6 @@ type EditForm = {
   admission_date: string;
   status: string;
   notes: string;
-  care_manager_staff_id: string;
 };
 
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
@@ -75,13 +80,13 @@ type OfficeServiceRow = {
   office_id: string;
   start_date: string | null;
   end_date: string | null;
-  is_active: boolean;
   service_notes: string | null;
   home_care_categories: HomeCareCategory[];
 };
 
-const isHomeCareType = (bt: string | null | undefined) =>
-  bt === "home_care" || bt === "訪問介護";
+// 共通マスタ offices.service_type は日本語値のみ（'訪問介護'|'訪問入浴'|'訪問看護'|'居宅介護支援'|'福祉用具'）
+// 訪問介護系は home_care_categories の細分化対象
+const isHomeCareType = (bt: string | null | undefined) => bt === "訪問介護";
 
 /** DBから取得した値を7カテゴリ全てが揃った配列に正規化 */
 function normalizeCategories(raw: unknown): HomeCareCategory[] {
@@ -97,17 +102,25 @@ function normalizeCategories(raw: unknown): HomeCareCategory[] {
   });
 }
 
-function UserOfficeServices({ userId }: { userId: string }) {
+function UserOfficeServices({ userId, tenantId }: { userId: string; tenantId: string | null }) {
   const supabase = createClient();
-  const [offices, setOffices] = useState<{ id: string; office_name: string; business_type: string }[]>([]);
+  const [offices, setOffices] = useState<{ id: string; name: string; service_type: string }[]>([]);
   const [services, setServices] = useState<OfficeServiceRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
     setLoading(true);
+    // 共通マスタの offices（kaigo-app 用）と client_office_assignments を並行取得
     const [{ data: offs }, { data: svcs }] = await Promise.all([
-      supabase.from("kaigo_office_settings").select("id, office_name, business_type").order("office_name"),
-      supabase.from("kaigo_user_office_services").select("*").eq("user_id", userId),
+      supabase
+        .from("offices")
+        .select("id, name, service_type")
+        .eq("app_type", "kaigo-app")
+        .order("name"),
+      supabase
+        .from("client_office_assignments")
+        .select("*")
+        .eq("client_id", userId),
     ]);
     setOffices(offs || []);
     const normalized = (svcs || []).map((s: Record<string, unknown>) => ({
@@ -123,28 +136,30 @@ function UserOfficeServices({ userId }: { userId: string }) {
   const toggleOffice = async (officeId: string, currentlyUsing: boolean) => {
     const existing = services.find((s) => s.office_id === officeId);
     if (currentlyUsing && existing) {
-      // 利用終了（is_active=false + end_date=今日）にする
-      const { error } = await supabase.from("kaigo_user_office_services").update({
-        is_active: false,
+      // 利用終了: end_date を埋める（client_office_assignments に is_active カラムは無い）
+      const { error } = await supabase.from("client_office_assignments").update({
         end_date: existing.end_date ?? format(new Date(), "yyyy-MM-dd"),
       }).eq("id", existing.id);
       if (error) toast.error("更新に失敗: " + error.message);
       else { toast.success("サービス終了を登録しました"); load(); }
     } else if (existing) {
-      // 再開（is_active=true + end_date=null）
-      const { error } = await supabase.from("kaigo_user_office_services").update({
-        is_active: true,
+      // 再開: end_date を NULL に戻す
+      const { error } = await supabase.from("client_office_assignments").update({
         end_date: null,
       }).eq("id", existing.id);
       if (error) toast.error("更新に失敗: " + error.message);
       else { toast.success("サービス再開を登録しました"); load(); }
     } else {
-      // 新規
-      const { error } = await supabase.from("kaigo_user_office_services").insert({
-        user_id: userId,
+      // 新規（tenant_id は client_office_assignments の旧カラム互換のため埋める）
+      if (!tenantId) {
+        toast.error("自事業所が選択されていません");
+        return;
+      }
+      const { error } = await supabase.from("client_office_assignments").insert({
+        tenant_id: tenantId,
+        client_id: userId,
         office_id: officeId,
         start_date: format(new Date(), "yyyy-MM-dd"),
-        is_active: true,
       });
       if (error) toast.error("登録に失敗: " + error.message);
       else { toast.success("サービスを開始しました"); load(); }
@@ -152,7 +167,7 @@ function UserOfficeServices({ userId }: { userId: string }) {
   };
 
   const updateDate = async (id: string, field: "start_date" | "end_date", value: string) => {
-    const { error } = await supabase.from("kaigo_user_office_services").update({ [field]: value || null }).eq("id", id);
+    const { error } = await supabase.from("client_office_assignments").update({ [field]: value || null }).eq("id", id);
     if (error) toast.error("更新に失敗: " + error.message);
     else { toast.success("保存しました"); load(); }
   };
@@ -173,7 +188,7 @@ function UserOfficeServices({ userId }: { userId: string }) {
       prev.map((s) => (s.id === serviceId ? { ...s, home_care_categories: next } : s)),
     );
     const { error } = await supabase
-      .from("kaigo_user_office_services")
+      .from("client_office_assignments")
       .update({ home_care_categories: next })
       .eq("id", serviceId);
     if (error) {
@@ -194,7 +209,8 @@ function UserOfficeServices({ userId }: { userId: string }) {
         <div className="space-y-2">
           {offices.map((o) => {
             const svc = services.find((s) => s.office_id === o.id);
-            const using = !!svc && svc.is_active;
+            // 「現役」判定: client_office_assignments に is_active は無いので end_date IS NULL で判定
+            const using = !!svc && svc.end_date === null;
             return (
               <div key={o.id} className={`rounded-lg border p-3 ${using ? "border-blue-300 bg-blue-50/30" : "border-gray-200"}`}>
                 <div className="flex items-center gap-3">
@@ -205,8 +221,8 @@ function UserOfficeServices({ userId }: { userId: string }) {
                     className="w-4 h-4 accent-blue-600 cursor-pointer"
                   />
                   <div className="flex-1">
-                    <div className="text-sm font-semibold text-gray-900">{o.office_name || "(名称未設定)"}</div>
-                    <div className="text-xs text-gray-500">{o.business_type}</div>
+                    <div className="text-sm font-semibold text-gray-900">{o.name || "(名称未設定)"}</div>
+                    <div className="text-xs text-gray-500">{o.service_type}</div>
                   </div>
                 </div>
                 {svc && (
@@ -221,7 +237,7 @@ function UserOfficeServices({ userId }: { userId: string }) {
                     </label>
                   </div>
                 )}
-                {svc && using && isHomeCareType(o.business_type) && (
+                {svc && using && isHomeCareType(o.service_type) && (
                   <div className="mt-3 rounded-md border border-blue-200 bg-white p-3">
                     <div className="text-xs font-semibold text-gray-700 mb-2">提供サービス種別</div>
                     <div className="space-y-1">
@@ -296,8 +312,9 @@ export default function UserDetailPage() {
   const router = useRouter();
   const pathname = usePathname();
   const supabase = createClient();
+  const { currentOffice } = useBusinessType();
 
-  const [user, setUser] = useState<KaigoUser | null>(null);
+  const [user, setUser] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -317,52 +334,59 @@ export default function UserDetailPage() {
     admission_date: "",
     status: "active",
     notes: "",
-    care_manager_staff_id: "",
   });
 
-  // 職員一覧（担当ケアマネ選択用 — ケアマネージャーのみ）
-  const [staffList, setStaffList] = useState<{ id: string; name: string; role: string }[]>([]);
-  useEffect(() => {
-    const fetch = async () => {
-      const { data } = await supabase
-        .from("kaigo_staff")
-        .select("id, name, role")
-        .eq("status", "active")
-        .in("role", ["ケアマネージャー", "介護支援専門員", "主任介護支援専門員"])
-        .order("name_kana");
-      setStaffList(data || []);
-    };
-    fetch();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // 自事業所スコープのメモ（client_memos の最新 1 件）。
+  // 編集時にも参照するため id を保持しておく。
+  const [tenantMemoId, setTenantMemoId] = useState<string | null>(null);
 
   const fetchUser = useCallback(async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from("kaigo_users")
+        .from("clients")
         .select("*")
         .eq("id", id)
         .single();
       if (error) throw error;
       setUser(data);
+
+      // 自事業所スコープのメモを別途取得（最新 1 件）
+      let memoBody = "";
+      let memoId: string | null = null;
+      if (currentOffice?.tenant_id) {
+        const { data: memo } = await supabase
+          .from("client_memos")
+          .select("id, body")
+          .eq("client_id", id)
+          .eq("scope", "tenant")
+          .eq("tenant_id", currentOffice.tenant_id)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (memo) {
+          memoId = memo.id as string;
+          memoBody = (memo.body as string) ?? "";
+        }
+      }
+      setTenantMemoId(memoId);
+
       setForm({
         name: data.name ?? "",
-        name_kana: data.name_kana ?? "",
+        name_kana: data.furigana ?? "",
         gender: data.gender ?? "女",
         birth_date: data.birth_date ?? "",
         blood_type: data.blood_type ?? "",
         postal_code: data.postal_code ?? "",
         address: data.address ?? "",
         phone: data.phone ?? "",
-        mobile_phone: data.mobile_phone ?? "",
+        mobile_phone: data.mobile ?? "",
         email: data.email ?? "",
         emergency_contact_name: data.emergency_contact_name ?? "",
         emergency_contact_phone: data.emergency_contact_phone ?? "",
         admission_date: data.admission_date ?? "",
         status: data.status ?? "active",
-        notes: data.notes ?? "",
-        care_manager_staff_id: (data as { care_manager_staff_id?: string }).care_manager_staff_id ?? "",
+        notes: memoBody,
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "取得に失敗しました";
@@ -371,7 +395,7 @@ export default function UserDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, id, router]);
+  }, [supabase, id, router, currentOffice?.tenant_id]);
 
   useEffect(() => {
     fetchUser();
@@ -384,29 +408,53 @@ export default function UserDetailPage() {
     }
     setSaving(true);
     try {
+      // clients への UPDATE（共通カラム名: furigana, mobile）
+      // updated_at はトリガで自動更新されるので手動指定不要
       const { error } = await supabase
-        .from("kaigo_users")
+        .from("clients")
         .update({
           name: form.name.trim(),
-          name_kana: form.name_kana.trim(),
+          furigana: form.name_kana.trim(),
           gender: form.gender,
-          birth_date: form.birth_date,
+          birth_date: form.birth_date || null,
           blood_type: form.blood_type || null,
           postal_code: form.postal_code || null,
           address: form.address || null,
           phone: form.phone || null,
-          mobile_phone: form.mobile_phone || null,
+          mobile: form.mobile_phone || null,
           email: form.email || null,
           emergency_contact_name: form.emergency_contact_name || null,
           emergency_contact_phone: form.emergency_contact_phone || null,
           admission_date: form.admission_date || null,
           status: form.status,
-          notes: form.notes || null,
-          care_manager_staff_id: form.care_manager_staff_id || null,
-          updated_at: new Date().toISOString(),
         })
         .eq("id", id);
       if (error) throw error;
+
+      // 備考の保存（client_memos の scope='tenant'、自事業所スコープ）
+      if (currentOffice?.tenant_id) {
+        const trimmedNotes = form.notes.trim();
+        if (tenantMemoId) {
+          // 既存メモを UPDATE（空なら DELETE）
+          if (trimmedNotes === "") {
+            await supabase.from("client_memos").delete().eq("id", tenantMemoId);
+          } else {
+            await supabase
+              .from("client_memos")
+              .update({ body: trimmedNotes })
+              .eq("id", tenantMemoId);
+          }
+        } else if (trimmedNotes !== "") {
+          // 新規メモを INSERT
+          await supabase.from("client_memos").insert({
+            client_id: id,
+            scope: "tenant",
+            tenant_id: currentOffice.tenant_id,
+            body: trimmedNotes,
+          });
+        }
+      }
+
       toast.success("保存しました");
       setEditing(false);
       fetchUser();
@@ -473,7 +521,7 @@ export default function UserDetailPage() {
             <div className="grid grid-cols-1 gap-0 sm:grid-cols-2">
               <div className="sm:pr-6">
                 <InfoRow label="氏名" value={user.name} />
-                <InfoRow label="氏名（かな）" value={user.name_kana} />
+                <InfoRow label="氏名（かな）" value={user.furigana} />
                 <InfoRow label="性別" value={user.gender} />
                 <InfoRow
                   label="生年月日"
@@ -504,7 +552,7 @@ export default function UserDetailPage() {
                 <InfoRow label="郵便番号" value={user.postal_code} />
                 <InfoRow label="住所" value={user.address} />
                 <InfoRow label="電話番号" value={user.phone} />
-                <InfoRow label="携帯電話" value={user.mobile_phone} />
+                <InfoRow label="携帯電話" value={user.mobile} />
                 <InfoRow label="メール" value={user.email} />
                 <InfoRow
                   label="緊急連絡先氏名"
@@ -515,17 +563,17 @@ export default function UserDetailPage() {
                   value={user.emergency_contact_phone}
                 />
               </div>
-              {user.notes && (
+              {form.notes && (
                 <div className="sm:col-span-2 mt-4 pt-4 border-t">
-                  <p className="text-sm text-gray-500 mb-1">備考</p>
+                  <p className="text-sm text-gray-500 mb-1">備考（自事業所スコープ）</p>
                   <p className="text-sm text-gray-800 whitespace-pre-wrap">
-                    {user.notes}
+                    {form.notes}
                   </p>
                 </div>
               )}
               {/* 利用中の自事業所サービス */}
               <div className="sm:col-span-2 mt-4 pt-4 border-t">
-                <UserOfficeServices userId={id} />
+                <UserOfficeServices userId={id} tenantId={currentOffice?.tenant_id ?? null} />
               </div>
             </div>
           ) : (
@@ -729,24 +777,10 @@ export default function UserDetailPage() {
                     className={inputClass}
                   />
                 </div>
+                {/* 担当ケアマネ UI は Phase 2-3-1 スコープ外（care_managers 統合と一緒に再設計予定） */}
                 <div className="sm:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    担当ケアマネジャー
-                  </label>
-                  <select
-                    value={form.care_manager_staff_id}
-                    onChange={(e) => setForm((p) => ({ ...p, care_manager_staff_id: e.target.value }))}
-                    className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">— 未選択 —</option>
-                    {staffList.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}（{s.role}）</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    備考
+                    備考（自事業所スコープ）
                   </label>
                   <textarea
                     value={form.notes}
@@ -755,6 +789,7 @@ export default function UserDetailPage() {
                     }
                     rows={3}
                     className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                    placeholder="自事業所スタッフのみ閲覧可能なメモ"
                   />
                 </div>
               </div>

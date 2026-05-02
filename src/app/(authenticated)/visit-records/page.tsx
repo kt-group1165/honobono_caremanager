@@ -552,8 +552,9 @@ export default function VisitRecordsPage() {
   useEffect(() => {
     const fetchStaff = async () => {
       const { data } = await supabase
-        .from("kaigo_staff")
+        .from("members")
         .select("id, name")
+        .eq("status", "active")
         .order("name");
       setStaffList(data || []);
     };
@@ -564,9 +565,10 @@ export default function VisitRecordsPage() {
   const fetchRecords = useCallback(async (userId: string) => {
     setLoading(true);
     setRecords([]);
+    // PostgREST embed: kaigo_visit_records.staff_id → members (FK redirect 済)
     const { data, error } = await supabase
       .from("kaigo_visit_records")
-      .select("*, kaigo_staff(name)")
+      .select("*, members(name)")
       .eq("user_id", userId)
       .order("visit_date", { ascending: false })
       .order("start_time", { ascending: false });
@@ -575,7 +577,7 @@ export default function VisitRecordsPage() {
     } else {
       const mapped = (data || []).map((r: any) => ({
         ...r,
-        staff_name: r.kaigo_staff?.name ?? null,
+        staff_name: r.members?.name ?? null,
       }));
       setRecords(mapped);
     }

@@ -19,10 +19,12 @@ import { ja } from "date-fns/locale";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+// client_hospitalizations 行（旧 kaigo_hospitalizations、Phase 2-3-5 で張替え）
+//   user_id → client_id
 interface Hospitalization {
   id: string;
-  user_id: string;
-  hospital_name: string;
+  client_id: string;
+  hospital_name: string | null;
   department: string | null;
   admission_date: string;
   discharge_date: string | null;
@@ -33,10 +35,12 @@ interface Hospitalization {
   created_at: string;
 }
 
+// 共通マスタ clients の subset
+//   旧 kaigo_users.name_kana → clients.furigana
 interface UserInfo {
   id: string;
   name: string;
-  name_kana: string | null;
+  furigana: string | null;
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -74,8 +78,8 @@ export default function HospitalizationsPage() {
       return;
     }
     supabase
-      .from("kaigo_users")
-      .select("id, name, name_kana")
+      .from("clients")
+      .select("id, name, furigana")
       .eq("id", selectedUserId)
       .single()
       .then(({ data }: { data: UserInfo | null }) => setSelectedUser(data));
@@ -89,9 +93,9 @@ export default function HospitalizationsPage() {
     }
     setLoading(true);
     const { data, error } = await supabase
-      .from("kaigo_hospitalizations")
+      .from("client_hospitalizations")
       .select("*")
-      .eq("user_id", selectedUserId)
+      .eq("client_id", selectedUserId)
       .order("admission_date", { ascending: false });
     if (error) {
       toast.error("入退院情報の取得に失敗しました: " + error.message);
@@ -109,13 +113,13 @@ export default function HospitalizationsPage() {
   const fetchAllAdmitted = async () => {
     setLoadingAllAdmitted(true);
     const { data } = await supabase
-      .from("kaigo_hospitalizations")
-      .select("*, kaigo_users(name)")
+      .from("client_hospitalizations")
+      .select("*, clients(name)")
       .eq("status", "admitted")
       .order("admission_date", { ascending: true });
     const rows = (data ?? []).map((r: any) => ({  // eslint-disable-line @typescript-eslint/no-explicit-any
       ...r,
-      user_name: r.kaigo_users?.name ?? "—",
+      user_name: r.clients?.name ?? "—",
     })) as (Hospitalization & { user_name: string })[];
     setAllAdmitted(rows);
     setLoadingAllAdmitted(false);
@@ -162,9 +166,19 @@ export default function HospitalizationsPage() {
     setSaving(true);
     try {
       const status = form.discharge_date ? "discharged" : "admitted";
+      // 共通マスタ client_hospitalizations の payload
+      // 旧 user_id → client_id
+      // tenant_id は client_hospitalizations の旧カラム互換のため埋める必要があるが、
+      // 既存スキーマでは TEXT NOT NULL のまま。現在の利用者の clients.tenant_id を取得して埋める。
+      const { data: clientRow } = await supabase
+        .from("clients")
+        .select("tenant_id")
+        .eq("id", selectedUserId)
+        .single();
       const payload = {
-        user_id: selectedUserId,
-        hospital_name: form.hospital_name.trim() || "（未入力）",
+        tenant_id: clientRow?.tenant_id ?? "",
+        client_id: selectedUserId,
+        hospital_name: form.hospital_name.trim() || null,
         department: form.department.trim() || null,
         admission_date: form.admission_date,
         discharge_date: form.discharge_date || null,
@@ -176,14 +190,14 @@ export default function HospitalizationsPage() {
 
       if (editingId) {
         const { error } = await supabase
-          .from("kaigo_hospitalizations")
+          .from("client_hospitalizations")
           .update(payload)
           .eq("id", editingId);
         if (error) throw error;
         toast.success("更新しました");
       } else {
         const { error } = await supabase
-          .from("kaigo_hospitalizations")
+          .from("client_hospitalizations")
           .insert(payload);
         if (error) throw error;
 
@@ -257,7 +271,7 @@ export default function HospitalizationsPage() {
 
     try {
       const { error } = await supabase
-        .from("kaigo_hospitalizations")
+        .from("client_hospitalizations")
         .update({
           discharge_date: dischargeDate,
           discharge_destination: dest || null,
@@ -267,12 +281,13 @@ export default function HospitalizationsPage() {
       if (error) throw error;
 
       // 該当利用者の退院日を含むケアプランを検索（care_plan_idを紐付けて支援経過画面で見えるように）
-      const { data: userName2 } = await supabase.from("kaigo_users").select("name").eq("id", rec.user_id).single();
+      // kaigo_care_plans.user_id / kaigo_support_records.user_id は FK redirect 済（→ clients.id）
+      const { data: userName2 } = await supabase.from("clients").select("name").eq("id", rec.client_id).single();
       const userName = userName2?.name ?? selectedUser?.name ?? "";
       const { data: plans } = await supabase
         .from("kaigo_care_plans")
         .select("id, start_date, end_date")
-        .eq("user_id", rec.user_id)
+        .eq("user_id", rec.client_id)
         .lte("start_date", dischargeDate)
         .order("start_date", { ascending: false });
       const activePlan = (plans || []).find((p: { id: string; start_date: string; end_date: string | null }) =>
@@ -281,11 +296,11 @@ export default function HospitalizationsPage() {
 
       // 支援経過に退院記録を追加
       await supabase.from("kaigo_support_records").insert({
-        user_id: rec.user_id,
+        user_id: rec.client_id,
         record_date: dischargeDate,
         record_time: null,
         category: "その他",
-        content: `【退院】${userName} 様が ${rec.hospital_name} を退院。${dest ? "退院先: " + dest : ""}`.trim(),
+        content: `【退院】${userName} 様が ${rec.hospital_name ?? "（病院未入力）"} を退院。${dest ? "退院先: " + dest : ""}`.trim(),
         staff_name: null,
         care_plan_id: activePlan?.id ?? null,
       });
@@ -306,8 +321,8 @@ export default function HospitalizationsPage() {
 
     // ① 削除対象の入退院情報を先に取得（自動生成された支援経過を特定するため）
     const { data: targetRaw, error: fetchErr } = await supabase
-      .from("kaigo_hospitalizations")
-      .select("user_id, hospital_name, admission_date, discharge_date")
+      .from("client_hospitalizations")
+      .select("client_id, hospital_name, admission_date, discharge_date")
       .eq("id", id)
       .single();
     if (fetchErr || !targetRaw) {
@@ -315,15 +330,16 @@ export default function HospitalizationsPage() {
       return;
     }
     const target = targetRaw as {
-      user_id: string;
-      hospital_name: string;
+      client_id: string;
+      hospital_name: string | null;
       admission_date: string;
       discharge_date: string | null;
     };
 
     // ② 自動生成された支援経過を削除
-    //    識別条件: user_id + record_date(入院日 or 退院日) + 病院名を含む
+    //    識別条件: user_id(=clients.id) + record_date(入院日 or 退院日) + 病院名を含む
     //              + content が 【入院】 または 【退院】 で始まる
+    //    kaigo_support_records.user_id は FK redirect 済（→ clients.id）。カラム名は維持。
     let supportDeleted = 0;
     const dates = [target.admission_date, target.discharge_date].filter(
       (d): d is string => !!d,
@@ -332,14 +348,14 @@ export default function HospitalizationsPage() {
       const { data: candidates } = await supabase
         .from("kaigo_support_records")
         .select("id, content, record_date")
-        .eq("user_id", target.user_id)
+        .eq("user_id", target.client_id)
         .in("record_date", dates);
       const matchIds = (candidates ?? [])
         .filter((r: { id: string; content: string | null }) => {
           const c = r.content ?? "";
           return (
             (c.startsWith("【入院】") || c.startsWith("【退院】")) &&
-            c.includes(target.hospital_name)
+            (target.hospital_name ? c.includes(target.hospital_name) : true)
           );
         })
         .map((r: { id: string }) => r.id);
@@ -358,7 +374,7 @@ export default function HospitalizationsPage() {
 
     // ③ 入退院レコードを削除
     const { error } = await supabase
-      .from("kaigo_hospitalizations")
+      .from("client_hospitalizations")
       .delete()
       .eq("id", id);
     if (error) {
@@ -777,7 +793,7 @@ export default function HospitalizationsPage() {
                           key={rec.id}
                           className="hover:bg-red-50/30 cursor-pointer"
                           onClick={() => {
-                            setSelectedUserId(rec.user_id);
+                            setSelectedUserId(rec.client_id);
                             setShowAllAdmitted(false);
                           }}
                         >

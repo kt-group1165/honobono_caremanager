@@ -290,8 +290,8 @@ export function Sidebar() {
             <div>介護管理システム v{APP_VERSION}</div>
             <div className={typeInfo.color}>{typeInfo.label}</div>
             {currentOffice && (
-              <div className="mt-1 pt-1 border-t border-gray-100 text-gray-600 truncate" title={currentOffice.office_name}>
-                🏢 {currentOffice.office_name || "(名称未設定)"}
+              <div className="mt-1 pt-1 border-t border-gray-100 text-gray-600 truncate" title={currentOffice.name}>
+                🏢 {currentOffice.name || "(名称未設定)"}
               </div>
             )}
           </div>

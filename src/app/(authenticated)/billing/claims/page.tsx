@@ -98,7 +98,10 @@ interface ClaimRow {
   abuse_reduction_pct: number;
   status: ClaimStatus;
   notes: string | null;
-  kaigo_users?: {
+  // Phase 2-3-8 で kaigo_users から clients に張替え。
+  // PostgREST 列エイリアス（name_kana:furigana, mobile_phone:mobile）で
+  // 既存 UI フィールド名を維持。
+  clients?: {
     name: string;
     name_kana?: string | null;
     gender?: string | null;
@@ -301,7 +304,7 @@ function generateCSV(
       c.insurance_amount,
       "0",
       cert?.care_level ?? "",
-      (c.kaigo_users?.name ?? "").replace(/,/g, "　"),
+      (c.clients?.name ?? "").replace(/,/g, "　"),
     ];
     lines.push(row.join(","));
   }
@@ -358,8 +361,9 @@ function EditModal({ claim, certEntry, onClose, onSave }: EditModalProps) {
   // Auto-fill tokutei_kassan and medical_coop_kassan from office settings
   useEffect(() => {
     supabase
-      .from("kaigo_office_settings")
+      .from("offices")
       .select("tokutei_kassan_type, medical_cooperation_kassan")
+      .eq("app_type", "kaigo-app")
       .limit(1)
       .maybeSingle()
       .then(({ data }: { data: Record<string, unknown> | null }) => {
@@ -397,7 +401,7 @@ function EditModal({ claim, certEntry, onClose, onSave }: EditModalProps) {
       <div className="w-full max-w-lg rounded-xl border bg-white shadow-xl p-6 space-y-5 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-gray-900">
-            レセプト編集 — {claim.kaigo_users?.name}
+            レセプト編集 — {claim.clients?.name}
           </h2>
           <button
             onClick={onClose}
@@ -666,12 +670,14 @@ export default function ClaimsPage() {
     provider_number: string | null;
   } | null>(null);
 
-  // 事業所設定を取得（画面上部の加算バッジ表示用）
+  // 事業所設定を取得（画面上部の加算バッジ表示用、共通マスタ offices）
+  // PostgREST 列エイリアスで provider_number → business_number をマッピング
   useEffect(() => {
     const fetchOffice = async () => {
       const { data } = await supabase
-        .from("kaigo_office_settings")
-        .select("tokutei_kassan_type, medical_cooperation_kassan, area_category, unit_price, provider_number")
+        .from("offices")
+        .select("tokutei_kassan_type, medical_cooperation_kassan, area_category, unit_price, provider_number:business_number")
+        .eq("app_type", "kaigo-app")
         .limit(1)
         .maybeSingle();
       if (data) setOfficeInfo(data as typeof officeInfo);
@@ -685,9 +691,11 @@ export default function ClaimsPage() {
   const fetchClaims = useCallback(async () => {
     setLoading(true);
     try {
+      // PostgREST 列エイリアスで kaigo_users 旧フィールド名を維持しつつ clients を埋め込む
+      // kaigo_care_support_claims.user_id → clients.id (FK redirect 済)
       const { data, error } = await supabase
         .from("kaigo_care_support_claims")
-        .select("*, kaigo_users(name, name_kana, gender, phone, mobile_phone)")
+        .select("*, clients(name, name_kana:furigana, gender, phone, mobile_phone:mobile)")
         .eq("billing_month", billingMonth)
         .order("created_at", { ascending: true });
 
@@ -698,21 +706,22 @@ export default function ClaimsPage() {
       // Fetch certifications for the users in these claims
       const userIds = [...new Set(rows.map((r) => r.user_id))];
       if (userIds.length > 0) {
+        // client_insurance_records, カラム名は新スキーマ
         const { data: certs } = await supabase
-          .from("kaigo_care_certifications")
-          .select("user_id, care_level, insurer_number, insured_number, start_date, end_date")
-          .in("user_id", userIds)
+          .from("client_insurance_records")
+          .select("client_id, care_level, insurer_number, insured_number, certification_start_date, certification_end_date")
+          .in("client_id", userIds)
           .order("certification_date", { ascending: false });
 
         const map = new Map<string, { care_level: string; insurer_number: string | null; insured_number: string | null; start_date: string | null; end_date: string | null }>();
         for (const cert of certs || []) {
-          if (!map.has(cert.user_id)) {
-            map.set(cert.user_id, {
+          if (!map.has(cert.client_id)) {
+            map.set(cert.client_id, {
               care_level: cert.care_level,
               insurer_number: cert.insurer_number ?? null,
               insured_number: cert.insured_number ?? null,
-              start_date: cert.start_date ?? null,
-              end_date: cert.end_date ?? null,
+              start_date: cert.certification_start_date ?? null,
+              end_date: cert.certification_end_date ?? null,
             });
           }
         }
@@ -758,11 +767,12 @@ export default function ClaimsPage() {
 
     setGenerating(true);
     try {
-      // 1. Fetch active users
+      // 1. Fetch active users（clients）
       const { data: users, error: usersErr } = await supabase
-        .from("kaigo_users")
+        .from("clients")
         .select("id, name")
-        .eq("status", "active");
+        .eq("status", "active")
+        .is("deleted_at", null);
       if (usersErr) throw usersErr;
       if (!users || users.length === 0) {
         toast.error("在籍中の利用者が見つかりません");
@@ -787,11 +797,11 @@ export default function ClaimsPage() {
         return;
       }
 
-      // 3. Fetch latest certifications for those users
+      // 3. Fetch latest certifications for those users（client_insurance_records）
       const { data: certs, error: certsErr } = await supabase
-        .from("kaigo_care_certifications")
-        .select("user_id, care_level, insurer_number, insured_number")
-        .in("user_id", Array.from(activeUserIds))
+        .from("client_insurance_records")
+        .select("client_id, care_level, insurer_number, insured_number")
+        .in("client_id", Array.from(activeUserIds))
         .order("certification_date", { ascending: false });
       if (certsErr) throw certsErr;
 
@@ -805,8 +815,8 @@ export default function ClaimsPage() {
         }
       >();
       for (const cert of certs || []) {
-        if (!certMap.has(cert.user_id)) {
-          certMap.set(cert.user_id, {
+        if (!certMap.has(cert.client_id)) {
+          certMap.set(cert.client_id, {
             care_level: cert.care_level,
             insurer_number: cert.insurer_number ?? null,
             insured_number: cert.insured_number ?? null,
@@ -814,10 +824,11 @@ export default function ClaimsPage() {
         }
       }
 
-      // 4. Fetch office settings for auto-apply
+      // 4. Fetch office settings for auto-apply（共通マスタ offices, kaigo-app の自事業所）
       const { data: officeSettings } = await supabase
-        .from("kaigo_office_settings")
+        .from("offices")
         .select("tokutei_kassan_type, medical_cooperation_kassan, unit_price, area_category")
+        .eq("app_type", "kaigo-app")
         .limit(1)
         .maybeSingle();
 
@@ -1125,21 +1136,22 @@ export default function ClaimsPage() {
     }
 
     try {
-      // 自事業所設定を取得
+      // 自事業所設定を取得（共通マスタ offices, kaigo-app）
       const { data: officeData } = await supabase
-        .from("kaigo_office_settings")
-        .select("provider_number, area_category, unit_price")
+        .from("offices")
+        .select("provider_number:business_number, area_category, unit_price")
+        .eq("app_type", "kaigo-app")
         .limit(1)
         .maybeSingle();
 
-      const providerNumber = officeData?.provider_number ?? "0000000000";
+      const providerNumber = (officeData as { provider_number?: string } | null)?.provider_number ?? "0000000000";
       const unitPrice = Number(officeData?.unit_price ?? 10);
       const areaCode = areaCategoryToCode(officeData?.area_category ?? "その他");
 
-      // 利用者情報（生年月日・性別）を取得
+      // 利用者情報（生年月日・性別）を取得（clients）
       const userIds = [...new Set(confirmed.map((c) => c.user_id))];
       const { data: usersData } = await supabase
-        .from("kaigo_users")
+        .from("clients")
         .select("id, birth_date, gender")
         .in("id", userIds);
       const userInfoMap = new Map<string, { birth_date: string | null; gender: string | null }>();
@@ -1155,7 +1167,7 @@ export default function ClaimsPage() {
       // ClaimRowからCareMgmtClaim形式に変換
       const careMgmtClaims = confirmed.map((c) => {
         const cert = certMap.get(c.user_id);
-        const userName = c.kaigo_users?.name ?? "";
+        const userName = c.clients?.name ?? "";
         const insuredNumber = cert?.insured_number ?? "";
         const insurerNumber = cert?.insurer_number ?? "";
         const careLevelCode = careLevelToCode(cert?.care_level ?? "");
@@ -1602,7 +1614,7 @@ export default function ClaimsPage() {
               <tbody>
                 {claims.map((claim) => {
                   const certEntry = certMap.get(claim.user_id);
-                  const user = claim.kaigo_users;
+                  const user = claim.clients;
                   const disabled = claim.status !== "draft"; // 確定済みはロック
                   const inputCls = "w-full border border-gray-300 rounded px-1 py-0.5 text-[11px] bg-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed";
                   return (

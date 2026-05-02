@@ -25,12 +25,15 @@ import { ja } from "date-fns/locale";
 // Types
 // ---------------------------------------------------------------------------
 
+// 共通マスタ client_insurance_records の subset（Phase 2-3-8 で kaigo_care_certifications から張替え）
+//   user_id              → client_id
+//   support_limit_amount → service_limit_amount
 interface CareCertification {
   id: string;
-  user_id: string;
+  client_id: string;
   insured_number: string;
   care_level: string;
-  support_limit_amount: number;
+  service_limit_amount: number;
   insurer_number?: string;
 }
 
@@ -148,7 +151,7 @@ function aggregateUserGroups(
         (s, r) => s + (r.over_limit_units ?? 0),
         0
       );
-      const limit = user.certification?.support_limit_amount ?? 0;
+      const limit = user.certification?.service_limit_amount ?? 0;
       const remaining = limit - totalActual;
       const isOverLimit = remaining < 0;
 
@@ -199,12 +202,14 @@ export default function BenefitsPage() {
     setLoading(true);
     try {
       // Fetch all active users with certifications
+      // PostgREST embed: clients -> client_insurance_records (FK client_id)
       const { data: usersData, error: usersError } = await supabase
-        .from("kaigo_users")
+        .from("clients")
         .select(
-          "id, name, kaigo_care_certifications(id, user_id, insured_number, care_level, support_limit_amount, insurer_number)"
+          "id, name, client_insurance_records(id, client_id, insured_number, care_level, service_limit_amount, insurer_number)"
         )
         .eq("status", "active")
+        .is("deleted_at", null)
         .order("name");
 
       if (usersError) throw usersError;
@@ -212,11 +217,11 @@ export default function BenefitsPage() {
       const mappedUsers: UserWithCert[] = (usersData ?? []).map((u: {
         id: string;
         name: string;
-        kaigo_care_certifications?: CareCertification | CareCertification[] | null;
+        client_insurance_records?: CareCertification | CareCertification[] | null;
       }) => {
-        const cert = Array.isArray(u.kaigo_care_certifications)
-          ? u.kaigo_care_certifications[0] ?? null
-          : u.kaigo_care_certifications ?? null;
+        const cert = Array.isArray(u.client_insurance_records)
+          ? u.client_insurance_records[0] ?? null
+          : u.client_insurance_records ?? null;
         return { id: u.id, name: u.name, certification: cert };
       });
 
@@ -379,7 +384,7 @@ export default function BenefitsPage() {
     // Find user's certification limit to recalculate over_limit
     // We'll just save and refetch; over_limit recalculated server-side or here
     const user = users.find((u) => u.id === row.user_id);
-    const limit = user?.certification?.support_limit_amount ?? 0;
+    const limit = user?.certification?.service_limit_amount ?? 0;
 
     // Recalculate over_limit for this row's user across all rows
     const siblingRows = rows.filter(
@@ -559,7 +564,7 @@ export default function BenefitsPage() {
   const usersOverLimit = userGroups.filter((g) => g.isOverLimit).length;
   const totalAllUnits = userGroups.reduce((s, g) => s + g.totalActual, 0);
   const totalAllLimit = userGroups.reduce(
-    (s, g) => s + (g.user.certification?.support_limit_amount ?? 0),
+    (s, g) => s + (g.user.certification?.service_limit_amount ?? 0),
     0
   );
 
@@ -757,7 +762,7 @@ function UserGroupCard({
   const { user, rows, totalPlanned, totalActual, remaining, isOverLimit, status } =
     group;
   const cert = user.certification;
-  const limit = cert?.support_limit_amount ?? 0;
+  const limit = cert?.service_limit_amount ?? 0;
   const usagePercent = limit > 0 ? Math.min((totalActual / limit) * 100, 100) : 0;
 
   return (

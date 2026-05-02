@@ -18,10 +18,12 @@ import {
 import { format, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
 
+// 共通マスタ clients の subset。Phase 2-3-8 で kaigo_users から張替え。
+//   kaigo_users.name_kana → clients.furigana
 interface KaigoUser {
   id: string;
   name: string;
-  name_kana: string;
+  furigana: string | null;
 }
 
 interface ServiceRecord {
@@ -108,10 +110,11 @@ export default function BillingCreatePage() {
     setLoadingUsers(true);
     try {
       const { data, error } = await supabase
-        .from("kaigo_users")
-        .select("id, name, name_kana")
+        .from("clients")
+        .select("id, name, furigana")
         .eq("status", "active")
-        .order("name_kana");
+        .is("deleted_at", null)
+        .order("furigana", { nullsFirst: false });
       if (error) throw error;
       setUsers(data || []);
       // Select all by default
@@ -510,7 +513,7 @@ export default function BillingCreatePage() {
                         {user.name}
                       </span>
                       <span className="ml-2 text-xs text-gray-400">
-                        {user.name_kana}
+                        {user.furigana ?? ""}
                       </span>
                     </div>
                   </label>

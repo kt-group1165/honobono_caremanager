@@ -119,15 +119,25 @@ export default function BillingFormsPage() {
   const [claims, setClaims] = useState<ClaimRow[]>([]);
   const [allClaims, setAllClaims] = useState<ClaimRow[]>([]); // 全利用者分（請求書用）
 
-  // Load office info
+  // Load office info（offices, kaigo-app の自事業所だけ）
+  // 共通マスタ: name → office_name, business_number → provider_number にマッピング
   useEffect(() => {
     supabase
-      .from("kaigo_office_settings")
-      .select("provider_number, office_name, address, phone, area_category, unit_price, postal_code")
+      .from("offices")
+      .select("name, business_number, address, phone, area_category, unit_price, postal_code")
+      .eq("app_type", "kaigo-app")
       .limit(1)
       .maybeSingle()
-      .then(({ data }: { data: OfficeInfo | null }) => {
-        if (data) setOffice(data);
+      .then(({ data }: { data: { name: string | null; business_number: string | null; address: string | null; phone: string | null; area_category: string | null; unit_price: number | null; postal_code: string | null } | null }) => {
+        if (data) setOffice({
+          provider_number: data.business_number ?? "",
+          office_name: data.name ?? "",
+          address: data.address ?? "",
+          phone: data.phone ?? "",
+          area_category: data.area_category ?? "",
+          unit_price: data.unit_price ?? 10,
+          postal_code: data.postal_code ?? "",
+        });
       });
   }, [supabase]);
 
@@ -141,22 +151,35 @@ export default function BillingFormsPage() {
     }
     setLoading(true);
     try {
-      // User
+      // User（共通マスタ clients、furigana → name_kana にマッピング）
       const { data: u } = await supabase
-        .from("kaigo_users")
-        .select("id, name, name_kana, gender, birth_date")
+        .from("clients")
+        .select("id, name, furigana, gender, birth_date")
         .eq("id", selectedUserId)
         .single();
-      setUserInfo(u as UserInfo | null);
+      setUserInfo(u ? {
+        id: u.id,
+        name: u.name ?? "",
+        name_kana: u.furigana ?? "",
+        gender: u.gender ?? "",
+        birth_date: u.birth_date ?? "",
+      } : null);
 
-      // Cert
+      // Cert（client_insurance_records、カラム名は新スキーマ）
       const { data: certs } = await supabase
-        .from("kaigo_care_certifications")
-        .select("insurer_number, insured_number, care_level, start_date, end_date")
-        .eq("user_id", selectedUserId)
-        .order("start_date", { ascending: false })
+        .from("client_insurance_records")
+        .select("insurer_number, insured_number, care_level, certification_start_date, certification_end_date")
+        .eq("client_id", selectedUserId)
+        .order("certification_start_date", { ascending: false, nullsFirst: false })
         .limit(1);
-      setCertInfo((certs?.[0] as CertInfo) ?? null);
+      const cert = certs?.[0];
+      setCertInfo(cert ? {
+        insurer_number: cert.insurer_number ?? "",
+        insured_number: cert.insured_number ?? "",
+        care_level: cert.care_level ?? "",
+        start_date: cert.certification_start_date ?? "",
+        end_date: cert.certification_end_date ?? "",
+      } : null);
 
       // Claims for this user + month
       const { data: claimData } = await supabase

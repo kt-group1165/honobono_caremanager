@@ -328,7 +328,7 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
     const [schedRes, availRes, allStaffRes, allSchedRes, provRes] = await Promise.all([
       supabase
         .from("kaigo_visit_schedule")
-        .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, kaigo_staff(name)")
+        .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, members(name)")
         .eq("user_id", userId)
         .gte("visit_date", from)
         .lte("visit_date", to)
@@ -338,7 +338,7 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
         .select("staff_id, available_date, start_time, end_time, is_available")
         .gte("available_date", from)
         .lte("available_date", to),
-      supabase.from("kaigo_staff").select("id, name, name_kana, status").eq("status", "active"),
+      supabase.from("members").select("id, name, name_kana:furigana, status").eq("status", "active"),
       supabase
         .from("kaigo_visit_schedule")
         .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type")
@@ -356,7 +356,7 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
       end_time: r.end_time,
       service_type: r.service_type,
       status: r.status ?? "scheduled",
-      staff_name: r.kaigo_staff?.name ?? null,
+      staff_name: r.members?.name ?? null,
     }));
 
     setSchedules(mapped);
@@ -922,7 +922,7 @@ function StaffCalendar({ staffId, staffName, currentMonth, onMonthChange, onEdit
     const [schedRes, availRes] = await Promise.all([
       supabase
         .from("kaigo_visit_schedule")
-        .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, kaigo_users(name)")
+        .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, clients(name)")
         .eq("staff_id", staffId)
         .gte("visit_date", from)
         .lte("visit_date", to)
@@ -944,7 +944,7 @@ function StaffCalendar({ staffId, staffName, currentMonth, onMonthChange, onEdit
       end_time: r.end_time,
       service_type: r.service_type,
       status: r.status ?? "scheduled",
-      user_name: r.kaigo_users?.name ?? null,
+      user_name: r.clients?.name ?? null,
     }));
 
     setSchedules(mapped);
@@ -1132,13 +1132,13 @@ function PatternImportModal({ onClose }: PatternImportModalProps) {
       const [patRes, userRes] = await Promise.all([
         supabase
           .from("kaigo_visit_patterns")
-          .select("id, user_id, pattern_name, day_of_week, start_time, end_time, service_type, staff_id, kaigo_users(name)")
+          .select("id, user_id, pattern_name, day_of_week, start_time, end_time, service_type, staff_id, clients(name)")
           .order("user_id"),
-        supabase.from("kaigo_users").select("id, name, name_kana, status").eq("status", "active"),
+        supabase.from("clients").select("id, name, name_kana:furigana, status").eq("status", "active"),
       ]);
       const pats: VisitPattern[] = (patRes.data || []).map((r: any) => ({
         ...r,
-        user_name: r.kaigo_users?.name ?? null,
+        user_name: r.clients?.name ?? null,
       }));
       setPatterns(pats);
       setUsers(userRes.data || []);
@@ -1406,7 +1406,7 @@ function UrlManagementModal({ onClose }: UrlManagementModalProps) {
     const fetch = async () => {
       setLoading(true);
       const [staffRes, tokenRes] = await Promise.all([
-        supabase.from("kaigo_staff").select("id, name, name_kana, status").eq("status", "active").order("name_kana"),
+        supabase.from("members").select("id, name, name_kana:furigana, status").eq("status", "active").order("furigana", { nullsFirst: false }),
         supabase.from("kaigo_staff_tokens").select("id, staff_id, token"),
       ]);
       setStaff(staffRes.data || []);
@@ -1659,7 +1659,7 @@ function TimelineView({
       supabase
         .from("kaigo_visit_schedule")
         .select(
-          "id, user_id, staff_id, visit_date, start_time, end_time, service_type, kaigo_staff(name), kaigo_users(name)"
+          "id, user_id, staff_id, visit_date, start_time, end_time, service_type, members(name), clients(name)"
         )
         .eq("visit_date", dateStr)
         .order("start_time"),
@@ -1678,8 +1678,8 @@ function TimelineView({
       start_time: r.start_time,
       end_time: r.end_time,
       service_type: r.service_type,
-      staff_name: r.kaigo_staff?.name ?? null,
-      user_name: r.kaigo_users?.name ?? null,
+      staff_name: r.members?.name ?? null,
+      user_name: r.clients?.name ?? null,
     }));
 
     setSchedules(mapped);
@@ -2370,7 +2370,7 @@ function MonthlyIndividualView({
     const col = entityType === "user" ? "user_id" : "staff_id";
     const { data } = await supabase
       .from("kaigo_visit_schedule")
-      .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, kaigo_users(name), kaigo_staff(name)")
+      .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, clients(name), members(name)")
       .eq(col, entityId)
       .gte("visit_date", from)
       .lte("visit_date", to)
@@ -2381,7 +2381,7 @@ function MonthlyIndividualView({
       id: r.id, user_id: r.user_id, staff_id: r.staff_id,
       visit_date: r.visit_date, start_time: r.start_time, end_time: r.end_time,
       service_type: r.service_type, status: r.status ?? "scheduled",
-      user_name: r.kaigo_users?.name ?? null, staff_name: r.kaigo_staff?.name ?? null,
+      user_name: r.clients?.name ?? null, staff_name: r.members?.name ?? null,
     }));
     setSchedules(mapped);
     setLoading(false);
@@ -2917,8 +2917,8 @@ export default function ShiftManagementPage() {
     const fetch = async () => {
       setLoadingLists(true);
       const [userRes, staffRes] = await Promise.all([
-        supabase.from("kaigo_users").select("id, name, name_kana, status").eq("status", "active").order("name_kana"),
-        supabase.from("kaigo_staff").select("id, name, name_kana, status").eq("status", "active").order("name_kana"),
+        supabase.from("clients").select("id, name, name_kana:furigana, status").eq("status", "active").order("furigana", { nullsFirst: false }),
+        supabase.from("members").select("id, name, name_kana:furigana, status").eq("status", "active").order("furigana", { nullsFirst: false }),
       ]);
       const u = userRes.data || [];
       const s = staffRes.data || [];

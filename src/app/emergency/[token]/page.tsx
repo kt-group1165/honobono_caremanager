@@ -104,7 +104,7 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
     const fetch = async () => {
       // Get staff as care managers
       const { data } = await supabase
-        .from("kaigo_staff")
+        .from("members")
         .select("id, name")
         .eq("status", "active")
         .order("name");
@@ -118,11 +118,11 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
     setLoadingUsers(true);
     // 選択したケアマネが担当している利用者のみ取得
     const { data: usersData } = await supabase
-      .from("kaigo_users")
-      .select("id, name, name_kana, care_manager_staff_id")
+      .from("clients")
+      .select("id, name, name_kana:furigana, care_manager_staff_id")
       .eq("status", "active")
       .eq("care_manager_staff_id", managerId)
-      .order("name_kana");
+      .order("furigana");
 
     // Get existing statuses
     const { data: statusData } = await supabase
@@ -173,7 +173,7 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
   const openSheet = async (userId: string) => {
     setLoadingSheet(true);
     const [{ data: userData }, { data: sheetRow }, { data: historyData }, { data: familyData }] = await Promise.all([
-      supabase.from("kaigo_users").select("name, name_kana, birth_date, gender, address, phone").eq("id", userId).single(),
+      supabase.from("clients").select("name, name_kana:furigana, birth_date, gender, address, phone").eq("id", userId).single(),
       supabase.from("kaigo_emergency_sheets").select("*").eq("user_id", userId).single(),
       supabase.from("kaigo_medical_history").select("disease_name, status, hospital, doctor").eq("user_id", userId).order("created_at", { ascending: false }),
       supabase.from("kaigo_assessments").select("form_data").eq("user_id", userId).order("created_at", { ascending: false }).limit(1).single(),

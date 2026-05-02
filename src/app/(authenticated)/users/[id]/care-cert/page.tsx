@@ -105,16 +105,21 @@ function formatDate(d: string | null | undefined) {
 }
 
 function recToForm(rec: CareCertification): FormData {
+  // DB 列名（client_insurance_records）→ UI フィールド名のマッピング
+  //   certification_start_date → start_date
+  //   certification_end_date   → end_date
+  //   service_limit_amount     → support_limit_amount
+  //   certification_status     → status
   return {
     ...EMPTY_FORM,
     insured_number: rec.insured_number ?? "",
     certification_date: rec.certification_date ?? "",
     insurer_number: rec.insurer_number ?? "",
-    start_date: rec.start_date ?? "",
-    end_date: rec.end_date ?? "",
-    care_level: rec.care_level,
-    support_limit_amount: rec.support_limit_amount?.toString() ?? "",
-    status: rec.status ?? "active",
+    start_date: rec.certification_start_date ?? "",
+    end_date: rec.certification_end_date ?? "",
+    care_level: (rec.care_level as CareLevel) ?? "申請中",
+    support_limit_amount: rec.service_limit_amount?.toString() ?? "",
+    status: (rec.certification_status as DbFields["status"]) ?? "active",
     certification_number: rec.certification_number ?? "",
     cert_status_type: rec.care_level === "申請中" ? "申請中" : "認定済み",
   };
@@ -148,12 +153,12 @@ export default function CareCertPage() {
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from("kaigo_care_certifications")
+        .from("client_insurance_records")
         .select("*")
-        .eq("user_id", userId)
-        .order("start_date", { ascending: false });
+        .eq("client_id", userId)
+        .order("certification_start_date", { ascending: false, nullsFirst: false });
       if (error) throw error;
-      const recs = data ?? [];
+      const recs = (data ?? []) as CareCertification[];
       setRecords(recs);
       // 最新レコードを自動選択
       if (recs.length > 0 && selectedId === null) {
@@ -196,22 +201,23 @@ export default function CareCertPage() {
     }
     setSaving(true);
     try {
+      // DB 列名（client_insurance_records）にマッピング
+      // updated_at はトリガで自動更新されるため省略
       const payload = {
         care_level: form.care_level,
-        start_date: form.start_date,
-        end_date: form.end_date,
+        certification_start_date: form.start_date,
+        certification_end_date: form.end_date,
         certification_date: form.certification_date || null,
         insurer_number: form.insurer_number || null,
         insured_number: form.insured_number || null,
-        support_limit_amount: form.support_limit_amount
+        service_limit_amount: form.support_limit_amount
           ? Number(form.support_limit_amount)
           : null,
-        status: form.status,
+        certification_status: form.status,
         certification_number: form.certification_number || null,
-        updated_at: new Date().toISOString(),
       };
       const { error } = await supabase
-        .from("kaigo_care_certifications")
+        .from("client_insurance_records")
         .update(payload)
         .eq("id", selectedId);
       if (error) throw error;
@@ -245,22 +251,29 @@ export default function CareCertPage() {
       const newEnd = addYears(newStart, 1);
       newEnd.setDate(newEnd.getDate() - 1);
 
+      // 新規 INSERT には client_insurance_records.tenant_id が必要なので clients から取得
+      const { data: clientRow } = await supabase
+        .from("clients")
+        .select("tenant_id")
+        .eq("id", userId)
+        .single();
       const payload = {
-        user_id: userId,
+        tenant_id: clientRow?.tenant_id ?? "",
+        client_id: userId,
         care_level: form.care_level,
-        start_date: format(newStart, "yyyy-MM-dd"),
-        end_date: format(newEnd, "yyyy-MM-dd"),
+        certification_start_date: format(newStart, "yyyy-MM-dd"),
+        certification_end_date: format(newEnd, "yyyy-MM-dd"),
         certification_date: null,
         insurer_number: form.insurer_number || null,
         insured_number: form.insured_number || null,
-        support_limit_amount: form.support_limit_amount
+        service_limit_amount: form.support_limit_amount
           ? Number(form.support_limit_amount)
           : null,
-        status: "pending" as const,
+        certification_status: "pending",
         certification_number: null,
       };
       const { data, error } = await supabase
-        .from("kaigo_care_certifications")
+        .from("client_insurance_records")
         .insert(payload)
         .select()
         .single();
@@ -285,7 +298,7 @@ export default function CareCertPage() {
     if (!confirm("この認定情報を削除しますか？")) return;
     try {
       const { error } = await supabase
-        .from("kaigo_care_certifications")
+        .from("client_insurance_records")
         .delete()
         .eq("id", id);
       if (error) throw error;
@@ -353,7 +366,7 @@ export default function CareCertPage() {
                         {rec.insured_number ?? "—"}
                       </td>
                       <td className="border-b border-gray-100 px-3 py-1.5 whitespace-nowrap text-gray-700">
-                        {formatDate(rec.start_date)} 〜 {formatDate(rec.end_date)}
+                        {formatDate(rec.certification_start_date)} 〜 {formatDate(rec.certification_end_date)}
                       </td>
                       <td className="border-b border-gray-100 px-3 py-1.5 whitespace-nowrap">
                         <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${
@@ -370,7 +383,7 @@ export default function CareCertPage() {
                         {formatDate(rec.certification_date)}
                       </td>
                       <td className="border-b border-gray-100 px-3 py-1.5 whitespace-nowrap text-gray-700">
-                        {formatDate(rec.start_date)} 〜 {formatDate(rec.end_date)}
+                        {formatDate(rec.certification_start_date)} 〜 {formatDate(rec.certification_end_date)}
                       </td>
                       <td className="border-b border-gray-100 px-2 py-1.5 text-center">
                         <button

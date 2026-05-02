@@ -463,10 +463,10 @@ function OfficeSwitcher() {
                 className="accent-blue-600"
               />
               <div className="flex-1">
-                <div className="text-sm font-semibold text-gray-900">{o.office_name || "(名称未設定)"}</div>
+                <div className="text-sm font-semibold text-gray-900">{o.name || "(名称未設定)"}</div>
                 <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500">
-                  <span className="inline-block px-2 py-0.5 rounded-full bg-gray-100">{typeLabel(o.business_type)}</span>
-                  {o.provider_number && <span>事業所番号: {o.provider_number}</span>}
+                  <span className="inline-block px-2 py-0.5 rounded-full bg-gray-100">{typeLabel(o.service_type)}</span>
+                  {o.business_number && <span>事業所番号: {o.business_number}</span>}
                   {!o.is_active && <span className="text-red-500">停止中</span>}
                 </div>
               </div>

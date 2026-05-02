@@ -23,10 +23,12 @@ import { ja } from "date-fns/locale";
 
 type ShiftType = "早番" | "日勤" | "遅番" | "夜勤" | "休み" | "有給" | "公休" | "";
 
+// 共通マスタ members の subset。Phase 2-3-8 で kaigo_staff から張替え。
+//   kaigo_staff.name_kana → members.furigana
 interface Staff {
   id: string;
   name: string;
-  name_kana: string;
+  furigana: string | null;
 }
 
 interface ShiftRecord {
@@ -77,10 +79,10 @@ export default function ShiftsPage() {
 
     const [staffRes, shiftsRes] = await Promise.all([
       supabase
-        .from("kaigo_staff")
-        .select("id, name, name_kana")
+        .from("members")
+        .select("id, name, furigana")
         .eq("status", "active")
-        .order("name_kana"),
+        .order("furigana", { nullsFirst: false }),
       supabase
         .from("kaigo_shifts")
         .select("*")

@@ -119,7 +119,7 @@ export default function DashboardPage() {
       try {
         // 1. Active user count
         const { count: activeUsers, error: e1 } = await supabase
-          .from("kaigo_users")
+          .from("clients")
           .select("*", { count: "exact", head: true })
           .eq("status", "active");
         if (e1) throw e1;
@@ -144,13 +144,13 @@ export default function DashboardPage() {
           .lte("service_date", monthEnd);
         if (e3) throw e3;
 
-        // 4. Expiring care certifications within 30 days
+        // 4. Expiring care certifications within 30 days（client_insurance_records、新カラム名）
         const { count: expiringCarePlans, error: e4 } = await supabase
-          .from("kaigo_care_certifications")
+          .from("client_insurance_records")
           .select("*", { count: "exact", head: true })
-          .eq("status", "active")
-          .lte("end_date", warnEnd)
-          .gte("end_date", todayStr);
+          .eq("certification_status", "active")
+          .lte("certification_end_date", warnEnd)
+          .gte("certification_end_date", todayStr);
         if (e4) throw e4;
 
         setStats({
@@ -162,7 +162,7 @@ export default function DashboardPage() {
 
         // 5. Recently registered users (latest 8)
         const { data: usersData, error: e5 } = await supabase
-          .from("kaigo_users")
+          .from("clients")
           .select(
             "id, name, birth_date, status, created_at"
           )
@@ -174,15 +174,16 @@ export default function DashboardPage() {
         const userIds = (usersData ?? []).map((u: any) => u.id);
         let certMap: Record<string, string> = {};
         if (userIds.length > 0) {
+          // client_insurance_records、新カラム名（user_id → client_id, status → certification_status, start_date → certification_start_date）
           const { data: certData } = await supabase
-            .from("kaigo_care_certifications")
-            .select("user_id, care_level")
-            .in("user_id", userIds)
-            .eq("status", "active")
-            .order("start_date", { ascending: false });
+            .from("client_insurance_records")
+            .select("client_id, care_level")
+            .in("client_id", userIds)
+            .eq("certification_status", "active")
+            .order("certification_start_date", { ascending: false, nullsFirst: false });
           if (certData) {
             certData.forEach((c: any) => {
-              if (!certMap[c.user_id]) certMap[c.user_id] = c.care_level;
+              if (!certMap[c.client_id]) certMap[c.client_id] = c.care_level;
             });
           }
         }
@@ -208,7 +209,7 @@ export default function DashboardPage() {
         let userNameMap: Record<string, string> = {};
         if (serviceUserIds.length > 0) {
           const { data: serviceUsersData } = await supabase
-            .from("kaigo_users")
+            .from("clients")
             .select("id, name")
             .in("id", serviceUserIds);
           if (serviceUsersData) {

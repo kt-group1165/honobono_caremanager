@@ -27,27 +27,36 @@ const AREA_CATEGORIES = [
   { value: "その他", label: "その他", price: 10.00 },
 ];
 
+// 共通マスタ offices の subset（kaigo-app 自事業所設定で使うフィールド）
+// Phase 2-3-7 で kaigo_office_settings から張替え。
+//   旧 kaigo_office_settings → 新 offices
+//   office_name      → name
+//   provider_number  → business_number
+//   business_type    → service_type
 type OfficeSettings = {
   id: string;
-  office_name: string;
-  office_name_kana: string;
-  provider_number: string;
-  postal_code: string;
-  address: string;
-  phone: string;
-  fax: string;
-  representative_name: string;
-  manager_name: string;
+  tenant_id: string;
+  name: string;
+  office_name_kana: string | null;
+  business_number: string | null;
+  postal_code: string | null;
+  address: string | null;
+  phone: string | null;
+  fax: string | null;
+  representative_name: string | null;
+  manager_name: string | null;
   tokutei_kassan_type: string;
   tokutei_kassan_units: number;
   medical_cooperation_kassan: boolean;
   medical_cooperation_units: number;
   area_category: string;
   unit_price: number;
-  notes: string;
+  notes: string | null;
   ai_enabled: boolean;
   ai_api_key: string;
-  business_type: string;
+  service_type: string;
+  app_type: string | null;
+  is_active: boolean;
 };
 
 export default function OfficeSettingsPage() {
@@ -60,7 +69,12 @@ export default function OfficeSettingsPage() {
   const [form, setForm] = useState<OfficeSettings | null>(null);
 
   const loadOffices = async () => {
-    const { data } = await supabase.from("kaigo_office_settings").select("*").order("office_name");
+    // 共通マスタ offices から、app_type='kaigo-app' の自事業所だけ取得
+    const { data } = await supabase
+      .from("offices")
+      .select("*")
+      .eq("app_type", "kaigo-app")
+      .order("name");
     const list = (data || []).map((d: OfficeSettings) => {
       // 旧区分マッピング
       const mapping: Record<string, string> = { A: "Ⅰ", B: "Ⅱ", C: "Ⅲ" };
@@ -114,9 +128,25 @@ export default function OfficeSettingsPage() {
   const handleAddNew = async () => {
     const newName = prompt("新規事業所の名前を入力してください", "新規事業所");
     if (!newName?.trim()) return;
+    // 新規 INSERT には offices.tenant_id が必要。現在の自事業所と同じ tenant に紐付ける
+    // （未選択の場合は最初の事業所の tenant、それも無ければエラー）
+    const baseTenant = form?.tenant_id ?? offices[0]?.tenant_id;
+    if (!baseTenant) {
+      toast.error("基準となる自事業所が無いため新規追加できません。先に既存の事業所を 1 件選択してください。");
+      return;
+    }
     const { data, error } = await supabase
-      .from("kaigo_office_settings")
-      .insert({ office_name: newName.trim(), business_type: "居宅介護支援", tokutei_kassan_type: "なし", tokutei_kassan_units: 0 })
+      .from("offices")
+      .insert({
+        tenant_id: baseTenant,
+        name: newName.trim(),
+        service_type: "居宅介護支援",
+        app_type: "kaigo-app",
+        designation_type: "介護保険",
+        tokutei_kassan_type: "なし",
+        tokutei_kassan_units: 0,
+        is_active: true,
+      })
       .select("*").single();
     if (error) { toast.error("追加に失敗: " + error.message); return; }
     toast.success("事業所を追加しました");
@@ -127,8 +157,8 @@ export default function OfficeSettingsPage() {
 
   const handleDelete = async () => {
     if (!form || offices.length <= 1) { toast.error("最低1つの事業所が必要です"); return; }
-    if (!confirm(`「${form.office_name}」を削除しますか？\n関連するデータは残りますが、この事業所を選択できなくなります。`)) return;
-    const { error } = await supabase.from("kaigo_office_settings").delete().eq("id", form.id);
+    if (!confirm(`「${form.name}」を削除しますか？\n関連するデータは残りますが、この事業所を選択できなくなります。`)) return;
+    const { error } = await supabase.from("offices").delete().eq("id", form.id);
     if (error) { toast.error("削除に失敗: " + error.message); return; }
     toast.success("削除しました");
     const list = await loadOffices();
@@ -164,11 +194,11 @@ export default function OfficeSettingsPage() {
     if (!form) return;
     setSaving(true);
     const { error } = await supabase
-      .from("kaigo_office_settings")
+      .from("offices")
       .update({
-        office_name: form.office_name,
+        name: form.name,
         office_name_kana: form.office_name_kana,
-        provider_number: form.provider_number,
+        business_number: form.business_number,
         postal_code: form.postal_code,
         address: form.address,
         phone: form.phone,
@@ -184,7 +214,7 @@ export default function OfficeSettingsPage() {
         notes: form.notes,
         ai_enabled: form.ai_enabled,
         ai_api_key: form.ai_api_key,
-        business_type: form.business_type,
+        service_type: form.service_type,
       })
       .eq("id", form.id);
     setSaving(false);
@@ -256,7 +286,7 @@ export default function OfficeSettingsPage() {
               className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
             >
               {offices.map((o) => (
-                <option key={o.id} value={o.id}>{o.office_name || "(名称未設定)"}（{o.business_type}）</option>
+                <option key={o.id} value={o.id}>{o.name || "(名称未設定)"}（{o.service_type}）</option>
               ))}
             </select>
             <button
@@ -276,16 +306,16 @@ export default function OfficeSettingsPage() {
           {["居宅介護支援", "訪問介護", "通所介護"].map((type) => (
             <label key={type} className={cn(
               "flex items-center gap-2 rounded-lg border-2 px-4 py-3 cursor-pointer transition-all",
-              form.business_type === type
+              form.service_type === type
                 ? "border-blue-500 bg-blue-50 text-blue-700 font-bold"
                 : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
             )}>
               <input
                 type="radio"
-                name="business_type"
+                name="service_type"
                 value={type}
-                checked={form.business_type === type}
-                onChange={(e) => handleChange("business_type", e.target.value)}
+                checked={form.service_type === type}
+                onChange={(e) => handleChange("service_type", e.target.value)}
                 className="accent-blue-600"
               />
               {type}
@@ -299,9 +329,9 @@ export default function OfficeSettingsPage() {
       <div className="rounded-xl border bg-white p-6 shadow-sm space-y-4">
         <h2 className="text-sm font-bold text-gray-700 border-b pb-2">基本情報</h2>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="事業所名" value={form.office_name} onChange={(v) => handleChange("office_name", v)} />
+          <Field label="事業所名" value={form.name} onChange={(v) => handleChange("name", v)} />
           <Field label="フリガナ" value={form.office_name_kana} onChange={(v) => handleChange("office_name_kana", v)} />
-          <Field label="事業所番号（10桁）" value={form.provider_number} onChange={(v) => handleChange("provider_number", v)} placeholder="2970100007" />
+          <Field label="事業所番号（10桁）" value={form.business_number} onChange={(v) => handleChange("business_number", v)} placeholder="2970100007" />
           <Field label="郵便番号" value={form.postal_code} onChange={(v) => handleChange("postal_code", v)} placeholder="630-8007" />
           <Field label="住所" value={form.address} onChange={(v) => handleChange("address", v)} className="col-span-2" />
           <Field label="電話番号" value={form.phone} onChange={(v) => handleChange("phone", v)} />

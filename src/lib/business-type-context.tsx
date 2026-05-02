@@ -5,22 +5,32 @@ import { createClient } from "@/lib/supabase/client";
 
 type BusinessType = "居宅介護支援" | "訪問介護" | "通所介護";
 
+/**
+ * 共通マスタ offices の行を kaigo-app コンテキストで使う形に整形した型。
+ *
+ * Phase 2-3-0 で kaigo_office_settings から共通の offices テーブルへ参照先を張替え。
+ * 旧フィールド名対応:
+ *   office_name      → name
+ *   business_type    → service_type
+ *   provider_number  → business_number
+ */
 export interface OfficeRow {
   id: string;
-  office_name: string;
-  business_type: string;
-  provider_number: string;
+  name: string;
+  service_type: string;
+  business_number: string | null;
   is_active: boolean;
+  tenant_id: string;
 }
 
 interface BusinessTypeContextValue {
   businessType: BusinessType;
-  /** @deprecated 事業種別は自事業所のbusiness_typeから自動取得。直接変更不可。 */
+  /** @deprecated offices.service_type は法的指定で固定値のため変更不可。後方互換のため残置（no-op）。 */
   setBusinessType: (type: BusinessType) => void;
   loading: boolean;
   isLocked: boolean;
   // 複数事業所対応 — こちらが公式の切替手段
-  offices: OfficeRow[];          // 全自事業所一覧
+  offices: OfficeRow[];          // kaigo-app 用の自事業所一覧（app_type='kaigo-app' でフィルタ済）
   currentOfficeId: string | null; // 現在選択されている自事業所ID
   setCurrentOfficeId: (id: string) => void;
   currentOffice: OfficeRow | null;
@@ -37,10 +47,13 @@ const BusinessTypeContext = createContext<BusinessTypeContextValue>({
   currentOffice: null,
 });
 
-// business_type値（DB） → 表示名のマッピング
+// service_type（共通マスタ） → BusinessType（kaigo-app UI 切替用）のマッピング
+// offices.service_type は: '居宅介護支援'|'訪問介護'|'訪問入浴'|'訪問看護'|'福祉用具' のいずれか
+// kaigo-app の BusinessType は 3 値しかないので訪問系は '訪問介護' に集約する。
 function mapBusinessType(dbValue: string): BusinessType {
-  if (dbValue === "home_care" || dbValue === "訪問介護") return "訪問介護";
-  if (dbValue === "day_service" || dbValue === "通所介護") return "通所介護";
+  if (dbValue === "通所介護") return "通所介護";
+  if (dbValue === "訪問介護" || dbValue === "訪問入浴" || dbValue === "訪問看護") return "訪問介護";
+  // '居宅介護支援' / その他 → '居宅介護支援'
   return "居宅介護支援";
 }
 
@@ -64,10 +77,12 @@ export function BusinessTypeProvider({ children }: { children: ReactNode }) {
     const officeParam = params.get("office");
 
     const loadOffices = async () => {
+      // 共通マスタ offices から、app_type='kaigo-app' の事業所のみ取得
       const { data } = await supabase
-        .from("kaigo_office_settings")
-        .select("id, office_name, business_type, provider_number, is_active")
-        .order("office_name");
+        .from("offices")
+        .select("id, name, service_type, business_number, is_active, tenant_id")
+        .eq("app_type", "kaigo-app")
+        .order("name");
       const list = (data || []) as OfficeRow[];
       setOffices(list);
       return list;
@@ -102,8 +117,8 @@ export function BusinessTypeProvider({ children }: { children: ReactNode }) {
       // 事業種別は「現在選択中の自事業所」から自動取得（優先）
       // URL ?mode= は事業所が未選択の場合のみフォールバックとして使用
       const selected = list.find((o) => o.id === officeId);
-      if (selected?.business_type) {
-        setBusinessTypeState(mapBusinessType(selected.business_type));
+      if (selected?.service_type) {
+        setBusinessTypeState(mapBusinessType(selected.service_type));
         setIsLocked(false);
       } else if (modeParam === "訪問介護" || modeParam === "居宅介護支援" || modeParam === "通所介護") {
         // 事業所未登録時のフォールバック（開発・テスト用）
@@ -127,15 +142,10 @@ export function BusinessTypeProvider({ children }: { children: ReactNode }) {
     }
   }, [currentOfficeId]);
 
-  const setBusinessType = async (type: BusinessType) => {
-    if (isLocked) return;
-    setBusinessTypeState(type);
-    if (currentOfficeId) {
-      await supabase
-        .from("kaigo_office_settings")
-        .update({ business_type: type })
-        .eq("id", currentOfficeId);
-    }
+  // offices.service_type は法的指定で固定値のため、UI からの変更は許可しない（no-op）。
+  // 後方互換のため関数自体は残置。
+  const setBusinessType = (_type: BusinessType) => {
+    // intentionally no-op
   };
 
   const setCurrentOfficeId = (id: string) => {
@@ -151,8 +161,8 @@ export function BusinessTypeProvider({ children }: { children: ReactNode }) {
     }
     // 選択した事業所の種別に追従
     const selected = offices.find((o) => o.id === id);
-    if (selected?.business_type) {
-      setBusinessTypeState(mapBusinessType(selected.business_type));
+    if (selected?.service_type) {
+      setBusinessTypeState(mapBusinessType(selected.service_type));
       setIsLocked(false);
     }
   };

@@ -24,7 +24,9 @@ interface RawRecord {
   start_time: string | null;
   end_time: string | null;
   service_type: string;
-  kaigo_users: { name: string; name_kana: string | null } | { name: string; name_kana: string | null }[] | null;
+  // Phase 2-3-8 で kaigo_users → clients に張替え
+  // PostgREST 列エイリアスで name_kana を維持（実 DB は furigana）
+  clients: { name: string; name_kana: string | null } | { name: string; name_kana: string | null }[] | null;
 }
 
 interface BillingRow {
@@ -99,7 +101,7 @@ export default function VisitBillingPage() {
         start_time,
         end_time,
         service_type,
-        kaigo_users(name, name_kana)
+        clients(name, name_kana:furigana)
       `)
       .gte("visit_date", from)
       .lte("visit_date", to)
@@ -134,8 +136,8 @@ export default function VisitBillingPage() {
       } else {
         map.set(key, {
           user_id: rec.user_id,
-          user_name: (Array.isArray(rec.kaigo_users) ? rec.kaigo_users[0]?.name : rec.kaigo_users?.name) ?? "不明",
-          user_name_kana: (Array.isArray(rec.kaigo_users) ? rec.kaigo_users[0]?.name_kana : rec.kaigo_users?.name_kana) ?? null,
+          user_name: (Array.isArray(rec.clients) ? rec.clients[0]?.name : rec.clients?.name) ?? "不明",
+          user_name_kana: (Array.isArray(rec.clients) ? rec.clients[0]?.name_kana : rec.clients?.name_kana) ?? null,
           service_type: rec.service_type,
           total_visits: 1,
           total_minutes: mins,

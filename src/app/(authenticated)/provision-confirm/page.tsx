@@ -65,10 +65,10 @@ export default function ProvisionConfirmPage() {
     // Fetch active users with provision sheet data
     // We join kaigo_users -> kaigo_report_documents (type = service-usage) for the latest
     const { data: userData, error: userError } = await supabase
-      .from("kaigo_users")
-      .select("id, name, name_kana, care_level, status")
+      .from("clients")
+      .select("id, name, name_kana:furigana, care_level, status")
       .eq("status", "active")
-      .order("name_kana");
+      .order("furigana");
 
     if (userError) {
       toast.error("利用者情報の取得に失敗しました");

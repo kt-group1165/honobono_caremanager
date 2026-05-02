@@ -135,7 +135,7 @@ export default function MeetingMinutesPage() {
     }
     (async () => {
       const { data } = await supabase
-        .from("kaigo_users")
+        .from("clients")
         .select("id, name, name_kana")
         .eq("id", selectedUserId)
         .single();

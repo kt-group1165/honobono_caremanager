@@ -137,10 +137,10 @@ export default function SupportMobilePage({ params }: { params: Promise<Params> 
     if (!valid) return;
     const fetch = async () => {
       const { data } = await supabase
-        .from("kaigo_users")
-        .select("id, name, name_kana")
+        .from("clients")
+        .select("id, name, name_kana:furigana")
         .eq("status", "active")
-        .order("name_kana");
+        .order("furigana");
       setUsers(data || []);
     };
     fetch();

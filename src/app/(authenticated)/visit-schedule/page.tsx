@@ -80,8 +80,8 @@ export default function VisitSchedulePage() {
         start_time,
         end_time,
         service_type,
-        kaigo_users(name),
-        kaigo_staff(name)
+        clients(name),
+        members(name)
       `)
       .gte("visit_date", from)
       .lte("visit_date", to)
@@ -94,12 +94,12 @@ export default function VisitSchedulePage() {
       const mapped: ScheduleEntry[] = (data || []).map((r: any) => ({
         id: r.id,
         user_id: r.user_id,
-        user_name: r.kaigo_users?.name ?? "不明",
+        user_name: r.clients?.name ?? "不明",
         visit_date: r.visit_date,
         start_time: r.start_time,
         end_time: r.end_time,
         service_type: r.service_type,
-        staff_name: r.kaigo_staff?.name ?? null,
+        staff_name: r.members?.name ?? null,
       }));
       setEntries(mapped);
     }

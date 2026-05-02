@@ -12,14 +12,17 @@ import {
   UserCog,
   Loader2,
 } from "lucide-react";
+import { useBusinessType } from "@/lib/business-type-context";
 
 type EmploymentType = "常勤" | "非常勤" | "パート";
 type StaffStatus = "active" | "inactive";
 
+// 共通マスタ members の subset。Phase 2-3-2 で kaigo_staff から張替え。
+//   kaigo_staff.name_kana → members.furigana
 interface Staff {
   id: string;
   name: string;
-  name_kana: string;
+  furigana: string;
   role: string;
   qualifications: string;
   email: string;
@@ -45,7 +48,7 @@ const EMPLOYMENT_TYPES: EmploymentType[] = ["常勤", "非常勤", "パート"];
 
 const EMPTY_FORM: Omit<Staff, "id" | "created_at"> = {
   name: "",
-  name_kana: "",
+  furigana: "",
   role: "",
   qualifications: "",
   email: "",
@@ -57,6 +60,7 @@ const EMPTY_FORM: Omit<Staff, "id" | "created_at"> = {
 
 export default function StaffPage() {
   const supabase = createClient();
+  const { currentOffice } = useBusinessType();
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -69,17 +73,23 @@ export default function StaffPage() {
 
   const fetchStaff = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("kaigo_staff")
-      .select("*")
-      .order("name_kana");
+    // 共通マスタ members から kaigo-app に必要なカラムだけ取得（color/sort_order は order-app 専用なので除外）
+    let query = supabase
+      .from("members")
+      .select("id, name, furigana, role, qualifications, email, phone, employment_type, hire_date, status, created_at")
+      .order("furigana", { nullsFirst: false });
+    // 自事業所のスタッフだけを表示（office が選択済みの場合）
+    if (currentOffice?.tenant_id) {
+      query = query.eq("tenant_id", currentOffice.tenant_id);
+    }
+    const { data, error } = await query;
     if (error) {
       toast.error("職員データの取得に失敗しました");
     } else {
-      setStaffList(data || []);
+      setStaffList((data || []) as Staff[]);
     }
     setLoading(false);
-  }, [supabase]);
+  }, [supabase, currentOffice?.tenant_id]);
 
   useEffect(() => {
     fetchStaff();
@@ -95,7 +105,7 @@ export default function StaffPage() {
     setEditingStaff(staff);
     setForm({
       name: staff.name,
-      name_kana: staff.name_kana,
+      furigana: staff.furigana,
       role: staff.role,
       qualifications: staff.qualifications,
       email: staff.email,
@@ -113,13 +123,20 @@ export default function StaffPage() {
     try {
       if (editingStaff) {
         const { error } = await supabase
-          .from("kaigo_staff")
+          .from("members")
           .update(form)
           .eq("id", editingStaff.id);
         if (error) throw error;
         toast.success("職員情報を更新しました");
       } else {
-        const { error } = await supabase.from("kaigo_staff").insert([form]);
+        // 新規 INSERT には members.tenant_id が必要
+        if (!currentOffice?.tenant_id) {
+          toast.error("自事業所が選択されていません");
+          return;
+        }
+        const { error } = await supabase.from("members").insert([
+          { ...form, tenant_id: currentOffice.tenant_id },
+        ]);
         if (error) throw error;
         toast.success("職員を登録しました");
       }
@@ -139,7 +156,7 @@ export default function StaffPage() {
     setSaving(true);
     try {
       const { error } = await supabase
-        .from("kaigo_staff")
+        .from("members")
         .delete()
         .eq("id", deleteTarget.id);
       if (error) throw error;
@@ -159,8 +176,8 @@ export default function StaffPage() {
   const filtered = staffList.filter(
     (s) =>
       s.name.includes(searchQuery) ||
-      s.name_kana.includes(searchQuery) ||
-      s.role.includes(searchQuery)
+      (s.furigana ?? "").includes(searchQuery) ||
+      (s.role ?? "").includes(searchQuery)
   );
 
   const employmentBadge = (type: EmploymentType) => {
@@ -250,7 +267,7 @@ export default function StaffPage() {
                 {filtered.map((staff) => (
                   <tr key={staff.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 font-medium text-gray-900">{staff.name}</td>
-                    <td className="px-4 py-3 text-gray-500">{staff.name_kana}</td>
+                    <td className="px-4 py-3 text-gray-500">{staff.furigana}</td>
                     <td className="px-4 py-3 text-gray-700">{staff.role}</td>
                     <td className="px-4 py-3 text-gray-500 max-w-[140px] truncate" title={staff.qualifications}>
                       {staff.qualifications || "—"}
@@ -328,8 +345,8 @@ export default function StaffPage() {
                   <input
                     type="text"
                     required
-                    value={form.name_kana}
-                    onChange={(e) => setForm({ ...form, name_kana: e.target.value })}
+                    value={form.furigana}
+                    onChange={(e) => setForm({ ...form, furigana: e.target.value })}
                     className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     placeholder="やまだ たろう"
                   />

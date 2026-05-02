@@ -290,7 +290,7 @@ export default function MonitoringPage() {
   const fetchUser = useCallback(
     async (userId: string) => {
       const { data } = await supabase
-        .from("kaigo_users")
+        .from("clients")
         .select("id, name, name_kana")
         .eq("id", userId)
         .single();
@@ -341,12 +341,12 @@ export default function MonitoringPage() {
           .limit(1);
 
         if (existingDocs && existingDocs.length > 0) {
-          // 認定情報から期間を取得
+          // 認定情報から期間を取得（client_insurance_records、列エイリアスで旧フィールド名維持）
           const { data: certArr } = await supabase
-            .from("kaigo_care_certifications")
-            .select("start_date, end_date")
-            .eq("user_id", selectedUserId)
-            .order("start_date", { ascending: false })
+            .from("client_insurance_records")
+            .select("start_date:certification_start_date, end_date:certification_end_date")
+            .eq("client_id", selectedUserId)
+            .order("certification_start_date", { ascending: false, nullsFirst: false })
             .limit(1);
           const cert = certArr?.[0];
           const today = format(new Date(), "yyyy-MM-dd");

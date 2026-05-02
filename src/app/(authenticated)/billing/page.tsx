@@ -31,7 +31,8 @@ interface BillingRecord {
   status: "draft" | "submitted" | "paid";
   created_at: string;
   updated_at: string;
-  kaigo_users?: { name: string };
+  // PostgREST embed: kaigo_billing_records.user_id → clients (FK redirect 済)
+  clients?: { name: string };
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -125,9 +126,10 @@ export default function BillingPage() {
   const fetchRecords = useCallback(async () => {
     setLoading(true);
     try {
+      // PostgREST embed: kaigo_billing_records.user_id → clients (FK redirect 済)
       let query = supabase
         .from("kaigo_billing_records")
-        .select("*, kaigo_users(name)")
+        .select("*, clients(name)")
         .order("billing_month", { ascending: false })
         .order("created_at", { ascending: false });
 
@@ -194,20 +196,21 @@ export default function BillingPage() {
     }
 
     try {
-      // 1. 自事業所設定
+      // 1. 自事業所設定（共通マスタ offices、kaigo-app の自事業所だけ取得）
       const { data: officeData } = await supabase
-        .from("kaigo_office_settings")
-        .select("provider_number, area_category, unit_price")
+        .from("offices")
+        .select("business_number, area_category, unit_price")
+        .eq("app_type", "kaigo-app")
         .limit(1)
         .maybeSingle();
-      const providerNumber = officeData?.provider_number ?? "0000000000";
+      const providerNumber = officeData?.business_number ?? "0000000000";
       const unitPrice = Number(officeData?.unit_price ?? 10);
       const areaCode = areaCategoryToCode(officeData?.area_category ?? "その他");
 
-      // 2. 利用者情報（生年月日・性別）
+      // 2. 利用者情報（生年月日・性別） — clients から取得
       const userIds = [...new Set(confirmed.map((r) => r.user_id))];
       const { data: usersData } = await supabase
-        .from("kaigo_users")
+        .from("clients")
         .select("id, name, birth_date, gender")
         .in("id", userIds);
       const userInfoMap = new Map<
@@ -222,11 +225,12 @@ export default function BillingPage() {
         });
       }
 
-      // 3. 認定情報
+      // 3. 認定情報（client_insurance_records、カラム名は新スキーマ）
+      //   user_id → client_id, start_date → certification_start_date, end_date → certification_end_date
       const { data: certs } = await supabase
-        .from("kaigo_care_certifications")
-        .select("user_id, care_level, insurer_number, insured_number, start_date, end_date")
-        .in("user_id", userIds)
+        .from("client_insurance_records")
+        .select("client_id, care_level, insurer_number, insured_number, certification_start_date, certification_end_date")
+        .in("client_id", userIds)
         .order("certification_date", { ascending: false });
       const certMap = new Map<
         string,
@@ -239,13 +243,13 @@ export default function BillingPage() {
         }
       >();
       for (const cert of certs || []) {
-        if (!certMap.has(cert.user_id)) {
-          certMap.set(cert.user_id, {
+        if (!certMap.has(cert.client_id)) {
+          certMap.set(cert.client_id, {
             care_level: cert.care_level,
             insurer_number: cert.insurer_number ?? null,
             insured_number: cert.insured_number ?? null,
-            start_date: cert.start_date ?? null,
-            end_date: cert.end_date ?? null,
+            start_date: cert.certification_start_date ?? null,
+            end_date: cert.certification_end_date ?? null,
           });
         }
       }
@@ -510,7 +514,7 @@ export default function BillingPage() {
                     className="hover:bg-gray-50 transition-colors"
                   >
                     <td className="px-4 py-3 font-medium text-gray-900">
-                      {record.kaigo_users?.name || "—"}
+                      {record.clients?.name || "—"}
                     </td>
                     <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
                       {formatMonth(record.billing_month)}

@@ -6,10 +6,11 @@ import { Search, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBusinessType } from "@/lib/business-type-context";
 
-interface KaigoUser {
+// 利用者一覧表示用の最小スキーマ（共通マスタ clients の subset）
+interface ClientRow {
   id: string;
   name: string;
-  name_kana: string;
+  furigana: string | null;
   status: string;
 }
 
@@ -21,7 +22,7 @@ interface UserSidebarProps {
 const FILTER_KEY = "kaigo.user_filter_mode";
 
 export function UserSidebar({ selectedUserId, onSelectUser }: UserSidebarProps) {
-  const [users, setUsers] = useState<KaigoUser[]>([]);
+  const [users, setUsers] = useState<ClientRow[]>([]);
   const [officeUserIds, setOfficeUserIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -38,21 +39,22 @@ export function UserSidebar({ selectedUserId, onSelectUser }: UserSidebarProps) 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     const { data } = await supabase
-      .from("kaigo_users")
-      .select("id, name, name_kana, status")
+      .from("clients")
+      .select("id, name, furigana, status")
       .eq("status", "active")
-      .order("name_kana", { ascending: true });
-    const list = (data || []) as KaigoUser[];
+      .is("deleted_at", null)
+      .order("furigana", { ascending: true, nullsFirst: false });
+    const list = (data || []) as ClientRow[];
     setUsers(list);
 
-    // 自事業所に紐付く利用者を取得
+    // 自事業所に紐付く利用者を取得（client_office_assignments の現役レコード）
     if (currentOfficeId) {
       const { data: svc } = await supabase
-        .from("kaigo_user_office_services")
-        .select("user_id")
+        .from("client_office_assignments")
+        .select("client_id")
         .eq("office_id", currentOfficeId)
-        .eq("is_active", true);
-      const set = new Set<string>((svc || []).map((s: { user_id: string }) => s.user_id));
+        .is("end_date", null);
+      const set = new Set<string>((svc || []).map((s: { client_id: string }) => s.client_id));
       setOfficeUserIds(set);
     } else {
       setOfficeUserIds(new Set());
@@ -77,7 +79,7 @@ export function UserSidebar({ selectedUserId, onSelectUser }: UserSidebarProps) 
     if (search) {
       const q = search.toLowerCase();
       list = list.filter((u) =>
-        u.name.toLowerCase().includes(q) || u.name_kana.toLowerCase().includes(q)
+        u.name.toLowerCase().includes(q) || (u.furigana ?? "").toLowerCase().includes(q)
       );
     }
     return list;
@@ -146,7 +148,7 @@ export function UserSidebar({ selectedUserId, onSelectUser }: UserSidebarProps) 
                   <User size={14} className="shrink-0 text-gray-400" />
                   <div className="min-w-0">
                     <div className="truncate text-sm leading-tight">{user.name}</div>
-                    <div className="truncate text-[10px] text-gray-400 leading-tight">{user.name_kana}</div>
+                    <div className="truncate text-[10px] text-gray-400 leading-tight">{user.furigana ?? ""}</div>
                   </div>
                 </button>
               </li>

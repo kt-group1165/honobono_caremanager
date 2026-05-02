@@ -1839,7 +1839,7 @@ function MyShiftTab({ staffId }: { staffId: string }) {
       const ds = format(date, "yyyy-MM-dd");
       const { data, error } = await supabase
         .from("kaigo_visit_schedule")
-        .select("id, user_id, visit_date, start_time, end_time, service_type, status, notes, kaigo_users(name)")
+        .select("id, user_id, visit_date, start_time, end_time, service_type, status, notes, clients(name)")
         .eq("staff_id", staffId)
         .eq("visit_date", ds)
         .neq("status", "cancelled")
@@ -1850,7 +1850,7 @@ function MyShiftTab({ staffId }: { staffId: string }) {
           id: r.id, user_id: r.user_id, visit_date: r.visit_date,
           start_time: r.start_time, end_time: r.end_time,
           service_type: r.service_type, status: r.status, notes: r.notes,
-          user_name: r.kaigo_users?.name || "不明",
+          user_name: r.clients?.name || "不明",
         })));
       }
       setLoading(false);
@@ -2235,7 +2235,7 @@ export default function StaffAvailabilityPage({
       }
 
       const { data: staffData, error: staffError } = await supabase
-        .from("kaigo_staff")
+        .from("members")
         .select("id, name, name_kana")
         .eq("id", tokenData.staff_id)
         .single();

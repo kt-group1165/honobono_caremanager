@@ -8,7 +8,8 @@ import { toast } from "sonner";
 import { differenceInYears, parseISO, format } from "date-fns";
 import { User, Download, Upload, Loader2 } from "lucide-react";
 import { UserSidebar } from "@/components/users/user-sidebar";
-import type { KaigoUser } from "@/types/database";
+import type { Client } from "@/types/database";
+import { useBusinessType } from "@/lib/business-type-context";
 
 /**
  * 利用者詳細画面の共有レイアウト
@@ -53,8 +54,9 @@ export default function UserDetailLayout({
   const router = useRouter();
   const id = params?.id;
   const supabase = createClient();
+  const { currentOffice } = useBusinessType();
 
-  const [user, setUser] = useState<KaigoUser | null>(null);
+  const [user, setUser] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -67,12 +69,12 @@ export default function UserDetailLayout({
     (async () => {
       setLoading(true);
       const { data } = await supabase
-        .from("kaigo_users")
+        .from("clients")
         .select("*")
         .eq("id", id)
         .single();
       if (!cancelled) {
-        setUser(data as KaigoUser | null);
+        setUser(data as Client | null);
         setLoading(false);
       }
     })();
@@ -89,14 +91,14 @@ export default function UserDetailLayout({
     let cancelled = false;
     (async () => {
       const { data } = await supabase
-        .from("kaigo_user_office_services")
-        .select("home_care_categories, is_active")
-        .eq("user_id", id);
+        .from("client_office_assignments")
+        .select("home_care_categories")
+        .eq("client_id", id)
+        .is("end_date", null);  // 現役の紐付けのみ
       if (cancelled) return;
       const TRIGGER = ["居宅介護", "重度訪問介護", "同行援護"];
       const has = (data || []).some(
-        (row: { home_care_categories: unknown; is_active: boolean }) => {
-          if (!row.is_active) return false;
+        (row: { home_care_categories: unknown }) => {
           const cats = Array.isArray(row.home_care_categories)
             ? row.home_care_categories
             : [];
@@ -122,23 +124,24 @@ export default function UserDetailLayout({
   };
 
   // ── CSV出力 ────────────────────────────────────────────────────────────────
+  // 共通マスタ clients のカラム名に合わせる（旧 kaigo_users からの主な変更:
+  //   name_kana → furigana, mobile_phone → mobile, notes → 削除（client_memos へ移行））
   const CSV_COLUMNS = [
     "id",
     "name",
-    "name_kana",
+    "furigana",
     "gender",
     "birth_date",
     "blood_type",
     "postal_code",
     "address",
     "phone",
-    "mobile_phone",
+    "mobile",
     "email",
     "emergency_contact_name",
     "emergency_contact_phone",
     "admission_date",
     "status",
-    "notes",
   ] as const;
 
   const escapeCsv = (val: unknown): string => {
@@ -154,9 +157,10 @@ export default function UserDetailLayout({
     setExporting(true);
     try {
       const { data, error } = await supabase
-        .from("kaigo_users")
+        .from("clients")
         .select(CSV_COLUMNS.join(","))
-        .order("name_kana", { ascending: true });
+        .is("deleted_at", null)
+        .order("furigana", { ascending: true, nullsFirst: false });
       if (error) throw error;
       const rows = (data ?? []) as Record<string, unknown>[];
 
@@ -239,7 +243,7 @@ export default function UserDetailLayout({
       }
 
       const headerCells = parseCSVLine(lines[0]).map((c) => c.trim());
-      const requiredCols = ["name", "name_kana", "gender", "birth_date"];
+      const requiredCols = ["name", "furigana", "gender", "birth_date"];
       const missing = requiredCols.filter((c) => !headerCells.includes(c));
       if (missing.length > 0) {
         toast.error(`必須カラムがありません: ${missing.join(", ")}`);
@@ -264,7 +268,7 @@ export default function UserDetailLayout({
           errors.push(`${i + 1}行目: 氏名がありません`);
           continue;
         }
-        if (!row.name_kana) {
+        if (!row.furigana) {
           errors.push(`${i + 1}行目: フリガナがありません`);
           continue;
         }
@@ -298,20 +302,27 @@ export default function UserDetailLayout({
       let updated = 0;
 
       if (insertRows.length > 0) {
-        // id を除外して新規登録
+        // 新規 INSERT には clients.tenant_id が必要
+        if (!currentOffice?.tenant_id) {
+          toast.error("自事業所が選択されていません。先にサイドバーから事業所を選んでください。");
+          return;
+        }
+        // id を除外して新規登録 + tenant_id を補完
+        const tenantId = currentOffice.tenant_id;
         const payload = insertRows.map((r) => {
-          const copy = { ...r };
+          const copy: Record<string, unknown> = { ...r };
           delete copy.id;
           // 空文字列は null に（日付系）
           Object.keys(copy).forEach((k) => {
-            if ((copy as Record<string, string>)[k] === "") {
-              (copy as Record<string, unknown>)[k] = null;
-            }
+            if (copy[k] === "") copy[k] = null;
           });
+          copy.tenant_id = tenantId;
+          copy.is_facility = false;
+          copy.is_provisional = false;
           return copy;
         });
         const { error, data } = await supabase
-          .from("kaigo_users")
+          .from("clients")
           .insert(payload)
           .select("id");
         if (error) throw error;
@@ -326,7 +337,7 @@ export default function UserDetailLayout({
             if (payload[k] === "") payload[k] = null;
           });
           const { error } = await supabase
-            .from("kaigo_users")
+            .from("clients")
             .update(payload)
             .eq("id", rowId!);
           if (!error) updated++;
@@ -340,11 +351,11 @@ export default function UserDetailLayout({
       // 自動再読込のため現在のユーザーを再取得
       if (id) {
         const { data } = await supabase
-          .from("kaigo_users")
+          .from("clients")
           .select("*")
           .eq("id", id)
           .single();
-        setUser(data as KaigoUser | null);
+        setUser(data as Client | null);
       }
       // サイドバーはリロードが必要
       router.refresh();
@@ -437,13 +448,17 @@ export default function UserDetailLayout({
                   </div>
                   <div>
                     <h1 className="text-xl font-bold text-gray-900">{user.name}</h1>
-                    <p className="text-sm text-gray-500">{user.name_kana}</p>
+                    <p className="text-sm text-gray-500">{user.furigana ?? ""}</p>
                     <div className="mt-1 flex items-center gap-2 text-sm text-gray-600">
-                      <span>{user.gender}</span>
-                      <span>·</span>
-                      <span>{differenceInYears(new Date(), parseISO(user.birth_date))}歳</span>
-                      <span>·</span>
-                      <span>{format(parseISO(user.birth_date), "yyyy年M月d日")} 生</span>
+                      <span>{user.gender ?? ""}</span>
+                      {user.birth_date && (
+                        <>
+                          <span>·</span>
+                          <span>{differenceInYears(new Date(), parseISO(user.birth_date))}歳</span>
+                          <span>·</span>
+                          <span>{format(parseISO(user.birth_date), "yyyy年M月d日")} 生</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

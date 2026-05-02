@@ -6,7 +6,12 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { ChevronLeft, Save } from "lucide-react";
+import { useBusinessType } from "@/lib/business-type-context";
 
+// FormData は kaigo-app UI 入力用の中間型。DB カラム名（共通 clients）にマッピングして INSERT。
+//   name_kana    → clients.furigana
+//   mobile_phone → clients.mobile
+//   notes        → client_memos.body (scope='tenant')
 type FormData = {
   name: string;
   name_kana: string;
@@ -67,6 +72,7 @@ const inputClass =
 export default function NewUserPage() {
   const router = useRouter();
   const supabase = createClient();
+  const { currentOffice } = useBusinessType();
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [saving, setSaving] = useState(false);
 
@@ -88,34 +94,58 @@ export default function NewUserPage() {
       toast.error("生年月日は必須です");
       return;
     }
+    if (!currentOffice?.tenant_id) {
+      toast.error("自事業所が選択されていません。サイドバーの事業所セレクタで選択してください。");
+      return;
+    }
 
     setSaving(true);
     try {
+      // 共通マスタ clients への INSERT（旧 kaigo_users から張替え）
+      // カラム名対応: name_kana → furigana, mobile_phone → mobile
       const payload = {
+        tenant_id: currentOffice.tenant_id,
         name: form.name.trim(),
-        name_kana: form.name_kana.trim(),
+        furigana: form.name_kana.trim(),
         gender: form.gender,
         birth_date: form.birth_date,
         blood_type: form.blood_type || null,
         postal_code: form.postal_code || null,
         address: form.address || null,
         phone: form.phone || null,
-        mobile_phone: form.mobile_phone || null,
+        mobile: form.mobile_phone || null,
         email: form.email || null,
         emergency_contact_name: form.emergency_contact_name || null,
         emergency_contact_phone: form.emergency_contact_phone || null,
         admission_date: form.admission_date || null,
-        notes: form.notes || null,
         status: "active",
+        is_facility: false,
+        is_provisional: false,
       };
 
       const { data, error } = await supabase
-        .from("kaigo_users")
+        .from("clients")
         .insert(payload)
         .select("id")
         .single();
 
       if (error) throw error;
+
+      // 備考は client_memos へ scope='tenant' で別 INSERT
+      if (form.notes.trim()) {
+        const { error: memoErr } = await supabase
+          .from("client_memos")
+          .insert({
+            client_id: data.id,
+            scope: "tenant",
+            tenant_id: currentOffice.tenant_id,
+            body: form.notes.trim(),
+          });
+        if (memoErr) {
+          console.warn("備考の保存に失敗:", memoErr);
+          toast.warning("利用者は登録されましたが、備考の保存に失敗しました");
+        }
+      }
 
       toast.success("利用者を登録しました");
       router.push(`/users/${data.id}`);

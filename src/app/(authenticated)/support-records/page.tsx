@@ -278,10 +278,10 @@ export default function SupportRecordsPage() {
   const fetchUsers = useCallback(async () => {
     setLoadingUsers(true);
     const { data, error } = await supabase
-      .from("kaigo_users")
-      .select("id, name, name_kana")
+      .from("clients")
+      .select("id, name, name_kana:furigana")
       .eq("status", "active")
-      .order("name_kana", { ascending: true });
+      .order("furigana", { ascending: true });
     if (error) {
       toast.error("利用者の取得に失敗しました: " + error.message);
     } else {

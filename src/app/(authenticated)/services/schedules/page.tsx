@@ -50,8 +50,8 @@ interface ServiceRecord {
   content: string;
   user_id: string;
   staff_id: string;
-  kaigo_users?: { name: string };
-  kaigo_staff?: { name: string };
+  clients?: { name: string };
+  members?: { name: string };
 }
 
 export default function SchedulesPage() {
@@ -68,8 +68,9 @@ export default function SchedulesPage() {
 
   const fetchUsers = useCallback(async () => {
     const { data } = await supabase
-      .from("kaigo_users")
+      .from("clients")
       .select("id, name")
+      .is("deleted_at", null)
       .order("name");
     setUsers(data || []);
   }, [supabase]);
@@ -81,7 +82,7 @@ export default function SchedulesPage() {
 
     let query = supabase
       .from("kaigo_service_records")
-      .select("*, kaigo_users(name), kaigo_staff(name)")
+      .select("*, clients(name), members(name)")
       .gte("service_date", fromDate)
       .lte("service_date", toDate)
       .order("start_time");
@@ -283,7 +284,7 @@ export default function SchedulesPage() {
                                     record.start_time && record.end_time
                                       ? `${record.start_time}〜${record.end_time}`
                                       : record.start_time || "",
-                                    record.kaigo_staff?.name || "",
+                                    record.members?.name || "",
                                     record.content || "",
                                   ]
                                     .filter(Boolean)
@@ -296,9 +297,9 @@ export default function SchedulesPage() {
                                       {record.end_time && `〜${record.end_time}`}
                                     </div>
                                   )}
-                                  {record.kaigo_staff?.name && (
+                                  {record.members?.name && (
                                     <div className="opacity-60 truncate">
-                                      {record.kaigo_staff.name}
+                                      {record.members.name}
                                     </div>
                                   )}
                                 </div>

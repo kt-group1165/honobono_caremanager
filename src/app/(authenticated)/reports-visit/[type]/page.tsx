@@ -115,18 +115,18 @@ export default function ReportsVisitEditorPage() {
 
     // 利用者情報取得
     const { data: userData } = await supabase
-      .from("kaigo_users")
-      .select("name, name_kana, gender, birth_date, address, phone")
+      .from("clients")
+      .select("name, name_kana:furigana, gender, birth_date, address, phone")
       .eq("id", userId)
       .single();
 
-    // 認定情報取得
+    // 認定情報取得（client_insurance_records、PostgREST 列エイリアスでフィールド名維持）
     const { data: certData } = await supabase
-      .from("kaigo_care_certifications")
-      .select("care_level, start_date, end_date")
-      .eq("user_id", userId)
-      .eq("status", "active")
-      .order("start_date", { ascending: false })
+      .from("client_insurance_records")
+      .select("care_level, start_date:certification_start_date, end_date:certification_end_date")
+      .eq("client_id", userId)
+      .eq("certification_status", "active")
+      .order("certification_start_date", { ascending: false, nullsFirst: false })
       .limit(1);
 
     // 既存文書
@@ -138,11 +138,13 @@ export default function ReportsVisitEditorPage() {
       .order("updated_at", { ascending: false })
       .limit(1);
 
-    // 事業所情報
+    // 事業所情報（共通マスタ offices, kaigo-app の自事業所、PostgREST 列エイリアスで旧フィールド名維持）
+    // 旧 business_type='home_care' → 新 service_type='訪問介護'
     const { data: officeData } = await supabase
-      .from("kaigo_office_settings")
-      .select("office_name, manager_name")
-      .eq("business_type", "home_care")
+      .from("offices")
+      .select("office_name:name, manager_name")
+      .eq("app_type", "kaigo-app")
+      .eq("service_type", "訪問介護")
       .eq("is_active", true)
       .limit(1);
 

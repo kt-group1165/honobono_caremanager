@@ -1,39 +1,88 @@
-// 利用者基本情報
-export type KaigoUser = {
+// 利用者基本情報（共通マスタ clients に統合済 - Phase 2-3-1）
+//
+// DB カラム名と TS フィールド名は同じ。kaigo_users 旧フィールドからの主な変更:
+//   name_kana    → furigana
+//   mobile_phone → mobile
+//   notes        → client_memos テーブル（別管理）
+//
+// clients 全カラム（Phase 1-5 + Phase 2-0-05 追加分含む）を網羅。
+export type Client = {
   id: string;
+  tenant_id: string;
+  user_number: string | null;
   name: string;
-  name_kana: string;
-  gender: "男" | "女";
-  birth_date: string;
-  blood_type: string | null;
-  postal_code: string | null;
-  address: string | null;
+  furigana: string | null;
+  // 連絡先
   phone: string | null;
-  mobile_phone: string | null;
+  mobile: string | null;
+  address: string | null;
+  postal_code: string | null;
   email: string | null;
+  // 個人属性
+  gender: string | null;          // '男' | '女' | 'その他' | null
+  blood_type: string | null;      // 'A' | 'B' | 'O' | 'AB' | '不明' | null
+  birth_date: string | null;
+  // 介護情報（認定情報の最新値キャッシュ）
+  care_level: string | null;
+  benefit_rate: string | null;
+  insured_number: string | null;
+  certification_start_date: string | null;
+  certification_end_date: string | null;
+  insurer_number: string | null;
+  copay_rate: string | null;
+  public_expense: string | null;
+  // ケアマネ
+  care_manager: string | null;
+  care_manager_org: string | null;
+  care_office_id: string | null;
+  care_manager_id: string | null;
+  referrer_org: string | null;
+  // 緊急連絡先
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
+  // 入退所
   admission_date: string | null;
   discharge_date: string | null;
+  // ステータス
   status: "active" | "inactive" | "deceased";
-  notes: string | null;
+  is_facility: boolean;
+  is_provisional: boolean;
+  // メモ（旧、client_memos へ移行済。新規 INSERT は client_memos を使う）
+  memo: string | null;
+  // 削除
+  deleted_at: string | null;
+  // タイムスタンプ
   created_at: string;
   updated_at: string;
 };
 
-// 介護認定情報
+/** @deprecated Phase 2-3-1 で Client 型に統合。新規コードは Client を使う。 */
+export type KaigoUser = Client;
+
+// 介護認定情報（共通マスタ client_insurance_records に統合済 - Phase 2-3-3）
+//
+// kaigo_care_certifications 旧フィールドからの主な変更:
+//   user_id              → client_id
+//   start_date           → certification_start_date
+//   end_date             → certification_end_date
+//   support_limit_amount → service_limit_amount
+//   status               → certification_status
+//
+// client_insurance_records は他にも多くのカラムを持つが、kaigo-app から必須参照する
+// subset のみを type に含める（フィールドが必要になれば追加）。
 export type CareCertification = {
   id: string;
-  user_id: string;
+  tenant_id: string;
+  client_id: string;
   certification_number: string | null;
-  care_level: CareLevel;
-  start_date: string;
-  end_date: string;
+  care_level: string | null;          // CHECK 制約は共通側にまだ無い（Phase 2 後半でクリーンアップ後付与予定）
+  certification_start_date: string | null;
+  certification_end_date: string | null;
   certification_date: string | null;
   insurer_number: string | null;
   insured_number: string | null;
-  support_limit_amount: number | null;
-  status: "active" | "expired" | "pending";
+  service_limit_amount: number | null;
+  certification_status: string | null;  // 共通側は値域自由（'active'|'expired'|'pending'|'認定済み'... 混在の可能性）
   created_at: string;
   updated_at: string;
 };
@@ -127,21 +176,35 @@ export type FamilyContact = {
   created_at: string;
 };
 
-// 職員
-export type Staff = {
+// 職員（共通マスタ members に統合済 - Phase 2-3-2）
+//
+// DB カラム名と TS フィールド名は同じ。kaigo_staff 旧フィールドからの主な変更:
+//   name_kana → furigana
+//
+// members 全カラム（Phase 2-0-07 追加分含む）を網羅。
+export type Member = {
   id: string;
+  tenant_id: string;
   name: string;
-  name_kana: string;
-  role: string;
+  furigana: string | null;
+  // kaigo_staff 由来のカラム（Phase 2-0-07 で追加）
+  role: string | null;
   qualifications: string | null;
   email: string | null;
   phone: string | null;
-  employment_type: "常勤" | "非常勤" | "パート";
+  employment_type: "常勤" | "非常勤" | "パート" | null;
   hire_date: string | null;
   status: "active" | "inactive";
+  // order-app 専用 UI 設定（kaigo-app からは参照不要）
+  color: string | null;
+  sort_order: number | null;
+  // タイムスタンプ
   created_at: string;
   updated_at: string;
 };
+
+/** @deprecated Phase 2-3-2 で Member 型に統合。新規コードは Member を使う。 */
+export type Staff = Member;
 
 // シフト
 export type Shift = {

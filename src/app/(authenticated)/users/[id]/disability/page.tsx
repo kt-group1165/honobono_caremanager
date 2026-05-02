@@ -322,7 +322,7 @@ export default function UserDisabilityPage() {
     if (!userId) return;
     setLoading(true);
     const { data, error } = await supabase
-      .from("kaigo_disability_certifications")
+      .from("client_disability_certifications")
       .select("*")
       .eq("user_id", userId)
       .order("period_start", { ascending: false, nullsFirst: false });
@@ -382,7 +382,7 @@ export default function UserDisabilityPage() {
     }
     if (!confirm("この受給者証を削除します。よろしいですか？")) return;
     const { error } = await supabase
-      .from("kaigo_disability_certifications")
+      .from("client_disability_certifications")
       .delete()
       .eq("id", selectedId);
     if (error) {
@@ -407,14 +407,14 @@ export default function UserDisabilityPage() {
       };
       if (selectedId && !isNew) {
         const { error } = await supabase
-          .from("kaigo_disability_certifications")
+          .from("client_disability_certifications")
           .update(payload)
           .eq("id", selectedId);
         if (error) throw error;
         toast.success("保存しました");
       } else {
         const { error } = await supabase
-          .from("kaigo_disability_certifications")
+          .from("client_disability_certifications")
           .insert(payload);
         if (error) throw error;
         toast.success("登録しました");

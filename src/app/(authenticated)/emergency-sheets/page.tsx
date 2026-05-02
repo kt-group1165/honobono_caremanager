@@ -206,7 +206,7 @@ export default function EmergencySheetsPage() {
   const autoFillFromBaseData = useCallback(async (userId: string, baseSheet: EmergencySheet): Promise<EmergencySheet> => {
     const s = { ...baseSheet };
     const [{ data: userData }, { data: historyData }, { data: familyData }] = await Promise.all([
-      supabase.from("kaigo_users").select("phone").eq("id", userId).single(),
+      supabase.from("clients").select("phone").eq("id", userId).single(),
       supabase.from("kaigo_medical_history").select("disease_name, onset_date, status, hospital, doctor, notes").eq("user_id", userId).order("created_at", { ascending: false }),
       supabase.from("kaigo_assessments").select("form_data").eq("user_id", userId).order("created_at", { ascending: false }).limit(1).single(),
     ]);
@@ -317,7 +317,7 @@ export default function EmergencySheetsPage() {
   const fetchData = useCallback(async (userId: string) => {
     setLoading(true);
     const [{ data: userData }, { data: sheetData }] = await Promise.all([
-      supabase.from("kaigo_users").select("name, name_kana, birth_date, gender, address, phone").eq("id", userId).single(),
+      supabase.from("clients").select("name, name_kana:furigana, birth_date, gender, address, phone").eq("id", userId).single(),
       supabase.from("kaigo_emergency_sheets").select("*").eq("user_id", userId).single(),
     ]);
     setUserInfo(userData as UserInfo | null);

@@ -48,8 +48,8 @@ interface ServiceRecord {
   user_id: string;
   staff_id: string;
   notes: string;
-  kaigo_users?: { name: string };
-  kaigo_staff?: { name: string };
+  clients?: { name: string };
+  members?: { name: string };
 }
 
 const EMPTY_FORM = {
@@ -85,10 +85,11 @@ export default function ServicesPage() {
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
+    // PostgREST embed: kaigo_service_records.user_id → clients, .staff_id → members (FK redirect 済)
     let query = supabase
       .from("kaigo_service_records")
       .select(
-        "*, kaigo_users(name), kaigo_staff(name)"
+        "*, clients(name), members(name)"
       )
       .order("service_date", { ascending: false })
       .order("start_time", { ascending: false });
@@ -109,8 +110,8 @@ export default function ServicesPage() {
 
   const fetchMasters = useCallback(async () => {
     const [usersRes, staffRes] = await Promise.all([
-      supabase.from("kaigo_users").select("id, name").order("name"),
-      supabase.from("kaigo_staff").select("id, name").eq("status", "active").order("name_kana"),
+      supabase.from("clients").select("id, name").is("deleted_at", null).order("name"),
+      supabase.from("members").select("id, name").eq("status", "active").order("furigana", { nullsFirst: false }),
     ]);
     if (!usersRes.error) setUsers(usersRes.data || []);
     if (!staffRes.error) setStaff(staffRes.data || []);
@@ -196,8 +197,8 @@ export default function ServicesPage() {
 
   const filtered = records.filter((r) => {
     if (!searchQuery) return true;
-    const userName = r.kaigo_users?.name || "";
-    const staffName = r.kaigo_staff?.name || "";
+    const userName = r.clients?.name || "";
+    const staffName = r.members?.name || "";
     return (
       userName.includes(searchQuery) ||
       staffName.includes(searchQuery) ||
@@ -347,7 +348,7 @@ export default function ServicesPage() {
                       {formatDate(record.service_date)}
                     </td>
                     <td className="px-4 py-3 text-gray-900">
-                      {record.kaigo_users?.name || "—"}
+                      {record.clients?.name || "—"}
                     </td>
                     <td className="px-4 py-3">
                       <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
@@ -360,7 +361,7 @@ export default function ServicesPage() {
                         : record.start_time || "—"}
                     </td>
                     <td className="px-4 py-3 text-gray-700">
-                      {record.kaigo_staff?.name || "—"}
+                      {record.members?.name || "—"}
                     </td>
                     <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate" title={record.content}>
                       {record.content || "—"}
@@ -547,7 +548,7 @@ export default function ServicesPage() {
             <p className="text-sm text-gray-600 mb-6">
               {formatDate(deleteTarget.service_date)} の{" "}
               <span className="font-medium text-gray-900">
-                {deleteTarget.kaigo_users?.name}
+                {deleteTarget.clients?.name}
               </span>{" "}
               さんのサービス記録を削除しますか？
             </p>
