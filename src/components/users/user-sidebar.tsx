@@ -30,11 +30,12 @@ export function UserSidebar({ selectedUserId, onSelectUser }: UserSidebarProps) 
   const { currentOfficeId } = useBusinessType();
 
   // 表示モード: all (全利用者) / office (自事業所の利用者のみ)
-  const [filterMode, setFilterMode] = useState<"all" | "office">(() => {
-    if (typeof window === "undefined") return "office";
+  // SSR/CSR 整合のため初期値は固定 "office"。マウント後に localStorage から復元。
+  const [filterMode, setFilterMode] = useState<"all" | "office">("office");
+  useEffect(() => {
     const stored = localStorage.getItem(FILTER_KEY);
-    return stored === "all" ? "all" : "office";
-  });
+    if (stored === "all") setFilterMode("all");
+  }, []);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);

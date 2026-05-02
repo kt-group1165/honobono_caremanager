@@ -93,12 +93,13 @@ const BUSINESS_TYPE_LABELS: Record<string, { label: string; color: string }> = {
 export function Sidebar() {
   const pathname = usePathname();
   const { businessType, currentOffice } = useBusinessType();
-  const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("sidebar-collapsed") === "true";
+  // SSR/CSR 整合のため初期値は固定。マウント後に localStorage から復元。
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    if (localStorage.getItem("sidebar-collapsed") === "true") {
+      setCollapsed(true);
     }
-    return false;
-  });
+  }, []);
   const toggleCollapsed = () => {
     const next = !collapsed;
     setCollapsed(next);
@@ -106,14 +107,16 @@ export function Sidebar() {
   };
 
   // グループごとの開閉状態（localStorage に永続化）
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
-    if (typeof window === "undefined") return { "ケアマネ業務": true };
+  // SSR/CSR 整合のため初期値は固定。マウント後に localStorage から復元。
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    "ケアマネ業務": true,
+  });
+  useEffect(() => {
     try {
       const stored = localStorage.getItem("sidebar-open-groups");
-      if (stored) return JSON.parse(stored);
+      if (stored) setOpenGroups(JSON.parse(stored));
     } catch { /* ignore */ }
-    return { "ケアマネ業務": true };
-  });
+  }, []);
   const toggleGroup = (name: string) => {
     setOpenGroups((prev) => {
       const next = { ...prev, [name]: !prev[name] };
