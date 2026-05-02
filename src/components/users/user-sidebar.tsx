@@ -38,35 +38,65 @@ export function UserSidebar({ selectedUserId, onSelectUser }: UserSidebarProps) 
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
-    // 注: クライアント側で .range(0, 9999) を指定しても、Supabase 側の
-    // db.max_rows 設定（デフォルト 1000）でサーバ側でキャップされる場合がある。
-    // 本番運用では Supabase ダッシュボード Settings→API で max_rows を引き上げる
-    // か、自事業所フィルタを「先に client_office_assignments を取得して
-    // .in('id', [...])」する方式へ刷新する必要がある（§5-3 参照）。
-    const { data } = await supabase
-      .from("clients")
-      .select("id, name, furigana, status")
-      .eq("status", "active")
-      .is("deleted_at", null)
-      .order("furigana", { ascending: true, nullsFirst: false })
-      .range(0, 9999);
-    const list = (data || []) as ClientRow[];
-    setUsers(list);
-
-    // 自事業所に紐付く利用者を取得（client_office_assignments の現役レコード）
-    if (currentOfficeId) {
-      const { data: svc } = await supabase
+    // Supabase の db.max_rows（デフォルト 1000）対策で、
+    // 自事業所モードでは「先に assignments を取得 → .in('id', [...])」で
+    // 限定 fetch する。これにより 1000 件超のテナントでも漏れなく
+    // 自事業所に紐付く利用者が表示される。
+    // 全利用者モードは max_rows までで切れるが UX 上許容。
+    if (filterMode === "office" && currentOfficeId) {
+      // 1) 自事業所の現役 assignments から client_id を取得
+      const { data: assigns } = await supabase
         .from("client_office_assignments")
         .select("client_id")
         .eq("office_id", currentOfficeId)
         .is("end_date", null);
-      const set = new Set<string>((svc || []).map((s: { client_id: string }) => s.client_id));
-      setOfficeUserIds(set);
+      const clientIds = Array.from(
+        new Set<string>((assigns || []).map((a: { client_id: string }) => a.client_id))
+      );
+
+      if (clientIds.length === 0) {
+        setUsers([]);
+        setOfficeUserIds(new Set());
+        setLoading(false);
+        return;
+      }
+
+      // 2) その client_id 群だけ clients を fetch
+      const { data } = await supabase
+        .from("clients")
+        .select("id, name, furigana, status")
+        .in("id", clientIds)
+        .eq("status", "active")
+        .is("deleted_at", null)
+        .order("furigana", { ascending: true, nullsFirst: false });
+      setUsers((data || []) as ClientRow[]);
+      setOfficeUserIds(new Set<string>(clientIds));
     } else {
-      setOfficeUserIds(new Set());
+      // 全利用者モード: 通常の clients 取得（最大 db.max_rows まで）
+      const { data } = await supabase
+        .from("clients")
+        .select("id, name, furigana, status")
+        .eq("status", "active")
+        .is("deleted_at", null)
+        .order("furigana", { ascending: true, nullsFirst: false })
+        .range(0, 9999);
+      setUsers((data || []) as ClientRow[]);
+
+      // モード切替時のチラつき防止に officeUserIds も並行取得
+      if (currentOfficeId) {
+        const { data: svc } = await supabase
+          .from("client_office_assignments")
+          .select("client_id")
+          .eq("office_id", currentOfficeId)
+          .is("end_date", null);
+        const set = new Set<string>((svc || []).map((s: { client_id: string }) => s.client_id));
+        setOfficeUserIds(set);
+      } else {
+        setOfficeUserIds(new Set());
+      }
     }
     setLoading(false);
-  }, [supabase, currentOfficeId]);
+  }, [supabase, currentOfficeId, filterMode]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
