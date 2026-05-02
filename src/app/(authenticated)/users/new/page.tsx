@@ -101,10 +101,25 @@ export default function NewUserPage() {
 
     setSaving(true);
     try {
+      // user_number 採番（tenant 単位 max+1）。order-app の採番と同算法。
+      // 共通マスタ clients は order-app 由来で user_number が NOT NULL のため必須。
+      // TODO(§5-3): Phase 2-X で monorepo 化して共通 util に集約予定。
+      const { data: existingClients, error: numErr } = await supabase
+        .from("clients")
+        .select("user_number")
+        .eq("tenant_id", currentOffice.tenant_id);
+      if (numErr) throw numErr;
+      const maxNum = (existingClients ?? []).reduce<number>((mx, c) => {
+        const n = parseInt(c.user_number ?? "0");
+        return Number.isNaN(n) ? mx : Math.max(mx, n);
+      }, 0);
+      const userNumber = String(maxNum + 1);
+
       // 共通マスタ clients への INSERT（旧 kaigo_users から張替え）
       // カラム名対応: name_kana → furigana, mobile_phone → mobile
       const payload = {
         tenant_id: currentOffice.tenant_id,
+        user_number: userNumber,
         name: form.name.trim(),
         furigana: form.name_kana.trim(),
         gender: form.gender,
