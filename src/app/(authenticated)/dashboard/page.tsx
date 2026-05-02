@@ -149,7 +149,7 @@ export default function DashboardPage() {
         const { count: expiringCarePlans, error: e4 } = await supabase
           .from("client_insurance_records")
           .select("*", { count: "exact", head: true })
-          .eq("certification_status", "active")
+          .eq("certification_status", "認定済み")
           .lte("certification_end_date", warnEnd)
           .gte("certification_end_date", todayStr);
         if (e4) throw e4;
@@ -181,7 +181,7 @@ export default function DashboardPage() {
             .from("client_insurance_records")
             .select("client_id, care_level")
             .in("client_id", userIds)
-            .eq("certification_status", "active")
+            .eq("certification_status", "認定済み")
             .order("certification_start_date", { ascending: false, nullsFirst: false });
           if (certData) {
             certData.forEach((c: any) => {

@@ -125,7 +125,7 @@ export default function ReportsVisitEditorPage() {
       .from("client_insurance_records")
       .select("care_level, start_date:certification_start_date, end_date:certification_end_date")
       .eq("client_id", userId)
-      .eq("certification_status", "active")
+      .eq("certification_status", "認定済み")
       .order("certification_start_date", { ascending: false, nullsFirst: false })
       .limit(1);
 

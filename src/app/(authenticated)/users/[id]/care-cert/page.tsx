@@ -33,7 +33,8 @@ type DbFields = {
   end_date: string;
   care_level: CareLevel;
   support_limit_amount: string;
-  status: "active" | "expired" | "pending";
+  // certification_status の値域は DB 側で CHECK 制約済（認定済み / 申請中 / NULL）
+  status: "認定済み" | "申請中";
   certification_number: string;
 };
 
@@ -70,7 +71,7 @@ const EMPTY_FORM: FormData = {
   end_date: "",
   care_level: "申請中",
   support_limit_amount: "",
-  status: "active",
+  status: "認定済み",
   certification_number: "",
   // Local
   insurer_name: "",
@@ -119,7 +120,7 @@ function recToForm(rec: CareCertification): FormData {
     end_date: rec.certification_end_date ?? "",
     care_level: (rec.care_level as CareLevel) ?? "申請中",
     support_limit_amount: rec.service_limit_amount?.toString() ?? "",
-    status: (rec.certification_status as DbFields["status"]) ?? "active",
+    status: (rec.certification_status as DbFields["status"]) ?? "認定済み",
     certification_number: rec.certification_number ?? "",
     cert_status_type: rec.care_level === "申請中" ? "申請中" : "認定済み",
   };
@@ -301,7 +302,7 @@ export default function CareCertPage() {
         service_limit_amount: form.support_limit_amount
           ? Number(form.support_limit_amount)
           : null,
-        certification_status: "pending",
+        certification_status: "申請中",
         certification_number: null,
       };
       const { data, error } = await supabase

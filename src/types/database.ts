@@ -82,7 +82,7 @@ export type CareCertification = {
   insurer_number: string | null;
   insured_number: string | null;
   service_limit_amount: number | null;
-  certification_status: string | null;  // 共通側は値域自由（'active'|'expired'|'pending'|'認定済み'... 混在の可能性）
+  certification_status: string | null;  // CHECK 制約済（'認定済み' | '申請中' | NULL）
   created_at: string;
   updated_at: string;
 };
