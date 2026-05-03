@@ -476,7 +476,7 @@ export default function OfficeSettingsPage() {
 }
 
 function Field({ label, value, onChange, placeholder, className }: {
-  label: string; value: string; onChange: (v: string) => void; placeholder?: string; className?: string;
+  label: string; value: string | null; onChange: (v: string) => void; placeholder?: string; className?: string;
 }) {
   return (
     <div className={className}>

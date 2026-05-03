@@ -144,7 +144,7 @@ export default function HospitalizationsPage() {
   const openEdit = (rec: Hospitalization) => {
     setEditingId(rec.id);
     setForm({
-      hospital_name: rec.hospital_name,
+      hospital_name: rec.hospital_name ?? "",
       department: rec.department ?? "",
       admission_date: rec.admission_date,
       discharge_date: rec.discharge_date ?? "",
