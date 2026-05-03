@@ -17,6 +17,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getMaxUserNumber } from "@kt/shared/user-number";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -323,18 +324,8 @@ export default function CareplanImportPage() {
           return;
         }
         const info = userInfoFile.parsed;
-        // user_number 採番（tenant 単位 max+1）— users/new と同算法
-        // TODO(§5-3): Phase 2-X で monorepo 化して共通 util に集約予定
-        const { data: existingClients, error: numErr } = await supabase
-          .from("clients")
-          .select("user_number")
-          .eq("tenant_id", currentOffice.tenant_id);
-        if (numErr) throw numErr;
-        const maxNum = (existingClients ?? []).reduce<number>((mx, c) => {
-          const n = parseInt(c.user_number ?? "0");
-          return Number.isNaN(n) ? mx : Math.max(mx, n);
-        }, 0);
-        const userNumber = String(maxNum + 1);
+        // user_number 採番（tenant 単位 max+1）。@kt/shared 共通 util。
+        const userNumber = String((await getMaxUserNumber(supabase, currentOffice.tenant_id)) + 1);
 
         // 共通マスタ clients への INSERT。
         // カラム名対応: name_kana → furigana / phone はそのまま
