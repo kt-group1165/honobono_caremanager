@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { resolvePreferredTenantId } from "@/lib/tenant-resolver";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -1425,15 +1426,19 @@ function UrlManagementModal({ onClose }: UrlManagementModalProps) {
       const token = crypto.randomUUID();
       const existing = getToken(staffId);
       if (existing) {
+        // 既存 token は UPDATE のみ。tenant_id は変えない（admin が tenant を
+        // 跨いで運用しない前提、Phase 2-6c migration で NOT NULL 化済）。
         const { error } = await supabase
           .from("kaigo_staff_tokens")
           .update({ token })
           .eq("staff_id", staffId);
         if (error) throw error;
       } else {
+        const resolved = await resolvePreferredTenantId(supabase);
+        if (!resolved.ok) throw new Error(resolved.error);
         const { error } = await supabase
           .from("kaigo_staff_tokens")
-          .insert({ staff_id: staffId, token });
+          .insert({ staff_id: staffId, token, tenant_id: resolved.tenantId });
         if (error) throw error;
       }
       setTokens((prev) => {

@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { useState, useEffect, useCallback, useMemo, createContext, useContext } from "react";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -42,14 +41,42 @@ import { cn } from "@/lib/utils";
 import { use } from "react";
 import { TemplatePicker } from "@/components/templates/template-picker";
 
-// ─── Supabase (anon, no auth) ─────────────────────────────────────────────────
+// ─── API access (token-scoped service_role API) ──────────────────────────────
+// /staff-availability/[token] は未認証経路。直接 Supabase は叩かず、
+// /api/staff-availability/[token]/* （service_role）に fetch する。
+// token から API base を組み立てるヘルパー：
 
-function createAnonClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+function apiBase(token: string) {
+  return `/api/staff-availability/${encodeURIComponent(token)}`;
 }
+
+async function apiGet<T>(url: string): Promise<T> {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`GET ${url} ${res.status}: ${detail || res.statusText}`);
+  }
+  return (await res.json()) as T;
+}
+
+async function apiSend<T>(method: "POST" | "PUT" | "DELETE", url: string, body?: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`${method} ${url} ${res.status}: ${detail || res.statusText}`);
+  }
+  return (await res.json()) as T;
+}
+
+// CareTextarea が TemplatePicker に渡す URL は CareRecordModal が token から組立て、
+// このコンテキスト経由で配下に流す。CareTextarea が呼び出される 28 箇所すべてに
+// prop drilling せずに済むため。
+const TemplatesUrlContext = createContext<string>("");
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -126,8 +153,8 @@ function getServiceColor(serviceType: string) {
 
 // ─── Base Settings Tab (Mobile) ──────────────────────────────────────────────
 
-function BaseSettingsTab({ staffId }: { staffId: string }) {
-  const supabase = createAnonClient();
+function BaseSettingsTab({ token }: { token: string }) {
+  const base = apiBase(token);
   const [slots, setSlots] = useState<BaseSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -136,38 +163,40 @@ function BaseSettingsTab({ staffId }: { staffId: string }) {
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const { data } = await supabase
-        .from("kaigo_staff_availability_base")
-        .select("id, staff_id, day_of_week, start_time, end_time")
-        .eq("staff_id", staffId)
-        .order("day_of_week")
-        .order("start_time");
+      try {
+        const { slots: data } = await apiGet<{
+          slots: { id: string; day_of_week: number; start_time: string; end_time: string }[];
+        }>(`${base}/base`);
 
-      if (data && data.length > 0) {
-        setSlots(
-          data.map((r: any) => ({
-            id: r.id,
-            tempId: genId(),
-            day_of_week: r.day_of_week,
-            start_time: r.start_time,
-            end_time: r.end_time,
-          }))
-        );
-      } else {
-        setSlots(
-          [1, 2, 3, 4, 5].map((dow) => ({
-            tempId: genId(),
-            day_of_week: dow,
-            start_time: "09:00",
-            end_time: "18:00",
-          }))
-        );
+        if (data && data.length > 0) {
+          setSlots(
+            data.map((r) => ({
+              id: r.id,
+              tempId: genId(),
+              day_of_week: r.day_of_week,
+              start_time: r.start_time,
+              end_time: r.end_time,
+            }))
+          );
+        } else {
+          setSlots(
+            [1, 2, 3, 4, 5].map((dow) => ({
+              tempId: genId(),
+              day_of_week: dow,
+              start_time: "09:00",
+              end_time: "18:00",
+            }))
+          );
+        }
+      } catch (err: unknown) {
+        toast.error("読み込みに失敗: " + (err instanceof Error ? err.message : String(err)));
+        setSlots([]);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [staffId]);
+  }, [base]);
 
   const addSlot = (dow: number) => {
     setSlots((prev) => [...prev, emptyBaseSlot(dow)]);
@@ -186,32 +215,16 @@ function BaseSettingsTab({ staffId }: { staffId: string }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await supabase
-        .from("kaigo_staff_availability_base")
-        .delete()
-        .eq("staff_id", staffId);
-
-      if (slots.length > 0) {
-        const rows = slots.map((s) => ({
-          staff_id: staffId,
+      await apiSend("PUT", `${base}/base`, {
+        slots: slots.map((s) => ({
           day_of_week: s.day_of_week,
           start_time: s.start_time,
           end_time: s.end_time,
-        }));
-        const { error } = await supabase
-          .from("kaigo_staff_availability_base")
-          .insert(rows);
-        if (error) throw error;
-      }
+        })),
+      });
       toast.success("ベース設定を保存しました");
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : typeof err === "object" && err !== null
-          ? JSON.stringify(err)
-          : String(err);
-      toast.error("保存に失敗しました: " + msg);
+      toast.error("保存に失敗しました: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setSaving(false);
     }
@@ -376,8 +389,8 @@ function BaseSettingsTab({ staffId }: { staffId: string }) {
 
 // ─── Monthly Settings Tab (Mobile) ──────────────────────────────────────────
 
-function MonthlySettingsTab({ staffId }: { staffId: string }) {
-  const supabase = createAnonClient();
+function MonthlySettingsTab({ token }: { token: string }) {
+  const base = apiBase(token);
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -400,32 +413,31 @@ function MonthlySettingsTab({ staffId }: { staffId: string }) {
   const fetchMonthly = useCallback(
     async (month: Date) => {
       setLoading(true);
-      const from = format(startOfMonth(month), "yyyy-MM-dd");
-      const to = format(endOfMonth(month), "yyyy-MM-dd");
-      const { data } = await supabase
-        .from("kaigo_staff_availability_monthly")
-        .select(
-          "id, staff_id, available_date, start_time, end_time, is_available"
-        )
-        .eq("staff_id", staffId)
-        .gte("available_date", from)
-        .lte("available_date", to)
-        .order("available_date")
-        .order("start_time");
+      try {
+        const from = format(startOfMonth(month), "yyyy-MM-dd");
+        const to = format(endOfMonth(month), "yyyy-MM-dd");
+        const { slots: data } = await apiGet<{
+          slots: { id: string; available_date: string; start_time: string; end_time: string; is_available: boolean }[];
+        }>(`${base}/monthly?from=${from}&to=${to}`);
 
-      setMonthlySlots(
-        (data || []).map((r: any) => ({
-          id: r.id,
-          tempId: genId(),
-          available_date: r.available_date,
-          start_time: r.start_time,
-          end_time: r.end_time,
-          is_available: r.is_available,
-        }))
-      );
-      setLoading(false);
+        setMonthlySlots(
+          (data || []).map((r) => ({
+            id: r.id,
+            tempId: genId(),
+            available_date: r.available_date,
+            start_time: r.start_time,
+            end_time: r.end_time,
+            is_available: r.is_available,
+          }))
+        );
+      } catch (err: unknown) {
+        toast.error("読み込みに失敗: " + (err instanceof Error ? err.message : String(err)));
+        setMonthlySlots([]);
+      } finally {
+        setLoading(false);
+      }
     },
-    [staffId, supabase]
+    [base]
   );
 
   useEffect(() => {
@@ -436,71 +448,22 @@ function MonthlySettingsTab({ staffId }: { staffId: string }) {
   const importFromBase = async () => {
     setImporting(true);
     try {
-      const { data: baseData } = await supabase
-        .from("kaigo_staff_availability_base")
-        .select("day_of_week, start_time, end_time")
-        .eq("staff_id", staffId);
-
-      const base = baseData || [];
-      if (base.length === 0) {
-        toast.info("ベース設定がありません");
-        setImporting(false);
-        return;
-      }
-
       const from = format(startOfMonth(currentMonth), "yyyy-MM-dd");
       const to = format(endOfMonth(currentMonth), "yyyy-MM-dd");
-
-      const { error: delErr } = await supabase
-        .from("kaigo_staff_availability_monthly")
-        .delete()
-        .eq("staff_id", staffId)
-        .gte("available_date", from)
-        .lte("available_date", to);
-      if (delErr) throw delErr;
-
-      const rows: Record<string, unknown>[] = [];
-      for (const day of days) {
-        const dow = getDay(day);
-        const matchingBase = base.filter((b: any) => b.day_of_week === dow);
-        if (matchingBase.length === 0) {
-          rows.push({
-            staff_id: staffId,
-            available_date: format(day, "yyyy-MM-dd"),
-            start_time: "00:00",
-            end_time: "23:59",
-            is_available: false,
-            source: "base",
-          });
-        } else {
-          for (const b of matchingBase) {
-            rows.push({
-              staff_id: staffId,
-              available_date: format(day, "yyyy-MM-dd"),
-              start_time: (b as any).start_time,
-              end_time: (b as any).end_time,
-              is_available: true,
-              source: "base",
-            });
-          }
+      try {
+        await apiSend("POST", `${base}/monthly/import-base`, { from, to });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("base_empty")) {
+          toast.info("ベース設定がありません");
+          return;
         }
+        throw err;
       }
-
-      const { error } = await supabase
-        .from("kaigo_staff_availability_monthly")
-        .insert(rows);
-      if (error) throw error;
-
       toast.success("ベース設定を取り込みました");
-      fetchMonthly(currentMonth);
+      await fetchMonthly(currentMonth);
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : typeof err === "object" && err !== null
-          ? JSON.stringify(err)
-          : String(err);
-      toast.error("取り込みに失敗しました: " + msg);
+      toast.error("取り込みに失敗しました: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setImporting(false);
     }
@@ -529,39 +492,21 @@ function MonthlySettingsTab({ staffId }: { staffId: string }) {
     try {
       const from = format(startOfMonth(currentMonth), "yyyy-MM-dd");
       const to = format(endOfMonth(currentMonth), "yyyy-MM-dd");
-
-      await supabase
-        .from("kaigo_staff_availability_monthly")
-        .delete()
-        .eq("staff_id", staffId)
-        .gte("available_date", from)
-        .lte("available_date", to);
-
-      if (monthlySlots.length > 0) {
-        const rows = monthlySlots.map((s) => ({
-          staff_id: staffId,
+      await apiSend("PUT", `${base}/monthly`, {
+        from,
+        to,
+        slots: monthlySlots.map((s) => ({
           available_date: s.available_date,
           start_time: s.start_time,
           end_time: s.end_time,
           is_available: s.is_available,
-          source: "manual" as const,
-        }));
-        const { error } = await supabase
-          .from("kaigo_staff_availability_monthly")
-          .insert(rows);
-        if (error) throw error;
-      }
-
+          source: "manual",
+        })),
+      });
       toast.success("月別設定を保存しました");
       await fetchMonthly(currentMonth);
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : typeof err === "object" && err !== null
-          ? JSON.stringify(err)
-          : String(err);
-      toast.error("保存に失敗しました: " + msg);
+      toast.error("保存に失敗しました: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setSaving(false);
     }
@@ -1166,11 +1111,12 @@ function CareInput({ label, value, onChange, placeholder, type = "text", inputMo
 }
 
 function CareTextarea({ label, value, onChange, placeholder, rows = 3 }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; rows?: number }) {
+  const templatesUrl = useContext(TemplatesUrlContext);
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
         {label && <label className="block text-xs text-gray-500">{label}</label>}
-        <TemplatePicker category="visit_record" currentText={value} onInsert={onChange} anon />
+        <TemplatePicker category="visit_record" currentText={value} onInsert={onChange} fetchUrl={templatesUrl} />
       </div>
       <textarea
         value={value}
@@ -1211,19 +1157,20 @@ const CARE_SECTIONS = [
 
 function CareRecordModal({
   sched,
-  staffId,
+  token,
   existingRecord,
   onClose,
   onSaved,
 }: {
   sched: VisitScheduleEntry;
-  staffId: string;
+  token: string;
   existingRecord: ExistingRecord | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
   // New comprehensive care record form — stores everything in care_record_data JSONB
-  const supabase = createAnonClient();
+  const base = apiBase(token);
+  const templatesUrl = `${base}/templates`;
   const [data, setData] = useState<CareRecordData>(() => {
     if (existingRecord?.care_record_data) return { ...emptyCareRecord(), ...existingRecord.care_record_data };
     // Legacy fallback: migrate from old columns
@@ -1284,38 +1231,37 @@ function CareRecordModal({
 
   const handleSave = async () => {
     setSaving(true);
-    const payload = {
-      user_id: sched.user_id,
-      visit_date: sched.visit_date,
-      staff_id: staffId,
-      service_type: sched.service_type,
-      start_time: sched.start_time,
-      end_time: sched.end_time,
-      schedule_id: sched.id,
-      care_record_data: data,
-      // Also write to legacy columns for backward compat
-      vital_temperature: data.vitals.temperature ? parseFloat(data.vitals.temperature) : null,
-      vital_bp_sys: data.vitals.bp_sys ? parseInt(data.vitals.bp_sys) : null,
-      vital_bp_dia: data.vitals.bp_dia ? parseInt(data.vitals.bp_dia) : null,
-      vital_pulse: data.vitals.pulse ? parseInt(data.vitals.pulse) : null,
-      vital_spo2: data.vitals.spo2 ? parseInt(data.vitals.spo2) : null,
-      vital_respiration: data.vitals.respiration ? parseInt(data.vitals.respiration) : null,
-      vital_blood_sugar: data.vitals.blood_sugar ? parseInt(data.vitals.blood_sugar) : null,
-      user_condition: data.user_condition || null,
-      handover_notes: data.handover.notes || null,
-      notes: data.notes || null,
-      progress_notes: data.progress_notes || null,
-      status: "draft",
-    };
-    let error;
-    if (existingRecord) {
-      ({ error } = await supabase.from("kaigo_visit_records").update(payload).eq("id", existingRecord.id));
-    } else {
-      ({ error } = await supabase.from("kaigo_visit_records").insert(payload));
+    try {
+      await apiSend("POST", `${base}/records`, {
+        id: existingRecord?.id,
+        user_id: sched.user_id,
+        visit_date: sched.visit_date,
+        service_type: sched.service_type,
+        start_time: sched.start_time,
+        end_time: sched.end_time,
+        schedule_id: sched.id,
+        care_record_data: data,
+        vital_temperature: data.vitals.temperature || null,
+        vital_bp_sys: data.vitals.bp_sys || null,
+        vital_bp_dia: data.vitals.bp_dia || null,
+        vital_pulse: data.vitals.pulse || null,
+        vital_spo2: data.vitals.spo2 || null,
+        vital_respiration: data.vitals.respiration || null,
+        vital_blood_sugar: data.vitals.blood_sugar || null,
+        user_condition: data.user_condition || null,
+        handover_notes: data.handover.notes || null,
+        notes: data.notes || null,
+        progress_notes: data.progress_notes || null,
+        status: "draft",
+      });
+      toast.success(existingRecord ? "記録を更新しました" : "記録を保存しました");
+      onSaved();
+      onClose();
+    } catch (err: unknown) {
+      toast.error("保存に失敗しました: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setSaving(false);
     }
-    if (error) { toast.error("保存に失敗しました: " + error.message); }
-    else { toast.success(existingRecord ? "記録を更新しました" : "記録を保存しました"); onSaved(); onClose(); }
-    setSaving(false);
   };
 
   const toggle = (id: string) => {
@@ -1332,6 +1278,7 @@ function CareRecordModal({
   };
 
   return (
+    <TemplatesUrlContext.Provider value={templatesUrl}>
     <div className="fixed inset-0 z-50 bg-white flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b bg-white shrink-0">
@@ -1794,13 +1741,14 @@ function CareRecordModal({
         <div className="h-8" />
       </div>
     </div>
+    </TemplatesUrlContext.Provider>
   );
 }
 
 // ─── My Shift Tab ────────────────────────────────────────────────────────────
 
-function MyShiftTab({ staffId }: { staffId: string }) {
-  const supabase = createAnonClient();
+function MyShiftTab({ token }: { token: string }) {
+  const base = apiBase(token);
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [schedules, setSchedules] = useState<VisitScheduleEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1814,19 +1762,15 @@ function MyShiftTab({ staffId }: { staffId: string }) {
 
   // Fetch which dates in a month have shifts (for calendar dots)
   const fetchShiftDates = useCallback(async (month: Date) => {
-    const from = format(startOfMonth(month), "yyyy-MM-dd");
-    const to = format(endOfMonth(month), "yyyy-MM-dd");
-    const { data } = await supabase
-      .from("kaigo_visit_schedule")
-      .select("visit_date")
-      .eq("staff_id", staffId)
-      .gte("visit_date", from)
-      .lte("visit_date", to)
-      .neq("status", "cancelled");
-    const dates = new Set<string>();
-    (data || []).forEach((r: { visit_date: string }) => dates.add(r.visit_date));
-    setShiftDates(dates);
-  }, [staffId, supabase]);
+    try {
+      const from = format(startOfMonth(month), "yyyy-MM-dd");
+      const to = format(endOfMonth(month), "yyyy-MM-dd");
+      const { dates } = await apiGet<{ dates: string[] }>(`${base}/schedule/dates?from=${from}&to=${to}`);
+      setShiftDates(new Set(dates));
+    } catch {
+      setShiftDates(new Set());
+    }
+  }, [base]);
 
   // When calendar opens or month changes, fetch shift dates
   useEffect(() => {
@@ -1836,39 +1780,30 @@ function MyShiftTab({ staffId }: { staffId: string }) {
   const fetchSchedules = useCallback(
     async (date: Date) => {
       setLoading(true);
-      const ds = format(date, "yyyy-MM-dd");
-      const { data, error } = await supabase
-        .from("kaigo_visit_schedule")
-        .select("id, user_id, visit_date, start_time, end_time, service_type, status, notes, clients(name)")
-        .eq("staff_id", staffId)
-        .eq("visit_date", ds)
-        .neq("status", "cancelled")
-        .order("start_time");
-      if (error) { setSchedules([]); }
-      else {
-        setSchedules((data || []).map((r: any) => ({
-          id: r.id, user_id: r.user_id, visit_date: r.visit_date,
-          start_time: r.start_time, end_time: r.end_time,
-          service_type: r.service_type, status: r.status, notes: r.notes,
-          user_name: r.clients?.name || "不明",
-        })));
+      try {
+        const ds = format(date, "yyyy-MM-dd");
+        const { schedules } = await apiGet<{ schedules: VisitScheduleEntry[] }>(`${base}/schedule?date=${ds}`);
+        setSchedules(schedules);
+      } catch {
+        setSchedules([]);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     },
-    [staffId, supabase]
+    [base]
   );
 
   const fetchRecords = useCallback(
     async (date: Date) => {
-      const ds = format(date, "yyyy-MM-dd");
-      const { data } = await supabase
-        .from("kaigo_visit_records")
-        .select("id, schedule_id, user_id, visit_date, start_time, end_time, body_care, living_support, vital_temperature, vital_bp_sys, vital_bp_dia, vital_pulse, vital_spo2, vital_respiration, vital_blood_sugar, user_condition, handover_notes, notes, progress_notes, care_record_data")
-        .eq("staff_id", staffId)
-        .eq("visit_date", ds);
-      setRecords((data || []) as ExistingRecord[]);
+      try {
+        const ds = format(date, "yyyy-MM-dd");
+        const { records } = await apiGet<{ records: ExistingRecord[] }>(`${base}/records?date=${ds}`);
+        setRecords(records);
+      } catch {
+        setRecords([]);
+      }
     },
-    [staffId, supabase]
+    [base]
   );
 
   const refreshRecords = () => fetchRecords(currentDate);
@@ -1891,7 +1826,7 @@ function MyShiftTab({ staffId }: { staffId: string }) {
   // 入退室記録の取得（care_record_dataから）
   const getEntryExit = (sched: VisitScheduleEntry) => {
     const rec = getRecordForSchedule(sched);
-    const crd = (rec as any)?.care_record_data;  // eslint-disable-line @typescript-eslint/no-explicit-any
+    const crd = rec?.care_record_data;
     return { entry: crd?.entry ?? null, exit: crd?.exit ?? null, recordId: rec?.id ?? null };
   };
 
@@ -1916,29 +1851,23 @@ function MyShiftTab({ staffId }: { staffId: string }) {
       const entryData = { time: now, lat: pos.lat, lng: pos.lng, accuracy: Math.round(pos.accuracy) };
 
       const existing = getRecordForSchedule(sched);
-      if (existing) {
-        // 既存レコードを更新
-        const crd = (existing as any).care_record_data || emptyCareRecord();  // eslint-disable-line @typescript-eslint/no-explicit-any
-        crd.entry = entryData;
-        await supabase.from("kaigo_visit_records").update({
-          care_record_data: crd,
-          start_time: format(new Date(), "HH:mm:ss"),
-        }).eq("id", existing.id);
-      } else {
-        // 新規レコード作成
-        const crd = emptyCareRecord();
-        crd.entry = entryData;
-        await supabase.from("kaigo_visit_records").insert({
-          user_id: sched.user_id, visit_date: sched.visit_date, staff_id: staffId,
-          service_type: sched.service_type, schedule_id: sched.id,
-          start_time: format(new Date(), "HH:mm:ss"), end_time: sched.end_time,
-          care_record_data: crd, status: "draft",
-        });
-      }
+      const crd = (existing?.care_record_data ?? emptyCareRecord()) as CareRecordData;
+      crd.entry = entryData;
+      await apiSend("POST", `${base}/records`, {
+        id: existing?.id,
+        user_id: sched.user_id,
+        visit_date: sched.visit_date,
+        service_type: sched.service_type,
+        schedule_id: sched.id,
+        start_time: format(new Date(), "HH:mm:ss"),
+        end_time: existing ? undefined : sched.end_time,
+        care_record_data: crd,
+        status: "draft",
+      });
       toast.success("入室を記録しました");
       refreshRecords();
-    } catch (err: any) {  // eslint-disable-line @typescript-eslint/no-explicit-any
-      toast.error(err.message || "入室記録に失敗しました");
+    } catch (err: unknown) {
+      toast.error((err instanceof Error ? err.message : String(err)) || "入室記録に失敗しました");
     }
   };
 
@@ -1951,27 +1880,23 @@ function MyShiftTab({ staffId }: { staffId: string }) {
       const exitData = { time: now, lat: pos.lat, lng: pos.lng, accuracy: Math.round(pos.accuracy) };
 
       const existing = getRecordForSchedule(sched);
-      if (existing) {
-        const crd = (existing as any).care_record_data || emptyCareRecord();  // eslint-disable-line @typescript-eslint/no-explicit-any
-        crd.exit = exitData;
-        await supabase.from("kaigo_visit_records").update({
-          care_record_data: crd,
-          end_time: format(new Date(), "HH:mm:ss"),
-        }).eq("id", existing.id);
-      } else {
-        const crd = emptyCareRecord();
-        crd.exit = exitData;
-        await supabase.from("kaigo_visit_records").insert({
-          user_id: sched.user_id, visit_date: sched.visit_date, staff_id: staffId,
-          service_type: sched.service_type, schedule_id: sched.id,
-          start_time: sched.start_time, end_time: format(new Date(), "HH:mm:ss"),
-          care_record_data: crd, status: "draft",
-        });
-      }
+      const crd = (existing?.care_record_data ?? emptyCareRecord()) as CareRecordData;
+      crd.exit = exitData;
+      await apiSend("POST", `${base}/records`, {
+        id: existing?.id,
+        user_id: sched.user_id,
+        visit_date: sched.visit_date,
+        service_type: sched.service_type,
+        schedule_id: sched.id,
+        start_time: existing ? undefined : sched.start_time,
+        end_time: format(new Date(), "HH:mm:ss"),
+        care_record_data: crd,
+        status: "draft",
+      });
       toast.success("退室を記録しました");
       refreshRecords();
-    } catch (err: any) {  // eslint-disable-line @typescript-eslint/no-explicit-any
-      toast.error(err.message || "退室記録に失敗しました");
+    } catch (err: unknown) {
+      toast.error((err instanceof Error ? err.message : String(err)) || "退室記録に失敗しました");
     }
   };
 
@@ -2185,7 +2110,7 @@ function MyShiftTab({ staffId }: { staffId: string }) {
       {recordFormTarget && (
         <CareRecordModal
           sched={recordFormTarget}
-          staffId={staffId}
+          token={token}
           existingRecord={getRecordForSchedule(recordFormTarget)}
           onClose={() => setRecordFormTarget(null)}
           onSaved={refreshRecords}
@@ -2213,7 +2138,6 @@ export default function StaffAvailabilityPage({
   params: Promise<Params>;
 }) {
   const { token } = use(params);
-  const supabase = createAnonClient();
   const [staff, setStaff] = useState<StaffInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [invalid, setInvalid] = useState(false);
@@ -2222,35 +2146,18 @@ export default function StaffAvailabilityPage({
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const { data: tokenData, error: tokenError } = await supabase
-        .from("kaigo_staff_tokens")
-        .select("staff_id, token")
-        .eq("token", token)
-        .single();
-
-      if (tokenError || !tokenData) {
+      try {
+        const meta = await apiGet<{ staff_id: string; name: string; name_kana: string | null }>(
+          apiBase(token)
+        );
+        setStaff({ id: meta.staff_id, name: meta.name, name_kana: meta.name_kana ?? "" });
+      } catch {
         setInvalid(true);
+      } finally {
         setLoading(false);
-        return;
       }
-
-      const { data: staffData, error: staffError } = await supabase
-        .from("members")
-        .select("id, name, name_kana")
-        .eq("id", tokenData.staff_id)
-        .single();
-
-      if (staffError || !staffData) {
-        setInvalid(true);
-        setLoading(false);
-        return;
-      }
-
-      setStaff(staffData as StaffInfo);
-      setLoading(false);
     };
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   if (loading) {
@@ -2327,9 +2234,9 @@ export default function StaffAvailabilityPage({
 
       {/* Content */}
       <main className="flex-1 px-4 py-4 max-w-lg mx-auto w-full">
-        {activeTab === "shift" && <MyShiftTab staffId={staff.id} />}
-        {activeTab === "base" && <BaseSettingsTab staffId={staff.id} />}
-        {activeTab === "monthly" && <MonthlySettingsTab staffId={staff.id} />}
+        {activeTab === "shift" && <MyShiftTab token={token} />}
+        {activeTab === "base" && <BaseSettingsTab token={token} />}
+        {activeTab === "monthly" && <MonthlySettingsTab token={token} />}
       </main>
     </div>
   );
