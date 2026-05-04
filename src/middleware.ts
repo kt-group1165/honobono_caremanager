@@ -34,7 +34,8 @@ export async function middleware(request: NextRequest) {
     !request.nextUrl.pathname.startsWith("/login") &&
     !request.nextUrl.pathname.startsWith("/staff-availability") &&
     !request.nextUrl.pathname.startsWith("/emergency") &&
-    !request.nextUrl.pathname.startsWith("/support")
+    !request.nextUrl.pathname.startsWith("/support") &&
+    !request.nextUrl.pathname.startsWith("/api/emergency")
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

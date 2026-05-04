@@ -183,7 +183,22 @@ export default function EmergencySheetsPage() {
   const createUrl = async () => {
     if (!newUrlName.trim()) { toast.error("名前を入力してください"); return; }
     setUrlLoading(true);
-    const { error } = await supabase.from("kaigo_emergency_tokens").insert({ name: newUrlName.trim() });
+    // kaigo_emergency_tokens は親無し表のため tenant_id を明示指定する必要がある。
+    // auth_visible_tenant_ids() の最初の 1 件を採用（kt-group 単独 tenant 運用）。
+    const { data: visible } = await supabase.rpc("auth_visible_tenant_ids");
+    type TenantRow = { auth_visible_tenant_ids?: string } | string;
+    const rows = (visible ?? []) as TenantRow[];
+    const tenantId = rows
+      .map((r) => (typeof r === "string" ? r : r.auth_visible_tenant_ids ?? ""))
+      .filter(Boolean)[0];
+    if (!tenantId) {
+      toast.error("発行に失敗: 所属 tenant が解決できません（管理者投入を確認してください）");
+      setUrlLoading(false);
+      return;
+    }
+    const { error } = await supabase
+      .from("kaigo_emergency_tokens")
+      .insert({ name: newUrlName.trim(), tenant_id: tenantId });
     if (error) toast.error("発行に失敗: " + error.message);
     else { toast.success("URLを発行しました"); setNewUrlName("災害時用"); fetchUrls(); }
     setUrlLoading(false);

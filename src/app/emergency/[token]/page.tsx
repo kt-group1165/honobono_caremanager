@@ -1,8 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { createBrowserClient } from "@supabase/ssr";
-import { toast } from "sonner";
+import { useState, useEffect, useCallback, use } from "react";
 import {
   ChevronLeft,
   AlertTriangle,
@@ -15,14 +13,11 @@ import {
   Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { use } from "react";
 
-function createAnonClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-}
+// /emergency/[token] : 災害時の安否確認モバイル画面（未認証アクセス可）。
+//
+// データアクセスは全て /api/emergency/[token]/* 経由（service_role）。
+// 直接 Supabase を叩く実装からの書換（Phase 2-6a）。
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,7 +30,6 @@ interface UserWithStatus {
   id: string;
   name: string;
   name_kana: string;
-  care_manager_name: string | null;
   safety_status: string;
   service_status: string;
 }
@@ -47,7 +41,7 @@ interface SheetData {
   gender: string | null;
   address: string | null;
   phone: string | null;
-  sheet: Record<string, string> | null;
+  sheet: Record<string, unknown> | null;
 }
 
 const STATUS_OPTIONS = ["", "◯", "△", "×"];
@@ -58,16 +52,13 @@ const STATUS_COLORS: Record<string, string> = {
   "": "bg-gray-50 text-gray-400 border-gray-200",
 };
 
-// ─── Main Page ───────────────────────────────────────────────────────────────
-
 type Params = { token: string };
 
 export default function EmergencyMobilePage({ params }: { params: Promise<Params> }) {
   const { token } = use(params);
-  const supabase = createAnonClient();
+  const apiBase = `/api/emergency/${encodeURIComponent(token)}`;
 
   const [valid, setValid] = useState<boolean | null>(null);
-  const [tokenId, setTokenId] = useState<string | null>(null);
   const [tokenName, setTokenName] = useState("");
 
   // Screens: "managers" → "users" → "sheet"
@@ -79,223 +70,93 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
   const [sheetData, setSheetData] = useState<SheetData | null>(null);
   const [loadingSheet, setLoadingSheet] = useState(false);
 
-  // Validate token
+  // Validate token + fetch managers in one effect after token check
   useEffect(() => {
-    const validate = async () => {
-      const { data } = await supabase
-        .from("kaigo_emergency_tokens")
-        .select("id, name")
-        .eq("token", token)
-        .single();
-      if (data) {
-        setValid(true);
-        setTokenId(data.id);
-        setTokenName(data.name);
-      } else {
+    let cancelled = false;
+    (async () => {
+      const res = await fetch(apiBase, { cache: "no-store" });
+      if (cancelled) return;
+      if (!res.ok) {
         setValid(false);
+        return;
       }
-    };
-    validate();
-  }, [token, supabase]);
+      const data = (await res.json()) as { name: string };
+      setValid(true);
+      setTokenName(data.name);
 
-  // Fetch care managers (distinct from kaigo_users.care_manager_name or staff)
-  useEffect(() => {
-    if (!valid) return;
-    const fetch = async () => {
-      // Get staff as care managers
-      const { data } = await supabase
-        .from("members")
-        .select("id, name")
-        .eq("status", "active")
-        .order("name");
-      setManagers(data || []);
+      const mgrRes = await fetch(`${apiBase}/managers`, { cache: "no-store" });
+      if (cancelled) return;
+      if (mgrRes.ok) {
+        const mgrJson = (await mgrRes.json()) as { managers: CareManager[] };
+        setManagers(mgrJson.managers ?? []);
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
-    fetch();
-  }, [valid, supabase]);
+  }, [apiBase]);
 
   // Fetch users for selected manager
   const fetchUsers = useCallback(async (managerId: string) => {
     setLoadingUsers(true);
-    // 選択したケアマネが担当している利用者のみ取得
-    const { data: usersData } = await supabase
-      .from("clients")
-      .select("id, name, name_kana:furigana, care_manager_staff_id")
-      .eq("status", "active")
-      .eq("is_facility", false)
-      .eq("care_manager_staff_id", managerId)
-      .order("furigana");
-
-    // Get existing statuses
-    const { data: statusData } = await supabase
-      .from("kaigo_emergency_status")
-      .select("user_id, safety_status, service_status")
-      .eq("token_id", tokenId);
-
-    const statusMap = new Map<string, { safety: string; service: string }>();
-    (statusData || []).forEach((s: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-      statusMap.set(s.user_id, { safety: s.safety_status || "", service: s.service_status || "" });
-    });
-
-    const merged: UserWithStatus[] = (usersData || []).map((u: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-      id: u.id,
-      name: u.name,
-      name_kana: u.name_kana,
-      care_manager_name: null,
-      safety_status: statusMap.get(u.id)?.safety ?? "",
-      service_status: statusMap.get(u.id)?.service ?? "",
-    }));
-
-    setUsers(merged);
-    setLoadingUsers(false);
-  }, [supabase, tokenId]);
-
-  // Update status
-  const updateStatus = async (userId: string, field: "safety_status" | "service_status", value: string) => {
-    // Optimistic update
-    setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, [field === "safety_status" ? "safety_status" : "service_status"]: value } : u));
-
-    const { data: existing } = await supabase
-      .from("kaigo_emergency_status")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("token_id", tokenId)
-      .single();
-
-    if (existing) {
-      await supabase.from("kaigo_emergency_status").update({ [field]: value, updated_at: new Date().toISOString() }).eq("id", existing.id);
-    } else {
-      await supabase.from("kaigo_emergency_status").insert({
-        user_id: userId, token_id: tokenId, [field]: value,
-      });
+    try {
+      const res = await fetch(
+        `${apiBase}/users?manager=${encodeURIComponent(managerId)}`,
+        { cache: "no-store" }
+      );
+      if (res.ok) {
+        const json = (await res.json()) as { users: UserWithStatus[] };
+        setUsers(json.users ?? []);
+      } else {
+        setUsers([]);
+      }
+    } finally {
+      setLoadingUsers(false);
     }
+  }, [apiBase]);
+
+  // Update status (optimistic + server PATCH)
+  const updateStatus = async (
+    userId: string,
+    field: "safety_status" | "service_status",
+    value: string
+  ) => {
+    setUsers((prev) =>
+      prev.map((u) => (u.id === userId ? { ...u, [field]: value } : u))
+    );
+    await fetch(`${apiBase}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId, field, value }),
+    });
   };
 
-  // Fetch sheet（保存済みに加えて、既往歴・家族情報から自動反映）
+  // Fetch sheet（merge は API 側で実施）
   const openSheet = async (userId: string) => {
     setLoadingSheet(true);
-    const [{ data: userData }, { data: sheetRow }, { data: historyData }, { data: familyData }] = await Promise.all([
-      supabase.from("clients").select("name, name_kana:furigana, birth_date, gender, address, phone").eq("id", userId).single(),
-      supabase.from("kaigo_emergency_sheets").select("*").eq("user_id", userId).single(),
-      supabase.from("kaigo_medical_history").select("disease_name, status, hospital, doctor").eq("user_id", userId).order("created_at", { ascending: false }),
-      supabase.from("kaigo_assessments").select("form_data").eq("user_id", userId).order("created_at", { ascending: false }).limit(1).single(),
-    ]);
-
-    // 保存済みシートをベースに、空欄のみ既往歴・家族情報から補完
-    const merged: Record<string, any> = { ...(sheetRow || {}) }; // eslint-disable-line @typescript-eslint/no-explicit-any
-
-    // 電話番号
-    if (userData?.phone && !merged.home_phone) merged.home_phone = userData.phone;
-
-    // 既往歴から主治医
-    if (historyData && historyData.length > 0) {
-      // 医師または医療機関が記載されているレコードを優先（ステータス不問）
-      const withDoctor = historyData.filter((h: any) => h.doctor || h.hospital); // eslint-disable-line @typescript-eslint/no-explicit-any
-      if (withDoctor.length > 0 && !merged.doctor_name && !merged.doctor_hospital) {
-        merged.doctor_name = withDoctor[0].doctor || "";
-        merged.doctor_hospital = withDoctor[0].hospital || "";
+    try {
+      const res = await fetch(
+        `${apiBase}/sheet?user=${encodeURIComponent(userId)}`,
+        { cache: "no-store" }
+      );
+      if (res.ok) {
+        const json = (await res.json()) as SheetData;
+        setSheetData(json);
+        setScreen("sheet");
       }
-      if (withDoctor.length > 1 && !merged.doctor2_name && !merged.doctor2_hospital) {
-        merged.doctor2_name = withDoctor[1].doctor || "";
-        merged.doctor2_hospital = withDoctor[1].hospital || "";
-      }
-      if (!merged.current_disease_notes) {
-        merged.current_disease_notes = historyData.map((h: any) => // eslint-disable-line @typescript-eslint/no-explicit-any
-          `${h.disease_name}${h.status ? ` (${h.status})` : ""}${h.hospital ? ` - ${h.hospital}` : ""}`
-        ).join("\n");
-      }
+    } finally {
+      setLoadingSheet(false);
     }
-
-    // アセスメントの家族情報から緊急連絡先
-    if (familyData?.form_data) {
-      const fd = familyData.form_data as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-      const members = fd?.tab2?.family_members || [];
-      let idx = 0;
-      for (const m of members) {
-        if (!m.name || idx >= 5) break;
-        const k = String(idx + 1);
-        if (!merged[`emergency_contact${k}_name`]) {
-          merged[`emergency_contact${k}_name`] = m.name || "";
-          merged[`emergency_contact${k}_relation`] = m.relationship || m.relationship_detail || "";
-          merged[`emergency_contact${k}_phone`] = m.phone || "";
-          merged[`emergency_contact${k}_address`] = m.address || "";
-        }
-        idx++;
-      }
-    }
-
-    // 第2表から利用中サービスを取得して services_in_use を完全上書き
-    {
-      const collected: { service_type: string; provider_name: string; phone: string; schedule: string }[] = [];
-      const addSvc = (svc: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-        if (!svc) return;
-        if (!(svc.type || svc.provider)) return;
-        const dup = collected.find((c) => c.service_type === (svc.type || "") && c.provider_name === (svc.provider || ""));
-        if (!dup) {
-          collected.push({
-            service_type: svc.type || "",
-            provider_name: svc.provider || "",
-            phone: "",
-            schedule: svc.frequency || "",
-          });
-        }
-      };
-
-      const { data: reportDocs } = await supabase
-        .from("kaigo_report_documents")
-        .select("content, updated_at")
-        .eq("user_id", userId)
-        .eq("report_type", "care-plan-2")
-        .order("updated_at", { ascending: false })
-        .limit(1);
-      for (const doc of (reportDocs || [])) {
-        const content = doc.content as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-        const blockArr = Array.isArray(content?.needs_blocks) ? content.needs_blocks
-          : Array.isArray(content?.blocks) ? content.blocks
-          : null;
-        if (blockArr) {
-          for (const block of blockArr) {
-            for (const goal of (block.goals || [])) {
-              for (const svc of (goal.services || [])) addSvc(svc);
-            }
-          }
-        } else if (Array.isArray(content?.services)) {
-          for (const svc of content.services) addSvc(svc);
-        }
-      }
-
-      if (collected.length > 0) {
-        const names = collected.map((c) => c.provider_name).filter(Boolean);
-        if (names.length > 0) {
-          const { data: provRows } = await supabase
-            .from("kaigo_service_providers")
-            .select("provider_name, phone")
-            .in("provider_name", names);
-          const phoneMap = new Map<string, string>();
-          (provRows || []).forEach((p: any) => phoneMap.set(p.provider_name, p.phone || "")); // eslint-disable-line @typescript-eslint/no-explicit-any
-          collected.forEach((c) => { if (!c.phone && phoneMap.has(c.provider_name)) c.phone = phoneMap.get(c.provider_name)!; });
-        }
-      }
-      // 第2表の内容で完全置換（空なら空）
-      merged.services_in_use = collected;
-    }
-
-    setSheetData({
-      user_name: userData?.name ?? "",
-      user_kana: userData?.name_kana ?? "",
-      birth_date: userData?.birth_date,
-      gender: userData?.gender,
-      address: userData?.address,
-      phone: userData?.phone,
-      sheet: merged as Record<string, string>,
-    });
-    setScreen("sheet");
-    setLoadingSheet(false);
   };
 
   // ─── Loading / Invalid ──────────────────────────────────────────────────────
 
   if (valid === null) {
-    return <div className="flex min-h-screen items-center justify-center"><Loader2 size={28} className="animate-spin text-blue-500" /></div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 size={28} className="animate-spin text-blue-500" />
+      </div>
+    );
   }
   if (!valid) {
     return (
@@ -312,12 +173,20 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
   // ─── Sheet View ─────────────────────────────────────────────────────────────
 
   if (screen === "sheet" && sheetData) {
-    const s = sheetData.sheet || {} as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
-    const svcs = (s.services_in_use || []) as { service_type: string; provider_name: string; phone: string; schedule: string }[];
-    const devs = (s.medical_devices || []) as { item: string; provider: string; phone: string; notes: string }[];
+    const s = (sheetData.sheet ?? {}) as Record<string, string | undefined> & {
+      services_in_use?: { service_type: string; provider_name: string; phone: string; schedule: string }[];
+      medical_devices?: { item: string; provider: string; phone: string; notes: string }[];
+    };
+    const svcs = s.services_in_use ?? [];
+    const devs = s.medical_devices ?? [];
     const Row = ({ label, value }: { label: string; value: string | null | undefined }) => {
       if (!value) return null;
-      return <div className="flex py-1.5 border-b border-gray-100"><span className="text-gray-500 w-24 shrink-0 text-xs">{label}</span><span className="text-sm font-medium">{value}</span></div>;
+      return (
+        <div className="flex py-1.5 border-b border-gray-100">
+          <span className="text-gray-500 w-24 shrink-0 text-xs">{label}</span>
+          <span className="text-sm font-medium">{value}</span>
+        </div>
+      );
     };
     const SectionTitle = ({ children, color }: { children: React.ReactNode; color: string }) => (
       <h3 className={`text-sm font-bold px-3 py-2 rounded-lg mt-4 mb-2 ${color}`}>{children}</h3>
@@ -325,9 +194,14 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
 
     return (
       <div className="min-h-screen bg-gray-50">
-        {/* Header */}
         <div className="sticky top-0 z-10 flex items-center gap-3 bg-white border-b px-4 py-3 shadow-sm">
-          <button onClick={() => { setScreen("users"); setSheetData(null); }} className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-100 active:bg-gray-200">
+          <button
+            onClick={() => {
+              setScreen("users");
+              setSheetData(null);
+            }}
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-100 active:bg-gray-200"
+          >
             <ChevronLeft size={20} />
           </button>
           <div>
@@ -337,7 +211,6 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
         </div>
 
         <div className="p-4 max-w-lg mx-auto">
-          {/* 基本情報 */}
           <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4 mb-4">
             <h2 className="text-base font-bold text-red-800 flex items-center gap-2 mb-2">
               <AlertTriangle size={16} />居宅緊急時シート
@@ -354,48 +227,75 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
             <Row label="アレルギー" value={s.allergies} />
           </div>
 
-          {/* ADL */}
           {s.adl_summary && (
-            <><SectionTitle color="bg-green-50 text-green-800"><User size={14} className="inline mr-1" />ADL（簡潔に）</SectionTitle>
-            <div className="bg-white rounded-xl border p-3"><p className="text-sm whitespace-pre-wrap">{s.adl_summary}</p></div></>
+            <>
+              <SectionTitle color="bg-green-50 text-green-800">
+                <User size={14} className="inline mr-1" />ADL（簡潔に）
+              </SectionTitle>
+              <div className="bg-white rounded-xl border p-3">
+                <p className="text-sm whitespace-pre-wrap">{s.adl_summary}</p>
+              </div>
+            </>
           )}
 
-          {/* 現病と注意点 */}
           {s.current_disease_notes && (
-            <><SectionTitle color="bg-purple-50 text-purple-800"><Heart size={14} className="inline mr-1" />現病と注意点</SectionTitle>
-            <div className="bg-white rounded-xl border p-3"><p className="text-sm whitespace-pre-wrap">{s.current_disease_notes}</p></div></>
+            <>
+              <SectionTitle color="bg-purple-50 text-purple-800">
+                <Heart size={14} className="inline mr-1" />現病と注意点
+              </SectionTitle>
+              <div className="bg-white rounded-xl border p-3">
+                <p className="text-sm whitespace-pre-wrap">{s.current_disease_notes}</p>
+              </div>
+            </>
           )}
 
-          {/* 内服薬 */}
           {s.oral_medications && (
-            <><SectionTitle color="bg-yellow-50 text-yellow-800"><Pill size={14} className="inline mr-1" />内服薬</SectionTitle>
-            <div className="bg-white rounded-xl border p-3"><p className="text-sm whitespace-pre-wrap">{s.oral_medications}</p></div></>
+            <>
+              <SectionTitle color="bg-yellow-50 text-yellow-800">
+                <Pill size={14} className="inline mr-1" />内服薬
+              </SectionTitle>
+              <div className="bg-white rounded-xl border p-3">
+                <p className="text-sm whitespace-pre-wrap">{s.oral_medications}</p>
+              </div>
+            </>
           )}
 
-          {/* 特別な状況 */}
           {s.special_situation && (
-            <><SectionTitle color="bg-blue-50 text-blue-800">特別な状況</SectionTitle>
-            <div className="bg-white rounded-xl border p-3"><p className="text-sm whitespace-pre-wrap">{s.special_situation}</p></div></>
+            <>
+              <SectionTitle color="bg-blue-50 text-blue-800">特別な状況</SectionTitle>
+              <div className="bg-white rounded-xl border p-3">
+                <p className="text-sm whitespace-pre-wrap">{s.special_situation}</p>
+              </div>
+            </>
           )}
 
-          {/* 急変時の対応 */}
           {s.sudden_change_response && (
-            <><SectionTitle color="bg-red-50 text-red-800"><AlertTriangle size={14} className="inline mr-1" />急変時の対応</SectionTitle>
-            <div className="bg-white rounded-xl border p-3"><p className="text-sm whitespace-pre-wrap">{s.sudden_change_response}</p></div></>
+            <>
+              <SectionTitle color="bg-red-50 text-red-800">
+                <AlertTriangle size={14} className="inline mr-1" />急変時の対応
+              </SectionTitle>
+              <div className="bg-white rounded-xl border p-3">
+                <p className="text-sm whitespace-pre-wrap">{s.sudden_change_response}</p>
+              </div>
+            </>
           )}
 
-          {/* 避難場所 */}
           {(s.evacuation_place_name || s.evacuation_place_address) && (
-            <><SectionTitle color="bg-orange-50 text-orange-800">避難場所</SectionTitle>
-            <div className="bg-white rounded-xl border p-3">
-              <Row label="名称" value={s.evacuation_place_name} />
-              <Row label="住所" value={s.evacuation_place_address} />
-              {s.evacuation_notes && <p className="text-xs text-gray-500 mt-2 whitespace-pre-wrap">{s.evacuation_notes}</p>}
-            </div></>
+            <>
+              <SectionTitle color="bg-orange-50 text-orange-800">避難場所</SectionTitle>
+              <div className="bg-white rounded-xl border p-3">
+                <Row label="名称" value={s.evacuation_place_name} />
+                <Row label="住所" value={s.evacuation_place_address} />
+                {s.evacuation_notes && (
+                  <p className="text-xs text-gray-500 mt-2 whitespace-pre-wrap">{s.evacuation_notes}</p>
+                )}
+              </div>
+            </>
           )}
 
-          {/* 緊急連絡先（5件まで） */}
-          <SectionTitle color="bg-orange-50 text-orange-800"><Phone size={14} className="inline mr-1" />緊急連絡先</SectionTitle>
+          <SectionTitle color="bg-orange-50 text-orange-800">
+            <Phone size={14} className="inline mr-1" />緊急連絡先
+          </SectionTitle>
           <div className="bg-white rounded-xl border p-3 space-y-0">
             {[1, 2, 3, 4, 5].map((n) => {
               const name = s[`emergency_contact${n}_name`];
@@ -412,49 +312,64 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
             })}
           </div>
 
-          {/* 主治医 */}
-          <SectionTitle color="bg-blue-50 text-blue-800"><Hospital size={14} className="inline mr-1" />主治医</SectionTitle>
+          <SectionTitle color="bg-blue-50 text-blue-800">
+            <Hospital size={14} className="inline mr-1" />主治医
+          </SectionTitle>
           <div className="bg-white rounded-xl border p-3">
             <Row label="医療機関" value={s.doctor_hospital} />
             <Row label="氏名" value={s.doctor_name} />
             <Row label="連絡先" value={s.doctor_phone} />
-            {s.doctor2_name && <><hr className="my-2" /><Row label="医療機関②" value={s.doctor2_hospital} /><Row label="氏名" value={s.doctor2_name} /><Row label="連絡先" value={s.doctor2_phone} /></>}
+            {s.doctor2_name && (
+              <>
+                <hr className="my-2" />
+                <Row label="医療機関②" value={s.doctor2_hospital} />
+                <Row label="氏名" value={s.doctor2_name} />
+                <Row label="連絡先" value={s.doctor2_phone} />
+              </>
+            )}
           </div>
 
-          {/* 利用中サービス */}
           {svcs.length > 0 && (
-            <><SectionTitle color="bg-green-50 text-green-800">利用中サービス</SectionTitle>
-            <div className="bg-white rounded-xl border divide-y">
-              {svcs.map((svc, i) => (
-                <div key={i} className="p-3 text-sm">
-                  <div className="font-medium">{svc.service_type}</div>
-                  <div className="text-gray-600">{svc.provider_name}</div>
-                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                    <span>{svc.phone}</span><span>{svc.schedule}</span>
+            <>
+              <SectionTitle color="bg-green-50 text-green-800">利用中サービス</SectionTitle>
+              <div className="bg-white rounded-xl border divide-y">
+                {svcs.map((svc, i) => (
+                  <div key={i} className="p-3 text-sm">
+                    <div className="font-medium">{svc.service_type}</div>
+                    <div className="text-gray-600">{svc.provider_name}</div>
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>{svc.phone}</span>
+                      <span>{svc.schedule}</span>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div></>
+                ))}
+              </div>
+            </>
           )}
 
-          {/* 電動医療・介護機器 */}
           {devs.length > 0 && (
-            <><SectionTitle color="bg-yellow-50 text-yellow-800">充電式を含む電動の医療・介護機器</SectionTitle>
-            <div className="bg-white rounded-xl border divide-y">
-              {devs.map((dev, i) => (
-                <div key={i} className="p-3 text-sm">
-                  <div className="font-medium">{dev.item}</div>
-                  <div className="text-gray-600">{dev.provider}</div>
-                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                    <span>{dev.phone}</span>{dev.notes && <span>{dev.notes}</span>}
+            <>
+              <SectionTitle color="bg-yellow-50 text-yellow-800">
+                充電式を含む電動の医療・介護機器
+              </SectionTitle>
+              <div className="bg-white rounded-xl border divide-y">
+                {devs.map((dev, i) => (
+                  <div key={i} className="p-3 text-sm">
+                    <div className="font-medium">{dev.item}</div>
+                    <div className="text-gray-600">{dev.provider}</div>
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>{dev.phone}</span>
+                      {dev.notes && <span>{dev.notes}</span>}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div></>
+                ))}
+              </div>
+            </>
           )}
 
-          {/* 担当ケアマネ */}
-          <SectionTitle color="bg-gray-100 text-gray-800"><Shield size={14} className="inline mr-1" />担当ケアマネジャー</SectionTitle>
+          <SectionTitle color="bg-gray-100 text-gray-800">
+            <Shield size={14} className="inline mr-1" />担当ケアマネジャー
+          </SectionTitle>
           <div className="bg-white rounded-xl border p-3">
             <Row label="事業所" value={s.care_manager_office} />
             <Row label="氏名" value={s.care_manager_name} />
@@ -473,7 +388,13 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="sticky top-0 z-10 flex items-center gap-3 bg-white border-b px-4 py-3 shadow-sm">
-          <button onClick={() => { setScreen("managers"); setSelectedManager(null); }} className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-100 active:bg-gray-200">
+          <button
+            onClick={() => {
+              setScreen("managers");
+              setSelectedManager(null);
+            }}
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-100 active:bg-gray-200"
+          >
             <ChevronLeft size={20} />
           </button>
           <div>
@@ -483,10 +404,11 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
         </div>
 
         {loadingUsers ? (
-          <div className="flex h-40 items-center justify-center"><Loader2 size={24} className="animate-spin text-blue-500" /></div>
+          <div className="flex h-40 items-center justify-center">
+            <Loader2 size={24} className="animate-spin text-blue-500" />
+          </div>
         ) : (
           <div className="p-4">
-            {/* ヘッダー */}
             <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-t-xl text-xs font-bold text-gray-600">
               <span className="flex-1">利用者名</span>
               <span className="w-16 text-center">安否確認</span>
@@ -496,7 +418,6 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
             <div className="bg-white rounded-b-xl border divide-y divide-gray-100">
               {users.map((u) => (
                 <div key={u.id} className="flex items-center gap-2 px-3 py-2.5">
-                  {/* 名前（タップでシート表示） */}
                   <button
                     onClick={() => openSheet(u.id)}
                     className="flex-1 text-left text-sm font-medium text-blue-700 active:text-blue-900"
@@ -506,25 +427,33 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
                     <span className="block text-[10px] text-gray-400">{u.name_kana}</span>
                   </button>
 
-                  {/* 安否確認 */}
                   <div className="w-16">
                     <select
                       value={u.safety_status}
                       onChange={(e) => updateStatus(u.id, "safety_status", e.target.value)}
-                      className={cn("w-full text-center text-sm font-bold rounded-lg border py-1.5 appearance-none cursor-pointer", STATUS_COLORS[u.safety_status] || STATUS_COLORS[""])}
+                      className={cn(
+                        "w-full text-center text-sm font-bold rounded-lg border py-1.5 appearance-none cursor-pointer",
+                        STATUS_COLORS[u.safety_status] || STATUS_COLORS[""]
+                      )}
                     >
-                      {STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o || "—"}</option>)}
+                      {STATUS_OPTIONS.map((o) => (
+                        <option key={o} value={o}>{o || "—"}</option>
+                      ))}
                     </select>
                   </div>
 
-                  {/* サービス調整 */}
                   <div className="w-16">
                     <select
                       value={u.service_status}
                       onChange={(e) => updateStatus(u.id, "service_status", e.target.value)}
-                      className={cn("w-full text-center text-sm font-bold rounded-lg border py-1.5 appearance-none cursor-pointer", STATUS_COLORS[u.service_status] || STATUS_COLORS[""])}
+                      className={cn(
+                        "w-full text-center text-sm font-bold rounded-lg border py-1.5 appearance-none cursor-pointer",
+                        STATUS_COLORS[u.service_status] || STATUS_COLORS[""]
+                      )}
                     >
-                      {STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o || "—"}</option>)}
+                      {STATUS_OPTIONS.map((o) => (
+                        <option key={o} value={o}>{o || "—"}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
