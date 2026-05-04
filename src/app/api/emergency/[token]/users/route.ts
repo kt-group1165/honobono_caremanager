@@ -27,11 +27,11 @@ export async function GET(
   const [{ data: clientsData, error: clientsErr }, { data: statusData, error: statusErr }] = await Promise.all([
     admin
       .from("clients")
-      .select("id, name, name_kana:furigana, care_manager_staff_id")
+      .select("id, name, name_kana:furigana, care_manager_id")
       .eq("status", "active")
       .eq("is_facility", false)
       .eq("tenant_id", ctx.tenant_id)
-      .eq("care_manager_staff_id", managerId)
+      .eq("care_manager_id", managerId)
       .order("furigana"),
     admin
       .from("kaigo_emergency_status")
