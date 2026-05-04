@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { resolvePreferredTenantId } from "@/lib/tenant-resolver";
 import { toast } from "sonner";
 import { UserSidebar } from "@/components/users/user-sidebar";
 import {
@@ -201,7 +202,15 @@ export default function SupportRecordsPage() {
   const createUrl = async () => {
     if (!newUrlName.trim()) { toast.error("名前を入力してください"); return; }
     setUrlLoading(true);
-    const { error } = await supabase.from("kaigo_support_tokens").insert({ name: newUrlName.trim() });
+    const resolved = await resolvePreferredTenantId(supabase);
+    if (!resolved.ok) {
+      toast.error("発行に失敗: " + resolved.error);
+      setUrlLoading(false);
+      return;
+    }
+    const { error } = await supabase
+      .from("kaigo_support_tokens")
+      .insert({ name: newUrlName.trim(), tenant_id: resolved.tenantId });
     if (error) toast.error("発行に失敗: " + error.message);
     else { toast.success("URLを発行しました"); setNewUrlName("訪問記録用"); fetchUrls(); }
     setUrlLoading(false);

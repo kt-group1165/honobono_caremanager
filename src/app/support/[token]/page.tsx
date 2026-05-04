@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, use } from "react";
-import { createBrowserClient } from "@supabase/ssr";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -29,12 +28,9 @@ import { ja } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { TemplatePicker } from "@/components/templates/template-picker";
 
-function createAnonClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-}
+// /support/[token] : 訪問先での支援経過記録モバイル画面（未認証アクセス可）。
+// データアクセスは全て /api/support/[token]/* 経由（service_role）。
+// Phase 2-6b で fetch ベースに書換。
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -90,7 +86,7 @@ type Params = { token: string };
 
 export default function SupportMobilePage({ params }: { params: Promise<Params> }) {
   const { token } = use(params);
-  const supabase = useMemo(() => createAnonClient(), []);
+  const apiBase = useMemo(() => `/api/support/${encodeURIComponent(token)}`, [token]);
 
   const [valid, setValid] = useState<boolean | null>(null);
   const [tokenName, setTokenName] = useState("");
@@ -118,47 +114,50 @@ export default function SupportMobilePage({ params }: { params: Promise<Params> 
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Validate token
+  // Validate token + fetch users
   useEffect(() => {
-    const validate = async () => {
-      const { data } = await supabase
-        .from("kaigo_support_tokens")
-        .select("id, name")
-        .eq("token", token)
-        .single();
-      if (data) { setValid(true); setTokenName(data.name); }
-      else setValid(false);
-    };
-    validate();
-  }, [token, supabase]);
+    let cancelled = false;
+    (async () => {
+      const res = await fetch(apiBase, { cache: "no-store" });
+      if (cancelled) return;
+      if (!res.ok) {
+        setValid(false);
+        return;
+      }
+      const data = (await res.json()) as { name: string };
+      setValid(true);
+      setTokenName(data.name);
 
-  // Fetch users
-  useEffect(() => {
-    if (!valid) return;
-    const fetch = async () => {
-      const { data } = await supabase
-        .from("clients")
-        .select("id, name, name_kana:furigana")
-        .eq("status", "active")
-        .eq("is_facility", false)
-        .order("furigana");
-      setUsers(data || []);
+      const usersRes = await fetch(`${apiBase}/users`, { cache: "no-store" });
+      if (cancelled) return;
+      if (usersRes.ok) {
+        const json = (await usersRes.json()) as { users: KaigoUser[] };
+        setUsers(json.users ?? []);
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
-    fetch();
-  }, [valid, supabase]);
+  }, [apiBase]);
 
   // Fetch records for selected user
   const fetchRecords = useCallback(async (userId: string) => {
     setLoading(true);
-    const { data } = await supabase
-      .from("kaigo_support_records")
-      .select("id, user_id, record_date, record_time, category, content, staff_name, created_at")
-      .eq("user_id", userId)
-      .order("record_date", { ascending: false })
-      .order("record_time", { ascending: false });
-    setRecords((data || []) as SupportRecord[]);
-    setLoading(false);
-  }, [supabase]);
+    try {
+      const res = await fetch(
+        `${apiBase}/records?user=${encodeURIComponent(userId)}`,
+        { cache: "no-store" }
+      );
+      if (res.ok) {
+        const json = (await res.json()) as { records: SupportRecord[] };
+        setRecords(json.records ?? []);
+      } else {
+        setRecords([]);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [apiBase]);
 
   const openUser = (u: KaigoUser) => {
     setSelectedUser(u);
@@ -169,12 +168,12 @@ export default function SupportMobilePage({ params }: { params: Promise<Params> 
   const handleDelete = async () => {
     if (!deleteTargetId || !selectedUser) return;
     setDeleting(true);
-    const { error } = await supabase
-      .from("kaigo_support_records")
-      .delete()
-      .eq("id", deleteTargetId);
-    if (error) {
-      toast.error("削除に失敗: " + error.message);
+    const res = await fetch(`${apiBase}/records/${encodeURIComponent(deleteTargetId)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      toast.error("削除に失敗: " + ((j as { error?: string }).error ?? res.status));
     } else {
       toast.success("支援経過を削除しました");
       setDeleteTargetId(null);
@@ -187,16 +186,22 @@ export default function SupportMobilePage({ params }: { params: Promise<Params> 
     if (!selectedUser) return;
     if (!form.content.trim()) { toast.error("内容を入力してください"); return; }
     setSaving(true);
-    const { error } = await supabase.from("kaigo_support_records").insert({
-      user_id: selectedUser.id,
-      record_date: form.record_date,
-      record_time: form.record_time || null,
-      category: form.category,
-      content: form.content,
-      staff_name: form.staff_name || null,
+    const res = await fetch(`${apiBase}/records`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: selectedUser.id,
+        record_date: form.record_date,
+        record_time: form.record_time || null,
+        category: form.category,
+        content: form.content,
+        staff_name: form.staff_name || null,
+      }),
     });
-    if (error) toast.error("追加に失敗: " + error.message);
-    else {
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      toast.error("追加に失敗: " + ((j as { error?: string }).error ?? res.status));
+    } else {
       toast.success("支援経過を追加しました");
       setShowForm(false);
       setForm({
@@ -431,7 +436,12 @@ export default function SupportMobilePage({ params }: { params: Promise<Params> 
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-xs text-gray-500">内容 <span className="text-red-500">*</span></label>
-                  <TemplatePicker category="support_record" currentText={form.content} onInsert={(v) => setForm({ ...form, content: v })} anon />
+                  <TemplatePicker
+                    category="support_record"
+                    currentText={form.content}
+                    onInsert={(v) => setForm({ ...form, content: v })}
+                    fetchUrl={`${apiBase}/templates`}
+                  />
                 </div>
                 <textarea
                   rows={8}

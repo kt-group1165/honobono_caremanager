@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { resolvePreferredTenantId } from "@/lib/tenant-resolver";
 import { toast } from "sonner";
 import { UserSidebar } from "@/components/users/user-sidebar";
 import {
@@ -183,70 +184,15 @@ export default function EmergencySheetsPage() {
   const createUrl = async () => {
     if (!newUrlName.trim()) { toast.error("名前を入力してください"); return; }
     setUrlLoading(true);
-
-    // kaigo_emergency_tokens は親無し表のため tenant_id を明示指定する必要がある。
-    // 多 tenant 管理者（domen の group_admin で 11 個見える等）でも決定的に
-    // 「自分が運用している tenant」を選ぶ：
-    //   (1) user_offices の primary office の tenant_id（office_admin / member）
-    //   (2) (1) が無い場合 group-type tenant（group_admin の本部 tenant、KT Group は 'kt-group'）
-    //   (3) いずれも無ければ auth_user_admin_tenants() の最初（最終 fallback）
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      toast.error("発行に失敗: 認証情報が取得できません");
+    const resolved = await resolvePreferredTenantId(supabase);
+    if (!resolved.ok) {
+      toast.error("発行に失敗: " + resolved.error);
       setUrlLoading(false);
       return;
     }
-
-    let tenantId: string | undefined;
-
-    // (1) primary office の tenant
-    const { data: officeRow } = await supabase
-      .from("user_offices")
-      .select("offices!inner(tenant_id)")
-      .eq("user_id", user.id)
-      .order("is_primary", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const officeTenant = (officeRow as { offices?: { tenant_id?: string } } | null)?.offices?.tenant_id;
-    if (officeTenant) tenantId = officeTenant;
-
-    // (2) group-type tenant（RLS で自分が見えるもののみ返る）
-    if (!tenantId) {
-      const { data: groupTenant } = await supabase
-        .from("tenants")
-        .select("id")
-        .eq("tenant_type", "group")
-        .order("id")
-        .limit(1)
-        .maybeSingle();
-      const groupId = (groupTenant as { id?: string } | null)?.id;
-      if (groupId) tenantId = groupId;
-    }
-
-    // (3) 最終 fallback
-    if (!tenantId) {
-      const { data: admin, error: rpcErr } = await supabase.rpc("auth_user_admin_tenants");
-      if (rpcErr) {
-        toast.error("発行に失敗: tenant 解決 RPC エラー: " + rpcErr.message);
-        setUrlLoading(false);
-        return;
-      }
-      type TenantRow = { auth_user_admin_tenants?: string } | string;
-      const rows = (admin ?? []) as TenantRow[];
-      tenantId = rows
-        .map((r) => (typeof r === "string" ? r : r.auth_user_admin_tenants ?? ""))
-        .filter(Boolean)[0];
-    }
-
-    if (!tenantId) {
-      toast.error("発行に失敗: あなたは admin 権限を持つ tenant がありません。所長 / 法人管理者 / グループ管理者のどれかに割当てが必要です。");
-      setUrlLoading(false);
-      return;
-    }
-
     const { error } = await supabase
       .from("kaigo_emergency_tokens")
-      .insert({ name: newUrlName.trim(), tenant_id: tenantId });
+      .insert({ name: newUrlName.trim(), tenant_id: resolved.tenantId });
     if (error) toast.error("発行に失敗: " + error.message);
     else { toast.success("URLを発行しました"); setNewUrlName("災害時用"); fetchUrls(); }
     setUrlLoading(false);

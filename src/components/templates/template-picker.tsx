@@ -16,44 +16,76 @@ interface TemplatePickerProps {
   onInsert: (newText: string) => void;
   // ボタンの外観オプション
   buttonClassName?: string;
-  /** anon access from /support or /emergency */
+  /**
+   * 未認証経路（/support/[token] / /staff-availability/[token] 等）から
+   * service_role API 経由で取得する場合の URL。
+   * 例: `/api/support/${token}/templates`
+   * 指定された場合 `${fetchUrl}?category=${category}` に GET し、
+   * `{ templates: Template[] }` を期待する。
+   */
+  fetchUrl?: string;
+  /**
+   * @deprecated kaigo_record_templates は Phase 2-5-09 以降 authenticated 限定。
+   * anon=true 経路は 0 件しか返らない既存バグ。fetchUrl を使うこと。
+   * Phase 2-6c で staff-availability/[token]/page.tsx を移行したら削除。
+   */
   anon?: boolean;
 }
 
-// モジュールレベルキャッシュ（全箇所で共有）
-let __templatesCache: Template[] | null = null;
-let __templatesLoading: Promise<void> | null = null;
-async function loadTemplates(anon: boolean): Promise<Template[]> {
-  if (__templatesCache) return __templatesCache;
-  if (__templatesLoading) { await __templatesLoading; return __templatesCache ?? []; }
-  __templatesLoading = (async () => {
-    let client;
-    if (anon) {
-      const { createBrowserClient } = await import("@supabase/ssr");
-      client = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
+// モジュールレベルキャッシュ（全箇所で共有、fetchUrl 別にキャッシュ）
+const __templatesCache = new Map<string, Template[]>();
+const __templatesLoading = new Map<string, Promise<void>>();
+
+async function loadTemplates(opts: { anon: boolean; fetchUrl?: string; category: string }): Promise<Template[]> {
+  const cacheKey = opts.fetchUrl ? `${opts.fetchUrl}?category=${opts.category}` : (opts.anon ? "__anon__" : "__authed__");
+  const cached = __templatesCache.get(cacheKey);
+  if (cached) return cached;
+  const inflight = __templatesLoading.get(cacheKey);
+  if (inflight) { await inflight; return __templatesCache.get(cacheKey) ?? []; }
+
+  const promise = (async () => {
+    let templates: Template[];
+    if (opts.fetchUrl) {
+      const url = `${opts.fetchUrl}?category=${encodeURIComponent(opts.category)}`;
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) {
+        templates = [];
+      } else {
+        const json = (await res.json()) as { templates?: Template[] };
+        templates = json.templates ?? [];
+      }
     } else {
-      client = createClient();
+      let client;
+      if (opts.anon) {
+        const { createBrowserClient } = await import("@supabase/ssr");
+        client = createBrowserClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        );
+      } else {
+        client = createClient();
+      }
+      const { data } = await client.from("kaigo_record_templates")
+        .select("id, category, label, content")
+        .order("sort_order");
+      templates = (data || []) as Template[];
     }
-    const { data } = await client.from("kaigo_record_templates")
-      .select("id, category, label, content")
-      .order("sort_order");
-    __templatesCache = (data || []) as Template[];
+    __templatesCache.set(cacheKey, templates);
   })();
-  await __templatesLoading;
-  __templatesLoading = null;
-  return __templatesCache ?? [];
+  __templatesLoading.set(cacheKey, promise);
+  await promise;
+  __templatesLoading.delete(cacheKey);
+  return __templatesCache.get(cacheKey) ?? [];
 }
 
-export function clearTemplateCache() { __templatesCache = null; }
+export function clearTemplateCache() { __templatesCache.clear(); }
 
 export function TemplatePicker({
   category,
   currentText = "",
   onInsert,
   buttonClassName,
+  fetchUrl,
   anon = false,
 }: TemplatePickerProps) {
   const [open, setOpen] = useState(false);
@@ -61,9 +93,9 @@ export function TemplatePicker({
 
   useEffect(() => {
     if (open && templates.length === 0) {
-      loadTemplates(anon).then(setTemplates);
+      loadTemplates({ anon, fetchUrl, category }).then(setTemplates);
     }
-  }, [open, templates.length, anon]);
+  }, [open, templates.length, anon, fetchUrl, category]);
 
   // カテゴリ一致 + common
   const filtered = useMemo(
