@@ -184,15 +184,22 @@ export default function EmergencySheetsPage() {
     if (!newUrlName.trim()) { toast.error("名前を入力してください"); return; }
     setUrlLoading(true);
     // kaigo_emergency_tokens は親無し表のため tenant_id を明示指定する必要がある。
-    // auth_visible_tenant_ids() の最初の 1 件を採用（kt-group 単独 tenant 運用）。
-    const { data: visible } = await supabase.rpc("auth_visible_tenant_ids");
-    type TenantRow = { auth_visible_tenant_ids?: string } | string;
-    const rows = (visible ?? []) as TenantRow[];
+    // calendar-app と同じ auth_user_admin_tenants() rpc を使う（GRANT 済 + admin
+    // 限定で意味的にも正しい）。group_admin / company_admin / office_admin 全員
+    // について最初の admin tenant を採用する。member 経由の発行は許可しない。
+    const { data: admin, error: rpcErr } = await supabase.rpc("auth_user_admin_tenants");
+    if (rpcErr) {
+      toast.error("発行に失敗: tenant 解決 RPC エラー: " + rpcErr.message);
+      setUrlLoading(false);
+      return;
+    }
+    type TenantRow = { auth_user_admin_tenants?: string } | string;
+    const rows = (admin ?? []) as TenantRow[];
     const tenantId = rows
-      .map((r) => (typeof r === "string" ? r : r.auth_visible_tenant_ids ?? ""))
+      .map((r) => (typeof r === "string" ? r : r.auth_user_admin_tenants ?? ""))
       .filter(Boolean)[0];
     if (!tenantId) {
-      toast.error("発行に失敗: 所属 tenant が解決できません（管理者投入を確認してください）");
+      toast.error("発行に失敗: あなたは admin 権限を持つ tenant がありません。所長 / 法人管理者 / グループ管理者のどれかに割当てが必要です。");
       setUrlLoading(false);
       return;
     }
