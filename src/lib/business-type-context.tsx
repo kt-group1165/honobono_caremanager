@@ -144,6 +144,7 @@ export function BusinessTypeProvider({ children }: { children: ReactNode }) {
 
   // offices.service_type は法的指定で固定値のため、UI からの変更は許可しない（no-op）。
   // 後方互換のため関数自体は残置。
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   const setBusinessType = (_type: BusinessType) => {
     // intentionally no-op
   };

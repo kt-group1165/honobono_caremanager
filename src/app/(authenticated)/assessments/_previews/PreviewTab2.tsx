@@ -1,7 +1,7 @@
 "use client";
 
 import type { FamilySupport } from "../_types";
-import { PVFrame, PVTitle, PVBar, PVCircle, cellBase, cellHead, cellLabel } from "../_preview";
+import { PVFrame, PVTitle, PVBar, PVCircle, cellBase, cellHead } from "../_preview";
 import { Genogram } from "../_components/Genogram";
 
 interface Props { data: FamilySupport; userName: string; userGender?: string | null; date: string; }

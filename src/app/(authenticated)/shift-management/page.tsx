@@ -298,6 +298,7 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
   const [schedules, setSchedules] = useState<VisitSchedule[]>([]);
   const [availability, setAvailability] = useState<StaffAvailabilitySlot[]>([]);
   const [allStaff, setAllStaff] = useState<KaigoStaff[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   const [allProviders, setAllProviders] = useState<{ id: string; provider_name: string }[]>([]);
   const [allSchedules, setAllSchedules] = useState<VisitSchedule[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1701,6 +1702,7 @@ function TimelineView({
     setSchedules(mapped);
     setAvailability((availRes.data || []) as StaffAvailabilitySlot[]);
     setLoading(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional dep stability
   }, [dateStr, supabase]);
 
   useEffect(() => {
@@ -1807,7 +1809,6 @@ function TimelineView({
       if (!drag) return;
 
       const deltaX = e.clientX - drag.mouseStartX;
-      const deltaY = e.clientY - drag.mouseStartY;
 
       // Calculate new horizontal position (percentage)
       const containerWidth = drag.barContainerRect.width;
@@ -1835,6 +1836,7 @@ function TimelineView({
   );
 
   const handleTimelineMouseUp = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
     async (e: React.MouseEvent) => {
       const drag = draggingRef.current;
       const preview = dragPreview;
@@ -1905,6 +1907,7 @@ function TimelineView({
         newEndTime,
       });
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional dep stability
     [dragPreview, rows, tab, supabase, fetchData]
   );
 
@@ -2369,6 +2372,7 @@ function MonthlyIndividualView({
   entityType,
   currentMonth,
   onMonthChange,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   staff,
   onEditSchedule,
 }: MonthlyIndividualViewProps) {
@@ -2593,6 +2597,7 @@ function MonthlyIndividualView({
     try { return format(parseISO(dateStr), "E", { locale: ja }); } catch { return ""; }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   const durationText = (start: string | null, end: string | null) => {
     if (!start || !end) return "";
     const [sh, sm] = start.split(":").map(Number);

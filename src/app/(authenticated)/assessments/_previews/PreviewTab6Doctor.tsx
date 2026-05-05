@@ -1,7 +1,7 @@
 "use client";
 
 import type { DoctorOpinion } from "../_types";
-import { PVFrame, PVCheck, PVCheckLabel, cellBase, cellLabel } from "../_preview";
+import { PVFrame, PVCheckLabel, cellBase, cellLabel } from "../_preview";
 
 interface Props { data: DoctorOpinion; userName: string; date: string; }
 

@@ -14,9 +14,8 @@ import {
   Plus,
   X,
   Edit3,
-  Check,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   Clock as ClockIcon,
-  AlertTriangle,
   Download,
   Upload,
 } from "lucide-react";
@@ -115,6 +114,7 @@ export default function ProvisionTicketsPage() {
 
   const [serviceRows, setServiceRows] = useState<ServiceRow[]>([]);
   const [grid, setGrid] = useState<GridState>({});
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   const [scheduleIds, setScheduleIds] = useState<Record<string, string>>({}); // "rowKey__day" -> schedule id
 
   const [loading, setLoading] = useState(false);

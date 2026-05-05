@@ -1,7 +1,7 @@
 "use client";
 
 import type { FaceSheet } from "../_types";
-import { PVFrame, PVTitle, PVBar, PVCircle, PVCheck, PVCheckLabel, cellBase, cellHead, cellLabel } from "../_preview";
+import { PVFrame, PVTitle, PVBar, PVCircle, PVCheckLabel, cellBase, cellLabel } from "../_preview";
 
 interface Props {
   data: FaceSheet;

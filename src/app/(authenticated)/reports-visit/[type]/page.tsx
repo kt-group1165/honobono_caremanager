@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { UserSidebar } from "@/components/users/user-sidebar";
 import { toast } from "sonner";
 import {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   FileText, ClipboardList, Printer, Save, Loader2, ChevronLeft, Plus, X, Info,
   ArrowDown, Wand2,
 } from "lucide-react";

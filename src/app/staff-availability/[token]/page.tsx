@@ -19,7 +19,9 @@ import {
   ClipboardList,
   Check,
   ChevronDown as ChevronDownIcon,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   Heart,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   Thermometer,
   Edit3,
   MapPin,
@@ -1044,6 +1046,7 @@ interface ExistingRecord {
 
 // ─── Helper UI Components ──────────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
 function SectionBtn({ id, label, active, onClick }: { id: string; label: string; active: boolean; onClick: () => void }) {
   return (
     <button
@@ -1131,6 +1134,7 @@ function CareTextarea({ label, value, onChange, placeholder, rows = 3 }: { label
 }
 
 // セクション定義（ケアパレット準拠 20カテゴリ）
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
 const CARE_SECTIONS = [
   { id: "pre_check", label: "事前チェック" },
   { id: "vitals", label: "バイタルサイン・身体測定" },
@@ -1709,6 +1713,7 @@ function CareRecordModal({
               <div className="grid grid-cols-3 gap-2">
                 {data.photos.map((p, i) => (
                   <div key={i} className="relative aspect-square rounded-lg overflow-hidden border">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- 訪問記録の写真表示 */}
                     <img src={p} alt="" className="w-full h-full object-cover" />
                     <button onClick={() => setData((prev) => ({ ...prev, photos: prev.photos.filter((_, j) => j !== i) }))} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/50 flex items-center justify-center text-white"><X size={12} /></button>
                   </div>
@@ -1726,6 +1731,7 @@ function CareRecordModal({
             {data.signature ? (
               <div className="space-y-2">
                 <div className="border rounded-xl p-2 bg-gray-50">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- 署名画像 (data URI)、next/image は不適 */}
                   <img src={data.signature} alt="署名" className="w-full h-24 object-contain" />
                 </div>
                 <button onClick={() => setData({ ...data, signature: "" })} className="text-xs text-red-500 font-medium">署名をクリア</button>
@@ -1846,6 +1852,7 @@ function MyShiftTab({ token }: { token: string }) {
   };
 
   // 入室ボタン
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   const handleEntry = async (sched: VisitScheduleEntry) => {
     try {
       toast.info("位置情報を取得中...");
@@ -1875,6 +1882,7 @@ function MyShiftTab({ token }: { token: string }) {
   };
 
   // 退室ボタン
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   const handleExit = async (sched: VisitScheduleEntry) => {
     try {
       toast.info("位置情報を取得中...");

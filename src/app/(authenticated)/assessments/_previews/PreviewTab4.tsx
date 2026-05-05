@@ -1,7 +1,7 @@
 "use client";
 
 import type { Housing } from "../_types";
-import { PVFrame, PVTitle, PVCheck, PVCheckLabel, cellBase, cellLabel } from "../_preview";
+import { PVFrame, PVTitle, PVCheckLabel, cellBase, cellLabel } from "../_preview";
 
 interface Props { data: Housing; userName: string; date: string; }
 

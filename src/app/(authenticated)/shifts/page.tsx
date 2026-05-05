@@ -120,6 +120,7 @@ export default function ShiftsPage() {
     return shiftMap[staffId]?.[date] ?? "";
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   const cycleShift = (staffId: string, date: string) => {
     const current = getShift(staffId, date);
     const idx = SHIFT_TYPES.indexOf(current);

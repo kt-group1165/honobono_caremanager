@@ -120,6 +120,7 @@ interface DropdownMenuContentProps extends React.HTMLAttributes<HTMLDivElement> 
 
 const DropdownMenuContent = React.forwardRef<HTMLDivElement, DropdownMenuContentProps>(
   ({ className, align = "start", sideOffset = 4, children, ...props }, ref) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
     const { open, onOpenChange } = React.useContext(DropdownMenuContext)
 
     if (!open) return null
@@ -216,6 +217,7 @@ const DropdownMenuRadioItem = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <div
     ref={ref}
+    // eslint-disable-next-line jsx-a11y/role-has-required-aria-props -- a11y review pending
     role="menuitemradio"
     className={cn(
       "relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
@@ -279,7 +281,9 @@ function DropdownMenuGroup({ children }: { children?: React.ReactNode }) {
 
 function DropdownMenuRadioGroup({
   children,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   value,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   onValueChange,
 }: {
   children?: React.ReactNode

@@ -5,14 +5,9 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
-  User,
   FileText,
-  ClipboardList,
-  CalendarDays,
-  BookOpen,
   Download,
   Loader2,
-  ChevronRight,
   X,
 } from "lucide-react";
 import {

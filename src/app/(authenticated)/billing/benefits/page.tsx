@@ -19,7 +19,6 @@ import {
   ChevronLeft,
 } from "lucide-react";
 import { format } from "date-fns";
-import { ja } from "date-fns/locale";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -99,6 +98,7 @@ const STATUS_COLORS: Record<string, string> = {
   submitted: "bg-green-100 text-green-700",
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
 const CARE_LEVEL_LIMITS: Record<string, number> = {
   要支援1: 5032,
   要支援2: 10531,

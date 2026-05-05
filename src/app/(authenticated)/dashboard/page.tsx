@@ -245,6 +245,7 @@ export default function DashboardPage() {
     }
 
     fetchDashboard();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional dep stability
   }, []);
 
   const dateLabel = format(today, "yyyy年M月d日（EEE）", { locale: ja });

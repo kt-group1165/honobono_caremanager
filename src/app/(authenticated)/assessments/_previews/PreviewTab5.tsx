@@ -1,7 +1,7 @@
 "use client";
 
 import type { Health, MedicalVisit } from "../_types";
-import { PVFrame, PVTitle, PVCheck, PVCheckLabel, cellBase, cellHead, cellLabel } from "../_preview";
+import { PVFrame, PVTitle, PVCheckLabel, cellBase, cellHead, cellLabel } from "../_preview";
 
 interface Props { data: Health; userName: string; date: string; }
 

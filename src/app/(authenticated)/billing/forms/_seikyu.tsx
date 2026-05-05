@@ -39,6 +39,7 @@ interface Props {
 export function SeikyuForm(props: Props) {
   const {
     providerNumber, officeName, officeAddress, officePhone, postalCode,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
     billingMonth, totalCount, totalUnits, totalAmount, insuranceAmount, userCopay,
   } = props;
 

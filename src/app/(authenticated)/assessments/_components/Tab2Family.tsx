@@ -3,7 +3,7 @@
 import { Trash2, Plus } from "lucide-react";
 import type { FamilySupport, FamilyMember, RelationshipType } from "../_types";
 import { emptyFamilyMember } from "../_types";
-import { Section, Field, TextInput, Textarea, Radio, Checkbox } from "../_shared";
+import { Section, Field, TextInput, Textarea, Radio } from "../_shared";
 import { Genogram } from "./Genogram";
 
 // ─── 続柄プルダウン選択肢 ──────────────────────────────────────────────────────

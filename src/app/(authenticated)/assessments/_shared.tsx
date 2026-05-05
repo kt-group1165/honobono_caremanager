@@ -153,6 +153,7 @@ export function CheckboxGroup({ options, value, onChange, inline = true }: {
 
 // ─── Number Radio (1-14 等の選択) ────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
 export function NumberRadio({ name, count, value, onChange, multi = false }: {
   name: string;
   count: number;

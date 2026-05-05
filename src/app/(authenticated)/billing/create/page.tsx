@@ -15,8 +15,7 @@ import {
   FileText,
   Save,
 } from "lucide-react";
-import { format, startOfMonth, endOfMonth, parseISO } from "date-fns";
-import { ja } from "date-fns/locale";
+import { format, startOfMonth, endOfMonth } from "date-fns";
 
 // 共通マスタ clients の subset。Phase 2-3-8 で kaigo_users から張替え。
 //   kaigo_users.name_kana → clients.furigana

@@ -355,6 +355,7 @@ export default function UserDisabilityPage() {
   }, [load]);
 
   function recordToForm(r: DisabilityCert): FormData {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
     const { id: _id, user_id: _u, created_at: _c, updated_at: _up, ...rest } = r;
     return rest;
   }

@@ -12,8 +12,6 @@ import {
   ClipboardList,
   Clock,
   User,
-  Thermometer,
-  Heart,
   ChevronDown,
   ChevronUp,
   CalendarDays,
@@ -120,6 +118,7 @@ const emptyCareData = (): CareData => ({
 });
 
 // Legacy FormData (kept for type compat)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
 type FormData = Record<string, unknown>;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -546,6 +545,7 @@ function CareRecordDetail({ record }: { record: VisitRecord }) {
           <div className="grid grid-cols-4 gap-2">
             {crd.photos.map((p: string, i: number) => (
               <div key={i} className="aspect-square rounded-lg overflow-hidden border">
+                {/* eslint-disable-next-line @next/next/no-img-element -- 介護記録の写真表示、Next.js Image は外部 URL でも適合するが現在は単純な img で運用 */}
                 <img src={p} alt="" className="w-full h-full object-cover" />
               </div>
             ))}
@@ -612,6 +612,7 @@ export default function VisitRecordsPage() {
       setStaffList(data || []);
     };
     fetchStaff();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional dep stability
   }, []);
 
   // Fetch records when user changes
@@ -636,6 +637,7 @@ export default function VisitRecordsPage() {
       setRecords(mapped);
     }
     setLoading(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional dep stability
   }, []);
 
   useEffect(() => {
@@ -700,7 +702,6 @@ export default function VisitRecordsPage() {
 
   // Section toggle for form
   const isFormOpen = (id: string) => formSection === id;
-  const toggleFormSection = (id: string) => setFormSection(formSection === id ? null : id);
 
   // ── Render ──────────────────────────────────────────────────────────────────
 

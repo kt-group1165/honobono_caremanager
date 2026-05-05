@@ -117,6 +117,7 @@ export function generateCarePlan2CSV(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
   content: Record<string, any>,
   user: UserData,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   office: OfficeData
 ): string {
   const rows: string[][] = [];
@@ -161,6 +162,7 @@ export function generateCarePlan3CSV(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
   content: Record<string, any>,
   user: UserData,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   office: OfficeData
 ): string {
   const rows: string[][] = [];
@@ -175,6 +177,7 @@ export function generateCarePlan3CSV(
     for (const day of dayKeys) {
       const val = slotData[day];
       if (val && val.trim()) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
         rowNo++;
         const dayNum = dayKeys.indexOf(day) + 1; // 1=月, 7=日
         const timeRange = slot === "early_morning" ? "0000-0600"
@@ -319,6 +322,7 @@ export function generateTable7CSV(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
   content: Record<string, any>,
   user: UserData,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   office: OfficeData
 ): string {
   const rows: string[][] = [];

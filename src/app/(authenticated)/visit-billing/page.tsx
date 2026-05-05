@@ -12,7 +12,7 @@ import {
   BarChart3,
   RefreshCw,
 } from "lucide-react";
-import { format, startOfMonth, endOfMonth, parseISO, differenceInMinutes, parse } from "date-fns";
+import { format, startOfMonth, endOfMonth, differenceInMinutes, parse } from "date-fns";
 import { ja } from "date-fns/locale";
 
 // ─── Types ────────────────────────────────────────────────────────────────────

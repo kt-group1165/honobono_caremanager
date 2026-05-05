@@ -41,6 +41,7 @@ function Cir({ on, text }: { on: boolean; text: string }) {
 }
 
 // 斜線セル
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
 const SLASH: React.CSSProperties = {
   border: B, background: "repeating-linear-gradient(135deg, transparent, transparent 2px, #bbb 2px, #bbb 3px)",
 };
@@ -89,7 +90,6 @@ function PersonBlock({
 }) {
   const h: React.CSSProperties = { border: B, padding: "1px 3px", fontSize: "6pt", verticalAlign: "middle", fontFamily: F, background: BG };
   const c: React.CSSProperties = { border: B, padding: "1px 3px", fontSize: "7.5pt", verticalAlign: "middle", fontFamily: F, background: "#fff" };
-  const cR: React.CSSProperties = { ...c, textAlign: "right" };
 
   if (!person) {
     // 空の被保険者ブロック

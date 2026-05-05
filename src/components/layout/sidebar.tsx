@@ -9,6 +9,7 @@ import {
   FileText,
   LayoutDashboard,
   ClipboardCheck,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   BookOpen,
   Calculator,
   FileSpreadsheet,
@@ -16,7 +17,6 @@ import {
   Activity,
   UserCog,
   Clock,
-  Home,
   ChevronLeft,
   ChevronRight,
   ChevronDown,

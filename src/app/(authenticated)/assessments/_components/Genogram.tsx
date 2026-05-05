@@ -391,6 +391,7 @@ export function Genogram({ userName, userGender, members }: GenogramProps) {
         {/* 孫と子をつなぐ線 + 孫の描画 */}
         {grandchildren.length > 0 && children.length > 0 && (
           <>
+            {/* eslint-disable-next-line @typescript-eslint/no-unused-vars -- gi unused but parameter index reserved */}
             {grandchildren.map((gc, gi) => {
               // 親メンバーの位置を特定
               const parentIdx = gc.parentMemberIndex;

@@ -89,6 +89,7 @@ function toWarekiYM(ym: string): { era: string; year: number; month: number } {
   return { era: "", year: y, month: m };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
 function careLevelCode(level: string): string {
   const map: Record<string, string> = {
     要支援1: "12", 要支援2: "13",

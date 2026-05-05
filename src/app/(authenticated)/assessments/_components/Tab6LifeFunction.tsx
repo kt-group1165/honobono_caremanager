@@ -1,7 +1,7 @@
 "use client";
 
 import type { LifeFunction } from "../_types";
-import { Section, SubSection, Field, TextInput, Textarea, Radio, CheckboxGroup, CertItemRow, SupportMatrixTable } from "../_shared";
+import { Section, SubSection, Field, Textarea, Radio, CheckboxGroup, CertItemRow, SupportMatrixTable } from "../_shared";
 
 interface Props {
   data: LifeFunction;

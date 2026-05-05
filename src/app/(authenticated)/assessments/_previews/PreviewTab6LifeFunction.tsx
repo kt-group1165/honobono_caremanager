@@ -1,7 +1,7 @@
 "use client";
 
 import type { LifeFunction } from "../_types";
-import { PVFrame, PVTitle, PVCircle, PVCheckLabel, cellBase, cellHead, cellLabel } from "../_preview";
+import { PVFrame, PVCircle, PVCheckLabel, cellBase, cellHead, cellLabel } from "../_preview";
 
 interface Props { data: LifeFunction; userName: string; date: string; }
 

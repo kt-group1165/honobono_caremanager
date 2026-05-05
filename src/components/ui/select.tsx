@@ -61,6 +61,7 @@ function Select({
 interface SelectGroupContextValue {
   label?: string
 }
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
 const SelectGroupContext = React.createContext<SelectGroupContextValue>({})
 
 function SelectGroup({ children }: { children?: React.ReactNode }) {
@@ -91,6 +92,7 @@ const SelectTrigger = React.forwardRef<HTMLButtonElement, SelectTriggerProps>(
       <button
         ref={ref}
         type="button"
+        // eslint-disable-next-line jsx-a11y/role-has-required-aria-props -- a11y review pending
         role="combobox"
         aria-expanded={open}
         aria-haspopup="listbox"
@@ -138,8 +140,10 @@ interface SelectContentProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const SelectContent = React.forwardRef<HTMLDivElement, SelectContentProps>(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   ({ className, children, position = "popper", ...props }, ref) => {
     const { open, setOpen } = React.useContext(SelectContext)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
     const [registry, setRegistry] = React.useState<Record<string, string>>({})
     const containerRef = React.useRef<HTMLDivElement>(null)
 

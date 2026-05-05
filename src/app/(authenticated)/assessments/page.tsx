@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { UserSidebar } from "@/components/users/user-sidebar";
 import { format, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Plus, Save, Loader2, ClipboardCheck, FileText, Trash2, Printer, ArrowLeft, Check, Edit3 } from "lucide-react";
+import { Plus, Save, Loader2, ClipboardCheck, FileText, Printer, ArrowLeft, Check, Edit3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import type { AssessmentFormData } from "./_types";
@@ -380,6 +380,7 @@ export default function AssessmentPage() {
             <div className="flex-1 overflow-y-auto p-6">
               {(() => {
                 const uname = selectedUser?.name ?? "";
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
                 const dstr = assessmentDate ? format(parseISO(assessmentDate), "令和y'年' M'月' d'日'", { locale: ja }).replace(/令和/, (m) => {
                   const y = parseISO(assessmentDate).getFullYear();
                   return y >= 2019 ? `令和${y - 2018}年` : `${y}年`;

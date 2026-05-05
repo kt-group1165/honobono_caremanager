@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Settings, Eye, EyeOff, Building2, ChevronRight, CalendarDays, Plus, Save, Loader2, Trash2, Link2, Copy } from "lucide-react";
+import { Settings, Eye, EyeOff, Building2, ChevronRight, CalendarDays, Plus, Save, Loader2, Trash2, Copy } from "lucide-react";
 import Link from "next/link";
 import { useBusinessType } from "@/lib/business-type-context";
 

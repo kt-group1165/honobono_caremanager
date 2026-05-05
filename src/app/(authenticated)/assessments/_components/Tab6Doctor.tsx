@@ -1,7 +1,7 @@
 "use client";
 
 import type { DoctorOpinion } from "../_types";
-import { Section, SubSection, Field, TextInput, Textarea, Radio, Checkbox, CheckboxGroup } from "../_shared";
+import { Section, SubSection, Field, TextInput, Radio, Checkbox, CheckboxGroup } from "../_shared";
 
 interface Props {
   data: DoctorOpinion;

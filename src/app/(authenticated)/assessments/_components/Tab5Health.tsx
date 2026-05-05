@@ -1,7 +1,6 @@
 "use client";
 
 import type { Health, MedicalVisit } from "../_types";
-import { emptyMedicalVisit } from "../_types";
 import { Section, SubSection, Field, TextInput, Textarea, Radio, CheckboxGroup } from "../_shared";
 
 interface Props {

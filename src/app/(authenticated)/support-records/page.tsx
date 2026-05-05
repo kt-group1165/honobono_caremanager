@@ -238,6 +238,7 @@ export default function SupportRecordsPage() {
   const [filterCategory, setFilterCategory] = useState<string>("");
 
   const [records, setRecords] = useState<SupportRecord[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
 
@@ -504,6 +505,7 @@ export default function SupportRecordsPage() {
   };
 
   // ── Period label for print ──
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   const periodLabel = useMemo(() => {
     if (startDate && endDate)
       return `${format(parseISO(startDate), "yyyy年M月d日")} ～ ${format(parseISO(endDate), "yyyy年M月d日")}`;

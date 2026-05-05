@@ -48,6 +48,7 @@ const AvatarImage = React.forwardRef<HTMLImageElement, AvatarImageProps>(
     const { setImageLoaded, setImageError } = React.useContext(AvatarContext)
 
     return (
+      // eslint-disable-next-line @next/next/no-img-element -- print preview / PDF use case
       <img
         ref={ref}
         src={src}

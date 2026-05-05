@@ -1,7 +1,7 @@
 "use client";
 
 import type { ServiceUsage } from "../_types";
-import { PVFrame, PVTitle, PVCheck, PVCheckLabel, cellBase, cellHead, cellLabel } from "../_preview";
+import { PVFrame, PVTitle, PVCheck, PVCheckLabel } from "../_preview";
 
 interface Props { data: ServiceUsage; userName: string; date: string; }
 

@@ -15,13 +15,11 @@ import {
   Zap,
   Check,
   X,
-  Pencil,
   Save,
-  ChevronDown,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   ChevronUp,
 } from "lucide-react";
 import { format } from "date-fns";
-import { ja } from "date-fns/locale";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -661,6 +659,7 @@ export default function ClaimsPage() {
   const [generating, setGenerating] = useState(false);
   const [confirmingAll, setConfirmingAll] = useState(false);
   const [editTarget, setEditTarget] = useState<ClaimRow | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [officeInfo, setOfficeInfo] = useState<{
     tokutei_kassan_type: string | null;
@@ -1316,6 +1315,7 @@ export default function ClaimsPage() {
 
   // ── Row expand ────────────────────────────────────────────────────────────
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   const toggleExpand = (id: string) => {
     setExpandedRows((prev) => {
       const next = new Set(prev);

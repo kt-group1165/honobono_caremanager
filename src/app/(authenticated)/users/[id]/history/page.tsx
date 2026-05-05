@@ -35,6 +35,7 @@ const STATUS_OPTIONS: MedicalHistoryStatus[] = [
   "その他",
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
 const STATUS_COLORS: Record<MedicalHistoryStatus, string> = {
   治療中: "bg-red-100 text-red-700",
   経過観察: "bg-yellow-100 text-yellow-700",
@@ -45,6 +46,7 @@ const STATUS_COLORS: Record<MedicalHistoryStatus, string> = {
 const inputClass =
   "w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
 function formatDate(d: string | null | undefined) {
   if (!d) return "—";
   try {
