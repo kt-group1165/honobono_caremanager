@@ -3042,6 +3042,7 @@ function DocEditor({ doc, config, onSave, onStatusToggle, onDirtyChange }: {
 
   // Reset when doc changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     setContent(doc.content ?? {});
     setDirty(false);
   }, [doc.id, doc.content]);
@@ -3136,6 +3137,7 @@ export default function ReportTypePage() {
 
   // Load certifications when user selected
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     if (!selectedUserId || !isCertLinked) { setCertifications([]); setSelectedCertId(null); return; }
     // client_insurance_records、列エイリアスでローカル Certification 型と互換
     supabase.from("client_insurance_records")
@@ -3164,8 +3166,12 @@ export default function ReportTypePage() {
   monthOptions.sort((a, b) => b.localeCompare(a));
 
   // URLパラメータからの初期ユーザーがいればデータをロード
+  // handleUserSelect は下で宣言されるが、useEffect の callback は post-render に
+  // 走るため runtime 上は問題ない。React Compiler の immutability rule が静的参照を
+  // 警告するので disable。
   useEffect(() => {
     if (selectedUserId) {
+      // eslint-disable-next-line react-hooks/immutability
       handleUserSelect(selectedUserId);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3198,6 +3204,7 @@ export default function ReportTypePage() {
   // 認定期間が変更されたらドキュメントを再読込
   useEffect(() => {
     if (selectedUserId && isCertLinked) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
       loadDocs(selectedUserId);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

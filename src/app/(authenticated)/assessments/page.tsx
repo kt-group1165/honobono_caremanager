@@ -111,6 +111,7 @@ export default function AssessmentPage() {
 
   // Load user info when selected
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     if (!selectedUserId) { setSelectedUser(null); setCertifications([]); setSelectedCertId(null); return; }
     // 共通マスタ clients、PostgREST 列エイリアスで name_kana を維持
     supabase.from("clients").select("id, name, name_kana:furigana, gender").eq("id", selectedUserId).single().then(({ data }: { data: KaigoUser | null }) => setSelectedUser(data));
@@ -145,6 +146,7 @@ export default function AssessmentPage() {
   }, [selectedUserId, selectedCertId, supabase]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     if (mode === "list") fetchAssessments();
   }, [fetchAssessments, mode]);
 
@@ -200,6 +202,7 @@ export default function AssessmentPage() {
       }
       toast.success("アセスメントを保存しました");
     } catch (err) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
       const msg = err instanceof Error ? err.message : typeof err === "object" && err !== null && "message" in err ? String((err as any).message) : JSON.stringify(err);
       toast.error("保存に失敗しました: " + msg);
     } finally {

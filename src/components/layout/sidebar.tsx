@@ -97,6 +97,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
     if (localStorage.getItem("sidebar-collapsed") === "true") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
       setCollapsed(true);
     }
   }, []);
@@ -114,6 +115,7 @@ export function Sidebar() {
   useEffect(() => {
     try {
       const stored = localStorage.getItem("sidebar-open-groups");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
       if (stored) setOpenGroups(JSON.parse(stored));
     } catch { /* ignore */ }
   }, []);
@@ -144,6 +146,7 @@ export function Sidebar() {
       if (isGroup(entry)) {
         const anyChildActive = entry.children.some((c) => pathname.startsWith(c.href));
         if (anyChildActive && !openGroups[entry.name]) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
           setOpenGroups((prev) => ({ ...prev, [entry.name]: true }));
         }
       }

@@ -184,6 +184,7 @@ export default function ReportsVisitEditorPage() {
   }, [supabase, reportType]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     if (selectedUserId) loadDocument(selectedUserId);
   }, [selectedUserId, loadDocument]);
 
@@ -376,14 +377,11 @@ export default function ReportsVisitEditorPage() {
 
 // ─── 編集ビュー ─────────────────────────────────────────────────────────
 
-function EditVisitCarePlan({ content, update }: {
-  content: VisitCarePlanContent;
-  update: <K extends keyof VisitCarePlanContent>(k: K, v: VisitCarePlanContent[K]) => void;
+function Input({ label, value, onChange, type = "text", textarea, rows = 2, className = "" }: {
+  label: string; value: string; onChange: (v: string) => void;
+  type?: string; textarea?: boolean; rows?: number; className?: string;
 }) {
-  const Input = ({ label, value, onChange, type = "text", textarea, rows = 2, className = "" }: {
-    label: string; value: string; onChange: (v: string) => void;
-    type?: string; textarea?: boolean; rows?: number; className?: string;
-  }) => (
+  return (
     <div className={`flex flex-col gap-0.5 ${className}`}>
       <label className="text-xs font-medium text-gray-500">{label}</label>
       {textarea ? (
@@ -395,7 +393,12 @@ function EditVisitCarePlan({ content, update }: {
       )}
     </div>
   );
+}
 
+function EditVisitCarePlan({ content, update }: {
+  content: VisitCarePlanContent;
+  update: <K extends keyof VisitCarePlanContent>(k: K, v: VisitCarePlanContent[K]) => void;
+}) {
   const updateGoalArr = (key: "long_term_goals" | "short_term_goals", idx: number, field: "goal" | "period", v: string) => {
     const arr = [...content[key]];
     arr[idx] = { ...arr[idx], [field]: v };

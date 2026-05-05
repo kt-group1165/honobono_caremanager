@@ -91,6 +91,7 @@ export default function VisitSchedulePage() {
     if (error) {
       toast.error("予定の取得に失敗しました");
     } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
       const mapped: ScheduleEntry[] = (data || []).map((r: any) => ({
         id: r.id,
         user_id: r.user_id,
@@ -107,6 +108,7 @@ export default function VisitSchedulePage() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchEntries(currentMonth);
     setSelectedDay(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps

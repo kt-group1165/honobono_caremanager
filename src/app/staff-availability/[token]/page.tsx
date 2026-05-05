@@ -441,6 +441,7 @@ function MonthlySettingsTab({ token }: { token: string }) {
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchMonthly(currentMonth);
     setSelectedDate(null);
   }, [currentMonth, fetchMonthly]);
@@ -1774,6 +1775,7 @@ function MyShiftTab({ token }: { token: string }) {
 
   // When calendar opens or month changes, fetch shift dates
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     if (showCalendar) fetchShiftDates(calMonth);
   }, [showCalendar, calMonth, fetchShiftDates]);
 
@@ -1809,6 +1811,7 @@ function MyShiftTab({ token }: { token: string }) {
   const refreshRecords = () => fetchRecords(currentDate);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchSchedules(currentDate);
     fetchRecords(currentDate);
   }, [currentDate, fetchSchedules, fetchRecords]);

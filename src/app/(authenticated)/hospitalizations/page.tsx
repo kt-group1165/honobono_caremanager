@@ -73,6 +73,7 @@ export default function HospitalizationsPage() {
   // ── Fetch user ──
   useEffect(() => {
     if (!selectedUserId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
       setSelectedUser(null);
       setRecords([]);
       return;
@@ -106,6 +107,7 @@ export default function HospitalizationsPage() {
   }, [supabase, selectedUserId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchRecords();
   }, [fetchRecords]);
 

@@ -348,6 +348,7 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
       supabase.from("kaigo_service_providers").select("id, provider_name").eq("status", "active").order("provider_name"),
     ]);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
     const mapped: VisitSchedule[] = (schedRes.data || []).map((r: any) => ({
       id: r.id,
       user_id: r.user_id,
@@ -369,6 +370,7 @@ function UserCalendar({ userId, userName, currentMonth, onMonthChange }: UserCal
   }, [userId, currentMonth, supabase]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchData();
   }, [fetchData]);
 
@@ -936,6 +938,7 @@ function StaffCalendar({ staffId, staffName, currentMonth, onMonthChange, onEdit
         .lte("available_date", to),
     ]);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
     const mapped: VisitSchedule[] = (schedRes.data || []).map((r: any) => ({
       id: r.id,
       user_id: r.user_id,
@@ -954,6 +957,7 @@ function StaffCalendar({ staffId, staffName, currentMonth, onMonthChange, onEdit
   }, [staffId, currentMonth, supabase]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchData();
   }, [fetchData]);
 
@@ -1137,6 +1141,7 @@ function PatternImportModal({ onClose }: PatternImportModalProps) {
           .order("user_id"),
         supabase.from("clients").select("id, name, name_kana:furigana, status").eq("status", "active").eq("is_facility", false),
       ]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
       const pats: VisitPattern[] = (patRes.data || []).map((r: any) => ({
         ...r,
         user_name: r.clients?.name ?? null,
@@ -1249,6 +1254,7 @@ function PatternImportModal({ onClose }: PatternImportModalProps) {
       toast.success(`${toInsert.length}件の予定を取り込みました`);
       onClose();
     } catch (err: unknown) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
       toast.error("取り込みに失敗: " + (err instanceof Error ? err.message : typeof err === 'object' && err !== null && 'message' in err ? (err as any).message : JSON.stringify(err)));
     } finally {
       setImporting(false);
@@ -1447,6 +1453,7 @@ function UrlManagementModal({ onClose }: UrlManagementModalProps) {
       });
       toast.success("URLを発行しました");
     } catch (err: unknown) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
       toast.error("URL発行に失敗: " + (err instanceof Error ? err.message : typeof err === 'object' && err !== null && 'message' in err ? (err as any).message : JSON.stringify(err)));
     } finally {
       setGenerating(null);
@@ -1644,6 +1651,9 @@ function TimelineView({
     width: number; // percentage
   } | null>(null);
   const draggingRef = useRef(dragging);
+  // render 時に ref へ最新 state を mirror する pattern。drag handler 内で stale
+  // closure を避けるための定石だが React Compiler refs rule は警告するため抑止。
+  // eslint-disable-next-line react-hooks/refs
   draggingRef.current = dragging;
 
   // ─── Move/Copy choice dialog after drop ───────────────────────────
@@ -1675,6 +1685,7 @@ function TimelineView({
         .lte("available_date", format(endOfMonth(selectedDate), "yyyy-MM-dd")),
     ]);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
     const mapped: VisitSchedule[] = (schedRes.data || []).map((r: any) => ({
       id: r.id,
       user_id: r.user_id,
@@ -1693,6 +1704,7 @@ function TimelineView({
   }, [dateStr, supabase]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchData();
   }, [fetchData]);
 
@@ -2392,6 +2404,7 @@ function MonthlyIndividualView({
     setLoading(false);
   }, [entityId, entityType, currentMonth, supabase]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
   useEffect(() => { fetchData(); }, [fetchData]);
 
   // 予定⇔実績 切替

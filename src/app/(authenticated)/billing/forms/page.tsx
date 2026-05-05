@@ -197,6 +197,7 @@ export default function BillingFormsPage() {
   }, [supabase, selectedUserId, billingMonth]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchData();
   }, [fetchData]);
 
@@ -211,6 +212,7 @@ export default function BillingFormsPage() {
   }, [supabase, billingMonth]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchAllClaims();
   }, [fetchAllClaims]);
 

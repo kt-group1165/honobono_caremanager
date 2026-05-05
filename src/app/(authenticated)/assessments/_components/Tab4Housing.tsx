@@ -47,7 +47,7 @@ export function Tab4Housing({ data, onChange }: Props) {
             <Radio name="elevator" options={["有", "無"] as const} value={data.living_room.elevator} onChange={(v) => updLR("elevator", v)} />
           </Field>
           <Field label="ウ. 寝具">
-            <Radio name="bed-type" options={["布団", "ベッド"] as const} value={data.living_room.bed_type[0] as any || ""} onChange={(v) => updLR("bed_type", [v])} />
+            <Radio name="bed-type" options={["布団", "ベッド"] as const} value={data.living_room.bed_type[0] as any || ""} onChange={(v) => updLR("bed_type", [v])} /> {/* eslint-disable-line @typescript-eslint/no-explicit-any -- Radio prop widening */}
             {data.living_room.bed_type.includes("ベッド") && (
               <CheckboxGroup options={["固定式", "ギャッチ", "電動"]} value={data.living_room.bed_sub} onChange={(v) => updLR("bed_sub", v)} />
             )}

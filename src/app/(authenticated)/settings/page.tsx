@@ -78,7 +78,10 @@ function FiscalYearRatesSection() {
   const saveRates = async () => {
     setSavingRates(true);
     try {
-      for (const r of rates) {
+      // 直接 state mutation せず、コピーに対して id 反映してから setState で commit
+      const updated = [...rates];
+      for (let i = 0; i < updated.length; i++) {
+        const r = updated[i];
         if (r.id) {
           await supabase.from("kaigo_care_support_rates").update({
             units: r.units,
@@ -93,9 +96,10 @@ function FiscalYearRatesSection() {
             service_code: r.service_code,
             service_name: r.service_name,
           }, { onConflict: "fiscal_year,care_level" }).select("id").single();
-          if (data) r.id = data.id;
+          if (data) updated[i] = { ...r, id: data.id };
         }
       }
+      setRates(updated);
       toast.success("年度別単位数を保存しました");
     } catch (err) {
       toast.error("保存に失敗しました");
@@ -279,7 +283,10 @@ function FiscalYearTokuteiKassanSection() {
   const saveRates = async () => {
     setSavingRates(true);
     try {
-      for (const r of rates) {
+      // 直接 state mutation せず、コピーに対して id 反映してから setState で commit
+      const updated = [...rates];
+      for (let i = 0; i < updated.length; i++) {
+        const r = updated[i];
         if (r.id) {
           await supabase
             .from("kaigo_tokutei_kassan_rates")
@@ -299,9 +306,10 @@ function FiscalYearTokuteiKassanSection() {
             )
             .select("id")
             .single();
-          if (data) r.id = data.id;
+          if (data) updated[i] = { ...r, id: data.id };
         }
       }
+      setRates(updated);
       toast.success("特定事業所加算単位数を保存しました");
     } catch (err) {
       toast.error("保存に失敗しました");

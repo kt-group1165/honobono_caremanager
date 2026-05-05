@@ -162,6 +162,7 @@ export default function ProvisionTicketsPage() {
 
   // ── Load user details ──────────────────────────────────────────────────────
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     if (!selectedUserId) { setUserData(null); return; }
     const load = async () => {
       const { data } = await supabase
@@ -201,6 +202,7 @@ export default function ProvisionTicketsPage() {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
     const schedules: VisitSchedule[] = (data || []).map((r: any) => ({
       id: r.id,
       user_id: r.user_id,
@@ -261,6 +263,7 @@ export default function ProvisionTicketsPage() {
   }, [selectedUserId, monthStr, daysCount, supabase]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchGridData();
   }, [fetchGridData]);
 

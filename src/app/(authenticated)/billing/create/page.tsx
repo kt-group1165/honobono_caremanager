@@ -131,6 +131,7 @@ export default function BillingCreatePage() {
   }, [supabase]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchUsers();
   }, [fetchUsers]);
 

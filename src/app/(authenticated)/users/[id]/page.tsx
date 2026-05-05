@@ -131,6 +131,7 @@ function UserOfficeServices({ userId, tenantId }: { userId: string; tenantId: st
     setLoading(false);
   };
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
   useEffect(() => { load(); }, [userId]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleOffice = async (officeId: string, currentlyUsing: boolean) => {
@@ -340,6 +341,7 @@ export default function UserDetailPage() {
   // 編集時にも参照するため id を保持しておく。
   const [tenantMemoId, setTenantMemoId] = useState<string | null>(null);
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- React Compiler skip OK; manual memo を維持
   const fetchUser = useCallback(async () => {
     setLoading(true);
     try {
@@ -398,6 +400,7 @@ export default function UserDetailPage() {
   }, [supabase, id, router, currentOffice?.tenant_id]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchUser();
   }, [fetchUser]);
 

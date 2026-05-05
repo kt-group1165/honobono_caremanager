@@ -127,6 +127,7 @@ export default function MeetingMinutesPage() {
   // ── Fetch user ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!selectedUserId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
       setSelectedUser(null);
       setCarePlans([]);
       setSelectedCarePlanId(null);
@@ -170,6 +171,7 @@ export default function MeetingMinutesPage() {
   }, [supabase, selectedUserId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchCarePlans();
   }, [fetchCarePlans]);
 
@@ -204,6 +206,7 @@ export default function MeetingMinutesPage() {
   }, [supabase, selectedUserId, selectedCarePlanId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     if (mode === "list") fetchDocs();
   }, [fetchDocs, mode]);
 

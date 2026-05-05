@@ -71,6 +71,7 @@ export default function StaffPage() {
   const [deleteTarget, setDeleteTarget] = useState<Staff | null>(null);
   const [form, setForm] = useState<Omit<Staff, "id" | "created_at">>(EMPTY_FORM);
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- React Compiler skip OK; manual memo を維持
   const fetchStaff = useCallback(async () => {
     setLoading(true);
     // 共通マスタ members から kaigo-app に必要なカラムだけ取得（color/sort_order は order-app 専用なので除外）
@@ -92,6 +93,7 @@ export default function StaffPage() {
   }, [supabase, currentOffice?.tenant_id]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchStaff();
   }, [fetchStaff]);
 

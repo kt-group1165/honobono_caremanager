@@ -206,6 +206,7 @@ export default function ProvidersPage() {
   }, [supabase]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchProviders();
   }, [fetchProviders]);
 
@@ -215,6 +216,7 @@ export default function ProvidersPage() {
     if (selectedId && providers.some((p) => p.id === selectedId)) return;
     const firstActive = providers.find((p) => p.status === "active") ?? providers[0];
     if (firstActive) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
       setSelectedId(firstActive.id);
     }
   }, [loading, providers, selectedId, isCreating]);
@@ -225,6 +227,7 @@ export default function ProvidersPage() {
   useEffect(() => {
     if (isCreating) return;
     if (selectedProvider) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
       setForm({
         provider_number: selectedProvider.provider_number,
         provider_name: selectedProvider.provider_name,

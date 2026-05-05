@@ -176,6 +176,7 @@ export default function CareCertPage() {
   }, [supabase, userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchRecords();
   }, [fetchRecords]);
 

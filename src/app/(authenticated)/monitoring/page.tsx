@@ -301,6 +301,7 @@ export default function MonitoringPage() {
 
   useEffect(() => {
     if (selectedUserId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
       fetchUser(selectedUserId);
       setMode("list");
     } else {
@@ -408,6 +409,7 @@ export default function MonitoringPage() {
   }, [supabase, selectedUserId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchCarePlans();
   }, [fetchCarePlans]);
 
@@ -442,6 +444,7 @@ export default function MonitoringPage() {
   }, [supabase, selectedUserId, selectedCarePlanId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     if (mode === "list") fetchSheets();
   }, [fetchSheets, mode]);
 
@@ -588,6 +591,7 @@ export default function MonitoringPage() {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
     const mapped: MonitoringItem[] = (dbItems ?? []).map((r: any) => ({
       id: r.id,
       monitoring_sheet_id: r.monitoring_sheet_id,

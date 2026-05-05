@@ -249,12 +249,14 @@ export default function BenefitsPage() {
   }, [supabase, billingMonth]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchData();
   }, [fetchData]);
 
   // Auto-expand all users with data
   useEffect(() => {
     const groups = aggregateUserGroups(users, rows);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     setExpandedUsers(new Set(groups.map((g) => g.user.id)));
   }, [users, rows]);
 

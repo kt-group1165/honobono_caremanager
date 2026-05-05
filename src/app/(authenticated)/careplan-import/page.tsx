@@ -27,6 +27,7 @@ interface ImportedFile {
   type: "user-info" | "care-plan-1" | "care-plan-2" | "care-plan-3" | "table-6" | "table-7" | "unknown";
   label: string;
   rows: string[][];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
   parsed: Record<string, any>;
 }
 
@@ -95,6 +96,7 @@ function getTypeIcon(type: ImportedFile["type"]) {
 }
 
 // Parse specific CSV types
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
 function parseUserInfo(rows: string[][]): Record<string, any> {
   if (rows.length === 0) return {};
   const r = rows[0];
@@ -113,6 +115,7 @@ function parseUserInfo(rows: string[][]): Record<string, any> {
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
 function parseCarePlan1(rows: string[][]): Record<string, any> {
   if (rows.length === 0) return {};
   const r = rows[0];
@@ -130,7 +133,9 @@ function parseCarePlan1(rows: string[][]): Record<string, any> {
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
 function parseCarePlan2(rows: string[][]): Record<string, any> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
   const services: Record<string, any>[] = [];
   for (const r of rows) {
     services.push({
@@ -150,7 +155,9 @@ function parseCarePlan2(rows: string[][]): Record<string, any> {
   return { services };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
 function parseCarePlan3(rows: string[][]): Record<string, any> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
   const schedule: Record<string, any>[] = [];
   for (const r of rows) {
     schedule.push({
@@ -234,6 +241,7 @@ export default function CareplanImportPage() {
         const rows = dataLines.map(parseCSVLine);
         const type = detectFileType(file.name, rows);
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
         let parsed: Record<string, any> = {};
         switch (type) {
           case "user-info": parsed = parseUserInfo(rows); break;

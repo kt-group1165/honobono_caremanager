@@ -76,6 +76,7 @@ export default function SchedulesPage() {
     setUsers(data || []);
   }, [supabase]);
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- React Compiler skip OK; manual memo を維持
   const fetchRecords = useCallback(async () => {
     setLoading(true);
     const fromDate = format(weekStart, "yyyy-MM-dd");
@@ -97,13 +98,16 @@ export default function SchedulesPage() {
       setRecords(data || []);
     }
     setLoading(false);
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- React Compiler skip OK; manual memo を維持
   }, [supabase, weekStart, weekEnd, filterUser]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchUsers();
   }, [fetchUsers]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchRecords();
   }, [fetchRecords]);
 

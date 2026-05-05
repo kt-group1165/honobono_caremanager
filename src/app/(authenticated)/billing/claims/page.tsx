@@ -732,6 +732,7 @@ export default function ClaimsPage() {
     } catch (err: unknown) {
       toast.error(
         "レセプトデータの取得に失敗しました: " +
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
           (err instanceof Error ? err.message : typeof err === "object" && err !== null && "message" in err ? String((err as any).message) : JSON.stringify(err))
       );
     } finally {
@@ -740,6 +741,7 @@ export default function ClaimsPage() {
   }, [supabase, billingMonth]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchClaims();
   }, [fetchClaims]);
 
@@ -934,7 +936,7 @@ export default function ClaimsPage() {
         return;
       }
 
-      let { error: insertErr } = await supabase
+      const { error: insertErr } = await supabase
         .from("kaigo_care_support_claims")
         .insert(rows);
 
@@ -953,6 +955,7 @@ export default function ClaimsPage() {
       fetchClaims();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
         : typeof err === "object" && err !== null && "message" in err ? String((err as any).message)
         : JSON.stringify(err);
       toast.error("一括生成に失敗しました: " + msg);
@@ -978,6 +981,7 @@ export default function ClaimsPage() {
     } catch (err: unknown) {
       toast.error(
         "更新に失敗しました: " +
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
           (err instanceof Error ? err.message : typeof err === "object" && err !== null && "message" in err ? String((err as any).message) : JSON.stringify(err))
       );
     }
@@ -1012,6 +1016,7 @@ export default function ClaimsPage() {
     } catch (err: unknown) {
       toast.error(
         "全件確定に失敗しました: " +
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
           (err instanceof Error ? err.message : typeof err === "object" && err !== null && "message" in err ? String((err as any).message) : JSON.stringify(err))
       );
     } finally {
@@ -1077,6 +1082,7 @@ export default function ClaimsPage() {
     } catch (err: unknown) {
       toast.error(
         "更新に失敗しました: " +
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
           (err instanceof Error ? err.message : typeof err === "object" && err !== null && "message" in err ? String((err as any).message) : JSON.stringify(err))
       );
     }

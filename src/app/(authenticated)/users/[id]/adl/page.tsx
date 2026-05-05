@@ -196,6 +196,7 @@ export default function AdlPage() {
   }, [supabase, userId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchRecords();
   }, [fetchRecords]);
 

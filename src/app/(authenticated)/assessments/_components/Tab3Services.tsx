@@ -108,7 +108,7 @@ export function Tab3Services({ data, onChange }: Props) {
         </SubSection>
 
         <SubSection title="直近の入所・入院">
-          <Radio name="admission-type" options={ADMISSION_TYPES} value={data.recent_admission.type as any} onChange={(v) => upd("recent_admission", { ...data.recent_admission, type: v })} />
+          <Radio name="admission-type" options={ADMISSION_TYPES} value={data.recent_admission.type as any} onChange={(v) => upd("recent_admission", { ...data.recent_admission, type: v })} /> {/* eslint-disable-line @typescript-eslint/no-explicit-any -- Radio prop widening */}
           <div className="grid grid-cols-2 gap-2 mt-2">
             <Field label="施設・機関名"><TextInput value={data.recent_admission.facility_name} onChange={(v) => upd("recent_admission", { ...data.recent_admission, facility_name: v })} className="w-full" /></Field>
             <Field label="TEL"><TextInput value={data.recent_admission.tel} onChange={(v) => upd("recent_admission", { ...data.recent_admission, tel: v })} className="w-full" /></Field>

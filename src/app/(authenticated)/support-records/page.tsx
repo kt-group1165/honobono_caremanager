@@ -197,6 +197,7 @@ export default function SupportRecordsPage() {
     setUrls(data || []);
   }, [supabase]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
   useEffect(() => { if (showUrlModal) fetchUrls(); }, [showUrlModal, fetchUrls]);
 
   const createUrl = async () => {
@@ -301,6 +302,7 @@ export default function SupportRecordsPage() {
   }, [supabase]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchUsers();
   }, [fetchUsers]);
 
@@ -336,6 +338,7 @@ export default function SupportRecordsPage() {
   }, [supabase, selectedUserId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchCarePlans();
   }, [fetchCarePlans]);
 
@@ -370,6 +373,7 @@ export default function SupportRecordsPage() {
   }, [supabase, selectedUserId, selectedCarePlanId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchRecords();
   }, [fetchRecords]);
 

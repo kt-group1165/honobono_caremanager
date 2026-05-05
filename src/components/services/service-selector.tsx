@@ -56,6 +56,7 @@ export function ServiceSelector({ open, onClose, onSelect }: ServiceSelectorProp
     if (!open) return
 
     let cancelled = false
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     setLoading(true)
     setError(null)
 
@@ -92,6 +93,7 @@ export function ServiceSelector({ open, onClose, onSelect }: ServiceSelectorProp
   // ── Reset state when closed ──────────────────────────────────────────────────
   React.useEffect(() => {
     if (!open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
       setQuery("")
       setActiveCategory(CATEGORIES[0].code)
     }

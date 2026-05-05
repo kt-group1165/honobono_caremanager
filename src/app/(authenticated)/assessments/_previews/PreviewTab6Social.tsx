@@ -21,6 +21,7 @@ function CheckMark({ on }: { on: boolean }) {
   return <span className="inline-block text-center" style={{ width: "4mm" }}>{on ? "○" : ""}</span>;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
 function SupportT({ title, rows, matrix }: { title: string; rows: string[]; matrix: Record<string, any> | undefined }) {
   return (
     <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "7pt" }}>

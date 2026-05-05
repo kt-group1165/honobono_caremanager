@@ -34,6 +34,7 @@ export function UserSidebar({ selectedUserId, onSelectUser }: UserSidebarProps) 
   const [filterMode, setFilterMode] = useState<"all" | "office">("office");
   useEffect(() => {
     const stored = localStorage.getItem(FILTER_KEY);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     if (stored === "all") setFilterMode("all");
   }, []);
 
@@ -103,6 +104,7 @@ export function UserSidebar({ selectedUserId, onSelectUser }: UserSidebarProps) 
     setLoading(false);
   }, [supabase, currentOfficeId, filterMode]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
   useEffect(() => {

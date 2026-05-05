@@ -173,8 +173,9 @@ export default function DashboardPage() {
         if (e5) throw e5;
 
         // Fetch latest active care certifications for those users
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
         const userIds = (usersData ?? []).map((u: any) => u.id);
-        let certMap: Record<string, string> = {};
+        const certMap: Record<string, string> = {};
         if (userIds.length > 0) {
           // client_insurance_records、新カラム名（user_id → client_id, status → certification_status, start_date → certification_start_date）
           const { data: certData } = await supabase
@@ -184,6 +185,7 @@ export default function DashboardPage() {
             .eq("certification_status", "認定済み")
             .order("certification_start_date", { ascending: false, nullsFirst: false });
           if (certData) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
             certData.forEach((c: any) => {
               if (!certMap[c.client_id]) certMap[c.client_id] = c.care_level;
             });
@@ -191,6 +193,7 @@ export default function DashboardPage() {
         }
 
         setRecentUsers(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
           (usersData ?? []).map((u: any) => ({
             ...u,
             care_level: certMap[u.id] ?? null,
@@ -206,15 +209,17 @@ export default function DashboardPage() {
         if (e6) throw e6;
 
         const serviceUserIds = [
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
           ...new Set((serviceData ?? []).map((s: any) => s.user_id).filter(Boolean)),
         ];
-        let userNameMap: Record<string, string> = {};
+        const userNameMap: Record<string, string> = {};
         if (serviceUserIds.length > 0) {
           const { data: serviceUsersData } = await supabase
             .from("clients")
             .select("id, name")
             .in("id", serviceUserIds);
           if (serviceUsersData) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
             serviceUsersData.forEach((u: any) => {
               userNameMap[u.id] = u.name;
             });
@@ -222,6 +227,7 @@ export default function DashboardPage() {
         }
 
         setRecentServiceRecords(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
           (serviceData ?? []).map((s: any) => ({
             id: s.id,
             service_date: s.service_date,

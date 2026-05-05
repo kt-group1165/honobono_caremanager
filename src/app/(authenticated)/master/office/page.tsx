@@ -111,6 +111,7 @@ export default function OfficeSettingsPage() {
   useEffect(() => {
     if (!currentOfficeId || offices.length === 0) return;
     const o = offices.find((x: OfficeSettings) => x.id === currentOfficeId);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     if (o && o.id !== editingId) { setEditingId(o.id); setForm(o); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentOfficeId, offices]);

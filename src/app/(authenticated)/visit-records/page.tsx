@@ -220,6 +220,76 @@ function getActiveCareItems(record: VisitRecord): string[] {
   return items;
 }
 
+// VisitRecordsPage の form 内で使う入力 helper (module scope に hoist)
+// TemplatePicker import は既に top にあり、closure 依存なし
+function FSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-gray-700">{label}</label>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={inputClass}>
+        <option value="">選択してください</option>
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+}
+function FInput({ label, value, onChange, placeholder, type = "text" }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-gray-700">{label}</label>
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={inputClass} />
+    </div>
+  );
+}
+function FTextarea({ label, value, onChange, placeholder, rows = 2 }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; rows?: number }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <label className="block text-xs font-medium text-gray-700">{label}</label>
+        <TemplatePicker category="visit_record" currentText={value} onInsert={onChange} />
+      </div>
+      <textarea rows={rows} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={inputClass} />
+    </div>
+  );
+}
+function FCheck({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${checked ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+      <input type="checkbox" checked={checked} onChange={() => onChange(!checked)} className="accent-blue-600" />
+      {label}
+    </label>
+  );
+}
+function FSectionBtn({ id, label, openId, setOpenId }: { id: string; label: string; openId: string | null; setOpenId: (id: string | null) => void }) {
+  const isOpen = openId === id;
+  return (
+    <button onClick={() => setOpenId(isOpen ? null : id)} className="flex items-center justify-between w-full px-3 py-2.5 bg-gray-100 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-200 transition-colors">
+      {label}
+      <ChevronDown size={14} className={`text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+    </button>
+  );
+}
+
+// CareRecordDetail で使う presentational helpers (module scope に hoist して
+// react-hooks/static-components rule を満たす。closure 依存なしの純粋 component)
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-3">
+      <p className="mb-1.5 text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded">{title}</p>
+      <div className="pl-2 text-sm text-gray-700 space-y-0.5">{children}</div>
+    </div>
+  );
+}
+function Row({ label, value }: { label: string; value: string | number | null | undefined }) {
+  if (!value && value !== 0) return null;
+  return <div className="flex gap-2"><span className="text-gray-500 shrink-0 w-20">{label}</span><span className="font-medium">{value}</span></div>;
+}
+function Tags({ items }: { items: { label: string; active: boolean }[] }) {
+  const active = items.filter((i) => i.active);
+  if (active.length === 0) return null;
+  return <div className="flex flex-wrap gap-1">{active.map((i) => <span key={i.label} className="rounded bg-blue-50 text-blue-700 px-2 py-0.5 text-xs font-medium">{i.label}</span>)}</div>;
+}
+
 // 22カテゴリ展開表示コンポーネント
 function CareRecordDetail({ record }: { record: VisitRecord }) {
   const r = record as any;  // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -285,23 +355,6 @@ function CareRecordDetail({ record }: { record: VisitRecord }) {
       </div>
     );
   }
-
-  // Helper for rendering sections
-  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <div className="mb-3">
-      <p className="mb-1.5 text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded">{title}</p>
-      <div className="pl-2 text-sm text-gray-700 space-y-0.5">{children}</div>
-    </div>
-  );
-  const Row = ({ label, value }: { label: string; value: string | number | null | undefined }) => {
-    if (!value && value !== 0) return null;
-    return <div className="flex gap-2"><span className="text-gray-500 shrink-0 w-20">{label}</span><span className="font-medium">{value}</span></div>;
-  };
-  const Tags = ({ items }: { items: { label: string; active: boolean }[] }) => {
-    const active = items.filter((i) => i.active);
-    if (active.length === 0) return null;
-    return <div className="flex flex-wrap gap-1">{active.map((i) => <span key={i.label} className="rounded bg-blue-50 text-blue-700 px-2 py-0.5 text-xs font-medium">{i.label}</span>)}</div>;
-  };
 
   return (
     <div className="space-y-1">
@@ -575,6 +628,7 @@ export default function VisitRecordsPage() {
     if (error) {
       toast.error("記録の取得に失敗しました");
     } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
       const mapped = (data || []).map((r: any) => ({
         ...r,
         staff_name: r.members?.name ?? null,
@@ -586,6 +640,7 @@ export default function VisitRecordsPage() {
 
   useEffect(() => {
     if (selectedUserId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
       fetchRecords(selectedUserId);
       setShowForm(false);
       setExpandedId(null);
@@ -646,44 +701,6 @@ export default function VisitRecordsPage() {
   // Section toggle for form
   const isFormOpen = (id: string) => formSection === id;
   const toggleFormSection = (id: string) => setFormSection(formSection === id ? null : id);
-
-  // Reusable form components
-  const FSelect = ({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) => (
-    <div>
-      <label className="mb-1 block text-xs font-medium text-gray-700">{label}</label>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className={inputClass}>
-        <option value="">選択してください</option>
-        {options.map((o) => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </div>
-  );
-  const FInput = ({ label, value, onChange, placeholder, type = "text" }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) => (
-    <div>
-      <label className="mb-1 block text-xs font-medium text-gray-700">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={inputClass} />
-    </div>
-  );
-  const FTextarea = ({ label, value, onChange, placeholder, rows = 2 }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; rows?: number }) => (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <label className="block text-xs font-medium text-gray-700">{label}</label>
-        <TemplatePicker category="visit_record" currentText={value} onInsert={onChange} />
-      </div>
-      <textarea rows={rows} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={inputClass} />
-    </div>
-  );
-  const FCheck = ({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) => (
-    <label className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${checked ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-      <input type="checkbox" checked={checked} onChange={() => onChange(!checked)} className="accent-blue-600" />
-      {label}
-    </label>
-  );
-  const FSectionBtn = ({ id, label }: { id: string; label: string }) => (
-    <button onClick={() => toggleFormSection(id)} className="flex items-center justify-between w-full px-3 py-2.5 bg-gray-100 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-200 transition-colors">
-      {label}
-      <ChevronDown size={14} className={`text-gray-400 transition-transform ${isFormOpen(id) ? "rotate-180" : ""}`} />
-    </button>
-  );
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -856,7 +873,7 @@ export default function VisitRecordsPage() {
               </section>
 
               {/* 1. 事前チェック */}
-              <FSectionBtn id="pre_check" label="事前チェック" />
+              <FSectionBtn id="pre_check" label="事前チェック" openId={formSection} setOpenId={setFormSection} />
               {isFormOpen("pre_check") && (
                 <div className="space-y-2 pl-1">
                   <div className="grid grid-cols-2 gap-2">
@@ -872,7 +889,7 @@ export default function VisitRecordsPage() {
               )}
 
               {/* 2. バイタル */}
-              <FSectionBtn id="vitals" label="バイタルサイン・身体測定" />
+              <FSectionBtn id="vitals" label="バイタルサイン・身体測定" openId={formSection} setOpenId={setFormSection} />
               {isFormOpen("vitals") && (
                 <div className="space-y-2 pl-1">
                   <div className="grid grid-cols-2 gap-2">
@@ -895,7 +912,7 @@ export default function VisitRecordsPage() {
               )}
 
               {/* 3. 排泄 */}
-              <FSectionBtn id="excretion" label="排泄介助" />
+              <FSectionBtn id="excretion" label="排泄介助" openId={formSection} setOpenId={setFormSection} />
               {isFormOpen("excretion") && (
                 <div className="space-y-2 pl-1">
                   <div className="grid grid-cols-2 gap-2">
@@ -914,7 +931,7 @@ export default function VisitRecordsPage() {
               )}
 
               {/* 4. 水分 */}
-              <FSectionBtn id="hydration" label="水分摂取" />
+              <FSectionBtn id="hydration" label="水分摂取" openId={formSection} setOpenId={setFormSection} />
               {isFormOpen("hydration") && (
                 <div className="space-y-2 pl-1">
                   <FInput label="飲み物の種類" value={formCare.hydration.drink_type} onChange={(v) => updCare("hydration", { drink_type: v, done: true })} placeholder="お茶、水等" />
@@ -924,7 +941,7 @@ export default function VisitRecordsPage() {
               )}
 
               {/* 5. 食事 */}
-              <FSectionBtn id="meal" label="食事介助" />
+              <FSectionBtn id="meal" label="食事介助" openId={formSection} setOpenId={setFormSection} />
               {isFormOpen("meal") && (
                 <div className="space-y-2 pl-1">
                   <div className="grid grid-cols-2 gap-2">
@@ -937,7 +954,7 @@ export default function VisitRecordsPage() {
               )}
 
               {/* 6. 口腔ケア */}
-              <FSectionBtn id="oral_care" label="口腔ケア" />
+              <FSectionBtn id="oral_care" label="口腔ケア" openId={formSection} setOpenId={setFormSection} />
               {isFormOpen("oral_care") && (
                 <div className="space-y-2 pl-1">
                   <FSelect label="義歯" value={formCare.oral_care.denture} onChange={(v) => updCare("oral_care", { denture: v })} options={["なし", "上のみ", "下のみ", "上下"]} />
@@ -951,7 +968,7 @@ export default function VisitRecordsPage() {
               )}
 
               {/* 7. 清拭・入浴 */}
-              <FSectionBtn id="bathing" label="清拭・入浴" />
+              <FSectionBtn id="bathing" label="清拭・入浴" openId={formSection} setOpenId={setFormSection} />
               {isFormOpen("bathing") && (
                 <div className="space-y-2 pl-1">
                   <FSelect label="入浴種類" value={formCare.bathing.bath_type} onChange={(v) => updCare("bathing", { bath_type: v, done: true })} options={["一般浴", "シャワー浴", "清拭", "足浴", "手浴", "部分浴"]} />
@@ -961,7 +978,7 @@ export default function VisitRecordsPage() {
               )}
 
               {/* 8. 身体整容 */}
-              <FSectionBtn id="grooming" label="身体整容" />
+              <FSectionBtn id="grooming" label="身体整容" openId={formSection} setOpenId={setFormSection} />
               {isFormOpen("grooming") && (
                 <div className="grid grid-cols-3 gap-2 pl-1">
                   <FCheck label="洗顔" checked={formCare.grooming.face_wash} onChange={(v) => updCare("grooming", { face_wash: v, done: true })} />
@@ -973,7 +990,7 @@ export default function VisitRecordsPage() {
               )}
 
               {/* 9. 更衣 */}
-              <FSectionBtn id="dressing" label="更衣介助" />
+              <FSectionBtn id="dressing" label="更衣介助" openId={formSection} setOpenId={setFormSection} />
               {isFormOpen("dressing") && (
                 <div className="space-y-2 pl-1">
                   <div className="grid grid-cols-2 gap-2">
@@ -985,7 +1002,7 @@ export default function VisitRecordsPage() {
               )}
 
               {/* 10. 体位・移動 */}
-              <FSectionBtn id="positioning" label="体位変換・移動" />
+              <FSectionBtn id="positioning" label="体位変換・移動" openId={formSection} setOpenId={setFormSection} />
               {isFormOpen("positioning") && (
                 <div className="space-y-2 pl-1">
                   <FSelect label="体位" value={formCare.positioning.position_type} onChange={(v) => updCare("positioning", { position_type: v, done: true })} options={["仰臥位", "側臥位", "座位", "半座位", "起立位", "その他"]} />
@@ -994,7 +1011,7 @@ export default function VisitRecordsPage() {
               )}
 
               {/* 11. 服薬 */}
-              <FSectionBtn id="medication" label="服薬介助" />
+              <FSectionBtn id="medication" label="服薬介助" openId={formSection} setOpenId={setFormSection} />
               {isFormOpen("medication") && (
                 <div className="space-y-2 pl-1">
                   <FSelect label="投与方法" value={formCare.medication.med_type} onChange={(v) => updCare("medication", { med_type: v, done: true })} options={["内服", "外用", "点眼", "吸入", "座薬", "注射", "その他"]} />
@@ -1003,7 +1020,7 @@ export default function VisitRecordsPage() {
               )}
 
               {/* 12. 通院・外出 */}
-              <FSectionBtn id="outing" label="通院・外出介助" />
+              <FSectionBtn id="outing" label="通院・外出介助" openId={formSection} setOpenId={setFormSection} />
               {isFormOpen("outing") && (
                 <div className="space-y-2 pl-1">
                   <FSelect label="種類" value={formCare.outing.outing_type} onChange={(v) => updCare("outing", { outing_type: v, done: true })} options={["通院", "買物同行", "散歩", "外出付添", "その他"]} />
@@ -1012,7 +1029,7 @@ export default function VisitRecordsPage() {
               )}
 
               {/* 13. 起床・就寝 */}
-              <FSectionBtn id="wake_sleep" label="起床・就寝介助" />
+              <FSectionBtn id="wake_sleep" label="起床・就寝介助" openId={formSection} setOpenId={setFormSection} />
               {isFormOpen("wake_sleep") && (
                 <div className="grid grid-cols-3 gap-2 pl-1">
                   <FCheck label="起床介助" checked={formCare.wake_sleep.wake_up} onChange={(v) => updCare("wake_sleep", { wake_up: v, done: true })} />
@@ -1022,7 +1039,7 @@ export default function VisitRecordsPage() {
               )}
 
               {/* 14. 医療的ケア */}
-              <FSectionBtn id="medical_care" label="医療的ケア" />
+              <FSectionBtn id="medical_care" label="医療的ケア" openId={formSection} setOpenId={setFormSection} />
               {isFormOpen("medical_care") && (
                 <div className="grid grid-cols-3 gap-2 pl-1">
                   <FCheck label="吸引" checked={formCare.medical_care.suction} onChange={(v) => updCare("medical_care", { suction: v, done: true })} />
@@ -1035,7 +1052,7 @@ export default function VisitRecordsPage() {
               )}
 
               {/* 15. 自立支援 */}
-              <FSectionBtn id="independence" label="自立支援" />
+              <FSectionBtn id="independence" label="自立支援" openId={formSection} setOpenId={setFormSection} />
               {isFormOpen("independence") && (
                 <div className="grid grid-cols-2 gap-2 pl-1">
                   <FCheck label="運動・リハビリ" checked={formCare.independence_support.exercise} onChange={(v) => updCare("independence_support", { exercise: v, done: true })} />
@@ -1046,7 +1063,7 @@ export default function VisitRecordsPage() {
               )}
 
               {/* 16. 生活援助 */}
-              <FSectionBtn id="living" label="生活援助" />
+              <FSectionBtn id="living" label="生活援助" openId={formSection} setOpenId={setFormSection} />
               {isFormOpen("living") && (
                 <div className="space-y-2 pl-1">
                   <div className="grid grid-cols-3 gap-2">
@@ -1063,7 +1080,7 @@ export default function VisitRecordsPage() {
               )}
 
               {/* 17. 退出確認 */}
-              <FSectionBtn id="exit_check" label="退出確認" />
+              <FSectionBtn id="exit_check" label="退出確認" openId={formSection} setOpenId={setFormSection} />
               {isFormOpen("exit_check") && (
                 <div className="space-y-2 pl-1">
                   <div className="grid grid-cols-3 gap-2">
@@ -1076,7 +1093,7 @@ export default function VisitRecordsPage() {
               )}
 
               {/* 18-20. テキスト系 */}
-              <FSectionBtn id="text_sections" label="経過記録・申し送り・詳細報告" />
+              <FSectionBtn id="text_sections" label="経過記録・申し送り・詳細報告" openId={formSection} setOpenId={setFormSection} />
               {isFormOpen("text_sections") && (
                 <div className="space-y-3 pl-1">
                   <FTextarea label="経過記録" value={formCare.progress_notes} onChange={(v) => setFormCare({ ...formCare, progress_notes: v })} placeholder="サービス提供中の経過を記録..." rows={3} />

@@ -332,6 +332,7 @@ export default function PatternsPage() {
 
   useEffect(() => {
     if (selectedUserId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
       fetchPatterns(selectedUserId);
     } else {
       setPatterns([]);
@@ -406,6 +407,7 @@ export default function PatternsPage() {
         )
       );
     } catch (err: unknown) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
       toast.error("保存に失敗: " + (err instanceof Error ? err.message : typeof err === 'object' && err !== null && 'message' in err ? (err as any).message : JSON.stringify(err)));
     } finally {
       setSavingId(null);

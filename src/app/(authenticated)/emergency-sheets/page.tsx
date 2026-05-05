@@ -179,6 +179,7 @@ export default function EmergencySheetsPage() {
     setUrls(data || []);
   }, [supabase]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
   useEffect(() => { if (showUrlModal) fetchUrls(); }, [showUrlModal, fetchUrls]);
 
   const createUrl = async () => {
@@ -349,6 +350,7 @@ export default function EmergencySheetsPage() {
 
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     if (selectedUserId) fetchData(selectedUserId);
   }, [selectedUserId, fetchData]);
 

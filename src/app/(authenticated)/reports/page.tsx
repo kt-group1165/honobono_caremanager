@@ -125,6 +125,7 @@ export default function ReportsPage() {
         .eq("user_id", selectedUserId)
         .order("created_at", { ascending: false });
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
       const docMap: Record<string, any> = {};
       for (const doc of docs ?? []) {
         if (!docMap[doc.report_type]) {

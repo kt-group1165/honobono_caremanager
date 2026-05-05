@@ -84,6 +84,7 @@ export default function ProvisionConfirmPage() {
     }
 
     // Try to fetch latest report documents for these users
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
     const userIds = userData.map((u: any) => u.id);
     const { data: docData } = await supabase
       .from("kaigo_report_documents")
@@ -93,6 +94,7 @@ export default function ProvisionConfirmPage() {
       .order("period_start", { ascending: false });
 
     // Map: latest doc per user
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
     const docByUser: Record<string, any> = {};
     for (const doc of docData || []) {
       if (!docByUser[doc.user_id]) {
@@ -100,6 +102,7 @@ export default function ProvisionConfirmPage() {
       }
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
     const mapped: ProvisionUser[] = userData.map((u: any) => {
       const doc = docByUser[u.id] ?? null;
       return {
@@ -119,6 +122,7 @@ export default function ProvisionConfirmPage() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

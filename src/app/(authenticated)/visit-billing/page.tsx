@@ -116,6 +116,7 @@ export default function VisitBillingPage() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     fetchRecords(currentMonth);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentMonth]);

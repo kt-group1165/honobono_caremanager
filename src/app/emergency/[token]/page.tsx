@@ -54,6 +54,21 @@ const STATUS_COLORS: Record<string, string> = {
 
 type Params = { token: string };
 
+// presentational helpers (module scope に置いて react-hooks/static-components rule
+// を満たす。closure 依存なし)
+function Row({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value) return null;
+  return (
+    <div className="flex py-1.5 border-b border-gray-100">
+      <span className="text-gray-500 w-24 shrink-0 text-xs">{label}</span>
+      <span className="text-sm font-medium">{value}</span>
+    </div>
+  );
+}
+function SectionTitle({ children, color }: { children: React.ReactNode; color: string }) {
+  return <h3 className={`text-sm font-bold px-3 py-2 rounded-lg mt-4 mb-2 ${color}`}>{children}</h3>;
+}
+
 export default function EmergencyMobilePage({ params }: { params: Promise<Params> }) {
   const { token } = use(params);
   const apiBase = `/api/emergency/${encodeURIComponent(token)}`;
@@ -179,18 +194,6 @@ export default function EmergencyMobilePage({ params }: { params: Promise<Params
     };
     const svcs = s.services_in_use ?? [];
     const devs = s.medical_devices ?? [];
-    const Row = ({ label, value }: { label: string; value: string | null | undefined }) => {
-      if (!value) return null;
-      return (
-        <div className="flex py-1.5 border-b border-gray-100">
-          <span className="text-gray-500 w-24 shrink-0 text-xs">{label}</span>
-          <span className="text-sm font-medium">{value}</span>
-        </div>
-      );
-    };
-    const SectionTitle = ({ children, color }: { children: React.ReactNode; color: string }) => (
-      <h3 className={`text-sm font-bold px-3 py-2 rounded-lg mt-4 mb-2 ${color}`}>{children}</h3>
-    );
 
     return (
       <div className="min-h-screen bg-gray-50">

@@ -77,6 +77,7 @@ export function generateUserInfoCSV(user: UserData, office: OfficeData): string 
 // ─── 第1表 居宅サービス計画書 (p29-30) ────────────────────────────────────────
 
 export function generateCarePlan1CSV(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
   content: Record<string, any>,
   user: UserData,
   office: OfficeData
@@ -113,6 +114,7 @@ export function generateCarePlan1CSV(
 // ─── 第2表 居宅サービス計画書 (p31) ──────────────────────────────────────────
 
 export function generateCarePlan2CSV(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
   content: Record<string, any>,
   user: UserData,
   office: OfficeData
@@ -156,6 +158,7 @@ export function generateCarePlan2CSV(
 // ─── 第3表 週間サービス計画表 (p32) ──────────────────────────────────────────
 
 export function generateCarePlan3CSV(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
   content: Record<string, any>,
   user: UserData,
   office: OfficeData
@@ -313,6 +316,7 @@ export function generateTable6ActualCSV(
 // ─── 第7表 サービス利用票別表 (p35) ──────────────────────────────────────────
 
 export function generateTable7CSV(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
   content: Record<string, any>,
   user: UserData,
   office: OfficeData
