@@ -302,23 +302,44 @@ export default function UserDetailLayout({
       let updated = 0;
 
       if (insertRows.length > 0) {
-        // 新規 INSERT には clients.tenant_id が必要
+        // 新規 INSERT には clients.tenant_id + user_number (NOT NULL) が必要
         if (!currentOffice?.tenant_id) {
           toast.error("自事業所が選択されていません。先にサイドバーから事業所を選んでください。");
           return;
         }
-        // id を除外して新規登録 + tenant_id を補完
         const tenantId = currentOffice.tenant_id;
-        const payload = insertRows.map((r) => {
+
+        // tenant 内の現在の最大 user_number を取得し、max+1 から sequential 採番
+        // (calendar-app の getMaxUserNumber と同じ logic)
+        const PAGE = 1000;
+        let maxNum = 0;
+        let from = 0;
+        for (;;) {
+          const { data: rows, error: e } = await supabase
+            .from("clients")
+            .select("user_number")
+            .eq("tenant_id", tenantId)
+            .range(from, from + PAGE - 1);
+          if (e) throw e;
+          if (!rows || rows.length === 0) break;
+          for (const row of rows as { user_number: string | null }[]) {
+            const n = parseInt(row.user_number ?? "0", 10);
+            if (!Number.isNaN(n) && n > maxNum) maxNum = n;
+          }
+          if (rows.length < PAGE) break;
+          from += PAGE;
+        }
+
+        const payload = insertRows.map((r, i) => {
           const copy: Record<string, unknown> = { ...r };
           delete copy.id;
-          // 空文字列は null に（日付系）
           Object.keys(copy).forEach((k) => {
             if (copy[k] === "") copy[k] = null;
           });
           copy.tenant_id = tenantId;
           copy.is_facility = false;
           copy.is_provisional = false;
+          copy.user_number = String(maxNum + 1 + i);
           return copy;
         });
         const { error, data } = await supabase
@@ -360,10 +381,14 @@ export default function UserDetailLayout({
       // サイドバーはリロードが必要
       router.refresh();
     } catch (err: unknown) {
-      toast.error(
-        "CSV取込に失敗しました: " +
-          (err instanceof Error ? err.message : String(err))
-      );
+      // PostgrestError は message/code/details を持つので構造化して取り出す
+      let msg: string;
+      if (err instanceof Error) msg = err.message;
+      else if (typeof err === "object" && err !== null) {
+        const e = err as { message?: string; details?: string; hint?: string; code?: string };
+        msg = [e.message, e.details, e.hint, e.code].filter(Boolean).join(" | ") || JSON.stringify(err);
+      } else msg = String(err);
+      toast.error("CSV取込に失敗しました: " + msg);
     } finally {
       setImporting(false);
     }
