@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { Suspense, useState, useEffect, useMemo, useCallback } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Search, User } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,13 +16,59 @@ interface ClientRow {
 }
 
 interface UserSidebarProps {
-  selectedUserId: string | null;
-  onSelectUser: (userId: string) => void;
+  // Both props omitted → URL mode (?user=<id> driven via search params)
+  // Both props provided → explicit mode (used by users/[id]/layout where id is in path)
+  selectedUserId?: string | null;
+  onSelectUser?: (userId: string) => void;
 }
 
 const FILTER_KEY = "kaigo.user_filter_mode";
+const URL_PARAM = "user";
 
-export function UserSidebar({ selectedUserId, onSelectUser }: UserSidebarProps) {
+// useSearchParams は Suspense 境界配下に必須 (CSR bailout 回避)
+// 利用側が Suspense を毎回張らずに済むよう、本体側で内蔵する
+export function UserSidebar(props: UserSidebarProps = {}) {
+  return (
+    <Suspense fallback={<UserSidebarFallback />}>
+      <UserSidebarInner {...props} />
+    </Suspense>
+  );
+}
+
+function UserSidebarFallback() {
+  return (
+    <div className="flex h-full w-36 flex-col border-r bg-white">
+      <div className="border-b p-2 space-y-1.5 h-[58px]" />
+      <div className="flex-1 overflow-y-auto p-3 text-center text-xs text-gray-400">
+        読込中...
+      </div>
+    </div>
+  );
+}
+
+function UserSidebarInner(props: UserSidebarProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // URL mode is active when explicit props are not provided
+  const explicit = props.selectedUserId !== undefined && props.onSelectUser !== undefined;
+  const urlSelectedUserId = searchParams.get(URL_PARAM);
+  const selectedUserId = explicit ? (props.selectedUserId ?? null) : urlSelectedUserId;
+
+  const handleSelectUser = useCallback(
+    (id: string) => {
+      if (explicit) {
+        props.onSelectUser?.(id);
+        return;
+      }
+      const next = new URLSearchParams(searchParams.toString());
+      next.set(URL_PARAM, id);
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    },
+    [explicit, props, searchParams, router, pathname]
+  );
+
   const [users, setUsers] = useState<ClientRow[]>([]);
   const [officeUserIds, setOfficeUserIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -107,13 +154,6 @@ export function UserSidebar({ selectedUserId, onSelectUser }: UserSidebarProps) 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
-  useEffect(() => {
-    if (!loading && !selectedUserId && users.length > 0) {
-      onSelectUser(users[0].id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, users]);
-
   const filtered = useMemo(() => {
     let list = users;
     if (filterMode === "office" && currentOfficeId) {
@@ -127,6 +167,16 @@ export function UserSidebar({ selectedUserId, onSelectUser }: UserSidebarProps) 
     }
     return list;
   }, [users, search, filterMode, currentOfficeId, officeUserIds]);
+
+  // Auto-select 1st visible user when nothing selected (URL mode のみ)
+  // 明示モード (users/[id]/layout) は URL の path 側で id が決まるので auto-select 不要
+  useEffect(() => {
+    if (explicit) return;
+    if (loading) return;
+    if (selectedUserId) return;
+    if (filtered.length === 0) return;
+    handleSelectUser(filtered[0].id);
+  }, [explicit, loading, selectedUserId, filtered, handleSelectUser]);
 
   const setMode = (m: "all" | "office") => {
     setFilterMode(m);
@@ -180,7 +230,7 @@ export function UserSidebar({ selectedUserId, onSelectUser }: UserSidebarProps) 
             {filtered.map((user) => (
               <li key={user.id}>
                 <button
-                  onClick={() => onSelectUser(user.id)}
+                  onClick={() => handleSelectUser(user.id)}
                   className={cn(
                     "flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors",
                     selectedUserId === user.id
