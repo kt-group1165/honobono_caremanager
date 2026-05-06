@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Search, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBusinessType } from "@/lib/business-type-context";
+import { useLocalStorage } from "@/lib/use-local-storage";
 
 // 利用者一覧表示用の最小スキーマ（共通マスタ clients の subset）
 interface ClientRow {
@@ -77,13 +78,12 @@ function UserSidebarInner(props: UserSidebarProps) {
   const { currentOfficeId } = useBusinessType();
 
   // 表示モード: all (全利用者) / office (自事業所の利用者のみ)
-  // SSR/CSR 整合のため初期値は固定 "office"。マウント後に localStorage から復元。
-  const [filterMode, setFilterMode] = useState<"all" | "office">("office");
-  useEffect(() => {
-    const stored = localStorage.getItem(FILTER_KEY);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
-    if (stored === "all") setFilterMode("all");
-  }, []);
+  // useLocalStorage で SSR-safe に hydrate (setState-in-effect 不要)
+  const [filterMode, setFilterMode] = useLocalStorage<"all" | "office">(
+    FILTER_KEY,
+    "office",
+    (raw) => (raw === "all" ? "all" : "office"),
+  );
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -178,10 +178,8 @@ function UserSidebarInner(props: UserSidebarProps) {
     handleSelectUser(filtered[0].id);
   }, [explicit, loading, selectedUserId, filtered, handleSelectUser]);
 
-  const setMode = (m: "all" | "office") => {
-    setFilterMode(m);
-    if (typeof window !== "undefined") localStorage.setItem(FILTER_KEY, m);
-  };
+  // setFilterMode が localStorage 書き込み込みなので setMode は alias
+  const setMode = setFilterMode;
 
   return (
     <div className="flex h-full w-36 flex-col border-r bg-white">

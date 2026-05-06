@@ -25,9 +25,10 @@ import {
   MessagesSquare,
   AlertTriangle,
 } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { useBusinessType } from "@/lib/business-type-context";
+import { useLocalStorage } from "@/lib/use-local-storage";
 import pkg from "../../../package.json";
 
 const APP_VERSION = pkg.version;
@@ -93,40 +94,22 @@ const BUSINESS_TYPE_LABELS: Record<string, { label: string; color: string }> = {
 export function Sidebar() {
   const pathname = usePathname();
   const { businessType, currentOffice } = useBusinessType();
-  // SSR/CSR 整合のため初期値は固定。マウント後に localStorage から復元。
-  const [collapsed, setCollapsed] = useState(false);
-  useEffect(() => {
-    if (localStorage.getItem("sidebar-collapsed") === "true") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
-      setCollapsed(true);
-    }
-  }, []);
-  const toggleCollapsed = () => {
-    const next = !collapsed;
-    setCollapsed(next);
-    localStorage.setItem("sidebar-collapsed", String(next));
-  };
+  // SSR-safe localStorage hydration (useSyncExternalStore 経由で setState-in-effect 不要)
+  const [collapsed, setCollapsed] = useLocalStorage(
+    "sidebar-collapsed",
+    false,
+    (raw) => raw === "true",
+  );
+  const toggleCollapsed = () => setCollapsed(!collapsed);
 
-  // グループごとの開閉状態（localStorage に永続化）
-  // SSR/CSR 整合のため初期値は固定。マウント後に localStorage から復元。
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    "ケアマネ業務": true,
-  });
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("sidebar-open-groups");
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
-      if (stored) setOpenGroups(JSON.parse(stored));
-    } catch { /* ignore */ }
-  }, []);
+  const [openGroups, setOpenGroups] = useLocalStorage<Record<string, boolean>>(
+    "sidebar-open-groups",
+    { "ケアマネ業務": true },
+    (raw) => JSON.parse(raw),
+    (v) => JSON.stringify(v),
+  );
   const toggleGroup = (name: string) => {
-    setOpenGroups((prev) => {
-      const next = { ...prev, [name]: !prev[name] };
-      if (typeof window !== "undefined") {
-        localStorage.setItem("sidebar-open-groups", JSON.stringify(next));
-      }
-      return next;
-    });
+    setOpenGroups({ ...openGroups, [name]: !openGroups[name] });
   };
 
   const navigation: NavEntry[] =
