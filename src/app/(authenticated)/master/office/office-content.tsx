@@ -36,6 +36,7 @@ const AREA_CATEGORIES = [
 export type OfficeSettings = {
   id: string;
   tenant_id: string;
+  company_id: string | null;
   name: string;
   office_name_kana: string | null;
   business_number: string | null;
@@ -128,10 +129,13 @@ export function OfficeContent({
   const handleAddNew = async () => {
     const newName = prompt("新規事業所の名前を入力してください", "新規事業所");
     if (!newName?.trim()) return;
-    // 新規 INSERT には offices.tenant_id が必要。現在の自事業所と同じ tenant に紐付ける
-    // （未選択の場合は最初の事業所の tenant、それも無ければエラー）
+    // 新規 INSERT には offices.tenant_id + company_id が必要。
+    // company_id は RLS policy `offices_admin_write` の WITH CHECK で
+    // `auth_admin_company_ids()` 一致が要求されるため必須。
+    // 現在の自事業所と同じ tenant/company に紐付ける。
     const baseTenant = form?.tenant_id ?? offices[0]?.tenant_id;
-    if (!baseTenant) {
+    const baseCompany = form?.company_id ?? offices[0]?.company_id;
+    if (!baseTenant || !baseCompany) {
       toast.error("基準となる自事業所が無いため新規追加できません。先に既存の事業所を 1 件選択してください。");
       return;
     }
@@ -139,6 +143,7 @@ export function OfficeContent({
       .from("offices")
       .insert({
         tenant_id: baseTenant,
+        company_id: baseCompany,
         name: newName.trim(),
         service_type: "居宅介護支援",
         app_type: "kaigo-app",
