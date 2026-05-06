@@ -3037,6 +3037,7 @@ function DocEditor({ doc, config, onSave, onStatusToggle, onDirtyChange }: {
   onStatusToggle: () => Promise<void>;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
+  // 親側で key={doc.id} を渡すので、doc 切替時は remount される (state は新 doc から初期化)
   const [content, setContent] = useState<Record<string, unknown>>(doc.content ?? {});
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -3045,13 +3046,6 @@ function DocEditor({ doc, config, onSave, onStatusToggle, onDirtyChange }: {
   const paperWidth = isLandscape ? "297mm" : "210mm";
   const paperMinHeight = isLandscape ? "210mm" : "297mm";
   const paperPadding = isLandscape ? "8mm 10mm" : "10mm 12mm";
-
-  // Reset when doc changes
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
-    setContent(doc.content ?? {});
-    setDirty(false);
-  }, [doc.id, doc.content]);
 
   const handleChange = (c: Record<string, unknown>) => { setContent(c); setDirty(true); onDirtyChange?.(true); };
 
@@ -3352,9 +3346,10 @@ export function ReportsContent({ userId, reportType, initialDocs, initialCertifi
                 onSelect={handleSelectDoc} onNew={handleNewDoc} newLoading={newLoading}
               />
 
-              {/* Editor */}
+              {/* Editor — key で doc 切替時に remount → 内部 state 初期化 */}
               {selectedDoc && (
                 <DocEditor
+                  key={selectedDoc.id}
                   doc={selectedDoc} config={config}
                   onSave={handleSave} onStatusToggle={handleStatusToggle}
                   onDirtyChange={setHasUnsavedChanges}

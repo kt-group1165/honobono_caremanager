@@ -44,17 +44,22 @@ const CATEGORIES = [
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function ServiceSelector({ open, onClose, onSelect }: ServiceSelectorProps) {
+// 外側 wrapper: open=false 時は null を返して内側を unmount。
+// → 内側 state (query / activeCategory) は次の open で fresh init される (reset effect 不要)
+export function ServiceSelector(props: ServiceSelectorProps) {
+  if (!props.open) return null
+  return <ServiceSelectorInner {...props} />
+}
+
+function ServiceSelectorInner({ onClose, onSelect }: Omit<ServiceSelectorProps, "open">) {
   const [services, setServices] = React.useState<ServiceCode[]>([])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [activeCategory, setActiveCategory] = React.useState<string>(CATEGORIES[0].code)
   const [query, setQuery] = React.useState("")
 
-  // ── Fetch on open ────────────────────────────────────────────────────────────
+  // ── Fetch on mount (modal-on-click pattern: open になった瞬間にこの component が mount) ──
   React.useEffect(() => {
-    if (!open) return
-
     let cancelled = false
     // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     setLoading(true)
@@ -88,30 +93,20 @@ export function ServiceSelector({ open, onClose, onSelect }: ServiceSelectorProp
 
     fetchServices()
     return () => { cancelled = true }
-  }, [open])
-
-  // ── Reset state when closed ──────────────────────────────────────────────────
-  React.useEffect(() => {
-    if (!open) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
-      setQuery("")
-      setActiveCategory(CATEGORIES[0].code)
-    }
-  }, [open])
+  }, [])
 
   // ── Escape key ───────────────────────────────────────────────────────────────
   React.useEffect(() => {
-    if (!open) return
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
     document.addEventListener("keydown", handler)
     return () => document.removeEventListener("keydown", handler)
-  }, [open, onClose])
+  }, [onClose])
 
   // ── Body scroll lock ─────────────────────────────────────────────────────────
   React.useEffect(() => {
-    if (open) document.body.style.overflow = "hidden"
+    document.body.style.overflow = "hidden"
     return () => { document.body.style.overflow = "" }
-  }, [open])
+  }, [])
 
   // ── Filtered list ────────────────────────────────────────────────────────────
   const filtered = React.useMemo(() => {
@@ -126,8 +121,6 @@ export function ServiceSelector({ open, onClose, onSelect }: ServiceSelectorProp
       )
     })
   }, [services, activeCategory, query])
-
-  if (!open) return null
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (

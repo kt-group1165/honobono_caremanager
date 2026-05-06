@@ -70,6 +70,21 @@ const EMPTY_FORM: Omit<ServiceProvider, "id" | "created_at"> = {
   status: "active",
 };
 
+function formFromProvider(p: ServiceProvider): Omit<ServiceProvider, "id" | "created_at"> {
+  return {
+    provider_number: p.provider_number,
+    provider_name: p.provider_name,
+    provider_name_kana: p.provider_name_kana,
+    service_categories: p.service_categories ?? [],
+    address: p.address,
+    phone: p.phone,
+    fax: p.fax,
+    manager_name: p.manager_name,
+    unit_price: p.unit_price,
+    status: p.status,
+  };
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Provider sidebar (vertical list on the left, mirrors UserSidebar pattern)
 // ────────────────────────────────────────────────────────────────────────────
@@ -198,19 +213,7 @@ export function ProvidersContent({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [form, setForm] = useState<Omit<ServiceProvider, "id" | "created_at">>(() => {
     const firstActive = initialProviders.find((p) => p.status === "active") ?? initialProviders[0];
-    if (!firstActive) return EMPTY_FORM;
-    return {
-      provider_number: firstActive.provider_number,
-      provider_name: firstActive.provider_name,
-      provider_name_kana: firstActive.provider_name_kana,
-      service_categories: firstActive.service_categories ?? [],
-      address: firstActive.address,
-      phone: firstActive.phone,
-      fax: firstActive.fax,
-      manager_name: firstActive.manager_name,
-      unit_price: firstActive.unit_price,
-      status: firstActive.status,
-    };
+    return firstActive ? formFromProvider(firstActive) : EMPTY_FORM;
   });
 
   const fetchProviders = useCallback(async () => {
@@ -233,31 +236,15 @@ export function ProvidersContent({
     if (selectedId && providers.some((p) => p.id === selectedId)) return;
     const firstActive = providers.find((p) => p.status === "active") ?? providers[0];
     if (!firstActive) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- providers refetch 後の selection 復旧 (server initial では useState lazy init で済む)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- providers refetch 後の selection 復旧 (initial では useState lazy init で済む)
     setSelectedId(firstActive.id);
+    setForm(formFromProvider(firstActive));
   }, [loading, providers, selectedId, isCreating]);
 
   const selectedProvider = providers.find((p) => p.id === selectedId) ?? null;
 
-  // 選択された事業所の内容をフォームに反映
-  useEffect(() => {
-    if (isCreating) return;
-    if (selectedProvider) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
-      setForm({
-        provider_number: selectedProvider.provider_number,
-        provider_name: selectedProvider.provider_name,
-        provider_name_kana: selectedProvider.provider_name_kana,
-        service_categories: selectedProvider.service_categories ?? [],
-        address: selectedProvider.address,
-        phone: selectedProvider.phone,
-        fax: selectedProvider.fax,
-        manager_name: selectedProvider.manager_name,
-        unit_price: selectedProvider.unit_price,
-        status: selectedProvider.status,
-      });
-    }
-  }, [selectedProvider, isCreating]);
+  // form は初回 useState lazy init で server data から作成。
+  // 以降は handleSelect / cancelCreate / 自動 selection 復旧で明示的に同期。
 
   const openCreate = () => {
     setIsCreating(true);
@@ -269,13 +256,18 @@ export function ProvidersContent({
     setIsCreating(false);
     if (providers.length > 0) {
       const firstActive = providers.find((p) => p.status === "active") ?? providers[0];
-      setSelectedId(firstActive?.id ?? null);
+      if (firstActive) {
+        setSelectedId(firstActive.id);
+        setForm(formFromProvider(firstActive));
+      }
     }
   };
 
   const handleSelect = (id: string) => {
     setIsCreating(false);
     setSelectedId(id);
+    const p = providers.find((p) => p.id === id);
+    if (p) setForm(formFromProvider(p));
   };
 
   const toggleServiceCategory = (code: string) => {

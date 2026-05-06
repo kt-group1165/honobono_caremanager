@@ -25,7 +25,7 @@ import {
   MessagesSquare,
   AlertTriangle,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { useBusinessType } from "@/lib/business-type-context";
 import pkg from "../../../package.json";
@@ -140,19 +140,17 @@ export function Sidebar() {
     return `${href}?office=${encodeURIComponent(currentOffice.id)}`;
   };
 
-  // 子ページを開いていたら親グループは自動で開く
-  useEffect(() => {
+  // 子ページを開いていたら親グループは自動で開く (derived state、effect 不要)
+  const effectiveOpenGroups = useMemo(() => {
+    const result: Record<string, boolean> = { ...openGroups };
     for (const entry of navigation) {
       if (isGroup(entry)) {
         const anyChildActive = entry.children.some((c) => pathname.startsWith(c.href));
-        if (anyChildActive && !openGroups[entry.name]) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
-          setOpenGroups((prev) => ({ ...prev, [entry.name]: true }));
-        }
+        if (anyChildActive) result[entry.name] = true;
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname, businessType]);
+    return result;
+  }, [openGroups, navigation, pathname]);
 
   return (
     <aside
@@ -181,7 +179,7 @@ export function Sidebar() {
         {navigation.map((entry) => {
           // グループ（子メニュー付き）
           if (isGroup(entry)) {
-            const groupOpen = openGroups[entry.name] ?? false;
+            const groupOpen = effectiveOpenGroups[entry.name] ?? false;
             const anyChildActive = entry.children.some((c) => pathname.startsWith(c.href));
             const GroupIcon = entry.icon;
             return (
