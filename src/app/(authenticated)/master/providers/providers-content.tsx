@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
@@ -230,16 +230,8 @@ export function ProvidersContent({
     setLoading(false);
   }, [supabase]);
 
-  // refetch 後 (providers 変更時) も selection が無効になっていれば再選択
-  useEffect(() => {
-    if (loading || isCreating) return;
-    if (selectedId && providers.some((p) => p.id === selectedId)) return;
-    const firstActive = providers.find((p) => p.status === "active") ?? providers[0];
-    if (!firstActive) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- providers refetch 後の selection 復旧 (initial では useState lazy init で済む)
-    setSelectedId(firstActive.id);
-    setForm(formFromProvider(firstActive));
-  }, [loading, providers, selectedId, isCreating]);
+  // selection 同期は handleSelect / cancelCreate / handleSave / handleDelete で
+  // 明示的に setSelectedId + setForm を呼ぶようにしたため、ここでの effect は不要
 
   const selectedProvider = providers.find((p) => p.id === selectedId) ?? null;
 
@@ -330,7 +322,16 @@ export function ProvidersContent({
       if (error) throw error;
       toast.success("事業所を削除しました");
       setDeleteDialogOpen(false);
-      setSelectedId(null);
+      // 削除後の selection 復旧 (effect 経由ではなく明示)
+      const next = providers.filter((p) => p.id !== selectedProvider.id);
+      const firstActive = next.find((p) => p.status === "active") ?? next[0];
+      if (firstActive) {
+        setSelectedId(firstActive.id);
+        setForm(formFromProvider(firstActive));
+      } else {
+        setSelectedId(null);
+        setForm(EMPTY_FORM);
+      }
       fetchProviders();
     } catch (err: unknown) {
       toast.error(
