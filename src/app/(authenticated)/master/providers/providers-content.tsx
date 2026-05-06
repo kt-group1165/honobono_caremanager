@@ -190,10 +190,28 @@ export function ProvidersContent({
   const [providers, setProviders] = useState<ServiceProvider[]>(initialProviders);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() => {
+    const firstActive = initialProviders.find((p) => p.status === "active") ?? initialProviders[0];
+    return firstActive?.id ?? null;
+  });
   const [isCreating, setIsCreating] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [form, setForm] = useState<Omit<ServiceProvider, "id" | "created_at">>(EMPTY_FORM);
+  const [form, setForm] = useState<Omit<ServiceProvider, "id" | "created_at">>(() => {
+    const firstActive = initialProviders.find((p) => p.status === "active") ?? initialProviders[0];
+    if (!firstActive) return EMPTY_FORM;
+    return {
+      provider_number: firstActive.provider_number,
+      provider_name: firstActive.provider_name,
+      provider_name_kana: firstActive.provider_name_kana,
+      service_categories: firstActive.service_categories ?? [],
+      address: firstActive.address,
+      phone: firstActive.phone,
+      fax: firstActive.fax,
+      manager_name: firstActive.manager_name,
+      unit_price: firstActive.unit_price,
+      status: firstActive.status,
+    };
+  });
 
   const fetchProviders = useCallback(async () => {
     setLoading(true);
@@ -209,15 +227,14 @@ export function ProvidersContent({
     setLoading(false);
   }, [supabase]);
 
-  // 最初の有効な事業所を自動選択
+  // refetch 後 (providers 変更時) も selection が無効になっていれば再選択
   useEffect(() => {
     if (loading || isCreating) return;
     if (selectedId && providers.some((p) => p.id === selectedId)) return;
     const firstActive = providers.find((p) => p.status === "active") ?? providers[0];
-    if (firstActive) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
-      setSelectedId(firstActive.id);
-    }
+    if (!firstActive) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- providers refetch 後の selection 復旧 (server initial では useState lazy init で済む)
+    setSelectedId(firstActive.id);
   }, [loading, providers, selectedId, isCreating]);
 
   const selectedProvider = providers.find((p) => p.id === selectedId) ?? null;
