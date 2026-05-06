@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation";
 import type { Client } from "@/types/database";
 import { createClient } from "@/lib/supabase/server";
+import { UserDetailContent } from "./user-detail-content";
 import {
   normalizeCategories,
-  UserDetailContent,
   type ClientMemoRow,
   type OfficeRow,
   type OfficeServiceRow,
-} from "./user-detail-content";
+} from "./user-detail-shared";
 
 export default async function UserDetailPage({
   params,

@@ -12,6 +12,14 @@ import {
 } from "lucide-react";
 import type { Client } from "@/types/database";
 import { useBusinessType } from "@/lib/business-type-context";
+import {
+  normalizeCategories,
+  type ClientMemoRow,
+  type HomeCareCategory,
+  type HomeCareCategoryName,
+  type OfficeRow,
+  type OfficeServiceRow,
+} from "./user-detail-shared";
 
 const STATUS_LABELS: Record<string, string> = {
   active: "在籍中",
@@ -55,62 +63,12 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
 }
 
 // ─── 利用中の自事業所サービス ─────────────────────────────────────────────
-
-/** 訪問介護のサービス種別 */
-const HOME_CARE_CATEGORIES = [
-  "介護",
-  "総合事業",
-  "居宅介護",
-  "重度訪問介護",
-  "同行援護",
-  "移動支援",
-  "自費",
-] as const;
-type HomeCareCategoryName = (typeof HOME_CARE_CATEGORIES)[number];
-
-type HomeCareCategory = {
-  category: HomeCareCategoryName;
-  active: boolean;
-  start_date: string | null;
-  end_date: string | null;
-};
-
-export type OfficeServiceRow = {
-  id: string;
-  office_id: string;
-  start_date: string | null;
-  end_date: string | null;
-  service_notes: string | null;
-  home_care_categories: HomeCareCategory[];
-};
-
-export type OfficeRow = { id: string; name: string; service_type: string };
-
-export type ClientMemoRow = {
-  id: string;
-  client_id: string;
-  scope: string;
-  tenant_id: string | null;
-  body: string;
-};
+// 型 / HOME_CARE_CATEGORIES / normalizeCategories は user-detail-shared.ts に切出済
+// (RSC である page.tsx から normalizeCategories を呼ぶため "use client" を付けない module へ)
 
 // 共通マスタ offices.service_type は日本語値のみ（'訪問介護'|'訪問入浴'|'訪問看護'|'居宅介護支援'|'福祉用具'）
 // 訪問介護系は home_care_categories の細分化対象
 const isHomeCareType = (bt: string | null | undefined) => bt === "訪問介護";
-
-/** DBから取得した値を7カテゴリ全てが揃った配列に正規化 */
-export function normalizeCategories(raw: unknown): HomeCareCategory[] {
-  const list = Array.isArray(raw) ? (raw as Partial<HomeCareCategory>[]) : [];
-  return HOME_CARE_CATEGORIES.map((name) => {
-    const found = list.find((c) => c?.category === name);
-    return {
-      category: name,
-      active: !!found?.active,
-      start_date: found?.start_date ?? null,
-      end_date: found?.end_date ?? null,
-    };
-  });
-}
 
 function UserOfficeServices({
   userId,
