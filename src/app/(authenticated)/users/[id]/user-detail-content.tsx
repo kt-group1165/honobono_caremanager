@@ -82,6 +82,7 @@ function UserOfficeServices({
   initialServices: OfficeServiceRow[];
 }) {
   const supabase = useMemo(() => createClient(), []);
+  const { currentOfficeId } = useBusinessType();
   const [offices, setOffices] = useState<OfficeRow[]>(initialOffices);
   const [services, setServices] = useState<OfficeServiceRow[]>(initialServices);
 
@@ -170,29 +171,44 @@ function UserOfficeServices({
     }
   };
 
+  // 表示する事業所:
+  //   - 自事業所 (currentOfficeId): 常に表示 (チェック編集可)
+  //   - 他事業所: 利用中 (services にレコードあり) のみ情報表示 (チェック非編集)
+  //   - 他事業所で未利用: 非表示 (UI ノイズ削減)
+  const visibleOffices = offices.filter((o) => {
+    if (o.id === currentOfficeId) return true;
+    return services.some((s) => s.office_id === o.id);
+  });
+
   return (
     <div>
       <h3 className="text-sm font-bold text-gray-700 mb-2">利用中の自事業所サービス</h3>
-      <p className="text-xs text-gray-500 mb-3">この利用者に自事業所のサービスを提供中/提供予定の場合にチェックしてください。</p>
-      {offices.length === 0 ? (
-        <p className="text-xs text-gray-400">自事業所が登録されていません（設定から追加してください）</p>
+      <p className="text-xs text-gray-500 mb-3">この利用者に自事業所のサービスを提供中/提供予定の場合にチェックしてください。他事業所の利用は参考表示のみ。</p>
+      {visibleOffices.length === 0 ? (
+        <p className="text-xs text-gray-400">自事業所が選択されていません（上部のメニューから事業所を選択してください）</p>
       ) : (
         <div className="space-y-2">
-          {offices.map((o) => {
+          {visibleOffices.map((o) => {
             const svc = services.find((s) => s.office_id === o.id);
             // 「現役」判定: client_office_assignments に is_active は無いので end_date IS NULL で判定
             const using = !!svc && svc.end_date === null;
+            const isOwnOffice = o.id === currentOfficeId;
             return (
-              <div key={o.id} className={`rounded-lg border p-3 ${using ? "border-blue-300 bg-blue-50/30" : "border-gray-200"}`}>
+              <div key={o.id} className={`rounded-lg border p-3 ${using ? (isOwnOffice ? "border-blue-300 bg-blue-50/30" : "border-emerald-200 bg-emerald-50/30") : "border-gray-200"}`}>
                 <div className="flex items-center gap-3">
                   <input
                     type="checkbox"
                     checked={using}
-                    onChange={() => toggleOffice(o.id, using)}
-                    className="w-4 h-4 accent-blue-600 cursor-pointer"
+                    onChange={() => isOwnOffice && toggleOffice(o.id, using)}
+                    disabled={!isOwnOffice}
+                    className={`w-4 h-4 accent-blue-600 ${isOwnOffice ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}
+                    title={isOwnOffice ? undefined : "他事業所のチェックは編集できません"}
                   />
                   <div className="flex-1">
-                    <div className="text-sm font-semibold text-gray-900">{o.name || "(名称未設定)"}</div>
+                    <div className="text-sm font-semibold text-gray-900">
+                      {o.name || "(名称未設定)"}
+                      {!isOwnOffice && <span className="ml-2 text-[10px] font-normal text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5">他事業所</span>}
+                    </div>
                     <div className="text-xs text-gray-500">{o.service_type}</div>
                   </div>
                 </div>
@@ -200,15 +216,27 @@ function UserOfficeServices({
                   <div className="flex items-center gap-2 mt-2 text-xs">
                     <label className="flex items-center gap-1">
                       <span className="text-gray-500">開始日:</span>
-                      <input type="date" value={svc.start_date ?? ""} onChange={(e) => updateDate(svc.id, "start_date", e.target.value)} className="rounded border border-gray-300 px-2 py-1 text-xs" />
+                      <input
+                        type="date"
+                        value={svc.start_date ?? ""}
+                        onChange={(e) => isOwnOffice && updateDate(svc.id, "start_date", e.target.value)}
+                        readOnly={!isOwnOffice}
+                        className={`rounded border border-gray-300 px-2 py-1 text-xs ${!isOwnOffice ? "bg-gray-50 text-gray-500" : ""}`}
+                      />
                     </label>
                     <label className="flex items-center gap-1">
                       <span className="text-gray-500">終了日:</span>
-                      <input type="date" value={svc.end_date ?? ""} onChange={(e) => updateDate(svc.id, "end_date", e.target.value)} className="rounded border border-gray-300 px-2 py-1 text-xs" />
+                      <input
+                        type="date"
+                        value={svc.end_date ?? ""}
+                        onChange={(e) => isOwnOffice && updateDate(svc.id, "end_date", e.target.value)}
+                        readOnly={!isOwnOffice}
+                        className={`rounded border border-gray-300 px-2 py-1 text-xs ${!isOwnOffice ? "bg-gray-50 text-gray-500" : ""}`}
+                      />
                     </label>
                   </div>
                 )}
-                {svc && using && isHomeCareType(o.service_type) && (
+                {svc && using && isHomeCareType(o.service_type) && isOwnOffice && (
                   <div className="mt-3 rounded-md border border-blue-200 bg-white p-3">
                     <div className="text-xs font-semibold text-gray-700 mb-2">提供サービス種別</div>
                     <div className="space-y-1">
