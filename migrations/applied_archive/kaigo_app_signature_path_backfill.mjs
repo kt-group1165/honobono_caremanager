@@ -17,9 +17,9 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!URL || !KEY) {
+const SB_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!SB_URL || !SB_KEY) {
   console.error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY が未設定です');
   process.exit(1);
 }
@@ -27,7 +27,7 @@ if (!URL || !KEY) {
 const DRY_RUN = (process.env.DRY_RUN ?? 'true').toLowerCase() !== 'false';
 console.log(`DRY_RUN = ${DRY_RUN}`);
 
-const admin = createClient(URL, KEY, {
+const admin = createClient(SB_URL, SB_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
