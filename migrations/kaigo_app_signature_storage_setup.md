@@ -71,5 +71,13 @@ WITH CHECK (bucket_id = 'signatures');
 
 ## 5. signed URL の有効期限
 
-UI では `createSignedUrl(path, 60 * 60 * 24 * 365)` (1 年) で発行。
-1 年経過後は再発行 or `signed_at` を見て自動 refresh する仕組みを v2 で検討。
+### v1 (deprecated)
+UI で `createSignedUrl(path, 60 * 60 * 24 * 365)` (1 年) で発行し DB の `signature_image_url` に保存していた。
+→ 1 年経過後 token 失効で `<img src>` が表示不可になる問題あり。
+
+### v2 (現行)
+- DB には `signature_image_path` (Storage path) のみ保存する。
+- 表示時に `useSignedUrls(paths, "signatures", 3600)` (`src/lib/use-signed-url.ts`) で 1 時間期限の signed URL を動的発行する。
+- 1 年経過しても何度でも再発行可能。
+- v1 の `signature_image_url` は deprecated 扱いで残置。path 未 backfill の record は URL fallback で表示する (v1 の 1 年以内のみ動作)。
+- backfill: `migrations/kaigo_app_signature_path_backfill.mjs` (DRY_RUN default true)。

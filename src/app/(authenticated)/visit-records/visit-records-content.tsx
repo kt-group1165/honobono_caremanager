@@ -20,6 +20,7 @@ import {
 import { format, parseISO } from "date-fns";
 import { TemplatePicker } from "@/components/templates/template-picker";
 import { SignaturePadModal } from "@/components/signature/SignaturePadModal";
+import { useSignedUrls } from "@/lib/use-signed-url";
 import { ja } from "date-fns/locale";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -67,6 +68,9 @@ interface VisitRecord {
   notes: string | null;
   created_at: string;
   // 電子署名
+  // v2: signature_image_path を主に保存。表示時に useSignedUrls で動的発行する。
+  // signature_image_url は v1 互換用 deprecated 列 (path 未 backfill record の fallback)。
+  signature_image_path: string | null;
   signature_image_url: string | null;
   signed_at: string | null;
   signer_name: string | null;
@@ -699,6 +703,23 @@ export function VisitRecordsContent({ userId, userName, initialRecords, initialS
   // Section toggle for form
   const isFormOpen = (id: string) => formSection === id;
 
+  // v2: signature_image_path から signed URL を一括動的発行 (1 時間期限 / 表示直前で再発行)
+  const signaturePaths = useMemo(
+    () => records.map((r) => r.signature_image_path),
+    [records]
+  );
+  const signedUrlMap = useSignedUrls(signaturePaths);
+  // 表示用 helper: path 優先 → URL fallback (path 未 backfill record 用)
+  const resolveSignatureSrc = useCallback(
+    (rec: VisitRecord): string | null => {
+      if (rec.signature_image_path) {
+        return signedUrlMap.get(rec.signature_image_path) ?? null;
+      }
+      return rec.signature_image_url;
+    },
+    [signedUrlMap]
+  );
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -831,15 +852,25 @@ export function VisitRecordsContent({ userId, userName, initialRecords, initialS
                           <p className="mb-1.5 text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded">
                             電子署名
                           </p>
-                          {rec.signature_image_url ? (
+                          {(rec.signature_image_path || rec.signature_image_url) ? (
                             <div className="pl-2 space-y-2">
                               <div className="rounded-lg border border-gray-200 bg-white p-3 inline-block">
-                                {/* eslint-disable-next-line @next/next/no-img-element -- Storage signed URL は外部 host (next/image 不適) */}
-                                <img
-                                  src={rec.signature_image_url}
-                                  alt="電子署名"
-                                  className="max-h-32 w-auto"
-                                />
+                                {(() => {
+                                  const src = resolveSignatureSrc(rec);
+                                  if (!src) {
+                                    return (
+                                      <span className="text-[11px] text-gray-400">署名画像を読み込み中...</span>
+                                    );
+                                  }
+                                  return (
+                                    /* eslint-disable-next-line @next/next/no-img-element -- Storage signed URL は外部 host (next/image 不適) */
+                                    <img
+                                      src={src}
+                                      alt="電子署名"
+                                      className="max-h-32 w-auto"
+                                    />
+                                  );
+                                })()}
                               </div>
                               <div className="text-xs text-gray-600 space-y-0.5">
                                 {rec.signer_name && (
@@ -898,7 +929,7 @@ export function VisitRecordsContent({ userId, userName, initialRecords, initialS
 
       {/* 印刷用 DOM (画面では hidden) */}
       <div id="visit-records-print" className="hidden">
-        <VisitPrintView records={records} userName={userName ?? undefined} />
+        <VisitPrintView records={records} userName={userName ?? undefined} signedUrlMap={signedUrlMap} />
       </div>
 
       {/* Modal — 22カテゴリ対応の新規記録フォーム */}
@@ -1200,12 +1231,14 @@ export function VisitRecordsContent({ userId, userName, initialRecords, initialS
           recordId={signTarget.id}
           defaultSignerName={userName ?? undefined}
           onClose={() => setSignTarget(null)}
-          onSubmit={async ({ signatureImageUrl, signedAt, signerName }) => {
+          onSubmit={async ({ signatureImagePath, signedAt, signerName }) => {
             const targetId = signTarget.id;
+            // v2: path のみ保存 (URL は表示時に動的発行)。再署名時は v1 URL を null clear して整合性確保。
             const { error } = await supabase
               .from("kaigo_visit_records")
               .update({
-                signature_image_url: signatureImageUrl,
+                signature_image_path: signatureImagePath,
+                signature_image_url: null,
                 signed_at: signedAt,
                 signer_name: signerName,
               })
@@ -1218,7 +1251,13 @@ export function VisitRecordsContent({ userId, userName, initialRecords, initialS
             setRecords((prev) =>
               prev.map((r) =>
                 r.id === targetId
-                  ? { ...r, signature_image_url: signatureImageUrl, signed_at: signedAt, signer_name: signerName }
+                  ? {
+                      ...r,
+                      signature_image_path: signatureImagePath,
+                      signature_image_url: null,
+                      signed_at: signedAt,
+                      signer_name: signerName,
+                    }
                   : r
               )
             );
@@ -1231,7 +1270,15 @@ export function VisitRecordsContent({ userId, userName, initialRecords, initialS
 }
 
 // ─── 印刷専用 View ─────────────────────────────────────────────────────────
-function VisitPrintView({ records, userName }: { records: VisitRecord[]; userName?: string }) {
+function VisitPrintView({
+  records,
+  userName,
+  signedUrlMap,
+}: {
+  records: VisitRecord[];
+  userName?: string;
+  signedUrlMap: Map<string, string>;
+}) {
   const B = "1px solid #000";
   const cellBase: React.CSSProperties = {
     border: B,
@@ -1296,22 +1343,29 @@ function VisitPrintView({ records, userName }: { records: VisitRecord[]; userNam
                   {careItems.length > 0 ? careItems.join("、") : ""}
                 </td>
                 <td style={{ ...cellBase, textAlign: "center" }}>
-                  {rec.signature_image_url ? (
-                    <>
-                      {/* eslint-disable-next-line @next/next/no-img-element -- 印刷用 Storage URL (next/image 不要) */}
-                      <img
-                        src={rec.signature_image_url}
-                        alt="電子署名"
-                        style={{ display: "block", margin: "0 auto", maxHeight: "16mm", maxWidth: "50mm", height: "auto", width: "auto" }}
-                      />
-                      <span style={{ display: "block", fontSize: "7pt", marginTop: "0.5mm", color: "#333" }}>
-                        {rec.signer_name && <>{rec.signer_name}<br /></>}
-                        {rec.signed_at && fmtSignedAt(rec.signed_at)}
-                      </span>
-                    </>
-                  ) : (
-                    <span style={{ fontSize: "8pt", color: "#999" }}>未署名</span>
-                  )}
+                  {(() => {
+                    // v2: path 優先 (動的 signed URL) → v1 URL fallback
+                    const printSrc = rec.signature_image_path
+                      ? signedUrlMap.get(rec.signature_image_path) ?? null
+                      : rec.signature_image_url;
+                    if (!printSrc) {
+                      return <span style={{ fontSize: "8pt", color: "#999" }}>未署名</span>;
+                    }
+                    return (
+                      <>
+                        {/* eslint-disable-next-line @next/next/no-img-element -- 印刷用 Storage URL (next/image 不要) */}
+                        <img
+                          src={printSrc}
+                          alt="電子署名"
+                          style={{ display: "block", margin: "0 auto", maxHeight: "16mm", maxWidth: "50mm", height: "auto", width: "auto" }}
+                        />
+                        <span style={{ display: "block", fontSize: "7pt", marginTop: "0.5mm", color: "#333" }}>
+                          {rec.signer_name && <>{rec.signer_name}<br /></>}
+                          {rec.signed_at && fmtSignedAt(rec.signed_at)}
+                        </span>
+                      </>
+                    );
+                  })()}
                 </td>
               </tr>
             );

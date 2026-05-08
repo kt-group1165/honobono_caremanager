@@ -15,15 +15,16 @@ export interface SignaturePadModalProps {
   /** 署名者氏名 default 値 (利用者本人なら client.name) */
   defaultSignerName?: string;
   onClose: () => void;
-  /** 確定時 callback。Storage path / signed URL / 署名取得日時 / 署名者名 を返す */
+  /**
+   * 確定時 callback。Storage path / 署名取得日時 / 署名者名 を返す。
+   * v2: signed URL は保存せず path のみ返す (表示時に毎回 createSignedUrl で動的発行)。
+   */
   onSubmit: (result: {
-    signatureImageUrl: string;
+    signatureImagePath: string;
     signedAt: string;
     signerName: string;
   }) => void;
 }
-
-const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 365; // 1 年
 
 export function SignaturePadModal({
   recordTable,
@@ -110,14 +111,10 @@ export function SignaturePadModal({
         });
       if (uploadErr) throw uploadErr;
 
-      const { data: signed, error: signErr } = await supabase.storage
-        .from("signatures")
-        .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
-      if (signErr) throw signErr;
-      if (!signed?.signedUrl) throw new Error("signed URL 取得失敗");
-
+      // v2: signed URL は発行せず path のみ返す。
+      // 表示側で useSignedUrl(path) により表示直前に動的発行する (1 年期限の URL 失効問題を回避)。
       onSubmit({
-        signatureImageUrl: signed.signedUrl,
+        signatureImagePath: path,
         signedAt: new Date().toISOString(),
         signerName: signerName.trim(),
       });
