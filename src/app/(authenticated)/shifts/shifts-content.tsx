@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -65,6 +66,7 @@ export function ShiftsContent({
   initialMonthIso: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
+  const { currentOfficeId } = useBusinessType();
   const [currentMonth, setCurrentMonth] = useState(() => new Date(initialMonthIso));
   const [staff, setStaff] = useState<Staff[]>(initialStaff);
   const [shiftMap, setShiftMap] = useState<ShiftMap>(initialShiftMap);
@@ -79,17 +81,24 @@ export function ShiftsContent({
   });
 
   const fetchData = useCallback(async () => {
+    if (!currentOfficeId) {
+      setStaff([]);
+      setShiftMap({});
+      return;
+    }
     setLoading(true);
     setChanges({});
 
     const monthStart = format(startOfMonth(currentMonth), "yyyy-MM-dd");
     const monthEnd = format(endOfMonth(currentMonth), "yyyy-MM-dd");
 
+    // 自事業所 (currentOfficeId) に primary office として紐付く職員のみ取得。
     const [staffRes, shiftsRes] = await Promise.all([
       supabase
         .from("members")
         .select("id, name, furigana")
         .eq("status", "active")
+        .eq("office_id", currentOfficeId)
         .order("furigana", { nullsFirst: false }),
       supabase
         .from("kaigo_shifts")
@@ -116,17 +125,24 @@ export function ShiftsContent({
     }
 
     setLoading(false);
-  }, [currentMonth, supabase]);
+  }, [currentMonth, currentOfficeId, supabase]);
 
-  // 初回 render は server からの initial データ。月切替時のみ refetch。
+  // 初回 render は server からの initial データ (officeId 付き) を信頼。
+  // ただし server で officeId 未指定だった場合 (initialStaff===[]) は client 側で fetch する。
+  // 月切替・自事業所切替時にも refetch。
   const isInitialMount = useRef(true);
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
+      // initialStaff が空 (server で officeId 未取得) の場合のみ初回 fetch する
+      if (initialStaff.length === 0 && currentOfficeId) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-time async fetch (HANDOVER §2)
+        fetchData();
+      }
       return;
     }
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, initialStaff.length, currentOfficeId]);
 
   const getShift = (staffId: string, date: string): ShiftType => {
     if (changes[staffId]?.[date] !== undefined) return changes[staffId][date];

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { resolvePreferredTenantId } from "@/lib/tenant-resolver";
+import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
 import {
   CalendarDays,
@@ -444,17 +445,29 @@ function PatternImportModal({ onClose }: { onClose: () => void }) {
 
 function UrlManagementModal({ onClose }: { onClose: () => void }) {
   const supabase = useMemo(() => createClient(), []);
+  const { currentOfficeId } = useBusinessType();
   const [staff, setStaff] = useState<KaigoStaff[]>([]);
   const [tokens, setTokens] = useState<StaffToken[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
+  // 自事業所 (currentOfficeId) が変わったら再フェッチ。初期化中は空配列。
   useEffect(() => {
+    if (!currentOfficeId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-time async fetch (HANDOVER §2)
+      setStaff([]);
+      return;
+    }
     const fetch = async () => {
       setLoading(true);
       const [staffRes, tokenRes] = await Promise.all([
-        supabase.from("members").select("id, name, name_kana:furigana, status").eq("status", "active").order("furigana", { nullsFirst: false }),
+        supabase
+          .from("members")
+          .select("id, name, name_kana:furigana, status")
+          .eq("status", "active")
+          .eq("office_id", currentOfficeId)
+          .order("furigana", { nullsFirst: false }),
         supabase.from("kaigo_staff_tokens").select("id, staff_id, token"),
       ]);
       setStaff(staffRes.data || []);
@@ -462,8 +475,7 @@ function UrlManagementModal({ onClose }: { onClose: () => void }) {
       setLoading(false);
     };
     fetch();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [supabase, currentOfficeId]);
 
   const getToken = (staffId: string) => tokens.find((t) => t.staff_id === staffId);
 

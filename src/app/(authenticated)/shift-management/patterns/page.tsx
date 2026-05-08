@@ -12,17 +12,21 @@ import {
 export default async function PatternsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ user?: string }>;
+  searchParams: Promise<{ user?: string; office?: string }>;
 }) {
-  const { user: userId } = await searchParams;
+  const { user: userId, office: officeId } = await searchParams;
   const supabase = await createClient();
 
-  const staffRes = await supabase
+  // 自事業所 (URL ?office=) のスタッフだけに絞り込む。officeId 未指定時は
+  // BusinessTypeContext が初期化中なので空配列を返し、Client 側で再フェッチさせる。
+  let staffQuery = supabase
     .from("members")
     .select("id, name, furigana")
     .eq("status", "active")
     .order("furigana", { nullsFirst: false });
-  const initialStaff = (staffRes.data ?? []) as KaigoStaff[];
+  if (officeId) staffQuery = staffQuery.eq("office_id", officeId);
+  const staffRes = await staffQuery;
+  const initialStaff = (officeId ? (staffRes.data ?? []) : []) as KaigoStaff[];
 
   let initialPatterns: VisitPattern[] = [];
   if (userId) {

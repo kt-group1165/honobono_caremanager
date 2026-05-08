@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -57,6 +58,7 @@ export function UserCalendar({
   initialData,
 }: UserCalendarProps) {
   const supabase = useMemo(() => createClient(), []);
+  const { currentOfficeId } = useBusinessType();
   const [schedules, setSchedules] = useState<VisitSchedule[]>(initialData.schedules);
   const [availability, setAvailability] = useState<StaffAvailabilitySlot[]>(initialData.availability);
   const [allStaff, setAllStaff] = useState<KaigoStaff[]>(initialData.allStaff);
@@ -88,6 +90,11 @@ export function UserCalendar({
     const from = format(startOfMonth(currentMonth), "yyyy-MM-dd");
     const to = format(endOfMonth(currentMonth), "yyyy-MM-dd");
 
+    // 自事業所 (currentOfficeId) のスタッフだけ。未指定時は空配列扱い。
+    const allStaffPromise = currentOfficeId
+      ? supabase.from("members").select("id, name, name_kana:furigana, status").eq("status", "active").eq("office_id", currentOfficeId)
+      : Promise.resolve({ data: [] as KaigoStaff[] });
+
     const [schedRes, availRes, allStaffRes, allSchedRes, provRes] = await Promise.all([
       supabase
         .from("kaigo_visit_schedule")
@@ -101,7 +108,7 @@ export function UserCalendar({
         .select("staff_id, available_date, start_time, end_time, is_available")
         .gte("available_date", from)
         .lte("available_date", to),
-      supabase.from("members").select("id, name, name_kana:furigana, status").eq("status", "active"),
+      allStaffPromise,
       supabase
         .from("kaigo_visit_schedule")
         .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type")
@@ -129,7 +136,7 @@ export function UserCalendar({
     setAllProviders(provRes.data || []);
     setAllSchedules((allSchedRes.data || []) as VisitSchedule[]);
     setLoading(false);
-  }, [userId, currentMonth, supabase]);
+  }, [userId, currentMonth, supabase, currentOfficeId]);
 
   // initial render は server からの initialData を使用、filter 変更時のみ refetch。
   const isInitialMount = useRef(true);

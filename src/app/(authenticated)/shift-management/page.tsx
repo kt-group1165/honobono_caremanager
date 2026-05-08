@@ -27,6 +27,7 @@ type SearchParams = Promise<{
   staff?: string;
   month?: string; // YYYY-MM
   date?: string; // YYYY-MM-DD
+  office?: string;
 }>;
 
 function parseTab(v: string | undefined): SidebarTab {
@@ -61,12 +62,22 @@ export default async function ShiftManagementPage({
   searchParams: SearchParams;
 }) {
   const sp = await searchParams;
+  const officeId = sp.office;
   const supabase = await createClient();
 
   const tab = parseTab(sp.tab);
   const view = parseView(sp.view);
   const month = parseMonth(sp.month);
   const date = parseDate(sp.date);
+
+  // 自事業所 (URL ?office=) のスタッフだけに絞り込む。officeId 未指定時は
+  // BusinessTypeContext が初期化中なので空配列を返し、Client 側で再フェッチさせる。
+  let staffQuery = supabase
+    .from("members")
+    .select("id, name, name_kana:furigana, status")
+    .eq("status", "active")
+    .order("furigana", { nullsFirst: false });
+  if (officeId) staffQuery = staffQuery.eq("office_id", officeId);
 
   const [usersRes, staffRes] = await Promise.all([
     supabase
@@ -75,15 +86,11 @@ export default async function ShiftManagementPage({
       .eq("status", "active")
       .eq("is_facility", false)
       .order("furigana", { nullsFirst: false }),
-    supabase
-      .from("members")
-      .select("id, name, name_kana:furigana, status")
-      .eq("status", "active")
-      .order("furigana", { nullsFirst: false }),
+    staffQuery,
   ]);
 
   const users: KaigoUser[] = (usersRes.data ?? []) as KaigoUser[];
-  const staff: KaigoStaff[] = (staffRes.data ?? []) as KaigoStaff[];
+  const staff: KaigoStaff[] = (officeId ? (staffRes.data ?? []) : []) as KaigoStaff[];
 
   const selectedUserId =
     sp.user ?? (users.length > 0 ? users[0].id : null);
@@ -114,7 +121,10 @@ export default async function ShiftManagementPage({
         .select("staff_id, available_date, start_time, end_time, is_available")
         .gte("available_date", monthFrom)
         .lte("available_date", monthTo),
-      supabase.from("members").select("id, name, name_kana:furigana, status").eq("status", "active"),
+      // 自事業所 (URL ?office=) のスタッフのみ。未指定時は空 → Client 側で再フェッチ。
+      officeId
+        ? supabase.from("members").select("id, name, name_kana:furigana, status").eq("status", "active").eq("office_id", officeId)
+        : Promise.resolve({ data: [] as KaigoStaff[] }),
       supabase
         .from("kaigo_visit_schedule")
         .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type")

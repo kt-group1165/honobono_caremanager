@@ -17,13 +17,19 @@ function makeRowKey(serviceType: string, startTime: string, endTime: string): st
 export default async function ProvisionTicketsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ user?: string }>;
+  searchParams: Promise<{ user?: string; office?: string }>;
 }) {
-  const { user: userId } = await searchParams;
+  const { user: userId, office: officeId } = await searchParams;
   const supabase = await createClient();
 
+  // 自事業所 (URL ?office=) のスタッフだけに絞り込む。officeId 未指定時は
+  // BusinessTypeContext が初期化中なので空配列を返し、Client 側で再フェッチさせる想定。
+  const staffQuery = officeId
+    ? supabase.from("members").select("id, name").eq("status", "active").eq("office_id", officeId).order("name")
+    : null;
+
   const [staffRes, serviceCodeRes, officeRes] = await Promise.all([
-    supabase.from("members").select("id, name").eq("status", "active").order("name"),
+    staffQuery ?? Promise.resolve({ data: [] as { id: string; name: string }[] }),
     supabase.from("kaigo_service_codes").select("service_name, units").eq("calculation_type", "基本"),
     supabase.from("offices").select("provider_number:business_number, office_name:name").eq("app_type", "kaigo-app").limit(1).maybeSingle(),
   ]);
