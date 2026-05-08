@@ -15,6 +15,7 @@ import {
   ChevronUp,
   CalendarDays,
   PenLine,
+  Printer,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { TemplatePicker } from "@/components/templates/template-picker";
@@ -702,19 +703,45 @@ export function VisitRecordsContent({ userId, userName, initialRecords, initialS
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #visit-records-print, #visit-records-print * { visibility: visible !important; }
+          #visit-records-print {
+            position: fixed; inset: 0;
+            padding: 10mm;
+            background: white;
+            color: #000;
+            font-family: "MS Mincho","游明朝","Hiragino Mincho ProN",serif;
+            overflow: visible;
+          }
+          @page { size: A4 portrait; margin: 0; }
+        }
+      `}</style>
+
       {/* Header */}
       <div className="flex items-center justify-between border-b bg-white px-6 py-4">
         <div>
           <h1 className="text-xl font-bold text-gray-900">サービス実施記録</h1>
           <p className="mt-0.5 text-xs text-gray-500">訪問介護サービスの実施内容を記録します</p>
         </div>
-        <button
-          onClick={handleOpenForm}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={16} />
-          新規記録
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => window.print()}
+            disabled={records.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40"
+          >
+            <Printer size={14} />
+            印刷
+          </button>
+          <button
+            onClick={handleOpenForm}
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={16} />
+            新規記録
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
@@ -867,6 +894,11 @@ export function VisitRecordsContent({ userId, userName, initialRecords, initialS
               })}
             </div>
           )}
+      </div>
+
+      {/* 印刷用 DOM (画面では hidden) */}
+      <div id="visit-records-print" className="hidden">
+        <VisitPrintView records={records} userName={userName ?? undefined} />
       </div>
 
       {/* Modal — 22カテゴリ対応の新規記録フォーム */}
@@ -1194,6 +1226,98 @@ export function VisitRecordsContent({ userId, userName, initialRecords, initialS
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ─── 印刷専用 View ─────────────────────────────────────────────────────────
+function VisitPrintView({ records, userName }: { records: VisitRecord[]; userName?: string }) {
+  const B = "1px solid #000";
+  const cellBase: React.CSSProperties = {
+    border: B,
+    padding: "1mm 2mm",
+    fontSize: "9pt",
+    verticalAlign: "top",
+    lineHeight: 1.3,
+  };
+  const thStyle: React.CSSProperties = {
+    ...cellBase,
+    textAlign: "center",
+    fontWeight: "bold",
+    background: "#fff",
+  };
+  const fmtSignedAt = (d: string | null | undefined) => {
+    if (!d) return "";
+    try {
+      return format(parseISO(d), "yyyy/M/d HH:mm");
+    } catch {
+      return d;
+    }
+  };
+  return (
+    <div style={{ color: "#000" }}>
+      <div style={{ textAlign: "center", fontSize: "14pt", fontWeight: "bold", letterSpacing: "0.2em", marginBottom: "3mm" }}>
+        サービス実施記録
+      </div>
+      {userName && (
+        <div style={{ fontSize: "10pt", marginBottom: "3mm", borderBottom: B, paddingBottom: "1mm" }}>
+          利用者名　{userName}　殿
+        </div>
+      )}
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <colgroup>
+          <col style={{ width: "13%" }} />
+          <col style={{ width: "11%" }} />
+          <col style={{ width: "13%" }} />
+          <col style={{ width: "15%" }} />
+          <col style={{ width: "23%" }} />
+          <col style={{ width: "25%" }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th style={thStyle}>訪問日</th>
+            <th style={thStyle}>区分</th>
+            <th style={thStyle}>時間</th>
+            <th style={thStyle}>担当</th>
+            <th style={thStyle}>援助内容</th>
+            <th style={thStyle}>電子署名</th>
+          </tr>
+        </thead>
+        <tbody>
+          {records.map((rec) => {
+            const careItems = getActiveCareItems(rec);
+            return (
+              <tr key={rec.id}>
+                <td style={cellBase}>{formatVisitDate(rec.visit_date)}</td>
+                <td style={cellBase}>{rec.service_type}</td>
+                <td style={cellBase}>{formatTimeRange(rec.start_time, rec.end_time)}</td>
+                <td style={cellBase}>{rec.staff_name ?? ""}</td>
+                <td style={{ ...cellBase, whiteSpace: "pre-wrap" }}>
+                  {careItems.length > 0 ? careItems.join("、") : ""}
+                </td>
+                <td style={{ ...cellBase, textAlign: "center" }}>
+                  {rec.signature_image_url ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element -- 印刷用 Storage URL (next/image 不要) */}
+                      <img
+                        src={rec.signature_image_url}
+                        alt="電子署名"
+                        style={{ display: "block", margin: "0 auto", maxHeight: "16mm", maxWidth: "50mm", height: "auto", width: "auto" }}
+                      />
+                      <span style={{ display: "block", fontSize: "7pt", marginTop: "0.5mm", color: "#333" }}>
+                        {rec.signer_name && <>{rec.signer_name}<br /></>}
+                        {rec.signed_at && fmtSignedAt(rec.signed_at)}
+                      </span>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: "8pt", color: "#999" }}>未署名</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

@@ -1105,6 +1105,36 @@ function PrintTable({
       return d;
     }
   };
+  const fmtSignedAt = (d: string | null | undefined) => {
+    if (!d) return "";
+    try {
+      return format(parseISO(d), "yyyy/M/d HH:mm");
+    } catch {
+      return d;
+    }
+  };
+  const renderContentCell = (rec: SupportRecord | undefined): React.ReactNode => {
+    if (!rec) return "";
+    return (
+      <>
+        <span>{rec.content}</span>
+        {rec.signature_image_url && (
+          <span style={{ display: "block", marginTop: "1mm", borderTop: "1px dashed #999", paddingTop: "0.5mm" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element -- print 用 Storage URL (next/image 不要) */}
+            <img
+              src={rec.signature_image_url}
+              alt="電子署名"
+              style={{ display: "block", maxHeight: "12mm", maxWidth: "40mm", height: "auto", width: "auto" }}
+            />
+            <span style={{ display: "block", fontSize: "7pt", color: "#333", marginTop: "0.5mm" }}>
+              {rec.signer_name && <>署名: {rec.signer_name} </>}
+              {rec.signed_at && <>{fmtSignedAt(rec.signed_at)}</>}
+            </span>
+          </span>
+        )}
+      </>
+    );
+  };
   const half = Math.ceil(filteredRecords.length / 2);
   const leftRecords = filteredRecords.slice(0, half);
   const rightRecords = filteredRecords.slice(half);
@@ -1167,10 +1197,10 @@ function PrintTable({
               <tr key={i} style={{ height: isEmpty ? "18mm" : "6mm" }}>
                 <td style={cellBase}>{fmtYmd(left?.record_date)}</td>
                 <td style={cellBase}>{left?.category ?? ""}</td>
-                <td style={{ ...cellBase, whiteSpace: "pre-wrap" }}>{left?.content ?? ""}</td>
+                <td style={{ ...cellBase, whiteSpace: "pre-wrap" }}>{renderContentCell(left)}</td>
                 <td style={cellBase}>{fmtYmd(right?.record_date)}</td>
                 <td style={cellBase}>{right?.category ?? ""}</td>
-                <td style={{ ...cellBase, whiteSpace: "pre-wrap" }}>{right?.content ?? ""}</td>
+                <td style={{ ...cellBase, whiteSpace: "pre-wrap" }}>{renderContentCell(right)}</td>
               </tr>
             );
           })}
