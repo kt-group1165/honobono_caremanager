@@ -11,12 +11,13 @@ export default async function ServicesPage({
 
   // 自事業所 (URL ?office=) のスタッフだけに絞り込む。officeId 未指定時は
   // BusinessTypeContext が初期化中なので空配列を返し、Client 側で再フェッチさせる想定。
+  // Phase 9 close: members.office_id DROP 済 → member_offices junction 経由で絞り込み
   const staffQuery = officeId
     ? supabase
         .from("members")
-        .select("id, name")
+        .select("id, name, member_offices!inner(office_id)")
         .eq("status", "active")
-        .eq("office_id", officeId)
+        .eq("member_offices.office_id", officeId)
         .order("furigana", { nullsFirst: false })
     : null;
 

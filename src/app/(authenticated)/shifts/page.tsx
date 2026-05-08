@@ -16,12 +16,13 @@ export default async function ShiftsPage({
 
   // 自事業所 (URL ?office=) のスタッフだけに絞り込む。officeId 未指定時は
   // BusinessTypeContext が初期化中なので空配列を返し、Client 側で再フェッチさせる。
+  // Phase 9 close: members.office_id DROP 済 → member_offices junction 経由で絞り込み
   let staffQ = supabase
     .from("members")
-    .select("id, name, furigana")
+    .select("id, name, furigana, member_offices!inner(office_id)")
     .eq("status", "active")
     .order("furigana", { nullsFirst: false });
-  if (officeId) staffQ = staffQ.eq("office_id", officeId);
+  if (officeId) staffQ = staffQ.eq("member_offices.office_id", officeId);
 
   const [staffRes, shiftsRes] = await Promise.all([
     staffQ,

@@ -19,12 +19,13 @@ export default async function PatternsPage({
 
   // 自事業所 (URL ?office=) のスタッフだけに絞り込む。officeId 未指定時は
   // BusinessTypeContext が初期化中なので空配列を返し、Client 側で再フェッチさせる。
+  // Phase 9 close: members.office_id DROP 済 → member_offices junction 経由で絞り込み
   let staffQuery = supabase
     .from("members")
-    .select("id, name, furigana")
+    .select("id, name, furigana, member_offices!inner(office_id)")
     .eq("status", "active")
     .order("furigana", { nullsFirst: false });
-  if (officeId) staffQuery = staffQuery.eq("office_id", officeId);
+  if (officeId) staffQuery = staffQuery.eq("member_offices.office_id", officeId);
   const staffRes = await staffQuery;
   const initialStaff = (officeId ? (staffRes.data ?? []) : []) as KaigoStaff[];
 

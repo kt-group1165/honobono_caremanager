@@ -475,12 +475,13 @@ function UrlManagementModal({ onClose }: { onClose: () => void }) {
     }
     const fetch = async () => {
       setLoading(true);
+      // Phase 9 close: members.office_id DROP 済 → member_offices junction 経由で絞り込み
       const [staffRes, tokenRes] = await Promise.all([
         supabase
           .from("members")
-          .select("id, name, name_kana:furigana, status")
+          .select("id, name, name_kana:furigana, status, member_offices!inner(office_id)")
           .eq("status", "active")
-          .eq("office_id", currentOfficeId)
+          .eq("member_offices.office_id", currentOfficeId)
           .order("furigana", { nullsFirst: false }),
         supabase.from("kaigo_staff_tokens").select("id, staff_id, token"),
       ]);

@@ -91,8 +91,13 @@ export function UserCalendar({
     const to = format(endOfMonth(currentMonth), "yyyy-MM-dd");
 
     // 自事業所 (currentOfficeId) のスタッフだけ。未指定時は空配列扱い。
+    // Phase 9 close: members.office_id DROP 済 → member_offices junction 経由で絞り込み
     const allStaffPromise = currentOfficeId
-      ? supabase.from("members").select("id, name, name_kana:furigana, status").eq("status", "active").eq("office_id", currentOfficeId)
+      ? supabase
+          .from("members")
+          .select("id, name, name_kana:furigana, status, member_offices!inner(office_id)")
+          .eq("status", "active")
+          .eq("member_offices.office_id", currentOfficeId)
       : Promise.resolve({ data: [] as KaigoStaff[] });
 
     const [schedRes, availRes, allStaffRes, allSchedRes, provRes] = await Promise.all([

@@ -72,12 +72,13 @@ export default async function ShiftManagementPage({
 
   // 自事業所 (URL ?office=) のスタッフだけに絞り込む。officeId 未指定時は
   // BusinessTypeContext が初期化中なので空配列を返し、Client 側で再フェッチさせる。
+  // Phase 9 close: members.office_id DROP 済 → member_offices junction 経由で絞り込み
   let staffQuery = supabase
     .from("members")
-    .select("id, name, name_kana:furigana, status")
+    .select("id, name, name_kana:furigana, status, member_offices!inner(office_id)")
     .eq("status", "active")
     .order("furigana", { nullsFirst: false });
-  if (officeId) staffQuery = staffQuery.eq("office_id", officeId);
+  if (officeId) staffQuery = staffQuery.eq("member_offices.office_id", officeId);
 
   // PostgREST default 1000 行制限対策で clients は page-loop
   const PAGE = 1000;
@@ -133,7 +134,11 @@ export default async function ShiftManagementPage({
         .lte("available_date", monthTo),
       // 自事業所 (URL ?office=) のスタッフのみ。未指定時は空 → Client 側で再フェッチ。
       officeId
-        ? supabase.from("members").select("id, name, name_kana:furigana, status").eq("status", "active").eq("office_id", officeId)
+        ? supabase
+            .from("members")
+            .select("id, name, name_kana:furigana, status, member_offices!inner(office_id)")
+            .eq("status", "active")
+            .eq("member_offices.office_id", officeId)
         : Promise.resolve({ data: [] as KaigoStaff[] }),
       supabase
         .from("kaigo_visit_schedule")

@@ -93,12 +93,13 @@ export function ShiftsContent({
     const monthEnd = format(endOfMonth(currentMonth), "yyyy-MM-dd");
 
     // 自事業所 (currentOfficeId) に primary office として紐付く職員のみ取得。
+    // Phase 9 close: members.office_id DROP 済 → member_offices junction 経由で絞り込み
     const [staffRes, shiftsRes] = await Promise.all([
       supabase
         .from("members")
-        .select("id, name, furigana")
+        .select("id, name, furigana, member_offices!inner(office_id)")
         .eq("status", "active")
-        .eq("office_id", currentOfficeId)
+        .eq("member_offices.office_id", currentOfficeId)
         .order("furigana", { nullsFirst: false }),
       supabase
         .from("kaigo_shifts")

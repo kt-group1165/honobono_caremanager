@@ -249,11 +249,12 @@ export function ProvisionTicketsContent({
       setAllStaff([]);
       return;
     }
+    // Phase 9 close: members.office_id DROP 済 → member_offices junction 経由で絞り込み
     const { data, error } = await supabase
       .from("members")
-      .select("id, name")
+      .select("id, name, member_offices!inner(office_id)")
       .eq("status", "active")
-      .eq("office_id", currentOfficeId)
+      .eq("member_offices.office_id", currentOfficeId)
       .order("name");
     if (error) {
       toast.error("職員データの取得に失敗しました");

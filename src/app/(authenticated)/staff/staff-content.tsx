@@ -88,10 +88,11 @@ export function StaffContent({
     setLoading(true);
     // 自事業所 (currentOfficeId) に primary office として紐付く職員のみ取得
     // (multi-office 兼務職員は user_offices を経由して見せたい場合に拡張する)
+    // Phase 9 close: members.office_id DROP 済 → member_offices junction 経由で絞り込み
     let q = supabase
       .from("members")
-      .select("id, tenant_id, name, furigana, role, qualifications, email, phone, employment_type, hire_date, status, created_at")
-      .eq("office_id", currentOfficeId);
+      .select("id, tenant_id, name, furigana, role, qualifications, email, phone, employment_type, hire_date, status, created_at, member_offices!inner(office_id)")
+      .eq("member_offices.office_id", currentOfficeId);
     if (!includeInactive) q = q.eq("status", "active");
     const { data, error } = await q.order("furigana", { nullsFirst: false });
     if (error) {
