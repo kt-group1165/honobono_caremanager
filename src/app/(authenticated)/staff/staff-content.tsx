@@ -77,6 +77,8 @@ export function StaffContent({
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Staff | null>(null);
   const [form, setForm] = useState<StaffForm>(EMPTY_FORM);
+  // Phase 9-6: 既定は active のみ表示。toggle ON で退職者も含めて再フェッチ。
+  const [includeInactive, setIncludeInactive] = useState(false);
 
   const fetchStaff = useCallback(async () => {
     if (!currentOfficeId) {
@@ -86,20 +88,21 @@ export function StaffContent({
     setLoading(true);
     // 自事業所 (currentOfficeId) に primary office として紐付く職員のみ取得
     // (multi-office 兼務職員は user_offices を経由して見せたい場合に拡張する)
-    const { data, error } = await supabase
+    let q = supabase
       .from("members")
       .select("id, tenant_id, name, furigana, role, qualifications, email, phone, employment_type, hire_date, status, created_at")
-      .eq("office_id", currentOfficeId)
-      .order("furigana", { nullsFirst: false });
+      .eq("office_id", currentOfficeId);
+    if (!includeInactive) q = q.eq("status", "active");
+    const { data, error } = await q.order("furigana", { nullsFirst: false });
     if (error) {
       toast.error("職員データの取得に失敗しました");
     } else {
       setStaffList((data || []) as Staff[]);
     }
     setLoading(false);
-  }, [supabase, currentOfficeId]);
+  }, [supabase, currentOfficeId, includeInactive]);
 
-  // 自事業所が変わったら再フェッチ
+  // 自事業所が変わったら / 退職者 toggle が変わったら 再フェッチ
   useEffect(() => {
     if (currentOfficeId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-time async fetch (HANDOVER §2)
@@ -247,16 +250,27 @@ export function StaffContent({
         </button>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          type="text"
-          placeholder="氏名・ふりがな・職種で検索"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full rounded-lg border pl-9 pr-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
+      {/* Search + 退職者 toggle */}
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="relative max-w-sm flex-1 min-w-[240px]">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="氏名・ふりがな・職種で検索"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full rounded-lg border pl-9 pr-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+        <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={includeInactive}
+            onChange={(e) => setIncludeInactive(e.target.checked)}
+            className="rounded border-gray-300"
+          />
+          退職者を含める
+        </label>
       </div>
 
       {/* Table */}
