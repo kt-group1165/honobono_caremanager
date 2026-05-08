@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
+import { useBusinessType } from "@/lib/business-type-context";
 
 const SERVICE_TYPES = [
   "訪問介護",
@@ -73,9 +74,10 @@ export function ServicesContent({
   initialStaff: KaigoStaff[];
 }) {
   const supabase = useMemo(() => createClient(), []);
+  const { currentOfficeId } = useBusinessType();
   const [records, setRecords] = useState<ServiceRecord[]>(initialRecords);
   const [users] = useState<KaigoUser[]>(initialUsers);
-  const [staff] = useState<KaigoStaff[]>(initialStaff);
+  const [staff, setStaff] = useState<KaigoStaff[]>(initialStaff);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -126,6 +128,33 @@ export function ServicesContent({
     }
     fetchRecords();
   }, [fetchRecords]);
+
+  // 自事業所が変わったら担当職員 (members) を再フェッチ
+  // (page.tsx は URL ?office= 起点で server fetch するが、context 起点の切替を拾う)
+  const fetchStaff = useCallback(async () => {
+    if (!currentOfficeId) {
+      setStaff([]);
+      return;
+    }
+    const { data, error } = await supabase
+      .from("members")
+      .select("id, name")
+      .eq("status", "active")
+      .eq("office_id", currentOfficeId)
+      .order("furigana", { nullsFirst: false });
+    if (error) {
+      toast.error("担当職員の取得に失敗しました");
+    } else {
+      setStaff((data || []) as KaigoStaff[]);
+    }
+  }, [supabase, currentOfficeId]);
+
+  useEffect(() => {
+    if (currentOfficeId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-time async fetch (HANDOVER §2)
+      fetchStaff();
+    }
+  }, [currentOfficeId, fetchStaff]);
 
   const openCreateDialog = () => {
     setEditingRecord(null);

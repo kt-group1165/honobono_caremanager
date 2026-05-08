@@ -27,6 +27,7 @@ import {
 import { ja } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { ServiceSelector } from "@/components/services/service-selector";
+import { useBusinessType } from "@/lib/business-type-context";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -124,10 +125,11 @@ export function ProvisionTicketsContent({
   initialGrid,
 }: ProvisionTicketsContentProps) {
   const supabase = useMemo(() => createClient(), []);
+  const { currentOfficeId } = useBusinessType();
 
   const [selectedMonth, setSelectedMonth] = useState(() => new Date());
   const [userData] = useState<KaigoUser | null>(initialUser);
-  const [allStaff] = useState<KaigoStaff[]>(initialStaff);
+  const [allStaff, setAllStaff] = useState<KaigoStaff[]>(initialStaff);
   const [serviceUnits] = useState<Record<string, number>>(initialServiceUnits);
   const [officeInfo] = useState<OfficeInfo | null>(initialOffice);
 
@@ -240,6 +242,37 @@ export function ProvisionTicketsContent({
     }
     fetchGridData();
   }, [fetchGridData]);
+
+  // 自事業所 (currentOfficeId) が変わったら staff (members) を再フェッチ
+  const fetchStaff = useCallback(async () => {
+    if (!currentOfficeId) {
+      setAllStaff([]);
+      return;
+    }
+    const { data, error } = await supabase
+      .from("members")
+      .select("id, name")
+      .eq("status", "active")
+      .eq("office_id", currentOfficeId)
+      .order("name");
+    if (error) {
+      toast.error("職員データの取得に失敗しました");
+      return;
+    }
+    setAllStaff((data ?? []) as KaigoStaff[]);
+  }, [supabase, currentOfficeId]);
+
+  const isInitialStaffMount = useRef(true);
+  useEffect(() => {
+    if (isInitialStaffMount.current) {
+      isInitialStaffMount.current = false;
+      return;
+    }
+    if (currentOfficeId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-time async fetch (HANDOVER §2)
+      fetchStaff();
+    }
+  }, [currentOfficeId, fetchStaff]);
 
   // ── Dirty tracking & beforeunload ──────────────────────────────────────────
   useEffect(() => {
