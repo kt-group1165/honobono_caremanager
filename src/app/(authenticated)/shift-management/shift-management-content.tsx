@@ -187,20 +187,34 @@ function PatternImportModal({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const fetch = async () => {
       setLoading(true);
-      const [patRes, userRes] = await Promise.all([
-        supabase
-          .from("kaigo_visit_patterns")
-          .select("id, user_id, pattern_name, day_of_week, start_time, end_time, service_type, staff_id, clients(name)")
-          .order("user_id"),
-        supabase.from("clients").select("id, name, name_kana:furigana, status").eq("status", "active").eq("is_facility", false),
-      ]);
+      // PostgREST default 1000 行制限対策で clients は page-loop
+      const PAGE = 1000;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
+      const usersAll: any[] = [];
+      let fromU = 0;
+      while (true) {
+        const { data } = await supabase
+          .from("clients")
+          .select("id, name, name_kana:furigana, status")
+          .eq("status", "active")
+          .eq("is_facility", false)
+          .range(fromU, fromU + PAGE - 1);
+        if (!data || data.length === 0) break;
+        usersAll.push(...data);
+        if (data.length < PAGE) break;
+        fromU += PAGE;
+      }
+      const patRes = await supabase
+        .from("kaigo_visit_patterns")
+        .select("id, user_id, pattern_name, day_of_week, start_time, end_time, service_type, staff_id, clients(name)")
+        .order("user_id");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
       const pats: VisitPattern[] = (patRes.data || []).map((r: any) => ({
         ...r,
         user_name: r.clients?.name ?? null,
       }));
       setPatterns(pats);
-      setUsers(userRes.data || []);
+      setUsers(usersAll);
       const checks: Record<string, Record<number, boolean>> = {};
       const uChecks: Record<string, boolean> = {};
       const userIds = [...new Set(pats.map((p) => p.user_id))];

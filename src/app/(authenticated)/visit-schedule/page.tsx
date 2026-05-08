@@ -7,23 +7,7 @@ export default async function VisitSchedulePage() {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const { data } = await supabase
-    .from("kaigo_visit_records")
-    .select(`
-      id,
-      user_id,
-      visit_date,
-      start_time,
-      end_time,
-      service_type,
-      clients(name),
-      members(name)
-    `)
-    .gte("visit_date", format(startOfMonth(monthStart), "yyyy-MM-dd"))
-    .lte("visit_date", format(endOfMonth(monthStart), "yyyy-MM-dd"))
-    .order("visit_date")
-    .order("start_time");
-
+  // PostgREST default 1000 行制限対策で page-loop で全件取得
   type Row = {
     id: string;
     user_id: string;
@@ -34,7 +18,36 @@ export default async function VisitSchedulePage() {
     clients: { name: string } | null;
     members: { name: string } | null;
   };
-  const initialEntries: ScheduleEntry[] = ((data ?? []) as unknown as Row[]).map((r) => ({
+  const PAGE = 1000;
+  const rowsAll: Row[] = [];
+  {
+    let from = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("kaigo_visit_records")
+        .select(`
+          id,
+          user_id,
+          visit_date,
+          start_time,
+          end_time,
+          service_type,
+          clients(name),
+          members(name)
+        `)
+        .gte("visit_date", format(startOfMonth(monthStart), "yyyy-MM-dd"))
+        .lte("visit_date", format(endOfMonth(monthStart), "yyyy-MM-dd"))
+        .order("visit_date")
+        .order("start_time")
+        .range(from, from + PAGE - 1);
+      if (!data || data.length === 0) break;
+      rowsAll.push(...(data as unknown as Row[]));
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+  }
+
+  const initialEntries: ScheduleEntry[] = rowsAll.map((r) => ({
     id: r.id,
     user_id: r.user_id,
     user_name: r.clients?.name ?? "不明",

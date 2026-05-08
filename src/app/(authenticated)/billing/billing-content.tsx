@@ -238,11 +238,25 @@ export function BillingContent({
 
       // 3. 認定情報（client_insurance_records、カラム名は新スキーマ）
       //   user_id → client_id, start_date → certification_start_date, end_date → certification_end_date
-      const { data: certs } = await supabase
-        .from("client_insurance_records")
-        .select("client_id, care_level, insurer_number, insured_number, certification_start_date, certification_end_date")
-        .in("client_id", userIds)
-        .order("certification_date", { ascending: false });
+      //   PostgREST default 1000 行制限対策で page-loop で全件取得
+      type CertRow = { client_id: string; care_level: string; insurer_number: string | null; insured_number: string | null; certification_start_date: string | null; certification_end_date: string | null };
+      const PAGE_CERTS = 1000;
+      const certs: CertRow[] = [];
+      {
+        let fromC = 0;
+        while (true) {
+          const { data } = await supabase
+            .from("client_insurance_records")
+            .select("client_id, care_level, insurer_number, insured_number, certification_start_date, certification_end_date")
+            .in("client_id", userIds)
+            .order("certification_date", { ascending: false })
+            .range(fromC, fromC + PAGE_CERTS - 1);
+          if (!data || data.length === 0) break;
+          certs.push(...(data as CertRow[]));
+          if (data.length < PAGE_CERTS) break;
+          fromC += PAGE_CERTS;
+        }
+      }
       const certMap = new Map<
         string,
         {

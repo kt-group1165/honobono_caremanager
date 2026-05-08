@@ -105,12 +105,24 @@ export function HospitalizationsContent({
 
   const fetchAllAdmitted = async () => {
     setLoadingAllAdmitted(true);
-    const { data } = await supabase
-      .from("client_hospitalizations")
-      .select("*, clients(name)")
-      .eq("status", "admitted")
-      .order("admission_date", { ascending: true });
-    const rows = (data ?? []).map((r: any) => ({  // eslint-disable-line @typescript-eslint/no-explicit-any
+    // PostgREST default 1000 行制限対策で page-loop で全件取得
+    const PAGE = 1000;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
+    const all: any[] = [];
+    let from = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("client_hospitalizations")
+        .select("*, clients(name)")
+        .eq("status", "admitted")
+        .order("admission_date", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    const rows = all.map((r) => ({
       ...r,
       user_name: r.clients?.name ?? "—",
     })) as (Hospitalization & { user_name: string })[];

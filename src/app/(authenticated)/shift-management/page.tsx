@@ -79,17 +79,27 @@ export default async function ShiftManagementPage({
     .order("furigana", { nullsFirst: false });
   if (officeId) staffQuery = staffQuery.eq("office_id", officeId);
 
-  const [usersRes, staffRes] = await Promise.all([
-    supabase
-      .from("clients")
-      .select("id, name, name_kana:furigana, status")
-      .eq("status", "active")
-      .eq("is_facility", false)
-      .order("furigana", { nullsFirst: false }),
-    staffQuery,
-  ]);
+  // PostgREST default 1000 行制限対策で clients は page-loop
+  const PAGE = 1000;
+  const users: KaigoUser[] = [];
+  {
+    let from = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("clients")
+        .select("id, name, name_kana:furigana, status")
+        .eq("status", "active")
+        .eq("is_facility", false)
+        .order("furigana", { nullsFirst: false })
+        .range(from, from + PAGE - 1);
+      if (!data || data.length === 0) break;
+      users.push(...(data as KaigoUser[]));
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+  }
 
-  const users: KaigoUser[] = (usersRes.data ?? []) as KaigoUser[];
+  const staffRes = await staffQuery;
   const staff: KaigoStaff[] = (officeId ? (staffRes.data ?? []) : []) as KaigoStaff[];
 
   const selectedUserId =

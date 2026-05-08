@@ -15,17 +15,28 @@ export async function GET(
   }
 
   const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("clients")
-    .select("id, name, name_kana:furigana")
-    .eq("status", "active")
-    .eq("is_facility", false)
-    .eq("tenant_id", ctx.tenant_id)
-    .order("furigana");
-
-  if (error) {
-    return NextResponse.json({ error: "fetch_failed", detail: error.message }, { status: 500 });
+  // PostgREST default 1000 行制限対策で page-loop で全件取得
+  const PAGE = 1000;
+  type UserRow = { id: string; name: string; name_kana: string | null };
+  const all: UserRow[] = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await admin
+      .from("clients")
+      .select("id, name, name_kana:furigana")
+      .eq("status", "active")
+      .eq("is_facility", false)
+      .eq("tenant_id", ctx.tenant_id)
+      .order("furigana")
+      .range(from, from + PAGE - 1);
+    if (error) {
+      return NextResponse.json({ error: "fetch_failed", detail: error.message }, { status: 500 });
+    }
+    if (!data || data.length === 0) break;
+    all.push(...(data as UserRow[]));
+    if (data.length < PAGE) break;
+    from += PAGE;
   }
 
-  return NextResponse.json({ users: data ?? [] });
+  return NextResponse.json({ users: all });
 }

@@ -20,26 +20,40 @@ export default async function ServicesPage({
         .order("furigana", { nullsFirst: false })
     : null;
 
-  const [recordsRes, usersRes, staffRes] = await Promise.all([
+  // PostgREST default 1000 行制限対策で clients は page-loop
+  const PAGE = 1000;
+  const usersAll: KaigoUser[] = [];
+  {
+    let from = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("clients")
+        .select("id, name")
+        .eq("is_facility", false)
+        .is("deleted_at", null)
+        .order("name")
+        .range(from, from + PAGE - 1);
+      if (!data || data.length === 0) break;
+      usersAll.push(...(data as KaigoUser[]));
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+  }
+
+  const [recordsRes, staffRes] = await Promise.all([
     supabase
       .from("kaigo_service_records")
       .select("*, clients(name), members(name)")
       .order("service_date", { ascending: false })
       .order("start_time", { ascending: false })
       .limit(200),
-    supabase
-      .from("clients")
-      .select("id, name")
-      .eq("is_facility", false)
-      .is("deleted_at", null)
-      .order("name"),
     staffQuery ?? Promise.resolve({ data: [] as { id: string; name: string }[] }),
   ]);
 
   return (
     <ServicesContent
       initialRecords={(recordsRes.data ?? []) as ServiceRecord[]}
-      initialUsers={(usersRes.data ?? []) as KaigoUser[]}
+      initialUsers={usersAll}
       initialStaff={(staffRes.data ?? []) as KaigoStaff[]}
     />
   );

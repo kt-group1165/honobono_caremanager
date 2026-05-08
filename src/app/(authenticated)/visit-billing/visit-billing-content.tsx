@@ -92,28 +92,41 @@ export function VisitBillingContent({
 
   const fetchRecords = async (month: Date) => {
     setLoading(true);
-    const from = format(startOfMonth(month), "yyyy-MM-dd");
+    const fromDate = format(startOfMonth(month), "yyyy-MM-dd");
     const to = format(endOfMonth(month), "yyyy-MM-dd");
 
-    const { data, error } = await supabase
-      .from("kaigo_visit_records")
-      .select(`
-        id,
-        user_id,
-        visit_date,
-        start_time,
-        end_time,
-        service_type,
-        clients(name, name_kana:furigana)
-      `)
-      .gte("visit_date", from)
-      .lte("visit_date", to)
-      .order("visit_date");
+    // PostgREST default 1000 行制限対策で page-loop で全件取得
+    const PAGE = 1000;
+    const all: RawRecord[] = [];
+    let from = 0;
+    let fetchError: unknown = null;
+    while (true) {
+      const { data, error } = await supabase
+        .from("kaigo_visit_records")
+        .select(`
+          id,
+          user_id,
+          visit_date,
+          start_time,
+          end_time,
+          service_type,
+          clients(name, name_kana:furigana)
+        `)
+        .gte("visit_date", fromDate)
+        .lte("visit_date", to)
+        .order("visit_date")
+        .range(from, from + PAGE - 1);
+      if (error) { fetchError = error; break; }
+      if (!data || data.length === 0) break;
+      all.push(...(data as RawRecord[]));
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
 
-    if (error) {
+    if (fetchError) {
       toast.error("実績データの取得に失敗しました");
     } else {
-      setRecords(data || []);
+      setRecords(all);
     }
     setLoading(false);
   };

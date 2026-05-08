@@ -706,14 +706,26 @@ export function ClaimsContent({
       const userIds = [...new Set(rows.map((r) => r.user_id))];
       if (userIds.length > 0) {
         // client_insurance_records, カラム名は新スキーマ
-        const { data: certs } = await supabase
-          .from("client_insurance_records")
-          .select("client_id, care_level, insurer_number, insured_number, certification_start_date, certification_end_date")
-          .in("client_id", userIds)
-          .order("certification_date", { ascending: false });
+        // PostgREST default 1000 行制限対策で page-loop で全件取得
+        type CertRow = { client_id: string; care_level: string; insurer_number: string | null; insured_number: string | null; certification_start_date: string | null; certification_end_date: string | null };
+        const PAGE = 1000;
+        const certs: CertRow[] = [];
+        let fromC = 0;
+        while (true) {
+          const { data } = await supabase
+            .from("client_insurance_records")
+            .select("client_id, care_level, insurer_number, insured_number, certification_start_date, certification_end_date")
+            .in("client_id", userIds)
+            .order("certification_date", { ascending: false })
+            .range(fromC, fromC + PAGE - 1);
+          if (!data || data.length === 0) break;
+          certs.push(...(data as CertRow[]));
+          if (data.length < PAGE) break;
+          fromC += PAGE;
+        }
 
         const map = new Map<string, { care_level: string; insurer_number: string | null; insured_number: string | null; start_date: string | null; end_date: string | null }>();
-        for (const cert of certs || []) {
+        for (const cert of certs) {
           if (!map.has(cert.client_id)) {
             map.set(cert.client_id, {
               care_level: cert.care_level,
@@ -774,14 +786,27 @@ export function ClaimsContent({
     setGenerating(true);
     try {
       // 1. Fetch active users（clients、is_facility=false で法人エントリ除外）
-      const { data: users, error: usersErr } = await supabase
-        .from("clients")
-        .select("id, name")
-        .eq("status", "active")
-        .eq("is_facility", false)
-        .is("deleted_at", null);
-      if (usersErr) throw usersErr;
-      if (!users || users.length === 0) {
+      //    PostgREST default 1000 行制限対策で page-loop で全件取得
+      const PAGE_USERS = 1000;
+      const users: { id: string; name: string }[] = [];
+      {
+        let fromU = 0;
+        while (true) {
+          const { data, error: usersErr } = await supabase
+            .from("clients")
+            .select("id, name")
+            .eq("status", "active")
+            .eq("is_facility", false)
+            .is("deleted_at", null)
+            .range(fromU, fromU + PAGE_USERS - 1);
+          if (usersErr) throw usersErr;
+          if (!data || data.length === 0) break;
+          users.push(...(data as { id: string; name: string }[]));
+          if (data.length < PAGE_USERS) break;
+          fromU += PAGE_USERS;
+        }
+      }
+      if (users.length === 0) {
         toast.error("在籍中の利用者が見つかりません");
         return;
       }
@@ -805,12 +830,26 @@ export function ClaimsContent({
       }
 
       // 3. Fetch latest certifications for those users（client_insurance_records）
-      const { data: certs, error: certsErr } = await supabase
-        .from("client_insurance_records")
-        .select("client_id, care_level, insurer_number, insured_number")
-        .in("client_id", Array.from(activeUserIds))
-        .order("certification_date", { ascending: false });
-      if (certsErr) throw certsErr;
+      //    PostgREST default 1000 行制限対策で page-loop で全件取得
+      const PAGE_CERTS = 1000;
+      const certs: { client_id: string; care_level: string; insurer_number: string | null; insured_number: string | null }[] = [];
+      {
+        let fromC = 0;
+        const activeIds = Array.from(activeUserIds);
+        while (true) {
+          const { data, error: certsErr } = await supabase
+            .from("client_insurance_records")
+            .select("client_id, care_level, insurer_number, insured_number")
+            .in("client_id", activeIds)
+            .order("certification_date", { ascending: false })
+            .range(fromC, fromC + PAGE_CERTS - 1);
+          if (certsErr) throw certsErr;
+          if (!data || data.length === 0) break;
+          certs.push(...(data as { client_id: string; care_level: string; insurer_number: string | null; insured_number: string | null }[]));
+          if (data.length < PAGE_CERTS) break;
+          fromC += PAGE_CERTS;
+        }
+      }
 
       // Build map: user_id -> most recent cert
       const certMap = new Map<

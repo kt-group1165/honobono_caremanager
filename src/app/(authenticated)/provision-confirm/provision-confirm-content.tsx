@@ -68,28 +68,40 @@ export function ProvisionConfirmContent({
 
     // Fetch active users with provision sheet data
     // We join kaigo_users -> kaigo_report_documents (type = service-usage) for the latest
-    const { data: userData, error: userError } = await supabase
-      .from("clients")
-      .select("id, name, name_kana:furigana, care_level, status")
-      .eq("status", "active")
-      .eq("is_facility", false)
-      .order("furigana");
-
-    if (userError) {
-      toast.error("利用者情報の取得に失敗しました");
-      setLoading(false);
-      return;
+    // PostgREST default 1000 行制限対策で page-loop で全件取得
+    type UserRow = { id: string; name: string; name_kana: string | null; care_level: string | null; status: string | null };
+    const PAGE = 1000;
+    const userData: UserRow[] = [];
+    {
+      let from = 0;
+      while (true) {
+        const { data, error: userError } = await supabase
+          .from("clients")
+          .select("id, name, name_kana:furigana, care_level, status")
+          .eq("status", "active")
+          .eq("is_facility", false)
+          .order("furigana")
+          .range(from, from + PAGE - 1);
+        if (userError) {
+          toast.error("利用者情報の取得に失敗しました");
+          setLoading(false);
+          return;
+        }
+        if (!data || data.length === 0) break;
+        userData.push(...(data as UserRow[]));
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
     }
 
-    if (!userData || userData.length === 0) {
+    if (userData.length === 0) {
       setUsers([]);
       setLoading(false);
       return;
     }
 
     // Try to fetch latest report documents for these users
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-    const userIds = userData.map((u: any) => u.id);
+    const userIds = userData.map((u) => u.id);
     const { data: docData } = await supabase
       .from("kaigo_report_documents")
       .select("id, user_id, period_start, period_end, status, document_type")
@@ -106,8 +118,7 @@ export function ProvisionConfirmContent({
       }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-    const mapped: ProvisionUser[] = userData.map((u: any) => {
+    const mapped: ProvisionUser[] = userData.map((u) => {
       const doc = docByUser[u.id] ?? null;
       return {
         user_id: u.id,

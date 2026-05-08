@@ -94,13 +94,24 @@ function UserSidebarInner(props: UserSidebarProps) {
     // 全利用者モードは max_rows までで切れるが UX 上許容。
     if (filterMode === "office" && currentOfficeId) {
       // 1) 自事業所の現役 assignments から client_id を取得
-      const { data: assigns } = await supabase
-        .from("client_office_assignments")
-        .select("client_id")
-        .eq("office_id", currentOfficeId)
-        .is("end_date", null);
+      //    PostgREST default 1000 行制限を超えるテナント向けに page-loop で全件取得
+      const PAGE = 1000;
+      const assignsAll: { client_id: string }[] = [];
+      let from = 0;
+      while (true) {
+        const { data: assigns } = await supabase
+          .from("client_office_assignments")
+          .select("client_id")
+          .eq("office_id", currentOfficeId)
+          .is("end_date", null)
+          .range(from, from + PAGE - 1);
+        if (!assigns || assigns.length === 0) break;
+        assignsAll.push(...(assigns as { client_id: string }[]));
+        if (assigns.length < PAGE) break;
+        from += PAGE;
+      }
       const clientIds = Array.from(
-        new Set<string>((assigns || []).map((a: { client_id: string }) => a.client_id))
+        new Set<string>(assignsAll.map((a) => a.client_id))
       );
 
       if (clientIds.length === 0) {
@@ -137,12 +148,23 @@ function UserSidebarInner(props: UserSidebarProps) {
 
       // モード切替時のチラつき防止に officeUserIds も並行取得
       if (currentOfficeId) {
-        const { data: svc } = await supabase
-          .from("client_office_assignments")
-          .select("client_id")
-          .eq("office_id", currentOfficeId)
-          .is("end_date", null);
-        const set = new Set<string>((svc || []).map((s: { client_id: string }) => s.client_id));
+        // PostgREST default 1000 行制限対策で page-loop
+        const PAGE2 = 1000;
+        const svcAll: { client_id: string }[] = [];
+        let from2 = 0;
+        while (true) {
+          const { data: svc } = await supabase
+            .from("client_office_assignments")
+            .select("client_id")
+            .eq("office_id", currentOfficeId)
+            .is("end_date", null)
+            .range(from2, from2 + PAGE2 - 1);
+          if (!svc || svc.length === 0) break;
+          svcAll.push(...(svc as { client_id: string }[]));
+          if (svc.length < PAGE2) break;
+          from2 += PAGE2;
+        }
+        const set = new Set<string>(svcAll.map((s) => s.client_id));
         setOfficeUserIds(set);
       } else {
         setOfficeUserIds(new Set());

@@ -72,12 +72,28 @@ export default function ReportsPage() {
 
   useEffect(() => {
     const load = async () => {
-      const [userRes, officeRes] = await Promise.all([
-        supabase.from("clients").select("id, name, name_kana:furigana, birth_date, gender, address, phone").eq("status", "active").eq("is_facility", false).is("deleted_at", null).order("furigana", { nullsFirst: false }),
-        // 共通マスタ offices, kaigo-app の自事業所だけ。PostgREST 列エイリアスで旧フィールド名維持
-        supabase.from("offices").select("provider_number:business_number, office_name:name").eq("app_type", "kaigo-app").limit(1).single(),
-      ]);
-      setUsers(userRes.data || []);
+      // PostgREST default 1000 行制限対策で clients は page-loop
+      const PAGE = 1000;
+      const usersAll: KaigoUser[] = [];
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("clients")
+          .select("id, name, name_kana:furigana, birth_date, gender, address, phone")
+          .eq("status", "active")
+          .eq("is_facility", false)
+          .is("deleted_at", null)
+          .order("furigana", { nullsFirst: false })
+          .range(from, from + PAGE - 1);
+        if (error) break;
+        if (!data || data.length === 0) break;
+        usersAll.push(...(data as KaigoUser[]));
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      // 共通マスタ offices, kaigo-app の自事業所だけ。PostgREST 列エイリアスで旧フィールド名維持
+      const officeRes = await supabase.from("offices").select("provider_number:business_number, office_name:name").eq("app_type", "kaigo-app").limit(1).single();
+      setUsers(usersAll);
       if (officeRes.data) setOfficeInfo(officeRes.data as OfficeData);
     };
     load();

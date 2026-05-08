@@ -71,31 +71,44 @@ export function VisitScheduleContent({
 
   const fetchEntries = async (month: Date) => {
     setLoading(true);
-    const from = format(startOfMonth(month), "yyyy-MM-dd");
+    const fromDate = format(startOfMonth(month), "yyyy-MM-dd");
     const to = format(endOfMonth(month), "yyyy-MM-dd");
 
-    const { data, error } = await supabase
-      .from("kaigo_visit_records")
-      .select(`
-        id,
-        user_id,
-        visit_date,
-        start_time,
-        end_time,
-        service_type,
-        clients(name),
-        members(name)
-      `)
-      .gte("visit_date", from)
-      .lte("visit_date", to)
-      .order("visit_date")
-      .order("start_time");
+    // PostgREST default 1000 行制限対策で page-loop で全件取得
+    const PAGE = 1000;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
+    const all: any[] = [];
+    let from = 0;
+    let fetchError: unknown = null;
+    while (true) {
+      const { data, error } = await supabase
+        .from("kaigo_visit_records")
+        .select(`
+          id,
+          user_id,
+          visit_date,
+          start_time,
+          end_time,
+          service_type,
+          clients(name),
+          members(name)
+        `)
+        .gte("visit_date", fromDate)
+        .lte("visit_date", to)
+        .order("visit_date")
+        .order("start_time")
+        .range(from, from + PAGE - 1);
+      if (error) { fetchError = error; break; }
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
 
-    if (error) {
+    if (fetchError) {
       toast.error("予定の取得に失敗しました");
     } else {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-      const mapped: ScheduleEntry[] = (data || []).map((r: any) => ({
+      const mapped: ScheduleEntry[] = all.map((r) => ({
         id: r.id,
         user_id: r.user_id,
         user_name: r.clients?.name ?? "不明",

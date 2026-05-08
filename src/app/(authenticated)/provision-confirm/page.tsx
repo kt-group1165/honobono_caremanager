@@ -4,16 +4,30 @@ import { ProvisionConfirmContent, type ProvisionUser } from "./provision-confirm
 export default async function ProvisionConfirmPage() {
   const supabase = await createClient();
 
-  const { data: userData } = await supabase
-    .from("clients")
-    .select("id, name, name_kana:furigana, care_level, status")
-    .eq("status", "active")
-    .eq("is_facility", false)
-    .order("furigana");
+  // PostgREST default 1000 行制限対策で page-loop で全件取得
+  type UserRow = { id: string; name: string; name_kana: string | null; care_level: string | null };
+  const PAGE = 1000;
+  const userData: UserRow[] = [];
+  {
+    let from = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("clients")
+        .select("id, name, name_kana:furigana, care_level, status")
+        .eq("status", "active")
+        .eq("is_facility", false)
+        .order("furigana")
+        .range(from, from + PAGE - 1);
+      if (!data || data.length === 0) break;
+      userData.push(...(data as UserRow[]));
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+  }
 
   let initialUsers: ProvisionUser[] = [];
-  if (userData && userData.length > 0) {
-    const userIds = userData.map((u: { id: string }) => u.id);
+  if (userData.length > 0) {
+    const userIds = userData.map((u) => u.id);
     const { data: docData } = await supabase
       .from("kaigo_report_documents")
       .select("id, user_id, period_start, period_end, status, document_type")
@@ -29,8 +43,7 @@ export default async function ProvisionConfirmPage() {
       }
     }
 
-    type UserRow = { id: string; name: string; name_kana: string | null; care_level: string | null };
-    initialUsers = (userData as UserRow[]).map((u) => {
+    initialUsers = userData.map((u) => {
       const doc = docByUser[u.id] ?? null;
       return {
         user_id: u.id,

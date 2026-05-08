@@ -191,8 +191,25 @@ export default function CareplanImportPage() {
   // Load existing users
   useEffect(() => {
     const load = async () => {
-      const { data } = await supabase.from("clients").select("id, name, name_kana:furigana").eq("status", "active").eq("is_facility", false).order("furigana");
-      setExistingUsers(data || []);
+      // PostgREST default 1000 行制限対策で page-loop
+      const PAGE = 1000;
+      const all: ExistingUser[] = [];
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("clients")
+          .select("id, name, name_kana:furigana")
+          .eq("status", "active")
+          .eq("is_facility", false)
+          .order("furigana")
+          .range(from, from + PAGE - 1);
+        if (error) break;
+        if (!data || data.length === 0) break;
+        all.push(...(data as ExistingUser[]));
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      setExistingUsers(all);
     };
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps

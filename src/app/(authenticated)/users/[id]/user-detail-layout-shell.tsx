@@ -104,13 +104,23 @@ export function UserDetailLayoutShell({
   const handleExportCSV = async () => {
     setExporting(true);
     try {
-      const { data, error } = await supabase
-        .from("clients")
-        .select(CSV_COLUMNS.join(","))
-        .is("deleted_at", null)
-        .order("furigana", { ascending: true, nullsFirst: false });
-      if (error) throw error;
-      const rows = (data ?? []) as Record<string, unknown>[];
+      // PostgREST default 1000 行制限対策で page-loop で全件取得 (CSV 出力なので全件必須)
+      const PAGE = 1000;
+      const rows: Record<string, unknown>[] = [];
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("clients")
+          .select(CSV_COLUMNS.join(","))
+          .is("deleted_at", null)
+          .order("furigana", { ascending: true, nullsFirst: false })
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        rows.push(...(data as unknown as Record<string, unknown>[]));
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
 
       const header = CSV_COLUMNS.join(",");
       const lines = rows.map((r) =>
