@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
@@ -67,7 +67,7 @@ export function StaffContent({
   initialStaff: Staff[];
 }) {
   const supabase = useMemo(() => createClient(), []);
-  const { currentOffice } = useBusinessType();
+  const { currentOffice, currentOfficeId } = useBusinessType();
   const [staffList, setStaffList] = useState<Staff[]>(initialStaff);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -79,12 +79,17 @@ export function StaffContent({
   const [form, setForm] = useState<StaffForm>(EMPTY_FORM);
 
   const fetchStaff = useCallback(async () => {
+    if (!currentOfficeId) {
+      setStaffList([]);
+      return;
+    }
     setLoading(true);
-    // 共通マスタ members から kaigo-app に必要なカラムだけ取得（color/sort_order は order-app 専用なので除外）
-    // tenant filter は client 側 useMemo で適用（RLS で visible tenants は scope 済み）
+    // 自事業所 (currentOfficeId) に primary office として紐付く職員のみ取得
+    // (multi-office 兼務職員は user_offices を経由して見せたい場合に拡張する)
     const { data, error } = await supabase
       .from("members")
       .select("id, tenant_id, name, furigana, role, qualifications, email, phone, employment_type, hire_date, status, created_at")
+      .eq("office_id", currentOfficeId)
       .order("furigana", { nullsFirst: false });
     if (error) {
       toast.error("職員データの取得に失敗しました");
@@ -92,7 +97,15 @@ export function StaffContent({
       setStaffList((data || []) as Staff[]);
     }
     setLoading(false);
-  }, [supabase]);
+  }, [supabase, currentOfficeId]);
+
+  // 自事業所が変わったら再フェッチ
+  useEffect(() => {
+    if (currentOfficeId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-time async fetch (HANDOVER §2)
+      fetchStaff();
+    }
+  }, [currentOfficeId, fetchStaff]);
 
   const openCreateDialog = () => {
     setEditingStaff(null);
@@ -128,13 +141,13 @@ export function StaffContent({
         if (error) throw error;
         toast.success("職員情報を更新しました");
       } else {
-        // 新規 INSERT には members.tenant_id が必要
-        if (!currentOffice?.tenant_id) {
+        // 新規 INSERT には members.tenant_id + office_id (自事業所) が必要
+        if (!currentOffice?.tenant_id || !currentOfficeId) {
           toast.error("自事業所が選択されていません");
           return;
         }
         const { error } = await supabase.from("members").insert([
-          { ...form, tenant_id: currentOffice.tenant_id },
+          { ...form, tenant_id: currentOffice.tenant_id, office_id: currentOfficeId },
         ]);
         if (error) throw error;
         toast.success("職員を登録しました");
