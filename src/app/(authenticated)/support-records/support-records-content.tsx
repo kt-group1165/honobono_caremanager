@@ -26,7 +26,9 @@ import {
   MoreHorizontal,
   Link2,
   Copy,
+  PenLine,
 } from "lucide-react";
+import { SignaturePadModal } from "@/components/signature/SignaturePadModal";
 import {
   format,
   parseISO,
@@ -64,6 +66,10 @@ export interface SupportRecord {
   staff_name: string | null;
   created_at: string;
   updated_at: string | null;
+  // 電子署名
+  signature_image_url: string | null;
+  signed_at: string | null;
+  signer_name: string | null;
 }
 
 export interface CarePlanSummary {
@@ -258,6 +264,8 @@ export function SupportRecordsContent({
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const [signTarget, setSignTarget] = useState<SupportRecord | null>(null);
 
   const filteredRecords = useMemo(() => {
     return records.filter((r) => {
@@ -717,6 +725,18 @@ export function SupportRecordsContent({
                             </div>
                             <div className="flex gap-1 shrink-0">
                               <button
+                                onClick={() => setSignTarget(rec)}
+                                className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors ${
+                                  rec.signature_image_url
+                                    ? "border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                                    : "border-gray-300 bg-white text-gray-600 hover:border-gray-400 hover:bg-gray-50"
+                                }`}
+                                title={rec.signature_image_url ? "再署名" : "署名する"}
+                              >
+                                <PenLine size={12} />
+                                {rec.signature_image_url ? "再署名" : "署名"}
+                              </button>
+                              <button
                                 onClick={() => openEdit(rec)}
                                 className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-600 hover:border-gray-400 hover:bg-gray-50 transition-colors"
                                 title="編集"
@@ -737,6 +757,39 @@ export function SupportRecordsContent({
                           <p className="mt-2 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
                             {rec.content}
                           </p>
+                          {rec.signature_image_url && (
+                            <div className="mt-3 border-t border-gray-200 pt-3">
+                              <p className="mb-1.5 text-[11px] font-bold text-gray-500">
+                                電子署名
+                              </p>
+                              <div className="rounded-lg border border-gray-200 bg-white p-2 inline-block">
+                                {/* eslint-disable-next-line @next/next/no-img-element -- Storage signed URL は外部 host (next/image 不適) */}
+                                <img
+                                  src={rec.signature_image_url}
+                                  alt="電子署名"
+                                  className="max-h-24 w-auto"
+                                />
+                              </div>
+                              <div className="mt-1 text-[11px] text-gray-500 space-x-3">
+                                {rec.signer_name && (
+                                  <span>
+                                    署名者: <strong>{rec.signer_name}</strong>
+                                  </span>
+                                )}
+                                {rec.signed_at && (
+                                  <span>
+                                    {(() => {
+                                      try {
+                                        return format(parseISO(rec.signed_at), "yyyy/M/d HH:mm");
+                                      } catch {
+                                        return rec.signed_at;
+                                      }
+                                    })()}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -983,6 +1036,40 @@ export function SupportRecordsContent({
             </div>
           </div>
         </div>
+      )}
+
+      {/* 電子署名 modal */}
+      {signTarget && (
+        <SignaturePadModal
+          recordTable="kaigo_support_records"
+          recordId={signTarget.id}
+          defaultSignerName={selectedUser?.name ?? undefined}
+          onClose={() => setSignTarget(null)}
+          onSubmit={async ({ signatureImageUrl, signedAt, signerName }) => {
+            const targetId = signTarget.id;
+            const { error } = await supabase
+              .from("kaigo_support_records")
+              .update({
+                signature_image_url: signatureImageUrl,
+                signed_at: signedAt,
+                signer_name: signerName,
+              })
+              .eq("id", targetId);
+            if (error) {
+              toast.error("署名情報の保存に失敗: " + error.message);
+              return;
+            }
+            toast.success("電子署名を保存しました");
+            setRecords((prev) =>
+              prev.map((r) =>
+                r.id === targetId
+                  ? { ...r, signature_image_url: signatureImageUrl, signed_at: signedAt, signer_name: signerName }
+                  : r
+              )
+            );
+            setSignTarget(null);
+          }}
+        />
       )}
     </>
   );

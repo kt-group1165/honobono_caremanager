@@ -27,17 +27,22 @@ export default async function VisitRecordsPage({
   const initialStaff = (staffData ?? []) as KaigoStaff[];
 
   let initialRecords: AnyRecord[] = [];
+  let initialUserName: string | null = null;
   if (userId) {
-    const { data } = await supabase
-      .from("kaigo_visit_records")
-      .select("*, members(name)")
-      .eq("user_id", userId)
-      .order("visit_date", { ascending: false })
-      .order("start_time", { ascending: false });
-    initialRecords = (data ?? []).map((r: AnyRecord) => ({
+    const [recordsRes, clientRes] = await Promise.all([
+      supabase
+        .from("kaigo_visit_records")
+        .select("*, members(name)")
+        .eq("user_id", userId)
+        .order("visit_date", { ascending: false })
+        .order("start_time", { ascending: false }),
+      supabase.from("clients").select("name").eq("id", userId).maybeSingle(),
+    ]);
+    initialRecords = (recordsRes.data ?? []).map((r: AnyRecord) => ({
       ...r,
       staff_name: r.members?.name ?? null,
     }));
+    initialUserName = (clientRes.data as { name?: string } | null)?.name ?? null;
   }
 
   return (
@@ -47,6 +52,7 @@ export default async function VisitRecordsPage({
         <VisitRecordsContent
           key={userId}
           userId={userId}
+          userName={initialUserName}
           initialRecords={initialRecords as never}
           initialStaff={initialStaff}
         />

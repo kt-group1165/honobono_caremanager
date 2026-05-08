@@ -14,9 +14,11 @@ import {
   ChevronDown,
   ChevronUp,
   CalendarDays,
+  PenLine,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { TemplatePicker } from "@/components/templates/template-picker";
+import { SignaturePadModal } from "@/components/signature/SignaturePadModal";
 import { ja } from "date-fns/locale";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -63,6 +65,10 @@ interface VisitRecord {
   user_condition: string | null;
   notes: string | null;
   created_at: string;
+  // 電子署名
+  signature_image_url: string | null;
+  signed_at: string | null;
+  signer_name: string | null;
 }
 
 // 新形式: care_record_data JSONB にすべて格納
@@ -588,11 +594,12 @@ function CareRecordDetail({ record }: { record: VisitRecord }) {
 
 export interface VisitRecordsContentProps {
   userId: string;
+  userName?: string | null;
   initialRecords: VisitRecord[];
   initialStaff: KaigoStaff[];
 }
 
-export function VisitRecordsContent({ userId, initialRecords, initialStaff }: VisitRecordsContentProps) {
+export function VisitRecordsContent({ userId, userName, initialRecords, initialStaff }: VisitRecordsContentProps) {
   const supabase = useMemo(() => createClient(), []);
 
   const [records, setRecords] = useState<VisitRecord[]>(initialRecords);
@@ -604,6 +611,7 @@ export function VisitRecordsContent({ userId, initialRecords, initialStaff }: Vi
   const [formCare, setFormCare] = useState<CareData>(emptyCareData());
   const [formSection, setFormSection] = useState<string | null>("pre_check");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [signTarget, setSignTarget] = useState<VisitRecord | null>(null);
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
@@ -790,6 +798,68 @@ export function VisitRecordsContent({ userId, initialRecords, initialStaff }: Vi
                     {isExpanded && (
                       <div className="border-t bg-gray-50 px-4 py-4">
                         <CareRecordDetail record={rec} />
+
+                        {/* 電子署名 */}
+                        <div className="mt-4 border-t border-gray-200 pt-3">
+                          <p className="mb-1.5 text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                            電子署名
+                          </p>
+                          {rec.signature_image_url ? (
+                            <div className="pl-2 space-y-2">
+                              <div className="rounded-lg border border-gray-200 bg-white p-3 inline-block">
+                                {/* eslint-disable-next-line @next/next/no-img-element -- Storage signed URL は外部 host (next/image 不適) */}
+                                <img
+                                  src={rec.signature_image_url}
+                                  alt="電子署名"
+                                  className="max-h-32 w-auto"
+                                />
+                              </div>
+                              <div className="text-xs text-gray-600 space-y-0.5">
+                                {rec.signer_name && (
+                                  <div>署名者: <strong>{rec.signer_name}</strong></div>
+                                )}
+                                {rec.signed_at && (
+                                  <div>
+                                    署名日時:{" "}
+                                    {(() => {
+                                      try {
+                                        return format(parseISO(rec.signed_at), "yyyy/M/d HH:mm");
+                                      } catch {
+                                        return rec.signed_at;
+                                      }
+                                    })()}
+                                  </div>
+                                )}
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSignTarget(rec);
+                                }}
+                                className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                              >
+                                <PenLine size={12} />
+                                再署名
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="pl-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSignTarget(rec);
+                                }}
+                                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                              >
+                                <PenLine size={12} />
+                                署名する
+                              </button>
+                              <p className="mt-1 text-[11px] text-gray-500">
+                                利用者または代理人の電子署名を取得します
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1089,6 +1159,40 @@ export function VisitRecordsContent({ userId, initialRecords, initialStaff }: Vi
             </div>
           </div>
         </div>
+      )}
+
+      {/* 電子署名 modal */}
+      {signTarget && (
+        <SignaturePadModal
+          recordTable="kaigo_visit_records"
+          recordId={signTarget.id}
+          defaultSignerName={userName ?? undefined}
+          onClose={() => setSignTarget(null)}
+          onSubmit={async ({ signatureImageUrl, signedAt, signerName }) => {
+            const targetId = signTarget.id;
+            const { error } = await supabase
+              .from("kaigo_visit_records")
+              .update({
+                signature_image_url: signatureImageUrl,
+                signed_at: signedAt,
+                signer_name: signerName,
+              })
+              .eq("id", targetId);
+            if (error) {
+              toast.error("署名情報の保存に失敗: " + error.message);
+              return;
+            }
+            toast.success("電子署名を保存しました");
+            setRecords((prev) =>
+              prev.map((r) =>
+                r.id === targetId
+                  ? { ...r, signature_image_url: signatureImageUrl, signed_at: signedAt, signer_name: signerName }
+                  : r
+              )
+            );
+            setSignTarget(null);
+          }}
+        />
       )}
     </div>
   );
