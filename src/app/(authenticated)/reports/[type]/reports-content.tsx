@@ -4,13 +4,15 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client";
 import {
   Printer, Loader2, FileText, Plus, ChevronLeft, ChevronRight,
-  Save, CheckCircle, Clock, Pencil, X, CalendarDays,
+  Save, CheckCircle, Clock, Pencil, X, CalendarDays, Send,
 } from "lucide-react";
 import Link from "next/link";
 import { ServiceSelector } from "@/components/services/service-selector";
 import { format, parseISO, differenceInYears } from "date-fns";
 import { ja } from "date-fns/locale";
 import { toast } from "sonner";
+import { useBusinessType } from "@/lib/business-type-context";
+import { SendDocumentModal } from "@/components/shared/SendDocumentModal";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -3031,8 +3033,9 @@ function PreviewScaler({ paperWidth, paperMinHeight, paperPadding, children }: {
 
 // ---------------------------------------------------------------------------
 
-function DocEditor({ doc, config, onSave, onStatusToggle, onDirtyChange }: {
+function DocEditor({ doc, config, clientName, onSave, onStatusToggle, onDirtyChange }: {
   doc: ReportDoc; config: ReportConfig;
+  clientName: string | null;
   onSave: (content: Record<string, unknown>) => Promise<void>;
   onStatusToggle: () => Promise<void>;
   onDirtyChange?: (dirty: boolean) => void;
@@ -3042,10 +3045,15 @@ function DocEditor({ doc, config, onSave, onStatusToggle, onDirtyChange }: {
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [showSendModal, setShowSendModal] = useState(false);
+  const { currentOffice } = useBusinessType();
   const isLandscape = config.landscape ?? false;
   const paperWidth = isLandscape ? "297mm" : "210mm";
   const paperMinHeight = isLandscape ? "210mm" : "297mm";
   const paperPadding = isLandscape ? "8mm 10mm" : "10mm 12mm";
+
+  // 送付対象は「居宅サービス計画書（第1〜3表）」のみ
+  const isSendable = ["care-plan-1", "care-plan-2", "care-plan-3"].includes(doc.report_type);
 
   const handleChange = (c: Record<string, unknown>) => { setContent(c); setDirty(true); onDirtyChange?.(true); };
 
@@ -3057,6 +3065,22 @@ function DocEditor({ doc, config, onSave, onStatusToggle, onDirtyChange }: {
   const handleToggle = async () => {
     setToggling(true);
     try { await onStatusToggle(); } finally { setToggling(false); }
+  };
+
+  const handleOpenSend = () => {
+    if (dirty) {
+      toast.error("先に保存してから送付してください");
+      return;
+    }
+    if (!clientName) {
+      toast.error("利用者情報が読み込まれていません");
+      return;
+    }
+    if (!currentOffice) {
+      toast.error("送信元事業所が選択されていません");
+      return;
+    }
+    setShowSendModal(true);
   };
 
   return (
@@ -3086,6 +3110,14 @@ function DocEditor({ doc, config, onSave, onStatusToggle, onDirtyChange }: {
             className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
             <Printer size={12} /> 印刷
           </button>
+          {isSendable && (
+            <button
+              onClick={handleOpenSend}
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+            >
+              <Send size={12} /> サービス事業所に送付
+            </button>
+          )}
         </div>
       </div>
 
@@ -3101,6 +3133,32 @@ function DocEditor({ doc, config, onSave, onStatusToggle, onDirtyChange }: {
       <PreviewScaler paperWidth={paperWidth} paperMinHeight={paperMinHeight} paperPadding={paperPadding}>
         <PrintView reportType={doc.report_type} content={content} config={config} />
       </PreviewScaler>
+
+      {showSendModal && clientName && currentOffice && (
+        <SendDocumentModal
+          tenantId={currentOffice.tenant_id}
+          client={{ id: doc.user_id, name: clientName }}
+          sourceOfficeId={currentOffice.id}
+          documentType={doc.report_type}
+          title={`${config.titleJa} ${clientName} 様`}
+          getHtmlSnapshot={() => document.getElementById("print-area")?.outerHTML ?? ""}
+          payload={{
+            client_id: doc.user_id,
+            client_name: clientName,
+            report_type: doc.report_type,
+            doc_id: doc.id,
+            certification_id: doc.certification_id,
+            report_month: doc.report_month,
+          }}
+          sourceDocumentId={doc.id}
+          onClose={() => setShowSendModal(false)}
+          onSuccess={() => {
+            setShowSendModal(false);
+            toast.success("送付しました");
+          }}
+          onError={(msg) => toast.error("送付失敗: " + msg)}
+        />
+      )}
     </div>
   );
 }
@@ -3128,8 +3186,23 @@ export function ReportsContent({ userId, reportType, initialDocs, initialCertifi
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [certifications] = useState<Certification[]>(initialCertifications);
   const [selectedCertId, setSelectedCertId] = useState<string | null>(initialCertifications[0]?.id ?? null);
+  const [clientName, setClientName] = useState<string | null>(null);
 
   const isCertLinked = ["care-plan-1", "care-plan-2", "care-plan-3"].includes(reportType);
+
+  // 送付モーダルで使うため、利用者の name を取得
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("clients")
+        .select("name")
+        .eq("id", userId)
+        .maybeSingle();
+      if (!cancelled) setClientName((data?.name as string | undefined) ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [supabase, userId]);
 
   const monthOptions: string[] = [];
   for (let i = -12; i <= 2; i++) {
@@ -3351,6 +3424,7 @@ export function ReportsContent({ userId, reportType, initialDocs, initialCertifi
                 <DocEditor
                   key={selectedDoc.id}
                   doc={selectedDoc} config={config}
+                  clientName={clientName}
                   onSave={handleSave} onStatusToggle={handleStatusToggle}
                   onDirtyChange={setHasUnsavedChanges}
                 />

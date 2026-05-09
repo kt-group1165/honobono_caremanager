@@ -3,6 +3,8 @@
 import { useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { resolvePreferredTenantId } from "@/lib/tenant-resolver";
+import { useBusinessType } from "@/lib/business-type-context";
+import { SendDocumentModal } from "@/components/shared/SendDocumentModal";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -17,6 +19,7 @@ import {
   Printer,
   Link2,
   Copy,
+  Send,
   X,
 } from "lucide-react";
 import {
@@ -68,6 +71,7 @@ export function EmergencySheetsContent({
   initialSheet,
 }: EmergencySheetsContentProps) {
   const supabase = useMemo(() => createClient(), []);
+  const { currentOffice } = useBusinessType();
   const [userInfo] = useState<EmergencyUserInfo | null>(initialUserInfo);
   const [sheet, setSheet] = useState<EmergencySheet>(initialSheet);
   const [saving, setSaving] = useState(false);
@@ -75,6 +79,7 @@ export function EmergencySheetsContent({
   const [urls, setUrls] = useState<{ id: string; token: string; name: string }[]>([]);
   const [newUrlName, setNewUrlName] = useState("災害時用");
   const [urlLoading, setUrlLoading] = useState(false);
+  const [showSendModal, setShowSendModal] = useState(false);
 
   const fetchUrls = useCallback(async () => {
     const { data } = await supabase.from("kaigo_emergency_tokens").select("id, token, name").order("created_at", { ascending: false });
@@ -169,6 +174,17 @@ export function EmergencySheetsContent({
             <Printer size={15} />
             印刷
           </button>
+          <button
+            onClick={() => {
+              if (!userInfo?.name) { toast.error("利用者情報が読み込まれていません"); return; }
+              if (!currentOffice) { toast.error("送信元事業所が選択されていません"); return; }
+              setShowSendModal(true);
+            }}
+            className="flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
+          >
+            <Send size={15} />
+            サービス事業所に送付
+          </button>
           <button onClick={handleSave} disabled={saving} className="flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60">
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
             保存
@@ -177,7 +193,7 @@ export function EmergencySheetsContent({
       </div>
 
       <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
-        <div className="max-w-3xl mx-auto">
+        <div id="emergency-sheet-doc" className="max-w-3xl mx-auto">
           <div className="mb-4 text-center">
             <h2 className="text-xl font-bold text-red-800 flex items-center justify-center gap-2">
               <AlertTriangle size={20} />緊急時シート
@@ -367,6 +383,29 @@ export function EmergencySheetsContent({
             </div>
           </div>
         </div>
+      )}
+
+      {showSendModal && userInfo?.name && currentOffice && (
+        <SendDocumentModal
+          tenantId={currentOffice.tenant_id}
+          client={{ id: userId, name: userInfo.name }}
+          sourceOfficeId={currentOffice.id}
+          documentType="emergency_sheet"
+          title={`緊急時シート ${new Date().toISOString().slice(0, 10)} ${userInfo.name} 様`}
+          getHtmlSnapshot={() => document.getElementById("emergency-sheet-doc")?.outerHTML ?? ""}
+          payload={{
+            client_id: userId,
+            client_name: userInfo.name,
+            sheet_id: sheet.id ?? null,
+          }}
+          sourceDocumentId={sheet.id ?? null}
+          onClose={() => setShowSendModal(false)}
+          onSuccess={() => {
+            setShowSendModal(false);
+            toast.success("送付しました");
+          }}
+          onError={(msg) => toast.error("送付失敗: " + msg)}
+        />
       )}
     </div>
   );
