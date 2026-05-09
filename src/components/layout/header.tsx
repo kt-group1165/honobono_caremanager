@@ -3,6 +3,7 @@
 import { LogOut, User } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { NotificationBadge } from "@/components/layout/notification-badge";
 
 export function Header() {
   const router = useRouter();
@@ -18,6 +19,7 @@ export function Header() {
     <header className="flex h-14 items-center justify-between border-b bg-white px-6">
       <div />
       <div className="flex items-center gap-4">
+        <NotificationBadge />
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <User size={16} />
           <span>管理者</span>

@@ -24,11 +24,13 @@ import {
   NotebookPen,
   MessagesSquare,
   AlertTriangle,
+  Bell,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useBusinessType } from "@/lib/business-type-context";
 import { useLocalStorage } from "@/lib/use-local-storage";
+import { getUnreadCount } from "@/lib/notifications";
 import pkg from "../../../package.json";
 
 const APP_VERSION = pkg.version;
@@ -44,6 +46,7 @@ function isGroup(entry: NavEntry): entry is NavGroup {
 // ケアマネ版メニュー
 const NAV_CARE_MANAGER: NavEntry[] = [
   { name: "ダッシュボード", href: "/dashboard", icon: LayoutDashboard },
+  { name: "通知", href: "/notifications", icon: Bell },
   { name: "利用者管理", href: "/users", icon: Users },
   {
     name: "ケアマネ業務",
@@ -72,6 +75,7 @@ const NAV_CARE_MANAGER: NavEntry[] = [
 // 訪問介護版メニュー
 const NAV_HOME_CARE: NavEntry[] = [
   { name: "ダッシュボード", href: "/dashboard", icon: LayoutDashboard },
+  { name: "通知", href: "/notifications", icon: Bell },
   { name: "利用者管理", href: "/users", icon: Users },
   { name: "職員管理", href: "/staff", icon: UserCog },
   { name: "ケアプラン取込", href: "/careplan-import", icon: FileText },
@@ -115,6 +119,32 @@ export function Sidebar() {
   const navigation: NavEntry[] =
     businessType === "訪問介護" ? NAV_HOME_CARE : NAV_CARE_MANAGER;
   const typeInfo = BUSINESS_TYPE_LABELS[businessType] ?? BUSINESS_TYPE_LABELS["居宅介護支援"];
+
+  // 通知メニュー横に出す未読 badge (1 分間隔で polling)
+  const [unread, setUnread] = useState(0);
+  const officeIdForUnread = currentOffice?.id;
+  useEffect(() => {
+    let cancelled = false;
+    const fetchOnce = async () => {
+      if (!officeIdForUnread) {
+        if (!cancelled) setUnread(0);
+        return;
+      }
+      const n = await getUnreadCount(officeIdForUnread);
+      if (!cancelled) setUnread(n);
+    };
+    fetchOnce();
+    if (!officeIdForUnread) {
+      return () => {
+        cancelled = true;
+      };
+    }
+    const id = setInterval(fetchOnce, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [officeIdForUnread]);
 
   // 全リンクに ?office=<現在の事業所ID> を自動付加して
   // 遷移後も事業所選択が維持されるようにする
@@ -250,12 +280,14 @@ export function Sidebar() {
             entry.href === "/dashboard"
               ? pathname === "/dashboard"
               : pathname.startsWith(entry.href);
+          const isNotifications = entry.href === "/notifications";
+          const showBadge = isNotifications && unread > 0;
           return (
             <Link
               key={entry.href}
               href={appendMode(entry.href)}
               className={cn(
-                "flex items-center rounded-md py-2 text-sm font-medium transition-colors",
+                "relative flex items-center rounded-md py-2 text-sm font-medium transition-colors",
                 collapsed
                   ? "justify-center"
                   : "gap-3 px-3",
@@ -266,7 +298,21 @@ export function Sidebar() {
               title={collapsed ? entry.name : undefined}
             >
               <entry.icon size={20} />
-              {!collapsed && <span>{entry.name}</span>}
+              {!collapsed && (
+                <>
+                  <span className="flex-1">{entry.name}</span>
+                  {showBadge && (
+                    <span className="ml-auto min-w-[20px] rounded-full bg-red-500 px-1.5 text-center text-[11px] font-semibold leading-[18px] text-white">
+                      {unread > 99 ? "99+" : unread}
+                    </span>
+                  )}
+                </>
+              )}
+              {collapsed && showBadge && (
+                <span className="absolute right-1 top-1 min-w-[16px] rounded-full bg-red-500 px-1 text-center text-[9px] font-semibold leading-[14px] text-white">
+                  {unread > 99 ? "99+" : unread}
+                </span>
+              )}
             </Link>
           );
         })}
