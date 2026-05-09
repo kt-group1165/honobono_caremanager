@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Check, FileText, Loader2 } from "lucide-react";
+import { Bell, Check, ChevronRight, FileText, Loader2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -210,6 +210,19 @@ function Row({
           )}
         </div>
       </div>
+      {isDoc && (
+        <button
+          type="button"
+          className="flex shrink-0 items-center gap-1 rounded-md border border-blue-300 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick();
+          }}
+        >
+          内容を見る
+          <ChevronRight size={12} />
+        </button>
+      )}
       {!row.read_at && onMarkRead && (
         <button
           type="button"
