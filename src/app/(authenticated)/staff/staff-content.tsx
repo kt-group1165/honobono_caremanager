@@ -4,13 +4,15 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
-  Plus,
+  UserPlus,
   Pencil,
   Trash2,
   X,
   Search,
   UserCog,
   Loader2,
+  Copy,
+  Check,
 } from "lucide-react";
 import { useBusinessType } from "@/lib/business-type-context";
 
@@ -49,6 +51,28 @@ const EMPLOYMENT_TYPES: EmploymentType[] = ["常勤", "非常勤", "パート"];
 
 type StaffForm = Omit<Staff, "id" | "tenant_id" | "created_at">;
 
+type InviteRole = "member" | "office_admin";
+
+type InviteForm = {
+  display_name: string;
+  login_id: string;
+  role: InviteRole;
+};
+
+const EMPTY_INVITE_FORM: InviteForm = {
+  display_name: "",
+  login_id: "",
+  role: "member",
+};
+
+type InviteResult = {
+  invite_url: string;
+  initial_password: string;
+  login_id: string;
+  login_id_was_renamed: boolean;
+  expires_at: string | null;
+};
+
 const EMPTY_FORM: StaffForm = {
   name: "",
   furigana: "",
@@ -79,6 +103,12 @@ export function StaffContent({
   const [form, setForm] = useState<StaffForm>(EMPTY_FORM);
   // Phase 9-6: 既定は active のみ表示。toggle ON で退職者も含めて再フェッチ。
   const [includeInactive, setIncludeInactive] = useState(false);
+  // 招待発行 modal: form / 結果 / 進行状態
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [inviting, setInviting] = useState(false);
+  const [inviteForm, setInviteForm] = useState<InviteForm>(EMPTY_INVITE_FORM);
+  const [inviteResult, setInviteResult] = useState<InviteResult | null>(null);
+  const [copiedField, setCopiedField] = useState<"url" | "password" | null>(null);
 
   const fetchStaff = useCallback(async () => {
     if (!currentOfficeId) {
@@ -111,10 +141,79 @@ export function StaffContent({
     }
   }, [currentOfficeId, fetchStaff]);
 
-  const openCreateDialog = () => {
-    setEditingStaff(null);
-    setForm(EMPTY_FORM);
-    setDialogOpen(true);
+  const openInviteDialog = () => {
+    setInviteForm(EMPTY_INVITE_FORM);
+    setInviteResult(null);
+    setCopiedField(null);
+    setInviteDialogOpen(true);
+  };
+
+  const closeInviteDialog = () => {
+    setInviteDialogOpen(false);
+    setInviteForm(EMPTY_INVITE_FORM);
+    setInviteResult(null);
+    setCopiedField(null);
+  };
+
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentOfficeId) {
+      toast.error("自事業所が選択されていません");
+      return;
+    }
+    setInviting(true);
+    try {
+      const res = await fetch("/api/staff/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          display_name: inviteForm.display_name.trim(),
+          login_id: inviteForm.login_id.trim() || undefined,
+          role: inviteForm.role,
+          office_id: currentOfficeId,
+        }),
+      });
+      const json = (await res.json()) as Partial<InviteResult> & {
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok) {
+        toast.error(
+          "招待発行に失敗しました: " + (json.message ?? json.error ?? `HTTP ${res.status}`)
+        );
+        return;
+      }
+      if (!json.invite_url || !json.initial_password || !json.login_id) {
+        toast.error("招待発行: 応答に不足する項目があります");
+        return;
+      }
+      setInviteResult({
+        invite_url: json.invite_url,
+        initial_password: json.initial_password,
+        login_id: json.login_id,
+        login_id_was_renamed: json.login_id_was_renamed ?? false,
+        expires_at: json.expires_at ?? null,
+      });
+      toast.success("招待を発行しました");
+    } catch (err: unknown) {
+      toast.error(
+        "招待発行に失敗しました: " + (err instanceof Error ? err.message : String(err))
+      );
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const copyToClipboard = async (text: string, field: "url" | "password") => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      window.setTimeout(() => {
+        setCopiedField((c) => (c === field ? null : c));
+      }, 1500);
+    } catch {
+      toast.error("クリップボードへのコピーに失敗しました");
+    }
   };
 
   const openEditDialog = (staff: Staff) => {
@@ -135,27 +234,15 @@ export function StaffContent({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingStaff) return;
     setSaving(true);
     try {
-      if (editingStaff) {
-        const { error } = await supabase
-          .from("members")
-          .update(form)
-          .eq("id", editingStaff.id);
-        if (error) throw error;
-        toast.success("職員情報を更新しました");
-      } else {
-        // 新規 INSERT には members.tenant_id + office_id (自事業所) が必要
-        if (!currentOffice?.tenant_id || !currentOfficeId) {
-          toast.error("自事業所が選択されていません");
-          return;
-        }
-        const { error } = await supabase.from("members").insert([
-          { ...form, tenant_id: currentOffice.tenant_id, office_id: currentOfficeId },
-        ]);
-        if (error) throw error;
-        toast.success("職員を登録しました");
-      }
+      const { error } = await supabase
+        .from("members")
+        .update(form)
+        .eq("id", editingStaff.id);
+      if (error) throw error;
+      toast.success("職員情報を更新しました");
       setDialogOpen(false);
       fetchStaff();
     } catch (err: unknown) {
@@ -243,11 +330,11 @@ export function StaffContent({
           </span>
         </div>
         <button
-          onClick={openCreateDialog}
+          onClick={openInviteDialog}
           className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
         >
-          <Plus size={16} />
-          職員を追加
+          <UserPlus size={16} />
+          招待発行
         </button>
       </div>
 
@@ -345,13 +432,13 @@ export function StaffContent({
         )}
       </div>
 
-      {/* Create/Edit Dialog */}
-      {dialogOpen && (
+      {/* Edit Dialog (編集専用 — 新規は招待発行 modal) */}
+      {dialogOpen && editingStaff && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl">
             <div className="flex items-center justify-between border-b px-6 py-4">
               <h2 className="text-base font-semibold text-gray-900">
-                {editingStaff ? "職員情報を編集" : "職員を追加"}
+                職員情報を編集
               </h2>
               <button
                 onClick={() => setDialogOpen(false)}
@@ -498,7 +585,7 @@ export function StaffContent({
                   className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
                   {saving && <Loader2 size={14} className="animate-spin" />}
-                  {editingStaff ? "更新する" : "登録する"}
+                  更新する
                 </button>
               </div>
             </form>
@@ -534,6 +621,215 @@ export function StaffContent({
                 削除する
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invite Dialog (招待発行) */}
+      {inviteDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b px-6 py-4">
+              <h2 className="text-base font-semibold text-gray-900">
+                {inviteResult ? "招待を発行しました" : "招待発行"}
+              </h2>
+              <button
+                onClick={closeInviteDialog}
+                className="rounded p-1 text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {!inviteResult ? (
+              <form onSubmit={handleInvite} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    表示名 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={inviteForm.display_name}
+                    onChange={(e) =>
+                      setInviteForm({ ...inviteForm, display_name: e.target.value })
+                    }
+                    className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="山田 太郎"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    ログイン ID <span className="text-gray-400">(任意)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={inviteForm.login_id}
+                    onChange={(e) =>
+                      setInviteForm({ ...inviteForm, login_id: e.target.value })
+                    }
+                    className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="未指定なら表示名から自動生成"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    半角英数字と一部記号のみ。空欄なら表示名から派生します。
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    権限 <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="invite-role"
+                        value="member"
+                        checked={inviteForm.role === "member"}
+                        onChange={() =>
+                          setInviteForm({ ...inviteForm, role: "member" })
+                        }
+                      />
+                      member (一般職員)
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="invite-role"
+                        value="office_admin"
+                        checked={inviteForm.role === "office_admin"}
+                        onChange={() =>
+                          setInviteForm({ ...inviteForm, role: "office_admin" })
+                        }
+                      />
+                      office_admin (事業所管理者)
+                    </label>
+                  </div>
+                </div>
+                {currentOffice && (
+                  <p className="text-xs text-gray-500">
+                    招待対象事業所: <span className="font-medium">{currentOffice.name}</span>
+                  </p>
+                )}
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={closeInviteDialog}
+                    className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={inviting || !currentOfficeId}
+                    className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    {inviting && <Loader2 size={14} className="animate-spin" />}
+                    発行
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-gray-700">
+                  以下を本人へ伝えてください。初回パスワードはこの画面でしか確認できません。
+                </p>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    招待 URL
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      readOnly
+                      value={inviteResult.invite_url}
+                      onFocus={(e) => e.currentTarget.select()}
+                      className="flex-1 rounded-lg border bg-gray-50 px-3 py-2 text-sm font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(inviteResult.invite_url, "url")}
+                      className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      {copiedField === "url" ? (
+                        <>
+                          <Check size={14} className="text-green-600" />
+                          コピー済
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={14} />
+                          コピー
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    初回パスワード
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      readOnly
+                      value={inviteResult.initial_password}
+                      onFocus={(e) => e.currentTarget.select()}
+                      className="flex-1 rounded-lg border bg-gray-50 px-3 py-2 text-sm font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        copyToClipboard(inviteResult.initial_password, "password")
+                      }
+                      className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      {copiedField === "password" ? (
+                        <>
+                          <Check size={14} className="text-green-600" />
+                          コピー済
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={14} />
+                          コピー
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600 space-y-1">
+                  <div>
+                    ログイン ID:{" "}
+                    <span className="font-mono">{inviteResult.login_id}</span>
+                    {inviteResult.login_id_was_renamed && (
+                      <span className="ml-2 text-amber-600">
+                        (重複のため連番を付与)
+                      </span>
+                    )}
+                  </div>
+                  {inviteResult.expires_at && (
+                    <div>
+                      有効期限:{" "}
+                      <span className="font-mono">
+                        {new Date(inviteResult.expires_at).toLocaleString("ja-JP")}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={closeInviteDialog}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                  >
+                    閉じる
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
