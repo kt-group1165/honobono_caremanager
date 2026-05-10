@@ -3047,7 +3047,8 @@ function DocEditor({ doc, config, clientName, onSave, onStatusToggle, onDirtyCha
   const paperPadding = isLandscape ? "8mm 10mm" : "10mm 12mm";
 
   // 送付対象は「居宅サービス計画書（第1〜3表）」のみ
-  const isSendable = ["care-plan-1", "care-plan-2", "care-plan-3"].includes(doc.report_type);
+  // 全帳票種別を送付可能に (1〜3表 / 5表 / 利用票・別表)
+  const isSendable = doc.report_type in REPORT_CONFIG;
 
   const handleChange = (c: Record<string, unknown>) => { setContent(c); setDirty(true); onDirtyChange?.(true); };
 
