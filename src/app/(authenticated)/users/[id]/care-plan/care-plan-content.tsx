@@ -19,6 +19,8 @@ import {
   Inbox,
   Download,
   Eye,
+  Archive,
+  Printer,
 } from "lucide-react";
 import type { CarePlan } from "@/types/database";
 import { useBusinessType } from "@/lib/business-type-context";
@@ -345,6 +347,248 @@ function ReceivedCarePlansPanel({
   );
 }
 
+// ─── 取込済ケアプラン (= 自事業所が保管しているケアプラン帳票) パネル ─────
+
+interface StoredCarePlan {
+  id: string;
+  report_type: string;
+  title: string;
+  status: "draft" | "completed";
+  updated_at: string;
+  source_office_name: string | null;
+  received_at: string | null;
+  html_snapshot: string | null;
+}
+
+function StoredCarePlansPanel({ clientId }: { clientId: string }) {
+  const supabase = useMemo(() => createClient(), []);
+  const [items, setItems] = useState<StoredCarePlan[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [previewing, setPreviewing] = useState<StoredCarePlan | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!clientId) {
+      setItems([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("kaigo_report_documents")
+        .select("id, report_type, title, status, updated_at, content")
+        .eq("user_id", clientId)
+        .in("report_type", CARE_PLAN_REPORT_TYPES as unknown as string[])
+        .order("updated_at", { ascending: false });
+      if (error) {
+        toast.error("保管中ケアプランの取得に失敗しました");
+        return;
+      }
+      const rows = (data ?? []) as Array<{
+        id: string;
+        report_type: string;
+        title: string;
+        status: "draft" | "completed";
+        updated_at: string;
+        content: unknown;
+      }>;
+      setItems(
+        rows.map<StoredCarePlan>((r) => {
+          const c = (r.content ?? {}) as Record<string, unknown>;
+          return {
+            id: r.id,
+            report_type: r.report_type,
+            title: r.title,
+            status: r.status,
+            updated_at: r.updated_at,
+            source_office_name:
+              typeof c.source_office_name === "string" ? c.source_office_name : null,
+            received_at: typeof c.received_at === "string" ? c.received_at : null,
+            html_snapshot:
+              typeof c.html_snapshot === "string" ? c.html_snapshot : null,
+          };
+        }),
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase, clientId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch)
+    refresh();
+  }, [refresh]);
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("保管中ケアプランを削除します。よろしいですか？")) return;
+    setDeletingId(id);
+    try {
+      const { error } = await supabase
+        .from("kaigo_report_documents")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+      toast.success("削除しました");
+      await refresh();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error("削除に失敗: " + msg);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  if (!clientId) return null;
+
+  return (
+    <div className="rounded-lg border bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b px-4 py-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+          <Archive size={14} className="text-emerald-600" />
+          保管中ケアプラン ({items.length} 件)
+        </h2>
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={loading}
+          className="text-xs text-gray-500 hover:text-emerald-600 disabled:opacity-50"
+        >
+          {loading ? "読込中..." : "再読込"}
+        </button>
+      </div>
+
+      {loading && items.length === 0 ? (
+        <div className="flex items-center justify-center py-6 text-gray-400">
+          <Loader2 size={16} className="mr-2 animate-spin" /> 読込中...
+        </div>
+      ) : items.length === 0 ? (
+        <div className="px-4 py-5 text-center text-xs text-gray-400">
+          まだ取り込んだケアプランはありません
+        </div>
+      ) : (
+        <ul className="divide-y">
+          {items.map((it) => (
+            <li
+              key={it.id}
+              className="flex items-center justify-between gap-3 px-4 py-2.5"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-700">
+                    {CARE_PLAN_LABEL[it.report_type] ?? it.report_type}
+                  </span>
+                  <span className="truncate text-sm font-medium text-gray-800">
+                    {it.title}
+                  </span>
+                </div>
+                <div className="mt-0.5 text-[11px] text-gray-500 truncate">
+                  {it.source_office_name && <span>送信元: {it.source_office_name} ・ </span>}
+                  {it.received_at && (
+                    <span>
+                      受信: {format(parseISO(it.received_at), "yyyy/MM/dd HH:mm", { locale: ja })} ・{" "}
+                    </span>
+                  )}
+                  保存:{" "}
+                  {format(parseISO(it.updated_at), "yyyy/MM/dd HH:mm", { locale: ja })}
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setPreviewing(it)}
+                  disabled={!it.html_snapshot}
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                  title={it.html_snapshot ? "保管している HTML スナップショットを表示" : "html_snapshot がありません"}
+                >
+                  <Eye size={12} />
+                  表示
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(it.id)}
+                  disabled={deletingId === it.id}
+                  className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  title="保管中ケアプランを削除"
+                >
+                  {deletingId === it.id ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={12} />
+                  )}
+                  削除
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {previewing && previewing.html_snapshot && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-2"
+          onClick={() => setPreviewing(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl w-[96vw] h-[96vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-3 border-b flex items-center justify-between shrink-0">
+              <h3 className="text-sm font-semibold text-gray-800 truncate">
+                {previewing.title}
+              </h3>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const w = window.open("", "_blank");
+                    if (w && previewing.html_snapshot) {
+                      w.document.write(previewing.html_snapshot);
+                      w.document.close();
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                  title="新しいタブで開く"
+                >
+                  <ExternalLink size={12} />
+                  別タブで開く
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const iframe = document.getElementById(
+                      "stored-care-plan-iframe",
+                    ) as HTMLIFrameElement | null;
+                    if (iframe?.contentWindow) iframe.contentWindow.print();
+                  }}
+                  className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1.5 text-xs text-white hover:bg-blue-700"
+                >
+                  <Printer size={12} />
+                  印刷
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewing(null)}
+                  className="text-gray-400 hover:text-gray-600 px-2"
+                  aria-label="閉じる"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            <iframe
+              id="stored-care-plan-iframe"
+              srcDoc={previewing.html_snapshot}
+              sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+              className="flex-1 w-full border-0 bg-white"
+              title={previewing.title}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function planToForm(p: CarePlan): FormState {
   return {
     start_date: p.start_date ?? "",
@@ -494,6 +738,9 @@ export function CarePlanContent({ userId, initialPlans }: CarePlanContentProps) 
     <div className="space-y-4">
       {/* 受信ケアプラン (居宅 → 自事業所) — 全 mode で表示 */}
       <ReceivedCarePlansPanel clientId={userId} targetOfficeId={currentOfficeId} />
+
+      {/* 取込済 = 自事業所が保管しているケアプラン帳票 — 全 mode で表示 */}
+      <StoredCarePlansPanel clientId={userId} />
 
       {/* 以下は居宅介護支援 mode でのみ表示 (訪問介護等は閲覧 only) */}
       {!isCareManagerSide ? null : (
