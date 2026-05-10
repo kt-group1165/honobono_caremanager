@@ -110,6 +110,11 @@ export function SendDocumentModal({
   const [search, setSearch] = useState("");
   const [showAll, setShowAll] = useState(false);
   // 同梱書類 (= 同 client × completed の他 report)
+  // サービス事業所 → 居宅 の月次実績送付では care plan 書類を同梱する意味が無いので非表示
+  const allowBundle = useMemo(
+    () => !targetTypes.includes("居宅介護支援"),
+    [targetTypes],
+  );
   const [bundleCandidates, setBundleCandidates] = useState<Array<{ id: string; report_type: string; title: string; content: unknown }>>([]);
   const [selectedBundleIds, setSelectedBundleIds] = useState<Set<string>>(new Set());
 
@@ -167,17 +172,22 @@ export function SendDocumentModal({
         }
 
         // 4. 同梱候補: 同 client × status='completed' の他 report (current sourceDocumentId は除く)
-        const { data: bundles } = await supabase
-          .from("kaigo_report_documents")
-          .select("id, report_type, title, content")
-          .eq("user_id", client.id)
-          .eq("status", "completed")
-          .order("report_type");
-        if (cancelled) return;
-        const filtered = ((bundles ?? []) as Array<{ id: string; report_type: string; title: string; content: unknown }>).filter(
-          (b) => !sourceDocumentId || b.id !== sourceDocumentId,
-        );
-        setBundleCandidates(filtered);
+        //    送信先が居宅介護支援 (= 実績送付シナリオ) では care plan 書類を同梱する意味が無いので skip
+        if (allowBundle) {
+          const { data: bundles } = await supabase
+            .from("kaigo_report_documents")
+            .select("id, report_type, title, content")
+            .eq("user_id", client.id)
+            .eq("status", "completed")
+            .order("report_type");
+          if (cancelled) return;
+          const filtered = ((bundles ?? []) as Array<{ id: string; report_type: string; title: string; content: unknown }>).filter(
+            (b) => !sourceDocumentId || b.id !== sourceDocumentId,
+          );
+          setBundleCandidates(filtered);
+        } else {
+          setBundleCandidates([]);
+        }
       } catch (e) {
         if (!cancelled) setErrorMsg(e instanceof Error ? e.message : String(e));
       } finally {
@@ -187,7 +197,7 @@ export function SendDocumentModal({
     return () => {
       cancelled = true;
     };
-  }, [supabase, tenantId, client.id, sourceOfficeId, targetTypes, sourceDocumentId]);
+  }, [supabase, tenantId, client.id, sourceOfficeId, targetTypes, sourceDocumentId, allowBundle]);
 
   const visibleChoices = useMemo(() => {
     const base = showAll ? choices : choices.filter((c) => c.is_assigned);
