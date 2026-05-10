@@ -295,29 +295,47 @@ function ReceivedCarePlansPanel({
 
       {previewing && (
         <div
-          className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4"
+          className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-2"
           onClick={() => setPreviewing(null)}
         >
           <div
-            className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col"
+            className="bg-white rounded-xl shadow-2xl w-[96vw] h-[96vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-5 py-3 border-b flex items-center justify-between">
+            <div className="px-5 py-3 border-b flex items-center justify-between shrink-0">
               <h3 className="text-sm font-semibold text-gray-800 truncate">
                 {previewing.title}
               </h3>
-              <button
-                type="button"
-                onClick={() => setPreviewing(null)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const w = window.open("", "_blank");
+                    if (w) {
+                      w.document.write(previewing.html_content);
+                      w.document.close();
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                  title="新しいタブで開く (印刷もここから)"
+                >
+                  <ExternalLink size={12} />
+                  別タブで開く
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewing(null)}
+                  className="text-gray-400 hover:text-gray-600 px-2"
+                  aria-label="閉じる"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             <iframe
               srcDoc={previewing.html_content}
               sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-              className="flex-1 w-full border-0"
+              className="flex-1 w-full border-0 bg-white"
               title={previewing.title}
             />
           </div>
