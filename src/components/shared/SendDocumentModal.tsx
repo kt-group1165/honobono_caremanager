@@ -12,7 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 //   2. 確定で shared_documents INSERT + notifications INSERT (type='document_received')
 //   3. 受信側 office の全 staff 宛 (user_id=null, office_id=target) に通知
 
-const TARGET_SERVICE_TYPES = [
+const DEFAULT_TARGET_SERVICE_TYPES = [
   "福祉用具",
   "訪問介護",
   "訪問入浴",
@@ -24,6 +24,7 @@ export type DocumentType =
   | "care_plan_2"
   | "care_plan_3"
   | "emergency_sheet"
+  | "service_record_monthly"
   | string; // 拡張余地
 
 export interface SendDocumentModalClient {
@@ -44,6 +45,9 @@ export interface SendDocumentModalProps {
   payload?: Record<string, unknown>;
   /** 関連元 document の id (任意) */
   sourceDocumentId?: string | null;
+  /** 送付先候補に含める service_type 一覧 (default: 福祉用具/訪問介護/訪問入浴/訪問看護)。
+   *  例: 実績送付では `["居宅介護支援"]` を渡し、居宅介護支援事業所のみを候補にする。 */
+  targetServiceTypes?: string[];
   onClose: () => void;
   onSuccess: () => void;
   onError: (msg: string) => void;
@@ -65,11 +69,16 @@ export function SendDocumentModal({
   getHtmlSnapshot,
   payload,
   sourceDocumentId,
+  targetServiceTypes,
   onClose,
   onSuccess,
   onError,
 }: SendDocumentModalProps) {
   const supabase = useMemo(() => createClient(), []);
+  const targetTypes = useMemo<string[]>(
+    () => targetServiceTypes ?? (DEFAULT_TARGET_SERVICE_TYPES as unknown as string[]),
+    [targetServiceTypes],
+  );
 
   const [loading, setLoading] = useState(true);
   const [choices, setChoices] = useState<OfficeChoice[]>([]);
@@ -101,7 +110,7 @@ export function SendDocumentModal({
           .from("offices")
           .select("id, name, service_type")
           .eq("tenant_id", tenantId)
-          .in("service_type", TARGET_SERVICE_TYPES as unknown as string[])
+          .in("service_type", targetTypes)
           .eq("is_active", true)
           .order("service_type", { ascending: true })
           .order("name", { ascending: true });
@@ -141,7 +150,7 @@ export function SendDocumentModal({
     return () => {
       cancelled = true;
     };
-  }, [supabase, tenantId, client.id, sourceOfficeId]);
+  }, [supabase, tenantId, client.id, sourceOfficeId, targetTypes]);
 
   const visibleChoices = useMemo(() => {
     const base = showAll ? choices : choices.filter((c) => c.is_assigned);
@@ -241,7 +250,7 @@ export function SendDocumentModal({
           ) : choices.length === 0 ? (
             <p className="text-sm text-red-500">
               tenant 内に対象のサービス事業所が登録されていません
-              （対象: {TARGET_SERVICE_TYPES.join(" / ")}）
+              （対象: {targetTypes.join(" / ")}）
             </p>
           ) : (
             <>

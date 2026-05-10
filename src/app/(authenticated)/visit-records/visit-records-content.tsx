@@ -16,10 +16,13 @@ import {
   CalendarDays,
   PenLine,
   Printer,
+  Send,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { TemplatePicker } from "@/components/templates/template-picker";
 import { SignaturePadModal } from "@/components/signature/SignaturePadModal";
+import { SendDocumentModal } from "@/components/shared/SendDocumentModal";
+import { useBusinessType } from "@/lib/business-type-context";
 import { useSignedUrls } from "@/lib/use-signed-url";
 import { ja } from "date-fns/locale";
 
@@ -227,6 +230,70 @@ function getActiveCareItems(record: VisitRecord): string[] {
   if (record.support_trash) items.push("ゴミ出し");
   if (record.support_clothing) items.push("衣類の整理");
   return items;
+}
+
+// ─── 月次実績送付用 payload builder ─────────────────────────────────────────
+// shared_documents.payload に保存される統一 schema (受信側 = 居宅介護支援が取込時に使用)
+interface MonthlyServiceRecordItem {
+  date: string;             // YYYY-MM-DD
+  start_time: string | null;  // HH:MM
+  end_time: string | null;    // HH:MM
+  service_category: string; // service_type (身体介護 / 生活援助 / ...)
+  service_content: string;  // care 項目を ", " で連結 (空なら notes)
+  provider_name: string;    // staff_name
+  duration_minutes: number | null;
+}
+interface MonthlyServiceRecordPayload {
+  service_type: "訪問介護";
+  year_month: string;        // YYYY-MM
+  client_id: string;
+  client_name: string;
+  records: MonthlyServiceRecordItem[];
+}
+function diffMinutes(start: string | null, end: string | null): number | null {
+  if (!start || !end) return null;
+  const [sh, sm] = start.split(":").map((v) => Number(v));
+  const [eh, em] = end.split(":").map((v) => Number(v));
+  if ([sh, sm, eh, em].some((n) => Number.isNaN(n))) return null;
+  const mins = (eh * 60 + em) - (sh * 60 + sm);
+  return mins > 0 ? mins : null;
+}
+function buildMonthlyServiceRecordPayload({
+  yearMonth,
+  clientId,
+  clientName,
+  records,
+}: {
+  yearMonth: string;
+  clientId: string;
+  clientName: string;
+  records: VisitRecord[];
+}): MonthlyServiceRecordPayload {
+  return {
+    service_type: "訪問介護",
+    year_month: yearMonth,
+    client_id: clientId,
+    client_name: clientName,
+    records: records.map<MonthlyServiceRecordItem>((r) => {
+      const items = getActiveCareItems(r);
+      // service_content: care 項目連結 → 空なら notes / progress_notes / detailed_report fallback
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed (DB row 直)
+      const rr = r as any;
+      const content =
+        items.length > 0
+          ? items.join("、")
+          : (r.notes ?? rr.progress_notes ?? rr.detailed_report ?? "") || "";
+      return {
+        date: r.visit_date,
+        start_time: r.start_time,
+        end_time: r.end_time,
+        service_category: r.service_type,
+        service_content: content,
+        provider_name: r.staff_name ?? "",
+        duration_minutes: diffMinutes(r.start_time, r.end_time),
+      };
+    }),
+  };
 }
 
 // VisitRecordsPage の form 内で使う入力 helper (module scope に hoist)
@@ -606,6 +673,7 @@ export interface VisitRecordsContentProps {
 
 export function VisitRecordsContent({ userId, userName, initialRecords, initialStaff }: VisitRecordsContentProps) {
   const supabase = useMemo(() => createClient(), []);
+  const { currentOffice } = useBusinessType();
 
   const [records, setRecords] = useState<VisitRecord[]>(initialRecords);
   const [staffList] = useState<KaigoStaff[]>(initialStaff);
@@ -617,6 +685,23 @@ export function VisitRecordsContent({ userId, userName, initialRecords, initialS
   const [formSection, setFormSection] = useState<string | null>("pre_check");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [signTarget, setSignTarget] = useState<VisitRecord | null>(null);
+  // 月次実績送付用
+  const [sendMonth, setSendMonth] = useState<string>(() => format(new Date(), "yyyy-MM"));
+  const [showSendModal, setShowSendModal] = useState(false);
+
+  // 当該月分の visit_records (date + start_time 昇順)
+  const monthRecords = useMemo(() => {
+    const filtered = records.filter((r) => (r.visit_date ?? "").startsWith(sendMonth));
+    return [...filtered].sort((a, b) => {
+      const ad = a.visit_date ?? "";
+      const bd = b.visit_date ?? "";
+      if (ad !== bd) return ad < bd ? -1 : 1;
+      const at = a.start_time ?? "";
+      const bt = b.start_time ?? "";
+      if (at === bt) return 0;
+      return at < bt ? -1 : 1;
+    });
+  }, [records, sendMonth]);
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
@@ -747,6 +832,32 @@ export function VisitRecordsContent({ userId, userName, initialRecords, initialS
           <p className="mt-0.5 text-xs text-gray-500">訪問介護サービスの実施内容を記録します</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* 月次実績送付の対象月 */}
+          <input
+            type="month"
+            value={sendMonth}
+            onChange={(e) => setSendMonth(e.target.value)}
+            className="rounded-lg border px-2 py-1.5 text-sm text-gray-700"
+            title="実績送信の対象月"
+          />
+          <button
+            onClick={() => setShowSendModal(true)}
+            disabled={!userName || !currentOffice || monthRecords.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title={
+              monthRecords.length === 0
+                ? "対象月の実績がありません"
+                : !currentOffice
+                  ? "事業所が選択されていません"
+                  : "居宅介護支援事業所へ月次実績を送付"
+            }
+          >
+            <Send size={14} />
+            居宅事業所に実績送信
+            <span className="ml-1 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
+              {monthRecords.length}件
+            </span>
+          </button>
           <button
             onClick={() => window.print()}
             disabled={records.length === 0}
@@ -931,6 +1042,45 @@ export function VisitRecordsContent({ userId, userName, initialRecords, initialS
       <div id="visit-records-print" className="hidden">
         <VisitPrintView records={records} userName={userName ?? undefined} signedUrlMap={signedUrlMap} />
       </div>
+
+      {/* 月次実績送付スナップショット用 DOM (画面では hidden、month で filter 済) */}
+      <div id="visit-records-month-print" className="hidden">
+        <VisitPrintView
+          records={monthRecords}
+          userName={userName ?? undefined}
+          signedUrlMap={signedUrlMap}
+          headerLabel={`${sendMonth.replace("-", "年")}月 訪問介護実績`}
+        />
+      </div>
+
+      {/* 月次実績の居宅事業所への送信モーダル */}
+      {showSendModal && userName && currentOffice && (
+        <SendDocumentModal
+          tenantId={currentOffice.tenant_id}
+          client={{ id: userId, name: userName }}
+          sourceOfficeId={currentOffice.id}
+          documentType="service_record_monthly"
+          targetServiceTypes={["居宅介護支援"]}
+          title={`${sendMonth.replace("-", "年")}月 訪問介護実績 - ${userName} 様`}
+          getHtmlSnapshot={() =>
+            document.getElementById("visit-records-month-print")?.outerHTML ?? ""
+          }
+          payload={
+            buildMonthlyServiceRecordPayload({
+              yearMonth: sendMonth,
+              clientId: userId,
+              clientName: userName,
+              records: monthRecords,
+            }) as unknown as Record<string, unknown>
+          }
+          onClose={() => setShowSendModal(false)}
+          onSuccess={() => {
+            setShowSendModal(false);
+            toast.success("月次実績を送付しました");
+          }}
+          onError={(msg) => toast.error("送付失敗: " + msg)}
+        />
+      )}
 
       {/* Modal — 22カテゴリ対応の新規記録フォーム */}
       {showForm && (
@@ -1274,10 +1424,13 @@ function VisitPrintView({
   records,
   userName,
   signedUrlMap,
+  headerLabel,
 }: {
   records: VisitRecord[];
   userName?: string;
   signedUrlMap: Map<string, string>;
+  /** 表示タイトル (default: "サービス実施記録")。月次実績送付時は "2026年5月 訪問介護実績" 等を渡す。 */
+  headerLabel?: string;
 }) {
   const B = "1px solid #000";
   const cellBase: React.CSSProperties = {
@@ -1304,7 +1457,7 @@ function VisitPrintView({
   return (
     <div style={{ color: "#000" }}>
       <div style={{ textAlign: "center", fontSize: "14pt", fontWeight: "bold", letterSpacing: "0.2em", marginBottom: "3mm" }}>
-        サービス実施記録
+        {headerLabel ?? "サービス実施記録"}
       </div>
       {userName && (
         <div style={{ fontSize: "10pt", marginBottom: "3mm", borderBottom: B, paddingBottom: "1mm" }}>
