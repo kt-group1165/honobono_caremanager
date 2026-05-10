@@ -23,7 +23,7 @@ function formatDate(iso: string | null): string {
   }
 }
 
-// ─── 第7表 取り込み用の型・差分判定 ──────────────────────────────────────────
+// ─── 利用票・提供票 取り込み用の型・差分判定 ──────────────────────────────
 //
 // payload.records は送信側 (visit-records / order-app 月次実績) で生成される
 // 「月次サービス実績」の record。送信元によって field 構成は若干異なるが、
@@ -98,7 +98,15 @@ function computeDiff(
   return { added, updated, unchanged, existingOnly };
 }
 
-// ─── 第7表 (service-usage-detail) doc 取得・upsert helper ─────────────────────
+// ─── 第6表 (service-usage = 利用票・提供票) doc 取得・upsert helper ───────────
+//
+// 受信側 (居宅介護支援) が見る画面は /reports/service-usage = 利用票・提供票。
+// 取込結果はその grid (services[].planned/actual[31]) に反映する必要がある。
+// content 内には:
+//   - records[]              : 受信実績の生 (round-trip diff 用)
+//   - services[]             : grid 表示用 (time/content/provider/planned[31]/actual[31])
+//   - other meta (insurer_number, ...) : auto-gen 時の値を保持
+// を共存させる。
 
 interface TargetDoc {
   id: string | null;
@@ -114,7 +122,7 @@ async function fetchTargetDoc(
     .from("kaigo_report_documents")
     .select("id, content")
     .eq("user_id", clientId)
-    .eq("report_type", "service-usage-detail")
+    .eq("report_type", "service-usage")
     .eq("report_month", yearMonth)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -125,6 +133,70 @@ async function fetchTargetDoc(
   };
 }
 
+// records[] → services[] (利用票・提供票 grid schema) に変換
+// 既存 services[] があれば planned[] は保持し、actual[] のみ受信実績で再構築する。
+type ServiceRow = {
+  time: string;
+  content: string;
+  provider: string;
+  planned: boolean[];
+  actual: boolean[];
+};
+
+function buildServicesFromRecords(
+  records: ServiceUsageRecord[],
+  existingServices: ServiceRow[],
+): ServiceRow[] {
+  // (start_time-end_time, service_category, provider) で行を一意化
+  const rowMap = new Map<string, ServiceRow>();
+  // 既存行をベースに (planned[] を保持) — actual[] は一旦 false 化して再構築
+  for (const ex of existingServices) {
+    rowMap.set(`${ex.time}__${ex.content}__${ex.provider}`, {
+      time: ex.time,
+      content: ex.content,
+      provider: ex.provider,
+      planned: [...ex.planned],
+      actual: Array(31).fill(false) as boolean[],
+    });
+  }
+  for (const r of records) {
+    const start = typeof r.start_time === "string" ? r.start_time.slice(0, 5) : "";
+    const end = typeof r.end_time === "string" ? r.end_time.slice(0, 5) : "";
+    const time = start ? (end ? `${start}-${end}` : start) : "";
+    const content =
+      typeof r.service_category === "string"
+        ? r.service_category
+        : typeof r.service_content === "string"
+          ? r.service_content
+          : "";
+    const provider =
+      typeof r.provider_name === "string" ? r.provider_name : "";
+    const day = (() => {
+      const d = String(r.date ?? "").split("-")[2];
+      const n = parseInt(d, 10);
+      return Number.isFinite(n) && n >= 1 && n <= 31 ? n : null;
+    })();
+    if (!day) continue;
+    const key = `${time}__${content}__${provider}`;
+    let row = rowMap.get(key);
+    if (!row) {
+      row = {
+        time,
+        content,
+        provider,
+        planned: Array(31).fill(false) as boolean[],
+        actual: Array(31).fill(false) as boolean[],
+      };
+      rowMap.set(key, row);
+    }
+    row.actual[day - 1] = true;
+  }
+  // 開始時刻昇順
+  return Array.from(rowMap.values()).sort((a, b) =>
+    a.time < b.time ? -1 : a.time > b.time ? 1 : 0,
+  );
+}
+
 async function persistRecords(
   supabase: ReturnType<typeof createClient>,
   target: TargetDoc,
@@ -133,8 +205,20 @@ async function persistRecords(
   clientName: string,
   records: ServiceUsageRecord[],
 ): Promise<void> {
+  // 既存 services[] を抽出 (取得失敗 / 形違いは空配列扱い)
+  const existing = Array.isArray(target.content.services)
+    ? (target.content.services as unknown[]).filter(
+        (s): s is ServiceRow =>
+          !!s &&
+          typeof s === "object" &&
+          Array.isArray((s as ServiceRow).planned) &&
+          Array.isArray((s as ServiceRow).actual),
+      )
+    : [];
+  const services = buildServicesFromRecords(records, existing);
+
   if (target.id) {
-    const nextContent = { ...target.content, records };
+    const nextContent = { ...target.content, records, services };
     const { error } = await supabase
       .from("kaigo_report_documents")
       .update({ content: nextContent })
@@ -142,16 +226,17 @@ async function persistRecords(
     if (error) throw new Error(error.message);
     return;
   }
-  // 新規 INSERT (最小 content)
+  // 新規 INSERT (最小 content + services[])
   const newContent: Record<string, unknown> = {
     user_name: clientName,
     year_month: yearMonth,
     records,
+    services,
   };
-  const title = `サービス利用票別表（${yearMonth}）`;
+  const title = `サービス利用票・提供票（${yearMonth}）`;
   const { error } = await supabase.from("kaigo_report_documents").insert({
     user_id: clientId,
-    report_type: "service-usage-detail",
+    report_type: "service-usage",
     title,
     report_month: yearMonth,
     content: newContent,
@@ -328,7 +413,7 @@ function ImportConfirmModal({
       const addCount = addedChecked.filter(Boolean).length;
       const updCount = updateChoice.filter((c) => c === "overwrite").length;
       onSuccess(
-        `第7表に取り込みました (追加 ${addCount} 件 / 上書き ${updCount} 件 / 保持 ${diff.existingOnly.length + diff.unchanged.length + (diff.updated.length - updCount)} 件)`,
+        `利用票・提供票に取り込みました (追加 ${addCount} 件 / 上書き ${updCount} 件 / 保持 ${diff.existingOnly.length + diff.unchanged.length + (diff.updated.length - updCount)} 件)`,
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -359,7 +444,7 @@ function ImportConfirmModal({
         incoming,
       );
       onSuccess(
-        `第7表を受信内容で上書きしました (${incoming.length} 件 / 既存 ${diff.existingOnly.length + diff.unchanged.length + diff.updated.length} 件を破棄)`,
+        `利用票・提供票を受信内容で上書きしました (${incoming.length} 件 / 既存 ${diff.existingOnly.length + diff.unchanged.length + diff.updated.length} 件を破棄)`,
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -390,7 +475,7 @@ function ImportConfirmModal({
         <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between">
           <div>
             <h3 className="font-semibold text-gray-800">
-              第7表 (サービス利用票別表) への取り込み確認
+              利用票・提供票 への取り込み確認
             </h3>
             <p className="text-xs text-gray-500 mt-1">
               {extracted.clientName || "—"} 様 / {extracted.yearMonth ?? "—"} /
@@ -772,7 +857,7 @@ export default function SharedDocumentPage({
               className="inline-flex items-center gap-1 rounded-md border border-blue-600 bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
             >
               <Download size={14} />
-              第7表 (利用票実績表) に取り込む
+              利用票・提供票に取り込む
             </button>
           )}
           <button
