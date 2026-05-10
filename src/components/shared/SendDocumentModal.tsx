@@ -19,6 +19,24 @@ const DEFAULT_TARGET_SERVICE_TYPES = [
   "訪問看護",
 ] as const;
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+const REPORT_TYPE_LABEL: Record<string, string> = {
+  "care-plan-1": "第1表",
+  "care-plan-2": "第2表",
+  "care-plan-3": "第3表",
+  "support-progress": "第5表 (支援経過)",
+  "service-usage": "利用票",
+  "service-usage-detail": "利用票別表",
+};
+
 export type DocumentType =
   | "care_plan_1"
   | "care_plan_2"
@@ -88,6 +106,9 @@ export function SendDocumentModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [showAll, setShowAll] = useState(false);
+  // 同梱書類 (= 同 client × completed の他 report)
+  const [bundleCandidates, setBundleCandidates] = useState<Array<{ id: string; report_type: string; title: string; content: unknown }>>([]);
+  const [selectedBundleIds, setSelectedBundleIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -141,6 +162,19 @@ export function SendDocumentModal({
           setShowAll(true);
           setSelectedId(all[0]?.id ?? null);
         }
+
+        // 4. 同梱候補: 同 client × status='completed' の他 report (current sourceDocumentId は除く)
+        const { data: bundles } = await supabase
+          .from("kaigo_report_documents")
+          .select("id, report_type, title, content")
+          .eq("user_id", client.id)
+          .eq("status", "completed")
+          .order("report_type");
+        if (cancelled) return;
+        const filtered = ((bundles ?? []) as Array<{ id: string; report_type: string; title: string; content: unknown }>).filter(
+          (b) => !sourceDocumentId || b.id !== sourceDocumentId,
+        );
+        setBundleCandidates(filtered);
       } catch (e) {
         if (!cancelled) setErrorMsg(e instanceof Error ? e.message : String(e));
       } finally {
@@ -150,7 +184,7 @@ export function SendDocumentModal({
     return () => {
       cancelled = true;
     };
-  }, [supabase, tenantId, client.id, sourceOfficeId, targetTypes]);
+  }, [supabase, tenantId, client.id, sourceOfficeId, targetTypes, sourceDocumentId]);
 
   const visibleChoices = useMemo(() => {
     const base = showAll ? choices : choices.filter((c) => c.is_assigned);
@@ -177,7 +211,7 @@ export function SendDocumentModal({
       const html = getHtmlSnapshot();
       if (!html) throw new Error("プレビュー DOM が見つかりません");
 
-      // shared_documents INSERT
+      // shared_documents INSERT (main)
       const { data: sd, error: sdErr } = await supabase
         .from("shared_documents")
         .insert({
@@ -208,6 +242,40 @@ export function SendDocumentModal({
         body: `${sourceOfficeName || "送信元事業所"} から`,
       });
       if (ntErr) throw ntErr;
+
+      // 同梱書類 INSERT (selected bundle docs)
+      const bundles = bundleCandidates.filter((b) => selectedBundleIds.has(b.id));
+      for (const b of bundles) {
+        // 簡易 HTML: title + content の整形 (PDF render は v2)
+        const bundleHtml = `<div style="font-family:'MS Mincho',serif;padding:24px;"><h1 style="font-size:18pt;text-align:center;margin-bottom:18px;">${b.title}</h1><pre style="white-space:pre-wrap;font-size:10pt;line-height:1.5;">${escapeHtml(JSON.stringify(b.content, null, 2))}</pre><p style="font-size:9pt;color:#888;margin-top:24px;">※ 同梱書類: 受信側で取り込み or 印刷可能。詳細レイアウトは送信元 ${sourceOfficeName || "事業所"} で確認してください。</p></div>`;
+        const { data: bsd, error: bsdErr } = await supabase
+          .from("shared_documents")
+          .insert({
+            tenant_id: tenantId,
+            client_id: client.id,
+            source_office_id: sourceOfficeId,
+            target_office_id: selectedId,
+            document_type: b.report_type,
+            title: b.title,
+            html_content: bundleHtml,
+            payload: { client_id: client.id, client_name: client.name, source_kaigo_report_id: b.id, content: b.content, bundled_with: sd.id },
+            source_document_id: null,
+            sent_by: userId,
+          })
+          .select("id")
+          .single();
+        if (bsdErr || !bsd) throw bsdErr ?? new Error(`同梱書類 ${b.title} の作成失敗`);
+        await supabase.from("notifications").insert({
+          tenant_id: tenantId,
+          office_id: selectedId,
+          user_id: null,
+          type: "document_received",
+          ref_table: "shared_documents",
+          ref_id: bsd.id,
+          title: `${b.title} を受信`,
+          body: `${sourceOfficeName || "送信元事業所"} から (同梱)`,
+        });
+      }
 
       onSuccess();
     } catch (e) {
@@ -326,6 +394,39 @@ export function SendDocumentModal({
                   )}
                 </div>
               </div>
+
+              {/* 同梱書類 (= 同 client × completed の他 report) */}
+              {bundleCandidates.length > 0 && (
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1.5">同梱書類 (任意)</label>
+                  <p className="text-[11px] text-gray-400 mb-1.5">同じ利用者の他の作成済書類を一緒に送付できます。</p>
+                  <div className="space-y-1 max-h-40 overflow-y-auto border rounded p-2">
+                    {bundleCandidates.map((b) => {
+                      const checked = selectedBundleIds.has(b.id);
+                      return (
+                        <label key={b.id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              setSelectedBundleIds((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) next.add(b.id); else next.delete(b.id);
+                                return next;
+                              });
+                            }}
+                            className="accent-blue-600"
+                          />
+                          <span className="text-gray-700">
+                            <span className="font-medium">{REPORT_TYPE_LABEL[b.report_type] ?? b.report_type}</span>
+                            <span className="text-gray-400 ml-1">— {b.title}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {errorMsg && (
                 <div className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
