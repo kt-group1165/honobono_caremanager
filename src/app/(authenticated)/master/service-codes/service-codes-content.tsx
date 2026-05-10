@@ -169,6 +169,9 @@ export function ServiceCodesContent({
     errors: string[];
   } | null>(null);
   const [importMode, setImportMode] = useState<"upsert" | "skip-existing">("upsert");
+  // 取込時に全行へ適用する valid_from / valid_until (UI で指定 → CSV の値を上書き)
+  const [importValidFrom, setImportValidFrom] = useState<string>("2024-06-01");
+  const [importValidUntil, setImportValidUntil] = useState<string>("");
   const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
 
   // ─── Data fetch (refetch after CRUD) ────────────────────────────────────────
@@ -546,6 +549,18 @@ export function ServiceCodesContent({
       toast.error("取り込める行がありません (全て検証エラー)");
       return;
     }
+    if (!importValidFrom || !/^\d{4}-\d{2}-\d{2}$/.test(importValidFrom)) {
+      toast.error("適用開始日を YYYY-MM-DD で指定してください");
+      return;
+    }
+    if (importValidUntil && !/^\d{4}-\d{2}-\d{2}$/.test(importValidUntil)) {
+      toast.error("適用終了日が不正です");
+      return;
+    }
+    if (importValidUntil && importValidUntil < importValidFrom) {
+      toast.error("適用終了日は適用開始日より後の日付を指定してください");
+      return;
+    }
     setImporting(true);
     setImportProgress({ done: 0, total: valid.length });
     try {
@@ -561,8 +576,9 @@ export function ServiceCodesContent({
           units: r.units,
           unit_type: r.unit_type,
           calculation_type: r.calculation_type,
-          valid_from: r.valid_from,
-          valid_until: r.valid_until,
+          // ↓ CSV の値を無視し、UI で指定した日付で全行を上書き
+          valid_from: importValidFrom,
+          valid_until: importValidUntil || null,
           notes: r.notes,
         }));
         // 複合 unique (service_code, valid_from) で UPSERT。
@@ -1115,6 +1131,67 @@ export function ServiceCodesContent({
                   <div className="text-base font-bold text-gray-700">
                     {importPreview.rows.length} 件
                   </div>
+                </div>
+              </div>
+
+              {/* 適用期間ピッカー: CSV の値を無視して全行をこの期間で取り込む */}
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <div className="mb-2 text-xs font-semibold text-amber-800">
+                  適用期間 (改定対応 — 全 {importPreview.rows.filter((r) => !r.error).length} 行に一律適用)
+                </div>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-[11px] text-gray-600 mb-1">
+                      適用開始日 <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={importValidFrom}
+                      onChange={(e) => setImportValidFrom(e.target.value)}
+                      className="text-sm border border-gray-300 rounded px-2 py-1.5 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-gray-600 mb-1">
+                      適用終了日 (任意 / 空 = 現行)
+                    </label>
+                    <input
+                      type="date"
+                      value={importValidUntil}
+                      onChange={(e) => setImportValidUntil(e.target.value)}
+                      className="text-sm border border-gray-300 rounded px-2 py-1.5 bg-white"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 text-[11px] pb-1">
+                    <span className="text-gray-500 mr-1 self-center">プリセット:</span>
+                    <button
+                      type="button"
+                      onClick={() => setImportValidFrom("2024-04-01")}
+                      className="rounded border border-amber-300 bg-white px-2 py-0.5 hover:bg-amber-100"
+                      title="訪問介護等"
+                    >
+                      令和6年4月
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImportValidFrom("2024-06-01")}
+                      className="rounded border border-amber-300 bg-white px-2 py-0.5 hover:bg-amber-100"
+                      title="大半のサービス"
+                    >
+                      令和6年6月
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImportValidFrom("2025-04-01")}
+                      className="rounded border border-amber-300 bg-white px-2 py-0.5 hover:bg-amber-100"
+                      title="一部見直し"
+                    >
+                      令和7年4月
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-2 text-[11px] text-amber-700">
+                  ※ CSV 内の valid_from / valid_until 列は無視され、ここで指定した期間で全行が取り込まれます。
                 </div>
               </div>
 
