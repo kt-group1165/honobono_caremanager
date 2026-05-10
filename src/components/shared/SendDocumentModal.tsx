@@ -202,7 +202,14 @@ export function SendDocumentModal({
 
       onSuccess();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      // Supabase error は Error instance ではなく { message, details, hint, code } の plain object
+      console.error("[SendDocumentModal] 送付失敗", e);
+      const msg =
+        e instanceof Error
+          ? e.message
+          : (e && typeof e === "object" && "message" in e
+              ? String((e as { message: unknown }).message)
+              : JSON.stringify(e));
       setErrorMsg(msg);
       onError(msg);
     } finally {
