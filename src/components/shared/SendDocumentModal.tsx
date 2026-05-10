@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { renderToString } from "react-dom/server";
 import { Loader2, Send, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { PrintView } from "@/app/(authenticated)/reports/[type]/reports-content";
+import { REPORT_CONFIG } from "@/app/(authenticated)/reports/[type]/report-config";
 
 // 居宅介護支援 (kaigo-app) → サービス事業所 (福祉用具/訪問介護/訪問入浴/訪問看護) への
 // 書類送付用モーダル。order-app の SendRentalReportModal を参考にした汎用版。
@@ -246,8 +249,28 @@ export function SendDocumentModal({
       // 同梱書類 INSERT (selected bundle docs)
       const bundles = bundleCandidates.filter((b) => selectedBundleIds.has(b.id));
       for (const b of bundles) {
-        // 簡易 HTML: title + content の整形 (PDF render は v2)
-        const bundleHtml = `<div style="font-family:'MS Mincho',serif;padding:24px;"><h1 style="font-size:18pt;text-align:center;margin-bottom:18px;">${b.title}</h1><pre style="white-space:pre-wrap;font-size:10pt;line-height:1.5;">${escapeHtml(JSON.stringify(b.content, null, 2))}</pre><p style="font-size:9pt;color:#888;margin-top:24px;">※ 同梱書類: 受信側で取り込み or 印刷可能。詳細レイアウトは送信元 ${sourceOfficeName || "事業所"} で確認してください。</p></div>`;
+        // 実 component で render (PrintCarePlan1/2/3 等が PrintView 経由で呼ばれる)
+        const config = REPORT_CONFIG[b.report_type];
+        let bundleHtml: string;
+        try {
+          if (config) {
+            const inner = renderToString(
+              <PrintView
+                reportType={b.report_type}
+                content={(b.content ?? {}) as Record<string, unknown>}
+                config={config}
+              />
+            );
+            // print 用に root を A4 風に wrap
+            bundleHtml = `<div style="font-family:'MS Mincho','Yu Mincho',serif;padding:24px;background:#fff;">${inner}</div>`;
+          } else {
+            // 未知 report_type → JSON fallback
+            bundleHtml = `<div style="font-family:'MS Mincho',serif;padding:24px;"><h1 style="font-size:18pt;text-align:center;margin-bottom:18px;">${b.title}</h1><pre style="white-space:pre-wrap;font-size:10pt;">${escapeHtml(JSON.stringify(b.content, null, 2))}</pre></div>`;
+          }
+        } catch (renderErr) {
+          console.warn("[SendDocumentModal] bundle render failed", b.report_type, renderErr);
+          bundleHtml = `<div style="font-family:'MS Mincho',serif;padding:24px;"><h1 style="font-size:18pt;text-align:center;margin-bottom:18px;">${b.title}</h1><pre style="white-space:pre-wrap;font-size:10pt;">${escapeHtml(JSON.stringify(b.content, null, 2))}</pre></div>`;
+        }
         const { data: bsd, error: bsdErr } = await supabase
           .from("shared_documents")
           .insert({

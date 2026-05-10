@@ -2666,7 +2666,7 @@ function PrintGeneric({ c, title }: { c: Record<string, unknown>; title: string 
   );
 }
 
-function PrintView({ reportType, content, config }: {
+export function PrintView({ reportType, content, config }: {
   reportType: string; content: Record<string, unknown>; config: ReportConfig;
 }) {
   switch (reportType) {
