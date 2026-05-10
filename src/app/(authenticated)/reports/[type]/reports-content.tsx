@@ -13,6 +13,12 @@ import { ja } from "date-fns/locale";
 import { toast } from "sonner";
 import { useBusinessType } from "@/lib/business-type-context";
 import { SendDocumentModal } from "@/components/shared/SendDocumentModal";
+import {
+  ImportServiceRecordModal,
+  listReceivedServiceRecords,
+  type ReceivedRecord,
+} from "@/components/shared/ImportServiceRecordModal";
+import { Download as DownloadIcon, Inbox } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -3159,6 +3165,142 @@ function DocEditor({ doc, config, clientName, onSave, onStatusToggle, onDirtyCha
 }
 
 // ---------------------------------------------------------------------------
+// 受信実績パネル (利用票・提供票 でのみ表示)
+// ---------------------------------------------------------------------------
+
+function ReceivedRecordsPanel({
+  clientId,
+  yearMonth,
+  targetOfficeId,
+  onImported,
+}: {
+  clientId: string;
+  yearMonth: string;
+  targetOfficeId: string | null;
+  onImported: () => void;
+}) {
+  const [items, setItems] = useState<ReceivedRecord[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [activeShared, setActiveShared] = useState<ReceivedRecord["shared"] | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!clientId || !yearMonth || !targetOfficeId) {
+      setItems([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const list = await listReceivedServiceRecords(clientId, yearMonth, targetOfficeId);
+      setItems(list);
+    } finally {
+      setLoading(false);
+    }
+  }, [clientId, yearMonth, targetOfficeId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / month switch)
+    refresh();
+  }, [refresh]);
+
+  if (!clientId || !yearMonth || !targetOfficeId) return null;
+
+  const pendingCount = items.filter((it) => !it.imported).length;
+
+  return (
+    <div className="mb-4 rounded-xl border bg-white shadow-sm no-print">
+      <div className="flex items-center justify-between border-b px-4 py-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+          <Inbox size={14} className="text-blue-600" />
+          受信実績 ({yearMonth.replace("-", "年")}月)
+          {pendingCount > 0 && (
+            <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white">
+              未取込 {pendingCount}
+            </span>
+          )}
+        </h2>
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={loading}
+          className="text-xs text-gray-500 hover:text-blue-600 disabled:opacity-50"
+        >
+          {loading ? "読込中..." : "再読込"}
+        </button>
+      </div>
+
+      {loading && items.length === 0 ? (
+        <div className="flex items-center justify-center py-6 text-gray-400">
+          <Loader2 size={16} className="mr-2 animate-spin" /> 読込中...
+        </div>
+      ) : items.length === 0 ? (
+        <div className="px-4 py-5 text-center text-xs text-gray-400">
+          この月の受信実績はありません
+        </div>
+      ) : (
+        <ul className="divide-y">
+          {items.map((it) => (
+            <li
+              key={it.shared.id}
+              className={`flex items-center justify-between gap-3 px-4 py-2.5 ${it.imported ? "bg-gray-50" : "bg-blue-50/40"}`}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-sm font-medium text-gray-800">
+                    {it.sourceOfficeName}
+                  </span>
+                  {it.imported ? (
+                    <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                      取込済
+                    </span>
+                  ) : (
+                    <span className="rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      未取込
+                    </span>
+                  )}
+                </div>
+                <div className="mt-0.5 text-[11px] text-gray-500">
+                  {it.shared.title} ・ {it.recordCount} 件 ・{" "}
+                  {format(parseISO(it.shared.sent_at), "yyyy/MM/dd HH:mm", { locale: ja })}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveShared(it.shared)}
+                className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  it.imported
+                    ? "border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                    : "bg-blue-600 text-white hover:bg-blue-700"
+                }`}
+                title={it.imported ? "差分を再確認して再取込" : "受信内容を取り込む"}
+              >
+                <span className="flex items-center gap-1">
+                  <DownloadIcon size={12} />
+                  {it.imported ? "再取込" : "取込"}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {activeShared && (
+        <ImportServiceRecordModal
+          shared={activeShared}
+          onClose={() => setActiveShared(null)}
+          onSuccess={(msg) => {
+            toast.success(msg);
+            setActiveShared(null);
+            refresh();
+            onImported();
+          }}
+          onError={(msg) => toast.error(msg)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Content
 // ---------------------------------------------------------------------------
 
@@ -3172,6 +3314,7 @@ export interface ReportsContentProps {
 export function ReportsContent({ userId, reportType, initialDocs, initialCertifications }: ReportsContentProps) {
   const config = REPORT_CONFIG[reportType];
   const supabase = useMemo(() => createClient(), []);
+  const { currentOfficeId } = useBusinessType();
 
   const [selectedYearMonth, setSelectedYearMonth] = useState(format(new Date(), "yyyy-MM"));
   const [docs, setDocs] = useState<ReportDoc[]>(initialDocs);
@@ -3406,6 +3549,16 @@ export function ReportsContent({ userId, reportType, initialDocs, initialCertifi
                 <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 no-print">
                   介護認定情報が登録されていません。先に利用者情報で認定情報を登録してください。
                 </div>
+              )}
+
+              {/* 受信実績パネル (利用票・提供票 でのみ表示) */}
+              {reportType === "service-usage" && (
+                <ReceivedRecordsPanel
+                  clientId={userId}
+                  yearMonth={selectedYearMonth}
+                  targetOfficeId={currentOfficeId}
+                  onImported={loadDocs}
+                />
               )}
 
               {/* Document list */}
