@@ -148,6 +148,7 @@ export function ServiceCodesContent({
   const [filterCategory, setFilterCategory] = useState("");
   const [filterCalcType, setFilterCalcType] = useState("");
   const [searchText, setSearchText] = useState("");
+  const [filterActiveAt, setFilterActiveAt] = useState<string>(""); // "" = 全件, "YYYY-MM-DD" = その日付で有効な行のみ
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -211,9 +212,14 @@ export function ServiceCodesContent({
       if (filterCategory && r.service_category !== filterCategory) return false;
       if (filterCalcType && r.calculation_type !== filterCalcType) return false;
       if (q && !r.service_code.toLowerCase().includes(q) && !r.service_name.toLowerCase().includes(q)) return false;
+      // 適用日フィルタ: 指定日に有効な行のみ (valid_from <= D AND (valid_until IS NULL OR valid_until >= D))
+      if (filterActiveAt) {
+        if (r.valid_from && r.valid_from > filterActiveAt) return false;
+        if (r.valid_until && r.valid_until < filterActiveAt) return false;
+      }
       return true;
     });
-  }, [records, filterCategory, filterCalcType, searchText]);
+  }, [records, filterCategory, filterCalcType, searchText, filterActiveAt]);
 
   // ─── Form helpers ────────────────────────────────────────────────────────────
 
@@ -559,16 +565,19 @@ export function ServiceCodesContent({
           valid_until: r.valid_until,
           notes: r.notes,
         }));
+        // 複合 unique (service_code, valid_from) で UPSERT。
+        // 同じ service_code でも valid_from が違えば別行として履歴保持される。
+        // valid_from が CSV で空の場合は DB の DEFAULT ('2024-06-01') が入る。
         if (importMode === "upsert") {
           const { error } = await supabase
             .from("kaigo_service_codes")
-            .upsert(batch, { onConflict: "service_code" });
+            .upsert(batch, { onConflict: "service_code,valid_from" });
           if (error) throw error;
         } else {
-          // skip-existing: insert + ignore duplicates (上書きしない)
+          // skip-existing: 同 (service_code, valid_from) が既にあれば INSERT を skip
           const { error } = await supabase
             .from("kaigo_service_codes")
-            .upsert(batch, { onConflict: "service_code", ignoreDuplicates: true });
+            .upsert(batch, { onConflict: "service_code,valid_from", ignoreDuplicates: true });
           if (error) throw error;
         }
         done += batch.length;
@@ -679,6 +688,35 @@ export function ServiceCodesContent({
             ))}
           </select>
 
+          {/* 適用日フィルタ */}
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-gray-500 whitespace-nowrap">適用日</label>
+            <input
+              type="date"
+              value={filterActiveAt}
+              onChange={(e) => setFilterActiveAt(e.target.value)}
+              className="text-sm border border-gray-300 rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              title="この日付に有効なコードのみ表示"
+            />
+            <button
+              type="button"
+              onClick={() => setFilterActiveAt(new Date().toISOString().split("T")[0])}
+              className="text-xs text-indigo-600 hover:underline"
+              title="本日有効なコードのみ表示"
+            >
+              本日
+            </button>
+            {filterActiveAt && (
+              <button
+                type="button"
+                onClick={() => setFilterActiveAt("")}
+                className="text-xs text-gray-400 hover:text-gray-600"
+              >
+                クリア
+              </button>
+            )}
+          </div>
+
           {/* Text search */}
           <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -737,6 +775,9 @@ export function ServiceCodesContent({
                     <th className="text-center px-4 py-3 font-medium text-gray-600 whitespace-nowrap">
                       区分
                     </th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">
+                      適用期間
+                    </th>
                     <th className="text-center px-4 py-3 font-medium text-gray-600 whitespace-nowrap">
                       操作
                     </th>
@@ -777,6 +818,19 @@ export function ServiceCodesContent({
                         >
                           {record.calculation_type}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
+                        {record.valid_from ? (
+                          <>
+                            <span>{record.valid_from.replace(/-/g, "/")}</span>
+                            <span className="mx-1 text-gray-400">〜</span>
+                            <span className={record.valid_until ? "" : "text-gray-400"}>
+                              {record.valid_until ? record.valid_until.replace(/-/g, "/") : "現行"}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-gray-400">未設定</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-1">

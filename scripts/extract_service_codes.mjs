@@ -30,17 +30,36 @@ const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
 
 const args = process.argv.slice(2);
 if (args.length < 1) {
-  console.error("Usage: node extract_service_codes.mjs <pdf-path> [out.csv] [start-page] [end-page] [--zaitaku-only]");
-  console.error("  --zaitaku-only : 在宅系サービスのみ出力 (施設サービス 51-59 を除外)");
+  console.error("Usage: node extract_service_codes.mjs <pdf-path> [out.csv] [start-page] [end-page] [opts]");
+  console.error("  --zaitaku-only        : 在宅系サービスのみ出力 (施設サービス 51-59 を除外)");
+  console.error("  --valid-from=YYYY-MM-DD : 適用開始日 (default: 2024-06-01 = 令和6年6月改定)");
+  console.error("  --notes=<text>        : notes 列に書き込む追加文字列 (PDF ページ番号は常に併記)");
   process.exit(1);
 }
 const pdfPath = args[0];
 const positional = args.slice(1).filter((a) => !a.startsWith("--"));
-const flags = new Set(args.slice(1).filter((a) => a.startsWith("--")));
+const flagArgs = args.slice(1).filter((a) => a.startsWith("--"));
+const flags = new Set(flagArgs.filter((a) => !a.includes("=")));
+const kwargs = Object.fromEntries(
+  flagArgs
+    .filter((a) => a.includes("="))
+    .map((a) => {
+      const [k, ...rest] = a.replace(/^--/, "").split("=");
+      return [k, rest.join("=")];
+    }),
+);
 const outCsv = positional[0] ?? "service_codes.csv";
 const startPage = positional[1] ? Number(positional[1]) : 1;
 let endPage = positional[2] ? Number(positional[2]) : null;
 const zaitakuOnly = flags.has("--zaitaku-only");
+const validFrom = kwargs["valid-from"] ?? "2024-06-01"; // 令和6年6月改定 default
+const extraNotes = kwargs["notes"] ?? "";
+
+// validFrom 形式チェック
+if (!/^\d{4}-\d{2}-\d{2}$/.test(validFrom)) {
+  console.error(`--valid-from は YYYY-MM-DD 形式で指定: "${validFrom}"`);
+  process.exit(1);
+}
 
 // 在宅系 (居宅サービス + 居宅介護支援 + 介護予防 + 地域密着)
 const ZAITAKU_PREFIXES = new Set([
@@ -243,9 +262,9 @@ for (let pageNum = startPage; pageNum <= endPage; pageNum++) {
       units,
       unit_type: unitType,
       calculation_type: calcType,
-      valid_from: "",
+      valid_from: validFrom,
       valid_until: "",
-      notes: `PDF p.${pageNum}`,
+      notes: extraNotes ? `${extraNotes} / PDF p.${pageNum}` : `PDF p.${pageNum}`,
     });
     seen.add(fullCode);
   }
