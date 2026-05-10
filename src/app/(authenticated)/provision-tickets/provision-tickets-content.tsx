@@ -130,7 +130,25 @@ export function ProvisionTicketsContent({
   const { currentOfficeId, currentOffice } = useBusinessType();
 
   const [selectedMonth, setSelectedMonth] = useState(() => new Date());
-  const [userData] = useState<KaigoUser | null>(initialUser);
+  const [userData, setUserData] = useState<KaigoUser | null>(initialUser);
+
+  // Server-side で initialUser=null だった場合 (Server Component の RLS で空行) は
+  // client-side で再フェッチ。sidebar 側は client RLS で取れるので、こちらでも取れる想定。
+  useEffect(() => {
+    if (userData || !userId) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("clients")
+        .select("id, name, name_kana, care_level, insurer_no, insured_no")
+        .eq("id", userId)
+        .maybeSingle();
+      if (!cancelled && data) setUserData(data as KaigoUser);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, userData, supabase]);
   const [allStaff, setAllStaff] = useState<KaigoStaff[]>(initialStaff);
   const [serviceUnits] = useState<Record<string, number>>(initialServiceUnits);
   const [officeInfo] = useState<OfficeInfo | null>(initialOffice);
@@ -964,7 +982,7 @@ export function ProvisionTicketsContent({
                 </button>
                 <button
                   onClick={() => setShowSendModal(true)}
-                  disabled={!userData?.name || !currentOffice || monthlyActualCount === 0}
+                  disabled={!currentOffice || monthlyActualCount === 0}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   title={
                     monthlyActualCount === 0
@@ -1436,14 +1454,14 @@ export function ProvisionTicketsContent({
       )}
 
       {/* 居宅介護支援事業所への月次実績送信モーダル */}
-      {showSendModal && currentOffice && userData?.name && (
+      {showSendModal && currentOffice && (
         <SendDocumentModal
           tenantId={currentOffice.tenant_id}
-          client={{ id: userId, name: userData.name }}
+          client={{ id: userId, name: userData?.name ?? "利用者" }}
           sourceOfficeId={currentOffice.id}
           documentType="service_record_monthly"
           targetServiceTypes={["居宅介護支援"]}
-          title={`${format(selectedMonth, "yyyy年M月", { locale: ja })} サービス提供表（実績） - ${userData.name} 様`}
+          title={`${format(selectedMonth, "yyyy年M月", { locale: ja })} サービス提供表（実績） - ${userData?.name ?? "利用者"} 様`}
           getHtmlSnapshot={() =>
             document.getElementById("provision-ticket-print")?.outerHTML ?? ""
           }
