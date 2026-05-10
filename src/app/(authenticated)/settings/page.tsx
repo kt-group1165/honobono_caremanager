@@ -453,34 +453,60 @@ function OfficeSwitcher() {
         <br />
         <span className="text-gray-400">※ 事業種別を変更したい場合は「マスタ管理 → 自事業所管理」で事業所ごとに設定してください。</span>
       </p>
-      <div className="space-y-2">
-        {offices.map((o) => {
-          const isCurrent = o.id === currentOfficeId;
-          return (
-            <label
-              key={o.id}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all ${
-                isCurrent ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:bg-gray-50"
-              }`}
-            >
-              <input
-                type="radio"
-                name="office"
-                checked={isCurrent}
-                onChange={() => setCurrentOfficeId(o.id)}
-                className="accent-blue-600"
-              />
-              <div className="flex-1">
-                <div className="text-sm font-semibold text-gray-900">{o.name || "(名称未設定)"}</div>
-                <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500">
-                  <span className="inline-block px-2 py-0.5 rounded-full bg-gray-100">{typeLabel(o.service_type)}</span>
-                  {o.business_number && <span>事業所番号: {o.business_number}</span>}
-                  {!o.is_active && <span className="text-red-500">停止中</span>}
+      {/* service_type 別にグループ化 */}
+      <div className="space-y-4">
+        {(() => {
+          // 表示順序: 居宅介護支援 → 訪問介護 → 訪問入浴 → 訪問看護 → その他
+          const groupOrder: string[] = ["居宅介護支援", "訪問介護", "訪問入浴", "訪問看護"];
+          const grouped = new Map<string, typeof offices>();
+          for (const o of offices) {
+            const key = o.service_type ?? "その他";
+            if (!grouped.has(key)) grouped.set(key, []);
+            grouped.get(key)!.push(o);
+          }
+          const orderedKeys = [
+            ...groupOrder.filter((k) => grouped.has(k)),
+            ...Array.from(grouped.keys()).filter((k) => !groupOrder.includes(k)),
+          ];
+          return orderedKeys.map((typeKey) => {
+            const list = grouped.get(typeKey) ?? [];
+            return (
+              <section key={typeKey}>
+                <h3 className="text-xs font-semibold text-gray-500 mb-1.5 px-1">
+                  {typeLabel(typeKey)}事業所 <span className="text-gray-400">({list.length})</span>
+                </h3>
+                <div className="space-y-2">
+                  {list.map((o) => {
+                    const isCurrent = o.id === currentOfficeId;
+                    return (
+                      <label
+                        key={o.id}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all ${
+                          isCurrent ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:bg-gray-50"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="office"
+                          checked={isCurrent}
+                          onChange={() => setCurrentOfficeId(o.id)}
+                          className="accent-blue-600"
+                        />
+                        <div className="flex-1">
+                          <div className="text-sm font-semibold text-gray-900">{o.name || "(名称未設定)"}</div>
+                          <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500">
+                            {o.business_number && <span>事業所番号: {o.business_number}</span>}
+                            {!o.is_active && <span className="text-red-500">停止中</span>}
+                          </div>
+                        </div>
+                      </label>
+                    );
+                  })}
                 </div>
-              </div>
-            </label>
-          );
-        })}
+              </section>
+            );
+          });
+        })()}
       </div>
       {currentOffice && (
         <div className="mt-4 pt-3 border-t">
