@@ -358,7 +358,9 @@ function planToForm(p: CarePlan): FormState {
 
 export function CarePlanContent({ userId, initialPlans }: CarePlanContentProps) {
   const supabase = useMemo(() => createClient(), []);
-  const { currentOfficeId } = useBusinessType();
+  const { currentOfficeId, businessType } = useBusinessType();
+  // 居宅介護支援以外 (訪問介護/通所介護等) は編集不可、受信ケアプランの閲覧のみ
+  const isCareManagerSide = businessType === "居宅介護支援";
   const [plans, setPlans] = useState<CarePlan[]>(initialPlans);
   const [selectedId, setSelectedId] = useState<string | null>(initialPlans[0]?.id ?? null);
   const [form, setForm] = useState<FormState>(
@@ -490,9 +492,12 @@ export function CarePlanContent({ userId, initialPlans }: CarePlanContentProps) 
 
   return (
     <div className="space-y-4">
-      {/* 受信ケアプラン (居宅 → 自事業所) */}
+      {/* 受信ケアプラン (居宅 → 自事業所) — 全 mode で表示 */}
       <ReceivedCarePlansPanel clientId={userId} targetOfficeId={currentOfficeId} />
 
+      {/* 以下は居宅介護支援 mode でのみ表示 (訪問介護等は閲覧 only) */}
+      {!isCareManagerSide ? null : (
+      <>
       {/* プラン一覧 + 新規作成 */}
       <div className="rounded-lg border bg-white shadow-sm">
         <div className="flex items-center justify-between border-b px-4 py-3">
@@ -677,6 +682,8 @@ export function CarePlanContent({ userId, initialPlans }: CarePlanContentProps) 
           })}
         </ul>
       </div>
+      </>
+      )}
     </div>
   );
 }
