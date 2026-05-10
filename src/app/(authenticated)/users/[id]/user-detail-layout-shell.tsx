@@ -33,11 +33,15 @@ const INSURANCE_TABS: SubTab[] = [
   { label: "医療保険", href: "/medical" },
 ];
 
+const CARE_PLAN_TABS: SubTab[] = [
+  { label: "計画概要", href: "/care-plan" },
+];
+
 const DISABILITY_TABS: SubTab[] = [
   { label: "障害情報", href: "/disability" },
 ];
 
-type MainTab = "basic" | "insurance" | "disability";
+type MainTab = "basic" | "insurance" | "carePlan" | "disability";
 
 const STATUS_LABELS: Record<string, string> = {
   active: "在籍中",
@@ -346,16 +350,20 @@ export function UserDetailLayoutShell({
   // 現在選択されているメイン分類を判定
   const activeMainTab: MainTab = DISABILITY_TABS.some((t) => t.href === currentSubHref)
     ? "disability"
-    : INSURANCE_TABS.some((t) => t.href === currentSubHref)
-      ? "insurance"
-      : "basic";
+    : CARE_PLAN_TABS.some((t) => t.href === currentSubHref)
+      ? "carePlan"
+      : INSURANCE_TABS.some((t) => t.href === currentSubHref)
+        ? "insurance"
+        : "basic";
 
   const currentSubs =
     activeMainTab === "basic"
       ? BASIC_TABS
       : activeMainTab === "insurance"
         ? INSURANCE_TABS
-        : DISABILITY_TABS;
+        : activeMainTab === "carePlan"
+          ? CARE_PLAN_TABS
+          : DISABILITY_TABS;
 
   return (
     <div className="flex h-full -m-6">
@@ -446,6 +454,7 @@ export function UserDetailLayoutShell({
             {([
               { id: "basic" as const, label: "基本情報", defaultHref: "" },
               { id: "insurance" as const, label: "介護保険", defaultHref: "/care-cert" },
+              { id: "carePlan" as const, label: "ケアプラン管理", defaultHref: "/care-plan" },
               ...(initialHasDisabilityService || activeMainTab === "disability"
                 ? [{ id: "disability" as const, label: "障害", defaultHref: "/disability" }]
                 : []),
