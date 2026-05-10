@@ -68,7 +68,9 @@ console.error(`PDF: ${doc.numPages} pages, extracting ${startPage}-${endPage}`);
 // ─── pattern を判定するための regex ───────────────────────────────────────────
 const RE_CATEGORY_PREFIX = /^\d{2}$/; // "11", "13", ...
 const RE_CODE_SUFFIX = /^[0-9A-HJ-NPR-Z]{4}$/; // "4845", "B401", "A001" (I/O/Q 除く)
-const RE_INTEGER = /^\d{1,5}$/; // 単位数
+// 単位数 (カンマ区切り対応: "1,086" / "10,830" 等)
+const RE_INTEGER = /^\d{1,3}(,\d{3})+$|^\d{1,6}$/;
+const parseUnits = (s) => Number(String(s).replace(/,/g, ""));
 const RE_HEADING_CATEGORY = /^[０-９0-9]+\s*[一-鿿].*サービスコード表$/; // "１ 訪問介護サービスコード表"
 
 // 在宅系で扱う category prefix → category name (ヘッダー検出失敗時の fallback)
@@ -121,6 +123,8 @@ const CATEGORY_NAME_BY_CODE = {
 const records = [];
 const seen = new Set(); // service_code dedupe (PDF 内に同一コードが何度か出ても 1 行に)
 let currentCategoryName = null;
+// service_category 別「最後に確定した unit_type」(派生行の unit_type 省略時 fallback 用)
+const lastUnitTypeByCat = {};
 
 for (let pageNum = startPage; pageNum <= endPage; pageNum++) {
   const page = await doc.getPage(pageNum);
@@ -187,35 +191,34 @@ for (let pageNum = startPage; pageNum <= endPage; pageNum++) {
 
     // 単位数: 末尾に近い integer を探す。最後から逆順に走査して最初に当たった integer を採用。
     // ただし末尾は "1回につき" のような日本語が多いので、その手前の integer を探す。
+    // PDF はカンマ区切り ("1,086") もあるので RE_INTEGER がそれを許容する。
     let units = 0;
     for (let i = trimmed.length - 1; i >= 3; i--) {
       const v = trimmed[i];
       if (RE_INTEGER.test(v)) {
-        const n = Number(v);
-        // 1〜30000 の範囲内を単位数候補とする (年や%は除外: 200% など)
-        if (n >= 1 && n <= 30000) {
+        const n = parseUnits(v);
+        // 1〜100000 の範囲内を単位数候補とする (年や%は除外: 200% など)
+        if (n >= 1 && n <= 100000) {
           units = n;
           break;
         }
       }
     }
 
-    // unit_type: 末尾項目に "1回につき" / "1日につき" / "1月につき" のいずれかがあれば採用
-    let unitType = "1回につき";
+    // unit_type: 末尾項目に "1回につき" / "1日につき" / "1月につき" のいずれかがあれば採用。
+    // PDF は最初の行にだけ単位を書いて以後省略するパターンが多いので、
+    // 同じ service_category の「直前の確定 unit_type」を fallback として継承する。
+    let unitType = null;
     for (let i = trimmed.length - 1; i >= 0; i--) {
       const v = trimmed[i];
-      if (v.includes("1回につき") || v === "1回につき") {
-        unitType = "1回につき";
-        break;
-      }
-      if (v.includes("1日につき") || v === "1日につき") {
-        unitType = "1日につき";
-        break;
-      }
-      if (v.includes("1月につき") || v === "1月につき") {
-        unitType = "1月につき";
-        break;
-      }
+      if (v.includes("1回につき")) { unitType = "1回につき"; break; }
+      if (v.includes("1日につき")) { unitType = "1日につき"; break; }
+      if (v.includes("1月につき")) { unitType = "1月につき"; break; }
+    }
+    if (!unitType) {
+      unitType = lastUnitTypeByCat[cat] ?? "1回につき";
+    } else {
+      lastUnitTypeByCat[cat] = unitType;
     }
 
     // calculation_type: 行内に "加算" / "減算" のリテラルがあるか
