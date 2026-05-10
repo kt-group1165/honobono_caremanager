@@ -17,7 +17,9 @@ import {
   Clock as ClockIcon,
   Download,
   Upload,
+  Send,
 } from "lucide-react";
+import { SendDocumentModal } from "@/components/shared/SendDocumentModal";
 import {
   format,
   getDaysInMonth,
@@ -125,7 +127,7 @@ export function ProvisionTicketsContent({
   initialGrid,
 }: ProvisionTicketsContentProps) {
   const supabase = useMemo(() => createClient(), []);
-  const { currentOfficeId } = useBusinessType();
+  const { currentOfficeId, currentOffice } = useBusinessType();
 
   const [selectedMonth, setSelectedMonth] = useState(() => new Date());
   const [userData] = useState<KaigoUser | null>(initialUser);
@@ -144,6 +146,7 @@ export function ProvisionTicketsContent({
   const [isDirty, setIsDirty] = useState(false);
 
   const [showAddRow, setShowAddRow] = useState(false);
+  const [showSendModal, setShowSendModal] = useState(false);
   const [addRowForm, setAddRowForm] = useState({ start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", staff_id: "" });
   const [showAddServiceSelector, setShowAddServiceSelector] = useState(false);
   const [editRowKey, setEditRowKey] = useState<string | null>(null);
@@ -603,6 +606,60 @@ export function ProvisionTicketsContent({
   const totalPlannedUnits = useMemo(() => unitSummary.reduce((s, r) => s + r.plannedUnits, 0), [unitSummary]);
   const totalActualUnits = useMemo(() => unitSummary.reduce((s, r) => s + r.actualUnits, 0), [unitSummary]);
 
+  // ── 月次実績 payload (居宅介護支援への送付用) ─────────────────────────────
+  // grid 上の actual=true セルを 1 record とし、(date, start_time) で重複判定可能な
+  // shape で出力。受信側 (notifications/document/[id]) は date+start_time で diff key 化する。
+  const monthlyPayload = useMemo(() => {
+    const items: {
+      date: string;
+      start_time: string | null;
+      end_time: string | null;
+      service_category: string;
+      service_content: string;
+      provider_name: string;
+      duration_minutes: number | null;
+    }[] = [];
+    for (const row of serviceRows) {
+      const rowGrid = grid[row.key] || {};
+      for (const day of days) {
+        const cell = rowGrid[day];
+        if (!cell?.actual) continue;
+        const dateStr = `${monthStr}-${String(day).padStart(2, "0")}`;
+        const [sh, sm] = (row.start_time || "").split(":").map(Number);
+        const [eh, em] = (row.end_time || "").split(":").map(Number);
+        const dur =
+          [sh, sm, eh, em].some((n) => Number.isNaN(n))
+            ? null
+            : Math.max(0, (eh * 60 + em) - (sh * 60 + sm)) || null;
+        items.push({
+          date: dateStr,
+          start_time: row.start_time || null,
+          end_time: row.end_time || null,
+          service_category: row.service_type,
+          service_content: row.service_type,
+          provider_name: row.staff_name ?? "",
+          duration_minutes: dur,
+        });
+      }
+    }
+    // 日付 + 開始時刻 昇順
+    items.sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+      const at = a.start_time ?? "";
+      const bt = b.start_time ?? "";
+      return at < bt ? -1 : at > bt ? 1 : 0;
+    });
+    return {
+      service_type: "サービス提供表（実績）" as const,
+      year_month: monthStr,
+      client_id: userId,
+      client_name: userData?.name ?? "",
+      records: items,
+    };
+  }, [serviceRows, grid, days, monthStr, userId, userData]);
+
+  const monthlyActualCount = monthlyPayload.records.length;
+
   // ── Print ──────────────────────────────────────────────────────────────────
   const handlePrint = () => window.print();
 
@@ -904,6 +961,24 @@ export function ProvisionTicketsContent({
                 >
                   <Download size={14} />
                   CSV出力
+                </button>
+                <button
+                  onClick={() => setShowSendModal(true)}
+                  disabled={!userData?.name || !currentOffice || monthlyActualCount === 0}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={
+                    monthlyActualCount === 0
+                      ? "実績が入力されていません"
+                      : !currentOffice
+                        ? "事業所が選択されていません"
+                        : "居宅介護支援事業所へ月次実績を送付"
+                  }
+                >
+                  <Send size={14} />
+                  居宅事業所に実績送信
+                  <span className="ml-1 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
+                    {monthlyActualCount}件
+                  </span>
                 </button>
                 <button
                   onClick={handlePrint}
@@ -1358,6 +1433,28 @@ export function ProvisionTicketsContent({
             </div>
           </div>
         </div>
+      )}
+
+      {/* 居宅介護支援事業所への月次実績送信モーダル */}
+      {showSendModal && currentOffice && userData?.name && (
+        <SendDocumentModal
+          tenantId={currentOffice.tenant_id}
+          client={{ id: userId, name: userData.name }}
+          sourceOfficeId={currentOffice.id}
+          documentType="service_record_monthly"
+          targetServiceTypes={["居宅介護支援"]}
+          title={`${format(selectedMonth, "yyyy年M月", { locale: ja })} サービス提供表（実績） - ${userData.name} 様`}
+          getHtmlSnapshot={() =>
+            document.getElementById("provision-ticket-print")?.outerHTML ?? ""
+          }
+          payload={monthlyPayload as unknown as Record<string, unknown>}
+          onClose={() => setShowSendModal(false)}
+          onSuccess={() => {
+            setShowSendModal(false);
+            toast.success("月次実績を送付しました");
+          }}
+          onError={(msg) => toast.error("送付失敗: " + msg)}
+        />
       )}
     </>
   );
