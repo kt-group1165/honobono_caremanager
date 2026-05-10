@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
   UserPlus,
+  UserCheck,
   Pencil,
   Trash2,
   X,
@@ -110,6 +111,16 @@ export function StaffContent({
   const [inviteResult, setInviteResult] = useState<InviteResult | null>(null);
   const [copiedField, setCopiedField] = useState<"url" | "password" | null>(null);
 
+  // 既存職員を自事業所に追加 modal
+  const [addExistingOpen, setAddExistingOpen] = useState(false);
+  const [addExistingLoading, setAddExistingLoading] = useState(false);
+  const [addExistingSubmitting, setAddExistingSubmitting] = useState(false);
+  const [addCandidates, setAddCandidates] = useState<
+    Array<{ id: string; name: string; furigana: string | null; role: string | null; offices: string[] }>
+  >([]);
+  const [addSelectedIds, setAddSelectedIds] = useState<Set<string>>(new Set());
+  const [addSearchQuery, setAddSearchQuery] = useState("");
+
   const fetchStaff = useCallback(async () => {
     if (!currentOfficeId) {
       setStaffList([]);
@@ -203,6 +214,114 @@ export function StaffContent({
       setInviting(false);
     }
   };
+
+  // ── 既存職員を自事業所に追加 ──────────────────────────────────────────
+  const openAddExisting = async () => {
+    if (!currentOffice || !currentOfficeId) {
+      toast.error("自事業所が選択されていません");
+      return;
+    }
+    setAddSelectedIds(new Set());
+    setAddSearchQuery("");
+    setAddExistingOpen(true);
+    setAddExistingLoading(true);
+    try {
+      // 同 tenant の active members を全件取得 (既存 member_offices も embed)
+      const { data: members, error } = await supabase
+        .from("members")
+        .select("id, name, furigana, role, status, member_offices(office_id)")
+        .eq("tenant_id", currentOffice.tenant_id)
+        .eq("status", "active")
+        .order("furigana", { nullsFirst: false });
+      if (error) throw error;
+
+      // office_id → name map (label 用)
+      const allOfficeIds = new Set<string>();
+      type MemberRow = {
+        id: string;
+        name: string;
+        furigana: string | null;
+        role: string | null;
+        member_offices: Array<{ office_id: string }> | null;
+      };
+      for (const m of (members ?? []) as MemberRow[]) {
+        for (const mo of m.member_offices ?? []) {
+          allOfficeIds.add(mo.office_id);
+        }
+      }
+      let officeNameMap = new Map<string, string>();
+      if (allOfficeIds.size > 0) {
+        const { data: offs } = await supabase
+          .from("offices")
+          .select("id, name")
+          .in("id", Array.from(allOfficeIds));
+        officeNameMap = new Map(
+          ((offs ?? []) as Array<{ id: string; name: string }>).map((o) => [o.id, o.name]),
+        );
+      }
+
+      // 自事業所 (currentOfficeId) に既に紐付いてる member は除外
+      const candidates = ((members ?? []) as MemberRow[])
+        .filter(
+          (m) => !(m.member_offices ?? []).some((mo) => mo.office_id === currentOfficeId),
+        )
+        .map((m) => ({
+          id: m.id,
+          name: m.name,
+          furigana: m.furigana,
+          role: m.role,
+          offices: (m.member_offices ?? [])
+            .map((mo) => officeNameMap.get(mo.office_id) ?? "")
+            .filter(Boolean),
+        }));
+      setAddCandidates(candidates);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error("候補の取得に失敗しました: " + msg);
+    } finally {
+      setAddExistingLoading(false);
+    }
+  };
+
+  const handleAddExistingSubmit = async () => {
+    if (!currentOfficeId) return;
+    if (addSelectedIds.size === 0) {
+      toast.error("追加する職員を選択してください");
+      return;
+    }
+    setAddExistingSubmitting(true);
+    try {
+      const rows = Array.from(addSelectedIds).map((member_id) => ({
+        member_id,
+        office_id: currentOfficeId,
+        is_primary: false, // 兼務扱い (既存 primary を奪わない)
+      }));
+      const { error } = await supabase
+        .from("member_offices")
+        .upsert(rows, { onConflict: "member_id,office_id", ignoreDuplicates: true });
+      if (error) throw error;
+      toast.success(`${addSelectedIds.size} 名を自事業所に追加しました`);
+      setAddExistingOpen(false);
+      await fetchStaff();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error("追加に失敗しました: " + msg);
+    } finally {
+      setAddExistingSubmitting(false);
+    }
+  };
+
+  const filteredAddCandidates = useMemo(() => {
+    const q = addSearchQuery.trim().toLowerCase();
+    if (!q) return addCandidates;
+    return addCandidates.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.furigana ?? "").toLowerCase().includes(q) ||
+        (c.role ?? "").toLowerCase().includes(q) ||
+        c.offices.some((o) => o.toLowerCase().includes(q)),
+    );
+  }, [addCandidates, addSearchQuery]);
 
   const copyToClipboard = async (text: string, field: "url" | "password") => {
     try {
@@ -329,13 +448,23 @@ export function StaffContent({
             {tenantStaff.length}名
           </span>
         </div>
-        <button
-          onClick={openInviteDialog}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-        >
-          <UserPlus size={16} />
-          招待発行
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openAddExisting}
+            className="flex items-center gap-2 rounded-lg border border-blue-600 bg-white px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 transition-colors"
+            title="同じテナントの既存職員を自事業所に兼務として追加"
+          >
+            <UserCheck size={16} />
+            既存職員を追加
+          </button>
+          <button
+            onClick={openInviteDialog}
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          >
+            <UserPlus size={16} />
+            招待発行
+          </button>
+        </div>
       </div>
 
       {/* Search + 退職者 toggle */}
@@ -619,6 +748,155 @@ export function StaffContent({
               >
                 {saving && <Loader2 size={14} className="animate-spin" />}
                 削除する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Existing Members Dialog (既存職員を自事業所に追加) */}
+      {addExistingOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => !addExistingSubmitting && setAddExistingOpen(false)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b px-6 py-4">
+              <div>
+                <h2 className="text-base font-semibold text-gray-800">既存職員を自事業所に追加</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {currentOffice?.name} に兼務として追加します。既存の主所属は維持されます。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => !addExistingSubmitting && setAddExistingOpen(false)}
+                disabled={addExistingSubmitting}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="px-6 py-3 border-b">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="氏名・ふりがな・職種・所属事業所で検索"
+                  value={addSearchQuery}
+                  onChange={(e) => setAddSearchQuery(e.target.value)}
+                  className="w-full rounded-lg border pl-9 pr-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                <span>
+                  選択 {addSelectedIds.size} 名 / 候補 {filteredAddCandidates.length} 名
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAddSelectedIds(new Set(filteredAddCandidates.map((c) => c.id)))}
+                    className="rounded border border-gray-200 bg-white px-2 py-0.5 hover:bg-gray-50"
+                  >
+                    全選択
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAddSelectedIds(new Set())}
+                    className="rounded border border-gray-200 bg-white px-2 py-0.5 hover:bg-gray-50"
+                  >
+                    全解除
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {addExistingLoading ? (
+                <div className="flex items-center justify-center py-12 text-gray-500">
+                  <Loader2 size={20} className="mr-2 animate-spin" />
+                  候補読込中...
+                </div>
+              ) : filteredAddCandidates.length === 0 ? (
+                <div className="text-center text-sm text-gray-400 py-12">
+                  追加可能な職員がありません
+                  <div className="mt-1 text-[11px] text-gray-400">
+                    (同 tenant の active 職員のうち、自事業所未紐付けの者が候補)
+                  </div>
+                </div>
+              ) : (
+                <ul className="divide-y">
+                  {filteredAddCandidates.map((c) => {
+                    const checked = addSelectedIds.has(c.id);
+                    return (
+                      <li key={c.id}>
+                        <label
+                          className={`flex items-center gap-3 px-6 py-2.5 cursor-pointer hover:bg-gray-50 ${
+                            checked ? "bg-blue-50/50" : ""
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              setAddSelectedIds((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) next.add(c.id);
+                                else next.delete(c.id);
+                                return next;
+                              });
+                            }}
+                            className="accent-blue-600"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-gray-800">{c.name}</span>
+                              {c.furigana && (
+                                <span className="text-[11px] text-gray-400">({c.furigana})</span>
+                              )}
+                              {c.role && (
+                                <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">
+                                  {c.role}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-gray-500 truncate mt-0.5">
+                              {c.offices.length > 0
+                                ? `所属: ${c.offices.join(" / ")}`
+                                : "所属事業所なし"}
+                            </div>
+                          </div>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t px-6 py-4 bg-gray-50 rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => !addExistingSubmitting && setAddExistingOpen(false)}
+                disabled={addExistingSubmitting}
+                className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleAddExistingSubmit}
+                disabled={addExistingSubmitting || addSelectedIds.size === 0}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {addExistingSubmitting ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <UserCheck size={14} />
+                )}
+                {addSelectedIds.size} 名 追加
               </button>
             </div>
           </div>
