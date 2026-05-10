@@ -148,7 +148,13 @@ export function ServiceCodesContent({
   const [filterCategory, setFilterCategory] = useState("");
   const [filterCalcType, setFilterCalcType] = useState("");
   const [searchText, setSearchText] = useState("");
-  const [filterActiveAt, setFilterActiveAt] = useState<string>(""); // "" = 全件, "YYYY-MM-DD" = その日付で有効な行のみ
+  // 適用日フィルタ: default は本日 (= 「今有効」な行のみ表示。15K 行を全件描画すると遅いため)
+  const [filterActiveAt, setFilterActiveAt] = useState<string>(() =>
+    new Date().toISOString().split("T")[0],
+  );
+
+  // 表示上限 (DOM 過負荷を避けるため。超える分は絞り込みを促す)
+  const DISPLAY_LIMIT = 500;
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -223,6 +229,13 @@ export function ServiceCodesContent({
       return true;
     });
   }, [records, filterCategory, filterCalcType, searchText, filterActiveAt]);
+
+  // 表示用 (DOM 数を抑えるため上限まで)
+  const displayedSliced = useMemo(
+    () => displayed.slice(0, DISPLAY_LIMIT),
+    [displayed],
+  );
+  const truncated = displayed.length > DISPLAY_LIMIT;
 
   // ─── Form helpers ────────────────────────────────────────────────────────────
 
@@ -757,6 +770,12 @@ export function ServiceCodesContent({
 
       {/* ── Table ── */}
       <div className="px-6 py-4">
+        {truncated && (
+          <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            該当 {displayed.length.toLocaleString("ja-JP")} 件中、先頭 {DISPLAY_LIMIT} 件のみ表示中。
+            検索やカテゴリ/適用日フィルタで絞り込んでください。
+          </div>
+        )}
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
           {loading ? (
             <div className="flex items-center justify-center py-16">
@@ -800,7 +819,7 @@ export function ServiceCodesContent({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {displayed.map((record) => (
+                  {displayedSliced.map((record) => (
                     <tr
                       key={record.id}
                       className="hover:bg-gray-50 transition-colors"
