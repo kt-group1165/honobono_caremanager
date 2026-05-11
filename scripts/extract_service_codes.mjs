@@ -236,10 +236,17 @@ for (let pageNum = startPage; pageNum <= endPage; pageNum++) {
   // ─── 行ごとに service-code 候補を組み立て
   // 同 y にある items を x 順にソート → [cat, code, name, ..., units, unit_type] のパターンを抽出
   const sortedRows = [...rows.entries()].sort((a, b) => b[0] - a[0]); // y 降順 = 上から下
+  // 単位列の x 位置: PDF レイアウト上 単位数は右側 (x≈490-510) に並ぶ。
+  // 本文中の数値 (例「567 単位 ＋」) を誤拾いしないために x の閾値を設定。
+  const UNIT_COLUMN_MIN_X = 470;
   for (const [, lineItems] of sortedRows) {
     lineItems.sort((a, b) => a.x - b.x);
-    const trimmed = lineItems.map((it) => it.str.trim()).filter(Boolean);
-    if (trimmed.length < 4) continue;
+    // x 情報を保持したまま処理
+    const positioned = lineItems
+      .map((it) => ({ str: it.str.trim(), x: it.x }))
+      .filter((it) => it.str);
+    if (positioned.length < 4) continue;
+    const trimmed = positioned.map((it) => it.str);
 
     // pattern: 最初の 2 個が "{2桁}{4桁英数}" なら service-code 行
     const cat = trimmed[0];
@@ -254,15 +261,15 @@ for (let pageNum = startPage; pageNum <= endPage; pageNum++) {
     const nameRaw = trimmed[2];
     if (!nameRaw || /^\d/.test(nameRaw)) continue; // 数字始まりは名前ではない
 
-    // 単位数: 末尾に近い integer を探す。最後から逆順に走査して最初に当たった integer を採用。
-    // ただし末尾は "1回につき" のような日本語が多いので、その手前の integer を探す。
-    // PDF はカンマ区切り ("1,086") もあるので RE_INTEGER がそれを許容する。
+    // 単位数:
+    //   1) 「単位列 (x >= UNIT_COLUMN_MIN_X) の中で末尾の integer」を最優先
+    //   2) 見つからなければ 0 (本文中の数値を誤拾いしない)
     let units = 0;
-    for (let i = trimmed.length - 1; i >= 3; i--) {
-      const v = trimmed[i];
-      if (RE_INTEGER.test(v)) {
-        const n = parseUnits(v);
-        // 1〜100000 の範囲内を単位数候補とする (年や%は除外: 200% など)
+    for (let i = positioned.length - 1; i >= 3; i--) {
+      const v = positioned[i];
+      if (v.x < UNIT_COLUMN_MIN_X) continue; // 本文中の数値は無視
+      if (RE_INTEGER.test(v.str)) {
+        const n = parseUnits(v.str);
         if (n >= 1 && n <= 100000) {
           units = n;
           break;
