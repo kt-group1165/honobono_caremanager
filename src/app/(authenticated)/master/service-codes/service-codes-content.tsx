@@ -341,18 +341,22 @@ export function ServiceCodesContent({
   }, [formData.system]);
 
   // フィルタ用カテゴリ候補 (filterSystem 指定時はその system のもののみ、未指定なら全 system union)
+  // 全制度モードでは同じ category prefix が制度で被る (例: 12 = 介護 訪問入浴 / 障害 重度訪問介護) ので、
+  // option value に "system|category" の複合 key を入れて区別する。
   const filterCategoryOptions = useMemo(() => {
-    if (filterSystem) return CATEGORIES_BY_SYSTEM[filterSystem];
-    // union
-    const seen = new Set<string>();
+    if (filterSystem) {
+      return CATEGORIES_BY_SYSTEM[filterSystem].map((c) => ({
+        value: c.value, // system 確定 = bare category value で OK
+        label: c.label,
+      }));
+    }
     const out: { value: string; label: string }[] = [];
     for (const s of ["介護", "障害", "総合事業"] as ServiceSystem[]) {
       for (const c of CATEGORIES_BY_SYSTEM[s]) {
-        const key = `${s}_${c.value}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          out.push({ value: c.value, label: `[${s === "介護" ? "介" : s === "障害" ? "障" : "総"}] ${c.label}` });
-        }
+        out.push({
+          value: `${s}|${c.value}`, // "障害|12" で衝突回避
+          label: `[${s === "介護" ? "介" : s === "障害" ? "障" : "総"}] ${c.label}`,
+        });
       }
     }
     return out;
@@ -850,9 +854,24 @@ export function ServiceCodesContent({
           </select>
 
           {/* Service category — system に応じて切替 */}
+          {/* 全制度モードでは option value = "{system}|{category}" (衝突回避)。選択時に system も自動セット */}
           <select
             value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (!v) {
+                setFilterCategory("");
+                return;
+              }
+              if (v.includes("|")) {
+                const [sys, cat] = v.split("|");
+                // system を確定 → category select の option も次回 render で bare value に
+                setFilterSystem(sys as ServiceSystem);
+                setFilterCategory(cat);
+              } else {
+                setFilterCategory(v);
+              }
+            }}
             className="text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           >
             <option value="">全て（種類）</option>
