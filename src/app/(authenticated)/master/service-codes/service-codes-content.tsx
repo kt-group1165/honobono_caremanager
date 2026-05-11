@@ -211,14 +211,18 @@ const EMPTY_FORM: FormData = {
 export function ServiceCodesContent({
   initialRecords,
   initialSystem = "介護",
+  initialTotalCount = 0,
 }: {
   initialRecords: ServiceCode[];
   /** Server-side で既に fetch 済みの system ('' = 全制度=all モード) */
   initialSystem?: "" | ServiceSystem;
+  /** 当該フィルタでの DB 上の件数 (limit 2000 を超える時の警告用) */
+  initialTotalCount?: number;
 }) {
   const supabase = useMemo(() => createClient(), []);
 
   const [records, setRecords] = useState<ServiceCode[]>(initialRecords);
+  const [totalCount, setTotalCount] = useState<number>(initialTotalCount);
   const [loading, setLoading] = useState(false);
   // filterSystem = server-side で fetch する制度。"" = 全制度 (重い)。
   const [filterSystem, setFilterSystem] = useState<"" | ServiceSystem>(initialSystem);
@@ -261,30 +265,39 @@ export function ServiceCodesContent({
 
   // ─── Data fetch (refetch after CRUD) ────────────────────────────────────────
 
-  const fetchRecords = useCallback(async () => {
+  // ─── Server-side filter で fetch (page-loop 廃止, limit 2000) ─────────────
+  // 全フィルタ (system / category / calc_type / search / 適用日) を WHERE で絞り、
+  // 1 クエリで完結。limit を超えた件数は totalCount で警告表示。
+  const fetchRecords = useCallback(async (): Promise<void> => {
     setLoading(true);
     try {
-      // PostgREST default 1000 行制限を避けるため page-loop で取得。
-      // 現 filterSystem で server-side 絞込 ('' = 全制度)。
-      const PAGE = 1000;
-      const all: ServiceCode[] = [];
-      let from = 0;
-      for (;;) {
-        let q = supabase
-          .from("kaigo_service_codes")
-          .select("*")
-          .order("service_category", { ascending: true })
-          .order("service_code", { ascending: true })
-          .range(from, from + PAGE - 1);
-        if (filterSystem) q = q.eq("system", filterSystem);
-        const { data, error } = await q;
-        if (error) throw error;
-        const rows = (data ?? []) as ServiceCode[];
-        all.push(...rows);
-        if (rows.length < PAGE) break;
-        from += PAGE;
+      let q = supabase
+        .from("kaigo_service_codes")
+        .select("*", { count: "exact" })
+        .order("system", { ascending: true })
+        .order("service_category", { ascending: true })
+        .order("service_code", { ascending: true })
+        .limit(2000);
+      if (filterSystem) q = q.eq("system", filterSystem);
+      if (filterCategory) q = q.eq("service_category", filterCategory);
+      if (filterCalcType) q = q.eq("calculation_type", filterCalcType);
+      if (filterActiveAt) {
+        q = q
+          .lte("valid_from", filterActiveAt)
+          .or(`valid_until.is.null,valid_until.gte.${filterActiveAt}`);
       }
-      setRecords(all);
+      // 検索: service_code or service_name の部分一致 (ilike)
+      const st = searchText.trim();
+      if (st) {
+        const escaped = st.replace(/[%_]/g, "\\$&");
+        q = q.or(
+          `service_code.ilike.%${escaped}%,service_name.ilike.%${escaped}%`,
+        );
+      }
+      const { data, count, error } = await q;
+      if (error) throw error;
+      setRecords((data ?? []) as ServiceCode[]);
+      setTotalCount(count ?? (data ?? []).length);
     } catch (err: unknown) {
       toast.error(
         "データの取得に失敗しました: " +
@@ -293,45 +306,34 @@ export function ServiceCodesContent({
     } finally {
       setLoading(false);
     }
-  }, [supabase, filterSystem]);
+  }, [supabase, filterSystem, filterCategory, filterCalcType, searchText, filterActiveAt]);
 
-  // ─── filterSystem 変更時に server-side で再 fetch (初回 mount は除く) ─────
+  // ─── Filter 変更時に server-side で再 fetch (初回 mount は除く) ──────────
+  // searchText は 300ms debounce で連打を抑制。
   const isInitialMount = useRef(true);
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
       return;
     }
-    fetchRecords();
-    // URL も同期 (リロード時に同じ system を維持)
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      if (filterSystem) {
-        url.searchParams.set("system", filterSystem);
-      } else {
-        url.searchParams.set("system", "all");
-      }
-      window.history.replaceState(null, "", url.toString());
-    }
-  }, [filterSystem, fetchRecords]);
+    const t = setTimeout(() => {
+      fetchRecords();
+    }, 300);
+    return () => clearTimeout(t);
+  }, [fetchRecords]);
+
+  // ─── filterSystem 変更時に URL を同期 ────────────────────────────────────
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("system", filterSystem || "all");
+    window.history.replaceState(null, "", url.toString());
+  }, [filterSystem]);
 
   // ─── In-memory filtering (records は全件、filter は client 側) ───────────────
 
-  const displayed = useMemo(() => {
-    const q = searchText.trim().toLowerCase();
-    return records.filter((r) => {
-      if (filterSystem && r.system !== filterSystem) return false;
-      if (filterCategory && r.service_category !== filterCategory) return false;
-      if (filterCalcType && r.calculation_type !== filterCalcType) return false;
-      if (q && !r.service_code.toLowerCase().includes(q) && !r.service_name.toLowerCase().includes(q)) return false;
-      // 適用日フィルタ: 指定日に有効な行のみ (valid_from <= D AND (valid_until IS NULL OR valid_until >= D))
-      if (filterActiveAt) {
-        if (r.valid_from && r.valid_from > filterActiveAt) return false;
-        if (r.valid_until && r.valid_until < filterActiveAt) return false;
-      }
-      return true;
-    });
-  }, [records, filterSystem, filterCategory, filterCalcType, searchText, filterActiveAt]);
+  // 全フィルタは server-side で適用済み。records をそのまま表示。
+  const displayed = records;
 
   // 編集中フォームの system に応じてカテゴリ候補を切り替え
   const formCategoryOptions = useMemo(() => {
@@ -361,7 +363,10 @@ export function ServiceCodesContent({
     () => displayed.slice(0, DISPLAY_LIMIT),
     [displayed],
   );
-  const truncated = displayed.length > DISPLAY_LIMIT;
+  // truncated は「DB 上の総件数 > server fetch limit (2000)」or「fetch 結果 > 表示 limit (500)」
+  const serverTruncated = totalCount > records.length;
+  const displayTruncated = displayed.length > DISPLAY_LIMIT;
+  const truncated = serverTruncated || displayTruncated;
 
   // ─── Form helpers ────────────────────────────────────────────────────────────
 
@@ -927,8 +932,19 @@ export function ServiceCodesContent({
       <div className="px-6 py-4">
         {truncated && (
           <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            該当 {displayed.length.toLocaleString("ja-JP")} 件中、先頭 {DISPLAY_LIMIT} 件のみ表示中。
-            検索やカテゴリ/適用日フィルタで絞り込んでください。
+            {serverTruncated ? (
+              <>
+                該当 <strong>{totalCount.toLocaleString("ja-JP")} 件</strong> 中、
+                <strong>先頭 {records.length.toLocaleString("ja-JP")} 件</strong> のみ取得しています
+                (残り {(totalCount - records.length).toLocaleString("ja-JP")} 件は未取得)。
+                検索や制度/カテゴリで絞り込んでください。
+              </>
+            ) : (
+              <>
+                取得済 {displayed.length.toLocaleString("ja-JP")} 件のうち、
+                先頭 {DISPLAY_LIMIT} 件のみ画面表示中。
+              </>
+            )}
           </div>
         )}
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
