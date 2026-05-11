@@ -18,8 +18,11 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export type ServiceSystem = "介護" | "障害" | "総合事業";
+
 export interface ServiceCode {
   id: string;
+  system: ServiceSystem;
   service_category: string;
   service_category_name: string;
   service_code: string;
@@ -34,10 +37,17 @@ export interface ServiceCode {
   updated_at: string;
 }
 
+const SERVICE_SYSTEMS: { value: ServiceSystem; label: string; color: string }[] = [
+  { value: "介護", label: "介護保険", color: "bg-blue-100 text-blue-700 border-blue-200" },
+  { value: "障害", label: "障害福祉", color: "bg-purple-100 text-purple-700 border-purple-200" },
+  { value: "総合事業", label: "総合事業", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+];
+
 type FormData = Omit<ServiceCode, "id" | "created_at" | "updated_at">;
 
 // CSV import 行 (検証済 = upsert 可能 / 検証失敗 = error 含む)
 interface ServiceCodeImportRow {
+  system: "介護" | "障害" | "総合事業";
   service_category: string;
   service_category_name: string;
   service_code: string;
@@ -55,18 +65,8 @@ interface ServiceCodeImportRow {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-// 在宅系 サービス種類区分 (令和6年度報酬改定 に基づく)
-// ─ 居宅サービス ─
-//   11 訪問介護 / 12 訪問入浴介護 / 13 訪問看護 / 14 訪問リハ
-//   15 通所介護 / 16 通所リハ
-//   17 福祉用具貸与 / 18 特定福祉用具販売
-//   21 短期入所生活介護 / 22 短期入所療養介護(老健) / 24 短期入所療養介護(医療院)
-//   31 居宅療養管理指導 / 32 定期巡回・随時対応型訪問介護看護
-//   33 夜間対応型訪問介護 / 36 認知症対応型通所介護 / 37 小規模多機能型居宅介護
-//   38 認知症対応型共同生活介護 / 73 看護小規模多機能型居宅介護
-// ─ 居宅介護支援 / 介護予防支援 ─
-//   43 居宅介護支援 / 46 介護予防支援
-const SERVICE_CATEGORIES: { value: string; label: string }[] = [
+// 介護保険 サービス種類区分 (令和6年度報酬改定 に基づく)
+const KAIGO_CATEGORIES: { value: string; label: string }[] = [
   { value: "11", label: "11:訪問介護" },
   { value: "12", label: "12:訪問入浴介護" },
   { value: "13", label: "13:訪問看護" },
@@ -77,7 +77,9 @@ const SERVICE_CATEGORIES: { value: string; label: string }[] = [
   { value: "18", label: "18:特定福祉用具販売" },
   { value: "21", label: "21:短期入所生活介護" },
   { value: "22", label: "22:短期入所療養介護(老健)" },
+  { value: "23", label: "23:短期入所療養介護(病院療養型)" },
   { value: "24", label: "24:短期入所療養介護(医療院)" },
+  { value: "27", label: "27:短期特定施設入居者生活介護" },
   { value: "31", label: "31:居宅療養管理指導" },
   { value: "32", label: "32:定期巡回・随時対応型訪問介護看護" },
   { value: "33", label: "33:夜間対応型訪問介護" },
@@ -89,27 +91,96 @@ const SERVICE_CATEGORIES: { value: string; label: string }[] = [
   { value: "73", label: "73:看護小規模多機能型居宅介護" },
 ];
 
-const CATEGORY_NAMES: Record<string, string> = {
-  "11": "訪問介護",
-  "12": "訪問入浴介護",
-  "13": "訪問看護",
-  "14": "訪問リハビリテーション",
-  "15": "通所介護",
-  "16": "通所リハビリテーション",
-  "17": "福祉用具貸与",
-  "18": "特定福祉用具販売",
-  "21": "短期入所生活介護",
-  "22": "短期入所療養介護(老健)",
-  "24": "短期入所療養介護(医療院)",
-  "31": "居宅療養管理指導",
-  "32": "定期巡回・随時対応型訪問介護看護",
-  "33": "夜間対応型訪問介護",
-  "36": "認知症対応型通所介護",
-  "37": "小規模多機能型居宅介護",
-  "38": "認知症対応型共同生活介護",
-  "43": "居宅介護支援",
-  "46": "介護予防支援",
-  "73": "看護小規模多機能型居宅介護",
+// 障害福祉 サービス種類区分 (障害者総合支援法 / 令和6年度報酬改定 に基づく)
+//   11 居宅介護 / 12 重度訪問介護 / 13 同行援護 / 14 行動援護
+//   15 療養介護 / 16 生活介護 / 21 短期入所(障害) / 22 重度障害者等包括支援
+//   31 共同生活援助(GH) / 41 自立生活援助
+//   42 自立訓練(機能訓練) / 43 自立訓練(生活訓練)
+//   44 就労移行支援 / 45 就労継続支援A型 / 46 就労継続支援B型 / 47 就労定着支援
+const SHOGAI_CATEGORIES: { value: string; label: string }[] = [
+  { value: "11", label: "11:居宅介護" },
+  { value: "12", label: "12:重度訪問介護" },
+  { value: "13", label: "13:同行援護" },
+  { value: "14", label: "14:行動援護" },
+  { value: "15", label: "15:療養介護" },
+  { value: "16", label: "16:生活介護" },
+  { value: "21", label: "21:短期入所(障害)" },
+  { value: "22", label: "22:重度障害者等包括支援" },
+  { value: "31", label: "31:共同生活援助(GH)" },
+  { value: "41", label: "41:自立生活援助" },
+  { value: "42", label: "42:自立訓練(機能訓練)" },
+  { value: "43", label: "43:自立訓練(生活訓練)" },
+  { value: "44", label: "44:就労移行支援" },
+  { value: "45", label: "45:就労継続支援A型" },
+  { value: "46", label: "46:就労継続支援B型" },
+  { value: "47", label: "47:就労定着支援" },
+];
+
+// 総合事業 サービス種類区分 (各自治体実施分)
+const SOGO_CATEGORIES: { value: string; label: string }[] = [
+  { value: "A1", label: "A1:訪問型サービスⅠ(従前相当)" },
+  { value: "A2", label: "A2:訪問型サービスⅡ(緩和基準)" },
+  { value: "A5", label: "A5:通所型サービスⅠ(従前相当)" },
+  { value: "A6", label: "A6:通所型サービスⅡ(緩和基準)" },
+];
+
+// system 別カテゴリ map
+const CATEGORIES_BY_SYSTEM: Record<ServiceSystem, { value: string; label: string }[]> = {
+  介護: KAIGO_CATEGORIES,
+  障害: SHOGAI_CATEGORIES,
+  総合事業: SOGO_CATEGORIES,
+};
+
+// system + service_category → service_category_name の lookup
+const CATEGORY_NAMES_BY_SYSTEM: Record<ServiceSystem, Record<string, string>> = {
+  介護: {
+    "11": "訪問介護",
+    "12": "訪問入浴介護",
+    "13": "訪問看護",
+    "14": "訪問リハビリテーション",
+    "15": "通所介護",
+    "16": "通所リハビリテーション",
+    "17": "福祉用具貸与",
+    "18": "特定福祉用具販売",
+    "21": "短期入所生活介護",
+    "22": "短期入所療養介護(老健)",
+    "23": "短期入所療養介護(病院療養型)",
+    "24": "短期入所療養介護(医療院)",
+    "27": "短期特定施設入居者生活介護",
+    "31": "居宅療養管理指導",
+    "32": "定期巡回・随時対応型訪問介護看護",
+    "33": "夜間対応型訪問介護",
+    "36": "認知症対応型通所介護",
+    "37": "小規模多機能型居宅介護",
+    "38": "認知症対応型共同生活介護",
+    "43": "居宅介護支援",
+    "46": "介護予防支援",
+    "73": "看護小規模多機能型居宅介護",
+  },
+  障害: {
+    "11": "居宅介護",
+    "12": "重度訪問介護",
+    "13": "同行援護",
+    "14": "行動援護",
+    "15": "療養介護",
+    "16": "生活介護",
+    "21": "短期入所",
+    "22": "重度障害者等包括支援",
+    "31": "共同生活援助",
+    "41": "自立生活援助",
+    "42": "自立訓練(機能訓練)",
+    "43": "自立訓練(生活訓練)",
+    "44": "就労移行支援",
+    "45": "就労継続支援A型",
+    "46": "就労継続支援B型",
+    "47": "就労定着支援",
+  },
+  総合事業: {
+    "A1": "訪問型サービスⅠ(従前相当)",
+    "A2": "訪問型サービスⅡ(緩和基準)",
+    "A5": "通所型サービスⅠ(従前相当)",
+    "A6": "通所型サービスⅡ(緩和基準)",
+  },
 };
 
 const UNIT_TYPES = ["1回につき", "1日につき", "1月につき"];
@@ -122,6 +193,7 @@ const CALC_TYPE_COLORS: Record<string, string> = {
 };
 
 const EMPTY_FORM: FormData = {
+  system: "介護",
   service_category: "",
   service_category_name: "",
   service_code: "",
@@ -145,6 +217,7 @@ export function ServiceCodesContent({
 
   const [records, setRecords] = useState<ServiceCode[]>(initialRecords);
   const [loading, setLoading] = useState(false);
+  const [filterSystem, setFilterSystem] = useState<"" | ServiceSystem>(""); // "" = 全制度
   const [filterCategory, setFilterCategory] = useState("");
   const [filterCalcType, setFilterCalcType] = useState("");
   const [searchText, setSearchText] = useState("");
@@ -175,7 +248,9 @@ export function ServiceCodesContent({
     errors: string[];
   } | null>(null);
   const [importMode, setImportMode] = useState<"upsert" | "skip-existing">("upsert");
-  // 取込時に全行へ適用する valid_from / valid_until (UI で指定 → CSV の値を上書き)
+  // 取込時に全行へ適用する system / valid_from / valid_until (UI で指定 → CSV の値を上書き)
+  // importSystem='' なら CSV 内の system 列を尊重 (空なら '介護' fallback)
+  const [importSystem, setImportSystem] = useState<"" | ServiceSystem>("");
   const [importValidFrom, setImportValidFrom] = useState<string>("2024-06-01");
   const [importValidUntil, setImportValidUntil] = useState<string>("");
   const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
@@ -218,6 +293,7 @@ export function ServiceCodesContent({
   const displayed = useMemo(() => {
     const q = searchText.trim().toLowerCase();
     return records.filter((r) => {
+      if (filterSystem && r.system !== filterSystem) return false;
       if (filterCategory && r.service_category !== filterCategory) return false;
       if (filterCalcType && r.calculation_type !== filterCalcType) return false;
       if (q && !r.service_code.toLowerCase().includes(q) && !r.service_name.toLowerCase().includes(q)) return false;
@@ -228,7 +304,30 @@ export function ServiceCodesContent({
       }
       return true;
     });
-  }, [records, filterCategory, filterCalcType, searchText, filterActiveAt]);
+  }, [records, filterSystem, filterCategory, filterCalcType, searchText, filterActiveAt]);
+
+  // 編集中フォームの system に応じてカテゴリ候補を切り替え
+  const formCategoryOptions = useMemo(() => {
+    return CATEGORIES_BY_SYSTEM[formData.system] ?? [];
+  }, [formData.system]);
+
+  // フィルタ用カテゴリ候補 (filterSystem 指定時はその system のもののみ、未指定なら全 system union)
+  const filterCategoryOptions = useMemo(() => {
+    if (filterSystem) return CATEGORIES_BY_SYSTEM[filterSystem];
+    // union
+    const seen = new Set<string>();
+    const out: { value: string; label: string }[] = [];
+    for (const s of ["介護", "障害", "総合事業"] as ServiceSystem[]) {
+      for (const c of CATEGORIES_BY_SYSTEM[s]) {
+        const key = `${s}_${c.value}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          out.push({ value: c.value, label: `[${s === "介護" ? "介" : s === "障害" ? "障" : "総"}] ${c.label}` });
+        }
+      }
+    }
+    return out;
+  }, [filterSystem]);
 
   // 表示用 (DOM 数を抑えるため上限まで)
   const displayedSliced = useMemo(
@@ -248,6 +347,7 @@ export function ServiceCodesContent({
   function openEdit(record: ServiceCode) {
     setEditingId(record.id);
     setFormData({
+      system: record.system,
       service_category: record.service_category,
       service_category_name: record.service_category_name,
       service_code: record.service_code,
@@ -272,7 +372,7 @@ export function ServiceCodesContent({
     setFormData((prev) => ({
       ...prev,
       service_category: value,
-      service_category_name: CATEGORY_NAMES[value] ?? "",
+      service_category_name: CATEGORY_NAMES_BY_SYSTEM[prev.system]?.[value] ?? "",
     }));
   }
 
@@ -371,6 +471,7 @@ export function ServiceCodesContent({
       return;
     }
     const headers = [
+      "system",
       "service_category",
       "service_category_name",
       "service_code",
@@ -394,6 +495,7 @@ export function ServiceCodesContent({
     for (const r of records) {
       lines.push(
         [
+          r.system,
           r.service_category,
           r.service_category_name,
           r.service_code,
@@ -481,6 +583,7 @@ export function ServiceCodesContent({
 
       const headerCols = parseLine(lines[0]).map((s) => s.trim().toLowerCase());
       const idx = (name: string) => headerCols.indexOf(name);
+      const iSystem = idx("system");
       const iCat = idx("service_category");
       const iCatName = idx("service_category_name");
       const iCode = idx("service_code");
@@ -505,10 +608,14 @@ export function ServiceCodesContent({
         const cat = (cols[iCat] ?? "").trim();
         const code = (cols[iCode] ?? "").trim();
         const name = (cols[iName] ?? "").trim();
+        // system 列: CSV にあれば優先、無ければ default '介護' (取込モーダル側で上書き可)
+        const systemRaw = iSystem >= 0 ? (cols[iSystem] ?? "").trim() : "";
+        const sys: ServiceSystem =
+          systemRaw === "障害" || systemRaw === "総合事業" ? systemRaw : "介護";
         const catName =
           iCatName >= 0 && cols[iCatName]?.trim()
             ? cols[iCatName].trim()
-            : (CATEGORY_NAMES[cat] ?? cat);
+            : (CATEGORY_NAMES_BY_SYSTEM[sys]?.[cat] ?? cat);
         const unitsRaw = iUnits >= 0 ? (cols[iUnits] ?? "").trim() : "0";
         const units = Number(unitsRaw) || 0;
         const unitType =
@@ -524,6 +631,7 @@ export function ServiceCodesContent({
         const notes = iNotes >= 0 && cols[iNotes]?.trim() ? cols[iNotes].trim() : null;
 
         const row: ServiceCodeImportRow = {
+          system: sys,
           service_category: cat,
           service_category_name: catName,
           service_code: code,
@@ -537,10 +645,11 @@ export function ServiceCodesContent({
           rowIndex: li + 1, // 表示用の 1-indexed (header = 1, first data = 2)
         };
 
-        // 検証
+        // 検証 — service_code は英数字 6 桁 (大文字、I/O/Q 除く) もしくは
+        // 総合事業の A1/A2 等 (英字 + 数字 4-5 桁) を許容
         if (!cat) row.error = "service_category が空";
         else if (!code) row.error = "service_code が空";
-        else if (!/^[0-9A-HJ-NPR-Z]{6}$/.test(code))
+        else if (!/^[0-9A-HJ-NPR-Z]{4,6}$/.test(code))
           row.error = `service_code 形式不正: "${code}"`;
         else if (!name) row.error = "service_name が空";
 
@@ -582,6 +691,8 @@ export function ServiceCodesContent({
       let done = 0;
       for (let i = 0; i < valid.length; i += BATCH) {
         const batch = valid.slice(i, i + BATCH).map((r) => ({
+          // system は UI で選択した値で上書き ('' = CSV 値を使う)
+          system: importSystem || r.system,
           service_category: r.service_category,
           service_category_name: r.service_category_name,
           service_code: r.service_code,
@@ -594,19 +705,18 @@ export function ServiceCodesContent({
           valid_until: importValidUntil || null,
           notes: r.notes,
         }));
-        // 複合 unique (service_code, valid_from) で UPSERT。
-        // 同じ service_code でも valid_from が違えば別行として履歴保持される。
-        // valid_from が CSV で空の場合は DB の DEFAULT ('2024-06-01') が入る。
+        // 複合 unique (system, service_code, valid_from) で UPSERT。
+        // 同じ service_code でも system / valid_from が違えば別行として履歴保持される。
         if (importMode === "upsert") {
           const { error } = await supabase
             .from("kaigo_service_codes")
-            .upsert(batch, { onConflict: "service_code,valid_from" });
+            .upsert(batch, { onConflict: "system,service_code,valid_from" });
           if (error) throw error;
         } else {
-          // skip-existing: 同 (service_code, valid_from) が既にあれば INSERT を skip
+          // skip-existing: 同 (system, service_code, valid_from) が既にあれば INSERT を skip
           const { error } = await supabase
             .from("kaigo_service_codes")
-            .upsert(batch, { onConflict: "service_code,valid_from", ignoreDuplicates: true });
+            .upsert(batch, { onConflict: "system,service_code,valid_from", ignoreDuplicates: true });
           if (error) throw error;
         }
         done += batch.length;
@@ -689,14 +799,31 @@ export function ServiceCodesContent({
       {/* ── Filters ── */}
       <div className="bg-white border-b border-gray-200 px-6 py-3">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Service category */}
+          {/* 制度 (system) フィルタ */}
+          <select
+            value={filterSystem}
+            onChange={(e) => {
+              setFilterSystem(e.target.value as "" | ServiceSystem);
+              setFilterCategory(""); // system 変更でカテゴリリセット
+            }}
+            className="text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          >
+            <option value="">全制度</option>
+            {SERVICE_SYSTEMS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+
+          {/* Service category — system に応じて切替 */}
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
             className="text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           >
             <option value="">全て（種類）</option>
-            {SERVICE_CATEGORIES.map((c) => (
+            {filterCategoryOptions.map((c) => (
               <option key={c.value} value={c.value}>
                 {c.label}
               </option>
@@ -793,6 +920,9 @@ export function ServiceCodesContent({
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">
+                      制度
+                    </th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">
                       サービス種類
                     </th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">
@@ -819,11 +949,18 @@ export function ServiceCodesContent({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {displayedSliced.map((record) => (
+                  {displayedSliced.map((record) => {
+                    const sysMeta = SERVICE_SYSTEMS.find((s) => s.value === record.system);
+                    return (
                     <tr
                       key={record.id}
                       className="hover:bg-gray-50 transition-colors"
                     >
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${sysMeta?.color ?? "bg-gray-100 text-gray-700 border-gray-200"}`}>
+                          {sysMeta?.label ?? record.system}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
                           {record.service_category}
@@ -886,7 +1023,8 @@ export function ServiceCodesContent({
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -919,6 +1057,35 @@ export function ServiceCodesContent({
 
             {/* Dialog body */}
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+              {/* Row: system (制度区分) */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  制度区分
+                  <span className="text-red-500 ml-0.5">*</span>
+                </label>
+                <div className="flex gap-2">
+                  {SERVICE_SYSTEMS.map((s) => (
+                    <button
+                      key={s.value}
+                      type="button"
+                      onClick={() => setFormData((prev) => ({
+                        ...prev,
+                        system: s.value,
+                        service_category: "", // system 変更でカテゴリリセット
+                        service_category_name: "",
+                      }))}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                        formData.system === s.value
+                          ? s.color + " border-2"
+                          : "bg-white border-gray-300 text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Row: service_category */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -932,7 +1099,7 @@ export function ServiceCodesContent({
                     className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   >
                     <option value="">選択してください</option>
-                    {SERVICE_CATEGORIES.map((c) => (
+                    {formCategoryOptions.map((c) => (
                       <option key={c.value} value={c.value}>
                         {c.label}
                       </option>
@@ -1150,6 +1317,41 @@ export function ServiceCodesContent({
                   <div className="text-base font-bold text-gray-700">
                     {importPreview.rows.length} 件
                   </div>
+                </div>
+              </div>
+
+              {/* 制度区分の上書き */}
+              <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+                <div className="mb-2 text-xs font-semibold text-purple-800">
+                  制度区分 (全 {importPreview.rows.filter((r) => !r.error).length} 行に一律適用)
+                </div>
+                <div className="flex gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setImportSystem("")}
+                    className={`px-3 py-1 rounded-lg border transition-colors ${
+                      importSystem === ""
+                        ? "border-purple-400 bg-purple-100 text-purple-700 font-semibold"
+                        : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                    title="CSV 内 system 列を尊重 (無ければ '介護')"
+                  >
+                    CSV に従う
+                  </button>
+                  {SERVICE_SYSTEMS.map((s) => (
+                    <button
+                      key={s.value}
+                      type="button"
+                      onClick={() => setImportSystem(s.value)}
+                      className={`px-3 py-1 rounded-lg border transition-colors ${
+                        importSystem === s.value
+                          ? s.color + " border-2 font-semibold"
+                          : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      {s.label} に統一
+                    </button>
+                  ))}
                 </div>
               </div>
 

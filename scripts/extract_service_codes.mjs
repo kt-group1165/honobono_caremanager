@@ -31,9 +31,10 @@ const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
 const args = process.argv.slice(2);
 if (args.length < 1) {
   console.error("Usage: node extract_service_codes.mjs <pdf-path> [out.csv] [start-page] [end-page] [opts]");
-  console.error("  --zaitaku-only        : 在宅系サービスのみ出力 (施設サービス 51-59 を除外)");
+  console.error("  --zaitaku-only          : 在宅系サービスのみ出力 (施設サービス 51-59 を除外、介護保険のみ意味あり)");
+  console.error("  --system=介護|障害|総合事業 : 出力 CSV の system 列値 (default: 介護)");
   console.error("  --valid-from=YYYY-MM-DD : 適用開始日 (default: 2024-06-01 = 令和6年6月改定)");
-  console.error("  --notes=<text>        : notes 列に書き込む追加文字列 (PDF ページ番号は常に併記)");
+  console.error("  --notes=<text>          : notes 列に書き込む追加文字列 (PDF ページ番号は常に併記)");
   process.exit(1);
 }
 const pdfPath = args[0];
@@ -54,10 +55,15 @@ let endPage = positional[2] ? Number(positional[2]) : null;
 const zaitakuOnly = flags.has("--zaitaku-only");
 const validFrom = kwargs["valid-from"] ?? "2024-06-01"; // 令和6年6月改定 default
 const extraNotes = kwargs["notes"] ?? "";
+const systemArg = kwargs["system"] ?? "介護";
 
 // validFrom 形式チェック
 if (!/^\d{4}-\d{2}-\d{2}$/.test(validFrom)) {
   console.error(`--valid-from は YYYY-MM-DD 形式で指定: "${validFrom}"`);
+  process.exit(1);
+}
+if (!["介護", "障害", "総合事業"].includes(systemArg)) {
+  console.error(`--system は '介護' / '障害' / '総合事業' のいずれか: "${systemArg}"`);
   process.exit(1);
 }
 
@@ -255,6 +261,7 @@ for (let pageNum = startPage; pageNum <= endPage; pageNum++) {
     }
 
     records.push({
+      system: systemArg,
       service_category: cat,
       service_category_name: categoryName,
       service_code: fullCode,
@@ -276,6 +283,7 @@ for (let pageNum = startPage; pageNum <= endPage; pageNum++) {
 
 // ─── CSV 出力 ────────────────────────────────────────────────────────────────
 const headers = [
+  "system",
   "service_category",
   "service_category_name",
   "service_code",

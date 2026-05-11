@@ -2,6 +2,8 @@
 
 厚労省刊行の介護保険サービスコード表 PDF からマスタ CSV を生成するツール。
 
+> 総合事業 (介護予防・日常生活支援総合事業) の PDF を入れる場所は `docs/介護ソフト関連/総合事業/`。
+
 ## なぜ Node + PDF.js？
 
 厚労省 PDF は CID-keyed CJK fonts (Adobe-Japan1 / UniJIS-UCS2-H) を使うが、Adobe CMap データを **PDF 内に埋め込んでない**。そのため:
