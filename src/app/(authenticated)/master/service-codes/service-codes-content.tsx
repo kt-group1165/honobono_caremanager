@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
@@ -210,14 +210,18 @@ const EMPTY_FORM: FormData = {
 
 export function ServiceCodesContent({
   initialRecords,
+  initialSystem = "介護",
 }: {
   initialRecords: ServiceCode[];
+  /** Server-side で既に fetch 済みの system ('' = 全制度=all モード) */
+  initialSystem?: "" | ServiceSystem;
 }) {
   const supabase = useMemo(() => createClient(), []);
 
   const [records, setRecords] = useState<ServiceCode[]>(initialRecords);
   const [loading, setLoading] = useState(false);
-  const [filterSystem, setFilterSystem] = useState<"" | ServiceSystem>(""); // "" = 全制度
+  // filterSystem = server-side で fetch する制度。"" = 全制度 (重い)。
+  const [filterSystem, setFilterSystem] = useState<"" | ServiceSystem>(initialSystem);
   const [filterCategory, setFilterCategory] = useState("");
   const [filterCalcType, setFilterCalcType] = useState("");
   const [searchText, setSearchText] = useState("");
@@ -260,17 +264,20 @@ export function ServiceCodesContent({
   const fetchRecords = useCallback(async () => {
     setLoading(true);
     try {
-      // PostgREST default 1000 行制限を避けるため page-loop で全件取得
+      // PostgREST default 1000 行制限を避けるため page-loop で取得。
+      // 現 filterSystem で server-side 絞込 ('' = 全制度)。
       const PAGE = 1000;
       const all: ServiceCode[] = [];
       let from = 0;
       for (;;) {
-        const { data, error } = await supabase
+        let q = supabase
           .from("kaigo_service_codes")
           .select("*")
           .order("service_category", { ascending: true })
           .order("service_code", { ascending: true })
           .range(from, from + PAGE - 1);
+        if (filterSystem) q = q.eq("system", filterSystem);
+        const { data, error } = await q;
         if (error) throw error;
         const rows = (data ?? []) as ServiceCode[];
         all.push(...rows);
@@ -286,7 +293,27 @@ export function ServiceCodesContent({
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, [supabase, filterSystem]);
+
+  // ─── filterSystem 変更時に server-side で再 fetch (初回 mount は除く) ─────
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    fetchRecords();
+    // URL も同期 (リロード時に同じ system を維持)
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (filterSystem) {
+        url.searchParams.set("system", filterSystem);
+      } else {
+        url.searchParams.set("system", "all");
+      }
+      window.history.replaceState(null, "", url.toString());
+    }
+  }, [filterSystem, fetchRecords]);
 
   // ─── In-memory filtering (records は全件、filter は client 側) ───────────────
 
@@ -799,7 +826,7 @@ export function ServiceCodesContent({
       {/* ── Filters ── */}
       <div className="bg-white border-b border-gray-200 px-6 py-3">
         <div className="flex flex-wrap items-center gap-3">
-          {/* 制度 (system) フィルタ */}
+          {/* 制度 (system) フィルタ — 変更で server-side 再 fetch */}
           <select
             value={filterSystem}
             onChange={(e) => {
@@ -807,8 +834,9 @@ export function ServiceCodesContent({
               setFilterCategory(""); // system 変更でカテゴリリセット
             }}
             className="text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            title="制度切替で DB から再 fetch (全制度は重いので注意)"
           >
-            <option value="">全制度</option>
+            <option value="">全制度 (重い)</option>
             {SERVICE_SYSTEMS.map((s) => (
               <option key={s.value} value={s.value}>
                 {s.label}
