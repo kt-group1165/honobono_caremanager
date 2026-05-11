@@ -80,6 +80,60 @@ interface ReceivedCarePlan {
   imported: boolean;
 }
 
+// 同じ送信元から短時間に届いた 1-3表 を 1 グループにまとめる
+interface ReceivedCarePlanGroup {
+  groupKey: string;
+  sourceOfficeId: string;
+  sourceOfficeName: string;
+  sentAt: string; // 最古の sent_at
+  items: ReceivedCarePlan[];
+  allImported: boolean;
+  anyImported: boolean;
+}
+
+// (source_office_id, target, client, sent_at ± 5 分) でグループ化
+const GROUP_WINDOW_MS = 5 * 60 * 1000;
+
+function groupReceivedPlans(rows: ReceivedCarePlan[]): ReceivedCarePlanGroup[] {
+  // sent_at 昇順で並べてから走査 (近い時刻のものを同じグループに)
+  const sorted = [...rows].sort((a, b) =>
+    a.shared.sent_at < b.shared.sent_at ? -1 : 1,
+  );
+  const groups: ReceivedCarePlanGroup[] = [];
+  for (const r of sorted) {
+    const t = new Date(r.shared.sent_at).getTime();
+    // 同 source × 時刻近い既存グループを探す
+    const g = groups.find(
+      (gg) =>
+        gg.sourceOfficeId === r.shared.source_office_id &&
+        Math.abs(new Date(gg.sentAt).getTime() - t) <= GROUP_WINDOW_MS,
+    );
+    if (g) {
+      g.items.push(r);
+    } else {
+      groups.push({
+        groupKey: `${r.shared.source_office_id}_${r.shared.sent_at}`,
+        sourceOfficeId: r.shared.source_office_id,
+        sourceOfficeName: r.sourceOfficeName,
+        sentAt: r.shared.sent_at,
+        items: [r],
+        allImported: false,
+        anyImported: false,
+      });
+    }
+  }
+  // 各グループ: items を report_type 順に sort、imported フラグ集約
+  for (const g of groups) {
+    g.items.sort((a, b) =>
+      a.shared.document_type < b.shared.document_type ? -1 : 1,
+    );
+    g.allImported = g.items.every((i) => i.imported);
+    g.anyImported = g.items.some((i) => i.imported);
+  }
+  // 最新グループを上に
+  return groups.sort((a, b) => (a.sentAt < b.sentAt ? 1 : -1));
+}
+
 function ReceivedCarePlansPanel({
   clientId,
   targetOfficeId,
@@ -92,6 +146,8 @@ function ReceivedCarePlansPanel({
   const [loading, setLoading] = useState(false);
   const [importingId, setImportingId] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState<SharedDocumentRow | null>(null);
+
+  const groups = useMemo(() => groupReceivedPlans(items), [items]);
 
   const refresh = useCallback(async () => {
     if (!clientId || !targetOfficeId) {
@@ -159,35 +215,43 @@ function ReceivedCarePlansPanel({
     refresh();
   }, [refresh]);
 
-  const handleImport = async (rec: ReceivedCarePlan) => {
+  const handleImportGroup = async (g: ReceivedCarePlanGroup) => {
+    // 再取込なら全件、未取込なら未取込分のみを対象
+    const targets = g.allImported ? g.items : g.items.filter((i) => !i.imported);
+    if (targets.length === 0) return;
+    const labels = targets
+      .map((t) => CARE_PLAN_LABEL[t.shared.document_type] ?? t.shared.document_type)
+      .join(" / ");
     if (!window.confirm(
-      `「${CARE_PLAN_LABEL[rec.shared.document_type] ?? rec.shared.document_type}」を取り込みます。\n` +
+      `${g.sourceOfficeName} から届いた以下を取り込みます:\n` +
+      `  ${labels}\n` +
       `(自事業所のケアプラン帳票として保存し、後から閲覧/印刷できるようになります)`,
-    )) {
-      return;
-    }
-    setImportingId(rec.shared.id);
+    )) return;
+
+    setImportingId(g.groupKey);
     try {
-      const content: Record<string, unknown> = {
-        // 受信した html を snapshot として保存 (構造化 content は payload に無いので)
-        html_snapshot: rec.shared.html_content,
-        imported_from_shared_doc_id: rec.shared.id,
-        source_office_id: rec.shared.source_office_id,
-        source_office_name: rec.sourceOfficeName,
-        received_at: rec.shared.sent_at,
-        ...(rec.shared.payload && typeof rec.shared.payload === "object" ? rec.shared.payload : {}),
-      };
-      const title = `${rec.shared.title}（取込：${rec.sourceOfficeName}）`;
-      const { error } = await supabase.from("kaigo_report_documents").insert({
-        user_id: clientId,
-        report_type: rec.shared.document_type,
-        title,
-        report_month: null,
-        content,
-        status: "draft",
-      });
-      if (error) throw error;
-      toast.success("ケアプランを取り込みました");
+      // 各帳票を順に INSERT (失敗時は途中まで成功した分は残る)
+      for (const t of targets) {
+        const content: Record<string, unknown> = {
+          html_snapshot: t.shared.html_content,
+          imported_from_shared_doc_id: t.shared.id,
+          source_office_id: t.shared.source_office_id,
+          source_office_name: t.sourceOfficeName,
+          received_at: t.shared.sent_at,
+          ...(t.shared.payload && typeof t.shared.payload === "object" ? t.shared.payload : {}),
+        };
+        const title = `${t.shared.title}(取込：${t.sourceOfficeName})`;
+        const { error } = await supabase.from("kaigo_report_documents").insert({
+          user_id: clientId,
+          report_type: t.shared.document_type,
+          title,
+          report_month: null,
+          content,
+          status: "draft",
+        });
+        if (error) throw error;
+      }
+      toast.success(`${targets.length} 帳票を取り込みました`);
       await refresh();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -199,7 +263,7 @@ function ReceivedCarePlansPanel({
 
   if (!clientId || !targetOfficeId) return null;
 
-  const pendingCount = items.filter((it) => !it.imported).length;
+  const pendingGroupCount = groups.filter((g) => !g.allImported).length;
 
   return (
     <div className="rounded-lg border bg-white shadow-sm">
@@ -207,9 +271,9 @@ function ReceivedCarePlansPanel({
         <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
           <Inbox size={14} className="text-blue-600" />
           受信ケアプラン
-          {pendingCount > 0 && (
+          {pendingGroupCount > 0 && (
             <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white">
-              未取込 {pendingCount}
+              未取込 {pendingGroupCount}
             </span>
           )}
         </h2>
@@ -223,75 +287,98 @@ function ReceivedCarePlansPanel({
         </button>
       </div>
 
-      {loading && items.length === 0 ? (
+      {loading && groups.length === 0 ? (
         <div className="flex items-center justify-center py-6 text-gray-400">
           <Loader2 size={16} className="mr-2 animate-spin" /> 読込中...
         </div>
-      ) : items.length === 0 ? (
+      ) : groups.length === 0 ? (
         <div className="px-4 py-5 text-center text-xs text-gray-400">
           この利用者宛ての受信ケアプランはありません
         </div>
       ) : (
         <ul className="divide-y">
-          {items.map((it) => (
-            <li
-              key={it.shared.id}
-              className={`flex items-center justify-between gap-3 px-4 py-2.5 ${it.imported ? "bg-gray-50" : "bg-blue-50/40"}`}
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-700">
-                    {CARE_PLAN_LABEL[it.shared.document_type] ?? it.shared.document_type}
-                  </span>
-                  <span className="truncate text-sm font-medium text-gray-800">
-                    {it.sourceOfficeName}
-                  </span>
-                  {it.imported ? (
-                    <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
-                      取込済
+          {groups.map((g) => {
+            // 各帳票種別の取込状態を short label で表示
+            const docBadges = g.items.map((it) => ({
+              label:
+                (CARE_PLAN_LABEL[it.shared.document_type] ?? it.shared.document_type)
+                  .split(" ")[0], // "第1表"
+              imported: it.imported,
+              shared: it.shared,
+            }));
+            return (
+              <li
+                key={g.groupKey}
+                className={`flex items-center justify-between gap-3 px-4 py-2.5 ${g.allImported ? "bg-gray-50" : "bg-blue-50/40"}`}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-sm font-medium text-gray-800">
+                      {g.sourceOfficeName}
                     </span>
-                  ) : (
-                    <span className="rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                      未取込
-                    </span>
-                  )}
+                    {g.allImported ? (
+                      <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                        取込済
+                      </span>
+                    ) : g.anyImported ? (
+                      <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                        一部未取込
+                      </span>
+                    ) : (
+                      <span className="rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                        未取込
+                      </span>
+                    )}
+                    {/* 含まれる帳票バッジ (clickable でプレビュー) */}
+                    {docBadges.map((b) => (
+                      <button
+                        key={b.shared.id}
+                        type="button"
+                        onClick={() => setPreviewing(b.shared)}
+                        className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+                          b.imported
+                            ? "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            : "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                        }`}
+                        title={`${b.label} をプレビュー${b.imported ? " (取込済)" : ""}`}
+                      >
+                        {b.label}
+                        {b.imported && <Eye size={10} className="ml-0.5 opacity-60" />}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-gray-500 truncate">
+                    送信: {format(parseISO(g.sentAt), "yyyy/MM/dd HH:mm", { locale: ja })}
+                    {g.items.length > 1 && (
+                      <span className="ml-1">・{g.items.length} 帳票一括</span>
+                    )}
+                  </div>
                 </div>
-                <div className="mt-0.5 text-[11px] text-gray-500 truncate">
-                  {it.shared.title} ・{" "}
-                  {format(parseISO(it.shared.sent_at), "yyyy/MM/dd HH:mm", { locale: ja })}
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleImportGroup(g)}
+                    disabled={importingId === g.groupKey}
+                    className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                      g.allImported
+                        ? "border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                        : "bg-blue-600 text-white hover:bg-blue-700"
+                    }`}
+                    title={g.allImported ? "再度取り込んで新しい帳票として保存" : "未取込分を自事業所の帳票として保存"}
+                  >
+                    {importingId === g.groupKey ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Download size={12} />
+                    )}
+                    {g.allImported
+                      ? `再取込 (${g.items.length})`
+                      : `取込 (${g.items.filter((i) => !i.imported).length})`}
+                  </button>
                 </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setPreviewing(it.shared)}
-                  className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
-                  title="受信内容をプレビュー"
-                >
-                  <Eye size={12} />
-                  プレビュー
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleImport(it)}
-                  disabled={importingId === it.shared.id}
-                  className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
-                    it.imported
-                      ? "border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-                      : "bg-blue-600 text-white hover:bg-blue-700"
-                  }`}
-                  title={it.imported ? "再度取り込んで新しい帳票として保存" : "受信内容を取り込んで自事業所の帳票として保存"}
-                >
-                  {importingId === it.shared.id ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : (
-                    <Download size={12} />
-                  )}
-                  {it.imported ? "再取込" : "取込"}
-                </button>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -360,12 +447,57 @@ interface StoredCarePlan {
   html_snapshot: string | null;
 }
 
+// 保管中も同じくグループ化 (送信元 + received_at ±5 分)
+interface StoredCarePlanGroup {
+  groupKey: string;
+  sourceOfficeName: string | null;
+  receivedAt: string | null;
+  latestUpdatedAt: string;
+  items: StoredCarePlan[];
+}
+
+function groupStoredPlans(rows: StoredCarePlan[]): StoredCarePlanGroup[] {
+  const sorted = [...rows].sort((a, b) => {
+    const at = a.received_at ?? a.updated_at;
+    const bt = b.received_at ?? b.updated_at;
+    return at < bt ? -1 : 1;
+  });
+  const groups: StoredCarePlanGroup[] = [];
+  for (const r of sorted) {
+    const t = new Date(r.received_at ?? r.updated_at).getTime();
+    const g = groups.find(
+      (gg) =>
+        gg.sourceOfficeName === r.source_office_name &&
+        Math.abs(
+          new Date(gg.receivedAt ?? gg.latestUpdatedAt).getTime() - t,
+        ) <= GROUP_WINDOW_MS,
+    );
+    if (g) {
+      g.items.push(r);
+      if (r.updated_at > g.latestUpdatedAt) g.latestUpdatedAt = r.updated_at;
+    } else {
+      groups.push({
+        groupKey: `${r.source_office_name ?? "_"}_${r.received_at ?? r.updated_at}_${r.id}`,
+        sourceOfficeName: r.source_office_name,
+        receivedAt: r.received_at,
+        latestUpdatedAt: r.updated_at,
+        items: [r],
+      });
+    }
+  }
+  for (const g of groups) {
+    g.items.sort((a, b) => (a.report_type < b.report_type ? -1 : 1));
+  }
+  return groups.sort((a, b) => (a.latestUpdatedAt < b.latestUpdatedAt ? 1 : -1));
+}
+
 function StoredCarePlansPanel({ clientId }: { clientId: string }) {
   const supabase = useMemo(() => createClient(), []);
   const [items, setItems] = useState<StoredCarePlan[]>([]);
   const [loading, setLoading] = useState(false);
   const [previewing, setPreviewing] = useState<StoredCarePlan | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const groups = useMemo(() => groupStoredPlans(items), [items]);
 
   const refresh = useCallback(async () => {
     if (!clientId) {
@@ -419,16 +551,24 @@ function StoredCarePlansPanel({ clientId }: { clientId: string }) {
     refresh();
   }, [refresh]);
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm("保管中ケアプランを削除します。よろしいですか？")) return;
-    setDeletingId(id);
+  const handleDeleteGroup = async (g: StoredCarePlanGroup) => {
+    const labels = g.items
+      .map((i) => CARE_PLAN_LABEL[i.report_type] ?? i.report_type)
+      .join(" / ");
+    if (!window.confirm(
+      `${g.sourceOfficeName ?? "—"} から取り込んだ以下の帳票を削除します:\n` +
+      `  ${labels}\n` +
+      `(${g.items.length} 帳票)`,
+    )) return;
+    setDeletingId(g.groupKey);
     try {
+      const ids = g.items.map((i) => i.id);
       const { error } = await supabase
         .from("kaigo_report_documents")
         .delete()
-        .eq("id", id);
+        .in("id", ids);
       if (error) throw error;
-      toast.success("削除しました");
+      toast.success(`${ids.length} 帳票を削除しました`);
       await refresh();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -445,7 +585,7 @@ function StoredCarePlansPanel({ clientId }: { clientId: string }) {
       <div className="flex items-center justify-between border-b px-4 py-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
           <Archive size={14} className="text-emerald-600" />
-          保管中ケアプラン ({items.length} 件)
+          保管中ケアプラン ({groups.length} 件 / {items.length} 帳票)
         </h2>
         <button
           type="button"
@@ -457,65 +597,68 @@ function StoredCarePlansPanel({ clientId }: { clientId: string }) {
         </button>
       </div>
 
-      {loading && items.length === 0 ? (
+      {loading && groups.length === 0 ? (
         <div className="flex items-center justify-center py-6 text-gray-400">
           <Loader2 size={16} className="mr-2 animate-spin" /> 読込中...
         </div>
-      ) : items.length === 0 ? (
+      ) : groups.length === 0 ? (
         <div className="px-4 py-5 text-center text-xs text-gray-400">
           まだ取り込んだケアプランはありません
         </div>
       ) : (
         <ul className="divide-y">
-          {items.map((it) => (
+          {groups.map((g) => (
             <li
-              key={it.id}
+              key={g.groupKey}
               className="flex items-center justify-between gap-3 px-4 py-2.5"
             >
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-700">
-                    {CARE_PLAN_LABEL[it.report_type] ?? it.report_type}
-                  </span>
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="truncate text-sm font-medium text-gray-800">
-                    {it.title}
+                    {g.sourceOfficeName ?? "—"}
                   </span>
+                  {/* 各帳票を clickable バッジで */}
+                  {g.items.map((it) => {
+                    const label = (CARE_PLAN_LABEL[it.report_type] ?? it.report_type).split(" ")[0];
+                    return (
+                      <button
+                        key={it.id}
+                        type="button"
+                        onClick={() => setPreviewing(it)}
+                        disabled={!it.html_snapshot}
+                        className="inline-flex items-center gap-0.5 rounded bg-emerald-100 text-emerald-700 px-1.5 py-0.5 text-[10px] font-medium hover:bg-emerald-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                        title={it.html_snapshot ? `${label} を表示` : "html_snapshot なし"}
+                      >
+                        {label}
+                        <Eye size={10} className="ml-0.5 opacity-60" />
+                      </button>
+                    );
+                  })}
                 </div>
                 <div className="mt-0.5 text-[11px] text-gray-500 truncate">
-                  {it.source_office_name && <span>送信元: {it.source_office_name} ・ </span>}
-                  {it.received_at && (
+                  {g.receivedAt && (
                     <span>
-                      受信: {format(parseISO(it.received_at), "yyyy/MM/dd HH:mm", { locale: ja })} ・{" "}
+                      受信: {format(parseISO(g.receivedAt), "yyyy/MM/dd HH:mm", { locale: ja })} ・{" "}
                     </span>
                   )}
-                  保存:{" "}
-                  {format(parseISO(it.updated_at), "yyyy/MM/dd HH:mm", { locale: ja })}
+                  保存: {format(parseISO(g.latestUpdatedAt), "yyyy/MM/dd HH:mm", { locale: ja })}
+                  {g.items.length > 1 && <span className="ml-1">・{g.items.length} 帳票一括</span>}
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => setPreviewing(it)}
-                  disabled={!it.html_snapshot}
-                  className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                  title={it.html_snapshot ? "保管している HTML スナップショットを表示" : "html_snapshot がありません"}
-                >
-                  <Eye size={12} />
-                  表示
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(it.id)}
-                  disabled={deletingId === it.id}
+                  onClick={() => handleDeleteGroup(g)}
+                  disabled={deletingId === g.groupKey}
                   className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
-                  title="保管中ケアプランを削除"
+                  title="このグループのケアプランを一括削除"
                 >
-                  {deletingId === it.id ? (
+                  {deletingId === g.groupKey ? (
                     <Loader2 size={12} className="animate-spin" />
                   ) : (
                     <Trash2 size={12} />
                   )}
-                  削除
+                  削除 ({g.items.length})
                 </button>
               </div>
             </li>
