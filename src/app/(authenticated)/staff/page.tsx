@@ -16,7 +16,7 @@ export default async function StaffPage({
   // Phase 9 close: members.office_id DROP 済 → member_offices junction 経由で絞り込み
   let q = supabase
     .from("members")
-    .select("id, tenant_id, name, furigana, role, qualifications, email, phone, employment_type, hire_date, status, created_at, member_offices!inner(office_id)")
+    .select("id, tenant_id, name, furigana, role, qualifications, email, phone, employment_type, salary_type, hire_date, status, created_at, member_offices!inner(office_id)")
     .eq("status", "active")
     .order("furigana", { nullsFirst: false });
   if (officeId) q = q.eq("member_offices.office_id", officeId);

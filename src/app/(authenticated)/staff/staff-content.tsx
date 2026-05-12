@@ -19,6 +19,8 @@ import { useBusinessType } from "@/lib/business-type-context";
 
 type EmploymentType = "常勤" | "非常勤" | "パート";
 type StaffStatus = "active" | "inactive";
+// 給与形態は payroll_employees.salary_type からの反映値。値域は固定せず NULL 許容。
+type SalaryType = string | null;
 
 // 共通マスタ members の subset。Phase 2-3-2 で kaigo_staff から張替え。
 //   kaigo_staff.name_kana → members.furigana
@@ -32,6 +34,7 @@ export interface Staff {
   email: string;
   phone: string;
   employment_type: EmploymentType;
+  salary_type: SalaryType;
   hire_date: string;
   status: StaffStatus;
   created_at?: string;
@@ -132,7 +135,7 @@ export function StaffContent({
     // Phase 9 close: members.office_id DROP 済 → member_offices junction 経由で絞り込み
     let q = supabase
       .from("members")
-      .select("id, tenant_id, name, furigana, role, qualifications, email, phone, employment_type, hire_date, status, created_at, member_offices!inner(office_id)")
+      .select("id, tenant_id, name, furigana, role, qualifications, email, phone, employment_type, salary_type, hire_date, status, created_at, member_offices!inner(office_id)")
       .eq("member_offices.office_id", currentOfficeId);
     if (!includeInactive) q = q.eq("status", "active");
     const { data, error } = await q.order("furigana", { nullsFirst: false });
@@ -425,6 +428,20 @@ export function StaffContent({
     );
   };
 
+  // 給与形態 (payroll_employees.salary_type からの反映: 時給 / 月給 / 日給 等)
+  const salaryBadge = (salary: SalaryType) => {
+    if (!salary) return <span className="text-xs text-gray-400">—</span>;
+    const color =
+      salary === "時給" ? "bg-amber-100 text-amber-700"
+        : salary === "月給" ? "bg-indigo-100 text-indigo-700"
+        : "bg-gray-100 text-gray-600";
+    return (
+      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${color}`}>
+        {salary}
+      </span>
+    );
+  };
+
   const statusBadge = (status: StaffStatus) => (
     <span
       className={`rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -510,6 +527,7 @@ export function StaffContent({
                   <th className="px-4 py-3 text-left font-medium text-gray-600">職種</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">資格</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">雇用形態</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">給与形態</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">入職日</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">連絡先</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">状態</th>
@@ -526,6 +544,7 @@ export function StaffContent({
                       {staff.qualifications || "—"}
                     </td>
                     <td className="px-4 py-3">{employmentBadge(staff.employment_type)}</td>
+                    <td className="px-4 py-3">{salaryBadge(staff.salary_type)}</td>
                     <td className="px-4 py-3 text-gray-600">{staff.hire_date || "—"}</td>
                     <td className="px-4 py-3 text-gray-500">
                       <div>{staff.email}</div>
