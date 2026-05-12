@@ -453,6 +453,8 @@ export function UserCalendar({
                 <ServiceSelector
                   open={showServiceSelector}
                   onClose={() => setShowServiceSelector(false)}
+                  startTime={editForm.start_time}
+                  endTime={editForm.end_time}
                   onSelect={(service) => {
                     setEditForm((f) => ({
                       ...f,
@@ -588,6 +590,8 @@ export function UserCalendar({
                 <ServiceSelector
                   open={showAddServiceSelector}
                   onClose={() => setShowAddServiceSelector(false)}
+                  startTime={addForm.start_time}
+                  endTime={addForm.end_time}
                   onSelect={(service) => {
                     setAddForm((f) => ({
                       ...f,

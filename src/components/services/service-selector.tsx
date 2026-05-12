@@ -35,6 +35,83 @@ interface ServiceSelectorProps {
    * provision-tickets / reports / shift-management は全て介護保険なので未指定 = "介護"。
    */
   system?: "介護" | "障害" | "総合事業"
+  /**
+   * 予定の開始/終了時間 (HH:MM)。指定時のみ「候補のみ」チェックが表示される。
+   * チェック ON で「該当時間 (= end - start 分) に収まるサービス」だけが残る。
+   */
+  startTime?: string
+  endTime?: string
+}
+
+// ─── 時間レンジ判定 (service_name から所要分を推定) ─────────────────────────
+
+/**
+ * service_name から所要時間レンジ [minMin, maxMin] (両端含む) を推定。
+ * 対応パターン:
+ *   ・介護 訪問介護:
+ *       身体介護０１              → [0,  20)
+ *       身体介護０２ / 身体介護１ → [20, 30)
+ *       身体介護２               → [30, 60)
+ *       身体介護N (N≥3)          → [(N-1)*30, N*30)  例: ３=60-90 / ４=90-120
+ *       生活援助１               → [20, 45)
+ *       生活援助２               → [45, ∞)
+ *       生活援助３               → [70, ∞)
+ *   ・障害 居宅介護等: X.Y時間表記 (0.5刻み)
+ *       身体日/早朝/夜/深 X.Y   → ((X.Y - 0.5)*60, X.Y*60]   例: 1.0 = (30, 60]
+ *       家事/通院/乗降/重訪 など同じパターン
+ *   ・上記いずれにも該当しない (加算・地域区分・処遇改善 等) → null
+ * null は「時間概念なし」を意味し、候補フィルタ ON 時は非表示扱い。
+ */
+function parseServiceDurationMinutes(name: string): { min: number; max: number } | null {
+  const toAscii = (s: string) =>
+    s.replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xFEE0));
+
+  // 身体介護N (介護保険)
+  const taido = name.match(/^身体介護\s*([０-９0-9]+)/);
+  if (taido) {
+    const raw = toAscii(taido[1]);
+    if (raw === "01") return { min: 0, max: 20 };
+    if (raw === "02") return { min: 20, max: 30 };
+    const n = parseInt(raw, 10);
+    if (n === 1) return { min: 20, max: 30 };
+    if (n === 2) return { min: 30, max: 60 };
+    if (n >= 3) return { min: (n - 1) * 30, max: n * 30 };
+  }
+
+  // 生活援助N (介護保険)
+  const seikatsu = name.match(/^生活援助\s*([０-９0-9]+)/);
+  if (seikatsu) {
+    const n = parseInt(toAscii(seikatsu[1]), 10);
+    if (n === 1) return { min: 20, max: 45 };
+    if (n === 2) return { min: 45, max: 9999 };
+    if (n === 3) return { min: 70, max: 9999 };
+  }
+
+  // X.Y時間 (障害 居宅介護等: 身体日/早朝/夜/深/家事/通院/乗降/重訪 etc)
+  // 名前に 0.5刻みの 10進数 (＝「N.M」) があれば、それが上限時間。
+  const shogai = name.match(/([０-９0-9]+)[．.]([０-９0-9]+)/);
+  if (shogai) {
+    const intPart = toAscii(shogai[1]);
+    const decPart = toAscii(shogai[2]);
+    const hours = parseFloat(`${intPart}.${decPart}`);
+    if (!isNaN(hours) && hours > 0 && hours <= 24) {
+      const maxMin = Math.round(hours * 60);
+      const minMin = Math.max(0, Math.round((hours - 0.5) * 60));
+      return { min: minMin, max: maxMin };
+    }
+  }
+
+  return null;
+}
+
+/** "HH:MM" 2 つから所要時間 (分) を計算。不正なら null。 */
+function calcDurationMinutes(start?: string, end?: string): number | null {
+  if (!start || !end) return null;
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  if ([sh, sm, eh, em].some((n) => !Number.isFinite(n))) return null;
+  const diff = eh * 60 + em - (sh * 60 + sm);
+  return diff > 0 ? diff : null;
 }
 
 // ─── Category definitions ─────────────────────────────────────────────────────
@@ -59,12 +136,20 @@ export function ServiceSelector(props: ServiceSelectorProps) {
   return <ServiceSelectorInner {...props} />
 }
 
-function ServiceSelectorInner({ onClose, onSelect, system = "介護" }: Omit<ServiceSelectorProps, "open">) {
+function ServiceSelectorInner({ onClose, onSelect, system = "介護", startTime, endTime }: Omit<ServiceSelectorProps, "open">) {
   const [services, setServices] = React.useState<ServiceCode[]>([])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [activeCategory, setActiveCategory] = React.useState<string>(CATEGORIES[0].code)
   const [query, setQuery] = React.useState("")
+  // 「候補のみ」: 時間範囲が指定されたときだけ意味を持つ。デフォルトは ON にして
+  // よくある使い方 (「この時間枠で取れるサービス何？」) を素直に満たす。
+  const durationMinutes = React.useMemo(() => calcDurationMinutes(startTime, endTime), [startTime, endTime])
+  const [candidateOnly, setCandidateOnly] = React.useState<boolean>(durationMinutes !== null)
+  // start/end が変わるたびに「該当時間が定義された場合は候補モードを ON 復帰」
+  React.useEffect(() => {
+    if (durationMinutes !== null) setCandidateOnly(true)
+  }, [durationMinutes])
 
   // ── Fetch on mount (modal-on-click pattern: open になった瞬間にこの component が mount) ──
   React.useEffect(() => {
@@ -126,16 +211,23 @@ function ServiceSelectorInner({ onClose, onSelect, system = "介護" }: Omit<Ser
   // ── Filtered list ────────────────────────────────────────────────────────────
   const filtered = React.useMemo(() => {
     const lowerQuery = query.toLowerCase()
+    const applyCandidate = candidateOnly && durationMinutes !== null
     return services.filter((s) => {
       const matchCategory = s.category === activeCategory
       if (!matchCategory) return false
+      if (applyCandidate) {
+        const range = parseServiceDurationMinutes(s.name)
+        if (!range) return false
+        // 半開区間 [min, max) で判定。境界 (例: 30分丁度 = 身体介護２) は上側に含める。
+        if (durationMinutes < range.min || durationMinutes >= range.max) return false
+      }
       if (!lowerQuery) return true
       return (
         s.code.toLowerCase().includes(lowerQuery) ||
         s.name.toLowerCase().includes(lowerQuery)
       )
     })
-  }, [services, activeCategory, query])
+  }, [services, activeCategory, query, candidateOnly, durationMinutes])
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
@@ -199,7 +291,7 @@ function ServiceSelectorInner({ onClose, onSelect, system = "介護" }: Omit<Ser
         </div>
 
         {/* Search */}
-        <div className="shrink-0 px-4 py-3 border-b">
+        <div className="shrink-0 px-4 py-3 border-b space-y-2">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
             <input
@@ -210,6 +302,20 @@ function ServiceSelectorInner({ onClose, onSelect, system = "介護" }: Omit<Ser
               className="w-full rounded-md border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
+          {durationMinutes !== null && (
+            <label className="flex items-center gap-2 text-sm text-gray-700 select-none cursor-pointer">
+              <input
+                type="checkbox"
+                checked={candidateOnly}
+                onChange={(e) => setCandidateOnly(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+              />
+              候補のみ表示
+              <span className="text-xs text-gray-500">
+                ({startTime}〜{endTime} = {durationMinutes}分に該当するサービス)
+              </span>
+            </label>
+          )}
         </div>
 
         {/* Service list */}
