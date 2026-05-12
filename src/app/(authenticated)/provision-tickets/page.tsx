@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { UserSidebar } from "@/components/users/user-sidebar";
 import {
   ProvisionTicketsContent,
+  type FormulaCode,
   type GridState,
   type KaigoStaff,
   type KaigoUser,
@@ -34,10 +35,18 @@ export default async function ProvisionTicketsPage({
         .order("name")
     : null;
 
-  const [staffRes, serviceCodeRes, officeRes] = await Promise.all([
+  const [staffRes, serviceCodeRes, officeRes, formulaRes] = await Promise.all([
     staffQuery ?? Promise.resolve({ data: [] as { id: string; name: string }[] }),
     supabase.from("kaigo_service_codes").select("service_name, units").eq("calculation_type", "基本"),
     supabase.from("offices").select("provider_number:business_number, office_name:name").eq("app_type", "kaigo-app").limit(1).maybeSingle(),
+    // 加算系 formula コード (処遇改善加算等の monthly_aggregate type)
+    supabase
+      .from("kaigo_service_codes")
+      .select("service_code, service_category, service_name, units, calculation_type, formula")
+      .eq("system", "介護")
+      .not("formula", "is", null)
+      .order("service_category")
+      .order("service_code"),
   ]);
   const initialStaff = (staffRes.data ?? []) as KaigoStaff[];
   const initialOffice = (officeRes.data ?? null) as OfficeInfo | null;
@@ -45,6 +54,7 @@ export default async function ProvisionTicketsPage({
   for (const sc of (serviceCodeRes.data ?? []) as { service_name: string; units: number }[]) {
     initialServiceUnits[sc.service_name] = sc.units;
   }
+  const initialFormulaCodes: FormulaCode[] = (formulaRes.data ?? []) as FormulaCode[];
 
   let initialUser: KaigoUser | null = null;
   let initialServiceRows: ServiceRow[] = [];
@@ -126,6 +136,7 @@ export default async function ProvisionTicketsPage({
           initialOffice={initialOffice}
           initialServiceRows={initialServiceRows}
           initialGrid={initialGrid}
+          initialFormulaCodes={initialFormulaCodes}
         />
       ) : (
         <div className="flex-1 overflow-y-auto">

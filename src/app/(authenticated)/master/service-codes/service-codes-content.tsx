@@ -21,7 +21,7 @@ import {
 export type ServiceSystem = "介護" | "障害" | "総合事業";
 
 import type { ServiceCodeFormula } from "@/lib/service-code-calc";
-import { calculateUnits, formulaToDescription } from "@/lib/service-code-calc";
+import { formulaToDescription } from "@/lib/service-code-calc";
 
 export interface ServiceCode {
   id: string;
@@ -1065,17 +1065,9 @@ export function ServiceCodesContent({
                       </td>
                       <td className="px-4 py-3 text-right font-medium text-gray-800 whitespace-nowrap">
                         {record.formula ? (
-                          (() => {
-                            const idx: Record<string, ServiceCode> = {};
-                            for (const r of records) idx[r.service_code] = r;
-                            const calc = calculateUnits(record, idx);
-                            return (
-                              <span title="formula で計算 (default minutes)">
-                                {calc != null ? calc.toLocaleString("ja-JP") : "—"}
-                                <span className="ml-1 text-[9px] text-purple-500">計算</span>
-                              </span>
-                            );
-                          })()
+                          <span className="text-purple-600 text-xs" title="formula コード — 実績画面で動的計算">
+                            式
+                          </span>
                         ) : (
                           record.units.toLocaleString("ja-JP")
                         )}

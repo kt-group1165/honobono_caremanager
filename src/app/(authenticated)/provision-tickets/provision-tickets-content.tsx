@@ -107,6 +107,16 @@ function toWareki(date: Date): string {
   return format(date, "yyyy年M月d日");
 }
 
+/** 加算系 formula コード (処遇改善加算等の monthly_aggregate type) */
+export interface FormulaCode {
+  service_code: string;
+  service_category: string;
+  service_name: string;
+  units: number;
+  calculation_type: "基本" | "加算" | "減算";
+  formula: import("@/lib/service-code-calc").ServiceCodeFormula | null;
+}
+
 export interface ProvisionTicketsContentProps {
   userId: string;
   initialUser: KaigoUser | null;
@@ -115,6 +125,7 @@ export interface ProvisionTicketsContentProps {
   initialOffice: OfficeInfo | null;
   initialServiceRows: ServiceRow[];
   initialGrid: GridState;
+  initialFormulaCodes?: FormulaCode[];
 }
 
 export function ProvisionTicketsContent({
@@ -125,6 +136,7 @@ export function ProvisionTicketsContent({
   initialOffice,
   initialServiceRows,
   initialGrid,
+  initialFormulaCodes = [],
 }: ProvisionTicketsContentProps) {
   const supabase = useMemo(() => createClient(), []);
   const { currentOfficeId, currentOffice } = useBusinessType();
@@ -152,6 +164,19 @@ export function ProvisionTicketsContent({
   const [allStaff, setAllStaff] = useState<KaigoStaff[]>(initialStaff);
   const [serviceUnits] = useState<Record<string, number>>(initialServiceUnits);
   const [officeInfo] = useState<OfficeInfo | null>(initialOffice);
+  // 加算系 formula コード (cat=11 訪問介護 のみ抽出してデフォルト)
+  const [formulaCodes] = useState<FormulaCode[]>(initialFormulaCodes);
+  // 自事業所が取得している加算 (service_code の Set、localStorage 永続化)
+  const [appliedFormulaCodes, setAppliedFormulaCodes] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const stored = window.localStorage.getItem("provision_tickets.applied_formula_codes");
+      if (stored) return new Set(JSON.parse(stored) as string[]);
+    } catch {
+      /* noop */
+    }
+    return new Set();
+  });
 
   const [serviceRows, setServiceRows] = useState<ServiceRow[]>(initialServiceRows);
   const [grid, setGrid] = useState<GridState>(initialGrid);
@@ -623,6 +648,84 @@ export function ProvisionTicketsContent({
 
   const totalPlannedUnits = useMemo(() => unitSummary.reduce((s, r) => s + r.plannedUnits, 0), [unitSummary]);
   const totalActualUnits = useMemo(() => unitSummary.reduce((s, r) => s + r.actualUnits, 0), [unitSummary]);
+
+  // ── formula 加算系コード (処遇改善加算等) を「自事業所の category」で絞る ──
+  // currentOffice.service_type → category prefix (簡易 mapping)
+  const officeCategory = useMemo(() => {
+    const t = currentOffice?.service_type ?? "";
+    if (t === "訪問介護") return "11";
+    if (t === "訪問入浴介護") return "12";
+    if (t === "訪問看護") return "13";
+    if (t === "訪問リハビリテーション") return "14";
+    if (t === "通所介護") return "15";
+    if (t === "通所リハビリテーション") return "16";
+    if (t === "短期入所生活介護") return "21";
+    if (t === "居宅介護支援") return "43";
+    return null;
+  }, [currentOffice]);
+
+  const availableFormulaCodes = useMemo(
+    () => formulaCodes.filter((f) => !officeCategory || f.service_category === officeCategory),
+    [formulaCodes, officeCategory],
+  );
+
+  // 選択された formula コードに月計を適用して計算した単位
+  const formulaAdjustments = useMemo(() => {
+    const out: { code: string; name: string; plannedUnits: number; actualUnits: number; pct: string }[] = [];
+    for (const f of availableFormulaCodes) {
+      if (!appliedFormulaCodes.has(f.service_code) || !f.formula) continue;
+      let plannedUnits = 0;
+      let actualUnits = 0;
+      let pctLabel = "";
+      if (f.formula.type === "monthly_aggregate") {
+        const num = f.formula.numerator;
+        const den = f.formula.denominator;
+        plannedUnits = Math.round((totalPlannedUnits * num) / den);
+        actualUnits = Math.round((totalActualUnits * num) / den);
+        pctLabel = `${((num / den) * 100).toFixed(1).replace(/\.0$/, "")}%`;
+      }
+      out.push({
+        code: f.service_code,
+        name: f.service_name,
+        plannedUnits,
+        actualUnits,
+        pct: pctLabel,
+      });
+    }
+    return out;
+  }, [availableFormulaCodes, appliedFormulaCodes, totalPlannedUnits, totalActualUnits]);
+
+  // 加算込みの最終合計
+  const grandPlannedUnits = useMemo(
+    () => totalPlannedUnits + formulaAdjustments.reduce((s, a) => s + a.plannedUnits, 0),
+    [totalPlannedUnits, formulaAdjustments],
+  );
+  const grandActualUnits = useMemo(
+    () => totalActualUnits + formulaAdjustments.reduce((s, a) => s + a.actualUnits, 0),
+    [totalActualUnits, formulaAdjustments],
+  );
+
+  // appliedFormulaCodes 変更時に localStorage に保存
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        "provision_tickets.applied_formula_codes",
+        JSON.stringify(Array.from(appliedFormulaCodes)),
+      );
+    } catch {
+      /* noop */
+    }
+  }, [appliedFormulaCodes]);
+
+  const toggleAppliedFormula = (code: string) => {
+    setAppliedFormulaCodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  };
 
   // ── 月次実績 payload (居宅介護支援への送付用) ─────────────────────────────
   // grid 上の actual=true セルを 1 record とし、(date, start_time) で重複判定可能な
@@ -1316,14 +1419,70 @@ export function ProvisionTicketsContent({
                     </tbody>
                     <tfoot>
                       <tr className="bg-gray-50 font-bold text-xs">
-                        <td className="border border-gray-200 px-2 py-1 text-right" colSpan={2}>合計</td>
+                        <td className="border border-gray-200 px-2 py-1 text-right" colSpan={2}>所定単位 合計</td>
                         <td className="border border-gray-200 px-2 py-1 text-right text-blue-700 tabular-nums">{totalPlanned || ""}</td>
                         <td className="border border-gray-200 px-2 py-1 text-right text-blue-700 tabular-nums">{totalPlannedUnits > 0 ? totalPlannedUnits.toLocaleString() : ""}</td>
                         <td className="border border-gray-200 px-2 py-1 text-right text-green-700 tabular-nums">{totalActual || ""}</td>
                         <td className="border border-gray-200 px-2 py-1 text-right text-green-700 tabular-nums">{totalActualUnits > 0 ? totalActualUnits.toLocaleString() : ""}</td>
                       </tr>
+                      {formulaAdjustments.map((a) => (
+                        <tr key={a.code} className="bg-purple-50/40 text-xs">
+                          <td className="border border-gray-200 px-2 py-1 text-purple-700">
+                            {a.name}
+                            <span className="ml-1 text-[10px] text-purple-500">({a.pct})</span>
+                          </td>
+                          <td className="border border-gray-200 px-2 py-1 text-right text-[10px] text-gray-400">月計×{a.pct}</td>
+                          <td className="border border-gray-200 px-2 py-1" colSpan={1}></td>
+                          <td className="border border-gray-200 px-2 py-1 text-right text-purple-700 tabular-nums">+{a.plannedUnits.toLocaleString()}</td>
+                          <td className="border border-gray-200 px-2 py-1" colSpan={1}></td>
+                          <td className="border border-gray-200 px-2 py-1 text-right text-purple-700 tabular-nums">+{a.actualUnits.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                      {formulaAdjustments.length > 0 && (
+                        <tr className="bg-gray-100 font-bold text-xs">
+                          <td className="border border-gray-200 px-2 py-1 text-right" colSpan={3}>加算込み 総合計</td>
+                          <td className="border border-gray-200 px-2 py-1 text-right text-blue-700 tabular-nums">{grandPlannedUnits.toLocaleString()}</td>
+                          <td className="border border-gray-200 px-2 py-1" colSpan={1}></td>
+                          <td className="border border-gray-200 px-2 py-1 text-right text-green-700 tabular-nums">{grandActualUnits.toLocaleString()}</td>
+                        </tr>
+                      )}
                     </tfoot>
                   </table>
+
+                  {/* 加算選択チェックボックス */}
+                  {availableFormulaCodes.length > 0 && (
+                    <div className="mt-2 rounded border border-purple-200 bg-purple-50/30 px-3 py-2">
+                      <div className="text-[11px] font-semibold text-purple-700 mb-1">
+                        適用する加算 (自事業所が取得しているもの)
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {availableFormulaCodes.map((f) => (
+                          <label
+                            key={f.service_code}
+                            className="flex items-center gap-1 text-[11px] cursor-pointer hover:bg-white rounded px-1.5 py-0.5"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={appliedFormulaCodes.has(f.service_code)}
+                              onChange={() => toggleAppliedFormula(f.service_code)}
+                              className="accent-purple-600"
+                            />
+                            <span className={appliedFormulaCodes.has(f.service_code) ? "text-purple-800 font-medium" : "text-gray-600"}>
+                              {f.service_name}
+                              {f.formula?.type === "monthly_aggregate" && (
+                                <span className="ml-0.5 text-[10px] text-gray-400">
+                                  ({((f.formula.numerator / f.formula.denominator) * 100).toFixed(1).replace(/\.0$/, "")}%)
+                                </span>
+                              )}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      <div className="mt-1 text-[10px] text-gray-500">
+                        ※ 選択は事業所ごとにこのブラウザに保存されます (localStorage)
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
