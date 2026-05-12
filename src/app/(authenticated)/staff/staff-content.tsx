@@ -85,6 +85,7 @@ const EMPTY_FORM: StaffForm = {
   email: "",
   phone: "",
   employment_type: "常勤",
+  salary_type: null,
   hire_date: "",
   status: "active",
 };
@@ -348,6 +349,7 @@ export function StaffContent({
       email: staff.email,
       phone: staff.phone,
       employment_type: staff.employment_type,
+      salary_type: staff.salary_type,
       hire_date: staff.hire_date,
       status: staff.status,
     });
