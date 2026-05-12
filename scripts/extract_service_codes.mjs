@@ -236,9 +236,12 @@ for (let pageNum = startPage; pageNum <= endPage; pageNum++) {
   // ─── 行ごとに service-code 候補を組み立て
   // 同 y にある items を x 順にソート → [cat, code, name, ..., units, unit_type] のパターンを抽出
   const sortedRows = [...rows.entries()].sort((a, b) => b[0] - a[0]); // y 降順 = 上から下
-  // 単位列の x 位置: PDF レイアウト上 単位数は右側 (x≈490-510) に並ぶ。
-  // 本文中の数値 (例「567 単位 ＋」) を誤拾いしないために x の閾値を設定。
-  const UNIT_COLUMN_MIN_X = 470;
+  // 単位列の x 位置: PDF レイアウトで単位数列は右側に並ぶ。
+  //   介護保険 PDF: x≈493-510
+  //   障害福祉 PDF: x≈455
+  // 本文中の数値 (例「567 単位 ＋」at x≈220) を誤拾いしないために閾値設定。
+  // 440 にすることで両方の単位列をカバーし、本文の中央寄り数値は除外。
+  const UNIT_COLUMN_MIN_X = 440;
   for (const [, lineItems] of sortedRows) {
     lineItems.sort((a, b) => a.x - b.x);
     // x 情報を保持したまま処理

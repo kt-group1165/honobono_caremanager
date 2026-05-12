@@ -27,6 +27,14 @@ interface ServiceSelectorProps {
     category: string
     categoryName: string
   }) => void
+  /**
+   * 制度区分フィルタ。
+   * - "介護" (デフォルト): 介護保険サービス
+   * - "障害": 障害福祉サービス
+   * - "総合事業": 介護予防・日常生活支援総合事業
+   * provision-tickets / reports / shift-management は全て介護保険なので未指定 = "介護"。
+   */
+  system?: "介護" | "障害" | "総合事業"
 }
 
 // ─── Category definitions ─────────────────────────────────────────────────────
@@ -51,7 +59,7 @@ export function ServiceSelector(props: ServiceSelectorProps) {
   return <ServiceSelectorInner {...props} />
 }
 
-function ServiceSelectorInner({ onClose, onSelect }: Omit<ServiceSelectorProps, "open">) {
+function ServiceSelectorInner({ onClose, onSelect, system = "介護" }: Omit<ServiceSelectorProps, "open">) {
   const [services, setServices] = React.useState<ServiceCode[]>([])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -68,9 +76,16 @@ function ServiceSelectorInner({ onClose, onSelect }: Omit<ServiceSelectorProps, 
     async function fetchServices() {
       try {
         const supabase = createClient()
+        // 介護 / 障害 / 総合事業 の同居テーブル → system でフィルタ必須
+        //   さもないと service_category=11 が介護(訪問介護) と 障害(居宅介護) で重複表示される
+        // 有効期間: 今日時点で有効なコードのみ (valid_until=NULL は無期限有効)
+        const today = new Date().toISOString().slice(0, 10)
         const { data, error: fetchError } = await supabase
           .from("kaigo_service_codes")
           .select("service_code, service_name, units, service_category, service_category_name, calculation_type")
+          .eq("system", system)
+          .lte("valid_from", today)
+          .or(`valid_until.is.null,valid_until.gte.${today}`)
           .order("service_code", { ascending: true })
 
         if (cancelled) return
@@ -93,7 +108,7 @@ function ServiceSelectorInner({ onClose, onSelect }: Omit<ServiceSelectorProps, 
 
     fetchServices()
     return () => { cancelled = true }
-  }, [])
+  }, [system])
 
   // ── Escape key ───────────────────────────────────────────────────────────────
   React.useEffect(() => {
