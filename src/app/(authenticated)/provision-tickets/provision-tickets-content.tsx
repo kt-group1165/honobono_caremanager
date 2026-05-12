@@ -166,17 +166,12 @@ export function ProvisionTicketsContent({
   const [officeInfo] = useState<OfficeInfo | null>(initialOffice);
   // 加算系 formula コード (cat=11 訪問介護 のみ抽出してデフォルト)
   const [formulaCodes] = useState<FormulaCode[]>(initialFormulaCodes);
-  // 自事業所が取得している加算 (service_code の Set、localStorage 永続化)
-  const [appliedFormulaCodes, setAppliedFormulaCodes] = useState<Set<string>>(() => {
-    if (typeof window === "undefined") return new Set();
-    try {
-      const stored = window.localStorage.getItem("provision_tickets.applied_formula_codes");
-      if (stored) return new Set(JSON.parse(stored) as string[]);
-    } catch {
-      /* noop */
-    }
-    return new Set();
-  });
+  // 自事業所が取得している加算 (currentOffice.applied_formula_codes から)
+  // 設定変更は /settings ページの「適用加算」セクションで行う (read-only here)
+  const appliedFormulaCodes = useMemo(
+    () => new Set(currentOffice?.applied_formula_codes ?? []),
+    [currentOffice],
+  );
 
   const [serviceRows, setServiceRows] = useState<ServiceRow[]>(initialServiceRows);
   const [grid, setGrid] = useState<GridState>(initialGrid);
@@ -705,27 +700,8 @@ export function ProvisionTicketsContent({
     [totalActualUnits, formulaAdjustments],
   );
 
-  // appliedFormulaCodes 変更時に localStorage に保存
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(
-        "provision_tickets.applied_formula_codes",
-        JSON.stringify(Array.from(appliedFormulaCodes)),
-      );
-    } catch {
-      /* noop */
-    }
-  }, [appliedFormulaCodes]);
-
-  const toggleAppliedFormula = (code: string) => {
-    setAppliedFormulaCodes((prev) => {
-      const next = new Set(prev);
-      if (next.has(code)) next.delete(code);
-      else next.add(code);
-      return next;
-    });
-  };
+  // appliedFormulaCodes は currentOffice 由来 (read-only)。
+  // 設定変更は /settings ページの「適用加算」セクションで行う。
 
   // ── 月次実績 payload (居宅介護支援への送付用) ─────────────────────────────
   // grid 上の actual=true セルを 1 record とし、(date, start_time) で重複判定可能な
@@ -1449,37 +1425,39 @@ export function ProvisionTicketsContent({
                     </tfoot>
                   </table>
 
-                  {/* 加算選択チェックボックス */}
+                  {/* 適用加算 (read-only — 設定変更は /settings) */}
                   {availableFormulaCodes.length > 0 && (
                     <div className="mt-2 rounded border border-purple-200 bg-purple-50/30 px-3 py-2">
-                      <div className="text-[11px] font-semibold text-purple-700 mb-1">
-                        適用する加算 (自事業所が取得しているもの)
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="text-[11px] font-semibold text-purple-700">
+                          適用中の加算 ({appliedFormulaCodes.size} / {availableFormulaCodes.length})
+                        </div>
+                        <a
+                          href="/settings"
+                          className="text-[10px] text-blue-600 hover:underline"
+                        >
+                          設定で変更 →
+                        </a>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {availableFormulaCodes.map((f) => (
-                          <label
-                            key={f.service_code}
-                            className="flex items-center gap-1 text-[11px] cursor-pointer hover:bg-white rounded px-1.5 py-0.5"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={appliedFormulaCodes.has(f.service_code)}
-                              onChange={() => toggleAppliedFormula(f.service_code)}
-                              className="accent-purple-600"
-                            />
-                            <span className={appliedFormulaCodes.has(f.service_code) ? "text-purple-800 font-medium" : "text-gray-600"}>
+                      <div className="flex flex-wrap gap-1.5 text-[10px]">
+                        {availableFormulaCodes
+                          .filter((f) => appliedFormulaCodes.has(f.service_code))
+                          .map((f) => (
+                            <span
+                              key={f.service_code}
+                              className="rounded bg-purple-100 text-purple-800 px-1.5 py-0.5 font-medium"
+                            >
                               {f.service_name}
                               {f.formula?.type === "monthly_aggregate" && (
-                                <span className="ml-0.5 text-[10px] text-gray-400">
+                                <span className="ml-0.5 opacity-60">
                                   ({((f.formula.numerator / f.formula.denominator) * 100).toFixed(1).replace(/\.0$/, "")}%)
                                 </span>
                               )}
                             </span>
-                          </label>
-                        ))}
-                      </div>
-                      <div className="mt-1 text-[10px] text-gray-500">
-                        ※ 選択は事業所ごとにこのブラウザに保存されます (localStorage)
+                          ))}
+                        {appliedFormulaCodes.size === 0 && (
+                          <span className="text-gray-400">適用加算未設定 (設定画面で選択)</span>
+                        )}
                       </div>
                     </div>
                   )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Settings, Eye, EyeOff, Building2, ChevronRight, CalendarDays, Plus, Save, Loader2, Trash2, Copy } from "lucide-react";
@@ -423,6 +423,167 @@ function FiscalYearTokuteiKassanSection() {
 
 // ─── 自事業所切替 ──────────────────────────────────────────────────────────
 
+// ─── 適用加算 (事業所単位の処遇改善加算等の選択) ───────────────────────────
+function AppliedFormulaSection() {
+  const supabase = useMemo(() => createClient(), []);
+  const { currentOffice, currentOfficeId } = useBusinessType();
+  const [formulaCodes, setFormulaCodes] = useState<{
+    service_code: string;
+    service_category: string;
+    service_name: string;
+    formula: { type: string; numerator?: number; denominator?: number } | null;
+  }[]>([]);
+  const [applied, setApplied] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // currentOffice の category prefix を service_type から判定
+  const officeCategory = useMemo(() => {
+    const t = currentOffice?.service_type ?? "";
+    if (t === "訪問介護") return "11";
+    if (t === "訪問入浴介護") return "12";
+    if (t === "訪問看護") return "13";
+    if (t === "訪問リハビリテーション") return "14";
+    if (t === "通所介護") return "15";
+    if (t === "通所リハビリテーション") return "16";
+    if (t === "短期入所生活介護") return "21";
+    if (t === "居宅介護支援") return "43";
+    return null;
+  }, [currentOffice]);
+
+  // 当該 category の formula コードを fetch
+  useEffect(() => {
+    if (!officeCategory) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 依存変更で初期化
+      setFormulaCodes([]);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const { data } = await supabase
+        .from("kaigo_service_codes")
+        .select("service_code, service_category, service_name, formula")
+        .eq("system", "介護")
+        .eq("service_category", officeCategory)
+        .not("formula", "is", null)
+        .order("service_code");
+      if (!cancelled) {
+        setFormulaCodes(
+          (data ?? []) as typeof formulaCodes,
+        );
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, officeCategory]);
+
+  // currentOffice の applied_formula_codes を反映
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (依存変更で同期)
+    setApplied(new Set(currentOffice?.applied_formula_codes ?? []));
+  }, [currentOffice]);
+
+  const toggle = (code: string) => {
+    setApplied((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  };
+
+  const handleSave = async () => {
+    if (!currentOfficeId) {
+      toast.error("自事業所が選択されていません");
+      return;
+    }
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("offices")
+        .update({ applied_formula_codes: Array.from(applied) })
+        .eq("id", currentOfficeId);
+      if (error) throw error;
+      toast.success("適用加算を保存しました (画面再読込で反映)");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error("保存に失敗: " + msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!currentOffice) return null;
+
+  const dirty =
+    JSON.stringify(Array.from(applied).sort()) !==
+    JSON.stringify([...(currentOffice.applied_formula_codes ?? [])].sort());
+
+  return (
+    <div className="rounded-lg border bg-white p-6 max-w-3xl">
+      <div className="flex items-center justify-between mb-2">
+        <div>
+          <h2 className="font-semibold text-gray-900">適用加算 (事業所単位)</h2>
+          <p className="text-xs text-gray-500 mt-1">
+            自事業所が取得している加算を選択。サービス提供表 (実績) で月計から自動計算されます。
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving || !dirty}
+          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"
+        >
+          {saving ? "保存中..." : dirty ? "変更を保存" : "保存済"}
+        </button>
+      </div>
+      {!officeCategory ? (
+        <p className="text-sm text-gray-500 py-4">
+          現在の事業所の service_type ({currentOffice.service_type || "未設定"}) に対応する加算がありません
+        </p>
+      ) : loading ? (
+        <p className="text-sm text-gray-400 py-4">読込中...</p>
+      ) : formulaCodes.length === 0 ? (
+        <p className="text-sm text-gray-500 py-4">
+          サービス種類 ({currentOffice.service_type}) に該当する加算 (formula 系) はマスタにありません
+        </p>
+      ) : (
+        <ul className="divide-y divide-gray-100 mt-2">
+          {formulaCodes.map((f) => {
+            const pct =
+              f.formula?.type === "monthly_aggregate" && f.formula.numerator && f.formula.denominator
+                ? ((f.formula.numerator / f.formula.denominator) * 100).toFixed(1).replace(/\.0$/, "")
+                : null;
+            return (
+              <li key={f.service_code}>
+                <label className="flex items-center gap-2 py-2 cursor-pointer hover:bg-gray-50 rounded px-2">
+                  <input
+                    type="checkbox"
+                    checked={applied.has(f.service_code)}
+                    onChange={() => toggle(f.service_code)}
+                    className="accent-blue-600"
+                  />
+                  <span className="flex-1 text-sm text-gray-800">
+                    {f.service_name}
+                  </span>
+                  {pct && (
+                    <span className="text-xs text-purple-600 font-medium">月計 × {pct}%</span>
+                  )}
+                  <span className="text-[10px] text-gray-400 font-mono">{f.service_code}</span>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function OfficeSwitcher() {
   const { offices, currentOfficeId, setCurrentOfficeId, currentOffice } = useBusinessType();
   const typeLabel = (bt: string) =>
@@ -720,6 +881,9 @@ export default function SettingsPage() {
           </div>
         </form>
       </div>
+
+      {/* 適用加算 (事業所単位) */}
+      <AppliedFormulaSection />
 
       {/* 年度別単位数管理 */}
       <FiscalYearRatesSection />

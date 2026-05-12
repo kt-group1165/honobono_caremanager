@@ -21,6 +21,8 @@ export interface OfficeRow {
   business_number: string | null;
   is_active: boolean;
   tenant_id: string;
+  /** 自事業所が取得している加算 (処遇改善加算等の service_code 配列) */
+  applied_formula_codes: string[];
 }
 
 interface BusinessTypeContextValue {
@@ -80,7 +82,7 @@ export function BusinessTypeProvider({ children }: { children: ReactNode }) {
       // 共通マスタ offices から、app_type='kaigo-app' の事業所のみ取得
       const { data } = await supabase
         .from("offices")
-        .select("id, name, service_type, business_number, is_active, tenant_id")
+        .select("id, name, service_type, business_number, is_active, tenant_id, applied_formula_codes")
         .eq("app_type", "kaigo-app")
         .order("name");
       const list = (data || []) as OfficeRow[];
