@@ -1508,6 +1508,8 @@ export function ProvisionTicketsContent({
                 <ServiceSelector
                   open={showAddServiceSelector}
                   onClose={() => setShowAddServiceSelector(false)}
+                  startTime={addRowForm.start_time}
+                  endTime={addRowForm.end_time}
                   onSelect={(service) => {
                     setAddRowForm((f) => ({ ...f, service_type: service.categoryName, service_code: service.code, service_name: service.name }));
                     setShowAddServiceSelector(false);
@@ -1573,6 +1575,8 @@ export function ProvisionTicketsContent({
                 <ServiceSelector
                   open={showEditServiceSelector}
                   onClose={() => setShowEditServiceSelector(false)}
+                  startTime={editRowForm.start_time}
+                  endTime={editRowForm.end_time}
                   onSelect={(service) => {
                     setEditRowForm((f) => ({ ...f, service_name: service.name, service_code: service.code }));
                     setShowEditServiceSelector(false);

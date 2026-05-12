@@ -1297,17 +1297,29 @@ function EditFormServiceTicket({ content, onChange }: {
       </div>
 
       {/* サービス選択モーダル */}
-      <ServiceSelector
-        open={selectorOpen}
-        onClose={() => { setSelectorOpen(false); setSelectorTarget(null); }}
-        onSelect={(svc) => {
-          if (selectorTarget !== null) {
-            updateSvc(selectorTarget, "content", svc.name);
-          }
-          setSelectorOpen(false);
-          setSelectorTarget(null);
-        }}
-      />
+      {/* selectorTarget の time 文字列 ("10:00-11:00" 等) から startTime/endTime を抽出。
+          ServiceSelector 側で「候補のみ表示」フィルタに使う。 */}
+      {(() => {
+        const timeStr = selectorTarget !== null ? (services[selectorTarget]?.time ?? "") : "";
+        const m = timeStr.match(/^(\d{1,2}:\d{2})\s*[-〜~～]\s*(\d{1,2}:\d{2})/);
+        const startTime = m?.[1];
+        const endTime = m?.[2];
+        return (
+          <ServiceSelector
+            open={selectorOpen}
+            onClose={() => { setSelectorOpen(false); setSelectorTarget(null); }}
+            startTime={startTime}
+            endTime={endTime}
+            onSelect={(svc) => {
+              if (selectorTarget !== null) {
+                updateSvc(selectorTarget, "content", svc.name);
+              }
+              setSelectorOpen(false);
+              setSelectorTarget(null);
+            }}
+          />
+        );
+      })()}
 
       {/* 提供時間帯モーダル（開始時刻・終了時刻を直接入力） */}
       {timeModalOpen && (
