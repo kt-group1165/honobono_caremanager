@@ -307,6 +307,31 @@ for (let pageNum = startPage; pageNum <= endPage; pageNum++) {
       continue;
     }
 
+    // ─── formula 自動検出 ─────────────────────────────────────────────────
+    // 「所定単位×N/1000」「所定単位数の N/1000」等の表記を検出して
+    // monthly_aggregate type の formula JSON を生成。
+    // 処遇改善加算 / サービス提供体制強化加算 / 特定処遇改善加算 等を網羅。
+    let formula = null;
+    // パターン1: "所定単位 × 245/1000" or "所定単位数の 100/1000"
+    const aggMatch =
+      inline.match(/所定単位[数]?[\s×x の]+(\d{1,4})\s*\/\s*(\d{2,5})/) ||
+      inline.match(/(\d{1,4})\s*\/\s*(\d{2,5})\s*加算/);
+    if (aggMatch) {
+      const num = parseInt(aggMatch[1], 10);
+      const den = parseInt(aggMatch[2], 10);
+      // 妥当性チェック: 1〜999 / 1000 (or 100) など
+      if (num >= 1 && num < den && den <= 10000) {
+        formula = {
+          type: "monthly_aggregate",
+          service_category: cat,
+          numerator: num,
+          denominator: den,
+          label: `所定単位×${num}/${den}`,
+          rounding: "round",
+        };
+      }
+    }
+
     records.push({
       system: systemArg,
       service_category: cat,
@@ -319,6 +344,7 @@ for (let pageNum = startPage; pageNum <= endPage; pageNum++) {
       valid_from: validFrom,
       valid_until: "",
       notes: extraNotes ? `${extraNotes} / PDF p.${pageNum}` : `PDF p.${pageNum}`,
+      formula: formula ? JSON.stringify(formula) : "",
     });
     seen.add(fullCode);
   }
@@ -341,6 +367,7 @@ const headers = [
   "valid_from",
   "valid_until",
   "notes",
+  "formula",
 ];
 const escape = (v) => {
   if (v === null || v === undefined) return "";

@@ -62,6 +62,7 @@ interface ServiceCodeImportRow {
   valid_from: string | null;
   valid_until: string | null;
   notes: string | null;
+  formula: ServiceCodeFormula | null;
   // 検証 / メタ
   rowIndex: number;
   error?: string;
@@ -636,6 +637,7 @@ export function ServiceCodesContent({
       const iValidFrom = idx("valid_from");
       const iValidUntil = idx("valid_until");
       const iNotes = idx("notes");
+      const iFormula = idx("formula");
       if (iCat < 0 || iCode < 0 || iName < 0) {
         toast.error(
           "CSV ヘッダーに service_category / service_code / service_name が必要です",
@@ -671,6 +673,16 @@ export function ServiceCodesContent({
         const validUntil =
           iValidUntil >= 0 && cols[iValidUntil]?.trim() ? cols[iValidUntil].trim() : null;
         const notes = iNotes >= 0 && cols[iNotes]?.trim() ? cols[iNotes].trim() : null;
+        // formula 列 (JSON 文字列) — parse して埋め込み、失敗時は null
+        let formula: ServiceCodeFormula | null = null;
+        const formulaRaw = iFormula >= 0 ? (cols[iFormula] ?? "").trim() : "";
+        if (formulaRaw) {
+          try {
+            formula = JSON.parse(formulaRaw) as ServiceCodeFormula;
+          } catch {
+            formula = null;
+          }
+        }
 
         const row: ServiceCodeImportRow = {
           system: sys,
@@ -684,6 +696,7 @@ export function ServiceCodesContent({
           valid_from: validFrom,
           valid_until: validUntil,
           notes,
+          formula,
           rowIndex: li + 1, // 表示用の 1-indexed (header = 1, first data = 2)
         };
 
@@ -746,6 +759,7 @@ export function ServiceCodesContent({
           valid_from: importValidFrom,
           valid_until: importValidUntil || null,
           notes: r.notes,
+          formula: r.formula,
         }));
         // 複合 unique (system, service_code, valid_from) で UPSERT。
         // 同じ service_code でも system / valid_from が違えば別行として履歴保持される。

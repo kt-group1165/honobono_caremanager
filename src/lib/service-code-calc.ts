@@ -36,6 +36,20 @@ export type ServiceCodeFormula =
         | { base_code: string; factor?: number; rounding?: "round" | "floor" | "ceil" | "none" }
         | { factor: number; rounding?: "round" | "floor" | "ceil" | "none" }
       >;
+    }
+  | {
+      // 処遇改善加算 等: 月の所定単位数の合計 × 加算率
+      // 計算には params.monthly_total_units (集計済の月内所定単位合計) が必要
+      type: "monthly_aggregate";
+      /** 集計対象スコープ (省略可、UI 表示用) */
+      service_category?: string;
+      /** 加算率 numerator (例 245 = 24.5%) */
+      numerator: number;
+      /** 加算率 denominator (通常 1000) */
+      denominator: number;
+      /** 計算式の元 PDF 表記 (例 "所定単位×245/1000 加算") */
+      label?: string;
+      rounding?: "round" | "floor" | "ceil" | "none";
     };
 
 export interface MinimalServiceCode {
@@ -47,6 +61,8 @@ export interface MinimalServiceCode {
 export interface CalcParams {
   /** 実利用時間 (分)。time_increment 系で使用 */
   minutes?: number;
+  /** 月の所定単位数の合計 (処遇改善加算等の monthly_aggregate で使用) */
+  monthly_total_units?: number;
 }
 
 function applyRounding(value: number, mode: "round" | "floor" | "ceil" | "none" = "round"): number {
@@ -100,6 +116,14 @@ export function calculateUnits(
     return applyRounding(baseValue * f.factor, f.rounding);
   }
 
+  if (f.type === "monthly_aggregate") {
+    // 月の所定単位合計 × (numerator / denominator)
+    // 集計値が未指定なら計算不可 (= null)、UI 上は「要月集計」表示
+    const total = params.monthly_total_units;
+    if (total == null) return null;
+    return applyRounding((total * f.numerator) / f.denominator, f.rounding ?? "round");
+  }
+
   if (f.type === "chain") {
     let current: number | null = null;
     for (const step of f.steps) {
@@ -150,6 +174,10 @@ export function formulaToDescription(formula: ServiceCodeFormula | null): string
   }
   if (formula.type === "chain") {
     return `chain × ${formula.steps.length} 段`;
+  }
+  if (formula.type === "monthly_aggregate") {
+    const pct = ((formula.numerator / formula.denominator) * 100).toFixed(1).replace(/\.0$/, "");
+    return formula.label ?? `月所定単位合計 × ${formula.numerator}/${formula.denominator} (${pct}%)`;
   }
   return "";
 }
