@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Database, Building2, FileText } from "lucide-react";
+import { Database, Building2, Building, FileText } from "lucide-react";
 
 export default function MasterPage() {
   return (
@@ -24,6 +24,18 @@ export default function MasterPage() {
           </div>
         </Link>
         <Link
+          href="/master/office"
+          className="flex items-center gap-4 rounded-xl border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+        >
+          <div className="rounded-lg bg-indigo-50 p-3">
+            <Building size={24} className="text-indigo-600" />
+          </div>
+          <div>
+            <h2 className="font-bold text-gray-900">自事業所管理 (グループ事業所)</h2>
+            <p className="text-sm text-gray-500">自社グループの事業所登録・地域区分・特定事業所加算</p>
+          </div>
+        </Link>
+        <Link
           href="/master/providers"
           className="flex items-center gap-4 rounded-xl border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
         >
@@ -31,8 +43,8 @@ export default function MasterPage() {
             <Building2 size={24} className="text-green-600" />
           </div>
           <div>
-            <h2 className="font-bold text-gray-900">サービス事業所マスタ</h2>
-            <p className="text-sm text-gray-500">事業所番号・提供サービス・連絡先の管理</p>
+            <h2 className="font-bold text-gray-900">サービス事業所マスタ (他社事業所)</h2>
+            <p className="text-sm text-gray-500">他社・連携先事業所の登録・提供サービス管理</p>
           </div>
         </Link>
         <Link
