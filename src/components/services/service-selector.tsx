@@ -114,6 +114,58 @@ function calcDurationMinutes(start?: string, end?: string): number | null {
   return diff > 0 ? diff : null;
 }
 
+// ─── 時間帯 (zone) 判定 ────────────────────────────────────────────────────
+
+type TimeZone = "日中" | "早朝" | "夜間" | "深夜";
+
+/** "HH:MM" → 時間帯 4 区分 (なお 22:00-翌6:00 が深夜、6:00-8:00 が早朝)。 */
+function classifyStartTimeZone(start?: string): TimeZone | null {
+  if (!start) return null;
+  const m = start.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const mins = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  if (mins < 6 * 60 || mins >= 22 * 60) return "深夜";   // 22:00〜翌6:00
+  if (mins < 8 * 60) return "早朝";                       //  6:00〜 8:00
+  if (mins < 18 * 60) return "日中";                      //  8:00〜18:00
+  return "夜間";                                          // 18:00〜22:00
+}
+
+/**
+ * service_name から時間帯を判定。
+ *   ・障害 居宅介護等の prefix 形式:
+ *       (身体|家事|通院|乗降|重訪|行援|同行|重包) + (日|早|夜|深) + N.M
+ *   ・介護 訪問介護等の suffix 形式:
+ *       本体名 + (・夜 | ・深) ※ 早朝専用コードは存在せず「・夜」が早朝も兼ねる
+ *   どれにも該当しなければ "日中" を返す (≒ 通常時間帯)。
+ */
+function parseServiceTimeZone(name: string): TimeZone {
+  // 障害 prefix
+  const prefix = name.match(/^(?:身体|家事|通院|乗降|重訪|行援|同行|重包)(日|早|夜|深)/);
+  if (prefix) {
+    switch (prefix[1]) {
+      case "日": return "日中";
+      case "早": return "早朝";
+      case "夜": return "夜間";
+      case "深": return "深夜";
+    }
+  }
+  // 介護 suffix (深 を先にチェック)
+  if (name.includes("・深")) return "深夜";
+  if (name.includes("・夜")) return "夜間";
+  return "日中";
+}
+
+/**
+ * slot の時間帯と service の時間帯が一致するか。
+ * 介護保険・総合事業は「早朝専用コード」がなく早朝も「・夜」コードを使うため、
+ * 早朝 slot → 夜間 サービス への match を許容する。障害福祉は 4 区分独立。
+ */
+function timeZoneMatches(slot: TimeZone, svc: TimeZone, system: "介護" | "障害" | "総合事業"): boolean {
+  if (slot === svc) return true;
+  if (system !== "障害" && slot === "早朝" && svc === "夜間") return true;
+  return false;
+}
+
 // ─── Category definitions ─────────────────────────────────────────────────────
 
 const CATEGORIES = [
@@ -208,6 +260,9 @@ function ServiceSelectorInner({ onClose, onSelect, system = "介護", startTime,
     return () => { document.body.style.overflow = "" }
   }, [])
 
+  // 開始時刻 → 時間帯 (日中/早朝/夜間/深夜)
+  const slotZone = React.useMemo(() => classifyStartTimeZone(startTime), [startTime])
+
   // ── Filtered list ────────────────────────────────────────────────────────────
   const filtered = React.useMemo(() => {
     const lowerQuery = query.toLowerCase()
@@ -216,10 +271,15 @@ function ServiceSelectorInner({ onClose, onSelect, system = "介護", startTime,
       const matchCategory = s.category === activeCategory
       if (!matchCategory) return false
       if (applyCandidate) {
+        // 1) 所要時間レンジで絞る
         const range = parseServiceDurationMinutes(s.name)
         if (!range) return false
-        // 半開区間 [min, max) で判定。境界 (例: 30分丁度 = 身体介護２) は上側に含める。
         if (durationMinutes < range.min || durationMinutes >= range.max) return false
+        // 2) 時間帯 (夜/深/早朝/日中) で絞る
+        if (slotZone) {
+          const svcZone = parseServiceTimeZone(s.name)
+          if (!timeZoneMatches(slotZone, svcZone, system)) return false
+        }
       }
       if (!lowerQuery) return true
       return (
@@ -227,7 +287,7 @@ function ServiceSelectorInner({ onClose, onSelect, system = "介護", startTime,
         s.name.toLowerCase().includes(lowerQuery)
       )
     })
-  }, [services, activeCategory, query, candidateOnly, durationMinutes])
+  }, [services, activeCategory, query, candidateOnly, durationMinutes, slotZone, system])
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
@@ -312,7 +372,21 @@ function ServiceSelectorInner({ onClose, onSelect, system = "介護", startTime,
               />
               候補のみ表示
               <span className="text-xs text-gray-500">
-                ({startTime}〜{endTime} = {durationMinutes}分に該当するサービス)
+                ({startTime}〜{endTime} = {durationMinutes}分
+                {slotZone && (
+                  <>
+                    {" / "}
+                    <span className={cn(
+                      "font-medium",
+                      slotZone === "深夜" ? "text-indigo-600" :
+                      slotZone === "夜間" ? "text-purple-600" :
+                      slotZone === "早朝" ? "text-amber-600" : "text-gray-600"
+                    )}>
+                      {slotZone}帯
+                    </span>
+                  </>
+                )}
+                )
               </span>
             </label>
           )}
