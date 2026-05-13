@@ -370,7 +370,55 @@ type FamilyRow = { name: string; relationship: string; phone: string; key_person
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
 type MedRow = { disease: string; hospital: string; status: string };
 type Schedule = Record<string, Record<string, string>>;
-type SvcRow = { time: string; content: string; provider: string; planned: boolean[]; actual: boolean[] };
+type RentalPeriodType = "1month" | "half_month" | "daily";
+type SvcRow = {
+  time: string;
+  content: string;
+  provider: string;
+  planned: boolean[];
+  actual: boolean[];
+  /**
+   * サービス category コード (e.g. "11" 訪問介護 / "17" 福祉用具貸与)。
+   * - "17" の場合は日付グリッドではなく単位数を手動入力する rental 行として扱う。
+   * - 既存 row は category 無しなので undefined → 既存挙動 (日付グリッド) を維持。
+   */
+  category?: string;
+  /** 福祉用具貸与行で手入力する月単位の単位数。master units を上書きする想定。 */
+  manual_units?: number | null;
+  /** 1month=1.0 / half_month=0.5 / daily=rental_days/月日数。 */
+  rental_period_type?: RentalPeriodType | null;
+  /** rental_period_type='daily' の時に使う日数。 */
+  rental_days?: number | null;
+};
+
+/** 行が「福祉用具貸与」(category=17) か判定。category 文字列が "17" の行のみ rental 扱い。 */
+function isRentalRow(svc: SvcRow): boolean {
+  return String(svc.category ?? "") === "17";
+}
+
+/** yyyy-MM から月の日数を計算。Invalid な値は 30 にフォールバック (UI 表示安全側)。 */
+function daysInMonthOf(yearMonth: string): number {
+  const m = /^(\d{4})-(\d{1,2})$/.exec(yearMonth);
+  if (!m) return 30;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  if (!Number.isFinite(y) || !Number.isFinite(mo) || mo < 1 || mo > 12) return 30;
+  return new Date(y, mo, 0).getDate();
+}
+
+/** rental 行の月計単位数を計算 (= round(units × 倍率))。 */
+function rentalMonthlyUnits(svc: SvcRow, yearMonth: string): number {
+  const units = Number(svc.manual_units ?? 0);
+  if (!Number.isFinite(units) || units <= 0) return 0;
+  const period = svc.rental_period_type ?? "1month";
+  if (period === "1month") return Math.round(units);
+  if (period === "half_month") return Math.round(units * 0.5);
+  // daily
+  const days = Math.max(0, Number(svc.rental_days ?? 0));
+  const total = daysInMonthOf(yearMonth);
+  if (!total) return 0;
+  return Math.round(units * (days / total));
+}
 type InvoiceItem = { content: string; units: number; unit_price: number; amount: number };
 
 const WEEK_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
@@ -1177,19 +1225,22 @@ function EditFormServiceTicket({ content, onChange }: {
                 </tr>
               )}
               {services.map((svc, i) => {
-                const plannedCount = svc.planned.filter(Boolean).length;
-                const actualCount  = svc.actual.filter(Boolean).length;
+                const rental = isRentalRow(svc);
+                const rentalMonthly = rental ? rentalMonthlyUnits(svc, selectedYearMonth) : 0;
+                const plannedCount = rental ? rentalMonthly : svc.planned.filter(Boolean).length;
+                const actualCount  = rental ? rentalMonthly : svc.actual.filter(Boolean).length;
                 return (
-                  <>
+                  <React.Fragment key={i}>
                     {/* 予定 row */}
-                    <tr key={`${i}-planned`} style={{ height: 18 }}>
+                    <tr style={{ height: 18 }}>
                       <td rowSpan={2} className="border border-gray-300 px-0.5 align-middle">
                         <button
                           onClick={() => { setTimeModalTarget(i); setTimeModalOpen(true); }}
                           className="w-full text-left text-[10px] px-1 py-0.5 rounded hover:bg-blue-50 transition-colors truncate"
                           title="クリックして時間帯を選択"
+                          disabled={rental}
                         >
-                          {svc.time || <span className="text-gray-400">選択...</span>}
+                          {svc.time || <span className="text-gray-400">{rental ? "—" : "選択..."}</span>}
                         </button>
                       </td>
                       <td rowSpan={2} className="border border-gray-300 px-0.5 align-middle">
@@ -1215,61 +1266,131 @@ function EditFormServiceTicket({ content, onChange }: {
                           ))}
                         </select>
                       </td>
-                      <td className="border border-dashed border-gray-300 px-0.5 text-center whitespace-nowrap">
-                        <div className="flex items-center gap-0.5 justify-center">
-                          <span className="text-gray-500 text-[10px]">予定</span>
-                          <button onClick={() => fillAll(i, "planned")} title="全日" className="text-[8px] text-blue-500 hover:text-blue-700 px-0.5 rounded hover:bg-blue-50">全</button>
-                          <button onClick={() => fillWeekdays(i, "planned")} title="平日" className="text-[8px] text-blue-500 hover:text-blue-700 px-0.5 rounded hover:bg-blue-50">平</button>
-                          <button onClick={() => clearAll(i, "planned")} title="クリア" className="text-[8px] text-red-400 hover:text-red-600 px-0.5 rounded hover:bg-red-50">消</button>
-                        </div>
-                      </td>
-                      {DAYS.map((_, di) => (
-                        <td
-                          key={di}
-                          onClick={() => toggleDay(i, "planned", di)}
-                          className="border border-dashed border-gray-300 text-center cursor-pointer select-none hover:bg-blue-50"
-                          style={{ height: 18, width: 18, minWidth: 18 }}
-                        >
-                          {svc.planned[di] ? <span className="text-blue-600 font-semibold">1</span> : null}
+                      {rental ? (
+                        // 福祉用具貸与: 日付グリッド (1〜31 + 計) を colSpan で潰し、入力欄に置換
+                        <td colSpan={1 + DAYS.length + 1} className="border border-dashed border-gray-300 px-1 py-0.5 align-middle bg-amber-50">
+                          <div className="flex items-center gap-2 text-[10px] flex-wrap">
+                            <span className="text-amber-700 font-semibold">月単位レンタル</span>
+                            <label className="flex items-center gap-1">
+                              <span className="text-gray-600">単位数</span>
+                              <input
+                                type="number"
+                                className="w-16 border border-gray-300 rounded px-1 py-0.5 text-right text-[10px]"
+                                value={svc.manual_units ?? ""}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  updateSvc(i, "manual_units", v === "" ? null : Number(v));
+                                }}
+                                min={0}
+                                step={1}
+                              />
+                            </label>
+                            <label className="flex items-center gap-1">
+                              <span className="text-gray-600">区分</span>
+                              <select
+                                className="border border-gray-300 rounded px-1 py-0.5 text-[10px] bg-white"
+                                value={svc.rental_period_type ?? "1month"}
+                                onChange={(e) => updateSvc(i, "rental_period_type", e.target.value as RentalPeriodType)}
+                              >
+                                <option value="1month">1月 (×1.0)</option>
+                                <option value="half_month">半月 (×0.5)</option>
+                                <option value="daily">日割り (×N/月日数)</option>
+                              </select>
+                            </label>
+                            {svc.rental_period_type === "daily" && (
+                              <label className="flex items-center gap-1">
+                                <span className="text-gray-600">日数</span>
+                                <input
+                                  type="number"
+                                  className="w-12 border border-gray-300 rounded px-1 py-0.5 text-right text-[10px]"
+                                  value={svc.rental_days ?? ""}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    updateSvc(i, "rental_days", v === "" ? null : Number(v));
+                                  }}
+                                  min={0}
+                                  max={daysInMonthOf(selectedYearMonth)}
+                                  step={1}
+                                />
+                                <span className="text-gray-400">/ {daysInMonthOf(selectedYearMonth)}日</span>
+                              </label>
+                            )}
+                            <span className="ml-auto text-amber-700 font-semibold">
+                              月計 {rentalMonthly} 単位
+                            </span>
+                          </div>
                         </td>
-                      ))}
-                      <td className="border border-dashed border-gray-300 text-center text-blue-700 font-semibold">{plannedCount || ""}</td>
+                      ) : (
+                        <>
+                          <td className="border border-dashed border-gray-300 px-0.5 text-center whitespace-nowrap">
+                            <div className="flex items-center gap-0.5 justify-center">
+                              <span className="text-gray-500 text-[10px]">予定</span>
+                              <button onClick={() => fillAll(i, "planned")} title="全日" className="text-[8px] text-blue-500 hover:text-blue-700 px-0.5 rounded hover:bg-blue-50">全</button>
+                              <button onClick={() => fillWeekdays(i, "planned")} title="平日" className="text-[8px] text-blue-500 hover:text-blue-700 px-0.5 rounded hover:bg-blue-50">平</button>
+                              <button onClick={() => clearAll(i, "planned")} title="クリア" className="text-[8px] text-red-400 hover:text-red-600 px-0.5 rounded hover:bg-red-50">消</button>
+                            </div>
+                          </td>
+                          {DAYS.map((_, di) => (
+                            <td
+                              key={di}
+                              onClick={() => toggleDay(i, "planned", di)}
+                              className="border border-dashed border-gray-300 text-center cursor-pointer select-none hover:bg-blue-50"
+                              style={{ height: 18, width: 18, minWidth: 18 }}
+                            >
+                              {svc.planned[di] ? <span className="text-blue-600 font-semibold">1</span> : null}
+                            </td>
+                          ))}
+                          <td className="border border-dashed border-gray-300 text-center text-blue-700 font-semibold">{plannedCount || ""}</td>
+                        </>
+                      )}
                       <td rowSpan={2} className="border border-gray-300 text-center align-middle">
                         <button onClick={() => removeSvc(i)} className="text-gray-300 hover:text-red-400"><X size={10} /></button>
                       </td>
                     </tr>
                     {/* 実績 row */}
-                    <tr key={`${i}-actual`} style={{ height: 18 }}>
-                      <td className="border border-gray-300 px-0.5 text-center whitespace-nowrap">
-                        <div className="flex items-center gap-0.5 justify-center">
-                          <span className="text-gray-500 text-[10px]">実績</span>
-                          <button onClick={() => fillAll(i, "actual")} title="全日" className="text-[8px] text-green-600 hover:text-green-800 px-0.5 rounded hover:bg-green-50">全</button>
-                          <button onClick={() => fillWeekdays(i, "actual")} title="平日" className="text-[8px] text-green-600 hover:text-green-800 px-0.5 rounded hover:bg-green-50">平</button>
-                          <button onClick={() => clearAll(i, "actual")} title="クリア" className="text-[8px] text-red-400 hover:text-red-600 px-0.5 rounded hover:bg-red-50">消</button>
-                        </div>
-                      </td>
-                      {DAYS.map((_, di) => (
-                        <td
-                          key={di}
-                          onClick={() => toggleDay(i, "actual", di)}
-                          className="border border-gray-300 text-center cursor-pointer select-none hover:bg-green-50"
-                          style={{ height: 18, width: 18, minWidth: 18 }}
-                        >
-                          {svc.actual[di] ? <span className="text-green-700 font-semibold">1</span> : null}
+                    <tr style={{ height: 18 }}>
+                      {rental ? (
+                        // rental 行は実績入力欄無し (月単位なので予定=実績扱い)。空表示。
+                        <td colSpan={1 + DAYS.length + 1} className="border border-dashed border-gray-300 px-1 py-0.5 bg-amber-50/40 text-[10px] text-amber-700/70 text-center align-middle">
+                          (実績は予定と同じ — 月単位レンタル)
                         </td>
-                      ))}
-                      <td className="border border-gray-300 text-center text-green-700 font-semibold">{actualCount || ""}</td>
+                      ) : (
+                        <>
+                          <td className="border border-gray-300 px-0.5 text-center whitespace-nowrap">
+                            <div className="flex items-center gap-0.5 justify-center">
+                              <span className="text-gray-500 text-[10px]">実績</span>
+                              <button onClick={() => fillAll(i, "actual")} title="全日" className="text-[8px] text-green-600 hover:text-green-800 px-0.5 rounded hover:bg-green-50">全</button>
+                              <button onClick={() => fillWeekdays(i, "actual")} title="平日" className="text-[8px] text-green-600 hover:text-green-800 px-0.5 rounded hover:bg-green-50">平</button>
+                              <button onClick={() => clearAll(i, "actual")} title="クリア" className="text-[8px] text-red-400 hover:text-red-600 px-0.5 rounded hover:bg-red-50">消</button>
+                            </div>
+                          </td>
+                          {DAYS.map((_, di) => (
+                            <td
+                              key={di}
+                              onClick={() => toggleDay(i, "actual", di)}
+                              className="border border-gray-300 text-center cursor-pointer select-none hover:bg-green-50"
+                              style={{ height: 18, width: 18, minWidth: 18 }}
+                            >
+                              {svc.actual[di] ? <span className="text-green-700 font-semibold">1</span> : null}
+                            </td>
+                          ))}
+                          <td className="border border-gray-300 text-center text-green-700 font-semibold">{actualCount || ""}</td>
+                        </>
+                      )}
                     </tr>
-                  </>
+                  </React.Fragment>
                 );
               })}
-              {/* 合計行 */}
+              {/* 合計行
+                  - 日付列ごとの件数集計: 福祉用具貸与 (rental) 行は日単位の概念がないため除外
+                  - 計列: rental 行は月計単位数、それ以外は日付チェック数を合算
+              */}
               {services.length > 0 && (
                 <>
                   <tr style={{ height: 18 }}>
                     <td colSpan={4} className="border border-gray-300 bg-gray-100 px-1 text-center text-[10px] font-semibold text-blue-700">予定合計</td>
                     {DAYS.map((_, di) => {
-                      const count = services.filter((svc) => svc.planned[di]).length;
+                      const count = services.filter((svc) => !isRentalRow(svc) && svc.planned[di]).length;
                       return (
                         <td key={di} className="border border-dashed border-gray-300 text-center text-[10px] text-blue-700 font-semibold bg-blue-50" style={{ width: 18, minWidth: 18 }}>
                           {count > 0 ? count : ""}
@@ -1277,14 +1398,14 @@ function EditFormServiceTicket({ content, onChange }: {
                       );
                     })}
                     <td className="border border-gray-300 text-center text-[10px] text-blue-700 font-semibold bg-blue-50">
-                      {services.reduce((sum, svc) => sum + svc.planned.filter(Boolean).length, 0) || ""}
+                      {services.reduce((sum, svc) => sum + (isRentalRow(svc) ? rentalMonthlyUnits(svc, selectedYearMonth) : svc.planned.filter(Boolean).length), 0) || ""}
                     </td>
                     <td className="border border-gray-300" />
                   </tr>
                   <tr style={{ height: 18 }}>
                     <td colSpan={4} className="border border-gray-300 bg-gray-100 px-1 text-center text-[10px] font-semibold text-green-700">実績合計</td>
                     {DAYS.map((_, di) => {
-                      const count = services.filter((svc) => svc.actual[di]).length;
+                      const count = services.filter((svc) => !isRentalRow(svc) && svc.actual[di]).length;
                       return (
                         <td key={di} className="border border-gray-300 text-center text-[10px] text-green-700 font-semibold bg-green-50" style={{ width: 18, minWidth: 18 }}>
                           {count > 0 ? count : ""}
@@ -1292,7 +1413,7 @@ function EditFormServiceTicket({ content, onChange }: {
                       );
                     })}
                     <td className="border border-gray-300 text-center text-[10px] text-green-700 font-semibold bg-green-50">
-                      {services.reduce((sum, svc) => sum + svc.actual.filter(Boolean).length, 0) || ""}
+                      {services.reduce((sum, svc) => sum + (isRentalRow(svc) ? rentalMonthlyUnits(svc, selectedYearMonth) : svc.actual.filter(Boolean).length), 0) || ""}
                     </td>
                     <td className="border border-gray-300" />
                   </tr>
@@ -1319,7 +1440,27 @@ function EditFormServiceTicket({ content, onChange }: {
             endTime={endTime}
             onSelect={(svc) => {
               if (selectorTarget !== null) {
-                updateSvc(selectorTarget, "content", svc.name);
+                // content と category を同時に書き換えるため、合成 patch を services 配列に当てる
+                const idx = selectorTarget;
+                const next = services.map((r, k) => {
+                  if (k !== idx) return r;
+                  const nowRental = String(svc.category ?? "") === "17";
+                  const wasRental = isRentalRow(r);
+                  return {
+                    ...r,
+                    content: svc.name,
+                    category: svc.category,
+                    // 福祉用具貸与に切り替わった瞬間は日付グリッドが意味を持たないので clear。
+                    // 福祉用具貸与以外に切り替わった瞬間は rental 用 fields を clear。
+                    ...(nowRental && !wasRental
+                      ? { planned: Array(31).fill(false), actual: Array(31).fill(false), rental_period_type: r.rental_period_type ?? "1month" as RentalPeriodType }
+                      : {}),
+                    ...(!nowRental && wasRental
+                      ? { manual_units: null, rental_period_type: null, rental_days: null }
+                      : {}),
+                  };
+                });
+                onChange({ ...content, services: next });
               }
               setSelectorOpen(false);
               setSelectorTarget(null);
@@ -2229,61 +2370,83 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
               </tr>
             </thead>
             <tbody>
-              {rows.map((svc, i) => {
-                const plannedCount = svc.planned.filter(Boolean).length;
-                const actualCount = svc.actual.filter(Boolean).length;
-                return (
-                <React.Fragment key={i}>
-                  {/* 予定行 */}
+              {(() => {
+                const printYM = String(c.report_month ?? format(new Date(), "yyyy-MM"));
+                return rows.map((svc, i) => {
+                  const rental = isRentalRow(svc);
+                  const rentalMonthly = rental ? rentalMonthlyUnits(svc, printYM) : 0;
+                  const plannedCount = rental ? rentalMonthly : svc.planned.filter(Boolean).length;
+                  const actualCount = rental ? rentalMonthly : svc.actual.filter(Boolean).length;
+                  return (
+                  <React.Fragment key={i}>
+                    {/* 予定行 */}
+                    <tr style={{ height: `${ROW_H}px` }}>
+                      <td style={{ ...thStyle, fontSize: "7pt" }} rowSpan={2}>{i + 1}</td>
+                      <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "6.5pt" }} rowSpan={2}>{svc.time || "　"}</td>
+                      <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "6.5pt" }} rowSpan={2}>{svc.content || "　"}</td>
+                      <td style={{ ...tdStyle, verticalAlign: "top", fontSize: "6.5pt" }} rowSpan={2}>{svc.provider || "　"}</td>
+                      {rental ? (
+                        // 福祉用具貸与: 日付グリッドを潰して「月単位レンタル」表示にまとめる
+                        <td colSpan={31} style={{ ...tdStyle, textAlign: "center", fontSize: "6.5pt", backgroundColor: "#fff8e1" }} rowSpan={2}>
+                          月単位レンタル ({
+                            svc.rental_period_type === "half_month" ? "半月" :
+                            svc.rental_period_type === "daily" ? `日割り ${svc.rental_days ?? 0}/${daysInMonthOf(printYM)}日` :
+                            "1月"
+                          })
+                        </td>
+                      ) : (
+                        svc.planned.map((v, di) => {
+                          const wdi = di % 7;
+                          const isWE = wdi === 5 || wdi === 6;
+                          return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", borderStyle: "dashed", fontWeight: "bold" }}>{v ? "1" : ""}</td>;
+                        })
+                      )}
+                      <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt" }} rowSpan={2}>{(plannedCount || actualCount) ? (rental ? `${rentalMonthly}単位` : `${plannedCount}/${actualCount}`) : ""}</td>
+                    </tr>
+                    {/* 実績行 */}
+                    <tr style={{ height: `${ROW_H}px` }}>
+                      {/* rental の場合は予定行の colSpan=31 で潰しているので、ここでは何も描画しない */}
+                      {!rental && svc.actual.map((v, di) => {
+                        const wdi = di % 7;
+                        const isWE = wdi === 5 || wdi === 6;
+                        return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", fontWeight: "bold" }}>{v ? "1" : ""}</td>;
+                      })}
+                    </tr>
+                  </React.Fragment>
+                  );
+                });
+              })()}
+              {/* 予定合計行 — rental 行は日単位の概念がないため日付列の集計から除外、計列は月計を加算 */}
+              {(() => {
+                const printYM = String(c.report_month ?? format(new Date(), "yyyy-MM"));
+                return (<>
                   <tr style={{ height: `${ROW_H}px` }}>
-                    <td style={{ ...thStyle, fontSize: "7pt" }} rowSpan={2}>{i + 1}</td>
-                    <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "6.5pt" }} rowSpan={2}>{svc.time || "　"}</td>
-                    <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "6.5pt" }} rowSpan={2}>{svc.content || "　"}</td>
-                    <td style={{ ...tdStyle, verticalAlign: "top", fontSize: "6.5pt" }} rowSpan={2}>{svc.provider || "　"}</td>
-                    {svc.planned.map((v, di) => {
+                    <td colSpan={4} style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>予定合計</td>
+                    {DAYS.map((_, di) => {
+                      const count = rows.filter((svc) => !isRentalRow(svc) && svc.planned[di]).length;
                       const wdi = di % 7;
                       const isWE = wdi === 5 || wdi === 6;
-                      return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", borderStyle: "dashed", fontWeight: "bold" }}>{v ? "1" : ""}</td>;
+                      return <td key={di} style={{ ...(isWE ? thGreen : thStyle), color: "#1565c0", backgroundColor: isWE ? "#bbdefb" : "#e3f2fd", fontWeight: "bold", textAlign: "center", padding: "0" }}>{count > 0 ? count : ""}</td>;
                     })}
-                    <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt" }} rowSpan={2}>{(plannedCount || actualCount) ? `${plannedCount}/${actualCount}` : ""}</td>
+                    <td style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>
+                      {rows.reduce((sum, svc) => sum + (isRentalRow(svc) ? rentalMonthlyUnits(svc, printYM) : svc.planned.filter(Boolean).length), 0) || ""}
+                    </td>
                   </tr>
-                  {/* 実績行 */}
+                  {/* 実績合計行 */}
                   <tr style={{ height: `${ROW_H}px` }}>
-                    {svc.actual.map((v, di) => {
+                    <td colSpan={4} style={{ ...thStyle, color: "#1b5e20", backgroundColor: "#e8f5e9" }}>実績合計</td>
+                    {DAYS.map((_, di) => {
+                      const count = rows.filter((svc) => !isRentalRow(svc) && svc.actual[di]).length;
                       const wdi = di % 7;
                       const isWE = wdi === 5 || wdi === 6;
-                      return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", fontWeight: "bold" }}>{v ? "1" : ""}</td>;
+                      return <td key={di} style={{ ...(isWE ? tdGreen : thStyle), color: "#1b5e20", backgroundColor: isWE ? "#a5d6a7" : "#e8f5e9", fontWeight: "bold", textAlign: "center", padding: "0" }}>{count > 0 ? count : ""}</td>;
                     })}
+                    <td style={{ ...tdStyle, color: "#1b5e20", backgroundColor: "#e8f5e9", fontWeight: "bold", textAlign: "center" }}>
+                      {rows.reduce((sum, svc) => sum + (isRentalRow(svc) ? rentalMonthlyUnits(svc, printYM) : svc.actual.filter(Boolean).length), 0) || ""}
+                    </td>
                   </tr>
-                </React.Fragment>
-                );
-              })}
-              {/* 予定合計行 */}
-              <tr style={{ height: `${ROW_H}px` }}>
-                <td colSpan={4} style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>予定合計</td>
-                {DAYS.map((_, di) => {
-                  const count = rows.filter((svc) => svc.planned[di]).length;
-                  const wdi = di % 7;
-                  const isWE = wdi === 5 || wdi === 6;
-                  return <td key={di} style={{ ...(isWE ? thGreen : thStyle), color: "#1565c0", backgroundColor: isWE ? "#bbdefb" : "#e3f2fd", fontWeight: "bold", textAlign: "center", padding: "0" }}>{count > 0 ? count : ""}</td>;
-                })}
-                <td style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>
-                  {rows.reduce((sum, svc) => sum + svc.planned.filter(Boolean).length, 0) || ""}
-                </td>
-              </tr>
-              {/* 実績合計行 */}
-              <tr style={{ height: `${ROW_H}px` }}>
-                <td colSpan={4} style={{ ...thStyle, color: "#1b5e20", backgroundColor: "#e8f5e9" }}>実績合計</td>
-                {DAYS.map((_, di) => {
-                  const count = rows.filter((svc) => svc.actual[di]).length;
-                  const wdi = di % 7;
-                  const isWE = wdi === 5 || wdi === 6;
-                  return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), color: "#1b5e20", backgroundColor: isWE ? "#a5d6a7" : "#e8f5e9", fontWeight: "bold", textAlign: "center", padding: "0" }}>{count > 0 ? count : ""}</td>;
-                })}
-                <td style={{ ...tdStyle, color: "#1b5e20", backgroundColor: "#e8f5e9", fontWeight: "bold", textAlign: "center" }}>
-                  {rows.reduce((sum, svc) => sum + svc.actual.filter(Boolean).length, 0) || ""}
-                </td>
-              </tr>
+                </>);
+              })()}
             </tbody>
           </table>
 
