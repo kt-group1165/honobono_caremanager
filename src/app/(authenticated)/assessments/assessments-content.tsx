@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Plus, Save, Loader2, ClipboardCheck, FileText, Printer, ArrowLeft, Check, Edit3 } from "lucide-react";
+import { Plus, Save, Loader2, ClipboardCheck, FileText, Printer, ArrowLeft, Check, Edit3, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import type { AssessmentFormData } from "./_types";
@@ -111,7 +111,7 @@ export function AssessmentsContent({
   const [assessments, setAssessments] = useState<Assessment[]>(initialAssessments);
   const [loadingList, setLoadingList] = useState(false);
 
-  const [mode, setMode] = useState<"list" | "edit">("list");
+  const [mode, setMode] = useState<"list" | "edit" | "view">("list");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingCertId, setEditingCertId] = useState<string | null>(null);
   const [assessmentDate, setAssessmentDate] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -157,7 +157,7 @@ export function AssessmentsContent({
     setMode("edit");
   };
 
-  // Open existing
+  // Open existing (editable)
   const openEdit = (a: Assessment) => {
     setEditingId(a.id);
     setEditingCertId(a.certification_id);
@@ -168,6 +168,19 @@ export function AssessmentsContent({
     setFormData(merged as AssessmentFormData);
     setActiveTab("1");
     setMode("edit");
+  };
+
+  // Open existing (read-only preview)
+  const openView = (a: Assessment) => {
+    setEditingId(a.id);
+    setEditingCertId(a.certification_id);
+    setAssessmentDate(a.assessment_date);
+    setAssessorName(a.assessor_name ?? "");
+    setStatus(a.status);
+    const merged = { ...emptyAssessment(), ...(a.form_data ?? {}) };
+    setFormData(merged as AssessmentFormData);
+    setActiveTab("1");
+    setMode("view");
   };
 
   // Save
@@ -298,6 +311,9 @@ export function AssessmentsContent({
                         </td>
                         <td className="px-4 py-3 text-xs text-gray-500">{format(parseISO(a.updated_at), "yyyy/MM/dd HH:mm")}</td>
                         <td className="px-4 py-3 text-right">
+                          {a.status === "completed" && (
+                            <button onClick={() => openView(a)} className="text-gray-600 hover:underline text-xs mr-3">閲覧</button>
+                          )}
                           <button onClick={() => openEdit(a)} className="text-blue-600 hover:underline text-xs mr-3">編集</button>
                           <button onClick={() => handleDelete(a.id)} className="text-red-500 hover:underline text-xs">削除</button>
                         </td>
@@ -310,31 +326,49 @@ export function AssessmentsContent({
           </div>
         )}
 
-        {mode === "edit" && (
+        {(mode === "edit" || mode === "view") && (
           <div className="flex flex-col h-full">
             {/* Toolbar */}
             <div className="sticky top-0 z-20 bg-white border-b px-6 py-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <button onClick={() => setMode("list")} className="flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50">
-                  <ArrowLeft size={14} /> 一覧
+                  <ArrowLeft size={14} /> 一覧へ戻る
                 </button>
-                <ClipboardCheck className="text-blue-600" size={20} />
-                <h1 className="text-base font-bold text-gray-900">アセスメント</h1>
+                {mode === "view" ? <Eye className="text-gray-600" size={20} /> : <ClipboardCheck className="text-blue-600" size={20} />}
+                <h1 className="text-base font-bold text-gray-900">{mode === "view" ? "アセスメント閲覧" : "アセスメント"}</h1>
                 {selectedUser && <span className="text-gray-500 text-sm">— {selectedUser.name} 様</span>}
+                {mode === "view" && (
+                  <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">読み取り専用</span>
+                )}
               </div>
               <div className="flex items-center gap-2">
-                <input type="date" value={assessmentDate} onChange={(e) => setAssessmentDate(e.target.value)} className="rounded border px-2 py-1 text-sm" />
-                <input type="text" value={assessorName} onChange={(e) => setAssessorName(e.target.value)} placeholder="作成者" className="rounded border px-2 py-1 text-sm w-32" />
-                <button onClick={() => setStatus(status === "draft" ? "completed" : "draft")} className="flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
-                  {status === "draft" ? <><Edit3 size={14} /> 下書き</> : <><Check size={14} /> 完了</>}
-                </button>
+                {mode === "edit" ? (
+                  <>
+                    <input type="date" value={assessmentDate} onChange={(e) => setAssessmentDate(e.target.value)} className="rounded border px-2 py-1 text-sm" />
+                    <input type="text" value={assessorName} onChange={(e) => setAssessorName(e.target.value)} placeholder="作成者" className="rounded border px-2 py-1 text-sm w-32" />
+                    <button onClick={() => setStatus(status === "draft" ? "completed" : "draft")} className="flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+                      {status === "draft" ? <><Edit3 size={14} /> 下書き</> : <><Check size={14} /> 完了</>}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="rounded border px-2 py-1 text-sm bg-gray-50 text-gray-700">
+                      {format(parseISO(assessmentDate), "yyyy/M/d")}
+                    </span>
+                    <span className="rounded border px-2 py-1 text-sm bg-gray-50 text-gray-700 w-32 truncate" title={assessorName || "—"}>
+                      {assessorName || "—"}
+                    </span>
+                  </>
+                )}
                 <button onClick={() => window.print()} className="flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
                   <Printer size={14} /> 印刷
                 </button>
-                <button onClick={handleSave} disabled={saving} className="flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                  保存
-                </button>
+                {mode === "edit" && (
+                  <button onClick={handleSave} disabled={saving} className="flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                    保存
+                  </button>
+                )}
               </div>
             </div>
 
@@ -371,63 +405,66 @@ export function AssessmentsContent({
                   const era = y >= 2019 ? `令和${y - 2018}` : `平成${y - 1988}`;
                   return `${era}年 ${d.getMonth() + 1}月${d.getDate()}日`;
                 })() : "";
+                const isView = mode === "view";
                 return (
                   <>
                     {activeTab === "1" && (<>
-                      <Tab1FaceSheet data={formData.face_sheet!} onChange={(v) => updFormData("face_sheet", v)} />
+                      {!isView && <Tab1FaceSheet data={formData.face_sheet!} onChange={(v) => updFormData("face_sheet", v)} />}
                       <PreviewTab1 data={formData.face_sheet!} userName={uname} date={dFormatted} />
                     </>)}
                     {activeTab === "2" && (<>
-                      <Tab2Family
-                        data={formData.family_support!}
-                        onChange={(v) => updFormData("family_support", v)}
-                        userName={selectedUser?.name ?? ""}
-                        userGender={selectedUser?.gender ?? null}
-                      />
+                      {!isView && (
+                        <Tab2Family
+                          data={formData.family_support!}
+                          onChange={(v) => updFormData("family_support", v)}
+                          userName={selectedUser?.name ?? ""}
+                          userGender={selectedUser?.gender ?? null}
+                        />
+                      )}
                       <PreviewTab2 data={formData.family_support!} userName={uname} userGender={selectedUser?.gender ?? null} date={dFormatted} />
                     </>)}
                     {activeTab === "3" && (<>
-                      <Tab3Services data={formData.service_usage!} onChange={(v) => updFormData("service_usage", v)} />
+                      {!isView && <Tab3Services data={formData.service_usage!} onChange={(v) => updFormData("service_usage", v)} />}
                       <PreviewTab3 data={formData.service_usage!} userName={uname} date={dFormatted} />
                     </>)}
                     {activeTab === "4" && (<>
-                      <Tab4Housing data={formData.housing!} onChange={(v) => updFormData("housing", v)} />
+                      {!isView && <Tab4Housing data={formData.housing!} onChange={(v) => updFormData("housing", v)} />}
                       <PreviewTab4 data={formData.housing!} userName={uname} date={dFormatted} />
                     </>)}
                     {activeTab === "5" && (<>
-                      <Tab5Health data={formData.health!} onChange={(v) => updFormData("health", v)} />
+                      {!isView && <Tab5Health data={formData.health!} onChange={(v) => updFormData("health", v)} />}
                       <PreviewTab5 data={formData.health!} userName={uname} date={dFormatted} />
                     </>)}
                     {activeTab === "6-1" && (<>
-                      <Tab6Basic data={formData.basic_motion!} onChange={(v) => updFormData("basic_motion", v)} />
+                      {!isView && <Tab6Basic data={formData.basic_motion!} onChange={(v) => updFormData("basic_motion", v)} />}
                       <PreviewTab6Basic data={formData.basic_motion!} userName={uname} date={dFormatted} />
                     </>)}
                     {activeTab === "6-2" && (<>
-                      <Tab6LifeFunction data={formData.life_function!} onChange={(v) => updFormData("life_function", v)} />
+                      {!isView && <Tab6LifeFunction data={formData.life_function!} onChange={(v) => updFormData("life_function", v)} />}
                       <PreviewTab6LifeFunction data={formData.life_function!} userName={uname} date={dFormatted} />
                     </>)}
                     {activeTab === "6-34" && (<>
-                      <Tab6Cognition data={formData.cognition_behavior!} onChange={(v) => updFormData("cognition_behavior", v)} />
+                      {!isView && <Tab6Cognition data={formData.cognition_behavior!} onChange={(v) => updFormData("cognition_behavior", v)} />}
                       <PreviewTab6Cognition data={formData.cognition_behavior!} userName={uname} date={dFormatted} />
                     </>)}
                     {activeTab === "6-5" && (<>
-                      <Tab6Social data={formData.social!} onChange={(v) => updFormData("social", v)} />
+                      {!isView && <Tab6Social data={formData.social!} onChange={(v) => updFormData("social", v)} />}
                       <PreviewTab6Social data={formData.social!} userName={uname} date={dFormatted} />
                     </>)}
                     {activeTab === "6-6" && (<>
-                      <Tab6Medical data={formData.medical_health!} onChange={(v) => updFormData("medical_health", v)} />
+                      {!isView && <Tab6Medical data={formData.medical_health!} onChange={(v) => updFormData("medical_health", v)} />}
                       <PreviewTab6Medical data={formData.medical_health!} userName={uname} date={dFormatted} />
                     </>)}
                     {activeTab === "6-dr" && (<>
-                      <Tab6Doctor data={formData.doctor_opinion!} onChange={(v) => updFormData("doctor_opinion", v)} />
+                      {!isView && <Tab6Doctor data={formData.doctor_opinion!} onChange={(v) => updFormData("doctor_opinion", v)} />}
                       <PreviewTab6Doctor data={formData.doctor_opinion!} userName={uname} date={dFormatted} />
                     </>)}
                     {activeTab === "7s" && (<>
-                      <Tab7Summary data={formData.summary!} onChange={(v) => updFormData("summary", v)} />
+                      {!isView && <Tab7Summary data={formData.summary!} onChange={(v) => updFormData("summary", v)} />}
                       <PreviewTab7Summary data={formData.summary!} userName={uname} date={dFormatted} />
                     </>)}
                     {activeTab === "7sch" && (<>
-                      <Tab7Schedule data={formData.daily_schedule!} onChange={(v) => updFormData("daily_schedule", v)} />
+                      {!isView && <Tab7Schedule data={formData.daily_schedule!} onChange={(v) => updFormData("daily_schedule", v)} />}
                       <PreviewTab7Schedule data={formData.daily_schedule!} userName={uname} date={dFormatted} />
                     </>)}
                   </>
