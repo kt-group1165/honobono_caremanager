@@ -266,7 +266,9 @@ function ServiceSelectorInner({ onClose, onSelect, system = "介護", startTime,
   // ── Filtered list ────────────────────────────────────────────────────────────
   const filtered = React.useMemo(() => {
     const lowerQuery = query.toLowerCase()
-    const applyCandidate = candidateOnly && durationMinutes !== null
+    // 福祉用具貸与 (17) は時間帯/所要時間の概念なし → candidate filter 適用しない
+    const hasTimeConcept = activeCategory !== "17"
+    const applyCandidate = candidateOnly && durationMinutes !== null && hasTimeConcept
     return services.filter((s) => {
       const matchCategory = s.category === activeCategory
       if (!matchCategory) return false
