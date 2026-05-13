@@ -1442,7 +1442,8 @@ function EditFormServiceTicket({ content, onChange }: {
               })}
               {/* 合計行
                   - 日付列ごとの件数集計: 福祉用具貸与 (rental) 行は日単位の概念がないため除外
-                  - 計列: rental 行は月計単位数、それ以外は日付チェック数を合算
+                  - 計列: 非 rental 行の回数合計のみ。rental 行の月計単位 (500 等) は単位が
+                    違う (回 vs 単位) ため加算しない。各 rental 行右端に月計表示済み。
               */}
               {services.length > 0 && (
                 <>
@@ -1457,7 +1458,7 @@ function EditFormServiceTicket({ content, onChange }: {
                       );
                     })}
                     <td className="border border-gray-300 text-center text-[10px] text-blue-700 font-semibold bg-blue-50">
-                      {services.reduce((sum, svc) => sum + (isRentalRow(svc) ? rentalMonthlyUnits(svc, selectedYearMonth) : svc.planned.filter(Boolean).length), 0) || ""}
+                      {services.reduce((sum, svc) => sum + (isRentalRow(svc) ? 0 : svc.planned.filter(Boolean).length), 0) || ""}
                     </td>
                     <td className="border border-gray-300" />
                   </tr>
@@ -1472,7 +1473,7 @@ function EditFormServiceTicket({ content, onChange }: {
                       );
                     })}
                     <td className="border border-gray-300 text-center text-[10px] text-green-700 font-semibold bg-green-50">
-                      {services.reduce((sum, svc) => sum + (isRentalRow(svc) ? rentalMonthlyUnits(svc, selectedYearMonth) : svc.actual.filter(Boolean).length), 0) || ""}
+                      {services.reduce((sum, svc) => sum + (isRentalRow(svc) ? 0 : svc.actual.filter(Boolean).length), 0) || ""}
                     </td>
                     <td className="border border-gray-300" />
                   </tr>
@@ -2475,9 +2476,9 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                   );
                 });
               })()}
-              {/* 予定合計行 — rental 行は日単位の概念がないため日付列の集計から除外、計列は月計を加算 */}
+              {/* 予定合計/実績合計行 — 計列は非 rental 行の回数合計のみ
+                  (rental 行の月計単位は同じ行右端に表示済、単位 (回 vs 単位) が違うため加算しない) */}
               {(() => {
-                const printYM = String(c.report_month ?? format(new Date(), "yyyy-MM"));
                 return (<>
                   <tr style={{ height: `${ROW_H}px` }}>
                     <td colSpan={4} style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>予定合計</td>
@@ -2488,7 +2489,7 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                       return <td key={di} style={{ ...(isWE ? thGreen : thStyle), color: "#1565c0", backgroundColor: isWE ? "#bbdefb" : "#e3f2fd", fontWeight: "bold", textAlign: "center", padding: "0" }}>{count > 0 ? count : ""}</td>;
                     })}
                     <td style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>
-                      {rows.reduce((sum, svc) => sum + (isRentalRow(svc) ? rentalMonthlyUnits(svc, printYM) : svc.planned.filter(Boolean).length), 0) || ""}
+                      {rows.reduce((sum, svc) => sum + (isRentalRow(svc) ? 0 : svc.planned.filter(Boolean).length), 0) || ""}
                     </td>
                   </tr>
                   {/* 実績合計行 */}
@@ -2501,7 +2502,7 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                       return <td key={di} style={{ ...(isWE ? tdGreen : thStyle), color: "#1b5e20", backgroundColor: isWE ? "#a5d6a7" : "#e8f5e9", fontWeight: "bold", textAlign: "center", padding: "0" }}>{count > 0 ? count : ""}</td>;
                     })}
                     <td style={{ ...tdStyle, color: "#1b5e20", backgroundColor: "#e8f5e9", fontWeight: "bold", textAlign: "center" }}>
-                      {rows.reduce((sum, svc) => sum + (isRentalRow(svc) ? rentalMonthlyUnits(svc, printYM) : svc.actual.filter(Boolean).length), 0) || ""}
+                      {rows.reduce((sum, svc) => sum + (isRentalRow(svc) ? 0 : svc.actual.filter(Boolean).length), 0) || ""}
                     </td>
                   </tr>
                 </>);
