@@ -383,6 +383,8 @@ type SvcRow = {
    * - 既存 row は category 無しなので undefined → 既存挙動 (日付グリッド) を維持。
    */
   category?: string;
+  /** サービスコードマスタの単位数 (1 回あたり)。非 rental 行で「単位計 = units × 回数」算出に使う。 */
+  units?: number;
   /** 福祉用具貸与行で手入力する月単位の単位数。master units を上書きする想定。 */
   manual_units?: number | null;
   /** 1month=1.0 / half_month=0.5 / daily=rental_days/月日数。 */
@@ -1253,14 +1255,15 @@ function EditFormServiceTicket({ content, onChange }: {
           )}
         </div>
         <div className="overflow-x-auto">
-          <table className="border-collapse text-[10px] w-full" style={{ minWidth: 1000, tableLayout: "fixed" }}>
+          <table className="border-collapse text-[10px] w-full" style={{ minWidth: 1040, tableLayout: "fixed" }}>
             <colgroup>
               <col style={{ width: 72 }} />   {/* 時間帯 */}
-              <col style={{ width: 120 }} />  {/* サービス内容 (rental config を 1 行に収める幅) */}
-              <col style={{ width: 110 }} />  {/* 事業所 (折り返し前提) */}
+              <col style={{ width: 110 }} />  {/* サービス内容 (rental は単位入力併設) */}
+              <col style={{ width: 100 }} />  {/* 事業所 (折り返し前提) */}
               <col style={{ width: 38 }} />   {/* 予定/実績 ラベル */}
               {DAYS.map((d) => <col key={d} style={{ width: 18 }} />)}
-              <col style={{ width: 28 }} />   {/* 計 */}
+              <col style={{ width: 28 }} />   {/* 計 (回数) */}
+              <col style={{ width: 40 }} />   {/* 単位計 (月計単位) */}
               <col style={{ width: 20 }} />   {/* 削除 */}
             </colgroup>
             <thead>
@@ -1273,13 +1276,14 @@ function EditFormServiceTicket({ content, onChange }: {
                   <th key={d} className="border border-gray-300 px-0 py-0.5 text-center leading-none">{d}</th>
                 ))}
                 <th className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">計</th>
+                <th className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">単位</th>
                 <th className="border border-gray-300 px-0 py-0.5"></th>
               </tr>
             </thead>
             <tbody>
               {services.length === 0 && (
                 <tr>
-                  <td colSpan={37} className="border border-dashed border-gray-200 py-3 text-center text-gray-400">
+                  <td colSpan={38} className="border border-dashed border-gray-200 py-3 text-center text-gray-400">
                     サービスを追加してください（最大9件）
                   </td>
                 </tr>
@@ -1357,7 +1361,6 @@ function EditFormServiceTicket({ content, onChange }: {
                                 />
                               )}
                             </div>
-                            <div className="text-[9px] text-amber-700 font-semibold mt-0.5">月計 {rentalMonthly}</div>
                           </div>
                         )}
                       </td>
@@ -1416,6 +1419,16 @@ function EditFormServiceTicket({ content, onChange }: {
                         </td>
                       ))}
                       <td className="border border-dashed border-gray-300 text-center text-blue-700 font-semibold">{plannedCount || ""}</td>
+                      <td rowSpan={2} className="border border-gray-300 text-center align-middle text-[10px] font-semibold text-amber-700">
+                        {(() => {
+                          // 月計単位: rental は manual_units × multiplier、非 rental は units × 回数。
+                          // 回数は予定/実績の大きい方を採用 (利用票の予定段階でも 実績段階でも数字を出す)。
+                          const monthlyUnits = rental
+                            ? rentalMonthly
+                            : (svc.units ?? 0) * Math.max(plannedCount, actualCount);
+                          return monthlyUnits > 0 ? monthlyUnits : "";
+                        })()}
+                      </td>
                       <td rowSpan={2} className="border border-gray-300 text-center align-middle">
                         <button onClick={() => removeSvc(i)} className="text-gray-300 hover:text-red-400"><X size={10} /></button>
                       </td>
@@ -1447,8 +1460,17 @@ function EditFormServiceTicket({ content, onChange }: {
                   </React.Fragment>
                 );
               })}
-              {/* 合計行: rental も 1日="1" を持つため、全行の回数を集計。 */}
-              {services.length > 0 && (
+              {/* 合計行: rental も 1日="1" を持つため、全行の回数を集計。
+                  単位列は予定/実績それぞれの月計単位を合算。 */}
+              {services.length > 0 && (() => {
+                const rowMonthlyUnits = (svc: SvcRow, kind: "planned" | "actual"): number => {
+                  if (isRentalRow(svc)) return rentalMonthlyUnits(svc, selectedYearMonth);
+                  const count = svc[kind].filter(Boolean).length;
+                  return (svc.units ?? 0) * count;
+                };
+                const plannedUnitsSum = services.reduce((s, svc) => s + rowMonthlyUnits(svc, "planned"), 0);
+                const actualUnitsSum = services.reduce((s, svc) => s + rowMonthlyUnits(svc, "actual"), 0);
+                return (
                 <>
                   <tr style={{ height: 18 }}>
                     <td colSpan={4} className="border border-gray-300 bg-gray-100 px-1 text-center text-[10px] font-semibold text-blue-700">予定合計</td>
@@ -1462,6 +1484,9 @@ function EditFormServiceTicket({ content, onChange }: {
                     })}
                     <td className="border border-gray-300 text-center text-[10px] text-blue-700 font-semibold bg-blue-50">
                       {services.reduce((sum, svc) => sum + svc.planned.filter(Boolean).length, 0) || ""}
+                    </td>
+                    <td className="border border-gray-300 text-center text-[10px] text-amber-700 font-semibold bg-blue-50">
+                      {plannedUnitsSum || ""}
                     </td>
                     <td className="border border-gray-300" />
                   </tr>
@@ -1478,10 +1503,14 @@ function EditFormServiceTicket({ content, onChange }: {
                     <td className="border border-gray-300 text-center text-[10px] text-green-700 font-semibold bg-green-50">
                       {services.reduce((sum, svc) => sum + svc.actual.filter(Boolean).length, 0) || ""}
                     </td>
+                    <td className="border border-gray-300 text-center text-[10px] text-amber-700 font-semibold bg-green-50">
+                      {actualUnitsSum || ""}
+                    </td>
                     <td className="border border-gray-300" />
                   </tr>
                 </>
-              )}
+                );
+              })()}
             </tbody>
           </table>
         </div>
@@ -1522,6 +1551,7 @@ function EditFormServiceTicket({ content, onChange }: {
                     ...r,
                     content: svc.name,
                     category: svc.category,
+                    units: svc.units,
                     ...rentalSwitchOn,
                     ...(!nowRental && wasRental
                       ? { manual_units: null, rental_period_type: null, rental_days: null }
@@ -2418,8 +2448,9 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
               <col style={{ width: "6%" }} />
               <col style={{ width: "10%" }} />
               <col style={{ width: "10%" }} />
-              {DAYS.map((d) => <col key={d} style={{ width: `${71 / 31}%` }} />)}
+              {DAYS.map((d) => <col key={d} style={{ width: `${68 / 31}%` }} />)}
               <col style={{ width: "3%" }} />
+              <col style={{ width: "4%" }} />
             </colgroup>
             <thead>
               <tr style={{ height: "18px" }}>
@@ -2433,6 +2464,7 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                   return <th key={d} style={isWE ? thGreen : thStyle}>{d}</th>;
                 })}
                 <th style={thStyle} rowSpan={2}>合計</th>
+                <th style={thStyle} rowSpan={2}>単位</th>
               </tr>
               <tr style={{ height: "14px" }}>
                 {DAYS.map((d) => {
@@ -2475,6 +2507,14 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                         return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", borderStyle: "dashed", fontWeight: "bold" }}>{v ? "1" : ""}</td>;
                       })}
                       <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt" }} rowSpan={2}>{(plannedCount || actualCount) ? `${plannedCount}/${actualCount}` : ""}</td>
+                      <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt", fontWeight: "bold" }} rowSpan={2}>
+                        {(() => {
+                          const monthlyUnits = rental
+                            ? rentalMonthly
+                            : (svc.units ?? 0) * Math.max(plannedCount, actualCount);
+                          return monthlyUnits > 0 ? monthlyUnits : "";
+                        })()}
+                      </td>
                     </tr>
                     {/* 実績行 */}
                     <tr style={{ height: `${ROW_H}px` }}>
@@ -2488,8 +2528,16 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                   );
                 });
               })()}
-              {/* 予定合計/実績合計行: rental も 1日="1" を持つので、全行の回数を集計 */}
+              {/* 予定合計/実績合計行: rental も 1日="1" を持つので、全行の回数を集計。単位列も合算。 */}
               {(() => {
+                const printYM = String(c.report_month ?? format(new Date(), "yyyy-MM"));
+                const rowMonthlyUnits = (svc: SvcRow, kind: "planned" | "actual"): number => {
+                  if (isRentalRow(svc)) return rentalMonthlyUnits(svc, printYM);
+                  const count = svc[kind].filter(Boolean).length;
+                  return (svc.units ?? 0) * count;
+                };
+                const plannedUnitsSum = rows.reduce((s, svc) => s + rowMonthlyUnits(svc, "planned"), 0);
+                const actualUnitsSum = rows.reduce((s, svc) => s + rowMonthlyUnits(svc, "actual"), 0);
                 return (<>
                   <tr style={{ height: `${ROW_H}px` }}>
                     <td colSpan={4} style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>予定合計</td>
@@ -2502,6 +2550,7 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                     <td style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>
                       {rows.reduce((sum, svc) => sum + svc.planned.filter(Boolean).length, 0) || ""}
                     </td>
+                    <td style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>{plannedUnitsSum || ""}</td>
                   </tr>
                   {/* 実績合計行 */}
                   <tr style={{ height: `${ROW_H}px` }}>
@@ -2515,6 +2564,7 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                     <td style={{ ...tdStyle, color: "#1b5e20", backgroundColor: "#e8f5e9", fontWeight: "bold", textAlign: "center" }}>
                       {rows.reduce((sum, svc) => sum + svc.actual.filter(Boolean).length, 0) || ""}
                     </td>
+                    <td style={{ ...tdStyle, color: "#1b5e20", backgroundColor: "#e8f5e9", fontWeight: "bold", textAlign: "center" }}>{actualUnitsSum || ""}</td>
                   </tr>
                 </>);
               })()}
