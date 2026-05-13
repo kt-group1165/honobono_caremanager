@@ -408,18 +408,40 @@ function daysInMonthOf(yearMonth: string): number {
   return new Date(y, mo, 0).getDate();
 }
 
-/** rental 行の月計単位数を計算 (= round(units × 倍率))。 */
-function rentalMonthlyUnits(svc: SvcRow, yearMonth: string): number {
+/**
+ * 利用票の日付マークから区分 (1月 / 半月) を自動判定する。
+ *   - 0 マーク: 1月 (default)
+ *   - 月初 (1日) または末日を含むマーク: 1月 (boundary touching)
+ *   - 2 マーク以上 で boundary に触れない: 半月 (同月内開始+終了)
+ *   - 単独マーク (中の日): 開始日と解釈し「末日までの利用日数 ≥ 16日 → 1月、未満 → 半月」
+ *
+ * 介護保険の福祉用具貸与の算定ルール:
+ *   - 開始日から月末まで連続使用 (≥16日) または 月初から終了日まで連続使用 (≥16日): 1月
+ *   - 同月内開始+終了 (boundary に触れない): 半月
+ */
+function autoRentalPeriodType(marks: boolean[], yearMonth: string): "1month" | "half_month" {
+  const daysInMonth = daysInMonthOf(yearMonth);
+  const days: number[] = [];
+  for (let i = 0; i < Math.min(daysInMonth, marks.length); i++) {
+    if (marks[i]) days.push(i + 1);
+  }
+  if (days.length === 0) return "1month";
+  const first = days[0];
+  const last = days[days.length - 1];
+  if (first === 1 || last === daysInMonth) return "1month";
+  if (days.length >= 2) return "half_month";
+  // 単独マーク (中の日): 開始日として末日まで継続と解釈
+  const utilizationDays = daysInMonth - first + 1;
+  return utilizationDays >= 16 ? "1month" : "half_month";
+}
+
+/** rental 行の月計単位数を計算 (= round(units × 倍率))。区分は marks から自動判定。 */
+function rentalMonthlyUnits(svc: SvcRow, yearMonth: string, kind: "planned" | "actual" = "planned"): number {
   const units = Number(svc.manual_units ?? 0);
   if (!Number.isFinite(units) || units <= 0) return 0;
-  const period = svc.rental_period_type ?? "1month";
-  if (period === "1month") return Math.round(units);
-  if (period === "half_month") return Math.round(units * 0.5);
-  // daily
-  const days = Math.max(0, Number(svc.rental_days ?? 0));
-  const total = daysInMonthOf(yearMonth);
-  if (!total) return 0;
-  return Math.round(units * (days / total));
+  const marks = kind === "planned" ? svc.planned : svc.actual;
+  const period = autoRentalPeriodType(marks, yearMonth);
+  return period === "1month" ? Math.round(units) : Math.round(units * 0.5);
 }
 type InvoiceItem = { content: string; units: number; unit_price: number; amount: number };
 
@@ -1189,11 +1211,6 @@ function EditFormServiceTicket({ content, onChange }: {
         const merged = { ...emptyServiceRow(), ...r };
         const planned = Array.isArray(r.planned) ? [...r.planned, ...Array(31).fill(false)].slice(0, 31) : Array(31).fill(false);
         const actual = Array.isArray(r.actual) ? [...r.actual, ...Array(31).fill(false)].slice(0, 31) : Array(31).fill(false);
-        // 福祉用具貸与 (category=17): 1日に "1" を自動付与 (利用票の慣習)
-        if (String(merged.category ?? "") === "17") {
-          planned[0] = true;
-          actual[0] = true;
-        }
         return { ...merged, planned, actual };
       })
     : [];
@@ -1290,9 +1307,7 @@ function EditFormServiceTicket({ content, onChange }: {
               )}
               {services.map((svc, i) => {
                 const rental = isRentalRow(svc);
-                // rental は 1日="1" 表示 (利用票慣習) のため、計列も非 rental と同じ「回数」表示。
-                // rentalMonthly は サービス内容 cell 内の単位数計算でのみ使用。
-                const rentalMonthly = rental ? rentalMonthlyUnits(svc, selectedYearMonth) : 0;
+                // rental は marks (開始日/終了日) から区分を自動判定。計列は回数表示で統一。
                 const plannedCount = svc.planned.filter(Boolean).length;
                 const actualCount  = svc.actual.filter(Boolean).length;
                 return (
@@ -1317,11 +1332,12 @@ function EditFormServiceTicket({ content, onChange }: {
                         >
                           {svc.content || <span className="text-gray-400">選択...</span>}
                         </button>
-                        {/* rental 行は単位数・区分を サービス内容 cell 内に縦 2 段で配置
-                            (日付グリッドは利用票慣習どおり 1日="1" 表示に戻す) */}
-                        {rental && (
-                          <div className="mt-0.5 px-1 leading-tight">
-                            <div className="flex items-center gap-1 text-[9px]">
+                        {/* rental 行: 単位数を編集可能 + 区分は日付マークから自動判定 (1月/半月) */}
+                        {rental && (() => {
+                          const autoPeriod = autoRentalPeriodType(svc.planned, selectedYearMonth);
+                          const label = autoPeriod === "1month" ? "1月" : "半月";
+                          return (
+                            <div className="mt-0.5 px-1 leading-tight flex items-center gap-1 text-[9px]">
                               <input
                                 type="number"
                                 className="w-10 border border-gray-300 rounded px-0.5 text-right text-[9px]"
@@ -1332,37 +1348,13 @@ function EditFormServiceTicket({ content, onChange }: {
                                 }}
                                 min={0}
                                 step={1}
-                                title="単位数"
+                                title="単位数 (1月あたり)"
                               />
                               <span className="text-gray-500">×</span>
-                              <select
-                                className="border border-gray-300 rounded px-0.5 bg-white text-[9px]"
-                                value={svc.rental_period_type ?? "1month"}
-                                onChange={(e) => updateSvc(i, "rental_period_type", e.target.value as RentalPeriodType)}
-                                title="区分"
-                              >
-                                <option value="1month">1月</option>
-                                <option value="half_month">半月</option>
-                                <option value="daily">日割</option>
-                              </select>
-                              {svc.rental_period_type === "daily" && (
-                                <input
-                                  type="number"
-                                  className="w-8 border border-gray-300 rounded px-0.5 text-right text-[9px]"
-                                  value={svc.rental_days ?? ""}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    updateSvc(i, "rental_days", v === "" ? null : Number(v));
-                                  }}
-                                  min={0}
-                                  max={daysInMonthOf(selectedYearMonth)}
-                                  step={1}
-                                  title={`日数 / ${daysInMonthOf(selectedYearMonth)}日`}
-                                />
-                              )}
+                              <span className="text-amber-700 font-semibold" title="日付マークから自動判定">{label}</span>
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
                       </td>
                       <td rowSpan={2} className="border border-gray-300 px-0.5 align-middle">
                         {(() => {
@@ -1406,13 +1398,16 @@ function EditFormServiceTicket({ content, onChange }: {
                             <button onClick={() => fillWeekdays(i, "planned")} title="平日" className="text-[8px] text-blue-500 hover:text-blue-700 px-0.5 rounded hover:bg-blue-50">平</button>
                             <button onClick={() => clearAll(i, "planned")} title="クリア" className="text-[8px] text-red-400 hover:text-red-600 px-0.5 rounded hover:bg-red-50">消</button>
                           </>)}
+                          {rental && (
+                            <button onClick={() => clearAll(i, "planned")} title="クリア" className="text-[8px] text-red-400 hover:text-red-600 px-0.5 rounded hover:bg-red-50">消</button>
+                          )}
                         </div>
                       </td>
                       {DAYS.map((_, di) => (
                         <td
                           key={di}
-                          onClick={rental ? undefined : () => toggleDay(i, "planned", di)}
-                          className={`border border-dashed border-gray-300 text-center select-none ${rental ? "" : "cursor-pointer hover:bg-blue-50"}`}
+                          onClick={() => toggleDay(i, "planned", di)}
+                          className="border border-dashed border-gray-300 text-center cursor-pointer select-none hover:bg-blue-50"
                           style={{ height: 18, width: 18, minWidth: 18 }}
                         >
                           {svc.planned[di] ? <span className="text-blue-600 font-semibold">1</span> : null}
@@ -1421,11 +1416,15 @@ function EditFormServiceTicket({ content, onChange }: {
                       <td className="border border-dashed border-gray-300 text-center text-blue-700 font-semibold">{plannedCount || ""}</td>
                       <td rowSpan={2} className="border border-gray-300 text-center align-middle text-[10px] font-semibold text-amber-700">
                         {(() => {
-                          // 月計単位: rental は manual_units × multiplier、非 rental は units × 回数。
-                          // 回数は予定/実績の大きい方を採用 (利用票の予定段階でも 実績段階でも数字を出す)。
-                          const monthlyUnits = rental
-                            ? rentalMonthly
-                            : (svc.units ?? 0) * Math.max(plannedCount, actualCount);
+                          // 月計単位: rental は marks から自動判定した区分 (1月/半月) × manual_units、
+                          // 非 rental は units × 回数。予定/実績の大きい方を採用。
+                          const monthlyPlanned = rental
+                            ? rentalMonthlyUnits(svc, selectedYearMonth, "planned")
+                            : (svc.units ?? 0) * plannedCount;
+                          const monthlyActual = rental
+                            ? rentalMonthlyUnits(svc, selectedYearMonth, "actual")
+                            : (svc.units ?? 0) * actualCount;
+                          const monthlyUnits = Math.max(monthlyPlanned, monthlyActual);
                           return monthlyUnits > 0 ? monthlyUnits : "";
                         })()}
                       </td>
@@ -1443,13 +1442,16 @@ function EditFormServiceTicket({ content, onChange }: {
                             <button onClick={() => fillWeekdays(i, "actual")} title="平日" className="text-[8px] text-green-600 hover:text-green-800 px-0.5 rounded hover:bg-green-50">平</button>
                             <button onClick={() => clearAll(i, "actual")} title="クリア" className="text-[8px] text-red-400 hover:text-red-600 px-0.5 rounded hover:bg-red-50">消</button>
                           </>)}
+                          {rental && (
+                            <button onClick={() => clearAll(i, "actual")} title="クリア" className="text-[8px] text-red-400 hover:text-red-600 px-0.5 rounded hover:bg-red-50">消</button>
+                          )}
                         </div>
                       </td>
                       {DAYS.map((_, di) => (
                         <td
                           key={di}
-                          onClick={rental ? undefined : () => toggleDay(i, "actual", di)}
-                          className={`border border-gray-300 text-center select-none ${rental ? "" : "cursor-pointer hover:bg-green-50"}`}
+                          onClick={() => toggleDay(i, "actual", di)}
+                          className="border border-gray-300 text-center cursor-pointer select-none hover:bg-green-50"
                           style={{ height: 18, width: 18, minWidth: 18 }}
                         >
                           {svc.actual[di] ? <span className="text-green-700 font-semibold">1</span> : null}
@@ -1464,7 +1466,7 @@ function EditFormServiceTicket({ content, onChange }: {
                   単位列は予定/実績それぞれの月計単位を合算。 */}
               {services.length > 0 && (() => {
                 const rowMonthlyUnits = (svc: SvcRow, kind: "planned" | "actual"): number => {
-                  if (isRentalRow(svc)) return rentalMonthlyUnits(svc, selectedYearMonth);
+                  if (isRentalRow(svc)) return rentalMonthlyUnits(svc, selectedYearMonth, kind);
                   const count = svc[kind].filter(Boolean).length;
                   return (svc.units ?? 0) * count;
                 };
@@ -2371,10 +2373,6 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
         const merged = { ...emptyServiceRow(), ...r };
         const planned = Array.isArray(r.planned) ? [...r.planned, ...Array(31).fill(false)].slice(0, 31) : Array(31).fill(false);
         const actual = Array.isArray(r.actual) ? [...r.actual, ...Array(31).fill(false)].slice(0, 31) : Array(31).fill(false);
-        if (String(merged.category ?? "") === "17") {
-          planned[0] = true;
-          actual[0] = true;
-        }
         return { ...merged, planned, actual };
       })
     : [];
@@ -2479,24 +2477,24 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                 const printYM = String(c.report_month ?? format(new Date(), "yyyy-MM"));
                 return rows.map((svc, i) => {
                   const rental = isRentalRow(svc);
-                  const rentalMonthly = rental ? rentalMonthlyUnits(svc, printYM) : 0;
+                  const monthlyPlanned = rental ? rentalMonthlyUnits(svc, printYM, "planned") : 0;
+                  const monthlyActual = rental ? rentalMonthlyUnits(svc, printYM, "actual") : 0;
                   const plannedCount = svc.planned.filter(Boolean).length;
                   const actualCount = svc.actual.filter(Boolean).length;
+                  const autoPeriodLabel = rental
+                    ? (autoRentalPeriodType(svc.planned, printYM) === "1month" ? "1月" : "半月")
+                    : "";
                   return (
                   <React.Fragment key={i}>
-                    {/* 予定行: rental も日付グリッド表示 (1日="1" auto)、サービス内容欄に単位数情報併記 */}
+                    {/* 予定行: rental は日付マーク (開始/終了等) から自動判定した区分で単位計算 */}
                     <tr style={{ height: `${ROW_H}px` }}>
                       <td style={{ ...thStyle, fontSize: "7pt" }} rowSpan={2}>{i + 1}</td>
                       <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "6.5pt" }} rowSpan={2}>{svc.time || "　"}</td>
                       <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "6.5pt" }} rowSpan={2}>
                         {svc.content || "　"}
-                        {rental && rentalMonthly > 0 && (
+                        {rental && monthlyPlanned > 0 && (
                           <div style={{ fontSize: "5.5pt", color: "#8d6e00", marginTop: "1px" }}>
-                            {svc.manual_units}単位×{
-                              svc.rental_period_type === "half_month" ? "半月" :
-                              svc.rental_period_type === "daily" ? `日割${svc.rental_days ?? 0}/${daysInMonthOf(printYM)}日` :
-                              "1月"
-                            } = {rentalMonthly}
+                            {svc.manual_units}単位×{autoPeriodLabel} = {monthlyPlanned}
                           </div>
                         )}
                       </td>
@@ -2509,9 +2507,9 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                       <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt" }} rowSpan={2}>{(plannedCount || actualCount) ? `${plannedCount}/${actualCount}` : ""}</td>
                       <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt", fontWeight: "bold" }} rowSpan={2}>
                         {(() => {
-                          const monthlyUnits = rental
-                            ? rentalMonthly
-                            : (svc.units ?? 0) * Math.max(plannedCount, actualCount);
+                          const mPlanned = rental ? monthlyPlanned : (svc.units ?? 0) * plannedCount;
+                          const mActual = rental ? monthlyActual : (svc.units ?? 0) * actualCount;
+                          const monthlyUnits = Math.max(mPlanned, mActual);
                           return monthlyUnits > 0 ? monthlyUnits : "";
                         })()}
                       </td>
@@ -2532,7 +2530,7 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
               {(() => {
                 const printYM = String(c.report_month ?? format(new Date(), "yyyy-MM"));
                 const rowMonthlyUnits = (svc: SvcRow, kind: "planned" | "actual"): number => {
-                  if (isRentalRow(svc)) return rentalMonthlyUnits(svc, printYM);
+                  if (isRentalRow(svc)) return rentalMonthlyUnits(svc, printYM, kind);
                   const count = svc[kind].filter(Boolean).length;
                   return (svc.units ?? 0) * count;
                 };
