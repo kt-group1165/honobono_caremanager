@@ -200,15 +200,19 @@ function ServiceSelectorInner({ onClose, onSelect, system = "介護", startTime,
   const [candidateOnly, setCandidateOnly] = React.useState<boolean>(durationMinutes !== null)
   // start/end が変わるたびに「該当時間が定義された場合は候補モードを ON 復帰」
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (時間レンジ変化による意図的な derived reset)
     if (durationMinutes !== null) setCandidateOnly(true)
   }, [durationMinutes])
 
-  // ── Fetch on mount (modal-on-click pattern: open になった瞬間にこの component が mount) ──
+  // ── Fetch per category (system='介護' 全件で 15k 行 → PostgREST 1000 limit に
+  //    引っ掛かり 訪問介護(11) 以外のカテゴリが返らない問題があったため、
+  //    activeCategory も filter に含めて 1 カテゴリずつ取得する) ──
   React.useEffect(() => {
     let cancelled = false
     // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
     setLoading(true)
     setError(null)
+    setServices([])
 
     async function fetchServices() {
       try {
@@ -221,6 +225,7 @@ function ServiceSelectorInner({ onClose, onSelect, system = "介護", startTime,
           .from("kaigo_service_codes")
           .select("service_code, service_name, units, service_category, service_category_name, calculation_type")
           .eq("system", system)
+          .eq("service_category", activeCategory)
           .lte("valid_from", today)
           .or(`valid_until.is.null,valid_until.gte.${today}`)
           .order("service_code", { ascending: true })
@@ -245,7 +250,7 @@ function ServiceSelectorInner({ onClose, onSelect, system = "介護", startTime,
 
     fetchServices()
     return () => { cancelled = true }
-  }, [system])
+  }, [system, activeCategory])
 
   // ── Escape key ───────────────────────────────────────────────────────────────
   React.useEffect(() => {
@@ -264,14 +269,14 @@ function ServiceSelectorInner({ onClose, onSelect, system = "介護", startTime,
   const slotZone = React.useMemo(() => classifyStartTimeZone(startTime), [startTime])
 
   // ── Filtered list ────────────────────────────────────────────────────────────
+  // services は activeCategory 単位で fetch されているので、ここでは
+  // candidate filter (時間レンジ/時間帯) と検索文字列のみ適用する。
   const filtered = React.useMemo(() => {
     const lowerQuery = query.toLowerCase()
     // 福祉用具貸与 (17) は時間帯/所要時間の概念なし → candidate filter 適用しない
     const hasTimeConcept = activeCategory !== "17"
     const applyCandidate = candidateOnly && durationMinutes !== null && hasTimeConcept
     return services.filter((s) => {
-      const matchCategory = s.category === activeCategory
-      if (!matchCategory) return false
       if (applyCandidate) {
         // 1) 所要時間レンジで絞る
         const range = parseServiceDurationMinutes(s.name)
