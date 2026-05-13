@@ -1131,30 +1131,52 @@ function EditFormServiceTicket({ content, onChange }: {
   //      列はサービス提供者なので、ケアプラン作成事業所 (居宅介護支援) は自分自身で除外
   //   ② 外部事業所 (kaigo_service_providers, status='active')
   // 同名重複は ① 優先で吸収する。
-  const [providers, setProviders] = useState<{ provider_number: string; provider_name: string }[]>([]);
+  // service_categories は「その事業所が提供できるサービスカテゴリコード」配列で、
+  // 行のサービス選択に応じて事業所を絞り込むのに使う (例: 行が "17" なら福祉用具のみ)。
+  const [providers, setProviders] = useState<{ provider_number: string; provider_name: string; service_categories: string[] }[]>([]);
 
   useEffect(() => {
+    // offices.service_type (日本語) → サービス category コード
+    const OFFICE_TYPE_TO_CATEGORY: Record<string, string> = {
+      "訪問介護": "11",
+      "訪問入浴": "12",
+      "訪問看護": "13",
+      "訪問リハ": "14",
+      "通所介護": "15",
+      "通所リハ": "16",
+      "福祉用具": "17",
+      "短期入所": "21",
+    };
     const fetchProviders = async () => {
       const [{ data: own }, { data: external }] = await Promise.all([
         supabase
           .from("offices")
-          .select("id, name, business_number")
+          .select("id, name, business_number, service_type")
           .eq("is_active", true)
           .neq("service_type", "居宅介護支援")
           .order("name"),
         supabase
           .from("kaigo_service_providers")
-          .select("provider_number, provider_name")
+          .select("provider_number, provider_name, service_categories")
           .eq("status", "active")
           .order("provider_name"),
       ]);
-      const ownMapped = ((own ?? []) as { id: string; name: string; business_number: string | null }[]).map((o) => ({
-        provider_number: o.business_number ?? `office-${o.id}`,
-        provider_name: o.name,
-      }));
+      const ownMapped = ((own ?? []) as { id: string; name: string; business_number: string | null; service_type: string }[]).map((o) => {
+        const code = OFFICE_TYPE_TO_CATEGORY[o.service_type];
+        return {
+          provider_number: o.business_number ?? `office-${o.id}`,
+          provider_name: o.name,
+          service_categories: code ? [code] : [],
+        };
+      });
       const ownNames = new Set(ownMapped.map((o) => o.provider_name));
-      const externalUnique = ((external ?? []) as { provider_number: string; provider_name: string }[])
-        .filter((p) => !ownNames.has(p.provider_name));
+      const externalUnique = ((external ?? []) as { provider_number: string; provider_name: string; service_categories: string[] | null }[])
+        .filter((p) => !ownNames.has(p.provider_name))
+        .map((p) => ({
+          provider_number: p.provider_number,
+          provider_name: p.provider_name,
+          service_categories: p.service_categories ?? [],
+        }));
       setProviders([...ownMapped, ...externalUnique]);
     };
     fetchProviders();
@@ -1276,18 +1298,32 @@ function EditFormServiceTicket({ content, onChange }: {
                         </button>
                       </td>
                       <td rowSpan={2} className="border border-gray-300 px-0.5 align-middle">
-                        <select
-                          className="w-full text-[10px] bg-transparent outline-none border-0 cursor-pointer"
-                          value={svc.provider}
-                          onChange={(e) => updateSvc(i, "provider", e.target.value)}
-                        >
-                          <option value="">-- 選択 --</option>
-                          {providers.map((p) => (
-                            <option key={p.provider_number} value={p.provider_name}>
-                              {p.provider_name}
-                            </option>
-                          ))}
-                        </select>
+                        {(() => {
+                          // 行のサービス category が決まっていれば、それを提供できる事業所のみに絞る。
+                          // 未選択 (svc.category 空) なら全表示。
+                          // 既存の選択値がフィルタ外でも消えないよう必ず含める。
+                          const cat = svc.category ?? "";
+                          const filtered = cat
+                            ? providers.filter((p) => p.service_categories.includes(cat))
+                            : providers;
+                          const list = svc.provider && !filtered.some((p) => p.provider_name === svc.provider)
+                            ? [...filtered, { provider_number: `__current__${svc.provider}`, provider_name: svc.provider, service_categories: [] as string[] }]
+                            : filtered;
+                          return (
+                            <select
+                              className="w-full text-[10px] bg-transparent outline-none border-0 cursor-pointer"
+                              value={svc.provider}
+                              onChange={(e) => updateSvc(i, "provider", e.target.value)}
+                            >
+                              <option value="">-- 選択 --</option>
+                              {list.map((p) => (
+                                <option key={p.provider_number} value={p.provider_name}>
+                                  {p.provider_name}
+                                </option>
+                              ))}
+                            </select>
+                          );
+                        })()}
                       </td>
                       {rental ? (
                         // 福祉用具貸与: 日付グリッド (1〜31 + 計) を colSpan で潰し、入力欄に置換
