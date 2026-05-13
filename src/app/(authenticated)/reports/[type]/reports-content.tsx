@@ -1223,14 +1223,77 @@ function EditFormServiceTicket({ content, onChange }: {
     fetchProviders();
   }, [supabase]);
 
-  const services: SvcRow[] = Array.isArray(content.services)
+  const services: SvcRow[] = useMemo(() => Array.isArray(content.services)
     ? (content.services as SvcRow[]).map((r) => {
         const merged = { ...emptyServiceRow(), ...r };
         const planned = Array.isArray(r.planned) ? [...r.planned, ...Array(31).fill(false)].slice(0, 31) : Array(31).fill(false);
         const actual = Array.isArray(r.actual) ? [...r.actual, ...Array(31).fill(false)].slice(0, 31) : Array(31).fill(false);
         return { ...merged, planned, actual };
       })
-    : [];
+    : [], [content.services]);
+
+  // 既存データ補完: 過去保存分は svc.units が未設定なので、サービス名+カテゴリで
+  // kaigo_service_codes から単位数をルックアップして lookup map に保存し、
+  // services 配列にも backfill (onChange 経由で content を更新) する。
+  // backfill 後は次回 DB 保存時に units も永続化される。
+  const [unitsLookup, setUnitsLookup] = useState<Map<string, number>>(new Map());
+  const missingUnitsKey = useMemo(() => {
+    const keys: string[] = [];
+    for (const s of services) {
+      if (typeof s.units !== "number" && s.content && s.category) {
+        keys.push(`${s.content}::${s.category}`);
+      }
+    }
+    return [...new Set(keys)].sort().join("|");
+  }, [services]);
+
+  useEffect(() => {
+    if (!missingUnitsKey) return;
+    let cancelled = false;
+    const fetchMissing = async () => {
+      const keys = missingUnitsKey.split("|").filter(Boolean);
+      const names = [...new Set(keys.map((k) => k.split("::")[0]))];
+      const today = new Date().toISOString().slice(0, 10);
+      const { data } = await supabase
+        .from("kaigo_service_codes")
+        .select("service_name, service_category, units")
+        .eq("system", "介護")
+        .in("service_name", names)
+        .lte("valid_from", today)
+        .or(`valid_until.is.null,valid_until.gte.${today}`);
+      if (cancelled || !data) return;
+      setUnitsLookup((prev) => {
+        const next = new Map(prev);
+        for (const r of data as { service_name: string; service_category: string; units: number }[]) {
+          next.set(`${r.service_name}::${r.service_category}`, Number(r.units ?? 0));
+        }
+        return next;
+      });
+    };
+    fetchMissing();
+    return () => { cancelled = true };
+  }, [missingUnitsKey, supabase]);
+
+  // backfill: lookup が更新されたら、services に units を埋め込み onChange で content を更新
+  useEffect(() => {
+    if (unitsLookup.size === 0) return;
+    let hasUpdate = false;
+    const updated = services.map((s) => {
+      if (typeof s.units === "number") return s;
+      if (!s.content || !s.category) return s;
+      const u = unitsLookup.get(`${s.content}::${s.category}`);
+      if (u != null) {
+        hasUpdate = true;
+        return { ...s, units: u };
+      }
+      return s;
+    });
+    if (hasUpdate) {
+      onChange({ ...content, services: updated });
+    }
+    // services / content / onChange は意図的に依存に含めない (lookup 完了タイミングで 1 回 backfill すれば足りる)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unitsLookup]);
 
   const addSvc = () => onChange({ ...content, services: [...services, emptyServiceRow()] });
   const removeSvc = (i: number) => onChange({ ...content, services: services.filter((_, idx) => idx !== i) });
