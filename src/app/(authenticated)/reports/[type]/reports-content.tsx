@@ -1289,12 +1289,12 @@ function EditFormServiceTicket({ content, onChange }: {
           )}
         </div>
         <div className="overflow-x-auto">
-          <table className="border-collapse text-[10px] w-full" style={{ minWidth: 1040, tableLayout: "fixed" }}>
+          <table className="border-collapse text-[10px] w-full" style={{ minWidth: 1080, tableLayout: "fixed", overflow: "hidden" }}>
             <colgroup>
               <col style={{ width: 72 }} />   {/* 時間帯 */}
               <col style={{ width: 110 }} />  {/* サービス内容 (rental は単位入力併設) */}
               <col style={{ width: 100 }} />  {/* 事業所 (折り返し前提) */}
-              <col style={{ width: 38 }} />   {/* 予定/実績 ラベル */}
+              <col style={{ width: 70 }} />   {/* 予定/実績 ラベル + 全平消 ボタン */}
               {DAYS.map((d) => <col key={d} style={{ width: 18 }} />)}
               <col style={{ width: 28 }} />   {/* 計 (回数) */}
               <col style={{ width: 40 }} />   {/* 単位計 (月計単位) */}
