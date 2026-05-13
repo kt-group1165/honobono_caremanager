@@ -1253,18 +1253,27 @@ function EditFormServiceTicket({ content, onChange }: {
           )}
         </div>
         <div className="overflow-x-auto">
-          <table className="border-collapse text-[10px] w-full" style={{ minWidth: 900 }}>
+          <table className="border-collapse text-[10px] w-full" style={{ minWidth: 1000, tableLayout: "fixed" }}>
+            <colgroup>
+              <col style={{ width: 72 }} />   {/* 時間帯 */}
+              <col style={{ width: 120 }} />  {/* サービス内容 (rental config を 1 行に収める幅) */}
+              <col style={{ width: 110 }} />  {/* 事業所 (折り返し前提) */}
+              <col style={{ width: 38 }} />   {/* 予定/実績 ラベル */}
+              {DAYS.map((d) => <col key={d} style={{ width: 18 }} />)}
+              <col style={{ width: 28 }} />   {/* 計 */}
+              <col style={{ width: 20 }} />   {/* 削除 */}
+            </colgroup>
             <thead>
               <tr className="bg-gray-100">
                 <th className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">時間帯</th>
                 <th className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">サービス内容</th>
                 <th className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">事業所</th>
-                <th className="border border-gray-300 px-1 py-0.5 w-6"></th>
+                <th className="border border-gray-300 px-1 py-0.5"></th>
                 {DAYS.map((d) => (
-                  <th key={d} className="border border-gray-300 px-0 py-0.5 w-5 text-center leading-none">{d}</th>
+                  <th key={d} className="border border-gray-300 px-0 py-0.5 text-center leading-none">{d}</th>
                 ))}
                 <th className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">計</th>
-                <th className="border border-gray-300 px-0 py-0.5 w-5"></th>
+                <th className="border border-gray-300 px-0 py-0.5"></th>
               </tr>
             </thead>
             <tbody>
@@ -1304,49 +1313,51 @@ function EditFormServiceTicket({ content, onChange }: {
                         >
                           {svc.content || <span className="text-gray-400">選択...</span>}
                         </button>
-                        {/* rental 行は単位数・区分を サービス内容 cell 内に compact 配置
+                        {/* rental 行は単位数・区分を サービス内容 cell 内に縦 2 段で配置
                             (日付グリッドは利用票慣習どおり 1日="1" 表示に戻す) */}
                         {rental && (
-                          <div className="text-[9px] text-amber-700 mt-0.5 flex items-center gap-0.5 flex-wrap px-1">
-                            <input
-                              type="number"
-                              className="w-10 border border-gray-300 rounded px-0.5 text-right text-[9px]"
-                              value={svc.manual_units ?? ""}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                updateSvc(i, "manual_units", v === "" ? null : Number(v));
-                              }}
-                              min={0}
-                              step={1}
-                              title="単位数"
-                            />
-                            <span className="text-gray-500">×</span>
-                            <select
-                              className="border border-gray-300 rounded px-0.5 bg-white text-[9px]"
-                              value={svc.rental_period_type ?? "1month"}
-                              onChange={(e) => updateSvc(i, "rental_period_type", e.target.value as RentalPeriodType)}
-                              title="区分"
-                            >
-                              <option value="1month">1月</option>
-                              <option value="half_month">半月</option>
-                              <option value="daily">日割</option>
-                            </select>
-                            {svc.rental_period_type === "daily" && (
+                          <div className="mt-0.5 px-1 leading-tight">
+                            <div className="flex items-center gap-1 text-[9px]">
                               <input
                                 type="number"
-                                className="w-8 border border-gray-300 rounded px-0.5 text-right text-[9px]"
-                                value={svc.rental_days ?? ""}
+                                className="w-10 border border-gray-300 rounded px-0.5 text-right text-[9px]"
+                                value={svc.manual_units ?? ""}
                                 onChange={(e) => {
                                   const v = e.target.value;
-                                  updateSvc(i, "rental_days", v === "" ? null : Number(v));
+                                  updateSvc(i, "manual_units", v === "" ? null : Number(v));
                                 }}
                                 min={0}
-                                max={daysInMonthOf(selectedYearMonth)}
                                 step={1}
-                                title={`日数 / ${daysInMonthOf(selectedYearMonth)}日`}
+                                title="単位数"
                               />
-                            )}
-                            <span>= {rentalMonthly}</span>
+                              <span className="text-gray-500">×</span>
+                              <select
+                                className="border border-gray-300 rounded px-0.5 bg-white text-[9px]"
+                                value={svc.rental_period_type ?? "1month"}
+                                onChange={(e) => updateSvc(i, "rental_period_type", e.target.value as RentalPeriodType)}
+                                title="区分"
+                              >
+                                <option value="1month">1月</option>
+                                <option value="half_month">半月</option>
+                                <option value="daily">日割</option>
+                              </select>
+                              {svc.rental_period_type === "daily" && (
+                                <input
+                                  type="number"
+                                  className="w-8 border border-gray-300 rounded px-0.5 text-right text-[9px]"
+                                  value={svc.rental_days ?? ""}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    updateSvc(i, "rental_days", v === "" ? null : Number(v));
+                                  }}
+                                  min={0}
+                                  max={daysInMonthOf(selectedYearMonth)}
+                                  step={1}
+                                  title={`日数 / ${daysInMonthOf(selectedYearMonth)}日`}
+                                />
+                              )}
+                            </div>
+                            <div className="text-[9px] text-amber-700 font-semibold mt-0.5">月計 {rentalMonthly}</div>
                           </div>
                         )}
                       </td>
