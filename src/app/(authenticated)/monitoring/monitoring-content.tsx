@@ -600,7 +600,7 @@ export function MonitoringContent({
           body > * { display: none !important; }
           #monitoring-print-root { display: block !important; }
           #monitoring-print-root { position: fixed; inset: 0; background: white; font-family: "MS Mincho", "ＭＳ 明朝", "Noto Serif JP", serif; }
-          @page { size: A4 landscape; margin: 6mm; }
+          @page { size: A4 portrait; margin: 8mm; }
           .no-print { display: none !important; }
         }
         @media screen {
@@ -1187,20 +1187,20 @@ export function MonitoringContent({
             </div>
           )}
 
-          {/* ── SCREEN PREVIEW (A4横フィット) ── */}
+          {/* ── SCREEN PREVIEW (A4縦フィット) ── */}
           {mode === "edit" && selectedUser && (
             <div className="mt-6 space-y-3 no-print">
               <div className="flex items-center gap-2">
                 <Printer size={18} className="text-gray-500" />
-                <h2 className="text-base font-semibold text-gray-700">印刷プレビュー（A4横）</h2>
+                <h2 className="text-base font-semibold text-gray-700">印刷プレビュー（A4縦）</h2>
               </div>
               <div className="rounded-lg border bg-white shadow-sm overflow-auto">
                 <div
                   style={{
-                    /* A4横 = 297mm x 210mm, margin 6mm each → content 285mm x 198mm */
-                    width: "285mm",
-                    minHeight: "198mm",
-                    padding: "6mm",
+                    /* A4縦 = 210mm x 297mm, margin 8mm each → content 194mm x 281mm */
+                    width: "194mm",
+                    minHeight: "281mm",
+                    padding: "8mm",
                     fontFamily: '"MS Mincho", "ＭＳ 明朝", "Noto Serif JP", serif',
                     fontSize: "8pt",
                     color: "#000",
@@ -1210,58 +1210,58 @@ export function MonitoringContent({
                   }}
                 >
                   {/* Title */}
-                  <div style={{ textAlign: "center", marginBottom: "4mm" }}>
-                    <div style={{ fontSize: "12pt", fontWeight: "bold", letterSpacing: "0.3em", marginBottom: "3mm" }}>
+                  <div style={{ textAlign: "center", marginBottom: "3mm" }}>
+                    <div style={{ fontSize: "11pt", fontWeight: "bold", letterSpacing: "0.2em", marginBottom: "2.5mm" }}>
                       居宅サービス計画実施状況報告書（モニタリングシート）
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9pt", paddingLeft: "2mm", paddingRight: "2mm" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "8pt", paddingLeft: "1mm", paddingRight: "1mm" }}>
                       <span>利用者名: <b>{selectedUser.name}</b> 様</span>
                       <span>居宅介護支援事業者: {officeName}</span>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9pt", paddingLeft: "2mm", paddingRight: "2mm", marginTop: "1mm" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "8pt", paddingLeft: "1mm", paddingRight: "1mm", marginTop: "1mm" }}>
                       <span>モニタリング実施日: {monitoringDate ? toWareki(monitoringDate) : ""}</span>
                       <span>担当者: {assessorName}</span>
                     </div>
                   </div>
 
                   {/* Table - flex:1 to fill remaining height */}
-                  <table style={{ width: "100%", borderCollapse: "collapse", border: "1pt solid #333", flex: 1 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", border: "1pt solid #333", flex: 1, tableLayout: "fixed" }}>
                     <thead>
                       <tr style={{ background: "#f5f5f5" }}>
-                        <th style={{ border: "1pt solid #333", padding: "1.5mm", width: "3%", textAlign: "center", fontSize: "7pt" }}>No</th>
-                        <th style={{ border: "1pt solid #333", padding: "1.5mm", width: "14%", fontSize: "7pt" }}>短期目標</th>
-                        <th style={{ border: "1pt solid #333", padding: "1.5mm", width: "7%", textAlign: "center", fontSize: "7pt" }}>目標期間</th>
-                        <th style={{ border: "1pt solid #333", padding: "1.5mm", width: "8%", fontSize: "7pt" }}>サービス種別</th>
-                        <th style={{ border: "1pt solid #333", padding: "1.5mm", width: "8%", fontSize: "7pt" }}>事業所</th>
-                        <th style={{ border: "1pt solid #333", padding: "1.5mm", width: "16%", fontSize: "7pt" }}>サービス実施状況</th>
-                        <th style={{ border: "1pt solid #333", padding: "1.5mm", width: "8%", textAlign: "center", fontSize: "7pt" }}>満足度</th>
-                        <th style={{ border: "1pt solid #333", padding: "1.5mm", width: "7%", textAlign: "center", fontSize: "7pt" }}>達成度</th>
-                        <th style={{ border: "1pt solid #333", padding: "1.5mm", width: "6%", textAlign: "center", fontSize: "7pt" }}>ADL変化</th>
-                        <th style={{ border: "1pt solid #333", padding: "1.5mm", width: "6%", textAlign: "center", fontSize: "7pt" }}>見直し</th>
-                        <th style={{ border: "1pt solid #333", padding: "1.5mm", width: "17%", fontSize: "7pt" }}>見直し理由</th>
+                        <th style={{ border: "1pt solid #333", padding: "1mm", width: "4%", textAlign: "center", fontSize: "6.5pt" }}>No</th>
+                        <th style={{ border: "1pt solid #333", padding: "1mm", width: "14%", fontSize: "6.5pt" }}>短期目標</th>
+                        <th style={{ border: "1pt solid #333", padding: "1mm", width: "9%", textAlign: "center", fontSize: "6.5pt" }}>目標期間</th>
+                        <th style={{ border: "1pt solid #333", padding: "1mm", width: "9%", fontSize: "6.5pt" }}>サービス種別</th>
+                        <th style={{ border: "1pt solid #333", padding: "1mm", width: "9%", fontSize: "6.5pt" }}>事業所</th>
+                        <th style={{ border: "1pt solid #333", padding: "1mm", width: "14%", fontSize: "6.5pt" }}>サービス実施状況</th>
+                        <th style={{ border: "1pt solid #333", padding: "1mm", width: "9%", textAlign: "center", fontSize: "6.5pt" }}>満足度</th>
+                        <th style={{ border: "1pt solid #333", padding: "1mm", width: "7%", textAlign: "center", fontSize: "6.5pt" }}>達成度</th>
+                        <th style={{ border: "1pt solid #333", padding: "1mm", width: "6%", textAlign: "center", fontSize: "6.5pt" }}>ADL変化</th>
+                        <th style={{ border: "1pt solid #333", padding: "1mm", width: "5%", textAlign: "center", fontSize: "6.5pt" }}>見直し</th>
+                        <th style={{ border: "1pt solid #333", padding: "1mm", width: "14%", fontSize: "6.5pt" }}>見直し理由</th>
                       </tr>
                     </thead>
                     <tbody>
                       {items.map((item) => (
-                        <tr key={item.item_number} style={{ verticalAlign: "top", height: `${Math.floor(150 / FIXED_ROWS)}mm` }}>
-                          <td style={{ border: "1pt solid #333", padding: "1.5mm", textAlign: "center", fontSize: "8pt", fontWeight: "bold" }}>{item.item_number}</td>
-                          <td style={{ border: "1pt solid #333", padding: "1.5mm", whiteSpace: "pre-wrap", fontSize: "7.5pt" }}>{item.short_term_goal || "\u00A0"}</td>
-                          <td style={{ border: "1pt solid #333", padding: "1.5mm", fontSize: "6.5pt", textAlign: "center", whiteSpace: "pre-wrap" }}>
+                        <tr key={item.item_number} style={{ verticalAlign: "top", height: `${Math.floor(228 / FIXED_ROWS)}mm` }}>
+                          <td style={{ border: "1pt solid #333", padding: "1mm", textAlign: "center", fontSize: "7.5pt", fontWeight: "bold" }}>{item.item_number}</td>
+                          <td style={{ border: "1pt solid #333", padding: "1mm", whiteSpace: "pre-wrap", wordBreak: "break-all", fontSize: "6.5pt" }}>{item.short_term_goal || "\u00A0"}</td>
+                          <td style={{ border: "1pt solid #333", padding: "1mm", fontSize: "5.5pt", textAlign: "center", whiteSpace: "pre-wrap" }}>
                             {formatPeriod(item.goal_period_start, item.goal_period_end) || "\u00A0"}
                           </td>
-                          <td style={{ border: "1pt solid #333", padding: "1.5mm", fontSize: "7.5pt" }}>{item.service_type || "\u00A0"}</td>
-                          <td style={{ border: "1pt solid #333", padding: "1.5mm", fontSize: "7.5pt" }}>{item.provider_name || "\u00A0"}</td>
-                          <td style={{ border: "1pt solid #333", padding: "1.5mm", fontSize: "7.5pt", whiteSpace: "pre-wrap" }}>{item.implementation_status || "\u00A0"}</td>
-                          <td style={{ border: "1pt solid #333", padding: "1.5mm", fontSize: "7pt", textAlign: "center" }}>
+                          <td style={{ border: "1pt solid #333", padding: "1mm", fontSize: "6.5pt", wordBreak: "break-all" }}>{item.service_type || "\u00A0"}</td>
+                          <td style={{ border: "1pt solid #333", padding: "1mm", fontSize: "6.5pt", wordBreak: "break-all" }}>{item.provider_name || "\u00A0"}</td>
+                          <td style={{ border: "1pt solid #333", padding: "1mm", fontSize: "6.5pt", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{item.implementation_status || "\u00A0"}</td>
+                          <td style={{ border: "1pt solid #333", padding: "1mm", fontSize: "6pt", textAlign: "center" }}>
                             {item.user_satisfaction ? <div>本人: {item.user_satisfaction}</div> : ""}
                             {item.family_satisfaction ? <div>家族: {item.family_satisfaction}</div> : ""}
-                            {item.satisfaction_comment ? <div style={{ fontSize: "6pt", marginTop: "0.5mm" }}>{item.satisfaction_comment}</div> : ""}
+                            {item.satisfaction_comment ? <div style={{ fontSize: "5.5pt", marginTop: "0.5mm", wordBreak: "break-all" }}>{item.satisfaction_comment}</div> : ""}
                             {!item.user_satisfaction && !item.family_satisfaction && "\u00A0"}
                           </td>
-                          <td style={{ border: "1pt solid #333", padding: "1.5mm", fontSize: "7.5pt", textAlign: "center" }}>{item.achievement || "\u00A0"}</td>
-                          <td style={{ border: "1pt solid #333", padding: "1.5mm", fontSize: "7.5pt", textAlign: "center" }}>{item.adl_change || "\u00A0"}</td>
-                          <td style={{ border: "1pt solid #333", padding: "1.5mm", fontSize: "7.5pt", textAlign: "center" }}>{item.plan_revision_needed || "\u00A0"}</td>
-                          <td style={{ border: "1pt solid #333", padding: "1.5mm", fontSize: "7.5pt", whiteSpace: "pre-wrap" }}>{item.revision_reason || "\u00A0"}</td>
+                          <td style={{ border: "1pt solid #333", padding: "1mm", fontSize: "6.5pt", textAlign: "center" }}>{item.achievement || "\u00A0"}</td>
+                          <td style={{ border: "1pt solid #333", padding: "1mm", fontSize: "6.5pt", textAlign: "center" }}>{item.adl_change || "\u00A0"}</td>
+                          <td style={{ border: "1pt solid #333", padding: "1mm", fontSize: "6.5pt", textAlign: "center" }}>{item.plan_revision_needed || "\u00A0"}</td>
+                          <td style={{ border: "1pt solid #333", padding: "1mm", fontSize: "6.5pt", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{item.revision_reason || "\u00A0"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1277,26 +1277,26 @@ export function MonitoringContent({
         {selectedUser && mode === "edit" && (
           <div
             style={{
-              padding: "6mm",
+              padding: "8mm",
               fontFamily:
                 '"MS Mincho", "ＭＳ 明朝", "Noto Serif JP", serif',
-              fontSize: "7pt",
+              fontSize: "6.5pt",
               color: "#000",
               background: "#fff",
-              width: "285mm",
-              minHeight: "198mm",
+              width: "194mm",
+              minHeight: "281mm",
               display: "flex",
               flexDirection: "column",
             }}
           >
             {/* Title */}
-            <div style={{ textAlign: "center", marginBottom: "3mm" }}>
+            <div style={{ textAlign: "center", marginBottom: "2.5mm" }}>
               <div
                 style={{
-                  fontSize: "11pt",
+                  fontSize: "10pt",
                   fontWeight: "bold",
-                  letterSpacing: "0.2em",
-                  marginBottom: "2mm",
+                  letterSpacing: "0.15em",
+                  marginBottom: "1.5mm",
                 }}
               >
                 モニタリングシート
@@ -1308,8 +1308,8 @@ export function MonitoringContent({
               style={{
                 width: "100%",
                 borderCollapse: "collapse",
-                marginBottom: "3mm",
-                fontSize: "8pt",
+                marginBottom: "2.5mm",
+                fontSize: "7pt",
               }}
             >
               <tbody>
@@ -1317,7 +1317,7 @@ export function MonitoringContent({
                   <td
                     style={{
                       border: "1pt solid #333",
-                      padding: "1.5mm 2mm",
+                      padding: "1mm 1.5mm",
                       width: "25%",
                     }}
                   >
@@ -1327,36 +1327,36 @@ export function MonitoringContent({
                   <td
                     style={{
                       border: "1pt solid #333",
-                      padding: "1.5mm 2mm",
+                      padding: "1mm 1.5mm",
                       width: "25%",
                     }}
                   >
                     <span style={{ fontWeight: "bold" }}>
-                      モニタリング実施日：
+                      実施日：
                     </span>
                     {monitoringDate ? toWareki(monitoringDate) : "　　年　月　日"}
                   </td>
                   <td
                     style={{
                       border: "1pt solid #333",
-                      padding: "1.5mm 2mm",
+                      padding: "1mm 1.5mm",
                       width: "25%",
                     }}
                   >
                     <span style={{ fontWeight: "bold" }}>
-                      居宅介護支援事業所名：
+                      事業所：
                     </span>
                     {officeName || "　　　　　　　"}
                   </td>
                   <td
                     style={{
                       border: "1pt solid #333",
-                      padding: "1.5mm 2mm",
+                      padding: "1mm 1.5mm",
                       width: "25%",
                     }}
                   >
                     <span style={{ fontWeight: "bold" }}>
-                      居宅サービス計画書作成者：
+                      計画作成者：
                     </span>
                     {assessorName || "　　　　　"}
                   </td>
@@ -1562,16 +1562,16 @@ export function MonitoringContent({
               </thead>
               <tbody>
                 {items.map((item) => (
-                  <tr key={item.item_number} style={{ height: `${Math.floor(150 / FIXED_ROWS)}mm` }}>
+                  <tr key={item.item_number} style={{ height: `${Math.floor(220 / FIXED_ROWS)}mm` }}>
                     {/* No */}
                     <td
                       style={{
                         border: "1pt solid #333",
-                        padding: "1mm",
+                        padding: "0.8mm",
                         textAlign: "center",
                         verticalAlign: "top",
                         fontWeight: "bold",
-                        fontSize: "8pt",
+                        fontSize: "7pt",
                       }}
                     >
                       {item.item_number}
@@ -1580,7 +1580,7 @@ export function MonitoringContent({
                     <td
                       style={{
                         border: "1pt solid #333",
-                        padding: "1mm",
+                        padding: "0.8mm",
                         verticalAlign: "top",
                         whiteSpace: "pre-wrap",
                         wordBreak: "break-all",
@@ -1592,9 +1592,9 @@ export function MonitoringContent({
                     <td
                       style={{
                         border: "1pt solid #333",
-                        padding: "1mm",
+                        padding: "0.8mm",
                         verticalAlign: "top",
-                        fontSize: "5.5pt",
+                        fontSize: "5pt",
                       }}
                     >
                       {item.goal_period_start || item.goal_period_end
@@ -1615,7 +1615,7 @@ export function MonitoringContent({
                     <td
                       style={{
                         border: "1pt solid #333",
-                        padding: "1mm",
+                        padding: "0.8mm",
                         verticalAlign: "top",
                         wordBreak: "break-all",
                       }}
@@ -1626,7 +1626,7 @@ export function MonitoringContent({
                     <td
                       style={{
                         border: "1pt solid #333",
-                        padding: "1mm",
+                        padding: "0.8mm",
                         verticalAlign: "top",
                         wordBreak: "break-all",
                       }}
@@ -1637,7 +1637,7 @@ export function MonitoringContent({
                     <td
                       style={{
                         border: "1pt solid #333",
-                        padding: "1mm",
+                        padding: "0.8mm",
                         verticalAlign: "top",
                         whiteSpace: "pre-wrap",
                         wordBreak: "break-all",
@@ -1649,12 +1649,12 @@ export function MonitoringContent({
                     <td
                       style={{
                         border: "1pt solid #333",
-                        padding: "1mm",
+                        padding: "0.8mm",
                         verticalAlign: "top",
                       }}
                     >
-                      <div style={{ marginBottom: "1mm" }}>
-                        <span style={{ fontSize: "5.5pt" }}>利用者：</span>
+                      <div style={{ marginBottom: "0.8mm" }}>
+                        <span style={{ fontSize: "5pt" }}>利用者：</span>
                         <PrintCheck
                           checked={item.user_satisfaction === "満足"}
                         />
@@ -1664,8 +1664,8 @@ export function MonitoringContent({
                         />
                         不満
                       </div>
-                      <div style={{ marginBottom: "1.5mm" }}>
-                        <span style={{ fontSize: "5.5pt" }}>家族：</span>
+                      <div style={{ marginBottom: "1mm" }}>
+                        <span style={{ fontSize: "5pt" }}>家族：</span>
                         <PrintCheck
                           checked={item.family_satisfaction === "満足"}
                         />
@@ -1678,10 +1678,10 @@ export function MonitoringContent({
                       <div
                         style={{
                           borderTop: "0.5pt solid #aaa",
-                          paddingTop: "1mm",
+                          paddingTop: "0.8mm",
                           whiteSpace: "pre-wrap",
                           wordBreak: "break-all",
-                          fontSize: "5.5pt",
+                          fontSize: "5pt",
                         }}
                       >
                         {item.satisfaction_comment}
@@ -1691,7 +1691,7 @@ export function MonitoringContent({
                     <td
                       style={{
                         border: "1pt solid #333",
-                        padding: "1mm",
+                        padding: "0.8mm",
                         verticalAlign: "top",
                       }}
                     >
@@ -1716,7 +1716,7 @@ export function MonitoringContent({
                     <td
                       style={{
                         border: "1pt solid #333",
-                        padding: "1mm",
+                        padding: "0.8mm",
                         verticalAlign: "top",
                       }}
                     >
@@ -1739,7 +1739,7 @@ export function MonitoringContent({
                     <td
                       style={{
                         border: "1pt solid #333",
-                        padding: "1mm",
+                        padding: "0.8mm",
                         verticalAlign: "top",
                       }}
                     >
@@ -1760,7 +1760,7 @@ export function MonitoringContent({
                     <td
                       style={{
                         border: "1pt solid #333",
-                        padding: "1mm",
+                        padding: "0.8mm",
                         verticalAlign: "top",
                         whiteSpace: "pre-wrap",
                         wordBreak: "break-all",
@@ -1778,8 +1778,8 @@ export function MonitoringContent({
               style={{
                 width: "100%",
                 borderCollapse: "collapse",
-                marginTop: "4mm",
-                fontSize: "7pt",
+                marginTop: "3mm",
+                fontSize: "6.5pt",
               }}
             >
               <tbody>
@@ -1787,39 +1787,39 @@ export function MonitoringContent({
                   <td
                     style={{
                       border: "1pt solid #666",
-                      padding: "1.5mm",
+                      padding: "1mm",
                       width: "33.3%",
-                      height: "14mm",
+                      height: "12mm",
                       verticalAlign: "top",
                     }}
                   >
-                    <div style={{ fontWeight: "bold", marginBottom: "1mm" }}>
+                    <div style={{ fontWeight: "bold", marginBottom: "0.8mm" }}>
                       居宅介護支援事業所（担当ケアマネジャー印）
                     </div>
                   </td>
                   <td
                     style={{
                       border: "1pt solid #666",
-                      padding: "1.5mm",
+                      padding: "1mm",
                       width: "33.3%",
-                      height: "14mm",
+                      height: "12mm",
                       verticalAlign: "top",
                     }}
                   >
-                    <div style={{ fontWeight: "bold", marginBottom: "1mm" }}>
+                    <div style={{ fontWeight: "bold", marginBottom: "0.8mm" }}>
                       利用者確認（署名・押印）
                     </div>
                   </td>
                   <td
                     style={{
                       border: "1pt solid #666",
-                      padding: "1.5mm",
+                      padding: "1mm",
                       width: "33.3%",
-                      height: "14mm",
+                      height: "12mm",
                       verticalAlign: "top",
                     }}
                   >
-                    <div style={{ fontWeight: "bold", marginBottom: "1mm" }}>
+                    <div style={{ fontWeight: "bold", marginBottom: "0.8mm" }}>
                       家族確認（署名・押印）
                     </div>
                   </td>
