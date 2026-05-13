@@ -410,14 +410,21 @@ function daysInMonthOf(yearMonth: string): number {
 
 /**
  * 利用票の日付マークから区分 (1月 / 半月) を自動判定する。
- *   - 0 マーク: 1月 (default)
- *   - 月初 (1日) または末日を含むマーク: 1月 (boundary touching)
- *   - 2 マーク以上 で boundary に触れない: 半月 (同月内開始+終了)
- *   - 単独マーク (中の日): 開始日と解釈し「末日までの利用日数 ≥ 16日 → 1月、未満 → 半月」
  *
- * 介護保険の福祉用具貸与の算定ルール:
- *   - 開始日から月末まで連続使用 (≥16日) または 月初から終了日まで連続使用 (≥16日): 1月
- *   - 同月内開始+終了 (boundary に触れない): 半月
+ * 介護保険の福祉用具貸与の算定ルール (厚労省 解釈通知):
+ *   - 月の途中で開始または終了 → 原則「半月」
+ *   - ただし「月初から開始」または「月末まで継続」で **利用日数 ≥ 16 日** → 「1月」
+ *   - 同月内開始+終了 (boundary に触れない) → 常に「半月」
+ *
+ * 実装:
+ *   - 0 マーク → 1月 (default)
+ *   - 単独マーク:
+ *       1日 or 末日 のみ → 1月 (= 月全体継続の慣習表記)
+ *       中の日 のみ → 開始日と解釈し、末日までの利用日数 ≥16 → 1月、未満 → 半月
+ *   - 2+ マーク:
+ *       1日〜末日 (全月) → 1月
+ *       boundary 触れる (1日 or 末日 を含む) → 利用日数 (= last - first + 1) ≥16 → 1月、未満 → 半月
+ *       boundary 触れない → 常に 半月
  */
 function autoRentalPeriodType(marks: boolean[], yearMonth: string): "1month" | "half_month" {
   const daysInMonth = daysInMonthOf(yearMonth);
@@ -428,11 +435,21 @@ function autoRentalPeriodType(marks: boolean[], yearMonth: string): "1month" | "
   if (days.length === 0) return "1month";
   const first = days[0];
   const last = days[days.length - 1];
-  if (first === 1 || last === daysInMonth) return "1month";
-  if (days.length >= 2) return "half_month";
-  // 単独マーク (中の日): 開始日として末日まで継続と解釈
-  const utilizationDays = daysInMonth - first + 1;
-  return utilizationDays >= 16 ? "1month" : "half_month";
+  // 単独マーク
+  if (days.length === 1) {
+    if (first === 1 || first === daysInMonth) return "1month"; // 慣習: 1日 or 末日 のみ = 全月
+    const utilizationDays = daysInMonth - first + 1;
+    return utilizationDays >= 16 ? "1month" : "half_month";
+  }
+  // 全月 (1日〜末日)
+  if (first === 1 && last === daysInMonth) return "1month";
+  // boundary 触れる: 利用日数で 16日 rule
+  if (first === 1 || last === daysInMonth) {
+    const utilizationDays = last - first + 1;
+    return utilizationDays >= 16 ? "1month" : "half_month";
+  }
+  // 同月内開始+終了 (boundary 触れない): 半月固定
+  return "half_month";
 }
 
 /** rental 行の月計単位数を計算 (= round(units × 倍率))。区分は marks から自動判定。 */
