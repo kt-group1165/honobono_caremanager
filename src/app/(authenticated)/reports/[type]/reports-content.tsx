@@ -1349,12 +1349,16 @@ function EditFormServiceTicket({ content, onChange }: {
                         >
                           {svc.content || <span className="text-gray-400">選択...</span>}
                         </button>
-                        {/* rental 行: 単位数を編集可能 + 区分は日付マークから自動判定 (1月/半月) */}
+                        {/* rental 行: 単位数を編集可能 + 区分は日付マークから自動判定 (1月/半月)。
+                            予定と実績で区分が異なる場合は両方表示。 */}
                         {rental && (() => {
-                          const autoPeriod = autoRentalPeriodType(svc.planned, selectedYearMonth);
-                          const label = autoPeriod === "1month" ? "1月" : "半月";
+                          const periodPlanned = autoRentalPeriodType(svc.planned, selectedYearMonth);
+                          const periodActual = autoRentalPeriodType(svc.actual, selectedYearMonth);
+                          const labelP = periodPlanned === "1month" ? "1月" : "半月";
+                          const labelA = periodActual === "1month" ? "1月" : "半月";
+                          const sameLabel = labelP === labelA;
                           return (
-                            <div className="mt-0.5 px-1 leading-tight flex items-center gap-1 text-[9px]">
+                            <div className="mt-0.5 px-1 leading-tight flex items-center gap-1 text-[9px] flex-wrap">
                               <input
                                 type="number"
                                 className="w-10 border border-gray-300 rounded px-0.5 text-right text-[9px]"
@@ -1368,7 +1372,15 @@ function EditFormServiceTicket({ content, onChange }: {
                                 title="単位数 (1月あたり)"
                               />
                               <span className="text-gray-500">×</span>
-                              <span className="text-amber-700 font-semibold" title="日付マークから自動判定">{label}</span>
+                              {sameLabel ? (
+                                <span className="text-amber-700 font-semibold" title="日付マークから自動判定 (予定=実績)">{labelP}</span>
+                              ) : (
+                                <span className="font-semibold" title="日付マークから自動判定">
+                                  <span className="text-blue-700">予 {labelP}</span>
+                                  <span className="text-gray-400 mx-0.5">/</span>
+                                  <span className="text-green-700">実 {labelA}</span>
+                                </span>
+                              )}
                             </div>
                           );
                         })()}
@@ -1431,18 +1443,12 @@ function EditFormServiceTicket({ content, onChange }: {
                         </td>
                       ))}
                       <td className="border border-dashed border-gray-300 text-center text-blue-700 font-semibold">{plannedCount || ""}</td>
-                      <td rowSpan={2} className="border border-gray-300 text-center align-middle text-[10px] font-semibold text-amber-700">
+                      <td className="border border-dashed border-gray-300 text-center text-[10px] font-semibold text-blue-700 bg-blue-50/40">
                         {(() => {
-                          // 月計単位: rental は marks から自動判定した区分 (1月/半月) × manual_units、
-                          // 非 rental は units × 回数。予定/実績の大きい方を採用。
-                          const monthlyPlanned = rental
+                          const m = rental
                             ? rentalMonthlyUnits(svc, selectedYearMonth, "planned")
                             : (svc.units ?? 0) * plannedCount;
-                          const monthlyActual = rental
-                            ? rentalMonthlyUnits(svc, selectedYearMonth, "actual")
-                            : (svc.units ?? 0) * actualCount;
-                          const monthlyUnits = Math.max(monthlyPlanned, monthlyActual);
-                          return monthlyUnits > 0 ? monthlyUnits : "";
+                          return m > 0 ? m : "";
                         })()}
                       </td>
                       <td rowSpan={2} className="border border-gray-300 text-center align-middle">
@@ -1475,6 +1481,14 @@ function EditFormServiceTicket({ content, onChange }: {
                         </td>
                       ))}
                       <td className="border border-gray-300 text-center text-green-700 font-semibold">{actualCount || ""}</td>
+                      <td className="border border-gray-300 text-center text-[10px] font-semibold text-green-700 bg-green-50/40">
+                        {(() => {
+                          const m = rental
+                            ? rentalMonthlyUnits(svc, selectedYearMonth, "actual")
+                            : (svc.units ?? 0) * actualCount;
+                          return m > 0 ? m : "";
+                        })()}
+                      </td>
                     </tr>
                   </React.Fragment>
                 );
@@ -2498,20 +2512,19 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                   const monthlyActual = rental ? rentalMonthlyUnits(svc, printYM, "actual") : 0;
                   const plannedCount = svc.planned.filter(Boolean).length;
                   const actualCount = svc.actual.filter(Boolean).length;
-                  const autoPeriodLabel = rental
-                    ? (autoRentalPeriodType(svc.planned, printYM) === "1month" ? "1月" : "半月")
-                    : "";
+                  const mPlanned = rental ? monthlyPlanned : (svc.units ?? 0) * plannedCount;
+                  const mActual = rental ? monthlyActual : (svc.units ?? 0) * actualCount;
                   return (
                   <React.Fragment key={i}>
-                    {/* 予定行: rental は日付マーク (開始/終了等) から自動判定した区分で単位計算 */}
+                    {/* 予定行 */}
                     <tr style={{ height: `${ROW_H}px` }}>
                       <td style={{ ...thStyle, fontSize: "7pt" }} rowSpan={2}>{i + 1}</td>
                       <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "6.5pt" }} rowSpan={2}>{svc.time || "　"}</td>
                       <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "6.5pt" }} rowSpan={2}>
                         {svc.content || "　"}
-                        {rental && monthlyPlanned > 0 && (
+                        {rental && (svc.manual_units ?? 0) > 0 && (
                           <div style={{ fontSize: "5.5pt", color: "#8d6e00", marginTop: "1px" }}>
-                            {svc.manual_units}単位×{autoPeriodLabel} = {monthlyPlanned}
+                            {svc.manual_units}単位/月
                           </div>
                         )}
                       </td>
@@ -2521,15 +2534,8 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                         const isWE = wdi === 5 || wdi === 6;
                         return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", borderStyle: "dashed", fontWeight: "bold" }}>{v ? "1" : ""}</td>;
                       })}
-                      <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt" }} rowSpan={2}>{(plannedCount || actualCount) ? `${plannedCount}/${actualCount}` : ""}</td>
-                      <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt", fontWeight: "bold" }} rowSpan={2}>
-                        {(() => {
-                          const mPlanned = rental ? monthlyPlanned : (svc.units ?? 0) * plannedCount;
-                          const mActual = rental ? monthlyActual : (svc.units ?? 0) * actualCount;
-                          const monthlyUnits = Math.max(mPlanned, mActual);
-                          return monthlyUnits > 0 ? monthlyUnits : "";
-                        })()}
-                      </td>
+                      <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt", borderStyle: "dashed" }}>{plannedCount || ""}</td>
+                      <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt", fontWeight: "bold", borderStyle: "dashed" }}>{mPlanned > 0 ? mPlanned : ""}</td>
                     </tr>
                     {/* 実績行 */}
                     <tr style={{ height: `${ROW_H}px` }}>
@@ -2538,6 +2544,8 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                         const isWE = wdi === 5 || wdi === 6;
                         return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", fontWeight: "bold" }}>{v ? "1" : ""}</td>;
                       })}
+                      <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt" }}>{actualCount || ""}</td>
+                      <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt", fontWeight: "bold" }}>{mActual > 0 ? mActual : ""}</td>
                     </tr>
                   </React.Fragment>
                   );
