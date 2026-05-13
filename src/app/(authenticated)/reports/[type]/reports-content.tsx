@@ -1126,13 +1126,36 @@ function EditFormServiceTicket({ content, onChange }: {
   const [timeModalOpen, setTimeModalOpen] = useState(false);
   const [timeModalTarget, setTimeModalTarget] = useState<number | null>(null);
 
-  // 事業所マスタ
+  // 事業所マスタ:
+  //   ① 自事業所 (offices, 居宅介護支援以外で active なもの) — 利用票/提供票の「事業所」
+  //      列はサービス提供者なので、ケアプラン作成事業所 (居宅介護支援) は自分自身で除外
+  //   ② 外部事業所 (kaigo_service_providers, status='active')
+  // 同名重複は ① 優先で吸収する。
   const [providers, setProviders] = useState<{ provider_number: string; provider_name: string }[]>([]);
 
   useEffect(() => {
     const fetchProviders = async () => {
-      const { data: provs } = await supabase.from("kaigo_service_providers").select("provider_number, provider_name").eq("status", "active").order("provider_name");
-      setProviders(provs || []);
+      const [{ data: own }, { data: external }] = await Promise.all([
+        supabase
+          .from("offices")
+          .select("id, name, business_number")
+          .eq("is_active", true)
+          .neq("service_type", "居宅介護支援")
+          .order("name"),
+        supabase
+          .from("kaigo_service_providers")
+          .select("provider_number, provider_name")
+          .eq("status", "active")
+          .order("provider_name"),
+      ]);
+      const ownMapped = ((own ?? []) as { id: string; name: string; business_number: string | null }[]).map((o) => ({
+        provider_number: o.business_number ?? `office-${o.id}`,
+        provider_name: o.name,
+      }));
+      const ownNames = new Set(ownMapped.map((o) => o.provider_name));
+      const externalUnique = ((external ?? []) as { provider_number: string; provider_name: string }[])
+        .filter((p) => !ownNames.has(p.provider_name));
+      setProviders([...ownMapped, ...externalUnique]);
     };
     fetchProviders();
   }, [supabase]);
