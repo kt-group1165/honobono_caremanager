@@ -3491,8 +3491,30 @@ function DocEditor({ doc, config, clientName, onSave, onStatusToggle, onDirtyCha
   const handleChange = (c: Record<string, unknown>) => { setContent(c); setDirty(true); onDirtyChange?.(true); };
 
   const handleSave = async () => {
+    // service-usage (利用票・提供票) のみ、予定/実績ともに "1" が無い行を検出して
+    // ユーザに削除確認を出す (空行のまま保存されると別表/合計でノイズになる)
+    let payload = content;
+    if (doc.report_type === "service-usage") {
+      const services = content.services;
+      if (Array.isArray(services)) {
+        const survivors = (services as SvcRow[]).filter((s) => {
+          const plannedCount = (s.planned ?? []).filter(Boolean).length;
+          const actualCount = (s.actual ?? []).filter(Boolean).length;
+          return plannedCount > 0 || actualCount > 0;
+        });
+        const removed = services.length - survivors.length;
+        if (removed > 0) {
+          const ok = window.confirm(
+            `予定・実績の入力が無いサービス行が ${removed} 件あります。\n削除して保存しますか？\n\n[OK] 削除して保存\n[キャンセル] 戻って入力する`
+          );
+          if (!ok) return;
+          payload = { ...content, services: survivors };
+          setContent(payload);
+        }
+      }
+    }
     setSaving(true);
-    try { await onSave(content); setDirty(false); } finally { setSaving(false); }
+    try { await onSave(payload); setDirty(false); } finally { setSaving(false); }
   };
 
   const handleToggle = async () => {
