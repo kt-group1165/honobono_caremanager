@@ -13,6 +13,7 @@ import {
 } from "@/lib/notifications";
 import { useBusinessType } from "@/lib/business-type-context";
 import { ImportServiceRecordModal } from "@/components/shared/ImportServiceRecordModal";
+import { ImportEquipmentRecordModal } from "@/components/shared/ImportEquipmentRecordModal";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -155,19 +156,27 @@ export default function SharedDocumentPage({
         />
       </div>
 
-      {showImport && (
-        <ImportServiceRecordModal
-          shared={doc}
-          onClose={() => setShowImport(false)}
-          onSuccess={(msg) => {
-            toast.success(msg);
-            setShowImport(false);
-          }}
-          onError={(msg) => {
-            toast.error(msg);
-          }}
-        />
-      )}
+      {showImport && (() => {
+        // payload.service_type で route 分岐:
+        //   "福祉用具" → order-app からのレンタル期間 record → Equipment Modal
+        //   "訪問介護" 他 → 単発訪問 record → 既存 Service Modal
+        const payload = (doc.payload ?? {}) as Record<string, unknown>;
+        const isEquipment = payload.service_type === "福祉用具";
+        const Modal = isEquipment ? ImportEquipmentRecordModal : ImportServiceRecordModal;
+        return (
+          <Modal
+            shared={doc}
+            onClose={() => setShowImport(false)}
+            onSuccess={(msg) => {
+              toast.success(msg);
+              setShowImport(false);
+            }}
+            onError={(msg) => {
+              toast.error(msg);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
