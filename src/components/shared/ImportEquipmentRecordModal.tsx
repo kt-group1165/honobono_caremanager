@@ -9,9 +9,9 @@ import { fetchTargetDoc, type TargetDoc } from "./ImportServiceRecordModal";
 // ─── 型 ───────────────────────────────────────────────────────────────────────
 
 /**
- * order-app が送信する福祉用具レンタル実績の 1 行。
- * 1 用具 = 1 レコード (期間表現)。1 月内に開始/終了が closed なら同月内、月跨ぎなら
- * date_range_start/end が当月にクリップされて送られてくる。
+ * order-app が送信する福祉用具レンタル実績の 1 行 (= 1 用具)。
+ * 1 月内に開始/終了が closed なら同月内、月跨ぎなら date_range_start/end が
+ * 当月にクリップされて送られてくる。
  */
 export type EquipmentRecord = {
   date_range_start: string; // YYYY-MM-DD
@@ -22,18 +22,26 @@ export type EquipmentRecord = {
   category?: string | null;
 };
 
+/** content.equipment_records に保存する形式 (provider 名等を補完) */
+export type StoredEquipmentRecord = EquipmentRecord & {
+  provider_name: string;       // 送信元事業所名
+  shared_document_id?: string; // traceability
+  imported_at?: string;        // ISO timestamp
+};
+
 /** kaigo_report_documents.content.services[] の 1 行 (= 福祉用具行) */
-type RentalSvcRow = {
+export type RentalSvcRow = {
   time: string;
   content: string;
   provider: string;
   planned: boolean[];
   actual: boolean[];
-  category: string;          // "17" = 福祉用具貸与
+  category: string;
   units?: number;
   manual_units?: number | null;
   rental_period_type?: "1month" | "half_month" | "daily" | null;
   rental_days?: number | null;
+  tais_code?: string | null; // 将来 TAIS 表示対応用
 };
 
 type AnySvcRow = {
@@ -47,6 +55,29 @@ type AnySvcRow = {
   manual_units?: number | null;
   rental_period_type?: "1month" | "half_month" | "daily" | null;
   rental_days?: number | null;
+  tais_code?: string | null;
+};
+
+/** 福祉用具行の集約モード */
+export type AggregationMode = "per_equipment" | "per_category";
+
+// ─── 国 14 種目 mapping (order-app category → 利用票 サービスコード名) ─────────
+
+export const CATEGORY_TO_SERVICE_NAME: Record<string, string> = {
+  "車椅子": "車いす貸与",
+  "車椅子付属品": "車いす付属品貸与",
+  "特殊寝台": "特殊寝台貸与",
+  "特殊寝台付属品": "特殊寝台付属品貸与",
+  "床ずれ防止用具": "床ずれ防止用具貸与",
+  "体位変換器": "体位変換器貸与",
+  "手すり": "手すり貸与",
+  "スロープ": "スロープ貸与",
+  "歩行器": "歩行器貸与",
+  "歩行補助つえ": "歩行補助つえ貸与",
+  "認知症老人徘徊感知機器": "認知症老人徘徊感知機器貸与",
+  "移動用リフト": "移動用リフト貸与",
+  "自動排泄処理装置": "自動排泄処理装置貸与",
+  "排泄予測支援機器": "排泄予測支援機器貸与",
 };
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -60,7 +91,6 @@ function daysInMonth(yearMonth: string): number {
   return new Date(y, mo, 0).getDate();
 }
 
-/** 日付 (YYYY-MM-DD) → 月内の日 (1-31)。月外なら null。 */
 function dayOfMonth(date: string, yearMonth: string): number | null {
   if (!date.startsWith(yearMonth + "-")) return null;
   const d = parseInt(date.slice(8, 10), 10);
@@ -72,11 +102,11 @@ function dayOfMonth(date: string, yearMonth: string): number | null {
  * 福祉用具レンタル期間 [start, end] から 利用票標準の planned/actual マークを生成。
  * 利用票慣習:
  *   - 月初〜末日 (= 当月通し) → 1日 のみマーク (= 1月扱い)
- *   - 月初〜途中終了 → 1日 + 終了日 をマーク (= boundary 触れ + 同月内終了)
- *   - 途中開始〜末日 → 開始日 のみマーク (= boundary 触れ、月末まで継続)
- *   - 途中〜途中 (同月内) → 開始日 + 終了日 をマーク (= 同月内開始+終了、半月扱い)
+ *   - 月初〜途中終了 → 1日 + 終了日 をマーク
+ *   - 途中開始〜末日 → 開始日 のみマーク
+ *   - 途中〜途中 (同月内) → 開始日 + 終了日 をマーク (= 半月扱い)
  */
-function buildMarksFromRange(
+export function buildMarksFromRange(
   start: string,
   end: string,
   yearMonth: string,
@@ -85,42 +115,92 @@ function buildMarksFromRange(
   const marks = Array<boolean>(31).fill(false);
   const startDay = dayOfMonth(start, yearMonth);
   const endDay = dayOfMonth(end, yearMonth);
-  // 月跨ぎ等で start が月外 → 1日扱い、end が月外 → 末日扱い
   const sDay = startDay ?? 1;
   const eDay = endDay ?? dim;
-  // 全月通し
   if (sDay === 1 && eDay === dim) {
     marks[0] = true;
     return marks;
   }
-  // 開始日マーク
   marks[sDay - 1] = true;
-  // 終了日マーク (start と異なり、かつ月末でない場合のみ明示)
   if (eDay !== sDay && eDay !== dim) {
     marks[eDay - 1] = true;
   }
   return marks;
 }
 
-function buildRentalSvcRow(
-  r: EquipmentRecord,
-  yearMonth: string,
-  sourceOfficeName: string,
-): RentalSvcRow {
-  const marks = buildMarksFromRange(r.date_range_start, r.date_range_end, yearMonth);
-  return {
-    time: "",
-    content: r.equipment_name,
-    provider: sourceOfficeName,
-    planned: [...marks],
-    actual: [...marks],
-    category: "17",
-    manual_units: r.monthly_rental_fee,
-  };
+function isRentalRow(s: AnySvcRow): boolean {
+  return String(s.category ?? "") === "17";
 }
 
-function isRentalRow(s: AnySvcRow): s is RentalSvcRow {
-  return String(s.category ?? "") === "17";
+/** 1 用具 = 1 行で生成 (TAIS 対応モード) */
+function generateRentalServicesPerEquipment(
+  records: StoredEquipmentRecord[],
+  yearMonth: string,
+): RentalSvcRow[] {
+  return records.map((r) => {
+    const marks = buildMarksFromRange(r.date_range_start, r.date_range_end, yearMonth);
+    return {
+      time: "",
+      content: r.equipment_name,
+      provider: r.provider_name,
+      planned: [...marks],
+      actual: [...marks],
+      category: "17",
+      manual_units: r.monthly_rental_fee,
+      tais_code: r.tais_code ?? null,
+    };
+  });
+}
+
+/** 種別 × 事業所 で集約して 1 行ずつ生成 (= 従来 利用票慣習) */
+function generateRentalServicesPerCategory(
+  records: StoredEquipmentRecord[],
+  yearMonth: string,
+): RentalSvcRow[] {
+  const groups = new Map<string, StoredEquipmentRecord[]>();
+  for (const r of records) {
+    const cat = r.category ?? "未分類";
+    const key = `${cat}__${r.provider_name}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(r);
+  }
+  return Array.from(groups.entries()).map(([key, list]) => {
+    const [cat, provider] = key.split("__");
+    const serviceName = CATEGORY_TO_SERVICE_NAME[cat] ?? `${cat}貸与`;
+    const totalFee = list.reduce((s, r) => s + (Number(r.monthly_rental_fee) || 0), 0);
+    // 各 record の marks を union (= 期間カバー範囲の合算)
+    const planned = Array<boolean>(31).fill(false);
+    const actual = Array<boolean>(31).fill(false);
+    for (const r of list) {
+      const marks = buildMarksFromRange(r.date_range_start, r.date_range_end, yearMonth);
+      for (let i = 0; i < 31; i++) {
+        if (marks[i]) {
+          planned[i] = true;
+          actual[i] = true;
+        }
+      }
+    }
+    return {
+      time: "",
+      content: serviceName,
+      provider,
+      planned,
+      actual,
+      category: "17",
+      manual_units: totalFee,
+    };
+  });
+}
+
+/** モード dispatcher。editor のトグルから呼ぶ。 */
+export function generateRentalServicesFromRecords(
+  records: StoredEquipmentRecord[],
+  yearMonth: string,
+  mode: AggregationMode,
+): RentalSvcRow[] {
+  return mode === "per_category"
+    ? generateRentalServicesPerCategory(records, yearMonth)
+    : generateRentalServicesPerEquipment(records, yearMonth);
 }
 
 // ─── persist ─────────────────────────────────────────────────────────────────
@@ -131,24 +211,40 @@ async function persistEquipmentRecords(
   clientId: string,
   yearMonth: string,
   clientName: string,
-  newRentalRows: RentalSvcRow[],
+  newRecords: StoredEquipmentRecord[],
+  mode: AggregationMode,
   importedSharedDocId: string,
 ): Promise<void> {
-  // 既存 services を取得
+  // 既存 services の rental 行以外はそのまま維持
   const existing: AnySvcRow[] = Array.isArray(target.content.services)
     ? (target.content.services as AnySvcRow[])
     : [];
-
-  // 非 rental 行はそのまま維持、rental 行 (category=17) は equipment_name で match
   const nonRental = existing.filter((s) => !isRentalRow(s));
-  const existingRental = existing.filter((s) => isRentalRow(s));
-  const byName = new Map<string, RentalSvcRow>();
-  for (const r of existingRental) byName.set(r.content ?? "", r as RentalSvcRow);
-  for (const r of newRentalRows) byName.set(r.content, r); // 同名上書き
 
-  const mergedServices: AnySvcRow[] = [...nonRental, ...byName.values()];
+  // 既存 equipment_records と new をマージ (equipment_name + provider で同名上書き)
+  const prevRecords: StoredEquipmentRecord[] = Array.isArray(target.content.equipment_records)
+    ? (target.content.equipment_records as StoredEquipmentRecord[])
+    : [];
+  const map = new Map<string, StoredEquipmentRecord>();
+  for (const r of prevRecords) {
+    const key = `${r.equipment_name}__${r.provider_name}`;
+    map.set(key, r);
+  }
+  for (const r of newRecords) {
+    const key = `${r.equipment_name}__${r.provider_name}`;
+    map.set(key, r); // overwrite
+  }
+  const mergedEquipmentRecords = Array.from(map.values());
 
-  // imported_shared_document_ids 維持
+  // 表示用 rental rows をモードに従って生成
+  const rentalRows = generateRentalServicesFromRecords(
+    mergedEquipmentRecords,
+    yearMonth,
+    mode,
+  );
+  const mergedServices: AnySvcRow[] = [...nonRental, ...rentalRows];
+
+  // imported_shared_document_ids 維持 + 追加
   const prevImportedIds = Array.isArray(target.content.imported_shared_document_ids)
     ? (target.content.imported_shared_document_ids as unknown[]).filter(
         (v): v is string => typeof v === "string",
@@ -160,6 +256,8 @@ async function persistEquipmentRecords(
     const nextContent = {
       ...target.content,
       services: mergedServices,
+      equipment_records: mergedEquipmentRecords,
+      rental_aggregation_mode: mode,
       imported_shared_document_ids: importedIds,
     };
     const { error } = await supabase
@@ -173,6 +271,8 @@ async function persistEquipmentRecords(
     user_name: clientName,
     year_month: yearMonth,
     services: mergedServices,
+    equipment_records: mergedEquipmentRecords,
+    rental_aggregation_mode: mode,
     imported_shared_document_ids: importedIds,
   };
   const title = `サービス利用票・提供票（${yearMonth}）`;
@@ -208,6 +308,8 @@ export function ImportEquipmentRecordModal({
   const [submitting, setSubmitting] = useState(false);
   const [target, setTarget] = useState<TargetDoc | null>(null);
   const [sourceOfficeName, setSourceOfficeName] = useState<string>("");
+  // 既存 doc に rental_aggregation_mode があればそれをデフォルトに、無ければ per_equipment
+  const [mode, setMode] = useState<AggregationMode>("per_equipment");
 
   const extracted = useMemo(() => {
     const payload = (shared.payload ?? {}) as Record<string, unknown>;
@@ -252,6 +354,10 @@ export function ImportEquipmentRecordModal({
         setSourceOfficeName(
           (srcOfc.data as { name?: string } | null)?.name ?? "(送信元事業所)",
         );
+        const existingMode = t.content.rental_aggregation_mode;
+        if (existingMode === "per_category" || existingMode === "per_equipment") {
+          setMode(existingMode);
+        }
       } catch (e) {
         if (!cancelled) setErrorMsg(e instanceof Error ? e.message : String(e));
       } finally {
@@ -263,7 +369,7 @@ export function ImportEquipmentRecordModal({
     };
   }, [supabase, extracted, shared.source_office_id]);
 
-  // 既存 rental 行と incoming を name で diff
+  // 既存 rental 行と incoming を equipment_name で diff
   const diff = useMemo(() => {
     if (!target) return null;
     const existing: AnySvcRow[] = Array.isArray(target.content.services)
@@ -282,20 +388,26 @@ export function ImportEquipmentRecordModal({
     if (!extracted.yearMonth || !extracted.clientId) return;
     setSubmitting(true);
     try {
-      const newRows = extracted.incoming.map((r) =>
-        buildRentalSvcRow(r, extracted.yearMonth!, sourceOfficeName),
-      );
+      const nowIso = new Date().toISOString();
+      const stored: StoredEquipmentRecord[] = extracted.incoming.map((r) => ({
+        ...r,
+        provider_name: sourceOfficeName,
+        shared_document_id: shared.id,
+        imported_at: nowIso,
+      }));
       await persistEquipmentRecords(
         supabase,
         target,
         extracted.clientId,
         extracted.yearMonth,
         extracted.clientName,
-        newRows,
+        stored,
+        mode,
         shared.id,
       );
+      const modeLabel = mode === "per_equipment" ? "用具ごと" : "種別ごとに集約";
       onSuccess(
-        `利用票の福祉用具行を更新しました (追加 ${diff.added.length} 件 / 上書き ${diff.replaced.length} 件)`,
+        `利用票に取り込みました (${modeLabel}・追加 ${diff.added.length} 件 / 上書き ${diff.replaced.length} 件)`,
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -346,6 +458,52 @@ export function ImportEquipmentRecordModal({
             </div>
           ) : diff ? (
             <>
+              {/* モード選択 */}
+              <section className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">
+                  利用票への記載モード
+                </h4>
+                <div className="space-y-2">
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={mode === "per_equipment"}
+                      onChange={() => setMode("per_equipment")}
+                      className="mt-0.5 accent-blue-600"
+                    />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-gray-800">
+                        用具ごとに 1 行 <span className="text-xs text-blue-600">(TAIS 対応・推奨)</span>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        各用具を個別の行で記載。TAIS コード対応や同システム事業所間でやり取りする場合に推奨。
+                        令和7年4月以降の改正様式に近い。
+                      </div>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={mode === "per_category"}
+                      onChange={() => setMode("per_category")}
+                      className="mt-0.5 accent-blue-600"
+                    />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-gray-800">
+                        種別ごとに集約 <span className="text-xs text-gray-500">(従来の利用票慣習)</span>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        同種別(車いす貸与等)×同事業所 を 1 行に集約。
+                        TAIS 対応してない事業所とのやり取りで簡潔にしたい場合に。
+                      </div>
+                    </div>
+                  </label>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-2 italic">
+                  ※ 取り込み後も利用票編集画面で切り替え可 (生データは保持されます)
+                </p>
+              </section>
+
               <div className="grid grid-cols-3 gap-2 rounded-md bg-blue-50 p-3 text-xs">
                 <div>
                   <div className="text-gray-500">新規追加</div>
@@ -375,6 +533,7 @@ export function ImportEquipmentRecordModal({
                           {r.date_range_start} 〜 {r.date_range_end} / ¥
                           {r.monthly_rental_fee.toLocaleString()}
                           {r.category ? ` / ${r.category}` : ""}
+                          {r.tais_code ? ` / TAIS:${r.tais_code}` : ""}
                         </div>
                       </li>
                     ))}
@@ -396,6 +555,7 @@ export function ImportEquipmentRecordModal({
                           {r.date_range_start} 〜 {r.date_range_end} / ¥
                           {r.monthly_rental_fee.toLocaleString()}
                           {r.category ? ` / ${r.category}` : ""}
+                          {r.tais_code ? ` / TAIS:${r.tais_code}` : ""}
                         </div>
                       </li>
                     ))}

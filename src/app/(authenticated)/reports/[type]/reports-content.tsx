@@ -14,6 +14,11 @@ import { toast } from "sonner";
 import { useBusinessType } from "@/lib/business-type-context";
 import { SendDocumentModal } from "@/components/shared/SendDocumentModal";
 import {
+  generateRentalServicesFromRecords,
+  type StoredEquipmentRecord,
+  type AggregationMode,
+} from "@/components/shared/ImportEquipmentRecordModal";
+import {
   ImportServiceRecordModal,
   listReceivedServiceRecords,
   type ReceivedRecord,
@@ -1356,6 +1361,55 @@ function EditFormServiceTicket({ content, onChange }: {
             </button>
           )}
         </div>
+        {/* 福祉用具行 表示モード切替 (= 受信した equipment_records が存在する場合のみ表示)
+            「用具ごと 1 行 (TAIS 対応)」と「種別ごとに集約 (= 従来慣習)」を後から切替可。
+            生データ (content.equipment_records) は不変、表示用 services のみ再生成する。 */}
+        {(() => {
+          const equipmentRecords = Array.isArray(content.equipment_records)
+            ? (content.equipment_records as StoredEquipmentRecord[])
+            : [];
+          if (equipmentRecords.length === 0) return null;
+          const currentMode: AggregationMode =
+            content.rental_aggregation_mode === "per_category" ? "per_category" : "per_equipment";
+          const switchMode = (next: AggregationMode) => {
+            if (next === currentMode) return;
+            const ok = window.confirm(
+              `福祉用具行を「${next === "per_equipment" ? "用具ごと" : "種別ごとに集約"}」モードで再生成します。\n手動編集した福祉用具行の内容は失われます。続行しますか?`
+            );
+            if (!ok) return;
+            const ym = String(content.report_month ?? selectedYearMonth);
+            const newRentalRows = generateRentalServicesFromRecords(equipmentRecords, ym, next);
+            const nonRental = services.filter((s) => String(s.category ?? "") !== "17");
+            onChange({
+              ...content,
+              services: [...nonRental, ...newRentalRows],
+              rental_aggregation_mode: next,
+            });
+          };
+          return (
+            <div className="mb-2 flex items-center gap-2 text-xs text-gray-600 px-1">
+              <span>福祉用具行 ({equipmentRecords.length} 用具):</span>
+              <label className="flex items-center gap-1 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={currentMode === "per_equipment"}
+                  onChange={() => switchMode("per_equipment")}
+                  className="accent-blue-600"
+                />
+                用具ごと <span className="text-[10px] text-blue-600">(TAIS対応)</span>
+              </label>
+              <label className="flex items-center gap-1 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={currentMode === "per_category"}
+                  onChange={() => switchMode("per_category")}
+                  className="accent-blue-600"
+                />
+                種別ごとに集約
+              </label>
+            </div>
+          );
+        })()}
         <div className="overflow-x-auto">
           <table className="border-collapse text-[10px] w-full" style={{ minWidth: 1080, tableLayout: "fixed", overflow: "hidden" }}>
             <colgroup>
