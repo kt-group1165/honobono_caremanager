@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
@@ -29,6 +29,10 @@ import {
   type KaigoStaff,
   type VisitSchedule,
 } from "./_shared";
+import {
+  useKaigoVisitSchedulesByUser,
+  useKaigoVisitSchedulesByStaff,
+} from "@/lib/swr/use-kaigo-visit-schedules";
 
 export interface MonthlyIndividualInitialData {
   schedules: VisitSchedule[];
@@ -57,47 +61,48 @@ export function MonthlyIndividualView({
   initialData,
 }: MonthlyIndividualViewProps) {
   const supabase = useMemo(() => createClient(), []);
+  // 楽観的 local state (複写行 _isCopy 等)。SWR data の到着で sync する。
   const [schedules, setSchedules] = useState<VisitSchedule[]>(initialData.schedules);
-  const [loading, setLoading] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkProcessing, setBulkProcessing] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    const from = format(startOfMonth(currentMonth), "yyyy-MM-dd");
-    const to = format(endOfMonth(currentMonth), "yyyy-MM-dd");
+  const monthFrom = useMemo(() => format(startOfMonth(currentMonth), "yyyy-MM-dd"), [currentMonth]);
+  const monthTo = useMemo(() => format(endOfMonth(currentMonth), "yyyy-MM-dd"), [currentMonth]);
+  const hasInitial = initialData.schedules.length > 0;
 
-    const col = entityType === "user" ? "user_id" : "staff_id";
-    const { data } = await supabase
-      .from("kaigo_visit_schedule")
-      .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, clients(name), members(name)")
-      .eq(col, entityId)
-      .gte("visit_date", from)
-      .lte("visit_date", to)
-      .order("visit_date")
-      .order("start_time");
+  // entityType に応じて hook を使い分け。SWR の hook は条件的に呼べないので両方呼び、
+  // 使う方の data だけ採用する (key が null だと fetch は走らない)。
+  const userResult = useKaigoVisitSchedulesByUser(
+    entityType === "user" ? entityId : null,
+    monthFrom,
+    monthTo,
+    entityType === "user" && hasInitial ? initialData.schedules : undefined,
+  );
+  const staffResult = useKaigoVisitSchedulesByStaff(
+    entityType === "staff" ? entityId : null,
+    monthFrom,
+    monthTo,
+    entityType === "staff" && hasInitial ? initialData.schedules : undefined,
+  );
+  const active = entityType === "user" ? userResult : staffResult;
+  const swrSchedules = useMemo(() => {
+    // by-user は visit_date 順序保証なし (start_time のみ order)、表示時は元来 visit_date,start_time 二段ソート。
+    return [...active.schedules].sort((a, b) => {
+      if (a.visit_date !== b.visit_date) return a.visit_date.localeCompare(b.visit_date);
+      return (a.start_time ?? "").localeCompare(b.start_time ?? "");
+    });
+  }, [active.schedules]);
+  const loading = active.isLoading;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-    const mapped: VisitSchedule[] = (data || []).map((r: any) => ({
-      id: r.id, user_id: r.user_id, staff_id: r.staff_id,
-      visit_date: r.visit_date, start_time: r.start_time, end_time: r.end_time,
-      service_type: r.service_type, status: r.status ?? "scheduled",
-      user_name: r.clients?.name ?? null, staff_name: r.members?.name ?? null,
-    }));
-    setSchedules(mapped);
-    setLoading(false);
-  }, [entityId, entityType, currentMonth, supabase]);
-
-  // initial render は server からの initialData を使用、filter 変更時のみ refetch。
-  const isInitialMount = useRef(true);
+  // SWR data → local state へ sync
+  const lastSwrRef = useRef(swrSchedules);
   useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
+    if (swrSchedules !== lastSwrRef.current) {
+      lastSwrRef.current = swrSchedules;
+      setSchedules(swrSchedules);
     }
-    fetchData();
-  }, [fetchData]);
+  }, [swrSchedules]);
 
   const toggleStatus = async (sched: VisitSchedule) => {
     const isCurrentlyCompleted = sched.status === "completed";

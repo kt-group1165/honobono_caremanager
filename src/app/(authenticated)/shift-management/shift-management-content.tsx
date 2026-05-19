@@ -44,6 +44,8 @@ import { UserCalendar, type UserCalendarInitialData } from "./user-calendar-cont
 import { StaffCalendar, type StaffCalendarInitialData } from "./staff-calendar-content";
 import { TimelineView, type TimelineInitialData } from "./timeline-view-content";
 import { MonthlyIndividualView, type MonthlyIndividualInitialData } from "./monthly-individual-content";
+import { useKaigoOfficeStaff } from "@/lib/swr/use-kaigo-office-staff";
+import { useKaigoOfficeUsers } from "@/lib/swr/use-kaigo-office-users";
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
@@ -643,9 +645,16 @@ export function ShiftManagementContent({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { currentOfficeId } = useBusinessType();
 
-  const [users] = useState<KaigoUser[]>(initialUsers);
-  const [staff] = useState<KaigoStaff[]>(initialStaff);
+  // 自事業所が context 起動後に確定する: SSR で渡ってきた initialUsers/initialStaff を
+  // SWR の fallbackData として使い、currentOfficeId が確定したら office key で cache する。
+  // currentOfficeId が null の間は fetch は走らない → fallbackData がそのまま表示される。
+  const { users: swrUsers } = useKaigoOfficeUsers(currentOfficeId, initialUsers);
+  const { staff: swrStaff } = useKaigoOfficeStaff(currentOfficeId, initialStaff);
+  // 不要な再 render を抑えるため、null/空時は initial にフォールバック
+  const users = swrUsers.length > 0 ? swrUsers : initialUsers;
+  const staff = swrStaff.length > 0 ? swrStaff : initialStaff;
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>(initialTab);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(initialSelectedUserId);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(initialSelectedStaffId);

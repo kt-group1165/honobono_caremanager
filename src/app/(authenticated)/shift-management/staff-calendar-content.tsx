@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useMemo } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -27,6 +26,8 @@ import {
   type StaffAvailabilitySlot,
   type VisitSchedule,
 } from "./_shared";
+import { useKaigoVisitSchedulesByStaff } from "@/lib/swr/use-kaigo-visit-schedules";
+import { useKaigoAvailability } from "@/lib/swr/use-kaigo-availability";
 
 export interface StaffCalendarInitialData {
   schedules: VisitSchedule[];
@@ -50,10 +51,26 @@ export function StaffCalendar({
   onEditSchedule,
   initialData,
 }: StaffCalendarProps) {
-  const supabase = useMemo(() => createClient(), []);
-  const [schedules, setSchedules] = useState<VisitSchedule[]>(initialData.schedules);
-  const [availability, setAvailability] = useState<StaffAvailabilitySlot[]>(initialData.availability);
-  const [loading, setLoading] = useState(false);
+  const monthFrom = useMemo(() => format(startOfMonth(currentMonth), "yyyy-MM-dd"), [currentMonth]);
+  const monthTo = useMemo(() => format(endOfMonth(currentMonth), "yyyy-MM-dd"), [currentMonth]);
+
+  // SWR fallbackData は initial mount でのみ有効 (key が変わると消える)。
+  // → 現 prop が "initial" と整合する場合のみ fallback として渡す。
+  const initialSchedules = initialData.schedules.length > 0 || initialData.availability.length > 0
+    ? initialData.schedules
+    : undefined;
+  const initialAvailability = initialData.availability.length > 0 ? initialData.availability : undefined;
+
+  const {
+    schedules,
+    isLoading: schedLoading,
+  } = useKaigoVisitSchedulesByStaff(staffId, monthFrom, monthTo, initialSchedules);
+  const {
+    availability,
+    isLoading: availLoading,
+  } = useKaigoAvailability(staffId, monthFrom, monthTo, initialAvailability);
+
+  const loading = schedLoading || availLoading;
 
   const days = useMemo(
     () =>
@@ -63,55 +80,6 @@ export function StaffCalendar({
       }),
     [currentMonth]
   );
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    const from = format(startOfMonth(currentMonth), "yyyy-MM-dd");
-    const to = format(endOfMonth(currentMonth), "yyyy-MM-dd");
-
-    const [schedRes, availRes] = await Promise.all([
-      supabase
-        .from("kaigo_visit_schedule")
-        .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, clients(name)")
-        .eq("staff_id", staffId)
-        .gte("visit_date", from)
-        .lte("visit_date", to)
-        .order("start_time"),
-      supabase
-        .from("kaigo_staff_availability_monthly")
-        .select("staff_id, available_date, start_time, end_time, is_available")
-        .eq("staff_id", staffId)
-        .gte("available_date", from)
-        .lte("available_date", to),
-    ]);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-    const mapped: VisitSchedule[] = (schedRes.data || []).map((r: any) => ({
-      id: r.id,
-      user_id: r.user_id,
-      staff_id: r.staff_id,
-      visit_date: r.visit_date,
-      start_time: r.start_time,
-      end_time: r.end_time,
-      service_type: r.service_type,
-      status: r.status ?? "scheduled",
-      user_name: r.clients?.name ?? null,
-    }));
-
-    setSchedules(mapped);
-    setAvailability((availRes.data || []) as StaffAvailabilitySlot[]);
-    setLoading(false);
-  }, [staffId, currentMonth, supabase]);
-
-  // initial render は server からの initialData を使用、filter 変更時のみ refetch。
-  const isInitialMount = useRef(true);
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-    fetchData();
-  }, [fetchData]);
 
   const isDayUnavailable = (dateStr: string) => {
     if (availability.length === 0) return false;

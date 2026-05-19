@@ -33,6 +33,8 @@ import {
   type StaffAvailabilitySlot,
   type VisitSchedule,
 } from "./_shared";
+import { useKaigoVisitSchedulesByDate } from "@/lib/swr/use-kaigo-visit-schedules";
+import { useKaigoAvailability } from "@/lib/swr/use-kaigo-availability";
 
 interface PendingChange {
   type: "update" | "copy";
@@ -103,9 +105,11 @@ export function TimelineView({
   initialData,
 }: TimelineViewProps) {
   const supabase = useMemo(() => createClient(), []);
+  // 楽観的 local state (drag/copy 操作中に書き換える)。SWR data の更新を
+  // useEffect で sync する。filter (dateStr) 変更時は SWR が新 data を fetch、
+  // local state も自動的に置き換わる。
   const [schedules, setSchedules] = useState<VisitSchedule[]>(initialData.schedules);
   const [availability, setAvailability] = useState<StaffAvailabilitySlot[]>(initialData.availability);
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
 
@@ -157,52 +161,43 @@ export function TimelineView({
   } | null>(null);
 
   const dateStr = format(selectedDate, "yyyy-MM-dd");
+  const monthFrom = useMemo(() => format(startOfMonth(selectedDate), "yyyy-MM-dd"), [selectedDate]);
+  const monthTo = useMemo(() => format(endOfMonth(selectedDate), "yyyy-MM-dd"), [selectedDate]);
+
+  // SWR fallbackData: initial mount でのみ有効 (key 変更で消える)
+  const hasInitial = initialData.schedules.length > 0 || initialData.availability.length > 0;
+
+  const {
+    schedules: swrSchedules,
+    isLoading: schedLoading,
+    mutate: mutateSched,
+  } = useKaigoVisitSchedulesByDate(dateStr, hasInitial ? initialData.schedules : undefined);
+  const {
+    availability: swrAvailability,
+    isLoading: availLoading,
+  } = useKaigoAvailability(null, monthFrom, monthTo, hasInitial ? initialData.availability : undefined);
+
+  const loading = schedLoading || availLoading;
+
+  // SWR data → local state へ sync (drag/copy 楽観的更新を許すため local state を持つ)
+  const lastSwrSchedRef = useRef(swrSchedules);
+  const lastSwrAvailRef = useRef(swrAvailability);
+  useEffect(() => {
+    if (swrSchedules !== lastSwrSchedRef.current) {
+      lastSwrSchedRef.current = swrSchedules;
+      setSchedules(swrSchedules);
+    }
+  }, [swrSchedules]);
+  useEffect(() => {
+    if (swrAvailability !== lastSwrAvailRef.current) {
+      lastSwrAvailRef.current = swrAvailability;
+      setAvailability(swrAvailability);
+    }
+  }, [swrAvailability]);
 
   const fetchData = useCallback(async () => {
-    setLoading(true);
-    const [schedRes, availRes] = await Promise.all([
-      supabase
-        .from("kaigo_visit_schedule")
-        .select(
-          "id, user_id, staff_id, visit_date, start_time, end_time, service_type, members(name), clients(name)"
-        )
-        .eq("visit_date", dateStr)
-        .order("start_time"),
-      supabase
-        .from("kaigo_staff_availability_monthly")
-        .select("staff_id, available_date, start_time, end_time, is_available")
-        .gte("available_date", format(startOfMonth(selectedDate), "yyyy-MM-dd"))
-        .lte("available_date", format(endOfMonth(selectedDate), "yyyy-MM-dd")),
-    ]);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-    const mapped: VisitSchedule[] = (schedRes.data || []).map((r: any) => ({
-      id: r.id,
-      user_id: r.user_id,
-      staff_id: r.staff_id,
-      visit_date: r.visit_date,
-      start_time: r.start_time,
-      end_time: r.end_time,
-      service_type: r.service_type,
-      staff_name: r.members?.name ?? null,
-      user_name: r.clients?.name ?? null,
-    }));
-
-    setSchedules(mapped);
-    setAvailability((availRes.data || []) as StaffAvailabilitySlot[]);
-    setLoading(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional dep stability
-  }, [dateStr, supabase]);
-
-  // initial render は server からの initialData を使用、filter 変更時のみ refetch。
-  const isInitialMount = useRef(true);
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-    fetchData();
-  }, [fetchData]);
+    mutateSched();
+  }, [mutateSched]);
 
   useEffect(() => {
     if (timelineScrollRef.current && !loading) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
@@ -33,6 +33,13 @@ import {
   type StaffAvailabilitySlot,
   type VisitSchedule,
 } from "./_shared";
+import {
+  useKaigoVisitSchedulesByUser,
+  useKaigoVisitSchedulesByMonthAll,
+} from "@/lib/swr/use-kaigo-visit-schedules";
+import { useKaigoAvailability } from "@/lib/swr/use-kaigo-availability";
+import { useKaigoOfficeStaff } from "@/lib/swr/use-kaigo-office-staff";
+import { useKaigoServiceProviders } from "@/lib/swr/use-kaigo-service-providers";
 
 export interface UserCalendarInitialData {
   schedules: VisitSchedule[];
@@ -59,13 +66,49 @@ export function UserCalendar({
 }: UserCalendarProps) {
   const supabase = useMemo(() => createClient(), []);
   const { currentOfficeId } = useBusinessType();
-  const [schedules, setSchedules] = useState<VisitSchedule[]>(initialData.schedules);
-  const [availability, setAvailability] = useState<StaffAvailabilitySlot[]>(initialData.availability);
-  const [allStaff, setAllStaff] = useState<KaigoStaff[]>(initialData.allStaff);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
-  const [allProviders, setAllProviders] = useState<{ id: string; provider_name: string }[]>(initialData.allProviders);
-  const [allSchedules, setAllSchedules] = useState<VisitSchedule[]>(initialData.allSchedules);
-  const [loading, setLoading] = useState(false);
+
+  const monthFrom = useMemo(() => format(startOfMonth(currentMonth), "yyyy-MM-dd"), [currentMonth]);
+  const monthTo = useMemo(() => format(endOfMonth(currentMonth), "yyyy-MM-dd"), [currentMonth]);
+
+  // SWR fallbackData: initial mount でのみ意味あり (key 変更で消える)
+  const hasInitial = initialData.schedules.length > 0 || initialData.availability.length > 0
+    || initialData.allStaff.length > 0 || initialData.allSchedules.length > 0
+    || initialData.allProviders.length > 0;
+
+  const { schedules, isLoading: schedLoading, mutate: mutateSched } = useKaigoVisitSchedulesByUser(
+    userId,
+    monthFrom,
+    monthTo,
+    hasInitial ? initialData.schedules : undefined,
+  );
+  const { availability, isLoading: availLoading } = useKaigoAvailability(
+    null, // all-staff (旧 fetch も staffId フィルタ無し)
+    monthFrom,
+    monthTo,
+    hasInitial ? initialData.availability : undefined,
+  );
+  const { staff: allStaff, isLoading: allStaffLoading } = useKaigoOfficeStaff(
+    currentOfficeId,
+    hasInitial ? initialData.allStaff : undefined,
+  );
+  const { schedules: allSchedules, mutate: mutateAllSched } = useKaigoVisitSchedulesByMonthAll(
+    monthFrom,
+    monthTo,
+    hasInitial ? initialData.allSchedules : undefined,
+  );
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- provider data は将来 service-selector が利用予定
+  const { providers: allProviders } = useKaigoServiceProviders(
+    hasInitial ? initialData.allProviders : undefined,
+  );
+
+  const loading = schedLoading || availLoading || allStaffLoading;
+
+  // mutation 後に schedules / allSchedules を一括で再 fetch
+  const refetchAfterMutation = () => {
+    mutateSched();
+    mutateAllSched();
+  };
+
   const [editModal, setEditModal] = useState<VisitSchedule | null>(null);
   const [editForm, setEditForm] = useState({ start_time: "", end_time: "", service_type: "", staff_id: "", service_code: "", service_name: "" });
   const [editSaving, setEditSaving] = useState(false);
@@ -84,74 +127,6 @@ export function UserCalendar({
       }),
     [currentMonth]
   );
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    const from = format(startOfMonth(currentMonth), "yyyy-MM-dd");
-    const to = format(endOfMonth(currentMonth), "yyyy-MM-dd");
-
-    // 自事業所 (currentOfficeId) のスタッフだけ。未指定時は空配列扱い。
-    // Phase 9 close: members.office_id DROP 済 → member_offices junction 経由で絞り込み
-    const allStaffPromise = currentOfficeId
-      ? supabase
-          .from("members")
-          .select("id, name, name_kana:furigana, status, member_offices!inner(office_id)")
-          .eq("status", "active")
-          .eq("member_offices.office_id", currentOfficeId)
-      : Promise.resolve({ data: [] as KaigoStaff[] });
-
-    const [schedRes, availRes, allStaffRes, allSchedRes, provRes] = await Promise.all([
-      supabase
-        .from("kaigo_visit_schedule")
-        .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, members(name)")
-        .eq("user_id", userId)
-        .gte("visit_date", from)
-        .lte("visit_date", to)
-        .order("start_time"),
-      supabase
-        .from("kaigo_staff_availability_monthly")
-        .select("staff_id, available_date, start_time, end_time, is_available")
-        .gte("available_date", from)
-        .lte("available_date", to),
-      allStaffPromise,
-      supabase
-        .from("kaigo_visit_schedule")
-        .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type")
-        .gte("visit_date", from)
-        .lte("visit_date", to),
-      supabase.from("kaigo_service_providers").select("id, provider_name").eq("status", "active").order("provider_name"),
-    ]);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-    const mapped: VisitSchedule[] = (schedRes.data || []).map((r: any) => ({
-      id: r.id,
-      user_id: r.user_id,
-      staff_id: r.staff_id,
-      visit_date: r.visit_date,
-      start_time: r.start_time,
-      end_time: r.end_time,
-      service_type: r.service_type,
-      status: r.status ?? "scheduled",
-      staff_name: r.members?.name ?? null,
-    }));
-
-    setSchedules(mapped);
-    setAvailability((availRes.data || []) as StaffAvailabilitySlot[]);
-    setAllStaff(allStaffRes.data || []);
-    setAllProviders(provRes.data || []);
-    setAllSchedules((allSchedRes.data || []) as VisitSchedule[]);
-    setLoading(false);
-  }, [userId, currentMonth, supabase, currentOfficeId]);
-
-  // initial render は server からの initialData を使用、filter 変更時のみ refetch。
-  const isInitialMount = useRef(true);
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-    fetchData();
-  }, [fetchData]);
 
   const isUnavailable = (sched: VisitSchedule) => {
     if (!sched.staff_id) return false;
@@ -194,7 +169,7 @@ export function UserCalendar({
     } else {
       toast.success("予定を更新しました");
       setEditModal(null);
-      fetchData();
+      refetchAfterMutation();
     }
     setEditSaving(false);
   };
@@ -212,7 +187,7 @@ export function UserCalendar({
     } else {
       toast.success("予定を削除しました");
       setEditModal(null);
-      fetchData();
+      refetchAfterMutation();
     }
     setEditDeleting(false);
   };
@@ -263,7 +238,7 @@ export function UserCalendar({
     } else {
       toast.success("予定を追加しました");
       setAddModal(null);
-      fetchData();
+      refetchAfterMutation();
     }
     setAddSaving(false);
   };
