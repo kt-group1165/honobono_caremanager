@@ -80,10 +80,53 @@ export default async function ShiftManagementPage({
     .order("furigana", { nullsFirst: false });
   if (officeId) staffQuery = staffQuery.eq("member_offices.office_id", officeId);
 
-  // PostgREST default 1000 行制限対策で clients は page-loop
+  // 自事業所 (URL ?office=) の利用者だけに絞る:
+  //   1) client_office_assignments で officeId に紐づく client_id を全件取得 (page-loop)
+  //   2) その client_id 集合に対して clients を fetch
+  // user-sidebar.tsx と同じ pattern。PostgREST default 1000 行制限を超える前提で page-loop。
+  // officeId 未指定時は旧挙動 (全件) を維持 → Client 側で再フェッチさせる。
   const PAGE = 1000;
   const users: KaigoUser[] = [];
-  {
+  if (officeId) {
+    const clientIdsAll: string[] = [];
+    let fromA = 0;
+    while (true) {
+      const { data: assigns } = await supabase
+        .from("client_office_assignments")
+        .select("client_id")
+        .eq("office_id", officeId)
+        .is("end_date", null)
+        .range(fromA, fromA + PAGE - 1);
+      if (!assigns || assigns.length === 0) break;
+      clientIdsAll.push(
+        ...(assigns as { client_id: string }[]).map((a) => a.client_id),
+      );
+      if (assigns.length < PAGE) break;
+      fromA += PAGE;
+    }
+    const uniqueClientIds = Array.from(new Set(clientIdsAll));
+
+    if (uniqueClientIds.length > 0) {
+      let fromU = 0;
+      while (true) {
+        // .in() は内部 URL length 制限があるため、安全側で 500 件ずつ chunk
+        const chunk = uniqueClientIds.slice(fromU, fromU + 500);
+        if (chunk.length === 0) break;
+        const { data } = await supabase
+          .from("clients")
+          .select("id, name, name_kana:furigana, status")
+          .in("id", chunk)
+          .eq("status", "active")
+          .eq("is_facility", false)
+          .order("furigana", { nullsFirst: false });
+        if (data && data.length > 0) {
+          users.push(...(data as KaigoUser[]));
+        }
+        fromU += 500;
+      }
+    }
+  } else {
+    // officeId 未指定 (= context 初期化中): 全件 fallback (= 旧挙動)
     let from = 0;
     while (true) {
       const { data } = await supabase
