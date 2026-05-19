@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import type { Client } from "@/types/database";
 import { createClient } from "@/lib/supabase/server";
 import { UserDetailContent } from "./user-detail-content";
+import { getClientById } from "./fetchers";
 import {
   normalizeCategories,
   type ClientMemoRow,
@@ -17,8 +18,9 @@ export default async function UserDetailPage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [userRes, officeRes, serviceRes, memoRes] = await Promise.all([
-    supabase.from("clients").select("*").eq("id", id).maybeSingle(),
+  // getClientById は React.cache 経由なので layout.tsx 側で既に取得済の場合は DB クエリ走らない
+  const [user, officeRes, serviceRes, memoRes] = await Promise.all([
+    getClientById(id),
     supabase
       .from("offices")
       .select("id, name, service_type")
@@ -35,11 +37,11 @@ export default async function UserDetailPage({
       .eq("scope", "tenant"),
   ]);
 
-  if (!userRes.data) {
+  if (!user) {
     redirect("/users");
   }
 
-  const initialUser = userRes.data as Client;
+  const initialUser = user as Client;
   const initialOffices = (officeRes.data ?? []) as OfficeRow[];
   const initialServices = ((serviceRes.data ?? []) as Record<string, unknown>[]).map((s) => ({
     ...s,

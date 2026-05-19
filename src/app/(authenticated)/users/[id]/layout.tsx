@@ -1,6 +1,6 @@
-import type { Client } from "@/types/database";
 import { createClient } from "@/lib/supabase/server";
 import { UserDetailLayoutShell } from "./user-detail-layout-shell";
+import { getClientById } from "./fetchers";
 
 /**
  * 利用者詳細画面の共有レイアウト (RSC)
@@ -39,16 +39,15 @@ export default async function UserDetailLayout({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [userRes, assignsRes] = await Promise.all([
-    supabase.from("clients").select("*").eq("id", id).maybeSingle(),
+  // getClientById は React.cache 経由なので、page.tsx 側で再度呼ばれても同一 Promise が返り DB クエリは 1 回
+  const [initialUser, assignsRes] = await Promise.all([
+    getClientById(id),
     supabase
       .from("client_office_assignments")
       .select("home_care_categories")
       .eq("client_id", id)
       .is("end_date", null),
   ]);
-
-  const initialUser = (userRes.data ?? null) as Client | null;
   const initialHasDisabilityService = computeHasDisabilityService(
     (assignsRes.data ?? []) as AssignmentRow[]
   );
