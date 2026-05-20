@@ -1,45 +1,82 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { isValidLoginId, loginIdToSyntheticEmail } from "@/lib/login_id";
+import { isValidLoginId } from "@/lib/login_id";
+import { ensureDeviceId, detectDeviceLabel } from "@/lib/device_id";
 
 export default function LoginPage() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
   const router = useRouter();
-  const supabase = createClient();
 
-  function resolveEmail(value: string): string | null {
+  function isResolvableIdentifier(value: string): boolean {
     const trimmed = value.trim();
-    if (!trimmed) return null;
-    if (trimmed.includes("@")) return trimmed; // 実 email
-    if (isValidLoginId(trimmed)) return loginIdToSyntheticEmail(trimmed);
-    return null;
+    if (!trimmed) return false;
+    if (trimmed.includes("@")) return true; // 実 email
+    return isValidLoginId(trimmed);
   }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const email = resolveEmail(identifier);
-    if (!email) {
+    if (!isResolvableIdentifier(identifier)) {
       toast.error("ログイン ID または メールアドレスの形式が正しくありません");
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) {
-      toast.error("ログインに失敗しました: " + error.message);
-    } else {
-      router.push("/");
-      router.refresh();
+    setInfo(null);
+    try {
+      // Phase 11c: device_id と一緒に /api/login へ送信 (trust check 用)
+      const deviceId = ensureDeviceId();
+      const deviceLabel = detectDeviceLabel();
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identifier: identifier.trim(),
+          password,
+          device_id: deviceId,
+          device_label: deviceLabel,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        status?: "approval_required" | "device_revoked";
+        message?: string;
+      };
+
+      if (res.ok && data.ok) {
+        router.push("/");
+        router.refresh();
+        return;
+      }
+      // 202: 承認待ち
+      if (res.status === 202 || data.status === "approval_required") {
+        setInfo(
+          data.message ??
+            "新しい端末からのログインです。管理者の承認をお待ちください。"
+        );
+        return;
+      }
+      // 403: 端末失効 等
+      if (res.status === 403) {
+        toast.error(
+          data.message ??
+            "この端末は無効化されています。管理者に連絡してください。"
+        );
+        return;
+      }
+      // 401: 認証失敗 (or その他)
+      toast.error(data.message ?? "ログインに失敗しました");
+    } catch {
+      toast.error("ログインに失敗しました");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -80,6 +117,11 @@ export default function LoginPage() {
               placeholder="パスワード"
             />
           </div>
+          {info && (
+            <div className="rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+              {info}
+            </div>
+          )}
           <button
             type="submit"
             disabled={loading}
