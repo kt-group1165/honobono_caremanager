@@ -32,6 +32,7 @@ export async function proxy(request: NextRequest) {
   if (
     !user &&
     !request.nextUrl.pathname.startsWith("/login") &&
+    request.nextUrl.pathname !== "/api/login" &&
     !request.nextUrl.pathname.startsWith("/staff-availability") &&
     !request.nextUrl.pathname.startsWith("/emergency") &&
     !request.nextUrl.pathname.startsWith("/support") &&
