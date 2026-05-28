@@ -442,35 +442,49 @@ function ProcedureTab({
   return (
     <div className="space-y-6">
       {/* ── サマリ (現在の週次概観、read-only) ── */}
-      <section className="rounded-lg border border-gray-200 bg-white p-3 sm:p-4">
-        <h2 className="text-sm font-semibold text-gray-700 mb-2">週次サービス サマリ</h2>
-        <div className="grid grid-cols-7 gap-1 text-xs">
-          {WEEKDAY_KEYS.map((day) => {
-            const svcsOnDay = SERVICE_NOS.filter((no) => {
-              const c = doc.weekly_schedule?.[day]?.[String(no)];
-              return c?.time_range || c?.service_kind;
-            });
-            return (
-              <div key={day} className={`rounded border p-1.5 text-center min-h-[60px] ${svcsOnDay.length > 0 ? "border-green-300 bg-green-50" : "border-gray-200 bg-gray-50 text-gray-400"}`}>
-                <div className="font-medium text-gray-700 mb-1">{WEEKDAY_LABELS[day]}</div>
-                {svcsOnDay.length === 0 ? (
-                  <div className="text-[10px] text-gray-400">—</div>
-                ) : (
-                  svcsOnDay.map((no) => {
+      <section className="rounded-lg border border-gray-200 bg-white">
+        <h2 className="px-4 py-2.5 border-b border-gray-200 text-sm font-semibold text-gray-700 bg-gray-50">
+          週次サービス サマリ
+        </h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="bg-gray-50 text-gray-600">
+                <th className="px-2 py-2 border border-gray-200 w-10 text-center">曜日</th>
+                {SERVICE_NOS.map((no) => (
+                  <th key={no} className="px-2 py-2 border border-gray-200 text-center">サービス{no}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {WEEKDAY_KEYS.map((day) => (
+                <tr key={day} className="border-t border-gray-200">
+                  <td className="px-2 py-2 border border-gray-200 text-center font-medium bg-gray-50">
+                    {WEEKDAY_LABELS[day]}
+                  </td>
+                  {SERVICE_NOS.map((no) => {
                     const c = doc.weekly_schedule?.[day]?.[String(no)] ?? {};
+                    const hasContent = c.time_range || c.service_kind;
                     return (
-                      <div key={no} className="text-[10px] leading-tight mb-0.5">
-                        <div className="font-medium">サ{no}</div>
-                        <div className="text-gray-600">{c.time_range || "—"}</div>
-                      </div>
+                      <td key={no} className="px-2 py-2 border border-gray-200">
+                        {hasContent ? (
+                          <span className="text-gray-800">
+                            {c.time_range || "—"}{c.service_kind ? `  ${c.service_kind}` : ""}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">&nbsp;</span>
+                        )}
+                      </td>
                     );
-                  })
-                )}
-              </div>
-            );
-          })}
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <p className="mt-2 text-[11px] text-gray-500">※ 下の各サービスの「実施曜日」チップで月〜日を選択するとここに反映されます</p>
+        <p className="px-4 py-2 text-[11px] text-gray-500 border-t border-gray-200 bg-gray-50">
+          ※ 下の各サービスの「実施曜日」チップで月〜日を選択するとここに反映されます
+        </p>
       </section>
 
       {/* ── 全体 特記事項 ── */}
