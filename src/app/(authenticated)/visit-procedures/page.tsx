@@ -1,75 +1,76 @@
 "use client";
 
+/**
+ * 訪問介護 手順書: 利用者一覧 page
+ *
+ * 表示: 過去に手順書を作成した利用者 (DISTINCT client_name) + バージョン数
+ * 操作:
+ *  - 利用者名 click → /visit-procedures/clients/[name] (バージョン一覧)
+ *  - 「新規利用者」 → モーダルで名前入力 → 新規 doc 作成画面へ
+ */
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
-import { BookOpen, Plus, Trash2, Edit3, AlertCircle, Loader2 } from "lucide-react";
+import { BookOpen, Plus, AlertCircle, Loader2, User } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
-import { getDocuments, deleteDocument } from "@/lib/visit-procedure/queries";
-import type { VisitProcedureDocumentSummary } from "@/lib/visit-procedure/types";
+import { getClients } from "@/lib/visit-procedure/queries";
+import type { VisitProcedureClient } from "@/lib/visit-procedure/types";
 
-export default function VisitProceduresListPage() {
+export default function VisitProceduresClientListPage() {
+  const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const { businessType, currentOffice, loading: btLoading } = useBusinessType();
-  const [docs, setDocs] = useState<VisitProcedureDocumentSummary[]>([]);
+  const [clients, setClients] = useState<VisitProcedureClient[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newName, setNewName] = useState("");
 
   const tenantId = currentOffice?.tenant_id ?? null;
+  const officeQuery = currentOffice ? `?office=${encodeURIComponent(currentOffice.id)}` : "";
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- mount-time async fetch (HANDOVER §2) */
     if (btLoading) return;
     if (!tenantId) {
       setLoading(false);
-      setDocs([]);
+      setClients([]);
       return;
     }
     let cancelled = false;
     const load = async () => {
       setLoading(true);
       try {
-        const rows = await getDocuments(supabase, tenantId);
-        if (!cancelled) setDocs(rows);
+        const rows = await getClients(supabase, tenantId);
+        if (!cancelled) setClients(rows);
       } catch (err) {
         console.error(err);
-        toast.error("手順書の読込に失敗しました: " + (err instanceof Error ? err.message : String(err)));
+        toast.error("利用者一覧の読込失敗: " + (err instanceof Error ? err.message : String(err)));
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
     load();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [supabase, tenantId, btLoading]);
 
-  const handleDelete = async (id: string, clientName: string) => {
-    if (!confirm(`「${clientName}」の手順書を削除します。よろしいですか？`)) return;
-    setDeletingId(id);
-    try {
-      await deleteDocument(supabase, id);
-      setDocs((prev) => prev.filter((d) => d.id !== id));
-      toast.success("手順書を削除しました");
-    } catch (err) {
-      console.error(err);
-      toast.error("削除に失敗しました: " + (err instanceof Error ? err.message : String(err)));
-    } finally {
-      setDeletingId(null);
+  const handleAdd = () => {
+    const name = newName.trim();
+    if (!name) {
+      toast.error("利用者名を入力してください");
+      return;
     }
+    const sep = officeQuery ? "&" : "?";
+    router.push(`/visit-procedures/clients/${encodeURIComponent(name)}/new${officeQuery}${sep}name=${encodeURIComponent(name)}`);
   };
 
-  const officeQuery = currentOffice ? `?office=${encodeURIComponent(currentOffice.id)}` : "";
-
-  // 訪問介護以外の事業種別では表示制限
   if (!btLoading && businessType !== "訪問介護") {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">手順書</h1>
-        </div>
+        <h1 className="text-2xl font-bold text-gray-900">手順書</h1>
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-amber-800 flex items-start gap-3">
           <AlertCircle size={20} className="shrink-0 mt-0.5" />
           <div>
@@ -89,17 +90,15 @@ export default function VisitProceduresListPage() {
             <BookOpen size={24} className="text-green-600" />
             手順書
           </h1>
-          <p className="mt-1 text-sm text-gray-500">
-            訪問介護のサービス手順書 (週次表 + サービス毎ステップ + モジュール表示)
-          </p>
+          <p className="mt-1 text-sm text-gray-500">利用者を選んでバージョン一覧へ。新規利用者は右上ボタンから追加</p>
         </div>
-        <Link
-          href={`/visit-procedures/new${officeQuery}`}
+        <button
+          onClick={() => { setNewName(""); setShowAdd(true); }}
           className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-700"
         >
           <Plus size={16} />
-          新規作成
-        </Link>
+          新規利用者
+        </button>
       </div>
 
       {loading ? (
@@ -107,56 +106,60 @@ export default function VisitProceduresListPage() {
           <Loader2 size={20} className="animate-spin mr-2" />
           読込中...
         </div>
-      ) : docs.length === 0 ? (
+      ) : clients.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-12 text-center">
-          <BookOpen size={40} className="mx-auto mb-3 text-gray-300" />
-          <p className="text-sm text-gray-500">手順書はまだ登録されていません</p>
-          <p className="text-xs text-gray-400 mt-1">右上の「新規作成」から作成してください</p>
+          <User size={40} className="mx-auto mb-3 text-gray-300" />
+          <p className="text-sm text-gray-500">利用者が登録されていません</p>
+          <p className="text-xs text-gray-400 mt-1">右上の「新規利用者」から追加してください</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">利用者名</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">計画開始日</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">作成者</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">作成理由</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">更新日時</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
-              {docs.map((doc) => (
-                <tr key={doc.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{doc.client_name}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{doc.plan_start_date}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{doc.author_name || "-"}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{doc.creation_reason || "-"}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">
-                    {doc.updated_at ? new Date(doc.updated_at).toLocaleString("ja-JP") : "-"}
-                  </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <Link
-                      href={`/visit-procedures/${doc.id}${officeQuery}`}
-                      className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50"
-                    >
-                      <Edit3 size={14} />
-                      編集
-                    </Link>
-                    <button
-                      onClick={() => handleDelete(doc.id, doc.client_name)}
-                      disabled={deletingId === doc.id}
-                      className="ml-2 inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                    >
-                      {deletingId === doc.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                      削除
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {clients.map((c) => (
+            <Link
+              key={c.client_name}
+              href={`/visit-procedures/clients/${encodeURIComponent(c.client_name)}${officeQuery}`}
+              className="block rounded-lg border border-gray-200 bg-white p-4 hover:border-green-400 hover:shadow-sm transition"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <User size={18} className="text-gray-400 shrink-0" />
+                  <span className="font-medium text-gray-900 truncate">{c.client_name}</span>
+                </div>
+                <span className="text-xs rounded-full bg-green-50 text-green-700 px-2 py-0.5">
+                  {c.version_count} 版
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-gray-500">最新計画: {c.latest_plan_start_date}</p>
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {/* 新規利用者 modal */}
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowAdd(false)}>
+          <div className="bg-white rounded-lg p-5 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">新規利用者</h2>
+            <label className="text-xs text-gray-500 mb-1 block">利用者名 *</label>
+            <input
+              type="text"
+              autoFocus
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
+              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+              placeholder="例: 溝渕 幸子"
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setShowAdd(false)} className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded">
+                キャンセル
+              </button>
+              <button onClick={handleAdd} className="inline-flex items-center gap-1 rounded bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700">
+                <Plus size={14} />
+                作成して編集へ
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

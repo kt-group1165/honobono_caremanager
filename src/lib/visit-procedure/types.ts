@@ -85,6 +85,7 @@ export interface VisitProcedureDocument {
   office_id: string | null;
   client_name: string;
   plan_start_date: string; // YYYY-MM-DD
+  plan_end_date: string | null; // YYYY-MM-DD
   author_name: string | null;
   creation_reason: string | null;
   special_notes: string | null;
@@ -95,15 +96,23 @@ export interface VisitProcedureDocument {
   services: VisitProcedureService[];
 }
 
-/** 一覧画面で使う軽量サマリ */
+/** バージョン一覧画面で使う軽量サマリ */
 export interface VisitProcedureDocumentSummary {
   id: string;
   client_name: string;
   plan_start_date: string;
+  plan_end_date: string | null;
   author_name: string | null;
   creation_reason: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** 利用者一覧 (DISTINCT client_name + 集計) */
+export interface VisitProcedureClient {
+  client_name: string;
+  version_count: number;
+  latest_plan_start_date: string;
 }
 
 /** 空の document を返す */
@@ -117,6 +126,7 @@ export function emptyDocument(tenantId: string, officeId: string | null): VisitP
     office_id: officeId,
     client_name: "",
     plan_start_date: `${yyyy}-${mm}-${dd}`,
+    plan_end_date: null,
     author_name: "",
     creation_reason: "",
     special_notes: "",

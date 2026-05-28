@@ -8,6 +8,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
+  VisitProcedureClient,
   VisitProcedureDocument,
   VisitProcedureDocumentSummary,
   VisitProcedureService,
@@ -17,6 +18,10 @@ import type {
 // PostgREST 1000 行制限対応 (project_pagination_audit_remaining.md)
 const PAGE_LIMIT = 1000;
 
+/**
+ * tenant 配下の全 documents を取得 (全 client 横断、新しい計画日順)
+ * 内部利用 / クライアント別一覧用 helper の元データ
+ */
 export async function getDocuments(
   supabase: SupabaseClient,
   tenantId: string,
@@ -26,7 +31,7 @@ export async function getDocuments(
   while (true) {
     const { data, error } = await supabase
       .from("kaigo_visit_procedure_documents")
-      .select("id, client_name, plan_start_date, author_name, creation_reason, created_at, updated_at")
+      .select("id, client_name, plan_start_date, plan_end_date, author_name, creation_reason, created_at, updated_at")
       .eq("tenant_id", tenantId)
       .order("plan_start_date", { ascending: false })
       .order("client_name", { ascending: true })
@@ -38,6 +43,53 @@ export async function getDocuments(
     from += PAGE_LIMIT;
   }
   return all;
+}
+
+/**
+ * 利用者一覧 (DISTINCT client_name) + バージョン数 + 最新計画開始日
+ * documents を内部で全取得して JS で集計 (件数が膨大にならない前提)
+ */
+export async function getClients(
+  supabase: SupabaseClient,
+  tenantId: string,
+): Promise<VisitProcedureClient[]> {
+  const docs = await getDocuments(supabase, tenantId);
+  const map = new Map<string, VisitProcedureClient>();
+  for (const d of docs) {
+    const cur = map.get(d.client_name);
+    if (!cur) {
+      map.set(d.client_name, {
+        client_name: d.client_name,
+        version_count: 1,
+        latest_plan_start_date: d.plan_start_date,
+      });
+    } else {
+      cur.version_count += 1;
+      if (d.plan_start_date > cur.latest_plan_start_date) cur.latest_plan_start_date = d.plan_start_date;
+    }
+  }
+  return Array.from(map.values()).sort((a, b) =>
+    b.latest_plan_start_date.localeCompare(a.latest_plan_start_date) ||
+    a.client_name.localeCompare(b.client_name, "ja"),
+  );
+}
+
+/**
+ * 指定 client_name のバージョン一覧 (新しい計画開始日順)
+ */
+export async function getDocumentsByClient(
+  supabase: SupabaseClient,
+  tenantId: string,
+  clientName: string,
+): Promise<VisitProcedureDocumentSummary[]> {
+  const { data, error } = await supabase
+    .from("kaigo_visit_procedure_documents")
+    .select("id, client_name, plan_start_date, plan_end_date, author_name, creation_reason, created_at, updated_at")
+    .eq("tenant_id", tenantId)
+    .eq("client_name", clientName)
+    .order("plan_start_date", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as VisitProcedureDocumentSummary[];
 }
 
 export async function getDocument(
@@ -108,6 +160,7 @@ export async function saveDocument(
     office_id: doc.office_id,
     client_name: doc.client_name,
     plan_start_date: doc.plan_start_date,
+    plan_end_date: doc.plan_end_date,
     author_name: doc.author_name,
     creation_reason: doc.creation_reason,
     special_notes: doc.special_notes,
