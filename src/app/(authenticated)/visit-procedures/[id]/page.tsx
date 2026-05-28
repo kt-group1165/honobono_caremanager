@@ -13,7 +13,7 @@
 import Link from "next/link";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, BookOpen, Edit3, Loader2, AlertCircle, Layers, LayoutGrid } from "lucide-react";
+import { ArrowLeft, BookOpen, Edit3, Loader2, AlertCircle, Layers, LayoutGrid, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
@@ -106,28 +106,52 @@ export default function VisitProcedurePreviewPage() {
   const period = `${formatJpDate(doc.plan_start_date)}〜${formatJpDate(doc.plan_end_date)}`;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+    <div className="space-y-4 sm:space-y-6 visit-procedure-print-root">
+      {/* 印刷専用 style: A4 縦、不要 UI 非表示 */}
+      <style>{`
+        @media print {
+          @page { size: A4 portrait; margin: 12mm; }
+          aside, nav, header, [role="navigation"], .print-hide { display: none !important; }
+          body, html { background: #fff !important; }
+          .visit-procedure-print-root { padding: 0 !important; }
+          .visit-procedure-print-root, .visit-procedure-print-root * {
+            color: #000 !important; box-shadow: none !important;
+          }
+          .visit-procedure-print-root table { page-break-inside: avoid; }
+          .visit-procedure-print-root section { page-break-inside: avoid; }
+        }
+      `}</style>
+      <div className="flex items-center justify-between gap-2 flex-wrap print-hide">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <Link
             href={`/visit-procedures/clients/${encodeURIComponent(doc.client_name)}${officeQuery}`}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 hover:text-gray-600 shrink-0"
             title="バージョン一覧に戻る"
           >
             <ArrowLeft size={20} />
           </Link>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <BookOpen size={22} className="text-green-600" />
-            {doc.client_name}
+          <h1 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2 min-w-0">
+            <BookOpen size={20} className="text-green-600 shrink-0" />
+            <span className="truncate">{doc.client_name}</span>
           </h1>
         </div>
-        <Link
-          href={`/visit-procedures/${id}/edit${officeQuery}`}
-          className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-        >
-          <Edit3 size={16} />
-          編集
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <Printer size={16} />
+            <span className="hidden sm:inline">印刷 (A4 縦)</span>
+            <span className="sm:hidden">印刷</span>
+          </button>
+          <Link
+            href={`/visit-procedures/${id}/edit${officeQuery}`}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
+          >
+            <Edit3 size={16} />
+            編集
+          </Link>
+        </div>
       </div>
 
       {/* 基本情報 */}
@@ -143,7 +167,7 @@ export default function VisitProcedurePreviewPage() {
       </div>
 
       {/* タブ切替 */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-gray-200 print-hide">
         <button onClick={() => setTab("procedure")}
           className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
             tab === "procedure" ? "border-green-600 text-green-700" : "border-transparent text-gray-500 hover:text-gray-700"
