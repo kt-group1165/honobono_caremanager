@@ -1,0 +1,608 @@
+"use client";
+
+/**
+ * 訪問介護 手順書 詳細/編集 page
+ *
+ * - URL: /visit-procedures/[id]
+ *   - id = "new" の時は空テンプレで新規作成
+ *   - それ以外は既存 document をロード
+ * - 2 タブ:
+ *   - 手順 (編集可): 週次表 + サービス毎 ステップ
+ *   - モジュール (read-only): 5 分刻みグリッドで step を帯表示
+ */
+
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useParams } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft, BookOpen, Plus, Trash2, Save, Loader2, AlertCircle, Layers, LayoutGrid } from "lucide-react";
+import { toast } from "sonner";
+import { createClient } from "@/lib/supabase/client";
+import { useBusinessType } from "@/lib/business-type-context";
+import { getDocument, saveDocument } from "@/lib/visit-procedure/queries";
+import {
+  emptyDocument,
+  SERVICE_NOS,
+  VISIT_SERVICE_KINDS,
+  WEEKDAY_KEYS,
+  WEEKDAY_LABELS,
+  type VisitProcedureDocument,
+  type VisitProcedureService,
+  type VisitProcedureStep,
+  type WeeklyCell,
+  type WeekdayKey,
+} from "@/lib/visit-procedure/types";
+
+type Tab = "procedure" | "module";
+
+export default function VisitProcedureDetailPage() {
+  const router = useRouter();
+  const params = useParams<{ id: string }>();
+  const id = params?.id ?? "new";
+  const supabase = useMemo(() => createClient(), []);
+  const { businessType, currentOffice, loading: btLoading } = useBusinessType();
+  const [tab, setTab] = useState<Tab>("procedure");
+  const [doc, setDoc] = useState<VisitProcedureDocument | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const tenantId = currentOffice?.tenant_id ?? null;
+  const officeId = currentOffice?.id ?? null;
+
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- mount-time async fetch (HANDOVER §2) */
+    if (btLoading) return;
+    if (!tenantId) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      try {
+        if (id === "new") {
+          if (!cancelled) setDoc(emptyDocument(tenantId, officeId));
+        } else {
+          const found = await getDocument(supabase, id);
+          if (!cancelled) {
+            if (!found) {
+              toast.error("手順書が見つかりません");
+              router.push("/visit-procedures");
+              return;
+            }
+            // services が 5 つ未満なら空 service で埋める (UI 上常に 5 表示)
+            const filledServices = SERVICE_NOS.map((no) => {
+              const existing = found.services.find((s) => s.service_no === no);
+              return existing ?? { service_no: no, time_range: "", service_kind: "" as const, special_notes: "", steps: [] };
+            });
+            setDoc({ ...found, services: filledServices });
+          }
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error("読込失敗: " + (err instanceof Error ? err.message : String(err)));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+    /* eslint-enable react-hooks/set-state-in-effect */
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- id/tenantId 変化のみで再 load
+  }, [id, tenantId, btLoading]);
+
+  if (!btLoading && businessType !== "訪問介護") {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-gray-900">手順書</h1>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-amber-800 flex items-start gap-3">
+          <AlertCircle size={20} className="shrink-0 mt-0.5" />
+          <p className="font-medium">この機能は訪問介護モード専用です</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading || !doc) {
+    return (
+      <div className="flex items-center justify-center py-12 text-gray-400">
+        <Loader2 size={20} className="animate-spin mr-2" />
+        読込中...
+      </div>
+    );
+  }
+
+  // ── doc state 更新 helper ──
+  const updateDoc = (patch: Partial<VisitProcedureDocument>) =>
+    setDoc((prev) => (prev ? { ...prev, ...patch } : prev));
+
+  const updateWeeklyCell = (day: WeekdayKey, serviceNo: number, patch: Partial<WeeklyCell>) => {
+    setDoc((prev) => {
+      if (!prev) return prev;
+      const ws = { ...(prev.weekly_schedule ?? {}) };
+      const dayMap = { ...(ws[day] ?? {}) };
+      const cell = { ...(dayMap[String(serviceNo)] ?? {}), ...patch };
+      dayMap[String(serviceNo)] = cell;
+      ws[day] = dayMap;
+      return { ...prev, weekly_schedule: ws };
+    });
+  };
+
+  const updateService = (no: number, patch: Partial<VisitProcedureService>) => {
+    setDoc((prev) => {
+      if (!prev) return prev;
+      const services = prev.services.map((s) => (s.service_no === no ? { ...s, ...patch } : s));
+      return { ...prev, services };
+    });
+  };
+
+  const updateStep = (svcNo: number, stepIdx: number, patch: Partial<VisitProcedureStep>) => {
+    setDoc((prev) => {
+      if (!prev) return prev;
+      const services = prev.services.map((s) => {
+        if (s.service_no !== svcNo) return s;
+        const steps = s.steps.map((st, i) => (i === stepIdx ? { ...st, ...patch } : st));
+        return { ...s, steps };
+      });
+      return { ...prev, services };
+    });
+  };
+
+  const addStep = (svcNo: number) => {
+    setDoc((prev) => {
+      if (!prev) return prev;
+      const services = prev.services.map((s) => {
+        if (s.service_no !== svcNo) return s;
+        const nextStepNo = s.steps.length + 1;
+        return {
+          ...s,
+          steps: [...s.steps, { step_no: nextStepNo, content: "", minutes: 5, detail: "" }],
+        };
+      });
+      return { ...prev, services };
+    });
+  };
+
+  const removeStep = (svcNo: number, stepIdx: number) => {
+    setDoc((prev) => {
+      if (!prev) return prev;
+      const services = prev.services.map((s) => {
+        if (s.service_no !== svcNo) return s;
+        const steps = s.steps.filter((_, i) => i !== stepIdx).map((st, i) => ({ ...st, step_no: i + 1 }));
+        return { ...s, steps };
+      });
+      return { ...prev, services };
+    });
+  };
+
+  // ── 保存 ──
+  const handleSave = async () => {
+    if (!doc) return;
+    if (!doc.client_name.trim()) {
+      toast.error("利用者氏名を入力してください");
+      return;
+    }
+    if (!doc.plan_start_date) {
+      toast.error("計画開始日を入力してください");
+      return;
+    }
+    setSaving(true);
+    try {
+      const newId = await saveDocument(supabase, doc);
+      toast.success("手順書を保存しました");
+      if (id === "new") {
+        router.replace(`/visit-procedures/${newId}`);
+      } else {
+        setDoc((prev) => (prev ? { ...prev, id: newId } : prev));
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("保存失敗: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* ── ヘッダ ── */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Link href="/visit-procedures" className="text-gray-400 hover:text-gray-600">
+            <ArrowLeft size={20} />
+          </Link>
+          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <BookOpen size={22} className="text-green-600" />
+            {id === "new" ? "新規 手順書" : `手順書: ${doc.client_name || "(無題)"}`}
+          </h1>
+        </div>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+        >
+          {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+          保存
+        </button>
+      </div>
+
+      {/* ── 基本情報 (両タブで共通表示) ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 rounded-lg border border-gray-200 bg-white p-4">
+        <div>
+          <label className="text-xs text-gray-500 mb-1 block">利用者氏名 *</label>
+          <input
+            type="text"
+            value={doc.client_name}
+            onChange={(e) => updateDoc({ client_name: e.target.value })}
+            className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 mb-1 block">計画開始日 *</label>
+          <input
+            type="date"
+            value={doc.plan_start_date}
+            onChange={(e) => updateDoc({ plan_start_date: e.target.value })}
+            className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 mb-1 block">サービス提供責任者</label>
+          <input
+            type="text"
+            value={doc.author_name ?? ""}
+            onChange={(e) => updateDoc({ author_name: e.target.value })}
+            className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 mb-1 block">作成理由</label>
+          <input
+            type="text"
+            value={doc.creation_reason ?? ""}
+            onChange={(e) => updateDoc({ creation_reason: e.target.value })}
+            className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+            placeholder="短期目標更新の為 / 初回 / 区分変更 等"
+          />
+        </div>
+      </div>
+
+      {/* ── タブ切替 ── */}
+      <div className="flex gap-1 border-b border-gray-200">
+        <button
+          onClick={() => setTab("procedure")}
+          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            tab === "procedure"
+              ? "border-green-600 text-green-700"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <Layers size={16} />
+          手順
+        </button>
+        <button
+          onClick={() => setTab("module")}
+          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            tab === "module"
+              ? "border-green-600 text-green-700"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <LayoutGrid size={16} />
+          モジュール
+        </button>
+      </div>
+
+      {tab === "procedure" ? (
+        <ProcedureTab
+          doc={doc}
+          onWeeklyChange={updateWeeklyCell}
+          onDocChange={updateDoc}
+          onServiceChange={updateService}
+          onStepChange={updateStep}
+          onStepAdd={addStep}
+          onStepRemove={removeStep}
+        />
+      ) : (
+        <ModuleTab doc={doc} />
+      )}
+    </div>
+  );
+}
+
+// =====================================================================
+// 手順 タブ
+// =====================================================================
+
+function ProcedureTab({
+  doc,
+  onWeeklyChange,
+  onDocChange,
+  onServiceChange,
+  onStepChange,
+  onStepAdd,
+  onStepRemove,
+}: {
+  doc: VisitProcedureDocument;
+  onWeeklyChange: (day: WeekdayKey, serviceNo: number, patch: Partial<WeeklyCell>) => void;
+  onDocChange: (patch: Partial<VisitProcedureDocument>) => void;
+  onServiceChange: (no: number, patch: Partial<VisitProcedureService>) => void;
+  onStepChange: (svcNo: number, stepIdx: number, patch: Partial<VisitProcedureStep>) => void;
+  onStepAdd: (svcNo: number) => void;
+  onStepRemove: (svcNo: number, stepIdx: number) => void;
+}) {
+  return (
+    <div className="space-y-6">
+      {/* ── 週次表 ── */}
+      <section className="rounded-lg border border-gray-200 bg-white">
+        <h2 className="px-4 py-2.5 border-b border-gray-200 text-sm font-semibold text-gray-700 bg-gray-50">
+          週次サービス表
+        </h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <th className="px-2 py-2 border border-gray-200 w-10">曜日</th>
+                {SERVICE_NOS.map((no) => (
+                  <th key={no} className="px-2 py-2 border border-gray-200">サービス{no}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {WEEKDAY_KEYS.map((day) => (
+                <tr key={day} className="border-t border-gray-200">
+                  <td className="px-2 py-2 border border-gray-200 text-center font-medium bg-gray-50">
+                    {WEEKDAY_LABELS[day]}
+                  </td>
+                  {SERVICE_NOS.map((no) => {
+                    const cell = doc.weekly_schedule?.[day]?.[String(no)] ?? {};
+                    return (
+                      <td key={no} className="px-1 py-1 border border-gray-200">
+                        <div className="flex flex-col gap-1">
+                          <input
+                            type="text"
+                            value={cell.time_range ?? ""}
+                            placeholder="8:50-9:20"
+                            onChange={(e) => onWeeklyChange(day, no, { time_range: e.target.value })}
+                            className="w-full rounded border border-gray-200 px-1.5 py-1 text-xs"
+                          />
+                          <select
+                            value={cell.service_kind ?? ""}
+                            onChange={(e) => onWeeklyChange(day, no, { service_kind: e.target.value as never })}
+                            className="w-full rounded border border-gray-200 px-1.5 py-1 text-xs bg-white"
+                          >
+                            <option value="">--</option>
+                            {VISIT_SERVICE_KINDS.map((k) => (
+                              <option key={k} value={k}>{k}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* ── 全体 特記事項 ── */}
+      <section className="rounded-lg border border-gray-200 bg-white p-4">
+        <label className="text-sm font-semibold text-gray-700 mb-2 block">特記事項 (全体)</label>
+        <textarea
+          value={doc.special_notes ?? ""}
+          onChange={(e) => onDocChange({ special_notes: e.target.value })}
+          rows={2}
+          className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+        />
+      </section>
+
+      {/* ── サービス①〜⑤ ── */}
+      {doc.services.map((svc) => (
+        <section key={svc.service_no} className="rounded-lg border border-gray-200 bg-white">
+          <h3 className="px-4 py-2.5 border-b border-gray-200 text-sm font-semibold text-gray-700 bg-gray-50 flex items-center gap-3">
+            サービス{svc.service_no}
+            <input
+              type="text"
+              value={svc.time_range ?? ""}
+              placeholder="時間帯 (例: 8:50-9:20)"
+              onChange={(e) => onServiceChange(svc.service_no, { time_range: e.target.value })}
+              className="rounded border border-gray-300 px-2 py-1 text-xs font-normal w-40"
+            />
+            <select
+              value={svc.service_kind ?? ""}
+              onChange={(e) => onServiceChange(svc.service_no, { service_kind: e.target.value as never })}
+              className="rounded border border-gray-300 px-2 py-1 text-xs font-normal w-32 bg-white"
+            >
+              <option value="">区分 --</option>
+              {VISIT_SERVICE_KINDS.map((k) => (
+                <option key={k} value={k}>{k}</option>
+              ))}
+            </select>
+          </h3>
+          <div className="p-4 space-y-3">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 text-gray-600">
+                <tr>
+                  <th className="px-2 py-1.5 border border-gray-200 w-32">サービス内容</th>
+                  <th className="px-2 py-1.5 border border-gray-200 w-20">時間(分)</th>
+                  <th className="px-2 py-1.5 border border-gray-200">具体的取り組内容及び手順</th>
+                  <th className="px-2 py-1.5 border border-gray-200 w-12"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {svc.steps.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-4 text-center text-gray-400 italic">
+                      ステップ未登録
+                    </td>
+                  </tr>
+                ) : (
+                  svc.steps.map((step, idx) => (
+                    <tr key={idx} className="border-t border-gray-200">
+                      <td className="px-1 py-1 border border-gray-200">
+                        <input
+                          type="text"
+                          value={step.content}
+                          onChange={(e) => onStepChange(svc.service_no, idx, { content: e.target.value })}
+                          className="w-full rounded border border-gray-200 px-1.5 py-1 text-xs"
+                        />
+                      </td>
+                      <td className="px-1 py-1 border border-gray-200">
+                        <input
+                          type="number"
+                          min={0}
+                          step={5}
+                          value={step.minutes}
+                          onChange={(e) => onStepChange(svc.service_no, idx, { minutes: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+                          className="w-full rounded border border-gray-200 px-1.5 py-1 text-xs text-right tabular-nums"
+                        />
+                      </td>
+                      <td className="px-1 py-1 border border-gray-200">
+                        <textarea
+                          value={step.detail ?? ""}
+                          rows={1}
+                          onChange={(e) => onStepChange(svc.service_no, idx, { detail: e.target.value })}
+                          className="w-full rounded border border-gray-200 px-1.5 py-1 text-xs resize-y"
+                        />
+                      </td>
+                      <td className="px-1 py-1 border border-gray-200 text-center">
+                        <button
+                          onClick={() => onStepRemove(svc.service_no, idx)}
+                          className="text-red-500 hover:bg-red-50 rounded p-1"
+                          aria-label="ステップ削除"
+                          title="ステップ削除"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+            <button
+              onClick={() => onStepAdd(svc.service_no)}
+              className="inline-flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+            >
+              <Plus size={12} />
+              ステップ追加
+            </button>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">サービス{svc.service_no} 特記事項</label>
+              <textarea
+                value={svc.special_notes ?? ""}
+                onChange={(e) => onServiceChange(svc.service_no, { special_notes: e.target.value })}
+                rows={2}
+                className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs"
+              />
+            </div>
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+// =====================================================================
+// モジュール タブ (5 分刻みグリッド、read-only)
+// =====================================================================
+
+function ModuleTab({ doc }: { doc: VisitProcedureDocument }) {
+  // 18 列 (5 分 × 18 = 90 分)
+  const COLS = Array.from({ length: 18 }, (_, i) => (i + 1) * 5);
+  // サービス毎の色 (5 種類)
+  const SERVICE_COLORS = [
+    "bg-blue-200",
+    "bg-emerald-200",
+    "bg-amber-200",
+    "bg-rose-200",
+    "bg-violet-200",
+  ];
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-gray-500">
+        5 分刻みでサービス毎のステップを帯表示。手順タブで編集してください。
+      </p>
+      {doc.services.map((svc, svcIdx) => {
+        // ステップを開始分 (累積) で位置決め
+        let cursor = 0;
+        const bands = svc.steps.map((st) => {
+          const start = cursor;
+          const len = Math.max(0, Math.floor(st.minutes));
+          cursor += len;
+          return { ...st, start, len };
+        });
+        const total = cursor;
+        const cellW = 28; // 1 列 ≒ 5 分 ≒ 28 px
+
+        return (
+          <section key={svc.service_no} className="rounded-lg border border-gray-200 bg-white p-3">
+            <div className="flex items-center gap-3 text-sm font-medium text-gray-700 mb-2">
+              <span>サービス{svc.service_no}</span>
+              <span className="text-xs text-gray-500">
+                {svc.time_range || "(時間帯 未設定)"}
+                {svc.service_kind ? ` / ${svc.service_kind}` : ""}
+              </span>
+              <span className="text-xs text-gray-400 ml-auto">合計 {total} 分</span>
+            </div>
+            {/* 列見出し */}
+            <div className="overflow-x-auto">
+              <div className="flex border-b border-gray-200 text-[10px] text-gray-500 mb-1" style={{ width: `${cellW * COLS.length + 120}px` }}>
+                <div className="w-[120px] shrink-0 px-2">内容</div>
+                {COLS.map((m) => (
+                  <div key={m} className="text-center" style={{ width: `${cellW}px` }}>
+                    {m}
+                  </div>
+                ))}
+              </div>
+              {/* ステップ帯 */}
+              {bands.length === 0 ? (
+                <div className="text-center text-xs text-gray-400 italic py-3">
+                  ステップが未登録です
+                </div>
+              ) : (
+                bands.map((b, i) => {
+                  const startCols = Math.floor(b.start / 5);
+                  const widthCols = Math.max(1, Math.floor(b.len / 5));
+                  const leftPx = startCols * cellW;
+                  const widthPx = widthCols * cellW;
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-stretch border-t border-gray-100 relative"
+                      style={{ width: `${cellW * COLS.length + 120}px`, minHeight: 26 }}
+                    >
+                      <div className="w-[120px] shrink-0 px-2 py-1 text-xs truncate" title={b.content}>
+                        {b.content || `ステップ${i + 1}`}
+                      </div>
+                      <div className="relative" style={{ width: `${cellW * COLS.length}px` }}>
+                        {/* グリッド線 */}
+                        {COLS.map((m) => (
+                          <div
+                            key={m}
+                            className="absolute top-0 bottom-0 border-r border-gray-100"
+                            style={{ left: `${(m / 5 - 1) * cellW}px`, width: `${cellW}px` }}
+                          />
+                        ))}
+                        {/* バー */}
+                        <div
+                          className={`absolute top-1 bottom-1 rounded ${SERVICE_COLORS[svcIdx % SERVICE_COLORS.length]} flex items-center justify-center text-[10px] text-gray-700 px-1`}
+                          style={{ left: `${leftPx}px`, width: `${widthPx}px` }}
+                          title={`${b.content} (${b.len} 分)`}
+                        >
+                          {b.len >= 10 ? `${b.len}分` : ""}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}

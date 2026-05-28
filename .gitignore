@@ -41,3 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+# 手順書 ローカル参考 Excel (.xlsm / 抽出ファイル) は repo に入れない
+手順書/
+*.xlsm

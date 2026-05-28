@@ -9,7 +9,6 @@ import {
   FileText,
   LayoutDashboard,
   ClipboardCheck,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   BookOpen,
   Calculator,
   FileSpreadsheet,
@@ -83,6 +82,7 @@ const NAV_HOME_CARE: NavEntry[] = [
   { name: "パターン登録", href: "/shift-management/patterns", icon: Clock },
   { name: "サービス提供表（実績）", href: "/provision-tickets", icon: FileSpreadsheet },
   { name: "サービス実施記録", href: "/visit-records", icon: ClipboardCheck },
+  { name: "手順書", href: "/visit-procedures", icon: BookOpen },
   { name: "実績管理", href: "/visit-billing", icon: Calculator },
   { name: "帳票作成", href: "/reports-visit", icon: FileText },
   { name: "マスタ管理", href: "/master", icon: Settings },
