@@ -139,12 +139,12 @@ export default function VisitProcedureVersionListPage() {
                 </span>
                 <Link
                   href={`/visit-procedures/${d.id}${officeQuery}`}
-                  className="flex-1 min-w-0"
+                  className="flex-1 min-w-0 flex items-center gap-4"
                 >
-                  <div className="text-sm font-medium text-gray-900">{range}{reason}</div>
-                  <div className="text-xs text-gray-500 mt-0.5">
+                  <span className="text-sm font-medium text-gray-900 truncate flex-1 min-w-0">{range}{reason}</span>
+                  <span className="shrink-0 text-xs text-gray-500 hidden sm:inline">
                     {d.author_name ? `作成者: ${d.author_name} / ` : ""}更新: {d.updated_at ? new Date(d.updated_at).toLocaleString("ja-JP") : "-"}
-                  </div>
+                  </span>
                 </Link>
                 <button
                   onClick={() => handleDelete(d.id, range)}

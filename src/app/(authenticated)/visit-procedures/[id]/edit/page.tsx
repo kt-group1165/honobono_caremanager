@@ -34,6 +34,61 @@ import {
 
 type Tab = "procedure" | "module";
 
+// 5 分刻みの time options: 06:00 〜 22:00
+const TIME_OPTIONS: string[] = (() => {
+  const out: string[] = [];
+  for (let h = 6; h <= 22; h++) {
+    for (let m = 0; m < 60; m += 5) {
+      if (h === 22 && m > 0) break;
+      out.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+    }
+  }
+  return out;
+})();
+
+/** "HH:MM-HH:MM" を { start, end } に parse (失敗時は空文字) */
+function parseTimeRange(s: string | null | undefined): { start: string; end: string } {
+  if (!s) return { start: "", end: "" };
+  const m = /^(\d{1,2}[:：]\d{1,2})\s*[-〜~]\s*(\d{1,2}[:：]\d{1,2})$/.exec(s);
+  if (!m) return { start: "", end: "" };
+  const norm = (t: string) => {
+    const mm = /^(\d{1,2})[:：](\d{1,2})$/.exec(t);
+    if (!mm) return "";
+    return `${String(Number(mm[1])).padStart(2, "0")}:${String(Number(mm[2])).padStart(2, "0")}`;
+  };
+  return { start: norm(m[1]), end: norm(m[2]) };
+}
+
+/** 開始/終了 5 分刻み select コンポーネント */
+function TimeRangeSelect({
+  value,
+  onChange,
+  size = "sm",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  size?: "xs" | "sm";
+}) {
+  const { start, end } = parseTimeRange(value);
+  const emit = (s: string, e: string) => onChange(s && e ? `${s}-${e}` : s || e ? `${s}-${e}` : "");
+  const cls = size === "xs"
+    ? "rounded border border-gray-200 px-1 py-1 text-xs bg-white"
+    : "rounded border border-gray-200 px-1.5 py-1 text-xs bg-white";
+  return (
+    <div className="flex items-center gap-0.5">
+      <select value={start} onChange={(ev) => emit(ev.target.value, end)} className={cls}>
+        <option value="">--</option>
+        {TIME_OPTIONS.map((t) => <option key={`s-${t}`} value={t}>{t}</option>)}
+      </select>
+      <span className="text-gray-400 text-xs">〜</span>
+      <select value={end} onChange={(ev) => emit(start, ev.target.value)} className={cls}>
+        <option value="">--</option>
+        {TIME_OPTIONS.map((t) => <option key={`e-${t}`} value={t}>{t}</option>)}
+      </select>
+    </div>
+  );
+}
+
 export default function VisitProcedureDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -374,13 +429,11 @@ function ProcedureTab({
                     const cell = doc.weekly_schedule?.[day]?.[String(no)] ?? {};
                     return (
                       <td key={no} className="px-1 py-1 border border-gray-200">
-                        <div className="flex flex-col gap-1">
-                          <input
-                            type="text"
+                        <div className="flex flex-col gap-1 items-center">
+                          <TimeRangeSelect
                             value={cell.time_range ?? ""}
-                            placeholder="8:50-9:20"
-                            onChange={(e) => onWeeklyChange(day, no, { time_range: e.target.value })}
-                            className="w-full rounded border border-gray-200 px-1.5 py-1 text-xs"
+                            onChange={(v) => onWeeklyChange(day, no, { time_range: v })}
+                            size="xs"
                           />
                           <select
                             value={cell.service_kind ?? ""}
@@ -417,14 +470,12 @@ function ProcedureTab({
       {/* ── サービス①〜⑤ ── */}
       {doc.services.map((svc) => (
         <section key={svc.service_no} className="rounded-lg border border-gray-200 bg-white">
-          <h3 className="px-4 py-2.5 border-b border-gray-200 text-sm font-semibold text-gray-700 bg-gray-50 flex items-center gap-3">
+          <h3 className="px-4 py-2.5 border-b border-gray-200 text-sm font-semibold text-gray-700 bg-gray-50 flex items-center gap-3 flex-wrap">
             サービス{svc.service_no}
-            <input
-              type="text"
+            <TimeRangeSelect
               value={svc.time_range ?? ""}
-              placeholder="時間帯 (例: 8:50-9:20)"
-              onChange={(e) => onServiceChange(svc.service_no, { time_range: e.target.value })}
-              className="rounded border border-gray-300 px-2 py-1 text-xs font-normal w-40"
+              onChange={(v) => onServiceChange(svc.service_no, { time_range: v })}
+              size="sm"
             />
             <select
               value={svc.service_kind ?? ""}
