@@ -84,17 +84,17 @@ export default function VisitProceduresClientListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <BookOpen size={24} className="text-green-600" />
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <BookOpen size={22} className="text-green-600 shrink-0" />
             手順書
           </h1>
-          <p className="mt-1 text-sm text-gray-500">利用者を選んでバージョン一覧へ。新規利用者は右上ボタンから追加</p>
+          <p className="mt-1 text-xs sm:text-sm text-gray-500">利用者を選んでバージョン一覧へ</p>
         </div>
         <button
           onClick={() => { setNewName(""); setShowAdd(true); }}
-          className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-700"
+          className="shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
         >
           <Plus size={16} />
           新規利用者
@@ -118,16 +118,20 @@ export default function VisitProceduresClientListPage() {
             <Link
               key={c.client_name}
               href={`/visit-procedures/clients/${encodeURIComponent(c.client_name)}${officeQuery}`}
-              className="flex items-center gap-4 rounded-lg border border-gray-200 bg-white px-4 py-3 hover:border-green-400 hover:shadow-sm transition"
+              className="block rounded-lg border border-gray-200 bg-white px-3 sm:px-4 py-3 hover:border-green-400 hover:shadow-sm transition"
             >
-              <User size={18} className="text-gray-400 shrink-0" />
-              <span className="font-medium text-gray-900 truncate flex-1 min-w-0">{c.client_name}</span>
-              <span className="shrink-0 text-xs rounded-full bg-green-50 text-green-700 px-2 py-0.5">
-                {c.version_count} 版
-              </span>
-              <span className="shrink-0 text-xs text-gray-500 w-44 text-right">
+              {/* 1 行目: 名前 + 版数 (常に表示) */}
+              <div className="flex items-center gap-2">
+                <User size={16} className="text-gray-400 shrink-0" />
+                <span className="font-medium text-gray-900 truncate flex-1 min-w-0">{c.client_name}</span>
+                <span className="shrink-0 text-xs rounded-full bg-green-50 text-green-700 px-2 py-0.5">
+                  {c.version_count} 版
+                </span>
+              </div>
+              {/* 2 行目: 最新計画日 (右寄せ、小さめ) */}
+              <div className="mt-1 text-[11px] text-gray-500 text-right">
                 最新計画: {c.latest_plan_start_date}
-              </span>
+              </div>
             </Link>
           ))}
         </div>

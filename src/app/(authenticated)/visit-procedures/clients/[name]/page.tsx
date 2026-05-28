@@ -96,19 +96,20 @@ export default function VisitProcedureVersionListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href={`/visit-procedures${officeQuery}`} className="text-gray-400 hover:text-gray-600">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <Link href={`/visit-procedures${officeQuery}`} className="text-gray-400 hover:text-gray-600 shrink-0">
             <ArrowLeft size={20} />
           </Link>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <BookOpen size={22} className="text-green-600" />
-            {clientName} の手順書バージョン
+          <h1 className="text-base sm:text-xl font-bold text-gray-900 flex items-center gap-2 min-w-0">
+            <BookOpen size={20} className="text-green-600 shrink-0" />
+            <span className="truncate">{clientName}</span>
+            <span className="hidden sm:inline text-sm font-normal text-gray-500">の手順書バージョン</span>
           </h1>
         </div>
         <button
           onClick={handleCreateNew}
-          className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+          className="shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
         >
           <Plus size={16} />
           新規バージョン
@@ -133,27 +134,31 @@ export default function VisitProcedureVersionListPage() {
             const range = `${formatJpDate(d.plan_start_date)}〜${formatJpDate(d.plan_end_date)}`;
             const reason = d.creation_reason ? `（${d.creation_reason}）` : "";
             return (
-              <div key={d.id} className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 hover:border-green-400 hover:shadow-sm transition">
-                <span className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-50 text-green-700 text-sm font-medium">
-                  {versionNo}
-                </span>
-                <Link
-                  href={`/visit-procedures/${d.id}${officeQuery}`}
-                  className="flex-1 min-w-0 flex items-center gap-4"
-                >
-                  <span className="text-sm font-medium text-gray-900 truncate flex-1 min-w-0">{range}{reason}</span>
-                  <span className="shrink-0 text-xs text-gray-500 hidden sm:inline">
-                    {d.author_name ? `作成者: ${d.author_name} / ` : ""}更新: {d.updated_at ? new Date(d.updated_at).toLocaleString("ja-JP") : "-"}
+              <div key={d.id} className="rounded-lg border border-gray-200 bg-white p-3 hover:border-green-400 hover:shadow-sm transition">
+                <div className="flex items-start gap-2 sm:gap-3">
+                  <span className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-50 text-green-700 text-xs font-medium">
+                    {versionNo}
                   </span>
-                </Link>
-                <button
-                  onClick={() => handleDelete(d.id, range)}
-                  disabled={deletingId === d.id}
-                  className="shrink-0 inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                >
-                  {deletingId === d.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                  削除
-                </button>
+                  <Link
+                    href={`/visit-procedures/${d.id}${officeQuery}`}
+                    className="flex-1 min-w-0"
+                  >
+                    <div className="text-sm font-medium text-gray-900 break-words">{range}{reason}</div>
+                    <div className="mt-1 text-[11px] text-gray-500">
+                      {d.author_name ? `作成者: ${d.author_name}` : ""}
+                      {d.author_name && d.updated_at ? " / " : ""}
+                      {d.updated_at ? `更新: ${new Date(d.updated_at).toLocaleString("ja-JP")}` : ""}
+                    </div>
+                  </Link>
+                  <button
+                    onClick={() => handleDelete(d.id, range)}
+                    disabled={deletingId === d.id}
+                    className="shrink-0 inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    {deletingId === d.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                    <span className="hidden sm:inline">削除</span>
+                  </button>
+                </div>
               </div>
             );
           })}
