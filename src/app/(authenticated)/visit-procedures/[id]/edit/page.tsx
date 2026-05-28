@@ -546,8 +546,9 @@ function ProcedureTab({
               })}
             </div>
           </div>
-          <div className="p-4 space-y-3">
-            <table className="w-full text-xs">
+          <div className="p-3 sm:p-4 space-y-3">
+            {/* PC: 横並び table */}
+            <table className="hidden sm:table w-full text-xs">
               <thead className="bg-gray-50 text-gray-600">
                 <tr>
                   <th className="px-2 py-1.5 border border-gray-200 w-32">サービス内容</th>
@@ -608,6 +609,49 @@ function ProcedureTab({
                 )}
               </tbody>
             </table>
+            {/* SP: カード式 */}
+            <div className="sm:hidden space-y-3">
+              {svc.steps.length === 0 ? (
+                <p className="text-xs text-gray-400 italic text-center py-2">ステップ未登録</p>
+              ) : (
+                svc.steps.map((step, idx) => (
+                  <div key={idx} className="rounded border border-gray-200 bg-white p-2 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="サービス内容"
+                        value={step.content}
+                        onChange={(e) => onStepChange(svc.service_no, idx, { content: e.target.value })}
+                        className="flex-1 min-w-0 rounded border border-gray-200 px-2 py-1.5 text-sm"
+                      />
+                      <select
+                        value={step.minutes}
+                        onChange={(e) => onStepChange(svc.service_no, idx, { minutes: Number(e.target.value) })}
+                        className="shrink-0 w-20 rounded border border-gray-200 px-1.5 py-1.5 text-sm text-right tabular-nums bg-white"
+                      >
+                        {Array.from({ length: 25 }, (_, i) => i * 5).map((m) => (
+                          <option key={m} value={m}>{m}分</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => onStepRemove(svc.service_no, idx)}
+                        className="shrink-0 text-red-500 hover:bg-red-50 rounded p-1.5"
+                        aria-label="ステップ削除"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                    <textarea
+                      placeholder="具体的取り組内容及び手順"
+                      value={step.detail ?? ""}
+                      rows={2}
+                      onChange={(e) => onStepChange(svc.service_no, idx, { detail: e.target.value })}
+                      className="w-full rounded border border-gray-200 px-2 py-1.5 text-sm resize-y"
+                    />
+                  </div>
+                ))
+              )}
+            </div>
             <button
               onClick={() => onStepAdd(svc.service_no)}
               className="inline-flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"

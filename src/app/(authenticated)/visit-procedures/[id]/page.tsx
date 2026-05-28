@@ -235,9 +235,9 @@ function ProcedurePreview({ doc }: { doc: VisitProcedureDocument }) {
 
       {/* 全体 特記事項 */}
       {doc.special_notes && (
-        <section className="rounded-lg border border-gray-200 bg-white p-4">
+        <section className="rounded-lg border border-gray-200 bg-white p-3 sm:p-4">
           <h3 className="text-sm font-semibold text-gray-700 mb-2">特記事項 (全体)</h3>
-          <p className="text-sm text-gray-700 whitespace-pre-wrap">{doc.special_notes}</p>
+          <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">{doc.special_notes}</p>
         </section>
       )}
 
@@ -247,40 +247,56 @@ function ProcedurePreview({ doc }: { doc: VisitProcedureDocument }) {
         if (!hasAny) return null;
         return (
           <section key={svc.service_no} className="rounded-lg border border-gray-200 bg-white">
-            <h3 className="px-4 py-2.5 border-b border-gray-200 text-sm font-semibold text-gray-700 bg-gray-50 flex items-center gap-3">
+            <h3 className="px-3 sm:px-4 py-2 border-b border-gray-200 text-sm font-semibold text-gray-700 bg-gray-50 flex items-center gap-2 sm:gap-3 flex-wrap">
               <span>サービス{svc.service_no}</span>
               <span className="text-xs font-normal text-gray-500">
                 {svc.time_range || "—"}
                 {svc.service_kind ? ` / ${svc.service_kind}` : ""}
               </span>
             </h3>
-            <div className="p-4 space-y-3">
+            <div className="p-3 sm:p-4 space-y-3">
               {svc.steps.length === 0 ? (
                 <p className="text-xs text-gray-400 italic">ステップ未登録</p>
               ) : (
-                <table className="w-full text-xs">
-                  <thead className="bg-gray-50 text-gray-600">
-                    <tr>
-                      <th className="px-2 py-1.5 border border-gray-200 w-32 text-left">サービス内容</th>
-                      <th className="px-2 py-1.5 border border-gray-200 w-16 text-right">時間(分)</th>
-                      <th className="px-2 py-1.5 border border-gray-200 text-left">具体的取り組内容及び手順</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {svc.steps.map((step, idx) => (
-                      <tr key={idx} className="border-t border-gray-200">
-                        <td className="px-2 py-1.5 border border-gray-200">{step.content || "—"}</td>
-                        <td className="px-2 py-1.5 border border-gray-200 text-right tabular-nums">{step.minutes}</td>
-                        <td className="px-2 py-1.5 border border-gray-200 whitespace-pre-wrap">{step.detail || ""}</td>
+                <>
+                  {/* PC: table、SP: カード stack */}
+                  <table className="hidden sm:table w-full text-xs">
+                    <thead className="bg-gray-50 text-gray-600">
+                      <tr>
+                        <th className="px-2 py-1.5 border border-gray-200 w-32 text-left">サービス内容</th>
+                        <th className="px-2 py-1.5 border border-gray-200 w-16 text-right">時間(分)</th>
+                        <th className="px-2 py-1.5 border border-gray-200 text-left">具体的取り組内容及び手順</th>
                       </tr>
+                    </thead>
+                    <tbody>
+                      {svc.steps.map((step, idx) => (
+                        <tr key={idx} className="border-t border-gray-200">
+                          <td className="px-2 py-1.5 border border-gray-200">{step.content || "—"}</td>
+                          <td className="px-2 py-1.5 border border-gray-200 text-right tabular-nums">{step.minutes}</td>
+                          <td className="px-2 py-1.5 border border-gray-200 whitespace-pre-wrap">{step.detail || ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="sm:hidden space-y-2">
+                    {svc.steps.map((step, idx) => (
+                      <div key={idx} className="rounded border border-gray-200 p-2 bg-gray-50">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-sm font-medium text-gray-900 break-words flex-1 min-w-0">{step.content || "—"}</span>
+                          <span className="shrink-0 text-xs text-gray-500 tabular-nums">{step.minutes}分</span>
+                        </div>
+                        {step.detail && (
+                          <p className="mt-1 text-xs text-gray-700 whitespace-pre-wrap break-words">{step.detail}</p>
+                        )}
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                </>
               )}
               {svc.special_notes && (
                 <div className="text-xs">
                   <span className="text-gray-500">特記事項: </span>
-                  <span className="text-gray-700 whitespace-pre-wrap">{svc.special_notes}</span>
+                  <span className="text-gray-700 whitespace-pre-wrap break-words">{svc.special_notes}</span>
                 </div>
               )}
             </div>
