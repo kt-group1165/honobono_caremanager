@@ -466,14 +466,15 @@ function ProcedureTab({
                         />
                       </td>
                       <td className="px-1 py-1 border border-gray-200">
-                        <input
-                          type="number"
-                          min={0}
-                          step={5}
+                        <select
                           value={step.minutes}
-                          onChange={(e) => onStepChange(svc.service_no, idx, { minutes: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
-                          className="w-full rounded border border-gray-200 px-1.5 py-1 text-xs text-right tabular-nums"
-                        />
+                          onChange={(e) => onStepChange(svc.service_no, idx, { minutes: Number(e.target.value) })}
+                          className="w-full rounded border border-gray-200 px-1.5 py-1 text-xs text-right tabular-nums bg-white"
+                        >
+                          {Array.from({ length: 25 }, (_, i) => i * 5).map((m) => (
+                            <option key={m} value={m}>{m}</option>
+                          ))}
+                        </select>
                       </td>
                       <td className="px-1 py-1 border border-gray-200">
                         <textarea
