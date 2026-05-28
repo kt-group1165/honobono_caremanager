@@ -28,7 +28,6 @@ import {
   type VisitProcedureDocument,
   type VisitProcedureService,
   type VisitProcedureStep,
-  type WeeklyCell,
   type WeekdayKey,
 } from "@/lib/visit-procedure/types";
 
@@ -170,23 +169,58 @@ export default function VisitProcedureDetailPage() {
   const updateDoc = (patch: Partial<VisitProcedureDocument>) =>
     setDoc((prev) => (prev ? { ...prev, ...patch } : prev));
 
-  const updateWeeklyCell = (day: WeekdayKey, serviceNo: number, patch: Partial<WeeklyCell>) => {
-    setDoc((prev) => {
-      if (!prev) return prev;
-      const ws = { ...(prev.weekly_schedule ?? {}) };
-      const dayMap = { ...(ws[day] ?? {}) };
-      const cell = { ...(dayMap[String(serviceNo)] ?? {}), ...patch };
-      dayMap[String(serviceNo)] = cell;
-      ws[day] = dayMap;
-      return { ...prev, weekly_schedule: ws };
-    });
-  };
 
   const updateService = (no: number, patch: Partial<VisitProcedureService>) => {
     setDoc((prev) => {
       if (!prev) return prev;
       const services = prev.services.map((s) => (s.service_no === no ? { ...s, ...patch } : s));
-      return { ...prev, services };
+      // 時間 / 区分 が変わったら、当該サービスを使っている全曜日セルにも propagate
+      const ws = { ...(prev.weekly_schedule ?? {}) };
+      const updated = services.find((s) => s.service_no === no);
+      if (updated) {
+        for (const day of WEEKDAY_KEYS) {
+          const dayMap = { ...(ws[day] ?? {}) };
+          if (dayMap[String(no)]) {
+            dayMap[String(no)] = {
+              time_range: updated.time_range ?? "",
+              service_kind: (updated.service_kind || "") as never,
+            };
+            ws[day] = dayMap;
+          }
+        }
+      }
+      return { ...prev, services, weekly_schedule: ws };
+    });
+  };
+
+  /** サービス no がどの曜日に設定されてるか */
+  const getServiceDays = (doc: VisitProcedureDocument, svcNo: number): Set<WeekdayKey> => {
+    const days = new Set<WeekdayKey>();
+    for (const day of WEEKDAY_KEYS) {
+      const cell = doc.weekly_schedule?.[day]?.[String(svcNo)];
+      if (cell?.time_range || cell?.service_kind) days.add(day);
+    }
+    return days;
+  };
+
+  /** 曜日チップトグル: そのサービスをその曜日に追加/削除 */
+  const toggleServiceDay = (svcNo: number, day: WeekdayKey) => {
+    setDoc((prev) => {
+      if (!prev) return prev;
+      const svc = prev.services.find((s) => s.service_no === svcNo);
+      if (!svc) return prev;
+      const ws = { ...(prev.weekly_schedule ?? {}) };
+      const dayMap = { ...(ws[day] ?? {}) };
+      if (dayMap[String(svcNo)]?.time_range || dayMap[String(svcNo)]?.service_kind) {
+        delete dayMap[String(svcNo)];
+      } else {
+        dayMap[String(svcNo)] = {
+          time_range: svc.time_range ?? "",
+          service_kind: (svc.service_kind || "") as never,
+        };
+      }
+      ws[day] = dayMap;
+      return { ...prev, weekly_schedule: ws };
     });
   };
 
@@ -367,12 +401,13 @@ export default function VisitProcedureDetailPage() {
       {tab === "procedure" ? (
         <ProcedureTab
           doc={doc}
-          onWeeklyChange={updateWeeklyCell}
           onDocChange={updateDoc}
           onServiceChange={updateService}
           onStepChange={updateStep}
           onStepAdd={addStep}
           onStepRemove={removeStep}
+          getServiceDays={(svcNo) => getServiceDays(doc, svcNo)}
+          onToggleServiceDay={toggleServiceDay}
         />
       ) : (
         <ModuleTab doc={doc} />
@@ -387,73 +422,55 @@ export default function VisitProcedureDetailPage() {
 
 function ProcedureTab({
   doc,
-  onWeeklyChange,
   onDocChange,
   onServiceChange,
   onStepChange,
   onStepAdd,
   onStepRemove,
+  getServiceDays,
+  onToggleServiceDay,
 }: {
   doc: VisitProcedureDocument;
-  onWeeklyChange: (day: WeekdayKey, serviceNo: number, patch: Partial<WeeklyCell>) => void;
   onDocChange: (patch: Partial<VisitProcedureDocument>) => void;
   onServiceChange: (no: number, patch: Partial<VisitProcedureService>) => void;
   onStepChange: (svcNo: number, stepIdx: number, patch: Partial<VisitProcedureStep>) => void;
   onStepAdd: (svcNo: number) => void;
   onStepRemove: (svcNo: number, stepIdx: number) => void;
+  getServiceDays: (svcNo: number) => Set<WeekdayKey>;
+  onToggleServiceDay: (svcNo: number, day: WeekdayKey) => void;
 }) {
   return (
     <div className="space-y-6">
-      {/* ── 週次表 ── */}
-      <section className="rounded-lg border border-gray-200 bg-white">
-        <h2 className="px-4 py-2.5 border-b border-gray-200 text-sm font-semibold text-gray-700 bg-gray-50">
-          週次サービス表
-        </h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-gray-50 text-gray-600">
-              <tr>
-                <th className="px-2 py-2 border border-gray-200 w-10">曜日</th>
-                {SERVICE_NOS.map((no) => (
-                  <th key={no} className="px-2 py-2 border border-gray-200">サービス{no}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {WEEKDAY_KEYS.map((day) => (
-                <tr key={day} className="border-t border-gray-200">
-                  <td className="px-2 py-2 border border-gray-200 text-center font-medium bg-gray-50">
-                    {WEEKDAY_LABELS[day]}
-                  </td>
-                  {SERVICE_NOS.map((no) => {
-                    const cell = doc.weekly_schedule?.[day]?.[String(no)] ?? {};
+      {/* ── サマリ (現在の週次概観、read-only) ── */}
+      <section className="rounded-lg border border-gray-200 bg-white p-3 sm:p-4">
+        <h2 className="text-sm font-semibold text-gray-700 mb-2">週次サービス サマリ</h2>
+        <div className="grid grid-cols-7 gap-1 text-xs">
+          {WEEKDAY_KEYS.map((day) => {
+            const svcsOnDay = SERVICE_NOS.filter((no) => {
+              const c = doc.weekly_schedule?.[day]?.[String(no)];
+              return c?.time_range || c?.service_kind;
+            });
+            return (
+              <div key={day} className={`rounded border p-1.5 text-center min-h-[60px] ${svcsOnDay.length > 0 ? "border-green-300 bg-green-50" : "border-gray-200 bg-gray-50 text-gray-400"}`}>
+                <div className="font-medium text-gray-700 mb-1">{WEEKDAY_LABELS[day]}</div>
+                {svcsOnDay.length === 0 ? (
+                  <div className="text-[10px] text-gray-400">—</div>
+                ) : (
+                  svcsOnDay.map((no) => {
+                    const c = doc.weekly_schedule?.[day]?.[String(no)] ?? {};
                     return (
-                      <td key={no} className="px-1 py-1 border border-gray-200">
-                        <div className="flex flex-col gap-1 items-center">
-                          <TimeRangeSelect
-                            value={cell.time_range ?? ""}
-                            onChange={(v) => onWeeklyChange(day, no, { time_range: v })}
-                            size="xs"
-                          />
-                          <select
-                            value={cell.service_kind ?? ""}
-                            onChange={(e) => onWeeklyChange(day, no, { service_kind: e.target.value as never })}
-                            className="w-full rounded border border-gray-200 px-1.5 py-1 text-xs bg-white"
-                          >
-                            <option value="">--</option>
-                            {VISIT_SERVICE_KINDS.map((k) => (
-                              <option key={k} value={k}>{k}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </td>
+                      <div key={no} className="text-[10px] leading-tight mb-0.5">
+                        <div className="font-medium">サ{no}</div>
+                        <div className="text-gray-600">{c.time_range || "—"}</div>
+                      </div>
                     );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  })
+                )}
+              </div>
+            );
+          })}
         </div>
+        <p className="mt-2 text-[11px] text-gray-500">※ 下の各サービスの「実施曜日」チップで月〜日を選択するとここに反映されます</p>
       </section>
 
       {/* ── 全体 特記事項 ── */}
@@ -468,26 +485,48 @@ function ProcedureTab({
       </section>
 
       {/* ── サービス①〜⑤ ── */}
-      {doc.services.map((svc) => (
+      {doc.services.map((svc) => {
+        const days = getServiceDays(svc.service_no);
+        return (
         <section key={svc.service_no} className="rounded-lg border border-gray-200 bg-white">
-          <h3 className="px-4 py-2.5 border-b border-gray-200 text-sm font-semibold text-gray-700 bg-gray-50 flex items-center gap-3 flex-wrap">
-            サービス{svc.service_no}
-            <TimeRangeSelect
-              value={svc.time_range ?? ""}
-              onChange={(v) => onServiceChange(svc.service_no, { time_range: v })}
-              size="sm"
-            />
-            <select
-              value={svc.service_kind ?? ""}
-              onChange={(e) => onServiceChange(svc.service_no, { service_kind: e.target.value as never })}
-              className="rounded border border-gray-300 px-2 py-1 text-xs font-normal w-32 bg-white"
-            >
-              <option value="">区分 --</option>
-              {VISIT_SERVICE_KINDS.map((k) => (
-                <option key={k} value={k}>{k}</option>
-              ))}
-            </select>
-          </h3>
+          <div className="px-3 sm:px-4 py-2.5 border-b border-gray-200 bg-gray-50 space-y-2">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h3 className="text-sm font-semibold text-gray-700">サービス{svc.service_no}</h3>
+              <TimeRangeSelect
+                value={svc.time_range ?? ""}
+                onChange={(v) => onServiceChange(svc.service_no, { time_range: v })}
+                size="sm"
+              />
+              <select
+                value={svc.service_kind ?? ""}
+                onChange={(e) => onServiceChange(svc.service_no, { service_kind: e.target.value as never })}
+                className="rounded border border-gray-300 px-2 py-1 text-xs font-normal w-32 bg-white"
+              >
+                <option value="">区分 --</option>
+                {VISIT_SERVICE_KINDS.map((k) => (
+                  <option key={k} value={k}>{k}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-xs text-gray-500 mr-1">実施曜日:</span>
+              {WEEKDAY_KEYS.map((day) => {
+                const on = days.has(day);
+                return (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => onToggleServiceDay(svc.service_no, day)}
+                    className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-medium transition ${
+                      on ? "bg-green-600 text-white" : "bg-white text-gray-500 border border-gray-300 hover:bg-gray-100"
+                    }`}
+                  >
+                    {WEEKDAY_LABELS[day]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <div className="p-4 space-y-3">
             <table className="w-full text-xs">
               <thead className="bg-gray-50 text-gray-600">
@@ -568,7 +607,8 @@ function ProcedureTab({
             </div>
           </div>
         </section>
-      ))}
+        );
+      })}
     </div>
   );
 }
