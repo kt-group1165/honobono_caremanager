@@ -443,33 +443,34 @@ function ProcedureTab({
     <div className="space-y-6">
       {/* ── サマリ (現在の週次概観、read-only) ── */}
       <section className="rounded-lg border border-gray-200 bg-white">
-        <h2 className="px-4 py-2.5 border-b border-gray-200 text-sm font-semibold text-gray-700 bg-gray-50">
+        <h2 className="px-3 py-2 border-b border-gray-200 text-sm font-semibold text-gray-700 bg-gray-50">
           週次サービス サマリ
         </h2>
         <div className="overflow-x-auto">
           <table className="w-full text-xs border-collapse">
             <thead>
               <tr className="bg-gray-50 text-gray-600">
-                <th className="px-2 py-2 border border-gray-200 w-10 text-center">曜日</th>
+                <th className="px-2 py-1.5 border border-gray-200 w-12 text-center">曜日</th>
                 {SERVICE_NOS.map((no) => (
-                  <th key={no} className="px-2 py-2 border border-gray-200 text-center">サービス{no}</th>
+                  <th key={no} className="px-2 py-1.5 border border-gray-200 text-center">サービス{no}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {WEEKDAY_KEYS.map((day) => (
                 <tr key={day} className="border-t border-gray-200">
-                  <td className="px-2 py-2 border border-gray-200 text-center font-medium bg-gray-50">
+                  <td className="px-2 py-1 border border-gray-200 text-center font-medium bg-gray-50">
                     {WEEKDAY_LABELS[day]}
                   </td>
                   {SERVICE_NOS.map((no) => {
                     const c = doc.weekly_schedule?.[day]?.[String(no)] ?? {};
                     const hasContent = c.time_range || c.service_kind;
                     return (
-                      <td key={no} className="px-2 py-2 border border-gray-200">
+                      <td key={no} className="px-2 py-1 border border-gray-200 text-center align-middle">
                         {hasContent ? (
-                          <span className="text-gray-800">
-                            {c.time_range || "—"}{c.service_kind ? `  ${c.service_kind}` : ""}
+                          <span className="text-gray-800 whitespace-nowrap">
+                            {c.time_range || "—"}
+                            {c.service_kind ? <span className="text-gray-500 ml-1.5">{c.service_kind}</span> : null}
                           </span>
                         ) : (
                           <span className="text-gray-300">&nbsp;</span>
@@ -482,7 +483,7 @@ function ProcedureTab({
             </tbody>
           </table>
         </div>
-        <p className="px-4 py-2 text-[11px] text-gray-500 border-t border-gray-200 bg-gray-50">
+        <p className="px-3 py-1.5 text-[11px] text-gray-500 border-t border-gray-200 bg-gray-50">
           ※ 下の各サービスの「実施曜日」チップで月〜日を選択するとここに反映されます
         </p>
       </section>

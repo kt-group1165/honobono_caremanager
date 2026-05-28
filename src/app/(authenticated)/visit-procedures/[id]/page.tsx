@@ -195,30 +195,30 @@ function ProcedurePreview({ doc }: { doc: VisitProcedureDocument }) {
     <div className="space-y-6">
       {/* 週次表 */}
       <section className="rounded-lg border border-gray-200 bg-white">
-        <h2 className="px-4 py-2.5 border-b border-gray-200 text-sm font-semibold text-gray-700 bg-gray-50">週次サービス表</h2>
+        <h2 className="px-3 py-2 border-b border-gray-200 text-sm font-semibold text-gray-700 bg-gray-50">週次サービス表</h2>
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+          <table className="w-full text-xs border-collapse">
             <thead className="bg-gray-50 text-gray-600">
               <tr>
-                <th className="px-2 py-2 border border-gray-200 w-10">曜日</th>
-                {SERVICE_NOS.map((no) => (<th key={no} className="px-2 py-2 border border-gray-200">サービス{no}</th>))}
+                <th className="px-2 py-1.5 border border-gray-200 w-12 text-center">曜日</th>
+                {SERVICE_NOS.map((no) => (<th key={no} className="px-2 py-1.5 border border-gray-200 text-center">サービス{no}</th>))}
               </tr>
             </thead>
             <tbody>
               {WEEKDAY_KEYS.map((day) => (
                 <tr key={day} className="border-t border-gray-200">
-                  <td className="px-2 py-2 border border-gray-200 text-center font-medium bg-gray-50">{WEEKDAY_LABELS[day]}</td>
+                  <td className="px-2 py-1 border border-gray-200 text-center font-medium bg-gray-50">{WEEKDAY_LABELS[day]}</td>
                   {SERVICE_NOS.map((no) => {
                     const cell = doc.weekly_schedule?.[day]?.[String(no)] ?? {};
                     const hasContent = cell.time_range || cell.service_kind;
                     return (
-                      <td key={no} className="px-2 py-2 border border-gray-200 text-center">
+                      <td key={no} className="px-2 py-1 border border-gray-200 text-center align-middle">
                         {hasContent ? (
-                          <>
-                            <div>{cell.time_range || ""}</div>
-                            {cell.service_kind && <div className="text-gray-500">{cell.service_kind}</div>}
-                          </>
-                        ) : <span className="text-gray-300">—</span>}
+                          <span className="text-gray-800 whitespace-nowrap">
+                            {cell.time_range || "—"}
+                            {cell.service_kind ? <span className="text-gray-500 ml-1.5">{cell.service_kind}</span> : null}
+                          </span>
+                        ) : <span className="text-gray-300">&nbsp;</span>}
                       </td>
                     );
                   })}
