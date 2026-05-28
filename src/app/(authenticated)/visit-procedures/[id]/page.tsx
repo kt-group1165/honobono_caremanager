@@ -197,10 +197,14 @@ function ProcedurePreview({ doc }: { doc: VisitProcedureDocument }) {
       <section className="rounded-lg border border-gray-200 bg-white">
         <h2 className="px-3 py-2 border-b border-gray-200 text-sm font-semibold text-gray-700 bg-gray-50">週次サービス表</h2>
         <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse">
+          <table className="w-full text-xs border-collapse table-fixed">
+            <colgroup>
+              <col className="w-12" />
+              {SERVICE_NOS.map((no) => <col key={no} />)}
+            </colgroup>
             <thead className="bg-gray-50 text-gray-600">
               <tr>
-                <th className="px-2 py-1.5 border border-gray-200 w-12 text-center">曜日</th>
+                <th className="px-2 py-1.5 border border-gray-200 text-center">曜日</th>
                 {SERVICE_NOS.map((no) => (<th key={no} className="px-2 py-1.5 border border-gray-200 text-center">サービス{no}</th>))}
               </tr>
             </thead>
@@ -216,7 +220,7 @@ function ProcedurePreview({ doc }: { doc: VisitProcedureDocument }) {
                         {hasContent ? (
                           <span className="text-gray-800 whitespace-nowrap">
                             {cell.time_range || "—"}
-                            {cell.service_kind ? <span className="text-gray-500 ml-1.5">{cell.service_kind}</span> : null}
+                            {cell.service_kind ? <span className="text-gray-500 ml-4">{cell.service_kind}</span> : null}
                           </span>
                         ) : <span className="text-gray-300">&nbsp;</span>}
                       </td>

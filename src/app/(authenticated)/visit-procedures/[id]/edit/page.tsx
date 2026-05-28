@@ -447,10 +447,14 @@ function ProcedureTab({
           週次サービス サマリ
         </h2>
         <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse">
+          <table className="w-full text-xs border-collapse table-fixed">
+            <colgroup>
+              <col className="w-12" />
+              {SERVICE_NOS.map((no) => <col key={no} />)}
+            </colgroup>
             <thead>
               <tr className="bg-gray-50 text-gray-600">
-                <th className="px-2 py-1.5 border border-gray-200 w-12 text-center">曜日</th>
+                <th className="px-2 py-1.5 border border-gray-200 text-center">曜日</th>
                 {SERVICE_NOS.map((no) => (
                   <th key={no} className="px-2 py-1.5 border border-gray-200 text-center">サービス{no}</th>
                 ))}
@@ -470,7 +474,7 @@ function ProcedureTab({
                         {hasContent ? (
                           <span className="text-gray-800 whitespace-nowrap">
                             {c.time_range || "—"}
-                            {c.service_kind ? <span className="text-gray-500 ml-1.5">{c.service_kind}</span> : null}
+                            {c.service_kind ? <span className="text-gray-500 ml-4">{c.service_kind}</span> : null}
                           </span>
                         ) : (
                           <span className="text-gray-300">&nbsp;</span>
