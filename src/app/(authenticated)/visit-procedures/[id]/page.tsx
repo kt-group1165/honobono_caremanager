@@ -335,7 +335,7 @@ function ModulePreview({ doc }: { doc: VisitProcedureDocument }) {
                         ))}
                         <div className={`absolute top-1 bottom-1 rounded ${COLORS[svcIdx % COLORS.length]} flex items-center justify-center text-[10px] text-gray-700 px-1`}
                           style={{ left: `${startCols * cellW}px`, width: `${widthCols * cellW}px` }} title={`${b.content} (${b.len} 分)`}>
-                          {b.len >= 10 ? `${b.len}分` : ""}
+                          {b.len > 0 ? `${b.len}分` : ""}
                         </div>
                       </div>
                     </div>

@@ -715,7 +715,7 @@ function ModuleTab({ doc }: { doc: VisitProcedureDocument }) {
                           style={{ left: `${leftPx}px`, width: `${widthPx}px` }}
                           title={`${b.content} (${b.len} 分)`}
                         >
-                          {b.len >= 10 ? `${b.len}分` : ""}
+                          {b.len > 0 ? `${b.len}分` : ""}
                         </div>
                       </div>
                     </div>
