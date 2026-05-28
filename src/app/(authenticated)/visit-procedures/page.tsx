@@ -113,23 +113,21 @@ export default function VisitProceduresClientListPage() {
           <p className="text-xs text-gray-400 mt-1">右上の「新規利用者」から追加してください</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="space-y-2">
           {clients.map((c) => (
             <Link
               key={c.client_name}
               href={`/visit-procedures/clients/${encodeURIComponent(c.client_name)}${officeQuery}`}
-              className="block rounded-lg border border-gray-200 bg-white p-4 hover:border-green-400 hover:shadow-sm transition"
+              className="flex items-center gap-4 rounded-lg border border-gray-200 bg-white px-4 py-3 hover:border-green-400 hover:shadow-sm transition"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  <User size={18} className="text-gray-400 shrink-0" />
-                  <span className="font-medium text-gray-900 truncate">{c.client_name}</span>
-                </div>
-                <span className="text-xs rounded-full bg-green-50 text-green-700 px-2 py-0.5">
-                  {c.version_count} 版
-                </span>
-              </div>
-              <p className="mt-2 text-xs text-gray-500">最新計画: {c.latest_plan_start_date}</p>
+              <User size={18} className="text-gray-400 shrink-0" />
+              <span className="font-medium text-gray-900 truncate flex-1 min-w-0">{c.client_name}</span>
+              <span className="shrink-0 text-xs rounded-full bg-green-50 text-green-700 px-2 py-0.5">
+                {c.version_count} 版
+              </span>
+              <span className="shrink-0 text-xs text-gray-500 w-44 text-right">
+                最新計画: {c.latest_plan_start_date}
+              </span>
             </Link>
           ))}
         </div>
