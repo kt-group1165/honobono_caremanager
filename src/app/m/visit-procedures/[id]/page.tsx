@@ -169,13 +169,13 @@ export default function MobileVisitProcedureView() {
                         const c = doc.weekly_schedule?.[day]?.[String(no)] ?? {};
                         const has = c.time_range || c.service_kind;
                         return (
-                          <td key={no} className="px-0.5 py-1 border border-gray-200 text-center align-middle">
+                          <td key={no} className="px-1 py-1 border border-gray-200 align-middle">
                             {has ? (
-                              <div className="leading-tight">
-                                <div className="text-gray-800">{c.time_range || "—"}</div>
-                                {c.service_kind && <div className="text-[10px] text-gray-500">{c.service_kind}</div>}
+                              <div className="flex items-baseline justify-center gap-2">
+                                <span className="text-gray-800 tabular-nums text-right" style={{ width: "5.5rem" }}>{c.time_range || "—"}</span>
+                                <span className="text-gray-500 text-left" style={{ minWidth: "4.5rem" }}>{c.service_kind || ""}</span>
                               </div>
-                            ) : <span className="text-gray-300">&nbsp;</span>}
+                            ) : <span className="block text-gray-300 text-center">&nbsp;</span>}
                           </td>
                         );
                       })}

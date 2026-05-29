@@ -216,13 +216,13 @@ function ProcedurePreview({ doc }: { doc: VisitProcedureDocument }) {
                     const cell = doc.weekly_schedule?.[day]?.[String(no)] ?? {};
                     const hasContent = cell.time_range || cell.service_kind;
                     return (
-                      <td key={no} className="px-2 py-1 border border-gray-200 text-center align-middle">
+                      <td key={no} className="px-2 py-1 border border-gray-200 align-middle">
                         {hasContent ? (
-                          <span className="text-gray-800 whitespace-nowrap">
-                            {cell.time_range || "—"}
-                            {cell.service_kind ? <span className="text-gray-500 ml-4">{cell.service_kind}</span> : null}
-                          </span>
-                        ) : <span className="text-gray-300">&nbsp;</span>}
+                          <div className="flex items-baseline justify-center gap-3">
+                            <span className="text-gray-800 tabular-nums text-right" style={{ width: "6rem" }}>{cell.time_range || "—"}</span>
+                            <span className="text-gray-500 text-left" style={{ minWidth: "5rem" }}>{cell.service_kind || ""}</span>
+                          </div>
+                        ) : <span className="block text-gray-300 text-center">&nbsp;</span>}
                       </td>
                     );
                   })}

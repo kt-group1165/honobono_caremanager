@@ -470,14 +470,14 @@ function ProcedureTab({
                     const c = doc.weekly_schedule?.[day]?.[String(no)] ?? {};
                     const hasContent = c.time_range || c.service_kind;
                     return (
-                      <td key={no} className="px-2 py-1 border border-gray-200 text-center align-middle">
+                      <td key={no} className="px-2 py-1 border border-gray-200 align-middle">
                         {hasContent ? (
-                          <span className="text-gray-800 whitespace-nowrap">
-                            {c.time_range || "—"}
-                            {c.service_kind ? <span className="text-gray-500 ml-4">{c.service_kind}</span> : null}
-                          </span>
+                          <div className="flex items-baseline justify-center gap-3">
+                            <span className="text-gray-800 tabular-nums text-right" style={{ width: "6rem" }}>{c.time_range || "—"}</span>
+                            <span className="text-gray-500 text-left" style={{ minWidth: "5rem" }}>{c.service_kind || ""}</span>
+                          </div>
                         ) : (
-                          <span className="text-gray-300">&nbsp;</span>
+                          <span className="block text-gray-300 text-center">&nbsp;</span>
                         )}
                       </td>
                     );
