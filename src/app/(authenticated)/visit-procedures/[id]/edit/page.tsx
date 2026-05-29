@@ -58,6 +58,20 @@ function parseTimeRange(s: string | null | undefined): { start: string; end: str
   return { start: norm(m[1]), end: norm(m[2]) };
 }
 
+/** dash 位置を揃えた 時刻範囲表示 (read-only) */
+function AlignedTimeRange({ value }: { value: string | null | undefined }) {
+  if (!value) return <span className="text-gray-400">—</span>;
+  const m = /^(\d{1,2}:\d{1,2})\s*[-〜~]\s*(\d{1,2}:\d{1,2})$/.exec(value);
+  const [start, end] = m ? [m[1], m[2]] : [value, ""];
+  return (
+    <span className="tabular-nums whitespace-nowrap">
+      <span className="inline-block text-right" style={{ width: "2.8em" }}>{start}</span>
+      <span className="mx-px">-</span>
+      <span className="inline-block text-right" style={{ width: "2.8em" }}>{end}</span>
+    </span>
+  );
+}
+
 /** 開始/終了 5 分刻み select コンポーネント */
 function TimeRangeSelect({
   value,
@@ -473,7 +487,7 @@ function ProcedureTab({
                       <td key={no} className="px-2 py-1 border border-gray-200 align-middle">
                         {hasContent ? (
                           <div className="flex items-baseline justify-center gap-3">
-                            <span className="text-gray-800 tabular-nums text-right" style={{ width: "6rem" }}>{c.time_range || "—"}</span>
+                            <span className="text-gray-800"><AlignedTimeRange value={c.time_range} /></span>
                             <span className="text-gray-500 text-left" style={{ minWidth: "5rem" }}>{c.service_kind || ""}</span>
                           </div>
                         ) : (

@@ -31,6 +31,27 @@ function formatJpDate(s: string | null | undefined): string {
   return `${m[1]}年${Number(m[2])}月${Number(m[3])}日`;
 }
 
+/** "9:00-9:45" → { start: "9:00", end: "9:45" } */
+function splitTimeRange(s: string | null | undefined): { start: string; end: string } {
+  if (!s) return { start: "", end: "" };
+  const m = /^(\d{1,2}:\d{1,2})\s*[-〜~]\s*(\d{1,2}:\d{1,2})$/.exec(s);
+  if (!m) return { start: s, end: "" };
+  return { start: m[1], end: m[2] };
+}
+
+/** dash 位置を揃えた 時刻範囲表示 */
+function AlignedTimeRange({ value }: { value: string | null | undefined }) {
+  const { start, end } = splitTimeRange(value);
+  if (!start && !end) return <span className="text-gray-400">—</span>;
+  return (
+    <span className="tabular-nums whitespace-nowrap">
+      <span className="inline-block text-right" style={{ width: "2.6em" }}>{start}</span>
+      <span className="mx-px">-</span>
+      <span className="inline-block text-right" style={{ width: "2.6em" }}>{end}</span>
+    </span>
+  );
+}
+
 export default function MobileVisitProcedureView() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -172,7 +193,7 @@ export default function MobileVisitProcedureView() {
                           <td key={no} className="px-1 py-1 border border-gray-200 align-middle">
                             {has ? (
                               <div className="flex items-baseline justify-center gap-2">
-                                <span className="text-gray-800 tabular-nums text-right" style={{ width: "5.5rem" }}>{c.time_range || "—"}</span>
+                                <span className="text-gray-800"><AlignedTimeRange value={c.time_range} /></span>
                                 <span className="text-gray-500 text-left" style={{ minWidth: "4.5rem" }}>{c.service_kind || ""}</span>
                               </div>
                             ) : <span className="block text-gray-300 text-center">&nbsp;</span>}

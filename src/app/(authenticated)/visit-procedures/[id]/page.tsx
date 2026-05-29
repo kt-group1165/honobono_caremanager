@@ -34,6 +34,25 @@ function formatJpDate(s: string | null | undefined): string {
   return `${m[1]}年${Number(m[2])}月${Number(m[3])}日`;
 }
 
+function splitTimeRange(s: string | null | undefined): { start: string; end: string } {
+  if (!s) return { start: "", end: "" };
+  const m = /^(\d{1,2}:\d{1,2})\s*[-〜~]\s*(\d{1,2}:\d{1,2})$/.exec(s);
+  if (!m) return { start: s, end: "" };
+  return { start: m[1], end: m[2] };
+}
+
+function AlignedTimeRange({ value }: { value: string | null | undefined }) {
+  const { start, end } = splitTimeRange(value);
+  if (!start && !end) return <span className="text-gray-400">—</span>;
+  return (
+    <span className="tabular-nums whitespace-nowrap">
+      <span className="inline-block text-right" style={{ width: "2.8em" }}>{start}</span>
+      <span className="mx-px">-</span>
+      <span className="inline-block text-right" style={{ width: "2.8em" }}>{end}</span>
+    </span>
+  );
+}
+
 export default function VisitProcedurePreviewPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -219,7 +238,7 @@ function ProcedurePreview({ doc }: { doc: VisitProcedureDocument }) {
                       <td key={no} className="px-2 py-1 border border-gray-200 align-middle">
                         {hasContent ? (
                           <div className="flex items-baseline justify-center gap-3">
-                            <span className="text-gray-800 tabular-nums text-right" style={{ width: "6rem" }}>{cell.time_range || "—"}</span>
+                            <span className="text-gray-800"><AlignedTimeRange value={cell.time_range} /></span>
                             <span className="text-gray-500 text-left" style={{ minWidth: "5rem" }}>{cell.service_kind || ""}</span>
                           </div>
                         ) : <span className="block text-gray-300 text-center">&nbsp;</span>}
