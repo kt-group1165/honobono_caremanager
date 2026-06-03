@@ -10,6 +10,10 @@ import type { NextConfig } from "next";
 // node_modules/next/dist/docs/01-app/03-api-reference/05-config/01-next-config-js/turbopack.md
 const nextConfig: NextConfig = {
   transpilePackages: ["@kt/shared"],
+  // Phase Perf-1: barrel optimization で bundle 縮小
+  experimental: {
+    optimizePackageImports: ["lucide-react", "date-fns", "recharts"],
+  },
 };
 
 export default nextConfig;

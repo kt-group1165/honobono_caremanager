@@ -47,15 +47,33 @@ export async function getDocuments(
 
 /**
  * 利用者一覧 (DISTINCT client_name) + バージョン数 + 最新計画開始日
- * documents を内部で全取得して JS で集計 (件数が膨大にならない前提)
+ *
+ * Phase Perf-1 最適化:
+ *   集約に不要な列 (author_name / creation_reason / id 等) は引かず、
+ *   client_name と plan_start_date のみ取得して payload 縮小。
+ *   getDocuments と独立した軽量フェッチに分離。
  */
 export async function getClients(
   supabase: SupabaseClient,
   tenantId: string,
 ): Promise<VisitProcedureClient[]> {
-  const docs = await getDocuments(supabase, tenantId);
+  const all: { client_name: string; plan_start_date: string }[] = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("kaigo_visit_procedure_documents")
+      .select("client_name, plan_start_date")  // ← 2 列のみ
+      .eq("tenant_id", tenantId)
+      .range(from, from + PAGE_LIMIT - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as { client_name: string; plan_start_date: string }[];
+    all.push(...rows);
+    if (rows.length < PAGE_LIMIT) break;
+    from += PAGE_LIMIT;
+  }
+
   const map = new Map<string, VisitProcedureClient>();
-  for (const d of docs) {
+  for (const d of all) {
     const cur = map.get(d.client_name);
     if (!cur) {
       map.set(d.client_name, {
