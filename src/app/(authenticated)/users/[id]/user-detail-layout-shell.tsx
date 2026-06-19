@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -59,6 +59,7 @@ interface UserDetailLayoutShellProps {
   id: string;
   initialUser: Client | null;
   initialHasDisabilityService: boolean;
+  initialAssignedOfficeIds: string[];
   children: React.ReactNode;
 }
 
@@ -66,12 +67,28 @@ export function UserDetailLayoutShell({
   id,
   initialUser,
   initialHasDisabilityService,
+  initialAssignedOfficeIds,
   children,
 }: UserDetailLayoutShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const { currentOffice } = useBusinessType();
+
+  // stale URL 救済: 現在 currentOffice が解決していて、その office が
+  // この user の active な client_office_assignments に含まれていなければ
+  // /users (= 自事業所の 1 番上へ index リダイレクト) に飛ばす。
+  // 0 件 (= 全社マスタ / 包括支援センター 等) でも自事業所 mode なら追い出す。
+  // ?office= を保持して飛ばすことで、index がさらに自事業所版の OY users[0] に redirect する。
+  // initialUser.is_facility === true (= 包括/法人エントリ) も同様に追い出し。
+  useEffect(() => {
+    if (!currentOffice?.id) return;
+    const isFacilityUser = !!(initialUser as (Client & { is_facility?: boolean }) | null)?.is_facility;
+    const isNotInThisOffice = !initialAssignedOfficeIds.includes(currentOffice.id);
+    if (!isFacilityUser && !isNotInThisOffice) return;
+    const qs = `?office=${currentOffice.id}`;
+    router.replace(`/users${qs}`);
+  }, [currentOffice?.id, initialAssignedOfficeIds, initialUser, router]);
 
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);

@@ -16,7 +16,7 @@ import { getClientById } from "./fetchers";
 
 const DISABILITY_TRIGGER = ["居宅介護", "重度訪問介護", "同行援護"];
 
-type AssignmentRow = { home_care_categories: unknown };
+type AssignmentRow = { office_id: string; home_care_categories: unknown };
 
 function computeHasDisabilityService(rows: AssignmentRow[]): boolean {
   return rows.some((row) => {
@@ -45,7 +45,7 @@ export default async function UserDetailLayout({
     getClientById(id),
     supabase
       .from("client_office_assignments")
-      .select("home_care_categories")
+      .select("office_id, home_care_categories")
       .eq("client_id", id)
       .is("end_date", null),
   ]);
@@ -57,15 +57,19 @@ export default async function UserDetailLayout({
     redirect("/users");
   }
 
-  const initialHasDisabilityService = computeHasDisabilityService(
-    (assignsRes.data ?? []) as AssignmentRow[]
-  );
+  const rows = (assignsRes.data ?? []) as AssignmentRow[];
+  const initialHasDisabilityService = computeHasDisabilityService(rows);
+  // 自事業所判定 (client-side で currentOffice と突合し、外れていたら shell が /users へ戻す)
+  const initialAssignedOfficeIds = rows
+    .map((r) => r.office_id)
+    .filter((v): v is string => typeof v === "string");
 
   return (
     <UserDetailLayoutShell
       id={id}
       initialUser={initialUser}
       initialHasDisabilityService={initialHasDisabilityService}
+      initialAssignedOfficeIds={initialAssignedOfficeIds}
     >
       {children}
     </UserDetailLayoutShell>

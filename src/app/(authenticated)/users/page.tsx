@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Users, Plus, Loader2 } from "lucide-react";
 import { useBusinessType } from "@/lib/business-type-context";
@@ -19,6 +19,7 @@ import { useKaigoOfficeUsers } from "@/lib/swr/use-kaigo-office-users";
  */
 export default function UsersIndexPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { currentOfficeId, loading: officeLoading } = useBusinessType();
   const { users, isLoading } = useKaigoOfficeUsers(currentOfficeId);
 
@@ -28,8 +29,10 @@ export default function UsersIndexPage() {
     if (officeLoading) return;
     if (isLoading) return;
     if (!first?.id) return;
-    router.replace(`/users/${first.id}`);
-  }, [officeLoading, isLoading, first?.id, router]);
+    // ?office= 等の query param を保持して redirect (= 自事業所 context を失わない)
+    const qs = searchParams.toString();
+    router.replace(`/users/${first.id}${qs ? `?${qs}` : ""}`);
+  }, [officeLoading, isLoading, first?.id, router, searchParams]);
 
   // currentOfficeId が解決済 & users 取得済 & 0 件 → 空状態 CTA
   const showEmpty =
