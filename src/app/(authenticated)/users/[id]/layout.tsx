@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { UserDetailLayoutShell } from "./user-detail-layout-shell";
 import { getClientById } from "./fetchers";
@@ -48,6 +49,14 @@ export default async function UserDetailLayout({
       .eq("client_id", id)
       .is("end_date", null),
   ]);
+
+  // [id] が無効 (削除済 / 別テナント / typo 等で DB に存在しない) なら
+  // /users (= 自事業所一覧の 1 番上へ redirect する index) に飛ばす。
+  // page.tsx 側でも null check しているが、layout で先に弾いた方が下位 fetch を回さずに済む。
+  if (!initialUser) {
+    redirect("/users");
+  }
+
   const initialHasDisabilityService = computeHasDisabilityService(
     (assignsRes.data ?? []) as AssignmentRow[]
   );
