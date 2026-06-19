@@ -449,8 +449,9 @@ export function MonitoringContent({
         }
         if (sourced.length > 0) setItems(buildFixedRows(sourced));
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      // 自動セットの失敗は致命的ではないので warn のみ (= UI は空のままで openNew は継続)
+      console.warn("openNew care-plan auto-fill failed:", err instanceof Error ? err.message : err);
     } finally {
       setLoadingCarePlan(false);
     }

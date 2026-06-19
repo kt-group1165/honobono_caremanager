@@ -535,12 +535,15 @@ export function ProvisionTicketsContent({
       const from = `${monthStr}-01`;
       const to = `${monthStr}-${String(daysCount).padStart(2, "0")}`;
 
-      await supabase
+      // 既存月分を一旦 delete → 再 insert。delete 失敗を silent にしない
+      // (silent fail だと重複が積み上がる)
+      const { error: delError } = await supabase
         .from("kaigo_visit_schedule")
         .delete()
         .eq("user_id", userId)
         .gte("visit_date", from)
         .lte("visit_date", to);
+      if (delError) throw delError;
 
       const toInsert: Record<string, unknown>[] = [];
       for (const row of serviceRows) {
@@ -576,11 +579,22 @@ export function ProvisionTicketsContent({
       }
 
       if (toInsert.length > 0) {
-        const { error } = await supabase.from("kaigo_visit_schedule").insert(toInsert);
+        // .select() で実 INSERT 件数を取得し、想定件数と照合 (= 部分 fail の検知)
+        const { data: inserted, error } = await supabase
+          .from("kaigo_visit_schedule")
+          .insert(toInsert)
+          .select("id");
         if (error) throw error;
+        const actual = inserted?.length ?? 0;
+        if (actual !== toInsert.length) {
+          toast.warning(`${toInsert.length} 件中 ${actual} 件のみ保存されました (${toInsert.length - actual} 件失敗)`);
+        } else {
+          toast.success(`提供票を保存しました (${actual} 件)`);
+        }
+      } else {
+        toast.success("提供票を保存しました");
       }
 
-      toast.success("提供票を保存しました");
       setIsDirty(false);
       fetchGridData();
     } catch (err: unknown) {

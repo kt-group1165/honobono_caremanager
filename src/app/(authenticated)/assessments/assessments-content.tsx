@@ -126,8 +126,14 @@ export function AssessmentsContent({
     setLoadingList(true);
     let query = supabase.from("kaigo_assessments").select("*").eq("user_id", userId);
     if (selectedCertId) query = query.eq("certification_id", selectedCertId);
-    const { data } = await query.order("assessment_date", { ascending: false });
-    setAssessments((data as Assessment[]) ?? []);
+    const { data, error } = await query.order("assessment_date", { ascending: false });
+    if (error) {
+      // silent fail で UI が空表示になっていたのを可視化
+      console.error("kaigo_assessments fetch failed:", error.message);
+      toast.error("アセスメントの取得に失敗しました: " + error.message);
+    } else {
+      setAssessments((data as Assessment[]) ?? []);
+    }
     setLoadingList(false);
   }, [userId, selectedCertId, supabase]);
 

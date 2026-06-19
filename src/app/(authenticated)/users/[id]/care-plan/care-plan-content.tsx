@@ -230,7 +230,9 @@ function ReceivedCarePlansPanel({
 
     setImportingId(g.groupKey);
     try {
-      // 各帳票を順に INSERT (失敗時は途中まで成功した分は残る)
+      // 各帳票を順に INSERT、部分失敗を集計する (= 1 件 fail で全体停止しない)
+      let successCount = 0;
+      const failures: { label: string; message: string }[] = [];
       for (const t of targets) {
         const content: Record<string, unknown> = {
           html_snapshot: t.shared.html_content,
@@ -249,9 +251,24 @@ function ReceivedCarePlansPanel({
           content,
           status: "draft",
         });
-        if (error) throw error;
+        if (error) {
+          const label = CARE_PLAN_LABEL[t.shared.document_type] ?? t.shared.document_type;
+          console.error("kaigo_report_documents insert failed:", t.shared.document_type, error.message);
+          failures.push({ label, message: error.message });
+        } else {
+          successCount++;
+        }
       }
-      toast.success(`${targets.length} 帳票を取り込みました`);
+      if (failures.length === 0) {
+        toast.success(`${successCount} 帳票を取り込みました`);
+      } else if (successCount === 0) {
+        toast.error(`取り込みに失敗 (${failures.length} 件): ${failures[0].message}`);
+      } else {
+        const failLabels = failures.map((f) => f.label).join(" / ");
+        toast.warning(
+          `${targets.length} 件中 ${successCount} 件成功、${failures.length} 件失敗 (${failLabels}: ${failures[0].message})`,
+        );
+      }
       await refresh();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

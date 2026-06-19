@@ -82,7 +82,12 @@ export function EmergencySheetsContent({
   const [showSendModal, setShowSendModal] = useState(false);
 
   const fetchUrls = useCallback(async () => {
-    const { data } = await supabase.from("kaigo_emergency_tokens").select("id, token, name").order("created_at", { ascending: false });
+    const { data, error } = await supabase.from("kaigo_emergency_tokens").select("id, token, name").order("created_at", { ascending: false });
+    if (error) {
+      console.error("kaigo_emergency_tokens fetch failed:", error.message);
+      toast.error("URL一覧の取得に失敗: " + error.message);
+      return;
+    }
     setUrls(data || []);
   }, [supabase]);
 
@@ -103,8 +108,14 @@ export function EmergencySheetsContent({
     const { error } = await supabase
       .from("kaigo_emergency_tokens")
       .insert({ name: newUrlName.trim(), tenant_id: resolved.tenantId });
-    if (error) toast.error("発行に失敗: " + error.message);
-    else { toast.success("URLを発行しました"); setNewUrlName("災害時用"); fetchUrls(); }
+    if (error) {
+      toast.error("発行に失敗: " + error.message);
+    } else {
+      // 反映を確認してから success を出す (insert 後の RLS / 一覧 fetch 失敗を silent にしない)
+      await fetchUrls();
+      toast.success("URLを発行しました");
+      setNewUrlName("災害時用");
+    }
     setUrlLoading(false);
   };
 
@@ -116,8 +127,13 @@ export function EmergencySheetsContent({
 
   const deleteUrl = async (id: string) => {
     if (!confirm("このURLを削除しますか？")) return;
-    await supabase.from("kaigo_emergency_tokens").delete().eq("id", id);
-    fetchUrls();
+    const { error } = await supabase.from("kaigo_emergency_tokens").delete().eq("id", id);
+    if (error) {
+      console.error("kaigo_emergency_tokens delete failed:", error.message);
+      toast.error("削除に失敗: " + error.message);
+      return;
+    }
+    await fetchUrls();
     toast.success("削除しました");
   };
 
