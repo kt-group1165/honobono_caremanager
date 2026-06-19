@@ -27,9 +27,11 @@ export default async function ServicesPage({
   {
     let from = 0;
     while (true) {
+      // Phase Shougai-1: service_category も取得 (form の制度区分 radio デフォルト用)
+      // migration 未適用環境では列が無い → "*" 経由で取得して未定義は undefined のまま
       const { data } = await supabase
         .from("clients")
-        .select("id, name")
+        .select("*")
         .eq("is_facility", false)
         .is("deleted_at", null)
         .order("name")

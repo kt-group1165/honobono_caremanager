@@ -10,6 +10,11 @@ import { User, Download, Upload, Loader2 } from "lucide-react";
 import { UserSidebar } from "@/components/users/user-sidebar";
 import type { Client } from "@/types/database";
 import { useBusinessType } from "@/lib/business-type-context";
+import {
+  ServiceCategoryBadge,
+  isShougaiClient,
+  isKaigoClient,
+} from "@/components/shared/service-category-badge";
 
 /**
  * 利用者詳細レイアウトの client shell。
@@ -38,7 +43,8 @@ const CARE_PLAN_TABS: SubTab[] = [
 ];
 
 const DISABILITY_TABS: SubTab[] = [
-  { label: "障害情報", href: "/disability" },
+  { label: "受給者証 (詳細)", href: "/disability" },
+  { label: "障害支援区分", href: "/shougai-cert" },
 ];
 
 type MainTab = "basic" | "insurance" | "carePlan" | "disability";
@@ -432,17 +438,20 @@ export function UserDetailLayoutShell({
                     </div>
                   </div>
                 </div>
-                <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                    initialUser.status === "active"
-                      ? "bg-green-100 text-green-800"
-                      : initialUser.status === "deceased"
-                        ? "bg-red-100 text-red-700"
-                        : "bg-gray-100 text-gray-600"
-                  }`}
-                >
-                  {STATUS_LABELS[initialUser.status] ?? initialUser.status}
-                </span>
+                <div className="flex items-center gap-2">
+                  <ServiceCategoryBadge category={initialUser.service_category} />
+                  <span
+                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                      initialUser.status === "active"
+                        ? "bg-green-100 text-green-800"
+                        : initialUser.status === "deceased"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    {STATUS_LABELS[initialUser.status] ?? initialUser.status}
+                  </span>
+                </div>
               </div>
             ) : (
               <p className="text-sm text-gray-400">利用者情報を取得できませんでした</p>
@@ -450,15 +459,32 @@ export function UserDetailLayoutShell({
           </div>
 
           {/* 2大タブ */}
+          {/*
+            Phase Shougai-1: clients.service_category により表示する大タブを切替
+              - 介護保険: kaigo / both / undefined (legacy) のとき表示 (shougai 専用なら非表示)
+              - 障害福祉: shougai / both のとき表示。または既存 home_care_categories
+                (居宅介護 / 重度訪問介護 / 同行援護) がアクティブなときも表示 (後方互換)
+          */}
           <div className="flex gap-1 border-b border-gray-200">
-            {([
-              { id: "basic" as const, label: "基本情報", defaultHref: "" },
-              { id: "insurance" as const, label: "介護保険", defaultHref: "/care-cert" },
-              { id: "carePlan" as const, label: "ケアプラン管理", defaultHref: "/care-plan" },
-              ...(initialHasDisabilityService || activeMainTab === "disability"
-                ? [{ id: "disability" as const, label: "障害", defaultHref: "/disability" }]
-                : []),
-            ]).map((main) => {
+            {(() => {
+              const showKaigo = !initialUser || isKaigoClient(initialUser);
+              const showShougai =
+                !!initialUser && isShougaiClient(initialUser)
+                || initialHasDisabilityService
+                || activeMainTab === "disability";
+              return [
+                { id: "basic" as const, label: "基本情報", defaultHref: "" },
+                ...(showKaigo
+                  ? [{ id: "insurance" as const, label: "介護保険", defaultHref: "/care-cert" }]
+                  : []),
+                ...(showKaigo
+                  ? [{ id: "carePlan" as const, label: "ケアプラン管理", defaultHref: "/care-plan" }]
+                  : []),
+                ...(showShougai
+                  ? [{ id: "disability" as const, label: "障害福祉", defaultHref: "/shougai-cert" }]
+                  : []),
+              ];
+            })().map((main) => {
               const isActive = activeMainTab === main.id;
               return (
                 <Link

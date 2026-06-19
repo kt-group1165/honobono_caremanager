@@ -28,6 +28,9 @@ export default async function VisitRecordsPage({
 
   let initialRecords: AnyRecord[] = [];
   let initialUserName: string | null = null;
+  // Phase Shougai-1: client の service_category を取得 (= form の radio デフォルト値に使う)
+  // migration 未適用環境では undefined / null → form は 'kaigo' に固定
+  let initialUserCategory: "kaigo" | "shougai" | "both" | null = null;
   if (userId) {
     const [recordsRes, clientRes] = await Promise.all([
       supabase
@@ -36,13 +39,15 @@ export default async function VisitRecordsPage({
         .eq("user_id", userId)
         .order("visit_date", { ascending: false })
         .order("start_time", { ascending: false }),
-      supabase.from("clients").select("name").eq("id", userId).maybeSingle(),
+      supabase.from("clients").select("*").eq("id", userId).maybeSingle(),
     ]);
     initialRecords = (recordsRes.data ?? []).map((r: AnyRecord) => ({
       ...r,
       staff_name: r.members?.name ?? null,
     }));
-    initialUserName = (clientRes.data as { name?: string } | null)?.name ?? null;
+    const clientData = clientRes.data as { name?: string; service_category?: "kaigo" | "shougai" | "both" | null } | null;
+    initialUserName = clientData?.name ?? null;
+    initialUserCategory = clientData?.service_category ?? null;
   }
 
   return (
@@ -53,6 +58,7 @@ export default async function VisitRecordsPage({
           key={userId}
           userId={userId}
           userName={initialUserName}
+          userCategory={initialUserCategory}
           initialRecords={initialRecords as never}
           initialStaff={initialStaff}
         />

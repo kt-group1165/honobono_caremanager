@@ -47,6 +47,12 @@ export type Client = {
   status: "active" | "inactive" | "deceased";
   is_facility: boolean;
   is_provisional: boolean;
+  // 制度区分 (Phase Shougai-1 で追加)
+  //   kaigo   = 介護保険
+  //   shougai = 障害福祉
+  //   both    = 両方利用
+  // migration 未適用環境では列が存在しないため optional / undefined 許容。
+  service_category?: "kaigo" | "shougai" | "both" | null;
   // メモ（旧、client_memos へ移行済。新規 INSERT は client_memos を使う）
   memo: string | null;
   // 削除
@@ -278,6 +284,46 @@ export type BillingRecord = {
   created_at: string;
   updated_at: string;
 };
+
+// 障害福祉サービス受給者証 / 障害支援区分マスタ (Phase Shougai-1)
+// shougai_certifications table (= 介護保険の認定区分に対応する障害版)
+export type ShougaiSupportLevel =
+  | "区分1"
+  | "区分2"
+  | "区分3"
+  | "区分4"
+  | "区分5"
+  | "区分6"
+  | "非該当";
+
+export type ShougaiPrimaryDisability =
+  | "身体障害"
+  | "知的障害"
+  | "精神障害"
+  | "発達障害"
+  | "難病"
+  | "重複障害";
+
+export type ShougaiCertification = {
+  id: string;
+  tenant_id: string;
+  client_id: string;
+  support_level: ShougaiSupportLevel;
+  primary_disability: ShougaiPrimaryDisability | null;
+  certification_start_date: string;
+  certification_end_date: string;
+  beneficiary_number: string | null;
+  insurer_municipality: string | null;
+  service_types: string[];
+  copay_rate: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+// 訪問記録 / サービス記録 / シフト の制度区分
+//   NULL は events 等 (= 会議 / その他) で利用
+export type ServiceCategory = "kaigo" | "shougai";
 
 // 請求明細
 export type BillingDetail = {

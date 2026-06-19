@@ -42,6 +42,9 @@ interface VisitRecord {
   start_time: string | null;
   end_time: string | null;
   service_type: ServiceType;
+  // Phase Shougai-1: 請求区分 (kaigo=介護保険 / shougai=障害福祉)
+  // migration 未適用環境では undefined になりうるため optional
+  service_category?: "kaigo" | "shougai" | null;
   staff_id: string | null;
   staff_name?: string | null;
   // body care
@@ -667,11 +670,22 @@ function CareRecordDetail({ record }: { record: VisitRecord }) {
 export interface VisitRecordsContentProps {
   userId: string;
   userName?: string | null;
+  // Phase Shougai-1: 利用者の制度区分 (= form の radio デフォルト / 強制値)
+  //   'kaigo'   → form の service_category は kaigo 固定
+  //   'shougai' → 同 shougai 固定
+  //   'both' | null → ラジオで選択可能 (default 'kaigo')
+  userCategory?: "kaigo" | "shougai" | "both" | null;
   initialRecords: VisitRecord[];
   initialStaff: KaigoStaff[];
 }
 
-export function VisitRecordsContent({ userId, userName, initialRecords, initialStaff }: VisitRecordsContentProps) {
+// form の制度区分初期値 (= 利用者カテゴリから決定)
+function pickDefaultCategory(uc: "kaigo" | "shougai" | "both" | null | undefined): "kaigo" | "shougai" {
+  if (uc === "shougai") return "shougai";
+  return "kaigo"; // kaigo / both / undefined はデフォルト介護
+}
+
+export function VisitRecordsContent({ userId, userName, userCategory, initialRecords, initialStaff }: VisitRecordsContentProps) {
   const supabase = useMemo(() => createClient(), []);
   const { currentOffice } = useBusinessType();
 
@@ -680,7 +694,18 @@ export function VisitRecordsContent({ userId, userName, initialRecords, initialS
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [formBase, setFormBase] = useState({ visit_date: format(new Date(), "yyyy-MM-dd"), staff_id: "", service_type: "身体介護" as ServiceType, start_time: "", end_time: "" });
+  // 利用者が 'both' の場合のみラジオ選択可。それ以外は固定。
+  const canChooseCategory = userCategory === "both" || userCategory == null;
+  const [formBase, setFormBase] = useState({
+    visit_date: format(new Date(), "yyyy-MM-dd"),
+    staff_id: "",
+    service_type: "身体介護" as ServiceType,
+    service_category: pickDefaultCategory(userCategory) as "kaigo" | "shougai",
+    start_time: "",
+    end_time: "",
+  });
+  // 一覧の制度区分フィルタ (= 'all' / 'kaigo' / 'shougai')
+  const [categoryFilter, setCategoryFilter] = useState<"all" | "kaigo" | "shougai">("all");
   const [formCare, setFormCare] = useState<CareData>(emptyCareData());
   const [formSection, setFormSection] = useState<string | null>("pre_check");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -737,7 +762,14 @@ export function VisitRecordsContent({ userId, userName, initialRecords, initialS
 
   // Form helpers
   const handleOpenForm = () => {
-    setFormBase({ visit_date: format(new Date(), "yyyy-MM-dd"), staff_id: "", service_type: "身体介護", start_time: "", end_time: "" });
+    setFormBase({
+      visit_date: format(new Date(), "yyyy-MM-dd"),
+      staff_id: "",
+      service_type: "身体介護",
+      service_category: pickDefaultCategory(userCategory),
+      start_time: "",
+      end_time: "",
+    });
     setFormCare(emptyCareData());
     setFormSection("pre_check");
     setShowForm(true);
@@ -756,6 +788,11 @@ export function VisitRecordsContent({ userId, userName, initialRecords, initialS
       visit_date: formBase.visit_date,
       staff_id: formBase.staff_id || null,
       service_type: formBase.service_type,
+      // Phase Shougai-1: 請求区分 (kaigo / shougai)
+      // migration 未適用 DB では列が無く INSERT エラー → その場合は除外したいが、
+      // SQL での試行錯誤を避けるため常に送信。列が存在しなければ Supabase 側で
+      // 400 が返るので silent failure を防げる ({error} を check 済)。
+      service_category: formBase.service_category,
       start_time: formBase.start_time || null,
       end_time: formBase.end_time || null,
       care_record_data: formCare,
@@ -876,6 +913,30 @@ export function VisitRecordsContent({ userId, userName, initialRecords, initialS
         </div>
       </div>
 
+      {/* Phase Shougai-1: 制度区分フィルタ */}
+      <div className="border-b bg-white px-6 py-2">
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-gray-500">制度区分:</span>
+          {([
+            { v: "all" as const, label: "すべて" },
+            { v: "kaigo" as const, label: "介護" },
+            { v: "shougai" as const, label: "障害" },
+          ]).map((opt) => (
+            <button
+              key={opt.v}
+              onClick={() => setCategoryFilter(opt.v)}
+              className={`rounded-full border px-3 py-0.5 transition-colors ${
+                categoryFilter === opt.v
+                  ? "border-violet-500 bg-violet-50 text-violet-700 font-medium"
+                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
         {loading ? (
             <div className="flex h-48 items-center justify-center text-sm text-gray-400">
@@ -897,7 +958,14 @@ export function VisitRecordsContent({ userId, userName, initialRecords, initialS
             </div>
           ) : (
             <div className="space-y-3">
-              {records.map((rec) => {
+              {records
+                .filter((rec) => {
+                  if (categoryFilter === "all") return true;
+                  // legacy 互換: service_category 未設定の record は 'kaigo' として扱う
+                  const c = rec.service_category ?? "kaigo";
+                  return c === categoryFilter;
+                })
+                .map((rec) => {
                 const colors = SERVICE_TYPE_COLORS[rec.service_type] ?? SERVICE_TYPE_COLORS["身体介護"];
                 const isExpanded = expandedId === rec.id;
                 const careItems = getActiveCareItems(rec);
@@ -921,6 +989,17 @@ export function VisitRecordsContent({ userId, userName, initialRecords, initialS
                           <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${colors.bg} ${colors.text} ${colors.border}`}>
                             {rec.service_type}
                           </span>
+                          {/* Phase Shougai-1: 制度区分 chip (kaigo/shougai 表示) */}
+                          {rec.service_category === "shougai" && (
+                            <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0 text-[10px] font-medium text-violet-700">
+                              障害
+                            </span>
+                          )}
+                          {rec.service_category === "kaigo" && (
+                            <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0 text-[10px] font-medium text-blue-700">
+                              介護
+                            </span>
+                          )}
                         </div>
                         <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
                           <span className="flex items-center gap-1">
@@ -1113,6 +1192,38 @@ export function VisitRecordsContent({ userId, userName, initialRecords, initialS
                     <select value={formBase.service_type} onChange={(e) => setFormBase({ ...formBase, service_type: e.target.value as ServiceType })} className={inputClass}>
                       {SERVICE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                     </select>
+                  </div>
+                  {/* Phase Shougai-1: 制度区分 (= 請求区分). 利用者が 'both' の場合のみ選択可能 */}
+                  <div className="col-span-2">
+                    <label className="mb-1 block text-xs font-medium text-gray-700">
+                      制度区分
+                      {!canChooseCategory && (
+                        <span className="ml-1 text-[10px] font-normal text-gray-400">
+                          (利用者の設定により固定)
+                        </span>
+                      )}
+                    </label>
+                    <div className="flex gap-4">
+                      {([
+                        { v: "kaigo" as const, label: "介護 (介護保険)" },
+                        { v: "shougai" as const, label: "障害 (障害福祉)" },
+                      ]).map((opt) => (
+                        <label key={opt.v} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                          <input
+                            type="radio"
+                            name="service_category"
+                            value={opt.v}
+                            checked={formBase.service_category === opt.v}
+                            disabled={!canChooseCategory}
+                            onChange={() => setFormBase({ ...formBase, service_category: opt.v })}
+                            className="accent-violet-600"
+                          />
+                          <span className={!canChooseCategory && formBase.service_category !== opt.v ? "text-gray-400" : ""}>
+                            {opt.label}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
                   <div className="col-span-2">
                     <label className="mb-1 block text-xs font-medium text-gray-700">担当職員</label>

@@ -7,13 +7,32 @@ import { Search, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBusinessType } from "@/lib/business-type-context";
 import { useLocalStorage } from "@/lib/use-local-storage";
+import {
+  ServiceCategoryBadge,
+  type ServiceCategoryValue,
+} from "@/components/shared/service-category-badge";
 
 // 利用者一覧表示用の最小スキーマ（共通マスタ clients の subset）
+// service_category は migration 未適用環境で undefined になりうる
 interface ClientRow {
   id: string;
   name: string;
   furigana: string | null;
   status: string;
+  service_category?: ServiceCategoryValue;
+}
+
+// 介護/障害/両方 の絞り込みモード
+//   all     = すべて
+//   kaigo   = 介護のみ (= 'kaigo' | undefined (legacy 互換))
+//   shougai = 障害のみ (= 'shougai')
+//   both    = 両方利用のみ (= 'both')
+// 利用者が単一の介護専用テナントの場合、初期は all。
+type CategoryFilter = "all" | "kaigo" | "shougai" | "both";
+const CATEGORY_FILTER_KEY = "kaigo.user_category_filter";
+function parseCategoryFilter(raw: string | null): CategoryFilter {
+  if (raw === "kaigo" || raw === "shougai" || raw === "both" || raw === "all") return raw;
+  return "all";
 }
 
 interface UserSidebarProps {
@@ -85,6 +104,13 @@ function UserSidebarInner(props: UserSidebarProps) {
     (raw) => (raw === "all" ? "all" : "office"),
   );
 
+  // 介護/障害/両方 絞り込み
+  const [categoryFilter, setCategoryFilter] = useLocalStorage<CategoryFilter>(
+    CATEGORY_FILTER_KEY,
+    "all",
+    parseCategoryFilter,
+  );
+
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     // Supabase の db.max_rows（デフォルト 1000）対策で、
@@ -125,7 +151,10 @@ function UserSidebarInner(props: UserSidebarProps) {
       // is_facility = false: 法人/事業所エントリ（包括支援センター等）を除外
       const { data } = await supabase
         .from("clients")
-        .select("id, name, furigana, status")
+        // service_category 列は Phase Shougai-1 migration 適用後のみ存在。
+        // migration 未適用環境では select 失敗を防ぐため "*" で取得し、
+        // 未定義時は undefined のまま (フィルタ default 'all' で全件表示) として扱う。
+        .select("*")
         .in("id", clientIds)
         .eq("status", "active")
         .eq("is_facility", false)
@@ -138,7 +167,10 @@ function UserSidebarInner(props: UserSidebarProps) {
       // is_facility = false: 法人/事業所エントリを除外
       const { data } = await supabase
         .from("clients")
-        .select("id, name, furigana, status")
+        // service_category 列は Phase Shougai-1 migration 適用後のみ存在。
+        // migration 未適用環境では select 失敗を防ぐため "*" で取得し、
+        // 未定義時は undefined のまま (フィルタ default 'all' で全件表示) として扱う。
+        .select("*")
         .eq("status", "active")
         .eq("is_facility", false)
         .is("deleted_at", null)
@@ -181,6 +213,18 @@ function UserSidebarInner(props: UserSidebarProps) {
     if (filterMode === "office" && currentOfficeId) {
       list = list.filter((u) => officeUserIds.has(u.id));
     }
+    // 介護/障害/両方 絞り込み
+    //   kaigo:   service_category in ('kaigo','both') OR undefined (legacy 互換)
+    //   shougai: service_category in ('shougai','both')
+    //   both:    service_category === 'both'
+    if (categoryFilter !== "all") {
+      list = list.filter((u) => {
+        const c = u.service_category;
+        if (categoryFilter === "kaigo") return c == null || c === "kaigo" || c === "both";
+        if (categoryFilter === "shougai") return c === "shougai" || c === "both";
+        return c === "both";
+      });
+    }
     if (search) {
       const q = search.toLowerCase();
       list = list.filter((u) =>
@@ -188,7 +232,7 @@ function UserSidebarInner(props: UserSidebarProps) {
       );
     }
     return list;
-  }, [users, search, filterMode, currentOfficeId, officeUserIds]);
+  }, [users, search, filterMode, currentOfficeId, officeUserIds, categoryFilter]);
 
   // Auto-select 1st visible user when nothing selected (URL mode のみ)
   // 明示モード (users/[id]/layout) は URL の path 側で id が決まるので auto-select 不要
@@ -237,6 +281,34 @@ function UserSidebarInner(props: UserSidebarProps) {
             全利用者
           </button>
         </div>
+        {/* 制度区分フィルタ (Phase Shougai-1) */}
+        <div className="flex rounded-md border overflow-hidden text-[10px] font-medium">
+          {([
+            { key: "all" as const, label: "全種別" },
+            { key: "kaigo" as const, label: "介護" },
+            { key: "shougai" as const, label: "障害" },
+            { key: "both" as const, label: "両方" },
+          ]).map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => setCategoryFilter(opt.key)}
+              className={cn(
+                "flex-1 py-1 transition-colors",
+                categoryFilter === opt.key
+                  ? "bg-violet-600 text-white"
+                  : "bg-gray-50 text-gray-500 hover:bg-gray-100"
+              )}
+              title={
+                opt.key === "all" ? "すべての利用者"
+                : opt.key === "kaigo" ? "介護保険利用者 (両方利用を含む)"
+                : opt.key === "shougai" ? "障害福祉利用者 (両方利用を含む)"
+                : "介護保険と障害福祉を両方利用する利用者のみ"
+              }
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto">
         {loading ? (
@@ -259,8 +331,11 @@ function UserSidebarInner(props: UserSidebarProps) {
                   )}
                 >
                   <User size={14} className="shrink-0 text-gray-400" />
-                  <div className="min-w-0">
-                    <div className="truncate text-sm leading-tight">{user.name}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1">
+                      <span className="truncate text-sm leading-tight">{user.name}</span>
+                      <ServiceCategoryBadge category={user.service_category} size="xs" />
+                    </div>
                     <div className="truncate text-[10px] text-gray-400 leading-tight">{user.furigana ?? ""}</div>
                   </div>
                 </button>

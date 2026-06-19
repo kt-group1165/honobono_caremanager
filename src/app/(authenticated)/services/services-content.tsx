@@ -32,6 +32,8 @@ const SERVICE_TYPES = [
 export interface KaigoUser {
   id: string;
   name: string;
+  // Phase Shougai-1: form の制度区分 radio デフォルト決定に使用
+  service_category?: "kaigo" | "shougai" | "both" | null;
 }
 
 export interface KaigoStaff {
@@ -49,7 +51,10 @@ export interface ServiceRecord {
   user_id: string;
   staff_id: string;
   notes: string;
-  clients?: { name: string };
+  // Phase Shougai-1: 制度区分 (kaigo / shougai)
+  // migration 未適用環境では undefined
+  service_category?: "kaigo" | "shougai" | null;
+  clients?: { name: string; service_category?: "kaigo" | "shougai" | "both" | null };
   members?: { name: string };
 }
 
@@ -62,6 +67,8 @@ const EMPTY_FORM = {
   user_id: "",
   staff_id: "",
   notes: "",
+  // 利用者選択時に動的に上書き (= kaigo / shougai / both → default 'kaigo')
+  service_category: "kaigo" as "kaigo" | "shougai",
 };
 
 export function ServicesContent({
@@ -92,12 +99,15 @@ export function ServicesContent({
   const [filterType, setFilterType] = useState("");
   const [filterUser, setFilterUser] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  // Phase Shougai-1: 制度区分フィルタ
+  const [filterCategory, setFilterCategory] = useState<"all" | "kaigo" | "shougai">("all");
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
     // PostgREST embed: kaigo_service_records.user_id → clients, .staff_id → members (FK redirect 済)
     let query = supabase
       .from("kaigo_service_records")
+      // service_category 列は kaigo_service_records.* で自動取得される (Phase Shougai-1)
       .select(
         "*, clients(name), members(name)"
       )
@@ -174,9 +184,28 @@ export function ServicesContent({
       user_id: record.user_id || "",
       staff_id: record.staff_id || "",
       notes: record.notes || "",
+      service_category: (record.service_category as "kaigo" | "shougai" | null) ?? "kaigo",
     });
     setDialogOpen(true);
   };
+
+  // 利用者選択時に制度区分のデフォルト値を更新 (= 'shougai' 専用利用者は強制 shougai)
+  const onSelectUser = (uid: string) => {
+    const user = users.find((u) => u.id === uid);
+    setForm((prev) => ({
+      ...prev,
+      user_id: uid,
+      service_category:
+        user?.service_category === "shougai" ? "shougai" :
+        user?.service_category === "kaigo" ? "kaigo" :
+        prev.service_category, // both / undefined → 維持
+    }));
+  };
+
+  // 選択中利用者のカテゴリで radio 編集可否を決定 ('both' or undefined のみ自由選択)
+  const selectedUserCategory = users.find((u) => u.id === form.user_id)?.service_category;
+  const canChooseCategory =
+    selectedUserCategory === "both" || selectedUserCategory == null;
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -228,6 +257,11 @@ export function ServicesContent({
   };
 
   const filtered = records.filter((r) => {
+    // Phase Shougai-1: 制度区分フィルタ (= 'all' なら無視)
+    if (filterCategory !== "all") {
+      const c = r.service_category ?? "kaigo"; // legacy 互換
+      if (c !== filterCategory) return false;
+    }
     if (!searchQuery) return true;
     const userName = r.clients?.name || "";
     const staffName = r.members?.name || "";
@@ -333,7 +367,28 @@ export function ServicesContent({
             </div>
           </div>
         </div>
-        {(filterDateFrom || filterDateTo || filterType || filterUser || searchQuery) && (
+        {/* Phase Shougai-1: 制度区分フィルタ */}
+        <div className="mt-3 flex items-center gap-2 border-t pt-3 text-xs">
+          <span className="text-gray-500">制度区分:</span>
+          {([
+            { v: "all" as const, label: "すべて" },
+            { v: "kaigo" as const, label: "介護" },
+            { v: "shougai" as const, label: "障害" },
+          ]).map((opt) => (
+            <button
+              key={opt.v}
+              onClick={() => setFilterCategory(opt.v)}
+              className={`rounded-full border px-3 py-0.5 transition-colors ${
+                filterCategory === opt.v
+                  ? "border-violet-500 bg-violet-50 text-violet-700 font-medium"
+                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        {(filterDateFrom || filterDateTo || filterType || filterUser || searchQuery || filterCategory !== "all") && (
           <button
             onClick={() => {
               setFilterDateFrom("");
@@ -341,6 +396,7 @@ export function ServicesContent({
               setFilterType("");
               setFilterUser("");
               setSearchQuery("");
+              setFilterCategory("all");
             }}
             className="mt-2 text-xs text-blue-600 hover:underline"
           >
@@ -383,9 +439,22 @@ export function ServicesContent({
                       {record.clients?.name || "—"}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
-                        {record.service_type}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+                          {record.service_type}
+                        </span>
+                        {/* Phase Shougai-1: 制度区分 chip */}
+                        {record.service_category === "shougai" && (
+                          <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0 text-[10px] font-medium text-violet-700">
+                            障害
+                          </span>
+                        )}
+                        {record.service_category === "kaigo" && (
+                          <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0 text-[10px] font-medium text-blue-700">
+                            介護
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                       {record.start_time && record.end_time
@@ -479,14 +548,50 @@ export function ServicesContent({
                   <select
                     required
                     value={form.user_id}
-                    onChange={(e) => setForm({ ...form, user_id: e.target.value })}
+                    onChange={(e) => onSelectUser(e.target.value)}
                     className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     <option value="">選択してください</option>
                     {users.map((u) => (
-                      <option key={u.id} value={u.id}>{u.name}</option>
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                        {u.service_category === "shougai" ? " [障害]" :
+                         u.service_category === "both" ? " [両方]" : ""}
+                      </option>
                     ))}
                   </select>
+                </div>
+                {/* Phase Shougai-1: 制度区分 radio */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    制度区分
+                    {!canChooseCategory && form.user_id && (
+                      <span className="ml-1 text-[10px] font-normal text-gray-400">
+                        (利用者の設定により固定)
+                      </span>
+                    )}
+                  </label>
+                  <div className="flex gap-6">
+                    {([
+                      { v: "kaigo" as const, label: "介護 (介護保険)" },
+                      { v: "shougai" as const, label: "障害 (障害福祉)" },
+                    ]).map((opt) => (
+                      <label key={opt.v} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                        <input
+                          type="radio"
+                          name="service_category"
+                          value={opt.v}
+                          checked={form.service_category === opt.v}
+                          disabled={!canChooseCategory && !!form.user_id}
+                          onChange={() => setForm({ ...form, service_category: opt.v })}
+                          className="accent-violet-600"
+                        />
+                        <span className={!canChooseCategory && !!form.user_id && form.service_category !== opt.v ? "text-gray-400" : ""}>
+                          {opt.label}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
