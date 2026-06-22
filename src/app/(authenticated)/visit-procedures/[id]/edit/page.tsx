@@ -36,7 +36,8 @@ import {
   VISIT_SERVICE_KINDS,
   WEEKDAY_KEYS,
   WEEKDAY_LABELS,
-  WEEKLY_START_TIME_OPTIONS,
+  WEEKLY_HOUR_OPTIONS,
+  WEEKLY_MINUTE_OPTIONS,
   buildStepDurationOptions,
   parseHHMM,
   formatHHMM,
@@ -637,33 +638,58 @@ function WeeklyScheduleEditor({
                     const totalMin = sumServiceMinutes(svc);
                     const start = cell?.start ?? "";
                     const startMin = parseHHMM(start);
+                    const hh = startMin !== null ? Math.floor(startMin / 60) : null;
+                    const mm = startMin !== null ? startMin % 60 : null;
                     const endLabel = (() => {
                       if (!start || startMin === null) return "";
                       if (totalMin <= 0) return "";
                       return formatHHMM(startMin + totalMin);
                     })();
+                    // 時/分 を分離プルダウン化。時 "--" → clear、分 "--" + 時 set → 分=0 で commit。
+                    const commit = (newH: number | null, newM: number | null) => {
+                      if (newH === null) {
+                        onCellChange(day, rowIdx, no, null);
+                        return;
+                      }
+                      const M = newM ?? 0;
+                      onCellChange(day, rowIdx, no, { start: formatHHMM(newH * 60 + M) });
+                    };
                     return (
                       <td key={no} className="px-1 py-1 border border-gray-200 align-middle">
-                        <div className="flex items-center justify-center gap-1 flex-wrap">
+                        {/* 左寄せ固定レイアウト: [時] : [分]  - HH:MM (自動)  / 空時もスロット維持 */}
+                        <div className="flex items-center justify-start gap-0.5 whitespace-nowrap">
                           <select
-                            value={start}
+                            value={hh ?? ""}
                             onChange={(e) =>
-                              onCellChange(day, rowIdx, no, e.target.value ? { start: e.target.value } : null)
+                              commit(e.target.value === "" ? null : Number(e.target.value), mm)
                             }
                             className="rounded border border-gray-200 px-1 py-1 text-xs bg-white"
-                            aria-label={`${WEEKDAY_LABELS[day]} サービス${no} 開始時刻`}
+                            aria-label={`${WEEKDAY_LABELS[day]} サービス${no} 開始 時`}
                           >
                             <option value="">--</option>
-                            {WEEKLY_START_TIME_OPTIONS.map((t) => (
-                              <option key={t} value={t}>{t}</option>
+                            {WEEKLY_HOUR_OPTIONS.map((h) => (
+                              <option key={h} value={h}>{String(h).padStart(2, "0")}</option>
                             ))}
                           </select>
-                          {endLabel && (
-                            <span className="text-[10px] text-gray-500 tabular-nums whitespace-nowrap">
-                              - {endLabel}
-                              <span className="ml-0.5 text-gray-400">(自動)</span>
-                            </span>
-                          )}
+                          <span className="text-gray-400">:</span>
+                          <select
+                            value={mm ?? ""}
+                            onChange={(e) =>
+                              commit(hh, e.target.value === "" ? null : Number(e.target.value))
+                            }
+                            className="rounded border border-gray-200 px-1 py-1 text-xs bg-white"
+                            aria-label={`${WEEKDAY_LABELS[day]} サービス${no} 開始 分`}
+                          >
+                            <option value="">--</option>
+                            {WEEKLY_MINUTE_OPTIONS.map((m) => (
+                              <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
+                            ))}
+                          </select>
+                          <span className="text-[10px] text-gray-500 tabular-nums ml-1 min-w-[78px] inline-block">
+                            {endLabel
+                              ? <>- {endLabel} <span className="text-gray-400">(自動)</span></>
+                              : ""}
+                          </span>
                         </div>
                       </td>
                     );

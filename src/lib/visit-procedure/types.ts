@@ -206,16 +206,11 @@ export function sumServiceMinutes(service: VisitProcedureService | undefined | n
   return total;
 }
 
-/** 開始時刻 5 分刻みプルダウン用 options (00:00 〜 23:55) */
-export const WEEKLY_START_TIME_OPTIONS: string[] = (() => {
-  const out: string[] = [];
-  for (let h = 0; h < 24; h++) {
-    for (let mi = 0; mi < 60; mi += 5) {
-      out.push(`${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`);
-    }
-  }
-  return out;
-})();
+/** 開始時刻 時プルダウン用 options (0 〜 23) */
+export const WEEKLY_HOUR_OPTIONS: readonly number[] = Array.from({ length: 24 }, (_, i) => i);
+
+/** 開始時刻 分プルダウン用 options (0 / 5 / 10 / ... / 55) */
+export const WEEKLY_MINUTE_OPTIONS: readonly number[] = Array.from({ length: 12 }, (_, i) => i * 5);
 
 /** step 所要時間プルダウン options (5 分刻み、上限を引数指定) */
 export function buildStepDurationOptions(maxMinutes: number): number[] {
