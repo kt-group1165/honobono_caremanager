@@ -21,6 +21,9 @@ import {
   WEEKDAY_KEYS,
   WEEKDAY_LABELS,
   SERVICE_NOS,
+  parseHHMM,
+  formatHHMM,
+  sumServiceMinutes,
   type VisitProcedureDocument,
 } from "@/lib/visit-procedure/types";
 
@@ -29,27 +32,6 @@ function formatJpDate(s: string | null | undefined): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
   if (!m) return s;
   return `${m[1]}年${Number(m[2])}月${Number(m[3])}日`;
-}
-
-/** "9:00-9:45" → { start: "9:00", end: "9:45" } */
-function splitTimeRange(s: string | null | undefined): { start: string; end: string } {
-  if (!s) return { start: "", end: "" };
-  const m = /^(\d{1,2}:\d{1,2})\s*[-〜~]\s*(\d{1,2}:\d{1,2})$/.exec(s);
-  if (!m) return { start: s, end: "" };
-  return { start: m[1], end: m[2] };
-}
-
-/** dash 位置を揃えた 時刻範囲表示 */
-function AlignedTimeRange({ value }: { value: string | null | undefined }) {
-  const { start, end } = splitTimeRange(value);
-  if (!start && !end) return <span className="text-gray-400">—</span>;
-  return (
-    <span className="tabular-nums whitespace-nowrap">
-      <span className="inline-block text-right" style={{ width: "2.6em" }}>{start}</span>
-      <span className="mx-px">-</span>
-      <span className="inline-block text-right" style={{ width: "2.6em" }}>{end}</span>
-    </span>
-  );
 }
 
 export default function MobileVisitProcedureView() {
@@ -77,7 +59,7 @@ export default function MobileVisitProcedureView() {
           }
           const filled = SERVICE_NOS.map((no) => {
             const ex = found.services.find((s) => s.service_no === no);
-            return ex ?? { service_no: no, time_range: "", service_kind: "" as const, special_notes: "", steps: [] };
+            return ex ?? { service_no: no, service_kind: "" as const, special_notes: "", steps: [] };
           });
           setDoc({ ...found, services: filled });
         }
@@ -105,7 +87,7 @@ export default function MobileVisitProcedureView() {
   const period = `${formatJpDate(doc.plan_start_date)}〜${formatJpDate(doc.plan_end_date)}`;
   const SERVICE_COLORS = ["bg-blue-100", "bg-emerald-100", "bg-amber-100", "bg-rose-100", "bg-violet-100"];
 
-  const visibleServices = doc.services.filter((s) => s.time_range || s.service_kind || s.steps.length > 0 || s.special_notes);
+  const visibleServices = doc.services.filter((s) => s.service_kind || s.steps.length > 0 || s.special_notes);
 
   // モジュール grid 用
   const COLS = Array.from({ length: 18 }, (_, i) => (i + 1) * 5);
@@ -183,25 +165,49 @@ export default function MobileVisitProcedureView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {WEEKDAY_KEYS.map((day) => (
-                    <tr key={day} className="border-t border-gray-200">
-                      <td className="px-1 py-1 border border-gray-200 text-center font-medium bg-gray-50">{WEEKDAY_LABELS[day]}</td>
-                      {SERVICE_NOS.map((no) => {
-                        const c = doc.weekly_schedule?.[day]?.[String(no)] ?? {};
-                        const has = c.time_range || c.service_kind;
-                        return (
-                          <td key={no} className="px-1 py-1 border border-gray-200 align-middle">
-                            {has ? (
-                              <div className="flex items-baseline justify-center gap-2">
-                                <span className="text-gray-800"><AlignedTimeRange value={c.time_range} /></span>
-                                <span className="text-gray-500 text-left" style={{ minWidth: "4.5rem" }}>{c.service_kind || ""}</span>
-                              </div>
-                            ) : <span className="block text-gray-300 text-center">&nbsp;</span>}
+                  {WEEKDAY_KEYS.flatMap((day) => {
+                    const rows = doc.weekly_schedule[day] ?? [{}];
+                    const effective = rows.length === 0 ? [{}] : rows;
+                    return effective.map((row, rowIdx) => (
+                      <tr key={`${day}-${rowIdx}`} className="border-t border-gray-200">
+                        {rowIdx === 0 && (
+                          <td
+                            rowSpan={effective.length}
+                            className="px-1 py-1 border border-gray-200 text-center font-medium bg-gray-50"
+                          >
+                            {WEEKDAY_LABELS[day]}
                           </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
+                        )}
+                        {SERVICE_NOS.map((no) => {
+                          const cell = row?.[String(no)];
+                          const start = cell?.start;
+                          if (!start) {
+                            return (
+                              <td key={no} className="px-1 py-1 border border-gray-200 align-middle">
+                                <span className="block text-gray-300 text-center">&nbsp;</span>
+                              </td>
+                            );
+                          }
+                          const svc = doc.services.find((s) => s.service_no === no);
+                          const startMin = parseHHMM(start);
+                          const total = sumServiceMinutes(svc);
+                          const endLabel = startMin !== null && total > 0 ? formatHHMM(startMin + total) : "";
+                          return (
+                            <td key={no} className="px-1 py-1 border border-gray-200 align-middle">
+                              <div className="flex items-baseline justify-center gap-2">
+                                <span className="text-gray-800 tabular-nums whitespace-nowrap">
+                                  {start}{endLabel ? `-${endLabel}` : ""}
+                                </span>
+                                <span className="text-gray-500 text-left" style={{ minWidth: "4.5rem" }}>
+                                  {svc?.service_kind || ""}
+                                </span>
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ));
+                  })}
                 </tbody>
               </table>
             </div>
@@ -214,8 +220,8 @@ export default function MobileVisitProcedureView() {
             <div className={`px-3 py-2 text-sm font-semibold text-gray-800 ${SERVICE_COLORS[svcIdx % SERVICE_COLORS.length]} border-b border-gray-200`}>
               <div>サービス{svc.service_no}</div>
               <div className="text-xs font-normal text-gray-700">
-                {svc.time_range || "—"}
-                {svc.service_kind ? ` / ${svc.service_kind}` : ""}
+                {svc.service_kind || "—"}
+                {sumServiceMinutes(svc) > 0 ? ` (合計 ${sumServiceMinutes(svc)} 分)` : ""}
               </div>
             </div>
             <div className="p-3 space-y-2">
@@ -267,7 +273,7 @@ export default function MobileVisitProcedureView() {
                 return (
                   <div key={svc.service_no} className="rounded border border-gray-200 p-2">
                     <div className="text-xs font-medium text-gray-700 mb-1">
-                      サービス{svc.service_no} ({svc.time_range || "—"}{svc.service_kind ? ` / ${svc.service_kind}` : ""}) — 合計 {total} 分
+                      サービス{svc.service_no} ({svc.service_kind || "—"}) — 合計 {total} 分
                     </div>
                     <div style={{ width: `${cellW * COLS.length + 80}px` }}>
                       <div className="flex border-b border-gray-200 text-[9px] text-gray-500 mb-1">

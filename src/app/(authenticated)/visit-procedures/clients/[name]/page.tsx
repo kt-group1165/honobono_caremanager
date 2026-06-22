@@ -1,10 +1,13 @@
 "use client";
 
 /**
- * 訪問介護 手順書: 利用者ごとのバージョン一覧 page
+ * 訪問介護 手順書: 利用者ごとのバージョン一覧 page (v2)
  *
  * URL: /visit-procedures/clients/[name]
  *   name = encodeURIComponent された利用者名
+ *
+ * v2 変更:
+ *  - 各バージョン行に「📋 複製」ボタン追加 (modal で「同じ利用者の新バージョン」/「別の利用者にコピー」)
  *
  * - 該当利用者の手順書バージョン一覧 (新しい順)
  *   表示形式: 「1  2026年1月1日～2027年12月31日（短期目標更新の為）」
@@ -15,12 +18,13 @@
 import Link from "next/link";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, BookOpen, Plus, AlertCircle, Loader2, Trash2 } from "lucide-react";
+import { ArrowLeft, BookOpen, Plus, AlertCircle, Loader2, Trash2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { getDocumentsByClient, deleteDocument } from "@/lib/visit-procedure/queries";
 import type { VisitProcedureDocumentSummary } from "@/lib/visit-procedure/types";
+import { DuplicateDocumentModal } from "@/lib/visit-procedure/DuplicateDocumentModal";
 
 function formatJpDate(s: string | null | undefined): string {
   if (!s) return "（未設定）";
@@ -38,6 +42,7 @@ export default function VisitProcedureVersionListPage() {
   const [docs, setDocs] = useState<VisitProcedureDocumentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [dupSourceId, setDupSourceId] = useState<string | null>(null);
 
   const clientName = decodeURIComponent(params?.name ?? "");
   const tenantId = currentOffice?.tenant_id ?? null;
@@ -83,6 +88,11 @@ export default function VisitProcedureVersionListPage() {
   const handleCreateNew = () => {
     const sep = officeQuery ? "&" : "?";
     router.push(`/visit-procedures/clients/${encodeURIComponent(clientName)}/new${officeQuery}${sep}name=${encodeURIComponent(clientName)}`);
+  };
+
+  const handleDuplicated = (newId: string) => {
+    setDupSourceId(null);
+    router.push(`/visit-procedures/${newId}/edit${officeQuery}`);
   };
 
   if (!btLoading && businessType !== "訪問介護") {
@@ -151,6 +161,14 @@ export default function VisitProcedureVersionListPage() {
                     </div>
                   </Link>
                   <button
+                    onClick={() => setDupSourceId(d.id)}
+                    className="shrink-0 inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50"
+                    title="複製"
+                  >
+                    <Copy size={14} />
+                    <span className="hidden sm:inline">複製</span>
+                  </button>
+                  <button
                     onClick={() => handleDelete(d.id, range)}
                     disabled={deletingId === d.id}
                     className="shrink-0 inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
@@ -163,6 +181,16 @@ export default function VisitProcedureVersionListPage() {
             );
           })}
         </div>
+      )}
+
+      {dupSourceId && (
+        <DuplicateDocumentModal
+          supabase={supabase}
+          sourceId={dupSourceId}
+          tenantId={tenantId}
+          onClose={() => setDupSourceId(null)}
+          onDuplicated={handleDuplicated}
+        />
       )}
     </div>
   );

@@ -1,10 +1,16 @@
 /**
- * 訪問介護 手順書/モジュール 機能の型定義
+ * 訪問介護 手順書/モジュール 機能の型定義 v2 (2026-06-22 確定)
+ *
+ * v2 変更点:
+ *  - サービス側の time_range を廃止 (= 週次表に移動)
+ *  - 週次表は曜日 → 行配列 → サービス番号 → { start: "HH:MM" } | null
+ *  - end は start + sum(step.minutes) で UI 側自動算出 (DB 保存なし)
+ *  - 実施曜日 chip は廃止 (週次表で完結)
  *
  * Phase 1:
- * - 利用者DB 未連携 (client_name は自由入力テキスト)
- * - 訪問介護モードのみで表示
- * - サービス区分は hardcode 11 enum
+ *  - 利用者DB 未連携 (client_name は自由入力テキスト)
+ *  - 訪問介護モードのみで表示
+ *  - サービス区分は hardcode 11 enum
  */
 
 export const VISIT_SERVICE_KINDS = [
@@ -42,22 +48,30 @@ export const SERVICE_NOS = [1, 2, 3, 4, 5] as const;
 export type ServiceNo = (typeof SERVICE_NOS)[number];
 
 /**
- * 週次表 1 セルの値
- * (Excel ④ では「時間帯 + サービス区分」が並列して入る)
+ * 週次表 1 セルの値 (v2)
+ *   - start: "HH:MM" (5 分刻み)
+ *   - end は start + サービスの step 合計分から計算 (DB 保存なし)
+ *   - null は「この行の このサービス列は空」
  */
 export interface WeeklyCell {
-  time_range?: string;
-  service_kind?: VisitServiceKind | "";
+  start?: string;
 }
 
 /**
- * 週次表 全体
- * { mon: { '1': { time_range, service_kind }, ... }, tue: {}, ... }
+ * 週次表 1 日 = 1 行ぶん (= サービス1〜5 の cell 配列)
+ *   { '1': { start }, '2': null, ... }
+ */
+export type WeeklyRow = {
+  [serviceNo: string]: WeeklyCell | null;
+};
+
+/**
+ * 週次表 全体 (v2)
+ *   { mon: [row, row, ...], tue: [row, ...], ... }
+ *   各曜日 最低 1 行は保持 (空でも)
  */
 export type WeeklySchedule = {
-  [K in WeekdayKey]?: {
-    [serviceNo: string]: WeeklyCell;
-  };
+  [K in WeekdayKey]?: WeeklyRow[];
 };
 
 export interface VisitProcedureStep {
@@ -73,7 +87,6 @@ export interface VisitProcedureService {
   id?: string;
   document_id?: string;
   service_no: number;
-  time_range: string | null;
   service_kind: VisitServiceKind | "";
   special_notes: string | null;
   steps: VisitProcedureStep[];
@@ -115,6 +128,22 @@ export interface VisitProcedureClient {
   latest_plan_start_date: string;
 }
 
+/** 全曜日に空セル 1 行を入れた weekly_schedule を返す helper */
+export function emptyWeeklySchedule(): WeeklySchedule {
+  const out: WeeklySchedule = {};
+  for (const day of WEEKDAY_KEYS) {
+    out[day] = [emptyWeeklyRow()];
+  }
+  return out;
+}
+
+/** サービス 1〜5 が全部 null の 1 行 */
+export function emptyWeeklyRow(): WeeklyRow {
+  const row: WeeklyRow = {};
+  for (const no of SERVICE_NOS) row[String(no)] = null;
+  return row;
+}
+
 /** 空の document を返す */
 export function emptyDocument(tenantId: string, officeId: string | null): VisitProcedureDocument {
   const today = new Date();
@@ -130,13 +159,68 @@ export function emptyDocument(tenantId: string, officeId: string | null): VisitP
     author_name: "",
     creation_reason: "",
     special_notes: "",
-    weekly_schedule: {},
+    weekly_schedule: emptyWeeklySchedule(),
     services: SERVICE_NOS.map<VisitProcedureService>((no) => ({
       service_no: no,
-      time_range: "",
       service_kind: "",
       special_notes: "",
       steps: [],
     })),
   };
+}
+
+// ─────────────────────────────────────────────────────
+// 時刻計算 helper (週次表 end 自動算出用)
+// ─────────────────────────────────────────────────────
+
+/** "HH:MM" → 分数 (= 0:00 起算)。parse 不能なら null */
+export function parseHHMM(s: string | null | undefined): number | null {
+  if (!s) return null;
+  const m = /^(\d{1,2}):(\d{1,2})$/.exec(s);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const mi = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(mi)) return null;
+  return h * 60 + mi;
+}
+
+/**
+ * 分数 → "HH:MM" 表記。
+ * 24:00 を超える場合は 25:00, 26:00 ... のように 24+ 表記 (= スタート曜日に紐付け)
+ */
+export function formatHHMM(totalMinutes: number): string {
+  const m = Math.max(0, Math.floor(totalMinutes));
+  const h = Math.floor(m / 60);
+  const mi = m % 60;
+  return `${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`;
+}
+
+/** サービスの step 合計分 (= 終了時刻計算用) */
+export function sumServiceMinutes(service: VisitProcedureService | undefined | null): number {
+  if (!service) return 0;
+  let total = 0;
+  for (const st of service.steps) {
+    const m = Number(st.minutes);
+    if (Number.isFinite(m) && m > 0) total += Math.floor(m);
+  }
+  return total;
+}
+
+/** 開始時刻 5 分刻みプルダウン用 options (00:00 〜 23:55) */
+export const WEEKLY_START_TIME_OPTIONS: string[] = (() => {
+  const out: string[] = [];
+  for (let h = 0; h < 24; h++) {
+    for (let mi = 0; mi < 60; mi += 5) {
+      out.push(`${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`);
+    }
+  }
+  return out;
+})();
+
+/** step 所要時間プルダウン options (5 分刻み、上限を引数指定) */
+export function buildStepDurationOptions(maxMinutes: number): number[] {
+  const max = Math.max(5, Math.floor(maxMinutes / 5) * 5);
+  const out: number[] = [];
+  for (let m = 5; m <= max; m += 5) out.push(m);
+  return out;
 }

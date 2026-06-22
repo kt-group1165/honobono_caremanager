@@ -1,7 +1,11 @@
 "use client";
 
 /**
- * 訪問介護 手順書: 利用者一覧 page
+ * 訪問介護 手順書: 利用者一覧 page (v2)
+ *
+ * v2 変更:
+ *  - 設定ボタン (⚙️) で step 所要時間プルダウン上限を変更
+ *  - 各 利用者行に「📋」(= 直近版を複製するため、まずバージョン一覧へ誘導)
  *
  * 表示: 過去に手順書を作成した利用者 (DISTINCT client_name) + バージョン数
  * 操作:
@@ -12,11 +16,16 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
-import { BookOpen, Plus, AlertCircle, Loader2, User } from "lucide-react";
+import { BookOpen, Plus, AlertCircle, Loader2, User, Settings, Save } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
-import { getClients } from "@/lib/visit-procedure/queries";
+import {
+  getClients,
+  getStepDurationMax,
+  setStepDurationMax,
+  getMaxStepMinutesForTenant,
+} from "@/lib/visit-procedure/queries";
 import type { VisitProcedureClient } from "@/lib/visit-procedure/types";
 
 export default function VisitProceduresClientListPage() {
@@ -27,6 +36,7 @@ export default function VisitProceduresClientListPage() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
 
   const tenantId = currentOffice?.tenant_id ?? null;
   const officeQuery = currentOffice ? `?office=${encodeURIComponent(currentOffice.id)}` : "";
@@ -92,13 +102,23 @@ export default function VisitProceduresClientListPage() {
           </h1>
           <p className="mt-1 text-xs sm:text-sm text-gray-500">利用者を選んでバージョン一覧へ</p>
         </div>
-        <button
-          onClick={() => { setNewName(""); setShowAdd(true); }}
-          className="shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
-        >
-          <Plus size={16} />
-          新規利用者
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setShowSettings(true)}
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            title="設定"
+          >
+            <Settings size={16} />
+            設定
+          </button>
+          <button
+            onClick={() => { setNewName(""); setShowAdd(true); }}
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
+          >
+            <Plus size={16} />
+            新規利用者
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -164,6 +184,148 @@ export default function VisitProceduresClientListPage() {
           </div>
         </div>
       )}
+
+      {/* 設定 modal */}
+      {showSettings && (
+        <SettingsModal supabase={supabase} tenantId={tenantId} onClose={() => setShowSettings(false)} />
+      )}
+    </div>
+  );
+}
+
+// =====================================================================
+// 設定 modal (step 所要時間プルダウン上限)
+// =====================================================================
+function SettingsModal({
+  supabase,
+  tenantId,
+  onClose,
+}: {
+  supabase: ReturnType<typeof createClient>;
+  tenantId: string | null;
+  onClose: () => void;
+}) {
+  const [currentMax, setCurrentMax] = useState<number>(60);
+  const [usedMax, setUsedMax] = useState<number>(0);
+  const [draftMax, setDraftMax] = useState<number>(60);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+     
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const max = await getStepDurationMax(supabase);
+        if (!cancelled) {
+          setCurrentMax(max);
+          setDraftMax(max);
+        }
+        if (tenantId) {
+          const used = await getMaxStepMinutesForTenant(supabase, tenantId);
+          if (!cancelled) setUsedMax(used);
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error("設定読込失敗: " + (err instanceof Error ? err.message : String(err)));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+     
+  }, [supabase, tenantId]);
+
+  // 5, 10, ..., 240 まで選択肢 (= 4 時間)
+  const ALL_OPTIONS: number[] = (() => {
+    const out: number[] = [];
+    for (let m = 5; m <= 240; m += 5) out.push(m);
+    return out;
+  })();
+
+  const handleSave = async () => {
+    if (draftMax < usedMax) {
+      toast.error(`既存値の最大 ${usedMax} 分より低い値には変更できません`);
+      return;
+    }
+    setSaving(true);
+    try {
+      await setStepDurationMax(supabase, draftMax);
+      toast.success("設定を保存しました");
+      onClose();
+    } catch (err) {
+      console.error(err);
+      toast.error("保存失敗: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="bg-white rounded-lg p-5 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+          <Settings size={18} className="text-gray-600" />
+          手順書 設定
+        </h2>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-8 text-gray-400">
+            <Loader2 size={18} className="animate-spin mr-2" />
+            読込中...
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">
+                step 所要時間プルダウン 上限
+              </label>
+              <p className="text-[11px] text-gray-500 mb-2">
+                各サービスの step 行で選べる「所要時間 (分)」の最大値。5 分刻み。<br />
+                現在使われている最大値: <span className="font-medium tabular-nums">{usedMax} 分</span>
+                {usedMax > 0 && <span className="ml-1 text-gray-400">(これ未満には変更できません)</span>}
+              </p>
+              <select
+                value={draftMax}
+                onChange={(e) => setDraftMax(Number(e.target.value))}
+                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm bg-white"
+              >
+                {ALL_OPTIONS.map((m) => {
+                  const disabled = m < usedMax;
+                  return (
+                    <option key={m} value={m} disabled={disabled}>
+                      {m} 分 {disabled ? "(既存値より低いため無効)" : ""}
+                    </option>
+                  );
+                })}
+              </select>
+              <p className="text-[11px] text-gray-400 mt-1">
+                現在の保存値: {currentMax} 分
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 mt-5">
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded"
+            disabled={saving}
+          >
+            キャンセル
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || loading || draftMax < usedMax}
+            className="inline-flex items-center gap-1 rounded bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+          >
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            保存
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

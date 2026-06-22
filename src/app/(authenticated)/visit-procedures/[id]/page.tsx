@@ -1,19 +1,21 @@
 "use client";
 
 /**
- * 訪問介護 手順書: プレビュー page (read-only)
+ * 訪問介護 手順書: プレビュー page (v2 read-only)
  *
  * URL: /visit-procedures/[id]
  *
- * - 既存 doc を fetch して整形表示 (印刷向けレイアウト)
- * - 2 タブ: 手順 / モジュール (両方 read-only)
- * - 編集ボタンで /[id]/edit へ
+ * v2 変更:
+ *  - 週次表は新形式 (各日 N 行、開始時刻のみ保存、終了は step 合計から算出)
+ *  - サービス header に time_range は表示しない (= 廃止)
+ *  - 上部に「📋 複製」ボタン追加
+ *  - 24:00 跨ぎは 25:00 表記
  */
 
 import Link from "next/link";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, BookOpen, Edit3, Loader2, AlertCircle, Layers, LayoutGrid, Printer } from "lucide-react";
+import { ArrowLeft, BookOpen, Edit3, Loader2, AlertCircle, Layers, LayoutGrid, Printer, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
@@ -22,8 +24,12 @@ import {
   WEEKDAY_KEYS,
   WEEKDAY_LABELS,
   SERVICE_NOS,
+  parseHHMM,
+  formatHHMM,
+  sumServiceMinutes,
   type VisitProcedureDocument,
 } from "@/lib/visit-procedure/types";
+import { DuplicateDocumentModal } from "@/lib/visit-procedure/DuplicateDocumentModal";
 
 type Tab = "procedure" | "module";
 
@@ -32,25 +38,6 @@ function formatJpDate(s: string | null | undefined): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
   if (!m) return s;
   return `${m[1]}年${Number(m[2])}月${Number(m[3])}日`;
-}
-
-function splitTimeRange(s: string | null | undefined): { start: string; end: string } {
-  if (!s) return { start: "", end: "" };
-  const m = /^(\d{1,2}:\d{1,2})\s*[-〜~]\s*(\d{1,2}:\d{1,2})$/.exec(s);
-  if (!m) return { start: s, end: "" };
-  return { start: m[1], end: m[2] };
-}
-
-function AlignedTimeRange({ value }: { value: string | null | undefined }) {
-  const { start, end } = splitTimeRange(value);
-  if (!start && !end) return <span className="text-gray-400">—</span>;
-  return (
-    <span className="tabular-nums whitespace-nowrap">
-      <span className="inline-block text-right" style={{ width: "2.8em" }}>{start}</span>
-      <span className="mx-px">-</span>
-      <span className="inline-block text-right" style={{ width: "2.8em" }}>{end}</span>
-    </span>
-  );
 }
 
 export default function VisitProcedurePreviewPage() {
@@ -63,6 +50,7 @@ export default function VisitProcedurePreviewPage() {
   const [tab, setTab] = useState<Tab>("procedure");
   const [doc, setDoc] = useState<VisitProcedureDocument | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showDup, setShowDup] = useState(false);
 
   const tenantId = currentOffice?.tenant_id ?? null;
   const officeQuery = search?.get("office") ? `?office=${encodeURIComponent(search.get("office")!)}` : "";
@@ -84,7 +72,7 @@ export default function VisitProcedurePreviewPage() {
           }
           const filled = SERVICE_NOS.map((no) => {
             const ex = found.services.find((s) => s.service_no === no);
-            return ex ?? { service_no: no, time_range: "", service_kind: "" as const, special_notes: "", steps: [] };
+            return ex ?? { service_no: no, service_kind: "" as const, special_notes: "", steps: [] };
           });
           setDoc({ ...found, services: filled });
         }
@@ -100,6 +88,11 @@ export default function VisitProcedurePreviewPage() {
     /* eslint-enable react-hooks/set-state-in-effect */
   // eslint-disable-next-line react-hooks/exhaustive-deps -- router 変化で再 load 不要
   }, [supabase, tenantId, id, btLoading]);
+
+  const handleDuplicated = (newId: string) => {
+    setShowDup(false);
+    router.push(`/visit-procedures/${newId}/edit${officeQuery}`);
+  };
 
   if (!btLoading && businessType !== "訪問介護") {
     return (
@@ -156,6 +149,14 @@ export default function VisitProcedurePreviewPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowDup(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
+            title="複製"
+          >
+            <Copy size={16} />
+            複製
+          </button>
+          <button
             onClick={() => window.print()}
             className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
@@ -202,51 +203,77 @@ export default function VisitProcedurePreviewPage() {
       </div>
 
       {tab === "procedure" ? <ProcedurePreview doc={doc} /> : <ModulePreview doc={doc} />}
+
+      {showDup && (
+        <DuplicateDocumentModal
+          supabase={supabase}
+          sourceId={id}
+          tenantId={tenantId}
+          onClose={() => setShowDup(false)}
+          onDuplicated={handleDuplicated}
+        />
+      )}
     </div>
   );
 }
 
 // =====================================================================
-// 手順 タブ (read-only)
+// 手順 タブ (read-only, v2)
 // =====================================================================
 function ProcedurePreview({ doc }: { doc: VisitProcedureDocument }) {
   return (
     <div className="space-y-6">
-      {/* 週次表 */}
+      {/* 週次表 (新形式 read-only) */}
       <section className="rounded-lg border border-gray-200 bg-white">
         <h2 className="px-3 py-2 border-b border-gray-200 text-sm font-semibold text-gray-700 bg-gray-50">週次サービス表</h2>
         <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse table-fixed">
-            <colgroup>
-              <col className="w-12" />
-              {SERVICE_NOS.map((no) => <col key={no} />)}
-            </colgroup>
+          <table className="w-full text-xs border-collapse">
             <thead className="bg-gray-50 text-gray-600">
               <tr>
-                <th className="px-2 py-1.5 border border-gray-200 text-center">曜日</th>
-                {SERVICE_NOS.map((no) => (<th key={no} className="px-2 py-1.5 border border-gray-200 text-center">サービス{no}</th>))}
+                <th className="px-2 py-1.5 border border-gray-200 text-center w-12">曜日</th>
+                {SERVICE_NOS.map((no) => {
+                  const svc = doc.services.find((s) => s.service_no === no);
+                  const kindLabel = svc?.service_kind ? svc.service_kind : "未設定";
+                  return (
+                    <th key={no} className="px-2 py-1.5 border border-gray-200 text-center">
+                      サービス{no} <span className="text-gray-400 font-normal">({kindLabel})</span>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
-              {WEEKDAY_KEYS.map((day) => (
-                <tr key={day} className="border-t border-gray-200">
-                  <td className="px-2 py-1 border border-gray-200 text-center font-medium bg-gray-50">{WEEKDAY_LABELS[day]}</td>
-                  {SERVICE_NOS.map((no) => {
-                    const cell = doc.weekly_schedule?.[day]?.[String(no)] ?? {};
-                    const hasContent = cell.time_range || cell.service_kind;
-                    return (
-                      <td key={no} className="px-2 py-1 border border-gray-200 align-middle">
-                        {hasContent ? (
-                          <div className="flex items-baseline justify-center gap-3">
-                            <span className="text-gray-800"><AlignedTimeRange value={cell.time_range} /></span>
-                            <span className="text-gray-500 text-left" style={{ minWidth: "5rem" }}>{cell.service_kind || ""}</span>
-                          </div>
-                        ) : <span className="block text-gray-300 text-center">&nbsp;</span>}
+              {WEEKDAY_KEYS.map((day) => {
+                const rows = doc.weekly_schedule?.[day] ?? [];
+                const visibleRows = rows.length > 0 ? rows : [{}];
+                return visibleRows.map((row, rowIdx) => (
+                  <tr key={`${day}-${rowIdx}`} className="border-t border-gray-200">
+                    {rowIdx === 0 && (
+                      <td className="px-2 py-1 border border-gray-200 text-center font-medium bg-gray-50 align-middle" rowSpan={visibleRows.length}>
+                        {WEEKDAY_LABELS[day]}
                       </td>
-                    );
-                  })}
-                </tr>
-              ))}
+                    )}
+                    {SERVICE_NOS.map((no) => {
+                      const cell = (row as Record<string, { start?: string } | null>)?.[String(no)] ?? null;
+                      const start = cell?.start ?? "";
+                      const startMin = parseHHMM(start);
+                      const svc = doc.services.find((s) => s.service_no === no);
+                      const totalMin = sumServiceMinutes(svc);
+                      const endLabel = (start && startMin !== null && totalMin > 0) ? formatHHMM(startMin + totalMin) : "";
+                      return (
+                        <td key={no} className="px-2 py-1 border border-gray-200 align-middle text-center">
+                          {start ? (
+                            <span className="text-gray-800 tabular-nums whitespace-nowrap">
+                              {start}
+                              {endLabel && <> - {endLabel}</>}
+                            </span>
+                          ) : <span className="block text-gray-300">&nbsp;</span>}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ));
+              })}
             </tbody>
           </table>
         </div>
@@ -262,16 +289,17 @@ function ProcedurePreview({ doc }: { doc: VisitProcedureDocument }) {
 
       {/* サービス①〜⑤ */}
       {doc.services.map((svc) => {
-        const hasAny = (svc.time_range || svc.service_kind || svc.steps.length > 0 || svc.special_notes);
+        const hasAny = (svc.service_kind || svc.steps.length > 0 || svc.special_notes);
         if (!hasAny) return null;
+        const totalMin = sumServiceMinutes(svc);
         return (
           <section key={svc.service_no} className="rounded-lg border border-gray-200 bg-white">
             <h3 className="px-3 sm:px-4 py-2 border-b border-gray-200 text-sm font-semibold text-gray-700 bg-gray-50 flex items-center gap-2 sm:gap-3 flex-wrap">
               <span>サービス{svc.service_no}</span>
               <span className="text-xs font-normal text-gray-500">
-                {svc.time_range || "—"}
-                {svc.service_kind ? ` / ${svc.service_kind}` : ""}
+                {svc.service_kind || "—"}
               </span>
+              <span className="ml-auto text-[11px] font-normal text-gray-400">合計 {totalMin} 分</span>
             </h3>
             <div className="p-3 sm:p-4 space-y-3">
               {svc.steps.length === 0 ? (
@@ -327,7 +355,7 @@ function ProcedurePreview({ doc }: { doc: VisitProcedureDocument }) {
 }
 
 // =====================================================================
-// モジュール タブ (read-only)
+// モジュール タブ (read-only, 5 分刻みグリッド)
 // =====================================================================
 function ModulePreview({ doc }: { doc: VisitProcedureDocument }) {
   const COLS = Array.from({ length: 18 }, (_, i) => (i + 1) * 5);
@@ -337,7 +365,7 @@ function ModulePreview({ doc }: { doc: VisitProcedureDocument }) {
     <div className="space-y-4">
       <p className="text-xs text-gray-500">5 分刻みでサービス毎のステップを帯表示</p>
       {doc.services.map((svc, svcIdx) => {
-        if (svc.steps.length === 0 && !svc.time_range && !svc.service_kind) return null;
+        if (svc.steps.length === 0 && !svc.service_kind) return null;
         let cursor = 0;
         const bands = svc.steps.map((st) => {
           const start = cursor;
@@ -351,7 +379,7 @@ function ModulePreview({ doc }: { doc: VisitProcedureDocument }) {
           <section key={svc.service_no} className="rounded-lg border border-gray-200 bg-white p-3">
             <div className="flex items-center gap-3 text-sm font-medium text-gray-700 mb-2">
               <span>サービス{svc.service_no}</span>
-              <span className="text-xs text-gray-500">{svc.time_range || "(時間帯未設定)"}{svc.service_kind ? ` / ${svc.service_kind}` : ""}</span>
+              <span className="text-xs text-gray-500">{svc.service_kind || "(種類 未設定)"}</span>
               <span className="text-xs text-gray-400 ml-auto">合計 {total} 分</span>
             </div>
             <div className="overflow-x-auto">

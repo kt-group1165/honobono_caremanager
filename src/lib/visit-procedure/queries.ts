@@ -1,18 +1,29 @@
 /**
- * 訪問介護 手順書 機能の Supabase queries
+ * 訪問介護 手順書 機能の Supabase queries (v2)
  *
  * 3 table を協調操作:
  *  - kaigo_visit_procedure_documents
  *  - kaigo_visit_procedure_services
  *  - kaigo_visit_procedure_steps
+ *
+ * + app_settings (= step 所要時間プルダウン上限など)
+ *
+ * v2 変更:
+ *  - services から time_range を送信しない (= column drop 済)
+ *  - 複製機能 3 種 (document / service / step) は呼出側で処理 — DB 層は document 複製のみ提供
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type {
-  VisitProcedureClient,
-  VisitProcedureDocument,
-  VisitProcedureDocumentSummary,
-  VisitProcedureService,
-  VisitProcedureStep,
+import {
+  emptyWeeklyRow,
+  WEEKDAY_KEYS,
+  SERVICE_NOS,
+  type VisitProcedureClient,
+  type VisitProcedureDocument,
+  type VisitProcedureDocumentSummary,
+  type VisitProcedureService,
+  type VisitProcedureStep,
+  type WeeklyRow,
+  type WeeklySchedule,
 } from "./types";
 
 // PostgREST 1000 行制限対応 (project_pagination_audit_remaining.md)
@@ -110,6 +121,34 @@ export async function getDocumentsByClient(
   return (data ?? []) as VisitProcedureDocumentSummary[];
 }
 
+/** weekly_schedule を v2 構造に正規化 (= 旧構造や null/欠損を空 row で埋める) */
+function normalizeWeeklySchedule(raw: unknown): WeeklySchedule {
+  const out: WeeklySchedule = {};
+  const obj = (raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}) as Record<string, unknown>;
+  for (const day of WEEKDAY_KEYS) {
+    const v = obj[day];
+    if (Array.isArray(v) && v.length > 0) {
+      out[day] = v.map((row) => {
+        if (!row || typeof row !== "object") return emptyWeeklyRow();
+        const r = row as Record<string, unknown>;
+        const newRow: WeeklyRow = {};
+        for (const no of SERVICE_NOS) {
+          const cell = r[String(no)];
+          if (cell && typeof cell === "object" && typeof (cell as { start?: unknown }).start === "string") {
+            newRow[String(no)] = { start: (cell as { start: string }).start };
+          } else {
+            newRow[String(no)] = null;
+          }
+        }
+        return newRow;
+      });
+    } else {
+      out[day] = [emptyWeeklyRow()];
+    }
+  }
+  return out;
+}
+
 export async function getDocument(
   supabase: SupabaseClient,
   id: string,
@@ -155,17 +194,24 @@ export async function getDocument(
     steps: s.id ? stepsBySvc[s.id] ?? [] : [],
   }));
 
+  const docTyped = doc as Omit<VisitProcedureDocument, "services" | "weekly_schedule"> & {
+    weekly_schedule?: unknown;
+  };
+
   return {
-    ...(doc as Omit<VisitProcedureDocument, "services">),
+    ...docTyped,
+    weekly_schedule: normalizeWeeklySchedule(docTyped.weekly_schedule),
     services: fullServices,
   };
 }
 
 /**
- * document 一括 upsert
+ * document 一括 upsert (v2)
  *  - documents: id 有なら UPDATE / 無なら INSERT (id 返却)
  *  - services: 既存全 DELETE → 5 サービス INSERT (空でも)
  *  - steps: services と同様に DELETE → INSERT
+ *
+ * 注意: services の time_range は送信しない (= column drop 済)
  */
 export async function saveDocument(
   supabase: SupabaseClient,
@@ -210,9 +256,9 @@ export async function saveDocument(
     .eq("document_id", docId);
   if (delSvcErr) throw delSvcErr;
 
-  // service_kind 必須なので空サービスは skip
+  // service_kind 必須なので空サービスは skip (= UI 側で未選択 block 済だが保険)
   const insertableServices = doc.services.filter(
-    (s) => (s.service_kind && s.service_kind.length > 0) || (s.time_range && s.time_range.length > 0) || s.steps.length > 0,
+    (s) => (s.service_kind && s.service_kind.length > 0) || s.steps.length > 0,
   );
 
   for (const svc of insertableServices) {
@@ -221,7 +267,6 @@ export async function saveDocument(
       .insert({
         document_id: docId,
         service_no: svc.service_no,
-        time_range: svc.time_range || null,
         // service_kind NOT NULL なので空なら placeholder. UI 側で必須にしているが保険.
         service_kind: svc.service_kind || "身体1",
         special_notes: svc.special_notes || null,
@@ -256,4 +301,167 @@ export async function deleteDocument(supabase: SupabaseClient, id: string): Prom
     .delete()
     .eq("id", id);
   if (error) throw error;
+}
+
+// ─────────────────────────────────────────────────────
+// 複製機能 (v2)
+// ─────────────────────────────────────────────────────
+
+/**
+ * 既存 document を「同じ利用者の新バージョン」として複製
+ *  - client_name 同じ / plan_start_date は引数で上書き
+ *  - services + steps も DB から取り直して新規 id で挿入
+ *  - 戻り値: 新 document id
+ */
+export async function duplicateDocumentToNewVersion(
+  supabase: SupabaseClient,
+  sourceId: string,
+  newPlanStartDate: string,
+): Promise<string> {
+  const src = await getDocument(supabase, sourceId);
+  if (!src) throw new Error("複製元の手順書が見つかりません");
+  const clone: VisitProcedureDocument = {
+    ...src,
+    id: undefined,
+    plan_start_date: newPlanStartDate,
+    plan_end_date: null,
+    creation_reason: src.creation_reason ? `${src.creation_reason} (複製)` : "複製",
+    services: src.services.map((s) => ({
+      ...s,
+      id: undefined,
+      document_id: undefined,
+      steps: s.steps.map((st) => ({ ...st, id: undefined, service_id: undefined })),
+    })),
+  };
+  return saveDocument(supabase, clone);
+}
+
+/**
+ * 既存 document を「別の利用者にコピー」
+ *  - client_name のみ差替え、他は同一
+ */
+export async function duplicateDocumentToAnotherClient(
+  supabase: SupabaseClient,
+  sourceId: string,
+  newClientName: string,
+): Promise<string> {
+  const src = await getDocument(supabase, sourceId);
+  if (!src) throw new Error("複製元の手順書が見つかりません");
+  const trimmed = newClientName.trim();
+  if (!trimmed) throw new Error("コピー先の利用者名が空です");
+  const clone: VisitProcedureDocument = {
+    ...src,
+    id: undefined,
+    client_name: trimmed,
+    creation_reason: src.creation_reason ? `${src.creation_reason} (他利用者から複製)` : "他利用者から複製",
+    services: src.services.map((s) => ({
+      ...s,
+      id: undefined,
+      document_id: undefined,
+      steps: s.steps.map((st) => ({ ...st, id: undefined, service_id: undefined })),
+    })),
+  };
+  return saveDocument(supabase, clone);
+}
+
+// ─────────────────────────────────────────────────────
+// app_settings (= step 所要時間プルダウン上限など)
+// ─────────────────────────────────────────────────────
+
+const SETTING_KEY_STEP_DURATION_MAX = "visit_procedure_step_duration_max";
+
+/**
+ * step 所要時間プルダウン上限 (default 60) を取得
+ * row が無い・型不正 / 取得失敗時は default 60 を返す (= 機能停止を防ぐ)
+ */
+export async function getStepDurationMax(supabase: SupabaseClient): Promise<number> {
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", SETTING_KEY_STEP_DURATION_MAX)
+    .maybeSingle();
+  if (error) {
+    console.warn("getStepDurationMax fetch failed:", error.message);
+    return 60;
+  }
+  const v = (data as { value?: unknown } | null)?.value;
+  if (typeof v === "number" && Number.isFinite(v) && v >= 5) return Math.floor(v / 5) * 5;
+  if (typeof v === "string") {
+    const n = Number(v);
+    if (Number.isFinite(n) && n >= 5) return Math.floor(n / 5) * 5;
+  }
+  return 60;
+}
+
+/**
+ * step 所要時間プルダウン上限を保存 (upsert)
+ */
+export async function setStepDurationMax(
+  supabase: SupabaseClient,
+  newMaxMinutes: number,
+): Promise<void> {
+  const m = Math.max(5, Math.floor(newMaxMinutes / 5) * 5);
+  const { error } = await supabase
+    .from("app_settings")
+    .upsert(
+      { key: SETTING_KEY_STEP_DURATION_MAX, value: m },
+      { onConflict: "key" },
+    );
+  if (error) throw error;
+}
+
+/**
+ * 全手順書から step.minutes の最大値を取得 (= 上限変更 disable 判定用)
+ *  - tenant_id 指定で絞り込み
+ *  - service_id IN (...) でまとめて取る (page 分割)
+ */
+export async function getMaxStepMinutesForTenant(
+  supabase: SupabaseClient,
+  tenantId: string,
+): Promise<number> {
+  // doc → service → step の順で取得
+  const docIds: string[] = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("kaigo_visit_procedure_documents")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .range(from, from + PAGE_LIMIT - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as { id: string }[];
+    docIds.push(...rows.map((r) => r.id));
+    if (rows.length < PAGE_LIMIT) break;
+    from += PAGE_LIMIT;
+  }
+  if (docIds.length === 0) return 0;
+
+  const svcIds: string[] = [];
+  // doc id を 200 件ずつ in() で分割
+  const chunkSize = 200;
+  for (let i = 0; i < docIds.length; i += chunkSize) {
+    const chunk = docIds.slice(i, i + chunkSize);
+    const { data, error } = await supabase
+      .from("kaigo_visit_procedure_services")
+      .select("id")
+      .in("document_id", chunk);
+    if (error) throw error;
+    svcIds.push(...((data ?? []) as { id: string }[]).map((r) => r.id));
+  }
+  if (svcIds.length === 0) return 0;
+
+  let maxMin = 0;
+  for (let i = 0; i < svcIds.length; i += chunkSize) {
+    const chunk = svcIds.slice(i, i + chunkSize);
+    const { data, error } = await supabase
+      .from("kaigo_visit_procedure_steps")
+      .select("minutes")
+      .in("service_id", chunk)
+      .order("minutes", { ascending: false })
+      .limit(1);
+    if (error) throw error;
+    const top = ((data ?? []) as { minutes: number }[])[0]?.minutes ?? 0;
+    if (top > maxMin) maxMin = top;
+  }
+  return maxMin;
 }
