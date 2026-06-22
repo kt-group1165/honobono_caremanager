@@ -538,15 +538,17 @@ export default function VisitProcedureEditPage() {
       </div>
 
       {/* ── 週次サービス表 (編集可能) ── */}
-      <WeeklyScheduleEditor
-        doc={doc}
-        onCellChange={updateWeeklyCell}
-        onAddRow={addWeeklyRow}
-        onRemoveRow={removeWeeklyRow}
-      />
+      <div id="weekly-schedule" className="scroll-mt-20">
+        <WeeklyScheduleEditor
+          doc={doc}
+          onCellChange={updateWeeklyCell}
+          onAddRow={addWeeklyRow}
+          onRemoveRow={removeWeeklyRow}
+        />
+      </div>
 
       {/* ── 全体 特記事項 ── */}
-      <section className="rounded-lg border border-gray-200 bg-white p-4">
+      <section id="special-notes" className="scroll-mt-20 rounded-lg border border-gray-200 bg-white p-4">
         <label className="text-sm font-semibold text-gray-700 mb-2 block">特記事項 (全体)</label>
         <textarea
           value={doc.special_notes ?? ""}
@@ -558,19 +560,20 @@ export default function VisitProcedureEditPage() {
 
       {/* ── サービス①〜⑤ ── */}
       {doc.services.map((svc) => (
-        <ServiceEditor
-          key={svc.service_no}
-          svc={svc}
-          totalServices={doc.services.length}
-          stepDurationOptions={stepDurationOptions}
-          onServiceChange={(patch) => updateService(svc.service_no, patch)}
-          onStepChange={(idx, patch) => updateStep(svc.service_no, idx, patch)}
-          onStepAdd={() => addStep(svc.service_no)}
-          onStepRemove={(idx) => removeStep(svc.service_no, idx)}
-          onStepDuplicate={(idx) => duplicateStep(svc.service_no, idx)}
-          onDuplicateTo={(targetNo) => duplicateServiceTo(svc.service_no, targetNo)}
-          onSwap={(adjNo) => swapServices(svc.service_no, adjNo)}
-        />
+        <div key={svc.service_no} id={`service-${svc.service_no}`} className="scroll-mt-20">
+          <ServiceEditor
+            svc={svc}
+            totalServices={doc.services.length}
+            stepDurationOptions={stepDurationOptions}
+            onServiceChange={(patch) => updateService(svc.service_no, patch)}
+            onStepChange={(idx, patch) => updateStep(svc.service_no, idx, patch)}
+            onStepAdd={() => addStep(svc.service_no)}
+            onStepRemove={(idx) => removeStep(svc.service_no, idx)}
+            onStepDuplicate={(idx) => duplicateStep(svc.service_no, idx)}
+            onDuplicateTo={(targetNo) => duplicateServiceTo(svc.service_no, targetNo)}
+            onSwap={(adjNo) => swapServices(svc.service_no, adjNo)}
+          />
+        </div>
       ))}
     </div>
   );
