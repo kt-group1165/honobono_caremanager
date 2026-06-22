@@ -89,9 +89,15 @@ export default function MobileVisitProcedureView() {
 
   const visibleServices = doc.services.filter((s) => s.service_kind || s.steps.length > 0 || s.special_notes);
 
-  // モジュール grid 用
-  const COLS = Array.from({ length: 18 }, (_, i) => (i + 1) * 5);
+  // モジュール grid 用 (= adaptive: 右端 default 120 分、step 合計が超えたら 30 分単位で拡張)
   const cellW = 24;
+  // increment / cellCount は per-service で計算 (= 各サービスの step 合計 に応じて)
+  const computeGrid = (totalMinutes: number) => {
+    const t = Math.max(120, Math.ceil(Math.max(totalMinutes, 1) / 30) * 30);
+    const increment = t <= 120 ? 5 : t <= 240 ? 10 : t <= 360 ? 15 : 30;
+    const cellCount = Math.ceil(t / increment);
+    return { increment, cellCount };
+  };
 
   return (
     <div className="space-y-3 max-w-2xl mx-auto pb-12">
@@ -256,7 +262,7 @@ export default function MobileVisitProcedureView() {
             onClick={() => setShowModule((v) => !v)}
             className="w-full flex items-center justify-between px-3 py-2 text-sm font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 mv-print-hide"
           >
-            <span>モジュール (5 分刻みタイムライン)</span>
+            <span>モジュール (adaptive タイムライン)</span>
             {showModule ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
           </button>
           {showModule && (
@@ -270,12 +276,14 @@ export default function MobileVisitProcedureView() {
                   return { ...st, start, len };
                 });
                 const total = cursor;
+                const { increment, cellCount } = computeGrid(total);
+                const COLS = Array.from({ length: cellCount }, (_, i) => (i + 1) * increment);
                 return (
                   <div key={svc.service_no} className="rounded border border-gray-200 p-2">
                     <div className="text-xs font-medium text-gray-700 mb-1">
-                      サービス{svc.service_no} ({svc.service_kind || "—"}) — 合計 {total} 分
+                      サービス{svc.service_no} ({svc.service_kind || "—"}) — 合計 {total} 分 / {increment} 分刻み
                     </div>
-                    <div style={{ width: `${cellW * COLS.length + 80}px` }}>
+                    <div style={{ width: `${cellW * cellCount + 80}px` }}>
                       <div className="flex border-b border-gray-200 text-[9px] text-gray-500 mb-1">
                         <div className="w-[80px] shrink-0 px-1">内容</div>
                         {COLS.map((m) => (<div key={m} className="text-center" style={{ width: `${cellW}px` }}>{m}</div>))}
@@ -284,18 +292,18 @@ export default function MobileVisitProcedureView() {
                         <div className="text-center text-xs text-gray-400 italic py-2">ステップ未登録</div>
                       ) : (
                         bands.map((b, i) => {
-                          const left = Math.floor(b.start / 5) * cellW;
-                          const w = Math.max(1, Math.floor(b.len / 5)) * cellW;
+                          const leftPx = (b.start / increment) * cellW;
+                          const widthPx = Math.max(2, (b.len / increment) * cellW);
                           return (
                             <div key={i} className="flex items-stretch border-t border-gray-100 relative" style={{ minHeight: 22 }}>
                               <div className="w-[80px] shrink-0 px-1 py-0.5 text-[10px] truncate" title={b.content}>{b.content || `ステップ${i + 1}`}</div>
-                              <div className="relative" style={{ width: `${cellW * COLS.length}px` }}>
+                              <div className="relative" style={{ width: `${cellW * cellCount}px` }}>
                                 {COLS.map((m) => (
                                   <div key={m} className="absolute top-0 bottom-0 border-r border-gray-100"
-                                    style={{ left: `${(m / 5 - 1) * cellW}px`, width: `${cellW}px` }} />
+                                    style={{ left: `${(m / increment - 1) * cellW}px`, width: `${cellW}px` }} />
                                 ))}
                                 <div className={`absolute top-0.5 bottom-0.5 rounded ${SERVICE_COLORS[svcIdx % SERVICE_COLORS.length]} flex items-center justify-center text-[9px] text-gray-700 px-0.5`}
-                                  style={{ left: `${left}px`, width: `${w}px` }}>
+                                  style={{ left: `${leftPx}px`, width: `${widthPx}px` }}>
                                   {b.len > 0 ? `${b.len}` : ""}
                                 </div>
                               </div>

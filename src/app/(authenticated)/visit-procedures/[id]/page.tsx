@@ -355,15 +355,23 @@ function ProcedurePreview({ doc }: { doc: VisitProcedureDocument }) {
 }
 
 // =====================================================================
-// モジュール タブ (read-only, 5 分刻みグリッド)
+// モジュール タブ (read-only, adaptive グリッド)
+// 右端 default = 120 分。step 合計が 120 分超なら 30 分単位で右に拡張。
+// 拡張に応じて grid 1 セルの分単位も自動で粗くなる (5 → 10 → 15 → 30)。
 // =====================================================================
+function computeModuleGrid(totalMinutes: number) {
+  const t = Math.max(120, Math.ceil(Math.max(totalMinutes, 1) / 30) * 30);
+  const increment = t <= 120 ? 5 : t <= 240 ? 10 : t <= 360 ? 15 : 30;
+  const cellCount = Math.ceil(t / increment);
+  return { totalMinutes: t, increment, cellCount };
+}
+
 function ModulePreview({ doc }: { doc: VisitProcedureDocument }) {
-  const COLS = Array.from({ length: 18 }, (_, i) => (i + 1) * 5);
   const COLORS = ["bg-blue-200", "bg-emerald-200", "bg-amber-200", "bg-rose-200", "bg-violet-200"];
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-gray-500">5 分刻みでサービス毎のステップを帯表示</p>
+      <p className="text-xs text-gray-500">サービス毎のステップを帯表示 (右端 default 120 分、最大値に応じて自動拡張)</p>
       {doc.services.map((svc, svcIdx) => {
         if (svc.steps.length === 0 && !svc.service_kind) return null;
         let cursor = 0;
@@ -374,16 +382,18 @@ function ModulePreview({ doc }: { doc: VisitProcedureDocument }) {
           return { ...st, start, len };
         });
         const total = cursor;
+        const { increment, cellCount } = computeModuleGrid(total);
+        const COLS = Array.from({ length: cellCount }, (_, i) => (i + 1) * increment);
         const cellW = 28;
         return (
           <section key={svc.service_no} className="rounded-lg border border-gray-200 bg-white p-3">
             <div className="flex items-center gap-3 text-sm font-medium text-gray-700 mb-2">
               <span>サービス{svc.service_no}</span>
               <span className="text-xs text-gray-500">{svc.service_kind || "(種類 未設定)"}</span>
-              <span className="text-xs text-gray-400 ml-auto">合計 {total} 分</span>
+              <span className="text-xs text-gray-400 ml-auto">合計 {total} 分 / グリッド {increment} 分刻み</span>
             </div>
             <div className="overflow-x-auto">
-              <div className="flex border-b border-gray-200 text-[10px] text-gray-500 mb-1" style={{ width: `${cellW * COLS.length + 120}px` }}>
+              <div className="flex border-b border-gray-200 text-[10px] text-gray-500 mb-1" style={{ width: `${cellW * cellCount + 120}px` }}>
                 <div className="w-[120px] shrink-0 px-2">内容</div>
                 {COLS.map((m) => (<div key={m} className="text-center" style={{ width: `${cellW}px` }}>{m}</div>))}
               </div>
@@ -391,17 +401,17 @@ function ModulePreview({ doc }: { doc: VisitProcedureDocument }) {
                 <div className="text-center text-xs text-gray-400 italic py-3">ステップが未登録です</div>
               ) : (
                 bands.map((b, i) => {
-                  const startCols = Math.floor(b.start / 5);
-                  const widthCols = Math.max(1, Math.floor(b.len / 5));
+                  const leftPx = (b.start / increment) * cellW;
+                  const widthPx = Math.max(2, (b.len / increment) * cellW);
                   return (
-                    <div key={i} className="flex items-stretch border-t border-gray-100 relative" style={{ width: `${cellW * COLS.length + 120}px`, minHeight: 26 }}>
+                    <div key={i} className="flex items-stretch border-t border-gray-100 relative" style={{ width: `${cellW * cellCount + 120}px`, minHeight: 26 }}>
                       <div className="w-[120px] shrink-0 px-2 py-1 text-xs truncate" title={b.content}>{b.content || `ステップ${i + 1}`}</div>
-                      <div className="relative" style={{ width: `${cellW * COLS.length}px` }}>
+                      <div className="relative" style={{ width: `${cellW * cellCount}px` }}>
                         {COLS.map((m) => (
-                          <div key={m} className="absolute top-0 bottom-0 border-r border-gray-100" style={{ left: `${(m / 5 - 1) * cellW}px`, width: `${cellW}px` }} />
+                          <div key={m} className="absolute top-0 bottom-0 border-r border-gray-100" style={{ left: `${(m / increment - 1) * cellW}px`, width: `${cellW}px` }} />
                         ))}
                         <div className={`absolute top-1 bottom-1 rounded ${COLORS[svcIdx % COLORS.length]} flex items-center justify-center text-[10px] text-gray-700 px-1`}
-                          style={{ left: `${startCols * cellW}px`, width: `${widthCols * cellW}px` }} title={`${b.content} (${b.len} 分)`}>
+                          style={{ left: `${leftPx}px`, width: `${widthPx}px` }} title={`${b.content} (${b.len} 分)`}>
                           {b.len > 0 ? `${b.len}分` : ""}
                         </div>
                       </div>
