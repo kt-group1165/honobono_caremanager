@@ -219,3 +219,27 @@ export function buildStepDurationOptions(maxMinutes: number): number[] {
   for (let m = 5; m <= max; m += 5) out.push(m);
   return out;
 }
+
+// ─────────────────────────────────────────────────────
+// step テンプレート (= サービス内容 + 具体的取り組内容 の master)
+// 2026-06-22 user 確定
+// ─────────────────────────────────────────────────────
+
+/**
+ * 訪問介護手順書 step テンプレート (office ごと)
+ *  - name (= サービス内容) + detail (= 具体的取り組内容) の 2 フィールド
+ *  - 時間は登録しない (= 各 step 行で毎回手入力)
+ *  - 既存手順書とは独立 (= テキスト一致のみ、FK 参照なし)
+ *  - soft delete (= deleted_at) で履歴保持
+ */
+export interface VisitProcedureStepTemplate {
+  id: string;
+  office_id: string;
+  tenant_id: string;
+  name: string;
+  detail: string | null;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string | null;
+}

@@ -17,7 +17,7 @@
  *  - 種類 未選択 service は保存 block
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, BookOpen, Plus, Trash2, Save, Loader2, AlertCircle, Copy, X, ChevronUp, ChevronDown } from "lucide-react";
@@ -28,6 +28,8 @@ import {
   getDocument,
   saveDocument,
   getStepDurationMax,
+  getStepTemplates,
+  createStepTemplate,
 } from "@/lib/visit-procedure/queries";
 import {
   emptyDocument,
@@ -45,6 +47,7 @@ import {
   type VisitProcedureDocument,
   type VisitProcedureService,
   type VisitProcedureStep,
+  type VisitProcedureStepTemplate,
   type WeekdayKey,
   type WeeklyRow,
   type WeeklySchedule,
@@ -109,6 +112,7 @@ export default function VisitProcedureEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [stepDurationMax, setStepDurationMax] = useState<number>(60);
+  const [stepTemplates, setStepTemplates] = useState<VisitProcedureStepTemplate[]>([]);
 
   const tenantId = currentOffice?.tenant_id ?? null;
   const officeId = currentOffice?.id ?? null;
@@ -174,6 +178,29 @@ export default function VisitProcedureEditPage() {
     /* eslint-enable react-hooks/set-state-in-effect */
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, tenantId, btLoading]);
+
+  // step テンプレート (= office ごとの サービス内容 + 取り組内容 master) を取得
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- mount-time async fetch */
+    if (btLoading) return;
+    if (!officeId) {
+      setStepTemplates([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await getStepTemplates(supabase, officeId);
+        if (!cancelled) setStepTemplates(rows);
+      } catch (err) {
+        // テンプレートは補助機能なので失敗しても save flow は止めない
+        console.warn("step テンプレート読込失敗:", err instanceof Error ? err.message : err);
+        if (!cancelled) setStepTemplates([]);
+      }
+    })();
+    return () => { cancelled = true; };
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [supabase, officeId, btLoading]);
 
   if (!btLoading && businessType !== "訪問介護") {
     return (
@@ -453,6 +480,46 @@ export default function VisitProcedureEditPage() {
 
   const stepDurationOptions = buildStepDurationOptions(stepDurationMax);
 
+  /**
+   * step テンプレートを inline で新規登録 (= combobox の「+ "xxx" を新規登録」)
+   *  - office が確定していない場合は no-op
+   *  - 成功時に local state へ append (= 直後の auto-fill / 候補表示に使う)
+   *  - 失敗時は toast でエラー表示し null を返す
+   */
+  const handleCreateInlineTemplate = async (
+    name: string,
+    detail: string | null,
+  ): Promise<VisitProcedureStepTemplate | null> => {
+    if (!officeId || !tenantId) {
+      toast.error("事業所が確定していないため登録できません");
+      return null;
+    }
+    const trimmedName = name.trim();
+    if (!trimmedName) return null;
+    try {
+      const created = await createStepTemplate(supabase, {
+        office_id: officeId,
+        tenant_id: tenantId,
+        name: trimmedName,
+        detail: detail && detail.trim().length > 0 ? detail.trim() : null,
+        sort_order: (stepTemplates.reduce((m, t) => Math.max(m, t.sort_order), 0) + 10),
+      });
+      setStepTemplates((prev) => {
+        const next = [...prev, created];
+        next.sort((a, b) =>
+          a.sort_order - b.sort_order || a.name.localeCompare(b.name, "ja"),
+        );
+        return next;
+      });
+      toast.success(`「${trimmedName}」をテンプレートに登録しました`);
+      return created;
+    } catch (err) {
+      console.error(err);
+      toast.error("テンプレート登録失敗: " + (err instanceof Error ? err.message : String(err)));
+      return null;
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* ── ヘッダ ── */}
@@ -566,6 +633,8 @@ export default function VisitProcedureEditPage() {
             svc={svc}
             totalServices={doc.services.length}
             stepDurationOptions={stepDurationOptions}
+            stepTemplates={stepTemplates}
+            onCreateTemplate={handleCreateInlineTemplate}
             onServiceChange={(patch) => updateService(svc.service_no, patch)}
             onStepChange={(idx, patch) => updateStep(svc.service_no, idx, patch)}
             onStepAdd={() => addStep(svc.service_no)}
@@ -736,6 +805,8 @@ function ServiceEditor({
   svc,
   totalServices,
   stepDurationOptions,
+  stepTemplates,
+  onCreateTemplate,
   onServiceChange,
   onStepChange,
   onStepAdd,
@@ -747,6 +818,12 @@ function ServiceEditor({
   svc: VisitProcedureService;
   totalServices: number;
   stepDurationOptions: number[];
+  stepTemplates: VisitProcedureStepTemplate[];
+  /**
+   * combobox の「+ "xxx" を新規登録」用 callback
+   * 成功時は新 row、失敗時は null を返す
+   */
+  onCreateTemplate: (name: string, detail: string | null) => Promise<VisitProcedureStepTemplate | null>;
   onServiceChange: (patch: Partial<VisitProcedureService>) => void;
   onStepChange: (idx: number, patch: Partial<VisitProcedureStep>) => void;
   onStepAdd: () => void;
@@ -857,11 +934,16 @@ function ServiceEditor({
               svc.steps.map((step, idx) => (
                 <tr key={idx} className="border-t border-gray-200">
                   <td className="px-1 py-1 border border-gray-200">
-                    <input
-                      type="text"
+                    <StepContentCombobox
                       value={step.content}
-                      onChange={(e) => onStepChange(idx, { content: e.target.value })}
-                      className="w-full rounded border border-gray-200 px-1.5 py-1 text-xs"
+                      currentDetail={step.detail ?? ""}
+                      templates={stepTemplates}
+                      onSelectTemplate={(t) =>
+                        onStepChange(idx, { content: t.name, detail: t.detail ?? "" })
+                      }
+                      onChangeText={(v) => onStepChange(idx, { content: v })}
+                      onCreateTemplate={onCreateTemplate}
+                      size="sm"
                     />
                   </td>
                   <td className="px-1 py-1 border border-gray-200">
@@ -923,13 +1005,20 @@ function ServiceEditor({
             svc.steps.map((step, idx) => (
               <div key={idx} className="rounded border border-gray-200 bg-white p-2 space-y-1.5">
                 <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="サービス内容"
-                    value={step.content}
-                    onChange={(e) => onStepChange(idx, { content: e.target.value })}
-                    className="flex-1 min-w-0 rounded border border-gray-200 px-2 py-1.5 text-sm"
-                  />
+                  <div className="flex-1 min-w-0">
+                    <StepContentCombobox
+                      value={step.content}
+                      currentDetail={step.detail ?? ""}
+                      templates={stepTemplates}
+                      placeholder="サービス内容"
+                      onSelectTemplate={(t) =>
+                        onStepChange(idx, { content: t.name, detail: t.detail ?? "" })
+                      }
+                      onChangeText={(v) => onStepChange(idx, { content: v })}
+                      onCreateTemplate={onCreateTemplate}
+                      size="md"
+                    />
+                  </div>
                   <select
                     value={step.minutes}
                     onChange={(e) => onStepChange(idx, { minutes: Number(e.target.value) })}
@@ -1002,5 +1091,169 @@ function ServiceEditor({
         </div>
       </div>
     </section>
+  );
+}
+
+// =====================================================================
+// step サービス内容 combobox
+//   - input + dropdown の hybrid
+//   - focus / 入力で候補 list 表示
+//   - 候補クリックで name + detail を auto-fill
+//   - 入力値が候補に無ければ「+ "xxx" を新規登録」option を表示
+//   - 自由入力は OK (= 候補に無くてもそのまま保存される)
+// =====================================================================
+function StepContentCombobox({
+  value,
+  currentDetail,
+  templates,
+  placeholder,
+  size,
+  onChangeText,
+  onSelectTemplate,
+  onCreateTemplate,
+}: {
+  value: string;
+  /** 現在の step.detail (= 新規 template 登録時に template の detail として使う) */
+  currentDetail: string;
+  templates: VisitProcedureStepTemplate[];
+  placeholder?: string;
+  size: "sm" | "md";
+  onChangeText: (v: string) => void;
+  onSelectTemplate: (t: VisitProcedureStepTemplate) => void;
+  onCreateTemplate: (name: string, detail: string | null) => Promise<VisitProcedureStepTemplate | null>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  // ARIA で <input role="combobox"> と popup を紐付けるための uniq id (SSR-safe)
+  const reactId = useId();
+  const popupId = `step-content-cb-${reactId}`;
+
+  // 外側クリックで close
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const q = value.trim();
+  // 候補絞り込み (= 入力 substring に name または detail がマッチ)
+  const filtered = q.length === 0
+    ? templates
+    : templates.filter((t) =>
+        t.name.toLowerCase().includes(q.toLowerCase()) ||
+        (t.detail ? t.detail.toLowerCase().includes(q.toLowerCase()) : false),
+      );
+
+  // 完全一致が無い & 入力値が空でなければ「+ 新規登録」候補を出す
+  const exactExists = templates.some((t) => t.name === q);
+  const showCreateOption = q.length > 0 && !exactExists;
+
+  const inputCls = size === "sm"
+    ? "w-full rounded border border-gray-200 px-1.5 py-1 text-xs"
+    : "w-full rounded border border-gray-200 px-2 py-1.5 text-sm";
+
+  const handleCreate = async () => {
+    if (creating) return;
+    if (!q) return;
+    setCreating(true);
+    try {
+      const created = await onCreateTemplate(q, currentDetail || null);
+      if (created) {
+        // 登録した内容を step にも反映 (= name + detail)
+        onSelectTemplate(created);
+        setOpen(false);
+      }
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <input
+        type="text"
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => {
+          onChangeText(e.target.value);
+          if (!open) setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            setOpen(false);
+          }
+        }}
+        className={inputCls}
+        autoComplete="off"
+        role="combobox"
+        aria-expanded={open}
+        aria-autocomplete="list"
+        aria-controls={popupId}
+      />
+      {open && (filtered.length > 0 || showCreateOption) && (
+        <div
+          id={popupId}
+          className="absolute z-30 left-0 right-0 top-full mt-0.5 max-h-60 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg text-xs"
+          role="listbox"
+        >
+          {filtered.slice(0, 20).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onMouseDown={(e) => {
+                // mousedown で先回り (= input blur より前に発火)
+                e.preventDefault();
+                onSelectTemplate(t);
+                setOpen(false);
+              }}
+              className="block w-full text-left px-2 py-1.5 hover:bg-green-50 border-b border-gray-100 last:border-b-0"
+              role="option"
+              aria-selected={false}
+            >
+              <div className="font-medium text-gray-800 truncate">{t.name}</div>
+              {t.detail && (
+                <div className="text-[11px] text-gray-500 truncate">{t.detail}</div>
+              )}
+            </button>
+          ))}
+          {showCreateOption && (
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                handleCreate();
+              }}
+              disabled={creating}
+              className="block w-full text-left px-2 py-1.5 hover:bg-blue-50 text-blue-700 font-medium border-t border-gray-200 disabled:opacity-50"
+            >
+              {creating ? (
+                <span className="inline-flex items-center gap-1">
+                  <Loader2 size={12} className="animate-spin" />
+                  登録中...
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1">
+                  <Plus size={12} />
+                  「{q}」を新規登録
+                  {currentDetail.trim() && (
+                    <span className="text-[10px] text-gray-500 ml-1">
+                      (取り組内容も含めて保存)
+                    </span>
+                  )}
+                </span>
+              )}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

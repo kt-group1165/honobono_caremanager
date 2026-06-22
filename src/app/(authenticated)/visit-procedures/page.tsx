@@ -16,7 +16,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
-import { BookOpen, Plus, AlertCircle, Loader2, User, Settings, Save } from "lucide-react";
+import { BookOpen, Plus, AlertCircle, Loader2, User, Settings, Save, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
@@ -103,6 +103,14 @@ export default function VisitProceduresClientListPage() {
           <p className="mt-1 text-xs sm:text-sm text-gray-500">利用者を選んでバージョン一覧へ</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <Link
+            href={`/visit-procedures/templates${officeQuery}`}
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            title="テンプレート管理"
+          >
+            <ClipboardList size={16} />
+            テンプレート管理
+          </Link>
           <button
             onClick={() => setShowSettings(true)}
             className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"

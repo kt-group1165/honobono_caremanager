@@ -22,6 +22,7 @@ import {
   type VisitProcedureDocumentSummary,
   type VisitProcedureService,
   type VisitProcedureStep,
+  type VisitProcedureStepTemplate,
   type WeeklyRow,
   type WeeklySchedule,
 } from "./types";
@@ -407,6 +408,105 @@ export async function setStepDurationMax(
       { key: SETTING_KEY_STEP_DURATION_MAX, value: m },
       { onConflict: "key" },
     );
+  if (error) throw error;
+}
+
+// ─────────────────────────────────────────────────────
+// step テンプレート (= サービス内容 + 具体的取り組内容 の master)
+// ─────────────────────────────────────────────────────
+
+/**
+ * 指定 office の step テンプレート一覧 (soft delete 済を除外、sort_order → name 順)
+ */
+export async function getStepTemplates(
+  supabase: SupabaseClient,
+  officeId: string,
+): Promise<VisitProcedureStepTemplate[]> {
+  const { data, error } = await supabase
+    .from("kaigo_visit_procedure_step_templates")
+    .select("*")
+    .eq("office_id", officeId)
+    .is("deleted_at", null)
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as VisitProcedureStepTemplate[];
+}
+
+/**
+ * step テンプレート 新規作成
+ *  - UNIQUE (office_id, name) 違反は "同名のテンプレートが既に登録されています" として返す
+ *  - 戻り値: 新 row
+ */
+export async function createStepTemplate(
+  supabase: SupabaseClient,
+  payload: {
+    office_id: string;
+    tenant_id: string;
+    name: string;
+    detail: string | null;
+    sort_order?: number;
+  },
+): Promise<VisitProcedureStepTemplate> {
+  const insert = {
+    office_id: payload.office_id,
+    tenant_id: payload.tenant_id,
+    name: payload.name,
+    detail: payload.detail,
+    sort_order: payload.sort_order ?? 0,
+  };
+  const { data, error } = await supabase
+    .from("kaigo_visit_procedure_step_templates")
+    .insert(insert)
+    .select("*")
+    .single();
+  if (error) {
+    // UNIQUE 違反 (= 23505) は専用メッセージに置き換える
+    if (error.code === "23505") {
+      throw new Error(`同名のテンプレートが既に登録されています: ${payload.name}`);
+    }
+    throw error;
+  }
+  return data as VisitProcedureStepTemplate;
+}
+
+/**
+ * step テンプレート 部分更新
+ *  - patch に含めた列のみ更新
+ *  - UNIQUE 違反は専用メッセージ
+ */
+export async function updateStepTemplate(
+  supabase: SupabaseClient,
+  id: string,
+  patch: Partial<Pick<VisitProcedureStepTemplate, "name" | "detail" | "sort_order">>,
+): Promise<VisitProcedureStepTemplate> {
+  const { data, error } = await supabase
+    .from("kaigo_visit_procedure_step_templates")
+    .update(patch)
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error(`同名のテンプレートが既に登録されています: ${patch.name ?? ""}`);
+    }
+    throw error;
+  }
+  return data as VisitProcedureStepTemplate;
+}
+
+/**
+ * step テンプレート soft delete (= deleted_at = NOW())
+ *  - 既存 手順書には影響しない (= テキスト一致なので)
+ */
+export async function softDeleteStepTemplate(
+  supabase: SupabaseClient,
+  id: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("kaigo_visit_procedure_step_templates")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id);
   if (error) throw error;
 }
 
