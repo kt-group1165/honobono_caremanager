@@ -655,15 +655,15 @@ function WeeklyScheduleEditor({
                       onCellChange(day, rowIdx, no, { start: formatHHMM(newH * 60 + M) });
                     };
                     return (
-                      <td key={no} className="px-1 py-1 border border-gray-200 align-middle">
-                        {/* 左寄せ固定レイアウト: [時] : [分]  - HH:MM (自動)  / 空時もスロット維持 */}
-                        <div className="flex items-center justify-start gap-0.5 whitespace-nowrap">
+                      <td key={no} className="px-2 py-1.5 border border-gray-200 align-middle">
+                        {/* 中央寄せ + slot 固定: [時]:[分] [- HH:MM (自動)] / 空時もスロット維持で左右ジャンプなし */}
+                        <div className="flex items-center justify-center gap-1 whitespace-nowrap">
                           <select
                             value={hh ?? ""}
                             onChange={(e) =>
                               commit(e.target.value === "" ? null : Number(e.target.value), mm)
                             }
-                            className="rounded border border-gray-200 px-1 py-1 text-xs bg-white"
+                            className="rounded border border-gray-300 pl-1.5 pr-0.5 py-1 text-xs bg-white tabular-nums"
                             aria-label={`${WEEKDAY_LABELS[day]} サービス${no} 開始 時`}
                           >
                             <option value="">--</option>
@@ -671,13 +671,13 @@ function WeeklyScheduleEditor({
                               <option key={h} value={h}>{String(h).padStart(2, "0")}</option>
                             ))}
                           </select>
-                          <span className="text-gray-400">:</span>
+                          <span className="text-gray-400 text-xs">:</span>
                           <select
                             value={mm ?? ""}
                             onChange={(e) =>
                               commit(hh, e.target.value === "" ? null : Number(e.target.value))
                             }
-                            className="rounded border border-gray-200 px-1 py-1 text-xs bg-white"
+                            className="rounded border border-gray-300 pl-1.5 pr-0.5 py-1 text-xs bg-white tabular-nums"
                             aria-label={`${WEEKDAY_LABELS[day]} サービス${no} 開始 分`}
                           >
                             <option value="">--</option>
@@ -685,10 +685,10 @@ function WeeklyScheduleEditor({
                               <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
                             ))}
                           </select>
-                          <span className="text-[10px] text-gray-500 tabular-nums ml-1 min-w-[78px] inline-block">
+                          <span className="text-[10px] text-gray-500 tabular-nums w-[88px] inline-block text-left">
                             {endLabel
                               ? <>- {endLabel} <span className="text-gray-400">(自動)</span></>
-                              : ""}
+                              : <span className="text-gray-300">&nbsp;</span>}
                           </span>
                         </div>
                       </td>
