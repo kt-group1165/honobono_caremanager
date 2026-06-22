@@ -656,8 +656,9 @@ function WeeklyScheduleEditor({
                     };
                     return (
                       <td key={no} className="px-2 py-1.5 border border-gray-200 align-middle">
-                        {/* 中央寄せ + slot 固定: [時]:[分] [- HH:MM (自動)] / 空時もスロット維持で左右ジャンプなし */}
+                        {/* picker を cell 中央に固定。end-label slot を右に置き、左に同サイズの invisible spacer を置いて完全中央。 */}
                         <div className="flex items-center justify-center gap-1 whitespace-nowrap">
+                          <span aria-hidden="true" className="inline-block w-[88px]" />
                           <select
                             value={hh ?? ""}
                             onChange={(e) =>
@@ -688,7 +689,7 @@ function WeeklyScheduleEditor({
                           <span className="text-[10px] text-gray-500 tabular-nums w-[88px] inline-block text-left">
                             {endLabel
                               ? <>- {endLabel} <span className="text-gray-400">(自動)</span></>
-                              : <span className="text-gray-300">&nbsp;</span>}
+                              : <>&nbsp;</>}
                           </span>
                         </div>
                       </td>
