@@ -49,6 +49,54 @@ import {
   type WeeklySchedule,
 } from "@/lib/visit-procedure/types";
 
+// ── step rows auto-extend ロジック ─────────────────────────────────────
+// 仕様 (2026-06-22 user 確定):
+//   - 上限 12 行
+//   - default 3 行表示
+//   - 末尾の空行が 1 行以下になったら自動で空行を追加 → 常に 2 行の空行が末尾に残る
+//   - 12 行に達したら自動追加停止
+const STEP_CAP = 12;
+const STEP_DEFAULT = 3;
+const STEP_TRAILING_EMPTY = 2;
+
+function isEmptyStep(s: VisitProcedureStep): boolean {
+  return (!s.content || !s.content.trim()) && (!s.detail || !s.detail.trim());
+}
+
+function makeEmptyStep(stepNo: number): VisitProcedureStep {
+  return { step_no: stepNo, content: "", minutes: 5, detail: "" };
+}
+
+/**
+ * steps を normalize: 末尾空行を 2 行に揃える (12 上限)、最低 3 行。
+ * 入力途中の row 数増減で focus が消えないよう、末尾追加 / 末尾削除のみ行う。
+ */
+function normalizeSteps(steps: VisitProcedureStep[]): VisitProcedureStep[] {
+  let result = [...steps];
+  // 末尾の空行数を数える
+  const countTrailing = () => {
+    let n = 0;
+    for (let i = result.length - 1; i >= 0; i--) {
+      if (isEmptyStep(result[i])) n++;
+      else break;
+    }
+    return n;
+  };
+  // 末尾空行が 2 を超えていれば trim (= 但し default 3 行は確保)
+  while (countTrailing() > STEP_TRAILING_EMPTY && result.length > STEP_DEFAULT) {
+    result = result.slice(0, -1);
+  }
+  // 末尾空行が 2 未満かつ 12 未満ならば追加
+  while (countTrailing() < STEP_TRAILING_EMPTY && result.length < STEP_CAP) {
+    result = [...result, makeEmptyStep(result.length + 1)];
+  }
+  // default 3 行未満は強制で埋める (= 新規 doc 等)
+  while (result.length < STEP_DEFAULT) {
+    result = [...result, makeEmptyStep(result.length + 1)];
+  }
+  return result.map((st, i) => ({ ...st, step_no: i + 1 }));
+}
+
 export default function VisitProcedureEditPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -81,7 +129,15 @@ export default function VisitProcedureEditPage() {
         if (!cancelled) setStepDurationMax(max);
 
         if (id === "new") {
-          if (!cancelled) setDoc(emptyDocument(tenantId, officeId));
+          if (!cancelled) {
+            const blank = emptyDocument(tenantId, officeId);
+            // 新規 doc も steps を normalize (= default 3 行表示)
+            const normalized = {
+              ...blank,
+              services: blank.services.map((s) => ({ ...s, steps: normalizeSteps(s.steps) })),
+            };
+            setDoc(normalized);
+          }
         } else {
           const found = await getDocument(supabase, id);
           if (!cancelled) {
@@ -91,14 +147,16 @@ export default function VisitProcedureEditPage() {
               return;
             }
             // services が 5 つ未満なら空 service で埋める (UI 上常に 5 表示)
+            // また各 service の steps は normalize (= 末尾空行 2 行確保、最低 3 行、12 上限)
             const filledServices = SERVICE_NOS.map((no) => {
               const existing = found.services.find((s) => s.service_no === no);
-              return existing ?? {
+              const base = existing ?? {
                 service_no: no,
                 service_kind: "" as const,
                 special_notes: "",
                 steps: [],
               };
+              return { ...base, steps: normalizeSteps(base.steps) };
             });
             setDoc({ ...found, services: filledServices });
           }
@@ -154,8 +212,8 @@ export default function VisitProcedureEditPage() {
       if (!prev) return prev;
       const services = prev.services.map((s) => {
         if (s.service_no !== svcNo) return s;
-        const steps = s.steps.map((st, i) => (i === stepIdx ? { ...st, ...patch } : st));
-        return { ...s, steps };
+        const patched = s.steps.map((st, i) => (i === stepIdx ? { ...st, ...patch } : st));
+        return { ...s, steps: normalizeSteps(patched) };
       });
       return { ...prev, services };
     });
@@ -166,10 +224,13 @@ export default function VisitProcedureEditPage() {
       if (!prev) return prev;
       const services = prev.services.map((s) => {
         if (s.service_no !== svcNo) return s;
-        const nextStepNo = s.steps.length + 1;
+        if (s.steps.length >= STEP_CAP) {
+          toast.info(`ステップは最大 ${STEP_CAP} 行までです`);
+          return s;
+        }
         return {
           ...s,
-          steps: [...s.steps, { step_no: nextStepNo, content: "", minutes: 5, detail: "" }],
+          steps: [...s.steps, makeEmptyStep(s.steps.length + 1)],
         };
       });
       return { ...prev, services };
@@ -181,14 +242,14 @@ export default function VisitProcedureEditPage() {
       if (!prev) return prev;
       const services = prev.services.map((s) => {
         if (s.service_no !== svcNo) return s;
-        const steps = s.steps.filter((_, i) => i !== stepIdx).map((st, i) => ({ ...st, step_no: i + 1 }));
-        return { ...s, steps };
+        const removed = s.steps.filter((_, i) => i !== stepIdx);
+        return { ...s, steps: normalizeSteps(removed) };
       });
       return { ...prev, services };
     });
   };
 
-  /** step 行を複製 (= 次行に同内容で挿入) */
+  /** step 行を複製 (= 次行に同内容で挿入。12 上限超は toast で拒否) */
   const duplicateStep = (svcNo: number, stepIdx: number) => {
     setDoc((prev) => {
       if (!prev) return prev;
@@ -196,6 +257,10 @@ export default function VisitProcedureEditPage() {
         if (s.service_no !== svcNo) return s;
         const src = s.steps[stepIdx];
         if (!src) return s;
+        if (s.steps.length >= STEP_CAP) {
+          toast.info(`ステップは最大 ${STEP_CAP} 行までです`);
+          return s;
+        }
         const cloned: VisitProcedureStep = {
           step_no: stepIdx + 2,
           content: src.content,
@@ -204,8 +269,8 @@ export default function VisitProcedureEditPage() {
         };
         const before = s.steps.slice(0, stepIdx + 1);
         const after = s.steps.slice(stepIdx + 1);
-        const steps = [...before, cloned, ...after].map((st, i) => ({ ...st, step_no: i + 1 }));
-        return { ...s, steps };
+        const merged = [...before, cloned, ...after].map((st, i) => ({ ...st, step_no: i + 1 }));
+        return { ...s, steps: normalizeSteps(merged) };
       });
       return { ...prev, services };
     });
@@ -227,16 +292,17 @@ export default function VisitProcedureEditPage() {
       if (!prev) return prev;
       const services = prev.services.map((s) => {
         if (s.service_no !== targetNo) return s;
+        const copied = source.steps.map((st, i) => ({
+          step_no: i + 1,
+          content: st.content,
+          minutes: st.minutes,
+          detail: st.detail,
+        }));
         return {
           ...s,
           service_kind: source.service_kind,
           special_notes: source.special_notes,
-          steps: source.steps.map((st, i) => ({
-            step_no: i + 1,
-            content: st.content,
-            minutes: st.minutes,
-            detail: st.detail,
-          })),
+          steps: normalizeSteps(copied),
         };
       });
       return { ...prev, services };
@@ -349,7 +415,8 @@ export default function VisitProcedureEditPage() {
       }
     }
     for (const s of doc.services) {
-      const hasContent = (s.special_notes && s.special_notes.trim().length > 0) || s.steps.length > 0;
+      const nonEmptySteps = s.steps.filter((st) => !isEmptyStep(st));
+      const hasContent = (s.special_notes && s.special_notes.trim().length > 0) || nonEmptySteps.length > 0;
       const used = usedServiceNos.has(s.service_no);
       if ((hasContent || used) && (!s.service_kind || s.service_kind.length === 0)) {
         toast.error(`サービス${s.service_no} の種類を選択してください`);
@@ -358,7 +425,17 @@ export default function VisitProcedureEditPage() {
     }
     setSaving(true);
     try {
-      const newId = await saveDocument(supabase, doc);
+      // 保存時は空行 (= 末尾の auto-extend 空 row) を DB に送らない
+      const savedDoc = {
+        ...doc,
+        services: doc.services.map((s) => ({
+          ...s,
+          steps: s.steps
+            .filter((st) => !isEmptyStep(st))
+            .map((st, i) => ({ ...st, step_no: i + 1 })),
+        })),
+      };
+      const newId = await saveDocument(supabase, savedDoc);
       toast.success("手順書を保存しました");
       if (id === "new") {
         router.replace(`/visit-procedures/${newId}${officeQuery}`);
@@ -868,10 +945,12 @@ function ServiceEditor({
         <button
           type="button"
           onClick={onStepAdd}
-          className="inline-flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+          disabled={svc.steps.length >= STEP_CAP}
+          className="inline-flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          title={svc.steps.length >= STEP_CAP ? `ステップは最大 ${STEP_CAP} 行までです` : ""}
         >
           <Plus size={12} />
-          ステップ追加
+          ステップ追加 ({svc.steps.length} / {STEP_CAP})
         </button>
 
         <div>
