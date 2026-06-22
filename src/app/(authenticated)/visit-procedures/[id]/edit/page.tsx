@@ -20,7 +20,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, BookOpen, Plus, Trash2, Save, Loader2, AlertCircle, Copy, X } from "lucide-react";
+import { ArrowLeft, BookOpen, Plus, Trash2, Save, Loader2, AlertCircle, Copy, X, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
@@ -46,6 +46,7 @@ import {
   type VisitProcedureStep,
   type WeekdayKey,
   type WeeklyRow,
+  type WeeklySchedule,
 } from "@/lib/visit-procedure/types";
 
 export default function VisitProcedureEditPage() {
@@ -241,6 +242,45 @@ export default function VisitProcedureEditPage() {
       return { ...prev, services };
     });
     toast.success(`サービス${sourceNo} → サービス${targetNo} に複製しました`);
+  };
+
+  /**
+   * サービス並び替え (= service_no が adjNo (= no±1) のサービスと中身 + 番号を swap)
+   *  - state 上で services[] を入れ替え、service_no を index + 1 で再 assign
+   *  - 週次表も同列を swap (= 列ヘッダーは services[].service_kind で自動追従)
+   *  - 保存は既存 onSave flow に乗る (= DELETE → 再 INSERT で UNIQUE 制約衝突なし)
+   */
+  const swapServices = (svcNo: number, adjNo: number) => {
+    if (svcNo === adjNo) return;
+    const inRange = (n: number) => (SERVICE_NOS as readonly number[]).includes(n);
+    if (!inRange(svcNo) || !inRange(adjNo)) return;
+    setDoc((prev) => {
+      if (!prev) return prev;
+      const fromIdx = prev.services.findIndex((s) => s.service_no === svcNo);
+      const toIdx = prev.services.findIndex((s) => s.service_no === adjNo);
+      if (fromIdx < 0 || toIdx < 0) return prev;
+      const services = [...prev.services];
+      [services[fromIdx], services[toIdx]] = [services[toIdx], services[fromIdx]];
+      // service_no を index + 1 で再 assign (= UI 上の順番 = service_no を維持)
+      const renumbered = services.map((s, i) => ({ ...s, service_no: i + 1 }));
+
+      // 週次表も同列を swap (= 全曜日・全行で svcNo ↔ adjNo)
+      const fromKey = String(svcNo);
+      const toKey = String(adjNo);
+      const ws: WeeklySchedule = {};
+      for (const day of WEEKDAY_KEYS) {
+        const rows = prev.weekly_schedule?.[day] ?? [emptyWeeklyRow()];
+        ws[day] = rows.map((row) => {
+          const next: WeeklyRow = { ...row };
+          const a = next[fromKey] ?? null;
+          const b = next[toKey] ?? null;
+          next[fromKey] = b;
+          next[toKey] = a;
+          return next;
+        });
+      }
+      return { ...prev, services: renumbered, weekly_schedule: ws };
+    });
   };
 
   // ── 週次表 操作 ──
@@ -444,6 +484,7 @@ export default function VisitProcedureEditPage() {
         <ServiceEditor
           key={svc.service_no}
           svc={svc}
+          totalServices={doc.services.length}
           stepDurationOptions={stepDurationOptions}
           onServiceChange={(patch) => updateService(svc.service_no, patch)}
           onStepChange={(idx, patch) => updateStep(svc.service_no, idx, patch)}
@@ -451,6 +492,7 @@ export default function VisitProcedureEditPage() {
           onStepRemove={(idx) => removeStep(svc.service_no, idx)}
           onStepDuplicate={(idx) => duplicateStep(svc.service_no, idx)}
           onDuplicateTo={(targetNo) => duplicateServiceTo(svc.service_no, targetNo)}
+          onSwap={(adjNo) => swapServices(svc.service_no, adjNo)}
         />
       ))}
     </div>
@@ -585,6 +627,7 @@ function WeeklyScheduleEditor({
 // =====================================================================
 function ServiceEditor({
   svc,
+  totalServices,
   stepDurationOptions,
   onServiceChange,
   onStepChange,
@@ -592,8 +635,10 @@ function ServiceEditor({
   onStepRemove,
   onStepDuplicate,
   onDuplicateTo,
+  onSwap,
 }: {
   svc: VisitProcedureService;
+  totalServices: number;
   stepDurationOptions: number[];
   onServiceChange: (patch: Partial<VisitProcedureService>) => void;
   onStepChange: (idx: number, patch: Partial<VisitProcedureStep>) => void;
@@ -601,16 +646,41 @@ function ServiceEditor({
   onStepRemove: (idx: number) => void;
   onStepDuplicate: (idx: number) => void;
   onDuplicateTo: (targetNo: number) => void;
+  onSwap: (adjNo: number) => void;
 }) {
   const [dupTarget, setDupTarget] = useState<string>("");
   const kindMissing = !svc.service_kind;
   const otherNos = SERVICE_NOS.filter((n) => n !== svc.service_no);
+  const canMoveUp = svc.service_no > 1;
+  const canMoveDown = svc.service_no < totalServices;
 
   return (
     <section className="rounded-lg border border-gray-200 bg-white">
       <div className="px-3 sm:px-4 py-2.5 border-b border-gray-200 bg-gray-50 space-y-2">
         <div className="flex items-center gap-3 flex-wrap">
           <h3 className="text-sm font-semibold text-gray-700">サービス{svc.service_no}</h3>
+          <div className="flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => onSwap(svc.service_no - 1)}
+              disabled={!canMoveUp}
+              className="text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded p-1 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+              aria-label={`サービス${svc.service_no} を 1 つ上へ`}
+              title="1 つ上へ (= 前のサービスと入替)"
+            >
+              <ChevronUp size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={() => onSwap(svc.service_no + 1)}
+              disabled={!canMoveDown}
+              className="text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded p-1 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+              aria-label={`サービス${svc.service_no} を 1 つ下へ`}
+              title="1 つ下へ (= 次のサービスと入替)"
+            >
+              <ChevronDown size={14} />
+            </button>
+          </div>
           <div className="flex items-center gap-1">
             <label className="text-xs text-gray-500">種類 *</label>
             <select
