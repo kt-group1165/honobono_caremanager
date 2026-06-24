@@ -992,6 +992,10 @@ function ServiceEditor({
                       onSelectTemplate={(t) =>
                         onStepChange(idx, { content: t.name, detail: t.detail ?? "" })
                       }
+                      onSelectName={(name) =>
+                        // 複数 variation の name 選択時は detail をクリアして 2 段目で選ばせる
+                        onStepChange(idx, { content: name, detail: "" })
+                      }
                       onChangeText={(v) => onStepChange(idx, { content: v })}
                       onCreateTemplate={onCreateTemplate}
                       size="sm"
@@ -1013,11 +1017,15 @@ function ServiceEditor({
                     </select>
                   </td>
                   <td className="px-1 py-1 border border-gray-200">
-                    <textarea
+                    <StepDetailCombobox
                       value={step.detail ?? ""}
+                      contentName={step.content}
+                      templates={stepTemplates}
+                      placeholder="具体的取り組み内容"
+                      size="sm"
                       rows={1}
-                      onChange={(e) => onStepChange(idx, { detail: e.target.value })}
-                      className="w-full rounded border border-gray-200 px-1.5 py-1 text-xs resize-y"
+                      onChangeText={(v) => onStepChange(idx, { detail: v })}
+                      onSelectDetail={(d) => onStepChange(idx, { detail: d })}
                     />
                   </td>
                   <td className="px-1 py-1 border border-gray-200 text-center">
@@ -1065,6 +1073,9 @@ function ServiceEditor({
                       onSelectTemplate={(t) =>
                         onStepChange(idx, { content: t.name, detail: t.detail ?? "" })
                       }
+                      onSelectName={(name) =>
+                        onStepChange(idx, { content: name, detail: "" })
+                      }
                       onChangeText={(v) => onStepChange(idx, { content: v })}
                       onCreateTemplate={onCreateTemplate}
                       size="md"
@@ -1100,12 +1111,15 @@ function ServiceEditor({
                     <Trash2 size={16} />
                   </button>
                 </div>
-                <textarea
-                  placeholder="具体的取り組内容及び手順"
+                <StepDetailCombobox
                   value={step.detail ?? ""}
+                  contentName={step.content}
+                  templates={stepTemplates}
+                  placeholder="具体的取り組み内容"
+                  size="md"
                   rows={2}
-                  onChange={(e) => onStepChange(idx, { detail: e.target.value })}
-                  className="w-full rounded border border-gray-200 px-2 py-1.5 text-sm resize-y"
+                  onChangeText={(v) => onStepChange(idx, { detail: v })}
+                  onSelectDetail={(d) => onStepChange(idx, { detail: d })}
                 />
               </div>
             ))
@@ -1146,11 +1160,14 @@ function ServiceEditor({
 }
 
 // =====================================================================
-// step サービス内容 combobox
+// step サービス内容 combobox (B 案: 2 段選択の 1 段目 = unique name)
 //   - input + dropdown の hybrid
-//   - focus / 入力で候補 list 表示
-//   - 候補クリックで name + detail を auto-fill
-//   - 入力値が候補に無ければ「+ "xxx" を新規登録」option を表示
+//   - popup には **unique name** のみ表示 (= 同名 detail 違いは 1 つに集約)
+//   - name の右に variation 数 (= 複数 detail がある場合のみ)
+//   - 選択時:
+//     · variations が 1 個だけ → name + detail を反映
+//     · variations が複数 → name のみ反映、detail はクリア (= 2 段目で選ばせる)
+//   - 入力値が候補に無ければ「+ "xxx" を新規登録」option を表示 (= currentDetail も保存)
 //   - 自由入力は OK (= 候補に無くてもそのまま保存される)
 // =====================================================================
 function StepContentCombobox({
@@ -1161,6 +1178,7 @@ function StepContentCombobox({
   size,
   onChangeText,
   onSelectTemplate,
+  onSelectName,
   onCreateTemplate,
 }: {
   value: string;
@@ -1170,7 +1188,10 @@ function StepContentCombobox({
   placeholder?: string;
   size: "sm" | "md";
   onChangeText: (v: string) => void;
+  /** variations が 1 個だけの name を選んだ時 (= name + detail を反映) */
   onSelectTemplate: (t: VisitProcedureStepTemplate) => void;
+  /** variations が複数ある name を選んだ時 (= name のみ反映、detail クリア) */
+  onSelectName: (name: string) => void;
   onCreateTemplate: (
     name: string,
     detail: string | null,
@@ -1200,30 +1221,74 @@ function StepContentCombobox({
   }, [open]);
 
   const q = value.trim();
-  // 候補絞り込み (= 入力 substring に name または detail がマッチ)
-  const filtered = q.length === 0
-    ? templates
-    : templates.filter((t) =>
-        t.name.toLowerCase().includes(q.toLowerCase()) ||
-        (t.detail ? t.detail.toLowerCase().includes(q.toLowerCase()) : false),
-      );
 
-  // 表示上限: 全カテゴリが見えるよう slice なし (= 80 件程度ならスクロールで十分)。
-  // 100 を超えるテンプレ環境なら都度 cap を検討。
-  const visible = filtered;
+  // ── name 単位に集約 (= 同名 detail 違いは 1 つに) ──
+  // category は representative (= 件数最多、同数なら最初に現れた category) を採用。
+  // variations は detail 配列 (空 detail は除外しない: 「detail 無し」も 1 variation)。
+  type NameGroup = {
+    name: string;
+    category: StepTemplateCategory;
+    variations: VisitProcedureStepTemplate[];
+  };
+  const nameGroups = useMemo(() => {
+    const byName = new Map<string, NameGroup>();
+    for (const t of templates) {
+      const g = byName.get(t.name);
+      if (g) {
+        g.variations.push(t);
+      } else {
+        byName.set(t.name, {
+          name: t.name,
+          category: (t.category ?? "その他") as StepTemplateCategory,
+          variations: [t],
+        });
+      }
+    }
+    // category 代表値の再決定 (= 件数最多)
+    for (const g of byName.values()) {
+      if (g.variations.length <= 1) continue;
+      const counts = new Map<StepTemplateCategory, number>();
+      for (const v of g.variations) {
+        const c = (v.category ?? "その他") as StepTemplateCategory;
+        counts.set(c, (counts.get(c) ?? 0) + 1);
+      }
+      let bestCat: StepTemplateCategory = g.category;
+      let bestCount = -1;
+      for (const [c, n] of counts.entries()) {
+        if (n > bestCount) {
+          bestCount = n;
+          bestCat = c;
+        }
+      }
+      g.category = bestCat;
+    }
+    return Array.from(byName.values());
+  }, [templates]);
+
+  // 候補絞り込み (= 入力 substring に name または いずれかの variation の detail がマッチ)
+  const filteredGroups = useMemo(() => {
+    if (q.length === 0) return nameGroups;
+    const needle = q.toLowerCase();
+    return nameGroups.filter((g) => {
+      if (g.name.toLowerCase().includes(needle)) return true;
+      return g.variations.some((v) => (v.detail ?? "").toLowerCase().includes(needle));
+    });
+  }, [nameGroups, q]);
+
+  // 表示上限: 全カテゴリが見えるよう slice なし。
+  const visibleGroups = filteredGroups;
 
   // 表示分を category ごとに group
   const groupedVisible = useMemo(() => {
-    const groups = new Map<StepTemplateCategory, VisitProcedureStepTemplate[]>();
+    const groups = new Map<StepTemplateCategory, NameGroup[]>();
     for (const c of STEP_TEMPLATE_CATEGORIES) groups.set(c, []);
-    for (const t of visible) {
-      const c = (t.category ?? "その他") as StepTemplateCategory;
-      const list = groups.get(c) ?? [];
-      list.push(t);
-      groups.set(c, list);
+    for (const g of visibleGroups) {
+      const list = groups.get(g.category) ?? [];
+      list.push(g);
+      groups.set(g.category, list);
     }
     return groups;
-  }, [visible]);
+  }, [visibleGroups]);
 
   // 完全一致 (= name + detail 両方一致) が無い & 入力値が空でなければ「+ 新規登録」候補を出す。
   // 同名でも detail が違えば別 template として登録可 (= UNIQUE (office, name, COALESCE(detail, '')))。
@@ -1235,6 +1300,17 @@ function StepContentCombobox({
   const inputCls = size === "sm"
     ? "w-full rounded border border-gray-200 px-1.5 py-1 text-xs"
     : "w-full rounded border border-gray-200 px-2 py-1.5 text-sm";
+
+  const handlePickGroup = (g: NameGroup) => {
+    if (g.variations.length === 1) {
+      // variation 1 個 → 楽に detail まで一緒に反映
+      onSelectTemplate(g.variations[0]);
+    } else {
+      // 複数 → name のみ反映、detail はクリア (= 2 段目で選ばせる)
+      onSelectName(g.name);
+    }
+    setOpen(false);
+  };
 
   const handleCreate = async () => {
     if (creating) return;
@@ -1275,7 +1351,7 @@ function StepContentCombobox({
         aria-autocomplete="list"
         aria-controls={popupId}
       />
-      {open && (visible.length > 0 || showCreateOption) && (
+      {open && (visibleGroups.length > 0 || showCreateOption) && (
         <div
           id={popupId}
           className="absolute z-30 left-0 right-0 top-full mt-0.5 max-h-60 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg text-xs"
@@ -1290,29 +1366,32 @@ function StepContentCombobox({
                 <div className="px-2 py-1 bg-gray-50 text-[10px] font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100 sticky top-0">
                   {cat}
                 </div>
-                {rows.map((t) => (
+                {rows.map((g) => (
                   <button
-                    key={t.id}
+                    key={g.name}
                     type="button"
                     onMouseDown={(e) => {
                       // mousedown で先回り (= input blur より前に発火)
                       e.preventDefault();
-                      onSelectTemplate(t);
-                      setOpen(false);
+                      handlePickGroup(g);
                     }}
                     className="block w-full text-left px-2 py-1.5 hover:bg-green-50 border-b border-gray-100 last:border-b-0"
                     role="option"
                     aria-selected={false}
+                    title={
+                      g.variations.length > 1
+                        ? `${g.name} (取り組内容 ${g.variations.length} パターン)`
+                        : g.name
+                    }
                   >
-                    <div className="font-medium text-gray-800 truncate" title={t.name}>{t.name}</div>
-                    {t.detail && (
-                      <div
-                        className="text-[11px] text-gray-500 line-clamp-3 whitespace-pre-wrap"
-                        title={t.detail}
-                      >
-                        {t.detail}
-                      </div>
-                    )}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-gray-800 truncate">{g.name}</span>
+                      {g.variations.length > 1 && (
+                        <span className="shrink-0 text-[10px] text-gray-500 tabular-nums">
+                          ({g.variations.length})
+                        </span>
+                      )}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -1364,6 +1443,134 @@ function StepContentCombobox({
               </button>
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =====================================================================
+// step 取り組み内容 combobox (B 案: 2 段選択の 2 段目)
+//   - 現状 textarea を置換
+//   - popup 表示条件:
+//     · contentName (= step.content) が空 → popup 表示しない (= 自由入力のみ)
+//     · contentName が set → そのname に紐付く detail variations のみ表示
+//   - 入力テキストで detail 内容を絞り込み (substring match)
+//   - 選択で detail を反映
+//   - 自由入力も維持 (= 候補にない detail も手入力可)
+//   - 新規登録ボタンは無い (= 新規登録は name 側で行う)
+// =====================================================================
+function StepDetailCombobox({
+  value,
+  contentName,
+  templates,
+  placeholder,
+  size,
+  rows,
+  onChangeText,
+  onSelectDetail,
+}: {
+  value: string;
+  /** 現在の step.content (= name) */
+  contentName: string;
+  templates: VisitProcedureStepTemplate[];
+  placeholder?: string;
+  size: "sm" | "md";
+  /** textarea 行数 */
+  rows: number;
+  onChangeText: (v: string) => void;
+  onSelectDetail: (detail: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const reactId = useId();
+  const popupId = `step-detail-cb-${reactId}`;
+
+  // 外側クリックで close
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const trimmedName = contentName.trim();
+  // contentName が空なら popup 用候補は空 (= 自由入力のみ)
+  // 同名 detail variations 抽出 (= detail が null/空 でない物)
+  const variations = useMemo(() => {
+    if (!trimmedName) return [] as VisitProcedureStepTemplate[];
+    return templates.filter(
+      (t) => t.name === trimmedName && (t.detail ?? "").trim().length > 0,
+    );
+  }, [templates, trimmedName]);
+
+  // 入力 substring で絞り込み
+  const q = value.trim();
+  const filtered = useMemo(() => {
+    if (q.length === 0) return variations;
+    const needle = q.toLowerCase();
+    return variations.filter((t) => (t.detail ?? "").toLowerCase().includes(needle));
+  }, [variations, q]);
+
+  const textareaCls = size === "sm"
+    ? "w-full rounded border border-gray-200 px-1.5 py-1 text-xs resize-y"
+    : "w-full rounded border border-gray-200 px-2 py-1.5 text-sm resize-y";
+
+  const canShowPopup = trimmedName.length > 0 && filtered.length > 0;
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <textarea
+        value={value}
+        placeholder={placeholder}
+        rows={rows}
+        onChange={(e) => {
+          onChangeText(e.target.value);
+          if (canShowPopup && !open) setOpen(true);
+        }}
+        onFocus={() => {
+          if (canShowPopup) setOpen(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setOpen(false);
+        }}
+        className={textareaCls}
+        autoComplete="off"
+        role="combobox"
+        aria-expanded={open && canShowPopup}
+        aria-autocomplete="list"
+        aria-controls={popupId}
+      />
+      {open && canShowPopup && (
+        <div
+          id={popupId}
+          className="absolute z-30 left-0 right-0 top-full mt-0.5 max-h-60 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg text-xs"
+          role="listbox"
+        >
+          {filtered.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onSelectDetail(t.detail ?? "");
+                setOpen(false);
+              }}
+              className="block w-full text-left px-2 py-1.5 hover:bg-green-50 border-b border-gray-100 last:border-b-0"
+              role="option"
+              aria-selected={false}
+              title={t.detail ?? ""}
+            >
+              <div className="text-[11px] text-gray-700 whitespace-pre-wrap line-clamp-3">
+                {t.detail}
+              </div>
+            </button>
+          ))}
         </div>
       )}
     </div>
