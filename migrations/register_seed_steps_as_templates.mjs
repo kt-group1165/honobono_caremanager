@@ -49,33 +49,33 @@ while (true) {
 }
 console.log(`[1] 既存 steps: ${allSteps.length} 行`);
 
-// 2) name で dedup (= UNIQUE(office_id, name) 制約に合わせる)。
-//    同名で detail が違う場合は「最長 detail」を採用 (= 最も情報量多い)。
-const byName = new Map();
+// 2) (name, detail) で dedup (= UNIQUE(office_id, name, COALESCE(detail, '')) 制約に合わせる)。
+//    同名でも detail が違えば別 template として登録 → 元の情報量を完全保持。
+const byKey = new Map();
 for (const s of allSteps) {
   const name = (s.content ?? "").trim();
   if (!name) continue;
   const detail = (s.detail ?? "").trim() || null;
-  const cur = byName.get(name);
-  if (!cur) { byName.set(name, { name, detail }); continue; }
-  // detail が長い方を採用
-  const curLen = (cur.detail ?? "").length;
-  const newLen = (detail ?? "").length;
-  if (newLen > curLen) byName.set(name, { name, detail });
+  const key = `${name}|||${detail ?? ""}`;
+  if (!byKey.has(key)) byKey.set(key, { name, detail });
 }
-const uniqueTemplates = [...byName.values()];
-console.log(`[2] name 単位 dedup 後: ${uniqueTemplates.length} 件`);
+const uniqueTemplates = [...byKey.values()];
+console.log(`[2] (name, detail) 単位 dedup 後: ${uniqueTemplates.length} 件`);
 
-// 3) 既存 templates と重複しないように事前 check
+// 3) 既存 templates と重複しないように事前 check ((name, detail) pair で)
 const { data: existing } = await sb
   .from("kaigo_visit_procedure_step_templates")
-  .select("name")
+  .select("name, detail")
   .eq("office_id", HANA_OFFICE_ID)
   .is("deleted_at", null);
-const existingNames = new Set((existing ?? []).map((t) => t.name));
-console.log(`[3] 既存 templates: ${existingNames.size} 件 (skip)`);
+const existingKeys = new Set(
+  (existing ?? []).map((t) => `${t.name}|||${(t.detail ?? "").trim()}`),
+);
+console.log(`[3] 既存 templates: ${existingKeys.size} 件 (skip 候補)`);
 
-const newOnes = uniqueTemplates.filter((t) => !existingNames.has(t.name));
+const newOnes = uniqueTemplates.filter(
+  (t) => !existingKeys.has(`${t.name}|||${(t.detail ?? "").trim()}`),
+);
 console.log(`[4] INSERT 対象: ${newOnes.length} 件\n`);
 
 // 4) sample 出力 (先頭 10 件)

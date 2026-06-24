@@ -1224,8 +1224,11 @@ function StepContentCombobox({
     return groups;
   }, [visible]);
 
-  // 完全一致が無い & 入力値が空でなければ「+ 新規登録」候補を出す
-  const exactExists = templates.some((t) => t.name === q);
+  // 完全一致 (= name + detail 両方一致) が無い & 入力値が空でなければ「+ 新規登録」候補を出す。
+  // 同名でも detail が違えば別 template として登録可 (= UNIQUE (office, name, COALESCE(detail, '')))。
+  const exactExists = templates.some(
+    (t) => t.name === q && (t.detail ?? "") === currentDetail.trim(),
+  );
   const showCreateOption = q.length > 0 && !exactExists;
 
   const inputCls = size === "sm"
