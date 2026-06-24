@@ -468,6 +468,7 @@ export async function getStepTemplates(
     .select("*")
     .eq("office_id", officeId)
     .is("deleted_at", null)
+    .order("category", { ascending: true })
     .order("sort_order", { ascending: true })
     .order("name", { ascending: true });
   if (error) throw error;
@@ -486,6 +487,7 @@ export async function createStepTemplate(
     tenant_id: string;
     name: string;
     detail: string | null;
+    category?: string;
     sort_order?: number;
   },
 ): Promise<VisitProcedureStepTemplate> {
@@ -494,6 +496,7 @@ export async function createStepTemplate(
     tenant_id: payload.tenant_id,
     name: payload.name,
     detail: payload.detail,
+    category: payload.category ?? "その他",
     sort_order: payload.sort_order ?? 0,
   };
   const { data, error } = await supabase
@@ -519,7 +522,7 @@ export async function createStepTemplate(
 export async function updateStepTemplate(
   supabase: SupabaseClient,
   id: string,
-  patch: Partial<Pick<VisitProcedureStepTemplate, "name" | "detail" | "sort_order">>,
+  patch: Partial<Pick<VisitProcedureStepTemplate, "name" | "detail" | "category" | "sort_order">>,
 ): Promise<VisitProcedureStepTemplate> {
   const { data, error } = await supabase
     .from("kaigo_visit_procedure_step_templates")

@@ -232,12 +232,33 @@ export function buildStepDurationOptions(maxMinutes: number): number[] {
  *  - 既存手順書とは独立 (= テキスト一致のみ、FK 参照なし)
  *  - soft delete (= deleted_at) で履歴保持
  */
+/**
+ * テンプレート カテゴリ (= 事前定義 enum 11)
+ * 2026-06-24 user 確定。DB schema の CHECK 制約とも一致させる。
+ */
+export const STEP_TEMPLATE_CATEGORIES = [
+  "挨拶・確認",
+  "バイタル",
+  "排泄",
+  "入浴",
+  "食事",
+  "服薬",
+  "移乗・歩行",
+  "掃除・洗濯",
+  "買物・通院",
+  "記録",
+  "その他",
+] as const;
+
+export type StepTemplateCategory = (typeof STEP_TEMPLATE_CATEGORIES)[number];
+
 export interface VisitProcedureStepTemplate {
   id: string;
   office_id: string;
   tenant_id: string;
   name: string;
   detail: string | null;
+  category: StepTemplateCategory;
   sort_order: number;
   created_at?: string;
   updated_at?: string;
