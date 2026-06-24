@@ -1304,9 +1304,14 @@ function StepContentCombobox({
                     role="option"
                     aria-selected={false}
                   >
-                    <div className="font-medium text-gray-800 truncate">{t.name}</div>
+                    <div className="font-medium text-gray-800 truncate" title={t.name}>{t.name}</div>
                     {t.detail && (
-                      <div className="text-[11px] text-gray-500 truncate">{t.detail}</div>
+                      <div
+                        className="text-[11px] text-gray-500 line-clamp-3 whitespace-pre-wrap"
+                        title={t.detail}
+                      >
+                        {t.detail}
+                      </div>
                     )}
                   </button>
                 ))}
