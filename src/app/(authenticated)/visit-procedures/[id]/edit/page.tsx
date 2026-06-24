@@ -1208,8 +1208,9 @@ function StepContentCombobox({
         (t.detail ? t.detail.toLowerCase().includes(q.toLowerCase()) : false),
       );
 
-  // 表示上限 (= 旧 logic と同じ 20 件)
-  const visible = filtered.slice(0, 20);
+  // 表示上限: 全カテゴリが見えるよう slice なし (= 80 件程度ならスクロールで十分)。
+  // 100 を超えるテンプレ環境なら都度 cap を検討。
+  const visible = filtered;
 
   // 表示分を category ごとに group
   const groupedVisible = useMemo(() => {
