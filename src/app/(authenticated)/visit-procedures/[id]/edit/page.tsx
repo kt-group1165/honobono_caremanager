@@ -113,6 +113,26 @@ export default function VisitProcedureEditPage() {
   const [saving, setSaving] = useState(false);
   const [stepDurationMax, setStepDurationMax] = useState<number>(60);
   const [stepTemplates, setStepTemplates] = useState<VisitProcedureStepTemplate[]>([]);
+  // dirty 追跡: ユーザ編集で true、save 成功で false に戻す。離脱時の警告に使用。
+  const [dirty, setDirty] = useState(false);
+
+  // beforeunload: タブ閉じ・リロード時に警告 (= browser native dialog)
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Chrome 等は returnValue を要求
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  // back ボタン / Link click をインターセプトする共通 helper
+  const confirmLeaveIfDirty = (): boolean => {
+    if (!dirty) return true;
+    return window.confirm("未保存の変更があります。保存しないで戻りますか？\n（OK で破棄して戻る／キャンセルで編集を続ける）");
+  };
 
   const tenantId = currentOffice?.tenant_id ?? null;
   const officeId = currentOffice?.id ?? null;
@@ -224,10 +244,13 @@ export default function VisitProcedureEditPage() {
   }
 
   // ── doc state 更新 helpers ──
-  const updateDoc = (patch: Partial<VisitProcedureDocument>) =>
+  const updateDoc = (patch: Partial<VisitProcedureDocument>) => {
+    setDirty(true);
     setDoc((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
 
   const updateService = (no: number, patch: Partial<VisitProcedureService>) => {
+    setDirty(true);
     setDoc((prev) => {
       if (!prev) return prev;
       const services = prev.services.map((s) => (s.service_no === no ? { ...s, ...patch } : s));
@@ -236,6 +259,7 @@ export default function VisitProcedureEditPage() {
   };
 
   const updateStep = (svcNo: number, stepIdx: number, patch: Partial<VisitProcedureStep>) => {
+    setDirty(true);
     setDoc((prev) => {
       if (!prev) return prev;
       const services = prev.services.map((s) => {
@@ -248,6 +272,7 @@ export default function VisitProcedureEditPage() {
   };
 
   const addStep = (svcNo: number) => {
+    setDirty(true);
     setDoc((prev) => {
       if (!prev) return prev;
       const services = prev.services.map((s) => {
@@ -266,6 +291,7 @@ export default function VisitProcedureEditPage() {
   };
 
   const removeStep = (svcNo: number, stepIdx: number) => {
+    setDirty(true);
     setDoc((prev) => {
       if (!prev) return prev;
       const services = prev.services.map((s) => {
@@ -279,6 +305,7 @@ export default function VisitProcedureEditPage() {
 
   /** step 行を複製 (= 次行に同内容で挿入。12 上限超は toast で拒否) */
   const duplicateStep = (svcNo: number, stepIdx: number) => {
+    setDirty(true);
     setDoc((prev) => {
       if (!prev) return prev;
       const services = prev.services.map((s) => {
@@ -316,6 +343,7 @@ export default function VisitProcedureEditPage() {
     if (hasContent) {
       if (!confirm(`サービス${targetNo} は既に内容があります。上書きしますか？`)) return;
     }
+    setDirty(true);
     setDoc((prev) => {
       if (!prev) return prev;
       const services = prev.services.map((s) => {
@@ -348,6 +376,7 @@ export default function VisitProcedureEditPage() {
     if (svcNo === adjNo) return;
     const inRange = (n: number) => (SERVICE_NOS as readonly number[]).includes(n);
     if (!inRange(svcNo) || !inRange(adjNo)) return;
+    setDirty(true);
     setDoc((prev) => {
       if (!prev) return prev;
       const fromIdx = prev.services.findIndex((s) => s.service_no === svcNo);
@@ -379,6 +408,7 @@ export default function VisitProcedureEditPage() {
 
   // ── 週次表 操作 ──
   const updateWeeklyCell = (day: WeekdayKey, rowIdx: number, svcNo: number, patch: { start?: string } | null) => {
+    setDirty(true);
     setDoc((prev) => {
       if (!prev) return prev;
       const ws = { ...(prev.weekly_schedule ?? {}) };
@@ -396,6 +426,7 @@ export default function VisitProcedureEditPage() {
   };
 
   const addWeeklyRow = (day: WeekdayKey) => {
+    setDirty(true);
     setDoc((prev) => {
       if (!prev) return prev;
       const ws = { ...(prev.weekly_schedule ?? {}) };
@@ -406,6 +437,7 @@ export default function VisitProcedureEditPage() {
   };
 
   const removeWeeklyRow = (day: WeekdayKey, rowIdx: number) => {
+    setDirty(true);
     setDoc((prev) => {
       if (!prev) return prev;
       const ws = { ...(prev.weekly_schedule ?? {}) };
@@ -465,6 +497,7 @@ export default function VisitProcedureEditPage() {
       };
       const newId = await saveDocument(supabase, savedDoc);
       toast.success("手順書を保存しました");
+      setDirty(false); // 保存成功で dirty 解除
       if (id === "new") {
         router.replace(`/visit-procedures/${newId}${officeQuery}`);
       } else {
@@ -529,18 +562,25 @@ export default function VisitProcedureEditPage() {
             href={`/visit-procedures/${id}${officeQuery}`}
             className="text-gray-400 hover:text-gray-600 shrink-0"
             title="プレビューに戻る"
+            onClick={(e) => { if (!confirmLeaveIfDirty()) e.preventDefault(); }}
           >
             <ArrowLeft size={20} />
           </Link>
           <h1 className="text-base sm:text-xl font-bold text-gray-900 flex items-center gap-2 min-w-0">
             <BookOpen size={20} className="text-green-600 shrink-0" />
             <span className="truncate">編集: {doc.client_name || "(無題)"}</span>
+            {dirty && (
+              <span className="text-xs font-normal text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                未保存
+              </span>
+            )}
           </h1>
         </div>
         <div className="flex items-center gap-2">
           <Link
             href={`/visit-procedures/${id}${officeQuery}`}
             className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+            onClick={(e) => { if (!confirmLeaveIfDirty()) e.preventDefault(); }}
           >
             プレビュー
           </Link>
