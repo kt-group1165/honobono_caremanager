@@ -35,6 +35,7 @@ import {
   emptyDocument,
   emptyWeeklyRow,
   SERVICE_NOS,
+  STEP_TEMPLATE_CATEGORIES,
   VISIT_SERVICE_KINDS,
   WEEKDAY_KEYS,
   WEEKDAY_LABELS,
@@ -44,6 +45,7 @@ import {
   parseHHMM,
   formatHHMM,
   sumServiceMinutes,
+  type StepTemplateCategory,
   type VisitProcedureDocument,
   type VisitProcedureService,
   type VisitProcedureStep,
@@ -522,6 +524,7 @@ export default function VisitProcedureEditPage() {
   const handleCreateInlineTemplate = async (
     name: string,
     detail: string | null,
+    category: StepTemplateCategory,
   ): Promise<VisitProcedureStepTemplate | null> => {
     if (!officeId || !tenantId) {
       toast.error("事業所が確定していないため登録できません");
@@ -535,12 +538,16 @@ export default function VisitProcedureEditPage() {
         tenant_id: tenantId,
         name: trimmedName,
         detail: detail && detail.trim().length > 0 ? detail.trim() : null,
+        category,
         sort_order: (stepTemplates.reduce((m, t) => Math.max(m, t.sort_order), 0) + 10),
       });
       setStepTemplates((prev) => {
         const next = [...prev, created];
+        // queries.ts と同じ並び (category → sort_order → name)
         next.sort((a, b) =>
-          a.sort_order - b.sort_order || a.name.localeCompare(b.name, "ja"),
+          (a.category ?? "その他").localeCompare(b.category ?? "その他", "ja") ||
+          a.sort_order - b.sort_order ||
+          a.name.localeCompare(b.name, "ja"),
         );
         return next;
       });
@@ -863,7 +870,11 @@ function ServiceEditor({
    * combobox の「+ "xxx" を新規登録」用 callback
    * 成功時は新 row、失敗時は null を返す
    */
-  onCreateTemplate: (name: string, detail: string | null) => Promise<VisitProcedureStepTemplate | null>;
+  onCreateTemplate: (
+    name: string,
+    detail: string | null,
+    category: StepTemplateCategory,
+  ) => Promise<VisitProcedureStepTemplate | null>;
   onServiceChange: (patch: Partial<VisitProcedureService>) => void;
   onStepChange: (idx: number, patch: Partial<VisitProcedureStep>) => void;
   onStepAdd: () => void;
@@ -1160,10 +1171,16 @@ function StepContentCombobox({
   size: "sm" | "md";
   onChangeText: (v: string) => void;
   onSelectTemplate: (t: VisitProcedureStepTemplate) => void;
-  onCreateTemplate: (name: string, detail: string | null) => Promise<VisitProcedureStepTemplate | null>;
+  onCreateTemplate: (
+    name: string,
+    detail: string | null,
+    category: StepTemplateCategory,
+  ) => Promise<VisitProcedureStepTemplate | null>;
 }) {
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  /** 新規登録時の category (= default 「その他」) */
+  const [newCategory, setNewCategory] = useState<StepTemplateCategory>("その他");
   const wrapRef = useRef<HTMLDivElement | null>(null);
   // ARIA で <input role="combobox"> と popup を紐付けるための uniq id (SSR-safe)
   const reactId = useId();
@@ -1191,6 +1208,22 @@ function StepContentCombobox({
         (t.detail ? t.detail.toLowerCase().includes(q.toLowerCase()) : false),
       );
 
+  // 表示上限 (= 旧 logic と同じ 20 件)
+  const visible = filtered.slice(0, 20);
+
+  // 表示分を category ごとに group
+  const groupedVisible = useMemo(() => {
+    const groups = new Map<StepTemplateCategory, VisitProcedureStepTemplate[]>();
+    for (const c of STEP_TEMPLATE_CATEGORIES) groups.set(c, []);
+    for (const t of visible) {
+      const c = (t.category ?? "その他") as StepTemplateCategory;
+      const list = groups.get(c) ?? [];
+      list.push(t);
+      groups.set(c, list);
+    }
+    return groups;
+  }, [visible]);
+
   // 完全一致が無い & 入力値が空でなければ「+ 新規登録」候補を出す
   const exactExists = templates.some((t) => t.name === q);
   const showCreateOption = q.length > 0 && !exactExists;
@@ -1204,7 +1237,7 @@ function StepContentCombobox({
     if (!q) return;
     setCreating(true);
     try {
-      const created = await onCreateTemplate(q, currentDetail || null);
+      const created = await onCreateTemplate(q, currentDetail || null, newCategory);
       if (created) {
         // 登録した内容を step にも反映 (= name + detail)
         onSelectTemplate(created);
@@ -1238,59 +1271,89 @@ function StepContentCombobox({
         aria-autocomplete="list"
         aria-controls={popupId}
       />
-      {open && (filtered.length > 0 || showCreateOption) && (
+      {open && (visible.length > 0 || showCreateOption) && (
         <div
           id={popupId}
           className="absolute z-30 left-0 right-0 top-full mt-0.5 max-h-60 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg text-xs"
           role="listbox"
         >
-          {filtered.slice(0, 20).map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onMouseDown={(e) => {
-                // mousedown で先回り (= input blur より前に発火)
-                e.preventDefault();
-                onSelectTemplate(t);
-                setOpen(false);
-              }}
-              className="block w-full text-left px-2 py-1.5 hover:bg-green-50 border-b border-gray-100 last:border-b-0"
-              role="option"
-              aria-selected={false}
-            >
-              <div className="font-medium text-gray-800 truncate">{t.name}</div>
-              {t.detail && (
-                <div className="text-[11px] text-gray-500 truncate">{t.detail}</div>
-              )}
-            </button>
-          ))}
+          {/* category 別に group 表示 (= 候補が無い category は heading を出さない) */}
+          {STEP_TEMPLATE_CATEGORIES.map((cat) => {
+            const rows = groupedVisible.get(cat) ?? [];
+            if (rows.length === 0) return null;
+            return (
+              <div key={cat}>
+                <div className="px-2 py-1 bg-gray-50 text-[10px] font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100 sticky top-0">
+                  {cat}
+                </div>
+                {rows.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onMouseDown={(e) => {
+                      // mousedown で先回り (= input blur より前に発火)
+                      e.preventDefault();
+                      onSelectTemplate(t);
+                      setOpen(false);
+                    }}
+                    className="block w-full text-left px-2 py-1.5 hover:bg-green-50 border-b border-gray-100 last:border-b-0"
+                    role="option"
+                    aria-selected={false}
+                  >
+                    <div className="font-medium text-gray-800 truncate">{t.name}</div>
+                    {t.detail && (
+                      <div className="text-[11px] text-gray-500 truncate">{t.detail}</div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
           {showCreateOption && (
-            <button
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                handleCreate();
-              }}
-              disabled={creating}
-              className="block w-full text-left px-2 py-1.5 hover:bg-blue-50 text-blue-700 font-medium border-t border-gray-200 disabled:opacity-50"
-            >
-              {creating ? (
-                <span className="inline-flex items-center gap-1">
-                  <Loader2 size={12} className="animate-spin" />
-                  登録中...
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1">
-                  <Plus size={12} />
-                  「{q}」を新規登録
-                  {currentDetail.trim() && (
-                    <span className="text-[10px] text-gray-500 ml-1">
-                      (取り組内容も含めて保存)
-                    </span>
-                  )}
-                </span>
-              )}
-            </button>
+            <div className="border-t border-gray-200">
+              {/* category select + 新規登録ボタン を 1 row に */}
+              <div className="px-2 py-1.5 flex items-center gap-1.5 bg-blue-50/30">
+                <label className="text-[10px] text-gray-500 shrink-0">分類:</label>
+                <select
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value as StepTemplateCategory)}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  disabled={creating}
+                  className="rounded border border-gray-300 px-1 py-0.5 text-[11px] bg-white"
+                  aria-label="新規テンプレートのカテゴリ"
+                >
+                  {STEP_TEMPLATE_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleCreate();
+                }}
+                disabled={creating}
+                className="block w-full text-left px-2 py-1.5 hover:bg-blue-50 text-blue-700 font-medium disabled:opacity-50"
+              >
+                {creating ? (
+                  <span className="inline-flex items-center gap-1">
+                    <Loader2 size={12} className="animate-spin" />
+                    登録中...
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1">
+                    <Plus size={12} />
+                    「{q}」を新規登録
+                    {currentDetail.trim() && (
+                      <span className="text-[10px] text-gray-500 ml-1">
+                        (取り組内容も含めて保存)
+                      </span>
+                    )}
+                  </span>
+                )}
+              </button>
+            </div>
           )}
         </div>
       )}
