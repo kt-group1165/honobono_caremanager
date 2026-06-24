@@ -1354,7 +1354,7 @@ function StepContentCombobox({
       {open && (visibleGroups.length > 0 || showCreateOption) && (
         <div
           id={popupId}
-          className="absolute z-30 left-0 right-0 top-full mt-0.5 max-h-60 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg text-xs"
+          className="absolute z-30 left-0 top-full mt-0.5 w-[200%] max-w-[600px] max-h-72 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg text-xs"
           role="listbox"
         >
           {/* category 別に group 表示 (= 候補が無い category は heading を出さない) */}
@@ -1549,7 +1549,7 @@ function StepDetailCombobox({
       {open && canShowPopup && (
         <div
           id={popupId}
-          className="absolute z-30 left-0 right-0 top-full mt-0.5 max-h-60 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg text-xs"
+          className="absolute z-30 left-0 top-full mt-0.5 w-[200%] max-w-[600px] max-h-72 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg text-xs"
           role="listbox"
         >
           {filtered.map((t) => (
