@@ -365,6 +365,47 @@ export async function duplicateDocumentToAnotherClient(
   return saveDocument(supabase, clone);
 }
 
+/**
+ * 既存 document をベースに、メタ情報 (= 利用者名・期間・理由・責任者) は上書きで新規作成。
+ *  - services / steps / weekly_schedule / special_notes は src からコピー
+ *  - tenant_id / office_id は overrides から (= 作成側 user の現在 office)
+ * 「新規バージョン作成」page で「他の利用者から複製して始める」用途。
+ */
+export async function createDocumentFromSource(
+  supabase: SupabaseClient,
+  sourceId: string,
+  overrides: {
+    tenant_id: string;
+    office_id: string | null;
+    client_name: string;
+    plan_start_date: string;
+    plan_end_date: string | null;
+    creation_reason: string | null;
+    author_name: string | null;
+  },
+): Promise<string> {
+  const src = await getDocument(supabase, sourceId);
+  if (!src) throw new Error("複製元の手順書が見つかりません");
+  const clone: VisitProcedureDocument = {
+    ...src,
+    id: undefined,
+    tenant_id: overrides.tenant_id,
+    office_id: overrides.office_id,
+    client_name: overrides.client_name.trim(),
+    plan_start_date: overrides.plan_start_date,
+    plan_end_date: overrides.plan_end_date,
+    creation_reason: overrides.creation_reason,
+    author_name: overrides.author_name,
+    services: src.services.map((s) => ({
+      ...s,
+      id: undefined,
+      document_id: undefined,
+      steps: s.steps.map((st) => ({ ...st, id: undefined, service_id: undefined })),
+    })),
+  };
+  return saveDocument(supabase, clone);
+}
+
 // ─────────────────────────────────────────────────────
 // app_settings (= step 所要時間プルダウン上限など)
 // ─────────────────────────────────────────────────────
