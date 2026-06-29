@@ -950,17 +950,15 @@ export function ClaimsContent({
         return;
       }
 
-      const { error: insertErr } = await supabase
-        .from("kaigo_care_support_claims")
-        .insert(rows);
-
-      if (insertErr) {
-        // マイグレーション008が未適用の可能性 — エラーメッセージを表示してSQL案内
-        console.error("Insert failed:", insertErr);
-        toast.error(
-          "レセプト生成に失敗しました。Supabaseで以下のマイグレーションを実行してください: supabase/migrations/008_kassan_expansion.sql"
-        );
-        throw insertErr;
+      // 大量 row の INSERT は payload が膨らみネットワーク失敗の元なので chunk 化
+      for (const chunk of chunkArray(rows, 200)) {
+        const { error: insertErr } = await supabase
+          .from("kaigo_care_support_claims")
+          .insert(chunk);
+        if (insertErr) {
+          console.error("Insert failed:", insertErr);
+          throw insertErr;
+        }
       }
 
       toast.success(
@@ -972,17 +970,16 @@ export function ClaimsContent({
       // "TypeError: Failed to fetch" で reject することがある。詳細を console に
       // 残しつつ、ユーザには分かりやすい toast を出す。
       console.error("一括生成エラー (詳細):", err);
+      const errObj = (typeof err === "object" && err !== null) ? (err as Record<string, unknown>) : null;
       const rawMsg = err instanceof Error
         ? err.message
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-        : typeof err === "object" && err !== null && "message" in err
-          ? String((err as any).message)
+        : errObj && "message" in errObj
+          ? String(errObj.message)
           : JSON.stringify(err);
       const friendly = (() => {
         if (!rawMsg) return "サーバから空の応答 (おそらく URI Too Long / ネットワーク中断)。コンソールを確認してください";
         if (/Failed to fetch/i.test(rawMsg)) return "ネットワーク要求が失敗しました (URI が長すぎる/接続切断の可能性)。コンソールを確認してください";
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-        const code = typeof err === "object" && err !== null && "code" in err ? String((err as any).code) : "";
+        const code = errObj && "code" in errObj ? String(errObj.code) : "";
         return code ? `${code}: ${rawMsg}` : rawMsg;
       })();
       toast.error("一括生成に失敗しました: " + friendly);

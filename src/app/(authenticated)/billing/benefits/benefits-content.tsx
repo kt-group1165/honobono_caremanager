@@ -249,21 +249,29 @@ export function BenefitsContent({
 
       setUsers(mappedUsers);
 
-      // Fetch benefit management rows for selected month
-      const { data: rowsData, error: rowsError } = await supabase
-        .from("kaigo_benefit_management")
-        .select("*")
-        .eq("billing_month", billingMonth)
-        .order("user_id")
-        .order("service_type");
-
-      if (rowsError) throw rowsError;
-      setRows(rowsData ?? []);
+      // Fetch benefit management rows for selected month (page-loop 1000 行制限対策)
+      const rowsAll: BenefitManagementRow[] = [];
+      {
+        let fromR = 0;
+        while (true) {
+          const { data: rowsData, error: rowsError } = await supabase
+            .from("kaigo_benefit_management")
+            .select("*")
+            .eq("billing_month", billingMonth)
+            .order("user_id")
+            .order("service_type")
+            .range(fromR, fromR + PAGE - 1);
+          if (rowsError) throw rowsError;
+          if (!rowsData || rowsData.length === 0) break;
+          rowsAll.push(...(rowsData as BenefitManagementRow[]));
+          if (rowsData.length < PAGE) break;
+          fromR += PAGE;
+        }
+      }
+      setRows(rowsAll);
     } catch (err: unknown) {
-      toast.error(
-        "データの取得に失敗しました: " +
-          (err instanceof Error ? err.message : String(err))
-      );
+      console.error("benefits fetchData err:", err);
+      toast.error("データの取得に失敗しました: " + formatSupabaseErr(err));
     } finally {
       setLoading(false);
     }
@@ -351,24 +359,24 @@ export function BenefitsContent({
         status: "draft" as const,
       }));
 
-      const { error: upsertError } = await supabase
-        .from("kaigo_benefit_management")
-        .upsert(upsertRows, {
-          onConflict: "user_id,billing_month,service_type",
-          ignoreDuplicates: false,
-        });
-
-      if (upsertError) throw upsertError;
+      // 大量 row の upsert は payload / URL が膨らみ HTTP 414/413 で失敗するため chunk 化
+      for (const chunk of chunkArray(upsertRows, IN_CHUNK_SIZE)) {
+        const { error: upsertError } = await supabase
+          .from("kaigo_benefit_management")
+          .upsert(chunk, {
+            onConflict: "user_id,billing_month,service_type",
+            ignoreDuplicates: false,
+          });
+        if (upsertError) throw upsertError;
+      }
 
       toast.success(
         `${upsertRows.length}件の給付管理票を生成しました（${formatMonth(billingMonth)}）`
       );
       await fetchData();
     } catch (err: unknown) {
-      toast.error(
-        "一括生成に失敗しました: " +
-          (err instanceof Error ? err.message : String(err))
-      );
+      console.error("benefits handleBulkGenerate err:", err);
+      toast.error("一括生成に失敗しました: " + formatSupabaseErr(err));
     } finally {
       setGenerating(false);
     }
@@ -462,10 +470,8 @@ export function BenefitsContent({
       });
       void overForUser; // suppress unused warning
     } catch (err: unknown) {
-      toast.error(
-        "更新に失敗しました: " +
-          (err instanceof Error ? err.message : String(err))
-      );
+      console.error("benefits handleUnitBlur err:", err);
+      toast.error("更新に失敗しました: " + formatSupabaseErr(err));
     }
   };
 
@@ -491,10 +497,8 @@ export function BenefitsContent({
         )
       );
     } catch (err: unknown) {
-      toast.error(
-        "確定に失敗しました: " +
-          (err instanceof Error ? err.message : String(err))
-      );
+      console.error("benefits handleConfirm err:", err);
+      toast.error("確定に失敗しました: " + formatSupabaseErr(err));
     }
   };
 
@@ -516,10 +520,8 @@ export function BenefitsContent({
         )
       );
     } catch (err: unknown) {
-      toast.error(
-        "取消に失敗しました: " +
-          (err instanceof Error ? err.message : String(err))
-      );
+      console.error("benefits handleRevoke err:", err);
+      toast.error("取消に失敗しました: " + formatSupabaseErr(err));
     }
   };
 
