@@ -19,15 +19,19 @@ import {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   ChevronUp,
 } from "lucide-react";
-import { format } from "date-fns";
+import {
+  type ClaimStatus,
+  type TokuteiKassanType,
+  type HospitalCoordType,
+  type DischargeType,
+  type ClaimRow,
+  type CertMapEntry,
+  type ClaimsOfficeInfo,
+} from "./claims-shared";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-type ClaimStatus = "draft" | "confirmed" | "submitted";
-
-type TokuteiKassanType = "none" | "Ⅰ" | "Ⅱ" | "Ⅲ" | "A";
 
 // 旧形式 (A/B/C) や事業所設定の "なし" を新形式にマッピング
 function normalizeTokuteiKassan(v: string | null | undefined): TokuteiKassanType {
@@ -43,8 +47,6 @@ function normalizeTokuteiKassan(v: string | null | undefined): TokuteiKassanType
   if (s === "A") return "A";
   return "none";
 }
-type HospitalCoordType = "none" | "i" | "ii";
-type DischargeType = "none" | "i_i" | "i_ro" | "ii_i" | "ii_ro" | "iii";
 
 interface Addings {
   // 加算
@@ -61,52 +63,8 @@ interface Addings {
   abuse_prevention_not_implemented: boolean; // 高齢者虐待防止措置未実施減算
 }
 
-export interface ClaimRow {
-  id: string;
-  user_id: string;
-  billing_month: string;
-  care_support_code: string;
-  care_support_name: string;
-  units: number;
-  unit_price: number;
-  total_amount: number;
-  insurance_amount: number;
-  // existing addition columns
-  initial_addition: boolean;
-  initial_addition_units: number;
-  hospital_coordination: boolean;
-  hospital_coordination_units: number;
-  discharge_addition: boolean;
-  discharge_addition_units: number;
-  medical_coordination: boolean;
-  medical_coordination_units: number;
-  // new columns (migration 008)
-  tokutei_kassan_type: TokuteiKassanType | null;
-  tokutei_kassan_units: number;
-  medical_coop_kassan: boolean;
-  medical_coop_kassan_units: number;
-  discharge_type: DischargeType | null;
-  terminal_care: boolean;
-  terminal_care_units: number;
-  emergency_conference: boolean;
-  emergency_conference_units: number;
-  bcp_not_prepared: boolean;
-  bcp_reduction_pct: number;
-  abuse_prevention_not_implemented: boolean;
-  abuse_reduction_pct: number;
-  status: ClaimStatus;
-  notes: string | null;
-  // Phase 2-3-8 で kaigo_users から clients に張替え。
-  // PostgREST 列エイリアス（name_kana:furigana, mobile_phone:mobile）で
-  // 既存 UI フィールド名を維持。
-  clients?: {
-    name: string;
-    name_kana?: string | null;
-    gender?: string | null;
-    phone?: string | null;
-    mobile_phone?: string | null;
-  };
-}
+// ClaimRow / CertMapEntry / ClaimsOfficeInfo / getCurrentMonth は
+// claims-shared.ts (server / client 共有 module) から import。
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -188,10 +146,6 @@ const STATUS_COLORS: Record<ClaimStatus, string> = {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-export function getCurrentMonth(): string {
-  return format(new Date(), "yyyy-MM");
-}
 
 function formatMonth(yyyyMm: string): string {
   if (!yyyyMm) return "—";
@@ -648,16 +602,6 @@ function EditModal({ claim, certEntry, onClose, onSave }: EditModalProps) {
 // ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
-
-export type CertMapEntry = { care_level: string; insurer_number: string | null; insured_number: string | null; start_date: string | null; end_date: string | null };
-
-export type ClaimsOfficeInfo = {
-  tokutei_kassan_type: string | null;
-  medical_cooperation_kassan: boolean;
-  area_category: string | null;
-  unit_price: number;
-  provider_number: string | null;
-} | null;
 
 export interface ClaimsContentProps {
   initialBillingMonth: string;

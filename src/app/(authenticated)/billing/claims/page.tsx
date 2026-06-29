@@ -1,11 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
+import { ClaimsContent } from "./claims-content";
 import {
-  ClaimsContent,
   getCurrentMonth,
   type CertMapEntry,
   type ClaimRow,
   type ClaimsOfficeInfo,
-} from "./claims-content";
+} from "./claims-shared";
 
 export default async function ClaimsPage({
   searchParams,
