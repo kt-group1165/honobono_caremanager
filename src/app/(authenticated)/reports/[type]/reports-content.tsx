@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   Printer, Loader2, FileText, Plus, ChevronLeft, ChevronRight,
   Save, CheckCircle, Clock, Pencil, X, CalendarDays, Send,
+  Copy, RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
 import { ServiceSelector } from "@/components/services/service-selector";
@@ -1169,10 +1170,6 @@ function EditFormServiceTicket({ content, onChange }: {
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [selectorTarget, setSelectorTarget] = useState<number | null>(null);
 
-  // 時間帯選択モーダル
-  const [timeModalOpen, setTimeModalOpen] = useState(false);
-  const [timeModalTarget, setTimeModalTarget] = useState<number | null>(null);
-
   // 事業所マスタ:
   //   ① 自事業所 (offices, 居宅介護支援以外で active なもの) — 利用票/提供票の「事業所」
   //      列はサービス提供者なので、ケアプラン作成事業所 (居宅介護支援) は自分自身で除外
@@ -1310,6 +1307,36 @@ function EditFormServiceTicket({ content, onChange }: {
   const removeSvc = (i: number) => onChange({ ...content, services: services.filter((_, idx) => idx !== i) });
   const updateSvc = (i: number, k: keyof SvcRow, v: unknown) =>
     onChange({ ...content, services: services.map((r, idx) => idx === i ? { ...r, [k]: v } : r) });
+  // 行複写 (= 直下に同内容コピー挿入)。planned / actual 配列は新しい参照に複製する。
+  const duplicateSvc = (i: number) => {
+    if (services.length >= 9) {
+      toast.error("サービスは最大9件までです");
+      return;
+    }
+    const src = services[i];
+    if (!src) return;
+    const copy: SvcRow = {
+      ...src,
+      planned: [...src.planned],
+      actual: [...src.actual],
+    };
+    const next = [...services.slice(0, i + 1), copy, ...services.slice(i + 1)];
+    onChange({ ...content, services: next });
+  };
+  // 1 行だけ予実変換 (= planned → actual)。planned 配列の参照を切って actual に複製。
+  const copyPlannedToActualOne = (i: number) => {
+    const src = services[i];
+    if (!src) return;
+    updateSvc(i, "actual", [...src.planned]);
+  };
+  // 全行 予実変換 (= 月末作業の時短)。1 回の onChange で services 配列全体を一括更新。
+  const copyPlannedToActualAll = () => {
+    if (services.length === 0) return;
+    const ok = window.confirm("全行の予定を実績にコピーします。よろしいですか?\n(実績の入力内容は上書きされます)");
+    if (!ok) return;
+    const next = services.map((r) => ({ ...r, actual: [...r.planned] }));
+    onChange({ ...content, services: next });
+  };
   const toggleDay = (svcIdx: number, field: "planned" | "actual", dayIdx: number) => {
     const arr = [...services[svcIdx][field]];
     arr[dayIdx] = !arr[dayIdx];
@@ -1356,11 +1383,22 @@ function EditFormServiceTicket({ content, onChange }: {
       <div>
         <div className="mb-2 flex items-center justify-between">
           <span className="text-xs font-semibold text-gray-600">サービス一覧（最大9件）</span>
-          {services.length < 9 && (
-            <button onClick={addSvc} className="flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-100">
-              <Plus size={12} /> サービス追加
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {services.length > 0 && (
+              <button
+                onClick={copyPlannedToActualAll}
+                className="flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 text-xs text-amber-700 hover:bg-amber-100"
+                title="全行の予定をそのまま実績にコピー (月末作業の時短)"
+              >
+                <RefreshCw size={12} /> 全行 予実変換
+              </button>
+            )}
+            {services.length < 9 && (
+              <button onClick={addSvc} className="flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-100">
+                <Plus size={12} /> サービス追加
+              </button>
+            )}
+          </div>
         </div>
         {/* 福祉用具行 表示モード切替 (= 受信した equipment_records が存在する場合のみ表示)
             「用具ごと 1 行 (TAIS 対応)」と「種別ごとに集約 (= 従来慣習)」を後から切替可。
@@ -1412,16 +1450,16 @@ function EditFormServiceTicket({ content, onChange }: {
           );
         })()}
         <div className="overflow-x-auto">
-          <table className="border-collapse text-[10px] w-full" style={{ minWidth: 1080, tableLayout: "fixed", overflow: "hidden" }}>
+          <table className="border-collapse text-[10px] w-full" style={{ minWidth: 1120, tableLayout: "fixed", overflow: "hidden" }}>
             <colgroup>
-              <col style={{ width: 72 }} />   {/* 時間帯 */}
+              <col style={{ width: 72 }} />   {/* 時間帯 (= inline 入力, 例: 9:00〜10:00) */}
               <col style={{ width: 110 }} />  {/* サービス内容 (rental は単位入力併設) */}
               <col style={{ width: 100 }} />  {/* 事業所 (折り返し前提) */}
               <col style={{ width: 70 }} />   {/* 予定/実績 ラベル + 全平消 ボタン */}
               {DAYS.map((d) => <col key={d} style={{ width: 18 }} />)}
               <col style={{ width: 28 }} />   {/* 計 (回数) */}
               <col style={{ width: 40 }} />   {/* 単位計 (月計単位) */}
-              <col style={{ width: 20 }} />   {/* 削除 */}
+              <col style={{ width: 56 }} />   {/* 操作 (修正/複写/予実/削除) */}
             </colgroup>
             <thead>
               <tr className="bg-gray-100">
@@ -1434,7 +1472,7 @@ function EditFormServiceTicket({ content, onChange }: {
                 ))}
                 <th className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">計</th>
                 <th className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">単位</th>
-                <th className="border border-gray-300 px-0 py-0.5"></th>
+                <th className="border border-gray-300 px-1 py-0.5 whitespace-nowrap text-center">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -1455,14 +1493,18 @@ function EditFormServiceTicket({ content, onChange }: {
                     {/* 予定 row */}
                     <tr style={{ height: 18 }}>
                       <td rowSpan={2} className="border border-gray-300 px-0.5 align-middle">
-                        <button
-                          onClick={() => { setTimeModalTarget(i); setTimeModalOpen(true); }}
-                          className="w-full text-left text-[10px] px-1 py-0.5 rounded hover:bg-blue-50 transition-colors truncate"
-                          title="クリックして時間帯を選択"
+                        {/* 時間範囲を inline 自由入力 (= 例: 9:00〜10:00)。
+                            既存セル値が「週3回(月水金)」等の頻度文字列でもそのまま表示・編集可。
+                            rental 行 (= 福祉用具貸与) は時間帯不要なので入力不可。 */}
+                        <input
+                          type="text"
+                          value={svc.time}
+                          onChange={(e) => updateSvc(i, "time", e.target.value)}
+                          placeholder={rental ? "—" : "例: 9:00〜10:00"}
                           disabled={rental}
-                        >
-                          {svc.time || <span className="text-gray-400">{rental ? "—" : "選択..."}</span>}
-                        </button>
+                          className="w-full text-[10px] px-1 py-0.5 rounded border border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent disabled:bg-gray-50 disabled:text-gray-400"
+                          title="例: 9:00〜10:00"
+                        />
                       </td>
                       <td rowSpan={2} className="border border-gray-300 px-0.5 align-middle">
                         <button
@@ -1575,7 +1617,46 @@ function EditFormServiceTicket({ content, onChange }: {
                         })()}
                       </td>
                       <td rowSpan={2} className="border border-gray-300 text-center align-middle">
-                        <button onClick={() => removeSvc(i)} className="text-gray-300 hover:text-red-400"><X size={10} /></button>
+                        {/* 行操作: 修正 (= ServiceSelector 再呼出) / 複写 / 予実変換 / 削除 */}
+                        <div className="flex flex-col items-center gap-0.5 py-0.5">
+                          <div className="flex items-center gap-0.5">
+                            <button
+                              onClick={() => { setSelectorTarget(i); setSelectorOpen(true); }}
+                              className="text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded p-0.5"
+                              title="修正 (サービス選択)"
+                              type="button"
+                            >
+                              <Pencil size={10} />
+                            </button>
+                            <button
+                              onClick={() => duplicateSvc(i)}
+                              className="text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded p-0.5"
+                              title="複写 (= 直下に同内容コピー挿入)"
+                              type="button"
+                            >
+                              <Copy size={10} />
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-0.5">
+                            <button
+                              onClick={() => copyPlannedToActualOne(i)}
+                              className="text-gray-500 hover:text-amber-700 hover:bg-amber-50 rounded p-0.5"
+                              title="予実変換 (= この行の予定をそのまま実績にコピー)"
+                              type="button"
+                              disabled={rental}
+                            >
+                              <RefreshCw size={10} />
+                            </button>
+                            <button
+                              onClick={() => removeSvc(i)}
+                              className="text-gray-300 hover:text-red-400 hover:bg-red-50 rounded p-0.5"
+                              title="削除"
+                              type="button"
+                            >
+                              <X size={10} />
+                            </button>
+                          </div>
+                        </div>
                       </td>
                     </tr>
                     {/* 実績 row */}
@@ -1672,6 +1753,186 @@ function EditFormServiceTicket({ content, onChange }: {
         </div>
       </div>
 
+      {/* 下部 集計サマリ
+          単位計算ロジック:
+            - 非 rental 行: (svc.units ?? 0) × count (= マークの個数)
+            - rental 行 (= 福祉用具貸与): rentalMonthlyUnits() で 1月/半月 を marks から自動判定
+          units 値は kaigo_service_codes.units から fetch (lookup map → backfill)。
+          未 backfill 行は units=undefined → 0 として扱う (= サマリでは合算されない)。
+          単価は 1単位=10円 ハードコード (TODO: 地域区分・サービス種別ごとの実単価対応)。 */}
+      {(() => {
+        const rowMonthlyUnits = (svc: SvcRow, kind: "planned" | "actual"): number => {
+          if (isRentalRow(svc)) return rentalMonthlyUnits(svc, selectedYearMonth, kind);
+          const count = svc[kind].filter(Boolean).length;
+          return (svc.units ?? 0) * count;
+        };
+        const plannedUnitsSum = services.reduce((s, svc) => s + rowMonthlyUnits(svc, "planned"), 0);
+        const actualUnitsSum = services.reduce((s, svc) => s + rowMonthlyUnits(svc, "actual"), 0);
+        const diffUnits = plannedUnitsSum - actualUnitsSum;
+        // 区分支給限度基準額 (= 単位)。content.limit_amount は文字列の場合があるので Number() で正規化
+        const limitUnits = Number(content.limit_amount ?? 0) || 0;
+        // 限度比較は実績 (= 実際の請求対象)。実績無ければ予定で代用。
+        const usedUnits = actualUnitsSum > 0 ? actualUnitsSum : plannedUnitsSum;
+        const withinLimitUnits = limitUnits > 0 ? Math.min(usedUnits, limitUnits) : usedUnits;
+        const overLimitUnits = limitUnits > 0 ? Math.max(0, usedUnits - limitUnits) : 0;
+        // 単価 = 10円/単位 (TODO: kaigo_service_codes.unit_price もしくは地域区分マスタから引く)
+        const unitPrice = 10;
+        // 利用者負担率 (= 1割/2割/3割)。content.copay_rate_pct は手入力 (デフォルト 10)
+        const copayRate = (() => {
+          const r = Number(content.copay_rate_pct ?? content.copay_rate ?? 10);
+          if (!Number.isFinite(r) || r <= 0) return 10;
+          return r;
+        })();
+        // 保険分 (= 限度内のみが保険適用)、全額分 (= 限度超過分は自費)
+        const insuranceTotalCost = Math.round(withinLimitUnits * unitPrice);
+        const userCopayInsurance = Math.round(insuranceTotalCost * copayRate / 100); // 利用者負担額 (保険分)
+        const userFullPay = Math.round(overLimitUnits * unitPrice); // 全額分 (= 限度超過)
+        // 保険外利用料 / 公費 / 軽減 は手入力 (まずは手入力 OK)
+        const extraServiceFee = Number(content.extra_service_fee ?? 0) || 0;
+        const publicAidAmount = Number(content.public_aid_amount ?? 0) || 0;
+        const selfPayAmount = Number(content.self_pay_amount ?? 0) || 0;
+        const welfareReduction = Number(content.welfare_reduction ?? 0) || 0;
+        // 差引利用者負担額 = 利用者負担額 - 公費 - 軽減 (= マイナスにならないようガード)
+        const netUserCopay = Math.max(0, userCopayInsurance - publicAidAmount - welfareReduction);
+        const fmtUnits = (v: number) => v > 0 ? v.toLocaleString() : "—";
+        const fmtYen = (v: number) => v > 0 ? `¥${v.toLocaleString()}` : "¥0";
+        return (
+          <div className="mt-3 rounded border border-gray-200 bg-gray-50/30 p-3">
+            <div className="mb-2 text-xs font-semibold text-gray-700">集計サマリ</div>
+            <div className="grid grid-cols-4 gap-2 text-[11px]">
+              {/* 単位数計算結果 */}
+              <div className="rounded border border-gray-200 bg-white p-2">
+                <div className="mb-1 text-[10px] font-semibold text-gray-500">単位数</div>
+                <div className="flex justify-between"><span className="text-blue-700">予定</span><span className="font-mono">{fmtUnits(plannedUnitsSum)}</span></div>
+                <div className="flex justify-between"><span className="text-green-700">実績</span><span className="font-mono">{fmtUnits(actualUnitsSum)}</span></div>
+                <div className="flex justify-between border-t border-dashed border-gray-200 mt-1 pt-1">
+                  <span className="text-gray-600">差異</span>
+                  <span className={`font-mono ${diffUnits === 0 ? "text-gray-500" : diffUnits > 0 ? "text-blue-700" : "text-red-600"}`}>
+                    {diffUnits > 0 ? `+${diffUnits.toLocaleString()}` : diffUnits.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+              {/* 区分支給限度 */}
+              <div className="rounded border border-gray-200 bg-white p-2">
+                <div className="mb-1 text-[10px] font-semibold text-gray-500">区分支給限度</div>
+                <div className="flex justify-between"><span className="text-gray-600">基準内</span><span className="font-mono text-emerald-700">{fmtUnits(withinLimitUnits)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">超過</span><span className={`font-mono ${overLimitUnits > 0 ? "text-red-600 font-semibold" : "text-gray-400"}`}>{fmtUnits(overLimitUnits)}</span></div>
+                <div className="flex justify-between border-t border-dashed border-gray-200 mt-1 pt-1 text-[10px]">
+                  <span className="text-gray-500">限度額</span>
+                  <span className="font-mono text-gray-500">{limitUnits > 0 ? limitUnits.toLocaleString() : "—"}</span>
+                </div>
+              </div>
+              {/* 利用者負担額 (= 保険分 / 全額分) */}
+              <div className="rounded border border-gray-200 bg-white p-2">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-[10px] font-semibold text-gray-500">利用者負担額</span>
+                  <label className="flex items-center gap-1 text-[9px] text-gray-500">
+                    負担率
+                    <input
+                      type="number"
+                      value={String(content.copay_rate_pct ?? 10)}
+                      onChange={(e) => set("copay_rate_pct", e.target.value)}
+                      className="w-9 border border-gray-200 rounded px-0.5 text-right text-[9px]"
+                      min={0}
+                      max={100}
+                      step={1}
+                      title="1=1割, 2=2割, 3=3割 ... 利用者の介護保険負担割合"
+                    />
+                    %
+                  </label>
+                </div>
+                <div className="flex justify-between"><span className="text-gray-600">保険分</span><span className="font-mono">{fmtYen(userCopayInsurance)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">全額分</span><span className={`font-mono ${userFullPay > 0 ? "text-red-600" : "text-gray-400"}`}>{fmtYen(userFullPay)}</span></div>
+              </div>
+              {/* 保険外利用料 */}
+              <div className="rounded border border-gray-200 bg-white p-2">
+                <div className="mb-1 text-[10px] font-semibold text-gray-500">保険外利用料</div>
+                <input
+                  type="number"
+                  value={String(content.extra_service_fee ?? "")}
+                  onChange={(e) => set("extra_service_fee", e.target.value)}
+                  placeholder="0"
+                  className="w-full text-right font-mono border border-gray-200 rounded px-1 py-0.5 text-[11px]"
+                  min={0}
+                  step={1}
+                />
+                <div className="mt-1 text-right text-[10px] text-gray-500">{fmtYen(extraServiceFee)}</div>
+              </div>
+              {/* 適用公費 */}
+              <div className="rounded border border-gray-200 bg-white p-2">
+                <div className="mb-1 text-[10px] font-semibold text-gray-500">適用公費</div>
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-gray-600 text-[10px]">公費額</span>
+                  <input
+                    type="number"
+                    value={String(content.public_aid_amount ?? "")}
+                    onChange={(e) => set("public_aid_amount", e.target.value)}
+                    placeholder="0"
+                    className="w-20 text-right font-mono border border-gray-200 rounded px-1 py-0.5 text-[10px]"
+                    min={0}
+                    step={1}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-1 mt-0.5">
+                  <span className="text-gray-600 text-[10px]">自費</span>
+                  <input
+                    type="number"
+                    value={String(content.self_pay_amount ?? "")}
+                    onChange={(e) => set("self_pay_amount", e.target.value)}
+                    placeholder="0"
+                    className="w-20 text-right font-mono border border-gray-200 rounded px-1 py-0.5 text-[10px]"
+                    min={0}
+                    step={1}
+                  />
+                </div>
+                <div className="mt-1 text-right text-[10px] text-gray-500">{fmtYen(publicAidAmount + selfPayAmount)}</div>
+              </div>
+              {/* 社福軽減 */}
+              <div className="rounded border border-gray-200 bg-white p-2">
+                <div className="mb-1 text-[10px] font-semibold text-gray-500">社福軽減</div>
+                <input
+                  type="number"
+                  value={String(content.welfare_reduction ?? "")}
+                  onChange={(e) => set("welfare_reduction", e.target.value)}
+                  placeholder="0"
+                  className="w-full text-right font-mono border border-gray-200 rounded px-1 py-0.5 text-[11px]"
+                  min={0}
+                  step={1}
+                />
+                <div className="mt-1 text-right text-[10px] text-gray-500">{fmtYen(welfareReduction)}</div>
+              </div>
+              {/* 差引利用者負担額 */}
+              <div className="rounded border border-amber-300 bg-amber-50 p-2 col-span-2">
+                <div className="mb-1 text-[10px] font-semibold text-amber-800">差引利用者負担額</div>
+                <div className="flex items-baseline justify-between">
+                  <div className="text-[9px] text-amber-700 leading-tight">
+                    = 利用者負担額(保険分)<br />
+                    &nbsp;&nbsp; − 公費 − 軽減
+                  </div>
+                  <div className="text-right">
+                    <div className="font-mono text-base font-bold text-amber-900">{fmtYen(netUserCopay)}</div>
+                    <div className="text-[9px] text-amber-700 mt-0.5">
+                      {fmtYen(userCopayInsurance)} − {fmtYen(publicAidAmount)} − {fmtYen(welfareReduction)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {/* 備考 */}
+            <div className="mt-2">
+              <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">備考</label>
+              <textarea
+                rows={2}
+                value={String(content.summary_notes ?? "")}
+                onChange={(e) => set("summary_notes", e.target.value)}
+                placeholder="月計に関する補足事項 (= 公費区分の根拠 / 限度超過の経緯 等)"
+                className="w-full rounded border border-gray-300 px-2 py-1 text-[11px] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        );
+      })()}
+
       {/* サービス選択モーダル */}
       {/* selectorTarget の time 文字列 ("10:00-11:00" 等) から startTime/endTime を抽出。
           ServiceSelector 側で「候補のみ表示」フィルタに使う。 */}
@@ -1723,109 +1984,6 @@ function EditFormServiceTicket({ content, onChange }: {
         );
       })()}
 
-      {/* 提供時間帯モーダル（開始時刻・終了時刻を直接入力） */}
-      {timeModalOpen && (
-        <TimeRangeModal
-          initial={timeModalTarget !== null ? (services[timeModalTarget]?.time ?? "") : ""}
-          onCancel={() => { setTimeModalOpen(false); setTimeModalTarget(null); }}
-          onSubmit={(value) => {
-            if (timeModalTarget !== null) updateSvc(timeModalTarget, "time", value);
-            setTimeModalOpen(false);
-            setTimeModalTarget(null);
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// 時間帯入力モーダル（開始〜終了を直接入力）
-// ---------------------------------------------------------------------------
-function TimeRangeModal({
-  initial,
-  onCancel,
-  onSubmit,
-}: {
-  initial: string;
-  onCancel: () => void;
-  onSubmit: (value: string) => void;
-}) {
-  const parseInitial = (raw: string): { start: string; end: string } => {
-    const m = raw.match(/^(\d{1,2}):?(\d{2})?\s*[〜~\-]\s*(\d{1,2}):?(\d{2})?$/);
-    if (m) {
-      const sh = m[1].padStart(2, "0");
-      const sm = (m[2] ?? "00").padStart(2, "0");
-      const eh = m[3].padStart(2, "0");
-      const em = (m[4] ?? "00").padStart(2, "0");
-      return { start: `${sh}:${sm}`, end: `${eh}:${em}` };
-    }
-    return { start: "", end: "" };
-  };
-  const parsed = parseInitial(initial);
-  const [start, setStart] = useState(parsed.start || "09:00");
-  const [end, setEnd] = useState(parsed.end || "10:00");
-
-  const handleOk = () => {
-    if (!start || !end) return;
-    onSubmit(`${start}〜${end}`);
-  };
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onClick={onCancel}
-    >
-      <div
-        className="bg-white rounded-xl shadow-xl w-80"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <h3 className="text-sm font-bold text-gray-800">提供時間帯</h3>
-          <button onClick={onCancel} className="text-gray-400 hover:text-gray-600">
-            <X size={16} />
-          </button>
-        </div>
-        <div className="p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">開始時刻</label>
-              <input
-                type="time"
-                value={start}
-                onChange={(e) => setStart(e.target.value)}
-                className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">終了時刻</label>
-              <input
-                type="time"
-                value={end}
-                onChange={(e) => setEnd(e.target.value)}
-                className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-          <div className="text-xs text-gray-500 text-center">
-            プレビュー: <span className="font-semibold text-gray-800">{start}〜{end}</span>
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 border-t px-4 py-3">
-          <button
-            onClick={onCancel}
-            className="rounded-md border border-gray-300 bg-white px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-          >
-            キャンセル
-          </button>
-          <button
-            onClick={handleOk}
-            className="rounded-md bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-          >
-            OK
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
