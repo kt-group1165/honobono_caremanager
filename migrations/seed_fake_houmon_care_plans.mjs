@@ -184,7 +184,7 @@ async function main() {
   const userNos = Array.from({ length: 10 }, (_, i) => `OY${String(i + 1).padStart(3, "0")}`);
   const { data: clientRows, error: cErr } = await sb
     .from("clients")
-    .select("id, user_number, name, primary_disease, status")
+    .select("id, user_number, name, status")
     .eq("tenant_id", TENANT_ID)
     .in("user_number", userNos);
   if (cErr) {
