@@ -56,11 +56,11 @@ const NAV_CARE_MANAGER: NavEntry[] = [
       { name: "会議録", href: "/meeting-minutes", icon: MessagesSquare },
       { name: "利用・提供票", href: "/reports/service-usage", icon: CalendarDays },
       { name: "利用票別表", href: "/reports/service-usage-detail", icon: FileSpreadsheet },
+      { name: "給付管理", href: "/billing/benefits", icon: Calculator },
       { name: "モニタリング", href: "/monitoring", icon: Activity },
       { name: "支援経過", href: "/support-records", icon: NotebookPen },
     ],
   },
-  // { name: "給付管理", href: "/billing/benefits", icon: Calculator }, // 非表示（後日削除検討）
   { name: "職員管理", href: "/staff", icon: UserCog },
   { name: "入退院管理", href: "/hospitalizations", icon: CalendarDays },
   { name: "緊急時シート", href: "/emergency-sheets", icon: AlertTriangle },
