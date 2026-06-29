@@ -27,7 +27,15 @@ import {
   type ClaimRow,
   type CertMapEntry,
   type ClaimsOfficeInfo,
+  ADDON_CODE_TO_DISCHARGE_TYPE,
+  ADDON_CODE_TO_HOSPITAL_TYPE,
+  ADDON_CODE_TO_TOKUTEI,
+  AUTO_ADDON_NOTES_MARKER,
+  KYOTAKU_ADDON_LAW_UNITS,
+  getUnitPriceByArea,
+  isAddonActiveInMonth,
 } from "./claims-shared";
+import { useBusinessType } from "@/lib/business-type-context";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -630,6 +638,9 @@ export function ClaimsContent({
   initialOfficeInfo,
 }: ClaimsContentProps) {
   const supabase = useMemo(() => createClient(), []);
+  // 加算管理 (= /addons) を business_type='居宅介護支援' + 現 office で fetch するため
+  // 現在選択中の office を取得。BusinessTypeProvider 配下なので必ず取得可。
+  const { currentOffice } = useBusinessType();
 
   const [billingMonth, setBillingMonth] = useState(initialBillingMonth);
   const [claims, setClaims] = useState<ClaimRow[]>(initialClaims);
@@ -846,7 +857,13 @@ export function ClaimsContent({
         .maybeSingle();
       if (officeErr) throw officeErr;
 
-      const officeUnitPrice = Number(officeSettings?.unit_price ?? 10);
+      // 4-a. 単位数単価: 地域区分を最優先で算出。
+      //   - offices.area_category (= "1級地"〜"7級地"/"その他") → 法令単価表 で引く
+      //   - area_category が無い場合のみ offices.unit_price の手動値、それも無ければ 10.00
+      const officeArea = (officeSettings?.area_category as string | null) ?? null;
+      const officeUnitPrice = officeArea
+        ? getUnitPriceByArea(officeArea)
+        : Number(officeSettings?.unit_price ?? 10);
 
       // 5. Fetch fiscal year rates from DB
       const fy = getFiscalYear(billingMonth);
@@ -882,11 +899,137 @@ export function ClaimsContent({
         }
       }
 
-      // 事業所設定は "なし"/"Ⅰ"/"Ⅱ"/"Ⅲ"/"A"、レセプトは "none"/"Ⅰ"/"Ⅱ"/"Ⅲ"/"A"
-      const officeTokutei: TokuteiKassanType = normalizeTokuteiKassan(officeSettings?.tokutei_kassan_type);
+      // 5-a. 加算管理 (= /addons) から「この月に有効な」加算を取得。
+      //     ─ business_type='居宅介護支援' + 現 office に限定
+      //     ─ status='active' AND applied_from <= 月末 AND (expires_at IS NULL OR expires_at >= 月初)
+      //     ─ 取得できない場合 (= currentOffice 未確定 / fetch error) は無視して fallback へ
+      type ActiveAddon = {
+        addon_code: string;
+        addon_unit: number | null;
+        applied_from: string;
+        expires_at: string | null;
+        status: string;
+      };
+      const activeAddons: ActiveAddon[] = [];
+      const useAddons = !!currentOffice?.id;
+      if (useAddons) {
+        const PAGE_ADDONS = 1000;
+        let fromA = 0;
+        while (true) {
+          const { data, error: addonsErr } = await supabase
+            .from("kaigo_billing_addons")
+            .select("addon_code, addon_unit, applied_from, expires_at, status")
+            .eq("office_id", currentOffice.id)
+            .eq("business_type", "居宅介護支援")
+            .eq("status", "active")
+            .range(fromA, fromA + PAGE_ADDONS - 1);
+          if (addonsErr) throw addonsErr;
+          if (!data || data.length === 0) break;
+          activeAddons.push(...(data as ActiveAddon[]));
+          if (data.length < PAGE_ADDONS) break;
+          fromA += PAGE_ADDONS;
+        }
+      }
+      // 月内有効分のみに絞り込み
+      const monthActiveAddons = activeAddons.filter((a) =>
+        isAddonActiveInMonth(a, billingMonth),
+      );
+      // 加算コードでまとめる (= 同 code が複数登録されている場合は applied_from 最新を採用)
+      const addonByCode = new Map<string, ActiveAddon>();
+      for (const a of monthActiveAddons) {
+        const prev = addonByCode.get(a.addon_code);
+        if (!prev || a.applied_from > prev.applied_from) {
+          addonByCode.set(a.addon_code, a);
+        }
+      }
+
+      /** addon_code に対応する 単位数を取得 (DB rates → addon_unit → 法令 hardcode の順) */
+      const resolveAddonUnits = (code: string): number => {
+        const a = addonByCode.get(code);
+        // 特定事業所加算は kaigo_tokutei_kassan_rates を最優先
+        const tokuteiType = ADDON_CODE_TO_TOKUTEI[code];
+        if (tokuteiType) {
+          return TOKUTEI_KASSAN_UNITS[tokuteiType] ?? 0;
+        }
+        // ユーザが addon_unit を明示入力していればそれを使う
+        if (a && a.addon_unit != null) return a.addon_unit;
+        // 法令 hardcode fallback
+        return KYOTAKU_ADDON_LAW_UNITS[code] ?? 0;
+      };
+
+      // 5-b. addons table 由来の office 単位加減算を決定。
+      //   - 特定事業所加算: addons 優先、無ければ offices.tokutei_kassan_type を fallback
+      //   - 医療介護連携加算: addons table には独立 code が無いので
+      //     既存通り offices.medical_cooperation_kassan を fallback
+      //     (= ※ 将来加算 master 一覧に追加されたら addon 由来に統一)
+      const addonsHasTokutei =
+        addonByCode.has("特定事業所加算Ⅰ") ||
+        addonByCode.has("特定事業所加算Ⅱ") ||
+        addonByCode.has("特定事業所加算Ⅲ") ||
+        addonByCode.has("特定事業所加算A");
+      let officeTokutei: TokuteiKassanType;
+      let tokuteiSource: "addons" | "master" = "master";
+      if (addonsHasTokutei) {
+        tokuteiSource = "addons";
+        if (addonByCode.has("特定事業所加算Ⅰ")) officeTokutei = "Ⅰ";
+        else if (addonByCode.has("特定事業所加算Ⅱ")) officeTokutei = "Ⅱ";
+        else if (addonByCode.has("特定事業所加算Ⅲ")) officeTokutei = "Ⅲ";
+        else officeTokutei = "A";
+      } else {
+        officeTokutei = normalizeTokuteiKassan(officeSettings?.tokutei_kassan_type);
+      }
       const officeMedicalCoop = officeSettings?.medical_cooperation_kassan ?? false;
       const officeTokuteiUnits = TOKUTEI_KASSAN_UNITS[officeTokutei] ?? 0;
       const officeMedicalCoopUnits = officeMedicalCoop ? 125 : 0;
+
+      // 5-c. 利用者単位の加算 (= 退院・退所 / 入院時情報連携 / ターミナル / 緊急時カンファ / 医療連携)
+      //   これらは事業所単位ではなく「該当する利用者にだけ算定」だが、
+      //   /addons には事業所単位でしか登録されていない。
+      //   → 当面は「事業所として算定届出済の加算は draft 段階で全員に自動算定」とする (= 安全側)
+      //     ユーザは行ごとの checkbox で個別に off にできる。
+      const autoHospitalCode = (() => {
+        if (addonByCode.has("入院時情報連携加算Ⅰ")) return "入院時情報連携加算Ⅰ";
+        if (addonByCode.has("入院時情報連携加算Ⅱ")) return "入院時情報連携加算Ⅱ";
+        return null;
+      })();
+      const autoDischargeCode = (() => {
+        if (addonByCode.has("退院・退所加算Ⅲ")) return "退院・退所加算Ⅲ";
+        if (addonByCode.has("退院・退所加算Ⅱロ")) return "退院・退所加算Ⅱロ";
+        if (addonByCode.has("退院・退所加算Ⅱイ")) return "退院・退所加算Ⅱイ";
+        if (addonByCode.has("退院・退所加算Ⅰロ")) return "退院・退所加算Ⅰロ";
+        if (addonByCode.has("退院・退所加算Ⅰイ")) return "退院・退所加算Ⅰイ";
+        return null;
+      })();
+      const autoMedicalCoordCode = addonByCode.has("医療連携加算") ? "医療連携加算" : null;
+      const autoTerminalCode = addonByCode.has("ターミナルケアマネジメント加算")
+        ? "ターミナルケアマネジメント加算"
+        : null;
+      const autoEmergencyCode = addonByCode.has("緊急時等居宅カンファレンス加算")
+        ? "緊急時等居宅カンファレンス加算"
+        : null;
+
+      // 5-d. 初回加算 自動算定 用に「過去 claims に既出の user_id」を取得。
+      //     billing_month は TEXT 'YYYY-MM' なので lexicographic 比較で「当月未満」が取れる。
+      //     当月 (= 既存の同 month claims) は手順 6 で delete されるため対象外。
+      type PriorClaimRow = { user_id: string };
+      const priorUserIds = new Set<string>();
+      {
+        const PAGE_PRIOR = 1000;
+        let fromP = 0;
+        while (true) {
+          const { data, error: priorErr } = await supabase
+            .from("kaigo_care_support_claims")
+            .select("user_id")
+            .lt("billing_month", billingMonth)
+            .range(fromP, fromP + PAGE_PRIOR - 1);
+          if (priorErr) throw priorErr;
+          if (!data || data.length === 0) break;
+          for (const r of data as PriorClaimRow[]) priorUserIds.add(r.user_id);
+          if (data.length < PAGE_PRIOR) break;
+          fromP += PAGE_PRIOR;
+        }
+      }
+      const initialAddonAvailable = addonByCode.has("初回加算");
 
       // 6. Delete existing claims for this month
       const { error: delErr } = await supabase
@@ -907,8 +1050,61 @@ export function ClaimsContent({
         const levelInfo = CARE_LEVEL_MAP[cert.care_level];
         if (!levelInfo) continue;
 
-        const autoAddUnits = officeTokuteiUnits + officeMedicalCoopUnits;
+        // ── 自動算定 加算 (= 事業所単位の届出加算を draft で全員に展開) ──
+        // 退院・退所加算
+        const dischargeType: DischargeType | null = autoDischargeCode
+          ? (ADDON_CODE_TO_DISCHARGE_TYPE[autoDischargeCode] ?? null)
+          : null;
+        const dischargeUnits = autoDischargeCode ? resolveAddonUnits(autoDischargeCode) : 0;
+        // 入院時情報連携加算
+        const hospitalType: HospitalCoordType | null = autoHospitalCode
+          ? (ADDON_CODE_TO_HOSPITAL_TYPE[autoHospitalCode] ?? null)
+          : null;
+        const hospitalUnits = autoHospitalCode ? resolveAddonUnits(autoHospitalCode) : 0;
+        // 医療連携加算 (= 通院時情報連携)
+        const medicalCoordUnits = autoMedicalCoordCode ? resolveAddonUnits(autoMedicalCoordCode) : 0;
+        // ターミナルケア
+        const terminalUnits = autoTerminalCode ? resolveAddonUnits(autoTerminalCode) : 0;
+        // 緊急時カンファレンス
+        const emergencyUnits = autoEmergencyCode ? resolveAddonUnits(autoEmergencyCode) : 0;
+        // 初回加算 (= 過去 claims に user_id が無い場合のみ)
+        const isInitial = initialAddonAvailable && !priorUserIds.has(user.id);
+        const initialUnits = isInitial ? (KYOTAKU_ADDON_LAW_UNITS["初回加算"] ?? 300) : 0;
+
+        const autoAddUnits =
+          officeTokuteiUnits +
+          officeMedicalCoopUnits +
+          dischargeUnits +
+          hospitalUnits +
+          medicalCoordUnits +
+          terminalUnits +
+          emergencyUnits +
+          initialUnits;
         const { total_amount } = calcTotals(levelInfo.units, autoAddUnits, 0, officeUnitPrice);
+
+        // 自動算定の根拠を notes に印で残す
+        const noteParts: string[] = [];
+        if (officeTokutei !== "none") {
+          noteParts.push(
+            `${AUTO_ADDON_NOTES_MARKER} 特定事業所加算${officeTokutei} (${tokuteiSource === "addons" ? "/addons" : "/master/office"} 由来)`,
+          );
+        }
+        if (officeMedicalCoop) {
+          noteParts.push(`${AUTO_ADDON_NOTES_MARKER} 特定事業所医療介護連携加算 (/master/office)`);
+        }
+        if (autoDischargeCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoDischargeCode} (/addons)`);
+        if (autoHospitalCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoHospitalCode} (/addons)`);
+        if (autoMedicalCoordCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoMedicalCoordCode} (/addons)`);
+        if (autoTerminalCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoTerminalCode} (/addons)`);
+        if (autoEmergencyCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoEmergencyCode} (/addons)`);
+        if (isInitial) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} 初回加算 (= 過去月 claims なしと判定)`);
+        // 単価 source
+        noteParts.push(
+          officeArea
+            ? `${AUTO_ADDON_NOTES_MARKER} 単価 ${officeUnitPrice.toFixed(2)}円 (地域区分: ${officeArea})`
+            : `${AUTO_ADDON_NOTES_MARKER} 単価 ${officeUnitPrice.toFixed(2)}円 (offices.unit_price)`,
+        );
+        const autoNotes = noteParts.join("\n");
 
         rows.push({
           user_id: user.id,
@@ -919,28 +1115,29 @@ export function ClaimsContent({
           unit_price: officeUnitPrice,
           total_amount,
           insurance_amount: total_amount,
-          initial_addition: false,
-          initial_addition_units: 0,
-          hospital_coordination: false,
-          hospital_coordination_units: 0,
-          discharge_addition: false,
-          discharge_addition_units: 0,
-          medical_coordination: false,
-          medical_coordination_units: 0,
+          initial_addition: isInitial,
+          initial_addition_units: initialUnits,
+          hospital_coordination: hospitalType !== null,
+          hospital_coordination_units: hospitalUnits,
+          discharge_addition: dischargeType !== null,
+          discharge_addition_units: dischargeUnits,
+          medical_coordination: medicalCoordUnits > 0,
+          medical_coordination_units: medicalCoordUnits,
           tokutei_kassan_type: officeTokutei === "none" ? null : officeTokutei,
           tokutei_kassan_units: officeTokuteiUnits,
           medical_coop_kassan: officeMedicalCoop,
           medical_coop_kassan_units: officeMedicalCoopUnits,
-          discharge_type: null,
-          terminal_care: false,
-          terminal_care_units: 0,
-          emergency_conference: false,
-          emergency_conference_units: 0,
+          discharge_type: dischargeType,
+          terminal_care: terminalUnits > 0,
+          terminal_care_units: terminalUnits,
+          emergency_conference: emergencyUnits > 0,
+          emergency_conference_units: emergencyUnits,
           bcp_not_prepared: false,
           bcp_reduction_pct: 0,
           abuse_prevention_not_implemented: false,
           abuse_reduction_pct: 0,
           status: "draft",
+          notes: autoNotes,
           created_at: now,
         });
       }
