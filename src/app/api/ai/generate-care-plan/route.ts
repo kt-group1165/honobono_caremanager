@@ -1,10 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 
+// ─── 生成モード ──────────────────────────────────────────────────────────────
+// "from-services"          : 既存サービスを種類ごとにグルーピングしたニーズ・目標 (第2表)
+// "from-services-grouped"  : 既存サービスをできるだけまとめたニーズ・目標 (第2表)
+// "full"                   : 利用者情報からプラン全体提案 (第2表)
+// "care-plan-1"            : 第1表 (総合的援助方針 / 課題分析 / 認定審査会意見等)
+// "care-plan-1-and-2"      : 第1表 + 第2表を 1 回でまとめて生成 (= アセスメント一括生成)
+//
+// userInfo.assessmentSummary を渡すと、アセスメント結果を踏まえた高精度な提案になる。
+type GenerateMode =
+  | "from-services"
+  | "from-services-grouped"
+  | "full"
+  | "care-plan-1"
+  | "care-plan-1-and-2";
+
+type AiUserInfo = {
+  name: string;
+  age: string;
+  gender: string;
+  careLevel: string;
+  medicalHistory: string;
+  adlSummary: string;
+  familySituation: string;
+  notes: string;
+  /** アセスメント (kaigo_assessments.form_data) を整形した平文サマリ。空文字なら未入力。 */
+  assessmentSummary?: string;
+};
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { apiKey, userInfo, services, mode } = body;
+    const apiKey: string | undefined = body.apiKey;
+    const userInfo: AiUserInfo = body.userInfo ?? {};
+    const services: Array<{ type: string; content: string; frequency: string; provider: string }> = body.services ?? [];
+    const mode: GenerateMode = body.mode ?? "from-services-grouped";
 
     if (!apiKey) {
       return NextResponse.json({ error: "APIキーが設定されていません" }, { status: 400 });
@@ -13,6 +44,10 @@ export async function POST(request: NextRequest) {
     const anthropic = new Anthropic({ apiKey });
 
     // 利用者情報を整形
+    const assessmentBlock = userInfo.assessmentSummary
+      ? `\n【アセスメント要約】\n${userInfo.assessmentSummary}`
+      : "";
+
     const userContext = `
 【利用者情報】
 氏名: ${userInfo.name}
@@ -22,14 +57,12 @@ export async function POST(request: NextRequest) {
 既往歴: ${userInfo.medicalHistory || "なし"}
 ADL状況: ${userInfo.adlSummary || "情報なし"}
 家族状況: ${userInfo.familySituation || "情報なし"}
-特記事項: ${userInfo.notes || "なし"}
+特記事項: ${userInfo.notes || "なし"}${assessmentBlock}
 `.trim();
 
     // サービス情報を整形
     const serviceList = (services || [])
-      .map((s: { type: string; content: string; frequency: string; provider: string }) =>
-        `・${s.type}（${s.content}）${s.frequency} - ${s.provider}`
-      )
+      .map((s) => `・${s.type}（${s.content}）${s.frequency} - ${s.provider}`)
       .join("\n");
 
     let systemPrompt = "";
@@ -46,6 +79,7 @@ ADL状況: ${userInfo.adlSummary || "情報なし"}
       systemPrompt = `あなたは経験豊富な介護支援専門員（ケアマネージャー）です。
 居宅サービス計画書（第2表）の作成を支援します。
 利用者の状態とサービス内容から、適切なニーズ（生活全般の解決すべき課題）、長期目標、短期目標、サービス内容の文章を生成してください。
+${userInfo.assessmentSummary ? "【アセスメント要約】に記載された本人/家族の意向、生活歴、医師意見、認知/行動所見、健康状態を必ず踏まえて、その人固有の表現にしてください。" : ""}
 
 【ルール】
 - ニーズは利用者本人の視点で「〜したい」「〜を維持したい」という表現を使う
@@ -81,12 +115,72 @@ ${serviceList}
 
 上記のサービスに合わせて、ケアプラン第2表の内容を生成してください。
 サービスの種類ごとに適切なニーズ・目標をグルーピングしてください。`;
+    } else if (mode === "care-plan-1") {
+      systemPrompt = `あなたは経験豊富な介護支援専門員（ケアマネージャー）です。
+居宅サービス計画書（第1表）の作成を支援します。
+アセスメント結果と利用者情報から、第1表に記載する各文章を生成してください。
 
+【ルール】
+- 「利用者及び家族の生活に対する意向を踏まえた課題分析の結果」: 本人/家族の意向 + 医師意見 + 生活上の課題を 200〜400 字で総合的にまとめる
+- 「介護認定審査会の意見及びサービスの種類の指定」: 認定情報からの推定で記入。情報が無ければ「特になし」
+- 「総合的な援助の方針」: 多職種チームで支える方針を 100〜250 字で。緊急時連絡先・主治医名は文章に含めなくてよい
+- 自然で簡潔な日本語、敬体ではなく常体 (である調) を基本とする
+- 実際のケアプランとして使える質にする
+
+【出力形式】JSON で出力:
+{
+  "issue_analysis": "課題分析の結果の文章",
+  "review_opinion": "認定審査会の意見・サービスの種類の指定の文章",
+  "overall_policy": "総合的な援助の方針の文章"
+}`;
+      userPrompt = `${userContext}
+
+この利用者の居宅サービス計画書 第1表 (居宅サービス計画書(1)) の3つの文章欄を、上記のアセスメント情報を踏まえて生成してください。`;
+    } else if (mode === "care-plan-1-and-2") {
+      systemPrompt = `あなたは経験豊富な介護支援専門員（ケアマネージャー）です。
+アセスメント結果から、居宅サービス計画書 第1表 と 第2表 の主要内容を一括で生成してください。
+
+【ルール - 第1表】
+- 利用者及び家族の意向を踏まえた課題分析の結果 (issue_analysis): 200〜400字
+- 介護認定審査会の意見及びサービスの種類の指定 (review_opinion): 情報が無ければ「特になし」
+- 総合的な援助の方針 (overall_policy): 100〜250字、多職種協働の方針
+
+【ルール - 第2表】
+- ニーズ (needs) は 2〜4 件
+- 各ニーズに「長期目標」「短期目標」「サービス内容」を提案
+- ニーズは本人視点で「〜したい」「〜を維持したい」
+- 長期目標: 6ヶ月〜1年、短期目標: 3〜6ヶ月
+- アセスメント要約に書かれた本人/家族意向、医師意見、認知/行動所見、健康状態を必ず反映
+
+【出力形式】JSON:
+{
+  "care_plan_1": {
+    "issue_analysis": "課題分析の結果",
+    "review_opinion": "認定審査会の意見",
+    "overall_policy": "総合的な援助の方針"
+  },
+  "care_plan_2": {
+    "blocks": [
+      {
+        "needs": "ニーズ",
+        "long_term_goal": "長期目標",
+        "short_term_goal": "短期目標",
+        "services": [
+          { "content": "サービス内容", "type": "サービス種別", "frequency": "頻度", "provider": "" }
+        ]
+      }
+    ]
+  }
+}`;
+      userPrompt = `${userContext}
+
+上記のアセスメント情報から、第1表と第2表の主要文章を一括生成してください。`;
     } else {
-      // ニーズから順にプラン全体を生成
+      // ニーズから順にプラン全体を生成 ("full")
       systemPrompt = `あなたは経験豊富な介護支援専門員（ケアマネージャー）です。
 居宅サービス計画書（第2表）の作成を支援します。
 利用者の情報から、適切なケアプラン全体を提案してください。
+${userInfo.assessmentSummary ? "【アセスメント要約】の本人/家族意向、生活歴、医師意見、認知/行動所見を反映してください。" : ""}
 
 【ルール】
 - ニーズは2〜4件程度

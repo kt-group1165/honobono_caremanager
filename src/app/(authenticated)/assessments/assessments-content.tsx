@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Plus, Save, Loader2, ClipboardCheck, FileText, Printer, ArrowLeft, Check, Edit3, Eye } from "lucide-react";
+import { Plus, Save, Loader2, ClipboardCheck, FileText, Printer, ArrowLeft, Check, Edit3, Eye, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fetchAssessmentContext, buildAiUserInfo } from "@/lib/ai/assessment-context";
 
 import type { AssessmentFormData } from "./_types";
 import { emptyAssessment } from "./_types";
@@ -102,6 +104,7 @@ export function AssessmentsContent({
   initialAssessments,
 }: AssessmentsContentProps) {
   const supabase = useMemo(() => createClient(), []);
+  const router = useRouter();
 
   const [selectedUser] = useState<KaigoUser | null>(initialUser);
   const [certifications] = useState<Certification[]>(initialCertifications);
@@ -120,6 +123,33 @@ export function AssessmentsContent({
   const [formData, setFormData] = useState<AssessmentFormData>(emptyAssessment());
   const [activeTab, setActiveTab] = useState<TabKey>("1");
   const [saving, setSaving] = useState(false);
+
+  // ─── AI 一括生成 (= アセスメントから第1表+第2表 draft を作成) ──────────
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiApiKey, setAiApiKey] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("offices")
+        .select("ai_enabled, ai_api_key")
+        .eq("app_type", "kaigo-app")
+        .limit(1)
+        .single();
+      if (cancelled) return;
+      if (error) {
+        // 行が無い等は AI 機能 OFF 扱い (toast は出さない)
+        return;
+      }
+      if (data) {
+        setAiEnabled(!!data.ai_enabled);
+        setAiApiKey(String(data.ai_api_key ?? ""));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [supabase]);
 
   // Fetch assessments list (filtered by certification_id if selected)
   const fetchAssessments = useCallback(async () => {
@@ -218,6 +248,157 @@ export function AssessmentsContent({
       setSaving(false);
     }
   };
+
+  // ─── AI: アセスメントから ケアプラン (第1表+第2表) draft を作成 ──────
+  // 既存アセスメント DB レコードの form_data を AI に渡し、出力を
+  // kaigo_report_documents に 2 件 (care-plan-1, care-plan-2) INSERT してから
+  // 第1表 page に遷移する。
+  const handleGenerateCarePlanFromAssessment = useCallback(async () => {
+    if (!aiApiKey) {
+      toast.error("APIキーが設定されていません。マスタ管理→自事業所設定で設定してください。");
+      return;
+    }
+    if (!editingCertId) {
+      toast.error("認定期間が特定できません");
+      return;
+    }
+    // 編集中で未保存なら、まず保存を促す (AI には DB の最新を渡す方が一貫性が出る)
+    if (mode === "edit" && !editingId) {
+      toast.error("先にアセスメントを保存してから生成してください");
+      return;
+    }
+    setAiGenerating(true);
+    try {
+      const ctx = await fetchAssessmentContext(supabase, userId);
+      const aiUserInfo = buildAiUserInfo(ctx);
+      if (!aiUserInfo.hasAssessment) {
+        toast.error("アセスメントが見つかりません。先に保存してください。");
+        return;
+      }
+
+      const res = await fetch("/api/ai/generate-care-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey: aiApiKey,
+          mode: "care-plan-1-and-2",
+          userInfo: aiUserInfo,
+          services: [],
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok || result.error) {
+        toast.error("AI生成エラー: " + (result.error || "不明なエラー"));
+        return;
+      }
+
+      const out = result.data ?? {};
+      const cp1 = out.care_plan_1 ?? {};
+      const cp2 = out.care_plan_2 ?? {};
+      const userName = aiUserInfo.name || ctx.user?.name || "";
+      const today = format(new Date(), "yyyy-MM-dd");
+
+      // ─── 第1表 content ─────────────────────────────────
+      const carePlan1Content: Record<string, unknown> = {
+        user_name: userName,
+        creator_name: ctx.cert?.care_manager ?? "",
+        creation_date: today,
+        care_level: ctx.cert?.care_level ?? "",
+        issue_analysis: typeof cp1.issue_analysis === "string" ? cp1.issue_analysis : "",
+        review_opinion: typeof cp1.review_opinion === "string" ? cp1.review_opinion : "",
+        overall_policy: typeof cp1.overall_policy === "string" ? cp1.overall_policy : "",
+        plan_type: "初回",
+        cert_status: "認定済",
+      };
+
+      // ─── 第2表 content: blocks 構造に整形 ───────────────────
+      type RawBlock = {
+        needs?: unknown;
+        long_term_goal?: unknown;
+        short_term_goal?: unknown;
+        services?: unknown;
+      };
+      const rawBlocks = Array.isArray(cp2.blocks) ? (cp2.blocks as RawBlock[]) : [];
+      const blocks = rawBlocks.map((ab) => ({
+        needs: String(ab.needs ?? ""),
+        long_term_goal: String(ab.long_term_goal ?? ""),
+        long_term_period: "",
+        goals: [{
+          short_term_goal: String(ab.short_term_goal ?? ""),
+          short_term_period: "",
+          services: Array.isArray(ab.services)
+            ? (ab.services as Array<Record<string, unknown>>).map((sv) => ({
+                content: String(sv.content ?? ""),
+                insurance_flag: "○",
+                type: String(sv.type ?? ""),
+                provider: String(sv.provider ?? ""),
+                frequency: String(sv.frequency ?? ""),
+                period: "",
+              }))
+            : [],
+        }],
+      }));
+
+      const carePlan2Content: Record<string, unknown> = {
+        user_name: userName,
+        creation_date: today,
+        blocks,
+      };
+
+      // ─── INSERT (kaigo_report_documents 2 件) ─────────────
+      const inserts = [
+        {
+          user_id: userId,
+          certification_id: editingCertId,
+          report_type: "care-plan-1",
+          title: "居宅サービス計画書（第1表）",
+          report_month: null,
+          care_plan_id: null,
+          content: carePlan1Content,
+          status: "draft" as const,
+        },
+        {
+          user_id: userId,
+          certification_id: editingCertId,
+          report_type: "care-plan-2",
+          title: "居宅サービス計画書（第2表）",
+          report_month: null,
+          care_plan_id: null,
+          content: carePlan2Content,
+          status: "draft" as const,
+        },
+      ];
+
+      const { error: insertError } = await supabase
+        .from("kaigo_report_documents")
+        .insert(inserts);
+      if (insertError) {
+        toast.error("ケアプラン draft の作成に失敗: " + insertError.message);
+        return;
+      }
+
+      // 使用ログ
+      const { error: logError } = await supabase.from("kaigo_ai_usage_logs").insert({
+        user_id: userId,
+        user_name: userName,
+        action: "care-plan-1-and-2-generate",
+        mode: "care-plan-1-and-2",
+        input_tokens: result.usage?.input_tokens ?? 0,
+        output_tokens: result.usage?.output_tokens ?? 0,
+        estimated_cost: result.usage?.estimated_cost_yen ?? 0,
+      });
+      if (logError) console.warn("AI 使用ログの保存に失敗:", logError.message);
+
+      const costStr = result.usage?.estimated_cost_yen ? `約${result.usage.estimated_cost_yen}円` : "";
+      toast.success(`第1表・第2表の draft を生成しました（${costStr}）。第1表 page に移動します。`);
+
+      router.push(`/reports/care-plan-1?user=${userId}`);
+    } catch (e) {
+      toast.error("AI生成に失敗しました: " + (e instanceof Error ? e.message : ""));
+    } finally {
+      setAiGenerating(false);
+    }
+  }, [aiApiKey, editingCertId, editingId, mode, supabase, userId, router]);
 
   // Delete
   const handleDelete = async (id: string) => {
@@ -369,6 +550,17 @@ export function AssessmentsContent({
                 <button onClick={() => window.print()} className="flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
                   <Printer size={14} /> 印刷
                 </button>
+                {aiEnabled && editingId && (
+                  <button
+                    onClick={handleGenerateCarePlanFromAssessment}
+                    disabled={aiGenerating}
+                    title="このアセスメント内容から第1表・第2表の draft を AI 生成して、第1表 page に移動します"
+                    className="flex items-center gap-1 rounded-lg border-2 border-purple-300 bg-purple-50 px-3 py-1.5 text-sm font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50 transition-colors"
+                  >
+                    {aiGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                    {aiGenerating ? "生成中..." : "ケアプラン目標を生成"}
+                  </button>
+                )}
                 {mode === "edit" && (
                   <button onClick={handleSave} disabled={saving} className="flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}

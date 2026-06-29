@@ -26,6 +26,7 @@ import {
   type ReceivedRecord,
 } from "@/components/shared/ImportServiceRecordModal";
 import { Download as DownloadIcon, Inbox } from "lucide-react";
+import { fetchAssessmentContext, buildAiUserInfo } from "@/lib/ai/assessment-context";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -688,12 +689,133 @@ function buildDefaultContent(
 // Edit Forms per report type
 // ---------------------------------------------------------------------------
 
-function EditFormCarePlan1({ content, onChange }: {
+function EditFormCarePlan1({ content, onChange, userId }: {
   content: Record<string, unknown>;
   onChange: (c: Record<string, unknown>) => void;
+  /** clients.id。アセスメント連動 AI 生成に使用。未指定なら AI ボタン非表示。 */
+  userId?: string;
 }) {
   const s = (key: string) => (String(content[key] ?? ""));
   const set = (key: string, v: string) => onChange({ ...content, [key]: v });
+  const setMany = (kv: Record<string, string>) => onChange({ ...content, ...kv });
+  const supabaseForAi = useMemo(() => createClient(), []);
+
+  // AI 生成
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiApiKey, setAiApiKey] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [hasAssessment, setHasAssessment] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const checkAi = async () => {
+      const { data } = await supabaseForAi
+        .from("offices")
+        .select("ai_enabled, ai_api_key")
+        .eq("app_type", "kaigo-app")
+        .limit(1)
+        .single();
+      if (data) {
+        setAiEnabled(!!data.ai_enabled);
+        setAiApiKey(String(data.ai_api_key ?? ""));
+      }
+    };
+    checkAi();
+  }, [supabaseForAi]);
+
+  // アセスメント有無を判定 (= ボタンの enabled/disabled)
+  useEffect(() => {
+    if (!userId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (userId 切替時の derived reset)
+      setHasAssessment(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabaseForAi
+        .from("kaigo_assessments")
+        .select("id")
+        .eq("user_id", userId)
+        .limit(1);
+      if (cancelled) return;
+      if (error) {
+        console.error("kaigo_assessments check failed:", error.message);
+        setHasAssessment(false);
+        return;
+      }
+      setHasAssessment(Array.isArray(data) && data.length > 0);
+    })();
+    return () => { cancelled = true; };
+  }, [userId, supabaseForAi]);
+
+  const handleAiGenerate = async () => {
+    if (!aiApiKey) {
+      toast.error("APIキーが設定されていません。マスタ管理→自事業所設定で設定してください。");
+      return;
+    }
+    if (!userId) {
+      toast.error("利用者情報が読み込まれていません");
+      return;
+    }
+    setAiGenerating(true);
+    try {
+      const ctx = await fetchAssessmentContext(supabaseForAi, userId);
+      const aiUserInfo = buildAiUserInfo(ctx);
+      if (!aiUserInfo.hasAssessment) {
+        toast.error("アセスメントが未入力です。先にアセスメントを入力してください。");
+        return;
+      }
+
+      const res = await fetch("/api/ai/generate-care-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey: aiApiKey,
+          mode: "care-plan-1",
+          userInfo: aiUserInfo,
+          services: [],
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok || result.error) {
+        toast.error("AI生成エラー: " + (result.error || "不明なエラー"));
+        return;
+      }
+
+      const out = result.data ?? {};
+      const updates: Record<string, string> = {};
+      if (typeof out.issue_analysis === "string" && out.issue_analysis) updates.issue_analysis = out.issue_analysis;
+      if (typeof out.review_opinion === "string" && out.review_opinion) updates.review_opinion = out.review_opinion;
+      if (typeof out.overall_policy === "string" && out.overall_policy) updates.overall_policy = out.overall_policy;
+      if (Object.keys(updates).length === 0) {
+        toast.error("AI出力に有効な内容がありませんでした");
+        return;
+      }
+      setMany(updates);
+
+      // 使用ログ
+      const { error: logError } = await supabaseForAi.from("kaigo_ai_usage_logs").insert({
+        user_id: userId,
+        user_name: aiUserInfo.name,
+        action: "care-plan-1-generate",
+        mode: "care-plan-1",
+        input_tokens: result.usage?.input_tokens ?? 0,
+        output_tokens: result.usage?.output_tokens ?? 0,
+        estimated_cost: result.usage?.estimated_cost_yen ?? 0,
+      });
+      if (logError) {
+        // ログ書込み失敗は本処理を止めない (= warn のみ)
+        console.warn("AI 使用ログの保存に失敗:", logError.message);
+      }
+
+      const costStr = result.usage?.estimated_cost_yen ? `約${result.usage.estimated_cost_yen}円` : "";
+      toast.success(`第1表の文章をAI生成しました（入力:${result.usage?.input_tokens} 出力:${result.usage?.output_tokens}トークン ${costStr}）`);
+    } catch (e) {
+      toast.error("AI生成に失敗しました: " + (e instanceof Error ? e.message : ""));
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
   return (
     <div className="grid grid-cols-2 gap-3 p-4">
       <div className="col-span-2 grid grid-cols-4 gap-3">
@@ -713,6 +835,45 @@ function EditFormCarePlan1({ content, onChange }: {
         <FI label="計画作成（変更）日" value={s("creation_date")} onChange={(v) => set("creation_date", v)} />
         <FI label="初回計画作成日" value={s("initial_creation_date")} onChange={(v) => set("initial_creation_date", v)} />
       </div>
+
+      {/* AI 生成パネル (= 課題分析 / 認定審査会意見 / 総合的援助方針 の3文章) */}
+      {aiEnabled && userId && (
+        <div className="col-span-2 rounded-lg border-2 border-purple-200 bg-purple-50/50 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-purple-700">🤖 AIで第1表の文章を生成</span>
+              <span className="text-[10px] text-purple-500">Claude Sonnet</span>
+            </div>
+            <button
+              onClick={handleAiGenerate}
+              disabled={aiGenerating || hasAssessment === false || hasAssessment === null}
+              className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50 transition-colors"
+              title={hasAssessment === false ? "アセスメントを先に入力してください" : ""}
+            >
+              {aiGenerating ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  生成中...
+                </>
+              ) : (
+                <>アセスメントから生成</>
+              )}
+            </button>
+          </div>
+          <p className="text-[11px] text-purple-600">
+            アセスメントの内容 (本人/家族意向・医師意見・健康状態・生活歴) を踏まえて、
+            「課題分析の結果」「認定審査会の意見」「総合的な援助の方針」を自動入力します。
+          </p>
+          {hasAssessment === false && (
+            <p className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+              ⚠ この利用者にはアセスメントが登録されていません。先に
+              <Link href={`/assessments?user=${userId}`} className="underline mx-1">アセスメント</Link>
+              を入力してください。
+            </p>
+          )}
+        </div>
+      )}
+
       <FI label="利用者及び家族の生活に対する意向を踏まえた課題分析の結果" value={s("issue_analysis")}
         onChange={(v) => set("issue_analysis", v)} textarea rows={4} className="col-span-2" />
       <FI label="介護認定審査会の意見及びサービスの種類の指定" value={s("review_opinion")}
@@ -737,19 +898,22 @@ type NeedsBlock = {
   }[];
 };
 
-function EditFormCarePlan2({ content, onChange }: {
+function EditFormCarePlan2({ content, onChange, userId }: {
   content: Record<string, unknown>;
   onChange: (c: Record<string, unknown>) => void;
+  /** clients.id。アセスメント連動 AI 生成に使用。指定が無い場合は name lookup にフォールバック (旧挙動)。 */
+  userId?: string;
 }) {
   const s = (key: string) => String(content[key] ?? "");
   const set = (key: string, v: unknown) => onChange({ ...content, [key]: v });
-  const supabaseForAi = createClient();
+  const supabaseForAi = useMemo(() => createClient(), []);
 
   // AI生成
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiMode, setAiMode] = useState<"from-services" | "from-services-grouped" | "full">("from-services-grouped");
+  const [hasAssessment, setHasAssessment] = useState<boolean | null>(null);
 
   useEffect(() => {
     const checkAi = async () => {
@@ -762,36 +926,60 @@ function EditFormCarePlan2({ content, onChange }: {
     checkAi();
   }, [supabaseForAi]);
 
+  // アセスメント有無を判定 (= UI ヒント表示用、ボタン自体は無くても押せる)
+  useEffect(() => {
+    if (!userId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (userId 切替時の derived reset)
+      setHasAssessment(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabaseForAi
+        .from("kaigo_assessments")
+        .select("id")
+        .eq("user_id", userId)
+        .limit(1);
+      if (cancelled) return;
+      if (error) {
+        console.error("kaigo_assessments check failed:", error.message);
+        setHasAssessment(false);
+        return;
+      }
+      setHasAssessment(Array.isArray(data) && data.length > 0);
+    })();
+    return () => { cancelled = true; };
+  }, [userId, supabaseForAi]);
+
   const handleAiGenerate = async () => {
     if (!aiApiKey) { toast.error("APIキーが設定されていません。マスタ管理→自事業所設定で設定してください。"); return; }
     setAiGenerating(true);
     try {
-      // 利用者情報を取得（contentからuser_nameを使ってDBから取得）
-      const userName = s("user_name");
-      const { data: users } = await supabaseForAi.from("clients").select("*").eq("name", userName).limit(1);
-      const user = users?.[0];
-      const userId = user?.id;
+      // userId が来ていればそれを使う (= 第2表開いている時の正しい利用者)。
+      // 来ていなければ user_name から逆引きする旧挙動にフォールバック。
+      let resolvedUserId: string | null = userId ?? null;
+      let resolvedUserName: string = s("user_name");
 
-      let adlSummary = "";
-      let medicalHistory = "";
-      let familySituation = "";
-      let careLevel = "";
-
-      if (userId) {
-        const { data: adl } = await supabaseForAi.from("kaigo_adl_records").select("*").eq("user_id", userId).order("assessment_date", { ascending: false }).limit(1);
-        if (adl?.[0]) {
-          const a = adl[0];
-          adlSummary = `食事:${a.eating} 移乗:${a.transfer} 整容:${a.grooming} トイレ:${a.toilet} 入浴:${a.bathing} 移動:${a.mobility} 階段:${a.stairs} 更衣:${a.dressing} 排便:${a.bowel} 排尿:${a.bladder} 合計:${a.total_score}/100`;
-        }
-        const { data: history } = await supabaseForAi.from("kaigo_medical_history").select("disease_name, status").eq("user_id", userId);
-        medicalHistory = (history || []).map((h: Record<string, unknown>) => `${h.disease_name}(${h.status})`).join("、");
-        const { data: family } = await supabaseForAi.from("kaigo_family_contacts").select("name, relationship").eq("user_id", userId);
-        familySituation = (family || []).map((f: Record<string, unknown>) => `${f.relationship}:${f.name}`).join("、");
-        const { data: cert } = await supabaseForAi.from("client_insurance_records").select("care_level").eq("client_id", userId).eq("certification_status", "認定済み").limit(1);
-        careLevel = cert?.[0]?.care_level ?? "";
+      if (!resolvedUserId && resolvedUserName) {
+        const { data: users } = await supabaseForAi
+          .from("clients").select("id, name").eq("name", resolvedUserName).limit(1);
+        resolvedUserId = users?.[0]?.id ?? null;
+        resolvedUserName = users?.[0]?.name ?? resolvedUserName;
       }
 
+      if (!resolvedUserId) {
+        toast.error("利用者情報が特定できませんでした");
+        return;
+      }
+
+      // アセスメント+ADL+家族+医療歴を 1 発で fetch
+      const ctx = await fetchAssessmentContext(supabaseForAi, resolvedUserId);
+      const aiUserInfo = buildAiUserInfo(ctx);
+      // user_name 欄が空なら DB の name で埋める (= 旧挙動の維持)
+      if (!aiUserInfo.name && resolvedUserName) aiUserInfo.name = resolvedUserName;
+
       // 現在のサービス一覧
+      // blocks 構造で持っているもの (NeedsBlock[]) を AI 入力フォーマットに変換
       const currentServices = (Array.isArray(content.blocks) ? content.blocks as NeedsBlock[] : [])
         .flatMap((b) => b.goals.flatMap((g) => g.services))
         .filter((sv) => sv.content || sv.type)
@@ -803,16 +991,7 @@ function EditFormCarePlan2({ content, onChange }: {
         body: JSON.stringify({
           apiKey: aiApiKey,
           mode: aiMode,
-          userInfo: {
-            name: userName,
-            age: user?.birth_date ? String(differenceInYears(new Date(), parseISO(user.birth_date))) : "",
-            gender: user?.gender ?? "",
-            careLevel,
-            medicalHistory,
-            adlSummary,
-            familySituation,
-            notes: user?.notes ?? "",
-          },
+          userInfo: aiUserInfo,
           services: currentServices,
         }),
       });
@@ -844,21 +1023,23 @@ function EditFormCarePlan2({ content, onChange }: {
           }],
         }));
         set("blocks", newBlocks);
-        if (result.data?.overall_policy) {
-          // 第1表の総合的援助方針も更新可能
-        }
         // 使用ログをDBに保存
-        await supabaseForAi.from("kaigo_ai_usage_logs").insert({
-          user_id: userId || null,
-          user_name: userName,
+        const { error: logError } = await supabaseForAi.from("kaigo_ai_usage_logs").insert({
+          user_id: resolvedUserId,
+          user_name: aiUserInfo.name,
           action: "care-plan-generate",
           mode: aiMode,
           input_tokens: result.usage?.input_tokens ?? 0,
           output_tokens: result.usage?.output_tokens ?? 0,
           estimated_cost: result.usage?.estimated_cost_yen ?? 0,
         });
+        if (logError) {
+          // ログ書込み失敗は本処理を止めない (= warn のみ)
+          console.warn("AI 使用ログの保存に失敗:", logError.message);
+        }
         const costStr = result.usage?.estimated_cost_yen ? `約${result.usage.estimated_cost_yen}円` : "";
-        toast.success(`AIがケアプランを生成しました（入力:${result.usage?.input_tokens} 出力:${result.usage?.output_tokens}トークン ${costStr}）`);
+        const assessHint = aiUserInfo.hasAssessment ? "（アセスメント反映済）" : "（アセスメント未入力）";
+        toast.success(`AIがケアプランを生成しました${assessHint}（入力:${result.usage?.input_tokens} 出力:${result.usage?.output_tokens}トークン ${costStr}）`);
       }
     } catch (e) {
       toast.error("AI生成に失敗しました: " + (e instanceof Error ? e.message : ""));
@@ -981,6 +1162,21 @@ function EditFormCarePlan2({ content, onChange }: {
               ? "②関連するサービスを1つのニーズにまとめて生成（シンプルなプラン向き）"
               : "③利用者のアセスメント情報からケアプラン全体を提案"}
           </p>
+          {hasAssessment === false && (
+            <p className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+              ⚠ アセスメント未入力。AI 生成は実行できますが、本人/家族の意向や医師意見が反映されません。先に
+              {userId && (
+                <Link href={`/assessments?user=${userId}`} className="underline mx-1">アセスメント</Link>
+              )}
+              {!userId && <span className="mx-1">アセスメント</span>}
+              を入力すると精度が向上します。
+            </p>
+          )}
+          {hasAssessment === true && (
+            <p className="mt-1 text-[10px] text-green-700">
+              ✓ アセスメント反映済 (本人/家族意向・医師意見・健康状態を AI に渡します)
+            </p>
+          )}
         </div>
       )}
 
@@ -3293,12 +3489,14 @@ export function PrintView({ reportType, content, config }: {
   }
 }
 
-function EditForm({ reportType, content, onChange }: {
+function EditForm({ reportType, content, onChange, userId }: {
   reportType: string; content: Record<string, unknown>; onChange: (c: Record<string, unknown>) => void;
+  /** clients.id - 第1表/第2表のアセスメント連動 AI に渡す。他帳票では未使用。 */
+  userId?: string;
 }) {
   switch (reportType) {
-    case "care-plan-1":       return <EditFormCarePlan1 content={content} onChange={onChange} />;
-    case "care-plan-2":       return <EditFormCarePlan2 content={content} onChange={onChange} />;
+    case "care-plan-1":       return <EditFormCarePlan1 content={content} onChange={onChange} userId={userId} />;
+    case "care-plan-2":       return <EditFormCarePlan2 content={content} onChange={onChange} userId={userId} />;
     case "care-plan-3":       return <EditFormCarePlan3 content={content} onChange={onChange} />;
     case "support-progress":  return <EditFormSupportProgress content={content} onChange={onChange} />;
     case "service-usage":        return <EditFormServiceTicket content={content} onChange={onChange} />;
@@ -3791,7 +3989,7 @@ function DocEditor({ doc, config, clientName, onSave, onStatusToggle, onDirtyCha
 
       {/* Edit form */}
       <div className="no-print border-b bg-gray-50">
-        <EditForm reportType={doc.report_type} content={content} onChange={handleChange} />
+        <EditForm reportType={doc.report_type} content={content} onChange={handleChange} userId={doc.user_id} />
       </div>
 
       {/* Print preview — scales to fit container width */}
