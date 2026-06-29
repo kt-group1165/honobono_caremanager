@@ -192,6 +192,19 @@ function calcTotals(
   return { total_units, total_amount, insurance_amount: total_amount };
 }
 
+// chunked array helper: 大量 UUID を .in() に渡すと URI Too Long (HTTP 414) になり、
+// Supabase JS は空 error message で reject → ブラウザ側で "Failed to fetch" と化けるため
+// chunk 化して complain しない範囲で並列 fetch する。
+// UUID 36 文字 + URL encoding (= comma %2C など) で 1 UUID ≒ 40 chars。
+// 50 個なら URL ≒ 2KB に収まり、Supabase pooler / Vercel Edge 等の URL 上限内。
+// 旧 300 では URL ~12KB になり net::ERR_FAILED で 一括生成 が落ちていた。
+const IN_CHUNK_SIZE = 50;
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // CSV Export
 // ---------------------------------------------------------------------------
@@ -650,22 +663,25 @@ export function ClaimsContent({
       const userIds = [...new Set(rows.map((r) => r.user_id))];
       if (userIds.length > 0) {
         // client_insurance_records, カラム名は新スキーマ
-        // PostgREST default 1000 行制限対策で page-loop で全件取得
+        // PostgREST default 1000 行制限対策で page-loop で全件取得 + .in() も chunk 化
         type CertRow = { client_id: string; care_level: string; insurer_number: string | null; insured_number: string | null; certification_start_date: string | null; certification_end_date: string | null };
         const PAGE = 1000;
         const certs: CertRow[] = [];
-        let fromC = 0;
-        while (true) {
-          const { data } = await supabase
-            .from("client_insurance_records")
-            .select("client_id, care_level, insurer_number, insured_number, certification_start_date, certification_end_date")
-            .in("client_id", userIds)
-            .order("certification_date", { ascending: false })
-            .range(fromC, fromC + PAGE - 1);
-          if (!data || data.length === 0) break;
-          certs.push(...(data as CertRow[]));
-          if (data.length < PAGE) break;
-          fromC += PAGE;
+        for (const idChunk of chunkArray(userIds, IN_CHUNK_SIZE)) {
+          let fromC = 0;
+          while (true) {
+            const { data, error: certsErr } = await supabase
+              .from("client_insurance_records")
+              .select("client_id, care_level, insurer_number, insured_number, certification_start_date, certification_end_date")
+              .in("client_id", idChunk)
+              .order("certification_date", { ascending: false })
+              .range(fromC, fromC + PAGE - 1);
+            if (certsErr) throw certsErr;
+            if (!data || data.length === 0) break;
+            certs.push(...(data as CertRow[]));
+            if (data.length < PAGE) break;
+            fromC += PAGE;
+          }
         }
 
         const map = new Map<string, { care_level: string; insurer_number: string | null; insured_number: string | null; start_date: string | null; end_date: string | null }>();
@@ -758,15 +774,20 @@ export function ClaimsContent({
       const userIds = users.map((u: { id: string }) => u.id);
 
       // 2. Fetch active care plans
-      const { data: plans, error: plansErr } = await supabase
-        .from("kaigo_care_plans")
-        .select("user_id")
-        .in("user_id", userIds)
-        .eq("status", "active");
-      if (plansErr) throw plansErr;
+      //    .in() に大量 UUID (>300 個) を渡すと URI Too Long (HTTP 414) で失敗するため chunk 化
+      const plans: { user_id: string }[] = [];
+      for (const idChunk of chunkArray(userIds, IN_CHUNK_SIZE)) {
+        const { data, error: plansErr } = await supabase
+          .from("kaigo_care_plans")
+          .select("user_id")
+          .in("user_id", idChunk)
+          .eq("status", "active");
+        if (plansErr) throw plansErr;
+        if (data) plans.push(...(data as { user_id: string }[]));
+      }
 
       const activeUserIds = new Set(
-        (plans || []).map((p: { user_id: string }) => p.user_id)
+        plans.map((p: { user_id: string }) => p.user_id)
       );
       if (activeUserIds.size === 0) {
         toast.error("有効なケアプランを持つ利用者が見つかりません");
@@ -774,24 +795,26 @@ export function ClaimsContent({
       }
 
       // 3. Fetch latest certifications for those users（client_insurance_records）
-      //    PostgREST default 1000 行制限対策で page-loop で全件取得
+      //    PostgREST default 1000 行制限対策で page-loop で全件取得 + .in() も chunk 化
       const PAGE_CERTS = 1000;
       const certs: { client_id: string; care_level: string; insurer_number: string | null; insured_number: string | null }[] = [];
       {
-        let fromC = 0;
         const activeIds = Array.from(activeUserIds);
-        while (true) {
-          const { data, error: certsErr } = await supabase
-            .from("client_insurance_records")
-            .select("client_id, care_level, insurer_number, insured_number")
-            .in("client_id", activeIds)
-            .order("certification_date", { ascending: false })
-            .range(fromC, fromC + PAGE_CERTS - 1);
-          if (certsErr) throw certsErr;
-          if (!data || data.length === 0) break;
-          certs.push(...(data as { client_id: string; care_level: string; insurer_number: string | null; insured_number: string | null }[]));
-          if (data.length < PAGE_CERTS) break;
-          fromC += PAGE_CERTS;
+        for (const idChunk of chunkArray(activeIds, IN_CHUNK_SIZE)) {
+          let fromC = 0;
+          while (true) {
+            const { data, error: certsErr } = await supabase
+              .from("client_insurance_records")
+              .select("client_id, care_level, insurer_number, insured_number")
+              .in("client_id", idChunk)
+              .order("certification_date", { ascending: false })
+              .range(fromC, fromC + PAGE_CERTS - 1);
+            if (certsErr) throw certsErr;
+            if (!data || data.length === 0) break;
+            certs.push(...(data as { client_id: string; care_level: string; insurer_number: string | null; insured_number: string | null }[]));
+            if (data.length < PAGE_CERTS) break;
+            fromC += PAGE_CERTS;
+          }
         }
       }
 
@@ -815,12 +838,13 @@ export function ClaimsContent({
       }
 
       // 4. Fetch office settings for auto-apply（共通マスタ offices, kaigo-app の自事業所）
-      const { data: officeSettings } = await supabase
+      const { data: officeSettings, error: officeErr } = await supabase
         .from("offices")
         .select("tokutei_kassan_type, medical_cooperation_kassan, unit_price, area_category")
         .eq("app_type", "kaigo-app")
         .limit(1)
         .maybeSingle();
+      if (officeErr) throw officeErr;
 
       const officeUnitPrice = Number(officeSettings?.unit_price ?? 10);
 
@@ -837,6 +861,8 @@ export function ClaimsContent({
           .eq("fiscal_year", fy)
           .eq("business_type", "居宅介護支援"),
       ]);
+      if (ratesRes.error) throw ratesRes.error;
+      if (tkRatesRes.error) throw tkRatesRes.error;
 
       const CARE_LEVEL_MAP: Record<string, CareLevelInfo> = { ...CARE_LEVEL_MAP_FALLBACK };
       if (ratesRes.data && ratesRes.data.length > 0) {
@@ -863,10 +889,11 @@ export function ClaimsContent({
       const officeMedicalCoopUnits = officeMedicalCoop ? 125 : 0;
 
       // 6. Delete existing claims for this month
-      await supabase
+      const { error: delErr } = await supabase
         .from("kaigo_care_support_claims")
         .delete()
         .eq("billing_month", billingMonth);
+      if (delErr) throw delErr;
 
       // 7. Build insert rows
       const now = new Date().toISOString();
@@ -941,12 +968,24 @@ export function ClaimsContent({
       );
       fetchClaims();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message
+      // Supabase JS は HTTP 414/500 等で空 message を返したり、ブラウザ fetch が
+      // "TypeError: Failed to fetch" で reject することがある。詳細を console に
+      // 残しつつ、ユーザには分かりやすい toast を出す。
+      console.error("一括生成エラー (詳細):", err);
+      const rawMsg = err instanceof Error
+        ? err.message
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-        : typeof err === "object" && err !== null && "message" in err ? String((err as any).message)
-        : JSON.stringify(err);
-      toast.error("一括生成に失敗しました: " + msg);
-      console.error("一括生成エラー:", err);
+        : typeof err === "object" && err !== null && "message" in err
+          ? String((err as any).message)
+          : JSON.stringify(err);
+      const friendly = (() => {
+        if (!rawMsg) return "サーバから空の応答 (おそらく URI Too Long / ネットワーク中断)。コンソールを確認してください";
+        if (/Failed to fetch/i.test(rawMsg)) return "ネットワーク要求が失敗しました (URI が長すぎる/接続切断の可能性)。コンソールを確認してください";
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
+        const code = typeof err === "object" && err !== null && "code" in err ? String((err as any).code) : "";
+        return code ? `${code}: ${rawMsg}` : rawMsg;
+      })();
+      toast.error("一括生成に失敗しました: " + friendly);
     } finally {
       setGenerating(false);
     }
