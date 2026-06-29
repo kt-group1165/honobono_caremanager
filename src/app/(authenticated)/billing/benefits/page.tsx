@@ -1,11 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
+import { BenefitsContent } from "./benefits-content";
 import {
-  BenefitsContent,
   getCurrentMonth,
   type BenefitManagementRow,
   type CareCertification,
   type UserWithCert,
-} from "./benefits-content";
+} from "./benefits-shared";
 
 export default async function BenefitsPage() {
   const supabase = await createClient();

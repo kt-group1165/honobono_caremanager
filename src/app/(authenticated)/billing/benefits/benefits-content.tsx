@@ -21,40 +21,14 @@ import {
 import { format } from "date-fns";
 
 // ---------------------------------------------------------------------------
-// Types
+// Types (= benefits-shared.ts から re-import、page.tsx は shared を直接 import)
 // ---------------------------------------------------------------------------
 
-// 共通マスタ client_insurance_records の subset（Phase 2-3-8 で kaigo_care_certifications から張替え）
-//   user_id              → client_id
-//   support_limit_amount → service_limit_amount
-export interface CareCertification {
-  id: string;
-  client_id: string;
-  insured_number: string;
-  care_level: string;
-  service_limit_amount: number;
-  insurer_number?: string;
-}
-
-export interface BenefitManagementRow {
-  id: string;
-  user_id: string;
-  billing_month: string;
-  service_type: string;
-  provider_name: string | null;
-  planned_units: number;
-  actual_units: number;
-  over_limit_units: number;
-  status: "draft" | "confirmed" | "submitted";
-  created_at: string;
-  updated_at: string;
-}
-
-export interface UserWithCert {
-  id: string;
-  name: string;
-  certification: CareCertification | null;
-}
+import type {
+  CareCertification,
+  BenefitManagementRow,
+  UserWithCert,
+} from "./benefits-shared";
 
 interface UserGroup {
   user: UserWithCert;
@@ -112,10 +86,6 @@ const CARE_LEVEL_LIMITS: Record<string, number> = {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-export function getCurrentMonth(): string {
-  return format(new Date(), "yyyy-MM");
-}
 
 function formatMonth(yyyyMm: string): string {
   if (!yyyyMm) return "—";
