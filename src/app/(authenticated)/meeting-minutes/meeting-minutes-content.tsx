@@ -12,79 +12,26 @@ import {
   Loader2,
   FileText,
   ArrowLeft,
+  UserPlus,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
-
-export interface KaigoUserLite {
-  id: string;
-  name: string;
-  name_kana: string | null;
-}
-
-export interface CarePlanSummary {
-  id: string;
-  plan_number: string | null;
-  plan_type: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  status: string;
-}
-
-interface Attendee {
-  affiliation: string;
-  name: string;
-}
-
-interface MeetingContent {
-  meeting_date: string;
-  location: string;
-  time_range: string;
-  session_number: string;
-  creator_name: string;
-  attendees: Attendee[];
-  self_attended: boolean;
-  family_attended: boolean;
-  family_relationship: string;
-  remarks: string;
-  topics: string;
-  discussion: string;
-  conclusion: string;
-  remaining_issues: string;
-}
-
-export interface MeetingDoc {
-  id: string;
-  user_id: string;
-  care_plan_id: string | null;
-  report_type: "meeting-minutes";
-  title: string;
-  content: MeetingContent;
-  status: "draft" | "completed";
-  updated_at: string;
-}
-
-const REPORT_TYPE = "meeting-minutes";
-
-const emptyAttendee = (): Attendee => ({ affiliation: "", name: "" });
-
-function emptyContent(): MeetingContent {
-  return {
-    meeting_date: format(new Date(), "yyyy-MM-dd"),
-    location: "",
-    time_range: "",
-    session_number: "",
-    creator_name: "",
-    attendees: Array.from({ length: 9 }, () => emptyAttendee()),
-    self_attended: false,
-    family_attended: false,
-    family_relationship: "",
-    remarks: "",
-    topics: "",
-    discussion: "",
-    conclusion: "",
-    remaining_issues: "",
-  };
-}
+import {
+  emptyAttendee,
+  emptyContent,
+  normalizeContent,
+  type Attendee,
+  type CarePlanSummary,
+  type CertificationLite,
+  type KaigoUserLite,
+  type MeetingContent,
+  type MeetingDoc,
+} from "@/lib/meeting-minutes/types";
+import {
+  createMeetingDoc,
+  deleteMeetingDoc,
+  getMeetingDocs,
+  updateMeetingDoc,
+} from "@/lib/meeting-minutes/queries";
 
 function fmtDate(d: string | null | undefined): string {
   if (!d) return "—";
@@ -95,11 +42,20 @@ function fmtDate(d: string | null | undefined): string {
   }
 }
 
+function fmtCertPeriod(cert: CertificationLite | null): string {
+  if (!cert) return "—";
+  const s = cert.certification_start_date ? fmtDate(cert.certification_start_date) : "";
+  const e = cert.certification_end_date ? fmtDate(cert.certification_end_date) : "";
+  if (!s && !e) return "—";
+  return `${s || "—"} 〜 ${e || "—"}`;
+}
+
 export interface MeetingMinutesContentProps {
   userId: string;
   initialUser: KaigoUserLite | null;
   initialCarePlans: CarePlanSummary[];
   initialDocs: MeetingDoc[];
+  initialCertification: CertificationLite | null;
 }
 
 export function MeetingMinutesContent({
@@ -107,11 +63,13 @@ export function MeetingMinutesContent({
   initialUser,
   initialCarePlans,
   initialDocs,
+  initialCertification,
 }: MeetingMinutesContentProps) {
   const supabase = useMemo(() => createClient(), []);
 
   const [selectedUser] = useState<KaigoUserLite | null>(initialUser);
   const [carePlans] = useState<CarePlanSummary[]>(initialCarePlans);
+  const [certification] = useState<CertificationLite | null>(initialCertification);
   const [selectedCarePlanId, setSelectedCarePlanId] = useState<string | null>(() => {
     if (initialCarePlans.length === 0) return null;
     const active = initialCarePlans.find((p) => p.status === "active");
@@ -129,18 +87,8 @@ export function MeetingMinutesContent({
   const fetchDocs = useCallback(async () => {
     setLoadingDocs(true);
     try {
-      let query = supabase
-        .from("kaigo_report_documents")
-        .select("*")
-        .eq("user_id", userId)
-        .eq("report_type", REPORT_TYPE)
-        .order("updated_at", { ascending: false });
-      if (selectedCarePlanId) {
-        query = query.eq("care_plan_id", selectedCarePlanId);
-      }
-      const { data, error } = await query;
-      if (error) throw error;
-      setDocs((data as MeetingDoc[]) ?? []);
+      const rows = await getMeetingDocs(supabase, userId, selectedCarePlanId);
+      setDocs(rows);
     } catch (err: unknown) {
       toast.error(
         "会議録の取得に失敗しました: " +
@@ -167,20 +115,21 @@ export function MeetingMinutesContent({
       return;
     }
     setEditingId(null);
-    setContent(emptyContent());
+    // 新規作成時は現在の認定情報を snapshot として埋め込む
+    const base = emptyContent();
+    if (certification) {
+      base.care_level_snapshot = certification.care_level ?? "";
+      base.certification_start_snapshot = certification.certification_start_date ?? "";
+      base.certification_end_snapshot = certification.certification_end_date ?? "";
+    }
+    setContent(base);
     setDocStatus("draft");
     setMode("edit");
   };
 
   const openEdit = (doc: MeetingDoc) => {
     setEditingId(doc.id);
-    const base = emptyContent();
-    const merged = { ...base, ...(doc.content ?? {}) };
-    if (!Array.isArray(merged.attendees) || merged.attendees.length < 9) {
-      const arr = Array.from({ length: 9 }, (_, i) => merged.attendees?.[i] ?? emptyAttendee());
-      merged.attendees = arr;
-    }
-    setContent(merged);
+    setContent(normalizeContent(doc.content));
     setDocStatus(doc.status);
     setMode("edit");
   };
@@ -191,34 +140,25 @@ export function MeetingMinutesContent({
     try {
       const title = `サービス担当者会議の要点　${content.meeting_date || ""}`.trim();
       if (editingId) {
-        const { error } = await supabase
-          .from("kaigo_report_documents")
-          .update({
-            title,
-            content,
-            status: docStatus,
-            care_plan_id: selectedCarePlanId,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", editingId);
-        if (error) throw error;
+        await updateMeetingDoc(supabase, editingId, {
+          care_plan_id: selectedCarePlanId,
+          title,
+          content,
+          status: docStatus,
+        });
       } else {
-        const { data, error } = await supabase
-          .from("kaigo_report_documents")
-          .insert({
-            user_id: userId,
-            care_plan_id: selectedCarePlanId,
-            report_type: REPORT_TYPE,
-            title,
-            content,
-            status: docStatus,
-          })
-          .select("id")
-          .single();
-        if (error) throw error;
-        setEditingId(data.id);
+        const newId = await createMeetingDoc(supabase, {
+          user_id: userId,
+          care_plan_id: selectedCarePlanId,
+          title,
+          content,
+          status: docStatus,
+        });
+        setEditingId(newId);
       }
       toast.success("会議録を保存しました");
+      // 一覧側にも反映 (= 編集中の content を docs に上書き)
+      await fetchDocs();
     } catch (err: unknown) {
       toast.error(
         "保存に失敗しました: " +
@@ -231,16 +171,16 @@ export function MeetingMinutesContent({
 
   const handleDelete = async (id: string) => {
     if (!confirm("この会議録を削除しますか？")) return;
-    const { error } = await supabase
-      .from("kaigo_report_documents")
-      .delete()
-      .eq("id", id);
-    if (error) {
-      toast.error("削除に失敗しました: " + error.message);
-      return;
+    try {
+      await deleteMeetingDoc(supabase, id);
+      toast.success("削除しました");
+      await fetchDocs();
+    } catch (err: unknown) {
+      toast.error(
+        "削除に失敗しました: " +
+          (err instanceof Error ? err.message : String(err))
+      );
     }
-    toast.success("削除しました");
-    fetchDocs();
   };
 
   const handlePrint = () => window.print();
@@ -253,9 +193,34 @@ export function MeetingMinutesContent({
     });
   };
 
+  const addAttendee = () => {
+    setContent((prev) => ({ ...prev, attendees: [...prev.attendees, emptyAttendee()] }));
+  };
+
+  const removeAttendee = (i: number) => {
+    setContent((prev) => ({
+      ...prev,
+      attendees: prev.attendees.filter((_, idx) => idx !== i),
+    }));
+  };
+
   const setField = <K extends keyof MeetingContent>(k: K, v: MeetingContent[K]) => {
     setContent((prev) => ({ ...prev, [k]: v }));
   };
+
+  // 印刷時に表示する 介護度 / 認定有効期間 (= 編集中なら content の snapshot 優先、無ければ最新)
+  const printCareLevel =
+    content.care_level_snapshot && content.care_level_snapshot.length > 0
+      ? content.care_level_snapshot
+      : certification?.care_level ?? "";
+  const printCertStart =
+    content.certification_start_snapshot && content.certification_start_snapshot.length > 0
+      ? content.certification_start_snapshot
+      : certification?.certification_start_date ?? "";
+  const printCertEnd =
+    content.certification_end_snapshot && content.certification_end_snapshot.length > 0
+      ? content.certification_end_snapshot
+      : certification?.certification_end_date ?? "";
 
   return (
     <>
@@ -276,6 +241,7 @@ export function MeetingMinutesContent({
           {mode === "list" ? (
             <ListView
               user={selectedUser}
+              certification={certification}
               docs={docs}
               loading={loadingDocs}
               carePlans={carePlans}
@@ -288,9 +254,11 @@ export function MeetingMinutesContent({
           ) : (
             <EditView
               user={selectedUser}
+              certification={certification}
               content={content}
-              onChange={setContent}
               updateAttendee={updateAttendee}
+              addAttendee={addAttendee}
+              removeAttendee={removeAttendee}
               setField={setField}
               docStatus={docStatus}
               setDocStatus={setDocStatus}
@@ -299,13 +267,22 @@ export function MeetingMinutesContent({
               onBack={() => setMode("list")}
               onPrint={handlePrint}
               selectedPlan={carePlans.find((p) => p.id === selectedCarePlanId) ?? null}
+              printCareLevel={printCareLevel}
+              printCertStart={printCertStart}
+              printCertEnd={printCertEnd}
             />
           )}
       </div>
 
       {mode === "edit" && (
         <div id="meeting-print-root">
-          <PrintView content={content} userName={selectedUser?.name ?? ""} />
+          <PrintView
+            content={content}
+            userName={selectedUser?.name ?? ""}
+            careLevel={printCareLevel}
+            certStart={printCertStart}
+            certEnd={printCertEnd}
+          />
         </div>
       )}
     </>
@@ -314,6 +291,7 @@ export function MeetingMinutesContent({
 
 function ListView({
   user,
+  certification,
   docs,
   loading,
   carePlans,
@@ -324,6 +302,7 @@ function ListView({
   onDelete,
 }: {
   user: KaigoUserLite | null;
+  certification: CertificationLite | null;
   docs: MeetingDoc[];
   loading: boolean;
   carePlans: CarePlanSummary[];
@@ -336,13 +315,20 @@ function ListView({
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <MessagesSquare className="text-indigo-600" size={24} />
           <h1 className="text-xl font-bold text-gray-900">
             サービス担当者会議の要点（第4表）
           </h1>
           {user && (
             <span className="text-gray-500 text-sm">— {user.name} 様</span>
+          )}
+          {certification && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs text-emerald-700">
+              {certification.care_level ?? "—"}
+              <span className="text-emerald-500">/</span>
+              認定 {fmtCertPeriod(certification)}
+            </span>
           )}
         </div>
         <button
@@ -485,8 +471,11 @@ function ListView({
 
 function EditView({
   user,
+  certification,
   content,
   updateAttendee,
+  addAttendee,
+  removeAttendee,
   setField,
   docStatus,
   setDocStatus,
@@ -495,11 +484,16 @@ function EditView({
   onBack,
   onPrint,
   selectedPlan,
+  printCareLevel,
+  printCertStart,
+  printCertEnd,
 }: {
   user: KaigoUserLite | null;
+  certification: CertificationLite | null;
   content: MeetingContent;
-  onChange: (c: MeetingContent) => void;
   updateAttendee: (i: number, key: keyof Attendee, value: string) => void;
+  addAttendee: () => void;
+  removeAttendee: (i: number) => void;
   setField: <K extends keyof MeetingContent>(k: K, v: MeetingContent[K]) => void;
   docStatus: "draft" | "completed";
   setDocStatus: (s: "draft" | "completed") => void;
@@ -508,6 +502,9 @@ function EditView({
   onBack: () => void;
   onPrint: () => void;
   selectedPlan: CarePlanSummary | null;
+  printCareLevel: string;
+  printCertStart: string;
+  printCertEnd: string;
 }) {
   const inp =
     "w-full border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
@@ -517,7 +514,7 @@ function EditView({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={onBack}
             className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
@@ -538,6 +535,13 @@ function EditView({
             <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-xs text-indigo-700">
               <FileText size={10} />
               対象計画期間: {fmtDate(selectedPlan.start_date)} 〜 {fmtDate(selectedPlan.end_date)}
+            </span>
+          )}
+          {certification && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs text-emerald-700">
+              {printCareLevel || certification.care_level || "—"}
+              <span className="text-emerald-500">/</span>
+              認定 {printCertStart ? fmtDate(printCertStart) : "—"} 〜 {printCertEnd ? fmtDate(printCertEnd) : "—"}
             </span>
           )}
         </div>
@@ -589,6 +593,37 @@ function EditView({
           </div>
         </div>
 
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="block text-[11px] font-medium text-gray-600 mb-0.5">介護度</label>
+            <input
+              type="text"
+              value={content.care_level_snapshot ?? ""}
+              onChange={(e) => setField("care_level_snapshot", e.target.value)}
+              placeholder={certification?.care_level ?? "要介護2 等"}
+              className={inp}
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-gray-600 mb-0.5">認定有効期間 開始</label>
+            <input
+              type="date"
+              value={content.certification_start_snapshot ?? ""}
+              onChange={(e) => setField("certification_start_snapshot", e.target.value)}
+              className={inp}
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-gray-600 mb-0.5">認定有効期間 終了</label>
+            <input
+              type="date"
+              value={content.certification_end_snapshot ?? ""}
+              onChange={(e) => setField("certification_end_snapshot", e.target.value)}
+              className={inp}
+            />
+          </div>
+        </div>
+
         <div className="grid grid-cols-4 gap-3">
           <div>
             <label className="block text-[11px] font-medium text-gray-600 mb-0.5">開催日</label>
@@ -609,7 +644,17 @@ function EditView({
         </div>
 
         <div>
-          <div className="text-[11px] font-semibold text-gray-700 mb-1">会議出席者</div>
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-[11px] font-semibold text-gray-700">会議出席者</div>
+            <button
+              type="button"
+              onClick={addAttendee}
+              className="inline-flex items-center gap-1 rounded border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] text-indigo-700 hover:bg-indigo-100"
+            >
+              <UserPlus size={11} />
+              出席者を追加
+            </button>
+          </div>
           <div className="grid grid-cols-[140px_1fr] gap-2">
             <div className="rounded border border-red-200 bg-red-50/30 p-2 text-[11px]">
               <div className="mb-1 font-medium text-red-700">利用者・家族の出席</div>
@@ -632,18 +677,31 @@ function EditView({
 
             <div className="grid grid-cols-3 gap-1">
               {content.attendees.map((att, i) => (
-                <div key={i} className="border border-gray-300 rounded p-1.5 bg-white">
+                <div key={i} className="border border-gray-300 rounded p-1.5 bg-white relative group">
                   <input type="text" value={att.affiliation} onChange={(e) => updateAttendee(i, "affiliation", e.target.value)} placeholder="所属(職種)" className="w-full border-b border-gray-200 text-[11px] pb-0.5 mb-0.5 focus:outline-none focus:border-indigo-500" />
                   <input type="text" value={att.name} onChange={(e) => updateAttendee(i, "name", e.target.value)} placeholder="氏名" className="w-full text-[11px] focus:outline-none" />
+                  <button
+                    type="button"
+                    onClick={() => removeAttendee(i)}
+                    className="absolute -right-1 -top-1 hidden group-hover:flex h-4 w-4 items-center justify-center rounded-full border border-red-300 bg-white text-red-500 hover:bg-red-50 shadow-sm"
+                    title="削除"
+                  >
+                    <Trash2 size={9} />
+                  </button>
                 </div>
               ))}
+              {content.attendees.length === 0 && (
+                <div className="col-span-3 rounded border border-dashed border-gray-300 p-3 text-center text-[11px] text-gray-400">
+                  「出席者を追加」ボタンから登録してください
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         <div>
           <label className="block text-[11px] font-semibold text-gray-700 mb-0.5">検討した項目</label>
-          <textarea rows={2} value={content.topics} onChange={(e) => setField("topics", e.target.value)} className={ta} />
+          <textarea rows={2} value={content.topics} onChange={(e) => setField("topics", e.target.value)} className={ta} placeholder="例: アセスメント結果、ケアプラン原案、モニタリング結果 等 (複数行可)" />
         </div>
 
         <div>
@@ -675,7 +733,13 @@ function EditView({
         </div>
         <div className="p-4 overflow-x-auto bg-gray-50">
           <div className="bg-white shadow-sm" style={{ minWidth: "260mm" }}>
-            <PrintView content={content} userName={user?.name ?? ""} />
+            <PrintView
+              content={content}
+              userName={user?.name ?? ""}
+              careLevel={printCareLevel}
+              certStart={printCertStart}
+              certEnd={printCertEnd}
+            />
           </div>
         </div>
       </div>
@@ -683,7 +747,19 @@ function EditView({
   );
 }
 
-function PrintView({ content, userName }: { content: MeetingContent; userName: string }) {
+function PrintView({
+  content,
+  userName,
+  careLevel,
+  certStart,
+  certEnd,
+}: {
+  content: MeetingContent;
+  userName: string;
+  careLevel: string;
+  certStart: string;
+  certEnd: string;
+}) {
   const B = "1px solid #000";
   const cellBase: React.CSSProperties = {
     border: B,
@@ -705,6 +781,27 @@ function PrintView({ content, userName }: { content: MeetingContent; userName: s
       return d;
     }
   };
+  const fmtJaDate = (d: string) => {
+    if (!d) return "　　　";
+    try {
+      const dt = parseISO(d);
+      return `${dt.getFullYear()}/${dt.getMonth() + 1}/${dt.getDate()}`;
+    } catch {
+      return d;
+    }
+  };
+
+  // 出席者を 3 列グリッドに展開。最低 3 行 (= 9 セル) は確保して様式の見栄えを保つ。
+  const minRows = 3;
+  const rowsNeeded = Math.max(minRows, Math.ceil(content.attendees.length / 3));
+  const attendeeCells: Array<Attendee> = [];
+  for (let i = 0; i < rowsNeeded * 3; i++) {
+    attendeeCells.push(content.attendees[i] ?? { affiliation: "", name: "" });
+  }
+  const attendeeRows: Array<Array<Attendee>> = [];
+  for (let r = 0; r < rowsNeeded; r++) {
+    attendeeRows.push(attendeeCells.slice(r * 3, r * 3 + 3));
+  }
 
   return (
     <div
@@ -726,6 +823,13 @@ function PrintView({ content, userName }: { content: MeetingContent; userName: s
         <div style={{ flex: 1, borderBottom: B }}>居宅サービス計画作成者（担当者）氏名　{content.creator_name || "　　　　　　"}</div>
       </div>
 
+      <div style={{ display: "flex", gap: "8px", fontSize: "9pt", marginBottom: "4px" }}>
+        <div style={{ borderBottom: B, paddingRight: "8px" }}>介護度　{careLevel || "　　　　"}</div>
+        <div style={{ borderBottom: B, flex: 1, paddingRight: "8px" }}>
+          認定有効期間　{fmtJaDate(certStart)} 〜 {fmtJaDate(certEnd)}
+        </div>
+      </div>
+
       <div style={{ display: "flex", gap: "8px", fontSize: "9pt", marginBottom: "6px" }}>
         <div style={{ borderBottom: B, paddingRight: "8px" }}>開催日　{fmtMeetingDate(content.meeting_date)}</div>
         <div style={{ borderBottom: B, flex: 1, paddingRight: "8px" }}>開催場所　{content.location || "　　　　"}</div>
@@ -745,7 +849,7 @@ function PrintView({ content, userName }: { content: MeetingContent; userName: s
         </colgroup>
         <thead>
           <tr style={{ height: "18px" }}>
-            <th rowSpan={4} style={{ ...thStyle, verticalAlign: "top", paddingTop: "4px" }}>
+            <th rowSpan={rowsNeeded + 1} style={{ ...thStyle, verticalAlign: "top", paddingTop: "4px" }}>
               <div style={{ fontWeight: "bold" }}>会議出席者</div>
               <div style={{ marginTop: "6px", fontSize: "7pt", color: "#c00", textAlign: "left", lineHeight: 1.3 }}>
                 利用者・家族の出席<br />
@@ -763,18 +867,14 @@ function PrintView({ content, userName }: { content: MeetingContent; userName: s
             <th style={thStyle}>所属(職種)</th>
             <th style={thStyle}>氏　名</th>
           </tr>
-          {[0, 1, 2].map((row) => (
-            <tr key={row} style={{ height: "22px" }}>
-              {[0, 1, 2].map((col) => {
-                const idx = row * 3 + col;
-                const att = content.attendees[idx] ?? { affiliation: "", name: "" };
-                return (
-                  <>
-                    <td key={`${row}-${col}-aff`} style={cellBase}>{att.affiliation}</td>
-                    <td key={`${row}-${col}-name`} style={cellBase}>{att.name}</td>
-                  </>
-                );
-              })}
+          {attendeeRows.map((row, rIdx) => (
+            <tr key={rIdx} style={{ height: "22px" }}>
+              <td style={cellBase}>{row[0]?.affiliation ?? ""}</td>
+              <td style={cellBase}>{row[0]?.name ?? ""}</td>
+              <td style={cellBase}>{row[1]?.affiliation ?? ""}</td>
+              <td style={cellBase}>{row[1]?.name ?? ""}</td>
+              <td style={cellBase}>{row[2]?.affiliation ?? ""}</td>
+              <td style={cellBase}>{row[2]?.name ?? ""}</td>
             </tr>
           ))}
         </thead>
