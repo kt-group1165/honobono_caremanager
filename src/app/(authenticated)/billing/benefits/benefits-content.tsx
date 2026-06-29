@@ -147,6 +147,36 @@ function aggregateUserGroups(
     });
 }
 
+// chunked array helper: 大量 UUID を .in() に渡すと URI Too Long (HTTP 414) になり、
+// Supabase JS は空 error message で reject → ブラウザ側で "Failed to fetch" と化けるため
+// chunk 化。UUID 36 + URL encoding で 1 UUID ≒ 40 chars → 50 個で URL ~2KB に収まる。
+// 旧 300 では URL ~12KB になり net::ERR_FAILED で 一括生成 失敗。
+const IN_CHUNK_SIZE = 50;
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+// "Failed to fetch" 等の生 error を分かりやすい文字列に整形
+function formatSupabaseErr(err: unknown): string {
+  if (err instanceof Error) {
+    if (/Failed to fetch/i.test(err.message)) {
+      return "ネットワーク要求が失敗しました (URI が長すぎる/接続切断の可能性)。コンソールを確認してください";
+    }
+    return err.message;
+  }
+  if (typeof err === "object" && err !== null) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
+    const e = err as any;
+    const code = e.code ? `${e.code}: ` : "";
+    const msg = e.message || JSON.stringify(err);
+    if (!msg || msg === "{}") return "サーバから空の応答 (おそらく URI Too Long / ネットワーク中断)。コンソールを確認してください";
+    return code + msg;
+  }
+  return String(err);
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
