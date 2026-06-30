@@ -498,15 +498,14 @@ function CombinedContractView({
             重要事項説明書
           </div>
 
-          {/* 利用者欄 (28pt) — docx は 9個の全角空白 + 様 */}
+          {/* 利用者欄 (28pt) — docx 仕様: 1 paragraph で
+              '　　　　　　　　　様' (全角空白 9 + 様) を center / underline=True / 28pt 1 行表示 */}
           <div className="mt-[40mm] text-center" style={{ fontSize: "28pt" }}>
-            <span
-              className="inline-block border-b border-black pb-1 text-left"
-              style={{ minWidth: "160mm" }}
-            >
-              <span style={{ paddingLeft: "20mm" }}>{user?.name ?? ""}</span>
+            <span style={{ textDecoration: "underline", textUnderlineOffset: "6px" }}>
+              {user?.name
+                ? `　　　　${user.name}　　　　　様`
+                : "　　　　　　　　　様"}
             </span>
-            <span className="ml-2">様</span>
           </div>
 
           {/* 事業者名・事業所名 (20pt) — center */}
