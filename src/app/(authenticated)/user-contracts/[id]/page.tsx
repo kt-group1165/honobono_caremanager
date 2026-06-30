@@ -449,13 +449,11 @@ function CombinedContractView({
     <>
       {/* 印刷用 style (= docx 余白を A4 で再現) */}
       <style>{`
-        @media print {
-          @page { size: A4 portrait; margin: 20mm 30mm 15mm 30mm; }
-          html, body { background: #fff !important; }
-          .uc-sheet { box-shadow: none !important; margin: 0 !important; padding: 0 !important; max-width: none !important; }
-          .uc-page { page-break-after: always; }
-          .uc-page:last-child { page-break-after: auto; }
-          .uc-avoid { page-break-inside: avoid; }
+        /* 画面: 各 .uc-page を A4 1 枚の白カードとして個別表示 (= ページ境界が視認できる) */
+        .uc-stage {
+          background: #e5e7eb; /* slate-200 ぽいグレー */
+          padding: 24px 0;
+          min-height: 100vh;
         }
         .uc-sheet {
           font-family: "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "Hiragino Mincho Pro",
@@ -465,6 +463,16 @@ function CombinedContractView({
           line-height: 1.8;
           font-feature-settings: "palt" 1;
         }
+        .uc-page {
+          width: 210mm;
+          min-height: 297mm;
+          background: #fff;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+          margin: 0 auto 18mm auto;
+          box-sizing: border-box;
+          position: relative;
+        }
+        .uc-page:last-child { margin-bottom: 0; }
         .uc-sheet table { border-collapse: collapse; width: 100%; }
         .uc-sheet td, .uc-sheet th {
           border: 1px solid #000;
@@ -473,13 +481,26 @@ function CombinedContractView({
           font-size: 10.5pt;
           line-height: 1.6;
         }
+
+        @media print {
+          @page { size: A4 portrait; margin: 20mm 30mm 15mm 30mm; }
+          html, body { background: #fff !important; }
+          .uc-stage { background: #fff !important; padding: 0 !important; min-height: 0 !important; }
+          .uc-page {
+            width: auto !important;
+            min-height: 0 !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+            page-break-after: always;
+          }
+          .uc-page:last-child { page-break-after: auto; }
+          .uc-avoid { page-break-inside: avoid; }
+        }
       `}</style>
 
-      {/* 画面用 wrapper: A4 比率に近い max-width / 印刷時は uc-sheet 内に展開 */}
-      <div
-        className="uc-sheet mx-auto my-6 bg-white shadow-sm print:my-0 print:shadow-none"
-        style={{ maxWidth: "210mm" }}
-      >
+      {/* 画面用 stage: グレー背景 + 各 page を 1 枚ずつ白カード化 */}
+      <div className="uc-stage">
+      <div className="uc-sheet">
         {/* ===== Page 1: 表紙 ===== */}
         <section
           className="uc-page relative px-[30mm] py-[20mm]"
@@ -998,6 +1019,7 @@ function CombinedContractView({
             </a>
           </p>
         )}
+      </div>
       </div>
     </>
   );
