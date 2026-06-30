@@ -340,13 +340,90 @@ function CombinedContractView({
     return `第${z}条（${m[2]}）`;
   };
 
-  const juyoSections = KEIYAKU_KEN_JUYO_SECTIONS.filter((s) => s.key.startsWith("juyo_"));
-  const juyoTitle = (sec: { key: string; label: string }, idx: number): string => {
-    // "別紙1 当事業所が提供する..." → "１ 当事業所が提供する..."
-    const stripped = sec.label.replace(/^別紙\d+\s*/, "");
-    const zen = "１２３４５６７８"[idx] ?? String(idx + 1);
-    return `${zen}　${stripped}`;
-  };
+  // 別紙重要事項 8 章: docx 章単位に grouping (= 章ごと見出し + 章内小見出し)
+  // 数字は全角に揃える ("１ 当事業所が提供する〜")
+  type JuyoSubsection = { key: string; subheading?: string };
+  type JuyoChapter = { title: string; subs: JuyoSubsection[] };
+  const juyoChapters: JuyoChapter[] = [
+    {
+      title: "１　当事業所が提供する居宅介護支援サービスについての相談窓口",
+      subs: [{ key: "juyo_01_contact" }],
+    },
+    {
+      title: "２　当事業所の概要",
+      subs: [
+        { key: "juyo_02_overview_intro" },
+        { key: "juyo_02_staff_table_note", subheading: "当事業所の職員体制" },
+        { key: "juyo_02_hours_note", subheading: "営業日及び営業時間" },
+        // 後方互換: 旧 1 key 版が残っていれば末尾に表示
+        { key: "juyo_02_overview" },
+      ],
+    },
+    {
+      title: "３　居宅介護支援の申し込みからサービス提供までの流れと主な内容",
+      subs: [{ key: "juyo_03_flow" }],
+    },
+    {
+      title: "４　利用料金",
+      subs: [
+        { key: "juyo_04_fee_intro", subheading: "利用料" },
+        { key: "juyo_04_fee_table_note" },
+        { key: "juyo_04_fee_shoguu", subheading: "介護職員等処遇改善加算" },
+        { key: "juyo_04_fee_transport", subheading: "交通費" },
+        { key: "juyo_04_fee_other", subheading: "その他" },
+        { key: "juyo_04_fee_payment", subheading: "支払方法" },
+        { key: "juyo_04_fee" }, // 後方互換
+      ],
+    },
+    {
+      title: "５　サービスの利用方法",
+      subs: [
+        { key: "juyo_05_usage_start", subheading: "サービスの利用開始" },
+        { key: "juyo_05_usage_end_user", subheading: "お客様のご都合でサービスを終了する場合" },
+        { key: "juyo_05_usage_end_office", subheading: "当事業所の都合でサービスを終了する場合" },
+        { key: "juyo_05_usage_auto_end", subheading: "自動終了" },
+        { key: "juyo_05_usage_other_end", subheading: "その他" },
+        { key: "juyo_05_usage" }, // 後方互換
+      ],
+    },
+    {
+      title: "６　当事業所の居宅介護支援の特徴等",
+      subs: [
+        { key: "juyo_06_policy", subheading: "運営の方針" },
+        { key: "juyo_06_assessment", subheading: "課題分析票" },
+        { key: "juyo_06_explanation", subheading: "居宅サービス作成に係る説明・同意" },
+        { key: "juyo_06_usage_ratio", subheading: "サービス利用割合" },
+        { key: "juyo_06_monitoring", subheading: "モニタリング" },
+        { key: "juyo_06_carekaigi", subheading: "地域ケア会議への協力" },
+        { key: "juyo_06_jisshu", subheading: "新人介護支援専門員の実習協力" },
+        { key: "juyo_06_medical", subheading: "医療機関との連携" },
+        { key: "juyo_06_gyakutai", subheading: "虐待に関する措置" },
+        { key: "juyo_06_kansensho", subheading: "感染症の発生及びまん延の防止に関する措置" },
+        { key: "juyo_06_bcp", subheading: "非常時における業務継続に向けた取り組み" },
+        { key: "juyo_06_kosoku", subheading: "身体的拘束に関する措置" },
+        { key: "juyo_06_privacy", subheading: "個人情報の取扱いについて（秘密保持）" },
+        { key: "juyo_06_incident", subheading: "事故発生時の対応" },
+        { key: "juyo_06_other", subheading: "その他の重要事項" },
+        { key: "juyo_06_features" }, // 後方互換
+      ],
+    },
+    {
+      title: "７　サービス内容に関する苦情",
+      subs: [
+        { key: "juyo_07_complaint_intro" },
+        { key: "juyo_07_complaint_service" },
+        { key: "juyo_07_complaint_office" },
+        { key: "juyo_07_complaint_hq" },
+        { key: "juyo_07_complaint_external" },
+        { key: "juyo_07_complaint" }, // 後方互換
+      ],
+    },
+    {
+      title: "８　当社の概要",
+      subs: [{ key: "juyo_08_company" }],
+    },
+  ];
+
 
   const companyOfficeName = c("company_office_name") || officeName || "";
   const companyName = c("company_name") || "";
@@ -523,25 +600,28 @@ function CombinedContractView({
           </div>
           <div style={{ pageBreakAfter: "always" }} />
 
-          {juyoSections.map((sec, idx) => {
-            const body = c(sec.key);
-            if (!body.trim()) return null;
-            const isFirstSection = idx === 0;
+          {juyoChapters.map((chapter, chapIdx) => {
+            // 章全体が空 (= 全 subs が空) ならそもそも描画しない
+            const hasAnyBody =
+              chapter.subs.some((s) => c(s.key).trim().length > 0) ||
+              chapter.title.startsWith("２") || // 別紙2 は事業所情報表があるため空でも描画
+              chapter.title.startsWith("４"); // 別紙4 も料金表テーブルがあるため空でも描画
+            if (!hasAnyBody) return null;
             return (
               <section
-                key={sec.key}
+                key={chapter.title}
                 className="uc-avoid"
-                style={{ marginTop: isFirstSection ? "0" : "1.5em" }}
+                style={{ marginTop: chapIdx === 0 ? "0" : "1.5em" }}
               >
                 <h3 className="font-bold" style={{ fontSize: "12pt", marginBottom: "0.4em" }}>
-                  {juyoTitle(sec, idx)}
+                  {chapter.title}
                 </h3>
 
-                {/* idx=1 (= juyo_02 当事業所の概要) では事業所情報の表 を追加表示 */}
-                {idx === 1 && (
+                {/* 別紙2 (= "２　当事業所の概要") では事業所情報・職員体制・営業時間 の 3 表を追加表示 */}
+                {chapter.title.startsWith("２") && (
                   <>
-                    <p className="mt-2">・居宅介護支援事業所の名称、所在地、指定番号、サービスを提供できる地域</p>
-                    <table className="mt-1">
+                    {/* (1) 事業所情報表 */}
+                    <table className="mt-2">
                       <tbody>
                         <tr>
                           <th
@@ -553,32 +633,95 @@ function CombinedContractView({
                           <td>{companyOfficeName || "　"}</td>
                         </tr>
                         <tr>
-                          <th
-                            className="text-center"
-                            style={{ background: "#f5f5f5" }}
-                          >
+                          <th className="text-center" style={{ background: "#f5f5f5" }}>
                             所　在　地
                           </th>
                           <td>{companyAddress || "　"}</td>
                         </tr>
                         <tr>
-                          <th
-                            className="text-center"
-                            style={{ background: "#f5f5f5" }}
-                          >
+                          <th className="text-center" style={{ background: "#f5f5f5" }}>
                             介護保険 指定事業所番号
                           </th>
                           <td>{officeDesignationNumber || "　"}</td>
                         </tr>
                         <tr>
-                          <th
-                            className="text-center"
-                            style={{ background: "#f5f5f5" }}
-                          >
+                          <th className="text-center" style={{ background: "#f5f5f5" }}>
                             通常のサービス実施地域
                           </th>
+                          <td className="whitespace-pre-wrap">{officeServiceArea || "　"}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    {/* (2) 職員体制表 (= docx: 4 行 × 4 列) */}
+                    <p className="mt-3 font-semibold">・当事業所の職員体制</p>
+                    <table className="mt-1">
+                      <thead>
+                        <tr>
+                          <th style={{ width: "40%", background: "#f5f5f5" }}>　</th>
+                          <th className="text-center" style={{ background: "#f5f5f5" }}>
+                            常勤
+                          </th>
+                          <th className="text-center" style={{ background: "#f5f5f5" }}>
+                            非常勤
+                          </th>
+                          <th className="text-center" style={{ background: "#f5f5f5" }}>
+                            計
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>管理者 兼 主任介護支援専門員</td>
+                          <td className="text-center">１名</td>
+                          <td className="text-center">０名</td>
+                          <td className="text-center">１名</td>
+                        </tr>
+                        <tr>
+                          <td>主任介護支援専門員</td>
+                          <td className="text-center">１名</td>
+                          <td className="text-center">０名</td>
+                          <td className="text-center">１名</td>
+                        </tr>
+                        <tr>
+                          <td>介護支援専門員</td>
+                          <td className="text-center">２名</td>
+                          <td className="text-center">０名</td>
+                          <td className="text-center">２名</td>
+                        </tr>
+                        <tr>
+                          <td>事務職員</td>
+                          <td className="text-center">１名</td>
+                          <td className="text-center">０名</td>
+                          <td className="text-center">１名</td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    {/* (3) 営業日・営業時間表 (= docx: 2 行 × 2 列) */}
+                    <p className="mt-3 font-semibold">・営業日及び営業時間</p>
+                    <table className="mt-1">
+                      <tbody>
+                        <tr>
+                          <th
+                            className="text-center"
+                            style={{ width: "20%", background: "#f5f5f5" }}
+                          >
+                            営業日
+                          </th>
                           <td className="whitespace-pre-wrap">
-                            {officeServiceArea || "　"}
+                            月曜日から金曜日です。{"\n"}
+                            但し、祝日・８月１３日～８月１５日及び１２月３０日～１月３日までにつきましては、その曜日に関わらず年間の休日となります。
+                          </td>
+                        </tr>
+                        <tr>
+                          <th className="text-center" style={{ background: "#f5f5f5" }}>
+                            営業時間
+                          </th>
+                          <td className="whitespace-pre-wrap">
+                            午前９時から午後６時です。{"\n"}
+                            但し、転送電話等により24時間365日の連絡体制を確保し、かつ必要に応じて利用者様等からの相談に対応 及び 必要と認められる居宅介護支援サービスを行うことができる体制を確保しています。{"\n"}
+                            ※営業日及び営業時間外の連絡につきましては、管理者の会社所有の携帯電話（{c("company_emergency_phone") || "080-9342-6539"}）までご連絡いただければ、担当の介護支援専門員に連絡がとれる体制を確保しています。
                           </td>
                         </tr>
                       </tbody>
@@ -586,9 +729,94 @@ function CombinedContractView({
                   </>
                 )}
 
-                <p className="whitespace-pre-wrap" style={{ marginTop: "0.4em" }}>
-                  {body}
-                </p>
+                {/* 別紙4 (= "４　利用料金") では介護保険給付の料金表を追加表示 */}
+                {chapter.title.startsWith("４") && (
+                  <>
+                    {/* 利用料 intro (該当 key の本文を見出し付きで先に表示) */}
+                    {c("juyo_04_fee_intro").trim() && (
+                      <>
+                        <p className="mt-2 font-semibold">・利用料</p>
+                        <p className="whitespace-pre-wrap" style={{ marginTop: "0.2em" }}>
+                          {c("juyo_04_fee_intro")}
+                        </p>
+                      </>
+                    )}
+                    {/* 料金表 (= docx: 5 行 × 2 列、その他加算は別行) */}
+                    <p className="mt-3">
+                      ※　保険料の滞納等により、法定代理受領ができなくなった場合の料金
+                    </p>
+                    <table className="mt-1">
+                      <tbody>
+                        <tr>
+                          <th
+                            className="text-center"
+                            style={{ width: "30%", background: "#f5f5f5" }}
+                          >
+
+                          </th>
+                          <th className="text-center" style={{ background: "#f5f5f5" }}>
+                            居宅介護支援費（特定事業所加算Ⅱ）
+                          </th>
+                        </tr>
+                        <tr>
+                          <td className="text-center whitespace-pre-wrap">
+                            要介護{"\n"}１・２
+                          </td>
+                          <td>１５，３８６円／月</td>
+                        </tr>
+                        <tr>
+                          <td className="text-center whitespace-pre-wrap">
+                            要介護{"\n"}３～５
+                          </td>
+                          <td>１８，７０４円／月</td>
+                        </tr>
+                        <tr>
+                          <td className="text-center">その他加算</td>
+                          <td className="whitespace-pre-wrap" style={{ lineHeight: 1.7 }}>
+                            初回加算　　　　　　　　　　　　　　　　　　 ３，０６３円{"\n"}
+                            入院時情報連携加算（Ⅰ）　　　　　　　　　　 ２，５５２円{"\n"}
+                            入院時情報連携加算（Ⅱ）　　　　　　　　　　 ２，０４２円{"\n"}
+                            退院・退所加算（Ⅰ）イ　　　　　　　　　　　 ４，５９４円{"\n"}
+                            退院・退所加算（Ⅰ）ロ　　　　　　　　　　　 ６，１２６円{"\n"}
+                            退院・退所加算（Ⅱ）イ　　　　　　　　　　　 ６，１２６円{"\n"}
+                            退院・退所加算（Ⅱ）ロ　　　　　　　　　　　 ７，６５７円{"\n"}
+                            退院・退所加算（Ⅲ）　　　　　　　　　　　　 ９，１８９円{"\n"}
+                            緊急時等居宅カンファレンス加算　　　　　　　 ２，０４２円{"\n"}
+                            ターミナルケアマネジメント加算　　　　　　　 ４，０８４円{"\n"}
+                            通院時情報連携加算　　　　　　 　　 　　　 　 ５１０円
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    {/* 料金表 補足 (intro 以外) — 各小見出しは下の subs.map でまとめて render */}
+                  </>
+                )}
+
+                {/* 各小見出し (sub) の本文表示 */}
+                {chapter.subs.map((sub) => {
+                  const body = c(sub.key);
+                  if (!body.trim()) return null;
+                  // 別紙4: juyo_04_fee_intro は table 前に既に render したので skip。
+                  if (sub.key === "juyo_04_fee_intro") return null;
+                  // 別紙4 の table_note は table 部分。本文として skip
+                  if (sub.key === "juyo_04_fee_table_note") {
+                    // 補足部分のみ本文として残す (= 「その他加算」見出しの行は table 内に既に出ているので本文では再描画しない)
+                    return null;
+                  }
+                  return (
+                    <div key={sub.key} style={{ marginTop: "0.8em" }}>
+                      {sub.subheading && (
+                        <p className="font-semibold">・{sub.subheading}</p>
+                      )}
+                      <p
+                        className="whitespace-pre-wrap"
+                        style={{ marginTop: sub.subheading ? "0.2em" : "0.4em" }}
+                      >
+                        {body}
+                      </p>
+                    </div>
+                  );
+                })}
               </section>
             );
           })}
