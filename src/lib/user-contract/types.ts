@@ -9,13 +9,10 @@
  *    (= memory: feedback_use_client_const_export.md)
  */
 
-export const CONTRACT_TYPES = [
-  "重要事項説明書",
-  "契約書",
-  "契約書兼重要事項説明書",
-  "個人情報同意書",
-  "その他",
-] as const;
+// 2026-06-29: user 確定で 1 値のみ運用に変更 (= 旧 4 値は削除)。
+// 既存サンプル含め全 contracts を DELETE 後、CHECK 制約も 1 値に絞った
+// (= migrations/applied_archive/user_contracts_v3_single_type.sql)。
+export const CONTRACT_TYPES = ["契約書兼重要事項説明書"] as const;
 export type ContractType = (typeof CONTRACT_TYPES)[number];
 
 export const CONTRACT_STATUSES = ["draft", "issued", "archived"] as const;
@@ -40,11 +37,7 @@ export const CONTRACT_TYPE_COLORS: Record<
   ContractType,
   { bg: string; text: string; border: string }
 > = {
-  重要事項説明書: { bg: "bg-indigo-100", text: "text-indigo-700", border: "border-indigo-200" },
-  契約書: { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200" },
   契約書兼重要事項説明書: { bg: "bg-rose-100", text: "text-rose-700", border: "border-rose-200" },
-  個人情報同意書: { bg: "bg-purple-100", text: "text-purple-700", border: "border-purple-200" },
-  その他: { bg: "bg-gray-100", text: "text-gray-600", border: "border-gray-200" },
 };
 
 /**
@@ -322,20 +315,11 @@ export function getKeiyakuKenJuyoDefaults(): UserContractContent {
  * contract_type → section 定義配列を返す helper
  */
 export function getSectionsForType(type: ContractType): ContractSection[] {
-  switch (type) {
-    case "重要事項説明書":
-      return JUUYOU_JIKOU_SECTIONS;
-    case "契約書":
-      return KEIYAKUSHO_SECTIONS;
-    case "契約書兼重要事項説明書":
-      return KEIYAKU_KEN_JUYO_SECTIONS;
-    case "個人情報同意書":
-      return KOJIN_JOUHOU_SECTIONS;
-    case "その他":
-      return OTHER_SECTIONS;
-    default:
-      return [];
-  }
+  // 2026-06-29: 1 値のみ運用なので常に 「契約書兼重要事項説明書」 の sections を返す。
+  // 旧 helpers (JUUYOU_JIKOU_SECTIONS / KEIYAKUSHO_SECTIONS / KOJIN_JOUHOU_SECTIONS / OTHER_SECTIONS)
+  // は未使用 (= 必要なら後日 再追加)。
+  if (type === "契約書兼重要事項説明書") return KEIYAKU_KEN_JUYO_SECTIONS;
+  return KEIYAKU_KEN_JUYO_SECTIONS;
 }
 
 /**
@@ -343,9 +327,10 @@ export function getSectionsForType(type: ContractType): ContractSection[] {
  * 「契約書兼重要事項説明書」は法令引用が多いため defaults を返す。
  * 他は空 (= 既存挙動を維持)。
  */
-export function getDefaultContentForType(type: ContractType): UserContractContent {
-  if (type === "契約書兼重要事項説明書") return getKeiyakuKenJuyoDefaults();
-  return {};
+// 2026-06-29: 1 値のみ運用なので _type 引数は形だけ (= 既存呼出 互換)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function getDefaultContentForType(_type: ContractType): UserContractContent {
+  return getKeiyakuKenJuyoDefaults();
 }
 
 /**
@@ -366,7 +351,7 @@ export function emptyContractInput(params: {
     tenant_id: params.tenantId,
     user_id: params.userId,
     office_id: params.officeId,
-    contract_type: params.contractType ?? "重要事項説明書",
+    contract_type: params.contractType ?? "契約書兼重要事項説明書",
     business_type: params.businessType ?? null,
     issued_date: `${yyyy}-${mm}-${dd}`,
     effective_from: `${yyyy}-${mm}-${dd}`,

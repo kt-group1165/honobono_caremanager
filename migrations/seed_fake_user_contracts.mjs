@@ -197,55 +197,35 @@ async function main() {
   const effectiveFromStr = ymd(issuedDateBase);
   const effectiveUntilStr = ymd(addYears(issuedDateBase, 1));
 
+  // 2026-06-29: 1 値運用に統一。重要事項説明書 + 契約書 の 2 件を merge し、
+  // 「契約書兼重要事項説明書」を 1 利用者 1 件 INSERT。
   const rowsToInsert = [];
   for (const c of clients) {
-    if (!existingByKey.has(`${c.id}__重要事項説明書`)) {
-      rowsToInsert.push({
-        tenant_id: TENANT_ID,
-        user_id: c.id,
-        office_id: HELPER_OFFICE_ID,
-        contract_type: "重要事項説明書",
-        business_type: "訪問介護",
-        issued_date: issuedDateStr,
-        effective_from: effectiveFromStr,
-        effective_until: effectiveUntilStr,
-        signed_at: issuedDateStr,
-        signed_by_name: c.name,
-        signed_by_relation: "本人",
-        content: jujikouContentFor(c),
-        attachment_url: null,
-        status: "issued",
-        notes: `${c.user_number} 重要事項説明書 ${FAKE_MARKER}`,
-      });
-    }
-    if (!existingByKey.has(`${c.id}__契約書`)) {
-      rowsToInsert.push({
-        tenant_id: TENANT_ID,
-        user_id: c.id,
-        office_id: HELPER_OFFICE_ID,
-        contract_type: "契約書",
-        business_type: "訪問介護",
-        issued_date: issuedDateStr,
-        effective_from: effectiveFromStr,
-        effective_until: null, // 自動更新想定 = 無期限扱い
-        signed_at: issuedDateStr,
-        signed_by_name: c.name,
-        signed_by_relation: "本人",
-        content: keiyakuContentFor(c),
-        attachment_url: null,
-        status: "issued",
-        notes: `${c.user_number} 契約書 ${FAKE_MARKER}`,
-      });
-    }
+    if (existingByKey.has(`${c.id}__契約書兼重要事項説明書`)) continue;
+    const merged = {
+      ...jujikouContentFor(c),
+      ...keiyakuContentFor(c),
+    };
+    rowsToInsert.push({
+      tenant_id: TENANT_ID,
+      user_id: c.id,
+      office_id: HELPER_OFFICE_ID,
+      contract_type: "契約書兼重要事項説明書",
+      business_type: "居宅介護支援",
+      issued_date: issuedDateStr,
+      effective_from: effectiveFromStr,
+      effective_until: effectiveUntilStr,
+      signed_at: issuedDateStr,
+      signed_by_name: c.name,
+      signed_by_relation: "本人",
+      content: merged,
+      attachment_url: null,
+      status: "issued",
+      notes: `${c.user_number} 契約書兼重要事項説明書 ${FAKE_MARKER}`,
+    });
   }
 
-  console.log(`\n📊 INSERT 予定: ${rowsToInsert.length} 件`);
-  console.log(
-    `   重要事項説明書: ${rowsToInsert.filter((r) => r.contract_type === "重要事項説明書").length}`,
-  );
-  console.log(
-    `   契約書:         ${rowsToInsert.filter((r) => r.contract_type === "契約書").length}`,
-  );
+  console.log(`\n📊 INSERT 予定: ${rowsToInsert.length} 件 (= 契約書兼重要事項説明書)`);
 
   if (rowsToInsert.length === 0) {
     console.log("✅ 既に全件 seed 済みです");

@@ -19,16 +19,12 @@ import {
 import { format, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
 import {
-  CONTRACT_TYPES,
   CONTRACT_STATUSES,
   CONTRACT_STATUS_LABELS,
   CONTRACT_STATUS_COLORS,
-  CONTRACT_TYPE_COLORS,
   BUSINESS_TYPES,
   emptyContractInput,
   getSectionsForType,
-  getDefaultContentForType,
-  type ContractType,
   type ContractStatus,
   type UserContract,
   type UserContractContent,
@@ -89,7 +85,7 @@ export function UserContractsContent({
   const [contracts, setContracts] = useState<UserContract[]>(initialContracts);
   const [loading, setLoading] = useState(false);
 
-  const [filterType, setFilterType] = useState<ContractType | "">("");
+  // filterType は 1 値運用になったため不要
   const [filterStatus, setFilterStatus] = useState<ContractStatus | "">("");
 
   const [showDialog, setShowDialog] = useState(false);
@@ -171,11 +167,10 @@ export function UserContractsContent({
 
   const filtered = useMemo(() => {
     return contracts.filter((c) => {
-      if (filterType && c.contract_type !== filterType) return false;
       if (filterStatus && c.status !== filterStatus) return false;
       return true;
     });
-  }, [contracts, filterType, filterStatus]);
+  }, [contracts, filterStatus]);
 
   const openNew = () => {
     const officeId = defaultOfficeId;
@@ -186,7 +181,7 @@ export function UserContractsContent({
         tenantId,
         userId,
         officeId,
-        contractType: "重要事項説明書",
+        contractType: "契約書兼重要事項説明書",
         businessType: currentOffice?.service_type ?? null,
       }),
     );
@@ -270,24 +265,9 @@ export function UserContractsContent({
   };
 
   /**
-   * 種別 select 変更時のハンドラ:
-   *  - 「契約書兼重要事項説明書」を選んだ場合は、content が空 (= 未入力 or _sample_marker のみ) なら
-   *    docx 由来のデフォルト本文を一括 prefill する。既に何か入力済みなら触らない。
-   *  - その他の種別はそのまま (= 後方互換)。
+   * 2026-06-29: 種別 select 削除に伴い handleContractTypeChange 撤去。
+   * 新規作成時は emptyContractInput で contract_type が固定される。
    */
-  const handleContractTypeChange = (next: ContractType) => {
-    if (!form) return;
-    const prevContent = form.content ?? {};
-    const isEmpty =
-      Object.keys(prevContent).filter((k) => k !== "_sample_marker").length === 0;
-    if (next === "契約書兼重要事項説明書" && isEmpty) {
-      const defaults = getDefaultContentForType(next);
-      setForm({ ...form, contract_type: next, content: defaults });
-      toast.success("契約書兼重要事項説明書のデフォルト本文を取り込みました");
-      return;
-    }
-    updateForm("contract_type", next);
-  };
 
   const handleSave = async () => {
     if (!form) return;
@@ -359,16 +339,7 @@ export function UserContractsContent({
       {/* フィルタ */}
       <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-gray-200 bg-white p-2 text-xs">
         <span className="font-medium text-gray-600">絞り込み:</span>
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType((e.target.value as ContractType) || "")}
-          className="rounded border border-gray-300 px-2 py-1"
-        >
-          <option value="">種別: すべて</option>
-          {CONTRACT_TYPES.map((t) => (
-            <option key={t} value={t}>{t}</option>
-          ))}
-        </select>
+        {/* 種別 filter は 1 値のみ運用 (= 契約書兼重要事項説明書) になったため非表示 */}
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus((e.target.value as ContractStatus) || "")}
@@ -389,7 +360,6 @@ export function UserContractsContent({
         <table className="min-w-full divide-y divide-gray-200 text-sm">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-3 py-2 text-left font-medium text-gray-700">種別</th>
               <th className="px-3 py-2 text-left font-medium text-gray-700">業務</th>
               <th className="px-3 py-2 text-left font-medium text-gray-700">交付日</th>
               <th className="px-3 py-2 text-left font-medium text-gray-700">効力発生</th>
@@ -402,29 +372,21 @@ export function UserContractsContent({
           <tbody className="divide-y divide-gray-100">
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-3 py-8 text-center text-gray-400">
+                <td colSpan={7} className="px-3 py-8 text-center text-gray-400">
                   <Loader2 size={18} className="mx-auto mb-1 animate-spin" /> 読込中...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-3 py-12 text-center text-gray-400">
+                <td colSpan={7} className="px-3 py-12 text-center text-gray-400">
                   該当する契約書がありません
                 </td>
               </tr>
             ) : (
               filtered.map((c) => {
-                const tColor = CONTRACT_TYPE_COLORS[c.contract_type];
                 const sColor = CONTRACT_STATUS_COLORS[c.status];
                 return (
                   <tr key={c.id} className="hover:bg-gray-50">
-                    <td className="px-3 py-2">
-                      <span
-                        className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${tColor.bg} ${tColor.text} ${tColor.border}`}
-                      >
-                        {c.contract_type}
-                      </span>
-                    </td>
                     <td className="px-3 py-2 text-xs text-gray-600">
                       {c.business_type ?? "—"}
                     </td>
@@ -504,22 +466,8 @@ export function UserContractsContent({
 
             <div className="flex-1 overflow-y-auto p-4">
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                <div className="col-span-1">
-                  <label className="mb-1 block text-xs font-medium text-gray-600">
-                    種別 <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={form.contract_type}
-                    onChange={(e) =>
-                      handleContractTypeChange(e.target.value as ContractType)
-                    }
-                    className={inputClass}
-                  >
-                    {CONTRACT_TYPES.map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
+                {/* 種別 select 削除 (= 2026-06-29 user 確定で 1 値のみ運用)。
+                    新規作成時に既に "契約書兼重要事項説明書" で固定される。 */}
                 <div className="col-span-1">
                   <label className="mb-1 block text-xs font-medium text-gray-600">業務</label>
                   <select
@@ -639,8 +587,7 @@ export function UserContractsContent({
               <div className="mt-5 rounded-md border border-gray-200 bg-gray-50 p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-gray-700">内容</h3>
-                  {(form.contract_type === "重要事項説明書" ||
-                    form.contract_type === "契約書兼重要事項説明書") && (
+                  {form.contract_type === "契約書兼重要事項説明書" && (
                     <button
                       type="button"
                       onClick={autoFillFromOffice}
