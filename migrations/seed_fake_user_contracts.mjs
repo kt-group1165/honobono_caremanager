@@ -3,7 +3,7 @@
  *   重要事項説明書 + 契約書 の 2 件を kaigo_user_contracts に seed する。
  *
  * 想定 office:
- *   訪問介護 office_id = 4f14d50c-76b5-4f44-ac41-ed6d01f53a30 (Ｈａｮｱヘルパーステーションおゆみ野)
+ *   訪問介護 office_id = 4f14d50c-76b5-4f44-ac41-ed6d01f53a30 (Ｈａｎａヘルパーステーションおゆみ野)
  *
  * マーカー:
  *   - notes に「[fake テスト用-contract]」
@@ -91,7 +91,7 @@ function addYears(d, n) {
 function jujikouContent() {
   return {
     _sample_marker: SAMPLE_MARKER,
-    company_name: "株式会社KTグループ Ｈａｮｱヘルパーステーションおゆみ野",
+    company_name: "株式会社KTグループ Ｈａｎａヘルパーステーションおゆみ野",
     company_address: "千葉県千葉市緑区おゆみ野中央 1-2-3",
     company_phone: "043-291-0001",
     company_fax: "043-291-0002",
@@ -152,7 +152,7 @@ function keiyakuContentFor(user) {
 
 async function main() {
   console.log(`\n📂 fake 重要事項説明書 / 契約書 seed`);
-  console.log(`🏢 office = Ｈａｮｱヘルパーステーションおゆみ野 (${HELPER_OFFICE_ID})`);
+  console.log(`🏢 office = Ｈａｎａヘルパーステーションおゆみ野 (${HELPER_OFFICE_ID})`);
   console.log(EXECUTE ? "⚠️  EXECUTE MODE (実書込)" : "🔍 DRY RUN");
   console.log("");
 
