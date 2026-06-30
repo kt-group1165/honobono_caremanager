@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   CONTRACT_STATUS_LABELS,
   getSectionsForType,
+  getKeiyakuKenJuyoDefaults,
   KEIYAKU_KEN_JUYO_SECTIONS,
   type UserContract,
 } from "@/lib/user-contract/types";
@@ -295,7 +296,15 @@ function CombinedContractView({
   user: KaigoClientLite | null;
   officeName: string | null;
 }) {
-  const c = (key: string): string => (contract.content?.[key] ?? "").toString();
+  // content に該当 key が無ければ docx 由来の defaults を fallback として使う。
+  // (= 旧 seed で article_*/juyo_* が空のまま contract が作られているケース対策)
+  // 事業者情報系 key も defaults を持つが、その場合は content 既存値が優先される。
+  const defaultsForFallback = getKeiyakuKenJuyoDefaults();
+  const c = (key: string): string => {
+    const raw = contract.content?.[key];
+    if (raw !== undefined && raw !== null && String(raw).trim() !== "") return String(raw);
+    return (defaultsForFallback[key] ?? "").toString();
+  };
 
   const articleKeys = Array.from({ length: 22 }, (_, i) =>
     `article_${String(i + 1).padStart(2, "0")}`,
