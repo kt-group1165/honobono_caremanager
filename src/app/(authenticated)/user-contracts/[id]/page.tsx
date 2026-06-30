@@ -24,6 +24,38 @@ function fmtDate(s: string | null): string {
   return `${m[1]}年${Number(m[2])}月${Number(m[3])}日`;
 }
 
+/**
+ * 西暦 → 和暦 (令和/平成/昭和) 変換 (= docx の「令和 年 月 日」表記に合わせる)
+ *
+ * - 2019-05-01 以降 → 令和 (y - 2018)
+ * - 1989-01-08〜2019-04-30 → 平成 (y - 1988)
+ * - それ以前 → 昭和 (y - 1925) ※ 安全側、実際は使われない想定
+ */
+function fmtWareki(s: string | null): {
+  era: string;
+  year: number | "";
+  month: number | "";
+  day: number | "";
+} {
+  if (!s) return { era: "令和", year: "", month: "", day: "" };
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (!m) return { era: "令和", year: "", month: "", day: "" };
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  let era = "令和";
+  let yy = y - 2018;
+  if (y < 2019 || (y === 2019 && mo < 5)) {
+    era = "平成";
+    yy = y - 1988;
+  }
+  if (y < 1989 || (y === 1989 && mo === 1 && d < 8)) {
+    era = "昭和";
+    yy = y - 1925;
+  }
+  return { era, year: yy, month: mo, day: d };
+}
+
 export default async function ContractDetailPage({
   params,
   searchParams,
@@ -234,13 +266,25 @@ function GenericContractView({
 }
 
 /**
- * 「契約書兼重要事項説明書」専用 view (= docx の縦組みを踏襲した A4 縦レイアウト)
+ * 「契約書兼重要事項説明書」専用 view (= docx に忠実な A4 縦レイアウト)
  *
- * - 表紙: 標題 + 利用者欄 + 事業者欄
- * - 第1〜22条 (article_01 〜 article_22) を順次表示
- * - 個人情報の取り扱いについて
- * - 別紙重要事項 1〜8 章
- * - 末尾: 説明日 / 契約締結日 / 事業者署名欄 / 利用者署名欄 / 代筆者署名欄
+ * 元 docx: `apps/kaigo-app/契約書/居宅介護支援/26.6月 契約書原本(大網）.docx`
+ *
+ * docx 構造 (= 抽出元):
+ *   - A4 縦, 余白 上 1134 / 下 851 / 左右 1701 twip (≒ 20mm/15mm/30mm)
+ *   - font: ＭＳ 明朝 (eastAsia 設定済)
+ *   - 半角ポイント (sz/2):
+ *       cover タイトル "居宅介護支援" 36pt / "契約書"・"重要事項説明書" 26pt
+ *       cover 利用者欄 "      様"   28pt
+ *       cover 事業者名               20pt
+ *       本文タイトル "居宅介護支援 契約書 / 兼 / …" 14pt bold
+ *       別紙重要事項のタイトル/見出し 12pt
+ *       条文本文 / 別紙本文           11pt
+ *
+ * - p.1   表紙 (居宅介護支援 / 契約書 / 兼 / 重要事項説明書 / 利用者 様 / 事業者名)
+ * - p.2〜 契約書本文 (第1〜22条 + 個人情報の取り扱いについて)
+ * - p.4〜 別紙「重要事項」(1 相談窓口 〜 8 当社の概要)
+ * - 末尾   署名欄 (説明日 / 説明者 / 契約締結日 / 事業者 / 利用者 / 代筆者)
  */
 function CombinedContractView({
   contract,
@@ -262,220 +306,463 @@ function CombinedContractView({
       s.label,
     ]),
   );
-  const juyoSections = KEIYAKU_KEN_JUYO_SECTIONS.filter((s) => s.key.startsWith("juyo_"));
+  // 条見出しは docx に合わせ "第○条（…）" の全角丸括弧表記に揃える
+  const renderArticleHeading = (key: string): string => {
+    const raw = articleLabels[key] ?? key;
+    // "第1条 (契約の目的)" → "第１条（契約の目的）"
+    const numMap: Record<string, string> = {
+      "1": "１",
+      "2": "２",
+      "3": "３",
+      "4": "４",
+      "5": "５",
+      "6": "６",
+      "7": "７",
+      "8": "８",
+      "9": "９",
+      "10": "１０",
+      "11": "１１",
+      "12": "１２",
+      "13": "１３",
+      "14": "１４",
+      "15": "１５",
+      "16": "１６",
+      "17": "１７",
+      "18": "１８",
+      "19": "１９",
+      "20": "２０",
+      "21": "２１",
+      "22": "２２",
+    };
+    const m = /^第(\d+)条\s*\((.+)\)$/.exec(raw);
+    if (!m) return raw;
+    const z = numMap[m[1]] ?? m[1];
+    return `第${z}条（${m[2]}）`;
+  };
 
-  const companyOfficeName = c("company_office_name") || officeName || "—";
-  const companyName = c("company_name") || "—";
-  const companyAddress = c("company_address") || "—";
-  const representativeName = c("representative_name") || "—";
+  const juyoSections = KEIYAKU_KEN_JUYO_SECTIONS.filter((s) => s.key.startsWith("juyo_"));
+  const juyoTitle = (sec: { key: string; label: string }, idx: number): string => {
+    // "別紙1 当事業所が提供する..." → "１ 当事業所が提供する..."
+    const stripped = sec.label.replace(/^別紙\d+\s*/, "");
+    const zen = "１２３４５６７８"[idx] ?? String(idx + 1);
+    return `${zen}　${stripped}`;
+  };
+
+  const companyOfficeName = c("company_office_name") || officeName || "";
+  const companyName = c("company_name") || "";
+  const companyAddress = c("company_address") || "";
+  const companyPhone = c("company_phone") || "";
+  const representativeName = c("representative_name") || "";
+  const officeDesignationNumber = c("office_designation_number") || "";
+  const officeServiceArea = c("office_service_area") || "";
+
+  const issuedW = fmtWareki(contract.issued_date);
+  const signedW = fmtWareki(contract.signed_at ?? contract.issued_date);
 
   return (
-    <div className="mx-auto my-6 max-w-3xl bg-white p-10 text-[13px] leading-relaxed text-gray-900 shadow-sm print:my-0 print:max-w-none print:p-12 print:shadow-none">
-      {/* 表紙 */}
-      <header className="text-center">
-        <p className="text-xs text-gray-600">居宅介護支援</p>
-        <h1 className="mt-2 text-3xl font-bold tracking-[0.4em]">契約書</h1>
-        <p className="my-1 text-sm text-gray-700">兼</p>
-        <h2 className="text-2xl font-bold tracking-[0.4em]">重要事項説明書</h2>
-        <p className="mt-4 text-xs text-gray-600">
-          ({fmtDate(contract.issued_date)} 現在)
-        </p>
-      </header>
+    <>
+      {/* 印刷用 style (= docx 余白を A4 で再現) */}
+      <style>{`
+        @media print {
+          @page { size: A4 portrait; margin: 20mm 30mm 15mm 30mm; }
+          html, body { background: #fff !important; }
+          .uc-sheet { box-shadow: none !important; margin: 0 !important; padding: 0 !important; max-width: none !important; }
+          .uc-page { page-break-after: always; }
+          .uc-page:last-child { page-break-after: auto; }
+          .uc-avoid { page-break-inside: avoid; }
+        }
+        .uc-sheet {
+          font-family: "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "Hiragino Mincho Pro",
+                       "MS Mincho", "ＭＳ 明朝", "Noto Serif JP", serif;
+          color: #111;
+          font-size: 11pt;
+          line-height: 1.8;
+          font-feature-settings: "palt" 1;
+        }
+        .uc-sheet table { border-collapse: collapse; width: 100%; }
+        .uc-sheet td, .uc-sheet th {
+          border: 1px solid #000;
+          padding: 4px 8px;
+          vertical-align: middle;
+          font-size: 10.5pt;
+          line-height: 1.6;
+        }
+      `}</style>
 
-      {/* 利用者・事業者 */}
-      <section className="mt-8 space-y-3 text-sm">
-        <div className="flex items-end gap-3 border-b border-gray-300 pb-1">
-          <span className="text-xs text-gray-500">利用者氏名</span>
-          <span className="flex-1 text-lg font-semibold">{user?.name ?? "—"}</span>
-          <span className="text-sm">様</span>
-        </div>
-        <div className="text-xs leading-loose text-gray-700">
-          <span className="font-semibold text-gray-900">{companyName}</span>
-          <br />
-          <span className="font-semibold text-gray-900">{companyOfficeName}</span>
-          <br />
-          (以下、「利用者」といいます) と、{companyName}{" "}
-          {companyOfficeName} (以下、「事業者」といいます) は、事業者が利用者に対して行う居宅介護支援について次の通り契約します。
-        </div>
-      </section>
+      {/* 画面用 wrapper: A4 比率に近い max-width / 印刷時は uc-sheet 内に展開 */}
+      <div
+        className="uc-sheet mx-auto my-6 bg-white shadow-sm print:my-0 print:shadow-none"
+        style={{ maxWidth: "210mm" }}
+      >
+        {/* ===== Page 1: 表紙 ===== */}
+        <section
+          className="uc-page relative px-[30mm] py-[20mm]"
+          style={{ minHeight: "297mm" }}
+        >
+          {/* 居宅介護支援 (36pt) — docx で center, 上 ⅓ 付近 */}
+          <div className="pt-[24mm] text-center" style={{ fontSize: "36pt", letterSpacing: "0.5em" }}>
+            居宅介護支援
+          </div>
+          {/* 契約書 (26pt) */}
+          <div className="mt-[16mm] text-center" style={{ fontSize: "26pt", letterSpacing: "0.4em" }}>
+            契約書
+          </div>
+          {/* 重要事項説明書 (26pt) */}
+          <div className="mt-[6mm] text-center" style={{ fontSize: "26pt", letterSpacing: "0.4em" }}>
+            重要事項説明書
+          </div>
 
-      {/* 契約条文 (第1〜22条) */}
-      <section className="mt-6 space-y-4">
-        {articleKeys.map((key) => {
-          const body = c(key);
-          if (!body.trim()) return null;
-          return (
-            <article key={key} className="break-inside-avoid">
-              <h3 className="text-sm font-bold text-gray-900">
-                {articleLabels[key] ?? key}
-              </h3>
-              <p className="mt-1 whitespace-pre-wrap text-sm leading-7 text-gray-800">
-                {body}
-              </p>
-            </article>
-          );
-        })}
-      </section>
+          {/* 利用者欄 (28pt) — docx は 9個の全角空白 + 様 */}
+          <div className="mt-[40mm] text-center" style={{ fontSize: "28pt" }}>
+            <span
+              className="inline-block border-b border-black pb-1 text-left"
+              style={{ minWidth: "160mm" }}
+            >
+              <span style={{ paddingLeft: "20mm" }}>{user?.name ?? ""}</span>
+            </span>
+            <span className="ml-2">様</span>
+          </div>
 
-      {/* 個人情報取扱い */}
-      {c("privacy_consent_text").trim() && (
-        <section className="mt-8 break-inside-avoid border-t border-gray-300 pt-4">
-          <h3 className="text-sm font-bold text-gray-900">【個人情報の取り扱いについて】</h3>
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-7 text-gray-800">
-            {c("privacy_consent_text")}
-          </p>
-          <p className="mt-3 text-sm leading-7 text-gray-800">
-            上記の契約を証するため本書2通を作成し、利用者・事業者が署名押印の上、1通ずつ保有するものとします。
-          </p>
+          {/* 事業者名・事業所名 (20pt) — center */}
+          <div className="mt-[40mm] text-center" style={{ fontSize: "20pt" }}>
+            {companyName || "　"}
+          </div>
+          <div className="mt-[4mm] text-center" style={{ fontSize: "20pt" }}>
+            {companyOfficeName || "　"}
+          </div>
         </section>
-      )}
 
-      {/* 改頁: 別紙重要事項 */}
-      <div className="mt-12 break-before-page">
-        <header className="text-center">
-          <h2 className="text-2xl font-bold tracking-[0.4em]">重要事項</h2>
-        </header>
+        {/* ===== Page 2〜: 契約書本文 ===== */}
+        <section className="uc-page px-[30mm] py-[18mm]">
+          {/* タイトル (14pt bold) — center */}
+          <div
+            className="text-center font-bold"
+            style={{ fontSize: "14pt", lineHeight: 1.9 }}
+          >
+            居宅介護支援　契約書
+          </div>
+          <div
+            className="text-center font-bold"
+            style={{ fontSize: "14pt", lineHeight: 1.9 }}
+          >
+            兼
+          </div>
+          <div
+            className="text-center font-bold"
+            style={{ fontSize: "14pt", lineHeight: 1.9 }}
+          >
+            居宅介護支援　重要事項説明書
+          </div>
 
-        {juyoSections.map((sec, idx) => {
-          const body = c(sec.key);
-          if (!body.trim()) return null;
-          return (
-            <section key={sec.key} className="mt-6 break-inside-avoid">
-              <h3 className="border-b border-gray-400 pb-1 text-sm font-bold text-gray-900">
-                {idx + 1} {sec.label.replace(/^別紙\d+\s*/, "")}
+          {/* 日付行 (右寄せ気味、docx は ind_firstLine=1680) */}
+          <div className="mt-2" style={{ paddingLeft: "60mm", fontSize: "12pt" }}>
+            （　　{issuedW.year || "　　"}　年　　{issuedW.month || "　　"}　月
+            {issuedW.day || "　　"}　日　現在　）
+          </div>
+
+          {/* 前文 (利用者…事業者…契約します。) */}
+          <p className="mt-6" style={{ textIndent: "1em" }}>
+            <span className="inline-block border-b border-black" style={{ minWidth: "8em" }}>
+              {user?.name ?? "　　　　　　　"}
+            </span>
+            様（以下、「利用者」といいます）と、
+            {companyName ? <strong>{companyName}</strong> : "　"}
+
+            {companyOfficeName ? <strong>{companyOfficeName}</strong> : "　"}
+            （以下、「事業者」といいます）は、事業者が利用者に対して行う居宅介護支援について次の通り契約します。
+          </p>
+
+          {/* 第1〜22条 */}
+          <div className="mt-6 space-y-4">
+            {articleKeys.map((key) => {
+              const body = c(key);
+              if (!body.trim()) return null;
+              return (
+                <article key={key} className="uc-avoid">
+                  <h3 className="font-bold" style={{ fontSize: "11pt" }}>
+                    {renderArticleHeading(key)}
+                  </h3>
+                  <p
+                    className="whitespace-pre-wrap"
+                    style={{ textIndent: "1em", marginTop: "0.2em" }}
+                  >
+                    {body}
+                  </p>
+                </article>
+              );
+            })}
+          </div>
+
+          {/* 個人情報の取り扱いについて */}
+          {c("privacy_consent_text").trim() && (
+            <section className="mt-8 uc-avoid">
+              <h3 className="font-bold" style={{ fontSize: "11pt" }}>
+                【個人情報の取り扱いについて】
               </h3>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-gray-800">
-                {body}
+              <p
+                className="whitespace-pre-wrap"
+                style={{ textIndent: "1em", marginTop: "0.2em" }}
+              >
+                {c("privacy_consent_text")}
+              </p>
+              <p className="mt-4" style={{ textIndent: "1em" }}>
+                上記の契約を証するため本書２通を作成し、利用者・事業者が署名押印の上、１通ずつ保有するものとします。
               </p>
             </section>
-          );
-        })}
-      </div>
+          )}
+        </section>
 
-      {/* 末尾 署名欄 */}
-      <section className="mt-12 break-inside-avoid border-t-2 border-gray-700 pt-6 text-sm">
-        <p className="leading-7 text-gray-800">
-          事業者は居宅介護支援の提供開始にあたり、利用者様に対し本書面を用いて契約書及び重要事項、個人情報の取扱いについて説明しました。
-        </p>
+        {/* ===== Page N: 別紙「重要事項」 ===== */}
+        <section className="uc-page px-[30mm] py-[18mm]">
+          {/* 中央タイトル (12pt bold) */}
+          <div
+            className="text-center font-bold"
+            style={{ fontSize: "12pt", letterSpacing: "0.6em", paddingTop: "60mm" }}
+          >
+            重要事項
+          </div>
+          <div style={{ pageBreakAfter: "always" }} />
 
-        <div className="mt-6 grid grid-cols-1 gap-3">
-          <div className="flex items-end gap-3 border-b border-gray-400 pb-1">
-            <span className="w-24 text-xs text-gray-500">説明日</span>
-            <span className="flex-1">{fmtDate(contract.issued_date)}</span>
-          </div>
-          <div className="flex items-end gap-3 border-b border-gray-400 pb-1">
-            <span className="w-24 text-xs text-gray-500">【 説明者 】</span>
-            <span className="flex-1" />
-            <span className="text-xs text-gray-500">印</span>
-          </div>
-          <div className="flex items-end gap-3 border-b border-gray-400 pb-1">
-            <span className="w-24 text-xs text-gray-500">契約締結日</span>
-            <span className="flex-1">
-              {fmtDate(contract.signed_at ?? contract.issued_date)}
-            </span>
-          </div>
-        </div>
+          {juyoSections.map((sec, idx) => {
+            const body = c(sec.key);
+            if (!body.trim()) return null;
+            const isFirstSection = idx === 0;
+            return (
+              <section
+                key={sec.key}
+                className="uc-avoid"
+                style={{ marginTop: isFirstSection ? "0" : "1.5em" }}
+              >
+                <h3 className="font-bold" style={{ fontSize: "12pt", marginBottom: "0.4em" }}>
+                  {juyoTitle(sec, idx)}
+                </h3>
 
-        {/* 事業者署名 */}
-        <div className="mt-6 rounded border border-gray-300 p-4">
-          <p className="text-xs font-semibold text-gray-600">事業者</p>
-          <div className="mt-2 space-y-2">
-            <div className="flex">
-              <span className="w-32 text-xs text-gray-500">【事業者名】</span>
-              <span className="flex-1">
-                {companyName}
-                <br />
-                {companyOfficeName}
+                {/* idx=1 (= juyo_02 当事業所の概要) では事業所情報の表 を追加表示 */}
+                {idx === 1 && (
+                  <>
+                    <p className="mt-2">・居宅介護支援事業所の名称、所在地、指定番号、サービスを提供できる地域</p>
+                    <table className="mt-1">
+                      <tbody>
+                        <tr>
+                          <th
+                            className="text-center"
+                            style={{ width: "35%", background: "#f5f5f5" }}
+                          >
+                            事　業　所　名
+                          </th>
+                          <td>{companyOfficeName || "　"}</td>
+                        </tr>
+                        <tr>
+                          <th
+                            className="text-center"
+                            style={{ background: "#f5f5f5" }}
+                          >
+                            所　在　地
+                          </th>
+                          <td>{companyAddress || "　"}</td>
+                        </tr>
+                        <tr>
+                          <th
+                            className="text-center"
+                            style={{ background: "#f5f5f5" }}
+                          >
+                            介護保険 指定事業所番号
+                          </th>
+                          <td>{officeDesignationNumber || "　"}</td>
+                        </tr>
+                        <tr>
+                          <th
+                            className="text-center"
+                            style={{ background: "#f5f5f5" }}
+                          >
+                            通常のサービス実施地域
+                          </th>
+                          <td className="whitespace-pre-wrap">
+                            {officeServiceArea || "　"}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </>
+                )}
+
+                <p className="whitespace-pre-wrap" style={{ marginTop: "0.4em" }}>
+                  {body}
+                </p>
+              </section>
+            );
+          })}
+        </section>
+
+        {/* ===== 末尾: 署名欄 ===== */}
+        <section className="px-[30mm] py-[18mm]">
+          <p style={{ textIndent: "1em" }}>
+            事業者は居宅介護支援の提供開始にあたり、利用者様に対し本書面を用いて契約書及び重要事項、個人情報の取扱いについて説明しました。
+          </p>
+
+          {/* 説明日 (令和 _ 年 _ 月 _ 日) */}
+          <div className="mt-6 uc-avoid">
+            <div className="font-bold" style={{ fontSize: "11pt" }}>
+              説明日　　　　　{signedW.era}
+              <span className="inline-block border-b border-black text-center" style={{ minWidth: "3em" }}>
+                {signedW.year || "　　"}
               </span>
-            </div>
-            <div className="flex">
-              <span className="w-32 text-xs text-gray-500">【 所在地 】</span>
-              <span className="flex-1">{companyAddress}</span>
-            </div>
-            <div className="flex items-end">
-              <span className="w-32 text-xs text-gray-500">【 法人代表者 】</span>
-              <span className="flex-1 border-b border-gray-400">
-                {representativeName}
+              　年
+              <span className="inline-block border-b border-black text-center" style={{ minWidth: "3em" }}>
+                {signedW.month || "　　"}
               </span>
-              <span className="ml-2 text-xs text-gray-500">印</span>
+              　月
+              <span className="inline-block border-b border-black text-center" style={{ minWidth: "3em" }}>
+                {signedW.day || "　　"}
+              </span>
+              　日
+            </div>
+            <div className="mt-3 flex items-end gap-4">
+              <span className="font-bold" style={{ fontSize: "11pt" }}>【 説明者 】</span>
+              <span className="flex-1 border-b border-black" />
+              <span style={{ fontSize: "10pt" }}>印</span>
+            </div>
+            <div className="mt-4 font-bold" style={{ fontSize: "11pt" }}>
+              契約締結日　　　{signedW.era}
+              <span className="inline-block border-b border-black text-center" style={{ minWidth: "3em" }}>
+                {signedW.year || "　　"}
+              </span>
+              　年
+              <span className="inline-block border-b border-black text-center" style={{ minWidth: "3em" }}>
+                {signedW.month || "　　"}
+              </span>
+              　月
+              <span className="inline-block border-b border-black text-center" style={{ minWidth: "3em" }}>
+                {signedW.day || "　　"}
+              </span>
+              　日
             </div>
           </div>
-        </div>
 
-        <p className="mt-6 text-sm leading-7 text-gray-800">
-          利用者は本書面により、事業者から居宅介護支援について契約書、重要事項、個人情報の取扱いについて、内容の説明を受け確認した上で、契約書記載の各条項及び重要事項説明書、個人情報の取扱いに記載されている内容につき同意します。また、事業者が「居宅サービス計画」を作成する為に必要がある時は、要介護認定にかかる調査内容・介護認定審査会による判定結果、意見・主治医意見書を閲覧することに同意します。
-        </p>
-
-        {/* 利用者署名 */}
-        <div className="mt-6 rounded border border-gray-300 p-4">
-          <p className="text-xs font-semibold text-gray-600">利用者</p>
-          <div className="mt-2 space-y-2">
-            <div className="flex">
-              <span className="w-24 text-xs text-gray-500">【 住所 】</span>
-              <span className="flex-1 border-b border-gray-400">&nbsp;</span>
-            </div>
-            <div className="flex items-end">
-              <span className="w-24 text-xs text-gray-500">【 氏名 】</span>
-              <span className="flex-1 border-b border-gray-400">
-                {contract.signed_by_relation === "本人"
-                  ? contract.signed_by_name ?? ""
-                  : user?.name ?? ""}
-              </span>
-              <span className="ml-2 text-xs text-gray-500">印</span>
-            </div>
-          </div>
-        </div>
-
-        {/* 代筆者 (= signed_by_relation が「本人」以外なら表示) */}
-        {contract.signed_by_relation && contract.signed_by_relation !== "本人" && (
-          <div className="mt-4 rounded border border-gray-300 p-4">
-            <p className="text-xs leading-6 text-gray-700">
-              利用者は心身の状況等により署名ができないため、利用者本人の意思を確認の上、私が利用者に代わってその署名を代筆しました。
-            </p>
-            <div className="mt-3 space-y-2">
-              <div className="flex items-end">
-                <span className="w-24 text-xs text-gray-500">代筆者</span>
-                <span className="flex-1 border-b border-gray-400">
-                  {contract.signed_by_name ?? ""}
+          {/* 事業者欄 */}
+          <div className="mt-6 uc-avoid">
+            <p className="font-bold" style={{ fontSize: "11pt" }}>事業者</p>
+            <div className="mt-2 space-y-2 pl-[6mm]">
+              <div className="flex">
+                <span className="font-bold" style={{ width: "30mm", fontSize: "11pt" }}>
+                  【事業者名】
                 </span>
-                <span className="ml-2 text-xs text-gray-500">
-                  (続柄: {contract.signed_by_relation})
+                <span className="flex-1">
+                  {companyName}
+                  {companyOfficeName && (
+                    <>
+                      <br />
+                      <span className="inline-block pl-[8mm]">{companyOfficeName}</span>
+                    </>
+                  )}
                 </span>
               </div>
               <div className="flex">
-                <span className="w-24 text-xs text-gray-500">【 住所 】</span>
-                <span className="flex-1 border-b border-gray-400">&nbsp;</span>
+                <span className="font-bold" style={{ width: "30mm", fontSize: "11pt" }}>
+                  【 所在地 】
+                </span>
+                <span className="flex-1">{companyAddress}</span>
               </div>
+              {companyPhone && (
+                <div className="flex">
+                  <span className="font-bold" style={{ width: "30mm", fontSize: "11pt" }}>
+                    【 電話番号 】
+                  </span>
+                  <span className="flex-1">{companyPhone}</span>
+                </div>
+              )}
               <div className="flex items-end">
-                <span className="w-24 text-xs text-gray-500">【 氏名 】</span>
-                <span className="flex-1 border-b border-gray-400">&nbsp;</span>
-                <span className="ml-2 text-xs text-gray-500">印</span>
+                <span className="font-bold" style={{ width: "30mm", fontSize: "11pt" }}>
+                  【 法人代表者 】
+                </span>
+                <span className="flex-1 border-b border-black pb-0.5">{representativeName}</span>
+                <span className="ml-2" style={{ fontSize: "10pt" }}>印</span>
               </div>
             </div>
           </div>
-        )}
-      </section>
 
-      {contract.notes && (
-        <section className="mt-6 border-t pt-3 print:hidden">
-          <h2 className="text-xs font-semibold text-gray-500">備考 (印刷非表示)</h2>
-          <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{contract.notes}</p>
+          {/* 利用者同意文 + 利用者欄 */}
+          <p className="mt-6" style={{ textIndent: "1em" }}>
+            利用者は本書面により、事業者から居宅介護支援について契約書、重要事項、個人情報の取扱いについて、内容の説明を受け確認した上で、契約書記載の各条項及び重要事項説明書、個人情報の取扱いに記載されている内容につき同意します。また、事業者が「居宅サービス計画」を作成する為に必要がある時は、要介護認定にかかる調査内容・介護認定審査会による判定結果、意見・主治医意見書を閲覧することに同意します。
+          </p>
+
+          <div className="mt-4 uc-avoid">
+            <p className="font-bold" style={{ fontSize: "11pt" }}>利用者</p>
+            <div className="mt-2 space-y-2 pl-[6mm]">
+              <div className="flex items-end">
+                <span className="font-bold" style={{ width: "24mm", fontSize: "11pt" }}>
+                  【 住所 】
+                </span>
+                <span className="flex-1 border-b border-black">&nbsp;</span>
+              </div>
+              <div className="flex items-end">
+                <span className="font-bold" style={{ width: "24mm", fontSize: "11pt" }}>
+                  【 氏名 】
+                </span>
+                <span className="flex-1 border-b border-black pb-0.5">
+                  {contract.signed_by_relation === "本人"
+                    ? contract.signed_by_name ?? user?.name ?? ""
+                    : user?.name ?? ""}
+                </span>
+                <span className="ml-2" style={{ fontSize: "10pt" }}>印</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 代筆者欄 (= 本人以外で signed_by_relation がある場合) */}
+          {contract.signed_by_relation && contract.signed_by_relation !== "本人" && (
+            <div className="mt-6 uc-avoid">
+              <p style={{ textIndent: "1em" }}>
+                利用者は心身の状況等により署名ができないため、利用者本人の意思を確認の上、私が利用者に代わってその署名を代筆しました。
+              </p>
+              <div className="mt-3 pl-[6mm]">
+                <p className="font-bold" style={{ fontSize: "11pt" }}>
+                  代筆者　　　　　　　　　　　　　　　（続柄：{contract.signed_by_relation}）
+                </p>
+                <div className="mt-2 space-y-2">
+                  <div className="flex items-end">
+                    <span className="font-bold" style={{ width: "24mm", fontSize: "11pt" }}>
+                      【 住所 】
+                    </span>
+                    <span className="flex-1 border-b border-black">&nbsp;</span>
+                  </div>
+                  <div className="flex items-end">
+                    <span className="font-bold" style={{ width: "24mm", fontSize: "11pt" }}>
+                      【 氏名 】
+                    </span>
+                    <span className="flex-1 border-b border-black pb-0.5">
+                      {contract.signed_by_name ?? ""}
+                    </span>
+                    <span className="ml-2" style={{ fontSize: "10pt" }}>印</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </section>
-      )}
 
-      {contract.attachment_url && (
-        <p className="mt-6 text-xs text-gray-500 print:hidden">
-          添付:{" "}
-          <a
-            href={contract.attachment_url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-indigo-600 underline"
-          >
-            {contract.attachment_url}
-          </a>
-        </p>
-      )}
-    </div>
+        {/* 備考・添付は印刷非表示 */}
+        {contract.notes && (
+          <section className="mx-[30mm] mb-6 border-t pt-3 print:hidden">
+            <h2 className="text-xs font-semibold text-gray-500">備考 (印刷非表示)</h2>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{contract.notes}</p>
+          </section>
+        )}
+
+        {contract.attachment_url && (
+          <p className="mx-[30mm] mb-6 text-xs text-gray-500 print:hidden">
+            添付:{" "}
+            <a
+              href={contract.attachment_url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-indigo-600 underline"
+            >
+              {contract.attachment_url}
+            </a>
+          </p>
+        )}
+      </div>
+    </>
   );
 }
