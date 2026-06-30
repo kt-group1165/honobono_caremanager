@@ -27,6 +27,7 @@ import {
   BUSINESS_TYPES,
   emptyContractInput,
   getSectionsForType,
+  getDefaultContentForType,
   type ContractType,
   type ContractStatus,
   type UserContract,
@@ -54,6 +55,8 @@ interface OfficeOption {
 
 interface OfficeMeta {
   business_number: string | null;
+  address: string | null;
+  phone: string | null;
 }
 
 export interface UserContractsContentProps {
@@ -119,15 +122,24 @@ export function UserContractsContent({
     if (ids.length === 0) return;
     const { data, error } = await supabase
       .from("offices")
-      .select("id, business_number")
+      .select("id, business_number, address, phone")
       .in("id", ids);
     if (error) {
       console.warn("offices meta fetch failed:", error.message);
       return;
     }
     const map: Record<string, OfficeMeta> = {};
-    for (const row of (data ?? []) as { id: string; business_number: string | null }[]) {
-      map[row.id] = { business_number: row.business_number };
+    for (const row of (data ?? []) as {
+      id: string;
+      business_number: string | null;
+      address: string | null;
+      phone: string | null;
+    }[]) {
+      map[row.id] = {
+        business_number: row.business_number,
+        address: row.address,
+        phone: row.phone,
+      };
     }
     setOfficeMeta(map);
   }, [supabase, officeOptions]);
@@ -227,7 +239,7 @@ export function UserContractsContent({
     });
   }, []);
 
-  /** 自事業所情報を content に流し込む (= 重要事項説明書 限定) */
+  /** 自事業所情報を content に流し込む (= 重要事項説明書 / 契約書兼重要事項説明書) */
   const autoFillFromOffice = () => {
     if (!form) return;
     const office = officeOptions.find((o) => o.id === form.office_id);
@@ -236,15 +248,45 @@ export function UserContractsContent({
       return;
     }
     const next: UserContractContent = { ...(form.content ?? {}) };
-    if (!next.company_name) next.company_name = office.name;
-    if (!next.service_types && office.service_type) next.service_types = office.service_type;
     const meta = officeMeta[office.id];
-    if (meta?.business_number && !next.company_phone) {
-      // business_number は実は事業所番号だが、UI hint として埋めるのは適切でない
-      // → 何もしない
+
+    if (form.contract_type === "契約書兼重要事項説明書") {
+      // 契約書兼重要事項説明書 用: docx の事業者欄に相当する key 群を上書き
+      if (!next.company_office_name) next.company_office_name = office.name;
+      if (!next.company_address && meta?.address) next.company_address = meta.address;
+      if (!next.company_phone && meta?.phone) next.company_phone = meta.phone;
+      if (!next.office_designation_number && meta?.business_number) {
+        next.office_designation_number = meta.business_number;
+      }
+    } else {
+      // 重要事項説明書 (旧) 用: 既存挙動を維持
+      if (!next.company_name) next.company_name = office.name;
+      if (!next.service_types && office.service_type) next.service_types = office.service_type;
+      if (!next.company_address && meta?.address) next.company_address = meta.address;
+      if (!next.company_phone && meta?.phone) next.company_phone = meta.phone;
     }
     setForm({ ...form, content: next });
-    toast.success("事業所情報を取り込みました (= 名称・サービス種別)");
+    toast.success("事業所情報を取り込みました");
+  };
+
+  /**
+   * 種別 select 変更時のハンドラ:
+   *  - 「契約書兼重要事項説明書」を選んだ場合は、content が空 (= 未入力 or _sample_marker のみ) なら
+   *    docx 由来のデフォルト本文を一括 prefill する。既に何か入力済みなら触らない。
+   *  - その他の種別はそのまま (= 後方互換)。
+   */
+  const handleContractTypeChange = (next: ContractType) => {
+    if (!form) return;
+    const prevContent = form.content ?? {};
+    const isEmpty =
+      Object.keys(prevContent).filter((k) => k !== "_sample_marker").length === 0;
+    if (next === "契約書兼重要事項説明書" && isEmpty) {
+      const defaults = getDefaultContentForType(next);
+      setForm({ ...form, contract_type: next, content: defaults });
+      toast.success("契約書兼重要事項説明書のデフォルト本文を取り込みました");
+      return;
+    }
+    updateForm("contract_type", next);
   };
 
   const handleSave = async () => {
@@ -469,7 +511,7 @@ export function UserContractsContent({
                   <select
                     value={form.contract_type}
                     onChange={(e) =>
-                      updateForm("contract_type", e.target.value as ContractType)
+                      handleContractTypeChange(e.target.value as ContractType)
                     }
                     className={inputClass}
                   >
@@ -597,7 +639,8 @@ export function UserContractsContent({
               <div className="mt-5 rounded-md border border-gray-200 bg-gray-50 p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-gray-700">内容</h3>
-                  {form.contract_type === "重要事項説明書" && (
+                  {(form.contract_type === "重要事項説明書" ||
+                    form.contract_type === "契約書兼重要事項説明書") && (
                     <button
                       type="button"
                       onClick={autoFillFromOffice}
