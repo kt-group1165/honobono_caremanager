@@ -34,7 +34,16 @@ export function articleLabel(index: number): string {
 const CIRCLED_NUMBERS =
   "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳㉑㉒㉓㉔㉕㉖㉗㉘㉙㉚";
 
-export function paragraphMarker(index: number): string {
+/**
+ * 項の marker を返す。
+ * - 'circled' → ①②③... (docx で明示 marker がある場合)
+ * - 'none' → 空文字 (docx 無番号項に対応。段落として visually 区切るだけ)
+ */
+export function paragraphMarker(
+  index: number,
+  style: "circled" | "none" = "circled",
+): string {
+  if (style === "none") return "";
   return CIRCLED_NUMBERS[index] ?? `(${index + 1})`;
 }
 

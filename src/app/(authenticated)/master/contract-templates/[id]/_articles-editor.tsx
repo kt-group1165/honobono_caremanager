@@ -75,7 +75,13 @@ function uuid(): string {
 }
 
 const newItem = (): ItemNode => ({ id: uuid(), marker: "nakaguro", text: "" });
-const newParagraph = (): ParagraphNode => ({ id: uuid(), chapeau: "", items: [] });
+// docx 原本は marker 無しが標準なので default 'none'
+const newParagraph = (): ParagraphNode => ({
+  id: uuid(),
+  marker: "none",
+  chapeau: "",
+  items: [],
+});
 const newArticle = (): ArticleNode => ({
   id: uuid(),
   title: "",
@@ -372,8 +378,17 @@ function ParagraphEditor({
     <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1.5">
       <div className="flex items-start gap-1">
         <span className="mt-1 min-w-[1.5em] rounded bg-white px-1 text-xs font-bold text-gray-700">
-          {paragraphMarker(index)}
+          {paragraphMarker(index, node.marker ?? "circled") || "◯"}
         </span>
+        <select
+          value={node.marker ?? "circled"}
+          onChange={(e) => set("marker", e.target.value as "circled" | "none")}
+          className="mt-0.5 rounded border border-gray-300 bg-white px-1 py-0.5 text-[10px]"
+          title="項の marker (docx は無 marker 標準)"
+        >
+          <option value="none">無</option>
+          <option value="circled">①②</option>
+        </select>
         <AutoTextArea
           value={node.chapeau}
           onChange={(v) => set("chapeau", v)}

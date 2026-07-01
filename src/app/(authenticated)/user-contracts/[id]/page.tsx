@@ -102,12 +102,15 @@ function StructuredParagraph({
   node: ParagraphNode;
   index: number;
 }) {
+  const marker = paragraphMarker(index, node.marker ?? "circled");
   return (
     <div style={{ marginTop: "0.2em" }}>
       <p className="whitespace-pre-wrap" style={{ textIndent: "1em" }}>
-        <span className="font-bold" style={{ marginRight: "0.3em" }}>
-          {paragraphMarker(index)}
-        </span>
+        {marker && (
+          <span className="font-bold" style={{ marginRight: "0.3em" }}>
+            {marker}
+          </span>
+        )}
         {node.chapeau}
       </p>
       {node.items.map((it, ii) => (

@@ -18,6 +18,8 @@ export interface ItemNode {
 
 export interface ParagraphNode {
   id: string;
+  /** 項の marker style。'none' なら番号を render しない (= docx 原本のように無番号で並べる) */
+  marker?: "circled" | "none";
   chapeau: string; // 項の柱書 (号が無ければこれが項本文)
   items: ItemNode[];
 }
