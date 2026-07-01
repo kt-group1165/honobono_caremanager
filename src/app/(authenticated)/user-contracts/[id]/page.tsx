@@ -140,6 +140,30 @@ export default async function ContractDetailPage({
   }
   const officeName = officeRow?.name ?? null;
 
+  // template 版 (= 契約書フォーマット) の content を fallback として取得
+  // - contract.template_version_no があればその版
+  // - なければ is_active=true な版
+  // - どちらも無ければ空 (=defaults に依存)
+  let templateContent: Record<string, string> = {};
+  {
+    let q = supabase
+      .from("kaigo_contract_templates")
+      .select("content")
+      .eq("kind", contract.contract_type)
+      .limit(1);
+    const ver = (contract as unknown as { template_version_no?: number | null })
+      .template_version_no;
+    if (typeof ver === "number") {
+      q = q.eq("version_no", ver);
+    } else {
+      q = q.eq("is_active", true);
+    }
+    const { data: tpl } = await q.maybeSingle();
+    if (tpl && (tpl as { content?: Record<string, string> }).content) {
+      templateContent = (tpl as { content: Record<string, string> }).content;
+    }
+  }
+
   const sections = getSectionsForType(contract.contract_type);
   const backHref = backUserParam
     ? `/user-contracts?user=${encodeURIComponent(backUserParam)}`
@@ -172,6 +196,7 @@ export default async function ContractDetailPage({
           officeName={officeName}
           office={officeRow}
           company={companyRow}
+          templateContent={templateContent}
         />
       ) : (
         <GenericContractView
@@ -337,20 +362,25 @@ function CombinedContractView({
   officeName,
   office,
   company,
+  templateContent,
 }: {
   contract: UserContract;
   user: KaigoClientLite | null;
   officeName: string | null;
   office: OfficeLite | null;
   company: CompanyLite | null;
+  templateContent: Record<string, string>;
 }) {
-  // content に該当 key が無ければ docx 由来の defaults を fallback として使う。
-  // (= 旧 seed で article_*/juyo_* が空のまま contract が作られているケース対策)
-  // 事業者情報系 key も defaults を持つが、その場合は content 既存値が優先される。
+  // 参照優先順位:
+  //   1) contract.content (= 締結時点 snapshot)
+  //   2) template (= kaigo_contract_templates の有効版 or 締結時点版)
+  //   3) types.ts の getKeiyakuKenJuyoDefaults() (= 最終 fallback / 移行期の互換)
   const defaultsForFallback = getKeiyakuKenJuyoDefaults();
   const c = (key: string): string => {
     const raw = contract.content?.[key];
     if (raw !== undefined && raw !== null && String(raw).trim() !== "") return String(raw);
+    const tpl = templateContent[key];
+    if (tpl !== undefined && tpl !== null && String(tpl).trim() !== "") return String(tpl);
     return (defaultsForFallback[key] ?? "").toString();
   };
 

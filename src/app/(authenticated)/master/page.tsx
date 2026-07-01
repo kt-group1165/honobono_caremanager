@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Database, Building2, Building, FileText } from "lucide-react";
+import { Database, Building2, Building, FileText, ScrollText } from "lucide-react";
 
 export default function MasterPage() {
   return (
@@ -57,6 +57,18 @@ export default function MasterPage() {
           <div>
             <h2 className="font-bold text-gray-900">定型文マスタ</h2>
             <p className="text-sm text-gray-500">訪問記録・支援経過の定型文テンプレート管理</p>
+          </div>
+        </Link>
+        <Link
+          href="/master/contract-templates"
+          className="flex items-center gap-4 rounded-xl border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+        >
+          <div className="rounded-lg bg-amber-50 p-3">
+            <ScrollText size={24} className="text-amber-600" />
+          </div>
+          <div>
+            <h2 className="font-bold text-gray-900">契約書フォーマット</h2>
+            <p className="text-sm text-gray-500">契約書兼重要事項説明書の条文・別紙・版管理</p>
           </div>
         </Link>
       </div>
