@@ -1148,7 +1148,7 @@ export function CombinedContractView({
         </section>
 
         {/* ===== 末尾: 署名欄 ===== */}
-        <section className="px-[30mm] py-[18mm]">
+        <section className="uc-page px-[30mm] py-[18mm]">
           <p style={{ textIndent: "1em" }}>
             事業者は居宅介護支援の提供開始にあたり、利用者様に対し本書面を用いて契約書及び重要事項、個人情報の取扱いについて説明しました。
           </p>
