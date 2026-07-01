@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Save } from "lucide-react";
 import { updateTemplateContent } from "../_actions";
-import { ArticlesEditor } from "./_articles-editor";
+import { ArticlesEditor, AutoTextArea } from "./_articles-editor";
 import type { ArticleNode } from "@/lib/contract-structure/types";
 
 interface Item {
@@ -126,10 +126,10 @@ export function EditTemplateForm({
                     <code className="text-[10px] text-gray-400">{it.key}</code>
                   </div>
                   {it.multiline ? (
-                    <textarea
+                    <AutoTextArea
                       value={v}
-                      onChange={(e) => set(it.key, e.target.value)}
-                      rows={Math.max(3, Math.min(20, v.split("\n").length + 1))}
+                      onChange={(nv) => set(it.key, nv)}
+                      minRows={3}
                       className="w-full rounded border border-gray-300 px-3 py-2 text-sm font-serif leading-relaxed focus:border-indigo-400 focus:outline-none"
                     />
                   ) : (

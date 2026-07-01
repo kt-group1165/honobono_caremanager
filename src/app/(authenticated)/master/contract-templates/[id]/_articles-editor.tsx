@@ -7,8 +7,55 @@
  * index から計算するため、途中に新規追加すると以降が自動リナンバー。
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useLayoutEffect, useRef } from "react";
 import { ChevronUp, ChevronDown, Plus, Trash2, GripVertical } from "lucide-react";
+
+/**
+ * 内容に合わせて自動高さ調整する textarea。
+ * - モダンブラウザは CSS `field-sizing: content` で自動追従
+ * - 古いブラウザは useLayoutEffect で scrollHeight → height 反映
+ */
+export function AutoTextArea({
+  value,
+  onChange,
+  minRows = 1,
+  className = "",
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  minRows?: number;
+  className?: string;
+  placeholder?: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // field-sizing: content 対応ブラウザは何もしない (CSS が優先)。
+    // 未対応環境向け fallback: 高さを auto に戻してから scrollHeight を反映。
+    if (
+      typeof CSS !== "undefined" &&
+      typeof CSS.supports === "function" &&
+      CSS.supports("field-sizing", "content")
+    ) {
+      return;
+    }
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      rows={minRows}
+      placeholder={placeholder}
+      className={`resize-y overflow-hidden [field-sizing:content] ${className}`}
+    />
+  );
+}
 import type {
   ArticleNode,
   ItemNode,
@@ -231,10 +278,10 @@ function ArticleEditor({
         </div>
       </div>
 
-      <textarea
+      <AutoTextArea
         value={node.chapeau}
-        onChange={(e) => set("chapeau", e.target.value)}
-        rows={Math.max(2, Math.min(10, node.chapeau.split("\n").length + 1))}
+        onChange={(v) => set("chapeau", v)}
+        minRows={2}
         placeholder="条の柱書 (項が無ければこれが条本文)"
         className="w-full rounded border border-gray-300 px-2 py-1 text-sm font-serif leading-relaxed focus:border-indigo-400 focus:outline-none"
       />
@@ -327,10 +374,10 @@ function ParagraphEditor({
         <span className="mt-1 min-w-[1.5em] rounded bg-white px-1 text-xs font-bold text-gray-700">
           {paragraphMarker(index)}
         </span>
-        <textarea
+        <AutoTextArea
           value={node.chapeau}
-          onChange={(e) => set("chapeau", e.target.value)}
-          rows={Math.max(1, Math.min(6, node.chapeau.split("\n").length))}
+          onChange={(v) => set("chapeau", v)}
+          minRows={1}
           placeholder="項の本文 (号が無ければこれが項本文)"
           className="flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm font-serif focus:border-indigo-400 focus:outline-none"
         />
@@ -439,10 +486,10 @@ function ItemEditor({
         <option value="iroha">イロハ</option>
         <option value="arabic">1.2.3.</option>
       </select>
-      <textarea
+      <AutoTextArea
         value={node.text}
-        onChange={(e) => set("text", e.target.value)}
-        rows={Math.max(1, Math.min(4, node.text.split("\n").length))}
+        onChange={(v) => set("text", v)}
+        minRows={1}
         className="flex-1 rounded border border-gray-300 bg-white px-2 py-0.5 text-sm font-serif focus:border-indigo-400 focus:outline-none"
       />
       <div className="flex items-center gap-0.5">
