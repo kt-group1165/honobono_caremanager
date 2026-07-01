@@ -31,6 +31,7 @@ import {
 } from "date-fns";
 import { ja } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { ServiceSelector } from "@/components/services/service-selector";
 import {
   type KaigoStaff,
   type KaigoUser,
@@ -677,8 +678,16 @@ export function ShiftManagementContent({
 
   // Page-level edit modal (shared across views)
   const [pageEditModal, setPageEditModal] = useState<VisitSchedule | null>(null);
-  const [pageEditForm, setPageEditForm] = useState({ start_time: "", end_time: "", service_type: "", staff_id: "" });
+  const [pageEditForm, setPageEditForm] = useState({
+    start_time: "",
+    end_time: "",
+    service_type: "",
+    service_code: "",
+    service_name: "",
+    staff_id: "",
+  });
   const [pageEditSaving, setPageEditSaving] = useState(false);
+  const [showPageServiceSelector, setShowPageServiceSelector] = useState(false);
 
   // Sync filters to URL (replace, no scroll). Skip on initial mount since URL already matches.
   const isInitialMount = useRef(true);
@@ -704,6 +713,8 @@ export function ShiftManagementContent({
       start_time: sched.start_time?.slice(0, 5) ?? "",
       end_time: sched.end_time?.slice(0, 5) ?? "",
       service_type: sched.service_type ?? "",
+      service_code: "",
+      service_name: sched.service_type ?? "",
       staff_id: sched.staff_id ?? "",
     });
   };
@@ -716,7 +727,8 @@ export function ShiftManagementContent({
       .update({
         start_time: pageEditForm.start_time + ":00",
         end_time: pageEditForm.end_time + ":00",
-        service_type: pageEditForm.service_type,
+        // 具体的な service_name (例: 身体介護02) があればそれを、無ければ category (身体介護) を保存
+        service_type: pageEditForm.service_name || pageEditForm.service_type,
         staff_id: pageEditForm.staff_id || null,
       })
       .eq("id", pageEditModal.id);
@@ -1012,11 +1024,33 @@ export function ShiftManagementContent({
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">サービス</label>
-                <input
-                  type="text"
-                  value={pageEditForm.service_type}
-                  onChange={(e) => setPageEditForm({ ...pageEditForm, service_type: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                <button
+                  type="button"
+                  onClick={() => setShowPageServiceSelector(true)}
+                  className="w-full flex items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:border-blue-400 focus:border-blue-500 focus:outline-none"
+                >
+                  <span className="truncate text-left">
+                    {pageEditForm.service_name || pageEditForm.service_type || "選択してください"}
+                  </span>
+                  {pageEditForm.service_code && (
+                    <span className="text-xs text-gray-400 font-mono">{pageEditForm.service_code}</span>
+                  )}
+                  {!pageEditForm.service_code && <span className="text-gray-400">›</span>}
+                </button>
+                <ServiceSelector
+                  open={showPageServiceSelector}
+                  onClose={() => setShowPageServiceSelector(false)}
+                  startTime={pageEditForm.start_time}
+                  endTime={pageEditForm.end_time}
+                  onSelect={(service) => {
+                    setPageEditForm({
+                      ...pageEditForm,
+                      service_type: service.categoryName,
+                      service_code: service.code,
+                      service_name: service.name,
+                    });
+                    setShowPageServiceSelector(false);
+                  }}
                 />
               </div>
               <div>
