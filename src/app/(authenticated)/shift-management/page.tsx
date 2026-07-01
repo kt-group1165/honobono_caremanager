@@ -343,6 +343,7 @@ export default async function ShiftManagementPage({
       }));
       initialMonthlyIndividualData = { schedules: mapped };
     }
+  }
   } catch (e) {
     // SSR fetch 失敗を SWR 側の再フェッチに委ねる。ここで throw させると error boundary が出て
     // ユーザーは Reload しか選べなくなるため、log して null で継続。
