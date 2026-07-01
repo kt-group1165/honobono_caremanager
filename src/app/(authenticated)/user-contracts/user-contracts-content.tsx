@@ -99,13 +99,17 @@ export function UserContractsContent({
   // 自事業所の詳細情報 (= 重要事項説明書 auto-fill の元データ)
   const [officeMeta, setOfficeMeta] = useState<Record<string, OfficeMeta>>({});
 
+  // 契約書兼重要事項説明書 は居宅介護支援事業所カテゴリの契約書
+  // = service_type = "居宅介護支援" の office にだけ紐付ける
   const officeOptions = useMemo<OfficeOption[]>(() => {
-    return offices.map((o) => ({
-      id: o.id,
-      name: o.name,
-      service_type: o.service_type ?? null,
-      tenant_id: o.tenant_id,
-    }));
+    return offices
+      .filter((o) => o.service_type === "居宅介護支援")
+      .map((o) => ({
+        id: o.id,
+        name: o.name,
+        service_type: o.service_type ?? null,
+        tenant_id: o.tenant_id,
+      }));
   }, [offices]);
 
   // current office を default に

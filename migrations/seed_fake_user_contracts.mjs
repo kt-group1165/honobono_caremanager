@@ -56,7 +56,8 @@ if (!SB_URL || !SB_KEY) {
 }
 
 const TENANT_ID = "kt-group";
-const HELPER_OFFICE_ID = "4f14d50c-76b5-4f44-ac41-ed6d01f53a30"; // 訪問介護
+// 契約書兼重要事項説明書 は居宅介護支援事業所カテゴリ用
+const KYOTAKU_OFFICE_ID = "1b22d425-2ec4-4c2f-a002-c1c994e94507"; // Ｈａｎａ居宅支援センターおゆみ野 (居宅介護支援)
 const FAKE_MARKER = "[fake テスト用-contract]";
 const SAMPLE_MARKER = "fake-contract-2026-06";
 
@@ -152,7 +153,7 @@ function keiyakuContentFor(user) {
 
 async function main() {
   console.log(`\n📂 fake 重要事項説明書 / 契約書 seed`);
-  console.log(`🏢 office = Ｈａｎａヘルパーステーションおゆみ野 (${HELPER_OFFICE_ID})`);
+  console.log(`🏢 office = Ｈａｎａ居宅支援センターおゆみ野 (${KYOTAKU_OFFICE_ID})`);
   console.log(EXECUTE ? "⚠️  EXECUTE MODE (実書込)" : "🔍 DRY RUN");
   console.log("");
 
@@ -209,7 +210,7 @@ async function main() {
     rowsToInsert.push({
       tenant_id: TENANT_ID,
       user_id: c.id,
-      office_id: HELPER_OFFICE_ID,
+      office_id: KYOTAKU_OFFICE_ID,
       contract_type: "契約書兼重要事項説明書",
       business_type: "居宅介護支援",
       issued_date: issuedDateStr,
