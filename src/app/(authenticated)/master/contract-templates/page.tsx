@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Plus, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Plus, CheckCircle2, Building2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { ActivateButton } from "./_activate-button";
 import { NewVersionButton } from "./_new-version-button";
@@ -57,13 +57,21 @@ export default async function ContractTemplatesPage() {
         </Link>
       </div>
 
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">契約書フォーマット</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          契約書兼重要事項説明書などの条文・別紙・別紙補足を版で管理します。
-          新しい版を作ると、以降の新規契約はその版で締結されます。
-          既存の契約書は締結時点の版で凍結されます。
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">契約書フォーマット</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            契約書兼重要事項説明書などの条文・別紙・別紙補足を版で管理します。
+            新しい版を作ると、以降の新規契約はその版で締結されます。
+            既存の契約書は締結時点の版で凍結されます。
+          </p>
+        </div>
+        <Link
+          href="/master/contract-templates/office-overrides"
+          className="mt-1 inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+        >
+          <Building2 size={12} /> 事業所別上書き
+        </Link>
       </div>
 
       {kinds.map((kind) => {

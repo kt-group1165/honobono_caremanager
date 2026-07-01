@@ -32,6 +32,8 @@ export interface OfficeLite {
   manager_name: string | null;
   postal_code: string | null;
   company_id: string | null;
+  /** 事業所ごとの契約書 override (別紙7 苦情窓口 等) */
+  contract_overrides: Record<string, string> | null;
 }
 
 export interface CompanyLite {
@@ -316,7 +318,7 @@ export default async function ContractDetailPage({
     const { data: o } = await supabase
       .from("offices")
       .select(
-        "id, name, address, phone, fax, business_number, representative_name, manager_name, postal_code, company_id",
+        "id, name, address, phone, fax, business_number, representative_name, manager_name, postal_code, company_id, contract_overrides",
       )
       .eq("id", contract.office_id)
       .maybeSingle();
@@ -565,12 +567,16 @@ export function CombinedContractView({
 }) {
   // 参照優先順位:
   //   1) contract.content (= 締結時点 snapshot)
-  //   2) template (= kaigo_contract_templates の有効版 or 締結時点版)
-  //   3) types.ts の getKeiyakuKenJuyoDefaults() (= 最終 fallback / 移行期の互換)
+  //   2) office.contract_overrides (= 事業所固有の上書き = 苦情窓口・相談窓口・地域別料金等)
+  //   3) template (= kaigo_contract_templates の有効版 or 締結時点版)
+  //   4) types.ts の getKeiyakuKenJuyoDefaults() (= 最終 fallback / 移行期の互換)
   const defaultsForFallback = getKeiyakuKenJuyoDefaults();
+  const officeOverrides = office?.contract_overrides ?? {};
   const c = (key: string): string => {
     const raw = contract.content?.[key];
     if (raw !== undefined && raw !== null && String(raw).trim() !== "") return String(raw);
+    const oo = officeOverrides[key];
+    if (oo !== undefined && oo !== null && String(oo).trim() !== "") return String(oo);
     const tpl = templateContent[key];
     if (tpl !== undefined && tpl !== null && String(tpl).trim() !== "") return String(tpl);
     return (defaultsForFallback[key] ?? "").toString();
