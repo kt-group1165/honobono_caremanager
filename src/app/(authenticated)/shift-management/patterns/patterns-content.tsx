@@ -12,42 +12,17 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-// 共通マスタ members の subset。Phase 2-3-8 で kaigo_staff から張替え。
-//   kaigo_staff.name_kana → members.furigana
-export interface KaigoStaff {
-  id: string;
-  name: string;
-  furigana: string | null;
-}
-
-export interface PatternDay {
-  id?: string;
-  tempId: string;
-  day_of_week: number;
-  start_time: string;
-  end_time: string;
-  service_type: string;
-  staff_id: string | null;
-}
-
-export interface VisitPattern {
-  id: string;
-  tempId: string;
-  pattern_name: string;
-  days: PatternDay[];
-}
-
-export interface VisitPatternRow {
-  id: string;
-  user_id: string;
-  pattern_name: string;
-  day_of_week: number;
-  start_time: string;
-  end_time: string;
-  service_type: string;
-  staff_id: string | null;
-}
+// 型 + helper は 「use client 越境で undefined」罠 (memory: feedback_use_client_const_export.md)
+// を避けるため patterns-shared.ts に切り出し済。ここでは re-export のみ。
+import {
+  rowsToPatterns,
+  type KaigoStaff,
+  type PatternDay,
+  type VisitPattern,
+  type VisitPatternRow,
+} from "./patterns-shared";
+export { rowsToPatterns };
+export type { KaigoStaff, PatternDay, VisitPattern, VisitPatternRow };
 
 const DOW_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -71,6 +46,8 @@ function genId() {
   return Math.random().toString(36).slice(2);
 }
 
+// rowsToPatterns は patterns-shared.ts に移動済 (server component から安全に import 可)
+
 function emptyDay(dow: number): PatternDay {
   return {
     tempId: genId(),
@@ -89,31 +66,6 @@ function emptyPattern(): VisitPattern {
     pattern_name: "新しいパターン",
     days: [],
   };
-}
-
-export function rowsToPatterns(rows: VisitPatternRow[]): VisitPattern[] {
-  const grouped = new Map<string, VisitPattern>();
-  for (const row of rows) {
-    const key = row.pattern_name;
-    if (!grouped.has(key)) {
-      grouped.set(key, {
-        id: key,
-        tempId: genId(),
-        pattern_name: key,
-        days: [],
-      });
-    }
-    grouped.get(key)!.days.push({
-      id: row.id,
-      tempId: genId(),
-      day_of_week: row.day_of_week,
-      start_time: row.start_time,
-      end_time: row.end_time,
-      service_type: row.service_type,
-      staff_id: row.staff_id,
-    });
-  }
-  return [...grouped.values()];
 }
 
 interface DayCellProps {

@@ -1,13 +1,13 @@
 import { CalendarDays } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { UserSidebar } from "@/components/users/user-sidebar";
+import { PatternsContent } from "./patterns-content";
 import {
-  PatternsContent,
   rowsToPatterns,
   type KaigoStaff,
   type VisitPattern,
   type VisitPatternRow,
-} from "./patterns-content";
+} from "./patterns-shared";
 
 export default async function PatternsPage({
   searchParams,
