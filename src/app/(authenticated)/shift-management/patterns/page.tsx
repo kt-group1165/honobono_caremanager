@@ -17,26 +17,38 @@ export default async function PatternsPage({
   const { user: userId, office: officeId } = await searchParams;
   const supabase = await createClient();
 
-  // 自事業所 (URL ?office=) のスタッフだけに絞り込む。officeId 未指定時は
-  // BusinessTypeContext が初期化中なので空配列を返し、Client 側で再フェッチさせる。
-  // Phase 9 close: members.office_id DROP 済 → member_offices junction 経由で絞り込み
-  let staffQuery = supabase
-    .from("members")
-    .select("id, name, furigana, member_offices!inner(office_id)")
-    .eq("status", "active")
-    .order("furigana", { nullsFirst: false });
-  if (officeId) staffQuery = staffQuery.eq("member_offices.office_id", officeId);
-  const staffRes = await staffQuery;
-  const initialStaff = (officeId ? (staffRes.data ?? []) : []) as KaigoStaff[];
+  // 自事業所 (URL ?office=) のスタッフだけに絞り込む。
+  // 全ての await を try/catch で包み SSR を落とさない (=空配列 fallback、
+  //  client 側で再フェッチしてもらう)。
+  let initialStaff: KaigoStaff[] = [];
+  if (officeId) {
+    try {
+      const { data, error } = await supabase
+        .from("members")
+        .select("id, name, furigana, member_offices!inner(office_id)")
+        .eq("status", "active")
+        .eq("member_offices.office_id", officeId)
+        .order("furigana", { nullsFirst: false });
+      if (error) console.error("[patterns] staff fetch failed:", error.message);
+      else initialStaff = (data ?? []) as KaigoStaff[];
+    } catch (e) {
+      console.error("[patterns] staff fetch threw:", e);
+    }
+  }
 
   let initialPatterns: VisitPattern[] = [];
   if (userId) {
-    const { data } = await supabase
-      .from("kaigo_visit_patterns")
-      .select("id, user_id, pattern_name, day_of_week, start_time, end_time, service_type, staff_id")
-      .eq("user_id", userId)
-      .order("pattern_name");
-    initialPatterns = rowsToPatterns((data ?? []) as VisitPatternRow[]);
+    try {
+      const { data, error } = await supabase
+        .from("kaigo_visit_patterns")
+        .select("id, user_id, pattern_name, day_of_week, start_time, end_time, service_type, staff_id")
+        .eq("user_id", userId)
+        .order("pattern_name");
+      if (error) console.error("[patterns] patterns fetch failed:", error.message);
+      else initialPatterns = rowsToPatterns((data ?? []) as VisitPatternRow[]);
+    } catch (e) {
+      console.error("[patterns] patterns fetch threw:", e);
+    }
   }
 
   return (
