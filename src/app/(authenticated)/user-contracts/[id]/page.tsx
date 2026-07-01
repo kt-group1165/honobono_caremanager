@@ -138,6 +138,101 @@ function StructuredItem({
   );
 }
 
+/**
+ * 別紙3 フローチャート render:
+ * 入力例 (1 行 = 1 要素):
+ *   ① 居宅介護支援サービス 利用申し込みの受付
+ *   　　↓
+ *   ② 利用者及びその家族等からニーズ等の聞き取り・各制度等の説明・アセスメント（課題分析）
+ *   　　↓ (地域のサービス情報の提供と利用者によるサービスの選択)
+ *   ③ 「居宅サービス計画」原案の作成及び支給限度額確認・利用者負担額計算
+ *   ...
+ * 描画:
+ *   [ ① 居宅介護支援サービス 利用申し込みの受付 ]     ← 囲み枠
+ *              ↓
+ *   [ ② 利用者及びその家族等からニーズ等の聞き取り … ]
+ *              ↓  地域のサービス情報の提供と…      ← 矢印横の注釈
+ *   [ ③ 「居宅サービス計画」原案の作成 … ]
+ */
+function FlowchartRenderer({ raw }: { raw: string }) {
+  const lines = raw
+    .split(/\r?\n/)
+    .map((l) => l.replace(/^\s+/, "").trimEnd())
+    .filter((l) => l.length > 0);
+
+  // ① から始まる行を box、↓ (前後の全角空白は無視) を arrow として認識、
+  // 括弧内テキストが同じ arrow 行にあれば注釈として横に添える。
+  type Node =
+    | { kind: "box"; text: string }
+    | { kind: "arrow"; note?: string };
+  const nodes: Node[] = [];
+  const BOX_RE = /^([①-⑳㉑-㉚])\s*(.+)$/;
+  const ARROW_RE = /^↓\s*(?:[(（]\s*(.+?)\s*[)）])?$/;
+  for (const line of lines) {
+    const bm = BOX_RE.exec(line);
+    if (bm) {
+      nodes.push({ kind: "box", text: `${bm[1]} ${bm[2]}` });
+      continue;
+    }
+    const am = ARROW_RE.exec(line);
+    if (am) {
+      nodes.push({ kind: "arrow", note: am[1] });
+      continue;
+    }
+    // 上記どちらでもない = 直前 box に text 追記 (改行内容)
+    const last = nodes[nodes.length - 1];
+    if (last && last.kind === "box") last.text += `\n${line}`;
+    else nodes.push({ kind: "box", text: line });
+  }
+  // box が連続する箇所は自動的に矢印を挿入 (docx は明示矢印が無い box 間もあり得るため)
+  const withArrows: Node[] = [];
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    withArrows.push(n);
+    const next = nodes[i + 1];
+    if (n.kind === "box" && next && next.kind === "box") {
+      withArrows.push({ kind: "arrow" });
+    }
+  }
+
+  return (
+    <div className="mt-3 flex flex-col items-stretch" style={{ marginTop: "0.8em" }}>
+      {withArrows.map((n, i) =>
+        n.kind === "box" ? (
+          <div
+            key={i}
+            className="uc-avoid mx-auto whitespace-pre-wrap rounded-md border-2 border-black bg-white px-4 py-2 text-center"
+            style={{
+              minWidth: "70%",
+              maxWidth: "90%",
+              fontSize: "11pt",
+              lineHeight: 1.5,
+            }}
+          >
+            {n.text}
+          </div>
+        ) : (
+          <div
+            key={i}
+            className="uc-avoid mx-auto flex items-center justify-center"
+            style={{ marginTop: "4px", marginBottom: "4px" }}
+          >
+            <span
+              className="font-bold"
+              style={{ fontSize: "18pt", lineHeight: 1 }}
+            >
+              ↓
+            </span>
+            {n.note && (
+              <span className="ml-3 text-xs text-gray-700">{n.note}</span>
+            )}
+          </div>
+        ),
+      )}
+    </div>
+  );
+}
+
 function fmtDate(s: string | null): string {
   if (!s) return "—";
   // ISO YYYY-MM-DD を簡易整形 (= サーバー側で date-fns に依存しない)
@@ -1022,6 +1117,10 @@ export function CombinedContractView({
                   if (sub.key === "juyo_04_fee_table_note") {
                     // 補足部分のみ本文として残す (= 「その他加算」見出しの行は table 内に既に出ているので本文では再描画しない)
                     return null;
+                  }
+                  // 別紙3: フローチャート (□ 囲み + ↓ 矢印 + 注釈)
+                  if (sub.key === "juyo_03_flow") {
+                    return <FlowchartRenderer key={sub.key} raw={body} />;
                   }
                   return (
                     <div key={sub.key} style={{ marginTop: "0.8em" }}>
