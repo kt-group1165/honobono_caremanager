@@ -1180,8 +1180,8 @@ export function ProvisionTicketsContent({
                   <Loader2 size={24} className="animate-spin text-blue-500" />
                 </div>
               ) : (
-                <div className="overflow-x-auto border rounded-lg">
-                  <table className="text-xs border-collapse" style={{ tableLayout: "fixed", width: "100%" }}>
+                <div className="w-full min-w-0 overflow-x-auto border rounded-lg">
+                  <table className="text-xs border-collapse" style={{ tableLayout: "fixed", width: "1016px", minWidth: "1016px" }}>
                     <colgroup>
                       <col style={{ width: "62px" }} />
                       <col style={{ width: "100px" }} />
