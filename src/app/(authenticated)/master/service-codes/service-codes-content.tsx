@@ -1077,17 +1077,17 @@ export function ServiceCodesContent({
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm table-fixed">
+              <table className="min-w-full text-sm" style={{ width: "1400px" }}>
                 <colgroup>
-                  <col style={{ width: "88px" }} />
-                  <col style={{ width: "180px" }} />
-                  <col style={{ width: "110px" }} />
-                  <col />
                   <col style={{ width: "80px" }} />
-                  <col style={{ width: "84px" }} />
-                  <col style={{ width: "60px" }} />
-                  <col style={{ width: "150px" }} />
+                  <col style={{ width: "160px" }} />
+                  <col style={{ width: "100px" }} />
+                  <col style={{ width: "auto", minWidth: "320px" }} />
                   <col style={{ width: "72px" }} />
+                  <col style={{ width: "80px" }} />
+                  <col style={{ width: "56px" }} />
+                  <col style={{ width: "140px" }} />
+                  <col style={{ width: "68px" }} />
                 </colgroup>
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
