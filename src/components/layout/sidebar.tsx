@@ -22,6 +22,7 @@ import {
   MessagesSquare,
   AlertTriangle,
   Bell,
+  Accessibility,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -70,6 +71,13 @@ const NAV_CARE_MANAGER_SECTIONED: SectionSpec[] = [
     ],
   },
   {
+    title: "障害福祉",
+    items: [
+      { name: "受給者管理", href: "/shogai/recipients", icon: Accessibility },
+      { name: "サービス提供実績", href: "/shogai/records", icon: ClipboardCheck },
+    ],
+  },
+  {
     title: "管理",
     items: [
       { name: "職員管理", href: "/staff", icon: UserCog },
@@ -107,6 +115,13 @@ const NAV_HOME_CARE_SECTIONED: SectionSpec[] = [
       { name: "加算管理", href: "/addons", icon: Calculator },
       { name: "実績管理", href: "/visit-billing", icon: Calculator },
       { name: "帳票作成", href: "/reports-visit", icon: FileText },
+    ],
+  },
+  {
+    title: "障害福祉",
+    items: [
+      { name: "受給者管理", href: "/shogai/recipients", icon: Accessibility },
+      { name: "サービス提供実績", href: "/shogai/records", icon: ClipboardCheck },
     ],
   },
   {
