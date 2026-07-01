@@ -529,7 +529,10 @@ function UrlManagementModal({ onClose }: { onClose: () => void }) {
   };
 
   const copyUrl = async (token: string) => {
-    const url = `https://kaigo-app-ruddy.vercel.app/staff-availability/${token}`;
+    // origin を実行時に取得 → domain 変更 (旧 kaigo-app-ruddy → 現行) に自動追従
+    const origin =
+      typeof window !== "undefined" ? window.location.origin : "";
+    const url = `${origin}/staff-availability/${token}`;
     await navigator.clipboard.writeText(url);
     setCopied(token);
     setTimeout(() => setCopied(null), 2000);
@@ -553,8 +556,10 @@ function UrlManagementModal({ onClose }: { onClose: () => void }) {
             <div className="space-y-2">
               {staff.map((s) => {
                 const tok = getToken(s.id);
+                const origin =
+                  typeof window !== "undefined" ? window.location.origin : "";
                 const url = tok
-                  ? `https://kaigo-app-ruddy.vercel.app/staff-availability/${tok.token}`
+                  ? `${origin}/staff-availability/${tok.token}`
                   : null;
                 return (
                   <div key={s.id} className="rounded-lg border p-3">
