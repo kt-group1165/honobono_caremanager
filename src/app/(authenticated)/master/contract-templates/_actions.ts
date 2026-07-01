@@ -33,6 +33,7 @@ export async function createNewVersion(kind: string): Promise<void> {
       effective_from: new Date().toISOString().slice(0, 10),
       is_active: false,
       content: baseContent,
+      parent_version_id: latest?.id ?? null,
       notes: `v${nextVer} (v${latest?.version_no ?? "?"} から複製)`,
     })
     .select("id")

@@ -125,6 +125,12 @@ export default async function ContractTemplatesPage() {
                             <ActivateButton id={v.id} kind={v.kind} />
                           )}
                           <Link
+                            href={`/master/contract-templates/${v.id}/diff`}
+                            className="inline-flex items-center gap-1 rounded border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100"
+                          >
+                            差分
+                          </Link>
+                          <Link
                             href={`/master/contract-templates/${v.id}`}
                             className="inline-flex items-center gap-1 rounded border border-indigo-300 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
                           >

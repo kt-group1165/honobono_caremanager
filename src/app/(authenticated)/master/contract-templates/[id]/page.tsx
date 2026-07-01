@@ -52,7 +52,7 @@ export default async function ContractTemplateEditPage({
     version_no: number;
     effective_from: string;
     is_active: boolean;
-    content: Record<string, string>;
+    content: Record<string, unknown>;
     notes: string | null;
     updated_at: string;
   };

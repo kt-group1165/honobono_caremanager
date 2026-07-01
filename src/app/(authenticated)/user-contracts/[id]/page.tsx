@@ -9,6 +9,16 @@ import {
   KEIYAKU_KEN_JUYO_SECTIONS,
   type UserContract,
 } from "@/lib/user-contract/types";
+import type {
+  ArticleNode,
+  ItemNode,
+  ParagraphNode,
+} from "@/lib/contract-structure/types";
+import {
+  articleLabel,
+  paragraphMarker,
+  itemMarker,
+} from "@/lib/contract-structure/numbering";
 import { ContractPrintActions } from "./print-actions";
 
 export interface OfficeLite {
@@ -39,6 +49,90 @@ export interface KaigoClientLite {
   id: string;
   name: string;
   furigana: string | null;
+}
+
+/**
+ * contract.content.articles ツリー、または template.articles ツリーを取り出す。
+ * どちらも無ければ null → flat article_* 側の render に fallback。
+ */
+function pickArticlesTree(
+  contract: UserContract,
+  templateContent: Record<string, unknown>,
+): ArticleNode[] | null {
+  const cArts = (contract.content as unknown as { articles?: ArticleNode[] })?.articles;
+  if (Array.isArray(cArts) && cArts.length > 0) return cArts;
+  const tArts = (templateContent as { articles?: ArticleNode[] })?.articles;
+  if (Array.isArray(tArts) && tArts.length > 0) return tArts;
+  return null;
+}
+
+function StructuredArticle({
+  node,
+  index,
+}: {
+  node: ArticleNode;
+  index: number;
+}) {
+  const heading = `${articleLabel(index)}${node.title ? `（${node.title}）` : ""}`;
+  const chapeauEmpty = !node.chapeau.trim();
+  return (
+    <article className="uc-avoid">
+      <h3 className="font-bold" style={{ fontSize: "11pt" }}>
+        {heading}
+      </h3>
+      {!chapeauEmpty && (
+        <p
+          className="whitespace-pre-wrap"
+          style={{ textIndent: "1em", marginTop: "0.2em" }}
+        >
+          {node.chapeau}
+        </p>
+      )}
+      {node.paragraphs.map((p, pi) => (
+        <StructuredParagraph key={p.id} node={p} index={pi} />
+      ))}
+    </article>
+  );
+}
+
+function StructuredParagraph({
+  node,
+  index,
+}: {
+  node: ParagraphNode;
+  index: number;
+}) {
+  return (
+    <div style={{ marginTop: "0.2em" }}>
+      <p className="whitespace-pre-wrap" style={{ textIndent: "1em" }}>
+        <span className="font-bold" style={{ marginRight: "0.3em" }}>
+          {paragraphMarker(index)}
+        </span>
+        {node.chapeau}
+      </p>
+      {node.items.map((it, ii) => (
+        <StructuredItem key={it.id} node={it} index={ii} />
+      ))}
+    </div>
+  );
+}
+
+function StructuredItem({
+  node,
+  index,
+}: {
+  node: ItemNode;
+  index: number;
+}) {
+  return (
+    <p
+      className="whitespace-pre-wrap"
+      style={{ paddingLeft: "1.6em", textIndent: "-0.6em" }}
+    >
+      <span style={{ marginRight: "0.3em" }}>{itemMarker(index, node.marker)}</span>
+      {node.text}
+    </p>
+  );
 }
 
 function fmtDate(s: string | null): string {
@@ -664,25 +758,33 @@ export function CombinedContractView({
             （以下、「事業者」といいます）は、事業者が利用者に対して行う居宅介護支援について次の通り契約します。
           </p>
 
-          {/* 第1〜22条 */}
+          {/* 第1〜22条: content.articles ツリーがあればそちらから、無ければ flat article_* から */}
           <div className="mt-6 space-y-4">
-            {articleKeys.map((key) => {
-              const body = c(key);
-              if (!body.trim()) return null;
-              return (
-                <article key={key} className="uc-avoid">
-                  <h3 className="font-bold" style={{ fontSize: "11pt" }}>
-                    {renderArticleHeading(key)}
-                  </h3>
-                  <p
-                    className="whitespace-pre-wrap"
-                    style={{ textIndent: "1em", marginTop: "0.2em" }}
-                  >
-                    {body}
-                  </p>
-                </article>
-              );
-            })}
+            {(() => {
+              const treeArticles = pickArticlesTree(contract, templateContent);
+              if (treeArticles && treeArticles.length > 0) {
+                return treeArticles.map((art, i) => (
+                  <StructuredArticle key={art.id} node={art} index={i} />
+                ));
+              }
+              return articleKeys.map((key) => {
+                const body = c(key);
+                if (!body.trim()) return null;
+                return (
+                  <article key={key} className="uc-avoid">
+                    <h3 className="font-bold" style={{ fontSize: "11pt" }}>
+                      {renderArticleHeading(key)}
+                    </h3>
+                    <p
+                      className="whitespace-pre-wrap"
+                      style={{ textIndent: "1em", marginTop: "0.2em" }}
+                    >
+                      {body}
+                    </p>
+                  </article>
+                );
+              });
+            })()}
           </div>
 
           {/* 個人情報の取り扱いについて */}

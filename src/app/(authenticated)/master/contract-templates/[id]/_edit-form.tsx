@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { Save } from "lucide-react";
 import { updateTemplateContent } from "../_actions";
+import { ArticlesEditor } from "./_articles-editor";
+import type { ArticleNode } from "@/lib/contract-structure/types";
 
 interface Item {
   key: string;
@@ -13,7 +15,7 @@ interface Item {
 
 interface Props {
   id: string;
-  initialContent: Record<string, string>;
+  initialContent: Record<string, unknown>;
   initialNotes: string;
   groupedSections: Array<{ group: string; items: Item[] }>;
 }
@@ -24,19 +26,45 @@ export function EditTemplateForm({
   initialNotes,
   groupedSections,
 }: Props) {
-  const [content, setContent] = useState<Record<string, string>>(initialContent);
+  // flat keys + jsonb tree を同じ state で保持し保存時に merge。
+  // flat key の string 値だけを分離管理して type-safe に。
+  const [flatContent, setFlatContent] = useState<Record<string, string>>(() => {
+    const rec: Record<string, string> = {};
+    for (const [k, v] of Object.entries(initialContent)) {
+      if (typeof v === "string") rec[k] = v;
+    }
+    return rec;
+  });
+  const [articles, setArticles] = useState<ArticleNode[]>(() => {
+    const arr = (initialContent as { articles?: ArticleNode[] }).articles;
+    return Array.isArray(arr) ? arr : [];
+  });
   const [notes, setNotes] = useState(initialNotes);
   const [pending, start] = useTransition();
   const [saved, setSaved] = useState<string | null>(null);
 
+  // 契約本文 (第1〜22条) は articles ツリー側で編集するため、
+  // flat sections からは article_* を除外する。
+  const nonArticleSections = groupedSections
+    .map((g) => ({
+      group: g.group,
+      items: g.items.filter((it) => !it.key.startsWith("article_")),
+    }))
+    .filter((g) => g.items.length > 0);
+
   const set = (key: string, value: string) =>
-    setContent((prev) => ({ ...prev, [key]: value }));
+    setFlatContent((prev) => ({ ...prev, [key]: value }));
 
   const onSave = () => {
     setSaved(null);
     start(async () => {
       try {
-        await updateTemplateContent(id, content, notes || null);
+        // flat + articles を merge。既存の他 key (= jsonb 内の任意 key) はそのまま保持するため
+        // initialContent を base にする。
+        const merged: Record<string, unknown> = { ...initialContent };
+        for (const k of Object.keys(flatContent)) merged[k] = flatContent[k];
+        merged.articles = articles;
+        await updateTemplateContent(id, merged, notes || null);
         setSaved(new Date().toLocaleTimeString("ja-JP"));
       } catch (e) {
         alert(String(e));
@@ -49,7 +77,8 @@ export function EditTemplateForm({
       {/* Sticky 保存バー */}
       <div className="sticky top-0 z-10 flex items-center justify-between rounded border bg-white/95 p-3 shadow-sm backdrop-blur">
         <div className="text-xs text-gray-600">
-          全 {groupedSections.reduce((s, g) => s + g.items.length, 0)} 項目
+          条 {articles.length} 個 + flat項目{" "}
+          {nonArticleSections.reduce((s, g) => s + g.items.length, 0)}
           {saved && <span className="ml-3 text-emerald-600">✅ {saved} に保存</span>}
         </div>
         <button
@@ -76,15 +105,18 @@ export function EditTemplateForm({
         />
       </div>
 
-      {/* section group ごと */}
-      {groupedSections.map(({ group, items }) => (
+      {/* 契約本文 (条・項・号) — 構造化エディタ */}
+      <ArticlesEditor value={articles} onChange={setArticles} />
+
+      {/* 契約本文以外の flat sections */}
+      {nonArticleSections.map(({ group, items }) => (
         <section key={group} className="rounded border bg-white shadow-sm">
           <header className="border-b bg-gray-50 px-4 py-2 text-sm font-bold text-gray-800">
             {group}
           </header>
           <div className="divide-y">
             {items.map((it) => {
-              const v = content[it.key] ?? "";
+              const v = flatContent[it.key] ?? "";
               return (
                 <div key={it.key} className="px-4 py-3">
                   <div className="mb-1 flex items-center justify-between">
