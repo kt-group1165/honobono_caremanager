@@ -277,33 +277,45 @@ export function ServiceCodesContent({
   const fetchRecords = useCallback(async (): Promise<void> => {
     setLoading(true);
     try {
-      let q = supabase
-        .from("kaigo_service_codes")
-        .select("*", { count: "exact" })
-        .order("system", { ascending: true })
-        .order("service_category", { ascending: true })
-        .order("service_code", { ascending: true })
-        .limit(2000);
-      if (filterSystem) q = q.eq("system", filterSystem);
-      if (filterCategory) q = q.eq("service_category", filterCategory);
-      if (filterCalcType) q = q.eq("calculation_type", filterCalcType);
-      if (filterActiveAt) {
-        q = q
-          .lte("valid_from", filterActiveAt)
-          .or(`valid_until.is.null,valid_until.gte.${filterActiveAt}`);
+      // PostgREST default 1000 行制限を回避するため .range() で page-loop
+      const PAGE = 1000;
+      const MAX_FETCH = 5000; // 表示上限 (絞込前提、無絞りだと 5000 で頭打ち)
+      const escaped = searchText.trim().replace(/[%_]/g, "\\$&");
+      const buildQuery = (from: number, to: number) => {
+        let q = supabase
+          .from("kaigo_service_codes")
+          .select("*", { count: "exact" })
+          .order("system", { ascending: true })
+          .order("service_category", { ascending: true })
+          .order("service_code", { ascending: true })
+          .range(from, to);
+        if (filterSystem) q = q.eq("system", filterSystem);
+        if (filterCategory) q = q.eq("service_category", filterCategory);
+        if (filterCalcType) q = q.eq("calculation_type", filterCalcType);
+        if (filterActiveAt) {
+          q = q
+            .lte("valid_from", filterActiveAt)
+            .or(`valid_until.is.null,valid_until.gte.${filterActiveAt}`);
+        }
+        if (escaped) {
+          q = q.or(`service_code.ilike.%${escaped}%,service_name.ilike.%${escaped}%`);
+        }
+        return q;
+      };
+      // page-loop
+      const all: ServiceCode[] = [];
+      let totalCount = 0;
+      for (let from = 0; from < MAX_FETCH; from += PAGE) {
+        const to = Math.min(from + PAGE - 1, MAX_FETCH - 1);
+        const { data, count, error } = await buildQuery(from, to);
+        if (error) throw error;
+        if (count != null) totalCount = count;
+        const rows = (data ?? []) as ServiceCode[];
+        all.push(...rows);
+        if (rows.length < PAGE) break; // 最終ページ
       }
-      // 検索: service_code or service_name の部分一致 (ilike)
-      const st = searchText.trim();
-      if (st) {
-        const escaped = st.replace(/[%_]/g, "\\$&");
-        q = q.or(
-          `service_code.ilike.%${escaped}%,service_name.ilike.%${escaped}%`,
-        );
-      }
-      const { data, count, error } = await q;
-      if (error) throw error;
-      setRecords((data ?? []) as ServiceCode[]);
-      setTotalCount(count ?? (data ?? []).length);
+      setRecords(all);
+      setTotalCount(totalCount || all.length);
     } catch (err: unknown) {
       toast.error(
         "データの取得に失敗しました: " +
@@ -1065,19 +1077,30 @@ export function ServiceCodesContent({
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm table-fixed">
+                <colgroup>
+                  <col style={{ width: "88px" }} />
+                  <col style={{ width: "180px" }} />
+                  <col style={{ width: "110px" }} />
+                  <col />
+                  <col style={{ width: "80px" }} />
+                  <col style={{ width: "84px" }} />
+                  <col style={{ width: "60px" }} />
+                  <col style={{ width: "150px" }} />
+                  <col style={{ width: "72px" }} />
+                </colgroup>
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">
+                    <th className="text-left px-3 py-3 font-medium text-gray-600 whitespace-nowrap">
                       制度
                     </th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">
+                    <th className="text-left px-3 py-3 font-medium text-gray-600 whitespace-nowrap">
                       サービス種類
                     </th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">
-                      サービスコード
+                    <th className="text-left px-3 py-3 font-medium text-gray-600 whitespace-nowrap">
+                      コード
                     </th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">
+                    <th className="text-left px-3 py-3 font-medium text-gray-600">
                       サービス名称
                     </th>
                     <th className="text-right px-4 py-3 font-medium text-gray-600 whitespace-nowrap">
@@ -1105,24 +1128,28 @@ export function ServiceCodesContent({
                       key={record.id}
                       className="hover:bg-gray-50 transition-colors"
                     >
-                      <td className="px-4 py-3 whitespace-nowrap">
+                      <td className="px-3 py-3 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${sysMeta?.color ?? "bg-gray-100 text-gray-700 border-gray-200"}`}>
                           {sysMeta?.label ?? record.system}
                         </span>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
-                          {record.service_category}
-                        </span>
-                        <span className="ml-1.5 text-gray-600 text-xs">
-                          {record.service_category_name}
-                        </span>
+                      <td className="px-3 py-3">
+                        <div className="flex items-start gap-1">
+                          <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 font-mono">
+                            {record.service_category}
+                          </span>
+                          <span className="text-gray-600 text-xs truncate" title={record.service_category_name}>
+                            {record.service_category_name}
+                          </span>
+                        </div>
                       </td>
-                      <td className="px-4 py-3 font-mono whitespace-nowrap">
+                      <td className="px-3 py-3 font-mono text-xs whitespace-nowrap">
                         {record.service_code}
                       </td>
-                      <td className="px-4 py-3 text-gray-800">
-                        {record.service_name}
+                      <td className="px-3 py-3 text-gray-800">
+                        <div className="whitespace-normal break-words" title={record.service_name}>
+                          {record.service_name}
+                        </div>
                         {record.formula && (
                           <div className="mt-0.5 text-[10px] text-purple-600">
                             計算式: {formulaToDescription(record.formula)}
