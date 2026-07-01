@@ -38,36 +38,12 @@ export function defaultMonitoringFrequency(cls: DisabilityClass): number {
 }
 
 // ─────────────────────────────────────────────────────
-// 受給者証
+// 受給者証 = 既存 shougai_certifications テーブルに集約
+//   src/types/database.ts の ShougaiCertification 型を使う
+//   このファイル内では import しない (循環回避)。
+//   月間支給量は shougai_certifications.monthly_allocations (JSONB) で
+//     { "居宅介護": 5000, "重度訪問介護": 30000 } の形で保持。
 // ─────────────────────────────────────────────────────
-export interface ShogaiRecipientCert {
-  id: string;
-  tenant_id: string;
-  client_id: string;
-  recipient_number: string | null;
-  municipality_code: string | null;
-  disability_category: DisabilityCategoryValue | null;
-  disability_class: DisabilityClass | null;
-  benefit_start_date: string | null;
-  benefit_end_date: string | null;
-  self_payment_limit: number;
-  self_payment_percent: number;
-  seiho_flag: boolean;
-  soudan_office_name: string | null;
-  soudan_manager_name: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ShogaiBenefitAllocation {
-  id: string;
-  cert_id: string;
-  service_type: ShogaiServiceType;
-  monthly_units: number;
-  monthly_minutes: number | null;
-  notes: string | null;
-}
 
 // ─────────────────────────────────────────────────────
 // サービスコード マスタ

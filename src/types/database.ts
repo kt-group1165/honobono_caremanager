@@ -316,6 +316,12 @@ export type ShougaiCertification = {
   insurer_municipality: string | null;
   service_types: string[];
   copay_rate: number | null;
+  // 2026-07: shogai_consolidate_to_existing.sql で追加
+  self_payment_limit: number;              // 自己負担月額上限 (円)
+  seiho_flag: boolean;                     // 生保連携
+  soudan_office_name: string | null;       // 相談支援事業所
+  soudan_manager_name: string | null;      // 相談支援専門員
+  monthly_allocations: Record<string, number>; // { "居宅介護": 5000, ... }
   notes: string | null;
   created_at: string;
   updated_at: string;

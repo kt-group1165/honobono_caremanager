@@ -65,6 +65,11 @@ const EMPTY_FORM: FormData = {
   insurer_municipality: "",
   service_types: [],
   copay_rate: 0.1,
+  self_payment_limit: 0,
+  seiho_flag: false,
+  soudan_office_name: null,
+  soudan_manager_name: null,
+  monthly_allocations: {},
   notes: "",
 };
 
@@ -123,6 +128,11 @@ export function ShougaiCertContent({
       insurer_municipality: r.insurer_municipality ?? "",
       service_types: Array.isArray(r.service_types) ? r.service_types : [],
       copay_rate: r.copay_rate ?? 0.1,
+      self_payment_limit: r.self_payment_limit ?? 0,
+      seiho_flag: r.seiho_flag ?? false,
+      soudan_office_name: r.soudan_office_name ?? null,
+      soudan_manager_name: r.soudan_manager_name ?? null,
+      monthly_allocations: r.monthly_allocations ?? {},
       notes: r.notes ?? "",
     };
   }
@@ -381,6 +391,48 @@ export function ShougaiCertContent({
                 : "—"}
             </span>
           </FieldRow>
+          <FieldRow label="自己負担月額上限">
+            <span className="text-sm text-gray-900">
+              {form.self_payment_limit
+                ? `¥${form.self_payment_limit.toLocaleString()}`
+                : "—"}
+            </span>
+          </FieldRow>
+          <FieldRow label="生保受給">
+            <span className="text-sm text-gray-900">
+              {form.seiho_flag ? "あり" : "—"}
+            </span>
+          </FieldRow>
+          <FieldRow label="相談支援事業所">
+            <span className="text-sm text-gray-900">
+              {form.soudan_office_name || "—"}
+            </span>
+          </FieldRow>
+          <FieldRow label="相談支援専門員">
+            <span className="text-sm text-gray-900">
+              {form.soudan_manager_name || "—"}
+            </span>
+          </FieldRow>
+          <div className="lg:col-span-2">
+            <FieldRow label="月間支給量 (単位数/月)">
+              <div className="flex flex-wrap gap-2 text-sm">
+                {Object.keys(form.monthly_allocations ?? {}).length === 0 ? (
+                  <span className="text-gray-500">—</span>
+                ) : (
+                  Object.entries(form.monthly_allocations ?? {}).map(
+                    ([st, n]) => (
+                      <span
+                        key={st}
+                        className="rounded bg-sky-50 px-2 py-0.5 text-xs ring-1 ring-sky-200"
+                      >
+                        {st}: {n.toLocaleString()}
+                      </span>
+                    ),
+                  )
+                )}
+              </div>
+            </FieldRow>
+          </div>
           <div className="lg:col-span-2">
             <FieldRow label="利用中サービス種別">
               <div className="flex flex-wrap gap-1.5">
@@ -496,6 +548,76 @@ export function ShougaiCertContent({
               </span>
             </div>
           </FieldRow>
+          <FieldRow label="自己負担月額上限 (円)">
+            <input
+              type="number"
+              min={0}
+              value={form.self_payment_limit ?? 0}
+              onChange={(e) =>
+                upd("self_payment_limit", Number(e.target.value || 0))
+              }
+              className={`${inputCls} w-32 text-right`}
+            />
+          </FieldRow>
+          <FieldRow label="生保受給">
+            <label className="inline-flex items-center gap-1 text-xs">
+              <input
+                type="checkbox"
+                checked={form.seiho_flag}
+                onChange={(e) => upd("seiho_flag", e.target.checked)}
+                className="accent-violet-600"
+              />
+              生保連携あり (自己負担 0 円扱い)
+            </label>
+          </FieldRow>
+          <FieldRow label="相談支援事業所">
+            <input
+              type="text"
+              value={form.soudan_office_name ?? ""}
+              onChange={(e) =>
+                upd("soudan_office_name", e.target.value || null)
+              }
+              className={`${inputCls} w-full`}
+            />
+          </FieldRow>
+          <FieldRow label="相談支援専門員">
+            <input
+              type="text"
+              value={form.soudan_manager_name ?? ""}
+              onChange={(e) =>
+                upd("soudan_manager_name", e.target.value || null)
+              }
+              className={`${inputCls} w-full`}
+            />
+          </FieldRow>
+          <div className="lg:col-span-2">
+            <FieldRow label="月間支給量 (サービス種別ごと、単位数)">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {(["居宅介護", "重度訪問介護", "行動援護", "同行援護"] as const).map(
+                  (st) => (
+                    <div key={st} className="flex items-center gap-1">
+                      <span className="text-xs text-gray-600 min-w-[80px]">
+                        {st}
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={form.monthly_allocations?.[st] ?? 0}
+                        onChange={(e) => {
+                          const next = { ...(form.monthly_allocations ?? {}) };
+                          const n = Number(e.target.value || 0);
+                          if (n > 0) next[st] = n;
+                          else delete next[st];
+                          upd("monthly_allocations", next);
+                        }}
+                        className={`${inputCls} w-full text-right`}
+                      />
+                    </div>
+                  ),
+                )}
+              </div>
+            </FieldRow>
+          </div>
           <div className="lg:col-span-2">
             <FieldRow label="利用中サービス種別">
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
