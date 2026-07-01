@@ -161,6 +161,9 @@ export default async function ShiftManagementPage({
   let initialTimelineData: TimelineInitialData | null = null;
   let initialMonthlyIndividualData: MonthlyIndividualInitialData | null = null;
 
+  // SSR で query が throw しても error boundary を出さず、
+  // client 側で再フェッチさせる (initial* は null のまま = client は SWR で自力取得)
+  try {
   if (view === "calendar" && tab === "user" && selectedUserId) {
     const [schedRes, availRes, allStaffRes, allSchedRes, provRes] = await Promise.all([
       supabase
@@ -340,6 +343,10 @@ export default async function ShiftManagementPage({
       }));
       initialMonthlyIndividualData = { schedules: mapped };
     }
+  } catch (e) {
+    // SSR fetch 失敗を SWR 側の再フェッチに委ねる。ここで throw させると error boundary が出て
+    // ユーザーは Reload しか選べなくなるため、log して null で継続。
+    console.error("[shift-management] SSR fetch failed:", e);
   }
 
   const props: ShiftManagementContentProps = {
