@@ -11,6 +11,30 @@ import {
 } from "@/lib/user-contract/types";
 import { ContractPrintActions } from "./print-actions";
 
+interface OfficeLite {
+  id: string;
+  name: string | null;
+  address: string | null;
+  phone: string | null;
+  fax: string | null;
+  business_number: string | null;
+  representative_name: string | null;
+  manager_name: string | null;
+  postal_code: string | null;
+  company_id: string | null;
+}
+
+interface CompanyLite {
+  id: string;
+  name: string | null;
+  short_name: string | null;
+  address: string | null;
+  phone: string | null;
+  fax: string | null;
+  representative_name: string | null;
+  postal_code: string | null;
+}
+
 interface KaigoClientLite {
   id: string;
   name: string;
@@ -91,16 +115,30 @@ export default async function ContractDetailPage({
     .maybeSingle();
   const user = (userRow ?? null) as KaigoClientLite | null;
 
-  // office 情報
-  let officeName: string | null = null;
+  // office 情報 + 法人 (companies) を join fetch
+  // = 契約書上の事業者欄 (法人名 / 事業所名 / 住所 / 電話 / 事業者番号 / 代表者) は
+  //   ここから動的に埋める (= content の hard-code に依存しない)
+  let officeRow: OfficeLite | null = null;
+  let companyRow: CompanyLite | null = null;
   if (contract.office_id) {
-    const { data: officeRow } = await supabase
+    const { data: o } = await supabase
       .from("offices")
-      .select("name")
+      .select(
+        "id, name, address, phone, fax, business_number, representative_name, manager_name, postal_code, company_id",
+      )
       .eq("id", contract.office_id)
       .maybeSingle();
-    officeName = (officeRow as { name?: string } | null)?.name ?? null;
+    officeRow = (o as OfficeLite | null) ?? null;
+    if (officeRow?.company_id) {
+      const { data: co } = await supabase
+        .from("companies")
+        .select("id, name, short_name, address, phone, fax, representative_name, postal_code")
+        .eq("id", officeRow.company_id)
+        .maybeSingle();
+      companyRow = (co as CompanyLite | null) ?? null;
+    }
   }
+  const officeName = officeRow?.name ?? null;
 
   const sections = getSectionsForType(contract.contract_type);
   const backHref = backUserParam
@@ -128,7 +166,13 @@ export default async function ContractDetailPage({
       </div>
 
       {isCombinedContract ? (
-        <CombinedContractView contract={contract} user={user} officeName={officeName} />
+        <CombinedContractView
+          contract={contract}
+          user={user}
+          officeName={officeName}
+          office={officeRow}
+          company={companyRow}
+        />
       ) : (
         <GenericContractView
           contract={contract}
@@ -291,10 +335,14 @@ function CombinedContractView({
   contract,
   user,
   officeName,
+  office,
+  company,
 }: {
   contract: UserContract;
   user: KaigoClientLite | null;
   officeName: string | null;
+  office: OfficeLite | null;
+  company: CompanyLite | null;
 }) {
   // content に該当 key が無ければ docx 由来の defaults を fallback として使う。
   // (= 旧 seed で article_*/juyo_* が空のまま contract が作られているケース対策)
@@ -434,12 +482,20 @@ function CombinedContractView({
   ];
 
 
-  const companyOfficeName = c("company_office_name") || officeName || "";
-  const companyName = c("company_name") || "";
-  const companyAddress = c("company_address") || "";
-  const companyPhone = c("company_phone") || "";
-  const representativeName = c("representative_name") || "";
-  const officeDesignationNumber = c("office_designation_number") || "";
+  // 事業者情報は「offices + companies (= contract.office_id が指している事業所) が master」。
+  // 今の要件では master 最優先 (= 事業所マスタを変えたら契約書表示も追従する)。
+  // 旧 seed の hard-code (= content 側) は master が空のときの fallback だけに残す。
+  const companyName = company?.name || c("company_name") || "";
+  const companyOfficeName =
+    office?.name || officeName || c("company_office_name") || "";
+  const companyAddress =
+    office?.address || company?.address || c("company_address") || "";
+  const companyPhone =
+    office?.phone || company?.phone || c("company_phone") || "";
+  const representativeName =
+    company?.representative_name || c("representative_name") || "";
+  const officeDesignationNumber =
+    office?.business_number || c("office_designation_number") || "";
   const officeServiceArea = c("office_service_area") || "";
 
   const issuedW = fmtWareki(contract.issued_date);

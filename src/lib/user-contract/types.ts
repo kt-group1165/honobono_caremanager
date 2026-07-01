@@ -291,21 +291,10 @@ export const KEIYAKU_KEN_JUYO_SECTIONS: ContractSection[] = [
  */
 export function getKeiyakuKenJuyoDefaults(): UserContractContent {
   return {
-    // 事業者欄は site/office 情報で埋める想定なので docx の大網事業所の値を defaults として埋める。
-    // 既存 contract の content にこれらの key が既にあれば上書きされない (= overwrite script で保持)。
-    company_name: "株式会社儀八",
-    company_office_name: "リンクス居宅介護支援事業所大網白里",
-    company_address: "千葉県大網白里市細草１１７０",
-    company_phone: "０４７５－８６－６０３８",
-    company_emergency_phone: "０８０－９３４２－６５３９",
-    representative_name: "手代木　正儀",
-    office_designation_number: "１２７９２０００８１",
-    office_service_area:
-      "大網白里市・東金市・九十九里町・山武市・横芝光町・茂原市・白子町・一宮町・長生村・千葉市緑区・八街市の全域",
-
-    // 契約本文 前文 / 末尾文
-    preamble_text:
-      "　　　　　　　　　　　　　　　　　様（以下、「利用者」といいます）と、株式会社儀八　リンクス居宅介護支援事業所大網白里（以下、「事業者」といいます）は、事業者が利用者に対して行う居宅介護支援について次の通り契約します。",
+    // 事業者欄 (company_name / company_office_name / address / phone 等) は defaults に埋めない。
+    // page.tsx で contract.office_id → offices + companies を lookup して動的に埋める。
+    // preamble_text も事業者名を含むため defaults では空にし、page.tsx で組み立てる。
+    preamble_text: "",
     closing_text:
       "上記の契約を証するため本書２通を作成し、利用者・事業者が署名押印の上、１通ずつ保有するものとします。",
 
