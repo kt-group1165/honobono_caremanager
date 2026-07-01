@@ -11,7 +11,7 @@ import {
 } from "@/lib/user-contract/types";
 import { ContractPrintActions } from "./print-actions";
 
-interface OfficeLite {
+export interface OfficeLite {
   id: string;
   name: string | null;
   address: string | null;
@@ -24,7 +24,7 @@ interface OfficeLite {
   company_id: string | null;
 }
 
-interface CompanyLite {
+export interface CompanyLite {
   id: string;
   name: string | null;
   short_name: string | null;
@@ -35,7 +35,7 @@ interface CompanyLite {
   postal_code: string | null;
 }
 
-interface KaigoClientLite {
+export interface KaigoClientLite {
   id: string;
   name: string;
   furigana: string | null;
@@ -356,7 +356,7 @@ function GenericContractView({
  * - p.4〜 別紙「重要事項」(1 相談窓口 〜 8 当社の概要)
  * - 末尾   署名欄 (説明日 / 説明者 / 契約締結日 / 事業者 / 利用者 / 代筆者)
  */
-function CombinedContractView({
+export function CombinedContractView({
   contract,
   user,
   officeName,

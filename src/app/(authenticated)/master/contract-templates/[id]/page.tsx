@@ -1,9 +1,26 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Eye } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { EditTemplateForm } from "./_edit-form";
 import { KEIYAKU_KEN_JUYO_SECTIONS } from "@/lib/user-contract/types";
+
+// contract kind → 適用される事業カテゴリ (= UI 表示 & preview の office 抽出用)
+const KIND_BUSINESS_CATEGORY: Record<string, string> = {
+  契約書兼重要事項説明書: "居宅介護支援",
+};
+
+// 事業所マスタ (offices/companies) から自動で埋まる key = 編集画面から除外
+const AUTO_FILLED_KEYS = new Set([
+  "company_name",
+  "company_office_name",
+  "company_address",
+  "company_phone",
+  "company_emergency_phone",
+  "representative_name",
+  "office_designation_number",
+  "office_service_area",
+]);
 
 /**
  * /master/contract-templates/[id]
@@ -61,7 +78,7 @@ export default async function ContractTemplateEditPage({
     return "その他";
   }
 
-  const sections =
+  const sections = (
     row.kind === "契約書兼重要事項説明書"
       ? KEIYAKU_KEN_JUYO_SECTIONS.map((s) => ({
           key: s.key,
@@ -74,7 +91,8 @@ export default async function ContractTemplateEditPage({
           label: k,
           multiline: true,
           group: groupOf(k),
-        }));
+        }))
+  ).filter((s) => !AUTO_FILLED_KEYS.has(s.key));
 
   // group ごとに並べる
   const grouped = new Map<string, typeof sections>();
@@ -100,6 +118,11 @@ export default async function ContractTemplateEditPage({
           <span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-sm text-gray-700">
             v{row.version_no}
           </span>
+          {KIND_BUSINESS_CATEGORY[row.kind] && (
+            <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700 ring-1 ring-sky-200">
+              対象カテゴリ: {KIND_BUSINESS_CATEGORY[row.kind]}
+            </span>
+          )}
           {row.is_active ? (
             <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
               有効
@@ -113,7 +136,22 @@ export default async function ContractTemplateEditPage({
             有効化日 {row.effective_from} / 最終更新{" "}
             {new Date(row.updated_at).toLocaleString("ja-JP")}
           </span>
+          <div className="ml-auto">
+            <Link
+              href={`/master/contract-templates/${row.id}/preview`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
+            >
+              <Eye size={14} /> プレビュー (別タブ)
+            </Link>
+          </div>
         </div>
+        <p className="mt-2 text-xs text-gray-500">
+          事業者情報 (法人名 / 事業所名 / 住所 / 電話 / 事業者番号 / 代表者) は
+          事業所マスタから自動反映されるため、ここでは編集しません。制度改正で本文が変わったら
+          「新版を作成」 → 編集 → 「有効化」してください。
+        </p>
       </div>
 
       <EditTemplateForm

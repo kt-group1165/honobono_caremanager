@@ -4,6 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { ActivateButton } from "./_activate-button";
 import { NewVersionButton } from "./_new-version-button";
 
+// contract kind → 適用される事業カテゴリ (= UI 表示用)
+const KIND_BUSINESS_CATEGORY: Record<string, string> = {
+  契約書兼重要事項説明書: "居宅介護支援",
+};
+
 /**
  * /master/contract-templates
  *  = 契約書フォーマット (kaigo_contract_templates) の一覧
@@ -66,7 +71,14 @@ export default async function ContractTemplatesPage() {
         return (
           <section key={kind} className="rounded-lg border bg-white shadow-sm">
             <header className="flex items-center justify-between border-b px-4 py-3">
-              <h2 className="text-base font-bold text-gray-900">{kind}</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-gray-900">{kind}</h2>
+                {KIND_BUSINESS_CATEGORY[kind] && (
+                  <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700 ring-1 ring-sky-200">
+                    対象カテゴリ: {KIND_BUSINESS_CATEGORY[kind]}
+                  </span>
+                )}
+              </div>
               <NewVersionButton kind={kind} />
             </header>
             {versions.length === 0 ? (
