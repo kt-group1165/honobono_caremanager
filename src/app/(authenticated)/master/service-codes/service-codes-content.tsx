@@ -506,6 +506,52 @@ export function ServiceCodesContent({
     }
   }
 
+  // ─── サンプル CSV DL (system 別テンプレート) ────────────────────────────────
+
+  const downloadSampleCsv = useCallback((sys: "介護" | "障害" | "総合事業") => {
+    const headers = [
+      "system",
+      "service_category",
+      "service_category_name",
+      "service_code",
+      "service_name",
+      "units",
+      "unit_type",
+      "calculation_type",
+      "valid_from",
+      "valid_until",
+      "notes",
+    ];
+    // system ごとの代表例 3 行
+    const SAMPLES: Record<string, Array<string[]>> = {
+      介護: [
+        ["介護", "11", "訪問介護", "111111", "身体介護01", "254", "1回につき", "基本", "2024-06-01", "", "令和6年報酬改定"],
+        ["介護", "11", "訪問介護", "111211", "生活援助02", "182", "1回につき", "基本", "2024-06-01", "", ""],
+        ["介護", "13", "通所介護", "156111", "通常型通所介護費Ⅰ1", "370", "1回につき", "基本", "2024-06-01", "", ""],
+      ],
+      障害: [
+        ["障害", "11", "居宅介護", "111111", "居宅介護 身体介護 30分未満", "254", "1回につき", "基本", "2024-04-01", "", "令和6年報酬改定"],
+        ["障害", "12", "重度訪問介護", "121111", "重度訪問介護 1時間未満", "187", "1回につき", "基本", "2024-04-01", "", ""],
+        ["障害", "13", "行動援護", "131111", "行動援護 30分未満", "258", "1回につき", "基本", "2024-04-01", "", ""],
+      ],
+      総合事業: [
+        ["総合事業", "A1", "訪問型サービスA (基準緩和)", "A1_20", "訪問型サービスA 20分未満", "165", "1回につき", "基本", "2024-06-01", "", "自治体独自 単価は市町村ごとに異なる"],
+        ["総合事業", "A1", "訪問型サービスA (基準緩和)", "A1_45", "訪問型サービスA 20分〜45分", "225", "1回につき", "基本", "2024-06-01", "", ""],
+        ["総合事業", "B1", "通所型サービスA (基準緩和)", "B1_1", "通所型サービスA 1回", "225", "1回につき", "基本", "2024-06-01", "", ""],
+      ],
+    };
+    const rows = SAMPLES[sys] ?? [];
+    const csv =
+      [headers.join(","), ...rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(","))].join("\r\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+    const link = document.createElement("a");
+    const filename = `service_codes_sample_${sys}.csv`;
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }, []);
+
   // ─── CSV Export ──────────────────────────────────────────────────────────────
 
   const handleCsvExport = useCallback(() => {
@@ -841,6 +887,26 @@ export function ServiceCodesContent({
               <Download className="w-4 h-4" />
               CSV出力
             </button>
+            <div className="relative group">
+              <button
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                title="空のテンプレート CSV を DL (system 別)"
+              >
+                <Download className="w-4 h-4" />
+                サンプル
+              </button>
+              <div className="absolute right-0 top-full mt-1 hidden group-hover:block z-10 rounded-lg border bg-white shadow-lg min-w-[200px]">
+                {(["介護", "障害", "総合事業"] as const).map((sys) => (
+                  <button
+                    key={sys}
+                    onClick={() => downloadSampleCsv(sys)}
+                    className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    {sys} 用 テンプレ
+                  </button>
+                ))}
+              </div>
+            </div>
             <button
               onClick={openCreate}
               className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
