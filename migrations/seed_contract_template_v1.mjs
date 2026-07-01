@@ -72,6 +72,11 @@ const V1_CONTENT = {
 
   privacy_consent_text:
     "利用者は、介護保険制度にて義務付けられているサービス担当者会議や利用する各介護・医療サービス等の利用調整等、居宅介護支援サービスを提供する上で必要と認められる場合において事業所が利用者及び家族の個人情報を用いることについて予め同意します。",
+
+  // ===== 別紙1〜8 =====
+  // 詳細内容は migrations/backfill_v1_juyo_sections.mjs の JUYO_DEFAULTS を参照。
+  // 同じ内容を V1_CONTENT に copy-in する必要はない (backfill script で埋める前提)
+  // が、seed からいきなり全部入れたい場合は下記に copy してください。
 };
 
 async function main() {
