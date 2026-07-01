@@ -166,9 +166,9 @@ function timeZoneMatches(slot: TimeZone, svc: TimeZone, system: "介護" | "障�
   return false;
 }
 
-// ─── Category definitions ─────────────────────────────────────────────────────
+// ─── Category definitions per system ─────────────────────────────────────────
 
-const CATEGORIES = [
+const CATEGORIES_KAIGO = [
   { code: "11", name: "訪問介護" },
   { code: "13", name: "訪問看護" },
   { code: "14", name: "訪問リハ" },
@@ -177,7 +177,52 @@ const CATEGORIES = [
   { code: "17", name: "福祉用具貸与" },
   { code: "21", name: "短期入所" },
   { code: "43", name: "居宅介護支援" },
-] as const
+] as const;
+
+const CATEGORIES_SHOGAI = [
+  { code: "11", name: "居宅介護" },
+  { code: "12", name: "重度訪問介護" },
+  { code: "13", name: "行動援護" },
+  { code: "14", name: "同行援護" },
+  { code: "15", name: "同行援護 (別)" },
+  { code: "21", name: "療養介護" },
+  { code: "22", name: "生活介護" },
+  { code: "24", name: "短期入所" },
+  { code: "32", name: "施設入所" },
+  { code: "33", name: "共同生活援助" },
+  { code: "41", name: "自立訓練 (機能)" },
+  { code: "42", name: "自立訓練 (生活)" },
+  { code: "43", name: "就労移行" },
+  { code: "45", name: "就労継続A" },
+  { code: "46", name: "就労継続B" },
+  { code: "47", name: "就労定着" },
+  { code: "48", name: "就労選択" },
+  { code: "52", name: "計画相談" },
+  { code: "55", name: "障害児相談" },
+  { code: "61", name: "児童発達支援" },
+  { code: "63", name: "放課後等デイ" },
+  { code: "71", name: "福祉型児童入所" },
+] as const;
+
+const CATEGORIES_SOUGOU = [
+  { code: "A1", name: "訪問型サービスA" },
+  { code: "A2", name: "訪問型サービスB" },
+  { code: "A3", name: "訪問型サービスC" },
+  { code: "A4", name: "訪問型サービスD" },
+  { code: "B1", name: "通所型サービスA" },
+  { code: "B2", name: "通所型サービスB" },
+  { code: "B3", name: "通所型サービスC" },
+  { code: "C1", name: "介護予防ケアマネ" },
+] as const;
+
+const CATEGORIES_BY_SYSTEM: Record<
+  "介護" | "障害" | "総合事業",
+  ReadonlyArray<{ code: string; name: string }>
+> = {
+  介護: CATEGORIES_KAIGO,
+  障害: CATEGORIES_SHOGAI,
+  総合事業: CATEGORIES_SOUGOU,
+};
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -188,11 +233,19 @@ export function ServiceSelector(props: ServiceSelectorProps) {
   return <ServiceSelectorInner {...props} />
 }
 
-function ServiceSelectorInner({ onClose, onSelect, system = "介護", startTime, endTime }: Omit<ServiceSelectorProps, "open">) {
+function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介護", startTime, endTime }: Omit<ServiceSelectorProps, "open">) {
+  const [activeSystem, setActiveSystem] = React.useState<"介護" | "障害" | "総合事業">(initialSystem);
+  const CATEGORIES = CATEGORIES_BY_SYSTEM[activeSystem];
+  const system = activeSystem;
   const [services, setServices] = React.useState<ServiceCode[]>([])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [activeCategory, setActiveCategory] = React.useState<string>(CATEGORIES[0].code)
+  // system 切替時に activeCategory を先頭に戻す
+  React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- system 切替に伴う derived reset
+    setActiveCategory(CATEGORIES_BY_SYSTEM[activeSystem][0].code);
+  }, [activeSystem]);
   const [query, setQuery] = React.useState("")
   // 「候補のみ」: 時間範囲が指定されたときだけ意味を持つ。デフォルトは ON にして
   // よくある使い方 (「この時間枠で取れるサービス何？」) を素直に満たす。
@@ -325,6 +378,30 @@ function ServiceSelectorInner({ onClose, onSelect, system = "介護", startTime,
           >
             <X className="h-5 w-5" />
           </button>
+        </div>
+
+        {/* System tabs (介護/障害/総合事業) */}
+        <div className="shrink-0 border-b bg-white">
+          <div className="flex gap-0 px-3 pt-2">
+            {(["介護", "障害", "総合事業"] as const).map((sys) => (
+              <button
+                key={sys}
+                type="button"
+                onClick={() => {
+                  setActiveSystem(sys);
+                  setQuery("");
+                }}
+                className={cn(
+                  "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+                  activeSystem === sys
+                    ? "border-blue-600 text-blue-700"
+                    : "border-transparent text-gray-500 hover:text-gray-800"
+                )}
+              >
+                {sys === "介護" ? "介護保険" : sys === "障害" ? "障害福祉" : "総合事業"}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Category tabs */}
