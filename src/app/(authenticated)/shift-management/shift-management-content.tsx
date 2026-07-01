@@ -76,7 +76,9 @@ function DualSidebar({
     if (!search) return users;
     const q = search.toLowerCase();
     return users.filter(
-      (u) => u.name.toLowerCase().includes(q) || u.name_kana.toLowerCase().includes(q)
+      (u) =>
+        (u.name ?? "").toLowerCase().includes(q) ||
+        (u.name_kana ?? "").toLowerCase().includes(q),
     );
   }, [users, search]);
 
@@ -84,7 +86,9 @@ function DualSidebar({
     if (!search) return staff;
     const q = search.toLowerCase();
     return staff.filter(
-      (s) => s.name.toLowerCase().includes(q) || s.name_kana.toLowerCase().includes(q)
+      (s) =>
+        (s.name ?? "").toLowerCase().includes(q) ||
+        (s.name_kana ?? "").toLowerCase().includes(q),
     );
   }, [staff, search]);
 
