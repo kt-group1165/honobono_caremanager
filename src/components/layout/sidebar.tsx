@@ -18,80 +18,105 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
-  Briefcase,
   NotebookPen,
   MessagesSquare,
   AlertTriangle,
   Bell,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useBusinessType } from "@/lib/business-type-context";
 import { useLocalStorage } from "@/lib/use-local-storage";
 import { getUnreadCount } from "@/lib/notifications";
 import pkg from "../../../package.json";
+import { SidebarLegacy } from "./sidebar-legacy";
 
 const APP_VERSION = pkg.version;
 
 type NavItem = { name: string; href: string; icon: React.ComponentType<{ size?: number }> };
-type NavGroup = { name: string; icon: React.ComponentType<{ size?: number }>; children: NavItem[] };
-type NavEntry = NavItem | NavGroup;
+type SectionSpec = { title?: string; items: NavItem[] };
 
-function isGroup(entry: NavEntry): entry is NavGroup {
-  return "children" in entry;
-}
-
-// ケアマネ版メニュー
-const NAV_CARE_MANAGER: NavEntry[] = [
-  { name: "ダッシュボード", href: "/dashboard", icon: LayoutDashboard },
-  { name: "通知", href: "/notifications", icon: Bell },
-  { name: "利用者管理", href: "/users", icon: Users },
+// ── ケアマネ版 (居宅介護支援) — セクション分割
+const NAV_CARE_MANAGER_SECTIONED: SectionSpec[] = [
   {
-    name: "ケアマネ業務",
-    icon: Briefcase,
-    children: [
-      { name: "アセスメント", href: "/assessments", icon: ClipboardCheck },
-      { name: "計画書", href: "/reports/care-plan-1", icon: ClipboardList },
-      { name: "会議録", href: "/meeting-minutes", icon: MessagesSquare },
-      { name: "利用・提供票", href: "/reports/service-usage", icon: CalendarDays },
-      { name: "利用票別表", href: "/reports/service-usage-detail", icon: FileSpreadsheet },
-      { name: "給付管理", href: "/billing/benefits", icon: Calculator },
-      { name: "モニタリング", href: "/monitoring", icon: Activity },
-      { name: "支援経過", href: "/support-records", icon: NotebookPen },
+    items: [
+      { name: "ダッシュボード", href: "/dashboard", icon: LayoutDashboard },
+      { name: "通知", href: "/notifications", icon: Bell },
+      { name: "利用者管理", href: "/users", icon: Users },
     ],
   },
-  { name: "職員管理", href: "/staff", icon: UserCog },
-  { name: "入退院管理", href: "/hospitalizations", icon: CalendarDays },
-  { name: "緊急時シート", href: "/emergency-sheets", icon: AlertTriangle },
-  { name: "重要事項・契約書", href: "/user-contracts", icon: FileText },
-  { name: "加算管理", href: "/addons", icon: Calculator },
-  { name: "レセプト", href: "/billing/claims", icon: FileSpreadsheet },
-  { name: "明細書・請求書", href: "/billing/forms", icon: FileText },
-  // 帳票作成: 全帳票がケアマネ業務メニューに移動したため非表示
-  { name: "マスタ管理", href: "/master", icon: Settings },
-  { name: "設定", href: "/settings", icon: UserCog },
+  {
+    title: "日常業務",
+    items: [
+      { name: "アセスメント", href: "/assessments", icon: ClipboardCheck },
+      { name: "居宅サービス計画書", href: "/reports/care-plan-1", icon: ClipboardList },
+      { name: "担当者会議録", href: "/meeting-minutes", icon: MessagesSquare },
+      { name: "利用票・提供票", href: "/reports/service-usage", icon: CalendarDays },
+      { name: "利用票別表", href: "/reports/service-usage-detail", icon: FileSpreadsheet },
+      { name: "モニタリング", href: "/monitoring", icon: Activity },
+      { name: "支援経過", href: "/support-records", icon: NotebookPen },
+      { name: "入退院管理", href: "/hospitalizations", icon: CalendarDays },
+      { name: "緊急時シート", href: "/emergency-sheets", icon: AlertTriangle },
+      { name: "重要事項・契約書", href: "/user-contracts", icon: FileText },
+    ],
+  },
+  {
+    title: "請求業務",
+    items: [
+      { name: "給付管理", href: "/billing/benefits", icon: Calculator },
+      { name: "加算管理", href: "/addons", icon: Calculator },
+      { name: "レセプト", href: "/billing/claims", icon: FileSpreadsheet },
+      { name: "明細書・請求書", href: "/billing/forms", icon: FileText },
+    ],
+  },
+  {
+    title: "管理",
+    items: [
+      { name: "職員管理", href: "/staff", icon: UserCog },
+      { name: "マスタ管理", href: "/master", icon: Settings },
+      { name: "設定", href: "/settings", icon: UserCog },
+    ],
+  },
 ];
 
-// 訪問介護版メニュー
-const NAV_HOME_CARE: NavEntry[] = [
-  { name: "ダッシュボード", href: "/dashboard", icon: LayoutDashboard },
-  { name: "通知", href: "/notifications", icon: Bell },
-  { name: "利用者管理", href: "/users", icon: Users },
-  { name: "職員管理", href: "/staff", icon: UserCog },
-  { name: "ケアプラン取込", href: "/careplan-import", icon: FileText },
-  { name: "シフト管理", href: "/shift-management", icon: CalendarDays },
-  { name: "パターン登録", href: "/shift-management/patterns", icon: Clock },
-  { name: "サービス提供表（実績）", href: "/provision-tickets", icon: FileSpreadsheet },
-  { name: "サービス実施記録", href: "/visit-records", icon: ClipboardCheck },
-  { name: "訪問介護計画書", href: "/houmon-care-plans", icon: ClipboardList },
-  { name: "手順書", href: "/visit-procedures", icon: BookOpen },
-  { name: "重要事項・契約書", href: "/user-contracts", icon: FileText },
-  { name: "加算管理", href: "/addons", icon: Calculator },
-  { name: "実績管理", href: "/visit-billing", icon: Calculator },
-  { name: "帳票作成", href: "/reports-visit", icon: FileText },
-  { name: "マスタ管理", href: "/master", icon: Settings },
-  { name: "設定", href: "/settings", icon: UserCog },
+// ── 訪問介護版 — セクション分割
+const NAV_HOME_CARE_SECTIONED: SectionSpec[] = [
+  {
+    items: [
+      { name: "ダッシュボード", href: "/dashboard", icon: LayoutDashboard },
+      { name: "通知", href: "/notifications", icon: Bell },
+      { name: "利用者管理", href: "/users", icon: Users },
+    ],
+  },
+  {
+    title: "日常業務",
+    items: [
+      { name: "ケアプラン取込", href: "/careplan-import", icon: FileText },
+      { name: "シフト管理", href: "/shift-management", icon: CalendarDays },
+      { name: "パターン登録", href: "/shift-management/patterns", icon: Clock },
+      { name: "サービス提供表 (実績)", href: "/provision-tickets", icon: FileSpreadsheet },
+      { name: "サービス実施記録", href: "/visit-records", icon: ClipboardCheck },
+      { name: "訪問介護計画書", href: "/houmon-care-plans", icon: ClipboardList },
+      { name: "手順書", href: "/visit-procedures", icon: BookOpen },
+      { name: "重要事項・契約書", href: "/user-contracts", icon: FileText },
+    ],
+  },
+  {
+    title: "請求業務",
+    items: [
+      { name: "加算管理", href: "/addons", icon: Calculator },
+      { name: "実績管理", href: "/visit-billing", icon: Calculator },
+      { name: "帳票作成", href: "/reports-visit", icon: FileText },
+    ],
+  },
+  {
+    title: "管理",
+    items: [
+      { name: "職員管理", href: "/staff", icon: UserCog },
+      { name: "マスタ管理", href: "/master", icon: Settings },
+      { name: "設定", href: "/settings", icon: UserCog },
+    ],
+  },
 ];
 
 const BUSINESS_TYPE_LABELS: Record<string, { label: string; color: string }> = {
@@ -101,9 +126,21 @@ const BUSINESS_TYPE_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 export function Sidebar() {
+  // legacy layout に切替 flag (localStorage で永続化)
+  const [useLegacy, setUseLegacy] = useLocalStorage(
+    "sidebar-legacy",
+    false,
+    (raw) => raw === "true",
+  );
+  if (useLegacy) {
+    return <SidebarLegacy onSwitchLayout={() => setUseLegacy(false)} />;
+  }
+  return <SidebarV2 onSwitchLayout={() => setUseLegacy(true)} />;
+}
+
+function SidebarV2({ onSwitchLayout }: { onSwitchLayout: () => void }) {
   const pathname = usePathname();
   const { businessType, currentOffice } = useBusinessType();
-  // SSR-safe localStorage hydration (useSyncExternalStore 経由で setState-in-effect 不要)
   const [collapsed, setCollapsed] = useLocalStorage(
     "sidebar-collapsed",
     false,
@@ -111,21 +148,13 @@ export function Sidebar() {
   );
   const toggleCollapsed = () => setCollapsed(!collapsed);
 
-  const [openGroups, setOpenGroups] = useLocalStorage<Record<string, boolean>>(
-    "sidebar-open-groups",
-    { "ケアマネ業務": true },
-    (raw) => JSON.parse(raw),
-    (v) => JSON.stringify(v),
-  );
-  const toggleGroup = (name: string) => {
-    setOpenGroups({ ...openGroups, [name]: !openGroups[name] });
-  };
-
-  const navigation: NavEntry[] =
-    businessType === "訪問介護" ? NAV_HOME_CARE : NAV_CARE_MANAGER;
+  const sections: SectionSpec[] =
+    businessType === "訪問介護"
+      ? NAV_HOME_CARE_SECTIONED
+      : NAV_CARE_MANAGER_SECTIONED;
   const typeInfo = BUSINESS_TYPE_LABELS[businessType] ?? BUSINESS_TYPE_LABELS["居宅介護支援"];
 
-  // 通知メニュー横に出す未読 badge (1 分間隔で polling)
+  // 通知未読 badge (1 分間隔で polling)
   const [unread, setUnread] = useState(0);
   const officeIdForUnread = currentOffice?.id;
   useEffect(() => {
@@ -139,203 +168,129 @@ export function Sidebar() {
       if (!cancelled) setUnread(n);
     };
     fetchOnce();
-    if (!officeIdForUnread) {
-      return () => {
-        cancelled = true;
-      };
-    }
+    if (!officeIdForUnread) return () => { cancelled = true; };
     const id = setInterval(fetchOnce, 60_000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
+    return () => { cancelled = true; clearInterval(id); };
   }, [officeIdForUnread]);
 
-  // 全リンクに ?office=<現在の事業所ID> を自動付加して
-  // 遷移後も事業所選択が維持されるようにする
   const appendMode = (href: string) => {
     if (!currentOffice) return href;
     return `${href}?office=${encodeURIComponent(currentOffice.id)}`;
   };
 
-  // 子ページを開いていたら親グループは自動で開く (derived state、effect 不要)
-  const effectiveOpenGroups = useMemo(() => {
-    const result: Record<string, boolean> = { ...openGroups };
-    for (const entry of navigation) {
-      if (isGroup(entry)) {
-        const anyChildActive = entry.children.some((c) => pathname.startsWith(c.href));
-        if (anyChildActive) result[entry.name] = true;
-      }
-    }
-    return result;
-  }, [openGroups, navigation, pathname]);
+  const renderItem = (item: NavItem) => {
+    const isActive =
+      item.href === "/dashboard"
+        ? pathname === "/dashboard"
+        : pathname.startsWith(item.href);
+    const isNotifications = item.href === "/notifications";
+    const showBadge = isNotifications && unread > 0;
+    const Icon = item.icon;
+    return (
+      <Link
+        key={item.href}
+        href={appendMode(item.href)}
+        title={collapsed ? item.name : undefined}
+        className={cn(
+          "relative flex items-center rounded-md transition-colors",
+          collapsed ? "justify-center py-2" : "gap-3 px-3 py-2",
+          isActive
+            ? "bg-blue-50 text-blue-700"
+            : "text-gray-700 hover:bg-gray-50 hover:text-gray-900",
+        )}
+      >
+        {/* icon 列を 20px 固定幅で揃える (視線が縦にスムーズに流れる) */}
+        <span className="flex w-5 shrink-0 items-center justify-center">
+          <Icon size={18} />
+        </span>
+        {!collapsed && (
+          <>
+            <span className="flex-1 truncate text-[13px] font-medium">
+              {item.name}
+            </span>
+            {showBadge && (
+              <span className="ml-auto min-w-[20px] rounded-full bg-red-500 px-1.5 text-center text-[11px] font-semibold leading-[18px] text-white">
+                {unread > 99 ? "99+" : unread}
+              </span>
+            )}
+          </>
+        )}
+        {collapsed && showBadge && (
+          <span className="absolute right-1 top-1 min-w-[16px] rounded-full bg-red-500 px-1 text-center text-[9px] font-semibold leading-[14px] text-white">
+            {unread > 99 ? "99+" : unread}
+          </span>
+        )}
+      </Link>
+    );
+  };
 
   return (
     <aside
       className={cn(
         "flex flex-col border-r bg-white transition-all duration-200",
-        collapsed ? "w-16" : "w-60"
+        collapsed ? "w-16" : "w-60",
       )}
     >
       <div className="flex h-14 items-center border-b px-4">
         {!collapsed && (
-          <div>
-            <h1 className="text-lg font-bold text-blue-700">介護管理システム</h1>
-          </div>
+          <h1 className="text-lg font-bold text-blue-700">介護管理システム</h1>
         )}
         <button
           onClick={toggleCollapsed}
           className={cn(
             "rounded p-1 hover:bg-gray-100",
-            collapsed ? "mx-auto" : "ml-auto"
+            collapsed ? "mx-auto" : "ml-auto",
           )}
         >
           {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
         </button>
       </div>
-      <nav className="flex-1 space-y-1 p-2 overflow-y-auto">
-        {navigation.map((entry) => {
-          // グループ（子メニュー付き）
-          if (isGroup(entry)) {
-            const groupOpen = effectiveOpenGroups[entry.name] ?? false;
-            const anyChildActive = entry.children.some((c) => pathname.startsWith(c.href));
-            const GroupIcon = entry.icon;
-            return (
-              <div key={entry.name}>
-                <button
-                  onClick={() => toggleGroup(entry.name)}
-                  className={cn(
-                    "w-full flex items-center rounded-md py-2 text-sm font-medium transition-colors",
-                    collapsed
-                      ? "justify-center"
-                      : "gap-3 px-3",
-                    anyChildActive
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                  )}
-                  title={collapsed ? entry.name : undefined}
-                >
-                  <GroupIcon size={20} />
-                  {!collapsed && (
-                    <>
-                      <span className="flex-1 text-left">{entry.name}</span>
-                      <ChevronDown
-                        size={14}
-                        className={cn(
-                          "transition-transform",
-                          groupOpen ? "rotate-0" : "-rotate-90"
-                        )}
-                      />
-                    </>
-                  )}
-                </button>
-                {!collapsed && groupOpen && (
-                  <div className="ml-3 mt-0.5 space-y-0.5 border-l border-gray-200 pl-2">
-                    {entry.children.map((child) => {
-                      const isActive = pathname.startsWith(child.href);
-                      const ChildIcon = child.icon;
-                      return (
-                        <Link
-                          key={child.href}
-                          href={appendMode(child.href)}
-                          className={cn(
-                            "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors",
-                            isActive
-                              ? "bg-blue-50 text-blue-700"
-                              : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                          )}
-                        >
-                          <ChildIcon size={18} />
-                          <span>{child.name}</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-                {/* 折りたたみ時は子をアイコンで表示 */}
-                {collapsed && (
-                  <div className="space-y-1">
-                    {entry.children.map((child) => {
-                      const isActive = pathname.startsWith(child.href);
-                      const ChildIcon = child.icon;
-                      return (
-                        <Link
-                          key={child.href}
-                          href={appendMode(child.href)}
-                          className={cn(
-                            "flex items-center justify-center rounded-md py-2 transition-colors",
-                            isActive
-                              ? "bg-blue-50 text-blue-700"
-                              : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                          )}
-                          title={child.name}
-                        >
-                          <ChildIcon size={20} />
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          }
 
-          // 単一メニュー項目
-          const isActive =
-            entry.href === "/dashboard"
-              ? pathname === "/dashboard"
-              : pathname.startsWith(entry.href);
-          const isNotifications = entry.href === "/notifications";
-          const showBadge = isNotifications && unread > 0;
-          return (
-            <Link
-              key={entry.href}
-              href={appendMode(entry.href)}
-              className={cn(
-                "relative flex items-center rounded-md py-2 text-sm font-medium transition-colors",
-                collapsed
-                  ? "justify-center"
-                  : "gap-3 px-3",
-                isActive
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-              )}
-              title={collapsed ? entry.name : undefined}
-            >
-              <entry.icon size={20} />
-              {!collapsed && (
-                <>
-                  <span className="flex-1">{entry.name}</span>
-                  {showBadge && (
-                    <span className="ml-auto min-w-[20px] rounded-full bg-red-500 px-1.5 text-center text-[11px] font-semibold leading-[18px] text-white">
-                      {unread > 99 ? "99+" : unread}
-                    </span>
-                  )}
-                </>
-              )}
-              {collapsed && showBadge && (
-                <span className="absolute right-1 top-1 min-w-[16px] rounded-full bg-red-500 px-1 text-center text-[9px] font-semibold leading-[14px] text-white">
-                  {unread > 99 ? "99+" : unread}
+      <nav className="flex-1 space-y-3 overflow-y-auto p-2">
+        {sections.map((sec, i) => (
+          <div key={sec.title ?? `sec-${i}`} className="space-y-0.5">
+            {/* section 見出し */}
+            {sec.title && !collapsed && (
+              <div className="mt-2 flex items-center gap-2 px-3 pb-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                  {sec.title}
                 </span>
-              )}
-            </Link>
-          );
-        })}
+                <span className="h-px flex-1 bg-gray-100" />
+              </div>
+            )}
+            {sec.title && collapsed && (
+              // 折畳時は section 見出しの代わりに thin divider
+              i > 0 && <div className="my-1 h-px bg-gray-200" />
+            )}
+            {sec.items.map(renderItem)}
+          </div>
+        ))}
       </nav>
+
       <div className="border-t px-3 py-2">
         {!collapsed && (
-          <div className="text-[10px] text-gray-400 leading-relaxed">
+          <div className="text-[10px] leading-relaxed text-gray-400">
             <div>介護管理システム v{APP_VERSION}</div>
             <div className={typeInfo.color}>{typeInfo.label}</div>
             {currentOffice && (
-              <div className="mt-1 pt-1 border-t border-gray-100 text-gray-600 truncate" title={currentOffice.name}>
+              <div
+                className="mt-1 truncate border-t border-gray-100 pt-1 text-gray-600"
+                title={currentOffice.name}
+              >
                 🏢 {currentOffice.name || "(名称未設定)"}
               </div>
             )}
+            <button
+              type="button"
+              onClick={onSwitchLayout}
+              className="mt-2 w-full rounded border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-100"
+            >
+              旧レイアウトに戻す
+            </button>
           </div>
         )}
         {collapsed && (
-          <div className="text-[9px] text-gray-400 text-center">v{APP_VERSION}</div>
+          <div className="text-center text-[9px] text-gray-400">v{APP_VERSION}</div>
         )}
       </div>
     </aside>
