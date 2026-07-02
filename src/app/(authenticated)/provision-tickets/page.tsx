@@ -1,19 +1,18 @@
 import { format, getDaysInMonth } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
-import { UserSidebar } from "@/components/users/user-sidebar";
 import {
   serviceNameVariantsAll,
   toHankakuDigits,
 } from "@/lib/service-name-normalize";
-import {
-  ProvisionTicketsContent,
-  type FormulaCode,
-  type GridState,
-  type KaigoStaff,
-  type KaigoUser,
-  type OfficeInfo,
-  type ServiceRow,
+import type {
+  FormulaCode,
+  GridState,
+  KaigoStaff,
+  KaigoUser,
+  OfficeInfo,
+  ServiceRow,
 } from "./provision-tickets-content";
+import { ProvisionTicketsShell } from "./provision-tickets-shell";
 
 function makeRowKey(serviceType: string, startTime: string, endTime: string): string {
   return `${serviceType}__${startTime}__${endTime}`;
@@ -148,28 +147,17 @@ export default async function ProvisionTicketsPage({
     }
   }
 
+  // 利用者切替は shell 内で client-side に行う (server 再実行を避けて高速化)
   return (
-    <div className="flex h-full -m-6">
-      <UserSidebar />
-      {userId ? (
-        <ProvisionTicketsContent
-          key={userId}
-          userId={userId}
-          initialUser={initialUser}
-          initialStaff={initialStaff}
-          initialServiceUnits={initialServiceUnits}
-          initialOffice={initialOffice}
-          initialServiceRows={initialServiceRows}
-          initialGrid={initialGrid}
-          initialFormulaCodes={initialFormulaCodes}
-        />
-      ) : (
-        <div className="flex-1 overflow-y-auto">
-          <div className="flex items-center justify-center h-64 text-gray-400 text-sm">
-            左の利用者一覧から利用者を選択してください
-          </div>
-        </div>
-      )}
-    </div>
+    <ProvisionTicketsShell
+      initialUserId={userId ?? null}
+      initialUser={initialUser}
+      initialStaff={initialStaff}
+      initialServiceUnits={initialServiceUnits}
+      initialOffice={initialOffice}
+      initialServiceRows={initialServiceRows}
+      initialGrid={initialGrid}
+      initialFormulaCodes={initialFormulaCodes}
+    />
   );
 }

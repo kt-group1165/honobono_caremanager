@@ -138,6 +138,12 @@ export interface ProvisionTicketsContentProps {
   initialServiceRows: ServiceRow[];
   initialGrid: GridState;
   initialFormulaCodes?: FormulaCode[];
+  /**
+   * server が initial data を preload 済みか。
+   * false = client 側の利用者切替で mount された (= initial* は空) ので
+   * mount 直後に grid を client fetch する。
+   */
+  serverPreloaded?: boolean;
 }
 
 export function ProvisionTicketsContent({
@@ -149,6 +155,7 @@ export function ProvisionTicketsContent({
   initialServiceRows,
   initialGrid,
   initialFormulaCodes = [],
+  serverPreloaded = true,
 }: ProvisionTicketsContentProps) {
   const supabase = useMemo(() => createClient(), []);
   const { currentOfficeId, currentOffice } = useBusinessType();
@@ -320,14 +327,17 @@ export function ProvisionTicketsContent({
     setLoading(false);
   }, [userId, monthStr, daysCount, supabase]);
 
-  // initial render は server からの initialServiceRows/initialGrid を使用、月切替時のみ refetch
+  // initial render は server からの initialServiceRows/initialGrid を使用、月切替時のみ refetch。
+  // ただし client-side の利用者切替 (serverPreloaded=false) で mount された場合は
+  // initial data が無いので即 fetch する。
   const isInitialMount = useRef(true);
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
-      return;
+      if (serverPreloaded) return;
     }
     fetchGridData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- serverPreloaded は mount 時のみ参照
   }, [fetchGridData]);
 
   // 自事業所 (currentOfficeId) が変わったら staff (members) を再フェッチ
