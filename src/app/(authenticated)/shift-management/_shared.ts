@@ -19,6 +19,10 @@ export interface VisitSchedule {
   id: string;
   user_id: string;
   staff_id: string | null;
+  /** 職員2 (2人対応・同行)。migration visit_schedule_staff_2_3.sql */
+  staff_id_2?: string | null;
+  /** 職員3 (2人対応・同行) */
+  staff_id_3?: string | null;
   visit_date: string;
   start_time: string | null;
   end_time: string | null;

@@ -56,7 +56,6 @@ export function MonthlyIndividualView({
   entityType,
   currentMonth,
   onMonthChange,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   staff,
   onEditSchedule,
   initialData,
@@ -104,6 +103,26 @@ export function MonthlyIndividualView({
       setSchedules(swrSchedules);
     }
   }, [swrSchedules]);
+
+  // 職員 2/3 の割当変更 (2人対応・同行用)
+  const updateStaffN = async (
+    sched: VisitSchedule,
+    field: "staff_id_2" | "staff_id_3",
+    value: string,
+  ) => {
+    const next = value || null;
+    const { error } = await supabase
+      .from("kaigo_visit_schedule")
+      .update({ [field]: next })
+      .eq("id", sched.id);
+    if (error) {
+      toast.error("職員の割当に失敗: " + error.message);
+      return;
+    }
+    setSchedules((prev) =>
+      prev.map((s) => (s.id === sched.id ? { ...s, [field]: next } : s)),
+    );
+  };
 
   const toggleStatus = async (sched: VisitSchedule) => {
     const isCurrentlyCompleted = sched.status === "completed";
@@ -353,13 +372,19 @@ export function MonthlyIndividualView({
                     title="全選択/解除"
                   />
                 </th>
-                <th className="border border-gray-300 px-1 py-1.5 text-center font-bold w-16">予実</th>
+                <th className="border border-gray-300 px-1 py-1.5 text-center font-bold w-20">予実</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-left font-bold text-red-700">利用日</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-left font-bold">利用時間</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-left font-bold text-red-700">*サービス内容</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-center font-bold">
                   {entityType === "user" ? "職員 1" : "利用者"}
                 </th>
+                {entityType === "user" && (
+                  <>
+                    <th className="border border-gray-300 px-2 py-1.5 text-center font-bold">職員 2</th>
+                    <th className="border border-gray-300 px-2 py-1.5 text-center font-bold">職員 3</th>
+                  </>
+                )}
                 <th className="border border-gray-300 px-2 py-1.5 text-center font-bold w-12">記録</th>
               </tr>
             </thead>
@@ -411,7 +436,7 @@ export function MonthlyIndividualView({
                           title={isCompleted ? "実績 → 予定に戻す" : "予定 → 実績に変更"}
                         >
                           <span className={cn(
-                            "relative inline-block w-8 h-4 rounded-full transition-colors",
+                            "relative inline-block w-8 h-4 shrink-0 rounded-full transition-colors",
                             isCompleted ? "bg-orange-500" : "bg-gray-300",
                             isToggling && "opacity-50"
                           )}>
@@ -421,7 +446,7 @@ export function MonthlyIndividualView({
                             )} />
                           </span>
                           <span className={cn(
-                            "text-[10px] font-bold min-w-[1.2rem]",
+                            "shrink-0 whitespace-nowrap text-[10px] font-bold",
                             isCompleted ? "text-orange-700" : "text-blue-600"
                           )}>
                             {isCompleted ? "実" : "予"}
@@ -496,6 +521,30 @@ export function MonthlyIndividualView({
                         ? sched.staff_name ?? "未割当"
                         : sched.user_name ?? "不明"}
                     </td>
+                    {entityType === "user" && (
+                      <>
+                        <td className="border border-gray-300 px-1 py-1 text-center">
+                          {!isCopy && (
+                            <StaffMiniSelect
+                              value={sched.staff_id_2 ?? ""}
+                              staff={staff}
+                              excludeIds={[sched.staff_id, sched.staff_id_3].filter(Boolean) as string[]}
+                              onChange={(v) => updateStaffN(sched, "staff_id_2", v)}
+                            />
+                          )}
+                        </td>
+                        <td className="border border-gray-300 px-1 py-1 text-center">
+                          {!isCopy && (
+                            <StaffMiniSelect
+                              value={sched.staff_id_3 ?? ""}
+                              staff={staff}
+                              excludeIds={[sched.staff_id, sched.staff_id_2].filter(Boolean) as string[]}
+                              onChange={(v) => updateStaffN(sched, "staff_id_3", v)}
+                            />
+                          )}
+                        </td>
+                      </>
+                    )}
                     <td className="border border-gray-300 px-1 py-1 text-center">
                       {isCompleted && (
                         <span className="inline-block w-3 h-3 rounded-sm bg-orange-200 border border-orange-400" title="実績記録あり" />
@@ -509,5 +558,38 @@ export function MonthlyIndividualView({
         </div>
       )}
     </div>
+  );
+}
+
+// ─── 職員 2/3 用のミニセレクト ────────────────────────────────────────────────
+function StaffMiniSelect({
+  value,
+  staff,
+  excludeIds,
+  onChange,
+}: {
+  value: string;
+  staff: KaigoStaff[];
+  excludeIds: string[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={cn(
+        "w-full max-w-[110px] rounded border px-1 py-0.5 text-[11px]",
+        value ? "border-gray-300 text-gray-800" : "border-gray-200 text-gray-400",
+      )}
+    >
+      <option value="">—</option>
+      {staff
+        .filter((s) => s.id === value || !excludeIds.includes(s.id))
+        .map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.name}
+          </option>
+        ))}
+    </select>
   );
 }

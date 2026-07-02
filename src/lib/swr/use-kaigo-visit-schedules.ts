@@ -44,7 +44,7 @@ async function fetchByUser(
   const { data, error } = await supabase
     .from("kaigo_visit_schedule")
     .select(
-      "id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, members(name)",
+      "id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, status, members(name)",
     )
     .eq("user_id", userId)
     .gte("visit_date", monthFrom)
@@ -55,6 +55,8 @@ async function fetchByUser(
     id: string;
     user_id: string;
     staff_id: string | null;
+    staff_id_2: string | null;
+    staff_id_3: string | null;
     visit_date: string;
     start_time: string | null;
     end_time: string | null;
@@ -66,6 +68,8 @@ async function fetchByUser(
     id: r.id,
     user_id: r.user_id,
     staff_id: r.staff_id,
+    staff_id_2: r.staff_id_2,
+    staff_id_3: r.staff_id_3,
     visit_date: r.visit_date,
     start_time: r.start_time,
     end_time: r.end_time,
@@ -108,7 +112,7 @@ async function fetchByStaff(
   const { data, error } = await supabase
     .from("kaigo_visit_schedule")
     .select(
-      "id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, clients(name)",
+      "id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, status, clients(name)",
     )
     .eq("staff_id", staffId)
     .gte("visit_date", monthFrom)
@@ -119,6 +123,8 @@ async function fetchByStaff(
     id: string;
     user_id: string;
     staff_id: string | null;
+    staff_id_2: string | null;
+    staff_id_3: string | null;
     visit_date: string;
     start_time: string | null;
     end_time: string | null;
@@ -130,6 +136,8 @@ async function fetchByStaff(
     id: r.id,
     user_id: r.user_id,
     staff_id: r.staff_id,
+    staff_id_2: r.staff_id_2,
+    staff_id_3: r.staff_id_3,
     visit_date: r.visit_date,
     start_time: r.start_time,
     end_time: r.end_time,
@@ -168,7 +176,7 @@ async function fetchByDate(dateStr: string): Promise<VisitSchedule[]> {
   const { data, error } = await supabase
     .from("kaigo_visit_schedule")
     .select(
-      "id, user_id, staff_id, visit_date, start_time, end_time, service_type, members(name), clients(name)",
+      "id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, members(name), clients(name)",
     )
     .eq("visit_date", dateStr)
     .order("start_time");
@@ -177,6 +185,8 @@ async function fetchByDate(dateStr: string): Promise<VisitSchedule[]> {
     id: string;
     user_id: string;
     staff_id: string | null;
+    staff_id_2: string | null;
+    staff_id_3: string | null;
     visit_date: string;
     start_time: string | null;
     end_time: string | null;
@@ -188,6 +198,8 @@ async function fetchByDate(dateStr: string): Promise<VisitSchedule[]> {
     id: r.id,
     user_id: r.user_id,
     staff_id: r.staff_id,
+    staff_id_2: r.staff_id_2,
+    staff_id_3: r.staff_id_3,
     visit_date: r.visit_date,
     start_time: r.start_time,
     end_time: r.end_time,
@@ -226,7 +238,7 @@ async function fetchByMonthAll(
   const supabase = createClient();
   const { data, error } = await supabase
     .from("kaigo_visit_schedule")
-    .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type")
+    .select("id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type")
     .gte("visit_date", monthFrom)
     .lte("visit_date", monthTo);
   if (error) throw error;
