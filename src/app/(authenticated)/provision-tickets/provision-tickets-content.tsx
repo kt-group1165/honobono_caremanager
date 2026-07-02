@@ -29,6 +29,10 @@ import {
 import { ja } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { ServiceSelector } from "@/components/services/service-selector";
+import {
+  serviceNameVariantsAll,
+  toHankakuDigits,
+} from "@/lib/service-name-normalize";
 import { useBusinessType } from "@/lib/business-type-context";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -170,7 +174,7 @@ export function ProvisionTicketsContent({
     };
   }, [userId, userData, supabase]);
   const [allStaff, setAllStaff] = useState<KaigoStaff[]>(initialStaff);
-  const [serviceUnits] = useState<Record<string, number>>(initialServiceUnits);
+  const [serviceUnits, setServiceUnits] = useState<Record<string, number>>(initialServiceUnits);
   const [officeInfo] = useState<OfficeInfo | null>(initialOffice);
   // 加算系 formula コード (cat=11 訪問介護 のみ抽出してデフォルト)
   const [formulaCodes] = useState<FormulaCode[]>(initialFormulaCodes);
@@ -183,6 +187,40 @@ export function ProvisionTicketsContent({
 
   const [serviceRows, setServiceRows] = useState<ServiceRow[]>(initialServiceRows);
   const [grid, setGrid] = useState<GridState>(initialGrid);
+
+  // serviceRows に serviceUnits 未登録の service_type が現れたら on-demand で単位数を補完
+  // (月変更・行追加のたび。「基本」全件 fetch は 1000 行制限で欠けるため .in() で絞る。
+  //  マスタは全角数字 (身体介護３) / schedule は半角混在のため variants 検索 + 正規化 lookup)
+  useEffect(() => {
+    const missing = Array.from(
+      new Set(serviceRows.map((r) => r.service_type)),
+    ).filter((t) => t && serviceUnits[t] === undefined);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("kaigo_service_codes")
+        .select("service_name, units")
+        .in("service_name", serviceNameVariantsAll(missing))
+        .eq("calculation_type", "基本");
+      if (cancelled || error) return;
+      const byNorm = new Map<string, number>();
+      for (const sc of (data ?? []) as { service_name: string; units: number }[]) {
+        const key = toHankakuDigits(sc.service_name);
+        if (!byNorm.has(key)) byNorm.set(key, sc.units);
+      }
+      const found: Record<string, number> = {};
+      for (const t of missing) {
+        // マスタに無い service_type は 0 を入れて再フェッチループを防ぐ
+        found[t] = byNorm.get(toHankakuDigits(t)) ?? 0;
+      }
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- on-demand master fetch
+      setServiceUnits((prev) => ({ ...prev, ...found }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [serviceRows, serviceUnits, supabase]);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   const [scheduleIds, setScheduleIds] = useState<Record<string, string>>({});
 

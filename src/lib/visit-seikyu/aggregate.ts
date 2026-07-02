@@ -16,6 +16,10 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  serviceNameVariantsAll,
+  toHankakuDigits,
+} from "@/lib/service-name-normalize";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -123,11 +127,14 @@ export async function aggregateMonthlyVisitSeikyu(
   }
 
   // 2) service_name → units / short_name のマスタ
+  // マスタは全角数字 (身体介護３) / schedule は半角混在のため
+  // variants で検索し、正規化キー (半角) で引く
   const serviceTypes = Array.from(new Set(schedules.map((s) => s.service_type)));
-  const unitByName = new Map<string, { units: number; short: string | null }>();
+  const unitByNorm = new Map<string, { units: number; short: string | null }>();
+  const variants = serviceNameVariantsAll(serviceTypes);
   // .in() の URL 長対策で 50 件ずつ chunk
-  for (let i = 0; i < serviceTypes.length; i += 50) {
-    const chunk = serviceTypes.slice(i, i + 50);
+  for (let i = 0; i < variants.length; i += 50) {
+    const chunk = variants.slice(i, i + 50);
     const { data, error } = await supabase
       .from("kaigo_service_codes")
       .select("service_name, short_name, units")
@@ -135,12 +142,16 @@ export async function aggregateMonthlyVisitSeikyu(
       .eq("calculation_type", "基本");
     if (error) throw new Error(`サービスコード取得失敗: ${error.message}`);
     for (const r of (data ?? []) as { service_name: string; short_name: string | null; units: number }[]) {
+      const key = toHankakuDigits(r.service_name);
       // 同名複数 code は最初の 1 件を採用 (units はどれも同一想定)
-      if (!unitByName.has(r.service_name)) {
-        unitByName.set(r.service_name, { units: r.units, short: r.short_name });
+      if (!unitByNorm.has(key)) {
+        unitByNorm.set(key, { units: r.units, short: r.short_name });
       }
     }
   }
+  const unitByName = {
+    get: (name: string) => unitByNorm.get(toHankakuDigits(name)),
+  };
 
   // 3) 利用者情報 (clients + 最新 insurance record)
   const userIds = Array.from(new Set(schedules.map((s) => s.user_id)));

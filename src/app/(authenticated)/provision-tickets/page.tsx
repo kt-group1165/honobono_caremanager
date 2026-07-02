@@ -2,6 +2,10 @@ import { format, getDaysInMonth } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { UserSidebar } from "@/components/users/user-sidebar";
 import {
+  serviceNameVariantsAll,
+  toHankakuDigits,
+} from "@/lib/service-name-normalize";
+import {
   ProvisionTicketsContent,
   type FormulaCode,
   type GridState,
@@ -35,9 +39,8 @@ export default async function ProvisionTicketsPage({
         .order("name")
     : null;
 
-  const [staffRes, serviceCodeRes, officeRes, formulaRes] = await Promise.all([
+  const [staffRes, officeRes, formulaRes] = await Promise.all([
     staffQuery ?? Promise.resolve({ data: [] as { id: string; name: string }[] }),
-    supabase.from("kaigo_service_codes").select("service_name, units").eq("calculation_type", "基本"),
     supabase.from("offices").select("provider_number:business_number, office_name:name").eq("app_type", "kaigo-app").limit(1).maybeSingle(),
     // 加算系 formula コード (処遇改善加算等の monthly_aggregate type)
     supabase
@@ -50,10 +53,9 @@ export default async function ProvisionTicketsPage({
   ]);
   const initialStaff = (staffRes.data ?? []) as KaigoStaff[];
   const initialOffice = (officeRes.data ?? null) as OfficeInfo | null;
+  // serviceUnits は「基本」全件だと PostgREST 1000 行制限に切られてしまうため、
+  // schedule に登場する service_type だけ後段 (userId ブロック内) で .in() 取得する
   const initialServiceUnits: Record<string, number> = {};
-  for (const sc of (serviceCodeRes.data ?? []) as { service_name: string; units: number }[]) {
-    initialServiceUnits[sc.service_name] = sc.units;
-  }
   const initialFormulaCodes: FormulaCode[] = (formulaRes.data ?? []) as FormulaCode[];
 
   let initialUser: KaigoUser | null = null;
@@ -121,6 +123,29 @@ export default async function ProvisionTicketsPage({
     }
     initialServiceRows = Array.from(rowMap.values()).sort((a, b) => a.start_time.localeCompare(b.start_time));
     initialGrid = newGrid;
+
+    // schedule に登場する service_type の単位数だけを取得
+    // マスタは全角数字 (身体介護３)、schedule は半角混在 (身体介護3) のため
+    // variants で検索し、正規化キー (半角) で引ける map にする
+    const serviceTypes = Array.from(new Set(schedules.map((s) => s.service_type))).filter(Boolean);
+    if (serviceTypes.length > 0) {
+      const { data: codeRows } = await supabase
+        .from("kaigo_service_codes")
+        .select("service_name, units")
+        .in("service_name", serviceNameVariantsAll(serviceTypes))
+        .eq("calculation_type", "基本");
+      const byNorm = new Map<string, number>();
+      for (const sc of (codeRows ?? []) as { service_name: string; units: number }[]) {
+        const key = toHankakuDigits(sc.service_name);
+        if (!byNorm.has(key)) byNorm.set(key, sc.units);
+      }
+      for (const t of serviceTypes) {
+        const units = byNorm.get(toHankakuDigits(t));
+        if (units !== undefined && !(t in initialServiceUnits)) {
+          initialServiceUnits[t] = units;
+        }
+      }
+    }
   }
 
   return (
