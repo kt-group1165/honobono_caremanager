@@ -434,7 +434,8 @@ export function MonthlyIndividualView({
         <div className="flex flex-1 items-center justify-center text-sm text-gray-400">この月の予定はありません</div>
       ) : (
         <div className="flex-1 overflow-auto">
-          <table className="w-full text-xs border-collapse">
+          {/* min-w で列潰れ (縦書き化) を防ぎ、狭い画面では横スクロールに逃がす */}
+          <table className="w-full min-w-[960px] text-xs border-collapse [&_th]:whitespace-nowrap">
             <thead className="bg-yellow-50 border-b sticky top-0 z-10">
               <tr>
                 <th className="border border-gray-300 px-1 py-1.5 text-center font-bold w-8">
@@ -596,7 +597,7 @@ export function MonthlyIndividualView({
                         ? serviceUnits[sched.service_type].toLocaleString()
                         : <span className="text-gray-300">—</span>}
                     </td>
-                    <td className="border border-gray-300 px-2 py-1 text-center">
+                    <td className="border border-gray-300 px-2 py-1 text-center whitespace-nowrap">
                       {entityType === "user"
                         ? sched.staff_name ?? "未割当"
                         : sched.user_name ?? "不明"}
