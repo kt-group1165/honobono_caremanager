@@ -58,6 +58,8 @@ export type OfficeSettings = {
   service_type: string;
   app_type: string | null;
   is_active: boolean;
+  // 訪問介護 手順書 モード: 'standalone'=手順書内で自入力 (先行スタート) / 'integrated'=本体 clients と連携
+  visit_procedure_mode?: "standalone" | "integrated";
 };
 
 function normalizeOffices(list: OfficeSettings[]): OfficeSettings[] {
@@ -220,6 +222,7 @@ export function OfficeContent({
         ai_enabled: form.ai_enabled,
         ai_api_key: form.ai_api_key,
         service_type: form.service_type,
+        visit_procedure_mode: form.visit_procedure_mode ?? "standalone",
       })
       .eq("id", form.id);
     setSaving(false);
@@ -409,6 +412,71 @@ export function OfficeContent({
           </div>
         </div>
       </div>
+
+      {/* 訪問介護 手順書 モード (=訪問介護事業所のみ) */}
+      {form.service_type === "訪問介護" && (
+        <div className="rounded-xl border bg-white p-6 shadow-sm space-y-4">
+          <h2 className="text-sm font-bold text-gray-700 border-b pb-2">
+            訪問介護 手順書モード
+          </h2>
+          <p className="text-xs text-gray-500">
+            移行期の運用切替:
+            <br />
+            ・<strong>先行スタート</strong>: 手順書機能内で利用者名を自入力する
+            (=本体マスタと分離)
+            <br />
+            ・<strong>通常</strong>: 本体の利用者管理 (clients) と連携し、
+            自動で利用者情報が反映される
+          </p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {(
+              [
+                {
+                  value: "standalone",
+                  label: "先行スタートモード",
+                  desc: "手順書内で利用者名を自入力 (先行運用用)",
+                },
+                {
+                  value: "integrated",
+                  label: "通常モード",
+                  desc: "本体マスタの利用者情報を使う",
+                },
+              ] as const
+            ).map((opt) => {
+              const active =
+                (form.visit_procedure_mode ?? "standalone") === opt.value;
+              return (
+                <label
+                  key={opt.value}
+                  className={
+                    "flex items-start gap-2 cursor-pointer rounded-lg border p-3 transition-colors " +
+                    (active
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-200 bg-white hover:bg-gray-50")
+                  }
+                >
+                  <input
+                    type="radio"
+                    name="visit_procedure_mode"
+                    value={opt.value}
+                    checked={active}
+                    onChange={() =>
+                      handleChange("visit_procedure_mode", opt.value)
+                    }
+                    className="mt-0.5"
+                  />
+                  <span className="flex flex-col">
+                    <span className="text-sm font-medium text-gray-800">
+                      {opt.label}
+                    </span>
+                    <span className="text-xs text-gray-500">{opt.desc}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* AI機能設定 */}
       <div className="rounded-xl border bg-white p-6 shadow-sm space-y-4">
