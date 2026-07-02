@@ -104,14 +104,18 @@ export function RiyouSeikyuContent() {
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-left text-xs text-gray-600">
                 <tr>
-                  <th className="px-2 py-2 text-center w-9">
-                    <input
-                      type="checkbox"
-                      checked={rows.length > 0 && checked.size === rows.length}
-                      onChange={toggleAll}
-                      className="h-3.5 w-3.5 accent-emerald-600 cursor-pointer"
-                      title="全選択/解除"
-                    />
+                  <th className="px-2 py-1.5 text-center w-14">
+                    <label className="inline-flex cursor-pointer select-none flex-col items-center gap-0.5">
+                      <input
+                        type="checkbox"
+                        checked={rows.length > 0 && checked.size === rows.length}
+                        onChange={toggleAll}
+                        className="h-3.5 w-3.5 accent-emerald-600 cursor-pointer"
+                      />
+                      <span className="whitespace-nowrap text-[9px] font-normal text-gray-500">
+                        全選択
+                      </span>
+                    </label>
                   </th>
                   <th className="px-3 py-2">利用者名</th>
                   <th className="px-3 py-2">被保険者番号</th>
