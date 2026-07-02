@@ -139,6 +139,7 @@ export function MonthlyIndividualView({
         .eq("start_time", sched.start_time)
         .limit(1);
       if (!existing || existing.length === 0) {
+        // status CHECK 制約は draft/confirmed/submitted のみ。自動生成は下書き記録として作る
         const { error } = await supabase.from("kaigo_visit_records").insert({
           user_id: sched.user_id,
           staff_id: sched.staff_id,
@@ -146,7 +147,7 @@ export function MonthlyIndividualView({
           start_time: sched.start_time,
           end_time: sched.end_time,
           service_type: sched.service_type,
-          status: "completed",
+          status: "draft",
         });
         if (error) {
           toast.error("実績登録に失敗しました: " + error.message);
@@ -155,7 +156,12 @@ export function MonthlyIndividualView({
           return;
         }
       }
-      await supabase.from("kaigo_visit_schedule").update({ status: "completed" }).eq("id", sched.id);
+      const { error: upErr } = await supabase.from("kaigo_visit_schedule").update({ status: "completed" }).eq("id", sched.id);
+      if (upErr) {
+        toast.error("実績変更に失敗しました: " + upErr.message);
+        setTogglingId(null);
+        return;
+      }
       setSchedules((prev) => prev.map((s) => s.id === sched.id ? { ...s, status: "completed" } : s));
       toast.success("実績に変更しました（提供表にも反映）");
     } else {
@@ -165,7 +171,12 @@ export function MonthlyIndividualView({
         .eq("user_id", sched.user_id)
         .eq("visit_date", sched.visit_date)
         .eq("start_time", sched.start_time);
-      await supabase.from("kaigo_visit_schedule").update({ status: "scheduled" }).eq("id", sched.id);
+      const { error: upErr } = await supabase.from("kaigo_visit_schedule").update({ status: "scheduled" }).eq("id", sched.id);
+      if (upErr) {
+        toast.error("予定への変更に失敗しました: " + upErr.message);
+        setTogglingId(null);
+        return;
+      }
       setSchedules((prev) => prev.map((s) => s.id === sched.id ? { ...s, status: "scheduled" } : s));
       toast.success("予定に戻しました（提供表の実績も削除）");
     }
@@ -192,21 +203,35 @@ export function MonthlyIndividualView({
     const targets = schedules.filter((s) => selectedIds.has(s.id) && s.status !== "completed");
     if (targets.length === 0) { toast.info("選択された予定はすべて実績済みです"); return; }
     setBulkProcessing(true);
+    const succeeded = new Set<string>();
     for (const sched of targets) {
       const { data: existing } = await supabase
         .from("kaigo_visit_records").select("id")
         .eq("user_id", sched.user_id).eq("visit_date", sched.visit_date).eq("start_time", sched.start_time).limit(1);
       if (!existing || existing.length === 0) {
-        await supabase.from("kaigo_visit_records").insert({
+        const { error } = await supabase.from("kaigo_visit_records").insert({
           user_id: sched.user_id, staff_id: sched.staff_id,
           visit_date: sched.visit_date, start_time: sched.start_time, end_time: sched.end_time,
-          service_type: sched.service_type, status: "completed",
+          service_type: sched.service_type, status: "draft",
         });
+        if (error) {
+          console.error("visit_records insert error:", error.message);
+          continue;
+        }
       }
-      await supabase.from("kaigo_visit_schedule").update({ status: "completed" }).eq("id", sched.id);
+      const { error: upErr } = await supabase.from("kaigo_visit_schedule").update({ status: "completed" }).eq("id", sched.id);
+      if (upErr) {
+        console.error("visit_schedule update error:", upErr.message);
+        continue;
+      }
+      succeeded.add(sched.id);
     }
-    setSchedules((prev) => prev.map((s) => selectedIds.has(s.id) ? { ...s, status: "completed" } : s));
-    toast.success(`${targets.length}件を実績に変換しました`);
+    setSchedules((prev) => prev.map((s) => succeeded.has(s.id) ? { ...s, status: "completed" } : s));
+    if (succeeded.size === targets.length) {
+      toast.success(`${succeeded.size}件を実績に変換しました`);
+    } else {
+      toast.error(`${succeeded.size}/${targets.length}件のみ実績に変換できました (失敗分はコンソール参照)`);
+    }
     setSelectedIds(new Set());
     setBulkProcessing(false);
   };
