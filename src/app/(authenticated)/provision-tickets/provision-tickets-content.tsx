@@ -97,6 +97,14 @@ function isDowColor(year: number, month: number, day: number): string {
   return "text-gray-700";
 }
 
+/** 土曜=薄い青、日曜=薄い赤 の背景色 (=カレンダー慣習) */
+function isDowBg(year: number, month: number, day: number): string {
+  const dow = new Date(year, month - 1, day).getDay();
+  if (dow === 0) return "bg-red-50";
+  if (dow === 6) return "bg-blue-50";
+  return "";
+}
+
 function makeRowKey(serviceType: string, startTime: string, endTime: string): string {
   return `${serviceType}__${startTime}__${endTime}`;
 }
@@ -1108,25 +1116,25 @@ export function ProvisionTicketsContent({
               <div className="grid grid-cols-4 gap-3 mb-4">
                 <div>
                   <label className="block text-[10px] text-gray-500 mb-0.5">保険者番号</label>
-                  <div className="rounded border border-gray-300 px-2 py-1.5 text-sm bg-white min-h-[2rem]">
+                  <div className="rounded border border-gray-400 px-2 py-1.5 text-sm bg-white min-h-[2rem]">
                     {userData?.insurer_no ?? ""}
                   </div>
                 </div>
                 <div>
                   <label className="block text-[10px] text-gray-500 mb-0.5">被保険者番号</label>
-                  <div className="rounded border border-gray-300 px-2 py-1.5 text-sm bg-white min-h-[2rem]">
+                  <div className="rounded border border-gray-400 px-2 py-1.5 text-sm bg-white min-h-[2rem]">
                     {userData?.insured_no ?? ""}
                   </div>
                 </div>
                 <div>
                   <label className="block text-[10px] text-gray-500 mb-0.5">利用者氏名</label>
-                  <div className="rounded border border-gray-300 px-2 py-1.5 text-sm font-semibold bg-white min-h-[2rem]">
+                  <div className="rounded border border-gray-400 px-2 py-1.5 text-sm font-semibold bg-white min-h-[2rem]">
                     {userData?.name ?? ""}
                   </div>
                 </div>
                 <div>
                   <label className="block text-[10px] text-gray-500 mb-0.5">要介護度</label>
-                  <div className="rounded border border-gray-300 px-2 py-1.5 text-sm bg-white min-h-[2rem]">
+                  <div className="rounded border border-gray-400 px-2 py-1.5 text-sm bg-white min-h-[2rem]">
                     {userData?.care_level ?? ""}
                   </div>
                 </div>
@@ -1151,7 +1159,7 @@ export function ProvisionTicketsContent({
                 </div>
                 <div>
                   <label className="block text-[10px] text-gray-500 mb-0.5">作成年月日</label>
-                  <div className="rounded border border-gray-300 px-2 py-1.5 text-sm bg-white min-h-[2rem]">
+                  <div className="rounded border border-gray-400 px-2 py-1.5 text-sm bg-white min-h-[2rem]">
                     {toWareki(new Date())}
                   </div>
                 </div>
@@ -1181,48 +1189,50 @@ export function ProvisionTicketsContent({
                 </div>
               ) : (
                 <div className="w-full min-w-0 overflow-x-auto border rounded-lg">
-                  <table className="text-xs border-collapse" style={{ tableLayout: "fixed", width: "1016px", minWidth: "1016px" }}>
+                  <table className="text-xs border-collapse" style={{ tableLayout: "fixed", width: "1040px", minWidth: "1040px" }}>
                     <colgroup>
-                      <col style={{ width: "62px" }} />
-                      <col style={{ width: "100px" }} />
-                      <col style={{ width: "62px" }} />
-                      {days.map((d) => <col key={d} style={{ width: "24px" }} />)}
-                      <col style={{ width: "28px" }} />
+                      <col style={{ width: "64px" }} />
+                      <col style={{ width: "110px" }} />
+                      <col style={{ width: "80px" }} />
+                      {days.map((d) => <col key={d} style={{ width: "22px" }} />)}
+                      <col style={{ width: "30px" }} />
                       <col className="no-print" style={{ width: "20px" }} />
                     </colgroup>
                     <thead>
                       {/* Day numbers */}
                       <tr className="bg-gray-50">
-                        <th className="border border-gray-300 px-1.5 py-1 text-left text-[11px] sticky left-0 bg-gray-50 z-10">時間帯</th>
-                        <th className="border border-gray-300 px-1.5 py-1 text-left text-[11px]">サービス内容</th>
-                        <th className="border border-gray-300 px-0 py-1 text-[9px]"></th>
+                        <th className="border border-gray-400 px-1.5 py-1 text-left text-[11px] sticky left-0 bg-gray-50 z-10">時間帯</th>
+                        <th className="border border-gray-400 px-1.5 py-1 text-left text-[11px]">サービス内容</th>
+                        <th className="border border-gray-400 px-0 py-1 text-[9px]"></th>
                         {days.map((d) => (
                           <th key={d} className={cn(
-                            "border border-gray-300 px-0 py-1 text-center font-semibold text-[11px]",
-                            isDowColor(year, month, d)
+                            "border border-gray-400 px-0 py-1 text-center font-semibold text-[11px]",
+                            isDowColor(year, month, d),
+                            isDowBg(year, month, d)
                           )}>
                             {d}
                           </th>
                         ))}
-                        <th className="border border-gray-300 px-0 py-1 text-center font-bold text-blue-700 text-[11px]">計</th>
-                        <th className="border border-gray-300 no-print"></th>
+                        <th className="border border-gray-400 px-0 py-1 text-center font-bold text-blue-700 text-[11px]">計</th>
+                        <th className="border border-gray-400 no-print"></th>
                       </tr>
                       {/* Day of week */}
                       <tr className="bg-gray-50">
-                        <th className="border border-gray-300 sticky left-0 bg-gray-50 z-10" colSpan={3}></th>
+                        <th className="border border-gray-400 sticky left-0 bg-gray-50 z-10" colSpan={3}></th>
                         {days.map((d) => {
                           const dow = getDayOfWeek(year, month, d);
                           return (
                             <th key={`dow-${d}`} className={cn(
-                              "border border-gray-300 px-0 py-0.5 text-center text-[10px] font-normal",
-                              isDowColor(year, month, d)
+                              "border border-gray-400 px-0 py-0.5 text-center text-[10px] font-normal",
+                              isDowColor(year, month, d),
+                              isDowBg(year, month, d)
                             )}>
                               {dow}
                             </th>
                           );
                         })}
-                        <th className="border border-gray-300"></th>
-                        <th className="border border-gray-300 no-print"></th>
+                        <th className="border border-gray-400"></th>
+                        <th className="border border-gray-400 no-print"></th>
                       </tr>
                     </thead>
                       {serviceRows.map((row) => {
@@ -1235,7 +1245,7 @@ export function ProvisionTicketsContent({
                             {/* Planned row */}
                             <tr>
                               <td
-                                className="border border-gray-300 px-1.5 py-1 text-[11px] text-gray-700 sticky left-0 bg-white z-10 cursor-pointer hover:bg-blue-50"
+                                className="border border-gray-400 px-1.5 py-1 text-[11px] text-gray-700 sticky left-0 bg-white z-10 cursor-pointer hover:bg-blue-50"
                                 rowSpan={2}
                                 onClick={() => openEditRow(row)}
                                 title="クリックして編集"
@@ -1244,7 +1254,7 @@ export function ProvisionTicketsContent({
                                 <br />〜{row.end_time.slice(0, 5)}
                               </td>
                               <td
-                                className="border border-gray-300 px-1.5 py-1 text-[11px] cursor-pointer hover:bg-blue-50"
+                                className="border border-gray-400 px-1.5 py-1 text-[11px] cursor-pointer hover:bg-blue-50"
                                 rowSpan={2}
                                 onClick={() => openEditRow(row)}
                                 title="クリックして編集"
@@ -1252,7 +1262,7 @@ export function ProvisionTicketsContent({
                                 <div>{row.service_type}</div>
                                 {row.staff_name && <div className="text-[9px] text-gray-400">{row.staff_name}</div>}
                               </td>
-                              <td className="border border-gray-300 pl-1 pr-1.5 py-0.5 text-center text-[10px]">
+                              <td className="border border-gray-400 pl-1 pr-1.5 py-0.5 text-center text-[10px]">
                                 <div className="flex items-center gap-1">
                                   <span className="text-gray-500 shrink-0">予定</span>
                                   <div className="flex gap-1 no-print">
@@ -1269,8 +1279,8 @@ export function ProvisionTicketsContent({
                                   <td
                                     key={`p-${d}`}
                                     className={cn(
-                                      "border border-gray-200 px-0 py-0 text-center cursor-pointer transition-colors",
-                                      isOn ? "bg-blue-50" : "hover:bg-blue-50/50"
+                                      "border border-gray-400 px-0 py-0 text-center cursor-pointer transition-colors",
+                                      isOn ? "bg-blue-100" : cn(isDowBg(year, month, d), "hover:bg-blue-50/50")
                                     )}
                                     onClick={() => togglePlanned(row.key, d)}
                                   >
@@ -1278,10 +1288,10 @@ export function ProvisionTicketsContent({
                                   </td>
                                 );
                               })}
-                              <td className="border border-gray-300 px-0 py-0 text-center font-bold text-blue-700">
+                              <td className="border border-gray-400 px-0 py-0 text-center font-bold text-blue-700">
                                 {plannedCount > 0 ? plannedCount : ""}
                               </td>
-                              <td className="border border-gray-300 px-0 py-0 text-center no-print" rowSpan={2}>
+                              <td className="border border-gray-400 px-0 py-0 text-center no-print" rowSpan={2}>
                                 <button
                                   onClick={() => removeRow(row.key)}
                                   className="text-gray-300 hover:text-red-500 transition-colors"
@@ -1293,7 +1303,7 @@ export function ProvisionTicketsContent({
                             </tr>
                             {/* Actual row */}
                             <tr>
-                              <td className="border border-gray-300 pl-1 pr-1.5 py-0.5 text-center text-[10px]">
+                              <td className="border border-gray-400 pl-1 pr-1.5 py-0.5 text-center text-[10px]">
                                 <div className="flex items-center gap-1">
                                   <span className="text-gray-500 shrink-0">実績</span>
                                   <div className="flex gap-1 no-print">
@@ -1310,8 +1320,8 @@ export function ProvisionTicketsContent({
                                   <td
                                     key={`a-${d}`}
                                     className={cn(
-                                      "border border-gray-200 px-0 py-0 text-center cursor-pointer transition-colors",
-                                      isOn ? "bg-green-50" : "hover:bg-green-50/50"
+                                      "border border-gray-400 px-0 py-0 text-center cursor-pointer transition-colors",
+                                      isOn ? "bg-green-100" : cn(isDowBg(year, month, d), "hover:bg-green-50/50")
                                     )}
                                     onClick={() => toggleActual(row.key, d)}
                                   >
@@ -1319,7 +1329,7 @@ export function ProvisionTicketsContent({
                                   </td>
                                 );
                               })}
-                              <td className="border border-gray-300 px-0 py-0 text-center font-bold text-green-700">
+                              <td className="border border-gray-400 px-0 py-0 text-center font-bold text-green-700">
                                 {actualCount > 0 ? actualCount : ""}
                               </td>
                             </tr>
@@ -1330,7 +1340,7 @@ export function ProvisionTicketsContent({
                       {serviceRows.length === 0 && (
                         <tbody>
                           <tr>
-                            <td colSpan={3 + days.length + 2} className="border border-gray-300 px-4 py-8 text-center text-gray-400">
+                            <td colSpan={3 + days.length + 2} className="border border-gray-400 px-4 py-8 text-center text-gray-400">
                               サービスの予定がありません。「＋サービス追加」で追加するか、シフト管理から予定を作成してください。
                             </td>
                           </tr>
@@ -1341,28 +1351,28 @@ export function ProvisionTicketsContent({
                       {serviceRows.length > 0 && (
                         <tbody>
                           <tr className="bg-blue-50/50">
-                            <td colSpan={3} className="border border-gray-300 px-2 py-1 text-right font-bold text-blue-700 text-xs">
+                            <td colSpan={3} className="border border-gray-400 px-2 py-1 text-right font-bold text-blue-700 text-xs">
                               予定合計
                             </td>
                             {days.map((d) => (
-                              <td key={`sp-${d}`} className="border border-gray-300 px-0 py-0 text-center font-bold text-blue-700">
+                              <td key={`sp-${d}`} className="border border-gray-400 px-0 py-0 text-center font-bold text-blue-700">
                                 {(daySummary.planned[d] ?? 0) > 0 ? daySummary.planned[d] : ""}
                               </td>
                             ))}
-                            <td className="border border-gray-300 px-0 py-0 text-center font-bold text-blue-700">{totalPlanned > 0 ? totalPlanned : ""}</td>
-                            <td className="border border-gray-300 no-print"></td>
+                            <td className="border border-gray-400 px-0 py-0 text-center font-bold text-blue-700">{totalPlanned > 0 ? totalPlanned : ""}</td>
+                            <td className="border border-gray-400 no-print"></td>
                           </tr>
                           <tr className="bg-green-50/50">
-                            <td colSpan={3} className="border border-gray-300 px-2 py-1 text-right font-bold text-green-700 text-xs">
+                            <td colSpan={3} className="border border-gray-400 px-2 py-1 text-right font-bold text-green-700 text-xs">
                               実績合計
                             </td>
                             {days.map((d) => (
-                              <td key={`sa-${d}`} className="border border-gray-300 px-0 py-0 text-center font-bold text-green-700">
+                              <td key={`sa-${d}`} className="border border-gray-400 px-0 py-0 text-center font-bold text-green-700">
                                 {(daySummary.actual[d] ?? 0) > 0 ? daySummary.actual[d] : ""}
                               </td>
                             ))}
-                            <td className="border border-gray-300 px-0 py-0 text-center font-bold text-green-700">{totalActual > 0 ? totalActual : ""}</td>
-                            <td className="border border-gray-300 no-print"></td>
+                            <td className="border border-gray-400 px-0 py-0 text-center font-bold text-green-700">{totalActual > 0 ? totalActual : ""}</td>
+                            <td className="border border-gray-400 no-print"></td>
                           </tr>
                         </tbody>
                       )}
@@ -1498,14 +1508,14 @@ export function ProvisionTicketsContent({
                   <input type="time" value={addRowForm.start_time} onChange={(e) => {
                     const v = e.target.value;
                     setAddRowForm((f) => ({ ...f, start_time: v, end_time: f.end_time <= v ? v : f.end_time }));
-                  }} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                  }} className="w-full rounded-lg border border-gray-400 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">終了時間</label>
                   <input type="time" value={addRowForm.end_time} min={addRowForm.start_time} onChange={(e) => {
                     const v = e.target.value;
                     setAddRowForm((f) => ({ ...f, end_time: v < f.start_time ? f.start_time : v }));
-                  }} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                  }} className="w-full rounded-lg border border-gray-400 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
                 </div>
               </div>
               <div>
@@ -1513,7 +1523,7 @@ export function ProvisionTicketsContent({
                 <button
                   type="button"
                   onClick={() => setShowAddServiceSelector(true)}
-                  className="w-full flex items-center justify-between rounded-lg border border-gray-300 px-3 py-2 text-sm text-left hover:bg-gray-50"
+                  className="w-full flex items-center justify-between rounded-lg border border-gray-400 px-3 py-2 text-sm text-left hover:bg-gray-50"
                 >
                   <span className={addRowForm.service_name ? "text-gray-900" : "text-gray-400"}>
                     {addRowForm.service_name || "サービスを選択..."}
@@ -1532,7 +1542,7 @@ export function ProvisionTicketsContent({
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">担当職員</label>
-                <select value={addRowForm.staff_id} onChange={(e) => setAddRowForm((f) => ({ ...f, staff_id: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                <select value={addRowForm.staff_id} onChange={(e) => setAddRowForm((f) => ({ ...f, staff_id: e.target.value }))} className="w-full rounded-lg border border-gray-400 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
                   <option value="">-- 選択 --</option>
                   {allStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
@@ -1565,14 +1575,14 @@ export function ProvisionTicketsContent({
                   <input type="time" value={editRowForm.start_time} onChange={(e) => {
                     const v = e.target.value;
                     setEditRowForm((f) => ({ ...f, start_time: v, end_time: f.end_time <= v ? v : f.end_time }));
-                  }} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                  }} className="w-full rounded-lg border border-gray-400 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">終了時間</label>
                   <input type="time" value={editRowForm.end_time} min={editRowForm.start_time} onChange={(e) => {
                     const v = e.target.value;
                     setEditRowForm((f) => ({ ...f, end_time: v < f.start_time ? f.start_time : v }));
-                  }} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                  }} className="w-full rounded-lg border border-gray-400 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
                 </div>
               </div>
               <div>
@@ -1580,7 +1590,7 @@ export function ProvisionTicketsContent({
                 <button
                   type="button"
                   onClick={() => setShowEditServiceSelector(true)}
-                  className="w-full flex items-center justify-between rounded-lg border border-gray-300 px-3 py-2 text-sm text-left hover:bg-gray-50"
+                  className="w-full flex items-center justify-between rounded-lg border border-gray-400 px-3 py-2 text-sm text-left hover:bg-gray-50"
                 >
                   <span className={editRowForm.service_name ? "text-gray-900" : "text-gray-400"}>
                     {editRowForm.service_name || "サービスを選択..."}
