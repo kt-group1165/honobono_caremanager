@@ -208,15 +208,19 @@ const CATEGORIES_SHOGAI = [
   { code: "71", name: "福祉型児童入所" },
 ] as const;
 
+// 実データ (千葉市/木更津市 取込分 + 汎用) の service_category に合わせる
 const CATEGORIES_SOUGOU = [
-  { code: "A1", name: "訪問型サービスA" },
-  { code: "A2", name: "訪問型サービスB" },
-  { code: "A3", name: "訪問型サービスC" },
-  { code: "A4", name: "訪問型サービスD" },
-  { code: "B1", name: "通所型サービスA" },
-  { code: "B2", name: "通所型サービスB" },
-  { code: "B3", name: "通所型サービスC" },
-  { code: "C1", name: "介護予防ケアマネ" },
+  { code: "A2", name: "訪問介護相当" },
+  { code: "A3", name: "生活援助型訪問" },
+  { code: "A1", name: "訪問型A (緩和)" },
+  { code: "A4", name: "訪問型D (移動)" },
+  { code: "A6", name: "通所介護相当" },
+  { code: "A7", name: "ミニデイ通所" },
+  { code: "B1", name: "通所型A (緩和)" },
+  { code: "B2", name: "通所型B" },
+  { code: "B3", name: "通所型C" },
+  { code: "AF", name: "予防ケアマネ" },
+  { code: "C1", name: "予防ケアマネ (汎用)" },
 ] as const;
 
 // 独自サービス (法定外・保険請求対象外)
@@ -332,13 +336,15 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
   // 開始時刻 → 時間帯 (日中/早朝/夜間/深夜)
   const slotZone = React.useMemo(() => classifyStartTimeZone(startTime), [startTime])
 
+  // 福祉用具貸与 (17) は所要時間の概念なし。総合事業は名称が時間コード化されて
+  // いない (週 N 回・月額等) ため、独自サービス共々 candidate filter の対象外。
+  const hasTimeConcept = activeCategory !== "17" && system !== "独自" && system !== "総合事業"
+
   // ── Filtered list ────────────────────────────────────────────────────────────
   // services は activeCategory 単位で fetch されているので、ここでは
   // candidate filter (時間レンジ/時間帯) と検索文字列のみ適用する。
   const filtered = React.useMemo(() => {
     const lowerQuery = query.toLowerCase()
-    // 福祉用具貸与 (17) と独自サービスは時間帯/所要時間の概念なし → candidate filter 適用しない
-    const hasTimeConcept = activeCategory !== "17" && system !== "独自"
     const applyCandidate = candidateOnly && durationMinutes !== null && hasTimeConcept
     return services.filter((s) => {
       if (applyCandidate) {
@@ -358,7 +364,7 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
         s.name.toLowerCase().includes(lowerQuery)
       )
     })
-  }, [services, activeCategory, query, candidateOnly, durationMinutes, slotZone, system])
+  }, [services, hasTimeConcept, query, candidateOnly, durationMinutes, slotZone, system])
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
@@ -457,7 +463,7 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
               className="w-full rounded-md border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
-          {durationMinutes !== null && (
+          {durationMinutes !== null && hasTimeConcept && (
             <label className="flex items-center gap-2 text-sm text-gray-700 select-none cursor-pointer">
               <input
                 type="checkbox"
