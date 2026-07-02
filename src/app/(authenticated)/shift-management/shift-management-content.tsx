@@ -98,7 +98,7 @@ function DualSidebar({
   const count = tab === "user" ? filteredUsers.length : filteredStaff.length;
 
   return (
-    <div className="flex h-full w-40 flex-col border-r bg-white">
+    <div className="flex h-full w-36 flex-col border-r bg-white">
       <div className="flex border-b">
         <button
           onClick={() => { onTabChange("user"); setSearch(""); }}
