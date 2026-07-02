@@ -8,7 +8,7 @@ import type { VisitSchedule } from "@/app/(authenticated)/shift-management/_shar
  * kaigo_visit_schedule 取得 hook (SWR ベース、shift-management 専用)。
  *
  * 4 つの filter pattern を 1 つの hook で扱う:
- *   - `byUser` (userId 指定)        : 月内かつ user_id 一致 + members(name) JOIN
+ *   - `byUser` (userId 指定)        : 月内かつ user_id 一致 + members!kaigo_visit_schedule_staff_id_fkey(name) JOIN
  *   - `byStaff` (staffId 指定)      : 月内かつ staff_id 一致 + clients(name) JOIN
  *   - `byDate` (date 指定、cross-staff): 日付完全一致 + members,clients JOIN (timeline 用)
  *   - `byMonthAll` (month 範囲全件) : user_calendar の allSchedules conflict 検知用
@@ -44,7 +44,7 @@ async function fetchByUser(
   const { data, error } = await supabase
     .from("kaigo_visit_schedule")
     .select(
-      "id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, status, members(name)",
+      "id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, status, members!kaigo_visit_schedule_staff_id_fkey(name)",
     )
     .eq("user_id", userId)
     .gte("visit_date", monthFrom)
@@ -176,7 +176,7 @@ async function fetchByDate(dateStr: string): Promise<VisitSchedule[]> {
   const { data, error } = await supabase
     .from("kaigo_visit_schedule")
     .select(
-      "id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, members(name), clients(name)",
+      "id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, members!kaigo_visit_schedule_staff_id_fkey(name), clients(name)",
     )
     .eq("visit_date", dateStr)
     .order("start_time");

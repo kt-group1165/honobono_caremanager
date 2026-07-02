@@ -168,7 +168,7 @@ export default async function ShiftManagementPage({
     const [schedRes, availRes, allStaffRes, allSchedRes, provRes] = await Promise.all([
       supabase
         .from("kaigo_visit_schedule")
-        .select("id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, status, members(name)")
+        .select("id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, status, members!kaigo_visit_schedule_staff_id_fkey(name)")
         .eq("user_id", selectedUserId)
         .gte("visit_date", monthFrom)
         .lte("visit_date", monthTo)
@@ -269,7 +269,7 @@ export default async function ShiftManagementPage({
       supabase
         .from("kaigo_visit_schedule")
         .select(
-          "id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, members(name), clients(name)"
+          "id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, members!kaigo_visit_schedule_staff_id_fkey(name), clients(name)"
         )
         .eq("visit_date", dateStr)
         .order("start_time"),
@@ -311,7 +311,7 @@ export default async function ShiftManagementPage({
       const col = tab === "user" ? "user_id" : "staff_id";
       const { data } = await supabase
         .from("kaigo_visit_schedule")
-        .select("id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, status, clients(name), members(name)")
+        .select("id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, status, clients(name), members!kaigo_visit_schedule_staff_id_fkey(name)")
         .eq(col, entityId)
         .gte("visit_date", monthFrom)
         .lte("visit_date", monthTo)

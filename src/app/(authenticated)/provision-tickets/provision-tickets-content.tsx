@@ -258,7 +258,7 @@ export function ProvisionTicketsContent({
 
     const { data, error } = await supabase
       .from("kaigo_visit_schedule")
-      .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, members(name)")
+      .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, members!kaigo_visit_schedule_staff_id_fkey(name)")
       .eq("user_id", userId)
       .gte("visit_date", from)
       .lte("visit_date", to)
