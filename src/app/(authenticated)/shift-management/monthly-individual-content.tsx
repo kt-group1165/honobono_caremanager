@@ -1,5 +1,6 @@
 "use client";
 
+import { serviceShortName } from "@/lib/service-short-name";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -487,7 +488,7 @@ export function MonthlyIndividualView({
                         "inline-block rounded px-1.5 py-0.5 text-[10px] font-medium",
                         SERVICE_TYPE_COLORS[sched.service_type] ?? "bg-gray-100 text-gray-700"
                       )}>
-                        {sched.service_type}
+                        {serviceShortName(sched.service_type)}
                       </span>
                     </td>
                     <td className="border border-gray-300 px-2 py-1 text-center">

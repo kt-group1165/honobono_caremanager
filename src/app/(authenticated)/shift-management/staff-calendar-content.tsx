@@ -1,5 +1,6 @@
 "use client";
 
+import { serviceShortName } from "@/lib/service-short-name";
 import { useMemo } from "react";
 import {
   ChevronLeft,
@@ -204,7 +205,7 @@ export function StaffCalendar({
                           )}
                           title={`クリックして編集${isCompleted ? "（実績）" : "（予定）"}${onUnavail ? " ⚠勤務不可" : ""}`}
                         >
-                          {sched.start_time?.slice(0, 5)}~{sched.end_time?.slice(0, 5)} {sched.user_name ?? ""} {sched.service_type}
+                          {sched.start_time?.slice(0, 5)}~{sched.end_time?.slice(0, 5)} {sched.user_name ?? ""} {serviceShortName(sched.service_type)}
                           {(onUnavail || conflict) && <AlertTriangle size={8} className="inline ml-0.5" />}
                           {conflict && <span className="ml-0.5">重複</span>}
                         </button>

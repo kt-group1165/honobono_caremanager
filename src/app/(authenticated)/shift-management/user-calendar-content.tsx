@@ -27,6 +27,7 @@ import { ja } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { ServiceSelector } from "@/components/services/service-selector";
 import { StaffCombobox } from "@/components/shared/staff-combobox";
+import { serviceShortName } from "@/lib/service-short-name";
 import {
   DOW_LABELS,
   isStaffUnavailableAtTime,
@@ -356,7 +357,7 @@ export function UserCalendar({
                           )}
                           title={isCompleted ? "実績（クリックして編集）" : "予定（クリックして編集）"}
                         >
-                          {sched.start_time?.slice(0, 5)}~{sched.end_time?.slice(0, 5)} {sched.staff_name ?? ""} {sched.service_type}
+                          {sched.start_time?.slice(0, 5)}~{sched.end_time?.slice(0, 5)} {sched.staff_name ?? ""} {serviceShortName(sched.service_type)}
                           {unavail && <AlertTriangle size={8} className="inline ml-0.5" />}
                         </button>
                       );

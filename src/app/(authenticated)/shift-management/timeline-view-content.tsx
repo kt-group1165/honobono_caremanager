@@ -1,5 +1,6 @@
 "use client";
 
+import { serviceShortName } from "@/lib/service-short-name";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -713,7 +714,7 @@ export function TimelineView({
                           }}
                         >
                           <span className="truncate font-semibold">{isOnUnavail && "⚠ "}{label}</span>
-                          <span className="truncate">{sched.service_type}</span>
+                          <span className="truncate">{serviceShortName(sched.service_type)}</span>
                         </div>
                       );
                     })}

@@ -140,13 +140,16 @@ async function main() {
   let updated = 0;
   const sample = [];
   while (true) {
+    // EXECUTE 時は UPDATE で null 集合が縮むため offset は常に 0 のまま fetch
+    // (offset を進めると縮んだ集合を飛び越えてスキップが発生する)
     const { data, error } = await sb
       .from("kaigo_service_codes")
       .select("service_code, service_name, short_name")
       .is("short_name", null)
-      .range(from, from + PAGE - 1);
+      .range(EXECUTE ? 0 : from, (EXECUTE ? 0 : from) + PAGE - 1);
     if (error) { console.error(error); process.exit(1); }
     if (!data || data.length === 0) break;
+    let updatedThisPage = 0;
     for (const row of data) {
       const s = makeShortName(row.service_name);
       if (!s) continue;
@@ -160,10 +163,18 @@ async function main() {
           .is("short_name", null);
         if (e) { console.error(`❌ ${row.service_code}:`, e.message); continue; }
         updated++;
+        updatedThisPage++;
       }
     }
-    from += PAGE;
-    if (data.length < PAGE) break;
+    if (EXECUTE) {
+      // 1 page 内で 1 件も更新できなかった (= makeShortName が null を返す行だけ残った)
+      // 場合は無限ループ回避のため終了
+      if (updatedThisPage === 0) break;
+      if (updated % 5000 < PAGE) console.log(`  ... ${updated} 件 更新済`);
+    } else {
+      from += PAGE;
+    }
+    if (!EXECUTE && data.length < PAGE) break;
   }
   console.log(`\nマッチ数 (short_name 割当予定): ${totalUpdates}`);
   console.log(`\n先頭 15 件 sample:`);
