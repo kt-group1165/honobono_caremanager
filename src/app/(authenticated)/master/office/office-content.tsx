@@ -16,16 +16,38 @@ const TOKUTEI_OPTIONS = [
   { value: "A", label: "特定事業所加算(A)", units: 114 },
 ];
 
-const AREA_CATEGORIES = [
-  { value: "1級地", label: "1級地", price: 11.40 },
-  { value: "2級地", label: "2級地", price: 11.12 },
-  { value: "3級地", label: "3級地", price: 11.05 },
-  { value: "4級地", label: "4級地", price: 10.84 },
-  { value: "5級地", label: "5級地", price: 10.70 },
-  { value: "6級地", label: "6級地", price: 10.42 },
-  { value: "7級地", label: "7級地", price: 10.14 },
-  { value: "その他", label: "その他", price: 10.00 },
-];
+// 令和6年度 地域区分別 1単位単価 (円)。人件費割合区分でサービス種別ごとに異なる。
+//   70%: 訪問介護 / 訪問入浴 / 訪問看護 / 居宅介護支援 / 定期巡回 / 夜間対応
+//   55%: 訪問リハ / 通所リハ / 認知症対応型通所 / 小規模多機能 / 短期入所生活 等
+//   45%: 通所介護 / 短期入所療養 / 特定施設 / 認知症対応型共同生活 等
+//   福祉用具貸与は全国一律 10.00
+const AREA_PRICE_TABLE: Record<string, { p70: number; p55: number; p45: number }> = {
+  "1級地": { p70: 11.40, p55: 11.10, p45: 10.90 },
+  "2級地": { p70: 11.12, p55: 10.88, p45: 10.72 },
+  "3級地": { p70: 11.05, p55: 10.83, p45: 10.68 },
+  "4級地": { p70: 10.84, p55: 10.66, p45: 10.54 },
+  "5級地": { p70: 10.70, p55: 10.55, p45: 10.45 },
+  "6級地": { p70: 10.42, p55: 10.33, p45: 10.27 },
+  "7級地": { p70: 10.21, p55: 10.17, p45: 10.14 },
+  "その他": { p70: 10.00, p55: 10.00, p45: 10.00 },
+};
+const AREA_VALUES = Object.keys(AREA_PRICE_TABLE);
+
+function laborBand(serviceType: string | null | undefined): "p70" | "p55" | "p45" | "flat" {
+  const t = serviceType ?? "";
+  if (t.includes("福祉用具")) return "flat";
+  if (/訪問リハ|通所リハ|認知症対応型通所|小規模多機能|短期入所生活/.test(t)) return "p55";
+  if (/通所介護|短期入所療養|特定施設|共同生活|グループホーム/.test(t)) return "p45";
+  // 訪問介護 / 訪問入浴 / 訪問看護 / 居宅介護支援 / 定期巡回 / 夜間対応 → 70%
+  return "p70";
+}
+
+function areaPrice(area: string, serviceType: string | null | undefined): number {
+  const row = AREA_PRICE_TABLE[area];
+  if (!row) return 10.0;
+  const band = laborBand(serviceType);
+  return band === "flat" ? 10.0 : row[band];
+}
 
 // 共通マスタ offices の subset（kaigo-app 自事業所設定で使うフィールド）
 // Phase 2-3-7 で kaigo_office_settings から張替え。
@@ -188,10 +210,13 @@ export function OfficeContent({
       updated.medical_cooperation_units = value ? 125 : 0;
     }
 
-    // 地域区分 → 単価自動設定
+    // 地域区分 → 単価自動設定 (サービス種別の人件費割合区分で単価が変わる)
     if (key === "area_category") {
-      const area = AREA_CATEGORIES.find((a) => a.value === value);
-      updated.unit_price = area?.price ?? 10.00;
+      updated.unit_price = areaPrice(String(value), updated.service_type);
+    }
+    // サービス種別変更時も同じ地域区分で単価を再計算
+    if (key === "service_type") {
+      updated.unit_price = areaPrice(updated.area_category, String(value));
     }
 
     setForm(updated);
@@ -398,16 +423,16 @@ export function OfficeContent({
               onChange={(e) => handleChange("area_category", e.target.value)}
               className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              {AREA_CATEGORIES.map((a) => (
-                <option key={a.value} value={a.value}>
-                  {a.label}（{a.price}円/単位）
+              {AREA_VALUES.map((a) => (
+                <option key={a} value={a}>
+                  {a}（{areaPrice(a, form.service_type).toFixed(2)}円/単位）
                 </option>
               ))}
             </select>
           </div>
           <div className="flex items-end pb-1">
             <div className="rounded-lg bg-gray-50 px-4 py-2 text-sm">
-              単位数単価: <span className="font-bold text-gray-900">{form.unit_price}</span> 円
+              単位数単価: <span className="font-bold text-gray-900">{Number(form.unit_price).toFixed(2)}</span> 円/単位
             </div>
           </div>
         </div>
