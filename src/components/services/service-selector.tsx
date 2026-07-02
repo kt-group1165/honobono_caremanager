@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils"
 interface ServiceCode {
   code: string
   name: string
+  short_name: string | null
   units: number
   category: string        // e.g. "11"
   category_name: string   // e.g. "訪問介護"
@@ -23,6 +24,8 @@ interface ServiceSelectorProps {
   onSelect: (service: {
     code: string
     name: string
+    /** 狭い枠用の略称 (例 身3 / 生2)。null なら name を使う */
+    short_name: string | null
     units: number
     category: string
     categoryName: string
@@ -276,7 +279,7 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
         const today = new Date().toISOString().slice(0, 10)
         const { data, error: fetchError } = await supabase
           .from("kaigo_service_codes")
-          .select("service_code, service_name, units, service_category, service_category_name, calculation_type")
+          .select("service_code, service_name, short_name, units, service_category, service_category_name, calculation_type")
           .eq("system", system)
           .eq("service_category", activeCategory)
           .lte("valid_from", today)
@@ -288,6 +291,7 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
         setServices(((data ?? []) as Record<string, unknown>[]).map((d) => ({
           code: String(d.service_code ?? ""),
           name: String(d.service_name ?? ""),
+          short_name: d.short_name ? String(d.short_name) : null,
           units: Number(d.units ?? 0),
           category: String(d.service_category ?? ""),
           category_name: String(d.service_category_name ?? ""),
@@ -523,6 +527,7 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
                       onSelect({
                         code: service.code,
                         name: service.name,
+                        short_name: service.short_name,
                         units: service.units,
                         category: service.category,
                         categoryName: service.category_name,
