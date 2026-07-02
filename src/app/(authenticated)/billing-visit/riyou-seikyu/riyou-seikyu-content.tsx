@@ -102,7 +102,7 @@ export function RiyouSeikyuContent() {
           {/* 左: 請求一覧 */}
           <div className="lg:col-span-3 overflow-hidden rounded-lg border bg-white shadow-sm">
             <table className="min-w-full text-sm">
-              <thead className="bg-emerald-600 text-left text-xs font-medium text-white">
+              <thead className="bg-blue-100 text-left text-xs font-medium text-blue-900">
                 <tr>
                   <th className="px-2 py-1.5 text-center w-14">
                     <label className="inline-flex cursor-pointer select-none flex-col items-center gap-0.5">
@@ -110,9 +110,9 @@ export function RiyouSeikyuContent() {
                         type="checkbox"
                         checked={rows.length > 0 && checked.size === rows.length}
                         onChange={toggleAll}
-                        className="h-3.5 w-3.5 accent-white cursor-pointer"
+                        className="h-3.5 w-3.5 accent-blue-600 cursor-pointer"
                       />
-                      <span className="whitespace-nowrap text-[9px] font-normal text-emerald-50">
+                      <span className="whitespace-nowrap text-[9px] font-normal text-blue-700">
                         全選択
                       </span>
                     </label>
@@ -172,13 +172,13 @@ export function RiyouSeikyuContent() {
 
           {/* 右: 利用明細欄 */}
           <div className="lg:col-span-2 rounded-lg border bg-white shadow-sm">
-            <header className="border-b bg-emerald-600 px-4 py-2 text-sm font-bold text-white">
+            <header className="border-b bg-blue-100 px-4 py-2 text-sm font-bold text-blue-900">
               利用明細欄 {selected ? `— ${selected.user_name}` : ""}
             </header>
             {selected ? (
               <div className="p-3">
                 <table className="min-w-full text-xs">
-                  <thead className="bg-emerald-50 text-left text-[10px] font-medium text-emerald-900">
+                  <thead className="bg-blue-50 text-left text-[10px] font-medium text-blue-900">
                     <tr>
                       <th className="rounded-l px-2 py-1.5">利用料項目</th>
                       <th className="px-2 py-1.5 text-right">単価</th>
