@@ -94,6 +94,8 @@ export function MonthlyIndividualView({
     });
   }, [active.schedules]);
   const loading = active.isLoading;
+  // fetch エラーを「予定なし」と混同させない (silent failure 防止)
+  const fetchError = active.error ? (active.error as Error).message : null;
 
   // SWR data → local state へ sync
   const lastSwrRef = useRef(swrSchedules);
@@ -356,6 +358,12 @@ export function MonthlyIndividualView({
 
       {loading ? (
         <div className="flex flex-1 items-center justify-center"><Loader2 size={24} className="animate-spin text-blue-500" /></div>
+      ) : fetchError && schedules.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center px-4">
+          <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            予定の取得に失敗しました: {fetchError}
+          </div>
+        </div>
       ) : schedules.length === 0 ? (
         <div className="flex flex-1 items-center justify-center text-sm text-gray-400">この月の予定はありません</div>
       ) : (
