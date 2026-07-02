@@ -1,6 +1,9 @@
 "use client";
 
-import { serviceShortName } from "@/lib/service-short-name";
+import {
+  serviceNameVariantsAll,
+  toHankakuDigits,
+} from "@/lib/service-name-normalize";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -105,6 +108,40 @@ export function MonthlyIndividualView({
       setSchedules(swrSchedules);
     }
   }, [swrSchedules]);
+
+  // 単位数を on-demand 補完 (提供表と同パターン:
+  //  「基本」全件 fetch は 1000 行制限で欠けるため .in() で絞る。
+  //  マスタは全角数字 (身体介護３) / schedule は半角混在のため variants 検索 + 正規化 lookup)
+  const [serviceUnits, setServiceUnits] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const missing = Array.from(
+      new Set(schedules.map((s) => s.service_type)),
+    ).filter((t) => t && serviceUnits[t] === undefined);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("kaigo_service_codes")
+        .select("service_name, units")
+        .in("service_name", serviceNameVariantsAll(missing))
+        .eq("calculation_type", "基本");
+      if (cancelled || error) return;
+      const byNorm = new Map<string, number>();
+      for (const sc of (data ?? []) as { service_name: string; units: number }[]) {
+        const key = toHankakuDigits(sc.service_name);
+        if (!byNorm.has(key)) byNorm.set(key, sc.units);
+      }
+      const found: Record<string, number> = {};
+      for (const t of missing) {
+        // マスタに無い service_type は 0 を入れて再フェッチループを防ぐ
+        found[t] = byNorm.get(toHankakuDigits(t)) ?? 0;
+      }
+      setServiceUnits((prev) => ({ ...prev, ...found }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [schedules, serviceUnits, supabase]);
 
   // 職員 2/3 の割当変更 (2人対応・同行用)
   const updateStaffN = async (
@@ -339,6 +376,10 @@ export function MonthlyIndividualView({
           予定 {schedules.filter((s) => s.status !== "completed").length}件
           / 実績 {schedules.filter((s) => s.status === "completed").length}件
           / 合計 {schedules.length}件
+          / 実績単位 {schedules
+            .filter((s) => s.status === "completed")
+            .reduce((sum, s) => sum + (serviceUnits[s.service_type] ?? 0), 0)
+            .toLocaleString()}
         </div>
       </div>
 
@@ -409,6 +450,7 @@ export function MonthlyIndividualView({
                 <th className="border border-gray-300 px-2 py-1.5 text-left font-bold text-red-700">利用日</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-left font-bold">利用時間</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-left font-bold text-red-700">*サービス内容</th>
+                <th className="border border-gray-300 px-2 py-1.5 text-right font-bold w-16">単位数</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-center font-bold">
                   {entityType === "user" ? "職員 1" : "利用者"}
                 </th>
@@ -543,11 +585,16 @@ export function MonthlyIndividualView({
                     </td>
                     <td className="border border-gray-300 px-2 py-1">
                       <span className={cn(
-                        "inline-block rounded px-1.5 py-0.5 text-[10px] font-medium",
+                        "inline-block rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap",
                         SERVICE_TYPE_COLORS[sched.service_type] ?? "bg-gray-100 text-gray-700"
                       )}>
-                        {serviceShortName(sched.service_type)}
+                        {sched.service_type}
                       </span>
+                    </td>
+                    <td className="border border-gray-300 px-2 py-1 text-right font-mono whitespace-nowrap">
+                      {serviceUnits[sched.service_type]
+                        ? serviceUnits[sched.service_type].toLocaleString()
+                        : <span className="text-gray-300">—</span>}
                     </td>
                     <td className="border border-gray-300 px-2 py-1 text-center">
                       {entityType === "user"
