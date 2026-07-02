@@ -16,6 +16,7 @@ import {
   AlertCircle,
   Printer,
   FileText,
+  Download,
 } from "lucide-react";
 import { MonthNav } from "../_shared/month-nav";
 import { useSeikyuData } from "../_shared/use-seikyu-data";
@@ -61,6 +62,75 @@ export function KokuhoSeikyuContent() {
     }, 100);
   };
 
+  // 国保連伝送用 CSV (様式2 相当の明細行)。
+  // 完全な interface 仕様 (固定長/複数レコード種別) は伝送ソフト側の取込仕様
+  // 確定後に対応。まずは項目網羅の明細 CSV を出す。
+  const exportCsv = () => {
+    const ym = `${year}${String(month).padStart(2, "0")}`;
+    const header = [
+      "提供年月",
+      "保険者番号",
+      "被保険者番号",
+      "利用者名",
+      "要介護度",
+      "サービス内容",
+      "サービス単位数",
+      "回数",
+      "小計単位数",
+      "合計単位数",
+      "保険請求額",
+      "利用者負担額",
+    ];
+    const lines: string[] = [header.join(",")];
+    for (const r of targets) {
+      for (const d of r.details) {
+        lines.push(
+          [
+            ym,
+            r.insurer_number ?? "",
+            r.insured_number ?? "",
+            `"${r.user_name}"`,
+            r.care_level ?? "",
+            `"${d.service_type}"`,
+            d.unit_per,
+            d.count,
+            d.units,
+            r.totalUnits,
+            r.insuranceAmount,
+            r.userAmount,
+          ].join(","),
+        );
+      }
+      if (r.addonUnits > 0) {
+        lines.push(
+          [
+            ym,
+            r.insurer_number ?? "",
+            r.insured_number ?? "",
+            `"${r.user_name}"`,
+            r.care_level ?? "",
+            `"${r.addonLabel ?? "処遇改善加算"}"`,
+            "",
+            1,
+            r.addonUnits,
+            r.totalUnits,
+            r.insuranceAmount,
+            r.userAmount,
+          ].join(","),
+        );
+      }
+    }
+    // Excel 互換のため BOM 付き UTF-8
+    const blob = new Blob(["﻿" + lines.join("\r\n")], {
+      type: "text/csv;charset=utf-8",
+    });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `kokuho_seikyu_${ym}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
   return (
     <div className="space-y-4">
       {/* 画面ヘッダ (印刷時非表示) */}
@@ -93,6 +163,16 @@ export function KokuhoSeikyuContent() {
           >
             <Printer size={14} />
             請求書
+          </button>
+          <button
+            type="button"
+            disabled={rows.length === 0}
+            onClick={exportCsv}
+            className="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+            title="国保連伝送用の明細 CSV を出力"
+          >
+            <Download size={14} />
+            伝送CSV
           </button>
         </div>
       </div>
@@ -191,7 +271,8 @@ export function KokuhoSeikyuContent() {
             />
           </div>
           <p className="text-[11px] text-gray-400 print:hidden">
-            ※ チェックで発行対象を絞込 (未チェック時は全件)。国保連伝送 CSV 出力は今後対応予定。
+            ※ チェックで発行対象を絞込 (未チェック時は全件)。「伝送CSV」は明細 CSV 形式
+            (国保連の固定長 interface 仕様には伝送ソフトの取込仕様確定後に対応)。
           </p>
 
           {/* ===== 印刷 view ===== */}
