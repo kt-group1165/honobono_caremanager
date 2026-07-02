@@ -35,6 +35,8 @@ export default function VisitProcedureNewVersionPage() {
   const tenantId = currentOffice?.tenant_id ?? null;
   const officeId = currentOffice?.id ?? null;
   const officeQuery = search?.get("office") ? `?office=${encodeURIComponent(search.get("office")!)}` : "";
+  // integrated モードで新規利用者選択時に付いてくる client_id (本体 clients master の id)
+  const clientIdFromUrl = search?.get("client_id") ?? null;
 
   const today = new Date();
   const yyyy = today.getFullYear();
@@ -110,6 +112,7 @@ export default function VisitProcedureNewVersionPage() {
         tenant_id: tenantId,
         office_id: officeId,
         client_name: clientName,
+        client_id: clientIdFromUrl,
         plan_start_date: planStart,
         plan_end_date: planEnd || null,
         creation_reason: creationReason || `${selectedSrcClient} から複製`,
@@ -143,6 +146,7 @@ export default function VisitProcedureNewVersionPage() {
       const doc = {
         ...emptyDocument(tenantId, officeId),
         client_name: clientName,
+        client_id: clientIdFromUrl,
         plan_start_date: planStart,
         plan_end_date: planEnd || null,
         creation_reason: creationReason || null,

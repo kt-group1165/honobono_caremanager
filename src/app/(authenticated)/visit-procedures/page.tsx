@@ -28,6 +28,12 @@ import {
 } from "@/lib/visit-procedure/queries";
 import type { VisitProcedureClient } from "@/lib/visit-procedure/types";
 
+interface MasterClient {
+  id: string;
+  name: string;
+  furigana: string | null;
+}
+
 export default function VisitProceduresClientListPage() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -37,9 +43,14 @@ export default function VisitProceduresClientListPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  // integrated モード用: 本体 clients マスタから選択
+  const [masterClients, setMasterClients] = useState<MasterClient[]>([]);
+  const [selectedMasterClient, setSelectedMasterClient] = useState<MasterClient | null>(null);
+  const [masterSearch, setMasterSearch] = useState("");
 
   const tenantId = currentOffice?.tenant_id ?? null;
   const officeQuery = currentOffice ? `?office=${encodeURIComponent(currentOffice.id)}` : "";
+  const mode = currentOffice?.visit_procedure_mode ?? "standalone";
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- mount-time async fetch (HANDOVER §2) */
@@ -67,7 +78,43 @@ export default function VisitProceduresClientListPage() {
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [supabase, tenantId, btLoading]);
 
+  // 「新規利用者」modal を開くタイミングで integrated モードなら本体 clients を fetch
+  const openAddModal = async () => {
+    setNewName("");
+    setSelectedMasterClient(null);
+    setMasterSearch("");
+    setShowAdd(true);
+    if (mode === "integrated" && tenantId) {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, name, furigana")
+        .eq("tenant_id", tenantId)
+        .eq("is_facility", false)
+        .is("deleted_at", null)
+        .order("furigana", { ascending: true, nullsFirst: false })
+        .limit(2000);
+      if (error) {
+        toast.error("利用者取得失敗: " + error.message);
+        return;
+      }
+      setMasterClients((data ?? []) as MasterClient[]);
+    }
+  };
+
   const handleAdd = () => {
+    if (mode === "integrated") {
+      if (!selectedMasterClient) {
+        toast.error("利用者を選択してください");
+        return;
+      }
+      const name = selectedMasterClient.name;
+      const sep = officeQuery ? "&" : "?";
+      router.push(
+        `/visit-procedures/clients/${encodeURIComponent(name)}/new${officeQuery}${sep}name=${encodeURIComponent(name)}&client_id=${encodeURIComponent(selectedMasterClient.id)}`,
+      );
+      return;
+    }
+    // standalone
     const name = newName.trim();
     if (!name) {
       toast.error("利用者名を入力してください");
@@ -76,6 +123,16 @@ export default function VisitProceduresClientListPage() {
     const sep = officeQuery ? "&" : "?";
     router.push(`/visit-procedures/clients/${encodeURIComponent(name)}/new${officeQuery}${sep}name=${encodeURIComponent(name)}`);
   };
+
+  const filteredMasterClients = useMemo(() => {
+    const q = masterSearch.trim().toLowerCase();
+    if (!q) return masterClients;
+    return masterClients.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.furigana ?? "").toLowerCase().includes(q),
+    );
+  }, [masterClients, masterSearch]);
 
   if (!btLoading && businessType !== "訪問介護") {
     return (
@@ -120,7 +177,7 @@ export default function VisitProceduresClientListPage() {
             設定
           </button>
           <button
-            onClick={() => { setNewName(""); setShowAdd(true); }}
+            onClick={openAddModal}
             className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
           >
             <Plus size={16} />
@@ -168,18 +225,67 @@ export default function VisitProceduresClientListPage() {
       {/* 新規利用者 modal */}
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowAdd(false)}>
-          <div className="bg-white rounded-lg p-5 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">新規利用者</h2>
-            <label className="text-xs text-gray-500 mb-1 block">利用者名 *</label>
-            <input
-              type="text"
-              autoFocus
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              placeholder="例: 溝渕 幸子"
-            />
+          <div className="bg-white rounded-lg p-5 w-full max-w-md max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-gray-900 mb-1">新規利用者</h2>
+            <p className="text-xs text-gray-500 mb-3">
+              {mode === "integrated"
+                ? "本体マスタから利用者を選択します (通常モード)"
+                : "利用者名を直接入力します (先行スタートモード)"}
+            </p>
+            {mode === "integrated" ? (
+              <>
+                <input
+                  type="text"
+                  autoFocus
+                  value={masterSearch}
+                  onChange={(e) => setMasterSearch(e.target.value)}
+                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm mb-2"
+                  placeholder="名前・ふりがなで検索..."
+                />
+                <div className="flex-1 overflow-y-auto border border-gray-200 rounded">
+                  {filteredMasterClients.length === 0 ? (
+                    <div className="p-3 text-xs text-gray-400 text-center">
+                      該当する利用者がいません
+                    </div>
+                  ) : (
+                    <ul className="divide-y divide-gray-100">
+                      {filteredMasterClients.map((c) => (
+                        <li key={c.id}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedMasterClient(c)}
+                            className={
+                              "w-full text-left px-3 py-2 text-sm hover:bg-blue-50 " +
+                              (selectedMasterClient?.id === c.id
+                                ? "bg-blue-50 text-blue-700 font-medium"
+                                : "")
+                            }
+                          >
+                            <div>{c.name}</div>
+                            {c.furigana && (
+                              <div className="text-[10px] text-gray-500">{c.furigana}</div>
+                            )}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <label className="text-xs text-gray-500 mb-1 block">利用者名 *</label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
+                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                  placeholder="例: 溝渕 幸子"
+                />
+              </>
+            )}
             <div className="flex justify-end gap-2 mt-4">
               <button onClick={() => setShowAdd(false)} className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded">
                 キャンセル

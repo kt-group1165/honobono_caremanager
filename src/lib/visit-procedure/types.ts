@@ -96,7 +96,10 @@ export interface VisitProcedureDocument {
   id?: string;
   tenant_id: string;
   office_id: string | null;
+  /** 利用者名 (standalone) or clients master.name の snapshot (integrated) */
   client_name: string;
+  /** integrated モード時に本体 clients マスタと紐付け。standalone では null */
+  client_id?: string | null;
   plan_start_date: string; // YYYY-MM-DD
   plan_end_date: string | null; // YYYY-MM-DD
   author_name: string | null;

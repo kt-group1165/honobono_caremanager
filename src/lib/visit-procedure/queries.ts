@@ -224,6 +224,7 @@ export async function saveDocument(
     tenant_id: doc.tenant_id,
     office_id: doc.office_id,
     client_name: doc.client_name,
+    client_id: doc.client_id ?? null,
     plan_start_date: doc.plan_start_date,
     plan_end_date: doc.plan_end_date,
     author_name: doc.author_name,
@@ -378,6 +379,8 @@ export async function createDocumentFromSource(
     tenant_id: string;
     office_id: string | null;
     client_name: string;
+    /** integrated モード時のみ設定される本体 clients.id */
+    client_id?: string | null;
     plan_start_date: string;
     plan_end_date: string | null;
     creation_reason: string | null;
@@ -392,6 +395,7 @@ export async function createDocumentFromSource(
     tenant_id: overrides.tenant_id,
     office_id: overrides.office_id,
     client_name: overrides.client_name.trim(),
+    client_id: overrides.client_id ?? null,
     plan_start_date: overrides.plan_start_date,
     plan_end_date: overrides.plan_end_date,
     creation_reason: overrides.creation_reason,
