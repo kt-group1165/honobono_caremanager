@@ -11,13 +11,17 @@
 --       単位数を令和6年度の値にするかは各事業所画面で選び直して保存する。
 --       移行後の 'A' は令和6年度の特定事業所加算(A) (114単位) を意味する。
 
+-- ※ DROP を先に行うこと。旧 CHECK が生きたまま UPDATE すると
+--    'Ⅱ' への変更自体が旧制約に弾かれる (1 回目の適用失敗の原因)。
+
 BEGIN;
+
+ALTER TABLE offices DROP CONSTRAINT offices_tokutei_kassan_type_check;
 
 UPDATE offices SET tokutei_kassan_type = 'Ⅰ' WHERE tokutei_kassan_type = 'A';
 UPDATE offices SET tokutei_kassan_type = 'Ⅱ' WHERE tokutei_kassan_type = 'B';
 UPDATE offices SET tokutei_kassan_type = 'Ⅲ' WHERE tokutei_kassan_type = 'C';
 
-ALTER TABLE offices DROP CONSTRAINT offices_tokutei_kassan_type_check;
 ALTER TABLE offices ADD CONSTRAINT offices_tokutei_kassan_type_check
   CHECK (tokutei_kassan_type IN ('なし', 'Ⅰ', 'Ⅱ', 'Ⅲ', 'A'));
 
