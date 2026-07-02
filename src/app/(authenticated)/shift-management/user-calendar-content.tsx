@@ -26,6 +26,7 @@ import {
 import { ja } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { ServiceSelector } from "@/components/services/service-selector";
+import { StaffCombobox } from "@/components/shared/staff-combobox";
 import {
   DOW_LABELS,
   isStaffUnavailableAtTime,
@@ -444,21 +445,23 @@ export function UserCalendar({
 
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">担当職員</label>
-                <select
+                <StaffCombobox
                   value={editForm.staff_id}
-                  onChange={(e) => setEditForm((f) => ({ ...f, staff_id: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value="">未割当</option>
-                  {allStaff.map((s) => {
+                  onChange={(id) => setEditForm((f) => ({ ...f, staff_id: id }))}
+                  options={allStaff.map((s) => {
                     const status = getStaffStatusForEdit(s.id);
-                    return (
-                      <option key={s.id} value={s.id}>
-                        {s.name}{status.unavail ? " (対応不可)" : status.conflict ? " (重複)" : ""}
-                      </option>
-                    );
+                    return {
+                      id: s.id,
+                      name: s.name,
+                      furigana: (s as unknown as { furigana?: string | null }).furigana ?? null,
+                      suffix: status.unavail
+                        ? " (対応不可)"
+                        : status.conflict
+                          ? " (重複)"
+                          : undefined,
+                    };
                   })}
-                </select>
+                />
                 {editForm.staff_id && (() => {
                   const status = getStaffStatusForEdit(editForm.staff_id);
                   if (status.unavail) return (
@@ -581,21 +584,23 @@ export function UserCalendar({
 
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">担当職員</label>
-                <select
+                <StaffCombobox
                   value={addForm.staff_id}
-                  onChange={(e) => setAddForm((f) => ({ ...f, staff_id: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value="">未割当</option>
-                  {allStaff.map((s) => {
+                  onChange={(id) => setAddForm((f) => ({ ...f, staff_id: id }))}
+                  options={allStaff.map((s) => {
                     const status = getStaffStatusForAdd(s.id);
-                    return (
-                      <option key={s.id} value={s.id}>
-                        {s.name}{status.unavail ? " (対応不可)" : status.conflict ? " (重複)" : ""}
-                      </option>
-                    );
+                    return {
+                      id: s.id,
+                      name: s.name,
+                      furigana: (s as unknown as { furigana?: string | null }).furigana ?? null,
+                      suffix: status.unavail
+                        ? " (対応不可)"
+                        : status.conflict
+                          ? " (重複)"
+                          : undefined,
+                    };
                   })}
-                </select>
+                />
                 {addForm.staff_id && (() => {
                   const status = getStaffStatusForAdd(addForm.staff_id);
                   if (status.unavail) return (

@@ -32,6 +32,7 @@ import {
 import { ja } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { ServiceSelector } from "@/components/services/service-selector";
+import { StaffCombobox } from "@/components/shared/staff-combobox";
 import {
   type KaigoStaff,
   type KaigoUser,
@@ -1055,16 +1056,15 @@ export function ShiftManagementContent({
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">担当職員</label>
-                <select
+                <StaffCombobox
                   value={pageEditForm.staff_id}
-                  onChange={(e) => setPageEditForm({ ...pageEditForm, staff_id: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="">-- 選択 --</option>
-                  {staff.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
+                  onChange={(id) => setPageEditForm({ ...pageEditForm, staff_id: id })}
+                  options={staff.map((s) => ({
+                    id: s.id,
+                    name: s.name,
+                    furigana: (s as unknown as { furigana?: string | null }).furigana ?? null,
+                  }))}
+                />
               </div>
             </div>
             <div className="flex items-center justify-between border-t px-5 py-4">
