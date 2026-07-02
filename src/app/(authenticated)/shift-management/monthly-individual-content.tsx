@@ -419,16 +419,30 @@ export function MonthlyIndividualView({
   const fmtHM = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
   const fmtAgg = (a: { c: number; m: number; u: number }) =>
     `${a.c}回(${fmtHM(a.m)}) ${a.u.toLocaleString()}単位`;
-  const fmtGroupLine = (g: typeof footerStats.planned) => {
-    const parts = [
-      `${fmtAgg(g.total)} / 身体: ${fmtAgg(g.by["身体"])}`,
-      `身生: ${fmtAgg(g.by["身生"])}`,
-      `生活: ${fmtAgg(g.by["生活"])}`,
-      `乗降: ${fmtAgg(g.by["乗降"])}`,
-    ];
-    if (g.by["その他"].c > 0) parts.push(`その他: ${fmtAgg(g.by["その他"])}`);
-    return parts.join("　");
-  };
+  // 列 (td) 単位で分割し、行間で / やカテゴリラベルが縦に揃うようにする
+  const footerCats = useMemo(() => {
+    const base: ("身体" | "身生" | "生活" | "乗降" | "その他")[] = ["身体", "身生", "生活", "乗降"];
+    const groups = [footerStats.planned, footerStats.actual, footerStats.shienPlanned, footerStats.shienActual];
+    if (groups.some((g) => g.by["その他"].c > 0)) base.push("その他");
+    return base;
+  }, [footerStats]);
+  const groupCells = (g: typeof footerStats.planned, blank: boolean) =>
+    blank ? (
+      <>
+        <td /><td />
+        {footerCats.map((c) => <td key={c} />)}
+      </>
+    ) : (
+      <>
+        <td className="text-right tabular-nums">{fmtAgg(g.total)}</td>
+        <td className="px-2 text-gray-400">/</td>
+        {footerCats.map((c) => (
+          <td key={c} className="pr-5 tabular-nums">
+            <span className="text-gray-500">{c}: </span>{fmtAgg(g.by[c])}
+          </td>
+        ))}
+      </>
+    );
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -712,19 +726,19 @@ export function MonthlyIndividualView({
           <tbody>
             <tr>
               <td className="pr-3 font-bold text-blue-700">【残予定 合計】</td>
-              <td>{fmtGroupLine(footerStats.planned)}</td>
+              {groupCells(footerStats.planned, false)}
             </tr>
             <tr>
               <td className="pr-3 font-bold text-orange-700">【 実績 合計 】</td>
-              <td>{fmtGroupLine(footerStats.actual)}</td>
+              {groupCells(footerStats.actual, false)}
             </tr>
             <tr>
               <td className="pr-3 font-bold text-blue-700">【支援予 合計】</td>
-              <td>{footerStats.shienPlanned.total.c > 0 ? fmtGroupLine(footerStats.shienPlanned) : ""}</td>
+              {groupCells(footerStats.shienPlanned, footerStats.shienPlanned.total.c === 0)}
             </tr>
             <tr>
               <td className="pr-3 font-bold text-orange-700">【支援実 合計】</td>
-              <td>{footerStats.shienActual.total.c > 0 ? fmtGroupLine(footerStats.shienActual) : ""}</td>
+              {groupCells(footerStats.shienActual, footerStats.shienActual.total.c === 0)}
             </tr>
           </tbody>
         </table>
