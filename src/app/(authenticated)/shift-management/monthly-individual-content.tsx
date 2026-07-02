@@ -380,7 +380,7 @@ export function MonthlyIndividualView({
                     title="全選択/解除"
                   />
                 </th>
-                <th className="border border-gray-300 px-1 py-1.5 text-center font-bold w-20">予実</th>
+                <th className="border border-gray-300 px-1 py-1.5 text-center font-bold w-14">予実</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-left font-bold text-red-700">利用日</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-left font-bold">利用時間</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-left font-bold text-red-700">*サービス内容</th>
@@ -440,24 +440,24 @@ export function MonthlyIndividualView({
                         <button
                           onClick={() => toggleStatus(sched)}
                           disabled={isToggling}
-                          className="inline-flex items-center gap-1 group"
                           title={isCompleted ? "実績 → 予定に戻す" : "予定 → 実績に変更"}
                         >
+                          {/* ラベルをピル内部に置く (隣接だと列が縮んだ時に重なる) */}
                           <span className={cn(
-                            "relative inline-block w-8 h-4 shrink-0 rounded-full transition-colors",
+                            "relative inline-block h-[18px] w-10 shrink-0 rounded-full align-middle transition-colors",
                             isCompleted ? "bg-orange-500" : "bg-gray-300",
                             isToggling && "opacity-50"
                           )}>
                             <span className={cn(
-                              "absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform",
-                              isCompleted ? "translate-x-4" : "translate-x-0.5"
+                              "absolute top-1/2 -translate-y-1/2 text-[10px] font-bold leading-none",
+                              isCompleted ? "left-1.5 text-white" : "right-1.5 text-gray-600"
+                            )}>
+                              {isCompleted ? "実" : "予"}
+                            </span>
+                            <span className={cn(
+                              "absolute top-0.5 h-[14px] w-[14px] rounded-full bg-white shadow transition-transform",
+                              isCompleted ? "translate-x-[24px]" : "translate-x-0.5"
                             )} />
-                          </span>
-                          <span className={cn(
-                            "shrink-0 whitespace-nowrap text-[10px] font-bold",
-                            isCompleted ? "text-orange-700" : "text-blue-600"
-                          )}>
-                            {isCompleted ? "実" : "予"}
                           </span>
                         </button>
                       )}
