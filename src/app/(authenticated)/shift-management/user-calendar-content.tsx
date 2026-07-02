@@ -22,6 +22,7 @@ import {
   addMonths,
   subMonths,
   isSameDay,
+  parseISO,
 } from "date-fns";
 import { ja } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -120,6 +121,49 @@ export function UserCalendar({
   const [addForm, setAddForm] = useState({ start_time: "09:00", end_time: "10:00", service_type: "", staff_id: "", service_code: "", service_name: "" });
   const [addSaving, setAddSaving] = useState(false);
   const [showAddServiceSelector, setShowAddServiceSelector] = useState(false);
+  // drag & drop: ドロップ先セルのハイライト用
+  const [dragOverDate, setDragOverDate] = useState<string | null>(null);
+
+  // ドラッグ = 移動 / Ctrl (Alt) + ドラッグ = コピー
+  const handleDropSchedule = async (schedId: string, targetDate: string, copy: boolean) => {
+    const sched = schedules.find((s) => s.id === schedId);
+    if (!sched) return;
+    if (!copy && sched.visit_date === targetDate) return;
+    if (copy) {
+      const { error } = await supabase.from("kaigo_visit_schedule").insert({
+        user_id: sched.user_id,
+        staff_id: sched.staff_id,
+        staff_id_2: sched.staff_id_2 ?? null,
+        staff_id_3: sched.staff_id_3 ?? null,
+        visit_date: targetDate,
+        start_time: sched.start_time,
+        end_time: sched.end_time,
+        service_type: sched.service_type,
+        status: "scheduled",
+      });
+      if (error) {
+        toast.error("コピーに失敗しました: " + error.message);
+        return;
+      }
+      toast.success(`${format(parseISO(targetDate), "M/d")} に予定をコピーしました`);
+    } else {
+      // 実績は提供表/請求と紐づくため移動不可 (コピーは可)
+      if (sched.status === "completed") {
+        toast.error("実績は移動できません (Ctrl+ドラッグでコピーは可能)");
+        return;
+      }
+      const { error } = await supabase
+        .from("kaigo_visit_schedule")
+        .update({ visit_date: targetDate })
+        .eq("id", sched.id);
+      if (error) {
+        toast.error("移動に失敗しました: " + error.message);
+        return;
+      }
+      toast.success(`${format(parseISO(targetDate), "M/d")} に予定を移動しました`);
+    }
+    refetchAfterMutation();
+  };
 
   const days = useMemo(
     () =>
@@ -313,8 +357,23 @@ export function UserCalendar({
                   key={dateStr}
                   className={cn(
                     "rounded border min-h-[80px] p-1 text-left",
-                    dow === 0 ? "bg-red-50/40" : dow === 6 ? "bg-blue-50/40" : "bg-white"
+                    dow === 0 ? "bg-red-50/40" : dow === 6 ? "bg-blue-50/40" : "bg-white",
+                    dragOverDate === dateStr && "ring-2 ring-blue-400 bg-blue-50/60"
                   )}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = e.ctrlKey || e.altKey ? "copy" : "move";
+                    if (dragOverDate !== dateStr) setDragOverDate(dateStr);
+                  }}
+                  onDragLeave={() => {
+                    if (dragOverDate === dateStr) setDragOverDate(null);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOverDate(null);
+                    const id = e.dataTransfer.getData("text/plain");
+                    if (id) void handleDropSchedule(id, dateStr, e.ctrlKey || e.altKey);
+                  }}
                 >
                   <div className="flex items-center justify-between mb-0.5">
                     <span
@@ -347,6 +406,12 @@ export function UserCalendar({
                         <button
                           key={sched.id}
                           onClick={() => openEditModal(sched)}
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData("text/plain", sched.id);
+                            e.dataTransfer.effectAllowed = "copyMove";
+                          }}
+                          onDragEnd={() => setDragOverDate(null)}
                           className={cn(
                             "w-full text-left rounded px-1 py-0.5 text-[8px] leading-tight whitespace-nowrap overflow-hidden text-ellipsis cursor-pointer transition-colors",
                             unavail
@@ -355,7 +420,7 @@ export function UserCalendar({
                               ? "bg-red-50 text-red-600 font-semibold hover:bg-red-100"
                               : "bg-blue-50 text-blue-700 hover:bg-blue-100"
                           )}
-                          title={isCompleted ? "実績（クリックして編集）" : "予定（クリックして編集）"}
+                          title={(isCompleted ? "実績（クリックして編集）" : "予定（クリックして編集）") + " / ドラッグで移動・Ctrl+ドラッグでコピー"}
                         >
                           {sched.start_time?.slice(0, 5)}~{sched.end_time?.slice(0, 5)} {sched.staff_name ?? ""} {serviceShortName(sched.service_type)}
                           {unavail && <AlertTriangle size={8} className="inline ml-0.5" />}
