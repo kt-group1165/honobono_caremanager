@@ -214,7 +214,7 @@ export function ProvisionTicketsContent({
         // マスタに無い service_type は 0 を入れて再フェッチループを防ぐ
         found[t] = byNorm.get(toHankakuDigits(t)) ?? 0;
       }
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- on-demand master fetch
+       
       setServiceUnits((prev) => ({ ...prev, ...found }));
     })();
     return () => {
