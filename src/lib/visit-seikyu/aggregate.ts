@@ -274,7 +274,9 @@ export async function aggregateMonthlyVisitSeikyu(
     const totalUnits = baseUnits + addonUnits;
     const totalAmount = Math.floor(totalUnits * unitPrice);
     const copay = ins?.copay ?? 0.1;
-    const insuranceAmount = totalAmount - Math.floor(totalAmount * copay);
+    // 国保連方式: 保険請求額 = 費用総額 × 給付率 (1円未満切捨)、利用者負担 = 差引
+    // (端数は利用者負担側に乗る。先に負担額を切捨てると 1 円ずれる)
+    const insuranceAmount = Math.floor(totalAmount * (1 - copay));
     // 公費 (生活保護等): 本人負担分を公費請求へ振替 (本人負担 0 の簡易版)
     const publicExpense = ins?.publicExpense ?? null;
     const kohiUnits = publicExpense ? totalUnits : null;
