@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ServiceSelector } from "@/components/services/service-selector";
 // 型 + helper は 「use client 越境で undefined」罠 (memory: feedback_use_client_const_export.md)
 // を避けるため patterns-shared.ts に切り出し済。ここでは re-export のみ。
 import {
@@ -26,21 +27,17 @@ export type { KaigoStaff, PatternDay, VisitPattern, VisitPatternRow };
 
 const DOW_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 
-const SERVICE_TYPES = [
-  "身体介護",
-  "生活援助",
-  "身体・生活",
-  "通院等乗降介助",
-  "その他",
-];
-
-const SERVICE_TYPE_COLORS: Record<string, string> = {
-  身体介護: "bg-blue-50 border-blue-200",
-  生活援助: "bg-green-50 border-green-200",
-  "身体・生活": "bg-purple-50 border-purple-200",
-  通院等乗降介助: "bg-orange-50 border-orange-200",
-  その他: "bg-gray-50 border-gray-200",
-};
+// サービスコードの正式名称 (身体介護3 等) から色分けを推定
+function serviceColorClass(t: string): string {
+  if (!t) return "bg-gray-50 border-gray-200";
+  const body = /身体|身\d/.test(t);
+  const life = /生活|生\d/.test(t);
+  if (t.includes("乗降")) return "bg-orange-50 border-orange-200";
+  if (body && life) return "bg-purple-50 border-purple-200";
+  if (body) return "bg-blue-50 border-blue-200";
+  if (life) return "bg-green-50 border-green-200";
+  return "bg-gray-50 border-gray-200";
+}
 
 function genId() {
   return Math.random().toString(36).slice(2);
@@ -54,7 +51,7 @@ function emptyDay(dow: number): PatternDay {
     day_of_week: dow,
     start_time: "09:00",
     end_time: "10:00",
-    service_type: "身体介護",
+    service_type: "", // ServiceSelector でコードマスタから選択させる
     staff_id: null,
   };
 }
@@ -81,6 +78,9 @@ function DayCell({ dow, days, staff, onAddDay, onRemoveDay, onChangeDay }: DayCe
   const dayEntries = days.filter((d) => d.day_of_week === dow);
   const isSun = dow === 0;
   const isSat = dow === 6;
+  // ServiceSelector を開いている entry の tempId
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
+  const pickerTarget = pickerFor ? dayEntries.find((d) => d.tempId === pickerFor) : undefined;
 
   return (
     <div className="flex flex-col gap-1 min-h-[80px] min-w-0">
@@ -103,7 +103,7 @@ function DayCell({ dow, days, staff, onAddDay, onRemoveDay, onChangeDay }: DayCe
       </div>
       <div className="space-y-1">
         {dayEntries.map((entry) => {
-          const colCls = SERVICE_TYPE_COLORS[entry.service_type] ?? "bg-gray-50 border-gray-200";
+          const colCls = serviceColorClass(entry.service_type);
           return (
             <div key={entry.tempId} className="relative group min-w-0">
               <button
@@ -130,15 +130,14 @@ function DayCell({ dow, days, staff, onAddDay, onRemoveDay, onChangeDay }: DayCe
                     className="min-w-0 flex-1 rounded border-0 bg-transparent text-[10px] px-0 focus:outline-none appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
                   />
                 </div>
-                <select
-                  value={entry.service_type}
-                  onChange={(e) => onChangeDay(entry.tempId, "service_type", e.target.value)}
-                  className="w-full max-w-full rounded border-0 bg-transparent text-[10px] focus:outline-none"
+                <button
+                  type="button"
+                  onClick={() => setPickerFor(entry.tempId)}
+                  className="block w-full max-w-full truncate rounded border-0 bg-transparent text-left text-[10px] hover:underline focus:outline-none"
+                  title={entry.service_type || "サービスを選択"}
                 >
-                  {SERVICE_TYPES.map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
+                  {entry.service_type || <span className="text-red-500 font-medium">サービス選択</span>}
+                </button>
                 <select
                 value={entry.staff_id ?? ""}
                 onChange={(e) =>
@@ -159,6 +158,20 @@ function DayCell({ dow, days, staff, onAddDay, onRemoveDay, onChangeDay }: DayCe
           <div className="text-center text-[10px] text-gray-300 py-2">—</div>
         )}
       </div>
+
+      {/* サービスコードマスタからの選択ダイアログ (時間枠に合う候補を優先表示) */}
+      {pickerTarget && (
+        <ServiceSelector
+          open
+          onClose={() => setPickerFor(null)}
+          startTime={pickerTarget.start_time}
+          endTime={pickerTarget.end_time}
+          onSelect={(svc) => {
+            onChangeDay(pickerTarget.tempId, "service_type", svc.name);
+            setPickerFor(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -276,6 +289,10 @@ export function PatternsContent({ userId, initialPatterns, initialStaff }: Patte
   };
 
   const handleSavePattern = async (pattern: VisitPattern) => {
+    if (pattern.days.some((d) => !d.service_type)) {
+      toast.error("サービス未選択の枠があります。全ての枠でサービスを選択してください。");
+      return;
+    }
     const noStaff = pattern.days.filter((d) => !d.staff_id);
     if (noStaff.length > 0) {
       toast.error("担当者が未設定の曜日があります。全ての曜日に担当者を設定してください。");

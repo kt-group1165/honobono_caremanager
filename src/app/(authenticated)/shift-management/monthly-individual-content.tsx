@@ -4,7 +4,7 @@ import {
   serviceNameVariantsAll,
   toHankakuDigits,
 } from "@/lib/service-name-normalize";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { Fragment, useState, useEffect, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
@@ -417,29 +417,35 @@ export function MonthlyIndividualView({
   }, [schedules, serviceUnits]);
 
   const fmtHM = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-  const fmtAgg = (a: { c: number; m: number; u: number }) =>
-    `${a.c}回(${fmtHM(a.m)}) ${a.u.toLocaleString()}単位`;
-  // 列 (td) 単位で分割し、行間で / やカテゴリラベルが縦に揃うようにする
+  // 回数 / (時間) / 単位 をそれぞれ独立セルにして、行間で () や単位の桁が縦に揃うようにする
   const footerCats = useMemo(() => {
     const base: ("身体" | "身生" | "生活" | "乗降" | "その他")[] = ["身体", "身生", "生活", "乗降"];
     const groups = [footerStats.planned, footerStats.actual, footerStats.shienPlanned, footerStats.shienActual];
     if (groups.some((g) => g.by["その他"].c > 0)) base.push("その他");
     return base;
   }, [footerStats]);
+  const aggCells = (a: { c: number; m: number; u: number }) => (
+    <>
+      <td className="text-right tabular-nums">{a.c}回</td>
+      <td className="tabular-nums px-0.5">({fmtHM(a.m)})</td>
+      <td className="text-right tabular-nums pl-1">{a.u.toLocaleString()}単位</td>
+    </>
+  );
   const groupCells = (g: typeof footerStats.planned, blank: boolean) =>
     blank ? (
       <>
-        <td /><td />
-        {footerCats.map((c) => <td key={c} />)}
+        <td colSpan={4} />
+        {footerCats.map((c) => <td key={c} colSpan={4} />)}
       </>
     ) : (
       <>
-        <td className="text-right tabular-nums">{fmtAgg(g.total)}</td>
+        {aggCells(g.total)}
         <td className="px-2 text-gray-400">/</td>
         {footerCats.map((c) => (
-          <td key={c} className="pr-5 tabular-nums">
-            <span className="text-gray-500">{c}: </span>{fmtAgg(g.by[c])}
-          </td>
+          <Fragment key={c}>
+            <td className="pl-4 text-gray-500">{c}:</td>
+            {aggCells(g.by[c])}
+          </Fragment>
         ))}
       </>
     );
