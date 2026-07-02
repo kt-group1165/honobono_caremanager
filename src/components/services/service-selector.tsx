@@ -57,9 +57,8 @@ interface ServiceSelectorProps {
  *       身体介護０２ / 身体介護１ → [20, 30)
  *       身体介護２               → [30, 60)
  *       身体介護N (N≥3)          → [(N-1)*30, N*30)  例: ３=60-90 / ４=90-120
- *       生活援助１               → [20, 45)
- *       生活援助２               → [45, ∞)
- *       生活援助３               → [70, ∞)
+ *       生活援助２               → [20, 45)   (令和6年度: 20分以上45分未満)
+ *       生活援助３               → [45, ∞)    (令和6年度: 45分以上)
  *   ・障害 居宅介護等: X.Y時間表記 (0.5刻み)
  *       身体日/早朝/夜/深 X.Y   → ((X.Y - 0.5)*60, X.Y*60]   例: 1.0 = (30, 60]
  *       家事/通院/乗降/重訪 など同じパターン
@@ -82,13 +81,12 @@ function parseServiceDurationMinutes(name: string): { min: number; max: number }
     if (n >= 3) return { min: (n - 1) * 30, max: n * 30 };
   }
 
-  // 生活援助N (介護保険)
+  // 生活援助N (介護保険 令和6年度: 2 = 20分以上45分未満 / 3 = 45分以上)
   const seikatsu = name.match(/^生活援助\s*([０-９0-9]+)/);
   if (seikatsu) {
     const n = parseInt(toAscii(seikatsu[1]), 10);
-    if (n === 1) return { min: 20, max: 45 };
-    if (n === 2) return { min: 45, max: 9999 };
-    if (n === 3) return { min: 70, max: 9999 };
+    if (n <= 2) return { min: 20, max: 45 };
+    if (n >= 3) return { min: 45, max: 9999 };
   }
 
   // X.Y時間 (障害 居宅介護等: 身体日/早朝/夜/深/家事/通院/乗降/重訪 etc)
