@@ -31,13 +31,14 @@ interface ServiceSelectorProps {
     categoryName: string
   }) => void
   /**
-   * 制度区分フィルタ。
+   * 制度区分フィルタ (初期タブ)。
    * - "介護" (デフォルト): 介護保険サービス
    * - "障害": 障害福祉サービス
    * - "総合事業": 介護予防・日常生活支援総合事業
+   * - "独自": 独自サービス (法定外・保険請求対象外。同行 等)
    * provision-tickets / reports / shift-management は全て介護保険なので未指定 = "介護"。
    */
-  system?: "介護" | "障害" | "総合事業"
+  system?: "介護" | "障害" | "総合事業" | "独自"
   /**
    * 予定の開始/終了時間 (HH:MM)。指定時のみ「候補のみ」チェックが表示される。
    * チェック ON で「該当時間 (= end - start 分) に収まるサービス」だけが残る。
@@ -163,7 +164,7 @@ function parseServiceTimeZone(name: string): TimeZone {
  * 介護保険・総合事業は「早朝専用コード」がなく早朝も「・夜」コードを使うため、
  * 早朝 slot → 夜間 サービス への match を許容する。障害福祉は 4 区分独立。
  */
-function timeZoneMatches(slot: TimeZone, svc: TimeZone, system: "介護" | "障害" | "総合事業"): boolean {
+function timeZoneMatches(slot: TimeZone, svc: TimeZone, system: "介護" | "障害" | "総合事業" | "独自"): boolean {
   if (slot === svc) return true;
   if (system !== "障害" && slot === "早朝" && svc === "夜間") return true;
   return false;
@@ -218,13 +219,19 @@ const CATEGORIES_SOUGOU = [
   { code: "C1", name: "介護予防ケアマネ" },
 ] as const;
 
+// 独自サービス (法定外・保険請求対象外)
+const CATEGORIES_UNIQ = [
+  { code: "90", name: "独自サービス" },
+] as const;
+
 const CATEGORIES_BY_SYSTEM: Record<
-  "介護" | "障害" | "総合事業",
+  "介護" | "障害" | "総合事業" | "独自",
   ReadonlyArray<{ code: string; name: string }>
 > = {
   介護: CATEGORIES_KAIGO,
   障害: CATEGORIES_SHOGAI,
   総合事業: CATEGORIES_SOUGOU,
+  独自: CATEGORIES_UNIQ,
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -237,7 +244,7 @@ export function ServiceSelector(props: ServiceSelectorProps) {
 }
 
 function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介護", startTime, endTime }: Omit<ServiceSelectorProps, "open">) {
-  const [activeSystem, setActiveSystem] = React.useState<"介護" | "障害" | "総合事業">(initialSystem);
+  const [activeSystem, setActiveSystem] = React.useState<"介護" | "障害" | "総合事業" | "独自">(initialSystem);
   const CATEGORIES = CATEGORIES_BY_SYSTEM[activeSystem];
   const system = activeSystem;
   const [services, setServices] = React.useState<ServiceCode[]>([])
@@ -330,8 +337,8 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
   // candidate filter (時間レンジ/時間帯) と検索文字列のみ適用する。
   const filtered = React.useMemo(() => {
     const lowerQuery = query.toLowerCase()
-    // 福祉用具貸与 (17) は時間帯/所要時間の概念なし → candidate filter 適用しない
-    const hasTimeConcept = activeCategory !== "17"
+    // 福祉用具貸与 (17) と独自サービスは時間帯/所要時間の概念なし → candidate filter 適用しない
+    const hasTimeConcept = activeCategory !== "17" && system !== "独自"
     const applyCandidate = candidateOnly && durationMinutes !== null && hasTimeConcept
     return services.filter((s) => {
       if (applyCandidate) {
@@ -384,10 +391,10 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
           </button>
         </div>
 
-        {/* System tabs (介護/障害/総合事業) */}
+        {/* System tabs (介護/障害/総合事業/独自) */}
         <div className="shrink-0 border-b bg-white">
           <div className="flex gap-0 px-3 pt-2">
-            {(["介護", "障害", "総合事業"] as const).map((sys) => (
+            {(["介護", "障害", "総合事業", "独自"] as const).map((sys) => (
               <button
                 key={sys}
                 type="button"
@@ -402,7 +409,7 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
                     : "border-transparent text-gray-500 hover:text-gray-800"
                 )}
               >
-                {sys === "介護" ? "介護保険" : sys === "障害" ? "障害福祉" : "総合事業"}
+                {{ 介護: "介護保険", 障害: "障害福祉", 総合事業: "総合事業", 独自: "独自サービス" }[sys]}
               </button>
             ))}
           </div>

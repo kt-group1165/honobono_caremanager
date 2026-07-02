@@ -18,7 +18,7 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ServiceSystem = "介護" | "障害" | "総合事業";
+export type ServiceSystem = "介護" | "障害" | "総合事業" | "独自";
 
 import type { ServiceCodeFormula } from "@/lib/service-code-calc";
 import { formulaToDescription } from "@/lib/service-code-calc";
@@ -45,13 +45,14 @@ const SERVICE_SYSTEMS: { value: ServiceSystem; label: string; color: string }[] 
   { value: "介護", label: "介護保険", color: "bg-blue-100 text-blue-700 border-blue-200" },
   { value: "障害", label: "障害福祉", color: "bg-purple-100 text-purple-700 border-purple-200" },
   { value: "総合事業", label: "総合事業", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  { value: "独自", label: "独自サービス", color: "bg-amber-100 text-amber-700 border-amber-200" },
 ];
 
 type FormData = Omit<ServiceCode, "id" | "created_at" | "updated_at">;
 
 // CSV import 行 (検証済 = upsert 可能 / 検証失敗 = error 含む)
 interface ServiceCodeImportRow {
-  system: "介護" | "障害" | "総合事業";
+  system: ServiceSystem;
   service_category: string;
   service_category_name: string;
   service_code: string;
@@ -129,11 +130,17 @@ const SOGO_CATEGORIES: { value: string; label: string }[] = [
   { value: "A6", label: "A6:通所型サービスⅡ(緩和基準)" },
 ];
 
+// 独自サービス (法定外・保険請求対象外)
+const UNIQ_CATEGORIES: { value: string; label: string }[] = [
+  { value: "90", label: "90:独自サービス" },
+];
+
 // system 別カテゴリ map
 const CATEGORIES_BY_SYSTEM: Record<ServiceSystem, { value: string; label: string }[]> = {
   介護: KAIGO_CATEGORIES,
   障害: SHOGAI_CATEGORIES,
   総合事業: SOGO_CATEGORIES,
+  独自: UNIQ_CATEGORIES,
 };
 
 // system + service_category → service_category_name の lookup
@@ -185,6 +192,9 @@ const CATEGORY_NAMES_BY_SYSTEM: Record<ServiceSystem, Record<string, string>> = 
     "A2": "訪問型サービスⅡ(緩和基準)",
     "A5": "通所型サービスⅠ(従前相当)",
     "A6": "通所型サービスⅡ(緩和基準)",
+  },
+  独自: {
+    "90": "独自サービス",
   },
 };
 
@@ -369,7 +379,7 @@ export function ServiceCodesContent({
       }));
     }
     const out: { value: string; label: string }[] = [];
-    for (const s of ["介護", "障害", "総合事業"] as ServiceSystem[]) {
+    for (const s of ["介護", "障害", "総合事業", "独自"] as ServiceSystem[]) {
       for (const c of CATEGORIES_BY_SYSTEM[s]) {
         out.push({
           value: `${s}|${c.value}`, // "障害|12" で衝突回避
