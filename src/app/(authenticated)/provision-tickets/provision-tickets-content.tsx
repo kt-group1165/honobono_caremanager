@@ -1189,20 +1189,23 @@ export function ProvisionTicketsContent({
                 </div>
               ) : (
                 <div className="w-full min-w-0 overflow-x-auto border rounded-lg">
-                  <table className="text-xs border-collapse" style={{ tableLayout: "fixed", width: "1040px", minWidth: "1040px" }}>
+                  {/* 幅は viewport 100% に自動 fit (最低 900px)。日セルは残り幅を等分 */}
+                  <table className="text-xs border-collapse w-full" style={{ tableLayout: "fixed", minWidth: "900px" }}>
                     <colgroup>
-                      <col style={{ width: "64px" }} />
-                      <col style={{ width: "110px" }} />
-                      <col style={{ width: "80px" }} />
-                      {days.map((d) => <col key={d} style={{ width: "22px" }} />)}
+                      <col style={{ width: "52px" }} />
+                      <col style={{ width: "96px" }} />
+                      <col style={{ width: "72px" }} />
+                      {days.map((d) => <col key={d} />)}
                       <col style={{ width: "30px" }} />
+                      <col style={{ width: "56px" }} />
+                      <col style={{ width: "68px" }} />
                       <col className="no-print" style={{ width: "20px" }} />
                     </colgroup>
                     <thead>
                       {/* Day numbers */}
                       <tr className="bg-gray-50">
-                        <th className="border border-gray-400 px-1.5 py-1 text-left text-[11px] sticky left-0 bg-gray-50 z-10">時間帯</th>
-                        <th className="border border-gray-400 px-1.5 py-1 text-left text-[11px]">サービス内容</th>
+                        <th className="border border-gray-400 px-1 py-1 text-left text-[11px] sticky left-0 bg-gray-50 z-10">時間帯</th>
+                        <th className="border border-gray-400 px-1 py-1 text-left text-[11px]">サービス内容</th>
                         <th className="border border-gray-400 px-0 py-1 text-[9px]"></th>
                         {days.map((d) => (
                           <th key={d} className={cn(
@@ -1214,6 +1217,8 @@ export function ProvisionTicketsContent({
                           </th>
                         ))}
                         <th className="border border-gray-400 px-0 py-1 text-center font-bold text-blue-700 text-[11px]">計</th>
+                        <th className="border border-gray-400 px-0 py-1 text-center text-[10px] text-gray-600">概算<br />単位</th>
+                        <th className="border border-gray-400 px-0 py-1 text-center text-[10px] text-gray-600">請求<br />区分</th>
                         <th className="border border-gray-400 no-print"></th>
                       </tr>
                       {/* Day of week */}
@@ -1231,7 +1236,7 @@ export function ProvisionTicketsContent({
                             </th>
                           );
                         })}
-                        <th className="border border-gray-400"></th>
+                        <th className="border border-gray-400" colSpan={3}></th>
                         <th className="border border-gray-400 no-print"></th>
                       </tr>
                     </thead>
@@ -1239,13 +1244,15 @@ export function ProvisionTicketsContent({
                         const rowGrid = grid[row.key] || {};
                         const plannedCount = days.reduce((s, d) => s + (rowGrid[d]?.planned ? 1 : 0), 0);
                         const actualCount = days.reduce((s, d) => s + (rowGrid[d]?.actual ? 1 : 0), 0);
+                        const rowUnits = serviceUnits[row.service_type] ?? 0;
+                        const rowEstUnits = (actualCount > 0 ? actualCount : plannedCount) * rowUnits;
 
                         return (
                           <tbody key={row.key}>
                             {/* Planned row */}
                             <tr>
                               <td
-                                className="border border-gray-400 px-1.5 py-1 text-[11px] text-gray-700 sticky left-0 bg-white z-10 cursor-pointer hover:bg-blue-50"
+                                className="border border-gray-400 px-1 py-1 text-[11px] text-gray-700 sticky left-0 bg-white z-10 cursor-pointer hover:bg-blue-50"
                                 rowSpan={2}
                                 onClick={() => openEditRow(row)}
                                 title="クリックして編集"
@@ -1254,13 +1261,12 @@ export function ProvisionTicketsContent({
                                 <br />〜{row.end_time.slice(0, 5)}
                               </td>
                               <td
-                                className="border border-gray-400 px-1.5 py-1 text-[11px] cursor-pointer hover:bg-blue-50"
+                                className="border border-gray-400 px-1 py-1 text-[11px] cursor-pointer hover:bg-blue-50"
                                 rowSpan={2}
                                 onClick={() => openEditRow(row)}
                                 title="クリックして編集"
                               >
-                                <div>{row.service_type}</div>
-                                {row.staff_name && <div className="text-[9px] text-gray-400">{row.staff_name}</div>}
+                                <div className="break-words">{row.service_type}</div>
                               </td>
                               <td className="border border-gray-400 pl-1 pr-1.5 py-0.5 text-center text-[10px]">
                                 <div className="flex items-center gap-1">
@@ -1290,6 +1296,12 @@ export function ProvisionTicketsContent({
                               })}
                               <td className="border border-gray-400 px-0 py-0 text-center font-bold text-blue-700">
                                 {plannedCount > 0 ? plannedCount : ""}
+                              </td>
+                              <td className="border border-gray-400 px-1 py-0 text-right text-[10px] text-gray-700 tabular-nums" rowSpan={2}>
+                                {rowEstUnits > 0 ? rowEstUnits.toLocaleString() : ""}
+                              </td>
+                              <td className="border border-gray-400 px-1 py-0 text-center text-[10px] text-gray-600" rowSpan={2}>
+                                介護保険
                               </td>
                               <td className="border border-gray-400 px-0 py-0 text-center no-print" rowSpan={2}>
                                 <button
@@ -1340,7 +1352,7 @@ export function ProvisionTicketsContent({
                       {serviceRows.length === 0 && (
                         <tbody>
                           <tr>
-                            <td colSpan={3 + days.length + 2} className="border border-gray-400 px-4 py-8 text-center text-gray-400">
+                            <td colSpan={3 + days.length + 4} className="border border-gray-400 px-4 py-8 text-center text-gray-400">
                               サービスの予定がありません。「＋サービス追加」で追加するか、シフト管理から予定を作成してください。
                             </td>
                           </tr>
@@ -1360,6 +1372,10 @@ export function ProvisionTicketsContent({
                               </td>
                             ))}
                             <td className="border border-gray-400 px-0 py-0 text-center font-bold text-blue-700">{totalPlanned > 0 ? totalPlanned : ""}</td>
+                            <td className="border border-gray-400 px-1 py-0 text-right font-bold text-blue-700 text-[10px] tabular-nums">
+                              {totalPlannedUnits > 0 ? totalPlannedUnits.toLocaleString() : ""}
+                            </td>
+                            <td className="border border-gray-400"></td>
                             <td className="border border-gray-400 no-print"></td>
                           </tr>
                           <tr className="bg-green-50/50">
@@ -1372,6 +1388,10 @@ export function ProvisionTicketsContent({
                               </td>
                             ))}
                             <td className="border border-gray-400 px-0 py-0 text-center font-bold text-green-700">{totalActual > 0 ? totalActual : ""}</td>
+                            <td className="border border-gray-400 px-1 py-0 text-right font-bold text-green-700 text-[10px] tabular-nums">
+                              {totalActualUnits > 0 ? totalActualUnits.toLocaleString() : ""}
+                            </td>
+                            <td className="border border-gray-400"></td>
                             <td className="border border-gray-400 no-print"></td>
                           </tr>
                         </tbody>

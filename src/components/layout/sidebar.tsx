@@ -112,6 +112,7 @@ const NAV_HOME_CARE_SECTIONED: SectionSpec[] = [
   {
     title: "請求業務",
     items: [
+      { name: "サービス提供表 (実績)", href: "/provision-tickets", icon: FileSpreadsheet },
       { name: "加算管理", href: "/addons", icon: Calculator },
       { name: "実績管理", href: "/visit-billing", icon: Calculator },
       { name: "帳票作成", href: "/reports-visit", icon: FileText },
