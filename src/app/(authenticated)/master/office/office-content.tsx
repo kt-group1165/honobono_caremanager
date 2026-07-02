@@ -84,17 +84,12 @@ export type OfficeSettings = {
   visit_procedure_mode?: "standalone" | "integrated";
 };
 
+// 旧区分 (A/B/C) → 新区分 (Ⅰ/Ⅱ/Ⅲ) のクライアント側変換は撤去済。
+// DB 側で offices_tokutei_kassan_check_migrate.sql により表記移行し、
+// CHECK も新表記 (なし/Ⅰ/Ⅱ/Ⅲ/A) に更新されている。
+// ('A' は令和6年度の特定事業所加算(A) を意味する)
 function normalizeOffices(list: OfficeSettings[]): OfficeSettings[] {
-  return list.map((d) => {
-    // 旧区分マッピング
-    const mapping: Record<string, string> = { A: "Ⅰ", B: "Ⅱ", C: "Ⅲ" };
-    if (d.tokutei_kassan_type && mapping[d.tokutei_kassan_type]) {
-      d.tokutei_kassan_type = mapping[d.tokutei_kassan_type];
-      const opt = TOKUTEI_OPTIONS.find((o) => o.value === d.tokutei_kassan_type);
-      if (opt) d.tokutei_kassan_units = opt.units;
-    }
-    return d;
-  });
+  return list;
 }
 
 export function OfficeContent({
