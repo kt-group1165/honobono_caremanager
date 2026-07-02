@@ -238,6 +238,9 @@ const CATEGORIES_BY_SYSTEM: Record<
   独自: CATEGORIES_UNIQ,
 };
 
+// 一覧の最大描画行数 (訪問介護は 5,500 件超あり全行描画は重い。検索/候補で絞る前提)
+const RENDER_CAP = 500
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 // 外側 wrapper: open=false 時は null を返して内側を unmount。
@@ -287,19 +290,26 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
         // 介護 / 障害 / 総合事業 の同居テーブル → system でフィルタ必須
         //   さもないと service_category=11 が介護(訪問介護) と 障害(居宅介護) で重複表示される
         // 有効期間: 今日時点で有効なコードのみ (valid_until=NULL は無期限有効)
+        // 訪問介護(11) は 5,500 件超あり PostgREST 1000 行制限に切られるため page-loop
         const today = new Date().toISOString().slice(0, 10)
-        const { data, error: fetchError } = await supabase
-          .from("kaigo_service_codes")
-          .select("service_code, service_name, short_name, units, service_category, service_category_name, calculation_type")
-          .eq("system", system)
-          .eq("service_category", activeCategory)
-          .lte("valid_from", today)
-          .or(`valid_until.is.null,valid_until.gte.${today}`)
-          .order("service_code", { ascending: true })
-
-        if (cancelled) return
-        if (fetchError) throw fetchError
-        setServices(((data ?? []) as Record<string, unknown>[]).map((d) => ({
+        const PAGE = 1000
+        const data: Record<string, unknown>[] = []
+        for (let from = 0; ; from += PAGE) {
+          const { data: page, error: fetchError } = await supabase
+            .from("kaigo_service_codes")
+            .select("service_code, service_name, short_name, units, service_category, service_category_name, calculation_type")
+            .eq("system", system)
+            .eq("service_category", activeCategory)
+            .lte("valid_from", today)
+            .or(`valid_until.is.null,valid_until.gte.${today}`)
+            .order("service_code", { ascending: true })
+            .range(from, from + PAGE - 1)
+          if (cancelled) return
+          if (fetchError) throw fetchError
+          data.push(...((page ?? []) as Record<string, unknown>[]))
+          if (!page || page.length < PAGE) break
+        }
+        setServices((data).map((d) => ({
           code: String(d.service_code ?? ""),
           name: String(d.service_name ?? ""),
           short_name: d.short_name ? String(d.short_name) : null,
@@ -532,7 +542,7 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filtered.map((service) => (
+                {filtered.slice(0, RENDER_CAP).map((service) => (
                   <ServiceRow
                     key={service.code}
                     service={service}
@@ -557,7 +567,11 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
         {/* Footer */}
         <div className="shrink-0 flex items-center justify-between px-5 py-3 border-t bg-gray-50">
           <span className="text-xs text-gray-400">
-            {!loading && !error ? `${filtered.length} 件` : ""}
+            {!loading && !error
+              ? filtered.length > RENDER_CAP
+                ? `${filtered.length} 件 (先頭 ${RENDER_CAP} 件のみ表示 — 検索で絞り込んでください)`
+                : `${filtered.length} 件`
+              : ""}
           </span>
           <button
             type="button"
