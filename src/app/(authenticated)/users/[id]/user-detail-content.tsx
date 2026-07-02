@@ -195,7 +195,8 @@ function UserOfficeServices({
             const isOwnOffice = o.id === currentOfficeId;
             return (
               <div key={o.id} className={`rounded-lg border p-3 ${using ? (isOwnOffice ? "border-blue-300 bg-blue-50/30" : "border-emerald-200 bg-emerald-50/30") : "border-gray-200"}`}>
-                <div className="flex items-center gap-3">
+                {/* 事業所名 + 種別 + 開始日/終了日 を 1 行に */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <input
                     type="checkbox"
                     checked={using}
@@ -204,95 +205,134 @@ function UserOfficeServices({
                     className={`w-4 h-4 accent-blue-600 ${isOwnOffice ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}
                     title={isOwnOffice ? undefined : "他事業所のチェックは編集できません"}
                   />
-                  <div className="flex-1">
-                    <div className="text-sm font-semibold text-gray-900">
+                  <div className="min-w-0">
+                    <span className="text-sm font-semibold text-gray-900">
                       {o.name || "(名称未設定)"}
-                      {!isOwnOffice && <span className="ml-2 text-[10px] font-normal text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5">他事業所</span>}
+                    </span>
+                    <span className="ml-2 text-xs text-gray-500">{o.service_type}</span>
+                    {!isOwnOffice && <span className="ml-2 text-[10px] font-normal text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5">他事業所</span>}
+                  </div>
+                  {svc && (
+                    <div className="ml-auto flex items-center gap-2 text-xs">
+                      <label className="flex items-center gap-1">
+                        <span className="text-gray-500">開始日:</span>
+                        <input
+                          type="date"
+                          value={svc.start_date ?? ""}
+                          onChange={(e) => isOwnOffice && updateDate(svc.id, "start_date", e.target.value)}
+                          readOnly={!isOwnOffice}
+                          className={`rounded border border-gray-300 px-2 py-1 text-xs ${!isOwnOffice ? "bg-gray-50 text-gray-500" : ""}`}
+                        />
+                      </label>
+                      <label className="flex items-center gap-1">
+                        <span className="text-gray-500">終了日:</span>
+                        <input
+                          type="date"
+                          value={svc.end_date ?? ""}
+                          onChange={(e) => isOwnOffice && updateDate(svc.id, "end_date", e.target.value)}
+                          readOnly={!isOwnOffice}
+                          className={`rounded border border-gray-300 px-2 py-1 text-xs ${!isOwnOffice ? "bg-gray-50 text-gray-500" : ""}`}
+                        />
+                      </label>
                     </div>
-                    <div className="text-xs text-gray-500">{o.service_type}</div>
-                  </div>
+                  )}
                 </div>
-                {svc && (
-                  <div className="flex items-center gap-2 mt-2 text-xs">
-                    <label className="flex items-center gap-1">
-                      <span className="text-gray-500">開始日:</span>
-                      <input
-                        type="date"
-                        value={svc.start_date ?? ""}
-                        onChange={(e) => isOwnOffice && updateDate(svc.id, "start_date", e.target.value)}
-                        readOnly={!isOwnOffice}
-                        className={`rounded border border-gray-300 px-2 py-1 text-xs ${!isOwnOffice ? "bg-gray-50 text-gray-500" : ""}`}
-                      />
-                    </label>
-                    <label className="flex items-center gap-1">
-                      <span className="text-gray-500">終了日:</span>
-                      <input
-                        type="date"
-                        value={svc.end_date ?? ""}
-                        onChange={(e) => isOwnOffice && updateDate(svc.id, "end_date", e.target.value)}
-                        readOnly={!isOwnOffice}
-                        className={`rounded border border-gray-300 px-2 py-1 text-xs ${!isOwnOffice ? "bg-gray-50 text-gray-500" : ""}`}
-                      />
-                    </label>
-                  </div>
-                )}
                 {svc && using && isHomeCareType(o.service_type) && isOwnOffice && (
                   <div className="mt-3 rounded-md border border-blue-200 bg-white p-3">
                     <div className="text-xs font-semibold text-gray-700 mb-2">提供サービス種別</div>
                     <div className="space-y-1">
-                      {svc.home_care_categories.map((c) => (
-                        <div key={c.category} className="flex items-center gap-2 text-xs">
-                          <label className="flex items-center gap-2 w-32 shrink-0 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={c.active}
-                              onChange={(e) =>
-                                updateCategory(svc.id, c.category, {
-                                  active: e.target.checked,
-                                  // チェックON: 未入力なら親事業所の開始日（無ければ今日）をデフォルトに
-                                  // チェックOFF: 開始日・終了日をクリア
-                                  start_date: e.target.checked
-                                    ? (c.start_date ??
-                                       svc.start_date ??
-                                       format(new Date(), "yyyy-MM-dd"))
-                                    : null,
-                                  end_date: e.target.checked ? c.end_date : null,
-                                })
-                              }
-                              className="w-3.5 h-3.5 accent-blue-600"
-                            />
-                            <span className="text-gray-700">{c.category}</span>
-                          </label>
-                          <label className="flex items-center gap-1">
-                            <span className="text-gray-500">開始日:</span>
-                            <input
-                              type="date"
-                              value={c.start_date ?? ""}
-                              disabled={!c.active}
-                              onChange={(e) =>
-                                updateCategory(svc.id, c.category, {
-                                  start_date: e.target.value || null,
-                                })
-                              }
-                              className="rounded border border-gray-300 px-2 py-0.5 text-xs disabled:bg-gray-50 disabled:text-gray-400"
-                            />
-                          </label>
-                          <label className="flex items-center gap-1">
-                            <span className="text-gray-500">終了日:</span>
-                            <input
-                              type="date"
-                              value={c.end_date ?? ""}
-                              disabled={!c.active}
-                              onChange={(e) =>
-                                updateCategory(svc.id, c.category, {
-                                  end_date: e.target.value || null,
-                                })
-                              }
-                              className="rounded border border-gray-300 px-2 py-0.5 text-xs disabled:bg-gray-50 disabled:text-gray-400"
-                            />
-                          </label>
-                        </div>
-                      ))}
+                      {svc.home_care_categories.map((c) => {
+                        const ended = c.active && !!c.end_date;
+                        return (
+                          <div key={c.category} className="text-xs">
+                            <div className="flex items-center gap-2">
+                              <label className="flex items-center gap-2 w-32 shrink-0 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={c.active}
+                                  onChange={(e) =>
+                                    updateCategory(svc.id, c.category, {
+                                      active: e.target.checked,
+                                      // チェックON: 未入力なら親事業所の開始日（無ければ今日）をデフォルトに
+                                      // チェックOFF: 開始日・終了日をクリア (履歴は保持)
+                                      start_date: e.target.checked
+                                        ? (c.start_date ??
+                                           svc.start_date ??
+                                           format(new Date(), "yyyy-MM-dd"))
+                                        : null,
+                                      end_date: e.target.checked ? c.end_date : null,
+                                    })
+                                  }
+                                  className="w-3.5 h-3.5 accent-blue-600"
+                                />
+                                <span className="text-gray-700">{c.category}</span>
+                              </label>
+                              <label className="flex items-center gap-1">
+                                <span className="text-gray-500">開始日:</span>
+                                <input
+                                  type="date"
+                                  value={c.start_date ?? ""}
+                                  disabled={!c.active}
+                                  onChange={(e) =>
+                                    updateCategory(svc.id, c.category, {
+                                      start_date: e.target.value || null,
+                                    })
+                                  }
+                                  className="rounded border border-gray-300 px-2 py-0.5 text-xs disabled:bg-gray-50 disabled:text-gray-400"
+                                />
+                              </label>
+                              <label className="flex items-center gap-1">
+                                <span className="text-gray-500">終了日:</span>
+                                <input
+                                  type="date"
+                                  value={c.end_date ?? ""}
+                                  disabled={!c.active}
+                                  onChange={(e) =>
+                                    updateCategory(svc.id, c.category, {
+                                      end_date: e.target.value || null,
+                                    })
+                                  }
+                                  className="rounded border border-gray-300 px-2 py-0.5 text-xs disabled:bg-gray-50 disabled:text-gray-400"
+                                />
+                              </label>
+                              {ended && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    // 再開: 現行期間 (終了済) を履歴に退避し、今日から新期間を開始
+                                    updateCategory(svc.id, c.category, {
+                                      history: [
+                                        ...c.history,
+                                        { start_date: c.start_date, end_date: c.end_date },
+                                      ],
+                                      start_date: format(new Date(), "yyyy-MM-dd"),
+                                      end_date: null,
+                                    })
+                                  }
+                                  className="rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-100"
+                                  title="終了済の期間を履歴に残し、今日から再開する"
+                                >
+                                  再開
+                                </button>
+                              )}
+                            </div>
+                            {c.history.length > 0 && (
+                              <details className="ml-[136px] mt-0.5">
+                                <summary className="cursor-pointer text-[10px] text-gray-400 hover:text-gray-600">
+                                  過去の利用期間 ({c.history.length})
+                                </summary>
+                                <ul className="mt-0.5 space-y-0.5 text-[10px] text-gray-500">
+                                  {c.history.map((p, i) => (
+                                    <li key={i}>
+                                      {p.start_date ?? "?"} 〜 {p.end_date ?? "?"}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </details>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
