@@ -22,7 +22,6 @@ import {
   MessagesSquare,
   AlertTriangle,
   Bell,
-  Accessibility,
   Loader2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
