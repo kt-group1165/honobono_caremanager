@@ -63,6 +63,12 @@ export interface UserSeikyuRow {
   insuranceAmount: number;
   /** 利用者負担額 (円) */
   userAmount: number;
+  /** 公費 (生活保護等)。client_insurance_records.public_expense。null = 公費なし */
+  publicExpense: string | null;
+  /** 公費対象単位数 (公費ありのとき全単位を対象とする簡易版) */
+  kohiUnits: number | null;
+  /** 公費請求額 (円) = 本人負担分を公費へ振替 (生保想定・本人負担 0) */
+  kohiAmount: number | null;
 }
 
 export interface MonthlySeikyuResult {
@@ -167,13 +173,13 @@ export async function aggregateMonthlyVisitSeikyu(
 
   const insByClient = new Map<
     string,
-    { insurer: string | null; insured: string | null; level: string | null; copay: number }
+    { insurer: string | null; insured: string | null; level: string | null; copay: number; publicExpense: string | null }
   >();
   for (let i = 0; i < userIds.length; i += 50) {
     const chunk = userIds.slice(i, i + 50);
     const { data, error } = await supabase
       .from("client_insurance_records")
-      .select("client_id, insurer_number, insured_number, care_level, copay_rate, effective_date")
+      .select("client_id, insurer_number, insured_number, care_level, copay_rate, public_expense, effective_date")
       .in("client_id", chunk)
       .order("effective_date", { ascending: false });
     if (error) throw new Error(`保険情報取得失敗: ${error.message}`);
@@ -183,6 +189,7 @@ export async function aggregateMonthlyVisitSeikyu(
       insured_number: string | null;
       care_level: string | null;
       copay_rate: number | null;
+      public_expense: string | null;
     }[]) {
       // 最新 (effective_date DESC) の 1 件のみ採用
       if (!insByClient.has(r.client_id)) {
@@ -198,6 +205,7 @@ export async function aggregateMonthlyVisitSeikyu(
           insured: r.insured_number,
           level: r.care_level,
           copay,
+          publicExpense: r.public_expense?.trim() ? r.public_expense.trim() : null,
         });
       }
     }
@@ -266,8 +274,12 @@ export async function aggregateMonthlyVisitSeikyu(
     const totalUnits = baseUnits + addonUnits;
     const totalAmount = Math.floor(totalUnits * unitPrice);
     const copay = ins?.copay ?? 0.1;
-    const userAmount = Math.floor(totalAmount * copay);
-    const insuranceAmount = totalAmount - userAmount;
+    const insuranceAmount = totalAmount - Math.floor(totalAmount * copay);
+    // 公費 (生活保護等): 本人負担分を公費請求へ振替 (本人負担 0 の簡易版)
+    const publicExpense = ins?.publicExpense ?? null;
+    const kohiUnits = publicExpense ? totalUnits : null;
+    const kohiAmount = publicExpense ? totalAmount - insuranceAmount : null;
+    const userAmount = publicExpense ? 0 : totalAmount - insuranceAmount;
 
     rows.push({
       user_id: userId,
@@ -286,6 +298,9 @@ export async function aggregateMonthlyVisitSeikyu(
       totalAmount,
       insuranceAmount,
       userAmount,
+      publicExpense,
+      kohiUnits,
+      kohiAmount,
     });
   }
 

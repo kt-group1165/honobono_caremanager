@@ -171,14 +171,8 @@ export function KaigoSeikyuContent() {
                   </tbody>
                 </table>
 
-                {/* 金額サマリ */}
-                <div className="mt-4 space-y-1 rounded border bg-gray-50 p-3 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">保険単位数</span>
-                    <span className="font-bold tabular-nums">
-                      {selected.totalUnits.toLocaleString()}
-                    </span>
-                  </div>
+                {/* 金額サマリ (ほのぼの 請求画面の右下ボックス準拠) */}
+                <div className="mt-4 rounded border bg-gray-50 p-3 text-xs space-y-1">
                   <div className="flex justify-between">
                     <span className="text-gray-500">地域単価</span>
                     <span className="tabular-nums">{selected.unitPrice.toFixed(2)} 円/単位</span>
@@ -189,20 +183,38 @@ export function KaigoSeikyuContent() {
                       ¥{selected.totalAmount.toLocaleString()}
                     </span>
                   </div>
-                  <div className="flex justify-between text-blue-700">
-                    <span>保険請求額 ({Math.round((1 - selected.copay_rate) * 100)}%)</span>
-                    <span className="font-bold tabular-nums">
-                      ¥{selected.insuranceAmount.toLocaleString()}
-                    </span>
+                  <div className="mt-2 grid grid-cols-2 gap-x-5 gap-y-1 border-t pt-2">
+                    <SummaryCell label="特定介護請求額" value="" />
+                    <SummaryCell label="軽減額" value="" />
+                    <SummaryCell label="保険単位数" value={selected.totalUnits.toLocaleString()} />
+                    <SummaryCell
+                      label="公費単位数"
+                      value={selected.kohiUnits != null ? selected.kohiUnits.toLocaleString() : ""}
+                    />
+                    <SummaryCell
+                      label={`保険請求額 (${Math.round((1 - selected.copay_rate) * 100)}%)`}
+                      value={`¥${selected.insuranceAmount.toLocaleString()}`}
+                      emphasis="blue"
+                    />
+                    <SummaryCell
+                      label="公費請求額"
+                      value={selected.kohiAmount != null ? `¥${selected.kohiAmount.toLocaleString()}` : ""}
+                      emphasis={selected.kohiAmount != null ? "purple" : undefined}
+                    />
+                    <SummaryCell
+                      label={`利用者負担額 (${Math.round(selected.copay_rate * 10)}割)`}
+                      value={selected.publicExpense ? "" : `¥${selected.userAmount.toLocaleString()}`}
+                    />
+                    <SummaryCell
+                      label="公費分本人負担"
+                      value={selected.publicExpense ? "¥0" : ""}
+                    />
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">
-                      利用者負担額 ({Math.round(selected.copay_rate * 100)}割相当)
-                    </span>
-                    <span className="font-bold tabular-nums">
-                      ¥{selected.userAmount.toLocaleString()}
-                    </span>
-                  </div>
+                  {selected.publicExpense && (
+                    <p className="pt-1 text-[10px] text-purple-600">
+                      公費: {selected.publicExpense} (本人負担分を公費請求へ振替)
+                    </p>
+                  )}
                 </div>
               </div>
             ) : (
@@ -213,6 +225,36 @@ export function KaigoSeikyuContent() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ほのぼの風 請求サマリの 1 セル (ラベル + 右寄せ数値。空文字 = 該当なし)
+function SummaryCell({
+  label,
+  value,
+  emphasis,
+}: {
+  label: string;
+  value: string;
+  emphasis?: "blue" | "purple";
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="shrink-0 rounded border border-blue-100 bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-900 whitespace-nowrap">
+        {label}
+      </span>
+      <span
+        className={
+          emphasis === "blue"
+            ? "font-bold tabular-nums text-blue-700"
+            : emphasis === "purple"
+            ? "font-bold tabular-nums text-purple-700"
+            : "font-bold tabular-nums text-gray-800"
+        }
+      >
+        {value || <span className="text-gray-300 font-normal">—</span>}
+      </span>
     </div>
   );
 }
