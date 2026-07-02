@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   Bell,
   Accessibility,
+  Loader2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -199,9 +200,18 @@ function SidebarV2({ onSwitchLayout }: { onSwitchLayout: () => void }) {
     return `${href}?office=${encodeURIComponent(currentOffice.id)}`;
   };
 
+  // optimistic active: クリック瞬間にハイライトを切替 (遷移完了を待たない)
+  // pathname が変わったら reset
+  const [clickedHref, setClickedHref] = useState<string | null>(null);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 遷移完了で optimistic 状態を解除
+    setClickedHref(null);
+  }, [pathname]);
+
   const renderItem = (item: NavItem) => {
-    const isActive =
-      item.href === "/dashboard"
+    const isActive = clickedHref
+      ? clickedHref === item.href
+      : item.href === "/dashboard"
         ? pathname === "/dashboard"
         : pathname.startsWith(item.href);
     const isNotifications = item.href === "/notifications";
@@ -211,6 +221,11 @@ function SidebarV2({ onSwitchLayout }: { onSwitchLayout: () => void }) {
       <Link
         key={item.href}
         href={appendMode(item.href)}
+        // dynamic ページも full page を事前取得 (staleTimes.static=300s が適用され
+        // メニュー往復が 5 分間ほぼゼロ往復になる)。利用者は単独運用のため
+        // prefetch 増によるサーバー負荷は問題にならない。
+        prefetch={true}
+        onClick={() => setClickedHref(item.href)}
         title={collapsed ? item.name : undefined}
         className={cn(
           "relative flex items-center rounded-md transition-colors",
@@ -229,6 +244,9 @@ function SidebarV2({ onSwitchLayout }: { onSwitchLayout: () => void }) {
             <span className="flex-1 truncate text-[13px] font-medium">
               {item.name}
             </span>
+            {clickedHref === item.href && (
+              <Loader2 size={12} className="ml-auto animate-spin text-blue-500" />
+            )}
             {showBadge && (
               <span className="ml-auto min-w-[20px] rounded-full bg-red-500 px-1.5 text-center text-[11px] font-semibold leading-[18px] text-white">
                 {unread > 99 ? "99+" : unread}
