@@ -363,6 +363,73 @@ export function MonthlyIndividualView({
     return `(${(totalMins / 60).toFixed(1)}h)`;
   };
 
+  // ─── 下部集計 (ほのぼの 月間個別 準拠: 残予定/実績 × 身体・身生・生活・乗降) ───
+  const footerStats = useMemo(() => {
+    type Agg = { c: number; m: number; u: number };
+    type Cat = "身体" | "身生" | "生活" | "乗降" | "その他";
+    const CATS: Cat[] = ["身体", "身生", "生活", "乗降", "その他"];
+    const categorize = (raw: string): Cat => {
+      const s = toHankakuDigits(raw ?? "");
+      if (s.includes("乗降")) return "乗降";
+      const hasBody = s.includes("身体") || /身\d/.test(s);
+      const hasLife = s.includes("生活") || /生\d/.test(s);
+      if (hasBody && hasLife) return "身生";
+      if (hasBody) return "身体";
+      if (hasLife) return "生活";
+      return "その他";
+    };
+    const mins = (start: string | null, end: string | null) => {
+      if (!start || !end) return 0;
+      const [sh, sm] = start.split(":").map(Number);
+      const [eh, em] = end.split(":").map(Number);
+      const d = (eh * 60 + em) - (sh * 60 + sm);
+      return d > 0 ? d : 0;
+    };
+    const mkAgg = (): Agg => ({ c: 0, m: 0, u: 0 });
+    const mkGroup = () => ({
+      total: mkAgg(),
+      by: Object.fromEntries(CATS.map((c) => [c, mkAgg()])) as Record<Cat, Agg>,
+    });
+    // 支援 = 総合事業/介護予防系 (訪問型サービス等) を別段で集計
+    const isShien = (raw: string) => {
+      const s = raw ?? "";
+      return s.includes("訪問型") || s.includes("予防") || s.includes("総合事業");
+    };
+    const groups = {
+      planned: mkGroup(),
+      actual: mkGroup(),
+      shienPlanned: mkGroup(),
+      shienActual: mkGroup(),
+    };
+    for (const s of schedules) {
+      if (s._isCopy || !s.visit_date) continue;
+      const done = s.status === "completed";
+      const g = isShien(s.service_type)
+        ? (done ? groups.shienActual : groups.shienPlanned)
+        : (done ? groups.actual : groups.planned);
+      const m = mins(s.start_time, s.end_time);
+      const u = serviceUnits[s.service_type] ?? 0;
+      const cat = categorize(s.service_type);
+      g.total.c += 1; g.total.m += m; g.total.u += u;
+      g.by[cat].c += 1; g.by[cat].m += m; g.by[cat].u += u;
+    }
+    return groups;
+  }, [schedules, serviceUnits]);
+
+  const fmtHM = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  const fmtAgg = (a: { c: number; m: number; u: number }) =>
+    `${a.c}回(${fmtHM(a.m)}) ${a.u.toLocaleString()}単位`;
+  const fmtGroupLine = (g: typeof footerStats.planned) => {
+    const parts = [
+      `${fmtAgg(g.total)} / 身体: ${fmtAgg(g.by["身体"])}`,
+      `身生: ${fmtAgg(g.by["身生"])}`,
+      `生活: ${fmtAgg(g.by["生活"])}`,
+      `乗降: ${fmtAgg(g.by["乗降"])}`,
+    ];
+    if (g.by["その他"].c > 0) parts.push(`その他: ${fmtAgg(g.by["その他"])}`);
+    return parts.join("　");
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2 border-b bg-white">
@@ -638,6 +705,30 @@ export function MonthlyIndividualView({
           </table>
         </div>
       )}
+
+      {/* 下部集計 (ほのぼの 準拠) */}
+      <div className="shrink-0 border-t bg-gray-50 px-4 py-2 overflow-x-auto">
+        <table className="text-[11px] font-mono whitespace-nowrap leading-5">
+          <tbody>
+            <tr>
+              <td className="pr-3 font-bold text-blue-700">【残予定 合計】</td>
+              <td>{fmtGroupLine(footerStats.planned)}</td>
+            </tr>
+            <tr>
+              <td className="pr-3 font-bold text-orange-700">【 実績 合計 】</td>
+              <td>{fmtGroupLine(footerStats.actual)}</td>
+            </tr>
+            <tr>
+              <td className="pr-3 font-bold text-blue-700">【支援予 合計】</td>
+              <td>{footerStats.shienPlanned.total.c > 0 ? fmtGroupLine(footerStats.shienPlanned) : ""}</td>
+            </tr>
+            <tr>
+              <td className="pr-3 font-bold text-orange-700">【支援実 合計】</td>
+              <td>{footerStats.shienActual.total.c > 0 ? fmtGroupLine(footerStats.shienActual) : ""}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
