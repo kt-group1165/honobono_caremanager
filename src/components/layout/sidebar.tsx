@@ -100,7 +100,7 @@ const NAV_HOME_CARE_SECTIONED: SectionSpec[] = [
     title: "日常業務",
     items: [
       { name: "ケアプラン取込", href: "/careplan-import", icon: FileText },
-      { name: "シフト管理", href: "/shift-management", icon: CalendarDays },
+      { name: "利用状況・シフト管理", href: "/shift-management", icon: CalendarDays },
       { name: "パターン登録", href: "/shift-management/patterns", icon: Clock },
       { name: "サービス提供表 (実績)", href: "/provision-tickets", icon: FileSpreadsheet },
       { name: "サービス実施記録", href: "/visit-records", icon: ClipboardCheck },
