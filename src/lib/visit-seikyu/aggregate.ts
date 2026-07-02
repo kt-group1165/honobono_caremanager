@@ -73,15 +73,9 @@ export interface MonthlySeikyuResult {
   recordCount: number;
 }
 
-// 処遇改善加算等 (= 月次総単位数に % を掛ける加算) の代表レート
-// offices.applied_formula_codes と kaigo_service_codes.formula の突合が理想だが、
-// Phase 2 では 訪問介護 処遇改善加算Ⅰ (24.5%) 等の一般値を code から推定する。
-const ADDON_LABELS: Record<string, { label: string; pct: number }> = {
-  "116275": { label: "処遇改善加算Ⅰ", pct: 24.5 },
-  "116271": { label: "処遇改善加算Ⅱ", pct: 22.4 },
-  "116269": { label: "処遇改善加算Ⅲ", pct: 18.2 },
-  "116267": { label: "処遇改善加算Ⅳ", pct: 14.5 },
-};
+// 処遇改善加算等 (= 月次総単位数に % を掛ける加算) は
+// offices.applied_formula_codes と kaigo_service_codes.formula
+// (monthly_aggregate: 所定単位 × numerator/denominator) を突合して計算する。
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
@@ -192,25 +186,48 @@ export async function aggregateMonthlyVisitSeikyu(
     }[]) {
       // 最新 (effective_date DESC) の 1 件のみ採用
       if (!insByClient.has(r.client_id)) {
+        // copay_rate は「割」単位 (1=1割, 2=2割, 3=3割) で格納されることが
+        // あるため、1 以上は /10 して負担率に正規化する (0.1〜0.3 表記も許容)
+        const raw = r.copay_rate;
+        const copay =
+          raw == null || raw <= 0 ? 0.1
+          : raw >= 1 ? Math.min(raw / 10, 1)
+          : raw;
         insByClient.set(r.client_id, {
           insurer: r.insurer_number,
           insured: r.insured_number,
           level: r.care_level,
-          copay: r.copay_rate != null && r.copay_rate > 0 ? r.copay_rate : 0.1,
+          copay,
         });
       }
     }
   }
 
-  // 4) 処遇改善加算の rate (applied_formula_codes から)
-  let addonPct = 0;
+  // 4) 処遇改善加算の rate — 適用加算コードの formula をマスタから取得
+  //    (monthly_aggregate: 所定単位 × numerator/denominator)
+  let addonNum = 0;
+  let addonDen = 1;
   let addonLabel: string | null = null;
-  for (const code of opts.appliedFormulaCodes ?? []) {
-    const meta = ADDON_LABELS[code];
-    if (meta) {
-      addonPct = meta.pct;
-      addonLabel = meta.label;
-      break;
+  if ((opts.appliedFormulaCodes ?? []).length > 0) {
+    const { data, error } = await supabase
+      .from("kaigo_service_codes")
+      .select("service_code, service_name, formula")
+      .in("service_code", opts.appliedFormulaCodes as string[])
+      .eq("system", "介護")
+      .not("formula", "is", null);
+    if (error) throw new Error(`加算コード取得失敗: ${error.message}`);
+    for (const r of (data ?? []) as {
+      service_name: string;
+      formula: { type?: string; numerator?: number; denominator?: number } | null;
+    }[]) {
+      const f = r.formula;
+      if (f?.type === "monthly_aggregate" && f.numerator && f.denominator) {
+        // 処遇改善Ⅰ〜Ⅳ は排他のため最初の 1 件を採用
+        addonNum = f.numerator;
+        addonDen = f.denominator;
+        addonLabel = r.service_name;
+        break;
+      }
     }
   }
 
@@ -245,7 +262,7 @@ export async function aggregateMonthlyVisitSeikyu(
     }
     details.sort((a, b) => b.units - a.units);
 
-    const addonUnits = addonPct > 0 ? Math.round((baseUnits * addonPct) / 100) : 0;
+    const addonUnits = addonNum > 0 ? Math.round((baseUnits * addonNum) / addonDen) : 0;
     const totalUnits = baseUnits + addonUnits;
     const totalAmount = Math.floor(totalUnits * unitPrice);
     const copay = ins?.copay ?? 0.1;

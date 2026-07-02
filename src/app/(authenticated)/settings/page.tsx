@@ -584,6 +584,15 @@ function AppliedFormulaSection() {
   );
 }
 
+// 年度別 居宅介護支援費 単位数は居宅介護支援の設定のため、
+// 自事業所が訪問介護等のときは表示しない
+function KyotakuOnlyFiscalYearRates() {
+  const { currentOffice } = useBusinessType();
+  const t = currentOffice?.service_type ?? "";
+  if (t !== "居宅介護支援" && t !== "care_manager") return null;
+  return <FiscalYearRatesSection />;
+}
+
 function OfficeSwitcher() {
   const { offices, currentOfficeId, setCurrentOfficeId, currentOffice } = useBusinessType();
   const typeLabel = (bt: string) =>
@@ -885,8 +894,8 @@ export default function SettingsPage() {
       {/* 適用加算 (事業所単位) */}
       <AppliedFormulaSection />
 
-      {/* 年度別単位数管理 */}
-      <FiscalYearRatesSection />
+      {/* 年度別単位数管理 (居宅介護支援費 = 居宅事業所選択時のみ) */}
+      <KyotakuOnlyFiscalYearRates />
 
       {/* 年度別特定事業所加算管理 */}
       <FiscalYearTokuteiKassanSection />
