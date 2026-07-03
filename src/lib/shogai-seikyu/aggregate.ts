@@ -49,10 +49,21 @@ export interface ShogaiSeikyuRow {
   unitPrice: number;
   /** 総費用額 (円) */
   totalAmount: number;
-  /** 利用者負担額 (上限適用後) */
+  /** 利用者負担額 (上限適用 + 上限管理結果反映後) */
   userAmount: number;
   /** 介護給付費請求額 */
   benefitAmount: number;
+  // ─── 利用者負担上限額管理 ───
+  /** 上限管理: なし / 自事業所 / 他事業所 */
+  jogenKanriKubun: string;
+  /** 上限額管理事業所番号 */
+  jogenKanriOfficeNumber: string | null;
+  /** 上限額管理事業所名 */
+  jogenKanriOfficeName: string | null;
+  /** 管理結果区分 (1/2/3)。未入力は null */
+  kanriResult: number | null;
+  /** 管理結果後の当事業所分 利用者負担額 (区分 1/3 のとき userAmount に反映済) */
+  kanriResultAmount: number | null;
 }
 
 export interface ShogaiSeikyuResult {
@@ -128,6 +139,9 @@ export async function aggregateMonthlyShogaiSeikyu(
     support_level: string | null;
     self_payment_limit: number | null;
     seiho_flag: boolean | null;
+    jogen_kanri_kubun: string | null;
+    jogen_kanri_office_number: string | null;
+    jogen_kanri_office_name: string | null;
   }
   const certByClient = new Map<string, Cert>();
   for (let i = 0; i < userIds.length; i += 50) {
@@ -135,13 +149,33 @@ export async function aggregateMonthlyShogaiSeikyu(
     const { data, error } = await supabase
       .from("shougai_certifications")
       .select(
-        "client_id, beneficiary_number, insurer_municipality, support_level, self_payment_limit, seiho_flag, certification_start_date",
+        "client_id, beneficiary_number, insurer_municipality, support_level, self_payment_limit, seiho_flag, jogen_kanri_kubun, jogen_kanri_office_number, jogen_kanri_office_name, certification_start_date",
       )
       .in("client_id", chunk)
       .order("certification_start_date", { ascending: false });
     if (error) throw new Error(`受給者証取得失敗: ${error.message}`);
     for (const r of (data ?? []) as Cert[]) {
       if (!certByClient.has(r.client_id)) certByClient.set(r.client_id, r);
+    }
+  }
+
+  // 3.5) 月次 上限額管理結果 (管理結果区分 1/3 は利用者負担を調整後額に置換)
+  interface KanriResult {
+    client_id: string;
+    kanri_result: number | null;
+    kanri_result_amount: number | null;
+  }
+  const kanriByClient = new Map<string, KanriResult>();
+  for (let i = 0; i < userIds.length; i += 50) {
+    const chunk = userIds.slice(i, i + 50);
+    const { data, error } = await supabase
+      .from("shogai_jogen_kanri_results")
+      .select("client_id, kanri_result, kanri_result_amount")
+      .eq("target_month", monthStr)
+      .in("client_id", chunk);
+    if (error) throw new Error(`上限管理結果取得失敗: ${error.message}`);
+    for (const r of (data ?? []) as KanriResult[]) {
+      kanriByClient.set(r.client_id, r);
     }
   }
 
@@ -179,6 +213,17 @@ export async function aggregateMonthlyShogaiSeikyu(
     const limit = cert?.self_payment_limit ?? 0;
     let userAmount = seiho ? 0 : Math.floor(totalAmount * 0.1);
     if (!seiho && limit > 0) userAmount = Math.min(userAmount, limit);
+    // 上限額管理結果の反映:
+    //   区分 1 (管理事業所で充当済) / 3 (管理結果票のとおり調整) → 調整後額に置換
+    //   区分 2 (合算が上限以下で調整なし) → そのまま
+    const kanri = kanriByClient.get(userId) ?? null;
+    if (
+      kanri?.kanri_result != null &&
+      kanri.kanri_result !== 2 &&
+      kanri.kanri_result_amount != null
+    ) {
+      userAmount = Math.min(kanri.kanri_result_amount, totalAmount);
+    }
     const benefitAmount = totalAmount - userAmount;
 
     rows.push({
@@ -196,6 +241,11 @@ export async function aggregateMonthlyShogaiSeikyu(
       totalAmount,
       userAmount,
       benefitAmount,
+      jogenKanriKubun: cert?.jogen_kanri_kubun ?? "なし",
+      jogenKanriOfficeNumber: cert?.jogen_kanri_office_number ?? null,
+      jogenKanriOfficeName: cert?.jogen_kanri_office_name ?? null,
+      kanriResult: kanri?.kanri_result ?? null,
+      kanriResultAmount: kanri?.kanri_result_amount ?? null,
     });
   }
 

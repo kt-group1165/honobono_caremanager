@@ -283,6 +283,15 @@ export function ShogaiSeikyuContent() {
                     </span>
                   </div>
                 </div>
+
+                {/* 上限額管理 (ほのぼのmore 上限管理事業所の登録に相当) */}
+                <JogenKanriSection
+                  key={`${selected.user_id}-${year}-${month}`}
+                  row={selected}
+                  year={year}
+                  month={month}
+                  onSaved={load}
+                />
               </div>
             ) : (
               <div className="p-8 text-center text-xs text-gray-400">
@@ -296,6 +305,109 @@ export function ShogaiSeikyuContent() {
       <p className="text-[11px] text-gray-400">
         ※ 「請求CSV」は国保連 介護給付費・訓練等給付費等明細書 (J121) 相当の項目を
         持つ明細 CSV。伝送ソフトの固定長 interface 仕様には取込仕様確定後に対応。
+        上限管理の設定 (管理事業所の登録) は 利用者管理 → 受給者証 で行います。
+      </p>
+    </div>
+  );
+}
+
+// ─── 利用者負担上限額管理 (月次の管理結果入力) ────────────────────────────────
+function JogenKanriSection({
+  row,
+  year,
+  month,
+  onSaved,
+}: {
+  row: ShogaiSeikyuRow;
+  year: number;
+  month: number;
+  onSaved: () => void;
+}) {
+  const supabase = useMemo(() => createClient(), []);
+  const [result, setResult] = useState<string>(row.kanriResult != null ? String(row.kanriResult) : "");
+  const [amount, setAmount] = useState<string>(row.kanriResultAmount != null ? String(row.kanriResultAmount) : "");
+  const [saving, setSaving] = useState(false);
+
+  if (row.jogenKanriKubun === "なし") {
+    return (
+      <div className="mt-3 rounded border border-dashed bg-gray-50 px-3 py-2 text-[11px] text-gray-400">
+        上限額管理: 対象外 (受給者証で管理事業所を設定すると月次の管理結果を入力できます)
+      </div>
+    );
+  }
+
+  const save = async () => {
+    setSaving(true);
+    const monthStr = `${year}-${String(month).padStart(2, "0")}`;
+    const { error } = await supabase.from("shogai_jogen_kanri_results").upsert(
+      {
+        client_id: row.user_id,
+        target_month: monthStr,
+        kanri_result: result ? parseInt(result, 10) : null,
+        kanri_result_amount: amount !== "" ? parseInt(amount, 10) : null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "client_id,target_month" },
+    );
+    setSaving(false);
+    if (error) {
+      alert("上限管理結果の保存に失敗しました: " + error.message);
+      return;
+    }
+    onSaved();
+  };
+
+  return (
+    <div className="mt-3 rounded border border-violet-200 bg-violet-50/50 p-3 text-xs space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="font-bold text-violet-800">利用者負担上限額管理</span>
+        <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">
+          {row.jogenKanriKubun}が管理
+        </span>
+      </div>
+      {row.jogenKanriKubun === "他事業所" && (
+        <p className="text-[10px] text-gray-500">
+          管理事業所: {row.jogenKanriOfficeName ?? "未設定"}
+          {row.jogenKanriOfficeNumber ? ` (${row.jogenKanriOfficeNumber})` : ""}
+          — 管理結果票を受領したら下に入力してください
+        </p>
+      )}
+      <div className="grid grid-cols-[1fr_auto_auto] items-end gap-2">
+        <div>
+          <label className="mb-0.5 block text-[10px] text-gray-500">管理結果区分</label>
+          <select
+            value={result}
+            onChange={(e) => setResult(e.target.value)}
+            className="w-full rounded border px-2 py-1.5 text-xs focus:border-violet-500 focus:outline-none"
+          >
+            <option value="">未入力</option>
+            <option value="1">1: 管理事業所で充当 (他は負担なし)</option>
+            <option value="2">2: 合算が上限以下 (調整なし)</option>
+            <option value="3">3: 管理結果票のとおり調整</option>
+          </select>
+        </div>
+        <div>
+          <label className="mb-0.5 block text-[10px] text-gray-500">調整後負担額</label>
+          <input
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            disabled={result === "2" || result === ""}
+            placeholder="円"
+            className="w-24 rounded border px-2 py-1.5 text-right text-xs tabular-nums focus:border-violet-500 focus:outline-none disabled:bg-gray-100"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className="rounded bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+        >
+          {saving ? "保存中..." : "保存"}
+        </button>
+      </div>
+      <p className="text-[10px] text-gray-400">
+        区分 1・3 は調整後負担額が利用者負担額・給付費請求額に反映されます。
       </p>
     </div>
   );

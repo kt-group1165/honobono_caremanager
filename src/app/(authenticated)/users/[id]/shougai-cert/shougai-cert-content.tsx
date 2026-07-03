@@ -70,6 +70,12 @@ const EMPTY_FORM: FormData = {
   soudan_office_name: null,
   soudan_manager_name: null,
   monthly_allocations: {},
+  jogen_kanri_kubun: "なし",
+  jogen_kanri_office_number: null,
+  jogen_kanri_office_name: null,
+  contract_amount_text: null,
+  contract_start_date: null,
+  contract_entry_number: null,
   notes: "",
 };
 
@@ -133,6 +139,12 @@ export function ShougaiCertContent({
       soudan_office_name: r.soudan_office_name ?? null,
       soudan_manager_name: r.soudan_manager_name ?? null,
       monthly_allocations: r.monthly_allocations ?? {},
+      jogen_kanri_kubun: r.jogen_kanri_kubun ?? "なし",
+      jogen_kanri_office_number: r.jogen_kanri_office_number ?? null,
+      jogen_kanri_office_name: r.jogen_kanri_office_name ?? null,
+      contract_amount_text: r.contract_amount_text ?? null,
+      contract_start_date: r.contract_start_date ?? null,
+      contract_entry_number: r.contract_entry_number ?? null,
       notes: r.notes ?? "",
     };
   }
@@ -216,6 +228,11 @@ export function ShougaiCertContent({
         client_id: userId,
         beneficiary_number: form.beneficiary_number || null,
         insurer_municipality: form.insurer_municipality || null,
+        jogen_kanri_office_number: form.jogen_kanri_office_number || null,
+        jogen_kanri_office_name: form.jogen_kanri_office_name || null,
+        contract_amount_text: form.contract_amount_text || null,
+        contract_start_date: form.contract_start_date || null,
+        contract_entry_number: form.contract_entry_number || null,
         notes: form.notes || null,
       };
       if (selectedId && !isNew) {
@@ -413,6 +430,21 @@ export function ShougaiCertContent({
               {form.soudan_manager_name || "—"}
             </span>
           </FieldRow>
+          <FieldRow label="上限額管理">
+            <span className="text-sm text-gray-900">
+              {form.jogen_kanri_kubun}
+              {form.jogen_kanri_kubun === "他事業所" && form.jogen_kanri_office_name
+                ? ` — ${form.jogen_kanri_office_name}${form.jogen_kanri_office_number ? ` (${form.jogen_kanri_office_number})` : ""}`
+                : ""}
+            </span>
+          </FieldRow>
+          <FieldRow label="契約支給量 (記入欄)">
+            <span className="text-sm text-gray-900">
+              {form.contract_amount_text || "—"}
+              {form.contract_start_date ? ` / ${fmtDate(form.contract_start_date)}〜` : ""}
+              {form.contract_entry_number ? ` / 記入欄 ${form.contract_entry_number}` : ""}
+            </span>
+          </FieldRow>
           <div className="lg:col-span-2">
             <FieldRow label="月間支給量 (単位数/月)">
               <div className="flex flex-wrap gap-2 text-sm">
@@ -589,6 +621,74 @@ export function ShougaiCertContent({
               }
               className={`${inputCls} w-full`}
             />
+          </FieldRow>
+          <FieldRow label="上限額管理">
+            <div className="space-y-1.5">
+              <div className="flex gap-1">
+                {(["なし", "自事業所", "他事業所"] as const).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => upd("jogen_kanri_kubun", k)}
+                    className={`rounded border px-2 py-1 text-xs font-medium transition-colors ${
+                      form.jogen_kanri_kubun === k
+                        ? "border-violet-500 bg-violet-50 text-violet-700"
+                        : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    {k}
+                  </button>
+                ))}
+              </div>
+              {form.jogen_kanri_kubun === "他事業所" && (
+                <div className="grid grid-cols-2 gap-1.5">
+                  <input
+                    type="text"
+                    value={form.jogen_kanri_office_number ?? ""}
+                    onChange={(e) => upd("jogen_kanri_office_number", e.target.value || null)}
+                    placeholder="管理事業所番号 (10桁)"
+                    className={`${inputCls} w-full`}
+                  />
+                  <input
+                    type="text"
+                    value={form.jogen_kanri_office_name ?? ""}
+                    onChange={(e) => upd("jogen_kanri_office_name", e.target.value || null)}
+                    placeholder="管理事業所名"
+                    className={`${inputCls} w-full`}
+                  />
+                </div>
+              )}
+              <p className="text-[10px] text-gray-400">
+                月次の管理結果 (区分 1/2/3) は 請求業務 → 障害請求 の明細で入力します
+              </p>
+            </div>
+          </FieldRow>
+          <FieldRow label="契約支給量 (記入欄)">
+            <div className="space-y-1.5">
+              <input
+                type="text"
+                value={form.contract_amount_text ?? ""}
+                onChange={(e) => upd("contract_amount_text", e.target.value || null)}
+                placeholder="例: 身体介護 10時間/月"
+                className={`${inputCls} w-full`}
+              />
+              <div className="grid grid-cols-2 gap-1.5">
+                <input
+                  type="date"
+                  value={form.contract_start_date ?? ""}
+                  onChange={(e) => upd("contract_start_date", e.target.value || null)}
+                  className={`${inputCls} w-full`}
+                  title="契約開始日"
+                />
+                <input
+                  type="text"
+                  value={form.contract_entry_number ?? ""}
+                  onChange={(e) => upd("contract_entry_number", e.target.value || null)}
+                  placeholder="記入欄番号"
+                  className={`${inputCls} w-full`}
+                />
+              </div>
+            </div>
           </FieldRow>
           <div className="lg:col-span-2">
             <FieldRow label="月間支給量 (サービス種別ごと、単位数)">

@@ -322,6 +322,13 @@ export type ShougaiCertification = {
   soudan_office_name: string | null;       // 相談支援事業所
   soudan_manager_name: string | null;      // 相談支援専門員
   monthly_allocations: Record<string, number>; // { "居宅介護": 5000, ... }
+  // 2026-07: shogai_jogen_kanri.sql で追加 (利用者負担上限額管理 + 事業者記入欄)
+  jogen_kanri_kubun: "なし" | "自事業所" | "他事業所";
+  jogen_kanri_office_number: string | null; // 上限額管理事業所番号 (10桁)
+  jogen_kanri_office_name: string | null;   // 上限額管理事業所名
+  contract_amount_text: string | null;      // 契約支給量 (例: 身体介護 10時間/月)
+  contract_start_date: string | null;       // 契約開始日
+  contract_entry_number: string | null;     // 受給者証 事業者記入欄番号
   notes: string | null;
   created_at: string;
   updated_at: string;
