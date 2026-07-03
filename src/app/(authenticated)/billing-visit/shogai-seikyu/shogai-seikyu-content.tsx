@@ -641,6 +641,7 @@ function JogenKanriSelfSection({
   const [newNo, setNewNo] = useState("");
   const [newName, setNewName] = useState("");
   const [newAmount, setNewAmount] = useState("");
+  const [newTotal, setNewTotal] = useState("");
 
   // 保存済みの関係事業所一覧を読み込み (無ければ自事業所行のみで初期化)
   useEffect(() => {
@@ -689,12 +690,13 @@ function JogenKanriSelfSection({
       return;
     }
     const amt = parseInt(newAmount, 10) || 0;
+    const tot = parseInt(newTotal, 10) || 0;
     setLines((prev) => [
       ...prev,
       {
         office_number: newNo.trim(),
         office_name: newName.trim(),
-        total_amount: 0,
+        total_amount: tot,
         user_amount: amt,
         adjusted_amount: amt,
         is_self: false,
@@ -703,9 +705,16 @@ function JogenKanriSelfSection({
     setNewNo("");
     setNewName("");
     setNewAmount("");
+    setNewTotal("");
   };
 
   const removeLine = (i: number) => setLines((prev) => prev.filter((_, idx) => idx !== i));
+
+  // 他事業所行の総費用額をインライン編集 (J411 明細 9 / 管理結果3 で必須)
+  const setLineTotal = (i: number, v: string) =>
+    setLines((prev) =>
+      prev.map((l, idx) => (idx === i ? { ...l, total_amount: parseInt(v, 10) || 0 } : l)),
+    );
 
   // 調整計算: 合算 ≤ 上限 → 区分2 / 超過 → 管理事業所 (自) 優先充当で配分
   const calc = () => {
@@ -766,6 +775,7 @@ function JogenKanriSelfSection({
 
   const sumUser = lines.reduce((s, l) => s + l.user_amount, 0);
   const sumAdj = lines.reduce((s, l) => s + l.adjusted_amount, 0);
+  const sumTotal = lines.reduce((s, l) => s + l.total_amount, 0);
 
   return (
     <div className="mt-3 rounded border border-violet-200 bg-violet-50/50 p-3 text-xs space-y-2">
@@ -780,6 +790,7 @@ function JogenKanriSelfSection({
         <thead className="text-left text-[10px] text-gray-500">
           <tr>
             <th className="py-0.5">事業所</th>
+            <th className="py-0.5 text-right">総費用額</th>
             <th className="py-0.5 text-right">利用者負担額</th>
             <th className="py-0.5 text-right">管理結果後</th>
             <th className="w-6"></th>
@@ -792,6 +803,19 @@ function JogenKanriSelfSection({
                 {l.office_name}
                 {l.office_number && (
                   <span className="ml-1 font-mono text-[9px] text-gray-400">{l.office_number}</span>
+                )}
+              </td>
+              <td className="py-1 text-right tabular-nums">
+                {l.is_self ? (
+                  `¥${l.total_amount.toLocaleString()}`
+                ) : (
+                  <input
+                    type="number"
+                    value={l.total_amount || ""}
+                    onChange={(e) => setLineTotal(i, e.target.value)}
+                    placeholder="0"
+                    className="w-20 rounded border px-1 py-0.5 text-right tabular-nums focus:border-violet-500 focus:outline-none"
+                  />
                 )}
               </td>
               <td className="py-1 text-right tabular-nums">¥{l.user_amount.toLocaleString()}</td>
@@ -813,6 +837,7 @@ function JogenKanriSelfSection({
           ))}
           <tr className="border-t border-violet-200 font-bold">
             <td className="py-1">合算</td>
+            <td className="py-1 text-right tabular-nums">¥{sumTotal.toLocaleString()}</td>
             <td className={`py-1 text-right tabular-nums ${limit > 0 && sumUser > limit ? "text-red-600" : ""}`}>
               ¥{sumUser.toLocaleString()}
             </td>
@@ -822,7 +847,7 @@ function JogenKanriSelfSection({
         </tbody>
       </table>
 
-      <div className="grid grid-cols-[90px_1fr_80px_auto] items-center gap-1.5">
+      <div className="grid grid-cols-[90px_1fr_80px_80px_auto] items-center gap-1.5">
         <input
           value={newNo}
           onChange={(e) => setNewNo(e.target.value)}
@@ -834,6 +859,13 @@ function JogenKanriSelfSection({
           onChange={(e) => setNewName(e.target.value)}
           placeholder="関係事業所名"
           className="rounded border px-2 py-1.5 focus:border-violet-500 focus:outline-none"
+        />
+        <input
+          type="number"
+          value={newTotal}
+          onChange={(e) => setNewTotal(e.target.value)}
+          placeholder="総費用額"
+          className="rounded border px-2 py-1.5 text-right tabular-nums focus:border-violet-500 focus:outline-none"
         />
         <input
           type="number"
@@ -915,6 +947,7 @@ function JogenKanriSelfSection({
                 <th className="border border-black px-2 py-1">項番</th>
                 <th className="border border-black px-2 py-1">事業所番号</th>
                 <th className="border border-black px-2 py-1">事業所名称</th>
+                <th className="border border-black px-2 py-1 text-right">総費用額</th>
                 <th className="border border-black px-2 py-1 text-right">利用者負担額</th>
                 <th className="border border-black px-2 py-1 text-right">管理結果後利用者負担額</th>
               </tr>
@@ -929,6 +962,9 @@ function JogenKanriSelfSection({
                     {l.is_self ? " (上限額管理事業所)" : ""}
                   </td>
                   <td className="border border-black px-2 py-1 text-right tabular-nums">
+                    ¥{l.total_amount.toLocaleString()}
+                  </td>
+                  <td className="border border-black px-2 py-1 text-right tabular-nums">
                     ¥{l.user_amount.toLocaleString()}
                   </td>
                   <td className="border border-black px-2 py-1 text-right tabular-nums">
@@ -939,6 +975,9 @@ function JogenKanriSelfSection({
               <tr className="font-bold">
                 <td className="border border-black px-2 py-1 text-center" colSpan={3}>
                   合計
+                </td>
+                <td className="border border-black px-2 py-1 text-right tabular-nums">
+                  ¥{sumTotal.toLocaleString()}
                 </td>
                 <td className="border border-black px-2 py-1 text-right tabular-nums">
                   ¥{sumUser.toLocaleString()}
