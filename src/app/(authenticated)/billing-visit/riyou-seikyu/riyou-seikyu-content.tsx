@@ -689,8 +689,8 @@ function PaymentSection({
           入金済: ¥{payment.paid_amount.toLocaleString()} ({payment.paid_date ?? "—"} / {payment.payment_method ?? "—"})
         </p>
       )}
-      <div className="grid grid-cols-[80px_auto_auto_1fr] items-end gap-1.5">
-        <div>
+      <div className="flex flex-wrap items-end gap-1.5">
+        <div className="w-20">
           <label className="mb-0.5 block text-[10px] text-gray-500">入金額</label>
           <input
             type="number"
@@ -720,7 +720,7 @@ function PaymentSection({
             <option>口座振替</option>
           </select>
         </div>
-        <div className="flex justify-end gap-1.5">
+        <div className="ml-auto flex justify-end gap-1.5">
           <button
             type="button"
             onClick={() => save()}
