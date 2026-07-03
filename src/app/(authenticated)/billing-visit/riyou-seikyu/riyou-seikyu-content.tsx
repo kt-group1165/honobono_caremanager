@@ -9,21 +9,70 @@
  * (未チェック時は全件対象 — 国保請求と同じ流儀)
  */
 
-import { useMemo, useState } from "react";
-import { Loader2, Receipt, AlertCircle, Printer } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Loader2, Receipt, AlertCircle, Printer, Plus, Trash2 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
 import { MonthNav } from "../_shared/month-nav";
 import { useSeikyuData } from "../_shared/use-seikyu-data";
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
 
+// 利用実費 (保険外費用) — ほのぼの 訪問介護請求管理編 1-3 対応
+interface JippiEntry {
+  id: string;
+  client_id: string;
+  item_name: string;
+  unit_price: number;
+  quantity: number;
+  amount: number;
+  provide_date: string | null;
+}
+
+const JIPPI_SUGGESTIONS = ["交通費", "キャンセル料", "日用品費", "その他"];
+
 export function RiyouSeikyuContent() {
   const { year, month, onMonthChange, rows, loading, error, officeName } =
     useSeikyuData();
+  const supabase = useMemo(() => createClient(), []);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [printing, setPrinting] = useState(false);
+  const [jippiByUser, setJippiByUser] = useState<Map<string, JippiEntry[]>>(new Map());
+
+  const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+
+  const loadJippi = useCallback(async () => {
+    const { data, error: e } = await supabase
+      .from("riyou_jippi_entries")
+      .select("id, client_id, item_name, unit_price, quantity, amount, provide_date")
+      .eq("target_month", monthKey)
+      .order("created_at");
+    if (e) {
+      // table 未作成 (migration 未適用) 時は実費なしとして続行
+      if (e.code !== "42P01") toast.error("実費取得失敗: " + e.message);
+      setJippiByUser(new Map());
+      return;
+    }
+    const m = new Map<string, JippiEntry[]>();
+    for (const r of (data ?? []) as JippiEntry[]) {
+      if (!m.has(r.client_id)) m.set(r.client_id, []);
+      m.get(r.client_id)!.push(r);
+    }
+    setJippiByUser(m);
+  }, [supabase, monthKey]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更時の fetch
+    loadJippi();
+  }, [loadJippi]);
+
+  const jippiTotal = useCallback(
+    (userId: string) => (jippiByUser.get(userId) ?? []).reduce((s, e) => s + e.amount, 0),
+    [jippiByUser],
+  );
 
   const selected = rows.find((r) => r.user_id === selectedUserId) ?? rows[0] ?? null;
-  const totalBilled = rows.reduce((s, r) => s + r.userAmount, 0);
+  const totalBilled = rows.reduce((s, r) => s + r.userAmount + jippiTotal(r.user_id), 0);
 
   const toggle = (id: string) =>
     setChecked((prev) => {
@@ -120,6 +169,7 @@ export function RiyouSeikyuContent() {
                   <th className="px-3 py-2">利用者名</th>
                   <th className="px-3 py-2">被保険者番号</th>
                   <th className="px-3 py-2 text-center">負担割合</th>
+                  <th className="px-3 py-2 text-right">実費</th>
                   <th className="px-3 py-2 text-right">請求額</th>
                 </tr>
               </thead>
@@ -151,15 +201,18 @@ export function RiyouSeikyuContent() {
                     <td className="px-3 py-2 text-center text-xs">
                       {Math.round(r.copay_rate * 10)}割
                     </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-xs">
+                      {jippiTotal(r.user_id) > 0 ? `¥${jippiTotal(r.user_id).toLocaleString()}` : "—"}
+                    </td>
                     <td className="px-3 py-2 text-right font-semibold tabular-nums text-emerald-700">
-                      ¥{r.userAmount.toLocaleString()}
+                      ¥{(r.userAmount + jippiTotal(r.user_id)).toLocaleString()}
                     </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot className="border-t-2 border-gray-300 bg-gray-50 font-bold">
                 <tr>
-                  <td className="px-3 py-2 text-xs text-gray-500" colSpan={4}>
+                  <td className="px-3 py-2 text-xs text-gray-500" colSpan={5}>
                     請求額合計 ({rows.length} 名{checked.size > 0 ? ` / 選択 ${checked.size} 名` : ""})
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums text-emerald-700">
@@ -210,11 +263,26 @@ export function RiyouSeikyuContent() {
                   </tbody>
                 </table>
 
+                {/* 利用実費 (保険外) の入力 */}
+                <JippiSection
+                  key={`${selected.user_id}-${monthKey}`}
+                  userId={selected.user_id}
+                  monthKey={monthKey}
+                  entries={jippiByUser.get(selected.user_id) ?? []}
+                  onChanged={loadJippi}
+                />
+
                 <div className="mt-4 space-y-1 rounded border bg-gray-50 p-3 text-xs">
                   <div className="flex justify-between">
-                    <span className="text-gray-500">合計金額</span>
-                    <span className="font-bold tabular-nums">
+                    <span className="text-gray-500">利用者負担額</span>
+                    <span className="tabular-nums">
                       ¥{selected.userAmount.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">実費合計</span>
+                    <span className="tabular-nums">
+                      ¥{jippiTotal(selected.user_id).toLocaleString()}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -224,7 +292,7 @@ export function RiyouSeikyuContent() {
                   <div className="flex justify-between text-emerald-700">
                     <span className="font-bold">請求金額</span>
                     <span className="font-bold tabular-nums">
-                      ¥{selected.userAmount.toLocaleString()}
+                      ¥{(selected.userAmount + jippiTotal(selected.user_id)).toLocaleString()}
                     </span>
                   </div>
                 </div>
@@ -247,6 +315,7 @@ export function RiyouSeikyuContent() {
               <RiyouSeikyuPrintSheet
                 key={r.user_id}
                 row={r}
+                jippi={jippiByUser.get(r.user_id) ?? []}
                 officeName={officeName}
                 reiwa={reiwa}
                 month={month}
@@ -299,14 +368,143 @@ function splitUserAmount(row: UserSeikyuRow): RiyouLine[] {
   return lines;
 }
 
+// ─── 利用実費の入力セクション ─────────────────────────────────────────────────
+function JippiSection({
+  userId,
+  monthKey,
+  entries,
+  onChanged,
+}: {
+  userId: string;
+  monthKey: string;
+  entries: JippiEntry[];
+  onChanged: () => void;
+}) {
+  const supabase = useMemo(() => createClient(), []);
+  const [itemName, setItemName] = useState("");
+  const [unitPrice, setUnitPrice] = useState("");
+  const [quantity, setQuantity] = useState("1");
+  const [saving, setSaving] = useState(false);
+
+  const amount = (parseInt(unitPrice, 10) || 0) * (parseInt(quantity, 10) || 0);
+
+  const add = async () => {
+    if (!itemName.trim()) {
+      toast.error("項目名を入力してください");
+      return;
+    }
+    setSaving(true);
+    const { error } = await supabase.from("riyou_jippi_entries").insert({
+      client_id: userId,
+      target_month: monthKey,
+      item_name: itemName.trim(),
+      unit_price: parseInt(unitPrice, 10) || 0,
+      quantity: parseInt(quantity, 10) || 1,
+      amount,
+    });
+    setSaving(false);
+    if (error) {
+      toast.error("実費の追加に失敗: " + error.message);
+      return;
+    }
+    setItemName("");
+    setUnitPrice("");
+    setQuantity("1");
+    onChanged();
+  };
+
+  const remove = async (id: string) => {
+    const { error } = await supabase.from("riyou_jippi_entries").delete().eq("id", id);
+    if (error) {
+      toast.error("削除に失敗: " + error.message);
+      return;
+    }
+    onChanged();
+  };
+
+  return (
+    <div className="mt-4 rounded border border-emerald-200 bg-emerald-50/40 p-3 text-xs">
+      <p className="mb-2 font-bold text-emerald-800">利用実費 (保険外)</p>
+      {entries.length > 0 && (
+        <table className="mb-2 w-full">
+          <thead className="text-left text-[10px] text-gray-500">
+            <tr>
+              <th className="py-0.5">項目</th>
+              <th className="py-0.5 text-right">単価</th>
+              <th className="py-0.5 text-right">数量</th>
+              <th className="py-0.5 text-right">金額</th>
+              <th className="w-6"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-emerald-100">
+            {entries.map((e) => (
+              <tr key={e.id}>
+                <td className="py-1">{e.item_name}</td>
+                <td className="py-1 text-right tabular-nums">{e.unit_price.toLocaleString()}</td>
+                <td className="py-1 text-right tabular-nums">{e.quantity}</td>
+                <td className="py-1 text-right tabular-nums font-semibold">¥{e.amount.toLocaleString()}</td>
+                <td className="py-1 text-center">
+                  <button onClick={() => remove(e.id)} className="text-gray-300 hover:text-red-500" title="削除">
+                    <Trash2 size={12} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <div className="grid grid-cols-[1fr_72px_52px_auto] items-center gap-1.5">
+        <input
+          type="text"
+          list="jippi-items"
+          value={itemName}
+          onChange={(e) => setItemName(e.target.value)}
+          placeholder="項目名 (交通費 等)"
+          className="rounded border px-2 py-1.5 focus:border-emerald-500 focus:outline-none"
+        />
+        <datalist id="jippi-items">
+          {JIPPI_SUGGESTIONS.map((s) => (
+            <option key={s} value={s} />
+          ))}
+        </datalist>
+        <input
+          type="number"
+          value={unitPrice}
+          onChange={(e) => setUnitPrice(e.target.value)}
+          placeholder="単価"
+          className="rounded border px-2 py-1.5 text-right tabular-nums focus:border-emerald-500 focus:outline-none"
+        />
+        <input
+          type="number"
+          value={quantity}
+          onChange={(e) => setQuantity(e.target.value)}
+          min={1}
+          className="rounded border px-2 py-1.5 text-right tabular-nums focus:border-emerald-500 focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={add}
+          disabled={saving}
+          className="inline-flex items-center gap-1 rounded bg-emerald-600 px-2.5 py-1.5 font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+        >
+          <Plus size={12} />
+          追加 {amount > 0 ? `(¥${amount.toLocaleString()})` : ""}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── 印刷: 利用料請求書 (利用者 1 名 = 1 枚) ─────────────────────────────────
 function RiyouSeikyuPrintSheet({
   row,
+  jippi,
   officeName,
   reiwa,
   month,
 }: {
   row: UserSeikyuRow;
+  jippi: JippiEntry[];
   officeName: string | null;
   reiwa: number;
   month: number;
@@ -314,6 +512,8 @@ function RiyouSeikyuPrintSheet({
   const today = new Date();
   const issueDate = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
   const lines = splitUserAmount(row);
+  const jippiSum = jippi.reduce((s, e) => s + e.amount, 0);
+  const grandTotal = row.userAmount + jippiSum;
 
   return (
     <div className="p-10 text-black" style={{ pageBreakAfter: "always" }}>
@@ -338,7 +538,7 @@ function RiyouSeikyuPrintSheet({
 
       <div className="mb-6 flex items-center gap-3">
         <span className="border border-black px-4 py-2 text-lg font-bold">
-          ご請求金額 ¥{row.userAmount.toLocaleString()} －
+          ご請求金額 ¥{grandTotal.toLocaleString()} －
         </span>
         <span className="text-xs">(消費税: 非課税)</span>
       </div>
@@ -367,12 +567,32 @@ function RiyouSeikyuPrintSheet({
               </td>
             </tr>
           ))}
-          <tr className="font-bold">
+          <tr className="font-semibold">
             <td className="border border-black px-2 py-1.5" colSpan={3}>
-              合計 (利用者負担額{Math.round(row.copay_rate * 10)}割)
+              小計 (利用者負担額{Math.round(row.copay_rate * 10)}割)
             </td>
             <td className="border border-black px-2 py-1.5 text-right tabular-nums">
               ¥{row.userAmount.toLocaleString()}
+            </td>
+          </tr>
+          {jippi.map((e) => (
+            <tr key={e.id}>
+              <td className="border border-black px-2 py-1.5">{e.item_name} (実費)</td>
+              <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+                {e.unit_price > 0 ? e.unit_price.toLocaleString() : "—"}
+              </td>
+              <td className="border border-black px-2 py-1.5 text-right tabular-nums">{e.quantity}</td>
+              <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+                ¥{e.amount.toLocaleString()}
+              </td>
+            </tr>
+          ))}
+          <tr className="font-bold">
+            <td className="border border-black px-2 py-1.5" colSpan={3}>
+              合計{jippiSum > 0 ? " (利用者負担 + 実費)" : ""}
+            </td>
+            <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+              ¥{grandTotal.toLocaleString()}
             </td>
           </tr>
         </tbody>
