@@ -24,6 +24,9 @@ export function useSeikyuData() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [officeNumber, setOfficeNumber] = useState<string | null>(null);
+  const [officeAddress, setOfficeAddress] = useState<string | null>(null);
+  const [officePhone, setOfficePhone] = useState<string | null>(null);
+  const [officePostal, setOfficePostal] = useState<string | null>(null);
   const [unitPrice, setUnitPrice] = useState<number>(10);
 
   const load = useCallback(async () => {
@@ -34,12 +37,19 @@ export function useSeikyuData() {
       // 地域単価: offices.unit_price / 事業所番号: business_number (伝送用)
       const { data: officeRow } = await supabase
         .from("offices")
-        .select("unit_price, applied_formula_codes, business_number")
+        .select("unit_price, applied_formula_codes, business_number, address, phone, postal_code")
         .eq("id", currentOffice.id)
         .maybeSingle();
-      setOfficeNumber(
-        (officeRow as { business_number?: string | null } | null)?.business_number ?? null,
-      );
+      const or = officeRow as {
+        business_number?: string | null;
+        address?: string | null;
+        phone?: string | null;
+        postal_code?: string | null;
+      } | null;
+      setOfficeNumber(or?.business_number ?? null);
+      setOfficeAddress(or?.address ?? null);
+      setOfficePhone(or?.phone ?? null);
+      setOfficePostal(or?.postal_code ?? null);
       setUnitPrice(
         (officeRow as { unit_price?: number } | null)?.unit_price ?? 10,
       );
@@ -83,6 +93,9 @@ export function useSeikyuData() {
     error,
     officeName: currentOffice?.name ?? null,
     officeNumber,
+    officeAddress,
+    officePhone,
+    officePostal,
     unitPrice,
     reload: load,
   };

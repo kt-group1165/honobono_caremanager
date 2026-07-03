@@ -25,10 +25,13 @@ import { MonthNav } from "../_shared/month-nav";
 import { useSeikyuData } from "../_shared/use-seikyu-data";
 import { buildKokuhoDensou } from "@/lib/kokuho-densou/build";
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
+import { SeikyuForm, type SeikyuKohiRow } from "../../billing/forms/_seikyu";
 
 export function KokuhoSeikyuContent() {
-  const { year, month, onMonthChange, rows, loading, error, officeName, officeNumber, unitPrice } =
-    useSeikyuData();
+  const {
+    year, month, onMonthChange, rows, loading, error,
+    officeName, officeNumber, officeAddress, officePhone, officePostal, unitPrice,
+  } = useSeikyuData();
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [printMode, setPrintMode] = useState<"meisai" | "seikyu" | null>(null);
 
@@ -52,8 +55,25 @@ export function KokuhoSeikyuContent() {
   );
 
   const totalUnits = targets.reduce((s, r) => s + r.totalUnits, 0);
+  const totalCost = targets.reduce((s, r) => s + r.totalAmount, 0);
   const totalInsurance = targets.reduce((s, r) => s + r.insuranceAmount, 0);
   const totalUser = targets.reduce((s, r) => s + r.userAmount, 0);
+  const totalKohi = targets.reduce((s, r) => s + (r.kohiAmount ?? 0), 0);
+
+  // 公費請求テーブル用: 法別番号ごとに集計 (生保 12 等)
+  const kohiRows = useMemo<SeikyuKohiRow[]>(() => {
+    const map = new Map<string, SeikyuKohiRow>();
+    for (const r of targets) {
+      if (!r.kohiHobetsu || !(r.kohiAmount ?? 0)) continue;
+      const e = map.get(r.kohiHobetsu) ?? { code: r.kohiHobetsu, count: 0, units: 0, cost: 0, kohi: 0 };
+      e.count += 1;
+      e.units += r.totalUnits;
+      e.cost += r.totalAmount;
+      e.kohi += r.kohiAmount ?? 0;
+      map.set(r.kohiHobetsu, e);
+    }
+    return [...map.values()];
+  }, [targets]);
 
   const reiwa = year - 2018;
 
@@ -342,14 +362,21 @@ export function KokuhoSeikyuContent() {
           )}
           {printMode === "seikyu" && (
             <div className="hidden print:block">
-              <SeikyuPrintSheet
-                rows={targets}
-                officeName={officeName}
-                reiwa={reiwa}
-                month={month}
+              <SeikyuForm
+                providerNumber={officeNumber ?? ""}
+                officeName={officeName ?? ""}
+                officeAddress={officeAddress ?? ""}
+                officePhone={officePhone ?? ""}
+                postalCode={officePostal ?? ""}
+                billingMonth={`${year}-${String(month).padStart(2, "0")}`}
+                totalCount={targets.length}
                 totalUnits={totalUnits}
-                totalInsurance={totalInsurance}
-                totalUser={totalUser}
+                totalAmount={totalCost}
+                insuranceAmount={totalInsurance}
+                userCopay={totalUser}
+                kubunLabel={"居宅サービス・地域密着型\nサービス・介護予防サービス"}
+                kohiRequestAmount={totalKohi}
+                kohiRows={kohiRows}
               />
             </div>
           )}
@@ -468,67 +495,6 @@ function MeisaiPrintSheet({
           <tr>
             <Th>利用者負担額</Th>
             <Td style={{ textAlign: "right" }}>¥{row.userAmount.toLocaleString()}</Td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// ─── 印刷: 介護給付費請求書 (事業所単位の総括 1 枚) ──────────────────────────
-
-function SeikyuPrintSheet({
-  rows,
-  officeName,
-  reiwa,
-  month,
-  totalUnits,
-  totalInsurance,
-  totalUser,
-}: {
-  rows: UserSeikyuRow[];
-  officeName: string | null;
-  reiwa: number;
-  month: number;
-  totalUnits: number;
-  totalInsurance: number;
-  totalUser: number;
-}) {
-  return (
-    <div style={{ padding: "10mm", fontSize: "10pt" }}>
-      <h2 style={{ textAlign: "center", fontSize: "14pt", fontWeight: "bold" }}>
-        介護給付費請求書 (訪問介護)
-      </h2>
-      <p style={{ textAlign: "right" }}>
-        令和{reiwa}年{month}月分
-      </p>
-      <p style={{ marginTop: "4mm" }}>事業所: {officeName ?? ""}</p>
-
-      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "6mm" }}>
-        <thead>
-          <tr>
-            <Th>被保険者番号</Th>
-            <Th>利用者名</Th>
-            <Th style={{ textAlign: "right" }}>単位数</Th>
-            <Th style={{ textAlign: "right" }}>保険請求額</Th>
-            <Th style={{ textAlign: "right" }}>利用者負担</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.user_id}>
-              <Td>{r.insured_number ?? ""}</Td>
-              <Td>{r.user_name}</Td>
-              <Td style={{ textAlign: "right" }}>{r.totalUnits.toLocaleString()}</Td>
-              <Td style={{ textAlign: "right" }}>{r.insuranceAmount.toLocaleString()}</Td>
-              <Td style={{ textAlign: "right" }}>{r.userAmount.toLocaleString()}</Td>
-            </tr>
-          ))}
-          <tr style={{ fontWeight: "bold" }}>
-            <Td colSpan={2}>合計 ({rows.length} 件)</Td>
-            <Td style={{ textAlign: "right" }}>{totalUnits.toLocaleString()}</Td>
-            <Td style={{ textAlign: "right" }}>{totalInsurance.toLocaleString()}</Td>
-            <Td style={{ textAlign: "right" }}>{totalUser.toLocaleString()}</Td>
           </tr>
         </tbody>
       </table>

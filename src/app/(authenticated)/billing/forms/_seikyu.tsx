@@ -29,11 +29,26 @@ const SLASH: React.CSSProperties = {
   border: B, background: "repeating-linear-gradient(135deg, transparent, transparent 2px, #bbb 2px, #bbb 3px)",
 };
 
+// 公費請求テーブルの明細 (法別番号ごと)。省略時は全行空欄 (居宅介護支援の既定)。
+export interface SeikyuKohiRow {
+  code: string; // 法別番号 (12=生保 等)
+  count: number; // 件数
+  units: number; // 単位数・点数
+  cost: number; // 費用合計
+  kohi: number; // 公費請求額
+}
+
 interface Props {
   providerNumber: string; officeName: string; officeAddress: string;
   officePhone: string; postalCode: string; billingMonth: string;
   totalCount: number; totalUnits: number; totalAmount: number;
   insuranceAmount: number; userCopay: number;
+  /** 保険請求の区分ラベル。既定=居宅介護支援。訪問介護等は別ラベルを渡す */
+  kubunLabel?: string;
+  /** 保険請求 公費請求額 合計 (生保等)。既定 0 */
+  kohiRequestAmount?: number;
+  /** 公費請求テーブルの明細 (法別番号ごと)。既定 [] = 全行空欄 */
+  kohiRows?: SeikyuKohiRow[];
 }
 
 export function SeikyuForm(props: Props) {
@@ -41,7 +56,17 @@ export function SeikyuForm(props: Props) {
     providerNumber, officeName, officeAddress, officePhone, postalCode,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
     billingMonth, totalCount, totalUnits, totalAmount, insuranceAmount, userCopay,
+    kubunLabel = "居宅介護支援・\n介護予防支援",
+    kohiRequestAmount = 0,
+    kohiRows = [],
   } = props;
+  const kohiByCode = new Map(kohiRows.map((k) => [k.code, k]));
+  const kohiTotal = {
+    count: kohiRows.reduce((s, k) => s + k.count, 0),
+    units: kohiRows.reduce((s, k) => s + k.units, 0),
+    cost: kohiRows.reduce((s, k) => s + k.cost, 0),
+    kohi: kohiRows.reduce((s, k) => s + k.kohi, 0),
+  };
 
   const h: React.CSSProperties = { border: B, padding: "1px 3px", fontSize: "6pt", verticalAlign: "middle", fontFamily: F, background: BG, textAlign: "center" };
   const c: React.CSSProperties = { border: B, padding: "1px 3px", fontSize: "7.5pt", verticalAlign: "middle", fontFamily: F, background: "#fff" };
@@ -135,13 +160,13 @@ export function SeikyuForm(props: Props) {
         </thead>
         <tbody>
           <tr style={{ height: 24 }}>
-            <td style={{ ...c, fontSize: "6pt", lineHeight: 1.2 }}>
-              居宅介護支援・<br />介護予防支援
+            <td style={{ ...c, fontSize: "6pt", lineHeight: 1.2, whiteSpace: "pre-line" }}>
+              {kubunLabel}
             </td>
             <td style={cR}>{totalCount}</td>
             <td style={cR}>{totalUnits.toLocaleString()}</td>
             <td style={cR}>{totalAmount.toLocaleString()}</td>
-            <td style={cR}>0</td>
+            <td style={cR}>{kohiRequestAmount.toLocaleString()}</td>
             <td style={{ ...cR, fontWeight: "bold" }}>{insuranceAmount.toLocaleString()}</td>
             <td style={SLASH}></td>
             <td style={SLASH}></td>
@@ -153,7 +178,7 @@ export function SeikyuForm(props: Props) {
             <td style={cR}>{totalCount}</td>
             <td style={cR}>{totalUnits.toLocaleString()}</td>
             <td style={cR}>{totalAmount.toLocaleString()}</td>
-            <td style={cR}>0</td>
+            <td style={cR}>{kohiRequestAmount.toLocaleString()}</td>
             <td style={{ ...cR, fontSize: "9pt" }}>{insuranceAmount.toLocaleString()}</td>
             <td style={cR}>0</td>
             <td style={cR}>0</td>
@@ -183,17 +208,26 @@ export function SeikyuForm(props: Props) {
           </tr>
         </thead>
         <tbody>
-          {publicRows.map((row) => (
-            <tr key={row.code} style={{ height: 17 }}>
-              <td style={{ ...h, width: "4%", fontSize: "7pt" }}>{row.code}</td>
-              <td style={{ ...c, width: "14%", fontSize: "5pt", lineHeight: 1.1, whiteSpace: "pre-line" }}>{row.label}</td>
-              <td style={c}></td><td style={c}></td><td style={c}></td><td style={c}></td>
-              <td style={SLASH}></td><td style={SLASH}></td><td style={SLASH}></td>
-            </tr>
-          ))}
+          {publicRows.map((row) => {
+            const k = kohiByCode.get(row.code);
+            return (
+              <tr key={row.code} style={{ height: 17 }}>
+                <td style={{ ...h, width: "4%", fontSize: "7pt" }}>{row.code}</td>
+                <td style={{ ...c, width: "14%", fontSize: "5pt", lineHeight: 1.1, whiteSpace: "pre-line" }}>{row.label}</td>
+                <td style={cR}>{k ? k.count : ""}</td>
+                <td style={cR}>{k ? k.units.toLocaleString() : ""}</td>
+                <td style={cR}>{k ? k.cost.toLocaleString() : ""}</td>
+                <td style={cR}>{k ? k.kohi.toLocaleString() : ""}</td>
+                <td style={SLASH}></td><td style={SLASH}></td><td style={SLASH}></td>
+              </tr>
+            );
+          })}
           <tr style={{ height: 20, fontWeight: "bold" }}>
             <td colSpan={2} style={{ ...h, fontWeight: "bold" }}>合計</td>
-            <td style={c}></td><td style={c}></td><td style={c}></td><td style={c}></td>
+            <td style={cR}>{kohiTotal.count || ""}</td>
+            <td style={cR}>{kohiTotal.units ? kohiTotal.units.toLocaleString() : ""}</td>
+            <td style={cR}>{kohiTotal.cost ? kohiTotal.cost.toLocaleString() : ""}</td>
+            <td style={cR}>{kohiTotal.kohi ? kohiTotal.kohi.toLocaleString() : ""}</td>
             <td style={c}></td><td style={c}></td><td style={cR}>0</td>
           </tr>
         </tbody>
