@@ -9,7 +9,8 @@
  */
 
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { Loader2, Accessibility, AlertCircle, Download } from "lucide-react";
+import { Loader2, Accessibility, AlertCircle, Download, FileDown } from "lucide-react";
+import Encoding from "encoding-japanese";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { MonthNav } from "../_shared/month-nav";
@@ -18,6 +19,12 @@ import {
   buildShogaiSeikyuCsv,
   type ShogaiSeikyuRow,
 } from "@/lib/shogai-seikyu/aggregate";
+import {
+  buildShogaiDensou,
+  type ShogaiDensouUser,
+  type ShogaiDensouVisit,
+  type ShogaiDensouKanriLine,
+} from "@/lib/shogai-densou/build";
 
 export function ShogaiSeikyuContent() {
   const supabase = useMemo(() => createClient(), []);
@@ -80,6 +87,172 @@ export function ShogaiSeikyuContent() {
     URL.revokeObjectURL(a.href);
   };
 
+  // ─── 電子請求受付システム向け 伝送ファイル (J11 / J61 / J41) ────────────────
+  const [densouLoading, setDensouLoading] = useState(false);
+
+  const downloadSjis = (f: { content: string; fileName: string }) => {
+    const sjis = Encoding.convert(Encoding.stringToCode(f.content), {
+      to: "SJIS",
+      from: "UNICODE",
+    });
+    const blob = new Blob([new Uint8Array(sjis)], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = f.fileName;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const handleDensouExport = async () => {
+    if (rows.length === 0) return;
+    setDensouLoading(true);
+    try {
+      // 1) 事業所番号・単価・地域区分
+      const { data: o, error: oe } = await supabase
+        .from("offices")
+        .select("business_number, unit_price, area_category")
+        .eq("id", currentOffice?.id ?? "")
+        .maybeSingle();
+      if (oe) throw new Error("事業所情報取得失敗: " + oe.message);
+      const officeNumber = ((o?.business_number ?? "") as string).trim();
+      const unitPrice = (o?.unit_price ?? 10) as number;
+      const areaCategory = (o?.area_category ?? null) as string | null;
+
+      // 2) 月内の確定実績 (実績記録票 J611 用の明細)
+      const monthStr = `${year}-${String(month).padStart(2, "0")}`;
+      const daysInMonth = new Date(year, month, 0).getDate();
+      const visitsByClient = new Map<string, ShogaiDensouVisit[]>();
+      const PAGE = 1000;
+      let offset = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("shogai_service_records")
+          .select(
+            "client_id, service_date, start_time, end_time, duration_minutes, service_category, service_code",
+          )
+          .eq("status", "confirmed")
+          .gte("service_date", `${monthStr}-01`)
+          .lte("service_date", `${monthStr}-${String(daysInMonth).padStart(2, "0")}`)
+          .range(offset, offset + PAGE - 1);
+        if (error) throw new Error("実績取得失敗: " + error.message);
+        const recs = (data ?? []) as {
+          client_id: string;
+          service_date: string;
+          start_time: string | null;
+          end_time: string | null;
+          duration_minutes: number | null;
+          service_category: string | null;
+          service_code: string | null;
+        }[];
+        for (const rec of recs) {
+          if (!visitsByClient.has(rec.client_id)) visitsByClient.set(rec.client_id, []);
+          visitsByClient.get(rec.client_id)!.push({
+            date: rec.service_date,
+            startTime: rec.start_time,
+            endTime: rec.end_time,
+            durationMinutes: rec.duration_minutes,
+            category: rec.service_category,
+            serviceCode: rec.service_code,
+          });
+        }
+        if (recs.length < PAGE) break;
+        offset += PAGE;
+      }
+
+      // 3) 受給者証の契約支給量 (契約情報レコード J121-05 用)
+      const ids = rows.map((r) => r.user_id);
+      const contractByClient = new Map<
+        string,
+        { text: string | null; start: string | null; entry: string | null }
+      >();
+      for (let i = 0; i < ids.length; i += 50) {
+        const chunk = ids.slice(i, i + 50);
+        const { data, error } = await supabase
+          .from("shougai_certifications")
+          .select(
+            "client_id, contract_amount_text, contract_start_date, contract_entry_number, certification_start_date",
+          )
+          .in("client_id", chunk)
+          .order("certification_start_date", { ascending: false });
+        if (error) throw new Error("受給者証取得失敗: " + error.message);
+        for (const c of (data ?? []) as {
+          client_id: string;
+          contract_amount_text: string | null;
+          contract_start_date: string | null;
+          contract_entry_number: string | null;
+        }[]) {
+          if (!contractByClient.has(c.client_id)) {
+            contractByClient.set(c.client_id, {
+              text: c.contract_amount_text,
+              start: c.contract_start_date,
+              entry: c.contract_entry_number,
+            });
+          }
+        }
+      }
+
+      // 4) 自事業所上限管理の関係事業所一覧 (上限管理結果票 J411 用)
+      const selfIds = rows
+        .filter((r) => r.jogenKanriKubun === "自事業所")
+        .map((r) => r.user_id);
+      const linesByClient = new Map<string, ShogaiDensouKanriLine[]>();
+      if (selfIds.length > 0) {
+        const { data, error } = await supabase
+          .from("shogai_jogen_kanri_results")
+          .select("client_id, office_lines")
+          .eq("target_month", monthStr)
+          .in("client_id", selfIds);
+        if (error) throw new Error("上限管理結果取得失敗: " + error.message);
+        for (const k of (data ?? []) as {
+          client_id: string;
+          office_lines: ShogaiDensouKanriLine[];
+        }[]) {
+          if (Array.isArray(k.office_lines) && k.office_lines.length > 0) {
+            linesByClient.set(k.client_id, k.office_lines);
+          }
+        }
+      }
+
+      // 5) 組み立て → 生成 → ダウンロード
+      const users: ShogaiDensouUser[] = rows.map((r) => {
+        const contract = contractByClient.get(r.user_id);
+        return {
+          row: r,
+          visits: visitsByClient.get(r.user_id) ?? [],
+          contractAmountText: contract?.text ?? null,
+          contractStartDate: contract?.start ?? null,
+          contractEntryNumber: contract?.entry ?? null,
+          jogenOfficeLines: linesByClient.get(r.user_id) ?? null,
+        };
+      });
+      const result = buildShogaiDensou(users, {
+        officeNumber,
+        year,
+        month,
+        unitPrice,
+        areaCategory,
+      });
+      if (result.warnings.length > 0) {
+        const ok = window.confirm(
+          "以下の確認事項があります:\n\n・" +
+            result.warnings.join("\n・") +
+            "\n\nこのまま出力しますか？",
+        );
+        if (!ok) return;
+      }
+      downloadSjis(result.seikyuFile);
+      downloadSjis(result.jissekiFile);
+      if (result.jogenFile) downloadSjis(result.jogenFile);
+    } catch (e) {
+      alert(
+        "伝送ファイルの生成に失敗しました: " +
+          (e instanceof Error ? e.message : String(e)),
+      );
+    } finally {
+      setDensouLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -105,11 +278,25 @@ export function ShogaiSeikyuContent() {
             type="button"
             disabled={rows.length === 0}
             onClick={exportCsv}
-            className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
-            title="国保連請求 CSV (明細書相当) を出力"
+            className="inline-flex items-center gap-1 rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50"
+            title="内容確認用の明細 CSV を出力"
           >
             <Download size={14} />
-            請求CSV
+            確認用CSV
+          </button>
+          <button
+            type="button"
+            disabled={rows.length === 0 || densouLoading}
+            onClick={handleDensouExport}
+            className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+            title="電子請求受付システム向け伝送ファイル (請求書・明細書 J11 / 実績記録票 J61 / 上限管理結果票 J41) を出力"
+          >
+            {densouLoading ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <FileDown size={14} />
+            )}
+            伝送ファイル
           </button>
         </div>
       </div>
