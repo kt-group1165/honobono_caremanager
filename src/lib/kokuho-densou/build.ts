@@ -32,10 +32,11 @@ const CARE_LEVEL_CODE: Record<string, string> = {
   要介護5: "25",
 };
 
-// ※ 以下 2 つは共通編コード一覧の値が未確認のため、伝送通信ソフトの
-//    取込チェックで要検証 (エラー時はここを修正する)
+// 共通編 1.4 コード一覧 (項番79/80) で検証済:
+//   保険・公費等区分コード 1=保険請求 / 2=公費請求
+//   請求情報区分コード 01=居宅サービス・施設・予防・地域密着型 / 02=居宅介護支援・介護予防支援
 const HOKEN_KOHI_KUBUN_HOKEN = "1"; // 保険・公費等区分コード: 保険請求分
-const SEIKYU_JOHO_KUBUN = "01"; // 請求情報区分コード
+const SEIKYU_JOHO_KUBUN = "01"; // 請求情報区分コード: 居宅サービス (訪問介護)
 
 export interface DensouBuildOptions {
   /** 請求事業所番号 (10 桁) */
@@ -120,7 +121,7 @@ export function buildKokuhoDensou(
       "7111",
       ym,
       office,
-      "2", // 保険・公費等区分コード (公費請求分) ※要検証
+      "2", // 保険・公費等区分コード (2:公費請求。共通編1.4 項番79)
       hobetsu, // 法別番号 (12=生活保護 等)
       SEIKYU_JOHO_KUBUN,
       String(hRows.length),
