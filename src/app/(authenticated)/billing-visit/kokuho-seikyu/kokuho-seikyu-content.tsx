@@ -201,14 +201,20 @@ export function KokuhoSeikyuContent() {
               介護給付費明細書 (様式第2) — {targets.length} 件
             </div>
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs text-gray-600">
+              <thead className="bg-blue-100 text-left text-xs font-medium text-blue-900">
                 <tr>
-                  <th className="px-2 py-2">
-                    <input
-                      type="checkbox"
-                      checked={checked.size === rows.length && rows.length > 0}
-                      onChange={toggleAll}
-                    />
+                  <th className="w-14 px-2 py-1.5 text-center">
+                    <label className="inline-flex cursor-pointer select-none flex-col items-center gap-0.5">
+                      <input
+                        type="checkbox"
+                        checked={checked.size === rows.length && rows.length > 0}
+                        onChange={toggleAll}
+                        className="h-3.5 w-3.5 accent-blue-600 cursor-pointer"
+                      />
+                      <span className="whitespace-nowrap text-[9px] font-normal text-blue-700">
+                        全選択
+                      </span>
+                    </label>
                   </th>
                   <th className="px-3 py-2">提供年月</th>
                   <th className="px-3 py-2">保険者番号</th>
