@@ -74,6 +74,7 @@ const NAV_CARE_MANAGER_SECTIONED: SectionSpec[] = [
     title: "障害福祉",
     items: [
       { name: "サービス提供実績", href: "/shogai/records", icon: ClipboardCheck },
+      { name: "実績月間管理", href: "/shogai/records/monthly", icon: CalendarDays },
       { name: "障害請求", href: "/billing-visit/shogai-seikyu", icon: Calculator },
       // 受給者証・障害支援区分 は 利用者管理 → 障害福祉タブ (/users/[id]/disability, /shougai-cert) に集約
     ],
@@ -126,6 +127,7 @@ const NAV_HOME_CARE_SECTIONED: SectionSpec[] = [
     title: "障害福祉",
     items: [
       { name: "サービス提供実績", href: "/shogai/records", icon: ClipboardCheck },
+      { name: "実績月間管理", href: "/shogai/records/monthly", icon: CalendarDays },
       { name: "障害請求", href: "/billing-visit/shogai-seikyu", icon: Calculator },
       // 受給者証・障害支援区分 は 利用者管理 → 障害福祉タブ (/users/[id]/disability, /shougai-cert) に集約
     ],
