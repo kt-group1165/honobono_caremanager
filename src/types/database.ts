@@ -40,6 +40,12 @@ export type Client = {
   // 緊急連絡先
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
+  // 口座情報 (利用料 口座振替用。2026-07 riyou_payments_and_bank.sql で追加)
+  bank_name: string | null;
+  bank_branch: string | null;
+  bank_account_type: string | null;
+  bank_account_number: string | null;
+  bank_account_holder: string | null;
   // 入退所
   admission_date: string | null;
   discharge_date: string | null;

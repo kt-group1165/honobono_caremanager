@@ -50,6 +50,12 @@ type EditForm = {
   emergency_contact_phone: string;
   admission_date: string;
   status: string;
+  // 口座情報 (利用料 口座振替用)
+  bank_name: string;
+  bank_branch: string;
+  bank_account_type: string;
+  bank_account_number: string;
+  bank_account_holder: string;
   notes: string;
 };
 
@@ -391,6 +397,12 @@ export function UserDetailContent({
     emergency_contact_phone: initialUser.emergency_contact_phone ?? "",
     admission_date: initialUser.admission_date ?? "",
     status: initialUser.status ?? "active",
+    // 口座情報 (利用料 口座振替用)
+    bank_name: (initialUser as { bank_name?: string | null }).bank_name ?? "",
+    bank_branch: (initialUser as { bank_branch?: string | null }).bank_branch ?? "",
+    bank_account_type: (initialUser as { bank_account_type?: string | null }).bank_account_type ?? "普通",
+    bank_account_number: (initialUser as { bank_account_number?: string | null }).bank_account_number ?? "",
+    bank_account_holder: (initialUser as { bank_account_holder?: string | null }).bank_account_holder ?? "",
     notes: matchingMemo?.body ?? "",
   });
 
@@ -451,6 +463,11 @@ export function UserDetailContent({
         emergency_contact_phone: data.emergency_contact_phone ?? "",
         admission_date: data.admission_date ?? "",
         status: data.status ?? "active",
+        bank_name: data.bank_name ?? "",
+        bank_branch: data.bank_branch ?? "",
+        bank_account_type: data.bank_account_type ?? "普通",
+        bank_account_number: data.bank_account_number ?? "",
+        bank_account_holder: data.bank_account_holder ?? "",
         notes: memoBody,
       });
     } catch (err: unknown) {
@@ -486,6 +503,11 @@ export function UserDetailContent({
           emergency_contact_phone: form.emergency_contact_phone || null,
           admission_date: form.admission_date || null,
           status: form.status,
+          bank_name: form.bank_name || null,
+          bank_branch: form.bank_branch || null,
+          bank_account_type: form.bank_account_type || null,
+          bank_account_number: form.bank_account_number || null,
+          bank_account_holder: form.bank_account_holder || null,
         })
         .eq("id", id);
       if (error) throw error;
@@ -618,6 +640,14 @@ export function UserDetailContent({
                 <InfoRow
                   label="緊急連絡先電話"
                   value={user.emergency_contact_phone}
+                />
+                <InfoRow
+                  label="口座 (利用料振替)"
+                  value={
+                    user.bank_name
+                      ? `${user.bank_name} ${user.bank_branch ?? ""} ${user.bank_account_type ?? ""} ${user.bank_account_number ?? ""}${user.bank_account_holder ? ` (${user.bank_account_holder})` : ""}`
+                      : null
+                  }
                 />
               </div>
               {form.notes && (
@@ -838,6 +868,50 @@ export function UserDetailContent({
                     }
                     className={inputClass}
                   />
+                </div>
+                {/* 口座情報 (利用料 口座振替用 — 利用者管理編 1-15) */}
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    口座情報（利用料 口座振替用）
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                    <input
+                      type="text"
+                      value={form.bank_name}
+                      onChange={(e) => setForm((p) => ({ ...p, bank_name: e.target.value }))}
+                      placeholder="金融機関名"
+                      className={inputClass}
+                    />
+                    <input
+                      type="text"
+                      value={form.bank_branch}
+                      onChange={(e) => setForm((p) => ({ ...p, bank_branch: e.target.value }))}
+                      placeholder="支店名"
+                      className={inputClass}
+                    />
+                    <select
+                      value={form.bank_account_type}
+                      onChange={(e) => setForm((p) => ({ ...p, bank_account_type: e.target.value }))}
+                      className={inputClass}
+                    >
+                      <option>普通</option>
+                      <option>当座</option>
+                    </select>
+                    <input
+                      type="text"
+                      value={form.bank_account_number}
+                      onChange={(e) => setForm((p) => ({ ...p, bank_account_number: e.target.value }))}
+                      placeholder="口座番号"
+                      className={inputClass}
+                    />
+                    <input
+                      type="text"
+                      value={form.bank_account_holder}
+                      onChange={(e) => setForm((p) => ({ ...p, bank_account_holder: e.target.value }))}
+                      placeholder="名義 (カナ)"
+                      className={inputClass}
+                    />
+                  </div>
                 </div>
                 {/* 担当ケアマネ UI は Phase 2-3-1 スコープ外（care_managers 統合と一緒に再設計予定） */}
                 <div className="sm:col-span-2">
