@@ -4,6 +4,7 @@ import {
   serviceNameVariantsAll,
   toHankakuDigits,
 } from "@/lib/service-name-normalize";
+import { getServiceSystemMap, isShogaiService } from "@/lib/service-system-lookup";
 import type {
   FormulaCode,
   GridState,
@@ -85,7 +86,7 @@ export default async function ProvisionTicketsPage({
     initialUser = (userRes.data ?? null) as KaigoUser | null;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const schedules = (scheduleRes.data ?? []).map((r: any) => ({
+    const allSchedules = (scheduleRes.data ?? []).map((r: any) => ({
       id: r.id as string,
       user_id: r.user_id as string,
       staff_id: r.staff_id as string | null,
@@ -96,6 +97,15 @@ export default async function ProvisionTicketsPage({
       status: r.status as string,
       staff_name: (r.members?.name ?? null) as string | null,
     }));
+
+    // 障害福祉サービスは介護保険の提供表に載せない (障害側の画面で扱う)
+    const systemMap = await getServiceSystemMap(
+      supabase,
+      allSchedules.map((s) => s.service_type),
+    );
+    const schedules = allSchedules.filter(
+      (s) => !isShogaiService(systemMap, s.service_type),
+    );
 
     const rowMap = new Map<string, ServiceRow>();
     for (const s of schedules) {
@@ -118,7 +128,11 @@ export default async function ProvisionTicketsPage({
       const day = parseInt(s.visit_date.split("-")[2], 10);
       if (!newGrid[key][day]) newGrid[key][day] = { planned: false, actual: false };
       if (s.status === "scheduled" || s.status === "changed") newGrid[key][day].planned = true;
-      if (s.status === "completed") newGrid[key][day].actual = true;
+      // 実績は「予定どおり実施」として予定にも計上する (ほのぼの 準拠)
+      if (s.status === "completed") {
+        newGrid[key][day].planned = true;
+        newGrid[key][day].actual = true;
+      }
     }
     initialServiceRows = Array.from(rowMap.values()).sort((a, b) => a.start_time.localeCompare(b.start_time));
     initialGrid = newGrid;

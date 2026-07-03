@@ -147,22 +147,24 @@ export async function aggregateMonthlyVisitSeikyu(
   // マスタは全角数字 (身体介護３) / schedule は半角混在のため
   // variants で検索し、正規化キー (半角) で引く
   const serviceTypes = Array.from(new Set(schedules.map((s) => s.service_type)));
-  const unitByNorm = new Map<string, { units: number; short: string | null; code: string | null }>();
+  const unitByNorm = new Map<string, { units: number; short: string | null; code: string | null; system: string }>();
   const variants = serviceNameVariantsAll(serviceTypes);
+  // 同名が複数制度にある場合は 介護 > 総合事業 > 独自 > 障害 の優先で採用
+  const SYSTEM_PRIORITY: Record<string, number> = { 介護: 0, 総合事業: 1, 独自: 2, 障害: 3 };
   // .in() の URL 長対策で 50 件ずつ chunk
   for (let i = 0; i < variants.length; i += 50) {
     const chunk = variants.slice(i, i + 50);
     const { data, error } = await supabase
       .from("kaigo_service_codes")
-      .select("service_name, short_name, units, service_code")
+      .select("service_name, short_name, units, service_code, system")
       .in("service_name", chunk)
       .eq("calculation_type", "基本");
     if (error) throw new Error(`サービスコード取得失敗: ${error.message}`);
-    for (const r of (data ?? []) as { service_name: string; short_name: string | null; units: number; service_code: string | null }[]) {
+    for (const r of (data ?? []) as { service_name: string; short_name: string | null; units: number; service_code: string | null; system: string }[]) {
       const key = toHankakuDigits(r.service_name);
-      // 同名複数 code は最初の 1 件を採用 (units はどれも同一想定)
-      if (!unitByNorm.has(key)) {
-        unitByNorm.set(key, { units: r.units, short: r.short_name, code: r.service_code });
+      const prev = unitByNorm.get(key);
+      if (!prev || (SYSTEM_PRIORITY[r.system] ?? 9) < (SYSTEM_PRIORITY[prev.system] ?? 9)) {
+        unitByNorm.set(key, { units: r.units, short: r.short_name, code: r.service_code, system: r.system });
       }
     }
   }
@@ -292,9 +294,11 @@ export async function aggregateMonthlyVisitSeikyu(
   const unitPrice = opts.unitPrice && opts.unitPrice > 0 ? opts.unitPrice : 10.0;
 
   // 5) 利用者ごとに集計
+  // 障害福祉サービスは介護保険請求の対象外 (障害請求側で扱う) のため除外
   const byUser = new Map<string, Map<string, number>>(); // user_id → (service_type → count)
   const daysByUser = new Map<string, Set<string>>(); // user_id → 訪問日 set (実日数)
   for (const s of schedules) {
+    if (unitByNorm.get(toHankakuDigits(s.service_type))?.system === "障害") continue;
     if (!byUser.has(s.user_id)) byUser.set(s.user_id, new Map());
     const m = byUser.get(s.user_id)!;
     m.set(s.service_type, (m.get(s.service_type) ?? 0) + 1);

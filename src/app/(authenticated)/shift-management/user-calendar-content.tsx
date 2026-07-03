@@ -117,6 +117,9 @@ export function UserCalendar({
   const [editSaving, setEditSaving] = useState(false);
   const [editDeleting, setEditDeleting] = useState(false);
   const [showServiceSelector, setShowServiceSelector] = useState(false);
+  // ServiceSelector の初期タブ (介護/総合事業/障害/独自)
+  const [editServiceSystem, setEditServiceSystem] = useState<"介護" | "総合事業" | "障害" | "独自">("介護");
+  const [addServiceSystem, setAddServiceSystem] = useState<"介護" | "総合事業" | "障害" | "独自">("介護");
   const [addModal, setAddModal] = useState<string | null>(null);
   const [addForm, setAddForm] = useState({ start_time: "09:00", end_time: "10:00", service_type: "", staff_id: "", service_code: "", service_name: "" });
   const [addSaving, setAddSaving] = useState(false);
@@ -187,6 +190,7 @@ export function UserCalendar({
 
   const openEditModal = (sched: VisitSchedule) => {
     setEditModal(sched);
+    setEditServiceSystem("介護");
     setEditForm({
       start_time: sched.start_time?.slice(0, 5) ?? "09:00",
       end_time: sched.end_time?.slice(0, 5) ?? "10:00",
@@ -199,6 +203,13 @@ export function UserCalendar({
 
   const handleEditSave = async () => {
     if (!editModal) return;
+    // 実績 (完了済) は提供表・請求集計に反映されるため、変更前に確認する
+    if (
+      editModal.status === "completed" &&
+      !window.confirm("この予定は既に実績になっています。変更すると提供表・請求集計にも反映されます。変更しますか？")
+    ) {
+      return;
+    }
     setEditSaving(true);
     const updateData: Record<string, string | null> = {
       start_time: editForm.start_time + ":00",
@@ -259,6 +270,7 @@ export function UserCalendar({
 
   const openAddModal = (dateStr: string) => {
     setAddModal(dateStr);
+    setAddServiceSystem("介護");
     setAddForm({ start_time: "09:00", end_time: "10:00", service_type: "", staff_id: "", service_code: "", service_name: "" });
   };
 
@@ -440,12 +452,25 @@ export function UserCalendar({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
             <div className="flex items-center justify-between border-b px-5 py-4">
-              <h2 className="font-semibold text-gray-900">予定を編集</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-gray-900">予定を編集</h2>
+                {editModal.status === "completed" ? (
+                  <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-700">実績</span>
+                ) : (
+                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-700">予定</span>
+                )}
+              </div>
               <button onClick={() => setEditModal(null)} className="text-gray-400 hover:text-gray-600">
                 <X size={18} />
               </button>
             </div>
             <div className="p-5 space-y-4">
+              {editModal.status === "completed" && (
+                <div className="flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-800">
+                  <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                  この予定は既に実績になっています。変更すると提供表・請求集計にも反映されます。
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">日付</label>
                 <p className="text-sm font-semibold text-gray-900">
@@ -475,6 +500,7 @@ export function UserCalendar({
                 </div>
               </div>
 
+              <ServiceSystemPicker value={editServiceSystem} onChange={setEditServiceSystem} />
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">サービス</label>
                 <button
@@ -495,6 +521,7 @@ export function UserCalendar({
                 <ServiceSelector
                   open={showServiceSelector}
                   onClose={() => setShowServiceSelector(false)}
+                  system={editServiceSystem}
                   startTime={editForm.start_time}
                   endTime={editForm.end_time}
                   onSelect={(service) => {
@@ -615,6 +642,7 @@ export function UserCalendar({
                 </div>
               </div>
 
+              <ServiceSystemPicker value={addServiceSystem} onChange={setAddServiceSystem} />
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">サービス</label>
                 <button
@@ -634,6 +662,7 @@ export function UserCalendar({
                 <ServiceSelector
                   open={showAddServiceSelector}
                   onClose={() => setShowAddServiceSelector(false)}
+                  system={addServiceSystem}
                   startTime={addForm.start_time}
                   endTime={addForm.end_time}
                   onSelect={(service) => {
@@ -703,6 +732,44 @@ export function UserCalendar({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── サービス種別ピッカー (ServiceSelector の初期タブを切替) ────────────────
+function ServiceSystemPicker({
+  value,
+  onChange,
+}: {
+  value: "介護" | "総合事業" | "障害" | "独自";
+  onChange: (v: "介護" | "総合事業" | "障害" | "独自") => void;
+}) {
+  const OPTIONS = [
+    { value: "介護", label: "介護" },
+    { value: "総合事業", label: "総合" },
+    { value: "障害", label: "障害" },
+    { value: "独自", label: "独自" },
+  ] as const;
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-500 mb-1">サービス種別</label>
+      <div className="grid grid-cols-4 gap-1">
+        {OPTIONS.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => onChange(o.value)}
+            className={cn(
+              "rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors",
+              value === o.value
+                ? "border-blue-500 bg-blue-50 text-blue-700"
+                : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50",
+            )}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

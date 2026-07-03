@@ -33,6 +33,7 @@ import {
   serviceNameVariantsAll,
   toHankakuDigits,
 } from "@/lib/service-name-normalize";
+import { getServiceSystemMap, isShogaiService } from "@/lib/service-system-lookup";
 import { useBusinessType } from "@/lib/business-type-context";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -163,17 +164,22 @@ export function ProvisionTicketsContent({
   const [selectedMonth, setSelectedMonth] = useState(() => new Date());
   const [userData, setUserData] = useState<KaigoUser | null>(initialUser);
 
-  // Server-side で initialUser=null だった場合 (Server Component の RLS で空行) は
-  // client-side で再フェッチ。sidebar 側は client RLS で取れるので、こちらでも取れる想定。
+  // ヘッダの保険者番号/被保険者番号/要介護度は clients から取得する。
+  // initialUser (SSR) は id/name のみのため、保険情報が未取得なら client-side で補完する。
+  // ※ clients の実列名は insurer_number / insured_number / furigana (alias で受ける)
   useEffect(() => {
-    if (userData || !userId) return;
+    if (!userId || userData?.insurer_no) return;
     let cancelled = false;
     (async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("clients")
-        .select("id, name, name_kana, care_level, insurer_no, insured_no")
+        .select("id, name, name_kana:furigana, care_level, insurer_no:insurer_number, insured_no:insured_number")
         .eq("id", userId)
         .maybeSingle();
+      if (error) {
+        console.error("利用者情報取得失敗:", error.message);
+        return;
+      }
       if (!cancelled && data) setUserData(data as KaigoUser);
     })();
     return () => {
@@ -271,7 +277,7 @@ export function ProvisionTicketsContent({
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-    const schedules: VisitSchedule[] = (data || []).map((r: any) => ({
+    const allSchedules: VisitSchedule[] = (data || []).map((r: any) => ({
       id: r.id,
       user_id: r.user_id,
       staff_id: r.staff_id,
@@ -282,6 +288,15 @@ export function ProvisionTicketsContent({
       status: r.status,
       staff_name: r.members?.name ?? null,
     }));
+
+    // 障害福祉サービスは介護保険の提供表に載せない (障害側の画面で扱う)
+    const systemMap = await getServiceSystemMap(
+      supabase,
+      allSchedules.map((s) => s.service_type),
+    );
+    const schedules = allSchedules.filter(
+      (s) => !isShogaiService(systemMap, s.service_type),
+    );
 
     const rowMap = new Map<string, ServiceRow>();
     for (const s of schedules) {
@@ -314,7 +329,9 @@ export function ProvisionTicketsContent({
       if (s.status === "scheduled" || s.status === "changed") {
         newGrid[key][day].planned = true;
       }
+      // 実績は「予定どおり実施」として予定にも計上する (ほのぼの 準拠)
       if (s.status === "completed") {
+        newGrid[key][day].planned = true;
         newGrid[key][day].actual = true;
       }
       newSchedIds[`${key}__${day}__${s.status}`] = s.id;
