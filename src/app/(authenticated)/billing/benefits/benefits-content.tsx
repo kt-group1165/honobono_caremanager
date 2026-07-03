@@ -17,8 +17,18 @@ import {
   AlertTriangle,
   Users,
   ChevronLeft,
+  Send,
 } from "lucide-react";
 import { format } from "date-fns";
+import Encoding from "encoding-japanese";
+import { useBusinessType } from "@/lib/business-type-context";
+import {
+  buildKyufuKanriFile,
+  buildKeikakuhiFile,
+  SERVICE_KIND_CODE,
+  type KyufuKanriUser,
+  type KeikakuhiUser,
+} from "@/lib/kokuho-densou/build-kyotaku";
 
 // ---------------------------------------------------------------------------
 // Types (= benefits-shared.ts から re-import、page.tsx は shared を直接 import)
@@ -191,6 +201,7 @@ export function BenefitsContent({
   initialRows: BenefitManagementRow[];
 }) {
   const supabase = useMemo(() => createClient(), []);
+  const { currentOffice } = useBusinessType();
 
   const [billingMonth, setBillingMonth] = useState(initialMonth);
   const [users, setUsers] = useState<UserWithCert[]>(initialUsers);
@@ -529,6 +540,136 @@ export function BenefitsContent({
   // CSV Export (国保連給付管理票形式)
   // ---------------------------------------------------------------------------
 
+  // 国保連伝送ファイル (正式形式: 給付管理票 8211/8221 + 計画費請求 7111/8121)
+  const downloadSjis = (r: { content: string; fileName: string }) => {
+    const sjis = Encoding.convert(Encoding.stringToCode(r.content), {
+      to: "SJIS",
+      from: "UNICODE",
+    });
+    const blob = new Blob([new Uint8Array(sjis)], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = r.fileName;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const handleDensouExport = async () => {
+    try {
+      const groups = aggregateUserGroups(users, rows).filter((g) => g.rows.length > 0);
+      if (groups.length === 0) {
+        toast.error("対象月の給付管理データがありません (先に一括生成してください)");
+        return;
+      }
+      const [y, m] = billingMonth.split("-").map(Number);
+
+      // 自事業所 (居宅介護支援) の事業所番号・地域単価
+      const { data: officeRow, error: oe } = await supabase
+        .from("offices")
+        .select("business_number, unit_price")
+        .eq("id", currentOffice?.id ?? "")
+        .maybeSingle();
+      if (oe) throw new Error("事業所情報取得失敗: " + oe.message);
+      const officeNumber = (officeRow?.business_number ?? "") as string;
+      const unitPrice = (officeRow?.unit_price ?? 10) as number;
+
+      const ids = groups.map((g) => g.user.id);
+      // 生年月日/性別 + 認定有効期間
+      const { data: cls, error: ce } = await supabase
+        .from("clients").select("id, birth_date, gender").in("id", ids);
+      if (ce) throw new Error("利用者取得失敗: " + ce.message);
+      const clientExtra = new Map(
+        ((cls ?? []) as { id: string; birth_date: string | null; gender: string | null }[]).map((c) => [c.id, c]),
+      );
+      const { data: certRows, error: cre } = await supabase
+        .from("client_insurance_records")
+        .select("client_id, certification_start_date, certification_end_date, effective_date")
+        .in("client_id", ids)
+        .order("effective_date", { ascending: false });
+      if (cre) throw new Error("認定期間取得失敗: " + cre.message);
+      const certPeriod = new Map<string, { s: string | null; e: string | null }>();
+      for (const r of (certRows ?? []) as { client_id: string; certification_start_date: string | null; certification_end_date: string | null }[]) {
+        if (!certPeriod.has(r.client_id)) certPeriod.set(r.client_id, { s: r.certification_start_date, e: r.certification_end_date });
+      }
+
+      // サービス事業所番号 (provider_name → offices.business_number)
+      const providerNames = Array.from(new Set(rows.map((r) => r.provider_name).filter(Boolean))) as string[];
+      const officeNoByName = new Map<string, string>();
+      if (providerNames.length > 0) {
+        const { data: offs } = await supabase
+          .from("offices").select("name, business_number").in("name", providerNames.slice(0, 100));
+        for (const o of (offs ?? []) as { name: string; business_number: string | null }[]) {
+          if (o.business_number) officeNoByName.set(o.name, o.business_number);
+        }
+      }
+
+      // 居宅介護支援費の年度別単位数 (4 月始まりの年度)
+      const fiscalYear = m >= 4 ? y : y - 1;
+      const { data: rates, error: re } = await supabase
+        .from("kaigo_care_support_rates")
+        .select("care_level, units, service_code")
+        .eq("fiscal_year", String(fiscalYear));
+      if (re) throw new Error("年度別単位数取得失敗: " + re.message);
+      const rateByLevel = new Map(
+        ((rates ?? []) as { care_level: string; units: number; service_code: string }[]).map((r) => [r.care_level, r]),
+      );
+
+      const opts = { officeNumber, year: y, month: m, unitPrice };
+      const kyufuUsers: KyufuKanriUser[] = groups.map((g) => ({
+        userName: g.user.name,
+        insurerNumber: g.user.certification?.insurer_number ?? "",
+        insuredNumber: g.user.certification?.insured_number ?? "",
+        birthDate: clientExtra.get(g.user.id)?.birth_date ?? null,
+        gender: clientExtra.get(g.user.id)?.gender ?? null,
+        careLevel: g.user.certification?.care_level ?? null,
+        limitStart: certPeriod.get(g.user.id)?.s ?? null,
+        limitEnd: certPeriod.get(g.user.id)?.e ?? null,
+        limitUnits: g.user.certification?.service_limit_amount ?? 0,
+        lines: g.rows.map((r) => ({
+          officeNumber: r.provider_name ? officeNoByName.get(r.provider_name) ?? "" : "",
+          serviceKindCode: SERVICE_KIND_CODE[r.service_type] ?? "",
+          plannedUnits: r.planned_units,
+        })),
+      }));
+      const keikakuUsers: KeikakuhiUser[] = groups.map((g) => {
+        const rate = rateByLevel.get((g.user.certification?.care_level ?? "").trim());
+        return {
+          userName: g.user.name,
+          insurerNumber: g.user.certification?.insurer_number ?? "",
+          insuredNumber: g.user.certification?.insured_number ?? "",
+          birthDate: clientExtra.get(g.user.id)?.birth_date ?? null,
+          gender: clientExtra.get(g.user.id)?.gender ?? null,
+          careLevel: g.user.certification?.care_level ?? null,
+          certStart: certPeriod.get(g.user.id)?.s ?? null,
+          certEnd: certPeriod.get(g.user.id)?.e ?? null,
+          requestDate: null, // 届出年月日は未管理 → 認定開始日で代用 (警告表示)
+          serviceCode: rate?.service_code ?? "",
+          units: rate?.units ?? 0,
+        };
+      });
+
+      const f1 = buildKyufuKanriFile(kyufuUsers, opts);
+      const f2 = buildKeikakuhiFile(keikakuUsers, opts);
+      const warnings = [...f1.warnings, ...f2.warnings];
+      if (warnings.length > 0) {
+        const list = warnings.slice(0, 12).join("\n・");
+        if (
+          !window.confirm(
+            `以下の項目が不足しています (伝送ソフトの取込チェックでエラーになる可能性があります):\n\n・${list}${warnings.length > 12 ? `\n…他 ${warnings.length - 12} 件` : ""}\n\nこのままファイルを出力しますか？`,
+          )
+        )
+          return;
+      }
+      downloadSjis(f1);
+      downloadSjis(f2);
+      toast.success(
+        `伝送ファイルを出力しました: ${f1.fileName} (給付管理票 ${f1.dataRecordCount} 件) / ${f2.fileName} (計画費 ${f2.dataRecordCount} 件)`,
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const handleCsvExport = () => {
     const confirmedRows = rows.filter(
       (r) => r.status === "confirmed" || r.status === "submitted"
@@ -645,12 +786,22 @@ export function BenefitsContent({
             一括生成
           </button>
           <button
+            onClick={handleDensouExport}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
+            title="国保連伝送用の正式形式 (給付管理票 8211/8221 + 計画費請求 7111/8121、Shift_JIS) を出力"
+          >
+            <Send size={14} />
+            伝送ファイル
+          </button>
+          <button
             onClick={handleCsvExport}
             disabled={loading}
             className="inline-flex items-center gap-1.5 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100 transition-colors disabled:opacity-50"
+            title="Excel で内容確認する用の CSV (伝送形式ではない)"
           >
             <Download size={14} />
-            国保連CSV出力
+            確認用CSV
           </button>
         </div>
       </div>
