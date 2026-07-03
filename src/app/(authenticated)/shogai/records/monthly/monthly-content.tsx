@@ -19,9 +19,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Printer,
   Trash2,
 } from "lucide-react";
 import { getServiceSystemMap, isShogaiService } from "@/lib/service-system-lookup";
+import { useBusinessType } from "@/lib/business-type-context";
 
 // ─── 区分判定 (身体介護 / 家事援助 / 乗降介助 / 通院・身体 / 通院介助) ─────────
 const CATS = ["身体介護", "家事援助", "乗降介助", "通院・身体", "通院介助", "その他"] as const;
@@ -75,6 +77,7 @@ interface MergedRow {
 
 export function ShogaiMonthlyContent() {
   const supabase = useMemo(() => createClient(), []);
+  const { currentOffice } = useBusinessType();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -83,8 +86,10 @@ export function ShogaiMonthlyContent() {
   const [plans, setPlans] = useState<PlanRow[]>([]);
   const [recs, setRecs] = useState<RecRow[]>([]);
   const [codeNames, setCodeNames] = useState<Map<string, string>>(new Map());
+  const [cert, setCert] = useState<{ beneficiary_number: string | null; contract_amount_text: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
 
   const monthStr = `${year}-${String(month).padStart(2, "0")}`;
   const lastDay = new Date(year, month, 0).getDate();
@@ -160,6 +165,18 @@ export function ShogaiMonthlyContent() {
       } else {
         setCodeNames(new Map());
       }
+
+      // 受給者証 (実績記録票のヘッダ用: 受給者証番号 / 契約支給量)
+      const { data: certRow } = await supabase
+        .from("shougai_certifications")
+        .select("beneficiary_number, contract_amount_text, certification_start_date")
+        .eq("client_id", userId)
+        .order("certification_start_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      setCert(
+        (certRow as { beneficiary_number: string | null; contract_amount_text: string | null } | null) ?? null,
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {
@@ -257,7 +274,7 @@ export function ShogaiMonthlyContent() {
 
   return (
     <div className="space-y-4 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold text-gray-900">
             <Accessibility size={20} className="text-purple-600" />
@@ -282,19 +299,35 @@ export function ShogaiMonthlyContent() {
             <span className="min-w-[90px] text-center text-sm font-semibold">R{year - 2018}/{month} 提供分</span>
             <button onClick={nextMonth} className="rounded p-1 hover:bg-gray-100"><ChevronRight size={14} /></button>
           </div>
+          <button
+            type="button"
+            disabled={rows.length === 0}
+            onClick={() => {
+              setPrinting(true);
+              setTimeout(() => {
+                window.print();
+                setPrinting(false);
+              }, 100);
+            }}
+            className="inline-flex items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+            title="サービス提供実績記録票 (様式第十八の一 準拠) を印刷"
+          >
+            <Printer size={14} />
+            実績記録票
+          </button>
         </div>
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-16 text-gray-400">
+        <div className="flex items-center justify-center py-16 text-gray-400 print:hidden">
           <Loader2 size={20} className="mr-2 animate-spin" /> 読み込み中...
         </div>
       ) : rows.length === 0 ? (
-        <div className="rounded-lg border border-dashed bg-gray-50 p-12 text-center text-sm text-gray-500">
+        <div className="rounded-lg border border-dashed bg-gray-50 p-12 text-center text-sm text-gray-500 print:hidden">
           対象月の障害サービスの計画・実績がありません
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-white shadow-sm">
+        <div className="overflow-hidden rounded-lg border bg-white shadow-sm print:hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] text-xs [&_th]:whitespace-nowrap">
               <thead className="bg-blue-100 text-left font-medium text-blue-900">
@@ -413,9 +446,178 @@ export function ShogaiMonthlyContent() {
         </div>
       )}
 
-      <p className="text-[11px] text-gray-400">
+      <p className="text-[11px] text-gray-400 print:hidden">
         ※ 計画はシフト管理カレンダーの障害サービス予定、提供は障害サービス実績 (確定/下書)。
         実績の単位数・詳細の編集は サービス提供実績 の各記録から行えます。
+      </p>
+
+      {/* ===== 印刷: サービス提供実績記録票 (様式第十八の一 準拠) ===== */}
+      {printing && (
+        <div className="hidden print:block">
+          <JissekiKirokuhyoSheet
+            rows={rows}
+            codeNames={codeNames}
+            userName={users.find((u) => u.id === userId)?.name ?? ""}
+            beneficiaryNumber={cert?.beneficiary_number ?? ""}
+            contractAmount={cert?.contract_amount_text ?? ""}
+            officeName={currentOffice?.name ?? ""}
+            officeNumber={currentOffice?.business_number ?? ""}
+            year={year}
+            month={month}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── 印刷: 居宅介護サービス提供実績記録票 (様式第十八の一 準拠 簡易版) ─────────
+function JissekiKirokuhyoSheet({
+  rows,
+  codeNames,
+  userName,
+  beneficiaryNumber,
+  contractAmount,
+  officeName,
+  officeNumber,
+  year,
+  month,
+}: {
+  rows: MergedRow[];
+  codeNames: Map<string, string>;
+  userName: string;
+  beneficiaryNumber: string;
+  contractAmount: string;
+  officeName: string;
+  officeNumber: string;
+  year: number;
+  month: number;
+}) {
+  const dow = (d: string) => "日月火水木金土"[new Date(d + "T00:00:00").getDay()];
+  const planTotal = rows.reduce(
+    (s, r) => s + (r.plan ? minsBetween(r.plan.start_time, r.plan.end_time) : 0),
+    0,
+  );
+  const actualTotal = rows.reduce(
+    (s, r) =>
+      s + (r.rec ? r.rec.duration_minutes ?? minsBetween(r.rec.start_time, r.rec.end_time) : 0),
+    0,
+  );
+
+  return (
+    <div className="p-6 text-black" style={{ pageBreakAfter: "always" }}>
+      <div className="mb-1 flex items-end justify-between text-xs">
+        <span>様式第十八の一 (準拠)</span>
+        <span>
+          令和{year - 2018}年{month}月分
+        </span>
+      </div>
+      <h1 className="mb-3 text-center text-lg font-bold tracking-widest">
+        居宅介護サービス提供実績記録票
+      </h1>
+
+      <table className="mb-3 w-full border-collapse text-xs">
+        <tbody>
+          <tr>
+            <td className="border border-black bg-gray-100 px-2 py-1 w-28">受給者証番号</td>
+            <td className="border border-black px-2 py-1 font-mono">{beneficiaryNumber || "　"}</td>
+            <td className="border border-black bg-gray-100 px-2 py-1 w-40">支給決定障害者等氏名</td>
+            <td className="border border-black px-2 py-1">{userName}</td>
+          </tr>
+          <tr>
+            <td className="border border-black bg-gray-100 px-2 py-1">事業所番号</td>
+            <td className="border border-black px-2 py-1 font-mono">{officeNumber || "　"}</td>
+            <td className="border border-black bg-gray-100 px-2 py-1">事業者及びその事業所名</td>
+            <td className="border border-black px-2 py-1">{officeName}</td>
+          </tr>
+          <tr>
+            <td className="border border-black bg-gray-100 px-2 py-1">契約支給量</td>
+            <td className="border border-black px-2 py-1" colSpan={3}>{contractAmount || "　"}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <table className="w-full border-collapse text-[10px]">
+        <thead>
+          <tr className="bg-gray-100">
+            <th className="border border-black px-1 py-1" rowSpan={2}>日付</th>
+            <th className="border border-black px-1 py-1" rowSpan={2}>曜日</th>
+            <th className="border border-black px-1 py-1" rowSpan={2}>サービス内容</th>
+            <th className="border border-black px-1 py-1" colSpan={3}>居宅介護計画</th>
+            <th className="border border-black px-1 py-1" colSpan={3}>サービス提供実績</th>
+            <th className="border border-black px-1 py-1" rowSpan={2}>派遣<br />人数</th>
+            <th className="border border-black px-1 py-1" rowSpan={2}>利用者<br />確認印</th>
+            <th className="border border-black px-1 py-1" rowSpan={2}>備考</th>
+          </tr>
+          <tr className="bg-gray-100">
+            <th className="border border-black px-1 py-1">開始時間</th>
+            <th className="border border-black px-1 py-1">終了時間</th>
+            <th className="border border-black px-1 py-1">計画<br />時間数</th>
+            <th className="border border-black px-1 py-1">開始時間</th>
+            <th className="border border-black px-1 py-1">終了時間</th>
+            <th className="border border-black px-1 py-1">算定<br />時間数</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const name =
+              (r.rec?.service_code ? codeNames.get(r.rec.service_code) : null) ??
+              r.rec?.service_type ??
+              r.plan?.service_type ??
+              "";
+            const planMins = r.plan ? minsBetween(r.plan.start_time, r.plan.end_time) : 0;
+            const actMins = r.rec
+              ? r.rec.duration_minutes ?? minsBetween(r.rec.start_time, r.rec.end_time)
+              : 0;
+            return (
+              <tr key={r.key}>
+                <td className="border border-black px-1 py-1 text-center tabular-nums">
+                  {parseInt(r.date.slice(8), 10)}
+                </td>
+                <td className="border border-black px-1 py-1 text-center">{dow(r.date)}</td>
+                <td className="border border-black px-1 py-1">{name}</td>
+                <td className="border border-black px-1 py-1 text-center font-mono">
+                  {r.plan ? hm(r.plan.start_time) : ""}
+                </td>
+                <td className="border border-black px-1 py-1 text-center font-mono">
+                  {r.plan ? hm(r.plan.end_time) : ""}
+                </td>
+                <td className="border border-black px-1 py-1 text-center tabular-nums">
+                  {planMins > 0 ? fmtHM(planMins) : ""}
+                </td>
+                <td className="border border-black px-1 py-1 text-center font-mono">
+                  {r.rec ? hm(r.rec.start_time) : ""}
+                </td>
+                <td className="border border-black px-1 py-1 text-center font-mono">
+                  {r.rec ? hm(r.rec.end_time) : ""}
+                </td>
+                <td className="border border-black px-1 py-1 text-center tabular-nums">
+                  {actMins > 0 ? fmtHM(actMins) : ""}
+                </td>
+                <td className="border border-black px-1 py-1 text-center">1</td>
+                <td className="border border-black px-1 py-1"></td>
+                <td className="border border-black px-1 py-1"></td>
+              </tr>
+            );
+          })}
+          <tr className="font-bold">
+            <td className="border border-black px-1 py-1 text-center" colSpan={5}>
+              合計
+            </td>
+            <td className="border border-black px-1 py-1 text-center tabular-nums">
+              {fmtHM(planTotal)}
+            </td>
+            <td className="border border-black px-1 py-1" colSpan={2}></td>
+            <td className="border border-black px-1 py-1 text-center tabular-nums">
+              {fmtHM(actualTotal)}
+            </td>
+            <td className="border border-black px-1 py-1" colSpan={3}></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p className="mt-2 text-[9px] text-gray-700">
+        ※ 本票は様式第十八の一に準拠した簡易版です。初回加算・緊急時対応加算等の欄は算定時に追記してください。
       </p>
     </div>
   );
