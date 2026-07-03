@@ -1177,57 +1177,28 @@ export function ProvisionTicketsContent({
 
           {(
             <div className="p-6" id="provision-ticket-print">
-              {/* ── User info header (利用票風) ── */}
-              <div className="grid grid-cols-4 gap-3 mb-4">
-                <div>
-                  <label className="block text-[10px] text-gray-500 mb-0.5">保険者番号</label>
-                  <div className="rounded border border-gray-400 px-2 py-1.5 text-sm bg-white min-h-[2rem]">
-                    {userData?.insurer_no ?? ""}
-                  </div>
+              {/* ── User info header (利用票風・コンパクト 1 行帯) ── */}
+              <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-lg border bg-gray-50 px-3 py-2">
+                <HeaderPair label="保険者番号" value={userData?.insurer_no} mono />
+                <HeaderPair label="被保険者番号" value={userData?.insured_no} mono />
+                <HeaderPair label="利用者氏名" value={userData?.name} strong />
+                <HeaderPair label="要介護度" value={userData?.care_level} />
+                <span className="hidden h-5 w-px bg-gray-300 sm:block" />
+                <div className="flex items-center gap-1.5">
+                  <span className="whitespace-nowrap text-[10px] text-gray-500">提供月</span>
+                  <button onClick={() => {
+                    if (isDirty && !window.confirm("未保存の変更があります。破棄しますか？")) return;
+                    setIsDirty(false);
+                    setSelectedMonth(subMonths(selectedMonth, 1));
+                  }} className="rounded border bg-white p-0.5 hover:bg-gray-50"><ChevronLeft size={14} /></button>
+                  <span className="text-sm font-semibold">{format(selectedMonth, "yyyy年M月", { locale: ja })}</span>
+                  <button onClick={() => {
+                    if (isDirty && !window.confirm("未保存の変更があります。破棄しますか？")) return;
+                    setIsDirty(false);
+                    setSelectedMonth(addMonths(selectedMonth, 1));
+                  }} className="rounded border bg-white p-0.5 hover:bg-gray-50"><ChevronRight size={14} /></button>
                 </div>
-                <div>
-                  <label className="block text-[10px] text-gray-500 mb-0.5">被保険者番号</label>
-                  <div className="rounded border border-gray-400 px-2 py-1.5 text-sm bg-white min-h-[2rem]">
-                    {userData?.insured_no ?? ""}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] text-gray-500 mb-0.5">利用者氏名</label>
-                  <div className="rounded border border-gray-400 px-2 py-1.5 text-sm font-semibold bg-white min-h-[2rem]">
-                    {userData?.name ?? ""}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] text-gray-500 mb-0.5">要介護度</label>
-                  <div className="rounded border border-gray-400 px-2 py-1.5 text-sm bg-white min-h-[2rem]">
-                    {userData?.care_level ?? ""}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div>
-                  <label className="block text-[10px] text-gray-500 mb-0.5">提供月</label>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => {
-                      if (isDirty && !window.confirm("未保存の変更があります。破棄しますか？")) return;
-                      setIsDirty(false);
-                      setSelectedMonth(subMonths(selectedMonth, 1));
-                    }} className="rounded border p-1 hover:bg-gray-50"><ChevronLeft size={16} /></button>
-                    <span className="text-sm font-semibold">{format(selectedMonth, "yyyy年M月", { locale: ja })}</span>
-                    <button onClick={() => {
-                      if (isDirty && !window.confirm("未保存の変更があります。破棄しますか？")) return;
-                      setIsDirty(false);
-                      setSelectedMonth(addMonths(selectedMonth, 1));
-                    }} className="rounded border p-1 hover:bg-gray-50"><ChevronRight size={16} /></button>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] text-gray-500 mb-0.5">作成年月日</label>
-                  <div className="rounded border border-gray-400 px-2 py-1.5 text-sm bg-white min-h-[2rem]">
-                    {toWareki(new Date())}
-                  </div>
-                </div>
+                <HeaderPair label="作成年月日" value={toWareki(new Date())} />
               </div>
 
               {/* ── Service grid header ── */}
@@ -1725,5 +1696,27 @@ export function ProvisionTicketsContent({
         />
       )}
     </>
+  );
+}
+
+// ヘッダ帯の「ラベル + 値」ペア (コンパクト表示用)
+function HeaderPair({
+  label,
+  value,
+  mono,
+  strong,
+}: {
+  label: string;
+  value: string | null | undefined;
+  mono?: boolean;
+  strong?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline gap-1.5">
+      <span className="whitespace-nowrap text-[10px] text-gray-500">{label}</span>
+      <span className={cn("text-sm", mono && "font-mono tabular-nums", strong && "font-semibold")}>
+        {value || "—"}
+      </span>
+    </div>
   );
 }
