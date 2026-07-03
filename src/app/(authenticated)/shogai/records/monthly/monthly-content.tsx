@@ -114,6 +114,8 @@ export function ShogaiMonthlyContent() {
       const list = Array.from(seen, ([id, name]) => ({ id, name }));
       setUsers(list);
       setUserId((prev) => prev || list[0]?.id || "");
+      // 受給者証登録者が 0 名のときは load() が走らないためここで解除
+      if (list.length === 0) setLoading(false);
     })();
   }, [supabase]);
 
@@ -321,6 +323,12 @@ export function ShogaiMonthlyContent() {
       {loading ? (
         <div className="flex items-center justify-center py-16 text-gray-400 print:hidden">
           <Loader2 size={20} className="mr-2 animate-spin" /> 読み込み中...
+        </div>
+      ) : users.length === 0 ? (
+        <div className="rounded-lg border border-dashed bg-gray-50 p-12 text-center text-sm text-gray-500 print:hidden">
+          受給者証が登録された利用者がいません。
+          <br />
+          利用者管理 → 各利用者の「受給者証」から登録してください。
         </div>
       ) : rows.length === 0 ? (
         <div className="rounded-lg border border-dashed bg-gray-50 p-12 text-center text-sm text-gray-500 print:hidden">
