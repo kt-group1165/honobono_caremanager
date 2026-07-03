@@ -29,6 +29,8 @@ import { cn } from "@/lib/utils";
 import { ServiceSelector } from "@/components/services/service-selector";
 import { StaffCombobox } from "@/components/shared/staff-combobox";
 import { serviceShortName } from "@/lib/service-short-name";
+import { getServiceSystemMap } from "@/lib/service-system-lookup";
+import { toHankakuDigits } from "@/lib/service-name-normalize";
 import {
   DOW_LABELS,
   isStaffUnavailableAtTime,
@@ -117,9 +119,9 @@ export function UserCalendar({
   const [editSaving, setEditSaving] = useState(false);
   const [editDeleting, setEditDeleting] = useState(false);
   const [showServiceSelector, setShowServiceSelector] = useState(false);
-  // ServiceSelector の初期タブ (介護/総合事業/障害/独自)
-  const [editServiceSystem, setEditServiceSystem] = useState<"介護" | "総合事業" | "障害" | "独自">("介護");
-  const [addServiceSystem, setAddServiceSystem] = useState<"介護" | "総合事業" | "障害" | "独自">("介護");
+  // 選択したサービスの制度区分 (表示用バッジ。選択時に自動設定、手動変更しない)
+  const [editServiceSystem, setEditServiceSystem] = useState<string | null>(null);
+  const [addServiceSystem, setAddServiceSystem] = useState<string | null>(null);
   const [addModal, setAddModal] = useState<string | null>(null);
   const [addForm, setAddForm] = useState({ start_time: "09:00", end_time: "10:00", service_type: "", staff_id: "", service_code: "", service_name: "" });
   const [addSaving, setAddSaving] = useState(false);
@@ -190,7 +192,11 @@ export function UserCalendar({
 
   const openEditModal = (sched: VisitSchedule) => {
     setEditModal(sched);
-    setEditServiceSystem("介護");
+    // 既存サービスの制度区分をマスタから引いてバッジ表示 (async)
+    setEditServiceSystem(null);
+    void getServiceSystemMap(supabase, [sched.service_type]).then((m) => {
+      setEditServiceSystem(m.get(toHankakuDigits(sched.service_type)) ?? null);
+    });
     setEditForm({
       start_time: sched.start_time?.slice(0, 5) ?? "09:00",
       end_time: sched.end_time?.slice(0, 5) ?? "10:00",
@@ -270,7 +276,7 @@ export function UserCalendar({
 
   const openAddModal = (dateStr: string) => {
     setAddModal(dateStr);
-    setAddServiceSystem("介護");
+    setAddServiceSystem(null);
     setAddForm({ start_time: "09:00", end_time: "10:00", service_type: "", staff_id: "", service_code: "", service_name: "" });
   };
 
@@ -500,9 +506,11 @@ export function UserCalendar({
                 </div>
               </div>
 
-              <ServiceSystemPicker value={editServiceSystem} onChange={setEditServiceSystem} />
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">サービス</label>
+                <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                  サービス
+                  <ServiceSystemBadge system={editServiceSystem} />
+                </label>
                 <button
                   type="button"
                   onClick={() => setShowServiceSelector(true)}
@@ -521,7 +529,6 @@ export function UserCalendar({
                 <ServiceSelector
                   open={showServiceSelector}
                   onClose={() => setShowServiceSelector(false)}
-                  system={editServiceSystem}
                   startTime={editForm.start_time}
                   endTime={editForm.end_time}
                   onSelect={(service) => {
@@ -531,6 +538,7 @@ export function UserCalendar({
                       service_code: service.code,
                       service_name: service.name,
                     }));
+                    setEditServiceSystem(service.system);
                     setShowServiceSelector(false);
                   }}
                 />
@@ -642,9 +650,11 @@ export function UserCalendar({
                 </div>
               </div>
 
-              <ServiceSystemPicker value={addServiceSystem} onChange={setAddServiceSystem} />
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">サービス</label>
+                <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                  サービス
+                  <ServiceSystemBadge system={addServiceSystem} />
+                </label>
                 <button
                   type="button"
                   onClick={() => setShowAddServiceSelector(true)}
@@ -662,7 +672,6 @@ export function UserCalendar({
                 <ServiceSelector
                   open={showAddServiceSelector}
                   onClose={() => setShowAddServiceSelector(false)}
-                  system={addServiceSystem}
                   startTime={addForm.start_time}
                   endTime={addForm.end_time}
                   onSelect={(service) => {
@@ -672,6 +681,7 @@ export function UserCalendar({
                       service_code: service.code,
                       service_name: service.name,
                     }));
+                    setAddServiceSystem(service.system);
                     setShowAddServiceSelector(false);
                   }}
                 />
@@ -736,40 +746,21 @@ export function UserCalendar({
   );
 }
 
-// ─── サービス種別ピッカー (ServiceSelector の初期タブを切替) ────────────────
-function ServiceSystemPicker({
-  value,
-  onChange,
-}: {
-  value: "介護" | "総合事業" | "障害" | "独自";
-  onChange: (v: "介護" | "総合事業" | "障害" | "独自") => void;
-}) {
-  const OPTIONS = [
-    { value: "介護", label: "介護" },
-    { value: "総合事業", label: "総合" },
-    { value: "障害", label: "障害" },
-    { value: "独自", label: "独自" },
-  ] as const;
+// ─── サービス種別バッジ (選択したサービスの制度区分を自動表示) ────────────────
+function ServiceSystemBadge({ system }: { system: string | null }) {
+  if (!system) return null;
+  const label = system === "総合事業" ? "総合" : system === "独自" ? "独自" : system;
+  const cls =
+    system === "介護"
+      ? "bg-blue-100 text-blue-700"
+      : system === "総合事業"
+      ? "bg-emerald-100 text-emerald-700"
+      : system === "障害"
+      ? "bg-purple-100 text-purple-700"
+      : "bg-amber-100 text-amber-700";
   return (
-    <div>
-      <label className="block text-xs font-medium text-gray-500 mb-1">サービス種別</label>
-      <div className="grid grid-cols-4 gap-1">
-        {OPTIONS.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            onClick={() => onChange(o.value)}
-            className={cn(
-              "rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors",
-              value === o.value
-                ? "border-blue-500 bg-blue-50 text-blue-700"
-                : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50",
-            )}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
-    </div>
+    <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-bold", cls)}>
+      {label}
+    </span>
   );
 }

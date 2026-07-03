@@ -29,6 +29,8 @@ interface ServiceSelectorProps {
     units: number
     category: string
     categoryName: string
+    /** 選択時に開いていた制度区分タブ (サービスの制度区分) */
+    system: "介護" | "障害" | "総合事業" | "独自"
   }) => void
   /**
    * 制度区分フィルタ (初期タブ)。
@@ -552,6 +554,7 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
                         units: service.units,
                         category: service.category,
                         categoryName: service.category_name,
+                        system,
                       })
                       onClose()
                     }}
