@@ -229,11 +229,12 @@ export function KokuhoSeikyuContent() {
               <tbody className="divide-y divide-gray-100">
                 {rows.map((r) => (
                   <tr key={r.user_id} className="hover:bg-gray-50">
-                    <td className="px-2 py-2">
+                    <td className="px-2 py-2 text-center">
                       <input
                         type="checkbox"
                         checked={checked.has(r.user_id)}
                         onChange={() => toggle(r.user_id)}
+                        className="h-3.5 w-3.5 accent-blue-600 cursor-pointer"
                       />
                     </td>
                     <td className="px-3 py-2 text-xs">
