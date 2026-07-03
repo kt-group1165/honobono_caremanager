@@ -336,6 +336,11 @@ function JogenKanriSection({
     );
   }
 
+  // 自事業所が管理者の場合は調整計算 + 結果票作成 (別コンポーネント)
+  if (row.jogenKanriKubun === "自事業所") {
+    return <JogenKanriSelfSection row={row} year={year} month={month} onSaved={onSaved} />;
+  }
+
   const save = async () => {
     setSaving(true);
     const monthStr = `${year}-${String(month).padStart(2, "0")}`;
@@ -409,6 +414,356 @@ function JogenKanriSection({
       <p className="text-[10px] text-gray-400">
         区分 1・3 は調整後負担額が利用者負担額・給付費請求額に反映されます。
       </p>
+    </div>
+  );
+}
+
+// ─── 自事業所が上限管理者の場合: 調整計算 + 結果票 (上限管理編 3-1/3-2) ────────
+interface KanriOfficeLine {
+  office_number: string;
+  office_name: string;
+  total_amount: number;
+  user_amount: number;
+  adjusted_amount: number;
+  is_self: boolean;
+}
+
+function JogenKanriSelfSection({
+  row,
+  year,
+  month,
+  onSaved,
+}: {
+  row: ShogaiSeikyuRow;
+  year: number;
+  month: number;
+  onSaved: () => void;
+}) {
+  const supabase = useMemo(() => createClient(), []);
+  const monthStr = `${year}-${String(month).padStart(2, "0")}`;
+  const limit = row.self_payment_limit;
+  // 調整前の自事業所 利用者負担 (上限管理結果の反映前の値を再計算)
+  const selfPre = row.seiho
+    ? 0
+    : Math.min(Math.floor(row.totalAmount * 0.1), limit > 0 ? limit : Number.MAX_SAFE_INTEGER);
+
+  const [lines, setLines] = useState<KanriOfficeLine[]>([]);
+  const [result, setResult] = useState<number | null>(row.kanriResult);
+  const [saving, setSaving] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const [newNo, setNewNo] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newAmount, setNewAmount] = useState("");
+
+  // 保存済みの関係事業所一覧を読み込み (無ければ自事業所行のみで初期化)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("shogai_jogen_kanri_results")
+        .select("office_lines, kanri_result")
+        .eq("client_id", row.user_id)
+        .eq("target_month", monthStr)
+        .maybeSingle();
+      if (cancelled) return;
+      const saved = ((data?.office_lines ?? []) as KanriOfficeLine[]) ?? [];
+      if (saved.length > 0) {
+        // 自事業所行は最新の請求集計値で更新
+        setLines(
+          saved.map((l) =>
+            l.is_self
+              ? { ...l, total_amount: row.totalAmount, user_amount: selfPre }
+              : l,
+          ),
+        );
+        setResult((data?.kanri_result as number | null) ?? null);
+      } else {
+        setLines([
+          {
+            office_number: "",
+            office_name: "(自事業所)",
+            total_amount: row.totalAmount,
+            user_amount: selfPre,
+            adjusted_amount: selfPre,
+            is_self: true,
+          },
+        ]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 対象 (利用者×月) 切替時のみ再読込
+  }, [row.user_id, monthStr]);
+
+  const addLine = () => {
+    if (!newName.trim()) {
+      alert("事業所名を入力してください");
+      return;
+    }
+    const amt = parseInt(newAmount, 10) || 0;
+    setLines((prev) => [
+      ...prev,
+      {
+        office_number: newNo.trim(),
+        office_name: newName.trim(),
+        total_amount: 0,
+        user_amount: amt,
+        adjusted_amount: amt,
+        is_self: false,
+      },
+    ]);
+    setNewNo("");
+    setNewName("");
+    setNewAmount("");
+  };
+
+  const removeLine = (i: number) => setLines((prev) => prev.filter((_, idx) => idx !== i));
+
+  // 調整計算: 合算 ≤ 上限 → 区分2 / 超過 → 管理事業所 (自) 優先充当で配分
+  const calc = () => {
+    const sum = lines.reduce((s, l) => s + l.user_amount, 0);
+    if (limit <= 0 || sum <= limit) {
+      setLines((prev) => prev.map((l) => ({ ...l, adjusted_amount: l.user_amount })));
+      setResult(2);
+      return;
+    }
+    let remain = limit;
+    const next = lines.map((l) => ({ ...l }));
+    for (const l of next.filter((x) => x.is_self)) {
+      l.adjusted_amount = Math.min(l.user_amount, remain);
+      remain -= l.adjusted_amount;
+    }
+    const others = next.filter((x) => !x.is_self).sort((a, b) => b.user_amount - a.user_amount);
+    for (const l of others) {
+      l.adjusted_amount = Math.min(l.user_amount, remain);
+      remain -= l.adjusted_amount;
+    }
+    setLines(next);
+    setResult(others.every((l) => l.adjusted_amount === 0) ? 1 : 3);
+  };
+
+  const save = async () => {
+    if (result == null) {
+      alert("先に「調整計算」を実行してください");
+      return;
+    }
+    setSaving(true);
+    const self = lines.find((l) => l.is_self);
+    const { error } = await supabase.from("shogai_jogen_kanri_results").upsert(
+      {
+        client_id: row.user_id,
+        target_month: monthStr,
+        kanri_result: result,
+        kanri_result_amount: self?.adjusted_amount ?? null,
+        office_lines: lines,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "client_id,target_month" },
+    );
+    setSaving(false);
+    if (error) {
+      alert("保存に失敗しました: " + error.message);
+      return;
+    }
+    onSaved();
+  };
+
+  const doPrint = () => {
+    setPrinting(true);
+    setTimeout(() => {
+      window.print();
+      setPrinting(false);
+    }, 100);
+  };
+
+  const sumUser = lines.reduce((s, l) => s + l.user_amount, 0);
+  const sumAdj = lines.reduce((s, l) => s + l.adjusted_amount, 0);
+
+  return (
+    <div className="mt-3 rounded border border-violet-200 bg-violet-50/50 p-3 text-xs space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="font-bold text-violet-800">利用者負担上限額管理 (当事業所が管理者)</span>
+        <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">
+          上限月額 ¥{limit.toLocaleString()}
+        </span>
+      </div>
+
+      <table className="w-full text-[11px]">
+        <thead className="text-left text-[10px] text-gray-500">
+          <tr>
+            <th className="py-0.5">事業所</th>
+            <th className="py-0.5 text-right">利用者負担額</th>
+            <th className="py-0.5 text-right">管理結果後</th>
+            <th className="w-6"></th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-violet-100">
+          {lines.map((l, i) => (
+            <tr key={i} className={l.is_self ? "font-semibold" : ""}>
+              <td className="py-1">
+                {l.office_name}
+                {l.office_number && (
+                  <span className="ml-1 font-mono text-[9px] text-gray-400">{l.office_number}</span>
+                )}
+              </td>
+              <td className="py-1 text-right tabular-nums">¥{l.user_amount.toLocaleString()}</td>
+              <td className="py-1 text-right tabular-nums text-violet-700">
+                ¥{l.adjusted_amount.toLocaleString()}
+              </td>
+              <td className="py-1 text-center">
+                {!l.is_self && (
+                  <button
+                    onClick={() => removeLine(i)}
+                    className="text-gray-300 hover:text-red-500"
+                    title="削除"
+                  >
+                    ×
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+          <tr className="border-t border-violet-200 font-bold">
+            <td className="py-1">合算</td>
+            <td className={`py-1 text-right tabular-nums ${limit > 0 && sumUser > limit ? "text-red-600" : ""}`}>
+              ¥{sumUser.toLocaleString()}
+            </td>
+            <td className="py-1 text-right tabular-nums">¥{sumAdj.toLocaleString()}</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div className="grid grid-cols-[90px_1fr_80px_auto] items-center gap-1.5">
+        <input
+          value={newNo}
+          onChange={(e) => setNewNo(e.target.value)}
+          placeholder="事業所番号"
+          className="rounded border px-2 py-1.5 font-mono focus:border-violet-500 focus:outline-none"
+        />
+        <input
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          placeholder="関係事業所名"
+          className="rounded border px-2 py-1.5 focus:border-violet-500 focus:outline-none"
+        />
+        <input
+          type="number"
+          value={newAmount}
+          onChange={(e) => setNewAmount(e.target.value)}
+          placeholder="負担額"
+          className="rounded border px-2 py-1.5 text-right tabular-nums focus:border-violet-500 focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={addLine}
+          className="rounded border border-violet-300 bg-white px-2.5 py-1.5 font-medium text-violet-700 hover:bg-violet-50"
+        >
+          追加
+        </button>
+      </div>
+
+      <div className="flex items-center justify-between pt-1">
+        <span className="text-[10px] text-gray-500">
+          {result != null
+            ? `管理結果区分: ${result} (${result === 1 ? "管理事業所で充当" : result === 2 ? "調整なし" : "結果票のとおり調整"})`
+            : "未計算"}
+        </span>
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={calc}
+            className="rounded border border-violet-300 bg-white px-3 py-1.5 font-medium text-violet-700 hover:bg-violet-50"
+          >
+            調整計算
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="rounded bg-violet-600 px-3 py-1.5 font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+          >
+            {saving ? "保存中..." : "保存 (請求に反映)"}
+          </button>
+          <button
+            type="button"
+            onClick={doPrint}
+            disabled={result == null}
+            className="rounded border border-violet-300 bg-white px-3 py-1.5 font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50"
+          >
+            結果票印刷
+          </button>
+        </div>
+      </div>
+
+      {/* 印刷: 利用者負担上限額管理結果票 */}
+      {printing && (
+        <div className="fixed inset-0 hidden bg-white p-8 text-black print:block">
+          <h1 className="mb-4 text-center text-lg font-bold tracking-widest">
+            利用者負担上限額管理結果票
+          </h1>
+          <div className="mb-1 text-right text-xs">
+            令和{year - 2018}年{month}月分
+          </div>
+          <table className="mb-3 w-full border-collapse text-xs">
+            <tbody>
+              <tr>
+                <td className="w-28 border border-black bg-gray-100 px-2 py-1">受給者証番号</td>
+                <td className="border border-black px-2 py-1 font-mono">{row.beneficiary_number ?? ""}</td>
+                <td className="w-40 border border-black bg-gray-100 px-2 py-1">支給決定障害者等氏名</td>
+                <td className="border border-black px-2 py-1">{row.user_name}</td>
+              </tr>
+              <tr>
+                <td className="border border-black bg-gray-100 px-2 py-1">利用者負担上限月額</td>
+                <td className="border border-black px-2 py-1 tabular-nums">¥{limit.toLocaleString()}</td>
+                <td className="border border-black bg-gray-100 px-2 py-1">管理結果区分</td>
+                <td className="border border-black px-2 py-1">{result ?? ""}</td>
+              </tr>
+            </tbody>
+          </table>
+          <table className="w-full border-collapse text-xs">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="border border-black px-2 py-1">項番</th>
+                <th className="border border-black px-2 py-1">事業所番号</th>
+                <th className="border border-black px-2 py-1">事業所名称</th>
+                <th className="border border-black px-2 py-1 text-right">利用者負担額</th>
+                <th className="border border-black px-2 py-1 text-right">管理結果後利用者負担額</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((l, i) => (
+                <tr key={i}>
+                  <td className="border border-black px-2 py-1 text-center">{i + 1}</td>
+                  <td className="border border-black px-2 py-1 font-mono">{l.office_number}</td>
+                  <td className="border border-black px-2 py-1">
+                    {l.office_name}
+                    {l.is_self ? " (上限額管理事業所)" : ""}
+                  </td>
+                  <td className="border border-black px-2 py-1 text-right tabular-nums">
+                    ¥{l.user_amount.toLocaleString()}
+                  </td>
+                  <td className="border border-black px-2 py-1 text-right tabular-nums">
+                    ¥{l.adjusted_amount.toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+              <tr className="font-bold">
+                <td className="border border-black px-2 py-1 text-center" colSpan={3}>
+                  合計
+                </td>
+                <td className="border border-black px-2 py-1 text-right tabular-nums">
+                  ¥{sumUser.toLocaleString()}
+                </td>
+                <td className="border border-black px-2 py-1 text-right tabular-nums">
+                  ¥{sumAdj.toLocaleString()}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
