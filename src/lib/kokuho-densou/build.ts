@@ -79,7 +79,7 @@ export function buildKokuhoDensou(
   // データレコード (レコード種別/連番は後で付与するため、まず中身のみ組み立てる)
   const dataParts: string[][] = [];
 
-  // ── 7111 介護給付費請求書情報 (保険請求分 1 レコード) ──
+  // ── 7111 介護給付費請求書情報 (保険請求分 1 レコード + 公費請求分) ──
   const totalCount = rows.length;
   const totalUnits = rows.reduce((s, r) => s + r.totalUnits, 0);
   const totalCost = rows.reduce((s, r) => s + r.totalAmount, 0);
@@ -107,6 +107,32 @@ export function buildKokuhoDensou(
     "", // 18 同 保険請求額
   ]);
 
+  // 公費請求分 (法別番号ごと。生活保護 12 等)
+  const kohiRows = rows.filter((r) => r.kohiHobetsu && (r.kohiAmount ?? 0) > 0);
+  const byHobetsu = new Map<string, UserSeikyuRow[]>();
+  for (const r of kohiRows) {
+    const h = r.kohiHobetsu as string;
+    if (!byHobetsu.has(h)) byHobetsu.set(h, []);
+    byHobetsu.get(h)!.push(r);
+  }
+  for (const [hobetsu, hRows] of byHobetsu) {
+    dataParts.push([
+      "7111",
+      ym,
+      office,
+      "2", // 保険・公費等区分コード (公費請求分) ※要検証
+      hobetsu, // 法別番号 (12=生活保護 等)
+      SEIKYU_JOHO_KUBUN,
+      String(hRows.length),
+      String(hRows.reduce((s, r) => s + r.totalUnits, 0)),
+      String(hRows.reduce((s, r) => s + r.totalAmount, 0)),
+      String(hRows.reduce((s, r) => s + r.insuranceAmount, 0)),
+      String(hRows.reduce((s, r) => s + (r.kohiAmount ?? 0), 0)),
+      "0", // 利用者負担 (公費振替後は 0)
+      "", "", "", "", "", "",
+    ]);
+  }
+
   // ── 7131 明細書 (利用者ごと: 基本 01 → 明細 02×n → 集計 10) ──
   for (const r of rows) {
     const insurer = (r.insurer_number ?? "").trim();
@@ -119,6 +145,10 @@ export function buildKokuhoDensou(
     if (!r.careOfficeNumber) warnings.push(`${r.user_name}: 担当居宅介護支援事業所 (事業所番号) が未登録です`);
 
     const benefitRate = String(Math.round((1 - r.copay_rate) * 100)); // 90 等
+    const hasKohi = !!(r.kohiHobetsu && (r.kohiAmount ?? 0) > 0);
+    if (r.kohiHobetsu && !r.kohiFutanshaNumber) {
+      warnings.push(`${r.user_name}: 公費 (法別${r.kohiHobetsu}) の負担者番号が未登録です`);
+    }
 
     // 基本情報レコード (01) — 様式第二で使用しない施設系項目は空欄
     dataParts.push([
@@ -128,8 +158,8 @@ export function buildKokuhoDensou(
       office, // 4 事業所番号
       insurer, // 5 証記載保険者番号
       insured, // 6 被保険者番号
-      "", // 7 公費1 負担者番号
-      "", // 8 公費1 受給者番号
+      hasKohi ? r.kohiFutanshaNumber ?? "" : "", // 7 公費1 負担者番号
+      hasKohi ? r.kohiJukyushaNumber ?? "" : "", // 8 公費1 受給者番号
       "", // 9 公費2 負担者番号
       "", // 10 公費2 受給者番号
       "", // 11 公費3 負担者番号
@@ -151,7 +181,7 @@ export function buildKokuhoDensou(
       "", // 27 外泊日数
       "", // 28 退所後の状態
       benefitRate, // 29 保険給付率
-      "", // 30 公費1給付率
+      hasKohi ? "100" : "", // 30 公費1給付率 (生活保護等は 100)
       "", // 31 公費2給付率
       "", // 32 公費3給付率
       String(r.totalUnits), // 33 合計 保険 サービス単位数
@@ -160,7 +190,11 @@ export function buildKokuhoDensou(
       "", // 36 緊急時施設療養費請求額
       "", // 37 特定診療費請求額
       "", // 38 特定入所者介護サービス費等請求額
-      "", "", "", "", "", "", // 39-44 公費1 合計情報
+      // 39-44 公費1 合計情報 (サービス単位数 / 請求額 / 本人負担額 / 緊急時 / 特定診療 / 特定入所者)
+      hasKohi ? String(r.totalUnits) : "",
+      hasKohi ? String(r.kohiAmount ?? 0) : "",
+      hasKohi ? "0" : "",
+      "", "", "",
       "", "", "", "", "", "", // 45-50 公費2 合計情報
       "", "", "", "", "", "", // 51-56 公費3 合計情報
     ]);
@@ -194,11 +228,11 @@ export function buildKokuhoDensou(
         d.code.slice(2, 6), // 8 サービス項目コード
         String(d.unitPer), // 9 単位数
         String(d.count), // 10 日数・回数
-        "", // 11 公費1対象日数・回数
+        hasKohi ? String(d.count) : "", // 11 公費1対象日数・回数
         "", // 12 公費2対象日数・回数
         "", // 13 公費3対象日数・回数
         String(d.units), // 14 サービス単位数
-        "", // 15 公費1対象サービス単位数
+        hasKohi ? String(d.units) : "", // 15 公費1対象サービス単位数
         "", // 16 公費2対象サービス単位数
         "", // 17 公費3対象サービス単位数
         "", // 18 摘要
@@ -225,7 +259,10 @@ export function buildKokuhoDensou(
       String(Math.round(opts.unitPrice * 100)), // 15 単位数単価 (10.00円 → 1000)
       String(r.insuranceAmount), // 16 保険 請求額
       String(r.userAmount), // 17 利用者負担額
-      "", "", "", // 18-20 公費1
+      // 18-20 公費1 (単位数合計 / 請求額 / 本人負担額)
+      hasKohi ? String(r.totalUnits) : "",
+      hasKohi ? String(r.kohiAmount ?? 0) : "",
+      hasKohi ? "0" : "",
       "", "", "", // 21-23 公費2
       "", "", "", // 24-26 公費3
       "", "", "", // 27-29 保険分出来高医療費

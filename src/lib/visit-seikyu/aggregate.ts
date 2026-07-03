@@ -65,8 +65,14 @@ export interface UserSeikyuRow {
   insuranceAmount: number;
   /** 利用者負担額 (円) */
   userAmount: number;
-  /** 公費 (生活保護等)。client_insurance_records.public_expense。null = 公費なし */
+  /** 公費 (生活保護等)。法別番号 or public_expense テキスト。null = 公費なし */
   publicExpense: string | null;
+  /** 公費 法別番号 (12=生活保護 等) */
+  kohiHobetsu: string | null;
+  /** 公費負担者番号 (8桁) */
+  kohiFutanshaNumber: string | null;
+  /** 公費受給者番号 (7桁) */
+  kohiJukyushaNumber: string | null;
   /** 公費対象単位数 (公費ありのとき全単位を対象とする簡易版) */
   kohiUnits: number | null;
   /** 公費請求額 (円) = 本人負担分を公費へ振替 (生保想定・本人負担 0) */
@@ -196,13 +202,14 @@ export async function aggregateMonthlyVisitSeikyu(
       insurer: string | null; insured: string | null; level: string | null; copay: number;
       publicExpense: string | null; certStart: string | null; certEnd: string | null;
       careOfficeId: string | null;
+      kohiHobetsu: string | null; kohiFutansha: string | null; kohiJukyusha: string | null;
     }
   >();
   for (let i = 0; i < userIds.length; i += 50) {
     const chunk = userIds.slice(i, i + 50);
     const { data, error } = await supabase
       .from("client_insurance_records")
-      .select("client_id, insurer_number, insured_number, care_level, copay_rate, public_expense, certification_start_date, certification_end_date, care_office_id, effective_date")
+      .select("client_id, insurer_number, insured_number, care_level, copay_rate, public_expense, kohi_hobetsu, kohi_futansha_number, kohi_jukyusha_number, certification_start_date, certification_end_date, care_office_id, effective_date")
       .in("client_id", chunk)
       .order("effective_date", { ascending: false });
     if (error) throw new Error(`保険情報取得失敗: ${error.message}`);
@@ -213,6 +220,9 @@ export async function aggregateMonthlyVisitSeikyu(
       care_level: string | null;
       copay_rate: number | null;
       public_expense: string | null;
+      kohi_hobetsu: string | null;
+      kohi_futansha_number: string | null;
+      kohi_jukyusha_number: string | null;
       certification_start_date: string | null;
       certification_end_date: string | null;
       care_office_id: string | null;
@@ -231,10 +241,18 @@ export async function aggregateMonthlyVisitSeikyu(
           insured: r.insured_number,
           level: r.care_level,
           copay,
-          publicExpense: r.public_expense?.trim() ? r.public_expense.trim() : null,
+          publicExpense:
+            r.kohi_hobetsu?.trim()
+              ? `法別${r.kohi_hobetsu.trim()}${r.kohi_hobetsu.trim() === "12" ? " (生活保護)" : ""}`
+              : r.public_expense?.trim()
+              ? r.public_expense.trim()
+              : null,
           certStart: r.certification_start_date,
           certEnd: r.certification_end_date,
           careOfficeId: r.care_office_id,
+          kohiHobetsu: r.kohi_hobetsu?.trim() || null,
+          kohiFutansha: r.kohi_futansha_number?.trim() || null,
+          kohiJukyusha: r.kohi_jukyusha_number?.trim() || null,
         });
       }
     }
@@ -361,6 +379,9 @@ export async function aggregateMonthlyVisitSeikyu(
       publicExpense,
       kohiUnits,
       kohiAmount,
+      kohiHobetsu: ins?.kohiHobetsu ?? null,
+      kohiFutanshaNumber: ins?.kohiFutansha ?? null,
+      kohiJukyushaNumber: ins?.kohiJukyusha ?? null,
       addonCode,
       birthDate: client?.birth ?? null,
       gender: client?.gender ?? null,

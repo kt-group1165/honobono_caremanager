@@ -35,6 +35,12 @@ type DbFields = {
   // certification_status の値域は DB 側で CHECK 制約済（認定済み / 申請中 / NULL）
   status: "認定済み" | "申請中";
   certification_number: string;
+  // 公費情報 (生活保護等 — 国保連伝送の公費欄に使用)
+  kohi_hobetsu: string;            // 法別番号 (12=生活保護)
+  kohi_futansha_number: string;    // 公費負担者番号 (8桁)
+  kohi_jukyusha_number: string;    // 公費受給者番号 (7桁)
+  kohi_start_date: string;
+  kohi_end_date: string;
 };
 
 /** ローカルステート専用フィールド（DB列なし） */
@@ -72,6 +78,11 @@ const EMPTY_FORM: FormData = {
   support_limit_amount: "",
   status: "認定済み",
   certification_number: "",
+  kohi_hobetsu: "",
+  kohi_futansha_number: "",
+  kohi_jukyusha_number: "",
+  kohi_start_date: "",
+  kohi_end_date: "",
   // Local
   insurer_name: "",
   copay_rate: "90",
@@ -121,6 +132,11 @@ function recToForm(rec: CareCertification): FormData {
     support_limit_amount: rec.service_limit_amount?.toString() ?? "",
     status: (rec.certification_status as DbFields["status"]) ?? "認定済み",
     certification_number: rec.certification_number ?? "",
+    kohi_hobetsu: (rec as unknown as { kohi_hobetsu?: string | null }).kohi_hobetsu ?? "",
+    kohi_futansha_number: (rec as unknown as { kohi_futansha_number?: string | null }).kohi_futansha_number ?? "",
+    kohi_jukyusha_number: (rec as unknown as { kohi_jukyusha_number?: string | null }).kohi_jukyusha_number ?? "",
+    kohi_start_date: (rec as unknown as { kohi_start_date?: string | null }).kohi_start_date ?? "",
+    kohi_end_date: (rec as unknown as { kohi_end_date?: string | null }).kohi_end_date ?? "",
     cert_status_type: rec.care_level === "申請中" ? "申請中" : "認定済み",
   };
 }
@@ -227,6 +243,11 @@ export function CareCertContent({
           : null,
         certification_status: form.status,
         certification_number: form.certification_number || null,
+        kohi_hobetsu: form.kohi_hobetsu || null,
+        kohi_futansha_number: form.kohi_futansha_number || null,
+        kohi_jukyusha_number: form.kohi_jukyusha_number || null,
+        kohi_start_date: form.kohi_start_date || null,
+        kohi_end_date: form.kohi_end_date || null,
       };
 
       if (selectedId && !isNew) {
@@ -545,6 +566,72 @@ export function CareCertContent({
                 min={0}
                 max={100}
               />
+            </div>
+
+            {/* 公費情報 (生活保護等) — 国保連伝送の公費欄に使用 */}
+            <div className="col-span-full rounded border border-purple-200 bg-purple-50/40 p-2">
+              <p className="mb-1.5 text-xs font-bold text-purple-800">公費情報 (生活保護等)</p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                <div>
+                  <label className={labelCls}>法別番号</label>
+                  <select
+                    value={form.kohi_hobetsu}
+                    onChange={(e) => setField("kohi_hobetsu", e.target.value)}
+                    className={inp}
+                  >
+                    <option value="">なし</option>
+                    <option value="12">12: 生活保護</option>
+                    <option value="25">25: 中国残留邦人等</option>
+                    <option value="10">10: 感染症 (結核)</option>
+                    <option value="21">21: 精神通院医療</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>公費負担者番号</label>
+                  <input
+                    type="text"
+                    value={form.kohi_futansha_number}
+                    onChange={(e) => setField("kohi_futansha_number", e.target.value)}
+                    className={inp}
+                    placeholder="8桁"
+                    disabled={!form.kohi_hobetsu}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>公費受給者番号</label>
+                  <input
+                    type="text"
+                    value={form.kohi_jukyusha_number}
+                    onChange={(e) => setField("kohi_jukyusha_number", e.target.value)}
+                    className={inp}
+                    placeholder="7桁"
+                    disabled={!form.kohi_hobetsu}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>公費適用 開始</label>
+                  <input
+                    type="date"
+                    value={form.kohi_start_date}
+                    onChange={(e) => setField("kohi_start_date", e.target.value)}
+                    className={inp}
+                    disabled={!form.kohi_hobetsu}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>公費適用 終了</label>
+                  <input
+                    type="date"
+                    value={form.kohi_end_date}
+                    onChange={(e) => setField("kohi_end_date", e.target.value)}
+                    className={inp}
+                    disabled={!form.kohi_hobetsu}
+                  />
+                </div>
+              </div>
+              <p className="mt-1 text-[10px] text-gray-500">
+                法別 12 (生活保護) を設定すると、介護請求で利用者負担分が公費請求へ振替えられ、伝送ファイルの公費欄に出力されます。
+              </p>
             </div>
 
             <div>

@@ -278,26 +278,48 @@ export function RiyouSeikyuContent() {
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="border-t-2 border-gray-300 bg-gray-50 font-bold">
-                <tr>
-                  <td className="px-3 py-2 text-xs text-gray-500" colSpan={5}>
-                    請求額合計 ({rows.length} 名{checked.size > 0 ? ` / 選択 ${checked.size} 名` : ""})
-                    {(() => {
-                      const misyu = rows.filter((r) => {
-                        const p = payments.get(r.user_id);
-                        return p && p.status !== "入金完";
-                      }).length;
-                      return misyu > 0 ? (
-                        <span className="ml-2 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-600">
-                          未入金 {misyu} 件
-                        </span>
-                      ) : null;
-                    })()}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-emerald-700" colSpan={2}>
-                    ¥{totalBilled.toLocaleString()}
-                  </td>
-                </tr>
+              <tfoot className="border-t-2 border-gray-300 bg-gray-50">
+                {(() => {
+                  const issued = rows.filter((r) => payments.has(r.user_id));
+                  const issuedTotal = issued.reduce(
+                    (s, r) => s + (payments.get(r.user_id)?.billed_amount ?? 0),
+                    0,
+                  );
+                  const paidTotal = rows.reduce(
+                    (s, r) => s + (payments.get(r.user_id)?.paid_amount ?? 0),
+                    0,
+                  );
+                  const misyu = rows.filter((r) => {
+                    const p = payments.get(r.user_id);
+                    return p && p.status !== "入金完";
+                  }).length;
+                  return (
+                    <>
+                      <tr className="font-bold">
+                        <td className="px-3 py-2 text-xs text-gray-500" colSpan={5}>
+                          件数合計 {rows.length} 件
+                          <span className="ml-3 font-normal">発行済 {issued.length} 件</span>
+                          {misyu > 0 && (
+                            <span className="ml-2 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-600">
+                              未入金 {misyu} 件
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-emerald-700" colSpan={2}>
+                          ¥{totalBilled.toLocaleString()}
+                        </td>
+                      </tr>
+                      <tr className="text-xs text-gray-500">
+                        <td className="px-3 py-1.5" colSpan={5}>
+                          発行済請求額合計 / 入金額合計
+                        </td>
+                        <td className="px-3 py-1.5 text-right tabular-nums" colSpan={2}>
+                          ¥{issuedTotal.toLocaleString()} / ¥{paidTotal.toLocaleString()}
+                        </td>
+                      </tr>
+                    </>
+                  );
+                })()}
               </tfoot>
             </table>
           </div>
@@ -361,28 +383,21 @@ export function RiyouSeikyuContent() {
                   onChanged={loadPayments}
                 />
 
-                <div className="mt-4 space-y-1 rounded border bg-gray-50 p-3 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">利用者負担額</span>
-                    <span className="tabular-nums">
-                      ¥{selected.userAmount.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">実費合計</span>
-                    <span className="tabular-nums">
-                      ¥{jippiTotal(selected.user_id).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">消費税額</span>
-                    <span className="tabular-nums">¥0 (非課税)</span>
-                  </div>
-                  <div className="flex justify-between text-emerald-700">
-                    <span className="font-bold">請求金額</span>
-                    <span className="font-bold tabular-nums">
-                      ¥{(selected.userAmount + jippiTotal(selected.user_id)).toLocaleString()}
-                    </span>
+                {/* ほのぼの 利用請求の右下ボックス準拠 (2 列) */}
+                <div className="mt-4 rounded border bg-gray-50 p-3 text-xs">
+                  <div className="grid grid-cols-2 gap-x-5 gap-y-1">
+                    <RiyouSummaryCell label="合計金額" value={`¥${(selected.userAmount + jippiTotal(selected.user_id)).toLocaleString()}`} />
+                    <RiyouSummaryCell label="過入金充当額" value="" />
+                    <RiyouSummaryCell label="利用者負担額" value={`¥${selected.userAmount.toLocaleString()}`} />
+                    <RiyouSummaryCell label="軽減額" value="" />
+                    <RiyouSummaryCell label="実費合計" value={`¥${jippiTotal(selected.user_id).toLocaleString()}`} />
+                    <RiyouSummaryCell label="医療費控除対象額" value="" />
+                    <RiyouSummaryCell label="消費税額" value="¥0 (非課税)" />
+                    <RiyouSummaryCell
+                      label="請求金額"
+                      value={`¥${(selected.userAmount + jippiTotal(selected.user_id)).toLocaleString()}`}
+                      emphasis
+                    />
                   </div>
                 </div>
               </div>
@@ -455,6 +470,28 @@ function splitUserAmount(row: UserSeikyuRow): RiyouLine[] {
     maxLine.amount += diff;
   }
   return lines;
+}
+
+// ほのぼの風 サマリセル (ラベル帯 + 右寄せ数値。空 = 該当なし)
+function RiyouSummaryCell({
+  label,
+  value,
+  emphasis,
+}: {
+  label: string;
+  value: string;
+  emphasis?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="shrink-0 rounded border border-blue-100 bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-900 whitespace-nowrap">
+        {label}
+      </span>
+      <span className={emphasis ? "font-bold tabular-nums text-emerald-700" : "font-bold tabular-nums text-gray-800"}>
+        {value || <span className="font-normal text-gray-300">—</span>}
+      </span>
+    </div>
+  );
 }
 
 // ─── 利用実費の入力セクション ─────────────────────────────────────────────────
