@@ -86,7 +86,7 @@ export function useKaigoVisitSchedulesByUser(
   fallbackData?: VisitSchedule[],
 ) {
   const key = userId ? `kaigo-schedules:byUser:${userId}:${monthFrom}:${monthTo}` : null;
-  const { data, error, isLoading, mutate } = useSWR<VisitSchedule[]>(
+  const { data, error, isLoading, isValidating, mutate } = useSWR<VisitSchedule[]>(
     key,
     () => fetchByUser(userId as string, monthFrom, monthTo),
     { ...SWR_OPTIONS, fallbackData },
@@ -94,6 +94,7 @@ export function useKaigoVisitSchedulesByUser(
   return {
     schedules: data ?? [],
     isLoading,
+    isValidating,
     error: error ?? null,
     mutate: () => {
       void mutate();
@@ -154,7 +155,7 @@ export function useKaigoVisitSchedulesByStaff(
   fallbackData?: VisitSchedule[],
 ) {
   const key = staffId ? `kaigo-schedules:byStaff:${staffId}:${monthFrom}:${monthTo}` : null;
-  const { data, error, isLoading, mutate } = useSWR<VisitSchedule[]>(
+  const { data, error, isLoading, isValidating, mutate } = useSWR<VisitSchedule[]>(
     key,
     () => fetchByStaff(staffId as string, monthFrom, monthTo),
     { ...SWR_OPTIONS, fallbackData },
@@ -162,6 +163,7 @@ export function useKaigoVisitSchedulesByStaff(
   return {
     schedules: data ?? [],
     isLoading,
+    isValidating,
     error: error ?? null,
     mutate: () => {
       void mutate();
@@ -214,7 +216,7 @@ export function useKaigoVisitSchedulesByDate(
   fallbackData?: VisitSchedule[],
 ) {
   const key = dateStr ? `kaigo-schedules:byDate:${dateStr}` : null;
-  const { data, error, isLoading, mutate } = useSWR<VisitSchedule[]>(
+  const { data, error, isLoading, isValidating, mutate } = useSWR<VisitSchedule[]>(
     key,
     () => fetchByDate(dateStr as string),
     { ...SWR_OPTIONS, fallbackData },
@@ -222,6 +224,7 @@ export function useKaigoVisitSchedulesByDate(
   return {
     schedules: data ?? [],
     isLoading,
+    isValidating,
     error: error ?? null,
     mutate: () => {
       void mutate();
@@ -251,7 +254,7 @@ export function useKaigoVisitSchedulesByMonthAll(
   fallbackData?: VisitSchedule[],
 ) {
   const key = `kaigo-schedules:byMonthAll:${monthFrom}:${monthTo}`;
-  const { data, error, isLoading, mutate } = useSWR<VisitSchedule[]>(
+  const { data, error, isLoading, isValidating, mutate } = useSWR<VisitSchedule[]>(
     key,
     () => fetchByMonthAll(monthFrom, monthTo),
     { ...SWR_OPTIONS, fallbackData },
@@ -259,6 +262,7 @@ export function useKaigoVisitSchedulesByMonthAll(
   return {
     schedules: data ?? [],
     isLoading,
+    isValidating,
     error: error ?? null,
     mutate: () => {
       void mutate();

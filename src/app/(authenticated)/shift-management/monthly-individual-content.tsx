@@ -4,6 +4,7 @@ import {
   serviceNameVariantsAll,
   toHankakuDigits,
 } from "@/lib/service-name-normalize";
+import { getServiceSystemMap } from "@/lib/service-system-lookup";
 import { Fragment, useState, useEffect, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -96,9 +97,28 @@ export function MonthlyIndividualView({
       return (a.start_time ?? "").localeCompare(b.start_time ?? "");
     });
   }, [active.schedules]);
-  const loading = active.isLoading;
+  // keepPreviousData のため key 切替 (利用者/月/ビュー変更) 直後は isLoading=false のまま
+  // 前 key のデータが残る。データ未着ならローディング表示にする (空表示のちらつき防止)
+  const loading = active.isLoading || (active.isValidating && active.schedules.length === 0);
   // fetch エラーを「予定なし」と混同させない (silent failure 防止)
   const fetchError = active.error ? (active.error as Error).message : null;
+
+  // 制度区分 (介護/総合事業/障害/独自) の lookup — 区分列のバッジ表示用
+  const [systemMap, setSystemMap] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    const types = Array.from(new Set(schedules.map((s) => s.service_type))).filter(
+      (t) => t && !systemMap.has(toHankakuDigits(t)),
+    );
+    if (types.length === 0) return;
+    let cancelled = false;
+    void getServiceSystemMap(supabase, types).then((m) => {
+      if (cancelled || m.size === 0) return;
+      setSystemMap((prev) => new Map([...prev, ...m]));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [schedules, systemMap, supabase]);
 
   // SWR data → local state へ sync
   const lastSwrRef = useRef(swrSchedules);
@@ -537,6 +557,7 @@ export function MonthlyIndividualView({
                 <th className="border border-gray-300 px-1 py-1.5 text-center font-bold w-14">予実</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-left font-bold text-red-700">利用日</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-left font-bold">利用時間</th>
+                <th className="border border-gray-300 px-1 py-1.5 text-center font-bold w-12">区分</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-left font-bold text-red-700">*サービス内容</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-right font-bold w-16">単位数</th>
                 <th className="border border-gray-300 px-2 py-1.5 text-center font-bold">
@@ -670,6 +691,23 @@ export function MonthlyIndividualView({
                     >
                       <span className="font-mono">{sched.start_time?.slice(0, 5)}-{sched.end_time?.slice(0, 5)}</span>
                       <span className="ml-1 text-gray-400">{durationShort(sched.start_time, sched.end_time)}</span>
+                    </td>
+                    <td className="border border-gray-300 px-1 py-1 text-center">
+                      {(() => {
+                        const sys = systemMap.get(toHankakuDigits(sched.service_type));
+                        if (!sys) return <span className="text-gray-300">—</span>;
+                        const label = sys === "総合事業" ? "総合" : sys;
+                        const cls =
+                          sys === "介護" ? "bg-blue-100 text-blue-700"
+                          : sys === "総合事業" ? "bg-emerald-100 text-emerald-700"
+                          : sys === "障害" ? "bg-purple-100 text-purple-700"
+                          : "bg-amber-100 text-amber-700";
+                        return (
+                          <span className={cn("rounded px-1 py-0.5 text-[10px] font-bold whitespace-nowrap", cls)}>
+                            {label}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="border border-gray-300 px-2 py-1">
                       <span className={cn(
