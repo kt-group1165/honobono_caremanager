@@ -59,7 +59,7 @@ export function KaigoSeikyuContent() {
           {/* 左: 利用者一覧 */}
           <div className="lg:col-span-3 rounded-lg border bg-white shadow-sm overflow-hidden">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs text-gray-600">
+              <thead className="bg-blue-100 text-left text-xs font-medium text-blue-900">
                 <tr>
                   <th className="px-3 py-2">被保険者番号</th>
                   <th className="px-3 py-2">利用者名</th>
@@ -120,18 +120,18 @@ export function KaigoSeikyuContent() {
 
           {/* 右: 明細情報 */}
           <div className="lg:col-span-2 rounded-lg border bg-white shadow-sm">
-            <header className="border-b bg-gray-50 px-4 py-2 text-sm font-bold text-gray-800">
+            <header className="border-b bg-blue-100 px-4 py-2 text-sm font-bold text-blue-900">
               明細情報 {selected ? `— ${selected.user_name}` : ""}
             </header>
             {selected ? (
               <div className="p-3">
                 <table className="min-w-full text-xs">
-                  <thead className="text-left text-[10px] text-gray-500">
+                  <thead className="bg-blue-50 text-left text-[10px] font-medium text-blue-900">
                     <tr>
-                      <th className="px-2 py-1">サービス内容</th>
-                      <th className="px-2 py-1 text-right">単位数/単価</th>
-                      <th className="px-2 py-1 text-right">回数</th>
-                      <th className="px-2 py-1 text-right">単位数</th>
+                      <th className="rounded-l px-2 py-1.5">サービス内容</th>
+                      <th className="px-2 py-1.5 text-right">単位数/単価</th>
+                      <th className="px-2 py-1.5 text-right">回数</th>
+                      <th className="rounded-r px-2 py-1.5 text-right">単位数</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
