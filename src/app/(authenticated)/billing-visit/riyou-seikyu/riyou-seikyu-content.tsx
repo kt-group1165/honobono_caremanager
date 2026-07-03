@@ -30,6 +30,25 @@ interface JippiEntry {
 
 const JIPPI_SUGGESTIONS = ["交通費", "キャンセル料", "日用品費", "その他"];
 
+// 入金状況 (ほのぼの 利用請求タブ: 状態 = 確定/入金完 + 未収金管理)
+interface PaymentRow {
+  id: string;
+  client_id: string;
+  billed_amount: number;
+  paid_amount: number;
+  paid_date: string | null;
+  payment_method: string | null;
+  status: "請求済" | "入金完" | "一部入金" | "未収";
+  issued_date: string | null;
+}
+
+const PAYMENT_STATUS_CLS: Record<string, string> = {
+  請求済: "bg-gray-100 text-gray-600",
+  入金完: "bg-green-100 text-green-700",
+  一部入金: "bg-amber-100 text-amber-700",
+  未収: "bg-red-100 text-red-700",
+};
+
 export function RiyouSeikyuContent() {
   const { year, month, onMonthChange, rows, loading, error, officeName } =
     useSeikyuData();
@@ -71,6 +90,25 @@ export function RiyouSeikyuContent() {
     [jippiByUser],
   );
 
+  // 入金状況
+  const [payments, setPayments] = useState<Map<string, PaymentRow>>(new Map());
+  const loadPayments = useCallback(async () => {
+    const { data, error: e } = await supabase
+      .from("riyou_seikyu_payments")
+      .select("id, client_id, billed_amount, paid_amount, paid_date, payment_method, status, issued_date")
+      .eq("target_month", monthKey);
+    if (e) {
+      if (e.code !== "42P01") toast.error("入金状況取得失敗: " + e.message);
+      setPayments(new Map());
+      return;
+    }
+    setPayments(new Map(((data ?? []) as PaymentRow[]).map((p) => [p.client_id, p])));
+  }, [supabase, monthKey]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更時の fetch
+    loadPayments();
+  }, [loadPayments]);
+
   const selected = rows.find((r) => r.user_id === selectedUserId) ?? rows[0] ?? null;
   const totalBilled = rows.reduce((s, r) => s + r.userAmount + jippiTotal(r.user_id), 0);
 
@@ -94,7 +132,24 @@ export function RiyouSeikyuContent() {
 
   const reiwa = year - 2018;
 
-  const issueSeikyusho = () => {
+  const issueSeikyusho = async () => {
+    // 発行記録: 請求額 + 発行日を upsert (入金状態は既存を保持、新規は 請求済)
+    const today = new Date();
+    const issued = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const { error: upErr } = await supabase.from("riyou_seikyu_payments").upsert(
+      targets.map((r) => ({
+        client_id: r.user_id,
+        target_month: monthKey,
+        billed_amount: r.userAmount + jippiTotal(r.user_id),
+        issued_date: issued,
+      })),
+      { onConflict: "client_id,target_month" },
+    );
+    if (upErr && upErr.code !== "42P01") {
+      toast.error("発行記録の保存に失敗: " + upErr.message);
+    } else if (!upErr) {
+      loadPayments();
+    }
     setPrinting(true);
     // print CSS 適用後に印刷 dialog
     setTimeout(() => {
@@ -171,6 +226,7 @@ export function RiyouSeikyuContent() {
                   <th className="px-3 py-2 text-center">負担割合</th>
                   <th className="px-3 py-2 text-right">実費</th>
                   <th className="px-3 py-2 text-right">請求額</th>
+                  <th className="px-3 py-2 text-center">状態</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -207,6 +263,18 @@ export function RiyouSeikyuContent() {
                     <td className="px-3 py-2 text-right font-semibold tabular-nums text-emerald-700">
                       ¥{(r.userAmount + jippiTotal(r.user_id)).toLocaleString()}
                     </td>
+                    <td className="px-3 py-2 text-center">
+                      {(() => {
+                        const p = payments.get(r.user_id);
+                        return p ? (
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${PAYMENT_STATUS_CLS[p.status] ?? "bg-gray-100 text-gray-600"}`}>
+                            {p.status}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-gray-300">未発行</span>
+                        );
+                      })()}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -214,8 +282,19 @@ export function RiyouSeikyuContent() {
                 <tr>
                   <td className="px-3 py-2 text-xs text-gray-500" colSpan={5}>
                     請求額合計 ({rows.length} 名{checked.size > 0 ? ` / 選択 ${checked.size} 名` : ""})
+                    {(() => {
+                      const misyu = rows.filter((r) => {
+                        const p = payments.get(r.user_id);
+                        return p && p.status !== "入金完";
+                      }).length;
+                      return misyu > 0 ? (
+                        <span className="ml-2 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-600">
+                          未入金 {misyu} 件
+                        </span>
+                      ) : null;
+                    })()}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-emerald-700">
+                  <td className="px-3 py-2 text-right tabular-nums text-emerald-700" colSpan={2}>
                     ¥{totalBilled.toLocaleString()}
                   </td>
                 </tr>
@@ -265,11 +344,21 @@ export function RiyouSeikyuContent() {
 
                 {/* 利用実費 (保険外) の入力 */}
                 <JippiSection
-                  key={`${selected.user_id}-${monthKey}`}
+                  key={`jippi-${selected.user_id}-${monthKey}`}
                   userId={selected.user_id}
                   monthKey={monthKey}
                   entries={jippiByUser.get(selected.user_id) ?? []}
                   onChanged={loadJippi}
+                />
+
+                {/* 入金登録 (未収金管理) */}
+                <PaymentSection
+                  key={`pay-${selected.user_id}-${monthKey}`}
+                  userId={selected.user_id}
+                  monthKey={monthKey}
+                  billed={selected.userAmount + jippiTotal(selected.user_id)}
+                  payment={payments.get(selected.user_id) ?? null}
+                  onChanged={loadPayments}
                 />
 
                 <div className="mt-4 space-y-1 rounded border bg-gray-50 p-3 text-xs">
@@ -490,6 +579,128 @@ function JippiSection({
           <Plus size={12} />
           追加 {amount > 0 ? `(¥${amount.toLocaleString()})` : ""}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── 入金登録 (未収金管理) ────────────────────────────────────────────────────
+function PaymentSection({
+  userId,
+  monthKey,
+  billed,
+  payment,
+  onChanged,
+}: {
+  userId: string;
+  monthKey: string;
+  billed: number;
+  payment: PaymentRow | null;
+  onChanged: () => void;
+}) {
+  const supabase = useMemo(() => createClient(), []);
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const [amount, setAmount] = useState(String(billed));
+  const [date, setDate] = useState(todayStr);
+  const [method, setMethod] = useState(payment?.payment_method ?? "振込");
+  const [saving, setSaving] = useState(false);
+
+  const save = async (asStatus?: "未収") => {
+    setSaving(true);
+    const paid = asStatus === "未収" ? payment?.paid_amount ?? 0 : parseInt(amount, 10) || 0;
+    const status =
+      asStatus ??
+      (paid >= billed && billed > 0 ? "入金完" : paid > 0 ? "一部入金" : "請求済");
+    const { error } = await supabase.from("riyou_seikyu_payments").upsert(
+      {
+        client_id: userId,
+        target_month: monthKey,
+        billed_amount: billed,
+        paid_amount: paid,
+        paid_date: asStatus === "未収" ? payment?.paid_date ?? null : date,
+        payment_method: method,
+        status,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "client_id,target_month" },
+    );
+    setSaving(false);
+    if (error) {
+      toast.error("入金登録に失敗: " + error.message);
+      return;
+    }
+    toast.success(asStatus === "未収" ? "未収として記録しました" : "入金を登録しました");
+    onChanged();
+  };
+
+  return (
+    <div className="mt-3 rounded border border-blue-200 bg-blue-50/40 p-3 text-xs space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="font-bold text-blue-800">入金管理</span>
+        <span className="text-[10px] text-gray-500">
+          {payment?.issued_date ? `請求書発行日: ${payment.issued_date}` : "請求書未発行"}
+          {payment && (
+            <span className={`ml-2 rounded px-1.5 py-0.5 font-bold ${PAYMENT_STATUS_CLS[payment.status]}`}>
+              {payment.status}
+            </span>
+          )}
+        </span>
+      </div>
+      {payment && payment.paid_amount > 0 && (
+        <p className="text-[10px] text-gray-500">
+          入金済: ¥{payment.paid_amount.toLocaleString()} ({payment.paid_date ?? "—"} / {payment.payment_method ?? "—"})
+        </p>
+      )}
+      <div className="grid grid-cols-[80px_auto_auto_1fr] items-end gap-1.5">
+        <div>
+          <label className="mb-0.5 block text-[10px] text-gray-500">入金額</label>
+          <input
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="w-full rounded border px-2 py-1.5 text-right tabular-nums focus:border-blue-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="mb-0.5 block text-[10px] text-gray-500">入金日</label>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="rounded border px-2 py-1.5 focus:border-blue-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="mb-0.5 block text-[10px] text-gray-500">方法</label>
+          <select
+            value={method}
+            onChange={(e) => setMethod(e.target.value)}
+            className="rounded border px-2 py-1.5 focus:border-blue-500 focus:outline-none"
+          >
+            <option>振込</option>
+            <option>現金</option>
+            <option>口座振替</option>
+          </select>
+        </div>
+        <div className="flex justify-end gap-1.5">
+          <button
+            type="button"
+            onClick={() => save()}
+            disabled={saving}
+            className="rounded bg-blue-600 px-3 py-1.5 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            入金登録
+          </button>
+          <button
+            type="button"
+            onClick={() => save("未収")}
+            disabled={saving}
+            className="rounded border border-red-300 bg-white px-2.5 py-1.5 font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+          >
+            未収
+          </button>
+        </div>
       </div>
     </div>
   );
