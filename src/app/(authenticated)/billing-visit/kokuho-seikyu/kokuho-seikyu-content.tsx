@@ -17,13 +17,17 @@ import {
   Printer,
   FileText,
   Download,
+  Send,
 } from "lucide-react";
+import Encoding from "encoding-japanese";
+import { toast } from "sonner";
 import { MonthNav } from "../_shared/month-nav";
 import { useSeikyuData } from "../_shared/use-seikyu-data";
+import { buildKokuhoDensou } from "@/lib/kokuho-densou/build";
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
 
 export function KokuhoSeikyuContent() {
-  const { year, month, onMonthChange, rows, loading, error, officeName } =
+  const { year, month, onMonthChange, rows, loading, error, officeName, officeNumber, unitPrice } =
     useSeikyuData();
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [printMode, setPrintMode] = useState<"meisai" | "seikyu" | null>(null);
@@ -62,9 +66,38 @@ export function KokuhoSeikyuContent() {
     }, 100);
   };
 
-  // 国保連伝送用 CSV (様式2 相当の明細行)。
-  // 完全な interface 仕様 (固定長/複数レコード種別) は伝送ソフト側の取込仕様
-  // 確定後に対応。まずは項目網羅の明細 CSV を出す。
+  // 国保連伝送ファイル (正式インタフェース仕様: 7111 + 7131 / Shift_JIS)
+  const exportDensou = () => {
+    const result = buildKokuhoDensou(targets, {
+      officeNumber: officeNumber ?? "",
+      year,
+      month,
+      unitPrice,
+    });
+    if (result.warnings.length > 0) {
+      const list = result.warnings.slice(0, 12).join("\n・");
+      const ok = window.confirm(
+        `以下の項目が不足しています (伝送ソフトの取込チェックでエラーになる可能性があります):\n\n・${list}${result.warnings.length > 12 ? `\n…他 ${result.warnings.length - 12} 件` : ""}\n\nこのままファイルを出力しますか？`,
+      );
+      if (!ok) return;
+    }
+    // Shift_JIS で出力 (仕様: 伝送ファイルの文字コードはシフト JIS)
+    const sjis = Encoding.convert(Encoding.stringToCode(result.content), {
+      to: "SJIS",
+      from: "UNICODE",
+    });
+    const blob = new Blob([new Uint8Array(sjis)], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = result.fileName;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast.success(
+      `伝送ファイル ${result.fileName} を出力しました (データレコード ${result.dataRecordCount} 件)`,
+    );
+  };
+
+  // 確認用 CSV (Excel で内容確認する用の明細一覧。伝送形式ではない)
   const exportCsv = () => {
     const ym = `${year}${String(month).padStart(2, "0")}`;
     const header = [
@@ -167,12 +200,22 @@ export function KokuhoSeikyuContent() {
           <button
             type="button"
             disabled={rows.length === 0}
+            onClick={exportDensou}
+            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+            title="国保中央会 伝送通信ソフト取込用の正式形式 (Shift_JIS) で出力"
+          >
+            <Send size={14} />
+            伝送ファイル
+          </button>
+          <button
+            type="button"
+            disabled={rows.length === 0}
             onClick={exportCsv}
             className="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
-            title="国保連伝送用の明細 CSV を出力"
+            title="Excel で内容確認する用の明細 CSV (伝送形式ではない)"
           >
             <Download size={14} />
-            伝送CSV
+            確認用CSV
           </button>
         </div>
       </div>
@@ -278,8 +321,9 @@ export function KokuhoSeikyuContent() {
             />
           </div>
           <p className="text-[11px] text-gray-400 print:hidden">
-            ※ チェックで発行対象を絞込 (未チェック時は全件)。「伝送CSV」は明細 CSV 形式
-            (国保連の固定長 interface 仕様には伝送ソフトの取込仕様確定後に対応)。
+            ※ チェックで発行対象を絞込 (未チェック時は全件)。「伝送ファイル」は国保中央会
+            伝送通信ソフト取込用の正式形式 (7111 請求書 + 7131 様式第二 / Shift_JIS)。
+            初回は伝送ソフトの取込チェックで内容を確認してください。「確認用CSV」は Excel 閲覧用。
           </p>
 
           {/* ===== 印刷 view ===== */}

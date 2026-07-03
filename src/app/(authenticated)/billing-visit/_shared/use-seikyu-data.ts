@@ -23,18 +23,26 @@ export function useSeikyuData() {
   const [recordCount, setRecordCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [officeNumber, setOfficeNumber] = useState<string | null>(null);
+  const [unitPrice, setUnitPrice] = useState<number>(10);
 
   const load = useCallback(async () => {
     if (!currentOffice) return;
     setLoading(true);
     setError(null);
     try {
-      // 地域単価: offices.unit_price
+      // 地域単価: offices.unit_price / 事業所番号: business_number (伝送用)
       const { data: officeRow } = await supabase
         .from("offices")
-        .select("unit_price, applied_formula_codes")
+        .select("unit_price, applied_formula_codes, business_number")
         .eq("id", currentOffice.id)
         .maybeSingle();
+      setOfficeNumber(
+        (officeRow as { business_number?: string | null } | null)?.business_number ?? null,
+      );
+      setUnitPrice(
+        (officeRow as { unit_price?: number } | null)?.unit_price ?? 10,
+      );
       const result = await aggregateMonthlyVisitSeikyu(supabase, {
         officeId: currentOffice.id,
         tenantId: currentOffice.tenant_id,
@@ -74,6 +82,8 @@ export function useSeikyuData() {
     loading: loading || btLoading,
     error,
     officeName: currentOffice?.name ?? null,
+    officeNumber,
+    unitPrice,
     reload: load,
   };
 }
