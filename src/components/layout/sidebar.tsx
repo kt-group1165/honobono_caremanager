@@ -267,7 +267,7 @@ function SidebarV2({ onSwitchLayout }: { onSwitchLayout: () => void }) {
   return (
     <aside
       className={cn(
-        "flex flex-col border-r bg-white transition-all duration-200",
+        "flex flex-col border-r bg-white transition-all duration-200 print:hidden",
         collapsed ? "w-16" : "w-60",
       )}
     >

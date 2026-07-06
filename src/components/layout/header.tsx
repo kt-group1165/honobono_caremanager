@@ -16,7 +16,7 @@ export function Header() {
   };
 
   return (
-    <header className="flex h-14 items-center justify-between border-b bg-white px-6">
+    <header className="flex h-14 items-center justify-between border-b bg-white px-6 print:hidden">
       <div />
       <div className="flex items-center gap-4">
         <NotificationBadge />
