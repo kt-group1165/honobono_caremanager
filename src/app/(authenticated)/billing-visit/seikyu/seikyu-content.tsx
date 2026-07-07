@@ -3,16 +3,15 @@
 /**
  * /billing-visit/seikyu — 請求 (1 画面タブ切替)
  *
- * 月次情報 / 介護請求 / 利用請求 / 国保請求 を 1 画面のタブで切替える
- * (参考: order-app の BillingTab)。SeikyuProvider で月 state と集計結果を
- * 全タブ横断で共有し、fetch は 1 回。共通ツールバーの MonthNav を Context の
- * year/month/onMonthChange に接続する。
+ * 月次情報 / 介護請求 / 利用請求 / 国保請求 を 1 画面のタブで切替える。
+ * 見た目は order-app の BillingTab (ピル型サブタブ + 各タブ内に
+ * カナ索引サイドバー + グレーツールバー + 格子テーブル) を踏襲。
+ * SeikyuProvider で月 state / 集計結果 / カナフィルタを全タブ横断で共有し、
+ * fetch は 1 回。
  */
 
 import { useState } from "react";
-import { Calculator } from "lucide-react";
-import { MonthNav } from "../_shared/month-nav";
-import { SeikyuProvider, useSeikyuContext } from "../_shared/seikyu-context";
+import { SeikyuProvider } from "../_shared/seikyu-context";
 import { MonthlyInfoContent } from "../_shared/monthly-info-content";
 import { KaigoSeikyuContent } from "../kaigo-seikyu/kaigo-seikyu-content";
 import { RiyouSeikyuContent } from "../riyou-seikyu/riyou-seikyu-content";
@@ -27,7 +26,7 @@ const SEIKYU_TABS: { id: SeikyuTab; label: string }[] = [
   { id: "kokuho", label: "国保請求" },
 ];
 
-// タブナビ (order-app の BillingSubTabNav 風。選択タブを強調)
+// タブナビ (order-app の BillingSubTabNav と同一クラス)
 function SeikyuTabNav({
   active,
   onChange,
@@ -36,18 +35,17 @@ function SeikyuTabNav({
   onChange: (id: SeikyuTab) => void;
 }) {
   return (
-    <div className="flex items-center gap-2 border-b border-gray-200 pb-2 print:hidden">
+    <div className="border-b border-gray-200 bg-white px-3 py-2 shrink-0 flex items-center gap-2 print:hidden">
       {SEIKYU_TABS.map((t) => (
         <button
           key={t.id}
           type="button"
           onClick={() => onChange(t.id)}
-          className={
-            "rounded-lg px-3 py-1 text-xs font-medium transition-colors " +
-            (active === t.id
-              ? "bg-blue-600 text-white"
-              : "bg-gray-100 text-gray-500 hover:bg-gray-200")
-          }
+          className={`px-3 py-1 rounded-lg text-xs font-medium ${
+            active === t.id
+              ? "bg-indigo-500 text-white"
+              : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+          }`}
         >
           {t.label}
         </button>
@@ -56,25 +54,13 @@ function SeikyuTabNav({
   );
 }
 
-// 共通ツールバー (MonthNav)。Context の月 state に接続。
-function SeikyuToolbar() {
-  const { year, month, onMonthChange } = useSeikyuContext();
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-      <h1 className="flex items-center gap-2 text-xl font-bold text-gray-900">
-        <Calculator size={20} className="text-blue-600" />
-        請求
-      </h1>
-      <MonthNav year={year} month={month} onChange={onMonthChange} />
-    </div>
-  );
-}
-
 function SeikyuInner() {
   const [tab, setTab] = useState<SeikyuTab>("monthly");
   return (
-    <div className="space-y-4">
-      <SeikyuToolbar />
+    // layout の main (p-6) を打ち消して order-app と同じ全面白ベースにする。
+    // 高さは main の可視領域いっぱい (padding 3rem ぶんを足し戻す)。
+    // 印刷時は高さ固定と flex を解除して印刷 view の流し込みを崩さない。
+    <div className="-m-6 flex h-[calc(100%+3rem)] flex-col bg-white text-sm print:m-0 print:block print:h-auto">
       <SeikyuTabNav active={tab} onChange={setTab} />
       {tab === "monthly" && <MonthlyInfoContent />}
       {tab === "kaigo" && <KaigoSeikyuContent />}

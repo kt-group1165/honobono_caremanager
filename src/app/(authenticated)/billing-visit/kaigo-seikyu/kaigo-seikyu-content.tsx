@@ -1,15 +1,17 @@
 "use client";
 
 /**
- * 介護請求 — 利用者ごとの月次請求管理 (参考: ほのぼの 介護請求タブ)
+ * 介護請求 — 利用者ごとの月次請求管理 (見た目: order-app 介護請求タブと同一)
  *
- * 1 画面で:
- *   - 行チェック + 状態バッジ (未発行 / 発行済 / 国保対象)
- *   - 月遅れ / 返戻 / 過誤 フラグ (チェックで kaigo_billing_status に upsert)
- *   - 明細書 (様式第二) / 請求書 (様式第一 総括) / 国保対象 の各ボタン
- * 右: 選択利用者の 明細情報パネル
+ * 左: あかさたな索引 / 中央: ツールバー + グリッドテーブル + 合計フッタ /
+ * 右: 明細情報ペイン (行クリックで表示)。
  *
- * ※ Phase 2: 月遅れ/返戻の再請求を実装。過去月の月遅れ/返戻 (未・国保対象) を
+ * 機能 (従来どおり):
+ *   - 行チェック + 状態表示 (未発行 / 発行済 / 国保対象)
+ *   - 月遅 / 返戻 / 過誤 フラグ (kaigo_billing_status に upsert)
+ *   - 明細書 (様式第二) / 請求書 (様式第一 総括) / 国保対象 / 確認用CSV
+ *
+ * ※ Phase 2: 月遅れ/返戻の再請求。過去月の月遅れ/返戻 (未・国保対象) を
  *    元提供月で再集計し、当月一覧にバッジ付きで合流。明細書・伝送・国保対象化は
  *    各自の元提供月で反映する。
  */
@@ -26,7 +28,11 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
-import { useSeikyuContext } from "../_shared/seikyu-context";
+import {
+  useSeikyuContext,
+  SeikyuKanaSidebar,
+  SeikyuMonthNav,
+} from "../_shared/seikyu-context";
 import { MeisaiPrintSheet } from "../../billing/forms/_meisai";
 import { SeikyuForm } from "../../billing/forms/_seikyu";
 import {
@@ -34,6 +40,10 @@ import {
   type ReSeikyuRow,
 } from "@/lib/visit-seikyu/re-seikyu";
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
+
+// order-app 介護請求タブのグリッド列定義 (完全コピー、サービス事業所列を除く)
+const GRID_COLS =
+  "grid grid-cols-[32px_64px_72px_60px_60px_104px_1fr_64px_72px_44px]";
 
 // kaigo_billing_status の 1 行 (利用者 × 月)
 interface BillingStatusRow {
@@ -60,7 +70,7 @@ interface DisplayRow {
 
 export function KaigoSeikyuContent() {
   const {
-    year, month, rows, recordCount, loading, error,
+    year, month, filteredRows, kanaMatches, recordCount, loading, error,
     officeName, officeNumber, officeAddress, officePhone, officePostal,
     officeId, tenantId, unitPrice, appliedFormulaCodes,
   } = useSeikyuContext();
@@ -73,22 +83,24 @@ export function KaigoSeikyuContent() {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [statusByClient, setStatusByClient] = useState<Map<string, BillingStatusRow>>(new Map());
   const [printMode, setPrintMode] = useState<"meisai" | "seikyu" | null>(null);
+  // 行内「明細書」ボタン用: 印刷対象を明示指定するとき (null = targetDisplayRows)
+  const [meisaiPrintRows, setMeisaiPrintRows] = useState<DisplayRow[] | null>(null);
   // 月遅れ/返戻の再請求行 (過去月を元提供月で再集計したもの)
   const [reRows, setReRows] = useState<ReSeikyuRow[]>([]);
 
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
 
-  // ── 表示用の統合行 (当月通常行 + 再請求行) ──
+  // ── 表示用の統合行 (当月通常行 + 再請求行)。カナ索引で共通絞込 ──
   // rowKey: 当月行は "cur:<user_id>" / 再請求行は "re:<user_id>:<origMonthKey>"
   const displayRows = useMemo<DisplayRow[]>(() => {
-    const cur: DisplayRow[] = rows.map((r) => ({
+    const cur: DisplayRow[] = filteredRows.map((r) => ({
       key: `cur:${r.user_id}`,
       row: r,
       origMonthKey: monthKey,
       isReSeikyu: false,
       reasons: null,
     }));
-    const re: DisplayRow[] = reRows.map((r) => ({
+    const re: DisplayRow[] = reRows.filter(kanaMatches).map((r) => ({
       key: `re:${r.user_id}:${r.__origMonthKey}`,
       row: r,
       origMonthKey: r.__origMonthKey,
@@ -97,17 +109,20 @@ export function KaigoSeikyuContent() {
     }));
     // 再請求 (過去分) を上、当月を下に並べる
     return [...re, ...cur];
-  }, [rows, reRows, monthKey]);
+  }, [filteredRows, reRows, kanaMatches, monthKey]);
 
   const selected =
-    displayRows.find((d) => d.key === selectedKey)?.row ??
-    displayRows[0]?.row ??
-    null;
+    displayRows.find((d) => d.key === selectedKey)?.row ?? null;
 
   // 合計は当月の通常行のみ (再請求分は元提供月の別集計なので当月合計には含めない)
-  const totalUnits = rows.reduce((s, r) => s + r.totalUnits, 0);
-  const totalInsurance = rows.reduce((s, r) => s + r.insuranceAmount, 0);
-  const totalUser = rows.reduce((s, r) => s + r.userAmount, 0);
+  const totalUnits = filteredRows.reduce((s, r) => s + r.totalUnits, 0);
+  const totalInsurance = filteredRows.reduce((s, r) => s + r.insuranceAmount, 0);
+  const totalUser = filteredRows.reduce((s, r) => s + r.userAmount, 0);
+  const totalKohiUnits = filteredRows.reduce((s, r) => s + (r.kohiUnits ?? 0), 0);
+  const totalKohiAmount = filteredRows.reduce((s, r) => s + (r.kohiAmount ?? 0), 0);
+  const kokuhoCount = filteredRows.filter(
+    (r) => statusByClient.get(r.user_id)?.kokuho_target,
+  ).length;
 
   // ── 月遅れ/返戻の再請求行を読み込む ──
   const loadReRows = useCallback(async () => {
@@ -240,10 +255,11 @@ export function KaigoSeikyuContent() {
 
   // ── 明細書: 対象者の様式第二を印刷 → 印刷実行時に issued_at を now() で upsert (発行済化) ──
   //    再請求行は元提供月 (origMonthKey) に対して upsert する。
-  const printMeisai = async () => {
-    if (targetDisplayRows.length === 0) return;
+  //    rowsToPrint 指定時 (行内ボタン) はその行のみ対象。
+  const printMeisaiFor = async (rowsToPrint: DisplayRow[]) => {
+    if (rowsToPrint.length === 0) return;
     const now = new Date().toISOString();
-    const payload = targetDisplayRows.map((d) => {
+    const payload = rowsToPrint.map((d) => {
       // 当月行のみ既存フラグを引き継ぐ (再請求行は過去月の別レコード)
       const cur = d.isReSeikyu ? undefined : statusByClient.get(d.row.user_id);
       return {
@@ -268,12 +284,16 @@ export function KaigoSeikyuContent() {
       loadStatus();
     }
     // 保存の成否に関わらず印刷は実行 (状態が保存できなくても紙は出せるように)
+    setMeisaiPrintRows(rowsToPrint);
     setPrintMode("meisai");
     setTimeout(() => {
       window.print();
       setPrintMode(null);
+      setMeisaiPrintRows(null);
     }, 100);
   };
+
+  const printMeisai = () => printMeisaiFor(targetDisplayRows);
 
   // ── 請求書: 事業所単位の総括 (様式第一) を印刷 ──
   const printSeikyu = () => {
@@ -403,376 +423,376 @@ export function KaigoSeikyuContent() {
     URL.revokeObjectURL(a.href);
   };
 
-  return (
-    <div className="space-y-4">
-      {/* 月遅れ/返戻の再請求 案内 (印刷時非表示) */}
-      {!loading && reRows.length > 0 && (
-        <div className="flex items-start gap-2 rounded border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 print:hidden">
-          <AlertCircle size={14} className="mt-0.5 shrink-0" />
-          <span>
-            過去月の月遅れ・返戻 {reRows.length} 件を当月請求に合流しています
-            (元提供月で明細書・伝送に反映)。国保対象化すると一覧から外れます。
-          </span>
-        </div>
-      )}
+  const allChecked = checked.size === displayRows.length && displayRows.length > 0;
 
-      {/* 操作ボタン (印刷時非表示) */}
-      {!loading && displayRows.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 print:hidden">
-          <button
-            type="button"
-            onClick={printMeisai}
-            className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-            title="対象者の介護給付費明細書 (様式第二) を印刷。印刷で発行済になります"
-          >
-            <FileText size={14} />
-            明細書 ({targets.length}件)
-          </button>
-          <button
-            type="button"
-            onClick={printSeikyu}
-            className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-            title="事業所単位の総括請求書 (様式第一) を印刷"
-          >
-            <Printer size={14} />
-            請求書
-          </button>
-          <button
-            type="button"
-            onClick={markKokuhoTarget}
-            className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
-            title="発行済の利用者を国保連請求の対象にする"
-          >
-            <Landmark size={14} />
-            国保対象
-          </button>
-          <button
-            type="button"
-            onClick={exportCsv}
-            className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-50"
-            title="明細一覧を Excel 閲覧用 CSV で出力"
-          >
-            <Download size={14} />
-            確認用CSV
-          </button>
-          <div className="ml-auto flex items-center gap-2 text-xs">
+  return (
+    <>
+      <div className="flex flex-1 min-h-0 print:hidden">
+        {/* ── 行カナ絞り込みサイドバー ── */}
+        <SeikyuKanaSidebar />
+
+        {/* ── メインテーブル ── */}
+        <div className="flex flex-col flex-1 min-w-0 border-r border-gray-200">
+          {/* ── ツールバー ── */}
+          <div className="border-b border-gray-300 bg-gray-100 px-3 py-2 shrink-0 flex items-center gap-2 flex-wrap">
+            <SeikyuMonthNav />
+            <span className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 font-medium">請求分</span>
+            <span className="text-xs text-gray-500">{displayRows.length} 件</span>
+            <div className="w-px h-5 bg-gray-300 mx-1" />
             <button
-              type="button"
-              onClick={toggleAll}
-              className="rounded border border-gray-300 bg-white px-2.5 py-1 font-medium text-gray-600 hover:bg-gray-50"
+              onClick={printMeisai}
+              disabled={displayRows.length === 0}
+              title="対象者の介護給付費明細書 (様式第二) を印刷。印刷で発行済になります"
+              className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
             >
-              {checked.size === displayRows.length && displayRows.length > 0
-                ? "全解除"
-                : "全選択"}
+              <FileText size={13} />明細書 ({targets.length}件)
             </button>
             <button
-              type="button"
+              onClick={printSeikyu}
+              disabled={displayRows.length === 0}
+              title="事業所単位の総括請求書 (様式第一) を印刷"
+              className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <Printer size={13} />請求書
+            </button>
+            <button
+              onClick={markKokuhoTarget}
+              disabled={displayRows.length === 0}
+              title="発行済の利用者を国保連請求の対象にする"
+              className="border border-blue-500 rounded bg-blue-100 px-2.5 py-1 text-blue-800 font-semibold hover:bg-blue-200 flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <Landmark size={13} />国保対象
+            </button>
+            <button
               onClick={selectUnissued}
-              className="rounded border border-gray-300 bg-white px-2.5 py-1 font-medium text-gray-600 hover:bg-gray-50"
+              disabled={displayRows.length === 0}
+              className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
               未発行のみ
             </button>
-          </div>
-        </div>
-      )}
-
-      {error && (
-        <div className="flex items-start gap-2 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700 print:hidden">
-          <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          {error}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="flex items-center justify-center py-16 text-gray-400 print:hidden">
-          <Loader2 size={20} className="mr-2 animate-spin" />
-          集計中...
-        </div>
-      ) : displayRows.length === 0 ? (
-        <div className="rounded-lg border border-dashed bg-gray-50 p-12 text-center text-sm text-gray-500 print:hidden">
-          対象月の実績 (完了) がありません。サービス提供表で実績を確定してください。
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-5 print:hidden">
-          {/* 左: 利用者一覧 */}
-          <div className="lg:col-span-3 rounded-lg border bg-white shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-blue-100 text-left text-xs font-medium text-blue-900">
-                  <tr>
-                    <th className="w-10 px-2 py-1.5 text-center">
-                      <input
-                        type="checkbox"
-                        checked={
-                          checked.size === displayRows.length &&
-                          displayRows.length > 0
-                        }
-                        onChange={toggleAll}
-                        className="h-3.5 w-3.5 accent-blue-600 cursor-pointer"
-                      />
-                    </th>
-                    <th className="px-2 py-2">状態</th>
-                    <th className="px-3 py-2">利用者名</th>
-                    <th className="px-3 py-2">被保険者番号</th>
-                    <th className="px-3 py-2">要介護度</th>
-                    <th className="px-3 py-2 text-right">総単位数</th>
-                    <th className="px-3 py-2 text-right">保険請求額</th>
-                    <th className="px-3 py-2 text-right">利用者負担</th>
-                    <th className="px-2 py-2 text-center">月遅れ</th>
-                    <th className="px-2 py-2 text-center">返戻</th>
-                    <th className="px-2 py-2 text-center">過誤</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {displayRows.map((d) => {
-                    const r = d.row;
-                    // 当月行のみ status を突合 (再請求行は過去月レコードなので理由バッジで代替)
-                    const st = d.isReSeikyu
-                      ? undefined
-                      : statusByClient.get(r.user_id);
-                    return (
-                      <tr
-                        key={d.key}
-                        onClick={() => setSelectedKey(d.key)}
-                        className={
-                          "cursor-pointer transition-colors " +
-                          (selectedKey === d.key
-                            ? "bg-blue-50"
-                            : d.isReSeikyu
-                            ? "bg-amber-50/40 hover:bg-amber-50"
-                            : "hover:bg-gray-50")
-                        }
-                      >
-                        <td
-                          className="px-2 py-2 text-center"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked.has(d.key)}
-                            onChange={() => toggle(d.key)}
-                            className="h-3.5 w-3.5 accent-blue-600 cursor-pointer"
-                          />
-                        </td>
-                        <td className="px-2 py-2">
-                          {d.isReSeikyu ? (
-                            <ReSeikyuBadge reasons={d.reasons} />
-                          ) : (
-                            <StatusBadge status={st} />
-                          )}
-                        </td>
-                        <td className="px-3 py-2 font-medium">
-                          {r.user_name}
-                          {d.isReSeikyu && (
-                            <span className="ml-1.5 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-bold text-amber-700">
-                              元 {origMonthLabel(d.origMonthKey)}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 font-mono text-xs">
-                          {r.insured_number ?? "—"}
-                        </td>
-                        <td className="px-3 py-2 text-xs">{r.care_level ?? "—"}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          {r.totalUnits.toLocaleString()}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-blue-700">
-                          {r.insuranceAmount.toLocaleString()}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-gray-700">
-                          {r.userAmount.toLocaleString()}
-                        </td>
-                        {/* 月遅れ / 返戻 / 過誤 — 当月行はチェックで upsert、再請求行は読取専用表示 */}
-                        <td
-                          className="px-2 py-2 text-center"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={
-                              d.isReSeikyu
-                                ? d.reasons?.tsukiokure ?? false
-                                : st?.tsukiokure ?? false
-                            }
-                            disabled={d.isReSeikyu}
-                            onChange={(e) =>
-                              setFlag(r.user_id, "tsukiokure", e.target.checked)
-                            }
-                            className="h-3.5 w-3.5 accent-amber-600 cursor-pointer disabled:cursor-default disabled:opacity-60"
-                          />
-                        </td>
-                        <td
-                          className="px-2 py-2 text-center"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={
-                              d.isReSeikyu
-                                ? d.reasons?.henrei ?? false
-                                : st?.henrei ?? false
-                            }
-                            disabled={d.isReSeikyu}
-                            onChange={(e) =>
-                              setFlag(r.user_id, "henrei", e.target.checked)
-                            }
-                            className="h-3.5 w-3.5 accent-red-600 cursor-pointer disabled:cursor-default disabled:opacity-60"
-                          />
-                        </td>
-                        <td
-                          className="px-2 py-2 text-center"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={d.isReSeikyu ? false : st?.kago ?? false}
-                            disabled={d.isReSeikyu}
-                            onChange={(e) =>
-                              setFlag(r.user_id, "kago", e.target.checked)
-                            }
-                            className="h-3.5 w-3.5 accent-purple-600 cursor-pointer disabled:cursor-default disabled:opacity-60"
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot className="border-t-2 border-gray-300 bg-gray-50 font-bold">
-                  <tr>
-                    <td className="px-3 py-2 text-xs text-gray-500" colSpan={4}>
-                      当月 {rows.length} 名 / 実績 {recordCount} 件
-                      {reRows.length > 0 && ` + 再請求 ${reRows.length} 件`}
-                    </td>
-                    <td></td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {totalUnits.toLocaleString()}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-blue-700">
-                      {totalInsurance.toLocaleString()}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {totalUser.toLocaleString()}
-                    </td>
-                    <td colSpan={3}></td>
-                  </tr>
-                </tfoot>
-              </table>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={exportCsv}
+                disabled={displayRows.length === 0}
+                title="明細一覧を Excel 閲覧用 CSV で出力"
+                className="border border-indigo-500 rounded bg-indigo-500 px-3 py-1 text-white font-semibold hover:bg-indigo-600 flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Download size={13} />確認用CSV
+              </button>
             </div>
           </div>
 
-          {/* 右: 明細情報 */}
-          <div className="lg:col-span-2 rounded-lg border bg-white shadow-sm">
-            <header className="border-b bg-blue-100 px-4 py-2 text-sm font-bold text-blue-900">
-              明細情報 {selected ? `— ${selected.user_name}` : ""}
-            </header>
-            {selected ? (
-              <div className="p-3">
-                <table className="min-w-full text-xs">
-                  <thead className="bg-blue-50 text-left text-[10px] font-medium text-blue-900">
+          {/* 月遅れ/返戻の再請求 案内 */}
+          {!loading && reRows.length > 0 && (
+            <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
+              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <span>
+                過去月の月遅れ・返戻 {reRows.length} 件を当月請求に合流しています
+                (元提供月で明細書・伝送に反映)。国保対象化すると一覧から外れます。
+              </span>
+            </div>
+          )}
+
+          {error && (
+            <div className="border-b border-red-200 bg-red-50 px-3 py-2 shrink-0 flex items-start gap-2 text-sm text-red-700">
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              {error}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="flex justify-center py-16">
+              <Loader2 size={22} className="animate-spin text-indigo-400" />
+            </div>
+          ) : (
+            <>
+              <div className="flex-1 overflow-y-auto">
+                {/* ヘッダー行: 対象 / 申請中 / 状態 / 提出月 / 請求月 / 被保険者番号 / 利用者名 / 月遅 / 返戻 / 過誤 */}
+                <div className={`${GRID_COLS} border-b border-gray-300 bg-gray-100 text-xs font-semibold text-gray-600 sticky top-0 z-10`}>
+                  <div className="px-1 py-2 flex items-center justify-center">
+                    <button
+                      onClick={toggleAll}
+                      className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
+                        allChecked ? "border-indigo-500 bg-indigo-500" : "border-gray-400 bg-white"
+                      }`}
+                    >
+                      {allChecked && (
+                        <span className="text-white text-[8px] font-bold leading-none">✓</span>
+                      )}
+                    </button>
+                  </div>
+                  <div className="px-2 py-2 border-l border-gray-200 text-center">申請中</div>
+                  <div className="px-2 py-2 border-l border-gray-200">状態</div>
+                  <div className="px-2 py-2 border-l border-gray-200">提出月</div>
+                  <div className="px-2 py-2 border-l border-gray-200">請求月</div>
+                  <div className="px-2 py-2 border-l border-gray-200">被保険者番号</div>
+                  <div className="px-2 py-2 border-l border-gray-200">利用者名</div>
+                  <div className="px-2 py-2 border-l border-gray-200 text-center">月遅</div>
+                  <div className="px-2 py-2 border-l border-gray-200 text-center">返戻</div>
+                  <div className="px-2 py-2 border-l border-gray-200 text-center">過誤</div>
+                </div>
+
+                {displayRows.length === 0 ? (
+                  <p className="text-gray-400 text-center py-10">
+                    対象月の実績 (完了) がありません。サービス提供表で実績を確定してください。
+                  </p>
+                ) : displayRows.map((d, idx) => {
+                  const r = d.row;
+                  // 当月行のみ status を突合 (再請求行は過去月レコードなので理由表示で代替)
+                  const st = d.isReSeikyu ? undefined : statusByClient.get(r.user_id);
+                  const isDetail = selectedKey === d.key;
+                  const isChecked = checked.has(d.key);
+                  const [oy, om] = d.origMonthKey.split("-").map((n) => Number(n));
+                  return (
+                    <div
+                      key={d.key}
+                      onClick={() => setSelectedKey(isDetail ? null : d.key)}
+                      className={`${GRID_COLS} border-b border-gray-100 text-xs cursor-pointer transition-colors ${
+                        isDetail
+                          ? "bg-blue-100"
+                          : d.isReSeikyu
+                          ? "bg-amber-50"
+                          : isChecked
+                          ? "bg-indigo-50"
+                          : idx % 2 === 0
+                          ? "bg-white hover:bg-gray-50"
+                          : "bg-gray-50/50 hover:bg-gray-100"
+                      }`}
+                    >
+                      <div className="px-1 py-2 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => toggle(d.key)}
+                          className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
+                            isChecked ? "border-indigo-500 bg-indigo-500" : "border-gray-400 bg-white"
+                          }`}
+                        >
+                          {isChecked && <span className="text-white text-[8px] font-bold leading-none">✓</span>}
+                        </button>
+                      </div>
+                      {/* 申請中: kaigo 側にデータなし → 空欄 (枠だけ揃える) */}
+                      <div className="px-1 py-2 border-l border-gray-100 text-center" />
+                      <div className="px-2 py-2 border-l border-gray-100">
+                        {d.isReSeikyu ? (
+                          <span className="text-amber-700 font-medium">再請求</span>
+                        ) : st?.kokuho_target ? (
+                          <span className="text-red-600 font-semibold">国保対象</span>
+                        ) : st?.issued_at ? (
+                          <span className="text-emerald-600 font-semibold">発行済</span>
+                        ) : (
+                          <span className="text-gray-400">未発行</span>
+                        )}
+                      </div>
+                      {/* 提出月 = 提供月 (再請求は元提供月) / 請求月 = 当月 */}
+                      <div className="px-2 py-2 border-l border-gray-100 text-gray-500">
+                        R{oy - 2018}/{om}
+                      </div>
+                      <div className="px-2 py-2 border-l border-gray-100 text-gray-500">
+                        R{year - 2018}/{month}
+                      </div>
+                      <div className="px-2 py-2 border-l border-gray-100 font-mono text-gray-700">
+                        {r.insured_number ?? "—"}
+                      </div>
+                      <div className="px-2 py-2 border-l border-gray-100 font-medium text-gray-800 flex items-center gap-1.5 min-w-0">
+                        <span className="flex-1 truncate">{r.user_name}</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); printMeisaiFor([d]); }}
+                          title="この利用者の明細書 (様式第二) を印刷"
+                          className="shrink-0 text-[10px] border border-gray-300 rounded px-1.5 py-0.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                        >明細書</button>
+                      </div>
+                      {/* 月遅 / 返戻 / 過誤 — 当月行は操作可、再請求行は理由の読取専用表示 */}
+                      <div className="px-1 py-2 border-l border-gray-100 text-center" onClick={(e) => e.stopPropagation()}>
+                        {d.isReSeikyu ? (
+                          d.reasons?.tsukiokure && (
+                            <span className="text-yellow-700 text-[11px] font-semibold">月遅</span>
+                          )
+                        ) : (
+                          <select
+                            value={st?.tsukiokure ? "月遅" : ""}
+                            onChange={(e) => setFlag(r.user_id, "tsukiokure", e.target.value === "月遅")}
+                            title="月遅れ"
+                            className={`w-full text-[11px] border rounded px-0.5 py-0.5 bg-white ${st?.tsukiokure ? "border-yellow-400 text-yellow-700 font-semibold" : "border-gray-300 text-gray-500"}`}
+                          >
+                            <option value=""></option>
+                            <option value="月遅">月遅</option>
+                          </select>
+                        )}
+                      </div>
+                      <div className="px-1 py-2 border-l border-gray-100 text-center" onClick={(e) => e.stopPropagation()}>
+                        {d.isReSeikyu ? (
+                          d.reasons?.henrei && (
+                            <span className="text-red-500 text-[11px] font-semibold">返戻</span>
+                          )
+                        ) : (
+                          <select
+                            value={st?.henrei ? "返戻" : ""}
+                            onChange={(e) => setFlag(r.user_id, "henrei", e.target.value === "返戻")}
+                            className={`w-full text-[11px] border rounded px-1 py-0.5 bg-white ${st?.henrei ? "border-red-400 text-red-600 font-semibold" : "border-gray-300 text-gray-500"}`}
+                          >
+                            <option value=""></option>
+                            <option value="返戻">返戻</option>
+                          </select>
+                        )}
+                      </div>
+                      <div
+                        className="px-1 py-2 border-l border-gray-100 text-center"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!d.isReSeikyu) setFlag(r.user_id, "kago", !st?.kago);
+                        }}
+                      >
+                        {!d.isReSeikyu && (
+                          <span
+                            className={`inline-flex w-5 h-5 rounded-full border-2 items-center justify-center text-[10px] font-bold cursor-pointer transition-colors ${
+                              st?.kago ? "border-red-500 bg-red-500 text-white" : "border-gray-300 text-transparent hover:border-red-300"
+                            }`}
+                            title="過誤"
+                          >○</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* ── フッター合計 (order-app の box レイアウト) ── */}
+              <div className="border-t border-gray-300 bg-gray-50 px-3 py-2 shrink-0 text-[11px] text-gray-700">
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-1 mb-1.5">
+                  <span>合計件数 <strong className="font-mono">{filteredRows.length.toLocaleString()}</strong></span>
+                  <span>合計単位数 <strong className="font-mono">{totalUnits.toLocaleString()}</strong></span>
+                  <span>国保件数 <strong className="font-mono">{kokuhoCount.toLocaleString()}</strong></span>
+                  <span>実績 <strong className="font-mono">{recordCount.toLocaleString()}</strong> 件</span>
+                  {reRows.length > 0 && (
+                    <span>再請求 <strong className="font-mono">{reRows.length.toLocaleString()}</strong> 件</span>
+                  )}
+                </div>
+                <div className="border border-gray-300 rounded bg-white px-2 py-1.5 grid grid-cols-3 gap-x-4 gap-y-1">
+                  <span>特定介護請求額 <strong className="font-mono">—</strong></span>
+                  <span>軽減額 <strong className="font-mono">—</strong></span>
+                  <span>保険単位数 <strong className="font-mono">{totalUnits.toLocaleString()}</strong></span>
+                  <span>公費単位数 <strong className="font-mono">{totalKohiUnits > 0 ? totalKohiUnits.toLocaleString() : "—"}</strong></span>
+                  <span>保険請求額 <strong className="font-mono">{totalInsurance.toLocaleString()}</strong></span>
+                  <span>公費請求額 <strong className="font-mono">{totalKohiAmount > 0 ? totalKohiAmount.toLocaleString() : "—"}</strong></span>
+                  <span>利用者負担額 <strong className="font-mono text-red-600">{totalUser.toLocaleString()}</strong></span>
+                  <span>公費分本人負担 <strong className="font-mono">—</strong></span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* ── 右：明細情報 ── */}
+        <div className="w-80 shrink-0 flex flex-col bg-white">
+          <div className="border-b border-gray-300 bg-gray-100 px-3 py-2 text-xs font-bold text-gray-700 flex items-center gap-2">
+            <span>明細情報</span>
+            {selected && <span className="font-normal text-gray-500 truncate">{selected.user_name}</span>}
+          </div>
+          {selected ? (
+            <>
+              <div className="flex-1 overflow-auto">
+                <table className="w-full text-[11px] border-collapse">
+                  <thead className="bg-gray-100 border-b border-gray-300 sticky top-0">
                     <tr>
-                      <th className="rounded-l px-2 py-1.5">サービス内容</th>
-                      <th className="px-2 py-1.5 text-right">単位数/単価</th>
-                      <th className="px-2 py-1.5 text-right">回数</th>
-                      <th className="rounded-r px-2 py-1.5 text-right">単位数</th>
+                      <th className="text-left px-1.5 py-1.5 font-semibold text-gray-600 border-r border-gray-200">サービス内容</th>
+                      <th className="text-right px-1.5 py-1.5 font-semibold text-gray-600 border-r border-gray-200 w-12">単位数</th>
+                      <th className="text-right px-1.5 py-1.5 font-semibold text-gray-600 border-r border-gray-200 w-10">回数</th>
+                      <th className="text-right px-1.5 py-1.5 font-semibold text-gray-600 border-r border-gray-200 w-14">単位数小計</th>
+                      <th className="text-left px-1.5 py-1.5 font-semibold text-gray-600 w-20">摘要</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {selected.details.map((d) => (
-                      <tr key={d.service_type}>
-                        <td className="px-2 py-1.5">
-                          {d.short_name ?? d.service_type}
-                          {d.short_name && (
-                            <span className="ml-1 text-[9px] text-gray-400">
-                              {d.service_type}
-                            </span>
-                          )}
+                  <tbody>
+                    {selected.details.map((dt, i) => (
+                      <tr key={dt.service_type} className={`border-b border-gray-100 ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
+                        <td className="px-1.5 py-1 text-gray-700 leading-tight border-r border-gray-100">
+                          {dt.short_name ?? dt.service_type}
                         </td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">
-                          {d.unit_per.toLocaleString()}
+                        <td className="px-1.5 py-1 text-right font-mono text-gray-700 border-r border-gray-100">
+                          {dt.unit_per.toLocaleString()}
                         </td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">
-                          {d.count}
+                        <td className="px-1.5 py-1 text-right font-mono text-gray-700 border-r border-gray-100">
+                          {dt.count}
                         </td>
-                        <td className="px-2 py-1.5 text-right tabular-nums font-semibold">
-                          {d.units.toLocaleString()}
+                        <td className="px-1.5 py-1 text-right font-mono font-semibold text-gray-800 border-r border-gray-100">
+                          {dt.units.toLocaleString()}
+                        </td>
+                        <td className="px-1.5 py-1 text-gray-500 text-[10px] font-mono truncate" title={dt.service_code ?? ""}>
+                          {dt.service_code ?? "—"}
                         </td>
                       </tr>
                     ))}
                     {selected.addonUnits > 0 && (
-                      <tr className="text-purple-700">
-                        <td className="px-2 py-1.5">
+                      <tr className="border-b border-gray-100 bg-white">
+                        <td className="px-1.5 py-1 text-gray-700 leading-tight border-r border-gray-100">
                           {selected.addonLabel ?? "処遇改善加算"}
                         </td>
-                        <td className="px-2 py-1.5 text-right">—</td>
-                        <td className="px-2 py-1.5 text-right">1</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums font-semibold">
+                        <td className="px-1.5 py-1 text-right font-mono text-gray-700 border-r border-gray-100">—</td>
+                        <td className="px-1.5 py-1 text-right font-mono text-gray-700 border-r border-gray-100">1</td>
+                        <td className="px-1.5 py-1 text-right font-mono font-semibold text-gray-800 border-r border-gray-100">
                           {selected.addonUnits.toLocaleString()}
+                        </td>
+                        <td className="px-1.5 py-1 text-gray-500 text-[10px] font-mono truncate">
+                          {selected.addonCode ?? "—"}
                         </td>
                       </tr>
                     )}
                   </tbody>
                 </table>
-
-                {/* 金額サマリ (ほのぼの 請求画面の右下ボックス準拠) */}
-                <div className="mt-4 rounded border bg-gray-50 p-3 text-xs space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">地域単価</span>
-                    <span className="tabular-nums">{selected.unitPrice.toFixed(2)} 円/単位</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">総額</span>
-                    <span className="tabular-nums">
-                      ¥{selected.totalAmount.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-x-5 gap-y-1 border-t pt-2">
-                    <SummaryCell label="特定介護請求額" value="" />
-                    <SummaryCell label="軽減額" value="" />
-                    <SummaryCell label="保険単位数" value={selected.totalUnits.toLocaleString()} />
-                    <SummaryCell
-                      label="公費単位数"
-                      value={selected.kohiUnits != null ? selected.kohiUnits.toLocaleString() : ""}
-                    />
-                    <SummaryCell
-                      label={`保険請求額 (${Math.round((1 - selected.copay_rate) * 100)}%)`}
-                      value={`¥${selected.insuranceAmount.toLocaleString()}`}
-                      emphasis="blue"
-                    />
-                    <SummaryCell
-                      label="公費請求額"
-                      value={selected.kohiAmount != null ? `¥${selected.kohiAmount.toLocaleString()}` : ""}
-                      emphasis={selected.kohiAmount != null ? "purple" : undefined}
-                    />
-                    <SummaryCell
-                      label={`利用者負担額 (${Math.round(selected.copay_rate * 10)}割)`}
-                      value={selected.publicExpense ? "" : `¥${selected.userAmount.toLocaleString()}`}
-                    />
-                    <SummaryCell
-                      label="公費分本人負担"
-                      value={selected.publicExpense ? "¥0" : ""}
-                    />
-                  </div>
-                  {selected.publicExpense && (
-                    <p className="pt-1 text-[10px] text-purple-600">
-                      公費: {selected.publicExpense} (本人負担分を公費請求へ振替)
-                    </p>
-                  )}
-                </div>
               </div>
-            ) : (
-              <div className="p-8 text-center text-xs text-gray-400">
-                左の一覧から利用者を選択
+              <div className="border-t border-gray-300 bg-gray-50 shrink-0">
+                <table className="w-full text-[11px] border-collapse">
+                  <tbody>
+                    <tr className="border-t border-gray-200">
+                      <td className="px-2 py-1 text-gray-600 border-r border-gray-200 bg-gray-100 font-medium">保険単位数</td>
+                      <td className="px-2 py-1 text-right font-mono font-semibold text-gray-800">{selected.totalUnits.toLocaleString()}</td>
+                      <td className="px-2 py-1 text-gray-600 border-l border-gray-200 bg-gray-100 font-medium">公費単位数</td>
+                      <td className="px-2 py-1 text-right font-mono text-gray-400">
+                        {selected.kohiUnits != null ? <span className="text-gray-800 font-semibold">{selected.kohiUnits.toLocaleString()}</span> : "—"}
+                      </td>
+                    </tr>
+                    <tr className="border-t border-gray-200">
+                      <td className="px-2 py-1 text-gray-600 border-r border-gray-200 bg-gray-100 font-medium">保険請求額</td>
+                      <td className="px-2 py-1 text-right font-mono font-semibold text-gray-800">{selected.insuranceAmount.toLocaleString()}</td>
+                      <td className="px-2 py-1 text-gray-600 border-l border-gray-200 bg-gray-100 font-medium">公費請求額</td>
+                      <td className="px-2 py-1 text-right font-mono text-gray-400">
+                        {selected.kohiAmount != null ? <span className="text-gray-800 font-semibold">{selected.kohiAmount.toLocaleString()}</span> : "—"}
+                      </td>
+                    </tr>
+                    <tr className="border-t border-gray-200">
+                      <td className="px-2 py-1 text-gray-600 border-r border-gray-200 bg-gray-100 font-medium">利用者負担額</td>
+                      <td className="px-2 py-1 text-right font-mono font-semibold text-red-600">
+                        {selected.publicExpense ? "0" : selected.userAmount.toLocaleString()}
+                      </td>
+                      <td className="px-2 py-1 text-gray-600 border-l border-gray-200 bg-gray-100 font-medium">公費本人負担</td>
+                      <td className="px-2 py-1 text-right font-mono text-gray-400">{selected.publicExpense ? "0" : "—"}</td>
+                    </tr>
+                    <tr className="border-t border-gray-200">
+                      <td className="px-2 py-1 text-gray-600 border-r border-gray-200 bg-gray-100 font-medium">総額</td>
+                      <td className="px-2 py-1 text-right font-mono font-semibold text-gray-800">{selected.totalAmount.toLocaleString()}</td>
+                      <td className="px-2 py-1 text-gray-600 border-l border-gray-200 bg-gray-100 font-medium">地域単価</td>
+                      <td className="px-2 py-1 text-right font-mono text-gray-800">{selected.unitPrice.toFixed(2)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                {selected.publicExpense && (
+                  <p className="px-2 py-1 text-[10px] text-purple-600">
+                    公費: {selected.publicExpense} (本人負担分を公費請求へ振替)
+                  </p>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-xs text-gray-400">
+              行を選択してください
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* ===== 印刷 view: 明細書 (様式第二) — 利用者 1 名 = 1 枚 ===== */}
       {/* 再請求行は元提供月 (origMonthKey) で reiwa/month を出す */}
       {printMode === "meisai" && (
         <div className="hidden print:block">
-          {targetDisplayRows.map((d) => {
+          {(meisaiPrintRows ?? targetDisplayRows).map((d) => {
             const [oy, om] = d.origMonthKey.split("-").map((n) => Number(n));
             return (
               <MeisaiPrintSheet
@@ -811,86 +831,6 @@ export function KaigoSeikyuContent() {
           />
         </div>
       )}
-    </div>
-  );
-}
-
-// 提供月 (YYYY-MM) → "R{年}/{月}" ラベル (令和換算)
-function origMonthLabel(monthKey: string): string {
-  const [y, m] = monthKey.split("-").map((n) => Number(n));
-  if (!y || !m) return monthKey;
-  return `R${y - 2018}/${m}`;
-}
-
-// 再請求バッジ (月遅れ / 返戻)。両方立つ場合は併記
-function ReSeikyuBadge({
-  reasons,
-}: {
-  reasons: { tsukiokure: boolean; henrei: boolean } | null;
-}) {
-  if (reasons?.henrei) {
-    return (
-      <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
-        返戻{reasons.tsukiokure ? "・月遅れ" : ""}
-      </span>
-    );
-  }
-  return (
-    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
-      月遅れ
-    </span>
-  );
-}
-
-// 状態バッジ (未発行 / 発行済 / 国保対象)
-function StatusBadge({ status }: { status: BillingStatusRow | undefined }) {
-  if (status?.kokuho_target) {
-    return (
-      <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">
-        国保対象
-      </span>
-    );
-  }
-  if (status?.issued_at) {
-    return (
-      <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-bold text-green-700">
-        発行済
-      </span>
-    );
-  }
-  return (
-    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-500">
-      未発行
-    </span>
-  );
-}
-
-// ほのぼの風 請求サマリの 1 セル (ラベル + 右寄せ数値。空文字 = 該当なし)
-function SummaryCell({
-  label,
-  value,
-  emphasis,
-}: {
-  label: string;
-  value: string;
-  emphasis?: "blue" | "purple";
-}) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="shrink-0 rounded border border-blue-100 bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-900 whitespace-nowrap">
-        {label}
-      </span>
-      <span
-        className={
-          emphasis === "blue"
-            ? "font-bold tabular-nums text-blue-700"
-            : emphasis === "purple"
-            ? "font-bold tabular-nums text-purple-700"
-            : "font-bold tabular-nums text-gray-800"
-        }
-      >
-        {value || <span className="text-gray-300 font-normal">—</span>}
-      </span>
-    </div>
+    </>
   );
 }

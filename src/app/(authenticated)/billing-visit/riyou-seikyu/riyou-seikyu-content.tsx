@@ -1,20 +1,36 @@
 "use client";
 
 /**
- * 利用請求 — 利用者本人への請求一覧 (参考: ほのぼの 利用請求タブ)
+ * 利用請求 — 利用者本人への請求一覧 (見た目: order-app UserBillingTab と同一)
  *
- * 左: 利用者一覧 (対象チェック / 名前 / 請求額 = 利用者負担額)
- * 右: 利用明細欄 (利用料項目 / 単価 / 数量 / 金額)
- * 請求書発行: チェックした利用者分の利用料請求書を印刷 view で発行
- * (未チェック時は全件対象 — 国保請求と同じ流儀)
+ * 左: あかさたな索引 / 中央: ツールバー + 格子テーブル + 合計フッタ /
+ * 右: 利用明細欄 (行クリックで明細 + 実費入力 + 入金管理)。
+ *
+ * 機能 (従来どおり):
+ *   - 請求書発行 (対象チェック or 全件) / FB データ出力 (全銀協)
+ *   - 世帯合算 印刷 (= 「名寄」チェック列で対象選択)
+ *   - 利用実費 (保険外) の入力 / 入金管理 (未収金)
+ *   - 印刷 view (通常 / 世帯合算) は不変
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, AlertCircle, Printer, Plus, Trash2, Users, Banknote } from "lucide-react";
+import {
+  Loader2,
+  AlertCircle,
+  FileText,
+  Plus,
+  Trash2,
+  Users,
+  Banknote,
+} from "lucide-react";
 import Encoding from "encoding-japanese";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { useSeikyuContext } from "../_shared/seikyu-context";
+import {
+  useSeikyuContext,
+  SeikyuKanaSidebar,
+  SeikyuMonthNav,
+} from "../_shared/seikyu-context";
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
 import { buildFbZengin, type FbTransferTarget } from "@/lib/fb-zengin";
 
@@ -52,19 +68,33 @@ interface PaymentRow {
   issued_date: string | null;
 }
 
+// 状態バッジ (order-app UserBillingTab の statusBadge と同じ配色ルール:
+//  確定系 = 青 / 入金完 = 緑 / 未確定 = グレー。未収系は赤/橙で警告)
 const PAYMENT_STATUS_CLS: Record<string, string> = {
-  請求済: "bg-gray-100 text-gray-600",
-  入金完: "bg-green-100 text-green-700",
+  請求済: "bg-blue-100 text-blue-700",
+  入金完: "bg-emerald-100 text-emerald-700",
   一部入金: "bg-amber-100 text-amber-700",
   未収: "bg-red-100 text-red-700",
 };
 
+const PAYMENT_METHOD_OPTIONS = ["", "振込", "現金", "口座振替"];
+
+// YYYY-MM-DD → R{Y}/{M}/{D} 表示 (order-app formatIssuedDateReiwa と同じ流儀)
+function fmtReiwaDate(iso: string | null): string {
+  if (!iso) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return iso;
+  return `R${parseInt(m[1], 10) - 2018}/${parseInt(m[2], 10)}/${parseInt(m[3], 10)}`;
+}
+
 export function RiyouSeikyuContent() {
-  const { year, month, rows, loading, error, officeName } =
+  const { year, month, rows, filteredRows, loading, error, officeName } =
     useSeikyuContext();
   const supabase = useMemo(() => createClient(), []);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  // 対象 (発行/FB の絞込) と 名寄 (世帯合算) は別チェック列 (order-app と同じ)
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [merged, setMerged] = useState<Set<string>>(new Set());
   const [printing, setPrinting] = useState(false);
   const [jippiByUser, setJippiByUser] = useState<Map<string, JippiEntry[]>>(new Map());
 
@@ -155,8 +185,13 @@ export function RiyouSeikyuContent() {
     loadBanks();
   }, [loadBanks]);
 
-  const selected = rows.find((r) => r.user_id === selectedUserId) ?? rows[0] ?? null;
-  const totalBilled = rows.reduce((s, r) => s + r.userAmount + jippiTotal(r.user_id), 0);
+  // 選択行 (order-app と同じく未選択時は右ペインに placeholder を出す)
+  const selected =
+    filteredRows.find((r) => r.user_id === selectedUserId) ?? null;
+  const totalBilled = filteredRows.reduce(
+    (s, r) => s + r.userAmount + jippiTotal(r.user_id),
+    0,
+  );
 
   const toggle = (id: string) =>
     setChecked((prev) => {
@@ -167,13 +202,25 @@ export function RiyouSeikyuContent() {
     });
   const toggleAll = () =>
     setChecked((prev) =>
-      prev.size === rows.length ? new Set() : new Set(rows.map((r) => r.user_id)),
+      prev.size === filteredRows.length
+        ? new Set()
+        : new Set(filteredRows.map((r) => r.user_id)),
     );
+  const toggleMerged = (id: string) =>
+    setMerged((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   // 発行対象: チェックあり → その利用者のみ / チェックなし → 全件
   const targets = useMemo(
-    () => (checked.size > 0 ? rows.filter((r) => checked.has(r.user_id)) : rows),
-    [rows, checked],
+    () =>
+      checked.size > 0
+        ? filteredRows.filter((r) => checked.has(r.user_id))
+        : filteredRows,
+    [filteredRows, checked],
   );
 
   const reiwa = year - 2018;
@@ -204,17 +251,56 @@ export function RiyouSeikyuContent() {
     }, 100);
   };
 
+  // ── 支払方法 / 請求書発行日 のインライン編集 (order-app の行内 select/date と同じ) ──
+  //    upsert は指定列のみ更新 (入金状態などは既存を保持 — issueSeikyusho と同じ流儀)
+  const setPaymentMethod = async (r: UserSeikyuRow, method: string) => {
+    const { error: e } = await supabase.from("riyou_seikyu_payments").upsert(
+      {
+        client_id: r.user_id,
+        target_month: monthKey,
+        billed_amount:
+          payments.get(r.user_id)?.billed_amount ??
+          r.userAmount + jippiTotal(r.user_id),
+        payment_method: method || null,
+      },
+      { onConflict: "client_id,target_month" },
+    );
+    if (e) {
+      if (e.code !== "42P01") toast.error("支払方法の保存に失敗: " + e.message);
+      return;
+    }
+    loadPayments();
+  };
+  const setIssuedDate = async (r: UserSeikyuRow, date: string) => {
+    const { error: e } = await supabase.from("riyou_seikyu_payments").upsert(
+      {
+        client_id: r.user_id,
+        target_month: monthKey,
+        billed_amount:
+          payments.get(r.user_id)?.billed_amount ??
+          r.userAmount + jippiTotal(r.user_id),
+        issued_date: date || null,
+      },
+      { onConflict: "client_id,target_month" },
+    );
+    if (e) {
+      if (e.code !== "42P01") toast.error("発行日の保存に失敗: " + e.message);
+      return;
+    }
+    loadPayments();
+  };
+
   // ─── 名寄せ (世帯合算) ───────────────────────────────────────────────────
-  // 選択した複数利用者を 1 世帯として 1 枚の請求書に合算印刷する。
+  // 「名寄」列でチェックした複数利用者を 1 世帯として 1 枚の請求書に合算印刷する。
   const [householdPrinting, setHouseholdPrinting] = useState(false);
-  // 合算対象 = チェックした利用者 (代表者 = 先頭)
+  // 合算対象 = 名寄チェックした利用者 (代表者 = 先頭)
   const householdRows = useMemo(
-    () => rows.filter((r) => checked.has(r.user_id)),
-    [rows, checked],
+    () => filteredRows.filter((r) => merged.has(r.user_id)),
+    [filteredRows, merged],
   );
   const printHousehold = () => {
     if (householdRows.length < 2) {
-      toast.error("世帯合算は 2 名以上を選択してください");
+      toast.error("世帯合算は 2 名以上を「名寄」で選択してください");
       return;
     }
     setHouseholdPrinting(true);
@@ -279,304 +365,406 @@ export function RiyouSeikyuContent() {
     );
   };
 
+  // ── フッタ集計 (order-app の 件数合計/確定合計 に対応) ──
+  const issuedRows = filteredRows.filter((r) => payments.has(r.user_id));
+  const issuedTotal = issuedRows.reduce(
+    (s, r) => s + (payments.get(r.user_id)?.billed_amount ?? 0),
+    0,
+  );
+  const paidTotal = filteredRows.reduce(
+    (s, r) => s + (payments.get(r.user_id)?.paid_amount ?? 0),
+    0,
+  );
+  const misyuCount = filteredRows.filter((r) => {
+    const p = payments.get(r.user_id);
+    return p && p.status !== "入金完";
+  }).length;
+
+  // 選択行のフッタ詳細 (未選択時は全体合計 — order-app と同じ)
+  const selAmount = selected
+    ? selected.userAmount + jippiTotal(selected.user_id)
+    : totalBilled;
+
+  const checkedCount = filteredRows.filter((r) => checked.has(r.user_id)).length;
+  const printScopeLabel =
+    checkedCount > 0 ? `対象 ${checkedCount} 名` : `全 ${filteredRows.length} 名`;
+  const allChecked =
+    filteredRows.length > 0 && checked.size === filteredRows.length;
+
+  const statusBadge = (userId: string) => {
+    const p = payments.get(userId);
+    if (!p)
+      return (
+        <span className="inline-block px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px] font-semibold">
+          未発行
+        </span>
+      );
+    return (
+      <span
+        className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold ${PAYMENT_STATUS_CLS[p.status] ?? "bg-gray-100 text-gray-600"}`}
+      >
+        {p.status}
+      </span>
+    );
+  };
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <p className="text-xs text-gray-500">
-          {officeName ?? ""} — 利用者本人への請求 (負担割合分) 一覧
-        </p>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={printHousehold}
-            disabled={householdRows.length < 2}
-            title="選択した 2 名以上を 1 世帯として 1 枚に合算印刷"
-            className="inline-flex items-center gap-1 rounded-lg border border-emerald-600 bg-white px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
-          >
-            <Users size={14} />
-            世帯合算で請求書 ({householdRows.length}名)
-          </button>
-          <button
-            type="button"
-            onClick={exportFbData}
-            disabled={rows.length === 0}
-            title="全銀協 口座振替フォーマット (Shift_JIS) で FB データを出力"
-            className="inline-flex items-center gap-1 rounded-lg border border-blue-600 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
-          >
-            <Banknote size={14} />
-            FBデータ ({targets.length}件)
-          </button>
-          <button
-            type="button"
-            onClick={issueSeikyusho}
-            disabled={rows.length === 0}
-            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-          >
-            <Printer size={14} />
-            請求書発行 ({targets.length}件)
-          </button>
-        </div>
-      </div>
+    <>
+      <div className="flex flex-1 min-h-0 print:hidden">
+        {/* ── 左: かな行フィルター ── */}
+        <SeikyuKanaSidebar />
 
-      {error && (
-        <div className="flex items-start gap-2 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700 print:hidden">
-          <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          {error}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="flex items-center justify-center py-16 text-gray-400 print:hidden">
-          <Loader2 size={20} className="mr-2 animate-spin" />
-          集計中...
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="rounded-lg border border-dashed bg-gray-50 p-12 text-center text-sm text-gray-500 print:hidden">
-          対象月の実績 (完了) がありません
-        </div>
-      ) : (
-        <>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-5 print:hidden">
-          {/* 左: 請求一覧 */}
-          <div className="lg:col-span-3 overflow-hidden rounded-lg border bg-white shadow-sm">
-            <table className="min-w-full text-sm">
-              <thead className="bg-blue-100 text-left text-xs font-medium text-blue-900">
-                <tr>
-                  <th className="px-2 py-1.5 text-center w-14">
-                    <label className="inline-flex cursor-pointer select-none flex-col items-center gap-0.5">
-                      <input
-                        type="checkbox"
-                        checked={rows.length > 0 && checked.size === rows.length}
-                        onChange={toggleAll}
-                        className="h-3.5 w-3.5 accent-blue-600 cursor-pointer"
-                      />
-                      <span className="whitespace-nowrap text-[9px] font-normal text-blue-700">
-                        全選択
-                      </span>
-                    </label>
-                  </th>
-                  <th className="px-3 py-2">利用者名</th>
-                  <th className="px-3 py-2">被保険者番号</th>
-                  <th className="px-3 py-2 text-center">負担割合</th>
-                  <th className="px-3 py-2 text-right">実費</th>
-                  <th className="px-3 py-2 text-right">請求額</th>
-                  <th className="px-3 py-2 text-center">状態</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {rows.map((r) => (
-                  <tr
-                    key={r.user_id}
-                    onClick={() => setSelectedUserId(r.user_id)}
-                    className={
-                      "cursor-pointer transition-colors " +
-                      (selected?.user_id === r.user_id
-                        ? "bg-emerald-50"
-                        : "hover:bg-gray-50")
-                    }
-                  >
-                    <td className="px-2 py-2 text-center">
-                      <input
-                        type="checkbox"
-                        checked={checked.has(r.user_id)}
-                        onChange={() => toggle(r.user_id)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="h-3.5 w-3.5 accent-emerald-600 cursor-pointer"
-                      />
-                    </td>
-                    <td className="px-3 py-2 font-medium">{r.user_name}</td>
-                    <td className="px-3 py-2 font-mono text-xs">
-                      {r.insured_number ?? "—"}
-                    </td>
-                    <td className="px-3 py-2 text-center text-xs">
-                      {Math.round(r.copay_rate * 10)}割
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-xs">
-                      {jippiTotal(r.user_id) > 0 ? `¥${jippiTotal(r.user_id).toLocaleString()}` : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right font-semibold tabular-nums text-emerald-700">
-                      ¥{(r.userAmount + jippiTotal(r.user_id)).toLocaleString()}
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      {(() => {
-                        const p = payments.get(r.user_id);
-                        return p ? (
-                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${PAYMENT_STATUS_CLS[p.status] ?? "bg-gray-100 text-gray-600"}`}>
-                            {p.status}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-gray-300">未発行</span>
-                        );
-                      })()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="border-t-2 border-gray-300 bg-gray-50">
-                {(() => {
-                  const issued = rows.filter((r) => payments.has(r.user_id));
-                  const issuedTotal = issued.reduce(
-                    (s, r) => s + (payments.get(r.user_id)?.billed_amount ?? 0),
-                    0,
-                  );
-                  const paidTotal = rows.reduce(
-                    (s, r) => s + (payments.get(r.user_id)?.paid_amount ?? 0),
-                    0,
-                  );
-                  const misyu = rows.filter((r) => {
-                    const p = payments.get(r.user_id);
-                    return p && p.status !== "入金完";
-                  }).length;
-                  return (
-                    <>
-                      <tr className="font-bold">
-                        <td className="px-3 py-2 text-xs text-gray-500" colSpan={5}>
-                          件数合計 {rows.length} 件
-                          <span className="ml-3 font-normal">発行済 {issued.length} 件</span>
-                          {misyu > 0 && (
-                            <span className="ml-2 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-600">
-                              未入金 {misyu} 件
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-emerald-700" colSpan={2}>
-                          ¥{totalBilled.toLocaleString()}
-                        </td>
-                      </tr>
-                      <tr className="text-xs text-gray-500">
-                        <td className="px-3 py-1.5" colSpan={5}>
-                          発行済請求額合計 / 入金額合計
-                        </td>
-                        <td className="px-3 py-1.5 text-right tabular-nums" colSpan={2}>
-                          ¥{issuedTotal.toLocaleString()} / ¥{paidTotal.toLocaleString()}
-                        </td>
-                      </tr>
-                    </>
-                  );
-                })()}
-              </tfoot>
-            </table>
+        {/* ── 中央: ツールバー + テーブル + フッタ ── */}
+        <div className="flex-1 flex flex-col min-w-0 border-r border-gray-200">
+          {/* ツールバー */}
+          <div className="border-b border-gray-300 bg-gray-100 px-3 py-2 shrink-0 flex items-center gap-2 flex-wrap">
+            <SeikyuMonthNav />
+            <span className="text-xs text-gray-500">{filteredRows.length} 件</span>
+            <div className="w-px h-5 bg-gray-300 mx-1" />
+            <button
+              type="button"
+              onClick={issueSeikyusho}
+              disabled={filteredRows.length === 0}
+              title={`利用料請求書を発行 (${printScopeLabel})。発行日を記録して印刷します`}
+              className="border border-emerald-500 rounded bg-emerald-50 px-2.5 py-1 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1.5 text-xs font-medium disabled:opacity-50"
+            >
+              <FileText size={13} />
+              請求書 ({targets.length}件)
+            </button>
+            <button
+              type="button"
+              onClick={printHousehold}
+              disabled={householdRows.length < 2}
+              title="「名寄」でチェックした 2 名以上を 1 世帯として 1 枚に合算印刷"
+              className="border border-emerald-500 rounded bg-emerald-50 px-2.5 py-1 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1.5 text-xs font-medium disabled:opacity-50"
+            >
+              <Users size={13} />
+              世帯合算 ({householdRows.length}名)
+            </button>
+            <button
+              type="button"
+              onClick={exportFbData}
+              disabled={filteredRows.length === 0}
+              title="全銀協 口座振替フォーマット (Shift_JIS) で FB データを出力"
+              className="border border-blue-500 rounded bg-blue-50 px-2.5 py-1 text-blue-700 hover:bg-blue-100 flex items-center gap-1.5 text-xs font-medium disabled:opacity-50"
+            >
+              <Banknote size={13} />
+              FBデータ ({targets.length}件)
+            </button>
+            <span className="text-[11px] text-gray-400">{printScopeLabel}</span>
           </div>
 
-          {/* 右: 利用明細欄 */}
-          <div className="lg:col-span-2 rounded-lg border bg-white shadow-sm">
-            <header className="border-b bg-blue-100 px-4 py-2 text-sm font-bold text-blue-900">
-              利用明細欄 {selected ? `— ${selected.user_name}` : ""}
-            </header>
-            {selected ? (
-              <div className="p-3">
-                <table className="min-w-full text-xs">
-                  <thead className="bg-blue-50 text-left text-[10px] font-medium text-blue-900">
+          {error && (
+            <div className="border-b border-red-200 bg-red-50 px-3 py-2 shrink-0 flex items-start gap-2 text-sm text-red-700">
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              {error}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="flex justify-center py-16">
+              <Loader2 size={22} className="animate-spin text-indigo-400" />
+            </div>
+          ) : (
+            <>
+              {/* テーブル (order-app UserBillingTab と同一列構成) */}
+              <div className="flex-1 overflow-auto">
+                <table className="min-w-full text-xs border-collapse">
+                  <thead className="bg-gray-100 text-gray-700 sticky top-0 z-10">
                     <tr>
-                      <th className="rounded-l px-2 py-1.5">利用料項目</th>
-                      <th className="px-2 py-1.5 text-right">単価</th>
-                      <th className="px-2 py-1.5 text-right">数量</th>
-                      <th className="rounded-r px-2 py-1.5 text-right">金額</th>
+                      <th className="px-2 py-1.5 border border-gray-300 text-center w-10">
+                        <label
+                          className="inline-flex cursor-pointer select-none flex-col items-center gap-0.5"
+                          title="全選択"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={allChecked}
+                            onChange={toggleAll}
+                            className="cursor-pointer"
+                          />
+                          <span className="text-[9px] font-normal">対象</span>
+                        </label>
+                      </th>
+                      <th className="px-2 py-1.5 border border-gray-300 text-center w-10">名寄</th>
+                      <th className="px-2 py-1.5 border border-gray-300 text-center w-16">状態</th>
+                      <th className="px-2 py-1.5 border border-gray-300 text-left">利用者名</th>
+                      <th className="px-2 py-1.5 border border-gray-300 text-left">事業所名</th>
+                      <th className="px-2 py-1.5 border border-gray-300 text-left w-24">番号</th>
+                      <th className="px-2 py-1.5 border border-gray-300 text-left w-24">支払方法</th>
+                      <th className="px-2 py-1.5 border border-gray-300 text-right w-24">請求額</th>
+                      <th className="px-2 py-1.5 border border-gray-300 text-left w-28">請求書発行日</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody>
+                    {filteredRows.map((r) => {
+                      const p = payments.get(r.user_id);
+                      const isSelected = selectedUserId === r.user_id;
+                      return (
+                        <tr
+                          key={r.user_id}
+                          className={`cursor-pointer ${isSelected ? "bg-indigo-50" : "hover:bg-blue-50"}`}
+                          onClick={() => setSelectedUserId(r.user_id)}
+                        >
+                          <td className="px-2 py-1 border border-gray-200 text-center">
+                            <input
+                              type="checkbox"
+                              checked={checked.has(r.user_id)}
+                              onChange={() => toggle(r.user_id)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="cursor-pointer"
+                            />
+                          </td>
+                          <td className="px-2 py-1 border border-gray-200 text-center">
+                            <input
+                              type="checkbox"
+                              checked={merged.has(r.user_id)}
+                              onChange={() => toggleMerged(r.user_id)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="cursor-pointer"
+                              title="名寄せ (チェックした利用者を世帯合算の請求書 1 枚に合算)"
+                            />
+                          </td>
+                          <td className="px-2 py-1 border border-gray-200 text-center">
+                            {statusBadge(r.user_id)}
+                          </td>
+                          <td className="px-2 py-1 border border-gray-200 font-medium">
+                            {r.user_name}
+                          </td>
+                          <td
+                            className="px-2 py-1 border border-gray-200 truncate max-w-[200px]"
+                            title={officeName ?? ""}
+                          >
+                            {officeName ?? "-"}
+                          </td>
+                          <td className="px-2 py-1 border border-gray-200 font-mono">
+                            {r.insured_number ?? "-"}
+                          </td>
+                          <td
+                            className="px-2 py-1 border border-gray-200"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <select
+                              value={p?.payment_method ?? ""}
+                              onChange={(e) => setPaymentMethod(r, e.target.value)}
+                              className="w-full bg-transparent border-0 text-xs focus:bg-white focus:border focus:border-indigo-300 focus:outline-none rounded px-1 py-0.5"
+                            >
+                              {PAYMENT_METHOD_OPTIONS.map((opt) => (
+                                <option key={opt} value={opt}>
+                                  {opt || "—"}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-2 py-1 border border-gray-200 text-right font-mono">
+                            ¥{(r.userAmount + jippiTotal(r.user_id)).toLocaleString()}
+                          </td>
+                          <td
+                            className="px-2 py-1 border border-gray-200"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <input
+                              type="date"
+                              value={p?.issued_date ?? ""}
+                              onChange={(e) => setIssuedDate(r, e.target.value)}
+                              className="w-full bg-transparent border-0 text-xs focus:bg-white focus:border focus:border-indigo-300 focus:outline-none rounded px-1 py-0.5"
+                            />
+                            {p?.issued_date && (
+                              <span className="text-[10px] text-gray-400 ml-1">
+                                {fmtReiwaDate(p.issued_date)}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {filteredRows.length === 0 && (
+                      <tr>
+                        <td colSpan={9} className="px-3 py-8 text-center text-gray-400 text-sm">
+                          対象月の実績 (完了) がありません
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* フッタ: 総合計 + 選択行詳細 (order-app と同一レイアウト) */}
+              <div className="border-t border-gray-300 bg-gray-50 px-3 py-2 shrink-0 text-xs">
+                <div className="flex flex-wrap gap-x-6 gap-y-1 text-gray-700">
+                  <span>
+                    件数合計 <span className="font-mono font-semibold">{filteredRows.length.toLocaleString()}</span>
+                  </span>
+                  <span>
+                    請求額合計{" "}
+                    <span className="font-mono font-semibold">¥{totalBilled.toLocaleString()}</span>
+                  </span>
+                  <span className="text-gray-500">
+                    確 件数合計{" "}
+                    <span className="font-mono font-semibold">{issuedRows.length.toLocaleString()}</span>
+                  </span>
+                  <span className="text-gray-500">
+                    確定請求額合計{" "}
+                    <span className="font-mono font-semibold">¥{issuedTotal.toLocaleString()}</span>
+                  </span>
+                  <span className="text-gray-500">
+                    入金額合計{" "}
+                    <span className="font-mono font-semibold">¥{paidTotal.toLocaleString()}</span>
+                  </span>
+                  {misyuCount > 0 && (
+                    <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-600">
+                      未入金 {misyuCount} 件
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-gray-600">
+                  <span>
+                    合計金額 <span className="font-mono">¥{selAmount.toLocaleString()}</span>
+                  </span>
+                  <span>
+                    過入金充当額 <span className="font-mono">¥0</span>
+                  </span>
+                  <span>
+                    軽減額 <span className="font-mono">¥0</span>
+                  </span>
+                  <span>
+                    医療費控除対象額 <span className="font-mono">¥0</span>
+                  </span>
+                  <span>
+                    消費税額 <span className="font-mono">¥0</span>
+                  </span>
+                  <span className="font-semibold text-gray-800">
+                    請求金額 <span className="font-mono">¥{selAmount.toLocaleString()}</span>
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* ── 右ペイン: 利用明細欄 ── */}
+        <div className="w-80 shrink-0 flex flex-col bg-white">
+          <div className="border-b border-gray-300 bg-gray-100 px-3 py-2 shrink-0 flex items-center justify-between">
+            <span className="text-sm font-semibold text-gray-700">利用明細欄</span>
+            {selected && (
+              <span className="text-xs text-gray-500 truncate max-w-[160px]">
+                {selected.user_name}
+              </span>
+            )}
+          </div>
+          <div className="flex-1 overflow-auto">
+            {!selected && (
+              <div className="p-4 text-center text-gray-400 text-xs">
+                左の行をクリックすると明細が表示されます
+              </div>
+            )}
+            {selected && (
+              <>
+                <table className="w-full text-xs border-collapse">
+                  <thead className="bg-gray-50 text-gray-600">
+                    <tr>
+                      <th className="px-2 py-1 border-b border-gray-200 text-left">利用料項目</th>
+                      <th className="px-2 py-1 border-b border-gray-200 text-right w-16">単価</th>
+                      <th className="px-2 py-1 border-b border-gray-200 text-right w-10">数量</th>
+                      <th className="px-2 py-1 border-b border-gray-200 text-right w-20">金額</th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {splitUserAmount(selected).map((l) => (
-                      <tr key={l.label}>
-                        <td className="px-2 py-1.5">{l.label}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">
+                      <tr key={l.label} className="border-b border-gray-100">
+                        <td className="px-2 py-1 text-gray-700">{l.label}</td>
+                        <td className="px-2 py-1 text-right font-mono">
                           {l.unitPer != null ? l.unitPer.toLocaleString() : "—"}
                         </td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">{l.count}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">
+                        <td className="px-2 py-1 text-right font-mono">{l.count}</td>
+                        <td className="px-2 py-1 text-right font-mono">
                           ¥{l.amount.toLocaleString()}
                         </td>
                       </tr>
                     ))}
-                    <tr className="font-semibold">
-                      <td className="px-2 py-1.5">利用者負担額 合計</td>
-                      <td></td>
-                      <td></td>
-                      <td className="px-2 py-1.5 text-right tabular-nums text-emerald-700">
-                        ¥{selected.userAmount.toLocaleString()}
-                      </td>
-                    </tr>
                   </tbody>
                 </table>
 
-                {/* 利用実費 (保険外) の入力 */}
-                <JippiSection
-                  key={`jippi-${selected.user_id}-${monthKey}`}
-                  userId={selected.user_id}
-                  monthKey={monthKey}
-                  entries={jippiByUser.get(selected.user_id) ?? []}
-                  onChanged={loadJippi}
-                />
-
-                {/* 入金登録 (未収金管理) */}
-                <PaymentSection
-                  key={`pay-${selected.user_id}-${monthKey}`}
-                  userId={selected.user_id}
-                  monthKey={monthKey}
-                  billed={selected.userAmount + jippiTotal(selected.user_id)}
-                  payment={payments.get(selected.user_id) ?? null}
-                  onChanged={loadPayments}
-                />
-
-                {/* ほのぼの 利用請求の右下ボックス準拠 (2 列) */}
-                <div className="mt-4 rounded border bg-gray-50 p-3 text-xs">
-                  <div className="grid grid-cols-2 gap-x-5 gap-y-1">
-                    <RiyouSummaryCell label="合計金額" value={`¥${(selected.userAmount + jippiTotal(selected.user_id)).toLocaleString()}`} />
-                    <RiyouSummaryCell label="過入金充当額" value="" />
-                    <RiyouSummaryCell label="利用者負担額" value={`¥${selected.userAmount.toLocaleString()}`} />
-                    <RiyouSummaryCell label="軽減額" value="" />
-                    <RiyouSummaryCell label="実費合計" value={`¥${jippiTotal(selected.user_id).toLocaleString()}`} />
-                    <RiyouSummaryCell label="医療費控除対象額" value="" />
-                    <RiyouSummaryCell label="消費税額" value="¥0 (非課税)" />
-                    <RiyouSummaryCell
-                      label="請求金額"
-                      value={`¥${(selected.userAmount + jippiTotal(selected.user_id)).toLocaleString()}`}
-                      emphasis
-                    />
+                <div className="px-3 py-2 border-t border-gray-200 text-xs space-y-0.5">
+                  <div className="flex justify-between text-gray-600">
+                    <span>
+                      利用者負担額 ({Math.round(selected.copay_rate * 10)}割)
+                    </span>
+                    <span className="font-mono">
+                      ¥{selected.userAmount.toLocaleString()}
+                    </span>
+                  </div>
+                  {jippiTotal(selected.user_id) > 0 && (
+                    <div className="flex justify-between text-gray-600">
+                      <span>実費合計</span>
+                      <span className="font-mono">
+                        ¥{jippiTotal(selected.user_id).toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-gray-800 font-semibold pt-1 border-t border-gray-100 mt-1">
+                    <span>合計</span>
+                    <span className="font-mono">
+                      ¥{(selected.userAmount + jippiTotal(selected.user_id)).toLocaleString()}
+                    </span>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="p-8 text-center text-xs text-gray-400">
-                左の一覧から利用者を選択
-              </div>
+
+                {/* 利用実費 (保険外) の入力 */}
+                <div className="px-3 pb-3">
+                  <JippiSection
+                    key={`jippi-${selected.user_id}-${monthKey}`}
+                    userId={selected.user_id}
+                    monthKey={monthKey}
+                    entries={jippiByUser.get(selected.user_id) ?? []}
+                    onChanged={loadJippi}
+                  />
+
+                  {/* 入金登録 (未収金管理) */}
+                  <PaymentSection
+                    key={`pay-${selected.user_id}-${monthKey}`}
+                    userId={selected.user_id}
+                    monthKey={monthKey}
+                    billed={selected.userAmount + jippiTotal(selected.user_id)}
+                    payment={payments.get(selected.user_id) ?? null}
+                    onChanged={loadPayments}
+                  />
+                </div>
+              </>
             )}
           </div>
         </div>
-        <p className="text-[11px] text-gray-400 print:hidden">
-          ※ チェックで発行対象を絞込 (未チェック時は全件発行)。請求書は利用者 1 名につき 1 枚で印刷されます。
-        </p>
+      </div>
 
-        {/* ===== 印刷 view: 利用料請求書 (利用者 1 名 = 1 枚) ===== */}
-        {printing && (
-          <div className="hidden print:block">
-            {targets.map((r) => (
-              <RiyouSeikyuPrintSheet
-                key={r.user_id}
-                row={r}
-                jippi={jippiByUser.get(r.user_id) ?? []}
-                officeName={officeName}
-                reiwa={reiwa}
-                month={month}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* ===== 印刷 view: 世帯合算 請求書 (選択者を 1 枚に合算) ===== */}
-        {householdPrinting && householdRows.length >= 2 && (
-          <div className="hidden print:block">
-            <RiyouSeikyuHouseholdPrintSheet
-              rows={householdRows}
-              jippiByUser={jippiByUser}
+      {/* ===== 印刷 view: 利用料請求書 (利用者 1 名 = 1 枚) ===== */}
+      {printing && (
+        <div className="hidden print:block">
+          {targets.map((r) => (
+            <RiyouSeikyuPrintSheet
+              key={r.user_id}
+              row={r}
+              jippi={jippiByUser.get(r.user_id) ?? []}
               officeName={officeName}
               reiwa={reiwa}
               month={month}
             />
-          </div>
-        )}
-        </>
+          ))}
+        </div>
       )}
-    </div>
+
+      {/* ===== 印刷 view: 世帯合算 請求書 (名寄チェック者を 1 枚に合算) ===== */}
+      {householdPrinting && householdRows.length >= 2 && (
+        <div className="hidden print:block">
+          <RiyouSeikyuHouseholdPrintSheet
+            rows={householdRows}
+            jippiByUser={jippiByUser}
+            officeName={officeName}
+            reiwa={reiwa}
+            month={month}
+          />
+        </div>
+      )}
+    </>
   );
 }
 
@@ -617,28 +805,6 @@ function splitUserAmount(row: UserSeikyuRow): RiyouLine[] {
     maxLine.amount += diff;
   }
   return lines;
-}
-
-// ほのぼの風 サマリセル (ラベル帯 + 右寄せ数値。空 = 該当なし)
-function RiyouSummaryCell({
-  label,
-  value,
-  emphasis,
-}: {
-  label: string;
-  value: string;
-  emphasis?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="shrink-0 rounded border border-blue-100 bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-900 whitespace-nowrap">
-        {label}
-      </span>
-      <span className={emphasis ? "font-bold tabular-nums text-emerald-700" : "font-bold tabular-nums text-gray-800"}>
-        {value || <span className="font-normal text-gray-300">—</span>}
-      </span>
-    </div>
-  );
 }
 
 // ─── 利用実費の入力セクション ─────────────────────────────────────────────────
@@ -1001,7 +1167,7 @@ function RiyouSeikyuPrintSheet({
   );
 }
 
-// ─── 印刷: 世帯合算 請求書 (選択者を 1 枚に合算 / 宛名 = 代表者) ─────────────
+// ─── 印刷: 世帯合算 請求書 (名寄チェック者を 1 枚に合算 / 宛名 = 代表者) ──────
 function RiyouSeikyuHouseholdPrintSheet({
   rows,
   jippiByUser,
