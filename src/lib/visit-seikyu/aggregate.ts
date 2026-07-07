@@ -315,15 +315,19 @@ export async function aggregateMonthlyVisitSeikyu(
         .filter(Boolean) as string[],
     ),
   );
+  // care_office_id は「care_offices」(ケアマネ事業所マスタ、office-app と共有) への FK。
+  // 自社 offices ではないので注意 (誤って offices を引くと全員未設定になる)
   const officeNumberById = new Map<string, string | null>();
+  const officeNameById = new Map<string, string | null>();
   if (careOfficeIds.length > 0) {
     const { data, error } = await supabase
-      .from("offices")
-      .select("id, business_number")
+      .from("care_offices")
+      .select("id, office_number, name")
       .in("id", careOfficeIds);
     if (error) throw new Error(`居宅事業所取得失敗: ${error.message}`);
-    for (const o of (data ?? []) as { id: string; business_number: string | null }[]) {
-      officeNumberById.set(o.id, o.business_number);
+    for (const o of (data ?? []) as { id: string; office_number: string | null; name: string | null }[]) {
+      officeNumberById.set(o.id, o.office_number);
+      officeNameById.set(o.id, o.name);
     }
   }
 
@@ -407,11 +411,13 @@ export async function aggregateMonthlyVisitSeikyu(
       gender: client?.gender ?? null,
       certStart: ins?.certStart ?? null,
       certEnd: ins?.certEnd ?? null,
-      // 直接入力の care_office_number があれば優先。無ければ従来の care_office_id → business_number 解決
+      // 直接入力の care_office_number があれば優先。無ければ care_office_id → care_offices.office_number 解決
       careOfficeNumber:
         ins?.careOfficeNumberDirect ??
         (ins?.careOfficeId ? officeNumberById.get(ins.careOfficeId) ?? null : null),
-      careOfficeName: ins?.careOfficeName ?? null,
+      careOfficeName:
+        ins?.careOfficeName ??
+        (ins?.careOfficeId ? officeNameById.get(ins.careOfficeId) ?? null : null),
       serviceDays: daysByUser.get(userId)?.size ?? 0,
     });
   }
