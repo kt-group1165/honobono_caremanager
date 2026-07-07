@@ -10,12 +10,11 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Receipt, AlertCircle, Printer, Plus, Trash2, Users, Banknote } from "lucide-react";
+import { Loader2, AlertCircle, Printer, Plus, Trash2, Users, Banknote } from "lucide-react";
 import Encoding from "encoding-japanese";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { MonthNav } from "../_shared/month-nav";
-import { useSeikyuData } from "../_shared/use-seikyu-data";
+import { useSeikyuContext } from "../_shared/seikyu-context";
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
 import { buildFbZengin, type FbTransferTarget } from "@/lib/fb-zengin";
 
@@ -61,8 +60,8 @@ const PAYMENT_STATUS_CLS: Record<string, string> = {
 };
 
 export function RiyouSeikyuContent() {
-  const { year, month, onMonthChange, rows, loading, error, officeName } =
-    useSeikyuData();
+  const { year, month, rows, loading, error, officeName } =
+    useSeikyuContext();
   const supabase = useMemo(() => createClient(), []);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
@@ -283,17 +282,10 @@ export function RiyouSeikyuContent() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-bold text-gray-900">
-            <Receipt size={20} className="text-emerald-600" />
-            利用請求
-          </h1>
-          <p className="mt-0.5 text-xs text-gray-500">
-            {officeName ?? ""} — 利用者本人への請求 (負担割合分) 一覧
-          </p>
-        </div>
+        <p className="text-xs text-gray-500">
+          {officeName ?? ""} — 利用者本人への請求 (負担割合分) 一覧
+        </p>
         <div className="flex items-center gap-2">
-          <MonthNav year={year} month={month} onChange={onMonthChange} />
           <button
             type="button"
             onClick={printHousehold}

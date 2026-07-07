@@ -17,7 +17,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Loader2,
-  Calculator,
   AlertCircle,
   FileText,
   Printer,
@@ -27,8 +26,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
-import { MonthNav } from "../_shared/month-nav";
-import { useSeikyuData } from "../_shared/use-seikyu-data";
+import { useSeikyuContext } from "../_shared/seikyu-context";
 import { MeisaiPrintSheet } from "../../billing/forms/_meisai";
 import { SeikyuForm } from "../../billing/forms/_seikyu";
 import {
@@ -62,10 +60,10 @@ interface DisplayRow {
 
 export function KaigoSeikyuContent() {
   const {
-    year, month, onMonthChange, rows, recordCount, loading, error,
+    year, month, rows, recordCount, loading, error,
     officeName, officeNumber, officeAddress, officePhone, officePostal,
     officeId, tenantId, unitPrice, appliedFormulaCodes,
-  } = useSeikyuData();
+  } = useSeikyuContext();
   const { currentOffice } = useBusinessType();
   const supabase = useMemo(() => createClient(), []);
 
@@ -407,20 +405,6 @@ export function KaigoSeikyuContent() {
 
   return (
     <div className="space-y-4">
-      {/* 画面ヘッダ (印刷時非表示) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-bold text-gray-900">
-            <Calculator size={20} className="text-blue-600" />
-            介護請求
-          </h1>
-          <p className="mt-0.5 text-xs text-gray-500">
-            {officeName ?? ""} — 実績 (完了) ベースの月次請求。明細書・請求書の発行と請求状態の管理
-          </p>
-        </div>
-        <MonthNav year={year} month={month} onChange={onMonthChange} />
-      </div>
-
       {/* 月遅れ/返戻の再請求 案内 (印刷時非表示) */}
       {!loading && reRows.length > 0 && (
         <div className="flex items-start gap-2 rounded border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 print:hidden">

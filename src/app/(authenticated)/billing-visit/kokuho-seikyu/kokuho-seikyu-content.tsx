@@ -14,22 +14,20 @@
 import { useMemo, useState } from "react";
 import {
   Loader2,
-  Landmark,
   AlertCircle,
   Download,
   Send,
 } from "lucide-react";
 import Encoding from "encoding-japanese";
 import { toast } from "sonner";
-import { MonthNav } from "../_shared/month-nav";
-import { useSeikyuData } from "../_shared/use-seikyu-data";
+import { useSeikyuContext } from "../_shared/seikyu-context";
 import { buildKokuhoDensou } from "@/lib/kokuho-densou/build";
 
 export function KokuhoSeikyuContent() {
   const {
-    year, month, onMonthChange, rows, loading, error,
+    year, month, rows, loading, error,
     officeName, officeNumber, unitPrice,
-  } = useSeikyuData();
+  } = useSeikyuContext();
   const [checked, setChecked] = useState<Set<string>>(new Set());
 
   const toggle = (id: string) =>
@@ -157,19 +155,12 @@ export function KokuhoSeikyuContent() {
 
   return (
     <div className="space-y-4">
-      {/* 画面ヘッダ */}
+      {/* ツールバー (伝送ファイル / 確認用CSV) */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-bold text-gray-900">
-            <Landmark size={20} className="text-indigo-600" />
-            国保請求
-          </h1>
-          <p className="mt-0.5 text-xs text-gray-500">
-            {officeName ?? ""} — 国保連への介護給付費請求の集計と、伝送ファイルの作成
-          </p>
-        </div>
+        <p className="text-xs text-gray-500">
+          {officeName ?? ""} — 国保連への介護給付費請求の集計と、伝送ファイルの作成
+        </p>
         <div className="flex items-center gap-2">
-          <MonthNav year={year} month={month} onChange={onMonthChange} />
           <button
             type="button"
             disabled={rows.length === 0}
