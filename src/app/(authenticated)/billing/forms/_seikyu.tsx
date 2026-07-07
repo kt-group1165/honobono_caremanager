@@ -91,7 +91,7 @@ export function SeikyuForm(props: Props) {
   };
 
   const publicRows = [
-    { code: "12", label: "生保\n居宅・施設サービス\n介護予防サービス\n地域密着型サービス等" },
+    { code: "12", label: "生保\n居宅・施設・介護予防\n地域密着型サービス等" },
     { code: "12", label: "生保\n居宅介護支援・\n居宅予防支援", key: "12b" },
     { code: "10", label: "感染症 37条の2" },
     { code: "21", label: "障自・通院医療" },
@@ -253,9 +253,9 @@ export function SeikyuForm(props: Props) {
             // 法別行の明細は最初の 12 (居宅・施設サービス等) 行のみに反映。他は空欄。
             const k = !row.key && idx === 0 ? kohiByCode.get(row.code) : undefined;
             return (
-              <tr key={rowKey} style={{ height: 18 }}>
+              <tr key={rowKey} style={{ height: 26 }}>
                 <td style={{ ...h, width: "5%", fontSize: "7pt" }}>{row.key ? "" : row.code}</td>
-                <td style={{ ...c, width: "14%", fontSize: "5pt", lineHeight: 1.1, whiteSpace: "pre-line" }}>{row.label}</td>
+                <td style={{ ...c, width: "14%", fontSize: "5.5pt", lineHeight: 1.15, whiteSpace: "pre-line" }}>{row.label}</td>
                 <td style={cR}>{k ? k.count : ""}</td>
                 <td style={cR}>{k ? k.units.toLocaleString() : ""}</td>
                 <td style={cR}>{k ? k.cost.toLocaleString() : ""}</td>
