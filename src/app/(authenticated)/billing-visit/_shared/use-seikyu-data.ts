@@ -28,6 +28,7 @@ export function useSeikyuData() {
   const [officePhone, setOfficePhone] = useState<string | null>(null);
   const [officePostal, setOfficePostal] = useState<string | null>(null);
   const [unitPrice, setUnitPrice] = useState<number>(10);
+  const [appliedFormulaCodes, setAppliedFormulaCodes] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     if (!currentOffice) return;
@@ -52,6 +53,10 @@ export function useSeikyuData() {
       setOfficePostal(or?.postal_code ?? null);
       setUnitPrice(
         (officeRow as { unit_price?: number } | null)?.unit_price ?? 10,
+      );
+      setAppliedFormulaCodes(
+        (officeRow as { applied_formula_codes?: string[] } | null)
+          ?.applied_formula_codes ?? [],
       );
       const result = await aggregateMonthlyVisitSeikyu(supabase, {
         officeId: currentOffice.id,
@@ -97,6 +102,9 @@ export function useSeikyuData() {
     officePhone,
     officePostal,
     unitPrice,
+    appliedFormulaCodes,
+    officeId: currentOffice?.id ?? null,
+    tenantId: currentOffice?.tenant_id ?? null,
     reload: load,
   };
 }

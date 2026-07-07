@@ -19,6 +19,13 @@
 
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
 
+/**
+ * 伝送用の 1 行。月遅れ・返戻の再請求では利用者ごとに
+ * サービス提供年月 (元提供月) が当月と異なるため、行に ym (YYYYMM) を
+ * 持たせられるようにした。ym が無い行は opts.year/month を使う (後方互換)。
+ */
+export type DensouRow = UserSeikyuRow & { ym?: string };
+
 // ─── コード値 ────────────────────────────────────────────────────────────────
 // 要介護状態区分コード (被保険者証記載の標準コード)
 const CARE_LEVEL_CODE: Record<string, string> = {
@@ -65,10 +72,12 @@ const genderCode = (g: string | null) =>
   g == null ? "" : g.includes("女") ? "2" : g.includes("男") ? "1" : "";
 
 export function buildKokuhoDensou(
-  rows: UserSeikyuRow[],
+  rows: DensouRow[],
   opts: DensouBuildOptions,
 ): DensouBuildResult {
   const warnings: string[] = [];
+  // opts の年月 (= 処理対象年月 / 通常請求の提供年月)。
+  // 行に ym があればそれを優先し、無ければこの opts 年月にフォールバック。
   const ym = `${opts.year}${String(opts.month).padStart(2, "0")}`;
   const office = (opts.officeNumber ?? "").trim();
   if (!/^\d{10}$/.test(office)) {
@@ -136,6 +145,8 @@ export function buildKokuhoDensou(
 
   // ── 7131 明細書 (利用者ごと: 基本 01 → 明細 02×n → 集計 10) ──
   for (const r of rows) {
+    // 提供年月: 月遅れ/返戻の再請求では利用者ごとに元の提供月を使う (行 ym 優先)
+    const rowYm = r.ym ?? ym;
     const insurer = (r.insurer_number ?? "").trim();
     const insured = (r.insured_number ?? "").trim();
     if (!insurer) warnings.push(`${r.user_name}: 保険者番号が未登録です`);
@@ -155,7 +166,7 @@ export function buildKokuhoDensou(
     dataParts.push([
       "7131", // 1 交換情報識別番号
       "01", // 2 レコード種別コード
-      ym, // 3 サービス提供年月
+      rowYm, // 3 サービス提供年月 (行 ym 優先 = 月遅れ/返戻は元提供月)
       office, // 4 事業所番号
       insurer, // 5 証記載保険者番号
       insured, // 6 被保険者番号
@@ -221,7 +232,7 @@ export function buildKokuhoDensou(
       dataParts.push([
         "7131", // 1
         "02", // 2 レコード種別コード
-        ym, // 3
+        rowYm, // 3 サービス提供年月 (行 ym 優先)
         office, // 4
         insurer, // 5
         insured, // 6
@@ -245,7 +256,7 @@ export function buildKokuhoDensou(
     dataParts.push([
       "7131", // 1
       "10", // 2 レコード種別コード
-      ym, // 3
+      rowYm, // 3 サービス提供年月 (行 ym 優先)
       office, // 4
       insurer, // 5
       insured, // 6

@@ -10,12 +10,23 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Receipt, AlertCircle, Printer, Plus, Trash2 } from "lucide-react";
+import { Loader2, Receipt, AlertCircle, Printer, Plus, Trash2, Users, Banknote } from "lucide-react";
+import Encoding from "encoding-japanese";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { MonthNav } from "../_shared/month-nav";
 import { useSeikyuData } from "../_shared/use-seikyu-data";
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
+import { buildFbZengin, type FbTransferTarget } from "@/lib/fb-zengin";
+
+// 利用者の口座情報 (FB データ用) — clients の bank_* 列
+interface ClientBank {
+  bank_name: string | null;
+  bank_branch: string | null;
+  bank_account_type: string | null;
+  bank_account_number: string | null;
+  bank_account_holder: string | null;
+}
 
 // 利用実費 (保険外費用) — ほのぼの 訪問介護請求管理編 1-3 対応
 interface JippiEntry {
@@ -109,6 +120,42 @@ export function RiyouSeikyuContent() {
     loadPayments();
   }, [loadPayments]);
 
+  // 口座情報 (FB データ用) — clients の bank_* を月内の利用者分だけ fetch
+  const [bankByUser, setBankByUser] = useState<Map<string, ClientBank>>(new Map());
+  const loadBanks = useCallback(async () => {
+    if (rows.length === 0) {
+      setBankByUser(new Map());
+      return;
+    }
+    const ids = rows.map((r) => r.user_id);
+    const m = new Map<string, ClientBank>();
+    for (let i = 0; i < ids.length; i += 100) {
+      const chunk = ids.slice(i, i + 100);
+      const { data, error: e } = await supabase
+        .from("clients")
+        .select("id, bank_name, bank_branch, bank_account_type, bank_account_number, bank_account_holder")
+        .in("id", chunk);
+      if (e) {
+        toast.error("口座情報取得失敗: " + e.message);
+        return;
+      }
+      for (const c of (data ?? []) as ({ id: string } & ClientBank)[]) {
+        m.set(c.id, {
+          bank_name: c.bank_name,
+          bank_branch: c.bank_branch,
+          bank_account_type: c.bank_account_type,
+          bank_account_number: c.bank_account_number,
+          bank_account_holder: c.bank_account_holder,
+        });
+      }
+    }
+    setBankByUser(m);
+  }, [supabase, rows]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更/行更新時の fetch
+    loadBanks();
+  }, [loadBanks]);
+
   const selected = rows.find((r) => r.user_id === selectedUserId) ?? rows[0] ?? null;
   const totalBilled = rows.reduce((s, r) => s + r.userAmount + jippiTotal(r.user_id), 0);
 
@@ -158,6 +205,81 @@ export function RiyouSeikyuContent() {
     }, 100);
   };
 
+  // ─── 名寄せ (世帯合算) ───────────────────────────────────────────────────
+  // 選択した複数利用者を 1 世帯として 1 枚の請求書に合算印刷する。
+  const [householdPrinting, setHouseholdPrinting] = useState(false);
+  // 合算対象 = チェックした利用者 (代表者 = 先頭)
+  const householdRows = useMemo(
+    () => rows.filter((r) => checked.has(r.user_id)),
+    [rows, checked],
+  );
+  const printHousehold = () => {
+    if (householdRows.length < 2) {
+      toast.error("世帯合算は 2 名以上を選択してください");
+      return;
+    }
+    setHouseholdPrinting(true);
+    setTimeout(() => {
+      window.print();
+      setHouseholdPrinting(false);
+    }, 100);
+  };
+
+  // ─── FB データ (全銀協 口座振替) ───────────────────────────────────────────
+  const exportFbData = () => {
+    // 対象: 発行対象 (targets)。金額 (負担額 + 実費) を引落額とする
+    const fbTargets: FbTransferTarget[] = targets.map((r) => {
+      const bank = bankByUser.get(r.user_id);
+      return {
+        customerNumber: r.insured_number ?? r.user_id.slice(0, 20),
+        accountHolderKana: bank?.bank_account_holder ?? r.user_name_kana ?? r.user_name,
+        bankCode: null, // clients に銀行番号は未保持 → 空欄
+        branchCode: null, // 支店番号も未保持 → 空欄
+        bankName: bank?.bank_name ?? null,
+        branchName: bank?.bank_branch ?? null,
+        accountType: bank?.bank_account_type ?? null,
+        accountNumber: bank?.bank_account_number ?? null,
+        amount: r.userAmount + jippiTotal(r.user_id),
+      };
+    });
+
+    const result = buildFbZengin(fbTargets, {
+      consignorCode: null, // 委託者コードは未設定 (銀行付与) → 空欄 + warning
+      consignorNameKana: officeName,
+      transferDay: 27, // 引落日は既定 27 日 (対象月)
+      year,
+      month,
+    });
+
+    if (result.count === 0) {
+      toast.error("引落対象 (金額 > 0) がありません");
+      return;
+    }
+
+    if (result.warnings.length > 0) {
+      const list = result.warnings.slice(0, 12).join("\n・");
+      const ok = window.confirm(
+        `以下の項目が未設定です (伝送前にご確認ください):\n\n・${list}${result.warnings.length > 12 ? `\n…他 ${result.warnings.length - 12} 件` : ""}\n\nこのまま FB データを出力しますか？`,
+      );
+      if (!ok) return;
+    }
+
+    // Shift_JIS で出力 (全銀フォーマットは Shift_JIS 固定)
+    const sjis = Encoding.convert(Encoding.stringToCode(result.content), {
+      to: "SJIS",
+      from: "UNICODE",
+    });
+    const blob = new Blob([new Uint8Array(sjis)], { type: "text/plain" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = result.fileName;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast.success(
+      `FB データ ${result.fileName} を出力しました (${result.count} 件 / 合計 ¥${result.totalAmount.toLocaleString()})`,
+    );
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
@@ -172,6 +294,26 @@ export function RiyouSeikyuContent() {
         </div>
         <div className="flex items-center gap-2">
           <MonthNav year={year} month={month} onChange={onMonthChange} />
+          <button
+            type="button"
+            onClick={printHousehold}
+            disabled={householdRows.length < 2}
+            title="選択した 2 名以上を 1 世帯として 1 枚に合算印刷"
+            className="inline-flex items-center gap-1 rounded-lg border border-emerald-600 bg-white px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+          >
+            <Users size={14} />
+            世帯合算で請求書 ({householdRows.length}名)
+          </button>
+          <button
+            type="button"
+            onClick={exportFbData}
+            disabled={rows.length === 0}
+            title="全銀協 口座振替フォーマット (Shift_JIS) で FB データを出力"
+            className="inline-flex items-center gap-1 rounded-lg border border-blue-600 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+          >
+            <Banknote size={14} />
+            FBデータ ({targets.length}件)
+          </button>
           <button
             type="button"
             onClick={issueSeikyusho}
@@ -425,6 +567,19 @@ export function RiyouSeikyuContent() {
                 month={month}
               />
             ))}
+          </div>
+        )}
+
+        {/* ===== 印刷 view: 世帯合算 請求書 (選択者を 1 枚に合算) ===== */}
+        {householdPrinting && householdRows.length >= 2 && (
+          <div className="hidden print:block">
+            <RiyouSeikyuHouseholdPrintSheet
+              rows={householdRows}
+              jippiByUser={jippiByUser}
+              officeName={officeName}
+              reiwa={reiwa}
+              month={month}
+            />
           </div>
         )}
         </>
@@ -849,6 +1004,106 @@ function RiyouSeikyuPrintSheet({
       <p className="mt-6 text-xs text-gray-700">
         ※ 本請求は介護保険サービス利用に伴う利用者負担分です (保険単位数{" "}
         {row.totalUnits.toLocaleString()} 単位、単価 {row.unitPrice.toFixed(2)} 円/単位)。
+      </p>
+    </div>
+  );
+}
+
+// ─── 印刷: 世帯合算 請求書 (選択者を 1 枚に合算 / 宛名 = 代表者) ─────────────
+function RiyouSeikyuHouseholdPrintSheet({
+  rows,
+  jippiByUser,
+  officeName,
+  reiwa,
+  month,
+}: {
+  rows: UserSeikyuRow[];
+  jippiByUser: Map<string, JippiEntry[]>;
+  officeName: string | null;
+  reiwa: number;
+  month: number;
+}) {
+  const today = new Date();
+  const issueDate = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
+  const rep = rows[0]; // 代表者 = 先頭
+  // 各利用者の 負担額 + 実費 = 明細 1 行、合計を世帯合算とする
+  const perUser = rows.map((r) => {
+    const jippiSum = (jippiByUser.get(r.user_id) ?? []).reduce((s, e) => s + e.amount, 0);
+    return { row: r, jippiSum, subtotal: r.userAmount + jippiSum };
+  });
+  const grandTotal = perUser.reduce((s, u) => s + u.subtotal, 0);
+
+  return (
+    <div className="p-10 text-black" style={{ pageBreakAfter: "always" }}>
+      <h1 className="mb-8 text-center text-2xl font-bold tracking-[0.5em]">
+        利用料請求書 (世帯合算)
+      </h1>
+
+      <div className="mb-8 flex items-start justify-between">
+        <div>
+          <p className="inline-block border-b border-black pb-1 pr-12 text-lg">
+            {rep.user_name} 様 {rows.length > 1 ? `他 ${rows.length - 1} 名` : ""}
+          </p>
+          <p className="mt-3 text-sm">
+            令和{reiwa}年{month}月分のサービス利用料を下記のとおり (世帯合算) ご請求申し上げます。
+          </p>
+        </div>
+        <div className="text-right text-sm leading-6">
+          <p>発行日: {issueDate}</p>
+          <p className="mt-3 font-medium">{officeName ?? ""}</p>
+        </div>
+      </div>
+
+      <div className="mb-6 flex items-center gap-3">
+        <span className="border border-black px-4 py-2 text-lg font-bold">
+          ご請求金額 ¥{grandTotal.toLocaleString()} －
+        </span>
+        <span className="text-xs">(消費税: 非課税 / 世帯 {rows.length} 名分)</span>
+      </div>
+
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="bg-gray-100">
+            <th className="border border-black px-2 py-1.5 text-left">利用者名</th>
+            <th className="border border-black px-2 py-1.5 text-right w-28">利用者負担額</th>
+            <th className="border border-black px-2 py-1.5 text-right w-24">実費</th>
+            <th className="border border-black px-2 py-1.5 text-right w-28">小計</th>
+          </tr>
+        </thead>
+        <tbody>
+          {perUser.map((u) => (
+            <tr key={u.row.user_id}>
+              <td className="border border-black px-2 py-1.5">
+                {u.row.user_name}
+                <span className="ml-2 text-xs text-gray-500">
+                  ({Math.round(u.row.copay_rate * 10)}割)
+                </span>
+              </td>
+              <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+                ¥{u.row.userAmount.toLocaleString()}
+              </td>
+              <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+                {u.jippiSum > 0 ? `¥${u.jippiSum.toLocaleString()}` : "—"}
+              </td>
+              <td className="border border-black px-2 py-1.5 text-right tabular-nums font-semibold">
+                ¥{u.subtotal.toLocaleString()}
+              </td>
+            </tr>
+          ))}
+          <tr className="font-bold">
+            <td className="border border-black px-2 py-1.5" colSpan={3}>
+              世帯合計 ({rows.length} 名分)
+            </td>
+            <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+              ¥{grandTotal.toLocaleString()}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p className="mt-6 text-xs text-gray-700">
+        ※ 本請求は世帯内 {rows.length} 名分の介護保険サービス利用者負担分 + 実費を合算したものです。
+        代表者 ({rep.user_name} 様) 宛に 1 枚で発行しています。
       </p>
     </div>
   );

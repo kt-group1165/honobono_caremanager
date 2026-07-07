@@ -9,6 +9,7 @@ import {
   Save,
   Loader2,
   CalendarDays,
+  CalendarPlus,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -41,6 +42,38 @@ function serviceColorClass(t: string): string {
 
 function genId() {
   return Math.random().toString(36).slice(2);
+}
+
+// TIME 値 (HH:MM もしくは HH:MM:SS) を Postgres TIME 用に HH:MM:SS へ正規化。
+// 保存済パターンは DB から HH:MM:SS で来るが、未保存の枠は HH:MM なので揃える。
+function normalizeTime(t: string): string {
+  const parts = t.split(":");
+  const hh = (parts[0] ?? "00").padStart(2, "0");
+  const mm = (parts[1] ?? "00").padStart(2, "0");
+  const ss = (parts[2] ?? "00").padStart(2, "0");
+  return `${hh}:${mm}:${ss}`;
+}
+
+// 指定年月 (year, month は 1〜12) の中で day_of_week (0=日〜6=土) に該当する
+// 全日付を "YYYY-MM-DD" で返す。
+function datesForDow(year: number, month: number, dow: number): string[] {
+  const out: string[] = [];
+  // month は 1-based → Date は 0-based
+  const daysInMonth = new Date(year, month, 0).getDate();
+  for (let day = 1; day <= daysInMonth; day++) {
+    const d = new Date(year, month - 1, day);
+    if (d.getDay() === dow) {
+      const mm = String(month).padStart(2, "0");
+      const dd = String(day).padStart(2, "0");
+      out.push(`${year}-${mm}-${dd}`);
+    }
+  }
+  return out;
+}
+
+function defaultMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
 // rowsToPatterns は patterns-shared.ts に移動済 (server component から安全に import 可)
@@ -263,6 +296,114 @@ export function PatternsContent({ userId, initialPatterns, initialStaff }: Patte
   const [patterns, setPatterns] = useState<VisitPattern[]>(initialPatterns);
   const [staff] = useState<KaigoStaff[]>(initialStaff);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [expandMonth, setExpandMonth] = useState<string>(defaultMonth());
+  const [expanding, setExpanding] = useState(false);
+
+  // 週間パターンを対象年月の該当曜日すべてに kaigo_visit_schedule として展開 (ほのぼの相当)。
+  // 重複防止キー = user_id + visit_date + start_time + service_type。
+  const handleExpand = async () => {
+    // 保存済 (DB にある) パターンのみ展開対象。未保存の days は id を持たない。
+    const savedDays = patterns.flatMap((p) => p.days.filter((d) => d.id));
+    if (savedDays.length === 0) {
+      toast.error("展開できる保存済パターンがありません。先にパターンを保存してください。");
+      return;
+    }
+    const m = /^(\d{4})-(\d{2})$/.exec(expandMonth);
+    if (!m) {
+      toast.error("対象年月が不正です");
+      return;
+    }
+    const year = Number(m[1]);
+    const month = Number(m[2]);
+
+    // パターン → その月の日付集合へ展開して候補行を作る
+    const candidates = savedDays.flatMap((d) =>
+      datesForDow(year, month, d.day_of_week).map((visit_date) => ({
+        user_id: userId,
+        staff_id: d.staff_id || null,
+        visit_date,
+        start_time: normalizeTime(d.start_time),
+        end_time: normalizeTime(d.end_time),
+        service_type: d.service_type,
+        status: "scheduled" as const,
+      }))
+    );
+    if (candidates.length === 0) {
+      toast.error("該当する曜日がこの月にありません");
+      return;
+    }
+
+    setExpanding(true);
+    try {
+      // 既存予定を取得して重複判定 (user_id + visit_date + start_time + service_type)
+      const from = `${year}-${String(month).padStart(2, "0")}-01`;
+      const to = `${year}-${String(month).padStart(2, "0")}-${String(
+        new Date(year, month, 0).getDate()
+      ).padStart(2, "0")}`;
+      const { data: existing, error: exErr } = await supabase
+        .from("kaigo_visit_schedule")
+        .select("visit_date, start_time, service_type")
+        .eq("user_id", userId)
+        .gte("visit_date", from)
+        .lte("visit_date", to);
+      if (exErr) throw exErr;
+
+      const existingRows = (existing ?? []) as {
+        visit_date: string;
+        start_time: string;
+        service_type: string;
+      }[];
+      const existingKeys = new Set(
+        existingRows.map(
+          (r) => `${r.visit_date}|${normalizeTime(r.start_time)}|${r.service_type}`
+        )
+      );
+
+      // 候補内での自己重複も排除しつつ、既存と衝突しない行だけ残す
+      const seen = new Set<string>(existingKeys);
+      const toInsert: typeof candidates = [];
+      let skipped = 0;
+      for (const c of candidates) {
+        const key = `${c.visit_date}|${c.start_time}|${c.service_type}`;
+        if (seen.has(key)) {
+          skipped++;
+          continue;
+        }
+        seen.add(key);
+        toInsert.push(c);
+      }
+
+      if (toInsert.length === 0) {
+        toast.info(`作成対象なし (${skipped} 件は既存でスキップ)`);
+        return;
+      }
+      if (
+        !window.confirm(
+          `${expandMonth} に ${toInsert.length} 件の予定を作成します。` +
+            (skipped > 0 ? ` (既存 ${skipped} 件はスキップ)` : "") +
+            "\nよろしいですか？"
+        )
+      ) {
+        return;
+      }
+
+      const { error: insErr } = await supabase
+        .from("kaigo_visit_schedule")
+        .insert(toInsert);
+      if (insErr) throw insErr;
+
+      toast.success(
+        `${toInsert.length} 件の予定を作成しました` +
+          (skipped > 0 ? ` (${skipped} 件スキップ)` : "")
+      );
+    } catch (err: unknown) {
+      toast.error(
+        "展開に失敗: " + (err instanceof Error ? err.message : JSON.stringify(err))
+      );
+    } finally {
+      setExpanding(false);
+    }
+  };
 
   const handleChange = (updated: VisitPattern) => {
     setPatterns((prev) => prev.map((p) => (p.tempId === updated.tempId ? updated : p)));
@@ -343,13 +484,37 @@ export function PatternsContent({ userId, initialPatterns, initialStaff }: Patte
           <CalendarDays className="text-blue-600" size={20} />
           <h1 className="text-lg font-bold text-gray-900">利用者パターン登録</h1>
         </div>
-        <button
-          onClick={handleAddPattern}
-          className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={15} />
-          パターン追加
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 rounded-lg border bg-gray-50 px-2 py-1">
+            <input
+              type="month"
+              value={expandMonth}
+              onChange={(e) => setExpandMonth(e.target.value)}
+              className="rounded border-0 bg-transparent text-sm text-gray-800 focus:outline-none"
+              aria-label="展開対象年月"
+            />
+            <button
+              onClick={handleExpand}
+              disabled={expanding}
+              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+              title="週間パターンをこの月の該当曜日すべてに予定として展開"
+            >
+              {expanding ? (
+                <Loader2 size={15} className="animate-spin" />
+              ) : (
+                <CalendarPlus size={15} />
+              )}
+              月間へ展開
+            </button>
+          </div>
+          <button
+            onClick={handleAddPattern}
+            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={15} />
+            パターン追加
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-5">

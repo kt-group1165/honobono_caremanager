@@ -35,6 +35,9 @@ type DbFields = {
   // certification_status の値域は DB 側で CHECK 制約済（認定済み / 申請中 / NULL）
   status: "認定済み" | "申請中";
   certification_number: string;
+  // 担当居宅介護支援事業所 (様式第二⑦ / 7131 の居宅サービス計画欄。外部ケアマネ事業所を直接入力)
+  care_office_number: string;      // 事業所番号 (10桁)
+  care_office_name: string;        // 事業所名 (任意)
   // 公費情報 (生活保護等 — 国保連伝送の公費欄に使用)
   kohi_hobetsu: string;            // 法別番号 (12=生活保護)
   kohi_futansha_number: string;    // 公費負担者番号 (8桁)
@@ -78,6 +81,8 @@ const EMPTY_FORM: FormData = {
   support_limit_amount: "",
   status: "認定済み",
   certification_number: "",
+  care_office_number: "",
+  care_office_name: "",
   kohi_hobetsu: "",
   kohi_futansha_number: "",
   kohi_jukyusha_number: "",
@@ -132,6 +137,8 @@ function recToForm(rec: CareCertification): FormData {
     support_limit_amount: rec.service_limit_amount?.toString() ?? "",
     status: (rec.certification_status as DbFields["status"]) ?? "認定済み",
     certification_number: rec.certification_number ?? "",
+    care_office_number: (rec as unknown as { care_office_number?: string | null }).care_office_number ?? "",
+    care_office_name: (rec as unknown as { care_office_name?: string | null }).care_office_name ?? "",
     kohi_hobetsu: (rec as unknown as { kohi_hobetsu?: string | null }).kohi_hobetsu ?? "",
     kohi_futansha_number: (rec as unknown as { kohi_futansha_number?: string | null }).kohi_futansha_number ?? "",
     kohi_jukyusha_number: (rec as unknown as { kohi_jukyusha_number?: string | null }).kohi_jukyusha_number ?? "",
@@ -243,6 +250,8 @@ export function CareCertContent({
           : null,
         certification_status: form.status,
         certification_number: form.certification_number || null,
+        care_office_number: form.care_office_number || null,
+        care_office_name: form.care_office_name || null,
         kohi_hobetsu: form.kohi_hobetsu || null,
         kohi_futansha_number: form.kohi_futansha_number || null,
         kohi_jukyusha_number: form.kohi_jukyusha_number || null,
@@ -864,6 +873,37 @@ export function CareCertContent({
                   />
                 </div>
               </div>
+            </div>
+
+            {/* 担当居宅介護支援事業所 (様式第二⑦ / 7131 居宅サービス計画欄) */}
+            <div className="rounded border border-sky-200 bg-sky-50/40 p-2 space-y-2">
+              <p className="text-xs font-bold text-sky-800">担当居宅介護支援事業所</p>
+              <div>
+                <label className={labelCls}>事業所番号（10桁）</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={form.care_office_number}
+                  onChange={(e) =>
+                    setField("care_office_number", e.target.value.replace(/[^0-9]/g, "").slice(0, 10))
+                  }
+                  className={inp}
+                  placeholder="0000000000"
+                />
+              </div>
+              <div>
+                <label className={labelCls}>事業所名（任意）</label>
+                <input
+                  type="text"
+                  value={form.care_office_name}
+                  onChange={(e) => setField("care_office_name", e.target.value)}
+                  className={inp}
+                  placeholder="〇〇居宅介護支援事業所"
+                />
+              </div>
+              <p className="text-[10px] text-gray-500">
+                訪問介護の担当居宅は外部ケアマネ事業所であることが多いため、ここに事業所番号を直接入力します。様式第二⑦・7131（居宅サービス計画）に反映されます。
+              </p>
             </div>
 
             <div>

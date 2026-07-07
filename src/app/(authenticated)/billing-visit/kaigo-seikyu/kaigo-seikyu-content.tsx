@@ -9,7 +9,9 @@
  *   - 明細書 (様式第二) / 請求書 (様式第一 総括) / 国保対象 の各ボタン
  * 右: 選択利用者の 明細情報パネル
  *
- * ※ Phase 1: 画面・状態・フラグ・ボタン移設まで。月遅れ/返戻の再請求ロジックは対象外。
+ * ※ Phase 2: 月遅れ/返戻の再請求を実装。過去月の月遅れ/返戻 (未・国保対象) を
+ *    元提供月で再集計し、当月一覧にバッジ付きで合流。明細書・伝送・国保対象化は
+ *    各自の元提供月で反映する。
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -29,6 +31,11 @@ import { MonthNav } from "../_shared/month-nav";
 import { useSeikyuData } from "../_shared/use-seikyu-data";
 import { MeisaiPrintSheet } from "../../billing/forms/_meisai";
 import { SeikyuForm } from "../../billing/forms/_seikyu";
+import {
+  loadReSeikyuRows,
+  type ReSeikyuRow,
+} from "@/lib/visit-seikyu/re-seikyu";
+import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
 
 // kaigo_billing_status の 1 行 (利用者 × 月)
 interface BillingStatusRow {
@@ -40,27 +47,98 @@ interface BillingStatusRow {
   kago: boolean;
 }
 
+// 一覧の 1 行 (当月通常行 or 過去月の再請求行)
+interface DisplayRow {
+  /** 一意キー (利用者 × 提供月)。当月="cur:<id>" / 再請求="re:<id>:<origMonthKey>" */
+  key: string;
+  row: UserSeikyuRow;
+  /** この行の提供月 (YYYY-MM)。当月行は当月、再請求行は元提供月 */
+  origMonthKey: string;
+  /** 月遅れ/返戻の再請求行か */
+  isReSeikyu: boolean;
+  /** 再請求理由 (月遅れ/返戻)。当月通常行は null */
+  reasons: { tsukiokure: boolean; henrei: boolean } | null;
+}
+
 export function KaigoSeikyuContent() {
   const {
     year, month, onMonthChange, rows, recordCount, loading, error,
     officeName, officeNumber, officeAddress, officePhone, officePostal,
+    officeId, tenantId, unitPrice, appliedFormulaCodes,
   } = useSeikyuData();
   const { currentOffice } = useBusinessType();
   const supabase = useMemo(() => createClient(), []);
 
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  // 選択・チェックは (利用者 × 提供月) 単位。月遅れ/返戻で同一利用者が
+  // 当月行 + 過去月行で二重に並ぶため、user_id 単体ではなく複合キーで持つ。
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [statusByClient, setStatusByClient] = useState<Map<string, BillingStatusRow>>(new Map());
   const [printMode, setPrintMode] = useState<"meisai" | "seikyu" | null>(null);
+  // 月遅れ/返戻の再請求行 (過去月を元提供月で再集計したもの)
+  const [reRows, setReRows] = useState<ReSeikyuRow[]>([]);
 
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
-  const reiwa = year - 2018;
 
-  const selected = rows.find((r) => r.user_id === selectedUserId) ?? rows[0] ?? null;
+  // ── 表示用の統合行 (当月通常行 + 再請求行) ──
+  // rowKey: 当月行は "cur:<user_id>" / 再請求行は "re:<user_id>:<origMonthKey>"
+  const displayRows = useMemo<DisplayRow[]>(() => {
+    const cur: DisplayRow[] = rows.map((r) => ({
+      key: `cur:${r.user_id}`,
+      row: r,
+      origMonthKey: monthKey,
+      isReSeikyu: false,
+      reasons: null,
+    }));
+    const re: DisplayRow[] = reRows.map((r) => ({
+      key: `re:${r.user_id}:${r.__origMonthKey}`,
+      row: r,
+      origMonthKey: r.__origMonthKey,
+      isReSeikyu: true,
+      reasons: r.__reasons,
+    }));
+    // 再請求 (過去分) を上、当月を下に並べる
+    return [...re, ...cur];
+  }, [rows, reRows, monthKey]);
 
+  const selected =
+    displayRows.find((d) => d.key === selectedKey)?.row ??
+    displayRows[0]?.row ??
+    null;
+
+  // 合計は当月の通常行のみ (再請求分は元提供月の別集計なので当月合計には含めない)
   const totalUnits = rows.reduce((s, r) => s + r.totalUnits, 0);
   const totalInsurance = rows.reduce((s, r) => s + r.insuranceAmount, 0);
   const totalUser = rows.reduce((s, r) => s + r.userAmount, 0);
+
+  // ── 月遅れ/返戻の再請求行を読み込む ──
+  const loadReRows = useCallback(async () => {
+    if (!officeId || !tenantId) {
+      setReRows([]);
+      return;
+    }
+    try {
+      const list = await loadReSeikyuRows(supabase, {
+        officeId,
+        tenantId,
+        unitPrice,
+        appliedFormulaCodes,
+        currentMonthKey: monthKey,
+      });
+      setReRows(list);
+    } catch (e) {
+      toast.error(
+        "再請求分の集計に失敗: " + (e instanceof Error ? e.message : String(e)),
+      );
+      setReRows([]);
+    }
+  }, [supabase, officeId, tenantId, unitPrice, appliedFormulaCodes, monthKey]);
+
+  useEffect(() => {
+    if (loading) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 月/事業所変更時の fetch
+    loadReRows();
+  }, [loading, loadReRows]);
 
   // ── kaigo_billing_status を (target_month) で読み、client_id で突合 ──
   const loadStatus = useCallback(async () => {
@@ -112,54 +190,74 @@ export function KaigoSeikyuContent() {
     loadStatus();
   };
 
-  const toggle = (id: string) =>
+  const toggle = (key: string) =>
     setChecked((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   const toggleAll = () =>
     setChecked((prev) =>
-      prev.size === rows.length ? new Set() : new Set(rows.map((r) => r.user_id)),
+      prev.size === displayRows.length
+        ? new Set()
+        : new Set(displayRows.map((d) => d.key)),
     );
   const selectUnissued = () =>
     setChecked(
       new Set(
-        rows
-          .filter((r) => !statusByClient.get(r.user_id)?.issued_at)
-          .map((r) => r.user_id),
+        displayRows
+          .filter(
+            (d) =>
+              // 再請求行は常に未発行扱い / 当月行は issued_at 無しのみ
+              d.isReSeikyu || !statusByClient.get(d.row.user_id)?.issued_at,
+          )
+          .map((d) => d.key),
       ),
     );
 
-  // 対象: チェックあり → その利用者 / チェックなし → 全件
+  // 対象: チェックあり → その行 / チェックなし → 全件 (当月 + 再請求)
+  const targetDisplayRows = useMemo(
+    () =>
+      checked.size > 0
+        ? displayRows.filter((d) => checked.has(d.key))
+        : displayRows,
+    [displayRows, checked],
+  );
   const targets = useMemo(
-    () => (checked.size > 0 ? rows.filter((r) => checked.has(r.user_id)) : rows),
-    [rows, checked],
+    () => targetDisplayRows.map((d) => d.row),
+    [targetDisplayRows],
   );
 
-  // 集計 (請求書用)
-  const targetUnits = targets.reduce((s, r) => s + r.totalUnits, 0);
-  const targetCost = targets.reduce((s, r) => s + r.totalAmount, 0);
-  const targetInsurance = targets.reduce((s, r) => s + r.insuranceAmount, 0);
-  const targetUser = targets.reduce((s, r) => s + r.userAmount, 0);
+  // 集計 (請求書用) — 様式第一 総括は当月の通常行のみを対象とする
+  // (再請求分は元提供月の別請求書になるため、当月総括には含めない)
+  const seikyuTargets = useMemo(
+    () => targetDisplayRows.filter((d) => !d.isReSeikyu).map((d) => d.row),
+    [targetDisplayRows],
+  );
+  const targetUnits = seikyuTargets.reduce((s, r) => s + r.totalUnits, 0);
+  const targetCost = seikyuTargets.reduce((s, r) => s + r.totalAmount, 0);
+  const targetInsurance = seikyuTargets.reduce((s, r) => s + r.insuranceAmount, 0);
+  const targetUser = seikyuTargets.reduce((s, r) => s + r.userAmount, 0);
 
   // ── 明細書: 対象者の様式第二を印刷 → 印刷実行時に issued_at を now() で upsert (発行済化) ──
+  //    再請求行は元提供月 (origMonthKey) に対して upsert する。
   const printMeisai = async () => {
-    if (targets.length === 0) return;
+    if (targetDisplayRows.length === 0) return;
     const now = new Date().toISOString();
-    const payload = targets.map((r) => {
-      const cur = statusByClient.get(r.user_id);
+    const payload = targetDisplayRows.map((d) => {
+      // 当月行のみ既存フラグを引き継ぐ (再請求行は過去月の別レコード)
+      const cur = d.isReSeikyu ? undefined : statusByClient.get(d.row.user_id);
       return {
-        client_id: r.user_id,
-        target_month: monthKey,
+        client_id: d.row.user_id,
+        target_month: d.origMonthKey,
         tenant_id: currentOffice?.tenant_id ?? "kt-group",
         office_id: currentOffice?.id ?? null,
         issued_at: now,
-        // 既存フラグを保持
+        // 既存フラグを保持 (再請求行は理由フラグを保持)
         kokuho_target: cur?.kokuho_target ?? false,
-        tsukiokure: cur?.tsukiokure ?? false,
-        henrei: cur?.henrei ?? false,
+        tsukiokure: d.reasons?.tsukiokure ?? cur?.tsukiokure ?? false,
+        henrei: d.reasons?.henrei ?? cur?.henrei ?? false,
         kago: cur?.kago ?? false,
       };
     });
@@ -189,28 +287,57 @@ export function KaigoSeikyuContent() {
     }, 100);
   };
 
-  // ── 国保対象: 選択した「発行済」の行を kokuho_target=true に upsert (未発行はスキップ) ──
+  // ── 国保対象: 選択行を kokuho_target=true に upsert ──
+  //    当月行は「発行済」のみ (未発行はスキップ)。
+  //    再請求行 (月遅れ/返戻) は元提供月に対し kokuho_target=true + notes='再請求' で立てる
+  //    (未発行なら発行済化も同時に行う)。
   const markKokuhoTarget = async () => {
-    const issued = targets.filter((r) => statusByClient.get(r.user_id)?.issued_at);
-    const skipped = targets.length - issued.length;
-    if (issued.length === 0) {
-      toast.warning("国保対象にできる「発行済」の利用者がありません (先に明細書を発行してください)");
+    const now = new Date().toISOString();
+    const payload: Record<string, unknown>[] = [];
+    let skipped = 0;
+
+    for (const d of targetDisplayRows) {
+      if (d.isReSeikyu) {
+        // 再請求分: 元提供月に kokuho_target を立てる (発行済でなくても許可)
+        const prevNotes = "再請求";
+        payload.push({
+          client_id: d.row.user_id,
+          target_month: d.origMonthKey,
+          tenant_id: currentOffice?.tenant_id ?? "kt-group",
+          office_id: currentOffice?.id ?? null,
+          issued_at: now,
+          kokuho_target: true,
+          tsukiokure: d.reasons?.tsukiokure ?? false,
+          henrei: d.reasons?.henrei ?? false,
+          kago: false,
+          notes: prevNotes,
+        });
+      } else {
+        const cur = statusByClient.get(d.row.user_id);
+        if (!cur?.issued_at) {
+          skipped++;
+          continue;
+        }
+        payload.push({
+          client_id: d.row.user_id,
+          target_month: monthKey,
+          tenant_id: currentOffice?.tenant_id ?? "kt-group",
+          office_id: currentOffice?.id ?? null,
+          issued_at: cur.issued_at,
+          kokuho_target: true,
+          tsukiokure: cur.tsukiokure,
+          henrei: cur.henrei,
+          kago: cur.kago,
+        });
+      }
+    }
+
+    if (payload.length === 0) {
+      toast.warning(
+        "国保対象にできる行がありません (当月分は先に明細書を発行してください)",
+      );
       return;
     }
-    const payload = issued.map((r) => {
-      const cur = statusByClient.get(r.user_id)!;
-      return {
-        client_id: r.user_id,
-        target_month: monthKey,
-        tenant_id: currentOffice?.tenant_id ?? "kt-group",
-        office_id: currentOffice?.id ?? null,
-        issued_at: cur.issued_at,
-        kokuho_target: true,
-        tsukiokure: cur.tsukiokure,
-        henrei: cur.henrei,
-        kago: cur.kago,
-      };
-    });
     const { error: e } = await supabase
       .from("kaigo_billing_status")
       .upsert(payload, { onConflict: "client_id,target_month" });
@@ -219,9 +346,11 @@ export function KaigoSeikyuContent() {
       return;
     }
     toast.success(
-      `${issued.length} 名を国保対象にしました${skipped > 0 ? ` (未発行 ${skipped} 名はスキップ)` : ""}`,
+      `${payload.length} 件を国保対象にしました${skipped > 0 ? ` (未発行 ${skipped} 名はスキップ)` : ""}`,
     );
     loadStatus();
+    // 再請求分は kokuho_target 化されたので一覧から外れる → 再読込
+    loadReRows();
   };
 
   // ── 確認用 CSV (明細一覧) ──
@@ -238,12 +367,23 @@ export function KaigoSeikyuContent() {
       "状態",
     ];
     const lines: string[] = [header.join(",")];
-    for (const r of targets) {
-      const st = statusByClient.get(r.user_id);
-      const state = st?.kokuho_target ? "国保対象" : st?.issued_at ? "発行済" : "未発行";
+    for (const d of targetDisplayRows) {
+      const r = d.row;
+      // 再請求行は元提供月 (YYYYMM) を提供年月として出す
+      const rowYm = d.isReSeikyu ? d.origMonthKey.replace("-", "") : ym;
+      const st = d.isReSeikyu ? undefined : statusByClient.get(r.user_id);
+      const state = d.isReSeikyu
+        ? d.reasons?.henrei
+          ? "返戻(再請求)"
+          : "月遅れ(再請求)"
+        : st?.kokuho_target
+        ? "国保対象"
+        : st?.issued_at
+        ? "発行済"
+        : "未発行";
       lines.push(
         [
-          ym,
+          rowYm,
           r.insured_number ?? "",
           `"${r.user_name}"`,
           r.care_level ?? "",
@@ -281,8 +421,19 @@ export function KaigoSeikyuContent() {
         <MonthNav year={year} month={month} onChange={onMonthChange} />
       </div>
 
+      {/* 月遅れ/返戻の再請求 案内 (印刷時非表示) */}
+      {!loading && reRows.length > 0 && (
+        <div className="flex items-start gap-2 rounded border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 print:hidden">
+          <AlertCircle size={14} className="mt-0.5 shrink-0" />
+          <span>
+            過去月の月遅れ・返戻 {reRows.length} 件を当月請求に合流しています
+            (元提供月で明細書・伝送に反映)。国保対象化すると一覧から外れます。
+          </span>
+        </div>
+      )}
+
       {/* 操作ボタン (印刷時非表示) */}
-      {!loading && rows.length > 0 && (
+      {!loading && displayRows.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 print:hidden">
           <button
             type="button"
@@ -326,7 +477,9 @@ export function KaigoSeikyuContent() {
               onClick={toggleAll}
               className="rounded border border-gray-300 bg-white px-2.5 py-1 font-medium text-gray-600 hover:bg-gray-50"
             >
-              {checked.size === rows.length && rows.length > 0 ? "全解除" : "全選択"}
+              {checked.size === displayRows.length && displayRows.length > 0
+                ? "全解除"
+                : "全選択"}
             </button>
             <button
               type="button"
@@ -351,7 +504,7 @@ export function KaigoSeikyuContent() {
           <Loader2 size={20} className="mr-2 animate-spin" />
           集計中...
         </div>
-      ) : rows.length === 0 ? (
+      ) : displayRows.length === 0 ? (
         <div className="rounded-lg border border-dashed bg-gray-50 p-12 text-center text-sm text-gray-500 print:hidden">
           対象月の実績 (完了) がありません。サービス提供表で実績を確定してください。
         </div>
@@ -366,7 +519,10 @@ export function KaigoSeikyuContent() {
                     <th className="w-10 px-2 py-1.5 text-center">
                       <input
                         type="checkbox"
-                        checked={checked.size === rows.length && rows.length > 0}
+                        checked={
+                          checked.size === displayRows.length &&
+                          displayRows.length > 0
+                        }
                         onChange={toggleAll}
                         className="h-3.5 w-3.5 accent-blue-600 cursor-pointer"
                       />
@@ -384,16 +540,22 @@ export function KaigoSeikyuContent() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {rows.map((r) => {
-                    const st = statusByClient.get(r.user_id);
+                  {displayRows.map((d) => {
+                    const r = d.row;
+                    // 当月行のみ status を突合 (再請求行は過去月レコードなので理由バッジで代替)
+                    const st = d.isReSeikyu
+                      ? undefined
+                      : statusByClient.get(r.user_id);
                     return (
                       <tr
-                        key={r.user_id}
-                        onClick={() => setSelectedUserId(r.user_id)}
+                        key={d.key}
+                        onClick={() => setSelectedKey(d.key)}
                         className={
                           "cursor-pointer transition-colors " +
-                          (selected?.user_id === r.user_id
+                          (selectedKey === d.key
                             ? "bg-blue-50"
+                            : d.isReSeikyu
+                            ? "bg-amber-50/40 hover:bg-amber-50"
                             : "hover:bg-gray-50")
                         }
                       >
@@ -403,15 +565,26 @@ export function KaigoSeikyuContent() {
                         >
                           <input
                             type="checkbox"
-                            checked={checked.has(r.user_id)}
-                            onChange={() => toggle(r.user_id)}
+                            checked={checked.has(d.key)}
+                            onChange={() => toggle(d.key)}
                             className="h-3.5 w-3.5 accent-blue-600 cursor-pointer"
                           />
                         </td>
                         <td className="px-2 py-2">
-                          <StatusBadge status={st} />
+                          {d.isReSeikyu ? (
+                            <ReSeikyuBadge reasons={d.reasons} />
+                          ) : (
+                            <StatusBadge status={st} />
+                          )}
                         </td>
-                        <td className="px-3 py-2 font-medium">{r.user_name}</td>
+                        <td className="px-3 py-2 font-medium">
+                          {r.user_name}
+                          {d.isReSeikyu && (
+                            <span className="ml-1.5 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-bold text-amber-700">
+                              元 {origMonthLabel(d.origMonthKey)}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 font-mono text-xs">
                           {r.insured_number ?? "—"}
                         </td>
@@ -425,15 +598,23 @@ export function KaigoSeikyuContent() {
                         <td className="px-3 py-2 text-right tabular-nums text-gray-700">
                           {r.userAmount.toLocaleString()}
                         </td>
+                        {/* 月遅れ / 返戻 / 過誤 — 当月行はチェックで upsert、再請求行は読取専用表示 */}
                         <td
                           className="px-2 py-2 text-center"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <input
                             type="checkbox"
-                            checked={st?.tsukiokure ?? false}
-                            onChange={(e) => setFlag(r.user_id, "tsukiokure", e.target.checked)}
-                            className="h-3.5 w-3.5 accent-amber-600 cursor-pointer"
+                            checked={
+                              d.isReSeikyu
+                                ? d.reasons?.tsukiokure ?? false
+                                : st?.tsukiokure ?? false
+                            }
+                            disabled={d.isReSeikyu}
+                            onChange={(e) =>
+                              setFlag(r.user_id, "tsukiokure", e.target.checked)
+                            }
+                            className="h-3.5 w-3.5 accent-amber-600 cursor-pointer disabled:cursor-default disabled:opacity-60"
                           />
                         </td>
                         <td
@@ -442,9 +623,16 @@ export function KaigoSeikyuContent() {
                         >
                           <input
                             type="checkbox"
-                            checked={st?.henrei ?? false}
-                            onChange={(e) => setFlag(r.user_id, "henrei", e.target.checked)}
-                            className="h-3.5 w-3.5 accent-red-600 cursor-pointer"
+                            checked={
+                              d.isReSeikyu
+                                ? d.reasons?.henrei ?? false
+                                : st?.henrei ?? false
+                            }
+                            disabled={d.isReSeikyu}
+                            onChange={(e) =>
+                              setFlag(r.user_id, "henrei", e.target.checked)
+                            }
+                            className="h-3.5 w-3.5 accent-red-600 cursor-pointer disabled:cursor-default disabled:opacity-60"
                           />
                         </td>
                         <td
@@ -453,9 +641,12 @@ export function KaigoSeikyuContent() {
                         >
                           <input
                             type="checkbox"
-                            checked={st?.kago ?? false}
-                            onChange={(e) => setFlag(r.user_id, "kago", e.target.checked)}
-                            className="h-3.5 w-3.5 accent-purple-600 cursor-pointer"
+                            checked={d.isReSeikyu ? false : st?.kago ?? false}
+                            disabled={d.isReSeikyu}
+                            onChange={(e) =>
+                              setFlag(r.user_id, "kago", e.target.checked)
+                            }
+                            className="h-3.5 w-3.5 accent-purple-600 cursor-pointer disabled:cursor-default disabled:opacity-60"
                           />
                         </td>
                       </tr>
@@ -465,7 +656,8 @@ export function KaigoSeikyuContent() {
                 <tfoot className="border-t-2 border-gray-300 bg-gray-50 font-bold">
                   <tr>
                     <td className="px-3 py-2 text-xs text-gray-500" colSpan={4}>
-                      合計 {rows.length} 名 / 実績 {recordCount} 件
+                      当月 {rows.length} 名 / 実績 {recordCount} 件
+                      {reRows.length > 0 && ` + 再請求 ${reRows.length} 件`}
                     </td>
                     <td></td>
                     <td className="px-3 py-2 text-right tabular-nums">
@@ -593,25 +785,30 @@ export function KaigoSeikyuContent() {
       )}
 
       {/* ===== 印刷 view: 明細書 (様式第二) — 利用者 1 名 = 1 枚 ===== */}
+      {/* 再請求行は元提供月 (origMonthKey) で reiwa/month を出す */}
       {printMode === "meisai" && (
         <div className="hidden print:block">
-          {targets.map((r) => (
-            <MeisaiPrintSheet
-              key={r.user_id}
-              row={r}
-              officeName={officeName}
-              officeNumber={officeNumber}
-              officeAddress={officeAddress}
-              officePhone={officePhone}
-              officePostal={officePostal}
-              reiwa={reiwa}
-              month={month}
-            />
-          ))}
+          {targetDisplayRows.map((d) => {
+            const [oy, om] = d.origMonthKey.split("-").map((n) => Number(n));
+            return (
+              <MeisaiPrintSheet
+                key={d.key}
+                row={d.row}
+                officeName={officeName}
+                officeNumber={officeNumber}
+                officeAddress={officeAddress}
+                officePhone={officePhone}
+                officePostal={officePostal}
+                reiwa={oy - 2018}
+                month={om}
+              />
+            );
+          })}
         </div>
       )}
 
       {/* ===== 印刷 view: 請求書 (様式第一) — 事業所単位の総括 1 枚 ===== */}
+      {/* 総括は当月の通常分のみ (再請求は元提供月の別請求書扱い) */}
       {printMode === "seikyu" && (
         <div className="hidden print:block">
           <SeikyuForm
@@ -621,7 +818,7 @@ export function KaigoSeikyuContent() {
             officePhone={officePhone ?? ""}
             postalCode={officePostal ?? ""}
             billingMonth={monthKey}
-            totalCount={targets.length}
+            totalCount={seikyuTargets.length}
             totalUnits={targetUnits}
             totalAmount={targetCost}
             insuranceAmount={targetInsurance}
@@ -631,6 +828,33 @@ export function KaigoSeikyuContent() {
         </div>
       )}
     </div>
+  );
+}
+
+// 提供月 (YYYY-MM) → "R{年}/{月}" ラベル (令和換算)
+function origMonthLabel(monthKey: string): string {
+  const [y, m] = monthKey.split("-").map((n) => Number(n));
+  if (!y || !m) return monthKey;
+  return `R${y - 2018}/${m}`;
+}
+
+// 再請求バッジ (月遅れ / 返戻)。両方立つ場合は併記
+function ReSeikyuBadge({
+  reasons,
+}: {
+  reasons: { tsukiokure: boolean; henrei: boolean } | null;
+}) {
+  if (reasons?.henrei) {
+    return (
+      <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
+        返戻{reasons.tsukiokure ? "・月遅れ" : ""}
+      </span>
+    );
+  }
+  return (
+    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+      月遅れ
+    </span>
   );
 }
 

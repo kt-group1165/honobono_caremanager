@@ -202,6 +202,8 @@ export async function aggregateMonthlyVisitSeikyu(
       insurer: string | null; insured: string | null; level: string | null; copay: number;
       publicExpense: string | null; certStart: string | null; certEnd: string | null;
       careOfficeId: string | null;
+      /** 直接入力された担当居宅事業所番号 (10桁)。あれば officeId 解決より優先 */
+      careOfficeNumberDirect: string | null;
       kohiHobetsu: string | null; kohiFutansha: string | null; kohiJukyusha: string | null;
     }
   >();
@@ -209,7 +211,7 @@ export async function aggregateMonthlyVisitSeikyu(
     const chunk = userIds.slice(i, i + 50);
     const { data, error } = await supabase
       .from("client_insurance_records")
-      .select("client_id, insurer_number, insured_number, care_level, copay_rate, public_expense, kohi_hobetsu, kohi_futansha_number, kohi_jukyusha_number, certification_start_date, certification_end_date, care_office_id, effective_date")
+      .select("client_id, insurer_number, insured_number, care_level, copay_rate, public_expense, kohi_hobetsu, kohi_futansha_number, kohi_jukyusha_number, certification_start_date, certification_end_date, care_office_id, care_office_number, effective_date")
       .in("client_id", chunk)
       .order("effective_date", { ascending: false });
     if (error) throw new Error(`保険情報取得失敗: ${error.message}`);
@@ -226,6 +228,7 @@ export async function aggregateMonthlyVisitSeikyu(
       certification_start_date: string | null;
       certification_end_date: string | null;
       care_office_id: string | null;
+      care_office_number: string | null;
     }[]) {
       // 最新 (effective_date DESC) の 1 件のみ採用
       if (!insByClient.has(r.client_id)) {
@@ -250,6 +253,7 @@ export async function aggregateMonthlyVisitSeikyu(
           certStart: r.certification_start_date,
           certEnd: r.certification_end_date,
           careOfficeId: r.care_office_id,
+          careOfficeNumberDirect: r.care_office_number?.trim() || null,
           kohiHobetsu: r.kohi_hobetsu?.trim() || null,
           kohiFutansha: r.kohi_futansha_number?.trim() || null,
           kohiJukyusha: r.kohi_jukyusha_number?.trim() || null,
@@ -387,9 +391,10 @@ export async function aggregateMonthlyVisitSeikyu(
       gender: client?.gender ?? null,
       certStart: ins?.certStart ?? null,
       certEnd: ins?.certEnd ?? null,
-      careOfficeNumber: ins?.careOfficeId
-        ? officeNumberById.get(ins.careOfficeId) ?? null
-        : null,
+      // 直接入力の care_office_number があれば優先。無ければ従来の care_office_id → business_number 解決
+      careOfficeNumber:
+        ins?.careOfficeNumberDirect ??
+        (ins?.careOfficeId ? officeNumberById.get(ins.careOfficeId) ?? null : null),
       serviceDays: daysByUser.get(userId)?.size ?? 0,
     });
   }
