@@ -193,8 +193,12 @@ export function UserCalendar({
   const openEditModal = (sched: VisitSchedule) => {
     setEditModal(sched);
     // 既存サービスの制度区分をマスタから引いてバッジ表示 (async)
+    // 有効期間: 予定の対象月に有効な世代で引く (改定跨ぎ対策)
     setEditServiceSystem(null);
-    void getServiceSystemMap(supabase, [sched.service_type]).then((m) => {
+    void getServiceSystemMap(supabase, [sched.service_type], {
+      year: Number(sched.visit_date.slice(0, 4)),
+      month: Number(sched.visit_date.slice(5, 7)),
+    }).then((m) => {
       setEditServiceSystem(m.get(toHankakuDigits(sched.service_type)) ?? null);
     });
     setEditForm({

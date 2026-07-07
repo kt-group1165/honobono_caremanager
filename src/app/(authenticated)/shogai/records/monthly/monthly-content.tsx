@@ -23,6 +23,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { getServiceSystemMap, isShogaiService } from "@/lib/service-system-lookup";
+import { validInMonth } from "@/lib/service-code-valid";
 import { useBusinessType } from "@/lib/business-type-context";
 
 // ─── 区分判定 (身体介護 / 家事援助 / 乗降介助 / 通院・身体 / 通院介助) ─────────
@@ -134,7 +135,7 @@ export function ShogaiMonthlyContent() {
         .order("start_time");
       if (e1) throw new Error("予定取得失敗: " + e1.message);
       const allPlans = (sched ?? []) as PlanRow[];
-      const sysMap = await getServiceSystemMap(supabase, allPlans.map((p) => p.service_type));
+      const sysMap = await getServiceSystemMap(supabase, allPlans.map((p) => p.service_type), { year, month });
       setPlans(allPlans.filter((p) => isShogaiService(sysMap, p.service_type)));
 
       // 提供 = 障害実績
@@ -156,11 +157,16 @@ export function ShogaiMonthlyContent() {
       // サービスコード → 名称 (障害マスタ)
       const codes = Array.from(new Set(recRows.map((r) => r.service_code).filter(Boolean))) as string[];
       if (codes.length > 0) {
-        const { data: cn } = await supabase
-          .from("kaigo_service_codes")
-          .select("service_code, service_name")
-          .eq("system", "障害")
-          .in("service_code", codes.slice(0, 200));
+        // 有効期間: 対象月に有効な世代のみ (改定跨ぎの同一コード複数世代ヒット防止)
+        const { data: cn } = await validInMonth(
+          supabase
+            .from("kaigo_service_codes")
+            .select("service_code, service_name")
+            .eq("system", "障害")
+            .in("service_code", codes.slice(0, 200)),
+          year,
+          month,
+        );
         setCodeNames(
           new Map(((cn ?? []) as { service_code: string; service_name: string }[]).map((c) => [c.service_code, c.service_name])),
         );
@@ -184,7 +190,7 @@ export function ShogaiMonthlyContent() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, userId, from, to]);
+  }, [supabase, userId, from, to, year, month]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- mount/月・利用者変更時の fetch

@@ -5,6 +5,7 @@ import {
   toHankakuDigits,
 } from "@/lib/service-name-normalize";
 import { getServiceSystemMap, isShogaiService } from "@/lib/service-system-lookup";
+import { validInMonth, validToday } from "@/lib/service-code-valid";
 import type {
   FormulaCode,
   GridState,
@@ -43,11 +44,14 @@ export default async function ProvisionTicketsPage({
     staffQuery ?? Promise.resolve({ data: [] as { id: string; name: string }[] }),
     supabase.from("offices").select("provider_number:business_number, office_name:name").eq("app_type", "kaigo-app").limit(1).maybeSingle(),
     // 加算系 formula コード (処遇改善加算等の monthly_aggregate type)
-    supabase
-      .from("kaigo_service_codes")
-      .select("service_code, service_category, service_name, units, calculation_type, formula")
-      .eq("system", "介護")
-      .not("formula", "is", null)
+    // 有効期間: 今日時点で有効な世代のみ (改定跨ぎの同一コード複数世代ヒット防止)
+    validToday(
+      supabase
+        .from("kaigo_service_codes")
+        .select("service_code, service_category, service_name, units, calculation_type, formula")
+        .eq("system", "介護")
+        .not("formula", "is", null),
+    )
       .order("service_category")
       .order("service_code"),
   ]);
@@ -102,6 +106,7 @@ export default async function ProvisionTicketsPage({
     const systemMap = await getServiceSystemMap(
       supabase,
       allSchedules.map((s) => s.service_type),
+      { year: now.getFullYear(), month: now.getMonth() + 1 },
     );
     const schedules = allSchedules.filter(
       (s) => !isShogaiService(systemMap, s.service_type),
@@ -142,11 +147,16 @@ export default async function ProvisionTicketsPage({
     // variants で検索し、正規化キー (半角) で引ける map にする
     const serviceTypes = Array.from(new Set(schedules.map((s) => s.service_type))).filter(Boolean);
     if (serviceTypes.length > 0) {
-      const { data: codeRows } = await supabase
-        .from("kaigo_service_codes")
-        .select("service_name, units")
-        .in("service_name", serviceNameVariantsAll(serviceTypes))
-        .eq("calculation_type", "基本");
+      // 有効期間: 対象月に有効な世代のみ (改定跨ぎの複数世代ヒット防止)
+      const { data: codeRows } = await validInMonth(
+        supabase
+          .from("kaigo_service_codes")
+          .select("service_name, units")
+          .in("service_name", serviceNameVariantsAll(serviceTypes))
+          .eq("calculation_type", "基本"),
+        now.getFullYear(),
+        now.getMonth() + 1,
+      );
       const byNorm = new Map<string, number>();
       for (const sc of (codeRows ?? []) as { service_name: string; units: number }[]) {
         const key = toHankakuDigits(sc.service_name);

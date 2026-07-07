@@ -11,6 +11,7 @@ import {
   serviceNameVariantsAll,
   toHankakuDigits,
 } from "@/lib/service-name-normalize";
+import { validInMonth, validToday } from "@/lib/service-code-valid";
 
 const PRIORITY: Record<string, number> = {
   介護: 0,
@@ -19,21 +20,29 @@ const PRIORITY: Record<string, number> = {
   障害: 3,
 };
 
-/** 正規化名 (半角数字) → system のマップを返す。マスタに無い名前は含まれない */
+/**
+ * 正規化名 (半角数字) → system のマップを返す。マスタに無い名前は含まれない。
+ * 有効期間: targetMonth 指定時は対象月に有効な世代、省略時は今日時点で有効な世代に絞る
+ * (改定跨ぎで同名の世代が複数あっても重複ヒットさせない)
+ */
 export async function getServiceSystemMap(
   supabase: SupabaseClient,
   serviceTypes: string[],
+  targetMonth?: { year: number; month: number },
 ): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   const types = Array.from(new Set(serviceTypes.filter(Boolean)));
   if (types.length === 0) return map;
   const variants = serviceNameVariantsAll(types);
   for (let i = 0; i < variants.length; i += 50) {
-    const { data, error } = await supabase
+    const base = supabase
       .from("kaigo_service_codes")
       .select("service_name, system")
       .in("service_name", variants.slice(i, i + 50))
       .eq("calculation_type", "基本");
+    const { data, error } = await (targetMonth
+      ? validInMonth(base, targetMonth.year, targetMonth.month)
+      : validToday(base));
     if (error) throw new Error(`制度区分取得失敗: ${error.message}`);
     for (const r of (data ?? []) as { service_name: string; system: string }[]) {
       const key = toHankakuDigits(r.service_name);

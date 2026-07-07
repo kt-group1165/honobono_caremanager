@@ -34,6 +34,7 @@ import {
   toHankakuDigits,
 } from "@/lib/service-name-normalize";
 import { getServiceSystemMap, isShogaiService } from "@/lib/service-system-lookup";
+import { validInMonth } from "@/lib/service-code-valid";
 import { useBusinessType } from "@/lib/business-type-context";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -201,6 +202,15 @@ export function ProvisionTicketsContent({
   const [serviceRows, setServiceRows] = useState<ServiceRow[]>(initialServiceRows);
   const [grid, setGrid] = useState<GridState>(initialGrid);
 
+  // 改定 (世代) を跨ぐと同名サービスでも単位数が変わるため、月切替時はキャッシュを破棄して引き直す
+  const unitsMonthRef = useRef(format(selectedMonth, "yyyy-MM"));
+  useEffect(() => {
+    const key = format(selectedMonth, "yyyy-MM");
+    if (unitsMonthRef.current === key) return;
+    unitsMonthRef.current = key;
+    setServiceUnits({});
+  }, [selectedMonth]);
+
   // serviceRows に serviceUnits 未登録の service_type が現れたら on-demand で単位数を補完
   // (月変更・行追加のたび。「基本」全件 fetch は 1000 行制限で欠けるため .in() で絞る。
   //  マスタは全角数字 (身体介護３) / schedule は半角混在のため variants 検索 + 正規化 lookup)
@@ -211,11 +221,16 @@ export function ProvisionTicketsContent({
     if (missing.length === 0) return;
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase
-        .from("kaigo_service_codes")
-        .select("service_name, units")
-        .in("service_name", serviceNameVariantsAll(missing))
-        .eq("calculation_type", "基本");
+      // 有効期間: 対象月に有効な世代のみ (改定跨ぎの複数世代ヒット防止)
+      const { data, error } = await validInMonth(
+        supabase
+          .from("kaigo_service_codes")
+          .select("service_name, units")
+          .in("service_name", serviceNameVariantsAll(missing))
+          .eq("calculation_type", "基本"),
+        selectedMonth.getFullYear(),
+        selectedMonth.getMonth() + 1,
+      );
       if (cancelled || error) return;
       const byNorm = new Map<string, number>();
       for (const sc of (data ?? []) as { service_name: string; units: number }[]) {
@@ -233,7 +248,7 @@ export function ProvisionTicketsContent({
     return () => {
       cancelled = true;
     };
-  }, [serviceRows, serviceUnits, supabase]);
+  }, [serviceRows, serviceUnits, supabase, selectedMonth]);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   const [scheduleIds, setScheduleIds] = useState<Record<string, string>>({});
 
@@ -293,6 +308,7 @@ export function ProvisionTicketsContent({
     const systemMap = await getServiceSystemMap(
       supabase,
       allSchedules.map((s) => s.service_type),
+      { year, month },
     );
     const schedules = allSchedules.filter(
       (s) => !isShogaiService(systemMap, s.service_type),
@@ -342,7 +358,7 @@ export function ProvisionTicketsContent({
     setGrid(newGrid);
     setScheduleIds(newSchedIds);
     setLoading(false);
-  }, [userId, monthStr, daysCount, supabase]);
+  }, [userId, monthStr, daysCount, supabase, year, month]);
 
   // initial render は server からの initialServiceRows/initialGrid を使用、月切替時のみ refetch。
   // ただし client-side の利用者切替 (serverPreloaded=false) で mount された場合は

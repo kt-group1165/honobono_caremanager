@@ -20,6 +20,7 @@ import {
   serviceNameVariantsAll,
   toHankakuDigits,
 } from "@/lib/service-name-normalize";
+import { validInMonth } from "@/lib/service-code-valid";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -164,13 +165,18 @@ export async function aggregateMonthlyVisitSeikyu(
   // 同名が複数制度にある場合は 介護 > 総合事業 > 独自 > 障害 の優先で採用
   const SYSTEM_PRIORITY: Record<string, number> = { 介護: 0, 総合事業: 1, 独自: 2, 障害: 3 };
   // .in() の URL 長対策で 50 件ずつ chunk
+  // 有効期間: 改定跨ぎで同名の世代が複数あるため、対象月に有効な世代のみ採用する
   for (let i = 0; i < variants.length; i += 50) {
     const chunk = variants.slice(i, i + 50);
-    const { data, error } = await supabase
-      .from("kaigo_service_codes")
-      .select("service_name, short_name, units, service_code, system")
-      .in("service_name", chunk)
-      .eq("calculation_type", "基本");
+    const { data, error } = await validInMonth(
+      supabase
+        .from("kaigo_service_codes")
+        .select("service_name, short_name, units, service_code, system")
+        .in("service_name", chunk)
+        .eq("calculation_type", "基本"),
+      opts.year,
+      opts.month,
+    );
     if (error) throw new Error(`サービスコード取得失敗: ${error.message}`);
     for (const r of (data ?? []) as { service_name: string; short_name: string | null; units: number; service_code: string | null; system: string }[]) {
       const key = toHankakuDigits(r.service_name);
@@ -283,12 +289,17 @@ export async function aggregateMonthlyVisitSeikyu(
   let addonLabel: string | null = null;
   let addonCode: string | null = null;
   if ((opts.appliedFormulaCodes ?? []).length > 0) {
-    const { data, error } = await supabase
-      .from("kaigo_service_codes")
-      .select("service_code, service_name, formula")
-      .in("service_code", opts.appliedFormulaCodes as string[])
-      .eq("system", "介護")
-      .not("formula", "is", null);
+    // 有効期間: 同一 service_code の世代が複数あるため対象月の世代の formula を採用
+    const { data, error } = await validInMonth(
+      supabase
+        .from("kaigo_service_codes")
+        .select("service_code, service_name, formula")
+        .in("service_code", opts.appliedFormulaCodes as string[])
+        .eq("system", "介護")
+        .not("formula", "is", null),
+      opts.year,
+      opts.month,
+    );
     if (error) throw new Error(`加算コード取得失敗: ${error.message}`);
     for (const r of (data ?? []) as {
       service_code: string;

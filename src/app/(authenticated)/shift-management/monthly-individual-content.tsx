@@ -5,6 +5,7 @@ import {
   toHankakuDigits,
 } from "@/lib/service-name-normalize";
 import { getServiceSystemMap } from "@/lib/service-system-lookup";
+import { validInMonth } from "@/lib/service-code-valid";
 import { Fragment, useState, useEffect, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -111,14 +112,17 @@ export function MonthlyIndividualView({
     );
     if (types.length === 0) return;
     let cancelled = false;
-    void getServiceSystemMap(supabase, types).then((m) => {
+    void getServiceSystemMap(supabase, types, {
+      year: currentMonth.getFullYear(),
+      month: currentMonth.getMonth() + 1,
+    }).then((m) => {
       if (cancelled || m.size === 0) return;
       setSystemMap((prev) => new Map([...prev, ...m]));
     });
     return () => {
       cancelled = true;
     };
-  }, [schedules, systemMap, supabase]);
+  }, [schedules, systemMap, supabase, currentMonth]);
 
   // SWR data → local state へ sync
   const lastSwrRef = useRef(swrSchedules);
@@ -133,6 +137,13 @@ export function MonthlyIndividualView({
   //  「基本」全件 fetch は 1000 行制限で欠けるため .in() で絞る。
   //  マスタは全角数字 (身体介護３) / schedule は半角混在のため variants 検索 + 正規化 lookup)
   const [serviceUnits, setServiceUnits] = useState<Record<string, number>>({});
+  // 改定 (世代) を跨ぐと同名サービスでも単位数が変わるため、月切替時はキャッシュを破棄して引き直す
+  const unitsMonthRef = useRef(monthFrom);
+  useEffect(() => {
+    if (unitsMonthRef.current === monthFrom) return;
+    unitsMonthRef.current = monthFrom;
+    setServiceUnits({});
+  }, [monthFrom]);
   useEffect(() => {
     const missing = Array.from(
       new Set(schedules.map((s) => s.service_type)),
@@ -140,11 +151,16 @@ export function MonthlyIndividualView({
     if (missing.length === 0) return;
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase
-        .from("kaigo_service_codes")
-        .select("service_name, units")
-        .in("service_name", serviceNameVariantsAll(missing))
-        .eq("calculation_type", "基本");
+      // 有効期間: 表示月に有効な世代のみ (改定跨ぎの複数世代ヒット防止)
+      const { data, error } = await validInMonth(
+        supabase
+          .from("kaigo_service_codes")
+          .select("service_name, units")
+          .in("service_name", serviceNameVariantsAll(missing))
+          .eq("calculation_type", "基本"),
+        currentMonth.getFullYear(),
+        currentMonth.getMonth() + 1,
+      );
       if (cancelled || error) return;
       const byNorm = new Map<string, number>();
       for (const sc of (data ?? []) as { service_name: string; units: number }[]) {
@@ -161,7 +177,7 @@ export function MonthlyIndividualView({
     return () => {
       cancelled = true;
     };
-  }, [schedules, serviceUnits, supabase]);
+  }, [schedules, serviceUnits, supabase, currentMonth]);
 
   // 職員 2/3 の割当変更 (2人対応・同行用)
   const updateStaffN = async (

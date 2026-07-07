@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Settings, Eye, EyeOff, Building2, ChevronRight, CalendarDays, Plus, Save, Loader2, Trash2, Copy } from "lucide-react";
 import Link from "next/link";
 import { useBusinessType } from "@/lib/business-type-context";
+import { validToday } from "@/lib/service-code-valid";
 
 // ─── 年度別単位数管理 ──────────────────────────────────────────────────────
 
@@ -462,13 +463,15 @@ function AppliedFormulaSection() {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const { data } = await supabase
-        .from("kaigo_service_codes")
-        .select("service_code, service_category, service_name, formula")
-        .eq("system", "介護")
-        .eq("service_category", officeCategory)
-        .not("formula", "is", null)
-        .order("service_code");
+      // 有効期間: 今日時点で有効な世代のみ (改定跨ぎの同一コード複数世代ヒット防止)
+      const { data } = await validToday(
+        supabase
+          .from("kaigo_service_codes")
+          .select("service_code, service_category, service_name, formula")
+          .eq("system", "介護")
+          .eq("service_category", officeCategory)
+          .not("formula", "is", null),
+      ).order("service_code");
       if (!cancelled) {
         setFormulaCodes(
           (data ?? []) as typeof formulaCodes,
