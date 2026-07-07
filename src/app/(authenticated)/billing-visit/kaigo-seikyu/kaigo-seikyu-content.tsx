@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * 介護請求 — 利用者ごとの月次請求管理 (見た目: order-app 介護請求タブと同一)
+ * 介護請求 — 利用者ごとの月次請求管理 (見た目: ほのぼの NEXT の実画面に準拠)
  *
- * 左: あかさたな索引 / 中央: ツールバー + グリッドテーブル + 合計フッタ /
+ * 左: あかさたな索引 / 中央: ツールバー + 高密度グリッドテーブル + 合計フッタ /
  * 右: 明細情報ペイン (行クリックで表示)。
  *
  * 機能 (従来どおり):
@@ -41,9 +41,14 @@ import {
 } from "@/lib/visit-seikyu/re-seikyu";
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
 
-// order-app 介護請求タブのグリッド列定義 (完全コピー、サービス事業所列を除く)
+// ほのぼの実画面の列順:
+// 対象 / 申請中 / 状態 / 提供月 / 請求月 / サービス事業所 / 被保険者番号 / 利用者名 / 月遅 / 返戻 / 過誤
 const GRID_COLS =
-  "grid grid-cols-[32px_64px_72px_60px_60px_104px_1fr_64px_72px_44px]";
+  "grid grid-cols-[26px_44px_60px_54px_54px_minmax(110px,0.9fr)_84px_minmax(140px,1.1fr)_44px_44px_44px]";
+
+// 和暦月表示 「R 8/ 5」 (ほのぼの流。1 桁は空白 pad、font-mono 前提)
+const reiwaMonth = (y: number, m: number) =>
+  `R${String(y - 2018).padStart(2, " ")}/${String(m).padStart(2, " ")}`;
 
 // kaigo_billing_status の 1 行 (利用者 × 月)
 interface BillingStatusRow {
@@ -116,13 +121,11 @@ export function KaigoSeikyuContent() {
 
   // 合計は当月の通常行のみ (再請求分は元提供月の別集計なので当月合計には含めない)
   const totalUnits = filteredRows.reduce((s, r) => s + r.totalUnits, 0);
-  const totalInsurance = filteredRows.reduce((s, r) => s + r.insuranceAmount, 0);
-  const totalUser = filteredRows.reduce((s, r) => s + r.userAmount, 0);
-  const totalKohiUnits = filteredRows.reduce((s, r) => s + (r.kohiUnits ?? 0), 0);
-  const totalKohiAmount = filteredRows.reduce((s, r) => s + (r.kohiAmount ?? 0), 0);
-  const kokuhoCount = filteredRows.filter(
+  const kokuhoRows = filteredRows.filter(
     (r) => statusByClient.get(r.user_id)?.kokuho_target,
-  ).length;
+  );
+  const kokuhoCount = kokuhoRows.length;
+  const kokuhoUnits = kokuhoRows.reduce((s, r) => s + r.totalUnits, 0);
 
   // ── 月遅れ/返戻の再請求行を読み込む ──
   const loadReRows = useCallback(async () => {
@@ -507,12 +510,12 @@ export function KaigoSeikyuContent() {
           ) : (
             <>
               <div className="flex-1 overflow-y-auto">
-                {/* ヘッダー行: 対象 / 申請中 / 状態 / 提出月 / 請求月 / 被保険者番号 / 利用者名 / 月遅 / 返戻 / 過誤 */}
-                <div className={`${GRID_COLS} border-b border-gray-300 bg-gray-100 text-xs font-semibold text-gray-600 sticky top-0 z-10`}>
-                  <div className="px-1 py-2 flex items-center justify-center">
+                {/* ヘッダー行: 対象 / 申請中 / 状態 / 提供月 / 請求月 / サービス事業所 / 被保険者番号 / 利用者名 / 月遅 / 返戻 / 過誤 */}
+                <div className={`${GRID_COLS} border-b border-gray-400 bg-gradient-to-b from-sky-100 to-sky-200 text-[11px] leading-4 font-medium text-gray-700 text-center sticky top-0 z-10`}>
+                  <div className="px-1 py-0.5 flex items-center justify-center">
                     <button
                       onClick={toggleAll}
-                      className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
+                      className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center transition-all ${
                         allChecked ? "border-indigo-500 bg-indigo-500" : "border-gray-400 bg-white"
                       }`}
                     >
@@ -521,48 +524,48 @@ export function KaigoSeikyuContent() {
                       )}
                     </button>
                   </div>
-                  <div className="px-2 py-2 border-l border-gray-200 text-center">申請中</div>
-                  <div className="px-2 py-2 border-l border-gray-200">状態</div>
-                  <div className="px-2 py-2 border-l border-gray-200">提出月</div>
-                  <div className="px-2 py-2 border-l border-gray-200">請求月</div>
-                  <div className="px-2 py-2 border-l border-gray-200">被保険者番号</div>
-                  <div className="px-2 py-2 border-l border-gray-200">利用者名</div>
-                  <div className="px-2 py-2 border-l border-gray-200 text-center">月遅</div>
-                  <div className="px-2 py-2 border-l border-gray-200 text-center">返戻</div>
-                  <div className="px-2 py-2 border-l border-gray-200 text-center">過誤</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">申請中</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">状態</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">提供月</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">請求月</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">サービス事業所</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">被保険者番号</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">利用者名</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">月遅</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">返戻</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">過誤</div>
                 </div>
 
                 {displayRows.length === 0 ? (
                   <p className="text-gray-400 text-center py-10">
                     対象月の実績 (完了) がありません。サービス提供表で実績を確定してください。
                   </p>
-                ) : displayRows.map((d, idx) => {
+                ) : displayRows.map((d) => {
                   const r = d.row;
                   // 当月行のみ status を突合 (再請求行は過去月レコードなので理由表示で代替)
                   const st = d.isReSeikyu ? undefined : statusByClient.get(r.user_id);
                   const isDetail = selectedKey === d.key;
                   const isChecked = checked.has(d.key);
                   const [oy, om] = d.origMonthKey.split("-").map((n) => Number(n));
+                  // 月遅れ行 = 提供月 ≠ 請求月 (再請求合流) or 月遅フラグ → 提供月セルを黄色ハイライト
+                  const isTsukiokure =
+                    d.origMonthKey !== monthKey || !!st?.tsukiokure;
                   return (
                     <div
                       key={d.key}
                       onClick={() => setSelectedKey(isDetail ? null : d.key)}
-                      className={`${GRID_COLS} border-b border-gray-100 text-xs cursor-pointer transition-colors ${
+                      className={`${GRID_COLS} border-b border-gray-200 text-[11px] leading-4 cursor-pointer transition-colors ${
                         isDetail
                           ? "bg-blue-100"
-                          : d.isReSeikyu
-                          ? "bg-amber-50"
                           : isChecked
                           ? "bg-indigo-50"
-                          : idx % 2 === 0
-                          ? "bg-white hover:bg-gray-50"
-                          : "bg-gray-50/50 hover:bg-gray-100"
+                          : "bg-white hover:bg-sky-50"
                       }`}
                     >
-                      <div className="px-1 py-2 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                      <div className="px-1 py-0.5 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => toggle(d.key)}
-                          className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
+                          className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center transition-all ${
                             isChecked ? "border-indigo-500 bg-indigo-500" : "border-gray-400 bg-white"
                           }`}
                         >
@@ -570,84 +573,85 @@ export function KaigoSeikyuContent() {
                         </button>
                       </div>
                       {/* 申請中: kaigo 側にデータなし → 空欄 (枠だけ揃える) */}
-                      <div className="px-1 py-2 border-l border-gray-100 text-center" />
-                      <div className="px-2 py-2 border-l border-gray-100">
+                      <div className="px-1 py-0.5 border-l border-gray-200 text-center" />
+                      {/* 状態: バッジ背景なしの素の色文字 (ほのぼの流)。国保対象 = 赤字 */}
+                      <div className="px-1 py-0.5 border-l border-gray-200">
                         {d.isReSeikyu ? (
-                          <span className="text-amber-700 font-medium">再請求</span>
+                          <span className="text-amber-700">再請求</span>
                         ) : st?.kokuho_target ? (
-                          <span className="text-red-600 font-semibold">国保対象</span>
+                          <span className="text-red-600">国保対象</span>
                         ) : st?.issued_at ? (
-                          <span className="text-emerald-600 font-semibold">発行済</span>
+                          <span className="text-emerald-700">発行済</span>
                         ) : (
-                          <span className="text-gray-400">未発行</span>
+                          <span className="text-gray-600">未発行</span>
                         )}
                       </div>
-                      {/* 提出月 = 提供月 (再請求は元提供月) / 請求月 = 当月 */}
-                      <div className="px-2 py-2 border-l border-gray-100 text-gray-500">
-                        R{oy - 2018}/{om}
+                      {/* 提供月 (再請求は元提供月。月遅れ行は黄色ハイライト) / 請求月 = 当月 */}
+                      <div className={`px-1 py-0.5 border-l border-gray-200 font-mono whitespace-pre text-gray-700 ${isTsukiokure ? "bg-yellow-200" : ""}`}>
+                        {reiwaMonth(oy, om)}
                       </div>
-                      <div className="px-2 py-2 border-l border-gray-100 text-gray-500">
-                        R{year - 2018}/{month}
+                      <div className="px-1 py-0.5 border-l border-gray-200 font-mono whitespace-pre text-gray-700">
+                        {reiwaMonth(year, month)}
                       </div>
-                      <div className="px-2 py-2 border-l border-gray-100 font-mono text-gray-700">
+                      <div className="px-1 py-0.5 border-l border-gray-200 text-gray-700 truncate" title={officeName ?? ""}>
+                        {officeName ?? ""}
+                      </div>
+                      <div className="px-1 py-0.5 border-l border-gray-200 font-mono text-gray-700">
                         {r.insured_number ?? "—"}
                       </div>
-                      <div className="px-2 py-2 border-l border-gray-100 font-medium text-gray-800 flex items-center gap-1.5 min-w-0">
+                      <div className="px-1 py-0.5 border-l border-gray-200 text-gray-800 flex items-center gap-1 min-w-0">
                         <span className="flex-1 truncate">{r.user_name}</span>
                         <button
                           onClick={(e) => { e.stopPropagation(); printMeisaiFor([d]); }}
                           title="この利用者の明細書 (様式第二) を印刷"
-                          className="shrink-0 text-[10px] border border-gray-300 rounded px-1.5 py-0.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                          className="shrink-0 text-[10px] leading-none border border-gray-300 rounded px-1 py-0.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
                         >明細書</button>
                       </div>
-                      {/* 月遅 / 返戻 / 過誤 — 当月行は操作可、再請求行は理由の読取専用表示 */}
-                      <div className="px-1 py-2 border-l border-gray-100 text-center" onClick={(e) => e.stopPropagation()}>
+                      {/* 月遅 / 返戻 / 過誤 — 当月行は小さな select、再請求行は赤字の読取専用表示 */}
+                      <div className="px-0.5 py-0.5 border-l border-gray-200 text-center" onClick={(e) => e.stopPropagation()}>
                         {d.isReSeikyu ? (
                           d.reasons?.tsukiokure && (
-                            <span className="text-yellow-700 text-[11px] font-semibold">月遅</span>
+                            <span className="text-red-600">月遅</span>
                           )
                         ) : (
                           <select
                             value={st?.tsukiokure ? "月遅" : ""}
                             onChange={(e) => setFlag(r.user_id, "tsukiokure", e.target.value === "月遅")}
                             title="月遅れ"
-                            className={`w-full text-[11px] border rounded px-0.5 py-0.5 bg-white ${st?.tsukiokure ? "border-yellow-400 text-yellow-700 font-semibold" : "border-gray-300 text-gray-500"}`}
+                            className={`w-full text-[11px] leading-4 border border-gray-300 px-0 py-0 bg-white ${st?.tsukiokure ? "text-red-600" : "text-gray-500"}`}
                           >
                             <option value=""></option>
                             <option value="月遅">月遅</option>
                           </select>
                         )}
                       </div>
-                      <div className="px-1 py-2 border-l border-gray-100 text-center" onClick={(e) => e.stopPropagation()}>
+                      <div className="px-0.5 py-0.5 border-l border-gray-200 text-center" onClick={(e) => e.stopPropagation()}>
                         {d.isReSeikyu ? (
                           d.reasons?.henrei && (
-                            <span className="text-red-500 text-[11px] font-semibold">返戻</span>
+                            <span className="text-red-600">返戻</span>
                           )
                         ) : (
                           <select
                             value={st?.henrei ? "返戻" : ""}
                             onChange={(e) => setFlag(r.user_id, "henrei", e.target.value === "返戻")}
-                            className={`w-full text-[11px] border rounded px-1 py-0.5 bg-white ${st?.henrei ? "border-red-400 text-red-600 font-semibold" : "border-gray-300 text-gray-500"}`}
+                            className={`w-full text-[11px] leading-4 border border-gray-300 px-0 py-0 bg-white ${st?.henrei ? "text-red-600" : "text-gray-500"}`}
                           >
                             <option value=""></option>
                             <option value="返戻">返戻</option>
                           </select>
                         )}
                       </div>
-                      <div
-                        className="px-1 py-2 border-l border-gray-100 text-center"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!d.isReSeikyu) setFlag(r.user_id, "kago", !st?.kago);
-                        }}
-                      >
+                      <div className="px-0.5 py-0.5 border-l border-gray-200 text-center" onClick={(e) => e.stopPropagation()}>
                         {!d.isReSeikyu && (
-                          <span
-                            className={`inline-flex w-5 h-5 rounded-full border-2 items-center justify-center text-[10px] font-bold cursor-pointer transition-colors ${
-                              st?.kago ? "border-red-500 bg-red-500 text-white" : "border-gray-300 text-transparent hover:border-red-300"
-                            }`}
+                          <select
+                            value={st?.kago ? "過誤" : ""}
+                            onChange={(e) => setFlag(r.user_id, "kago", e.target.value === "過誤")}
                             title="過誤"
-                          >○</span>
+                            className={`w-full text-[11px] leading-4 border border-gray-300 px-0 py-0 bg-white ${st?.kago ? "text-red-600" : "text-gray-500"}`}
+                          >
+                            <option value=""></option>
+                            <option value="過誤">過誤</option>
+                          </select>
                         )}
                       </div>
                     </div>
@@ -655,126 +659,124 @@ export function KaigoSeikyuContent() {
                 })}
               </div>
 
-              {/* ── フッター合計 (order-app の box レイアウト) ── */}
-              <div className="border-t border-gray-300 bg-gray-50 px-3 py-2 shrink-0 text-[11px] text-gray-700">
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-1 mb-1.5">
-                  <span>合計件数 <strong className="font-mono">{filteredRows.length.toLocaleString()}</strong></span>
-                  <span>合計単位数 <strong className="font-mono">{totalUnits.toLocaleString()}</strong></span>
-                  <span>国保件数 <strong className="font-mono">{kokuhoCount.toLocaleString()}</strong></span>
-                  <span>実績 <strong className="font-mono">{recordCount.toLocaleString()}</strong> 件</span>
-                  {reRows.length > 0 && (
-                    <span>再請求 <strong className="font-mono">{reRows.length.toLocaleString()}</strong> 件</span>
-                  )}
+              {/* ── フッター合計 (ほのぼの流: ラベル=水色枠 + 値=白枠右寄せ のボックス並び) ── */}
+              <div className="border-t border-gray-400 bg-gray-100 px-3 py-1.5 shrink-0 text-[11px] text-gray-800">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <span className="inline-flex">
+                    <span className="border border-gray-400 bg-sky-100 px-2 py-0.5 whitespace-nowrap">合計件数</span>
+                    <span className="border border-gray-400 border-l-0 bg-white px-2 py-0.5 min-w-[64px] text-right font-mono">{filteredRows.length.toLocaleString()}</span>
+                  </span>
+                  <span className="inline-flex">
+                    <span className="border border-gray-400 bg-sky-100 px-2 py-0.5 whitespace-nowrap">合計単位数</span>
+                    <span className="border border-gray-400 border-l-0 bg-white px-2 py-0.5 min-w-[96px] text-right font-mono">{totalUnits.toLocaleString()}</span>
+                  </span>
+                  <span className="ml-auto text-gray-500">
+                    実績 {recordCount.toLocaleString()} 件
+                    {reRows.length > 0 && <> / 再請求 {reRows.length.toLocaleString()} 件</>}
+                  </span>
                 </div>
-                <div className="border border-gray-300 rounded bg-white px-2 py-1.5 grid grid-cols-3 gap-x-4 gap-y-1">
-                  <span>特定介護請求額 <strong className="font-mono">—</strong></span>
-                  <span>軽減額 <strong className="font-mono">—</strong></span>
-                  <span>保険単位数 <strong className="font-mono">{totalUnits.toLocaleString()}</strong></span>
-                  <span>公費単位数 <strong className="font-mono">{totalKohiUnits > 0 ? totalKohiUnits.toLocaleString() : "—"}</strong></span>
-                  <span>保険請求額 <strong className="font-mono">{totalInsurance.toLocaleString()}</strong></span>
-                  <span>公費請求額 <strong className="font-mono">{totalKohiAmount > 0 ? totalKohiAmount.toLocaleString() : "—"}</strong></span>
-                  <span>利用者負担額 <strong className="font-mono text-red-600">{totalUser.toLocaleString()}</strong></span>
-                  <span>公費分本人負担 <strong className="font-mono">—</strong></span>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
+                  <span className="inline-flex">
+                    <span className="border border-gray-400 bg-sky-100 px-2 py-0.5 whitespace-nowrap">国保件数</span>
+                    <span className="border border-gray-400 border-l-0 bg-white px-2 py-0.5 min-w-[64px] text-right font-mono">{kokuhoCount.toLocaleString()}</span>
+                  </span>
+                  <span className="inline-flex">
+                    <span className="border border-gray-400 bg-sky-100 px-2 py-0.5 whitespace-nowrap">国保対象単位数</span>
+                    <span className="border border-gray-400 border-l-0 bg-white px-2 py-0.5 min-w-[96px] text-right font-mono">{kokuhoUnits.toLocaleString()}</span>
+                  </span>
                 </div>
               </div>
             </>
           )}
         </div>
 
-        {/* ── 右：明細情報 ── */}
+        {/* ── 右：明細情報 (ほのぼの流: 青系帯 + 高密度明細 + ラベル箱/値箱 grid) ── */}
         <div className="w-80 shrink-0 flex flex-col bg-white">
-          <div className="border-b border-gray-300 bg-gray-100 px-3 py-2 text-xs font-bold text-gray-700 flex items-center gap-2">
+          <div className="border-b border-sky-700 bg-gradient-to-b from-sky-500 to-sky-600 px-3 py-1 text-xs font-bold text-white flex items-center gap-2">
             <span>明細情報</span>
-            {selected && <span className="font-normal text-gray-500 truncate">{selected.user_name}</span>}
+            {selected && <span className="font-normal text-sky-100 truncate">{selected.user_name}</span>}
           </div>
           {selected ? (
             <>
               <div className="flex-1 overflow-auto">
-                <table className="w-full text-[11px] border-collapse">
-                  <thead className="bg-gray-100 border-b border-gray-300 sticky top-0">
+                <table className="w-full text-[11px] leading-4 border-collapse">
+                  <thead className="bg-gradient-to-b from-sky-100 to-sky-200 border-b border-gray-400 sticky top-0">
                     <tr>
-                      <th className="text-left px-1.5 py-1.5 font-semibold text-gray-600 border-r border-gray-200">サービス内容</th>
-                      <th className="text-right px-1.5 py-1.5 font-semibold text-gray-600 border-r border-gray-200 w-12">単位数</th>
-                      <th className="text-right px-1.5 py-1.5 font-semibold text-gray-600 border-r border-gray-200 w-10">回数</th>
-                      <th className="text-right px-1.5 py-1.5 font-semibold text-gray-600 border-r border-gray-200 w-14">単位数小計</th>
-                      <th className="text-left px-1.5 py-1.5 font-semibold text-gray-600 w-20">摘要</th>
+                      <th className="text-center px-1 py-0.5 font-medium text-gray-700 border-r border-sky-300">サービス内容</th>
+                      <th className="text-center px-1 py-0.5 font-medium text-gray-700 border-r border-sky-300 w-14 whitespace-nowrap">単位数/単価</th>
+                      <th className="text-center px-1 py-0.5 font-medium text-gray-700 border-r border-sky-300 w-8">回数</th>
+                      <th className="text-center px-1 py-0.5 font-medium text-gray-700 border-r border-sky-300 w-12">単位数</th>
+                      <th className="text-center px-1 py-0.5 font-medium text-gray-700 w-16">摘要</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {selected.details.map((dt, i) => (
-                      <tr key={dt.service_type} className={`border-b border-gray-100 ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
-                        <td className="px-1.5 py-1 text-gray-700 leading-tight border-r border-gray-100">
+                    {selected.details.map((dt) => (
+                      <tr key={dt.service_type} className="border-b border-gray-200 bg-white">
+                        <td className="px-1 py-0.5 text-gray-700 leading-tight border-r border-gray-200">
                           {dt.short_name ?? dt.service_type}
                         </td>
-                        <td className="px-1.5 py-1 text-right font-mono text-gray-700 border-r border-gray-100">
+                        <td className="px-1 py-0.5 text-right font-mono text-gray-700 border-r border-gray-200">
                           {dt.unit_per.toLocaleString()}
                         </td>
-                        <td className="px-1.5 py-1 text-right font-mono text-gray-700 border-r border-gray-100">
+                        <td className="px-1 py-0.5 text-right font-mono text-gray-700 border-r border-gray-200">
                           {dt.count}
                         </td>
-                        <td className="px-1.5 py-1 text-right font-mono font-semibold text-gray-800 border-r border-gray-100">
+                        <td className="px-1 py-0.5 text-right font-mono text-gray-800 border-r border-gray-200">
                           {dt.units.toLocaleString()}
                         </td>
-                        <td className="px-1.5 py-1 text-gray-500 text-[10px] font-mono truncate" title={dt.service_code ?? ""}>
-                          {dt.service_code ?? "—"}
+                        <td className="px-1 py-0.5 text-gray-500 text-[10px] font-mono truncate" title={dt.service_code ?? ""}>
+                          {dt.service_code ?? ""}
                         </td>
                       </tr>
                     ))}
                     {selected.addonUnits > 0 && (
-                      <tr className="border-b border-gray-100 bg-white">
-                        <td className="px-1.5 py-1 text-gray-700 leading-tight border-r border-gray-100">
+                      <tr className="border-b border-gray-200 bg-white">
+                        <td className="px-1 py-0.5 text-gray-700 leading-tight border-r border-gray-200">
                           {selected.addonLabel ?? "処遇改善加算"}
                         </td>
-                        <td className="px-1.5 py-1 text-right font-mono text-gray-700 border-r border-gray-100">—</td>
-                        <td className="px-1.5 py-1 text-right font-mono text-gray-700 border-r border-gray-100">1</td>
-                        <td className="px-1.5 py-1 text-right font-mono font-semibold text-gray-800 border-r border-gray-100">
+                        <td className="px-1 py-0.5 text-right font-mono text-gray-700 border-r border-gray-200">
                           {selected.addonUnits.toLocaleString()}
                         </td>
-                        <td className="px-1.5 py-1 text-gray-500 text-[10px] font-mono truncate">
-                          {selected.addonCode ?? "—"}
+                        <td className="px-1 py-0.5 text-right font-mono text-gray-700 border-r border-gray-200">1</td>
+                        <td className="px-1 py-0.5 text-right font-mono text-gray-800 border-r border-gray-200">
+                          {selected.addonUnits.toLocaleString()}
+                        </td>
+                        <td className="px-1 py-0.5 text-gray-500 text-[10px] font-mono truncate">
+                          {selected.addonCode ?? ""}
                         </td>
                       </tr>
                     )}
                   </tbody>
                 </table>
               </div>
-              <div className="border-t border-gray-300 bg-gray-50 shrink-0">
-                <table className="w-full text-[11px] border-collapse">
-                  <tbody>
-                    <tr className="border-t border-gray-200">
-                      <td className="px-2 py-1 text-gray-600 border-r border-gray-200 bg-gray-100 font-medium">保険単位数</td>
-                      <td className="px-2 py-1 text-right font-mono font-semibold text-gray-800">{selected.totalUnits.toLocaleString()}</td>
-                      <td className="px-2 py-1 text-gray-600 border-l border-gray-200 bg-gray-100 font-medium">公費単位数</td>
-                      <td className="px-2 py-1 text-right font-mono text-gray-400">
-                        {selected.kohiUnits != null ? <span className="text-gray-800 font-semibold">{selected.kohiUnits.toLocaleString()}</span> : "—"}
-                      </td>
-                    </tr>
-                    <tr className="border-t border-gray-200">
-                      <td className="px-2 py-1 text-gray-600 border-r border-gray-200 bg-gray-100 font-medium">保険請求額</td>
-                      <td className="px-2 py-1 text-right font-mono font-semibold text-gray-800">{selected.insuranceAmount.toLocaleString()}</td>
-                      <td className="px-2 py-1 text-gray-600 border-l border-gray-200 bg-gray-100 font-medium">公費請求額</td>
-                      <td className="px-2 py-1 text-right font-mono text-gray-400">
-                        {selected.kohiAmount != null ? <span className="text-gray-800 font-semibold">{selected.kohiAmount.toLocaleString()}</span> : "—"}
-                      </td>
-                    </tr>
-                    <tr className="border-t border-gray-200">
-                      <td className="px-2 py-1 text-gray-600 border-r border-gray-200 bg-gray-100 font-medium">利用者負担額</td>
-                      <td className="px-2 py-1 text-right font-mono font-semibold text-red-600">
-                        {selected.publicExpense ? "0" : selected.userAmount.toLocaleString()}
-                      </td>
-                      <td className="px-2 py-1 text-gray-600 border-l border-gray-200 bg-gray-100 font-medium">公費本人負担</td>
-                      <td className="px-2 py-1 text-right font-mono text-gray-400">{selected.publicExpense ? "0" : "—"}</td>
-                    </tr>
-                    <tr className="border-t border-gray-200">
-                      <td className="px-2 py-1 text-gray-600 border-r border-gray-200 bg-gray-100 font-medium">総額</td>
-                      <td className="px-2 py-1 text-right font-mono font-semibold text-gray-800">{selected.totalAmount.toLocaleString()}</td>
-                      <td className="px-2 py-1 text-gray-600 border-l border-gray-200 bg-gray-100 font-medium">地域単価</td>
-                      <td className="px-2 py-1 text-right font-mono text-gray-800">{selected.unitPrice.toFixed(2)}</td>
-                    </tr>
-                  </tbody>
-                </table>
+              {/* 右下: ラベル箱 + 値箱 のペア grid (2 列 × 4 行、ほのぼの流) */}
+              <div className="border-t border-gray-400 bg-gray-100 shrink-0 p-1.5">
+                <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)] gap-px bg-gray-400 border border-gray-400 text-[11px] leading-4">
+                  <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">特定介護請求額</div>
+                  <div className="bg-white px-1.5 py-0.5 text-right font-mono" />
+                  <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">軽減額</div>
+                  <div className="bg-white px-1.5 py-0.5 text-right font-mono" />
+                  <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">保険単位数</div>
+                  <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">{selected.totalUnits.toLocaleString()}</div>
+                  <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">公費単位数</div>
+                  <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">
+                    {selected.kohiUnits != null ? selected.kohiUnits.toLocaleString() : ""}
+                  </div>
+                  <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">保険請求額</div>
+                  <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">{selected.insuranceAmount.toLocaleString()}</div>
+                  <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">公費請求額</div>
+                  <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">
+                    {selected.kohiAmount != null ? selected.kohiAmount.toLocaleString() : ""}
+                  </div>
+                  <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">利用者負担額</div>
+                  <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">
+                    {selected.publicExpense ? "0" : selected.userAmount.toLocaleString()}
+                  </div>
+                  <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">公費分本人負担</div>
+                  <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">{selected.publicExpense ? "0" : ""}</div>
+                </div>
                 {selected.publicExpense && (
-                  <p className="px-2 py-1 text-[10px] text-purple-600">
+                  <p className="px-0.5 pt-1 text-[10px] text-purple-600">
                     公費: {selected.publicExpense} (本人負担分を公費請求へ振替)
                   </p>
                 )}

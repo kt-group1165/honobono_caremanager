@@ -85,6 +85,7 @@ const NAV_CARE_MANAGER_SECTIONED: SectionSpec[] = [
       { name: "職員管理", href: "/staff", icon: UserCog },
       { name: "マスタ管理", href: "/master", icon: Settings },
       { name: "設定", href: "/settings", icon: UserCog },
+      { name: "マニュアル", href: "/manual", icon: BookOpen },
     ],
   },
 ];
@@ -136,6 +137,7 @@ const NAV_HOME_CARE_SECTIONED: SectionSpec[] = [
       { name: "職員管理", href: "/staff", icon: UserCog },
       { name: "マスタ管理", href: "/master", icon: Settings },
       { name: "設定", href: "/settings", icon: UserCog },
+      { name: "マニュアル", href: "/manual", icon: BookOpen },
     ],
   },
 ];
