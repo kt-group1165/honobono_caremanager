@@ -1,18 +1,37 @@
 "use client";
 
 /**
- * 障害請求 — 障害福祉サービスの月次請求集計 + 国保連 CSV
+ * 障害請求 — 障害福祉サービスの月次請求集計 + 国保連 CSV (ほのぼのMORE の請求フロー準拠)
  *
- * 左: 利用者一覧 (受給者証番号 / 名前 / 区分 / 総単位数 / 給付費請求額 / 負担額)
- * 右: 明細 (サービス種類 / コード / 単位数 / 回数)
- * 出力: 国保連請求 CSV (J121 明細書 相当の項目)
+ * 左: 利用者一覧 (対象 / 状態 / 受給者証番号 / 名前 / 区分 / 入金 / 総単位数 / 給付費請求額 / 負担額)
+ * 右: 明細 (サービス種類 / コード / 単位数 / 回数) + 上限額管理 + 入金管理
+ * 出力: 明細書 (様式第二相当) / 請求書 (様式第一相当 総括) / 利用料請求書 /
+ *       国保連請求 CSV / 伝送ファイル (J11 / J61 / J41)
+ *
+ * 状態管理 (介護請求 kaigo-seikyu と同じ作り):
+ *   未発行 → (明細書印刷で issued_at=now() upsert) → 発行済
+ *   → (伝送対象ボタンで densou_target=true) → 伝送対象
+ *   shogai_billing_status (client_id × target_month UNIQUE) に upsert
+ * 入金管理 (利用請求 riyou-seikyu と同じ作り):
+ *   shogai_seikyu_payments (client_id × target_month UNIQUE) に upsert
  */
 
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { Loader2, Accessibility, AlertCircle, Download, FileDown } from "lucide-react";
+import {
+  Loader2,
+  Accessibility,
+  AlertCircle,
+  Download,
+  FileDown,
+  FileText,
+  Printer,
+  Receipt,
+  Send,
+} from "lucide-react";
 import Encoding from "encoding-japanese";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
+import { toast } from "sonner";
 import { MonthNav } from "../_shared/month-nav";
 import {
   aggregateMonthlyShogaiSeikyu,
@@ -25,6 +44,39 @@ import {
   type ShogaiDensouVisit,
   type ShogaiDensouKanriLine,
 } from "@/lib/shogai-densou/build";
+import {
+  ShogaiMeisaiPrintSheet,
+  ShogaiSeikyushoPrintSheet,
+  ShogaiRiyouSeikyuPrintSheet,
+  type ShogaiSeikyuSummaryGroup,
+} from "../../billing/forms/_shogai-meisai";
+
+// shogai_billing_status の 1 行 (利用者 × 月) — 状態: 未発行 / 発行済 / 伝送対象
+interface ShogaiBillingStatusRow {
+  client_id: string;
+  issued_at: string | null;
+  densou_target: boolean;
+  notes: string | null;
+}
+
+// shogai_seikyu_payments の 1 行 (利用者 × 月) — 利用料請求の入金管理
+interface ShogaiPaymentRow {
+  client_id: string;
+  billed_amount: number;
+  paid_amount: number;
+  paid_date: string | null;
+  payment_method: string | null;
+  status: "請求済" | "入金完" | "一部入金" | "未収";
+  issued_date: string | null;
+}
+
+// 入金状態バッジ (riyou-seikyu の PAYMENT_STATUS_CLS と同じ配色ルール)
+const PAYMENT_STATUS_CLS: Record<string, string> = {
+  請求済: "bg-blue-100 text-blue-700",
+  入金完: "bg-emerald-100 text-emerald-700",
+  一部入金: "bg-amber-100 text-amber-700",
+  未収: "bg-red-100 text-red-700",
+};
 
 export function ShogaiSeikyuContent() {
   const supabase = useMemo(() => createClient(), []);
@@ -38,6 +90,15 @@ export function ShogaiSeikyuContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [officeNumber, setOfficeNumber] = useState<string | null>(null);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [statusByClient, setStatusByClient] = useState<
+    Map<string, ShogaiBillingStatusRow>
+  >(new Map());
+  const [payments, setPayments] = useState<Map<string, ShogaiPaymentRow>>(new Map());
+  const [printMode, setPrintMode] = useState<"meisai" | "seikyu" | "riyou" | null>(null);
+
+  const monthStr = `${year}-${String(month).padStart(2, "0")}`;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,10 +108,15 @@ export function ShogaiSeikyuContent() {
       if (currentOffice) {
         const { data: o } = await supabase
           .from("offices")
-          .select("unit_price")
+          .select("unit_price, business_number")
           .eq("id", currentOffice.id)
           .maybeSingle();
-        unitPrice = (o as { unit_price?: number } | null)?.unit_price;
+        const od = o as {
+          unit_price?: number;
+          business_number?: string | null;
+        } | null;
+        unitPrice = od?.unit_price;
+        setOfficeNumber(((od?.business_number ?? "") as string).trim() || null);
       }
       const result = await aggregateMonthlyShogaiSeikyu(supabase, {
         year,
@@ -72,10 +138,229 @@ export function ShogaiSeikyuContent() {
     load();
   }, [btLoading, load]);
 
+  // ── shogai_billing_status (発行/伝送状態) を月で読み client_id で突合 ──
+  const loadStatus = useCallback(async () => {
+    const { data, error: e } = await supabase
+      .from("shogai_billing_status")
+      .select("client_id, issued_at, densou_target, notes")
+      .eq("target_month", monthStr);
+    if (e) {
+      // table 未作成 (migration 未適用) 時は状態なしとして続行
+      if (e.code !== "42P01") toast.error("請求状態の取得に失敗: " + e.message);
+      setStatusByClient(new Map());
+      return;
+    }
+    setStatusByClient(
+      new Map(
+        ((data ?? []) as ShogaiBillingStatusRow[]).map((r) => [r.client_id, r]),
+      ),
+    );
+  }, [supabase, monthStr]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更時の fetch
+    loadStatus();
+  }, [loadStatus]);
+
+  // ── shogai_seikyu_payments (利用料請求の入金状況) を月で読み client_id で突合 ──
+  const loadPayments = useCallback(async () => {
+    const { data, error: e } = await supabase
+      .from("shogai_seikyu_payments")
+      .select(
+        "client_id, billed_amount, paid_amount, paid_date, payment_method, status, issued_date",
+      )
+      .eq("target_month", monthStr);
+    if (e) {
+      if (e.code !== "42P01") toast.error("入金状況の取得に失敗: " + e.message);
+      setPayments(new Map());
+      return;
+    }
+    setPayments(
+      new Map(((data ?? []) as ShogaiPaymentRow[]).map((p) => [p.client_id, p])),
+    );
+  }, [supabase, monthStr]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更時の fetch
+    loadPayments();
+  }, [loadPayments]);
+
   const selected = rows.find((r) => r.user_id === selectedUserId) ?? rows[0] ?? null;
   const totalUnits = rows.reduce((s, r) => s + r.totalUnits, 0);
   const totalBenefit = rows.reduce((s, r) => s + r.benefitAmount, 0);
   const totalUser = rows.reduce((s, r) => s + r.userAmount, 0);
+
+  // ── 対象チェック (kaigo-seikyu と同じ: チェックあり → その行 / なし → 全件) ──
+  const toggle = (id: string) =>
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const toggleAll = () =>
+    setChecked((prev) =>
+      prev.size === rows.length ? new Set() : new Set(rows.map((r) => r.user_id)),
+    );
+  const targets = useMemo(
+    () => (checked.size > 0 ? rows.filter((r) => checked.has(r.user_id)) : rows),
+    [rows, checked],
+  );
+  const allChecked = rows.length > 0 && checked.size === rows.length;
+  const densouCount = rows.filter(
+    (r) => statusByClient.get(r.user_id)?.densou_target,
+  ).length;
+
+  // ── 明細書: 対象者の明細書を印刷 → 印刷実行時に issued_at=now() upsert (発行済化) ──
+  const printMeisai = async () => {
+    if (targets.length === 0) return;
+    const now = new Date().toISOString();
+    const payload = targets.map((r) => {
+      const cur = statusByClient.get(r.user_id);
+      return {
+        client_id: r.user_id,
+        target_month: monthStr,
+        tenant_id: currentOffice?.tenant_id ?? "kt-group",
+        office_id: currentOffice?.id ?? null,
+        issued_at: now,
+        // 既存の伝送対象フラグ・備考は保持
+        densou_target: cur?.densou_target ?? false,
+        notes: cur?.notes ?? null,
+      };
+    });
+    const { error: e } = await supabase
+      .from("shogai_billing_status")
+      .upsert(payload, { onConflict: "client_id,target_month" });
+    if (e) {
+      // table 未作成でも印刷は実行 (状態が保存できなくても紙は出せるように)
+      if (e.code !== "42P01") toast.error("発行状態の保存に失敗: " + e.message);
+    } else {
+      loadStatus();
+    }
+    setPrintMode("meisai");
+    setTimeout(() => {
+      window.print();
+      setPrintMode(null);
+    }, 100);
+  };
+
+  // ── 請求書: 事業所単位の総括 (市町村別 J111 相当) を印刷 ──
+  const seikyuGroups = useMemo<ShogaiSeikyuSummaryGroup[]>(() => {
+    const m = new Map<string, ShogaiSeikyuSummaryGroup>();
+    for (const r of targets) {
+      const key = r.municipality ?? "";
+      const g =
+        m.get(key) ??
+        {
+          municipality: r.municipality,
+          count: 0,
+          units: 0,
+          cost: 0,
+          userAmt: 0,
+          benefit: 0,
+        };
+      g.count += 1;
+      g.units += r.totalUnits;
+      g.cost += r.totalAmount;
+      g.userAmt += r.userAmount;
+      g.benefit += r.benefitAmount;
+      m.set(key, g);
+    }
+    return Array.from(m.values()).sort((a, b) =>
+      (a.municipality ?? "").localeCompare(b.municipality ?? ""),
+    );
+  }, [targets]);
+
+  const printSeikyusho = () => {
+    if (targets.length === 0) return;
+    setPrintMode("seikyu");
+    setTimeout(() => {
+      window.print();
+      setPrintMode(null);
+    }, 100);
+  };
+
+  // ── 利用料請求書: 発行記録 (billed_amount/issued_date) を upsert → 印刷 ──
+  //    入金状態などは既存を保持 (新規行は DB default '請求済') — riyou-seikyu と同じ流儀
+  const printRiyouSeikyu = async () => {
+    if (targets.length === 0) return;
+    const today = new Date();
+    const issued = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const { error: e } = await supabase.from("shogai_seikyu_payments").upsert(
+      targets.map((r) => ({
+        client_id: r.user_id,
+        target_month: monthStr,
+        billed_amount: r.userAmount,
+        issued_date: issued,
+      })),
+      { onConflict: "client_id,target_month" },
+    );
+    if (e && e.code !== "42P01") {
+      toast.error("発行記録の保存に失敗: " + e.message);
+    } else if (!e) {
+      loadPayments();
+    }
+    setPrintMode("riyou");
+    setTimeout(() => {
+      window.print();
+      setPrintMode(null);
+    }, 100);
+  };
+
+  // ── 伝送対象: 発行済の対象行を densou_target=true に (未発行はスキップ + 警告) ──
+  const markDensouTarget = async () => {
+    const payload: Record<string, unknown>[] = [];
+    let skipped = 0;
+    for (const r of targets) {
+      const cur = statusByClient.get(r.user_id);
+      if (!cur?.issued_at) {
+        skipped++;
+        continue;
+      }
+      payload.push({
+        client_id: r.user_id,
+        target_month: monthStr,
+        tenant_id: currentOffice?.tenant_id ?? "kt-group",
+        office_id: currentOffice?.id ?? null,
+        issued_at: cur.issued_at,
+        densou_target: true,
+        notes: cur.notes ?? null,
+      });
+    }
+    if (payload.length === 0) {
+      toast.warning("伝送対象にできる行がありません (先に明細書を発行してください)");
+      return;
+    }
+    const { error: e } = await supabase
+      .from("shogai_billing_status")
+      .upsert(payload, { onConflict: "client_id,target_month" });
+    if (e) {
+      toast.error("伝送対象の保存に失敗: " + e.message);
+      return;
+    }
+    toast.success(
+      `${payload.length} 件を伝送対象にしました${skipped > 0 ? ` (未発行 ${skipped} 名はスキップ)` : ""}`,
+    );
+    loadStatus();
+  };
+
+  // 入金状態バッジ (riyou-seikyu の statusBadge と同じ)
+  const paymentBadge = (userId: string) => {
+    const p = payments.get(userId);
+    if (!p)
+      return (
+        <span className="inline-block whitespace-nowrap px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[10px] font-semibold">
+          未発行
+        </span>
+      );
+    return (
+      <span
+        className={`inline-block whitespace-nowrap px-1.5 py-0.5 rounded text-[10px] font-semibold ${PAYMENT_STATUS_CLS[p.status] ?? "bg-gray-100 text-gray-600"}`}
+      >
+        {p.status}
+      </span>
+    );
+  };
 
   const exportCsv = () => {
     const csv = buildShogaiSeikyuCsv(rows, year, month);
@@ -254,7 +539,10 @@ export function ShogaiSeikyuContent() {
   };
 
   return (
-    <div className="space-y-4">
+    <>
+    {/* printMode 中は画面を隠す (上限管理結果票の印刷は printMode=null のまま
+        overlay で出すため、常時 print:hidden にはしない) */}
+    <div className={`space-y-4 ${printMode ? "print:hidden" : ""}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold text-gray-900">
@@ -262,10 +550,10 @@ export function ShogaiSeikyuContent() {
             障害請求
           </h1>
           <p className="mt-0.5 text-xs text-gray-500">
-            {currentOffice?.name ?? ""} — 障害福祉サービス実績 (確定) の月次集計と国保連請求 CSV
+            {currentOffice?.name ?? ""} — 障害福祉サービス実績 (確定) の月次集計・明細書/請求書・国保連伝送
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <MonthNav
             year={year}
             month={month}
@@ -274,6 +562,46 @@ export function ShogaiSeikyuContent() {
               setMonth(m);
             }}
           />
+          <button
+            type="button"
+            disabled={rows.length === 0}
+            onClick={printMeisai}
+            className="inline-flex items-center gap-1 rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50"
+            title="対象者の介護給付費・訓練等給付費等明細書を印刷。印刷で発行済になります"
+          >
+            <FileText size={14} />
+            明細書 ({targets.length}件)
+          </button>
+          <button
+            type="button"
+            disabled={rows.length === 0}
+            onClick={printSeikyusho}
+            className="inline-flex items-center gap-1 rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50"
+            title="事業所単位の総括請求書 (市町村別 J111 相当) を印刷"
+          >
+            <Printer size={14} />
+            請求書
+          </button>
+          <button
+            type="button"
+            disabled={rows.length === 0}
+            onClick={printRiyouSeikyu}
+            className="inline-flex items-center gap-1 rounded-lg border border-emerald-500 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+            title="利用者向けの利用料請求書 (利用者負担額) を発行・印刷。発行日を記録します"
+          >
+            <Receipt size={14} />
+            利用料請求書 ({targets.length}件)
+          </button>
+          <button
+            type="button"
+            disabled={rows.length === 0}
+            onClick={markDensouTarget}
+            className="inline-flex items-center gap-1 rounded-lg border border-red-400 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+            title="発行済の利用者を国保連伝送の対象にする (未発行はスキップ)"
+          >
+            <Send size={14} />
+            伝送対象
+          </button>
           <button
             type="button"
             disabled={rows.length === 0}
@@ -298,6 +626,11 @@ export function ShogaiSeikyuContent() {
             )}
             伝送ファイル
           </button>
+          {densouCount > 0 && (
+            <span className="text-[11px] font-medium text-red-600">
+              伝送対象 {densouCount} 件
+            </span>
+          )}
         </div>
       </div>
 
@@ -324,16 +657,29 @@ export function ShogaiSeikyuContent() {
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-left text-xs text-gray-600">
                 <tr>
+                  <th className="px-2 py-2 text-center w-8">
+                    <input
+                      type="checkbox"
+                      checked={allChecked}
+                      onChange={toggleAll}
+                      className="cursor-pointer"
+                      title="全選択 (未チェック時は全件が対象)"
+                    />
+                  </th>
+                  <th className="px-3 py-2">状態</th>
                   <th className="px-3 py-2">受給者証番号</th>
                   <th className="px-3 py-2">利用者名</th>
                   <th className="px-3 py-2">区分</th>
+                  <th className="px-3 py-2">入金</th>
                   <th className="px-3 py-2 text-right">総単位数</th>
                   <th className="px-3 py-2 text-right">給付費請求額</th>
                   <th className="px-3 py-2 text-right">利用者負担</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {rows.map((r) => (
+                {rows.map((r) => {
+                  const st = statusByClient.get(r.user_id);
+                  return (
                   <tr
                     key={r.user_id}
                     onClick={() => setSelectedUserId(r.user_id)}
@@ -344,6 +690,27 @@ export function ShogaiSeikyuContent() {
                         : "hover:bg-gray-50")
                     }
                   >
+                    <td
+                      className="px-2 py-2 text-center"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked.has(r.user_id)}
+                        onChange={() => toggle(r.user_id)}
+                        className="cursor-pointer"
+                      />
+                    </td>
+                    {/* 状態: バッジ背景なしの素の色文字 (介護請求と同じ)。伝送対象 = 赤字 */}
+                    <td className="px-3 py-2 text-xs">
+                      {st?.densou_target ? (
+                        <span className="text-red-600">伝送対象</span>
+                      ) : st?.issued_at ? (
+                        <span className="text-emerald-700">発行済</span>
+                      ) : (
+                        <span className="text-gray-600">未発行</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 font-mono text-xs">
                       {r.beneficiary_number ?? "—"}
                     </td>
@@ -356,6 +723,7 @@ export function ShogaiSeikyuContent() {
                       )}
                     </td>
                     <td className="px-3 py-2 text-xs">{r.support_level ?? "—"}</td>
+                    <td className="px-3 py-2">{paymentBadge(r.user_id)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {r.totalUnits.toLocaleString()}
                     </td>
@@ -366,11 +734,12 @@ export function ShogaiSeikyuContent() {
                       {r.userAmount.toLocaleString()}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
               <tfoot className="border-t-2 border-gray-300 bg-gray-50 font-bold">
                 <tr>
-                  <td className="px-3 py-2 text-xs text-gray-500" colSpan={3}>
+                  <td className="px-3 py-2 text-xs text-gray-500" colSpan={6}>
                     合計 {rows.length} 名 / 実績 {recordCount} 件
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
@@ -479,6 +848,19 @@ export function ShogaiSeikyuContent() {
                   month={month}
                   onSaved={load}
                 />
+
+                {/* 入金管理 (利用料請求の未収金管理 — riyou-seikyu と同じ作り) */}
+                <ShogaiPaymentSection
+                  key={`pay-${selected.user_id}-${monthStr}`}
+                  userId={selected.user_id}
+                  monthKey={monthStr}
+                  billed={
+                    payments.get(selected.user_id)?.billed_amount ??
+                    selected.userAmount
+                  }
+                  payment={payments.get(selected.user_id) ?? null}
+                  onChanged={loadPayments}
+                />
               </div>
             ) : (
               <div className="p-8 text-center text-xs text-gray-400">
@@ -490,10 +872,183 @@ export function ShogaiSeikyuContent() {
       )}
 
       <p className="text-[11px] text-gray-400">
-        ※ 「請求CSV」は国保連 介護給付費・訓練等給付費等明細書 (J121) 相当の項目を
-        持つ明細 CSV。伝送ソフトの固定長 interface 仕様には取込仕様確定後に対応。
+        ※ 明細書の印刷で「発行済」、伝送対象ボタンで「伝送対象」になります (介護請求と同じ流れ)。
+        「確認用CSV」は国保連 介護給付費・訓練等給付費等明細書 (J121) 相当の項目を持つ明細 CSV。
         上限管理の設定 (管理事業所の登録) は 利用者管理 → 受給者証 で行います。
       </p>
+    </div>
+
+    {/* ===== 印刷 view: 明細書 (介護給付費・訓練等給付費等明細書) — 利用者 1 名 = 1 枚 ===== */}
+    {printMode === "meisai" && (
+      <div className="hidden print:block">
+        {targets.map((r) => (
+          <ShogaiMeisaiPrintSheet
+            key={r.user_id}
+            row={r}
+            officeName={currentOffice?.name ?? null}
+            officeNumber={officeNumber}
+            reiwa={year - 2018}
+            month={month}
+          />
+        ))}
+      </div>
+    )}
+
+    {/* ===== 印刷 view: 請求書 (様式第一相当 — 事業所単位の総括 1 枚) ===== */}
+    {printMode === "seikyu" && (
+      <div className="hidden print:block">
+        <ShogaiSeikyushoPrintSheet
+          groups={seikyuGroups}
+          officeName={currentOffice?.name ?? null}
+          officeNumber={officeNumber}
+          reiwa={year - 2018}
+          month={month}
+        />
+      </div>
+    )}
+
+    {/* ===== 印刷 view: 利用料請求書 (利用者向け) — 利用者 1 名 = 1 枚 ===== */}
+    {printMode === "riyou" && (
+      <div className="hidden print:block">
+        {targets.map((r) => (
+          <ShogaiRiyouSeikyuPrintSheet
+            key={r.user_id}
+            row={r}
+            officeName={currentOffice?.name ?? null}
+            reiwa={year - 2018}
+            month={month}
+          />
+        ))}
+      </div>
+    )}
+    </>
+  );
+}
+
+// ─── 入金管理 (利用料請求の未収金管理 — riyou-seikyu の PaymentSection と同じ作り) ──
+function ShogaiPaymentSection({
+  userId,
+  monthKey,
+  billed,
+  payment,
+  onChanged,
+}: {
+  userId: string;
+  monthKey: string;
+  billed: number;
+  payment: ShogaiPaymentRow | null;
+  onChanged: () => void;
+}) {
+  const supabase = useMemo(() => createClient(), []);
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const [amount, setAmount] = useState(String(billed));
+  const [date, setDate] = useState(todayStr);
+  const [method, setMethod] = useState(payment?.payment_method ?? "振込");
+  const [saving, setSaving] = useState(false);
+
+  const save = async (asStatus?: "未収") => {
+    setSaving(true);
+    const paid =
+      asStatus === "未収" ? (payment?.paid_amount ?? 0) : parseInt(amount, 10) || 0;
+    const status =
+      asStatus ??
+      (paid >= billed && billed > 0 ? "入金完" : paid > 0 ? "一部入金" : "請求済");
+    const { error } = await supabase.from("shogai_seikyu_payments").upsert(
+      {
+        client_id: userId,
+        target_month: monthKey,
+        billed_amount: billed,
+        paid_amount: paid,
+        paid_date: asStatus === "未収" ? (payment?.paid_date ?? null) : date,
+        payment_method: method,
+        status,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "client_id,target_month" },
+    );
+    setSaving(false);
+    if (error) {
+      toast.error("入金登録に失敗: " + error.message);
+      return;
+    }
+    toast.success(asStatus === "未収" ? "未収として記録しました" : "入金を登録しました");
+    onChanged();
+  };
+
+  return (
+    <div className="mt-3 rounded border border-blue-200 bg-blue-50/40 p-3 text-xs space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="font-bold text-blue-800">入金管理</span>
+        <span className="text-[10px] text-gray-500">
+          {payment?.issued_date
+            ? `利用料請求書発行日: ${payment.issued_date}`
+            : "利用料請求書未発行"}
+          {payment && (
+            <span
+              className={`ml-2 whitespace-nowrap rounded px-1.5 py-0.5 font-bold ${PAYMENT_STATUS_CLS[payment.status]}`}
+            >
+              {payment.status}
+            </span>
+          )}
+        </span>
+      </div>
+      {payment && payment.paid_amount > 0 && (
+        <p className="text-[10px] text-gray-500">
+          入金済: ¥{payment.paid_amount.toLocaleString()} (
+          {payment.paid_date ?? "—"} / {payment.payment_method ?? "—"})
+        </p>
+      )}
+      <div className="flex flex-wrap items-end gap-1.5">
+        <div className="w-20">
+          <label className="mb-0.5 block text-[10px] text-gray-500">入金額</label>
+          <input
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="w-full rounded border px-2 py-1.5 text-right tabular-nums focus:border-blue-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="mb-0.5 block text-[10px] text-gray-500">入金日</label>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="rounded border px-2 py-1.5 focus:border-blue-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="mb-0.5 block text-[10px] text-gray-500">方法</label>
+          <select
+            value={method}
+            onChange={(e) => setMethod(e.target.value)}
+            className="rounded border px-2 py-1.5 focus:border-blue-500 focus:outline-none"
+          >
+            <option>振込</option>
+            <option>現金</option>
+            <option>口座振替</option>
+          </select>
+        </div>
+        <div className="ml-auto flex justify-end gap-1.5">
+          <button
+            type="button"
+            onClick={() => save()}
+            disabled={saving}
+            className="rounded bg-blue-600 px-3 py-1.5 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            入金登録
+          </button>
+          <button
+            type="button"
+            onClick={() => save("未収")}
+            disabled={saving}
+            className="rounded border border-red-300 bg-white px-2.5 py-1.5 font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+          >
+            未収
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
