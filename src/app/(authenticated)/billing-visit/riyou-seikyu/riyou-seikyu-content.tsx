@@ -6,11 +6,12 @@
  * 左: あかさたな索引 / 中央: ツールバー + 格子テーブル + 合計フッタ /
  * 右: 利用明細欄 (行クリックで明細 + 実費入力 + 入金管理)。
  *
- * 機能 (従来どおり):
+ * 機能:
  *   - 請求書発行 (対象チェック or 全件) / FB データ出力 (全銀協)
- *   - 世帯合算 印刷 (= 「名寄」チェック列で対象選択)
+ *   - 名寄せ (= 「名寄」チェック列。order-app UserBillingTab と同じ操作感):
+ *     請求書発行時に名寄チェック 2 名以上を 1 枚の世帯合算請求書、
+ *     それ以外は従来どおり 1 名 1 枚の個別請求書として同じ印刷 view 内で出す
  *   - 利用実費 (保険外) の入力 / 入金管理 (未収金)
- *   - 印刷 view (通常 / 世帯合算) は不変
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -20,7 +21,6 @@ import {
   FileText,
   Plus,
   Trash2,
-  Users,
   Banknote,
 } from "lucide-react";
 import Encoding from "encoding-japanese";
@@ -290,25 +290,20 @@ export function RiyouSeikyuContent() {
     loadPayments();
   };
 
-  // ─── 名寄せ (世帯合算) ───────────────────────────────────────────────────
-  // 「名寄」列でチェックした複数利用者を 1 世帯として 1 枚の請求書に合算印刷する。
-  const [householdPrinting, setHouseholdPrinting] = useState(false);
-  // 合算対象 = 名寄チェックした利用者 (代表者 = 先頭)
-  const householdRows = useMemo(
-    () => filteredRows.filter((r) => merged.has(r.user_id)),
-    [filteredRows, merged],
-  );
-  const printHousehold = () => {
-    if (householdRows.length < 2) {
-      toast.error("世帯合算は 2 名以上を「名寄」で選択してください");
-      return;
+  // ─── 名寄せ (世帯合算) — order-app UserBillingTab の groupForPrint と同じ挙動 ──
+  // 発行対象 (targets) のうち「名寄」チェックされた 2 名以上を 1 世帯グループに、
+  // それ以外は 1 名 1 枚。請求書発行 (issueSeikyusho) の同じ印刷 view 内で出し分ける。
+  const printGroups = useMemo(() => {
+    const household = targets.filter((r) => merged.has(r.user_id));
+    if (household.length >= 2) {
+      return {
+        household,
+        singles: targets.filter((r) => !merged.has(r.user_id)),
+      };
     }
-    setHouseholdPrinting(true);
-    setTimeout(() => {
-      window.print();
-      setHouseholdPrinting(false);
-    }, 100);
-  };
+    // 名寄 1 名以下は合算にならないので全員個別
+    return { household: [] as UserSeikyuRow[], singles: targets };
+  }, [targets, merged]);
 
   // ─── FB データ (全銀協 口座振替) ───────────────────────────────────────────
   const exportFbData = () => {
@@ -425,21 +420,11 @@ export function RiyouSeikyuContent() {
               type="button"
               onClick={issueSeikyusho}
               disabled={filteredRows.length === 0}
-              title={`利用料請求書を発行 (${printScopeLabel})。発行日を記録して印刷します`}
+              title={`利用料請求書を発行 (${printScopeLabel})。発行日を記録して印刷します。「名寄」チェック 2 名以上は 1 枚の世帯合算請求書になります`}
               className="border border-emerald-500 rounded bg-emerald-50 px-2.5 py-1 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1.5 text-xs font-medium disabled:opacity-50"
             >
               <FileText size={13} />
               請求書 ({targets.length}件)
-            </button>
-            <button
-              type="button"
-              onClick={printHousehold}
-              disabled={householdRows.length < 2}
-              title="「名寄」でチェックした 2 名以上を 1 世帯として 1 枚に合算印刷"
-              className="border border-emerald-500 rounded bg-emerald-50 px-2.5 py-1 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1.5 text-xs font-medium disabled:opacity-50"
-            >
-              <Users size={13} />
-              世帯合算 ({householdRows.length}名)
             </button>
             <button
               type="button"
@@ -736,10 +721,21 @@ export function RiyouSeikyuContent() {
         </div>
       </div>
 
-      {/* ===== 印刷 view: 利用料請求書 (利用者 1 名 = 1 枚) ===== */}
+      {/* ===== 印刷 view: 利用料請求書 =====
+          名寄チェック 2 名以上 → 1 枚の世帯合算請求書 / それ以外 → 1 名 1 枚
+          (order-app UserBillingTab の請求書発行と同じ操作感) */}
       {printing && (
         <div className="hidden print:block">
-          {targets.map((r) => (
+          {printGroups.household.length >= 2 && (
+            <RiyouSeikyuHouseholdPrintSheet
+              rows={printGroups.household}
+              jippiByUser={jippiByUser}
+              officeName={officeName}
+              reiwa={reiwa}
+              month={month}
+            />
+          )}
+          {printGroups.singles.map((r) => (
             <RiyouSeikyuPrintSheet
               key={r.user_id}
               row={r}
@@ -749,19 +745,6 @@ export function RiyouSeikyuContent() {
               month={month}
             />
           ))}
-        </div>
-      )}
-
-      {/* ===== 印刷 view: 世帯合算 請求書 (名寄チェック者を 1 枚に合算) ===== */}
-      {householdPrinting && householdRows.length >= 2 && (
-        <div className="hidden print:block">
-          <RiyouSeikyuHouseholdPrintSheet
-            rows={householdRows}
-            jippiByUser={jippiByUser}
-            officeName={officeName}
-            reiwa={reiwa}
-            month={month}
-          />
         </div>
       )}
     </>

@@ -4,13 +4,13 @@
  * 月次情報 — 訪問介護の請求前チェック一覧 (見た目: order-app 月次情報タブと同一)
  *
  * 左: あかさたな索引 / 中央: ◀ 年月 ▶ ツールバー + 格子テーブル。
- * 対象月の請求対象利用者を一覧し、請求前に目視で確認したい項目を並べる:
- *   保険者番号 / 被保険者番号 / 利用者名 / 要介護度 / 認定有効期間 /
- *   担当居宅事業所番号 / 作成区分 / 単位数
+ * 列構成は order-app MonthlyInfoTab と完全一致:
+ *   保険変更 / 保険者 / 被保険者番号 / 利用者名 / 利用者番号 / 作成区分 /
+ *   支援事業所番号 / 居宅介護支援事業所名 / 区分支給限度基準内単位数
  *
  * 警告バッジ (目視確認用):
- *   - 認定有効期間が対象月に掛からない → 赤「認定切れ」
- *   - 担当居宅事業所番号が未設定 → 橙「担当居宅未設定」
+ *   - 認定有効期間が対象月に掛からない → 保険変更列に赤「認定切れ」
+ *   - 担当居宅事業所番号が未設定 → 支援事業所番号列に橙「担当居宅未設定」
  */
 
 import { Loader2, AlertCircle } from "lucide-react";
@@ -33,14 +33,6 @@ function certCoversMonth(
   if (certStart && certStart > monthEnd) return false;
   if (certEnd && certEnd < monthStart) return false;
   return true;
-}
-
-// YYYY-MM-DD → YYYY/M/D 表示。null は空。
-function fmtDate(d: string | null): string {
-  if (!d) return "";
-  const [y, m, dd] = d.split("-").map((n) => Number(n));
-  if (!y || !m || !dd) return d;
-  return `${y}/${m}/${dd}`;
 }
 
 export function MonthlyInfoContent() {
@@ -78,13 +70,14 @@ export function MonthlyInfoContent() {
           <table className="min-w-full text-xs border-collapse">
             <thead className="bg-gray-100 text-gray-700 sticky top-0 z-10">
               <tr>
-                <th className="px-2 py-1.5 border border-gray-300 text-left">保険者番号</th>
+                <th className="px-2 py-1.5 border border-gray-300 text-left">保険変更</th>
+                <th className="px-2 py-1.5 border border-gray-300 text-left">保険者</th>
                 <th className="px-2 py-1.5 border border-gray-300 text-left">被保険者番号</th>
                 <th className="px-2 py-1.5 border border-gray-300 text-left">利用者名</th>
-                <th className="px-2 py-1.5 border border-gray-300 text-left">要介護度</th>
-                <th className="px-2 py-1.5 border border-gray-300 text-left">認定有効期間</th>
-                <th className="px-2 py-1.5 border border-gray-300 text-left">担当居宅事業所番号</th>
+                <th className="px-2 py-1.5 border border-gray-300 text-left">利用者番号</th>
                 <th className="px-2 py-1.5 border border-gray-300 text-left">作成区分</th>
+                <th className="px-2 py-1.5 border border-gray-300 text-left">支援事業所番号</th>
+                <th className="px-2 py-1.5 border border-gray-300 text-left">居宅介護支援事業所名</th>
                 <th className="px-2 py-1.5 border border-gray-300 text-right">区分支給限度基準内単位数</th>
               </tr>
             </thead>
@@ -94,35 +87,27 @@ export function MonthlyInfoContent() {
                 const hasCareOffice = !!r.careOfficeNumber;
                 return (
                   <tr key={r.user_id} className="hover:bg-blue-50">
-                    <td className="px-2 py-1 border border-gray-200 font-mono">
-                      {r.insurer_number ?? "-"}
-                    </td>
-                    <td className="px-2 py-1 border border-gray-200 font-mono">
-                      {r.insured_number ?? "-"}
-                    </td>
-                    <td className="px-2 py-1 border border-gray-200">{r.user_name}</td>
-                    <td className="px-2 py-1 border border-gray-200">
-                      {r.care_level ?? "-"}
-                    </td>
-                    <td className="px-2 py-1 border border-gray-200">
-                      {r.certStart || r.certEnd ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="tabular-nums">
-                            {fmtDate(r.certStart)}
-                            {"〜"}
-                            {fmtDate(r.certEnd)}
-                          </span>
-                          {!certOk && (
-                            <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
-                              認定切れ
-                            </span>
-                          )}
-                        </span>
+                    <td className="px-2 py-1 border border-gray-200 text-center text-gray-400">
+                      {certOk ? (
+                        "-"
                       ) : (
                         <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
                           認定切れ
                         </span>
                       )}
+                    </td>
+                    <td className="px-2 py-1 border border-gray-200">
+                      {r.insurer_name ?? r.insurer_number ?? "-"}
+                    </td>
+                    <td className="px-2 py-1 border border-gray-200 font-mono">
+                      {r.insured_number ?? "-"}
+                    </td>
+                    <td className="px-2 py-1 border border-gray-200">{r.user_name}</td>
+                    <td className="px-2 py-1 border border-gray-200 font-mono">
+                      {r.user_number ?? "-"}
+                    </td>
+                    <td className="px-2 py-1 border border-gray-200">
+                      {hasCareOffice ? "居宅介護支援事業者作成" : "-"}
                     </td>
                     <td className="px-2 py-1 border border-gray-200 font-mono">
                       {hasCareOffice ? (
@@ -133,8 +118,11 @@ export function MonthlyInfoContent() {
                         </span>
                       )}
                     </td>
-                    <td className="px-2 py-1 border border-gray-200">
-                      {hasCareOffice ? "居宅介護支援事業者作成" : "-"}
+                    <td
+                      className="px-2 py-1 border border-gray-200 truncate max-w-[200px]"
+                      title={r.careOfficeName ?? ""}
+                    >
+                      {r.careOfficeName ?? "-"}
                     </td>
                     <td className="px-2 py-1 border border-gray-200 text-right font-mono">
                       {r.totalUnits.toLocaleString()}
@@ -144,7 +132,7 @@ export function MonthlyInfoContent() {
               })}
               {filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-gray-400 text-sm">
+                  <td colSpan={9} className="px-3 py-8 text-center text-gray-400 text-sm">
                     対象月の実績 (完了) がありません
                   </td>
                 </tr>

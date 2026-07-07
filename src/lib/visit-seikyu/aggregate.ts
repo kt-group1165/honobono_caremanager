@@ -42,7 +42,11 @@ export interface UserSeikyuRow {
   user_id: string;
   user_name: string;
   user_name_kana: string | null;
+  /** 利用者番号 (clients.user_number) */
+  user_number: string | null;
   insurer_number: string | null;
+  /** 保険者名 (client_insurance_records.insurer_name) */
+  insurer_name: string | null;
   insured_number: string | null;
   care_level: string | null;
   /** 負担割合 (0.1 / 0.2 / 0.3)。レコード無し時は 0.1 */
@@ -90,6 +94,8 @@ export interface UserSeikyuRow {
   certEnd: string | null;
   /** 担当居宅介護支援事業所の事業所番号 (10 桁)。未解決は null */
   careOfficeNumber: string | null;
+  /** 担当居宅介護支援事業所名 (client_insurance_records.care_office_name) */
+  careOfficeName: string | null;
   /** サービス実日数 (訪問した日の数) */
   serviceDays: number;
 }
@@ -182,17 +188,17 @@ export async function aggregateMonthlyVisitSeikyu(
   const userIds = Array.from(new Set(schedules.map((s) => s.user_id)));
   const clientById = new Map<
     string,
-    { name: string; furigana: string | null; birth: string | null; gender: string | null }
+    { name: string; furigana: string | null; birth: string | null; gender: string | null; userNumber: string | null }
   >();
   for (let i = 0; i < userIds.length; i += 50) {
     const chunk = userIds.slice(i, i + 50);
     const { data, error } = await supabase
       .from("clients")
-      .select("id, name, furigana, birth_date, gender")
+      .select("id, name, furigana, birth_date, gender, user_number")
       .in("id", chunk);
     if (error) throw new Error(`利用者取得失敗: ${error.message}`);
-    for (const c of (data ?? []) as { id: string; name: string; furigana: string | null; birth_date: string | null; gender: string | null }[]) {
-      clientById.set(c.id, { name: c.name, furigana: c.furigana, birth: c.birth_date, gender: c.gender });
+    for (const c of (data ?? []) as { id: string; name: string; furigana: string | null; birth_date: string | null; gender: string | null; user_number: string | null }[]) {
+      clientById.set(c.id, { name: c.name, furigana: c.furigana, birth: c.birth_date, gender: c.gender, userNumber: c.user_number });
     }
   }
 
@@ -200,10 +206,14 @@ export async function aggregateMonthlyVisitSeikyu(
     string,
     {
       insurer: string | null; insured: string | null; level: string | null; copay: number;
+      /** 保険者名 */
+      insurerName: string | null;
       publicExpense: string | null; certStart: string | null; certEnd: string | null;
       careOfficeId: string | null;
       /** 直接入力された担当居宅事業所番号 (10桁)。あれば officeId 解決より優先 */
       careOfficeNumberDirect: string | null;
+      /** 担当居宅介護支援事業所名 (直接入力) */
+      careOfficeName: string | null;
       kohiHobetsu: string | null; kohiFutansha: string | null; kohiJukyusha: string | null;
     }
   >();
@@ -211,13 +221,14 @@ export async function aggregateMonthlyVisitSeikyu(
     const chunk = userIds.slice(i, i + 50);
     const { data, error } = await supabase
       .from("client_insurance_records")
-      .select("client_id, insurer_number, insured_number, care_level, copay_rate, public_expense, kohi_hobetsu, kohi_futansha_number, kohi_jukyusha_number, certification_start_date, certification_end_date, care_office_id, care_office_number, effective_date")
+      .select("client_id, insurer_number, insurer_name, insured_number, care_level, copay_rate, public_expense, kohi_hobetsu, kohi_futansha_number, kohi_jukyusha_number, certification_start_date, certification_end_date, care_office_id, care_office_number, care_office_name, effective_date")
       .in("client_id", chunk)
       .order("effective_date", { ascending: false });
     if (error) throw new Error(`保険情報取得失敗: ${error.message}`);
     for (const r of (data ?? []) as {
       client_id: string;
       insurer_number: string | null;
+      insurer_name: string | null;
       insured_number: string | null;
       care_level: string | null;
       copay_rate: number | null;
@@ -229,6 +240,7 @@ export async function aggregateMonthlyVisitSeikyu(
       certification_end_date: string | null;
       care_office_id: string | null;
       care_office_number: string | null;
+      care_office_name: string | null;
     }[]) {
       // 最新 (effective_date DESC) の 1 件のみ採用
       if (!insByClient.has(r.client_id)) {
@@ -241,6 +253,7 @@ export async function aggregateMonthlyVisitSeikyu(
           : raw;
         insByClient.set(r.client_id, {
           insurer: r.insurer_number,
+          insurerName: r.insurer_name?.trim() || null,
           insured: r.insured_number,
           level: r.care_level,
           copay,
@@ -254,6 +267,7 @@ export async function aggregateMonthlyVisitSeikyu(
           certEnd: r.certification_end_date,
           careOfficeId: r.care_office_id,
           careOfficeNumberDirect: r.care_office_number?.trim() || null,
+          careOfficeName: r.care_office_name?.trim() || null,
           kohiHobetsu: r.kohi_hobetsu?.trim() || null,
           kohiFutansha: r.kohi_futansha_number?.trim() || null,
           kohiJukyusha: r.kohi_jukyusha_number?.trim() || null,
@@ -367,7 +381,9 @@ export async function aggregateMonthlyVisitSeikyu(
       user_id: userId,
       user_name: client?.name ?? "(利用者不明)",
       user_name_kana: client?.furigana ?? null,
+      user_number: client?.userNumber ?? null,
       insurer_number: ins?.insurer ?? null,
+      insurer_name: ins?.insurerName ?? null,
       insured_number: ins?.insured ?? null,
       care_level: ins?.level ?? null,
       copay_rate: copay,
@@ -395,6 +411,7 @@ export async function aggregateMonthlyVisitSeikyu(
       careOfficeNumber:
         ins?.careOfficeNumberDirect ??
         (ins?.careOfficeId ? officeNumberById.get(ins.careOfficeId) ?? null : null),
+      careOfficeName: ins?.careOfficeName ?? null,
       serviceDays: daysByUser.get(userId)?.size ?? 0,
     });
   }
