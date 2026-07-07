@@ -661,7 +661,7 @@ function AggVc({
         fontFamily: '"MS Gothic","ＭＳ ゴシック",monospace',
         textAlign: "right",
         verticalAlign: "middle",
-        height: "5.5mm",
+        height: "4.7mm",
         ...style,
       }}
     >
@@ -728,8 +728,8 @@ function MeisaiPrintSheet({
       tekiyo: "",
     });
   }
-  // 明細欄は最低 10 行 (空行で枠を埋める) — 公式様式の桝目再現
-  const MIN_ROWS = 10;
+  // 明細欄は最低 6 行 (空行で枠を埋める) — 公式様式の桝目再現。A4 1枚に収める
+  const MIN_ROWS = 6;
   const emptyRows = Math.max(0, MIN_ROWS - detailLines.length);
 
   // 集計欄の数値 (⑫)
@@ -753,7 +753,7 @@ function MeisaiPrintSheet({
     <div
       style={{
         pageBreakAfter: "always",
-        padding: "6mm 6mm",
+        padding: "4mm 5mm",
         fontFamily: '"MS Mincho","ＭＳ 明朝","游明朝",serif',
         color: "#000",
         fontSize: "8pt",
@@ -1240,7 +1240,7 @@ function MeisaiPrintSheet({
             </tr>
           ))}
           {Array.from({ length: emptyRows }).map((_, i) => (
-            <tr key={`empty-${i}`} style={{ height: "5.5mm" }}>
+            <tr key={`empty-${i}`} style={{ height: "4.7mm" }}>
               <Vc></Vc>
               <Vc style={{ padding: 0 }}>
                 <DigitCells value="" cells={6} cw={3.5} h={5} />
