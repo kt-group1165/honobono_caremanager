@@ -395,13 +395,13 @@ export function RiyouSeikyuContent() {
     const p = payments.get(userId);
     if (!p)
       return (
-        <span className="inline-block px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px] font-semibold">
+        <span className="inline-block whitespace-nowrap px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[10px] font-semibold">
           未発行
         </span>
       );
     return (
       <span
-        className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold ${PAYMENT_STATUS_CLS[p.status] ?? "bg-gray-100 text-gray-600"}`}
+        className={`inline-block whitespace-nowrap px-1.5 py-0.5 rounded text-[10px] font-semibold ${PAYMENT_STATUS_CLS[p.status] ?? "bg-gray-100 text-gray-600"}`}
       >
         {p.status}
       </span>
@@ -991,7 +991,7 @@ function PaymentSection({
         <span className="text-[10px] text-gray-500">
           {payment?.issued_date ? `請求書発行日: ${payment.issued_date}` : "請求書未発行"}
           {payment && (
-            <span className={`ml-2 rounded px-1.5 py-0.5 font-bold ${PAYMENT_STATUS_CLS[payment.status]}`}>
+            <span className={`ml-2 whitespace-nowrap rounded px-1.5 py-0.5 font-bold ${PAYMENT_STATUS_CLS[payment.status]}`}>
               {payment.status}
             </span>
           )}
