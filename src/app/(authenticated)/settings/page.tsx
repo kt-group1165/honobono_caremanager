@@ -978,7 +978,7 @@ function OfficeSwitcher() {
                     return (
                       <label
                         key={o.id}
-                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all ${
+                        className={`flex items-center gap-3 px-3 py-1.5 rounded-lg border cursor-pointer transition-all ${
                           isCurrent ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:bg-gray-50"
                         }`}
                       >
@@ -989,12 +989,12 @@ function OfficeSwitcher() {
                           onChange={() => setCurrentOfficeId(o.id)}
                           className="accent-blue-600"
                         />
-                        <div className="flex-1">
-                          <div className="text-sm font-semibold text-gray-900">{o.name || "(名称未設定)"}</div>
-                          <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500">
+                        <div className="flex-1 flex items-center gap-3 min-w-0">
+                          <span className="text-sm font-semibold text-gray-900 truncate">{o.name || "(名称未設定)"}</span>
+                          <span className="flex items-center gap-2 text-xs text-gray-500 shrink-0">
                             {o.business_number && <span>事業所番号: {o.business_number}</span>}
                             {!o.is_active && <span className="text-red-500">停止中</span>}
-                          </div>
+                          </span>
                         </div>
                       </label>
                     );
