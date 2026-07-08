@@ -16,14 +16,18 @@ import { MonthlyInfoContent } from "../_shared/monthly-info-content";
 import { KaigoSeikyuContent } from "../kaigo-seikyu/kaigo-seikyu-content";
 import { RiyouSeikyuContent } from "../riyou-seikyu/riyou-seikyu-content";
 import { KokuhoSeikyuContent } from "../kokuho-seikyu/kokuho-seikyu-content";
+import { ShogaiSeikyuContent } from "../shogai-seikyu/shogai-seikyu-content";
 
-type SeikyuTab = "monthly" | "kaigo" | "riyou" | "kokuho";
+type SeikyuTab = "monthly" | "kaigo" | "riyou" | "kokuho" | "shogai";
 
 const SEIKYU_TABS: { id: SeikyuTab; label: string }[] = [
   { id: "monthly", label: "月次情報" },
   { id: "kaigo", label: "介護請求" },
   { id: "riyou", label: "利用請求" },
   { id: "kokuho", label: "国保請求" },
+  // 障害請求は独立メニューを廃し、介護請求のタブに統合 (2026-07-08)。
+  // ShogaiSeikyuContent は自己完結 (独自 MonthNav / useBusinessType、SeikyuProvider 非依存)。
+  { id: "shogai", label: "障害請求" },
 ];
 
 // タブナビ (order-app の BillingSubTabNav と同一クラス)
@@ -66,6 +70,7 @@ function SeikyuInner() {
       {tab === "kaigo" && <KaigoSeikyuContent />}
       {tab === "riyou" && <RiyouSeikyuContent />}
       {tab === "kokuho" && <KokuhoSeikyuContent />}
+      {tab === "shogai" && <ShogaiSeikyuContent />}
     </div>
   );
 }
