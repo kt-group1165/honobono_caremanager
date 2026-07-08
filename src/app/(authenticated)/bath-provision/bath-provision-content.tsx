@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { validInMonth, monthRange } from "@/lib/service-code-valid";
-import { ChevronLeft, ChevronRight, Loader2, Printer, Droplets } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Printer, Droplets, Plus, Search, X } from "lucide-react";
 
 // 訪問入浴の提供表 固定サービス行 (全身/部分 × 職員のみ)
 const BATH_ROWS = [
@@ -13,8 +13,10 @@ const BATH_ROWS = [
   { code: "121112", label: "訪問入浴（部分浴・清拭）", bath_type: "部分浴" as const, staff_only: false },
   { code: "121122", label: "訪問入浴（部分浴・職員のみ）", bath_type: "部分浴" as const, staff_only: true },
 ];
+const BASE_CODES = new Set(BATH_ROWS.map((r) => r.code));
 
 type Rec = { id: string; visit_date: string; service_code: string | null; planned: boolean; actual: boolean };
+type Row = { code: string; label: string; bath_type: "全身浴" | "部分浴"; staff_only: boolean };
 
 const WD = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -28,12 +30,36 @@ export function BathProvisionContent({ userId, userName }: { userId: string; use
   });
   const [records, setRecords] = useState<Rec[]>([]);
   const [unitByCode, setUnitByCode] = useState<Record<string, number>>({});
+  const [nameByCode, setNameByCode] = useState<Record<string, string>>({});
+  const [extraCodes, setExtraCodes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyCell, setBusyCell] = useState<string | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
 
   const [y, m] = month.split("-").map(Number);
   const daysInMonth = new Date(y, m, 0).getDate();
   const days = useMemo(() => Array.from({ length: daysInMonth }, (_, i) => i + 1), [daysInMonth]);
+
+  // 指定コードの単位/名称をマスタから補完
+  const ensureCodes = useCallback(
+    async (codes: string[]) => {
+      const need = codes.filter((c) => c && unitByCode[c] == null);
+      if (need.length === 0) return;
+      const { data } = await validInMonth(
+        supabase.from("kaigo_service_codes").select("service_code, service_name, units").in("service_code", need).eq("system", "介護"),
+        y,
+        m,
+      );
+      const um: Record<string, number> = {};
+      const nm: Record<string, string> = {};
+      for (const u of (data ?? []) as { service_code: string; service_name: string; units: number }[]) {
+        if (um[u.service_code] == null) { um[u.service_code] = u.units; nm[u.service_code] = u.service_name; }
+      }
+      setUnitByCode((prev) => ({ ...um, ...prev }));
+      setNameByCode((prev) => ({ ...nm, ...prev }));
+    },
+    [supabase, unitByCode, y, m],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,16 +73,22 @@ export function BathProvisionContent({ userId, userName }: { userId: string; use
         .lte("visit_date", monthEnd);
       const { data: recData, error: recErr } = currentOfficeId ? await recQ.eq("office_id", currentOfficeId) : await recQ;
       if (recErr) throw recErr;
-      setRecords((recData ?? []) as Rec[]);
+      const recs = (recData ?? []) as Rec[];
+      setRecords(recs);
 
+      const codes = Array.from(new Set([...BATH_ROWS.map((r) => r.code), ...recs.map((r) => r.service_code).filter(Boolean) as string[]]));
       const { data: uData } = await validInMonth(
-        supabase.from("kaigo_service_codes").select("service_code, units").in("service_code", BATH_ROWS.map((r) => r.code)).eq("system", "介護"),
+        supabase.from("kaigo_service_codes").select("service_code, service_name, units").in("service_code", codes).eq("system", "介護"),
         y,
         m,
       );
       const um: Record<string, number> = {};
-      for (const u of (uData ?? []) as { service_code: string; units: number }[]) if (um[u.service_code] == null) um[u.service_code] = u.units;
+      const nm: Record<string, string> = {};
+      for (const u of (uData ?? []) as { service_code: string; service_name: string; units: number }[]) {
+        if (um[u.service_code] == null) { um[u.service_code] = u.units; nm[u.service_code] = u.service_name; }
+      }
       setUnitByCode(um);
+      setNameByCode(nm);
     } catch (e) {
       console.error("提供表の読込に失敗:", e);
       alert("読込に失敗しました: " + (e instanceof Error ? e.message : String(e)));
@@ -70,7 +102,15 @@ export function BathProvisionContent({ userId, userName }: { userId: string; use
     load();
   }, [load]);
 
-  // (code, day) → その日の record (1件想定)
+  // 表示行 = 固定4行 + (実績にあるコード + 追加コード) のうち非固定
+  const displayRows = useMemo<Row[]>(() => {
+    const extra = new Set<string>();
+    for (const c of extraCodes) if (!BASE_CODES.has(c)) extra.add(c);
+    for (const r of records) { const c = r.service_code; if (c && !BASE_CODES.has(c)) extra.add(c); }
+    const extraRows: Row[] = Array.from(extra).sort().map((code) => ({ code, label: nameByCode[code] ?? code, bath_type: "全身浴", staff_only: false }));
+    return [...BATH_ROWS, ...extraRows];
+  }, [extraCodes, records, nameByCode]);
+
   const recByCell = useMemo(() => {
     const map = new Map<string, Rec>();
     for (const rec of records) {
@@ -83,8 +123,7 @@ export function BathProvisionContent({ userId, userName }: { userId: string; use
   const prevMonth = () => { const d = new Date(y, m - 2, 1); setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
   const nextMonth = () => { const d = new Date(y, m, 1); setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
 
-  // 予定/実績 セルの toggle。実績ONは予定も立てる(ほのぼの準拠)。両方offで削除。
-  const toggle = async (row: (typeof BATH_ROWS)[number], day: number, which: "planned" | "actual") => {
+  const toggle = async (row: Row, day: number, which: "planned" | "actual") => {
     if (!currentOfficeId) { alert("事業所を選択してください"); return; }
     const key = `${row.code}-${day}`;
     setBusyCell(key);
@@ -148,23 +187,21 @@ export function BathProvisionContent({ userId, userName }: { userId: string; use
   );
 
   const summary = useMemo(() => {
-    const rows = BATH_ROWS.map((r) => {
+    const rows = displayRows.map((r) => {
       const c = counts(r.code);
       const unit = unitByCode[r.code] ?? 0;
       return { ...r, planned: c.planned, actual: c.actual, unit, actualUnits: c.actual * unit };
     });
     const totalActual = rows.reduce((s, r) => s + r.actual, 0);
     const totalUnits = rows.reduce((s, r) => s + r.actualUnits, 0);
-    const daysUsed = new Set(records.filter((r) => r.actual).map((r) => r.visit_date)).size;
-    return { rows, totalActual, totalUnits, daysUsed };
-  }, [counts, unitByCode, records]);
+    const daysUsed = new Set(records.filter((r) => r.actual && BASE_CODES.has(r.service_code ?? "")).map((r) => r.visit_date)).size;
+    return { rows: rows.filter((r) => BASE_CODES.has(r.code) || r.actual > 0 || r.planned > 0), totalActual, totalUnits, daysUsed };
+  }, [displayRows, counts, unitByCode, records]);
 
   const cellCls = (on: boolean, which: "planned" | "actual") =>
-    on
-      ? which === "planned"
-        ? "bg-blue-100 font-semibold text-blue-800"
-        : "bg-green-100 font-semibold text-green-800"
-      : "text-gray-300";
+    on ? (which === "planned" ? "bg-blue-100 font-semibold text-blue-800" : "bg-green-100 font-semibold text-green-800") : "text-gray-300";
+
+  const shownCodes = useMemo(() => new Set(displayRows.map((r) => r.code)), [displayRows]);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-white">
@@ -178,13 +215,16 @@ export function BathProvisionContent({ userId, userName }: { userId: string; use
           <button onClick={nextMonth} className="text-gray-500 hover:text-gray-800"><ChevronRight size={14} /></button>
         </div>
         <span className="text-xs text-gray-400">実日数 {summary.daysUsed}日 / {summary.totalUnits.toLocaleString()}単位</span>
+        <button onClick={() => setShowAdd(true)} className="flex items-center gap-1 rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-cyan-700">
+          <Plus size={14} />サービス追加
+        </button>
         <button onClick={() => window.print()} className="ml-auto flex items-center gap-1 rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800">
           <Printer size={14} />印刷
         </button>
       </div>
 
       <p className="border-b border-gray-100 bg-cyan-50 px-4 py-1 text-[11px] text-cyan-700 no-print">
-        予定/実績のセルをクリックで「1」を入力/削除できます（実績を入れると予定にも計上）。詳細な入浴記録・バイタルは「入浴実施記録」で編集。
+        予定/実績のセルをクリックで「1」を入力/削除（実績を入れると予定にも計上）。「サービス追加」で加算等の行を追加できます。詳細な入浴記録・バイタルは「入浴実施記録」で編集。
       </p>
 
       <div className="flex-1 overflow-auto p-3" id="bath-provision-print">
@@ -213,14 +253,14 @@ export function BathProvisionContent({ userId, userName }: { userId: string; use
                   <th className="border border-gray-300 px-2 py-1" style={{ minWidth: 54 }}>単位</th>
                 </tr>
               </thead>
-              {BATH_ROWS.map((row) => {
+              {displayRows.map((row) => {
                 const c = counts(row.code);
                 const unit = unitByCode[row.code] ?? 0;
+                const isExtra = !BASE_CODES.has(row.code);
                 return (
                   <tbody key={row.code}>
-                    {/* 予定 */}
                     <tr>
-                      <td rowSpan={2} className="sticky left-0 z-10 border border-gray-300 bg-white px-2 py-1 text-left align-middle">{row.label}</td>
+                      <td rowSpan={2} className={`sticky left-0 z-10 border border-gray-300 px-2 py-1 text-left align-middle ${isExtra ? "bg-amber-50 text-amber-800" : "bg-white"}`}>{row.label}</td>
                       <td className="border border-gray-300 bg-blue-50 px-1 py-1 text-[10px] text-blue-700">予定</td>
                       {days.map((d) => {
                         const rec = recByCell.get(`${row.code}-${d}`);
@@ -234,7 +274,6 @@ export function BathProvisionContent({ userId, userName }: { userId: string; use
                       <td className="border border-gray-300 px-2 py-1 text-blue-700">{c.planned || ""}</td>
                       <td rowSpan={2} className="border border-gray-300 px-2 py-1 align-middle tabular-nums text-gray-600">{c.actual > 0 ? (c.actual * unit).toLocaleString() : ""}</td>
                     </tr>
-                    {/* 実績 */}
                     <tr>
                       <td className="border border-gray-300 bg-green-50 px-1 py-1 text-[10px] text-green-700">実績</td>
                       {days.map((d) => {
@@ -253,7 +292,6 @@ export function BathProvisionContent({ userId, userName }: { userId: string; use
               })}
             </table>
 
-            {/* 単位数集計 */}
             <div className="mt-4 max-w-lg">
               <div className="mb-1 text-xs font-semibold text-gray-600">単位数集計（実績）</div>
               <table className="w-full border-collapse text-xs">
@@ -285,11 +323,25 @@ export function BathProvisionContent({ userId, userName }: { userId: string; use
                   </tr>
                 </tbody>
               </table>
-              <p className="mt-1 text-[10px] text-gray-400">※ 処遇改善加算等の月次加算は「請求」画面で自動計上されます。</p>
+              <p className="mt-1 text-[10px] text-gray-400">※ 処遇改善加算等の月次%加算は「請求」画面で自動計上されます（この表には出しません）。</p>
             </div>
           </>
         )}
       </div>
+
+      {showAdd && (
+        <AddServiceModal
+          y={y}
+          m={m}
+          excludeCodes={shownCodes}
+          onClose={() => setShowAdd(false)}
+          onPick={(code) => {
+            setExtraCodes((prev) => (prev.includes(code) ? prev : [...prev, code]));
+            void ensureCodes([code]);
+            setShowAdd(false);
+          }}
+        />
+      )}
 
       <style>{`
         @media print {
@@ -302,6 +354,84 @@ export function BathProvisionContent({ userId, userName }: { userId: string; use
           th, td { border: 1px solid #333 !important; padding: 0.5mm 1mm !important; }
         }
       `}</style>
+    </div>
+  );
+}
+
+// ── サービス追加モーダル: 種類12 のコードから選ぶ (処遇改善系は除外=請求で自動) ──
+function AddServiceModal({
+  y, m, excludeCodes, onClose, onPick,
+}: {
+  y: number;
+  m: number;
+  excludeCodes: Set<string>;
+  onClose: () => void;
+  onPick: (code: string) => void;
+}) {
+  const supabase = useMemo(() => createClient(), []);
+  const [opts, setOpts] = useState<{ code: string; name: string; units: number }[]>([]);
+  const [q, setQ] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data } = await validInMonth(
+        supabase.from("kaigo_service_codes").select("service_code, service_name, units").like("service_code", "12%").eq("system", "介護"),
+        y,
+        m,
+      );
+      if (!alive) return;
+      const list = ((data ?? []) as { service_code: string; service_name: string; units: number }[])
+        .filter((d) => !excludeCodes.has(d.service_code) && !/処遇改善|特定処遇|ベースアップ/.test(d.service_name))
+        .map((d) => ({ code: d.service_code, name: d.service_name, units: d.units }))
+        .sort((a, b) => a.code.localeCompare(b.code));
+      // 同名重複を排除
+      const seen = new Set<string>();
+      const uniq = list.filter((o) => (seen.has(o.code) ? false : (seen.add(o.code), true)));
+      setOpts(uniq);
+      setLoading(false);
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount 時のみ
+  }, []);
+
+  const filtered = useMemo(() => {
+    const s = q.trim();
+    if (!s) return opts;
+    return opts.filter((o) => o.name.includes(s) || o.code.includes(s));
+  }, [opts, q]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3 shrink-0">
+          <h3 className="text-sm font-semibold text-gray-800">サービス追加（訪問入浴・加算）</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+        <div className="border-b border-gray-100 px-4 py-2">
+          <div className="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-1.5">
+            <Search size={14} className="text-gray-400" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="名称・コードで検索" className="flex-1 bg-transparent text-sm outline-none" />
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2">
+          {loading ? (
+            <div className="flex justify-center py-10"><Loader2 size={20} className="animate-spin text-cyan-400" /></div>
+          ) : filtered.length === 0 ? (
+            <p className="py-10 text-center text-sm text-gray-400">該当するサービスがありません</p>
+          ) : (
+            filtered.map((o) => (
+              <button key={o.code} onClick={() => onPick(o.code)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-cyan-50">
+                <span className="font-mono text-xs text-gray-400">{o.code}</span>
+                <span className="flex-1 text-gray-800">{o.name}</span>
+                <span className="text-xs tabular-nums text-gray-500">{o.units}単位</span>
+              </button>
+            ))
+          )}
+        </div>
+        <p className="border-t border-gray-100 px-4 py-2 text-[10px] text-gray-400">※ 処遇改善加算等の月次%加算は請求画面で自動計上のため一覧に出しません。</p>
+      </div>
     </div>
   );
 }
