@@ -251,10 +251,39 @@ export function KaigoSeikyuContent() {
     () => targetDisplayRows.filter((d) => !d.isReSeikyu).map((d) => d.row),
     [targetDisplayRows],
   );
-  const targetUnits = seikyuTargets.reduce((s, r) => s + r.totalUnits, 0);
-  const targetCost = seikyuTargets.reduce((s, r) => s + r.totalAmount, 0);
-  const targetInsurance = seikyuTargets.reduce((s, r) => s + r.insuranceAmount, 0);
-  const targetUser = seikyuTargets.reduce((s, r) => s + r.userAmount, 0);
+  // 公費単独 (被保険者番号 H = 生保 10割公費) は保険請求欄に記載しない。
+  // 公費請求欄の生保行に合算する (様式第一の公式記載例準拠)。
+  const hokenTargets = seikyuTargets.filter((r) => !r.kohiTandoku);
+  const tandokuTargets = seikyuTargets.filter((r) => r.kohiTandoku);
+  const targetUnits = hokenTargets.reduce((s, r) => s + r.totalUnits, 0);
+  const targetCost = hokenTargets.reduce((s, r) => s + r.totalAmount, 0);
+  const targetInsurance = hokenTargets.reduce((s, r) => s + r.insuranceAmount, 0);
+  const targetUser = hokenTargets.reduce((s, r) => s + r.userAmount, 0);
+  // 保険請求分の公費 (生保等の本人負担振替分) — 公費請求欄の再掲元
+  const hokenKohiRows = hokenTargets.filter((r) => (r.kohiAmount ?? 0) > 0);
+  const targetKohi = hokenKohiRows.reduce((s, r) => s + (r.kohiAmount ?? 0), 0);
+  const seikyuKohiRows =
+    hokenKohiRows.length > 0
+      ? [
+          {
+            code: "12",
+            count: hokenKohiRows.length,
+            units: hokenKohiRows.reduce((s, r) => s + (r.kohiUnits ?? 0), 0),
+            cost: hokenKohiRows.reduce((s, r) => s + r.totalAmount, 0),
+            kohi: targetKohi,
+          },
+        ]
+      : [];
+  // 公費単独分の集計 (10割公費: 費用合計 = 公費請求額)
+  const seikyuKohiTandoku =
+    tandokuTargets.length > 0
+      ? {
+          count: tandokuTargets.length,
+          units: tandokuTargets.reduce((s, r) => s + r.totalUnits, 0),
+          cost: tandokuTargets.reduce((s, r) => s + r.totalAmount, 0),
+          kohi: tandokuTargets.reduce((s, r) => s + (r.kohiAmount ?? 0), 0),
+        }
+      : undefined;
 
   // ── 明細書: 対象者の様式第二を印刷 → 印刷実行時に issued_at を now() で upsert (発行済化) ──
   //    再請求行は元提供月 (origMonthKey) に対して upsert する。
@@ -777,7 +806,16 @@ export function KaigoSeikyuContent() {
                 </div>
                 {selected.publicExpense && (
                   <p className="px-0.5 pt-1 text-[10px] text-purple-600">
-                    公費: {selected.publicExpense} (本人負担分を公費請求へ振替)
+                    公費: {selected.publicExpense}
+                    {selected.kohiTandoku
+                      ? " (公費単独請求 = 保険給付なし・総費用の10割を公費請求)"
+                      : " (本人負担分を公費請求へ振替)"}
+                  </p>
+                )}
+                {selected.kohiTandoku && !selected.kohiHobetsu && (
+                  <p className="px-0.5 pt-0.5 text-[10px] text-amber-600">
+                    ⚠ 公費単独 (被保険者番号 H) ですが公費情報 (法別12 生活保護)
+                    が未登録です。保険情報に公費を登録してください。
                   </p>
                 )}
               </div>
@@ -824,12 +862,15 @@ export function KaigoSeikyuContent() {
             officePhone={officePhone ?? ""}
             postalCode={officePostal ?? ""}
             billingMonth={monthKey}
-            totalCount={seikyuTargets.length}
+            totalCount={hokenTargets.length}
             totalUnits={targetUnits}
             totalAmount={targetCost}
             insuranceAmount={targetInsurance}
             userCopay={targetUser}
             kubunLabel={"居宅サービス・地域密着型\nサービス・介護予防サービス"}
+            kohiRequestAmount={targetKohi}
+            kohiRows={seikyuKohiRows}
+            kohiTandoku={seikyuKohiTandoku}
           />
         </div>
       )}

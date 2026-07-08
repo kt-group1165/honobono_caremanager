@@ -72,6 +72,13 @@ export interface UserSeikyuRow {
   userAmount: number;
   /** 公費 (生活保護等)。法別番号 or public_expense テキスト。null = 公費なし */
   publicExpense: string | null;
+  /**
+   * 公費単独請求 (10割公費)。被保険者番号が 'H' で始まる利用者
+   * (= 介護保険の被保険者でない生保受給者 = 2号未加入のみなし要介護者)。
+   * 保険給付なし: insuranceAmount=0 / userAmount=0 / kohiAmount=totalAmount (10割)。
+   * 様式第一では保険請求欄に記載せず、公費請求欄の生保行に合算する。
+   */
+  kohiTandoku: boolean;
   /** 公費 法別番号 (12=生活保護 等) */
   kohiHobetsu: string | null;
   /** 公費負担者番号 (8桁) */
@@ -417,13 +424,22 @@ export async function aggregateMonthlyVisitSeikyu(
     const totalUnits = baseUnits + addonUnits;
     const totalAmount = Math.floor(totalUnits * unitPrice);
     const copay = ins?.copay ?? 0.1;
+    // 公費単独 (10割公費): 被保険者番号が 'H' 始まり = 介護保険未加入の生保受給者。
+    // 保険給付なし → 総費用の全額を公費 (法別12 生活保護) で請求する。
+    const kohiTandoku = /^[Hh]/.test((ins?.insured ?? "").trim());
     // 国保連方式: 保険請求額 = 費用総額 × 給付率 (1円未満切捨)、利用者負担 = 差引
     // (端数は利用者負担側に乗る。先に負担額を切捨てると 1 円ずれる)
-    const insuranceAmount = Math.floor(totalAmount * (1 - copay));
+    const insuranceAmount = kohiTandoku ? 0 : Math.floor(totalAmount * (1 - copay));
     // 公費 (生活保護等): 本人負担分を公費請求へ振替 (本人負担 0 の簡易版)
-    const publicExpense = ins?.publicExpense ?? null;
+    // 公費単独時は kohi_hobetsu 未登録でも公費扱い (未登録は伝送 build 側で warning)
+    const publicExpense =
+      ins?.publicExpense ?? (kohiTandoku ? "公費単独 (生活保護 10割)" : null);
     const kohiUnits = publicExpense ? totalUnits : null;
-    const kohiAmount = publicExpense ? totalAmount - insuranceAmount : null;
+    const kohiAmount = kohiTandoku
+      ? totalAmount
+      : publicExpense
+      ? totalAmount - insuranceAmount
+      : null;
     const userAmount = publicExpense ? 0 : totalAmount - insuranceAmount;
 
     rows.push({
@@ -446,6 +462,7 @@ export async function aggregateMonthlyVisitSeikyu(
       insuranceAmount,
       userAmount,
       publicExpense,
+      kohiTandoku,
       kohiUnits,
       kohiAmount,
       kohiHobetsu: ins?.kohiHobetsu ?? null,

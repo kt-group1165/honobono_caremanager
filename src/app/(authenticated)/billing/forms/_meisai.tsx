@@ -671,8 +671,10 @@ export function MeisaiPrintSheet({
 }) {
   // 給付率 = 100 - 利用者負担割合(%)。copay_rate は分数 (0.1/0.2/0.3) で保持されている
   // (aggregate.ts: raw>=1 は /10 済み)。したがって給付率 = round((1 - copay_rate) * 100)。
-  const kyufuRate = Math.round((1 - row.copay_rate) * 100);
-  const hasKohi = !!row.kohiHobetsu && !!(row.kohiAmount ?? 0);
+  // 公費単独 (被保険者番号 H = 生保 10割公費) は保険給付なし → 保険給付率は空欄、
+  // 公費給付率 100。集計欄は保険請求額 0 / 公費請求額 = 総費用 10割 (aggregate 済)。
+  const kyufuRate = row.kohiTandoku ? null : Math.round((1 - row.copay_rate) * 100);
+  const hasKohi = row.kohiTandoku || (!!row.kohiHobetsu && !!(row.kohiAmount ?? 0));
 
   // 生年月日 (元号 + 年月日桝) / 性別
   const birth = warekiParts(row.birthDate);
@@ -1325,7 +1327,7 @@ export function MeisaiPrintSheet({
                     fontWeight: "bold",
                   }}
                 >
-                  {kyufuRate}
+                  {kyufuRate ?? ""}
                 </span>
               </div>
             </AggVc>
@@ -1338,7 +1340,14 @@ export function MeisaiPrintSheet({
             <AggVc style={{ textAlign: "left" }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span style={{ fontSize: "7pt" }}>公費</span>
-                <span />
+                <span
+                  style={{
+                    fontFamily: '"MS Gothic",monospace',
+                    fontWeight: "bold",
+                  }}
+                >
+                  {hasKohi ? "100" : ""}
+                </span>
               </div>
             </AggVc>
           </tr>
@@ -1377,12 +1386,12 @@ export function MeisaiPrintSheet({
             <AggVc />
             <AggVc>{hasKohi ? (row.kohiAmount ?? 0).toLocaleString() : ""}</AggVc>
           </tr>
-          {/* ⑬ 公費分本人負担 */}
+          {/* ⑬ 公費分本人負担 (生保は 0) */}
           <tr>
             <AggLb>⑬公費分本人負担</AggLb>
+            <AggVc>{hasKohi ? "0" : ""}</AggVc>
             <AggVc />
-            <AggVc />
-            <AggVc />
+            <AggVc>{hasKohi ? "0" : ""}</AggVc>
           </tr>
         </tbody>
       </table>

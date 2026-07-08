@@ -1,0 +1,1448 @@
+{
+ "badSched": [
+  {
+   "id": "946e5b90-031d-42ac-a854-60c7916b12f1",
+   "user_id": "09ac5855-839d-41c3-bc95-0b1e233916cd",
+   "visit_date": "2026-07-08",
+   "start_time": "10:00:00",
+   "end_time": "11:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "df07bad0-5931-4838-b4f6-e8694619387a",
+   "user_id": "09ac5855-839d-41c3-bc95-0b1e233916cd",
+   "visit_date": "2026-07-13",
+   "start_time": "09:00:00",
+   "end_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "490343c0-b26c-4b7f-9b39-6be4bee0c264",
+   "user_id": "09ac5855-839d-41c3-bc95-0b1e233916cd",
+   "visit_date": "2026-07-15",
+   "start_time": "10:00:00",
+   "end_time": "11:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "3e21af96-e334-4454-9d90-2196135a230f",
+   "user_id": "09ac5855-839d-41c3-bc95-0b1e233916cd",
+   "visit_date": "2026-07-20",
+   "start_time": "09:00:00",
+   "end_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "6d0ff5cf-dd5c-453c-b75f-069a3e41d6e1",
+   "user_id": "09ac5855-839d-41c3-bc95-0b1e233916cd",
+   "visit_date": "2026-07-22",
+   "start_time": "10:00:00",
+   "end_time": "11:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "2187e403-f0bf-42e5-b5c7-2df0a1e46fef",
+   "user_id": "09ac5855-839d-41c3-bc95-0b1e233916cd",
+   "visit_date": "2026-07-27",
+   "start_time": "09:00:00",
+   "end_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "281c8dc9-ee21-4014-b78c-81fe11d8f783",
+   "user_id": "09ac5855-839d-41c3-bc95-0b1e233916cd",
+   "visit_date": "2026-07-29",
+   "start_time": "10:00:00",
+   "end_time": "11:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "c4a0e119-fb9b-436e-9d40-13dcd152a10c",
+   "user_id": "435a560a-9121-4d29-bbf9-863d35a668de",
+   "visit_date": "2026-06-22",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "12d02c48-d766-49db-a9dc-fe8ce5939ee7",
+   "user_id": "435a560a-9121-4d29-bbf9-863d35a668de",
+   "visit_date": "2026-06-25",
+   "start_time": "16:00:00",
+   "end_time": "17:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "1dfe8225-e65b-4435-803d-c6d504ae22a2",
+   "user_id": "41de4f7f-3047-409c-8cd3-87ac9a066c5e",
+   "visit_date": "2026-06-22",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "88e9e0d1-4c31-42fb-8da3-11a3ebfb6563",
+   "user_id": "41de4f7f-3047-409c-8cd3-87ac9a066c5e",
+   "visit_date": "2026-06-25",
+   "start_time": "16:00:00",
+   "end_time": "17:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "3f8c233f-3824-4d8a-b970-429765040c3a",
+   "user_id": "dbd51d33-4e78-443c-900e-db1eb296c9a0",
+   "visit_date": "2026-06-22",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "e799c125-8518-44a6-a741-431eaabe4555",
+   "user_id": "e4372d82-0fe8-492e-8dba-9ff43cd7bc6d",
+   "visit_date": "2026-06-25",
+   "start_time": "16:00:00",
+   "end_time": "17:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "0013e491-6e4b-41f0-b5f0-5638f1c714f8",
+   "user_id": "e4372d82-0fe8-492e-8dba-9ff43cd7bc6d",
+   "visit_date": "2026-06-22",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "decc0ef5-0c37-4cbc-89f8-0b59ded6862d",
+   "user_id": "d7e3de9c-4c77-4357-9311-0568ea76cacf",
+   "visit_date": "2026-06-25",
+   "start_time": "16:00:00",
+   "end_time": "17:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "87a80ccd-6210-488f-930b-b2271eae9aab",
+   "user_id": "2e1b6b28-324c-4c9e-817a-c6586da28657",
+   "visit_date": "2026-07-22",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "ffe7cc89-9ac2-4e1a-bf3c-f9d2ed1ed956",
+   "user_id": "2e1b6b28-324c-4c9e-817a-c6586da28657",
+   "visit_date": "2026-07-27",
+   "start_time": "10:00:00",
+   "end_time": "11:30:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "4d3386ca-20a0-41ed-9769-e91b3874617e",
+   "user_id": "2e1b6b28-324c-4c9e-817a-c6586da28657",
+   "visit_date": "2026-07-29",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "26496054-028d-43d8-a700-d57d8d8eaef0",
+   "user_id": "41de4f7f-3047-409c-8cd3-87ac9a066c5e",
+   "visit_date": "2026-07-01",
+   "start_time": "14:30:00",
+   "end_time": "15:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "c46801e4-b5b6-4a09-bb21-93c99a9234de",
+   "user_id": "41de4f7f-3047-409c-8cd3-87ac9a066c5e",
+   "visit_date": "2026-07-06",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "2eddeda3-b568-4ab2-88f3-86d7093bf5d1",
+   "user_id": "41de4f7f-3047-409c-8cd3-87ac9a066c5e",
+   "visit_date": "2026-07-08",
+   "start_time": "14:30:00",
+   "end_time": "15:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "a40b3d52-7711-42b9-b081-af0c9991f649",
+   "user_id": "41de4f7f-3047-409c-8cd3-87ac9a066c5e",
+   "visit_date": "2026-07-13",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "5f0dcc8b-33d8-47ab-9194-3869ac71449a",
+   "user_id": "41de4f7f-3047-409c-8cd3-87ac9a066c5e",
+   "visit_date": "2026-07-15",
+   "start_time": "14:30:00",
+   "end_time": "15:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "c7e39dd3-bcb3-4b30-ab4f-48a4997b0902",
+   "user_id": "41de4f7f-3047-409c-8cd3-87ac9a066c5e",
+   "visit_date": "2026-07-20",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "608357ec-d27c-45ad-97aa-d142652d76ed",
+   "user_id": "41de4f7f-3047-409c-8cd3-87ac9a066c5e",
+   "visit_date": "2026-07-22",
+   "start_time": "14:30:00",
+   "end_time": "15:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "d2db776e-eded-42ce-b86b-08ab1a5b4726",
+   "user_id": "41de4f7f-3047-409c-8cd3-87ac9a066c5e",
+   "visit_date": "2026-07-27",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "7d47e13e-b092-405b-8d38-90eb2b975159",
+   "user_id": "41de4f7f-3047-409c-8cd3-87ac9a066c5e",
+   "visit_date": "2026-07-29",
+   "start_time": "14:30:00",
+   "end_time": "15:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "17bdaf15-c3c5-41e6-b256-20e34b331dfd",
+   "user_id": "435a560a-9121-4d29-bbf9-863d35a668de",
+   "visit_date": "2026-07-01",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "76c66758-b777-4cdf-965c-49ac40e07717",
+   "user_id": "435a560a-9121-4d29-bbf9-863d35a668de",
+   "visit_date": "2026-07-06",
+   "start_time": "10:00:00",
+   "end_time": "11:30:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "caa48190-d5ff-45ae-98ba-04de5b4f38e9",
+   "user_id": "435a560a-9121-4d29-bbf9-863d35a668de",
+   "visit_date": "2026-07-08",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "43e1599f-1bfd-4c54-9564-ca3b5f30b55c",
+   "user_id": "dbd51d33-4e78-443c-900e-db1eb296c9a0",
+   "visit_date": "2026-06-25",
+   "start_time": "16:00:00",
+   "end_time": "17:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "8f7fa6cd-841b-40d9-8233-2fb0727a9737",
+   "user_id": "4c950e31-2fbd-4d8f-aa72-294e36eac400",
+   "visit_date": "2026-06-25",
+   "start_time": "16:00:00",
+   "end_time": "17:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "748da213-3e6e-4638-87ec-d72b731836fd",
+   "user_id": "09ac5855-839d-41c3-bc95-0b1e233916cd",
+   "visit_date": "2026-06-25",
+   "start_time": "16:00:00",
+   "end_time": "17:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "c246146c-afb0-4439-a22c-e0f4880d0bff",
+   "user_id": "2e1b6b28-324c-4c9e-817a-c6586da28657",
+   "visit_date": "2026-06-25",
+   "start_time": "16:00:00",
+   "end_time": "17:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "613c12cd-e1f5-4de8-afff-d70f0f12ede5",
+   "user_id": "b4456691-c2b1-4d0f-bdcb-3a3457f81c78",
+   "visit_date": "2026-06-22",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "29e49c1e-d759-4fe0-810a-6a5a97e19354",
+   "user_id": "b4456691-c2b1-4d0f-bdcb-3a3457f81c78",
+   "visit_date": "2026-06-25",
+   "start_time": "16:00:00",
+   "end_time": "17:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "79d37986-c193-4972-a1bd-d13e5ebb8ac4",
+   "user_id": "435a560a-9121-4d29-bbf9-863d35a668de",
+   "visit_date": "2026-07-13",
+   "start_time": "10:00:00",
+   "end_time": "11:30:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "c4e3d884-4b6d-4244-95fe-c8267238b84a",
+   "user_id": "435a560a-9121-4d29-bbf9-863d35a668de",
+   "visit_date": "2026-07-15",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "82e4d8dd-8019-43ac-9d2c-4ca2dca8d51f",
+   "user_id": "435a560a-9121-4d29-bbf9-863d35a668de",
+   "visit_date": "2026-07-20",
+   "start_time": "10:00:00",
+   "end_time": "11:30:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "d2df3736-1347-4f1d-bc24-d5d5b2e1bcb7",
+   "user_id": "435a560a-9121-4d29-bbf9-863d35a668de",
+   "visit_date": "2026-07-22",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "7d464dbe-e8de-40f9-a7c6-74700a7227c4",
+   "user_id": "435a560a-9121-4d29-bbf9-863d35a668de",
+   "visit_date": "2026-07-27",
+   "start_time": "10:00:00",
+   "end_time": "11:30:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "6361d883-49b2-4f5b-98bc-9916d270b149",
+   "user_id": "435a560a-9121-4d29-bbf9-863d35a668de",
+   "visit_date": "2026-07-29",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "e05ac8a9-f88f-453f-a438-054d13fb5f5f",
+   "user_id": "4c950e31-2fbd-4d8f-aa72-294e36eac400",
+   "visit_date": "2026-07-01",
+   "start_time": "09:00:00",
+   "end_time": "10:00:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "02dcf47d-b988-4def-9f99-0d33542db129",
+   "user_id": "4c950e31-2fbd-4d8f-aa72-294e36eac400",
+   "visit_date": "2026-07-06",
+   "start_time": "16:00:00",
+   "end_time": "17:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "1a5149c1-f3a4-42f2-b11a-e7b99a0d7b7a",
+   "user_id": "4c950e31-2fbd-4d8f-aa72-294e36eac400",
+   "visit_date": "2026-07-08",
+   "start_time": "09:00:00",
+   "end_time": "10:00:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "08424374-2abc-4a53-a66e-9b0ad5390865",
+   "user_id": "4c950e31-2fbd-4d8f-aa72-294e36eac400",
+   "visit_date": "2026-07-13",
+   "start_time": "16:00:00",
+   "end_time": "17:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "d11e1ae5-24e3-43a4-9077-7908e2f94419",
+   "user_id": "4c950e31-2fbd-4d8f-aa72-294e36eac400",
+   "visit_date": "2026-07-15",
+   "start_time": "09:00:00",
+   "end_time": "10:00:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "835d791c-69f6-4b05-ac1b-6e81e4c461ca",
+   "user_id": "4c950e31-2fbd-4d8f-aa72-294e36eac400",
+   "visit_date": "2026-07-20",
+   "start_time": "16:00:00",
+   "end_time": "17:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "d3d6c2de-4208-4a65-8ec9-ca5f73998570",
+   "user_id": "4c950e31-2fbd-4d8f-aa72-294e36eac400",
+   "visit_date": "2026-07-22",
+   "start_time": "09:00:00",
+   "end_time": "10:00:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "bca417c9-79dd-4b3b-b4d6-11683386155d",
+   "user_id": "4c950e31-2fbd-4d8f-aa72-294e36eac400",
+   "visit_date": "2026-07-27",
+   "start_time": "16:00:00",
+   "end_time": "17:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "f4ed667d-06fd-4354-809a-bff7aff383b9",
+   "user_id": "4c950e31-2fbd-4d8f-aa72-294e36eac400",
+   "visit_date": "2026-07-29",
+   "start_time": "09:00:00",
+   "end_time": "10:00:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "9c403999-1492-4901-a754-c7abb6daf2e8",
+   "user_id": "82915d1e-d9e6-4076-abbc-6b5794cbbddb",
+   "visit_date": "2026-07-01",
+   "start_time": "15:30:00",
+   "end_time": "16:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "c73aebb2-6370-42fe-842c-81c024d92a74",
+   "user_id": "82915d1e-d9e6-4076-abbc-6b5794cbbddb",
+   "visit_date": "2026-07-06",
+   "start_time": "14:30:00",
+   "end_time": "15:30:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "17f273dd-4de0-4943-937b-5df7c0bf9659",
+   "user_id": "82915d1e-d9e6-4076-abbc-6b5794cbbddb",
+   "visit_date": "2026-07-08",
+   "start_time": "15:30:00",
+   "end_time": "16:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "e3ef1272-2994-4fda-b1c4-f0e94ab73375",
+   "user_id": "82915d1e-d9e6-4076-abbc-6b5794cbbddb",
+   "visit_date": "2026-07-13",
+   "start_time": "14:30:00",
+   "end_time": "15:30:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "cac882a0-1e88-4be1-b3a2-f92db35f3204",
+   "user_id": "82915d1e-d9e6-4076-abbc-6b5794cbbddb",
+   "visit_date": "2026-07-15",
+   "start_time": "15:30:00",
+   "end_time": "16:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "fb0ffe57-044b-46fd-9096-2c24a8404c04",
+   "user_id": "82915d1e-d9e6-4076-abbc-6b5794cbbddb",
+   "visit_date": "2026-07-20",
+   "start_time": "14:30:00",
+   "end_time": "15:30:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "018c4c30-6b3e-4bee-a919-2a3973e087de",
+   "user_id": "82915d1e-d9e6-4076-abbc-6b5794cbbddb",
+   "visit_date": "2026-07-22",
+   "start_time": "15:30:00",
+   "end_time": "16:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "9705217f-cd85-4370-915a-4e067ade169e",
+   "user_id": "82915d1e-d9e6-4076-abbc-6b5794cbbddb",
+   "visit_date": "2026-07-27",
+   "start_time": "14:30:00",
+   "end_time": "15:30:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "569a1778-a7a5-4780-a14e-ce696afade1b",
+   "user_id": "82915d1e-d9e6-4076-abbc-6b5794cbbddb",
+   "visit_date": "2026-07-29",
+   "start_time": "15:30:00",
+   "end_time": "16:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "41271952-8bc3-4e03-81fe-f6cc3ff216fd",
+   "user_id": "b4456691-c2b1-4d0f-bdcb-3a3457f81c78",
+   "visit_date": "2026-07-01",
+   "start_time": "14:30:00",
+   "end_time": "15:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "ecb7f81e-2732-4573-b714-c9bce71e5136",
+   "user_id": "b4456691-c2b1-4d0f-bdcb-3a3457f81c78",
+   "visit_date": "2026-07-06",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "ab8ce688-d77f-4624-aae2-8f9c6c5975bc",
+   "user_id": "b4456691-c2b1-4d0f-bdcb-3a3457f81c78",
+   "visit_date": "2026-07-08",
+   "start_time": "14:30:00",
+   "end_time": "15:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "4cae5895-2966-4a7a-b971-45b4c63f1543",
+   "user_id": "b4456691-c2b1-4d0f-bdcb-3a3457f81c78",
+   "visit_date": "2026-07-13",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "3e28be9b-1fa7-4175-947e-ba737a3a33ac",
+   "user_id": "4c950e31-2fbd-4d8f-aa72-294e36eac400",
+   "visit_date": "2026-06-22",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "108cb707-5e27-4c4e-9b7a-8d57007dd8a8",
+   "user_id": "82915d1e-d9e6-4076-abbc-6b5794cbbddb",
+   "visit_date": "2026-06-22",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "22694caa-9719-4e16-8bd8-790f3f3a5403",
+   "user_id": "82915d1e-d9e6-4076-abbc-6b5794cbbddb",
+   "visit_date": "2026-06-25",
+   "start_time": "16:00:00",
+   "end_time": "17:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "76a2ecf7-f738-4892-a5c2-5069c030760c",
+   "user_id": "09ac5855-839d-41c3-bc95-0b1e233916cd",
+   "visit_date": "2026-06-22",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "7dd23b5c-9452-4073-9c89-b3128465ba6a",
+   "user_id": "2e1b6b28-324c-4c9e-817a-c6586da28657",
+   "visit_date": "2026-06-22",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "c69ca04b-8685-4c1a-8b46-7d4405e7cdbe",
+   "user_id": "d7e3de9c-4c77-4357-9311-0568ea76cacf",
+   "visit_date": "2026-06-22",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "身体介護1・生活1",
+   "status": "completed"
+  },
+  {
+   "id": "c2784566-0268-4c72-9994-320bba239886",
+   "user_id": "b4456691-c2b1-4d0f-bdcb-3a3457f81c78",
+   "visit_date": "2026-07-15",
+   "start_time": "14:30:00",
+   "end_time": "15:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "37b92ea6-9ceb-490b-8992-0a43288f0b05",
+   "user_id": "b4456691-c2b1-4d0f-bdcb-3a3457f81c78",
+   "visit_date": "2026-07-20",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "4523141e-6d52-44e8-b92f-2cd749fca832",
+   "user_id": "b4456691-c2b1-4d0f-bdcb-3a3457f81c78",
+   "visit_date": "2026-07-22",
+   "start_time": "14:30:00",
+   "end_time": "15:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "4a2df119-4280-4feb-98d5-0d76a3466933",
+   "user_id": "b4456691-c2b1-4d0f-bdcb-3a3457f81c78",
+   "visit_date": "2026-07-27",
+   "start_time": "13:00:00",
+   "end_time": "14:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "89794a65-c357-4091-8413-d9766ce35dff",
+   "user_id": "b4456691-c2b1-4d0f-bdcb-3a3457f81c78",
+   "visit_date": "2026-07-29",
+   "start_time": "14:30:00",
+   "end_time": "15:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "7d56a997-0708-41a0-bfa3-f83067e55b6f",
+   "user_id": "ca9bfe78-87bc-4239-8004-0cfdef0e6180",
+   "visit_date": "2026-07-05",
+   "start_time": "09:00:00",
+   "end_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "83c6f671-0a13-4232-9f92-6da169a857dd",
+   "user_id": "ca9bfe78-87bc-4239-8004-0cfdef0e6180",
+   "visit_date": "2026-07-12",
+   "start_time": "09:00:00",
+   "end_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "e25f71b6-f8a8-4093-a368-c6c8c70ff30d",
+   "user_id": "ca9bfe78-87bc-4239-8004-0cfdef0e6180",
+   "visit_date": "2026-07-19",
+   "start_time": "09:00:00",
+   "end_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "9a0a47ea-ecb1-4c29-9697-eef0f0072a29",
+   "user_id": "ca9bfe78-87bc-4239-8004-0cfdef0e6180",
+   "visit_date": "2026-07-26",
+   "start_time": "09:00:00",
+   "end_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "3ff47366-259a-455a-ad39-f4f5abd6ab8f",
+   "user_id": "d7e3de9c-4c77-4357-9311-0568ea76cacf",
+   "visit_date": "2026-07-01",
+   "start_time": "16:00:00",
+   "end_time": "17:00:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "655d8421-fb50-4ec9-9bbf-d9ac960ef296",
+   "user_id": "d7e3de9c-4c77-4357-9311-0568ea76cacf",
+   "visit_date": "2026-07-06",
+   "start_time": "15:30:00",
+   "end_time": "16:30:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "68f49b40-3f9f-43ec-8f1c-7bd894095547",
+   "user_id": "d7e3de9c-4c77-4357-9311-0568ea76cacf",
+   "visit_date": "2026-07-08",
+   "start_time": "16:00:00",
+   "end_time": "17:00:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "c1826a74-14a2-489b-a381-16dd73b41715",
+   "user_id": "d7e3de9c-4c77-4357-9311-0568ea76cacf",
+   "visit_date": "2026-07-13",
+   "start_time": "15:30:00",
+   "end_time": "16:30:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "5f051c3b-30c8-4524-8a6b-d88339d11a61",
+   "user_id": "d7e3de9c-4c77-4357-9311-0568ea76cacf",
+   "visit_date": "2026-07-15",
+   "start_time": "16:00:00",
+   "end_time": "17:00:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "968a522f-853a-4a23-9fcb-5e50741580c7",
+   "user_id": "d7e3de9c-4c77-4357-9311-0568ea76cacf",
+   "visit_date": "2026-07-20",
+   "start_time": "15:30:00",
+   "end_time": "16:30:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "d2c176ea-2fe6-4897-bbe2-4b46b9fb72cd",
+   "user_id": "d7e3de9c-4c77-4357-9311-0568ea76cacf",
+   "visit_date": "2026-07-22",
+   "start_time": "16:00:00",
+   "end_time": "17:00:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "71538d3e-b2eb-45c2-b0a2-0aab82b93f4b",
+   "user_id": "d7e3de9c-4c77-4357-9311-0568ea76cacf",
+   "visit_date": "2026-07-27",
+   "start_time": "15:30:00",
+   "end_time": "16:30:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "6a189cb1-2fa9-4881-aa67-981b93d9b0e2",
+   "user_id": "d7e3de9c-4c77-4357-9311-0568ea76cacf",
+   "visit_date": "2026-07-29",
+   "start_time": "16:00:00",
+   "end_time": "17:00:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "cb842a29-6e78-466a-b140-3264b1d324d7",
+   "user_id": "dbd51d33-4e78-443c-900e-db1eb296c9a0",
+   "visit_date": "2026-07-01",
+   "start_time": "15:30:00",
+   "end_time": "16:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "e6cda604-8f93-4e75-b684-fd6b698b9f3c",
+   "user_id": "dbd51d33-4e78-443c-900e-db1eb296c9a0",
+   "visit_date": "2026-07-06",
+   "start_time": "14:30:00",
+   "end_time": "15:30:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "20d327d5-0fd6-43cf-bad9-e30dacff54ab",
+   "user_id": "dbd51d33-4e78-443c-900e-db1eb296c9a0",
+   "visit_date": "2026-07-08",
+   "start_time": "15:30:00",
+   "end_time": "16:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "e4d4d111-4996-433b-b101-11e53775270f",
+   "user_id": "dbd51d33-4e78-443c-900e-db1eb296c9a0",
+   "visit_date": "2026-07-13",
+   "start_time": "14:30:00",
+   "end_time": "15:30:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "5250a296-d6de-483f-a4f2-ab3bc30dc187",
+   "user_id": "dbd51d33-4e78-443c-900e-db1eb296c9a0",
+   "visit_date": "2026-07-15",
+   "start_time": "15:30:00",
+   "end_time": "16:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "1430f332-5801-4822-be2e-78edf93669a9",
+   "user_id": "dbd51d33-4e78-443c-900e-db1eb296c9a0",
+   "visit_date": "2026-07-20",
+   "start_time": "14:30:00",
+   "end_time": "15:30:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "7b8e15f0-ced5-459a-b77e-dc6b0795f110",
+   "user_id": "dbd51d33-4e78-443c-900e-db1eb296c9a0",
+   "visit_date": "2026-07-22",
+   "start_time": "15:30:00",
+   "end_time": "16:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "3e143f5d-3aab-438e-b47a-d37530b3fbef",
+   "user_id": "dbd51d33-4e78-443c-900e-db1eb296c9a0",
+   "visit_date": "2026-07-27",
+   "start_time": "14:30:00",
+   "end_time": "15:30:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "4593d989-fad1-4158-b54e-8f5101260bf7",
+   "user_id": "dbd51d33-4e78-443c-900e-db1eb296c9a0",
+   "visit_date": "2026-07-29",
+   "start_time": "15:30:00",
+   "end_time": "16:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "e7857f71-479e-49c1-b976-9df31d294311",
+   "user_id": "e4372d82-0fe8-492e-8dba-9ff43cd7bc6d",
+   "visit_date": "2026-07-01",
+   "start_time": "10:00:00",
+   "end_time": "11:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "58e68457-f740-41f1-b4b1-91c1b14ee0f8",
+   "user_id": "e4372d82-0fe8-492e-8dba-9ff43cd7bc6d",
+   "visit_date": "2026-07-06",
+   "start_time": "09:00:00",
+   "end_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "ffd9000f-1513-4cdb-a71b-6f9b09bdb388",
+   "user_id": "e4372d82-0fe8-492e-8dba-9ff43cd7bc6d",
+   "visit_date": "2026-07-08",
+   "start_time": "10:00:00",
+   "end_time": "11:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "9327f063-c1af-4736-a2df-f9cb544b82c8",
+   "user_id": "e4372d82-0fe8-492e-8dba-9ff43cd7bc6d",
+   "visit_date": "2026-07-13",
+   "start_time": "09:00:00",
+   "end_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "d614b1cf-edb0-4307-bb73-128be637f8b4",
+   "user_id": "e4372d82-0fe8-492e-8dba-9ff43cd7bc6d",
+   "visit_date": "2026-07-15",
+   "start_time": "10:00:00",
+   "end_time": "11:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "06664af8-ee5d-478d-8bf0-1a16b9fcaabb",
+   "user_id": "e4372d82-0fe8-492e-8dba-9ff43cd7bc6d",
+   "visit_date": "2026-07-20",
+   "start_time": "09:00:00",
+   "end_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "4093376e-c7ec-4004-8474-341964b1c74c",
+   "user_id": "e4372d82-0fe8-492e-8dba-9ff43cd7bc6d",
+   "visit_date": "2026-07-22",
+   "start_time": "10:00:00",
+   "end_time": "11:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  },
+  {
+   "id": "b2b74a50-18db-4cc5-937f-46214946ef6b",
+   "user_id": "e4372d82-0fe8-492e-8dba-9ff43cd7bc6d",
+   "visit_date": "2026-07-27",
+   "start_time": "09:00:00",
+   "end_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "scheduled"
+  },
+  {
+   "id": "49619429-65ef-4676-a538-12623203e220",
+   "user_id": "e4372d82-0fe8-492e-8dba-9ff43cd7bc6d",
+   "visit_date": "2026-07-29",
+   "start_time": "10:00:00",
+   "end_time": "11:30:00",
+   "service_type": "生活援助",
+   "status": "scheduled"
+  }
+ ],
+ "badRec": [
+  {
+   "id": "16729fb6-06d8-4ef1-8d45-32d359d16972",
+   "user_id": "ca9bfe78-87bc-4239-8004-0cfdef0e6180",
+   "visit_date": "2026-05-04",
+   "start_time": "14:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "1adcc72b-03ab-4181-9b65-7d433b8b2e5b",
+   "user_id": "e4372d82-0fe8-492e-8dba-9ff43cd7bc6d",
+   "visit_date": "2026-06-28",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "825d97e3-7358-4b92-b1aa-5609e6010160",
+   "user_id": "e4372d82-0fe8-492e-8dba-9ff43cd7bc6d",
+   "visit_date": "2026-06-24",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "e99b2869-cda3-40eb-acb6-5bc72fbfb748",
+   "user_id": "e4372d82-0fe8-492e-8dba-9ff43cd7bc6d",
+   "visit_date": "2026-06-20",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "a2b8aad6-442d-441c-806f-382534c8e42b",
+   "user_id": "e4372d82-0fe8-492e-8dba-9ff43cd7bc6d",
+   "visit_date": "2026-06-16",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "fe1bf722-58b1-41ed-b012-de4dbbf54700",
+   "user_id": "e4372d82-0fe8-492e-8dba-9ff43cd7bc6d",
+   "visit_date": "2026-06-12",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "3e7fe35d-9b9b-47d5-8886-728cf41b497e",
+   "user_id": "e4372d82-0fe8-492e-8dba-9ff43cd7bc6d",
+   "visit_date": "2026-06-08",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "522b62b8-1751-4eb9-a2d7-fdfd623d0d9a",
+   "user_id": "435a560a-9121-4d29-bbf9-863d35a668de",
+   "visit_date": "2026-06-28",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "0e2c6ffe-595b-43d7-9db7-43935ff81fd3",
+   "user_id": "435a560a-9121-4d29-bbf9-863d35a668de",
+   "visit_date": "2026-06-24",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "55d3aa0b-fd67-422a-8bc8-4586f5106028",
+   "user_id": "435a560a-9121-4d29-bbf9-863d35a668de",
+   "visit_date": "2026-06-20",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "af0dd04d-95aa-4abc-b1ea-d188ad91d978",
+   "user_id": "435a560a-9121-4d29-bbf9-863d35a668de",
+   "visit_date": "2026-06-16",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "f8fac4d2-7627-493d-804e-c4b37c76e119",
+   "user_id": "435a560a-9121-4d29-bbf9-863d35a668de",
+   "visit_date": "2026-06-12",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "d0b382eb-c80a-4375-8198-e0cfa60c9ea3",
+   "user_id": "435a560a-9121-4d29-bbf9-863d35a668de",
+   "visit_date": "2026-06-08",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "2fce0b34-b395-4bb1-ade0-98678341b3dc",
+   "user_id": "41de4f7f-3047-409c-8cd3-87ac9a066c5e",
+   "visit_date": "2026-06-28",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "8a090b91-d38f-4ee5-b184-a6d8fd705c57",
+   "user_id": "41de4f7f-3047-409c-8cd3-87ac9a066c5e",
+   "visit_date": "2026-06-24",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "06b1e450-c5fb-4c93-9ada-d67b162c0cda",
+   "user_id": "41de4f7f-3047-409c-8cd3-87ac9a066c5e",
+   "visit_date": "2026-06-20",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "ed00d4a3-10f4-489e-930f-31a6d1b9eb2b",
+   "user_id": "41de4f7f-3047-409c-8cd3-87ac9a066c5e",
+   "visit_date": "2026-06-16",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "2ff7c021-d128-4a21-ad9b-7828ebe8d5c8",
+   "user_id": "41de4f7f-3047-409c-8cd3-87ac9a066c5e",
+   "visit_date": "2026-06-12",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "480b1619-269d-4b25-b553-e7e0232c2628",
+   "user_id": "41de4f7f-3047-409c-8cd3-87ac9a066c5e",
+   "visit_date": "2026-06-08",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "0ee885b0-3497-4a3f-9129-5aa6c42036ef",
+   "user_id": "dbd51d33-4e78-443c-900e-db1eb296c9a0",
+   "visit_date": "2026-06-28",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "3552bd29-40d5-46f2-8aa7-a9ec97f7d04d",
+   "user_id": "dbd51d33-4e78-443c-900e-db1eb296c9a0",
+   "visit_date": "2026-06-24",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "6a600101-6f59-4cea-9120-ef7c02a279ed",
+   "user_id": "dbd51d33-4e78-443c-900e-db1eb296c9a0",
+   "visit_date": "2026-06-20",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "3de42f0e-45fa-43c5-ac62-63bfc588d0c3",
+   "user_id": "dbd51d33-4e78-443c-900e-db1eb296c9a0",
+   "visit_date": "2026-06-16",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "2a363bda-eb6e-4b24-a3e2-b366b6c927a5",
+   "user_id": "dbd51d33-4e78-443c-900e-db1eb296c9a0",
+   "visit_date": "2026-06-12",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "19b11aa0-7b2f-4682-83cb-c916356149e7",
+   "user_id": "dbd51d33-4e78-443c-900e-db1eb296c9a0",
+   "visit_date": "2026-06-08",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "bbc22c66-7c5d-4d08-a965-93fad807eb74",
+   "user_id": "d7e3de9c-4c77-4357-9311-0568ea76cacf",
+   "visit_date": "2026-06-28",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "c8f6bf2e-8ba4-4638-80e9-6090152fb644",
+   "user_id": "d7e3de9c-4c77-4357-9311-0568ea76cacf",
+   "visit_date": "2026-06-24",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "68a17a4e-b859-43ae-bc2a-616560912959",
+   "user_id": "d7e3de9c-4c77-4357-9311-0568ea76cacf",
+   "visit_date": "2026-06-20",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "5f3c0c13-61d7-4a1d-be18-4708633b51ea",
+   "user_id": "d7e3de9c-4c77-4357-9311-0568ea76cacf",
+   "visit_date": "2026-06-16",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "7868569e-e779-45e3-bf71-8446391fdba7",
+   "user_id": "d7e3de9c-4c77-4357-9311-0568ea76cacf",
+   "visit_date": "2026-06-12",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "a382f39d-611f-432b-a4c2-03884444c766",
+   "user_id": "d7e3de9c-4c77-4357-9311-0568ea76cacf",
+   "visit_date": "2026-06-08",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "ba683ac0-45c9-494f-bcaf-5009b0e22802",
+   "user_id": "4c950e31-2fbd-4d8f-aa72-294e36eac400",
+   "visit_date": "2026-06-28",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "07f48d61-3893-4fe2-bf52-406b3577726c",
+   "user_id": "4c950e31-2fbd-4d8f-aa72-294e36eac400",
+   "visit_date": "2026-06-24",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "305670ad-ebf4-46f7-821d-ac4ff0ed3f0e",
+   "user_id": "4c950e31-2fbd-4d8f-aa72-294e36eac400",
+   "visit_date": "2026-06-20",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "42743811-50ec-4097-972f-07376fc15a8e",
+   "user_id": "4c950e31-2fbd-4d8f-aa72-294e36eac400",
+   "visit_date": "2026-06-16",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "ec38562d-f08b-4497-8c04-462e938b5eef",
+   "user_id": "4c950e31-2fbd-4d8f-aa72-294e36eac400",
+   "visit_date": "2026-06-12",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "5d771384-54db-4fcd-b3a8-d3d84d312994",
+   "user_id": "4c950e31-2fbd-4d8f-aa72-294e36eac400",
+   "visit_date": "2026-06-08",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "46d39866-8ffe-4517-bcd8-f845c8a066d1",
+   "user_id": "09ac5855-839d-41c3-bc95-0b1e233916cd",
+   "visit_date": "2026-06-28",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "9c5281a0-3dd4-44bc-b068-6b3ae9e7eef6",
+   "user_id": "09ac5855-839d-41c3-bc95-0b1e233916cd",
+   "visit_date": "2026-06-24",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "dbb2363b-c2fa-4c71-8dc9-438ade2293b4",
+   "user_id": "09ac5855-839d-41c3-bc95-0b1e233916cd",
+   "visit_date": "2026-06-20",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "49de706f-860b-4ea0-bae6-13296c78a942",
+   "user_id": "09ac5855-839d-41c3-bc95-0b1e233916cd",
+   "visit_date": "2026-06-16",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "99d2ac56-f7e1-4af7-b253-71723ca49ef7",
+   "user_id": "09ac5855-839d-41c3-bc95-0b1e233916cd",
+   "visit_date": "2026-06-12",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "75ff461b-32d0-4a9e-a05d-0fb4ae15292e",
+   "user_id": "09ac5855-839d-41c3-bc95-0b1e233916cd",
+   "visit_date": "2026-06-08",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "9c9624d3-0bbd-4967-9006-f645843cf029",
+   "user_id": "2e1b6b28-324c-4c9e-817a-c6586da28657",
+   "visit_date": "2026-06-28",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "194050c3-ff0b-4bd7-822d-69e4cd109e84",
+   "user_id": "2e1b6b28-324c-4c9e-817a-c6586da28657",
+   "visit_date": "2026-06-24",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "8a2c791e-949f-49b4-aea6-ce4bcc2f29fe",
+   "user_id": "2e1b6b28-324c-4c9e-817a-c6586da28657",
+   "visit_date": "2026-06-20",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "8780c772-0885-42ed-a632-ef1d064ec690",
+   "user_id": "2e1b6b28-324c-4c9e-817a-c6586da28657",
+   "visit_date": "2026-06-16",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "35322c9d-c034-4d82-8394-23025dfcd7f2",
+   "user_id": "2e1b6b28-324c-4c9e-817a-c6586da28657",
+   "visit_date": "2026-06-12",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "2301ec28-3ed5-420a-9ffa-1be8a3242b35",
+   "user_id": "2e1b6b28-324c-4c9e-817a-c6586da28657",
+   "visit_date": "2026-06-08",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "6ad7caa2-008e-46ff-8d3e-336b5725dfba",
+   "user_id": "b4456691-c2b1-4d0f-bdcb-3a3457f81c78",
+   "visit_date": "2026-06-28",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "686dfb94-576b-4944-acb0-b8a95471e258",
+   "user_id": "b4456691-c2b1-4d0f-bdcb-3a3457f81c78",
+   "visit_date": "2026-06-24",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "9b346c1e-28c3-43d7-bcb7-4e9212b16c89",
+   "user_id": "b4456691-c2b1-4d0f-bdcb-3a3457f81c78",
+   "visit_date": "2026-06-20",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "f5cb4233-4231-4e53-91f9-f2de054970fb",
+   "user_id": "b4456691-c2b1-4d0f-bdcb-3a3457f81c78",
+   "visit_date": "2026-06-16",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "07d8bcf2-34b5-4c0e-bae5-d217efb104ef",
+   "user_id": "b4456691-c2b1-4d0f-bdcb-3a3457f81c78",
+   "visit_date": "2026-06-12",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "211f938e-adca-4180-b7fd-6e6169362fe4",
+   "user_id": "b4456691-c2b1-4d0f-bdcb-3a3457f81c78",
+   "visit_date": "2026-06-08",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "3f8a6828-14f3-41de-aa89-1043588661b4",
+   "user_id": "82915d1e-d9e6-4076-abbc-6b5794cbbddb",
+   "visit_date": "2026-06-28",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "ee5230ae-0f0c-40cd-a705-115c2269cef5",
+   "user_id": "82915d1e-d9e6-4076-abbc-6b5794cbbddb",
+   "visit_date": "2026-06-24",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "cb771d6a-4b1c-48c0-b73c-dce5e98c9f1a",
+   "user_id": "82915d1e-d9e6-4076-abbc-6b5794cbbddb",
+   "visit_date": "2026-06-20",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "3bfd7cc9-b22c-4ff9-9edc-737d157a019d",
+   "user_id": "82915d1e-d9e6-4076-abbc-6b5794cbbddb",
+   "visit_date": "2026-06-16",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  },
+  {
+   "id": "fe30d936-3c7f-430b-be5a-b113c1c4a73b",
+   "user_id": "82915d1e-d9e6-4076-abbc-6b5794cbbddb",
+   "visit_date": "2026-06-12",
+   "start_time": "10:00:00",
+   "service_type": "身体介護",
+   "status": "draft"
+  },
+  {
+   "id": "047a6543-a162-4806-a983-b68cf7b4504a",
+   "user_id": "82915d1e-d9e6-4076-abbc-6b5794cbbddb",
+   "visit_date": "2026-06-08",
+   "start_time": "14:00:00",
+   "service_type": "生活援助",
+   "status": "draft"
+  }
+ ]
+}

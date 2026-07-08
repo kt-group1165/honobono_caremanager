@@ -704,7 +704,7 @@ export function CareCertContent({
             <div className="col-span-full rounded border border-purple-200 bg-purple-50/40 p-2">
               <p className="mb-1.5 text-xs font-bold text-purple-800">公費情報 (生活保護等)</p>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-                <div>
+                <div className="flex flex-col justify-end">
                   <label className={labelCls}>法別番号</label>
                   <select
                     value={form.kohi_hobetsu}
@@ -718,7 +718,7 @@ export function CareCertContent({
                     <option value="21">21: 精神通院医療</option>
                   </select>
                 </div>
-                <div>
+                <div className="flex flex-col justify-end">
                   <label className={labelCls}>公費負担者番号</label>
                   <input
                     type="text"
@@ -729,7 +729,7 @@ export function CareCertContent({
                     disabled={!form.kohi_hobetsu}
                   />
                 </div>
-                <div>
+                <div className="flex flex-col justify-end">
                   <label className={labelCls}>公費受給者番号</label>
                   <input
                     type="text"
@@ -740,7 +740,7 @@ export function CareCertContent({
                     disabled={!form.kohi_hobetsu}
                   />
                 </div>
-                <div>
+                <div className="flex flex-col justify-end">
                   <label className={labelCls}>公費適用 開始</label>
                   <input
                     type="date"
@@ -750,7 +750,7 @@ export function CareCertContent({
                     disabled={!form.kohi_hobetsu}
                   />
                 </div>
-                <div>
+                <div className="flex flex-col justify-end">
                   <label className={labelCls}>公費適用 終了</label>
                   <input
                     type="date"

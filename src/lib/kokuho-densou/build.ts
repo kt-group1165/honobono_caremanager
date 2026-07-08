@@ -90,12 +90,15 @@ export function buildKokuhoDensou(
   const dataParts: string[][] = [];
 
   // ── 7111 介護給付費請求書情報 (保険請求分 1 レコード + 公費請求分) ──
-  const totalCount = rows.length;
-  const totalUnits = rows.reduce((s, r) => s + r.totalUnits, 0);
-  const totalCost = rows.reduce((s, r) => s + r.totalAmount, 0);
-  const totalInsurance = rows.reduce((s, r) => s + r.insuranceAmount, 0);
-  const totalKohi = rows.reduce((s, r) => s + (r.kohiAmount ?? 0), 0);
-  const totalUser = rows.reduce((s, r) => s + r.userAmount, 0);
+  // 公費単独 (被保険者番号 H = 生保 10割公費) は保険請求分レコードに含めない
+  // (様式第一の記載例: 保険請求欄には記載せず、公費請求欄の生保行に合算)。
+  const hokenRows = rows.filter((r) => !r.kohiTandoku);
+  const totalCount = hokenRows.length;
+  const totalUnits = hokenRows.reduce((s, r) => s + r.totalUnits, 0);
+  const totalCost = hokenRows.reduce((s, r) => s + r.totalAmount, 0);
+  const totalInsurance = hokenRows.reduce((s, r) => s + r.insuranceAmount, 0);
+  const totalKohi = hokenRows.reduce((s, r) => s + (r.kohiAmount ?? 0), 0);
+  const totalUser = hokenRows.reduce((s, r) => s + r.userAmount, 0);
   dataParts.push([
     "7111", // 1 交換情報識別番号
     ym, // 2 サービス提供年月
@@ -118,10 +121,13 @@ export function buildKokuhoDensou(
   ]);
 
   // 公費請求分 (法別番号ごと。生活保護 12 等)
-  const kohiRows = rows.filter((r) => r.kohiHobetsu && (r.kohiAmount ?? 0) > 0);
+  // 公費単独 (H番号) は法別未登録でも生保 (12) として合算する (未登録は warning)
+  const kohiRows = rows.filter(
+    (r) => (r.kohiHobetsu || r.kohiTandoku) && (r.kohiAmount ?? 0) > 0,
+  );
   const byHobetsu = new Map<string, UserSeikyuRow[]>();
   for (const r of kohiRows) {
-    const h = r.kohiHobetsu as string;
+    const h = r.kohiHobetsu ?? "12";
     if (!byHobetsu.has(h)) byHobetsu.set(h, []);
     byHobetsu.get(h)!.push(r);
   }
@@ -156,10 +162,16 @@ export function buildKokuhoDensou(
     if (!r.birthDate) warnings.push(`${r.user_name}: 生年月日が未登録です`);
     if (!r.careOfficeNumber) warnings.push(`${r.user_name}: 担当居宅介護支援事業所 (事業所番号) が未登録です`);
 
-    const benefitRate = String(Math.round((1 - r.copay_rate) * 100)); // 90 等
-    const hasKohi = !!(r.kohiHobetsu && (r.kohiAmount ?? 0) > 0);
-    if (r.kohiHobetsu && !r.kohiFutanshaNumber) {
-      warnings.push(`${r.user_name}: 公費 (法別${r.kohiHobetsu}) の負担者番号が未登録です`);
+    // 公費単独 (H番号 10割公費): 保険給付率は空欄、公費1給付率 100。
+    const benefitRate = r.kohiTandoku ? "" : String(Math.round((1 - r.copay_rate) * 100)); // 90 等
+    const hasKohi = r.kohiTandoku || !!(r.kohiHobetsu && (r.kohiAmount ?? 0) > 0);
+    if (r.kohiTandoku && !r.kohiHobetsu) {
+      warnings.push(
+        `${r.user_name}: 公費単独 (被保険者番号 H) なのに公費情報 (法別番号) が未登録です — 保険情報に法別12 (生活保護) を登録してください`,
+      );
+    }
+    if (hasKohi && !r.kohiFutanshaNumber) {
+      warnings.push(`${r.user_name}: 公費 (法別${r.kohiHobetsu ?? "12"}) の負担者番号が未登録です`);
     }
 
     // 基本情報レコード (01) — 様式第二で使用しない施設系項目は空欄
@@ -192,13 +204,17 @@ export function buildKokuhoDensou(
       "", // 26 入所実日数
       "", // 27 外泊日数
       "", // 28 退所後の状態
-      benefitRate, // 29 保険給付率
+      // 公費単独 (H番号): 29 空欄 / 30=100。合計欄は 33 単位数のみ設定し
+      // 34 請求額=0・35 負担=0、39-44 公費1 に全額 (kohiAmount=totalAmount) が入る。
+      // ※ 要取込チェック: 公費単独の 33-35 の扱い (単位数を設定 or 全欄空) は
+      //    国保連の取込テストで要確認。ここでは「保険請求額=0・公費請求額=10割」の素直な形。
+      benefitRate, // 29 保険給付率 (公費単独は空欄)
       hasKohi ? "100" : "", // 30 公費1給付率 (生活保護等は 100)
       "", // 31 公費2給付率
       "", // 32 公費3給付率
       String(r.totalUnits), // 33 合計 保険 サービス単位数
-      String(r.insuranceAmount), // 34 同 請求額
-      String(r.userAmount), // 35 同 利用者負担額
+      String(r.insuranceAmount), // 34 同 請求額 (公費単独は 0)
+      String(r.userAmount), // 35 同 利用者負担額 (公費単独は 0)
       "", // 36 緊急時施設療養費請求額
       "", // 37 特定診療費請求額
       "", // 38 特定入所者介護サービス費等請求額

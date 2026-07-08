@@ -38,17 +38,30 @@ export interface SeikyuKohiRow {
   kohi: number; // 公費請求額
 }
 
+// 公費単独 (被保険者番号 H = 生保 10割公費) の集計。
+// 保険請求欄には記載せず、公費請求欄の生保行 (法別12 上段) に合算する
+// (公式記載例: 公費請求欄は保険請求の再掲だが、生保欄のみ公費単独分を合算)。
+export interface SeikyuKohiTandoku {
+  count: number; // 件数
+  units: number; // 単位数・点数
+  cost: number; // 費用合計 (= 公費請求額 10割)
+  kohi: number; // 公費請求額
+}
+
 interface Props {
   providerNumber: string; officeName: string; officeAddress: string;
   officePhone: string; postalCode: string; billingMonth: string;
+  /** 保険請求分の集計 (公費単独分は含めないこと) */
   totalCount: number; totalUnits: number; totalAmount: number;
   insuranceAmount: number; userCopay: number;
   /** 保険請求の区分ラベル。既定=居宅介護支援。訪問介護等は別ラベルを渡す */
   kubunLabel?: string;
-  /** 保険請求 公費請求額 合計 (生保等)。既定 0 */
+  /** 保険請求 公費請求額 合計 (生保等の本人負担振替分)。既定 0 */
   kohiRequestAmount?: number;
-  /** 公費請求テーブルの明細 (法別番号ごと)。既定 [] = 全行空欄 */
+  /** 公費請求テーブルの明細 (法別番号ごと、保険請求の再掲分)。既定 [] = 全行空欄 */
   kohiRows?: SeikyuKohiRow[];
+  /** 公費単独 (10割公費) の集計。保険請求欄に含めず生保行に合算。既定 なし */
+  kohiTandoku?: SeikyuKohiTandoku;
 }
 
 export function SeikyuForm(props: Props) {
@@ -57,13 +70,26 @@ export function SeikyuForm(props: Props) {
     billingMonth, totalCount, totalUnits, totalAmount, insuranceAmount, userCopay,
     kohiRequestAmount = 0,
     kohiRows = [],
+    kohiTandoku,
   } = props;
   const kohiByCode = new Map(kohiRows.map((k) => [k.code, k]));
+  // 生保行 (法別12 上段) = 保険請求の再掲分 + 公費単独分 の合算
+  const seiho12 = kohiByCode.get("12");
+  const seihoRow: SeikyuKohiRow | undefined =
+    seiho12 || kohiTandoku
+      ? {
+          code: "12",
+          count: (seiho12?.count ?? 0) + (kohiTandoku?.count ?? 0),
+          units: (seiho12?.units ?? 0) + (kohiTandoku?.units ?? 0),
+          cost: (seiho12?.cost ?? 0) + (kohiTandoku?.cost ?? 0),
+          kohi: (seiho12?.kohi ?? 0) + (kohiTandoku?.kohi ?? 0),
+        }
+      : undefined;
   const kohiTotal = {
-    count: kohiRows.reduce((s, k) => s + k.count, 0),
-    units: kohiRows.reduce((s, k) => s + k.units, 0),
-    cost: kohiRows.reduce((s, k) => s + k.cost, 0),
-    kohi: kohiRows.reduce((s, k) => s + k.kohi, 0),
+    count: kohiRows.reduce((s, k) => s + k.count, 0) + (kohiTandoku?.count ?? 0),
+    units: kohiRows.reduce((s, k) => s + k.units, 0) + (kohiTandoku?.units ?? 0),
+    cost: kohiRows.reduce((s, k) => s + k.cost, 0) + (kohiTandoku?.cost ?? 0),
+    kohi: kohiRows.reduce((s, k) => s + k.kohi, 0) + (kohiTandoku?.kohi ?? 0),
   };
 
   // ── 桝・罫線・セル共通スタイル ──
@@ -251,7 +277,8 @@ export function SeikyuForm(props: Props) {
           {publicRows.map((row, idx) => {
             const rowKey = row.key ?? row.code;
             // 法別行の明細は最初の 12 (居宅・施設サービス等) 行のみに反映。他は空欄。
-            const k = !row.key && idx === 0 ? kohiByCode.get(row.code) : undefined;
+            // 生保行は 再掲分 + 公費単独 (10割) 分の合算 (seihoRow)。
+            const k = !row.key && idx === 0 ? seihoRow : undefined;
             return (
               <tr key={rowKey} style={{ height: 26 }}>
                 <td style={{ ...h, width: "5%", fontSize: "7pt" }}>{row.key ? "" : row.code}</td>
