@@ -135,9 +135,35 @@ const NAV_HOME_CARE_SECTIONED: SectionSpec[] = [
   },
 ];
 
+// ── 訪問入浴版 — セクション分割 (実施記録中心のシンプル構成)
+const NAV_BATH_SECTIONED: SectionSpec[] = [
+  {
+    items: [
+      { name: "ダッシュボード", href: "/dashboard", icon: LayoutDashboard },
+      { name: "通知", href: "/notifications", icon: Bell },
+      { name: "利用者管理", href: "/users", icon: Users },
+    ],
+  },
+  {
+    title: "日常業務",
+    items: [
+      { name: "入浴実施記録", href: "/bath-records", icon: ClipboardCheck },
+    ],
+  },
+  {
+    title: "管理",
+    items: [
+      { name: "職員管理", href: "/staff", icon: UserCog },
+      { name: "設定", href: "/settings", icon: UserCog },
+      { name: "マニュアル", href: "/manual", icon: BookOpen },
+    ],
+  },
+];
+
 const BUSINESS_TYPE_LABELS: Record<string, { label: string; color: string }> = {
   "居宅介護支援": { label: "ケアマネ版", color: "text-blue-600" },
   "訪問介護": { label: "訪問介護版", color: "text-green-600" },
+  "訪問入浴": { label: "訪問入浴版", color: "text-cyan-600" },
   "通所介護": { label: "通所介護版", color: "text-orange-600" },
 };
 
@@ -165,7 +191,9 @@ function SidebarV2({ onSwitchLayout }: { onSwitchLayout: () => void }) {
   const toggleCollapsed = () => setCollapsed(!collapsed);
 
   const sections: SectionSpec[] =
-    businessType === "訪問介護"
+    businessType === "訪問入浴"
+      ? NAV_BATH_SECTIONED
+      : businessType === "訪問介護"
       ? NAV_HOME_CARE_SECTIONED
       : NAV_CARE_MANAGER_SECTIONED;
   const typeInfo = BUSINESS_TYPE_LABELS[businessType] ?? BUSINESS_TYPE_LABELS["居宅介護支援"];
