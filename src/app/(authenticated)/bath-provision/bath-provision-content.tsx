@@ -1,0 +1,263 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useBusinessType } from "@/lib/business-type-context";
+import { validInMonth, monthRange } from "@/lib/service-code-valid";
+import { ChevronLeft, ChevronRight, Loader2, Printer, Droplets } from "lucide-react";
+
+// 訪問入浴の提供表 固定サービス行 (全身/部分 × 職員のみ)
+const BATH_ROWS = [
+  { code: "121111", label: "訪問入浴（全身浴）", bath_type: "全身浴" as const, staff_only: false },
+  { code: "121121", label: "訪問入浴（全身浴・職員のみ）", bath_type: "全身浴" as const, staff_only: true },
+  { code: "121112", label: "訪問入浴（部分浴・清拭）", bath_type: "部分浴" as const, staff_only: false },
+  { code: "121122", label: "訪問入浴（部分浴・職員のみ）", bath_type: "部分浴" as const, staff_only: true },
+];
+
+type Rec = { id: string; visit_date: string; service_code: string | null };
+
+const WD = ["日", "月", "火", "水", "木", "金", "土"];
+
+export function BathProvisionContent({ userId, userName }: { userId: string; userName: string | null }) {
+  const supabase = useMemo(() => createClient(), []);
+  const { currentOffice, currentOfficeId } = useBusinessType();
+
+  const [month, setMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [records, setRecords] = useState<Rec[]>([]);
+  const [unitByCode, setUnitByCode] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+  const [busyCell, setBusyCell] = useState<string | null>(null);
+
+  const [y, m] = month.split("-").map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const days = useMemo(() => Array.from({ length: daysInMonth }, (_, i) => i + 1), [daysInMonth]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { monthStart, monthEnd } = monthRange(y, m);
+      const recQ = supabase
+        .from("kaigo_bath_visit_records")
+        .select("id, visit_date, service_code")
+        .eq("client_id", userId)
+        .gte("visit_date", monthStart)
+        .lte("visit_date", monthEnd);
+      const { data: recData, error: recErr } = currentOfficeId ? await recQ.eq("office_id", currentOfficeId) : await recQ;
+      if (recErr) throw recErr;
+      setRecords((recData ?? []) as Rec[]);
+
+      const { data: uData } = await validInMonth(
+        supabase.from("kaigo_service_codes").select("service_code, units").in("service_code", BATH_ROWS.map((r) => r.code)).eq("system", "介護"),
+        y,
+        m,
+      );
+      const um: Record<string, number> = {};
+      for (const u of (uData ?? []) as { service_code: string; units: number }[]) if (um[u.service_code] == null) um[u.service_code] = u.units;
+      setUnitByCode(um);
+    } catch (e) {
+      console.error("提供表の読込に失敗:", e);
+      alert("読込に失敗しました: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase, userId, currentOfficeId, y, m]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount/月変更時の async fetch
+    load();
+  }, [load]);
+
+  // grid[code][day] = そのコード・その日の record 一覧
+  const grid = useMemo(() => {
+    const g: Record<string, Record<number, Rec[]>> = {};
+    for (const r of BATH_ROWS) g[r.code] = {};
+    for (const rec of records) {
+      const code = rec.service_code ?? "";
+      const day = Number(rec.visit_date.slice(8, 10));
+      if (!g[code]) continue;
+      (g[code][day] ??= []).push(rec);
+    }
+    return g;
+  }, [records]);
+
+  const prevMonth = () => { const d = new Date(y, m - 2, 1); setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
+  const nextMonth = () => { const d = new Date(y, m, 1); setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
+
+  // セル toggle: 空→追加(1件), 有→1件削除
+  const toggleCell = async (row: (typeof BATH_ROWS)[number], day: number) => {
+    if (!currentOfficeId) { alert("事業所を選択してください"); return; }
+    const key = `${row.code}-${day}`;
+    setBusyCell(key);
+    try {
+      const existing = grid[row.code][day] ?? [];
+      if (existing.length > 0) {
+        const target = existing[existing.length - 1];
+        const { error } = await supabase.from("kaigo_bath_visit_records").delete().eq("id", target.id);
+        if (error) throw error;
+        setRecords((prev) => prev.filter((r) => r.id !== target.id));
+      } else {
+        const visit_date = `${month}-${String(day).padStart(2, "0")}`;
+        const { data, error } = await supabase
+          .from("kaigo_bath_visit_records")
+          .insert({
+            client_id: userId,
+            office_id: currentOfficeId,
+            tenant_id: currentOffice?.tenant_id ?? "kt-group",
+            visit_date,
+            bath_type: row.bath_type,
+            staff_only: row.staff_only,
+            service_code: row.code,
+            status: "confirmed",
+          })
+          .select("id, visit_date, service_code")
+          .single();
+        if (error) throw error;
+        setRecords((prev) => [...prev, data as Rec]);
+      }
+    } catch (e) {
+      alert("更新に失敗しました: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setBusyCell(null);
+    }
+  };
+
+  // 単位集計
+  const summary = useMemo(() => {
+    const rows = BATH_ROWS.map((r) => {
+      const count = days.reduce((s, d) => s + (grid[r.code][d]?.length ?? 0), 0);
+      const unit = unitByCode[r.code] ?? 0;
+      return { ...r, count, unit, total: count * unit };
+    }).filter((r) => r.count > 0 || unitByCode[r.code] != null);
+    const totalCount = rows.reduce((s, r) => s + r.count, 0);
+    const totalUnits = rows.reduce((s, r) => s + r.total, 0);
+    const days_used = new Set(records.map((r) => r.visit_date)).size;
+    return { rows, totalCount, totalUnits, days_used };
+  }, [grid, days, unitByCode, records]);
+
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden bg-white">
+      {/* ツールバー */}
+      <div className="flex items-center gap-3 border-b border-gray-200 bg-gray-50 px-4 py-2 shrink-0 no-print">
+        <Droplets size={18} className="text-cyan-600" />
+        <h1 className="text-sm font-semibold text-gray-800">訪問入浴 サービス提供表（実績）</h1>
+        <span className="text-sm text-gray-600">{userName ?? ""} 様</span>
+        <div className="flex items-center gap-0.5 rounded border border-gray-300 bg-white px-2 py-1">
+          <button onClick={prevMonth} className="text-gray-500 hover:text-gray-800"><ChevronLeft size={14} /></button>
+          <span className="px-1.5 text-sm font-semibold text-gray-800">{y}年{m}月</span>
+          <button onClick={nextMonth} className="text-gray-500 hover:text-gray-800"><ChevronRight size={14} /></button>
+        </div>
+        <span className="text-xs text-gray-400">実日数 {summary.days_used}日 / {summary.totalUnits.toLocaleString()}単位</span>
+        <button onClick={() => window.print()} className="ml-auto flex items-center gap-1 rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800">
+          <Printer size={14} />印刷
+        </button>
+      </div>
+
+      <p className="border-b border-gray-100 bg-cyan-50 px-4 py-1 text-[11px] text-cyan-700 no-print">
+        セルをクリックで実績を追加/削除できます（詳細な入浴記録・バイタルは「入浴実施記録」で編集）。
+      </p>
+
+      <div className="flex-1 overflow-auto p-3" id="bath-provision-print">
+        <div className="mb-2 hidden text-sm font-bold print:block">
+          訪問入浴 サービス提供表（実績）　{y}年{m}月　{userName ?? ""} 様
+        </div>
+        {loading ? (
+          <div className="flex justify-center py-16"><Loader2 size={22} className="animate-spin text-cyan-400" /></div>
+        ) : (
+          <>
+            <table className="border-collapse text-center text-[11px]">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="sticky left-0 z-10 border border-gray-300 bg-gray-100 px-2 py-1 text-left" style={{ minWidth: 180 }}>サービス内容</th>
+                  {days.map((d) => {
+                    const wd = new Date(y, m - 1, d).getDay();
+                    return (
+                      <th key={d} className={`border border-gray-300 px-0.5 py-1 ${wd === 0 ? "text-red-500" : wd === 6 ? "text-blue-500" : "text-gray-600"}`} style={{ minWidth: 22 }}>
+                        <div>{d}</div>
+                        <div className="text-[9px]">{WD[wd]}</div>
+                      </th>
+                    );
+                  })}
+                  <th className="border border-gray-300 px-2 py-1" style={{ minWidth: 36 }}>回数</th>
+                  <th className="border border-gray-300 px-2 py-1" style={{ minWidth: 56 }}>単位</th>
+                </tr>
+              </thead>
+              <tbody>
+                {BATH_ROWS.map((row) => {
+                  const count = days.reduce((s, d) => s + (grid[row.code][d]?.length ?? 0), 0);
+                  const unit = unitByCode[row.code] ?? 0;
+                  return (
+                    <tr key={row.code}>
+                      <td className="sticky left-0 z-10 border border-gray-300 bg-white px-2 py-1 text-left">{row.label}</td>
+                      {days.map((d) => {
+                        const n = grid[row.code][d]?.length ?? 0;
+                        const key = `${row.code}-${d}`;
+                        return (
+                          <td
+                            key={d}
+                            onClick={() => busyCell === null && toggleCell(row, d)}
+                            className={`cursor-pointer border border-gray-200 px-0.5 py-1 hover:bg-cyan-50 ${n > 0 ? "bg-cyan-100 font-semibold text-cyan-800" : "text-gray-300"}`}
+                          >
+                            {busyCell === key ? "…" : n > 1 ? n : n === 1 ? "○" : ""}
+                          </td>
+                        );
+                      })}
+                      <td className="border border-gray-300 px-2 py-1 font-semibold">{count || ""}</td>
+                      <td className="border border-gray-300 px-2 py-1 tabular-nums text-gray-600">{count > 0 ? (count * unit).toLocaleString() : ""}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {/* 単位数集計 */}
+            <div className="mt-4 max-w-md">
+              <div className="mb-1 text-xs font-semibold text-gray-600">単位数集計</div>
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-100 text-gray-600">
+                    <th className="border border-gray-300 px-2 py-1 text-left">サービス内容</th>
+                    <th className="border border-gray-300 px-2 py-1 text-right">回数</th>
+                    <th className="border border-gray-300 px-2 py-1 text-right">単位/回</th>
+                    <th className="border border-gray-300 px-2 py-1 text-right">単位計</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.rows.map((r) => (
+                    <tr key={r.code}>
+                      <td className="border border-gray-300 px-2 py-1 text-left">{r.label}</td>
+                      <td className="border border-gray-300 px-2 py-1 text-right tabular-nums">{r.count}</td>
+                      <td className="border border-gray-300 px-2 py-1 text-right tabular-nums">{r.unit || "—"}</td>
+                      <td className="border border-gray-300 px-2 py-1 text-right tabular-nums font-semibold">{r.total.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-gray-50 font-semibold">
+                    <td className="border border-gray-300 px-2 py-1 text-left">合計</td>
+                    <td className="border border-gray-300 px-2 py-1 text-right tabular-nums">{summary.totalCount}</td>
+                    <td className="border border-gray-300 px-2 py-1"></td>
+                    <td className="border border-gray-300 px-2 py-1 text-right tabular-nums">{summary.totalUnits.toLocaleString()}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p className="mt-1 text-[10px] text-gray-400">※ 処遇改善加算等の月次加算は「請求」画面で自動計上されます。</p>
+            </div>
+          </>
+        )}
+      </div>
+
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #bath-provision-print, #bath-provision-print * { visibility: visible !important; }
+          #bath-provision-print { position: fixed; inset: 0; padding: 6mm; background: white; overflow: visible; }
+          .no-print { display: none !important; }
+          @page { size: A4 landscape; margin: 6mm; }
+          table { border-collapse: collapse; font-size: 7pt; }
+          th, td { border: 1px solid #333 !important; padding: 0.5mm 1mm !important; }
+        }
+      `}</style>
+    </div>
+  );
+}
