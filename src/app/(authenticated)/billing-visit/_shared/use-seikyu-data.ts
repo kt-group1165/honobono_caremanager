@@ -4,7 +4,7 @@
  * 介護請求 / 利用請求 / 国保請求 共通の月次集計 hook
  */
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import {
@@ -32,17 +32,29 @@ export function useSeikyuData() {
   const [unitPrice, setUnitPrice] = useState<number>(10);
   const [appliedFormulaCodes, setAppliedFormulaCodes] = useState<string[]>([]);
 
+  // 月切替の競合対策: 世代カウンタ。古い fetch の結果は破棄する
+  // (前月の遅い応答が当月の結果を上書きするのを防ぐ)
+  const genRef = useRef(0);
+
   const load = useCallback(async () => {
     if (!currentOffice) return;
+    const gen = ++genRef.current;
     setLoading(true);
     setError(null);
     try {
       // 地域単価: offices.unit_price / 事業所番号: business_number (伝送用)
-      const { data: officeRow } = await supabase
+      // 取得失敗時は単価 10.0 で誤集計しないよう、ここで集計を中断する
+      const { data: officeRow, error: officeError } = await supabase
         .from("offices")
         .select("unit_price, applied_formula_codes, business_number, address, phone, postal_code")
         .eq("id", currentOffice.id)
         .maybeSingle();
+      if (officeError) {
+        throw new Error(
+          `事業所情報 (地域単価・事業所番号) の取得に失敗したため集計を中断しました: ${officeError.message}`,
+        );
+      }
+      if (gen !== genRef.current) return; // 古い fetch は破棄
       const or = officeRow as {
         business_number?: string | null;
         address?: string | null;
@@ -70,13 +82,15 @@ export function useSeikyuData() {
           (officeRow as { applied_formula_codes?: string[] } | null)
             ?.applied_formula_codes ?? [],
       });
+      if (gen !== genRef.current) return; // 月切替済み → 古い結果は破棄
       setRows(result.rows);
       setRecordCount(result.recordCount);
       setWarnings(result.warnings);
     } catch (e) {
+      if (gen !== genRef.current) return;
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoading(false);
+      if (gen === genRef.current) setLoading(false);
     }
   }, [supabase, currentOffice, year, month]);
 

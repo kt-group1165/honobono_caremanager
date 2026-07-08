@@ -26,7 +26,8 @@ export default async function MonitoringPage({
     const [userRes, planRes] = await Promise.all([
       supabase
         .from("clients")
-        .select("id, name, name_kana")
+        // 実 DB 列は furigana (name_kana 列は存在しない) — PostgREST alias で型を維持
+        .select("id, name, name_kana:furigana")
         .eq("id", userId)
         .maybeSingle(),
       supabase

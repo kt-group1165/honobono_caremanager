@@ -74,11 +74,11 @@ export interface MeetingDoc {
   updated_at: string;
 }
 
-/** UserSidebar 連動用の最小利用者表現 */
+/** UserSidebar 連動用の最小利用者表現 (共有マスタ clients の subset。かな列は furigana) */
 export interface KaigoUserLite {
   id: string;
   name: string;
-  name_kana: string | null;
+  furigana: string | null;
 }
 
 /** 計画期間 tab に表示する ケアプラン要約 */

@@ -26,6 +26,7 @@ import { ja } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import {
   DOW_LABELS,
+  insertVisitSchedules,
   isStaffUnavailableAtTime,
   timeToMinutes,
   type KaigoStaff,
@@ -34,6 +35,7 @@ import {
   type StaffAvailabilitySlot,
   type VisitSchedule,
 } from "./_shared";
+import { useBusinessType } from "@/lib/business-type-context";
 import { useKaigoVisitSchedulesByDate } from "@/lib/swr/use-kaigo-visit-schedules";
 import { useKaigoAvailability } from "@/lib/swr/use-kaigo-availability";
 
@@ -106,6 +108,7 @@ export function TimelineView({
   initialData,
 }: TimelineViewProps) {
   const supabase = useMemo(() => createClient(), []);
+  const { currentOfficeId } = useBusinessType();
   // 楽観的 local state (drag/copy 操作中に書き換える)。SWR data の更新を
   // useEffect で sync する。filter (dateStr) 変更時は SWR が新 data を fetch、
   // local state も自動的に置き換わる。
@@ -463,9 +466,11 @@ export function TimelineView({
     let hasError = false;
     for (const change of pendingChanges) {
       if (change.type === "copy" && change.copyData) {
-        const { error } = await supabase
-          .from("kaigo_visit_schedule")
-          .insert(change.copyData);
+        // C5: 発生元 office を付与 (列未適用 42703/PGRST204 は helper が strip して retry)
+        const { error } = await insertVisitSchedules(supabase, [{
+          ...change.copyData,
+          ...(currentOfficeId ? { office_id: currentOfficeId } : {}),
+        }]);
         if (error) {
           console.error(error);
           hasError = true;
@@ -489,7 +494,7 @@ export function TimelineView({
     setPendingChanges([]);
     setSaving(false);
     fetchData();
-  }, [pendingChanges, supabase, fetchData]);
+  }, [pendingChanges, supabase, fetchData, currentOfficeId]);
 
   const handleDiscardPendingChanges = useCallback(() => {
     setPendingChanges([]);

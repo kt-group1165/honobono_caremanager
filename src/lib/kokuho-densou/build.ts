@@ -53,6 +53,14 @@ export interface DensouBuildOptions {
   month: number; // 1-12
   /** 地域区分単価 (円)。集計情報レコードの単位数単価 (×100 の 4 桁) に使用 */
   unitPrice: number;
+  /**
+   * 今回の請求 (提出) バッチの請求月。未指定は year/month (提供月) を請求月とみなす。
+   * コントロールレコードの処理対象年月 (項11) = この翌月 (= 審査月) を設定する。
+   * 月遅れ・返戻の再請求ファイル (提供月が過去) でも「同じ提出バッチの審査月」を
+   * 使うため、呼出側は選択中の請求月をここに渡すこと。
+   */
+  seikyuYear?: number;
+  seikyuMonth?: number; // 1-12
 }
 
 export interface DensouBuildResult {
@@ -172,7 +180,8 @@ export function buildKokuhoDensou(
     }
 
     // 公費単独 (H番号 10割公費): 保険給付率は空欄、公費1給付率 100。
-    const benefitRate = r.kohiTandoku ? "" : String(Math.round((1 - r.copay_rate) * 100)); // 90 等
+    // 給付率は整数演算: copay 0.1/0.2/0.3 → 1/2/3 → 90/80/70 (float 1円ズレ防止と同方針)
+    const benefitRate = r.kohiTandoku ? "" : String((10 - Math.round(r.copay_rate * 10)) * 10); // 90 等
     const hasKohi = r.kohiTandoku || !!(r.kohiHobetsu && (r.kohiAmount ?? 0) > 0);
     if (r.kohiTandoku && !r.kohiHobetsu) {
       warnings.push(
@@ -281,6 +290,11 @@ export function buildKokuhoDensou(
 
     // 集計情報レコード (10) — サービス種類 (訪問介護 = 11) 単位
     const svcKindCode = detailLines[0]?.code.slice(0, 2) ?? "11";
+    // 限度額管理対象外 (契約 C1) = 処遇改善等%加算 + 初回加算 + 緊急時訪問介護加算。
+    // 管理対象 (基準内) = baseUnits − 初回・緊急時分 (= baseUnits − (対象外 − %加算))。
+    // 恒等式: 保険単位数合計 (14) = 管理対象 (10) + 管理対象外 (11)。
+    const kanriGaiUnits = r.kanriTaishougaiUnits;
+    const kanriInUnits = r.baseUnits - (kanriGaiUnits - r.addonUnits);
     dataParts.push([
       "7131", // 1
       "10", // 2 レコード種別コード
@@ -290,12 +304,12 @@ export function buildKokuhoDensou(
       insured, // 6
       svcKindCode, // 7 サービス種類コード
       String(r.serviceDays), // 8 サービス実日数
-      // 9-11: baseUnits は「区分支給限度基準内」の本体単位数 (aggregate.ts で
-      // 超過分を除外済み)。超過がある場合、明細 02 行の合計 (grossBaseUnits) より
-      // 小さくなり、その差 = 超過分は保険請求外 (全額自費) — 様式第二の標準的な扱い。
-      String(r.baseUnits), // 9 計画単位数
-      String(r.baseUnits), // 10 限度額管理対象単位数 (基準内)
-      String(r.addonUnits), // 11 限度額管理対象外単位数 (処遇改善等は限度額管理の対象外)
+      // 9-11: 超過分は保険請求外 (aggregate.ts で除外済み・selfPayAmount へ分離)。
+      // 超過がある場合、管理対象 (10) は明細 02 行の合計より小さくなり、その差 =
+      // 超過分は保険請求外 (全額自費) — 様式第二の標準的な扱い。
+      String(r.planUnits ?? kanriInUnits), // 9 計画単位数 (kaigo_monthly_plan_units があればそれ、無ければ基準内)
+      String(kanriInUnits), // 10 限度額管理対象単位数 (基準内)
+      String(kanriGaiUnits), // 11 限度額管理対象外単位数 (処遇改善等 + 初回 + 緊急時)
       "", // 12 短期入所計画日数
       "", // 13 短期入所実日数
       String(r.totalUnits), // 14 保険 単位数合計
@@ -318,10 +332,23 @@ export function buildKokuhoDensou(
   // ── レコード番号を付与してファイルを組む ──
   const lines: string[] = [];
   let recNo = 1;
+  // 処理対象年月 (項11) = 審査月。
+  // 仕様書 (migrations/_if_kyotaku.txt 注1「処理対象年月について」):
+  //   「保険者／事業所等から国保連合会へ受け渡す交換情報の場合、
+  //     国保連合会での電算処理を実行する年月を設定する」
+  // = 提供月ではなく審査月。提供月 M の請求は M+1 月 10 日までに提出し M+1 月に
+  // 審査されるため、審査月 = 請求月 (提出バッチの月 = opts.seikyuYear/Month、
+  // 未指定は提供月) の翌月。月遅れ・返戻の再請求ファイルも同じ提出バッチの審査月。
+  // ⚠ 要取込チェック: 初回伝送時に伝送通信ソフトの取込チェックで処理対象年月が
+  //    受理されるか確認すること (過誤・審査依頼の要望月指定がある場合は別途調整)。
+  const sy = opts.seikyuYear ?? opts.year;
+  const sm = opts.seikyuMonth ?? opts.month;
+  const shinsaYm =
+    sm === 12 ? `${sy + 1}01` : `${sy}${String(sm + 1).padStart(2, "0")}`;
   // コントロールレコード: 種別1, 連番, ボリューム通番0, データ件数, データ種別711,
-  //   福祉事務所0, 保険者番号0, 事業所番号, 都道府県番号0, 媒体区分1(伝送), 処理対象年月, 管理番号1
+  //   福祉事務所0, 保険者番号0, 事業所番号, 都道府県番号0, 媒体区分1(伝送), 処理対象年月(審査月), 管理番号1
   lines.push(
-    ["1", String(recNo++), "0", String(dataParts.length), "711", "0", "0", office, "0", "1", ym, "1"].join(","),
+    ["1", String(recNo++), "0", String(dataParts.length), "711", "0", "0", office, "0", "1", shinsaYm, "1"].join(","),
   );
   for (const parts of dataParts) {
     lines.push(["2", String(recNo++), ...parts].join(","));

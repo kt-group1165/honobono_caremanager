@@ -70,15 +70,8 @@ const NAV_CARE_MANAGER_SECTIONED: SectionSpec[] = [
       // /billing/seikyu の介護請求タブからリンク (画面自体は残置)
     ],
   },
-  {
-    title: "障害福祉",
-    items: [
-      { name: "サービス提供実績", href: "/shogai/records", icon: ClipboardCheck },
-      { name: "実績月間管理", href: "/shogai/records/monthly", icon: CalendarDays },
-      { name: "障害請求", href: "/billing-visit/shogai-seikyu", icon: Calculator },
-      // 受給者証・障害支援区分 は 利用者管理 → 障害福祉タブ (/users/[id]/disability, /shougai-cert) に集約
-    ],
-  },
+  // 障害福祉 (サービス提供実績/実績月間管理/障害請求) は訪問介護版のみに表示
+  // (居宅介護支援では使わないため 2026-07 総点検で撤去)
   {
     title: "管理",
     items: [
@@ -107,6 +100,7 @@ const NAV_HOME_CARE_SECTIONED: SectionSpec[] = [
       { name: "サービス提供表 (実績)", href: "/provision-tickets", icon: FileSpreadsheet },
       { name: "サービス実施記録", href: "/visit-records", icon: ClipboardCheck },
       { name: "訪問介護計画書", href: "/houmon-care-plans", icon: ClipboardList },
+      { name: "カンファレンス記録", href: "/care-conferences", icon: MessagesSquare },
       { name: "手順書", href: "/visit-procedures", icon: BookOpen },
       { name: "重要事項・契約書", href: "/user-contracts", icon: FileText },
     ],

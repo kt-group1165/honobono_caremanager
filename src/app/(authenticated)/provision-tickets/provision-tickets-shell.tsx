@@ -32,6 +32,8 @@ interface Props {
   initialServiceRows: ServiceRow[];
   initialGrid: GridState;
   initialFormulaCodes: FormulaCode[];
+  /** SSR preload が成功したか。false = クライアント側で自力再フェッチさせる (自己回復) */
+  initialPreloadOk?: boolean;
 }
 
 export function ProvisionTicketsShell({
@@ -43,6 +45,7 @@ export function ProvisionTicketsShell({
   initialServiceRows,
   initialGrid,
   initialFormulaCodes,
+  initialPreloadOk = true,
 }: Props) {
   const [userId, setUserId] = useState<string | null>(initialUserId);
 
@@ -72,7 +75,8 @@ export function ProvisionTicketsShell({
           initialServiceRows={isInitialUser ? initialServiceRows : []}
           initialGrid={isInitialUser ? initialGrid : {}}
           initialFormulaCodes={initialFormulaCodes}
-          serverPreloaded={isInitialUser}
+          // SSR エラー時 (initialPreloadOk=false) はクライアント再フェッチに切替
+          serverPreloaded={isInitialUser && initialPreloadOk}
         />
       ) : (
         <div className="flex-1 overflow-y-auto">

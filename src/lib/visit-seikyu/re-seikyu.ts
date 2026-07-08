@@ -42,6 +42,13 @@ interface FlaggedRow {
   henrei: boolean;
 }
 
+/** 再請求の読込結果 (再集計時の warnings も呼出側 = 介護請求タブで表示する) */
+export interface ReSeikyuResult {
+  rows: ReSeikyuRow[];
+  /** 元提供月ごとの aggregate warnings (「[再請求 R8/5] …」形式) */
+  warnings: string[];
+}
+
 /**
  * 当月 (currentMonthKey) より前の月で、月遅れ/返戻フラグが立っており
  * まだ国保対象化されていない利用者を、元提供月で再集計して返す。
@@ -57,7 +64,7 @@ export async function loadReSeikyuRows(
     appliedFormulaCodes?: string[];
     currentMonthKey: string; // 'YYYY-MM'
   },
-): Promise<ReSeikyuRow[]> {
+): Promise<ReSeikyuResult> {
   // 1) 月遅れ/返戻かつ未・国保対象の過去月レコードを取得
   const { data, error } = await supabase
     .from("kaigo_billing_status")
@@ -67,13 +74,16 @@ export async function loadReSeikyuRows(
     .or("tsukiokure.eq.true,henrei.eq.true")
     .lt("target_month", opts.currentMonthKey);
   if (error) {
-    // table 未作成 (migration 未適用) 等は再請求なしで続行 (呼出側で握る)
-    if (error.code === "42P01") return [];
+    // table 未作成 (直 SQL=42P01 / PostgREST schema cache=PGRST205) は
+    // 再請求なしで続行 (呼出側で握る)
+    if (error.code === "42P01" || error.code === "PGRST205") {
+      return { rows: [], warnings: [] };
+    }
     throw new Error(`再請求対象の取得に失敗: ${error.message}`);
   }
 
   const flagged = (data ?? []) as FlaggedRow[];
-  if (flagged.length === 0) return [];
+  if (flagged.length === 0) return { rows: [], warnings: [] };
 
   // 2) 月ごとにまとめ、client_id → reasons を引けるようにする
   const byMonth = new Map<string, Map<string, ReSeikyuReasons>>();
@@ -87,6 +97,7 @@ export async function loadReSeikyuRows(
 
   // 3) 月ごとに元提供月で再集計 → 該当利用者のみ抽出
   const out: ReSeikyuRow[] = [];
+  const warnings: string[] = [];
   for (const [monthKey, clientReasons] of byMonth) {
     const [y, m] = monthKey.split("-").map((n) => Number(n));
     if (!y || !m) continue;
@@ -100,6 +111,17 @@ export async function loadReSeikyuRows(
       unitPrice: opts.unitPrice,
       appliedFormulaCodes: opts.appliedFormulaCodes ?? [],
     });
+    // 再集計時の warnings (認定フォールバック・入院重なり等) も表示側へ伝播する。
+    // ただし対象は再請求フラグの立っている利用者分のみに絞る (他利用者分はノイズ)
+    const flaggedNames = new Set<string>();
+    for (const r of result.rows) {
+      if (clientReasons.has(r.user_id)) flaggedNames.add(r.user_name);
+    }
+    warnings.push(
+      ...result.warnings
+        .filter((w) => [...flaggedNames].some((n) => w.includes(n)))
+        .map((w) => `[再請求 R${y - 2018}/${m}] ${w}`),
+    );
 
     for (const r of result.rows) {
       const reasons = clientReasons.get(r.user_id);
@@ -124,5 +146,5 @@ export async function loadReSeikyuRows(
     );
   });
 
-  return out;
+  return { rows: out, warnings };
 }

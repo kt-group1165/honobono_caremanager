@@ -13,6 +13,14 @@ import { ServiceSelector } from "@/components/services/service-selector";
 import { format, parseISO, differenceInYears } from "date-fns";
 import { ja } from "date-fns/locale";
 import { toast } from "sonner";
+import { validInMonth } from "@/lib/service-code-valid";
+import { resolveCertForMonth } from "@/lib/cert-for-month";
+import {
+  computeAutoAllocation,
+  getGendoAllocationMap,
+  remainingToAllocate,
+  type GendoAllocationLine,
+} from "@/lib/gendo-allocation";
 import { useBusinessType } from "@/lib/business-type-context";
 import { SendDocumentModal } from "@/components/shared/SendDocumentModal";
 import {
@@ -230,20 +238,22 @@ async function loadProviderMasterCache() {
   if (__cacheLoading) { await __cacheLoading; return; }
   __cacheLoading = (async () => {
     const supabase = createClient();
-    const [{ data: provs }, { data: codes }] = await Promise.all([
-      supabase.from("kaigo_service_providers").select("id, provider_name, service_categories").eq("status", "active").order("provider_name"),
-      supabase.from("kaigo_service_codes").select("service_category, service_category_name"),
-    ]);
-    __providerCache = (provs || []) as ProviderRow[];
-
-    // 標準マスタ + DBから取得した種別をマージ（DBにないものは標準を使う）
-    const catMap = new Map<string, string>();
-    STANDARD_SERVICE_CATEGORIES.forEach((c) => catMap.set(c.code, c.name));
-    (codes || []).forEach((c: Record<string, unknown>) => {
-      catMap.set(String(c.service_category), String(c.service_category_name));
-    });
-    __categoryCache = Array.from(catMap.entries()).map(([code, name]) => ({ code, name }))
-      .sort((a, b) => a.code.localeCompare(b.code));
+    // 種別 (service_category) の distinct 用途で kaigo_service_codes を全表 SELECT
+    // していたが、118k 行に対する 1000 行 cap + system 混在で不正確だったため撤去。
+    // 種別は STANDARD_SERVICE_CATEGORIES (標準マスタ) で十分に網羅している。
+    const { data: provs, error } = await supabase
+      .from("kaigo_service_providers")
+      .select("id, provider_name, service_categories")
+      .eq("status", "active")
+      .order("provider_name");
+    if (error) {
+      // 失敗を空 cache として固定しない (= 次の mount で再試行させる)
+      console.error("kaigo_service_providers fetch failed:", error.message);
+      __providerCache = null;
+    } else {
+      __providerCache = (provs || []) as ProviderRow[];
+    }
+    __categoryCache = [...STANDARD_SERVICE_CATEGORIES];
   })();
   await __cacheLoading;
   __cacheLoading = null;
@@ -472,6 +482,8 @@ type InvoiceItem = { content: string; units: number; unit_price: number; amount:
 
 const WEEK_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 const WEEK_DAY_JA = ["月", "火", "水", "木", "金", "土", "日"] as const;
+/** Date#getDay() index (0=日) → 曜日 (利用票の日別マトリクス用) */
+const DOW_JA = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
 /**
  * 第3表の時間行（公式様式準拠）
@@ -1354,13 +1366,52 @@ function EditFormCarePlan3({ content, onChange }: {
 // ---------------------------------------------------------------------------
 
 
-function EditFormServiceTicket({ content, onChange }: {
+/**
+ * 利用票・提供票 (service-usage) — ほのぼの化 (2026-07-08 総点検、ユーザー確定仕様)。
+ *
+ * 実装範囲の判断:
+ *   完全再構築は過大 (既存の content.services jsonb 構造 + rental 行 + CSV 連携 +
+ *   受信実績取込がこの形に依存) のため、既存データ構造を維持したまま
+ *   「ヘッダ増強 + 曜日付き日別マトリクス + 予実トグル + フッタ集計」を組み替えた。
+ *   - ヘッダ: 提供年月表示 / 作成年月日 / 保険者・被保険者 / 介護度・変更後・変更日・
+ *     支給限度 / 支援事業所・担当者 / 予定済・実績済チェック / 予定・実績トグル (新設)
+ *   - 本体: サービス事業者 | サービス内容 | 提供時間 | 曜日付き日別 1〜31 マトリクス
+ *     (各行 予・実 2 段、対象月の実カレンダー曜日 + 月外グレーアウト) | 合計 | 単位数
+ *   - 操作: 行追加 / 行複写 / 予実変換 (1行・全行) / 行削除 — 既存実装を流用
+ *   - フッタ: 単位数計算結果 (予定・実績・差異) / 区分支給限度 (基準内・超過) /
+ *     利用者負担額 (保険分・全額分) / 適用公費 / 差引利用者負担額 — 既存実装を流用
+ *   - 頻度列 (週◯) は仕様どおり入れない
+ */
+function EditFormServiceTicket({ content, onChange, reportMonth }: {
   content: Record<string, unknown>;
   onChange: (c: Record<string, unknown>) => void;
+  /** doc.report_month (content.report_month 未設定の旧データ用フォールバック) */
+  reportMonth?: string | null;
 }) {
   const s = (k: string) => String(content[k] ?? "");
   const set = (k: string, v: unknown) => onChange({ ...content, [k]: v });
   const supabase = createClient();
+
+  // 対象月 (提供年月)。単位数・世代解決・曜日計算の基準。
+  // 「今日」ではなく帳票の report_month を使う (改定跨ぎの世代バグ対策)。
+  const selectedYearMonth = String(content.report_month ?? reportMonth ?? format(new Date(), "yyyy-MM"));
+  const ymParts = selectedYearMonth.split("-").map(Number);
+  const ymYear = Number.isFinite(ymParts[0]) ? ymParts[0] : new Date().getFullYear();
+  const ymMonth = Number.isFinite(ymParts[1]) ? ymParts[1] : new Date().getMonth() + 1;
+  const daysInMonth = daysInMonthOf(selectedYearMonth);
+  // ServiceSelector へ渡す対象月 (再レンダリングでの無限 refetch 防止に memo)
+  const selectorTargetMonth = useMemo(
+    () => ({ year: ymYear, month: ymMonth }),
+    [ymYear, ymMonth],
+  );
+  /** 日 (1-31) の曜日 index (0=日)。月の日数を超える日は null */
+  const dowOfDay = (d: number): number | null => {
+    if (d > daysInMonth) return null;
+    return new Date(ymYear, ymMonth - 1, d).getDay();
+  };
+
+  // 予定・実績トグル (表示フィルタ。ほのぼの準拠の「予定/実績」切替。保存対象外)
+  const [rowMode, setRowMode] = useState<"both" | "planned" | "actual">("both");
 
   // サービス選択モーダル
   const [selectorOpen, setSelectorOpen] = useState(false);
@@ -1452,15 +1503,23 @@ function EditFormServiceTicket({ content, onChange }: {
     let cancelled = false;
     const fetchMissing = async () => {
       const names = missingNamesKey.split("|").filter(Boolean);
-      const today = new Date().toISOString().slice(0, 10);
-      const { data } = await supabase
-        .from("kaigo_service_codes")
-        .select("service_name, service_category, units")
-        .eq("system", "介護")
-        .in("service_name", names)
-        .lte("valid_from", today)
-        .or(`valid_until.is.null,valid_until.gte.${today}`);
-      if (cancelled || !data) return;
+      // 有効期間: 「今日」ではなく帳票の対象月 (report_month) に有効な世代で引く。
+      // 今日基準だと改定 (世代) を跨いだ過去月の帳票に新単価が backfill される事故になる。
+      const { data, error } = await validInMonth(
+        supabase
+          .from("kaigo_service_codes")
+          .select("service_name, service_category, units")
+          .eq("system", "介護")
+          .in("service_name", names),
+        ymYear,
+        ymMonth,
+      );
+      if (cancelled) return;
+      if (error) {
+        console.error("kaigo_service_codes units lookup failed:", error.message);
+        return;
+      }
+      if (!data) return;
       setUnitsLookup((prev) => {
         const next = new Map(prev);
         for (const r of data as { service_name: string; service_category: string; units: number }[]) {
@@ -1474,7 +1533,7 @@ function EditFormServiceTicket({ content, onChange }: {
     };
     fetchMissing();
     return () => { cancelled = true };
-  }, [missingNamesKey, supabase]);
+  }, [missingNamesKey, supabase, ymYear, ymMonth]);
 
   // backfill: lookup が更新されたら、services に units / category を埋め込み onChange で content を更新
   useEffect(() => {
@@ -1546,39 +1605,94 @@ function EditFormServiceTicket({ content, onChange }: {
   };
   const fillWeekdays = (svcIdx: number, field: "planned" | "actual") => {
     // 対象月の曜日を計算して平日のみ
-    const [y, m] = (String(content.report_month ?? selectedYearMonth ?? format(new Date(), "yyyy-MM"))).split("-").map(Number);
     const arr = Array(31).fill(false);
-    for (let d = 1; d <= 31; d++) {
-      const date = new Date(y, m - 1, d);
-      if (date.getMonth() !== m - 1) break; // 月を超えた
-      const dow = date.getDay();
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dow = new Date(ymYear, ymMonth - 1, d).getDay();
       if (dow !== 0 && dow !== 6) arr[d - 1] = true;
     }
     updateSvc(svcIdx, field, arr);
   };
-  const selectedYearMonth = String(content.report_month ?? format(new Date(), "yyyy-MM"));
 
   const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 
   return (
     <div className="p-4 space-y-3">
+      {/* ── ヘッダ (ほのぼの利用票準拠): 提供年月 / 作成年月日 / 届出 / 予定済・実績済 ── */}
+      <div className="flex flex-wrap items-end gap-3 rounded border border-gray-200 bg-white px-3 py-2">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs font-medium text-gray-500">提供年月</span>
+          <span className="rounded bg-blue-50 px-2 py-1 text-sm font-bold text-blue-800 tabular-nums">
+            {fmtJaYear(selectedYearMonth + "-01")}
+          </span>
+        </div>
+        <FI label="作成年月日" value={s("creation_date")} onChange={(v) => set("creation_date", v)} className="w-44" />
+        <FI label="届出年月日" value={s("submission_date")} onChange={(v) => set("submission_date", v)} className="w-44" />
+        {/* 予定済・実績済チェック (作成状態の管理用フラグ) */}
+        <div className="ml-auto flex items-center gap-3 pb-1">
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-blue-700">
+            <input
+              type="checkbox"
+              checked={content.planned_confirmed === true}
+              onChange={(e) => set("planned_confirmed", e.target.checked)}
+              className="h-4 w-4 accent-blue-600"
+            />
+            予定済
+          </label>
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-green-700">
+            <input
+              type="checkbox"
+              checked={content.actual_confirmed === true}
+              onChange={(e) => set("actual_confirmed", e.target.checked)}
+              className="h-4 w-4 accent-green-600"
+            />
+            実績済
+          </label>
+        </div>
+      </div>
       <div className="grid grid-cols-4 gap-3">
         <FI label="保険者番号" value={s("insurer_number")} onChange={(v) => set("insurer_number", v)} />
-        <FI label="被保険者番号" value={s("insured_number")} onChange={(v) => set("insured_number", v)} />
         <FI label="保険者名" value={s("insurer_name")} onChange={(v) => set("insurer_name", v)} />
+        <FI label="被保険者番号" value={s("insured_number")} onChange={(v) => set("insured_number", v)} />
         <FI label="利用者氏名" value={s("user_name")} onChange={(v) => set("user_name", v)} />
       </div>
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-5 gap-3">
         <FI label="要介護度" value={s("care_level")} onChange={(v) => set("care_level", v)} />
+        <FI label="変更後要介護度" value={s("care_level_changed")} onChange={(v) => set("care_level_changed", v)} />
+        <FI label="変更日" value={s("care_level_change_date")} onChange={(v) => set("care_level_change_date", v)} />
         <FI label="区分支給限度基準額" value={s("limit_amount")} onChange={(v) => set("limit_amount", v)} />
         <FI label="限度額適用期間" value={s("limit_period")} onChange={(v) => set("limit_period", v)} />
-        <FI label="作成年月日" value={s("creation_date")} onChange={(v) => set("creation_date", v)} />
       </div>
-      <FI label="届出年月日" value={s("submission_date")} onChange={(v) => set("submission_date", v)} />
+      <div className="grid grid-cols-4 gap-3">
+        <FI label="居宅介護支援事業所" value={s("support_office_name")} onChange={(v) => set("support_office_name", v)} className="col-span-2" />
+        <FI label="担当者" value={s("support_staff_name")} onChange={(v) => set("support_staff_name", v)} />
+      </div>
 
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-semibold text-gray-600">サービス一覧（最大9件）</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-semibold text-gray-600">サービス一覧（最大9件）</span>
+            {/* 予定・実績トグル (表示フィルタ) */}
+            <div className="flex overflow-hidden rounded border text-[11px]">
+              {([
+                { v: "both" as const, label: "予定+実績" },
+                { v: "planned" as const, label: "予定" },
+                { v: "actual" as const, label: "実績" },
+              ]).map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => setRowMode(opt.v)}
+                  className={
+                    rowMode === opt.v
+                      ? "bg-blue-600 px-2 py-0.5 font-medium text-white"
+                      : "bg-white px-2 py-0.5 text-gray-600 hover:bg-gray-50"
+                  }
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             {services.length > 0 && (
               <button
@@ -1659,16 +1773,48 @@ function EditFormServiceTicket({ content, onChange }: {
             </colgroup>
             <thead>
               <tr className="bg-gray-100">
-                <th className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">時間帯</th>
-                <th className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">サービス内容</th>
-                <th className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">事業所</th>
-                <th className="border border-gray-300 px-1 py-0.5"></th>
-                {DAYS.map((d) => (
-                  <th key={d} className="border border-gray-300 px-0 py-0.5 text-center leading-none">{d}</th>
-                ))}
-                <th className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">計</th>
-                <th className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">単位</th>
-                <th className="border border-gray-300 px-1 py-0.5 whitespace-nowrap text-center">操作</th>
+                <th rowSpan={2} className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">時間帯</th>
+                <th rowSpan={2} className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">サービス内容</th>
+                <th rowSpan={2} className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">サービス事業者</th>
+                <th rowSpan={2} className="border border-gray-300 px-1 py-0.5"></th>
+                {DAYS.map((d) => {
+                  const dow = dowOfDay(d);
+                  return (
+                    <th
+                      key={d}
+                      className={`border border-gray-300 px-0 py-0.5 text-center leading-none ${
+                        dow === null ? "bg-gray-200 text-gray-300"
+                        : dow === 0 ? "bg-red-50 text-red-600"
+                        : dow === 6 ? "bg-blue-50 text-blue-600"
+                        : ""
+                      }`}
+                    >
+                      {d}
+                    </th>
+                  );
+                })}
+                <th rowSpan={2} className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">合計</th>
+                <th rowSpan={2} className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">単位数</th>
+                <th rowSpan={2} className="border border-gray-300 px-1 py-0.5 whitespace-nowrap text-center">操作</th>
+              </tr>
+              {/* 曜日行 (対象月の実カレンダーから計算) */}
+              <tr className="bg-gray-100">
+                {DAYS.map((d) => {
+                  const dow = dowOfDay(d);
+                  return (
+                    <th
+                      key={`w-${d}`}
+                      className={`border border-gray-300 px-0 py-0.5 text-center font-normal leading-none text-[9px] ${
+                        dow === null ? "bg-gray-200 text-gray-300"
+                        : dow === 0 ? "bg-red-50 text-red-600"
+                        : dow === 6 ? "bg-blue-50 text-blue-600"
+                        : "text-gray-500"
+                      }`}
+                    >
+                      {dow === null ? "" : DOW_JA[dow]}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -1684,11 +1830,58 @@ function EditFormServiceTicket({ content, onChange }: {
                 // rental は marks (開始日/終了日) から区分を自動判定。計列は回数表示で統一。
                 const plannedCount = svc.planned.filter(Boolean).length;
                 const actualCount  = svc.actual.filter(Boolean).length;
+                // 予定・実績トグル: 各サービス行の 予/実 2 段のうち表示する段を絞る
+                const showPlanned = rowMode !== "actual";
+                const showActual = rowMode !== "planned";
+                const span = showPlanned && showActual ? 2 : 1;
+                // 行操作 (修正/複写/予実変換/削除)。予定行・実績のみ表示の両方で使う
+                const opsButtons = (
+                  <div className="flex flex-col items-center gap-0.5 py-0.5">
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        onClick={() => { setSelectorTarget(i); setSelectorOpen(true); }}
+                        className="text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded p-0.5"
+                        title="修正 (サービス選択)"
+                        type="button"
+                      >
+                        <Pencil size={10} />
+                      </button>
+                      <button
+                        onClick={() => duplicateSvc(i)}
+                        className="text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded p-0.5"
+                        title="複写 (= 直下に同内容コピー挿入)"
+                        type="button"
+                      >
+                        <Copy size={10} />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        onClick={() => copyPlannedToActualOne(i)}
+                        className="text-gray-500 hover:text-amber-700 hover:bg-amber-50 rounded p-0.5"
+                        title="予実変換 (= この行の予定をそのまま実績にコピー)"
+                        type="button"
+                        disabled={rental}
+                      >
+                        <RefreshCw size={10} />
+                      </button>
+                      <button
+                        onClick={() => removeSvc(i)}
+                        className="text-gray-300 hover:text-red-400 hover:bg-red-50 rounded p-0.5"
+                        title="削除"
+                        type="button"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  </div>
+                );
                 return (
                   <React.Fragment key={i}>
                     {/* 予定 row */}
+                    {showPlanned && (
                     <tr style={{ height: 18 }}>
-                      <td rowSpan={2} className="border border-gray-300 px-0.5 align-middle">
+                      <td rowSpan={span} className="border border-gray-300 px-0.5 align-middle">
                         {/* 時間範囲を inline 自由入力 (= 例: 9:00〜10:00)。
                             既存セル値が「週3回(月水金)」等の頻度文字列でもそのまま表示・編集可。
                             rental 行 (= 福祉用具貸与) は時間帯不要なので入力不可。 */}
@@ -1702,7 +1895,7 @@ function EditFormServiceTicket({ content, onChange }: {
                           title="例: 9:00〜10:00"
                         />
                       </td>
-                      <td rowSpan={2} className="border border-gray-300 px-0.5 align-middle">
+                      <td rowSpan={span} className="border border-gray-300 px-0.5 align-middle">
                         <button
                           onClick={() => { setSelectorTarget(i); setSelectorOpen(true); }}
                           className="w-full text-left text-[10px] px-1 py-0.5 rounded hover:bg-blue-50 transition-colors truncate"
@@ -1746,7 +1939,7 @@ function EditFormServiceTicket({ content, onChange }: {
                           );
                         })()}
                       </td>
-                      <td rowSpan={2} className="border border-gray-300 px-0.5 align-middle">
+                      <td rowSpan={span} className="border border-gray-300 px-0.5 align-middle">
                         {(() => {
                           // 行のサービス category が決まっていれば、それを提供できる事業所のみに絞る。
                           // 未選択 (svc.category 空) なら全表示。
@@ -1793,16 +1986,24 @@ function EditFormServiceTicket({ content, onChange }: {
                           )}
                         </div>
                       </td>
-                      {DAYS.map((_, di) => (
-                        <td
-                          key={di}
-                          onClick={() => toggleDay(i, "planned", di)}
-                          className="border border-dashed border-gray-300 text-center cursor-pointer select-none hover:bg-blue-50"
-                          style={{ height: 18, width: 18, minWidth: 18 }}
-                        >
-                          {svc.planned[di] ? <span className="text-blue-600 font-semibold">1</span> : null}
-                        </td>
-                      ))}
+                      {DAYS.map((_, di) => {
+                        const dow = dowOfDay(di + 1);
+                        const inMonth = dow !== null;
+                        return (
+                          <td
+                            key={di}
+                            onClick={inMonth ? () => toggleDay(i, "planned", di) : undefined}
+                            className={
+                              inMonth
+                                ? `border border-dashed border-gray-300 text-center cursor-pointer select-none hover:bg-blue-50 ${dow === 0 ? "bg-red-50/60" : dow === 6 ? "bg-blue-50/60" : ""}`
+                                : "border border-dashed border-gray-300 bg-gray-200 select-none"
+                            }
+                            style={{ height: 18, width: 18, minWidth: 18 }}
+                          >
+                            {inMonth && svc.planned[di] ? <span className="text-blue-600 font-semibold">1</span> : null}
+                          </td>
+                        );
+                      })}
                       <td className="border border-dashed border-gray-300 text-center text-blue-700 font-semibold">{plannedCount || ""}</td>
                       <td className="border border-dashed border-gray-300 text-center text-[10px] font-semibold text-blue-700 bg-blue-50/40">
                         {(() => {
@@ -1812,51 +2013,32 @@ function EditFormServiceTicket({ content, onChange }: {
                           return m > 0 ? m : "";
                         })()}
                       </td>
-                      <td rowSpan={2} className="border border-gray-300 text-center align-middle">
+                      <td rowSpan={span} className="border border-gray-300 text-center align-middle">
                         {/* 行操作: 修正 (= ServiceSelector 再呼出) / 複写 / 予実変換 / 削除 */}
-                        <div className="flex flex-col items-center gap-0.5 py-0.5">
-                          <div className="flex items-center gap-0.5">
-                            <button
-                              onClick={() => { setSelectorTarget(i); setSelectorOpen(true); }}
-                              className="text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded p-0.5"
-                              title="修正 (サービス選択)"
-                              type="button"
-                            >
-                              <Pencil size={10} />
-                            </button>
-                            <button
-                              onClick={() => duplicateSvc(i)}
-                              className="text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded p-0.5"
-                              title="複写 (= 直下に同内容コピー挿入)"
-                              type="button"
-                            >
-                              <Copy size={10} />
-                            </button>
-                          </div>
-                          <div className="flex items-center gap-0.5">
-                            <button
-                              onClick={() => copyPlannedToActualOne(i)}
-                              className="text-gray-500 hover:text-amber-700 hover:bg-amber-50 rounded p-0.5"
-                              title="予実変換 (= この行の予定をそのまま実績にコピー)"
-                              type="button"
-                              disabled={rental}
-                            >
-                              <RefreshCw size={10} />
-                            </button>
-                            <button
-                              onClick={() => removeSvc(i)}
-                              className="text-gray-300 hover:text-red-400 hover:bg-red-50 rounded p-0.5"
-                              title="削除"
-                              type="button"
-                            >
-                              <X size={10} />
-                            </button>
-                          </div>
-                        </div>
+                        {opsButtons}
                       </td>
                     </tr>
+                    )}
                     {/* 実績 row */}
+                    {showActual && (
                     <tr style={{ height: 18 }}>
+                      {/* 実績のみ表示モード: 予定行が無いので識別セル (時間帯/内容/事業所) を
+                          読み取り専用のコンパクト表示でこの行に付ける */}
+                      {!showPlanned && (
+                        <>
+                          <td className="border border-gray-300 px-1 align-middle text-[10px] text-gray-700">{svc.time || "—"}</td>
+                          <td className="border border-gray-300 px-1 align-middle">
+                            <button
+                              onClick={() => { setSelectorTarget(i); setSelectorOpen(true); }}
+                              className="w-full text-left text-[10px] px-1 py-0.5 rounded hover:bg-blue-50 transition-colors truncate"
+                              title={svc.content || "クリックしてサービスを選択"}
+                            >
+                              {svc.content || <span className="text-gray-400">選択...</span>}
+                            </button>
+                          </td>
+                          <td className="border border-gray-300 px-1 align-middle text-[10px] text-gray-700 break-words">{svc.provider || "—"}</td>
+                        </>
+                      )}
                       <td className="border border-gray-300 px-0.5 text-center whitespace-nowrap">
                         <div className="flex items-center gap-0.5 justify-center">
                           <span className="text-gray-500 text-[10px]">実績</span>
@@ -1870,16 +2052,24 @@ function EditFormServiceTicket({ content, onChange }: {
                           )}
                         </div>
                       </td>
-                      {DAYS.map((_, di) => (
-                        <td
-                          key={di}
-                          onClick={() => toggleDay(i, "actual", di)}
-                          className="border border-gray-300 text-center cursor-pointer select-none hover:bg-green-50"
-                          style={{ height: 18, width: 18, minWidth: 18 }}
-                        >
-                          {svc.actual[di] ? <span className="text-green-700 font-semibold">1</span> : null}
-                        </td>
-                      ))}
+                      {DAYS.map((_, di) => {
+                        const dow = dowOfDay(di + 1);
+                        const inMonth = dow !== null;
+                        return (
+                          <td
+                            key={di}
+                            onClick={inMonth ? () => toggleDay(i, "actual", di) : undefined}
+                            className={
+                              inMonth
+                                ? `border border-gray-300 text-center cursor-pointer select-none hover:bg-green-50 ${dow === 0 ? "bg-red-50/60" : dow === 6 ? "bg-blue-50/60" : ""}`
+                                : "border border-gray-300 bg-gray-200 select-none"
+                            }
+                            style={{ height: 18, width: 18, minWidth: 18 }}
+                          >
+                            {inMonth && svc.actual[di] ? <span className="text-green-700 font-semibold">1</span> : null}
+                          </td>
+                        );
+                      })}
                       <td className="border border-gray-300 text-center text-green-700 font-semibold">{actualCount || ""}</td>
                       <td className="border border-gray-300 text-center text-[10px] font-semibold text-green-700 bg-green-50/40">
                         {(() => {
@@ -1889,7 +2079,11 @@ function EditFormServiceTicket({ content, onChange }: {
                           return m > 0 ? m : "";
                         })()}
                       </td>
+                      {!showPlanned && (
+                        <td className="border border-gray-300 text-center align-middle">{opsButtons}</td>
+                      )}
                     </tr>
+                    )}
                   </React.Fragment>
                 );
               })}
@@ -1905,6 +2099,7 @@ function EditFormServiceTicket({ content, onChange }: {
                 const actualUnitsSum = services.reduce((s, svc) => s + rowMonthlyUnits(svc, "actual"), 0);
                 return (
                 <>
+                  {rowMode !== "actual" && (
                   <tr style={{ height: 18 }}>
                     <td colSpan={4} className="border border-gray-300 bg-gray-100 px-1 text-center text-[10px] font-semibold text-blue-700">予定合計</td>
                     {DAYS.map((_, di) => {
@@ -1923,6 +2118,8 @@ function EditFormServiceTicket({ content, onChange }: {
                     </td>
                     <td className="border border-gray-300" />
                   </tr>
+                  )}
+                  {rowMode !== "planned" && (
                   <tr style={{ height: 18 }}>
                     <td colSpan={4} className="border border-gray-300 bg-gray-100 px-1 text-center text-[10px] font-semibold text-green-700">実績合計</td>
                     {DAYS.map((_, di) => {
@@ -1941,6 +2138,7 @@ function EditFormServiceTicket({ content, onChange }: {
                     </td>
                     <td className="border border-gray-300" />
                   </tr>
+                  )}
                 </>
                 );
               })()}
@@ -2143,6 +2341,7 @@ function EditFormServiceTicket({ content, onChange }: {
             onClose={() => { setSelectorOpen(false); setSelectorTarget(null); }}
             startTime={startTime}
             endTime={endTime}
+            targetMonth={selectorTargetMonth}
             onSelect={(svc) => {
               if (selectorTarget !== null) {
                 // content と category を同時に書き換えるため、合成 patch を services 配列に当てる
@@ -2259,9 +2458,337 @@ type UsageDetailItem = {
   fixed_copay: number; user_copay: number; user_full_pay: number;
 };
 
-function EditFormUsageDetail({ content, onChange }: {
+// ── 区分支給限度 超過の割振り (ほのぼの別表の超過欄と同方式) ────────────────
+// 別表の各サービス行 (サービス事業所×サービス種類) を集計し、限度額超過分を
+// 各行の「超過」欄に割り振って kaigo_gendo_allocation に保存する。
+// 訪問介護の請求集計 (visit-seikyu/aggregate) が manual 行を自費単位の真値として使う。
+
+/** サービス内容の文字列からサービス種類コード (上2桁) をベストエフォート推定 */
+function guessServiceCategory(serviceType: string): string {
+  const t = serviceType ?? "";
+  if (t.includes("訪問入浴")) return "12";
+  if (t.includes("訪問看護")) return "13";
+  if (t.includes("訪問リハ")) return "14";
+  if (t.includes("通所リハ") || t.includes("デイケア")) return "16";
+  if (t.includes("通所介護") || t.includes("デイサービス")) return "15";
+  if (t.includes("福祉用具")) return "17";
+  if (t.includes("短期入所")) return "21";
+  if (t.includes("訪問介護") || t.includes("身体") || t.includes("生活") || t.includes("乗降")) return "11";
+  return "11";
+}
+
+interface GendoUiLine {
+  line_key: string;
+  office_id: string | null;
+  provider_name: string | null;
+  service_category: string;
+  service_label: string;
+  total_units: number;
+  over_units: number;
+}
+
+function GendoAllocationPanel({ userId, targetMonth, items, fallbackLimit }: {
+  userId: string;
+  targetMonth: string; // 'YYYY-MM'
+  items: UsageDetailItem[];
+  /** 認定が引けない場合の限度額フォールバック (content.limit_amount) */
+  fallbackLimit: number;
+}) {
+  const supabase = useMemo(() => createClient(), []);
+  const [rows, setRows] = useState<GendoUiLine[]>([]);
+  const [limitUnits, setLimitUnits] = useState<number>(fallbackLimit);
+  const [tableMissing, setTableMissing] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // 別表 items → 割振り行 (事業所 × サービス種類で集約)。
+  // 自法人 office の行は line_key = office_id、他事業所は 'ext:'+provider_name+':'+category
+  const itemsKey = useMemo(
+    () =>
+      JSON.stringify(
+        items.map((it) => [it.provider_name, it.service_content, it.units, it.count, it.service_units]),
+      ),
+    [items],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [y, m] = targetMonth.split("-").map(Number);
+
+      // ① 自法人 office (name → id)
+      const officeByName = new Map<string, string>();
+      {
+        const { data, error } = await supabase
+          .from("offices")
+          .select("id, name")
+          .eq("is_active", true);
+        if (error) {
+          console.error("offices fetch failed:", error.message);
+        } else {
+          for (const o of (data ?? []) as { id: string; name: string }[]) {
+            officeByName.set(o.name, o.id);
+          }
+        }
+      }
+
+      // ② 限度額: 対象月に有効な認定 (service_limit_amount) → 無ければ content.limit_amount
+      let limit = fallbackLimit;
+      if (y && m) {
+        try {
+          const certMap = await resolveCertForMonth(supabase, [userId], y, m);
+          const cert = certMap.get(userId);
+          if (cert?.service_limit_amount && cert.service_limit_amount > 0) {
+            limit = cert.service_limit_amount;
+          }
+        } catch (e) {
+          console.error("resolveCertForMonth failed:", e);
+        }
+      }
+
+      // ③ 別表 items から行を集約
+      const lineMap = new Map<string, GendoUiLine>();
+      for (const it of items) {
+        const provider = (it.provider_name ?? "").trim();
+        const category = guessServiceCategory(it.service_content ?? "");
+        const officeId = officeByName.get(provider) ?? null;
+        const lineKey = officeId ?? `ext:${provider}:${category}`;
+        const total = Number(it.service_units) > 0
+          ? Number(it.service_units)
+          : Number(it.units || 0) * (Number(it.count) || 1);
+        const existing = lineMap.get(lineKey);
+        if (existing) {
+          existing.total_units += Math.max(0, Math.round(total));
+        } else {
+          lineMap.set(lineKey, {
+            line_key: lineKey,
+            office_id: officeId,
+            provider_name: provider || null,
+            service_category: category,
+            service_label: `${provider || "(事業所未設定)"} / ${it.service_content || category}`,
+            total_units: Math.max(0, Math.round(total)),
+            over_units: 0,
+          });
+        }
+      }
+      const lines = Array.from(lineMap.values());
+
+      // ④ 保存済み割振り (manual) があれば復元、無ければ機械初期割振り (auto)
+      let savedLines: GendoAllocationLine[] | undefined;
+      try {
+        const map = await getGendoAllocationMap(supabase, [userId], targetMonth);
+        savedLines = map.get(userId);
+      } catch (e) {
+        console.error("gendo allocation fetch failed:", e);
+      }
+      // テーブル未作成の検知 (getGendoAllocationMap は 42P01 を空 Map に丸めるため probe)
+      let missing = false;
+      {
+        const { error } = await supabase.from("kaigo_gendo_allocation").select("id").limit(1);
+        if (error && (error.code === "42P01" || error.code === "PGRST205")) missing = true;
+      }
+      const savedByKey = new Map((savedLines ?? []).map((l) => [l.line_key, l]));
+      const hasManual = (savedLines ?? []).some((l) => l.source === "manual");
+      const auto = computeAutoAllocation(lines, limit);
+      const withOver = lines.map((l) => ({
+        ...l,
+        over_units: hasManual && savedByKey.has(l.line_key)
+          ? Math.max(0, savedByKey.get(l.line_key)!.over_units)
+          : (auto.get(l.line_key) ?? 0),
+      }));
+
+      if (cancelled) return;
+      setLimitUnits(limit);
+      setRows(withOver);
+      setTableMissing(missing);
+      setLoaded(true);
+    })();
+    return () => { cancelled = true; };
+    // itemsKey で items の実質変化のみ拾う (毎レンダリングの参照変化は無視)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase, userId, targetMonth, itemsKey, fallbackLimit]);
+
+  const totalUnits = rows.reduce((s, l) => s + l.total_units, 0);
+  const totalOver = Math.max(0, totalUnits - limitUnits);
+  const remaining = remainingToAllocate(rows, limitUnits);
+
+  const setOver = (lineKey: string, v: number) => {
+    setRows((prev) =>
+      prev.map((l) =>
+        l.line_key === lineKey
+          ? { ...l, over_units: Math.max(0, Math.min(Math.round(v) || 0, l.total_units)) }
+          : l,
+      ),
+    );
+  };
+
+  const resetAuto = () => {
+    const auto = computeAutoAllocation(rows, limitUnits);
+    setRows((prev) => prev.map((l) => ({ ...l, over_units: auto.get(l.line_key) ?? 0 })));
+  };
+
+  const handleSave = async () => {
+    if (tableMissing) return;
+    if (rows.length === 0) {
+      toast.error("割振り対象の行がありません");
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = rows.map((l) => ({
+        client_id: userId,
+        target_month: targetMonth,
+        line_key: l.line_key,
+        office_id: l.office_id,
+        provider_name: l.provider_name,
+        service_category: l.service_category,
+        service_label: l.service_label,
+        total_units: l.total_units,
+        over_units: l.over_units,
+        source: "manual" as const,
+        updated_at: new Date().toISOString(),
+      }));
+      const { error } = await supabase
+        .from("kaigo_gendo_allocation")
+        .upsert(payload, { onConflict: "client_id,target_month,line_key" });
+      if (error) {
+        if (error.code === "42P01" || error.code === "PGRST205") {
+          setTableMissing(true);
+          toast.error("kaigo_gendo_allocation テーブルが未作成です (migrations/kaigo_gendo_allocation.sql を実行してください)");
+        } else {
+          toast.error("割振りの保存に失敗しました: " + error.message);
+        }
+        return;
+      }
+      toast.success("限度額超過の割振りを保存しました (請求集計に反映されます)");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!loaded) {
+    return (
+      <div className="rounded border border-gray-200 bg-gray-50/40 p-3 text-xs text-gray-400">
+        <Loader2 size={13} className="mr-1 inline animate-spin" /> 区分支給限度の割振りを読込中...
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded border border-gray-200 p-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-semibold text-gray-700">区分支給限度 (超過の割振り)</span>
+          <span className="text-[11px] text-gray-500">
+            合計 <b className="tabular-nums">{totalUnits.toLocaleString()}</b> 単位 / 限度額{" "}
+            <b className="tabular-nums">{limitUnits > 0 ? limitUnits.toLocaleString() : "—"}</b> 単位 / 超過{" "}
+            <b className={`tabular-nums ${totalOver > 0 ? "text-red-600" : "text-gray-500"}`}>{totalOver.toLocaleString()}</b> 単位
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {totalOver > 0 && (
+            <span
+              className={`rounded px-2 py-0.5 text-[11px] font-semibold ${
+                remaining === 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"
+              }`}
+              title="総超過 − 各行に割り振った超過の合計。0 になるまで配分してください"
+            >
+              割り振りの残り: {remaining.toLocaleString()} 単位
+            </span>
+          )}
+          {totalOver > 0 && (
+            <button
+              type="button"
+              onClick={resetAuto}
+              className="rounded border px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-50"
+              title="単位数の大きい行から超過を寄せる機械初期割振りに戻す"
+            >
+              自動割振りに戻す
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || tableMissing || rows.length === 0}
+            className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1 text-[11px] font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {saving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
+            割振りを保存
+          </button>
+        </div>
+      </div>
+
+      {tableMissing && (
+        <div className="mb-2 flex items-start gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+          <span className="font-bold">kaigo_gendo_allocation テーブルが未作成です。</span>
+          migrations/kaigo_gendo_allocation.sql を実行してください (適用まで保存は無効)。
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-gray-400">明細行がありません (上の明細テーブルに行を追加すると割振り対象になります)</p>
+      ) : (
+        <table className="w-full border-collapse text-[11px]">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="border border-gray-300 px-2 py-1 text-left">サービス事業所 / サービス種類</th>
+              <th className="border border-gray-300 px-2 py-1 text-right w-24">総単位数</th>
+              <th className="border border-gray-300 px-2 py-1 text-right w-28">超過 (全額自費)</th>
+              <th className="border border-gray-300 px-2 py-1 text-right w-24">基準内単位数</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((l) => (
+              <tr key={l.line_key}>
+                <td className="border border-gray-300 px-2 py-1">
+                  {l.service_label}
+                  {l.office_id && (
+                    <span className="ml-1 rounded bg-blue-50 px-1 text-[9px] font-semibold text-blue-700">自法人</span>
+                  )}
+                </td>
+                <td className="border border-gray-300 px-2 py-1 text-right tabular-nums">{l.total_units.toLocaleString()}</td>
+                <td className="border border-gray-300 px-1 py-0.5 text-right">
+                  <input
+                    type="number"
+                    value={l.over_units}
+                    min={0}
+                    max={l.total_units}
+                    step={1}
+                    disabled={totalOver <= 0}
+                    onChange={(e) => setOver(l.line_key, Number(e.target.value))}
+                    className={`w-20 rounded border px-1 py-0.5 text-right text-[11px] tabular-nums ${
+                      totalOver <= 0
+                        ? "border-gray-200 bg-gray-50 text-gray-400"
+                        : l.over_units > 0
+                          ? "border-red-300 text-red-700"
+                          : "border-gray-300"
+                    }`}
+                    title={totalOver <= 0 ? "限度額超過なし" : "この行の全額自費 (10割) にする単位数"}
+                  />
+                </td>
+                <td className="border border-gray-300 px-2 py-1 text-right tabular-nums text-emerald-700">
+                  {Math.max(0, l.total_units - l.over_units).toLocaleString()}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <p className="mt-1 text-[10px] text-gray-400">
+        超過分をどのサービスの全額自費にするかはケアマネ判断です。保存すると訪問介護の請求集計がこの割振りを使用します
+        (未保存の間は機械判定: 合計 − 限度額)。
+      </p>
+    </div>
+  );
+}
+
+function EditFormUsageDetail({ content, onChange, userId, reportMonth }: {
   content: Record<string, unknown>;
   onChange: (c: Record<string, unknown>) => void;
+  /** clients.id (限度額割振りの保存キー) */
+  userId?: string;
+  /** doc.report_month */
+  reportMonth?: string | null;
 }) {
   const s = (k: string) => String(content[k] ?? "");
   const set = (k: string, v: unknown) => onChange({ ...content, [k]: v });
@@ -2362,6 +2889,16 @@ function EditFormUsageDetail({ content, onChange }: {
           </table>
         </div>
       </div>
+
+      {/* 区分支給限度 超過の割振り (ほのぼの別表の超過欄と同方式) */}
+      {userId && (
+        <GendoAllocationPanel
+          userId={userId}
+          targetMonth={String(content.report_month ?? reportMonth ?? format(new Date(), "yyyy-MM"))}
+          items={items}
+          fallbackLimit={Number(content.limit_amount ?? 0) || 0}
+        />
+      )}
 
       {/* 短期入所利用日数 */}
       <div className="grid grid-cols-3 gap-3">
@@ -2886,17 +3423,30 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
     : [];
   const rows = Array.from({ length: 9 }, (_, i) => services[i] ?? emptyServiceRow());
   const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
-  // Weekday names for the header row (simplified cyclic: 月火水木金土日 repeating from day 1)
-  const WDAY_JA = ["月","火","水","木","金","土","日"];
+  // 曜日は対象月 (report_month) の実カレンダーから計算 (旧: 1日=月曜固定の簡易巡回は誤り)
+  const printYM = String(c.report_month ?? format(new Date(), "yyyy-MM"));
+  const [pYear, pMonth] = printYM.split("-").map(Number);
+  const pDays = daysInMonthOf(printYM);
+  const dowOf = (d: number): number | null => {
+    if (!Number.isFinite(pYear) || !Number.isFinite(pMonth) || d > pDays) return null;
+    return new Date(pYear, pMonth - 1, d).getDay();
+  };
+  const PRINT_DOW_JA = ["日", "月", "火", "水", "木", "金", "土"];
 
   return (
     <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "7pt", color: "#000", width: "277mm", height: "190mm", overflow: "hidden" }}>
       {/* 表番号ラベル */}
       <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "7pt", marginBottom: "3px" }}>{tableNum}</div>
 
-      {/* タイトル */}
-      <div style={{ textAlign: "center", marginBottom: "3px" }}>
+      {/* タイトル + 提供年月 + 予定済/実績済 */}
+      <div style={{ position: "relative", textAlign: "center", marginBottom: "3px" }}>
         <span style={{ fontSize: "13pt", fontWeight: "bold", letterSpacing: "0.3em" }}>{title}</span>
+        <span style={{ position: "absolute", left: 0, bottom: 0, fontSize: "9pt", fontWeight: "bold" }}>
+          {fmtJaYear(printYM + "-01")}分
+        </span>
+        <span style={{ position: "absolute", right: 0, bottom: 0, fontSize: "7pt" }}>
+          予定済 {c.planned_confirmed === true ? "☑" : "☐"}　実績済 {c.actual_confirmed === true ? "☑" : "☐"}
+        </span>
       </div>
 
       {/* ヘッダー情報（公式書式3行） */}
@@ -2909,7 +3459,10 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
             <td style={{ ...thStyle, width: "8%" }}>保険者名</td>
             <td style={{ ...tdStyle, width: "14%" }}>{s("insurer_name")}</td>
             <td style={{ ...thStyle, width: "12%", fontSize: "6pt" }}>居宅介護支援<br />事業者事業所名<br />担当者名</td>
-            <td style={{ ...tdStyle, width: "16%" }}></td>
+            <td style={{ ...tdStyle, width: "16%", fontSize: "6.5pt" }}>
+              {String(c.support_office_name ?? "")}
+              {c.support_staff_name ? <><br />{String(c.support_staff_name)}</> : null}
+            </td>
             <td style={{ ...thStyle, width: "7%" }}>作成<br />年月日</td>
             <td style={{ ...tdStyle, width: "10%" }}>{s("creation_date")}</td>
             <td style={{ ...thStyle, width: "7%" }}>利用者確認</td>
@@ -2932,7 +3485,11 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
             <td style={thStyle}>性別</td>
             <td style={{ ...tdStyle, width: "4%" }}></td>
             <td style={{ ...thStyle, fontSize: "6pt" }}>要介護状態区<br />分<br /><span style={{ fontSize: "5.5pt" }}>変更後<br />要介護状態区分<br />変更日</span></td>
-            <td style={tdStyle}>{s("care_level")}</td>
+            <td style={{ ...tdStyle, fontSize: "6.5pt" }}>
+              {s("care_level")}
+              {c.care_level_changed ? <><br />変更後: {String(c.care_level_changed)}</> : null}
+              {c.care_level_change_date ? <><br />変更日: {String(c.care_level_change_date)}</> : null}
+            </td>
             <td style={{ ...thStyle, fontSize: "6pt" }}>区分支給<br />限度基準額</td>
             <td style={tdStyle}>{s("limit_amount")}<br /><span style={{ fontSize: "6pt" }}>単位/月</span></td>
             <td style={{ ...thStyle, fontSize: "6pt" }}>限度額<br />適用期間</td>
@@ -2965,18 +3522,18 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                 <th style={thStyle} rowSpan={2}>サービス内容</th>
                 <th style={thStyle} rowSpan={2}>事業所名</th>
                 {DAYS.map((d) => {
-                  const wdi = (d - 1) % 7;
-                  const isWE = wdi === 5 || wdi === 6;
-                  return <th key={d} style={isWE ? thGreen : thStyle}>{d}</th>;
+                  const dow = dowOf(d);
+                  const isWE = dow === 0 || dow === 6;
+                  return <th key={d} style={isWE ? thGreen : thStyle}>{dow === null ? "" : d}</th>;
                 })}
                 <th style={thStyle} rowSpan={2}>合計</th>
                 <th style={thStyle} rowSpan={2}>単位</th>
               </tr>
               <tr style={{ height: "14px" }}>
                 {DAYS.map((d) => {
-                  const wdi = (d - 1) % 7;
-                  const isWE = wdi === 5 || wdi === 6;
-                  return <th key={d} style={{ ...(isWE ? thGreen : thStyle), fontSize: "6pt" }}>{WDAY_JA[wdi]}</th>;
+                  const dow = dowOf(d);
+                  const isWE = dow === 0 || dow === 6;
+                  return <th key={d} style={{ ...(isWE ? thGreen : thStyle), fontSize: "6pt" }}>{dow === null ? "" : PRINT_DOW_JA[dow]}</th>;
                 })}
               </tr>
             </thead>
@@ -3007,9 +3564,9 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                       </td>
                       <td style={{ ...tdStyle, verticalAlign: "top", fontSize: "6.5pt", wordBreak: "break-word", whiteSpace: "normal" }} rowSpan={2}>{svc.provider || "　"}</td>
                       {svc.planned.map((v, di) => {
-                        const wdi = di % 7;
-                        const isWE = wdi === 5 || wdi === 6;
-                        return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", borderStyle: "dashed", fontWeight: "bold" }}>{v ? "1" : ""}</td>;
+                        const dow = dowOf(di + 1);
+                        const isWE = dow === 0 || dow === 6;
+                        return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", borderStyle: "dashed", fontWeight: "bold", ...(dow === null ? { backgroundColor: "#eee" } : {}) }}>{dow !== null && v ? "1" : ""}</td>;
                       })}
                       <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt", borderStyle: "dashed" }}>{plannedCount || ""}</td>
                       <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt", fontWeight: "bold", borderStyle: "dashed" }}>{mPlanned > 0 ? mPlanned : ""}</td>
@@ -3017,9 +3574,9 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                     {/* 実績行 */}
                     <tr style={{ height: `${ROW_H}px` }}>
                       {svc.actual.map((v, di) => {
-                        const wdi = di % 7;
-                        const isWE = wdi === 5 || wdi === 6;
-                        return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", fontWeight: "bold" }}>{v ? "1" : ""}</td>;
+                        const dow = dowOf(di + 1);
+                        const isWE = dow === 0 || dow === 6;
+                        return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", fontWeight: "bold", ...(dow === null ? { backgroundColor: "#eee" } : {}) }}>{dow !== null && v ? "1" : ""}</td>;
                       })}
                       <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt" }}>{actualCount || ""}</td>
                       <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt", fontWeight: "bold" }}>{mActual > 0 ? mActual : ""}</td>
@@ -3043,9 +3600,9 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                     <td colSpan={4} style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>予定合計</td>
                     {DAYS.map((_, di) => {
                       const count = rows.filter((svc) => svc.planned[di]).length;
-                      const wdi = di % 7;
-                      const isWE = wdi === 5 || wdi === 6;
-                      return <td key={di} style={{ ...(isWE ? thGreen : thStyle), color: "#1565c0", backgroundColor: isWE ? "#bbdefb" : "#e3f2fd", fontWeight: "bold", textAlign: "center", padding: "0" }}>{count > 0 ? count : ""}</td>;
+                      const dow = dowOf(di + 1);
+                      const isWE = dow === 0 || dow === 6;
+                      return <td key={di} style={{ ...(isWE ? thGreen : thStyle), color: "#1565c0", backgroundColor: isWE ? "#bbdefb" : "#e3f2fd", fontWeight: "bold", textAlign: "center", padding: "0" }}>{dow !== null && count > 0 ? count : ""}</td>;
                     })}
                     <td style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>
                       {rows.reduce((sum, svc) => sum + svc.planned.filter(Boolean).length, 0) || ""}
@@ -3057,9 +3614,9 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                     <td colSpan={4} style={{ ...thStyle, color: "#1b5e20", backgroundColor: "#e8f5e9" }}>実績合計</td>
                     {DAYS.map((_, di) => {
                       const count = rows.filter((svc) => svc.actual[di]).length;
-                      const wdi = di % 7;
-                      const isWE = wdi === 5 || wdi === 6;
-                      return <td key={di} style={{ ...(isWE ? tdGreen : thStyle), color: "#1b5e20", backgroundColor: isWE ? "#a5d6a7" : "#e8f5e9", fontWeight: "bold", textAlign: "center", padding: "0" }}>{count > 0 ? count : ""}</td>;
+                      const dow = dowOf(di + 1);
+                      const isWE = dow === 0 || dow === 6;
+                      return <td key={di} style={{ ...(isWE ? tdGreen : thStyle), color: "#1b5e20", backgroundColor: isWE ? "#a5d6a7" : "#e8f5e9", fontWeight: "bold", textAlign: "center", padding: "0" }}>{dow !== null && count > 0 ? count : ""}</td>;
                     })}
                     <td style={{ ...tdStyle, color: "#1b5e20", backgroundColor: "#e8f5e9", fontWeight: "bold", textAlign: "center" }}>
                       {rows.reduce((sum, svc) => sum + svc.actual.filter(Boolean).length, 0) || ""}
@@ -3489,18 +4046,20 @@ export function PrintView({ reportType, content, config }: {
   }
 }
 
-function EditForm({ reportType, content, onChange, userId }: {
+function EditForm({ reportType, content, onChange, userId, reportMonth }: {
   reportType: string; content: Record<string, unknown>; onChange: (c: Record<string, unknown>) => void;
-  /** clients.id - 第1表/第2表のアセスメント連動 AI に渡す。他帳票では未使用。 */
+  /** clients.id - 第1表/第2表のアセスメント連動 AI + 別表の限度額割振りに渡す。 */
   userId?: string;
+  /** doc.report_month - 利用票/別表の対象月 (世代解決・曜日計算) */
+  reportMonth?: string | null;
 }) {
   switch (reportType) {
     case "care-plan-1":       return <EditFormCarePlan1 content={content} onChange={onChange} userId={userId} />;
     case "care-plan-2":       return <EditFormCarePlan2 content={content} onChange={onChange} userId={userId} />;
     case "care-plan-3":       return <EditFormCarePlan3 content={content} onChange={onChange} />;
     case "support-progress":  return <EditFormSupportProgress content={content} onChange={onChange} />;
-    case "service-usage":        return <EditFormServiceTicket content={content} onChange={onChange} />;
-    case "service-usage-detail": return <EditFormUsageDetail content={content} onChange={onChange} />;
+    case "service-usage":        return <EditFormServiceTicket content={content} onChange={onChange} reportMonth={reportMonth} />;
+    case "service-usage-detail": return <EditFormUsageDetail content={content} onChange={onChange} userId={userId} reportMonth={reportMonth} />;
     default: return <EditFormGeneric content={content} onChange={onChange} label="内容（JSON編集）" />;
   }
 }
@@ -3989,7 +4548,7 @@ function DocEditor({ doc, config, clientName, onSave, onStatusToggle, onDirtyCha
 
       {/* Edit form */}
       <div className="no-print border-b bg-gray-50">
-        <EditForm reportType={doc.report_type} content={content} onChange={handleChange} userId={doc.user_id} />
+        <EditForm reportType={doc.report_type} content={content} onChange={handleChange} userId={doc.user_id} reportMonth={doc.report_month} />
       </div>
 
       {/* Print preview — scales to fit container width */}
@@ -4521,6 +5080,26 @@ export function ReportsContent({ userId, reportType, initialDocs, initialCertifi
                     {currentIdx + 1} / {reportOrder.length}
                     {config.landscape && <span className="ml-2 rounded bg-blue-100 px-1 py-0.5 text-blue-600 text-[10px]">A4横</span>}
                   </p>
+                  {/* 居宅サービス計画書 (1〜3表) は 3 ボタン常時表示で直接遷移
+                      (「次の表へ」を順に押さなくても任意の表へ飛べる) */}
+                  {isCertLinked && (
+                    <div className="mt-1.5 flex justify-center gap-1">
+                      {(["care-plan-1", "care-plan-2", "care-plan-3"] as const).map((t, ti) => (
+                        <button
+                          key={t}
+                          onClick={() => t !== reportType && navigateTo(t)}
+                          className={
+                            t === reportType
+                              ? "rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white"
+                              : "rounded-md border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+                          }
+                          title={REPORT_CONFIG[t]?.titleJa ?? ""}
+                        >
+                          第{ti + 1}表
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => nextType && navigateTo(nextType)}

@@ -48,8 +48,13 @@ import {
   ShogaiMeisaiPrintSheet,
   ShogaiSeikyushoPrintSheet,
   ShogaiRiyouSeikyuPrintSheet,
+  ShogaiJissekiKirokuhyoPrintSheet,
   type ShogaiSeikyuSummaryGroup,
 } from "../../billing/forms/_shogai-meisai";
+
+// table 未作成 (migration 未適用): 42P01 = SQL / PGRST205 = PostgREST schema cache
+const isMissingTable = (code: string | undefined) =>
+  code === "42P01" || code === "PGRST205";
 
 // shogai_billing_status の 1 行 (利用者 × 月) — 状態: 未発行 / 発行済 / 伝送対象
 interface ShogaiBillingStatusRow {
@@ -96,7 +101,14 @@ export function ShogaiSeikyuContent() {
     Map<string, ShogaiBillingStatusRow>
   >(new Map());
   const [payments, setPayments] = useState<Map<string, ShogaiPaymentRow>>(new Map());
-  const [printMode, setPrintMode] = useState<"meisai" | "seikyu" | "riyou" | null>(null);
+  const [printMode, setPrintMode] = useState<
+    "meisai" | "seikyu" | "riyou" | "jisseki" | null
+  >(null);
+  // 実績記録票 印刷用の月内提供実績 (client_id → visits)
+  const [jissekiVisits, setJissekiVisits] = useState<
+    Map<string, ShogaiDensouVisit[]>
+  >(new Map());
+  const [jissekiLoading, setJissekiLoading] = useState(false);
 
   const monthStr = `${year}-${String(month).padStart(2, "0")}`;
 
@@ -106,11 +118,12 @@ export function ShogaiSeikyuContent() {
     try {
       let unitPrice: number | undefined;
       if (currentOffice) {
-        const { data: o } = await supabase
+        const { data: o, error: oe } = await supabase
           .from("offices")
           .select("unit_price, business_number")
           .eq("id", currentOffice.id)
           .maybeSingle();
+        if (oe) throw new Error("事業所情報の取得に失敗: " + oe.message);
         const od = o as {
           unit_price?: number;
           business_number?: string | null;
@@ -147,7 +160,7 @@ export function ShogaiSeikyuContent() {
       .eq("target_month", monthStr);
     if (e) {
       // table 未作成 (migration 未適用) 時は状態なしとして続行
-      if (e.code !== "42P01") toast.error("請求状態の取得に失敗: " + e.message);
+      if (!isMissingTable(e.code)) toast.error("請求状態の取得に失敗: " + e.message);
       setStatusByClient(new Map());
       return;
     }
@@ -172,7 +185,7 @@ export function ShogaiSeikyuContent() {
       )
       .eq("target_month", monthStr);
     if (e) {
-      if (e.code !== "42P01") toast.error("入金状況の取得に失敗: " + e.message);
+      if (!isMissingTable(e.code)) toast.error("入金状況の取得に失敗: " + e.message);
       setPayments(new Map());
       return;
     }
@@ -234,7 +247,7 @@ export function ShogaiSeikyuContent() {
       .upsert(payload, { onConflict: "client_id,target_month" });
     if (e) {
       // table 未作成でも印刷は実行 (状態が保存できなくても紙は出せるように)
-      if (e.code !== "42P01") toast.error("発行状態の保存に失敗: " + e.message);
+      if (!isMissingTable(e.code)) toast.error("発行状態の保存に失敗: " + e.message);
     } else {
       loadStatus();
     }
@@ -296,7 +309,7 @@ export function ShogaiSeikyuContent() {
       })),
       { onConflict: "client_id,target_month" },
     );
-    if (e && e.code !== "42P01") {
+    if (e && !isMissingTable(e.code)) {
       toast.error("発行記録の保存に失敗: " + e.message);
     } else if (!e) {
       loadPayments();
@@ -373,6 +386,78 @@ export function ShogaiSeikyuContent() {
     URL.revokeObjectURL(a.href);
   };
 
+  // ─── 月内の確定実績を取得 (実績記録票 印刷 / 伝送 J611 で共用) ──────────────
+  const loadMonthVisits = useCallback(async (): Promise<
+    Map<string, ShogaiDensouVisit[]>
+  > => {
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const visitsByClient = new Map<string, ShogaiDensouVisit[]>();
+    const PAGE = 1000;
+    let offset = 0;
+    while (true) {
+      let q = supabase
+        .from("shogai_service_records")
+        .select(
+          "client_id, service_date, start_time, end_time, duration_minutes, service_category, service_code",
+        )
+        .eq("status", "confirmed")
+        .gte("service_date", `${monthStr}-01`)
+        .lte("service_date", `${monthStr}-${String(daysInMonth).padStart(2, "0")}`);
+      // 自事業所スコープ (office_id 未設定の旧データは含める) — aggregate と同条件
+      if (currentOffice) {
+        q = q.or(`office_id.eq.${currentOffice.id},office_id.is.null`);
+      }
+      const { data, error } = await q
+        .order("id") // page-loop の安定順序
+        .range(offset, offset + PAGE - 1);
+      if (error) throw new Error("実績取得失敗: " + error.message);
+      const recs = (data ?? []) as {
+        client_id: string;
+        service_date: string;
+        start_time: string | null;
+        end_time: string | null;
+        duration_minutes: number | null;
+        service_category: string | null;
+        service_code: string | null;
+      }[];
+      for (const rec of recs) {
+        if (!visitsByClient.has(rec.client_id)) visitsByClient.set(rec.client_id, []);
+        visitsByClient.get(rec.client_id)!.push({
+          date: rec.service_date,
+          startTime: rec.start_time,
+          endTime: rec.end_time,
+          durationMinutes: rec.duration_minutes,
+          category: rec.service_category,
+          serviceCode: rec.service_code,
+        });
+      }
+      if (recs.length < PAGE) break;
+      offset += PAGE;
+    }
+    return visitsByClient;
+  }, [supabase, currentOffice, year, month, monthStr]);
+
+  // ─── サービス提供実績記録票 (様式1 居宅介護) — 対象者 1 名 = 1 枚 ────────────
+  const printJisseki = async () => {
+    if (targets.length === 0) return;
+    setJissekiLoading(true);
+    try {
+      const visits = await loadMonthVisits();
+      setJissekiVisits(visits);
+      setPrintMode("jisseki");
+      setTimeout(() => {
+        window.print();
+        setPrintMode(null);
+      }, 100);
+    } catch (e) {
+      toast.error(
+        "実績記録票の作成に失敗: " + (e instanceof Error ? e.message : String(e)),
+      );
+    } finally {
+      setJissekiLoading(false);
+    }
+  };
+
   // ─── 電子請求受付システム向け 伝送ファイル (J11 / J61 / J41) ────────────────
   const [densouLoading, setDensouLoading] = useState(false);
 
@@ -404,46 +489,8 @@ export function ShogaiSeikyuContent() {
       const unitPrice = (o?.unit_price ?? 10) as number;
       const areaCategory = (o?.area_category ?? null) as string | null;
 
-      // 2) 月内の確定実績 (実績記録票 J611 用の明細)
-      const monthStr = `${year}-${String(month).padStart(2, "0")}`;
-      const daysInMonth = new Date(year, month, 0).getDate();
-      const visitsByClient = new Map<string, ShogaiDensouVisit[]>();
-      const PAGE = 1000;
-      let offset = 0;
-      while (true) {
-        const { data, error } = await supabase
-          .from("shogai_service_records")
-          .select(
-            "client_id, service_date, start_time, end_time, duration_minutes, service_category, service_code",
-          )
-          .eq("status", "confirmed")
-          .gte("service_date", `${monthStr}-01`)
-          .lte("service_date", `${monthStr}-${String(daysInMonth).padStart(2, "0")}`)
-          .range(offset, offset + PAGE - 1);
-        if (error) throw new Error("実績取得失敗: " + error.message);
-        const recs = (data ?? []) as {
-          client_id: string;
-          service_date: string;
-          start_time: string | null;
-          end_time: string | null;
-          duration_minutes: number | null;
-          service_category: string | null;
-          service_code: string | null;
-        }[];
-        for (const rec of recs) {
-          if (!visitsByClient.has(rec.client_id)) visitsByClient.set(rec.client_id, []);
-          visitsByClient.get(rec.client_id)!.push({
-            date: rec.service_date,
-            startTime: rec.start_time,
-            endTime: rec.end_time,
-            durationMinutes: rec.duration_minutes,
-            category: rec.service_category,
-            serviceCode: rec.service_code,
-          });
-        }
-        if (recs.length < PAGE) break;
-        offset += PAGE;
-      }
+      // 2) 月内の確定実績 (実績記録票 J611 用の明細) — 自事業所スコープ + 安定順序
+      const visitsByClient = await loadMonthVisits();
 
       // 3) 受給者証の契約支給量 (契約情報レコード J121-05 用)
       const ids = rows.map((r) => r.user_id);
@@ -539,6 +586,15 @@ export function ShogaiSeikyuContent() {
     }
   };
 
+  // 訪問介護 office 専用 (障害福祉の実績・請求は訪問介護事業所で運用)
+  if (!btLoading && currentOffice && currentOffice.service_type !== "訪問介護") {
+    return (
+      <div className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        この機能は訪問介護事業所専用です。ヘッダーの事業所切替で訪問介護の事業所を選択してください。
+      </div>
+    );
+  }
+
   return (
     <>
     {/* printMode 中は画面を隠す (上限管理結果票の印刷は printMode=null のまま
@@ -572,6 +628,20 @@ export function ShogaiSeikyuContent() {
           >
             <FileText size={14} />
             明細書 ({targets.length}件)
+          </button>
+          <button
+            type="button"
+            disabled={rows.length === 0 || jissekiLoading}
+            onClick={printJisseki}
+            className="inline-flex items-center gap-1 rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50"
+            title="対象者の居宅介護サービス提供実績記録票 (様式1) を印刷 (利用者 1 名 = 1 枚)"
+          >
+            {jissekiLoading ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Printer size={14} />
+            )}
+            実績記録票 ({targets.length}件)
           </button>
           <button
             type="button"
@@ -852,7 +922,13 @@ export function ShogaiSeikyuContent() {
                       負担上限月額 {selected.seiho ? "(生保 = 負担なし)" : ""}
                     </span>
                     <span className="tabular-nums">
-                      ¥{selected.self_payment_limit.toLocaleString()}
+                      {selected.self_payment_limit != null ? (
+                        `¥${selected.self_payment_limit.toLocaleString()}`
+                      ) : (
+                        <span className="font-semibold text-amber-600">
+                          未設定 (受給者証で入力)
+                        </span>
+                      )}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -933,6 +1009,23 @@ export function ShogaiSeikyuContent() {
           reiwa={year - 2018}
           month={month}
         />
+      </div>
+    )}
+
+    {/* ===== 印刷 view: サービス提供実績記録票 (様式1 居宅介護) — 利用者 1 名 = 1 枚 ===== */}
+    {printMode === "jisseki" && (
+      <div className="hidden print:block">
+        {targets.map((r) => (
+          <ShogaiJissekiKirokuhyoPrintSheet
+            key={r.user_id}
+            row={r}
+            visits={jissekiVisits.get(r.user_id) ?? []}
+            officeName={currentOffice?.name ?? null}
+            officeNumber={officeNumber}
+            reiwa={year - 2018}
+            month={month}
+          />
+        ))}
       </div>
     )}
 
@@ -1212,14 +1305,15 @@ function JogenKanriSelfSection({
 }) {
   const supabase = useMemo(() => createClient(), []);
   const monthStr = `${year}-${String(month).padStart(2, "0")}`;
+  // 負担上限月額: null = 未設定 / 0 = 負担0円 (aggregate 側で生保は 0 に正規化済)
   const limit = row.self_payment_limit;
+  const ichiwari = Math.floor(row.totalAmount / 10);
   // 調整前の自事業所 利用者負担 (上限管理結果の反映前の値を再計算)
-  const selfPre = row.seiho
-    ? 0
-    : Math.min(Math.floor(row.totalAmount * 0.1), limit > 0 ? limit : Number.MAX_SAFE_INTEGER);
+  const selfPre = row.seiho ? 0 : limit != null ? Math.min(ichiwari, limit) : ichiwari;
 
   const [lines, setLines] = useState<KanriOfficeLine[]>([]);
   const [result, setResult] = useState<number | null>(row.kanriResult);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [newNo, setNewNo] = useState("");
@@ -1231,13 +1325,19 @@ function JogenKanriSelfSection({
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("shogai_jogen_kanri_results")
         .select("office_lines, kanri_result")
         .eq("client_id", row.user_id)
         .eq("target_month", monthStr)
         .maybeSingle();
       if (cancelled) return;
+      if (error) {
+        // 読込失敗時に空で初期化すると保存済みの管理結果を上書き消失させるため編集不可にする
+        setLoadErr(error.message);
+        return;
+      }
+      setLoadErr(null);
       const saved = ((data?.office_lines ?? []) as KanriOfficeLine[]) ?? [];
       if (saved.length > 0) {
         // 自事業所行は最新の請求集計値で更新
@@ -1302,8 +1402,14 @@ function JogenKanriSelfSection({
 
   // 調整計算: 合算 ≤ 上限 → 区分2 / 超過 → 管理事業所 (自) 優先充当で配分
   const calc = () => {
+    if (limit == null) {
+      alert(
+        "負担上限月額が未設定のため調整計算できません。受給者証ページで入力してください (負担 0 円の場合も 0 を入力)。",
+      );
+      return;
+    }
     const sum = lines.reduce((s, l) => s + l.user_amount, 0);
-    if (limit <= 0 || sum <= limit) {
+    if (sum <= limit) {
       setLines((prev) => prev.map((l) => ({ ...l, adjusted_amount: l.user_amount })));
       setResult(2);
       return;
@@ -1361,14 +1467,30 @@ function JogenKanriSelfSection({
   const sumAdj = lines.reduce((s, l) => s + l.adjusted_amount, 0);
   const sumTotal = lines.reduce((s, l) => s + l.total_amount, 0);
 
+  // 読込失敗: 保存済みの管理結果を保護するため編集 UI を出さない
+  if (loadErr) {
+    return (
+      <div className="mt-3 rounded border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+        <span className="font-bold">利用者負担上限額管理:</span> 保存済みデータの読込に失敗しました
+        ({loadErr})。既存の管理結果を上書きしないよう編集を無効化しています —
+        ページを再読み込みしてください。
+      </div>
+    );
+  }
+
   return (
     <div className="mt-3 rounded border border-violet-200 bg-violet-50/50 p-3 text-xs space-y-2">
       <div className="flex items-center justify-between">
         <span className="font-bold text-violet-800">利用者負担上限額管理 (当事業所が管理者)</span>
         <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">
-          上限月額 ¥{limit.toLocaleString()}
+          上限月額 {limit != null ? `¥${limit.toLocaleString()}` : "未設定"}
         </span>
       </div>
+      {limit == null && (
+        <p className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] text-amber-800">
+          負担上限月額が未設定です。受給者証ページで入力してください (負担 0 円の場合も 0 を入力)。
+        </p>
+      )}
 
       <table className="w-full text-[11px]">
         <thead className="text-left text-[10px] text-gray-500">
@@ -1422,7 +1544,7 @@ function JogenKanriSelfSection({
           <tr className="border-t border-violet-200 font-bold">
             <td className="py-1">合算</td>
             <td className="py-1 text-right tabular-nums">¥{sumTotal.toLocaleString()}</td>
-            <td className={`py-1 text-right tabular-nums ${limit > 0 && sumUser > limit ? "text-red-600" : ""}`}>
+            <td className={`py-1 text-right tabular-nums ${limit != null && sumUser > limit ? "text-red-600" : ""}`}>
               ¥{sumUser.toLocaleString()}
             </td>
             <td className="py-1 text-right tabular-nums">¥{sumAdj.toLocaleString()}</td>
@@ -1519,7 +1641,9 @@ function JogenKanriSelfSection({
               </tr>
               <tr>
                 <td className="border border-black bg-gray-100 px-2 py-1">利用者負担上限月額</td>
-                <td className="border border-black px-2 py-1 tabular-nums">¥{limit.toLocaleString()}</td>
+                <td className="border border-black px-2 py-1 tabular-nums">
+                  {limit != null ? `¥${limit.toLocaleString()}` : ""}
+                </td>
                 <td className="border border-black bg-gray-100 px-2 py-1">管理結果区分</td>
                 <td className="border border-black px-2 py-1">{result ?? ""}</td>
               </tr>

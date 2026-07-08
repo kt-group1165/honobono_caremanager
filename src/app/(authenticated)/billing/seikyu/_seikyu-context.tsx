@@ -27,9 +27,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { resolveKohiForMonth } from "@/lib/kohi";
+import { resolveCertForMonth } from "@/lib/cert-for-month";
 import {
   getUnitPriceByArea,
   parseYoboShienKubun,
+  reductionUnitsOf,
   type ClaimStatus,
   type YoboShienKubun,
 } from "../claims/claims-shared";
@@ -91,7 +93,50 @@ export type KyotakuReSeikyuRow = KyotakuSeikyuRow & {
   __origMonthKey: string;
   /** 再請求の理由 */
   __reasons: { tsukiokure: boolean; henrei: boolean };
+  /** kaigo_billing_status.notes (給付管理票 作成区分マーカー等) */
+  __statusNotes: string | null;
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 給付管理票 作成区分 (8221 項5: 1=新規 / 2=修正 / 3=取消)
+// kaigo_billing_status.notes のマーカーで永続化する (専用列は増やさない)。
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type KyufuKanriKubun = "1" | "2" | "3";
+
+export const KYUFU_KANRI_KUBUN_LABELS: Record<KyufuKanriKubun, string> = {
+  "1": "新規",
+  "2": "修正",
+  "3": "取消",
+};
+
+const KYUFU_KUBUN_MARKER: Record<KyufuKanriKubun, string> = {
+  "1": "[給管:新規]",
+  "2": "[給管:修正]",
+  "3": "[給管:取消]",
+};
+
+/** notes からマーカーを読んで作成区分を返す (無ければ null) */
+export function parseKyufuKanriKubun(notes: string | null | undefined): KyufuKanriKubun | null {
+  if (!notes) return null;
+  if (notes.includes(KYUFU_KUBUN_MARKER["3"])) return "3";
+  if (notes.includes(KYUFU_KUBUN_MARKER["2"])) return "2";
+  if (notes.includes(KYUFU_KUBUN_MARKER["1"])) return "1";
+  return null;
+}
+
+/** notes の既存マーカーを除去して作成区分マーカーを付け直す */
+export function setKyufuKanriKubunMarker(
+  notes: string | null | undefined,
+  kubun: KyufuKanriKubun,
+): string {
+  const stripped = (notes ?? "")
+    .replace(/\[給管:[^\]]*\]/g, "")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+  const marker = KYUFU_KUBUN_MARKER[kubun];
+  return stripped ? `${stripped}\n${marker}` : marker;
+}
 
 // kaigo_care_support_claims の DB 行 (必要列のみ)
 interface ClaimDbRow {
@@ -111,6 +156,7 @@ interface ClaimDbRow {
   discharge_addition_units: number;
   medical_coordination: boolean;
   medical_coordination_units: number | null;
+  discharge_type: string | null;
   tokutei_kassan_type: string | null;
   tokutei_kassan_units: number | null;
   medical_coop_kassan: boolean | null;
@@ -123,6 +169,9 @@ interface ClaimDbRow {
   bcp_reduction_pct: number | null;
   abuse_prevention_not_implemented: boolean | null;
   abuse_reduction_pct: number | null;
+  /** 運営基準減算 (migration kyotaku_billing_kojin_settei.sql 適用前は undefined) */
+  unei_kijun_gensan?: boolean | null;
+  unei_kijun_gensan_units?: number | null;
   status: ClaimStatus;
   notes: string | null;
   clients: {
@@ -149,6 +198,30 @@ interface CertDbRow {
 // レセプト行 → 明細行/総単位数 (billing-forms-content の meisaiDetail と同じ算式)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// 加算のサービスコード (kaigo_service_codes 実DB確認値 2026-07-08。R6/R8.6 両世代同一)
+const TOKUTEI_KASSAN_CODES: Record<string, string> = {
+  "Ⅰ": "434002",
+  "Ⅱ": "434003",
+  "Ⅲ": "434004",
+  A: "434006",
+  // 旧区分 (既存データ対応)
+  B: "434003",
+  C: "434004",
+};
+const DISCHARGE_TYPE_CODES: Record<string, string> = {
+  i_i: "436132", // 退院退所加算Ⅰ１ 450
+  i_ro: "436143", // Ⅰ２ 600
+  ii_i: "436144", // Ⅱ１ 600
+  ii_ro: "436145", // Ⅱ２ 750
+  iii: "436146", // Ⅲ 900
+};
+// discharge_type 未保存の旧データは単位数からコードを推定
+const DISCHARGE_UNITS_TO_CODE: Record<number, string> = {
+  450: "436132",
+  750: "436145",
+  900: "436146",
+};
+
 function buildClaimLines(c: ClaimDbRow): {
   lines: KyotakuMeisaiLine[];
   totalUnits: number;
@@ -157,39 +230,59 @@ function buildClaimLines(c: ClaimDbRow): {
     { name: c.care_support_name, code: c.care_support_code, units: c.units, count: 1 },
   ];
   if (c.initial_addition && c.initial_addition_units > 0)
-    lines.push({ name: "初回加算", code: "434000", units: c.initial_addition_units, count: 1 });
+    lines.push({ name: "初回加算", code: "434001", units: c.initial_addition_units, count: 1 });
   if ((c.tokutei_kassan_units ?? 0) > 0)
     lines.push({
       name: `特定事業所加算(${c.tokutei_kassan_type ?? ""})`,
-      code: "436132",
+      code: TOKUTEI_KASSAN_CODES[c.tokutei_kassan_type ?? ""] ?? "",
       units: c.tokutei_kassan_units ?? 0,
       count: 1,
     });
   if (c.medical_coop_kassan)
-    lines.push({ name: "特定事業所医療介護連携加算", code: "436135", units: c.medical_coop_kassan_units ?? 125, count: 1 });
+    lines.push({ name: "特定事業所医療介護連携加算", code: "434005", units: c.medical_coop_kassan_units ?? 125, count: 1 });
   if (c.hospital_coordination && c.hospital_coordination_units > 0)
-    lines.push({ name: "入院時情報連携加算", code: "434001", units: c.hospital_coordination_units, count: 1 });
+    lines.push({
+      name: `入院時情報連携加算${c.hospital_coordination_units >= 250 ? "Ⅰ" : "Ⅱ"}`,
+      code: c.hospital_coordination_units >= 250 ? "436125" : "436129",
+      units: c.hospital_coordination_units,
+      count: 1,
+    });
   if (c.discharge_addition && c.discharge_addition_units > 0)
-    lines.push({ name: "退院・退所加算", code: "434002", units: c.discharge_addition_units, count: 1 });
+    lines.push({
+      name: "退院・退所加算",
+      code:
+        (c.discharge_type ? DISCHARGE_TYPE_CODES[c.discharge_type] : null) ??
+        DISCHARGE_UNITS_TO_CODE[c.discharge_addition_units] ??
+        "",
+      units: c.discharge_addition_units,
+      count: 1,
+    });
   if (c.medical_coordination)
-    lines.push({ name: "通院時情報連携加算", code: "434050", units: c.medical_coordination_units ?? 50, count: 1 });
+    lines.push({ name: "通院時情報連携加算", code: "436135", units: c.medical_coordination_units ?? 50, count: 1 });
   if (c.terminal_care)
-    lines.push({ name: "ターミナルケアマネジメント加算", code: "434400", units: c.terminal_care_units ?? 400, count: 1 });
+    lines.push({ name: "ターミナルケアマネジメント加算", code: "436100", units: c.terminal_care_units ?? 400, count: 1 });
   if (c.emergency_conference)
-    lines.push({ name: "緊急時等居宅カンファレンス加算", code: "434200", units: c.emergency_conference_units ?? 200, count: 1 });
-  // 減算 (所定単位数 × pct%。claims-content の CSV 算式と同じ floor)
+    lines.push({ name: "緊急時等居宅カンファレンス加算", code: "436133", units: c.emergency_conference_units ?? 200, count: 1 });
+  // 減算 (公式合成コードと一致する round 方式: 減算量 = 所定 − round(所定×(100−pct)/100))
   if (c.bcp_not_prepared)
     lines.push({
       name: "業務継続計画未策定減算",
       code: "",
-      units: -Math.floor((c.units * (c.bcp_reduction_pct ?? 1)) / 100),
+      units: -reductionUnitsOf(c.units, c.bcp_reduction_pct || 1),
       count: 1,
     });
   if (c.abuse_prevention_not_implemented)
     lines.push({
       name: "高齢者虐待防止措置未実施減算",
       code: "",
-      units: -Math.floor((c.units * (c.abuse_reduction_pct ?? 1)) / 100),
+      units: -reductionUnitsOf(c.units, c.abuse_reduction_pct || 1),
+      count: 1,
+    });
+  if (c.unei_kijun_gensan)
+    lines.push({
+      name: "運営基準減算",
+      code: "",
+      units: -(c.unei_kijun_gensan_units ?? reductionUnitsOf(c.units, 50)),
       count: 1,
     });
   const totalUnits = lines.reduce((s, l) => s + l.units * l.count, 0);
@@ -201,14 +294,6 @@ function buildClaimLines(c: ClaimDbRow): {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PAGE = 1000;
-// .in() に大量 UUID を渡すと URI Too Long (HTTP 414) になるため chunk 化
-// (claims-content と同じ 50 個 ≒ URL 2KB)
-const IN_CHUNK_SIZE = 50;
-function chunkArray<T>(arr: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
-}
 
 /**
  * 指定月のレセプト (kaigo_care_support_claims) を利用者・認定情報付きで取得する。
@@ -218,23 +303,17 @@ export async function fetchKyotakuClaimRows(
   supabase: SupabaseClient,
   monthKey: string, // 'YYYY-MM'
 ): Promise<KyotakuSeikyuRow[]> {
-  // 1) 当月レセプト (page-loop で 1000 行制限回避)
+  // 1) 当月レセプト (page-loop で 1000 行制限回避)。
+  //    select は "*" (unei_kijun_gensan 列は migration 適用前でも壊れないよう明示列挙しない)
   const claims: ClaimDbRow[] = [];
   let from = 0;
   while (true) {
     const { data, error } = await supabase
       .from("kaigo_care_support_claims")
-      .select(
-        "id, user_id, care_support_code, care_support_name, units, unit_price, total_amount, insurance_amount, " +
-          "initial_addition, initial_addition_units, hospital_coordination, hospital_coordination_units, " +
-          "discharge_addition, discharge_addition_units, medical_coordination, medical_coordination_units, " +
-          "tokutei_kassan_type, tokutei_kassan_units, medical_coop_kassan, medical_coop_kassan_units, " +
-          "terminal_care, terminal_care_units, emergency_conference, emergency_conference_units, " +
-          "bcp_not_prepared, bcp_reduction_pct, abuse_prevention_not_implemented, abuse_reduction_pct, status, notes, " +
-          "clients(name, furigana, gender, birth_date, phone)",
-      )
+      .select("*, clients(name, furigana, gender, birth_date, phone)")
       .eq("billing_month", monthKey)
       .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
       .range(from, from + PAGE - 1);
     if (error) throw new Error(`レセプトの取得に失敗: ${error.message}`);
     if (!data || data.length === 0) break;
@@ -248,28 +327,23 @@ export async function fetchKyotakuClaimRows(
   const billable = claims.filter((c) => parseYoboShienKubun(c.notes) !== "itaku");
   if (billable.length === 0) return [];
 
-  // 2) 認定情報 (最新 1 件/利用者)。.in() は chunk + page-loop
+  // 2) 認定情報 — 「対象月に有効な認定」で解決 (resolveCertForMonth)。
+  //    月遅れ再請求で認定更新を跨いでも元提供月時点の要介護度・被保険者番号が載る。
   const userIds = [...new Set(billable.map((c) => c.user_id))];
+  const [cy, cm] = monthKey.split("-").map(Number);
+  const certRes = await resolveCertForMonth(supabase, userIds, cy, cm);
   const certMap = new Map<string, CertDbRow>();
-  for (const idChunk of chunkArray(userIds, IN_CHUNK_SIZE)) {
-    let fromC = 0;
-    while (true) {
-      const { data, error } = await supabase
-        .from("client_insurance_records")
-        .select(
-          "client_id, insurer_number, insurer_name, insured_number, care_level, certification_start_date, certification_end_date, service_limit_amount",
-        )
-        .in("client_id", idChunk)
-        .order("certification_date", { ascending: false })
-        .range(fromC, fromC + PAGE - 1);
-      if (error) throw new Error(`認定情報の取得に失敗: ${error.message}`);
-      if (!data || data.length === 0) break;
-      for (const r of data as CertDbRow[]) {
-        if (!certMap.has(r.client_id)) certMap.set(r.client_id, r);
-      }
-      if (data.length < PAGE) break;
-      fromC += PAGE;
-    }
+  for (const [clientId, cert] of certRes) {
+    certMap.set(clientId, {
+      client_id: clientId,
+      insurer_number: cert.insurer_number,
+      insurer_name: cert.insurer_name,
+      insured_number: cert.insured_number,
+      care_level: cert.care_level,
+      certification_start_date: cert.certification_start_date,
+      certification_end_date: cert.certification_end_date,
+      service_limit_amount: cert.service_limit_amount,
+    });
   }
 
   // 2.5) 公費 (生活保護等) — client_kohi_records から対象月に有効な 1 件を解決
@@ -337,14 +411,14 @@ export async function loadKyotakuReSeikyuRows(
 ): Promise<KyotakuReSeikyuRow[]> {
   const { data, error } = await supabase
     .from("kaigo_billing_status")
-    .select("client_id, target_month, tsukiokure, henrei")
+    .select("client_id, target_month, tsukiokure, henrei, notes")
     .eq("office_id", officeId)
     .eq("kokuho_target", false)
     .or("tsukiokure.eq.true,henrei.eq.true")
     .lt("target_month", currentMonthKey);
   if (error) {
-    // table 未作成 (migration 未適用) は再請求なしで続行
-    if (error.code === "42P01") return [];
+    // table 未作成 (migration 未適用: 42P01 / PostgREST schema cache: PGRST205) は再請求なしで続行
+    if (error.code === "42P01" || error.code === "PGRST205") return [];
     throw new Error(`再請求対象の取得に失敗: ${error.message}`);
   }
   const flagged = (data ?? []) as {
@@ -352,16 +426,21 @@ export async function loadKyotakuReSeikyuRows(
     target_month: string;
     tsukiokure: boolean;
     henrei: boolean;
+    notes: string | null;
   }[];
   if (flagged.length === 0) return [];
 
   // 月ごとにまとめる
-  const byMonth = new Map<string, Map<string, { tsukiokure: boolean; henrei: boolean }>>();
+  const byMonth = new Map<
+    string,
+    Map<string, { tsukiokure: boolean; henrei: boolean; notes: string | null }>
+  >();
   for (const f of flagged) {
     if (!byMonth.has(f.target_month)) byMonth.set(f.target_month, new Map());
     byMonth.get(f.target_month)!.set(f.client_id, {
       tsukiokure: !!f.tsukiokure,
       henrei: !!f.henrei,
+      notes: f.notes ?? null,
     });
   }
 
@@ -373,7 +452,12 @@ export async function loadKyotakuReSeikyuRows(
     for (const r of rows) {
       const reasons = clientReasons.get(r.user_id);
       if (!reasons) continue;
-      out.push({ ...r, __origMonthKey: monthKey, __reasons: reasons });
+      out.push({
+        ...r,
+        __origMonthKey: monthKey,
+        __reasons: { tsukiokure: reasons.tsukiokure, henrei: reasons.henrei },
+        __statusNotes: reasons.notes,
+      });
     }
   }
 

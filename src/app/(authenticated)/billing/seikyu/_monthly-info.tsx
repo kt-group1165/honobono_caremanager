@@ -21,16 +21,17 @@ import {
   SeikyuMonthNav,
 } from "./_seikyu-context";
 import type { ClaimStatus } from "../claims/claims-shared";
+import { monthRange } from "@/lib/cert-for-month";
 
 // 認定有効期間 (certStart〜certEnd) が対象月 (year/month) に掛かるか判定する。
+// 月末は文字列演算 (monthRange) で求める (toISOString は UTC 化で日付がズレる)。
 function certCoversMonth(
   certStart: string | null,
   certEnd: string | null,
   year: number,
   month: number,
 ): boolean {
-  const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
-  const monthEnd = new Date(year, month, 0).toISOString().split("T")[0];
+  const { from: monthStart, to: monthEnd } = monthRange(year, month);
   if (certStart && certStart > monthEnd) return false;
   if (certEnd && certEnd < monthStart) return false;
   return true;

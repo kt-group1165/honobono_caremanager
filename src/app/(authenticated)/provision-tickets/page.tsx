@@ -41,7 +41,11 @@ export default async function ProvisionTicketsPage({
     : null;
 
   const [staffRes, officeRes, formulaRes] = await Promise.all([
-    staffQuery ?? Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    staffQuery ??
+      Promise.resolve({
+        data: [] as { id: string; name: string }[],
+        error: null as { message: string } | null,
+      }),
     supabase.from("offices").select("provider_number:business_number, office_name:name").eq("app_type", "kaigo-app").limit(1).maybeSingle(),
     // 加算系 formula コード (処遇改善加算等の monthly_aggregate type)
     // 有効期間: 今日時点で有効な世代のみ (改定跨ぎの同一コード複数世代ヒット防止)
@@ -55,6 +59,18 @@ export default async function ProvisionTicketsPage({
       .order("service_category")
       .order("service_code"),
   ]);
+  // SSR fetch のエラーは捨てない。preload 失敗時は initialPreloadOk=false を
+  // 渡してクライアント側の再フェッチ (自己回復) に切り替える。
+  let initialPreloadOk = true;
+  if (staffRes.error) {
+    console.error("[provision-tickets] members fetch failed:", staffRes.error.message);
+  }
+  if (officeRes.error) {
+    console.error("[provision-tickets] offices fetch failed:", officeRes.error.message);
+  }
+  if (formulaRes.error) {
+    console.error("[provision-tickets] formula codes fetch failed:", formulaRes.error.message);
+  }
   const initialStaff = (staffRes.data ?? []) as KaigoStaff[];
   const initialOffice = (officeRes.data ?? null) as OfficeInfo | null;
   // serviceUnits は「基本」全件だと PostgREST 1000 行制限に切られてしまうため、
@@ -76,7 +92,7 @@ export default async function ProvisionTicketsPage({
     const [userRes, scheduleRes] = await Promise.all([
       supabase
         .from("clients")
-        .select("id, name, name_kana")
+        .select("id, name, name_kana:furigana")
         .eq("id", userId)
         .maybeSingle(),
       supabase
@@ -87,6 +103,16 @@ export default async function ProvisionTicketsPage({
         .lte("visit_date", to)
         .order("start_time"),
     ]);
+    // SSR fetch 失敗を silent にしない: initialPreloadOk=false で
+    // クライアント側の再フェッチ (fetchGridData) に切り替える
+    if (userRes.error) {
+      console.error("[provision-tickets] clients fetch failed:", userRes.error.message);
+      initialPreloadOk = false;
+    }
+    if (scheduleRes.error) {
+      console.error("[provision-tickets] schedule fetch failed:", scheduleRes.error.message);
+      initialPreloadOk = false;
+    }
     initialUser = (userRes.data ?? null) as KaigoUser | null;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -148,7 +174,7 @@ export default async function ProvisionTicketsPage({
     const serviceTypes = Array.from(new Set(schedules.map((s) => s.service_type))).filter(Boolean);
     if (serviceTypes.length > 0) {
       // 有効期間: 対象月に有効な世代のみ (改定跨ぎの複数世代ヒット防止)
-      const { data: codeRows } = await validInMonth(
+      const { data: codeRows, error: codeErr } = await validInMonth(
         supabase
           .from("kaigo_service_codes")
           .select("service_name, units")
@@ -157,6 +183,10 @@ export default async function ProvisionTicketsPage({
         now.getFullYear(),
         now.getMonth() + 1,
       );
+      if (codeErr) {
+        // units は content 側の on-demand 補完 effect が拾い直すため空で継続 (log は残す)
+        console.error("[provision-tickets] service codes fetch failed:", codeErr.message);
+      }
       const byNorm = new Map<string, number>();
       for (const sc of (codeRows ?? []) as { service_name: string; units: number }[]) {
         const key = toHankakuDigits(sc.service_name);
@@ -182,6 +212,7 @@ export default async function ProvisionTicketsPage({
       initialServiceRows={initialServiceRows}
       initialGrid={initialGrid}
       initialFormulaCodes={initialFormulaCodes}
+      initialPreloadOk={initialPreloadOk}
     />
   );
 }

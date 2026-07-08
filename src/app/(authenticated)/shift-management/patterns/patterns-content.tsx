@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ServiceSelector } from "@/components/services/service-selector";
+import { useBusinessType } from "@/lib/business-type-context";
+import { insertVisitSchedules } from "../_shared";
 // 型 + helper は 「use client 越境で undefined」罠 (memory: feedback_use_client_const_export.md)
 // を避けるため patterns-shared.ts に切り出し済。ここでは re-export のみ。
 import {
@@ -293,6 +295,7 @@ export interface PatternsContentProps {
 
 export function PatternsContent({ userId, initialPatterns, initialStaff }: PatternsContentProps) {
   const supabase = useMemo(() => createClient(), []);
+  const { currentOfficeId } = useBusinessType();
   const [patterns, setPatterns] = useState<VisitPattern[]>(initialPatterns);
   const [staff] = useState<KaigoStaff[]>(initialStaff);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -387,9 +390,12 @@ export function PatternsContent({ userId, initialPatterns, initialStaff }: Patte
         return;
       }
 
-      const { error: insErr } = await supabase
-        .from("kaigo_visit_schedule")
-        .insert(toInsert);
+      // C5: 発生元 office を付与 (列未適用 42703/PGRST204 は helper が strip して retry)
+      const insertRows = toInsert.map((c) => ({
+        ...c,
+        ...(currentOfficeId ? { office_id: currentOfficeId } : {}),
+      }));
+      const { error: insErr } = await insertVisitSchedules(supabase, insertRows);
       if (insErr) throw insErr;
 
       toast.success(

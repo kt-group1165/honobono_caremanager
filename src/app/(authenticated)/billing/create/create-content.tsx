@@ -234,8 +234,8 @@ export function BillingCreateContent({
           setSaving(false);
           return;
         }
-        // Delete existing records for this month/users
-        await supabase
+        // Delete existing records for this month/users (error は必ず check — silent failure 防止)
+        const { error: delErr } = await supabase
           .from("kaigo_billing_records")
           .delete()
           .eq("billing_month", billingMonth)
@@ -243,6 +243,7 @@ export function BillingCreateContent({
             "user_id",
             previewItems.map((i) => i.user_id)
           );
+        if (delErr) throw delErr;
       }
 
       const now = new Date().toISOString();

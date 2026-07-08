@@ -25,7 +25,7 @@ export async function getUserLite(
 ): Promise<KaigoUserLite | null> {
   const { data, error } = await supabase
     .from("clients")
-    .select("id, name, name_kana")
+    .select("id, name, furigana")
     .eq("id", userId)
     .maybeSingle();
   if (error) throw error;

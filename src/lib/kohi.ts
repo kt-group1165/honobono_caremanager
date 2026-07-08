@@ -43,6 +43,7 @@ export interface ResolveKohiResult {
 }
 
 const IN_CHUNK = 50;
+const PAGE = 1000;
 
 /** 表示用: 法別番号 → 「法別12 (生活保護)」等のラベル */
 export function kohiHobetsuLabel(hobetsu: string): string {
@@ -93,29 +94,39 @@ export async function resolveKohiForMonth(
   const rowsByClient = new Map<string, KohiRow[]>();
   for (let i = 0; i < ids.length; i += IN_CHUNK) {
     const chunk = ids.slice(i, i + IN_CHUNK);
-    const { data, error } = await supabase
-      .from("client_kohi_records")
-      .select(
-        "client_id, kohi_hobetsu, futansha_number, jukyusha_number, start_date, end_date, priority, honnin_futan",
-      )
-      .in("client_id", chunk);
-    if (error) {
-      // テーブル未作成 (直 SQL=42P01 / PostgREST schema cache=PGRST205) は
-      // 旧方式 (client_insurance_records.kohi_*) にフォールバック。
-      // それ以外のエラーは握りつぶさない。
-      if (error.code === "42P01" || error.code === "PGRST205") {
-        console.warn(
-          "[kohi] client_kohi_records 未作成 — 旧 client_insurance_records.kohi_* にフォールバックします (migrations/client_kohi_records.sql を適用してください)",
-        );
-        const legacy = await resolveKohiLegacy(supabase, ids);
-        return { byClient: legacy, fallback: true };
+    // chunk 内でも PostgREST の 1000 行上限に掛かり得るため order 付き page-loop
+    let offset = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("client_kohi_records")
+        .select(
+          "client_id, kohi_hobetsu, futansha_number, jukyusha_number, start_date, end_date, priority, honnin_futan",
+        )
+        .in("client_id", chunk)
+        .order("client_id", { ascending: true })
+        .order("id", { ascending: true })
+        .range(offset, offset + PAGE - 1);
+      if (error) {
+        // テーブル未作成 (直 SQL=42P01 / PostgREST schema cache=PGRST205) は
+        // 旧方式 (client_insurance_records.kohi_*) にフォールバック。
+        // それ以外のエラーは握りつぶさない。
+        if (error.code === "42P01" || error.code === "PGRST205") {
+          console.warn(
+            "[kohi] client_kohi_records 未作成 — 旧 client_insurance_records.kohi_* にフォールバックします (migrations/client_kohi_records.sql を適用してください)",
+          );
+          const legacy = await resolveKohiLegacy(supabase, ids);
+          return { byClient: legacy, fallback: true };
+        }
+        throw new Error(`公費情報の取得に失敗: ${error.message}`);
       }
-      throw new Error(`公費情報の取得に失敗: ${error.message}`);
-    }
-    for (const r of (data ?? []) as KohiRow[]) {
-      const list = rowsByClient.get(r.client_id) ?? [];
-      list.push(r);
-      rowsByClient.set(r.client_id, list);
+      const rows = (data ?? []) as KohiRow[];
+      for (const r of rows) {
+        const list = rowsByClient.get(r.client_id) ?? [];
+        list.push(r);
+        rowsByClient.set(r.client_id, list);
+      }
+      if (rows.length < PAGE) break;
+      offset += PAGE;
     }
   }
 
@@ -160,33 +171,42 @@ async function resolveKohiLegacy(
   const byClient = new Map<string, ResolvedKohi | null>();
   for (let i = 0; i < ids.length; i += IN_CHUNK) {
     const chunk = ids.slice(i, i + IN_CHUNK);
-    const { data, error } = await supabase
-      .from("client_insurance_records")
-      .select(
-        "client_id, kohi_hobetsu, kohi_futansha_number, kohi_jukyusha_number, effective_date",
-      )
-      .in("client_id", chunk)
-      .order("effective_date", { ascending: false });
-    if (error) throw new Error(`公費情報 (旧方式) の取得に失敗: ${error.message}`);
-    for (const r of (data ?? []) as {
-      client_id: string;
-      kohi_hobetsu: string | null;
-      kohi_futansha_number: string | null;
-      kohi_jukyusha_number: string | null;
-    }[]) {
-      if (byClient.has(r.client_id)) continue; // 最新 (effective_date DESC) のみ
-      const hobetsu = r.kohi_hobetsu?.trim() || null;
-      byClient.set(
-        r.client_id,
-        hobetsu
-          ? {
-              hobetsu,
-              futansha: r.kohi_futansha_number?.trim() || null,
-              jukyusha: r.kohi_jukyusha_number?.trim() || null,
-              honninFutan: 0,
-            }
-          : null,
-      );
+    // client_id 順に固定して page-loop (per-client の先頭 = 最新 effective_date を保証)
+    let offset = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("client_insurance_records")
+        .select(
+          "client_id, kohi_hobetsu, kohi_futansha_number, kohi_jukyusha_number, effective_date",
+        )
+        .in("client_id", chunk)
+        .order("client_id", { ascending: true })
+        .order("effective_date", { ascending: false, nullsFirst: false })
+        .range(offset, offset + PAGE - 1);
+      if (error) throw new Error(`公費情報 (旧方式) の取得に失敗: ${error.message}`);
+      const rows = (data ?? []) as {
+        client_id: string;
+        kohi_hobetsu: string | null;
+        kohi_futansha_number: string | null;
+        kohi_jukyusha_number: string | null;
+      }[];
+      for (const r of rows) {
+        if (byClient.has(r.client_id)) continue; // 最新 (effective_date DESC) のみ
+        const hobetsu = r.kohi_hobetsu?.trim() || null;
+        byClient.set(
+          r.client_id,
+          hobetsu
+            ? {
+                hobetsu,
+                futansha: r.kohi_futansha_number?.trim() || null,
+                jukyusha: r.kohi_jukyusha_number?.trim() || null,
+                honninFutan: 0,
+              }
+            : null,
+        );
+      }
+      if (rows.length < PAGE) break;
+      offset += PAGE;
     }
   }
   return byClient;

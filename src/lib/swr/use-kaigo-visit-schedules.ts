@@ -244,13 +244,24 @@ async function fetchByMonthAll(
   monthTo: string,
 ): Promise<VisitSchedule[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("kaigo_visit_schedule")
-    .select("id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type")
-    .gte("visit_date", monthFrom)
-    .lte("visit_date", monthTo);
-  if (error) throw error;
-  return (data ?? []) as VisitSchedule[];
+  // 月内全件 (全利用者) は PostgREST default 1000 行制限を超えうるため、
+  // 安定 order (id) + range で page-loop する
+  const PAGE = 1000;
+  const out: VisitSchedule[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("kaigo_visit_schedule")
+      .select("id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type")
+      .gte("visit_date", monthFrom)
+      .lte("visit_date", monthTo)
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as VisitSchedule[];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return out;
 }
 
 export function useKaigoVisitSchedulesByMonthAll(

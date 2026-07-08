@@ -32,6 +32,7 @@ import { ja } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import {
   SERVICE_TYPE_COLORS,
+  insertVisitSchedules,
   twoPersonMismatchWarning,
   type KaigoStaff,
   type VisitSchedule,
@@ -40,6 +41,12 @@ import {
   useKaigoVisitSchedulesByUser,
   useKaigoVisitSchedulesByStaff,
 } from "@/lib/swr/use-kaigo-visit-schedules";
+import { useBusinessType } from "@/lib/business-type-context";
+import {
+  getHospitalizationMap,
+  isHospitalizedOn,
+  type HospitalizationPeriod,
+} from "@/lib/hospitalization";
 
 export interface MonthlyIndividualInitialData {
   schedules: VisitSchedule[];
@@ -67,6 +74,7 @@ export function MonthlyIndividualView({
   initialData,
 }: MonthlyIndividualViewProps) {
   const supabase = useMemo(() => createClient(), []);
+  const { currentOfficeId } = useBusinessType();
   // 楽観的 local state (複写行 _isCopy 等)。SWR data の到着で sync する。
   const [schedules, setSchedules] = useState<VisitSchedule[]>(initialData.schedules);
   const [togglingId, setTogglingId] = useState<string | null>(null);
@@ -125,12 +133,34 @@ export function MonthlyIndividualView({
     };
   }, [schedules, systemMap, supabase, currentMonth]);
 
-  // SWR data → local state へ sync
+  // 入院期間 (🏥 バッジ用、利用者ビューのみ)。entity 切替で 1 回 fetch。
+  const [hospPeriods, setHospPeriods] = useState<HospitalizationPeriod[]>([]);
+  useEffect(() => {
+    if (entityType !== "user") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- entity 切替に伴う derived reset
+      setHospPeriods([]);
+      return;
+    }
+    let cancelled = false;
+    getHospitalizationMap(supabase, [entityId])
+      .then((m) => {
+        if (!cancelled) setHospPeriods(m.get(entityId) ?? []);
+      })
+      .catch((e) => {
+        console.error("hospitalization fetch failed:", e);
+      });
+    return () => { cancelled = true; };
+  }, [supabase, entityType, entityId]);
+
+  // SWR data → local state へ sync (未保存のローカル複写行 _isCopy は保持する)
   const lastSwrRef = useRef(swrSchedules);
   useEffect(() => {
     if (swrSchedules !== lastSwrRef.current) {
       lastSwrRef.current = swrSchedules;
-      setSchedules(swrSchedules);
+      setSchedules((prev) => {
+        const pendingCopies = prev.filter((s) => s._isCopy);
+        return pendingCopies.length > 0 ? [...swrSchedules, ...pendingCopies] : swrSchedules;
+      });
     }
   }, [swrSchedules]);
 
@@ -210,13 +240,19 @@ export function MonthlyIndividualView({
     setTogglingId(sched.id);
 
     if (!isCurrentlyCompleted) {
-      const { data: existing } = await supabase
+      const { data: existing, error: existErr } = await supabase
         .from("kaigo_visit_records")
         .select("id")
         .eq("user_id", sched.user_id)
         .eq("visit_date", sched.visit_date)
         .eq("start_time", sched.start_time)
         .limit(1);
+      if (existErr) {
+        // 存在確認に失敗したまま INSERT すると重複記録を作りうるため中断
+        toast.error("実績記録の確認に失敗しました: " + existErr.message);
+        setTogglingId(null);
+        return;
+      }
       if (!existing || existing.length === 0) {
         // status CHECK 制約は draft/confirmed/submitted のみ。自動生成は下書き記録として作る
         const { error } = await supabase.from("kaigo_visit_records").insert({
@@ -244,12 +280,18 @@ export function MonthlyIndividualView({
       setSchedules((prev) => prev.map((s) => s.id === sched.id ? { ...s, status: "completed" } : s));
       toast.success("実績に変更しました（提供表にも反映）");
     } else {
-      await supabase
+      const { error: delErr } = await supabase
         .from("kaigo_visit_records")
         .delete()
         .eq("user_id", sched.user_id)
         .eq("visit_date", sched.visit_date)
         .eq("start_time", sched.start_time);
+      if (delErr) {
+        // 記録が残ったまま schedule だけ予定に戻すと提供表・請求と食い違うため中断
+        toast.error("実績記録の削除に失敗しました: " + delErr.message);
+        setTogglingId(null);
+        return;
+      }
       const { error: upErr } = await supabase.from("kaigo_visit_schedule").update({ status: "scheduled" }).eq("id", sched.id);
       if (upErr) {
         toast.error("予定への変更に失敗しました: " + upErr.message);
@@ -260,6 +302,8 @@ export function MonthlyIndividualView({
       toast.success("予定に戻しました（提供表の実績も削除）");
     }
     setTogglingId(null);
+    // SWR cache を server truth で更新 (月/エンティティ切替時の stale 表示防止)
+    active.mutate();
   };
 
   const toggleSelect = (id: string) => {
@@ -284,9 +328,14 @@ export function MonthlyIndividualView({
     setBulkProcessing(true);
     const succeeded = new Set<string>();
     for (const sched of targets) {
-      const { data: existing } = await supabase
+      const { data: existing, error: existErr } = await supabase
         .from("kaigo_visit_records").select("id")
         .eq("user_id", sched.user_id).eq("visit_date", sched.visit_date).eq("start_time", sched.start_time).limit(1);
+      if (existErr) {
+        // 存在確認に失敗したまま INSERT すると重複記録を作りうるためこの行はスキップ
+        console.error("visit_records existence check error:", existErr.message);
+        continue;
+      }
       if (!existing || existing.length === 0) {
         const { error } = await supabase.from("kaigo_visit_records").insert({
           user_id: sched.user_id, staff_id: sched.staff_id,
@@ -313,6 +362,7 @@ export function MonthlyIndividualView({
     }
     setSelectedIds(new Set());
     setBulkProcessing(false);
+    active.mutate();
   };
 
   const bulkToScheduled = async () => {
@@ -320,15 +370,31 @@ export function MonthlyIndividualView({
     const targets = schedules.filter((s) => selectedIds.has(s.id) && s.status === "completed");
     if (targets.length === 0) { toast.info("選択された予定はすべて予定状態です"); return; }
     setBulkProcessing(true);
+    // 行ごとに error をチェックし、成功分のみ state 反映 (silent failure 防止)
+    const succeeded = new Set<string>();
     for (const sched of targets) {
-      await supabase.from("kaigo_visit_records").delete()
+      const { error: delErr } = await supabase.from("kaigo_visit_records").delete()
         .eq("user_id", sched.user_id).eq("visit_date", sched.visit_date).eq("start_time", sched.start_time);
-      await supabase.from("kaigo_visit_schedule").update({ status: "scheduled" }).eq("id", sched.id);
+      if (delErr) {
+        console.error("visit_records delete error:", delErr.message);
+        continue;
+      }
+      const { error: upErr } = await supabase.from("kaigo_visit_schedule").update({ status: "scheduled" }).eq("id", sched.id);
+      if (upErr) {
+        console.error("visit_schedule update error:", upErr.message);
+        continue;
+      }
+      succeeded.add(sched.id);
     }
-    setSchedules((prev) => prev.map((s) => selectedIds.has(s.id) ? { ...s, status: "scheduled" } : s));
-    toast.success(`${targets.length}件を予定に戻しました`);
+    setSchedules((prev) => prev.map((s) => succeeded.has(s.id) ? { ...s, status: "scheduled" } : s));
+    if (succeeded.size === targets.length) {
+      toast.success(`${succeeded.size}件を予定に戻しました`);
+    } else {
+      toast.error(`${succeeded.size}/${targets.length}件のみ予定に戻せました (失敗分はコンソール参照)`);
+    }
     setSelectedIds(new Set());
     setBulkProcessing(false);
+    active.mutate();
   };
 
   const bulkCopy = () => {
@@ -355,21 +421,25 @@ export function MonthlyIndividualView({
   };
 
   const saveCopyDate = async (copyRow: VisitSchedule, dateStr: string) => {
-    const { data, error } = await supabase.from("kaigo_visit_schedule").insert({
+    const { data, error } = await insertVisitSchedules(supabase, [{
       user_id: copyRow.user_id, staff_id: copyRow.staff_id,
       staff_id_2: copyRow.staff_id_2 ?? null, staff_id_3: copyRow.staff_id_3 ?? null,
       visit_date: dateStr,
       start_time: copyRow.start_time, end_time: copyRow.end_time,
       service_type: copyRow.service_type, status: "scheduled",
-    }).select("id").single();
-    if (error) {
-      toast.error("保存に失敗しました: " + error.message);
+      // C5: 発生元 office (列未適用は helper が strip)
+      ...(currentOfficeId ? { office_id: currentOfficeId } : {}),
+    }], "id");
+    if (error || !data || data.length === 0) {
+      toast.error("保存に失敗しました: " + (error?.message ?? "不明なエラー"));
       return;
     }
+    const newId = (data[0] as { id: string }).id;
     setSchedules((prev) => prev.map((s) =>
-      s.id === copyRow.id ? { ...s, id: data.id, visit_date: dateStr, _isCopy: false } : s
+      s.id === copyRow.id ? { ...s, id: newId, visit_date: dateStr, _isCopy: false } : s
     ));
     toast.success("予定を保存しました");
+    active.mutate();
   };
 
   const removeCopyRow = (copyId: string) => {
@@ -382,15 +452,36 @@ export function MonthlyIndividualView({
     if (!ok) return;
     setBulkProcessing(true);
     const targets = schedules.filter((s) => selectedIds.has(s.id));
+    // 行ごとに error をチェックし、成功分のみ state から除去 (silent failure 防止)
+    const succeeded = new Set<string>();
     for (const sched of targets) {
-      await supabase.from("kaigo_visit_records").delete()
+      // ローカル複写行 (未保存) は DB 操作不要
+      if (sched._isCopy) {
+        succeeded.add(sched.id);
+        continue;
+      }
+      const { error: recDelErr } = await supabase.from("kaigo_visit_records").delete()
         .eq("user_id", sched.user_id).eq("visit_date", sched.visit_date).eq("start_time", sched.start_time);
-      await supabase.from("kaigo_visit_schedule").delete().eq("id", sched.id);
+      if (recDelErr) {
+        console.error("visit_records delete error:", recDelErr.message);
+        continue;
+      }
+      const { error: schedDelErr } = await supabase.from("kaigo_visit_schedule").delete().eq("id", sched.id);
+      if (schedDelErr) {
+        console.error("visit_schedule delete error:", schedDelErr.message);
+        continue;
+      }
+      succeeded.add(sched.id);
     }
-    setSchedules((prev) => prev.filter((s) => !selectedIds.has(s.id)));
-    toast.success(`${targets.length}件を削除しました`);
+    setSchedules((prev) => prev.filter((s) => !succeeded.has(s.id)));
+    if (succeeded.size === targets.length) {
+      toast.success(`${succeeded.size}件を削除しました`);
+    } else {
+      toast.error(`${succeeded.size}/${targets.length}件のみ削除できました (失敗分はコンソール参照)`);
+    }
     setSelectedIds(new Set());
     setBulkProcessing(false);
+    active.mutate();
   };
 
   const dowStr = (dateStr: string) => {
@@ -685,6 +776,19 @@ export function MonthlyIndividualView({
                           )}>
                             ({dow})
                           </span>
+                          {(() => {
+                            if (entityType !== "user" || !hasDate) return null;
+                            const hosp = isHospitalizedOn(hospPeriods, sched.visit_date);
+                            if (!hosp) return null;
+                            return (
+                              <span
+                                className="rounded bg-rose-100 px-1 py-0.5 text-[9px] font-bold text-rose-700 leading-none whitespace-nowrap"
+                                title={`入院中${hosp.hospital_name ? ` (${hosp.hospital_name})` : ""}: ${hosp.admission_date}〜${hosp.discharge_date ?? "退院日未定"}`}
+                              >
+                                🏥入院中
+                              </span>
+                            );
+                          })()}
                           {!isCopy && (
                             <label className="cursor-pointer text-gray-300 hover:text-blue-500 ml-auto" title="日付を変更">
                               <CalendarDays size={12} />
@@ -696,11 +800,12 @@ export function MonthlyIndividualView({
                                   if (!e.target.value || e.target.value === sched.visit_date) return;
                                   const { error } = await supabase.from("kaigo_visit_schedule")
                                     .update({ visit_date: e.target.value }).eq("id", sched.id);
-                                  if (error) { toast.error("日付変更に失敗"); return; }
+                                  if (error) { toast.error("日付変更に失敗: " + error.message); return; }
                                   setSchedules((prev) => prev.map((s) =>
                                     s.id === sched.id ? { ...s, visit_date: e.target.value } : s
                                   ));
                                   toast.success("日付を変更しました");
+                                  active.mutate();
                                 }}
                               />
                             </label>

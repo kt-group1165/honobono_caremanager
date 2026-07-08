@@ -59,8 +59,8 @@ export interface ShogaiSeikyuRow {
   municipality: string | null;
   /** 障害支援区分 */
   support_level: string | null;
-  /** 負担上限月額 (0 = 負担なし) */
-  self_payment_limit: number;
+  /** 負担上限月額 (null = 未設定 / 0 = 負担0円。生保は 0 に正規化) */
+  self_payment_limit: number | null;
   /** 生保フラグ */
   seiho: boolean;
   details: ShogaiSeikyuDetail[];
@@ -106,7 +106,8 @@ export async function aggregateMonthlyShogaiSeikyu(
     year: number;
     month: number;
     unitPrice?: number;
-    /** 自事業所 office_id — 処遇改善加算の区分 (kaigo_office_addon_periods) 解決に使用 */
+    /** 自事業所 office_id — 実績のスコープ (office_id = 自 or NULL) と
+     *  処遇改善加算の区分 (kaigo_office_addon_periods) 解決に使用 */
     officeId?: string | null;
   },
 ): Promise<ShogaiSeikyuResult> {
@@ -115,6 +116,8 @@ export async function aggregateMonthlyShogaiSeikyu(
   const from = `${monthStr}-01`;
   const to = `${monthStr}-${String(daysInMonth).padStart(2, "0")}`;
   const unitPrice = opts.unitPrice && opts.unitPrice > 0 ? opts.unitPrice : 10.0;
+  // 単価は整数 (×100) で持ち回り float 誤差を避ける (訪問介護側と同じパターン)
+  const unitPrice100 = Math.round(unitPrice * 100);
 
   // 1) 実績 (confirmed) を月範囲で取得 (page-loop)
   const PAGE = 1000;
@@ -128,12 +131,18 @@ export async function aggregateMonthlyShogaiSeikyu(
   const records: Rec[] = [];
   let offset = 0;
   while (true) {
-    const { data, error } = await supabase
+    let q = supabase
       .from("shogai_service_records")
       .select("client_id, service_type, service_category, service_code, unit_count")
       .eq("status", "confirmed")
       .gte("service_date", from)
-      .lte("service_date", to)
+      .lte("service_date", to);
+    // 自事業所スコープ (office_id 未設定の旧データは含める)
+    if (opts.officeId) {
+      q = q.or(`office_id.eq.${opts.officeId},office_id.is.null`);
+    }
+    const { data, error } = await q
+      .order("id") // page-loop の安定順序 (1000 行超で行落ち/重複しないように)
       .range(offset, offset + PAGE - 1);
     if (error) throw new Error(`実績取得失敗: ${error.message}`);
     const rows = (data ?? []) as Rec[];
@@ -329,11 +338,14 @@ export async function aggregateMonthlyShogaiSeikyu(
     const addonUnits = addons.reduce((s, a) => s + a.units, 0);
 
     const totalUnits = baseUnits + addonUnits;
-    const totalAmount = Math.floor(totalUnits * unitPrice);
+    // 整数演算: 総費用額 = floor(総単位数 × (単価×100) / 100) — float 誤差回避
+    const totalAmount = Math.floor((totalUnits * unitPrice100) / 100);
     const seiho = !!cert?.seiho_flag;
-    const limit = cert?.self_payment_limit ?? 0;
-    let userAmount = seiho ? 0 : Math.floor(totalAmount * 0.1);
-    if (!seiho && limit > 0) userAmount = Math.min(userAmount, limit);
+    // 負担上限月額: null = 未設定 / 0 = 負担0円 (低所得区分等)。生保は 0 円に正規化
+    const limit: number | null = seiho ? 0 : (cert?.self_payment_limit ?? null);
+    // 1割相当額 (totalAmount は整数なので /10 の floor で正確)
+    let userAmount = Math.floor(totalAmount / 10);
+    if (limit !== null) userAmount = Math.min(userAmount, limit);
     // 上限額管理結果の反映:
     //   区分 1 (管理事業所で充当済) / 3 (管理結果票のとおり調整) → 調整後額に置換
     //   区分 2 (合算が上限以下で調整なし) → そのまま
@@ -398,6 +410,12 @@ export const SERVICE_TYPE_NAMES: Record<string, string> = Object.fromEntries(
   Object.entries(SERVICE_TYPE_CODES).map(([name, code]) => [code, name]),
 );
 
+/** CSV セル: `"` `,` 改行 を含む値は quote + `""` エスケープ */
+function csvCell(v: string | number | null | undefined): string {
+  const s = v == null ? "" : String(v);
+  return /[",\r\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
+}
+
 /**
  * 国保連請求 CSV 文字列を生成。
  * 完全な interface 仕様 (交換情報識別番号付き固定長 multi-record) は
@@ -429,7 +447,7 @@ export function buildShogaiSeikyuCsv(
     "利用者負担額",
     "介護給付費請求額",
   ];
-  const lines = [header.join(",")];
+  const lines = [header.map(csvCell).join(",")];
   for (const r of rows) {
     for (const d of r.details) {
       lines.push(
@@ -437,21 +455,23 @@ export function buildShogaiSeikyuCsv(
           ym,
           r.municipality ?? "",
           r.beneficiary_number ?? "",
-          `"${r.user_name}"`,
+          r.user_name,
           r.support_level ?? "",
           SERVICE_TYPE_CODES[d.service_type] ?? "",
-          `"${d.service_type}"`,
+          d.service_type,
           d.service_code ?? "",
-          `"${d.service_category ?? ""}"`,
+          d.service_category ?? "",
           d.unit_per,
           d.count,
           d.units,
           r.totalUnits,
           r.totalAmount,
-          r.self_payment_limit,
+          r.self_payment_limit ?? "",
           r.userAmount,
           r.benefitAmount,
-        ].join(","),
+        ]
+          .map(csvCell)
+          .join(","),
       );
     }
     // 処遇改善加算等 (月次加算、回数 1)
@@ -462,21 +482,23 @@ export function buildShogaiSeikyuCsv(
           ym,
           r.municipality ?? "",
           r.beneficiary_number ?? "",
-          `"${r.user_name}"`,
+          r.user_name,
           r.support_level ?? "",
           tc,
-          `"${SERVICE_TYPE_NAMES[tc] ?? ""}"`,
+          SERVICE_TYPE_NAMES[tc] ?? "",
           a.service_code,
-          `"${a.service_name}"`,
+          a.service_name,
           a.units,
           1,
           a.units,
           r.totalUnits,
           r.totalAmount,
-          r.self_payment_limit,
+          r.self_payment_limit ?? "",
           r.userAmount,
           r.benefitAmount,
-        ].join(","),
+        ]
+          .map(csvCell)
+          .join(","),
       );
     }
   }

@@ -54,6 +54,8 @@ interface VisitRecord {
   service_category?: "kaigo" | "shougai" | null;
   staff_id: string | null;
   staff_name?: string | null;
+  // 記録の状態 (draft / confirmed / submitted)。draft は月次実績送信の対象外
+  status?: string | null;
   // 予定 (kaigo_visit_schedule) との正式紐付け。
   // migration 未適用環境では undefined になりうるため optional 扱いで参照する。
   schedule_id?: string | null;
@@ -296,12 +298,19 @@ interface MonthlyServiceRecordItem {
   provider_name: string;    // staff_name
   duration_minutes: number | null;
 }
+/** 月次加算 (kaigo_visit_month_addons 由来) の送付行 */
+interface MonthlyAddonItem {
+  name: string;   // 初回加算 / 緊急時訪問介護加算 / 生活機能向上連携加算Ⅰ・Ⅱ
+  count: number;  // 当月回数
+}
 interface MonthlyServiceRecordPayload {
   service_type: "訪問介護";
   year_month: string;        // YYYY-MM
   client_id: string;
   client_name: string;
   records: MonthlyServiceRecordItem[];
+  /** 月次加算行 (受信側は任意参照。無い場合は加算なし) */
+  addons?: MonthlyAddonItem[];
 }
 function diffMinutes(start: string | null, end: string | null): number | null {
   if (!start || !end) return null;
@@ -316,17 +325,20 @@ function buildMonthlyServiceRecordPayload({
   clientId,
   clientName,
   records,
+  addons,
 }: {
   yearMonth: string;
   clientId: string;
   clientName: string;
   records: VisitRecord[];
+  addons?: MonthlyAddonItem[];
 }): MonthlyServiceRecordPayload {
   return {
     service_type: "訪問介護",
     year_month: yearMonth,
     client_id: clientId,
     client_name: clientName,
+    ...(addons && addons.length > 0 ? { addons } : {}),
     records: records.map<MonthlyServiceRecordItem>((r) => {
       const items = getActiveCareItems(r);
       // service_content: care 項目連結 → 空なら notes / progress_notes / detailed_report fallback
@@ -942,6 +954,54 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
   const [schedules, setSchedules] = useState<VisitSchedule[]>([]);
   const [schedulesLoading, setSchedulesLoading] = useState(true);
 
+  // 当月の月次加算 (kaigo_visit_month_addons、office スコープ)。
+  // 編集は provision-tickets の「月次加算」セクション — ここは送信ペイロード/印字用の読取のみ。
+  const [monthAddons, setMonthAddons] = useState<{
+    shokai: boolean;
+    seikatsu_kino: string;
+    kinkyu_count: number;
+  } | null>(null);
+  useEffect(() => {
+    if (!currentOffice) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- office 未確定時の derived reset
+      setMonthAddons(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("kaigo_visit_month_addons")
+        .select("shokai, seikatsu_kino, kinkyu_count")
+        .eq("client_id", userId)
+        .eq("target_month", month)
+        .eq("office_id", currentOffice.id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        // テーブル未作成 (42P01/PGRST205) は「加算なし」として継続
+        if (error.code !== "42P01" && error.code !== "PGRST205") {
+          console.error("month addons fetch failed:", error.message);
+        }
+        setMonthAddons(null);
+        return;
+      }
+      setMonthAddons((data ?? null) as typeof monthAddons);
+    })();
+    return () => { cancelled = true; };
+  }, [supabase, userId, month, currentOffice]);
+
+  // 月次加算 → 送付/印字用の加算行
+  const addonItems = useMemo<MonthlyAddonItem[]>(() => {
+    if (!monthAddons) return [];
+    const out: MonthlyAddonItem[] = [];
+    if (monthAddons.shokai) out.push({ name: "初回加算", count: 1 });
+    if (monthAddons.kinkyu_count > 0) out.push({ name: "緊急時訪問介護加算", count: monthAddons.kinkyu_count });
+    if (monthAddons.seikatsu_kino === "Ⅰ" || monthAddons.seikatsu_kino === "Ⅱ") {
+      out.push({ name: `生活機能向上連携加算${monthAddons.seikatsu_kino}`, count: 1 });
+    }
+    return out;
+  }, [monthAddons]);
+
   // 当該月分の visit_records (date + start_time 昇順)
   const monthRecords = useMemo(() => {
     const filtered = records.filter((r) => (r.visit_date ?? "").startsWith(month));
@@ -955,6 +1015,12 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
       return at < bt ? -1 : 1;
     });
   }, [records, month]);
+
+  // 月次実績の送信対象: draft (下書き) は除外し confirmed / submitted のみ
+  const sendableRecords = useMemo(
+    () => monthRecords.filter((r) => r.status === "confirmed" || r.status === "submitted"),
+    [monthRecords],
+  );
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
@@ -1093,6 +1159,9 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
   // Form helpers
   // schedule を渡すと「予定から作成」: 日時・サービス種別・担当職員をプリフィルし schedule_id を紐付ける。
   // 渡さない場合は従来のフリー入力 (予定外の飛び込み訪問用)。
+  // NOTE: 2人体制の職員2/3 の個別時間 (kaigo_visit_schedule.staff2_start_time 等) は
+  //       本フォームのプリフィルでは本体時間を使う。職員2として記録を作る場合は
+  //       開始/終了を手で個別時間に直す運用 (個別時間の自動プリフィルは将来対応)。
   const handleOpenForm = (schedule?: VisitSchedule) => {
     if (schedule) {
       setFormBase({
@@ -1295,20 +1364,22 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowSendModal(true)}
-            disabled={!userName || !currentOffice || monthRecords.length === 0}
+            disabled={!userName || !currentOffice || sendableRecords.length === 0}
             className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             title={
-              monthRecords.length === 0
-                ? "対象月の実績がありません"
+              sendableRecords.length === 0
+                ? monthRecords.length > 0
+                  ? "確定済み (confirmed/submitted) の実績がありません (下書きは送信対象外)"
+                  : "対象月の実績がありません"
                 : !currentOffice
                   ? "事業所が選択されていません"
-                  : "居宅介護支援事業所へ月次実績を送付"
+                  : "居宅介護支援事業所へ月次実績を送付 (下書きは除外)"
             }
           >
             <Send size={14} />
             居宅事業所に実績送信
             <span className="ml-1 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
-              {monthRecords.length}件
+              {sendableRecords.length}件{addonItems.length > 0 ? ` +加算${addonItems.length}` : ""}
             </span>
           </button>
           <button
@@ -1585,13 +1656,14 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
         <VisitPrintView records={records} userName={userName ?? undefined} signedUrlMap={signedUrlMap} />
       </div>
 
-      {/* 月次実績送付スナップショット用 DOM (画面では hidden、month で filter 済) */}
+      {/* 月次実績送付スナップショット用 DOM (画面では hidden、month + 確定済のみ) */}
       <div id="visit-records-month-print" className="hidden">
         <VisitPrintView
-          records={monthRecords}
+          records={sendableRecords}
           userName={userName ?? undefined}
           signedUrlMap={signedUrlMap}
           headerLabel={`${month.replace("-", "年")}月 訪問介護実績`}
+          addons={addonItems}
         />
       </div>
 
@@ -1612,7 +1684,10 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
               yearMonth: month,
               clientId: userId,
               clientName: userName,
-              records: monthRecords,
+              // 下書き (draft) を除外した確定済のみを送付
+              records: sendableRecords,
+              // 月次加算 (初回/緊急時/生活機能向上) を加算行として同梱
+              addons: addonItems,
             }) as unknown as Record<string, unknown>
           }
           onClose={() => setShowSendModal(false)}
@@ -2044,12 +2119,15 @@ function VisitPrintView({
   userName,
   signedUrlMap,
   headerLabel,
+  addons,
 }: {
   records: VisitRecord[];
   userName?: string;
   signedUrlMap: Map<string, string>;
   /** 表示タイトル (default: "サービス実施記録")。月次実績送付時は "2026年5月 訪問介護実績" 等を渡す。 */
   headerLabel?: string;
+  /** 月次加算行 (初回/緊急時/生活機能向上)。月次実績送付スナップショット用 */
+  addons?: MonthlyAddonItem[];
 }) {
   const B = "1px solid #000";
   const cellBase: React.CSSProperties = {
@@ -2142,6 +2220,20 @@ function VisitPrintView({
               </tr>
             );
           })}
+          {/* 月次加算行 (kaigo_visit_month_addons 由来) */}
+          {(addons ?? []).map((a) => (
+            <tr key={`addon-${a.name}`}>
+              <td style={{ ...cellBase, color: "#555" }}>—</td>
+              <td style={{ ...cellBase, fontWeight: "bold" }}>加算</td>
+              <td style={cellBase}>—</td>
+              <td style={cellBase}></td>
+              <td style={cellBase}>
+                {a.name}
+                {a.count > 1 ? `　× ${a.count}回` : ""}
+              </td>
+              <td style={cellBase}></td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>

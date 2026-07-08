@@ -11,6 +11,11 @@ import {
   ServiceCategoryBadge,
   type ServiceCategoryValue,
 } from "@/components/shared/service-category-badge";
+import {
+  getHospitalizationMap,
+  isCurrentlyHospitalized,
+  type HospitalizationPeriod,
+} from "@/lib/hospitalization";
 
 // 利用者一覧表示用の最小スキーマ（共通マスタ clients の subset）
 // service_category は migration 未適用環境で undefined になりうる
@@ -40,6 +45,94 @@ interface UserSidebarProps {
   // Both props provided → explicit mode (used by users/[id]/layout where id is in path)
   selectedUserId?: string | null;
   onSelectUser?: (userId: string) => void;
+}
+
+// ── 警告バッジ (ほのぼの準拠) ──────────────────────────────────────────────
+// 未申請 / 認定切れ / 更新◯日 / 保険未登録 / 入院中 を名前の右に小バッジ表示。
+// 「未実績」「未記録」は負荷が読めないためスコープ外 (2026-07 総点検)。
+
+/** 最新認定 (certification_start_date 降順の先頭) の要約 */
+interface LatestCert {
+  care_level: string | null;
+  certification_end_date: string | null;
+}
+
+/** バッジ用にまとめて fetch した参照データ。取得失敗時は null (= バッジ非表示で続行) */
+interface BadgeData {
+  latestCert: Map<string, LatestCert>;
+  hasInsurance: Set<string>;
+  hospitalization: Map<string, HospitalizationPeriod[]>;
+}
+
+interface WarnBadge {
+  label: string;
+  cls: string;
+  title: string;
+}
+
+/** 認定更新の警告を出す残日数しきい値 */
+const CERT_RENEWAL_WARN_DAYS = 60;
+
+/** ローカル TZ の今日 (YYYY-MM-DD) */
+function localToday(): string {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+function computeWarnBadges(
+  clientId: string,
+  data: BadgeData,
+  today: string,
+): WarnBadge[] {
+  const out: WarnBadge[] = [];
+  const cert = data.latestCert.get(clientId);
+  if (cert) {
+    if (cert.care_level === "申請中") {
+      out.push({
+        label: "未申請",
+        cls: "bg-yellow-100 text-yellow-800",
+        title: "最新の認定が申請中です",
+      });
+    }
+    const end = cert.certification_end_date;
+    if (end) {
+      if (end < today) {
+        out.push({
+          label: "認定切れ",
+          cls: "bg-red-100 text-red-700",
+          title: `認定有効期間が終了しています (〜${end})`,
+        });
+      } else {
+        const days = Math.ceil(
+          (Date.parse(end) - Date.parse(today)) / 86_400_000,
+        );
+        if (days <= CERT_RENEWAL_WARN_DAYS) {
+          out.push({
+            label: `更新${days}日`,
+            cls: "bg-amber-100 text-amber-800",
+            title: `認定有効期間の終了まで ${days} 日です (〜${end})`,
+          });
+        }
+      }
+    }
+  }
+  if (!data.hasInsurance.has(clientId)) {
+    out.push({
+      label: "保険未登録",
+      cls: "bg-gray-100 text-gray-500",
+      title: "介護保険情報が未登録です",
+    });
+  }
+  if (isCurrentlyHospitalized(data.hospitalization.get(clientId), today)) {
+    out.push({
+      label: "入院中",
+      cls: "bg-purple-100 text-purple-700",
+      title: "現在入院中です",
+    });
+  }
+  return out;
 }
 
 const FILTER_KEY = "kaigo.user_filter_mode";
@@ -208,6 +301,71 @@ function UserSidebarInner(props: UserSidebarProps) {
   // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
+  // ── 警告バッジ用の参照データ (利用者一覧の確定後に 1 回だけまとめて fetch) ──
+  // UserSidebar は多画面で共有されるため、per-user の個別 fetch はしない。
+  // 失敗時はバッジ無しで一覧表示を続行する (console.warn のみ)。
+  const [badgeData, setBadgeData] = useState<BadgeData | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const ids = users.map((u) => u.id);
+    if (ids.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 一覧が空になったらバッジ情報もクリア (derived reset)
+      setBadgeData(null);
+      return;
+    }
+    (async () => {
+      try {
+        // 1) 介護保険: 最新認定 (start 降順の先頭) + 登録有無。IN 50 件 chunk + page-loop
+        const IN_CHUNK = 50;
+        const PAGE = 1000;
+        const latestCert = new Map<string, LatestCert>();
+        const hasInsurance = new Set<string>();
+        for (let i = 0; i < ids.length; i += IN_CHUNK) {
+          const chunk = ids.slice(i, i + IN_CHUNK);
+          let offset = 0;
+          while (true) {
+            const { data, error } = await supabase
+              .from("client_insurance_records")
+              .select("client_id, care_level, certification_end_date")
+              .in("client_id", chunk)
+              .order("client_id", { ascending: true })
+              .order("certification_start_date", { ascending: false, nullsFirst: false })
+              .range(offset, offset + PAGE - 1);
+            if (error) throw new Error(error.message);
+            const rows = (data ?? []) as Array<{
+              client_id: string;
+              care_level: string | null;
+              certification_end_date: string | null;
+            }>;
+            for (const r of rows) {
+              hasInsurance.add(r.client_id);
+              if (!latestCert.has(r.client_id)) {
+                latestCert.set(r.client_id, {
+                  care_level: r.care_level,
+                  certification_end_date: r.certification_end_date,
+                });
+              }
+            }
+            if (rows.length < PAGE) break;
+            offset += PAGE;
+          }
+        }
+        // 2) 入退院 (共有ヘルパー。テーブル未作成は空 Map で続行)
+        const hospitalization = await getHospitalizationMap(supabase, ids);
+        if (!cancelled) setBadgeData({ latestCert, hasInsurance, hospitalization });
+      } catch (err) {
+        console.warn(
+          "利用者バッジ情報の取得に失敗 (バッジ無しで続行):",
+          err instanceof Error ? err.message : err,
+        );
+        if (!cancelled) setBadgeData(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [users, supabase]);
+
+  const today = useMemo(() => localToday(), []);
+
   const filtered = useMemo(() => {
     let list = users;
     if (filterMode === "office" && currentOfficeId) {
@@ -319,28 +477,53 @@ function UserSidebarInner(props: UserSidebarProps) {
           </div>
         ) : (
           <ul className="py-1">
-            {filtered.map((user) => (
-              <li key={user.id}>
-                <button
-                  onClick={() => handleSelectUser(user.id)}
-                  className={cn(
-                    "flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors",
-                    selectedUserId === user.id
-                      ? "bg-blue-50 text-blue-700 font-medium border-r-2 border-blue-600"
-                      : "text-gray-700 hover:bg-gray-50"
-                  )}
-                >
-                  <User size={14} className="shrink-0 text-gray-400" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1">
-                      <span className="truncate text-sm leading-tight">{user.name}</span>
-                      <ServiceCategoryBadge category={user.service_category} size="xs" />
+            {filtered.map((user) => {
+              const warnBadges = badgeData
+                ? computeWarnBadges(user.id, badgeData, today)
+                : [];
+              return (
+                <li key={user.id}>
+                  <button
+                    onClick={() => handleSelectUser(user.id)}
+                    className={cn(
+                      "flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors",
+                      selectedUserId === user.id
+                        ? "bg-blue-50 text-blue-700 font-medium border-r-2 border-blue-600"
+                        : "text-gray-700 hover:bg-gray-50"
+                    )}
+                  >
+                    <User size={14} className="shrink-0 text-gray-400" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                        <span className="truncate text-sm leading-tight">{user.name}</span>
+                        <ServiceCategoryBadge category={user.service_category} size="xs" />
+                        {warnBadges.slice(0, 2).map((b) => (
+                          <span
+                            key={b.label}
+                            title={b.title}
+                            className={cn(
+                              "shrink-0 whitespace-nowrap rounded-full px-1.5 py-px text-[9px] font-medium leading-tight",
+                              b.cls,
+                            )}
+                          >
+                            {b.label}
+                          </span>
+                        ))}
+                        {warnBadges.length > 2 && (
+                          <span
+                            className="shrink-0 text-[9px] leading-tight text-gray-400"
+                            title={warnBadges.slice(2).map((b) => b.label).join(" / ")}
+                          >
+                            +{warnBadges.length - 2}
+                          </span>
+                        )}
+                      </div>
+                      <div className="truncate text-[10px] text-gray-400 leading-tight">{user.furigana ?? ""}</div>
                     </div>
-                    <div className="truncate text-[10px] text-gray-400 leading-tight">{user.furigana ?? ""}</div>
-                  </div>
-                </button>
-              </li>
-            ))}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

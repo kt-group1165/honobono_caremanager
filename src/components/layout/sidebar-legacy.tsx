@@ -82,6 +82,7 @@ const NAV_HOME_CARE: NavEntry[] = [
   { name: "サービス提供表（実績）", href: "/provision-tickets", icon: FileSpreadsheet },
   { name: "サービス実施記録", href: "/visit-records", icon: ClipboardCheck },
   { name: "訪問介護計画書", href: "/houmon-care-plans", icon: ClipboardList },
+  { name: "カンファレンス記録", href: "/care-conferences", icon: MessagesSquare },
   { name: "手順書", href: "/visit-procedures", icon: BookOpen },
   { name: "重要事項・契約書", href: "/user-contracts", icon: FileText },
   { name: "実績管理", href: "/visit-billing", icon: Calculator },

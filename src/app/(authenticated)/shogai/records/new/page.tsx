@@ -2,10 +2,11 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { NewRecordForm } from "./_form";
+import { ShogaiOfficeGuard } from "../../_office-guard";
 
 export default async function NewShogaiRecordPage() {
   const supabase = await createClient();
-  const [{ data: clients }, { data: codes }] = await Promise.all([
+  const [{ data: clients, error: clientError }, { data: codes, error: codeError }] = await Promise.all([
     supabase
       .from("clients")
       .select("id, name, furigana, tenant_id")
@@ -20,7 +21,10 @@ export default async function NewShogaiRecordPage() {
       .order("code"),
   ]);
 
+  const loadError = clientError?.message ?? codeError?.message ?? null;
+
   return (
+    <ShogaiOfficeGuard>
     <div className="space-y-4 p-4">
       <Link
         href="/shogai/records"
@@ -29,6 +33,11 @@ export default async function NewShogaiRecordPage() {
         <ArrowLeft size={16} /> 実績一覧へ戻る
       </Link>
       <h1 className="text-2xl font-bold">障害福祉 サービス提供記録 新規</h1>
+      {loadError && (
+        <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          マスタの読み込みに失敗しました: {loadError}
+        </div>
+      )}
       <NewRecordForm
         clients={(clients ?? []).map((c) => ({
           id: c.id,
@@ -39,5 +48,6 @@ export default async function NewShogaiRecordPage() {
         codes={codes ?? []}
       />
     </div>
+    </ShogaiOfficeGuard>
   );
 }

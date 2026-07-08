@@ -5,6 +5,7 @@ import { Save } from "lucide-react";
 import { submitCreateRecord } from "../_actions";
 import { SHOGAI_SERVICE_TYPES } from "@/lib/shogai-fukushi/types";
 import { findServiceCode } from "@/lib/shogai-fukushi/billing";
+import { useBusinessType } from "@/lib/business-type-context";
 
 interface Client {
   id: string;
@@ -31,6 +32,7 @@ export function NewRecordForm({
   clients: Client[];
   codes: Code[];
 }) {
+  const { currentOffice } = useBusinessType();
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
     client_id: "",
@@ -93,6 +95,8 @@ export function NewRecordForm({
     if (!c) return;
     const fd = new FormData();
     fd.set("tenant_id", c.tenant_id);
+    // 自事業所を付与 (office スコープの対象にする)
+    if (currentOffice) fd.set("office_id", currentOffice.id);
     fd.set("client_id", form.client_id);
     fd.set("service_date", form.service_date);
     fd.set("start_time", form.start_time);

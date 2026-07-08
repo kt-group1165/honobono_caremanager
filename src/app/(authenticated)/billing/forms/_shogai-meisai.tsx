@@ -14,6 +14,7 @@
 
 import React from "react";
 import type { ShogaiSeikyuRow } from "@/lib/shogai-seikyu/aggregate";
+import { decisionCode, type ShogaiDensouVisit } from "@/lib/shogai-densou/build";
 
 // サービス種類コード (障害福祉サービス)
 const SERVICE_TYPE_CODES: Record<string, string> = {
@@ -196,8 +197,12 @@ export function ShogaiMeisaiPrintSheet({
   month: number;
 }) {
   // J121 集計情報レコードと同じ計算 (build.ts に合わせる)
-  const ichiwari = Math.floor(row.totalAmount * 0.1); // 1割相当額
-  const jogenChosei = Math.min(row.self_payment_limit, ichiwari); // 上限月額調整
+  const ichiwari = Math.floor(row.totalAmount / 10); // 1割相当額 (整数演算)
+  // 上限月額調整 = min(①,②)。上限未設定 (null) は調整なし = 1割相当額
+  const jogenChosei =
+    row.self_payment_limit != null
+      ? Math.min(row.self_payment_limit, ichiwari)
+      : ichiwari;
   const hasKanri = row.kanriResult != null;
   // 上限額管理事業所番号: 自事業所管理なら自事業所、他事業所管理なら受給者証の記載
   const kanriOfficeNo =
@@ -360,7 +365,9 @@ export function ShogaiMeisaiPrintSheet({
               上限月額
             </Lb>
             <Vc style={{ ...R2, fontFamily: '"MS Gothic",monospace', fontWeight: "bold" }}>
-              {row.self_payment_limit.toLocaleString()} 円
+              {row.self_payment_limit != null
+                ? `${row.self_payment_limit.toLocaleString()} 円`
+                : "未設定"}
               {row.seiho ? "（生活保護）" : ""}
             </Vc>
           </tr>
@@ -546,7 +553,11 @@ export function ShogaiMeisaiPrintSheet({
           </tr>
           <tr>
             <AggLb>⑥利用者負担上限月額{row.seiho ? "（生活保護 = 負担なし）" : ""}</AggLb>
-            <AggVc>{row.self_payment_limit.toLocaleString()}</AggVc>
+            <AggVc>
+              {row.self_payment_limit != null
+                ? row.self_payment_limit.toLocaleString()
+                : ""}
+            </AggVc>
           </tr>
           <tr>
             <AggLb>⑦上限月額調整（⑤⑥のうち少ない数）</AggLb>
@@ -822,7 +833,9 @@ export function ShogaiRiyouSeikyuPrintSheet({
               ¥{row.totalAmount.toLocaleString()}
             </td>
             <td className="border border-black px-2 py-1.5 text-right tabular-nums">
-              ¥{row.self_payment_limit.toLocaleString()}
+              {row.self_payment_limit != null
+                ? `¥${row.self_payment_limit.toLocaleString()}`
+                : "未設定"}
             </td>
             <td className="border border-black px-2 py-1.5 text-right tabular-nums">
               ¥{row.userAmount.toLocaleString()}
@@ -844,6 +857,313 @@ export function ShogaiRiyouSeikyuPrintSheet({
         {row.totalUnits.toLocaleString()} 単位、単価 {row.unitPrice.toFixed(2)} 円/単位
         {row.seiho ? "、生活保護受給のため負担なし" : ""})。
       </p>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 4. サービス提供実績記録票 — 居宅介護 (様式1、利用者 1 名 = 1 枚)
+//    項目は伝送 J611 (基本情報 = 合計1〜5 / 明細情報 = 日別提供実績) に対応
+//    (migrations/_if_shogai.txt 参照)。データは shogai_service_records の月実績。
+// ════════════════════════════════════════════════════════════════════════════
+
+// 決定サービスコード → 合計欄の区分名 (J611 合計1〜5 と同じ並び)
+const KIROKU_SLOTS: { code: string; label: string; isCount: boolean }[] = [
+  { code: "111000", label: "身体介護", isCount: false },
+  { code: "113000", label: "通院介助(伴う)", isCount: false },
+  { code: "112000", label: "家事援助", isCount: false },
+  { code: "114000", label: "通院介助(伴わない)", isCount: false },
+  { code: "115000", label: "通院等乗降介助", isCount: true },
+];
+
+const DECISION_NAMES: Record<string, string> = Object.fromEntries(
+  KIROKU_SLOTS.map((s) => [s.code, s.label]),
+);
+
+/** 分 → 時間数 (小数2桁、例 90分 → "1.5") */
+function fmtHours(mins: number): string {
+  const h = Math.round((mins / 60) * 100) / 100;
+  return String(h);
+}
+
+export function ShogaiJissekiKirokuhyoPrintSheet({
+  row,
+  visits,
+  officeName,
+  officeNumber,
+  reiwa,
+  month,
+}: {
+  row: ShogaiSeikyuRow;
+  visits: ShogaiDensouVisit[];
+  officeName: string | null;
+  officeNumber: string | null;
+  reiwa: number;
+  month: number;
+}) {
+  const dow = (d: string) => "日月火水木金土"[new Date(d + "T00:00:00").getDay()];
+  const hm = (t: string | null) => (t ? t.slice(0, 5) : "");
+  const sorted = [...visits].sort((a, b) =>
+    (a.date + (a.startTime ?? "")).localeCompare(b.date + (b.startTime ?? "")),
+  );
+  // 合計 (J611 基本情報 合計1〜5): 乗降 = 回数、それ以外 = 算定時間数計
+  const totals = new Map<string, { mins: number; count: number }>();
+  for (const v of sorted) {
+    const code = decisionCode(v.category);
+    const t = totals.get(code) ?? { mins: 0, count: 0 };
+    t.mins += v.durationMinutes ?? 0;
+    t.count += 1;
+    totals.set(code, t);
+  }
+  const totalMins = sorted
+    .filter((v) => decisionCode(v.category) !== "115000")
+    .reduce((s, v) => s + (v.durationMinutes ?? 0), 0);
+
+  const thc: React.CSSProperties = {
+    border: "0.5pt solid #000",
+    padding: "0.8mm",
+    fontSize: "7pt",
+    fontWeight: "normal",
+    textAlign: "center",
+    lineHeight: 1.15,
+    verticalAlign: "middle",
+    background: "#f5f5f5",
+  };
+  const tdc: React.CSSProperties = {
+    border: "0.5pt solid #000",
+    padding: "0.8mm 1mm",
+    fontSize: "7.5pt",
+    textAlign: "center",
+    verticalAlign: "middle",
+    fontFamily: '"MS Gothic","ＭＳ ゴシック",monospace',
+  };
+
+  return (
+    <div
+      style={{
+        pageBreakAfter: "always",
+        padding: "6mm 8mm",
+        fontFamily: '"MS Mincho","ＭＳ 明朝","游明朝",serif',
+        color: "#000",
+        fontSize: "8pt",
+        lineHeight: 1.3,
+        width: "210mm",
+        boxSizing: "border-box",
+      }}
+    >
+      {/* ── 標題行 ── */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          marginBottom: "1.5mm",
+        }}
+      >
+        <div style={{ width: "20%", fontSize: "8pt" }}>
+          令和{reiwa}年{month}月分
+        </div>
+        <div
+          style={{
+            textAlign: "center",
+            flex: 1,
+            fontSize: "11pt",
+            fontWeight: "bold",
+            letterSpacing: "1pt",
+          }}
+        >
+          居宅介護サービス提供実績記録票
+        </div>
+        <div style={{ width: "20%", textAlign: "right", fontSize: "9pt", fontWeight: "bold" }}>
+          様式1
+        </div>
+      </div>
+
+      {/* ── ヘッダ: 受給者証番号 / 氏名 / 事業所番号 / 事業者名 ── */}
+      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+        <colgroup>
+          <col style={{ width: "14%" }} />
+          <col style={{ width: "36%" }} />
+          <col style={{ width: "14%" }} />
+          <col style={{ width: "36%" }} />
+        </colgroup>
+        <tbody>
+          <tr>
+            <Lb>受給者証番号</Lb>
+            <Vc>
+              <DigitCells value={row.beneficiary_number ?? ""} cells={10} cw={5} h={5} />
+            </Vc>
+            <Lb>事業所番号</Lb>
+            <Vc>
+              <DigitCells value={officeNumber ?? ""} cells={10} cw={5} h={5} />
+            </Vc>
+          </tr>
+          <tr>
+            <Lb>
+              支給決定障害
+              <br />
+              者等氏名
+            </Lb>
+            <Vc style={{ fontWeight: "bold", fontSize: "9.5pt" }}>{row.user_name}</Vc>
+            <Lb>
+              事業者及び
+              <br />
+              その事業所名
+            </Lb>
+            <Vc style={{ fontWeight: "bold", fontSize: "9pt" }}>{officeName ?? ""}</Vc>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* ── 日別グリッド (J611 明細情報レコード相当) ── */}
+      <table
+        style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", marginTop: "1.5mm" }}
+      >
+        <colgroup>
+          <col style={{ width: "6%" }} />
+          <col style={{ width: "6%" }} />
+          <col style={{ width: "24%" }} />
+          <col style={{ width: "10%" }} />
+          <col style={{ width: "10%" }} />
+          <col style={{ width: "10%" }} />
+          <col style={{ width: "8%" }} />
+          <col style={{ width: "8%" }} />
+          <col style={{ width: "9%" }} />
+          <col style={{ width: "9%" }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th style={thc}>日付</th>
+            <th style={thc}>曜日</th>
+            <th style={thc}>
+              サービス提供状況
+              <br />
+              (サービス内容)
+            </th>
+            <th style={thc}>開始時間</th>
+            <th style={thc}>終了時間</th>
+            <th style={thc}>
+              算定
+              <br />
+              時間数
+            </th>
+            <th style={thc}>
+              派遣
+              <br />
+              人数
+            </th>
+            <th style={thc}>
+              初回
+              <br />
+              加算
+            </th>
+            <th style={thc}>
+              利用者
+              <br />
+              確認欄
+            </th>
+            <th style={thc}>備考</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((v, i) => {
+            const code = decisionCode(v.category);
+            const isRide = code === "115000";
+            return (
+              <tr key={i} style={{ height: "5mm" }}>
+                <td style={tdc}>{parseInt(v.date.slice(8, 10), 10)}</td>
+                <td style={tdc}>{dow(v.date)}</td>
+                <td style={{ ...tdc, textAlign: "left", fontFamily: "inherit" }}>
+                  {v.category ?? DECISION_NAMES[code] ?? ""}
+                </td>
+                <td style={tdc}>{hm(v.startTime)}</td>
+                <td style={tdc}>{hm(v.endTime)}</td>
+                <td style={{ ...tdc, textAlign: "right" }}>
+                  {isRide
+                    ? "1回"
+                    : v.durationMinutes
+                      ? fmtHours(v.durationMinutes)
+                      : ""}
+                </td>
+                <td style={tdc}>1</td>
+                <td style={tdc}></td>
+                <td style={tdc}></td>
+                <td style={tdc}></td>
+              </tr>
+            );
+          })}
+          {sorted.length === 0 && (
+            <tr style={{ height: "5mm" }}>
+              <td style={{ ...tdc, fontFamily: "inherit" }} colSpan={10}>
+                対象月の提供実績がありません
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      {/* ── 合計欄 (J611 基本情報 合計1〜5 相当) ── */}
+      <table
+        style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", marginTop: "-0.5pt" }}
+      >
+        <tbody>
+          <tr>
+            <Lb style={{ width: "10%" }} rowSpan={2}>
+              合計
+            </Lb>
+            {KIROKU_SLOTS.map((s) => (
+              <Lb key={s.code}>{s.label}</Lb>
+            ))}
+            <Lb style={{ background: "#f5f5f5" }}>算定時間数 計</Lb>
+          </tr>
+          <tr>
+            {KIROKU_SLOTS.map((s) => {
+              const t = totals.get(s.code);
+              return (
+                <Vc
+                  key={s.code}
+                  style={{
+                    textAlign: "right",
+                    fontFamily: '"MS Gothic",monospace',
+                    height: "5mm",
+                  }}
+                >
+                  {t
+                    ? s.isCount
+                      ? `${t.count} 回`
+                      : `${fmtHours(t.mins)} 時間`
+                    : ""}
+                </Vc>
+              );
+            })}
+            <Vc
+              style={{
+                textAlign: "right",
+                fontFamily: '"MS Gothic",monospace',
+                fontWeight: "bold",
+              }}
+            >
+              {fmtHours(totalMins)} 時間
+            </Vc>
+          </tr>
+        </tbody>
+      </table>
+
+      <p style={{ marginTop: "1.5mm", fontSize: "6.5pt" }}>
+        ※ 伝送 J611 (サービス提供実績記録票情報) と同じ月実績から出力。初回加算等の加算欄は算定時に記入してください。
+      </p>
+
+      {/* ── 枚数 (右下) ── */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "1.5mm" }}>
+        <table style={{ borderCollapse: "collapse" }}>
+          <tbody>
+            <tr>
+              <Vc style={{ ...CT, width: "8mm", fontFamily: '"MS Gothic",monospace' }}>1</Vc>
+              <Vc style={{ ...CT, width: "12mm", fontSize: "7pt" }}>枚目</Vc>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

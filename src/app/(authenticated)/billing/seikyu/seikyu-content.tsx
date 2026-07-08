@@ -19,14 +19,16 @@ import {
   useKyotakuSeikyuContext,
   SeikyuMonthNav,
 } from "./_seikyu-context";
+import { KyotakuKojinSetteiContent } from "./_kojin-settei";
 import { KyotakuMonthlyInfoContent } from "./_monthly-info";
 import { KyotakuKaigoSeikyuContent } from "./_kaigo-seikyu";
 import { KyotakuKokuhoSeikyuContent } from "./_kokuho-seikyu";
 import { NyukinContent } from "./_nyukin-content";
 
-type SeikyuTab = "monthly" | "kaigo" | "kokuho" | "nyukin";
+type SeikyuTab = "kojin" | "monthly" | "kaigo" | "kokuho" | "nyukin";
 
 const SEIKYU_TABS: { id: SeikyuTab; label: string }[] = [
+  { id: "kojin", label: "請求個人設定" },
   { id: "monthly", label: "月次情報" },
   { id: "kaigo", label: "介護請求" },
   { id: "kokuho", label: "国保請求" },
@@ -85,6 +87,7 @@ function SeikyuInner() {
     // 印刷時は高さ固定と flex を解除して印刷 view の流し込みを崩さない。
     <div className="-m-6 flex h-[calc(100%+3rem)] flex-col bg-white text-sm print:m-0 print:block print:h-auto">
       <SeikyuTabNav active={tab} onChange={setTab} />
+      {tab === "kojin" && <KyotakuKojinSetteiContent />}
       {tab === "monthly" && <KyotakuMonthlyInfoContent />}
       {tab === "kaigo" && <KyotakuKaigoSeikyuContent />}
       {tab === "kokuho" && <KyotakuKokuhoSeikyuContent />}

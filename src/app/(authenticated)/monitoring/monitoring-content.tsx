@@ -198,7 +198,8 @@ function CheckboxPair({
 }) {
   return (
     <div className="flex items-center gap-2 text-xs whitespace-nowrap mb-0.5">
-      <span className="shrink-0 text-gray-500">{label}：</span>
+      {/* ラベルを固定幅にしてチェックボックス列を全行で縦に揃える */}
+      <span className="w-12 shrink-0 text-gray-500">{label}：</span>
       <label className="inline-flex items-center gap-0.5 cursor-pointer">
         <input type="checkbox" checked={value === "満足"} onChange={() => onChange(value === "満足" ? "" : "満足")} className="accent-blue-600 h-3 w-3" />
         <span>満足</span>
@@ -1655,7 +1656,7 @@ export function MonitoringContent({
                       }}
                     >
                       <div style={{ marginBottom: "0.8mm" }}>
-                        <span style={{ fontSize: "5pt" }}>利用者：</span>
+                        <span style={{ fontSize: "5pt", display: "inline-block", width: "9mm" }}>利用者：</span>
                         <PrintCheck
                           checked={item.user_satisfaction === "満足"}
                         />
@@ -1666,7 +1667,7 @@ export function MonitoringContent({
                         不満
                       </div>
                       <div style={{ marginBottom: "1mm" }}>
-                        <span style={{ fontSize: "5pt" }}>家族：</span>
+                        <span style={{ fontSize: "5pt", display: "inline-block", width: "9mm" }}>家族：</span>
                         <PrintCheck
                           checked={item.family_satisfaction === "満足"}
                         />

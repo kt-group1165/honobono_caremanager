@@ -56,6 +56,23 @@ function parseDate(v: string | undefined): Date {
   return new Date();
 }
 
+// PostgREST default 1000 行制限対策の page-loop。error は throw して
+// 呼出側 try-catch (= initial null → client SWR 再フェッチ) に委ねる。
+async function fetchAllRows<T>(
+  build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<T[]> {
+  const PAGE = 1000;
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    const rows = data ?? [];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
 export default async function ShiftManagementPage({
   searchParams,
 }: {
@@ -91,12 +108,18 @@ export default async function ShiftManagementPage({
     const clientIdsAll: string[] = [];
     let fromA = 0;
     while (true) {
-      const { data: assigns } = await supabase
+      const { data: assigns, error: assignsErr } = await supabase
         .from("client_office_assignments")
         .select("client_id")
         .eq("office_id", officeId)
         .is("end_date", null)
         .range(fromA, fromA + PAGE - 1);
+      // SSR 失敗は client 側 SWR (useKaigoOfficeUsers) が自力再フェッチする。
+      // silent にはしない (= log は残す)。
+      if (assignsErr) {
+        console.error("[shift-management] client_office_assignments fetch failed:", assignsErr.message);
+        break;
+      }
       if (!assigns || assigns.length === 0) break;
       clientIdsAll.push(
         ...(assigns as { client_id: string }[]).map((a) => a.client_id),
@@ -112,13 +135,17 @@ export default async function ShiftManagementPage({
         // .in() は内部 URL length 制限があるため、安全側で 500 件ずつ chunk
         const chunk = uniqueClientIds.slice(fromU, fromU + 500);
         if (chunk.length === 0) break;
-        const { data } = await supabase
+        const { data, error: clientsErr } = await supabase
           .from("clients")
           .select("id, name, name_kana:furigana, status")
           .in("id", chunk)
           .eq("status", "active")
           .eq("is_facility", false)
           .order("furigana", { nullsFirst: false });
+        if (clientsErr) {
+          console.error("[shift-management] clients fetch failed:", clientsErr.message);
+          break;
+        }
         if (data && data.length > 0) {
           users.push(...(data as KaigoUser[]));
         }
@@ -129,13 +156,17 @@ export default async function ShiftManagementPage({
     // officeId 未指定 (= context 初期化中): 全件 fallback (= 旧挙動)
     let from = 0;
     while (true) {
-      const { data } = await supabase
+      const { data, error: clientsErr } = await supabase
         .from("clients")
         .select("id, name, name_kana:furigana, status")
         .eq("status", "active")
         .eq("is_facility", false)
         .order("furigana", { nullsFirst: false })
         .range(from, from + PAGE - 1);
+      if (clientsErr) {
+        console.error("[shift-management] clients fetch failed:", clientsErr.message);
+        break;
+      }
       if (!data || data.length === 0) break;
       users.push(...(data as KaigoUser[]));
       if (data.length < PAGE) break;
@@ -144,6 +175,10 @@ export default async function ShiftManagementPage({
   }
 
   const staffRes = await staffQuery;
+  if (staffRes.error) {
+    // client 側 SWR (useKaigoOfficeStaff) が自力再フェッチするため空で継続 (log は残す)
+    console.error("[shift-management] members fetch failed:", staffRes.error.message);
+  }
   const staff: KaigoStaff[] = (officeId ? (staffRes.data ?? []) : []) as KaigoStaff[];
 
   const selectedUserId =
@@ -165,7 +200,9 @@ export default async function ShiftManagementPage({
   // client 側で再フェッチさせる (initial* は null のまま = client は SWR で自力取得)
   try {
   if (view === "calendar" && tab === "user" && selectedUserId) {
-    const [schedRes, availRes, allStaffRes, allSchedRes, provRes] = await Promise.all([
+    // availability / allSchedules (全利用者×月内) は 1000 行を超えうるため page-loop。
+    // error は fetchAllRows / 個別チェックで throw → catch で initial null → client 再フェッチ。
+    const [schedRes, availRows, allStaffRes, allSchedRows, provRes] = await Promise.all([
       supabase
         .from("kaigo_visit_schedule")
         .select("id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, status, members!kaigo_visit_schedule_staff_id_fkey(name)")
@@ -173,11 +210,17 @@ export default async function ShiftManagementPage({
         .gte("visit_date", monthFrom)
         .lte("visit_date", monthTo)
         .order("start_time"),
-      supabase
-        .from("kaigo_staff_availability_monthly")
-        .select("staff_id, available_date, start_time, end_time, is_available")
-        .gte("available_date", monthFrom)
-        .lte("available_date", monthTo),
+      fetchAllRows<StaffAvailabilitySlot>((from, to) =>
+        supabase
+          .from("kaigo_staff_availability_monthly")
+          .select("staff_id, available_date, start_time, end_time, is_available")
+          .gte("available_date", monthFrom)
+          .lte("available_date", monthTo)
+          .order("staff_id", { ascending: true })
+          .order("available_date", { ascending: true })
+          .order("start_time", { ascending: true })
+          .range(from, to),
+      ),
       // 自事業所 (URL ?office=) のスタッフのみ。未指定時は空 → Client 側で再フェッチ。
       officeId
         ? supabase
@@ -185,14 +228,21 @@ export default async function ShiftManagementPage({
             .select("id, name, name_kana:furigana, status, member_offices!inner(office_id)")
             .eq("status", "active")
             .eq("member_offices.office_id", officeId)
-        : Promise.resolve({ data: [] as KaigoStaff[] }),
-      supabase
-        .from("kaigo_visit_schedule")
-        .select("id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type")
-        .gte("visit_date", monthFrom)
-        .lte("visit_date", monthTo),
+        : Promise.resolve({ data: [] as KaigoStaff[], error: null }),
+      fetchAllRows<VisitSchedule>((from, to) =>
+        supabase
+          .from("kaigo_visit_schedule")
+          .select("id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type")
+          .gte("visit_date", monthFrom)
+          .lte("visit_date", monthTo)
+          .order("id", { ascending: true })
+          .range(from, to),
+      ),
       supabase.from("kaigo_service_providers").select("id, provider_name").eq("status", "active").order("provider_name"),
     ]);
+    if (schedRes.error) throw new Error(schedRes.error.message);
+    if (allStaffRes.error) throw new Error(allStaffRes.error.message);
+    if (provRes.error) throw new Error(provRes.error.message);
     type SchedRow = {
       id: string;
       user_id: string;
@@ -217,10 +267,10 @@ export default async function ShiftManagementPage({
     }));
     initialUserCalendarData = {
       schedules: mapped,
-      availability: ((availRes.data ?? []) as StaffAvailabilitySlot[]),
+      availability: availRows,
       allStaff: ((allStaffRes.data ?? []) as KaigoStaff[]),
       allProviders: (provRes.data ?? []) as { id: string; provider_name: string }[],
-      allSchedules: ((allSchedRes.data ?? []) as VisitSchedule[]),
+      allSchedules: allSchedRows,
     };
   } else if (view === "calendar" && tab === "staff" && selectedStaffId) {
     const [schedRes, availRes] = await Promise.all([
@@ -238,6 +288,8 @@ export default async function ShiftManagementPage({
         .gte("available_date", monthFrom)
         .lte("available_date", monthTo),
     ]);
+    if (schedRes.error) throw new Error(schedRes.error.message);
+    if (availRes.error) throw new Error(availRes.error.message);
     type SchedRow = {
       id: string;
       user_id: string;
@@ -265,7 +317,7 @@ export default async function ShiftManagementPage({
       availability: ((availRes.data ?? []) as StaffAvailabilitySlot[]),
     };
   } else if (view === "timeline") {
-    const [schedRes, availRes] = await Promise.all([
+    const [schedRes, availRows] = await Promise.all([
       supabase
         .from("kaigo_visit_schedule")
         .select(
@@ -273,12 +325,19 @@ export default async function ShiftManagementPage({
         )
         .eq("visit_date", dateStr)
         .order("start_time"),
-      supabase
-        .from("kaigo_staff_availability_monthly")
-        .select("staff_id, available_date, start_time, end_time, is_available")
-        .gte("available_date", format(startOfMonth(date), "yyyy-MM-dd"))
-        .lte("available_date", format(endOfMonth(date), "yyyy-MM-dd")),
+      fetchAllRows<StaffAvailabilitySlot>((from, to) =>
+        supabase
+          .from("kaigo_staff_availability_monthly")
+          .select("staff_id, available_date, start_time, end_time, is_available")
+          .gte("available_date", format(startOfMonth(date), "yyyy-MM-dd"))
+          .lte("available_date", format(endOfMonth(date), "yyyy-MM-dd"))
+          .order("staff_id", { ascending: true })
+          .order("available_date", { ascending: true })
+          .order("start_time", { ascending: true })
+          .range(from, to),
+      ),
     ]);
+    if (schedRes.error) throw new Error(schedRes.error.message);
     type SchedRow = {
       id: string;
       user_id: string;
@@ -303,13 +362,13 @@ export default async function ShiftManagementPage({
     }));
     initialTimelineData = {
       schedules: mapped,
-      availability: ((availRes.data ?? []) as StaffAvailabilitySlot[]),
+      availability: availRows,
     };
   } else if (view === "monthly-individual") {
     const entityId = tab === "user" ? selectedUserId : selectedStaffId;
     if (entityId) {
       const col = tab === "user" ? "user_id" : "staff_id";
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("kaigo_visit_schedule")
         .select("id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, status, clients(name), members!kaigo_visit_schedule_staff_id_fkey(name)")
         .eq(col, entityId)
@@ -317,6 +376,7 @@ export default async function ShiftManagementPage({
         .lte("visit_date", monthTo)
         .order("visit_date")
         .order("start_time");
+      if (error) throw new Error(error.message);
       type SchedRow = {
         id: string;
         user_id: string;

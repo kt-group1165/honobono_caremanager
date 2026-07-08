@@ -1,15 +1,18 @@
 import Link from "next/link";
-import { Plus, CheckCircle2, XCircle, FileEdit } from "lucide-react";
+import { Plus, CheckCircle2, XCircle, FileEdit, AlertCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { ShogaiOfficeGuard } from "../_office-guard";
 
 const YM_RE = /^(\d{4})-(\d{2})$/;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function ShogaiRecordsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; office?: string }>;
 }) {
-  const { month: monthParam } = await searchParams;
+  const { month: monthParam, office: officeParam } = await searchParams;
   const supabase = await createClient();
 
   // 対象月 (未指定なら 今月)
@@ -20,22 +23,28 @@ export default async function ShogaiRecordsPage({
   const first = `${month}-01`;
   const lastDay = new Date(year, mo, 0).getDate();
   const last = `${month}-${String(lastDay).padStart(2, "0")}`;
+  // 自事業所スコープ (?office= は BusinessTypeProvider が常に URL に付与する)
+  const officeId = officeParam && UUID_RE.test(officeParam) ? officeParam : null;
 
-  const { data: records } = await supabase
+  let q = supabase
     .from("shogai_service_records")
     .select(
       "id, service_date, start_time, end_time, duration_minutes, service_type, service_category, unit_count, staff_name_cached, status, client_id",
     )
     .gte("service_date", first)
-    .lte("service_date", last)
+    .lte("service_date", last);
+  // office_id 未設定の旧データは含める
+  if (officeId) q = q.or(`office_id.eq.${officeId},office_id.is.null`);
+  const { data: records, error: recError } = await q
     .order("service_date", { ascending: false })
     .order("start_time", { ascending: false });
 
   const clientIds = Array.from(new Set((records ?? []).map((r) => r.client_id)));
-  const { data: clientRows } =
+  const { data: clientRows, error: clientError } =
     clientIds.length > 0
       ? await supabase.from("clients").select("id, name").in("id", clientIds)
-      : { data: [] as { id: string; name: string }[] };
+      : { data: [] as { id: string; name: string }[], error: null };
+  const loadError = recError?.message ?? clientError?.message ?? null;
   const clientById = new Map(
     (clientRows ?? []).map((c) => [c.id, c.name] as const),
   );
@@ -48,7 +57,14 @@ export default async function ShogaiRecordsPage({
     .reduce((s, r) => s + (r.unit_count ?? 0), 0);
 
   return (
+    <ShogaiOfficeGuard>
     <div className="space-y-4 p-4">
+      {loadError && (
+        <div className="flex items-start gap-2 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          実績の読み込みに失敗しました: {loadError}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
@@ -62,6 +78,8 @@ export default async function ShogaiRecordsPage({
         </div>
         <div className="flex items-center gap-2">
           <form>
+            {/* 月切替で ?office= を落とさない (自事業所スコープ維持) */}
+            {officeId && <input type="hidden" name="office" value={officeId} />}
             <input
               type="month"
               name="month"
@@ -164,5 +182,6 @@ export default async function ShogaiRecordsPage({
         </table>
       </div>
     </div>
+    </ShogaiOfficeGuard>
   );
 }

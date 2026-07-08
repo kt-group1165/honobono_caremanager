@@ -28,6 +28,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, AlertCircle, FileDown, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { monthRange } from "@/lib/cert-for-month";
 import {
   useSeikyuContext,
   SeikyuKanaSidebar,
@@ -36,14 +37,15 @@ import {
 
 // 認定有効期間 (certStart〜certEnd) が対象月 (year/month) に掛かるか判定する。
 // 開始が月末より後、または 終了が月初より前なら「掛からない」= 認定切れ扱い。
+// 月初・月末は monthRange (文字列演算・TZ 安全)。toISOString は UTC 変換で
+// 月末が 1 日ずれる (JST 深夜に前日扱い) ため使わない。
 function certCoversMonth(
   certStart: string | null,
   certEnd: string | null,
   year: number,
   month: number,
 ): boolean {
-  const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
-  const monthEnd = new Date(year, month, 0).toISOString().split("T")[0];
+  const { from: monthStart, to: monthEnd } = monthRange(year, month);
   if (certStart && certStart > monthEnd) return false;
   if (certEnd && certEnd < monthStart) return false;
   return true;

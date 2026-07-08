@@ -164,6 +164,10 @@ export function HospitalizationsContent({
       toast.error("入院日は必須です");
       return;
     }
+    if (form.discharge_date && form.discharge_date < form.admission_date) {
+      toast.error("退院日は入院日以降の日付を入力してください");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -259,6 +263,14 @@ export function HospitalizationsContent({
       format(new Date(), "yyyy-MM-dd")
     );
     if (!dischargeDate) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dischargeDate)) {
+      toast.error("退院日は YYYY-MM-DD 形式で入力してください");
+      return;
+    }
+    if (dischargeDate < rec.admission_date) {
+      toast.error(`退院日は入院日 (${rec.admission_date}) 以降の日付を入力してください`);
+      return;
+    }
 
     const dest = prompt("退院先を入力してください（自宅/施設/転院 等）", "自宅");
 
@@ -404,6 +416,11 @@ export function HospitalizationsContent({
             <h1 className="text-xl font-bold text-gray-900">入退院管理</h1>
             {selectedUser && (
               <span className="text-gray-500 text-sm">— {selectedUser.name} 様</span>
+            )}
+            {currentlyAdmitted.length > 0 && (
+              <span className="rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-700">
+                現在入院中
+              </span>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -650,6 +667,7 @@ export function HospitalizationsContent({
                     <input
                       type="date"
                       value={form.discharge_date}
+                      min={form.admission_date || undefined}
                       onChange={(e) => setForm({ ...form, discharge_date: e.target.value })}
                       className={inp}
                     />

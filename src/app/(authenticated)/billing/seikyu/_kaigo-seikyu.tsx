@@ -20,6 +20,9 @@ import Link from "next/link";
 import {
   Loader2,
   AlertCircle,
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight as ChevronRightIcon,
   FileText,
   Printer,
   Landmark,
@@ -33,6 +36,10 @@ import {
   SeikyuKanaSidebar,
   SeikyuMonthNav,
   loadKyotakuReSeikyuRows,
+  parseKyufuKanriKubun,
+  setKyufuKanriKubunMarker,
+  KYUFU_KANRI_KUBUN_LABELS,
+  type KyufuKanriKubun,
   type KyotakuSeikyuRow,
   type KyotakuReSeikyuRow,
 } from "./_seikyu-context";
@@ -43,6 +50,12 @@ import {
   type SeikyuKohiTandoku,
 } from "../forms/_seikyu";
 import type { ClaimStatus } from "../claims/claims-shared";
+import { monthRange } from "@/lib/cert-for-month";
+import {
+  getHospitalizationMap,
+  hospitalizationsInRange,
+  type HospitalizationPeriod,
+} from "@/lib/hospitalization";
 
 // ほのぼの実画面の列順 (居宅版):
 // 対象 / 状態 / 提供月 / 請求月 / サービス事業所 / 被保険者番号 / 利用者名 /
@@ -68,6 +81,15 @@ interface BillingStatusRow {
   tsukiokure: boolean;
   henrei: boolean;
   kago: boolean;
+  notes: string | null;
+}
+
+// kaigo_benefit_management の 1 行 (下段: 給付管理票一覧用)
+interface BenefitDbRow {
+  user_id: string;
+  service_type: string;
+  provider_name: string | null;
+  planned_units: number | null;
 }
 
 // 一覧の 1 行 (当月通常行 or 過去月の再請求行)
@@ -80,11 +102,13 @@ interface DisplayRow {
   isReSeikyu: boolean;
   /** 再請求理由 (月遅れ/返戻)。当月通常行は null */
   reasons: { tsukiokure: boolean; henrei: boolean } | null;
+  /** 再請求行の元提供月 kaigo_billing_status.notes (当月行は statusByClient から読む) */
+  statusNotes: string | null;
 }
 
 export function KyotakuKaigoSeikyuContent() {
   const {
-    year, month, monthKey, filteredRows, kanaMatches, loading, error,
+    year, month, monthKey, rows, filteredRows, kanaMatches, loading, error,
     officeName, officeNumber, officeAddress, officePhone, officePostal,
     officeId, tenantId,
   } = useKyotakuSeikyuContext();
@@ -108,6 +132,7 @@ export function KyotakuKaigoSeikyuContent() {
       origMonthKey: monthKey,
       isReSeikyu: false,
       reasons: null,
+      statusNotes: null,
     }));
     const re: DisplayRow[] = reRows.filter(kanaMatches).map((r) => ({
       key: `re:${r.user_id}:${r.__origMonthKey}`,
@@ -115,6 +140,7 @@ export function KyotakuKaigoSeikyuContent() {
       origMonthKey: r.__origMonthKey,
       isReSeikyu: true,
       reasons: r.__reasons,
+      statusNotes: r.__statusNotes,
     }));
     // 再請求 (過去分) を上、当月を下に並べる
     return [...re, ...cur];
@@ -163,12 +189,14 @@ export function KyotakuKaigoSeikyuContent() {
     }
     const { data, error: e } = await supabase
       .from("kaigo_billing_status")
-      .select("client_id, issued_at, kokuho_target, tsukiokure, henrei, kago")
+      .select("client_id, issued_at, kokuho_target, tsukiokure, henrei, kago, notes")
       .eq("office_id", officeId)
       .eq("target_month", monthKey);
     if (e) {
-      // table 未作成 (migration 未適用) 時は状態なしとして続行
-      if (e.code !== "42P01") toast.error("請求状態の取得に失敗: " + e.message);
+      // table 未作成 (42P01) / PostgREST schema cache 未反映 (PGRST205) 時は状態なしとして続行
+      if (e.code !== "42P01" && e.code !== "PGRST205") {
+        toast.error("請求状態の取得に失敗: " + e.message);
+      }
       setStatusByClient(new Map());
       return;
     }
@@ -182,12 +210,221 @@ export function KyotakuKaigoSeikyuContent() {
     loadStatus();
   }, [loadStatus]);
 
+  // ── 下段: 給付管理票 (kaigo_benefit_management) ──────────────────────────
+  const [benefitRows, setBenefitRows] = useState<BenefitDbRow[]>([]);
+  const [benefitChecked, setBenefitChecked] = useState<Set<string>>(new Set());
+  const loadBenefits = useCallback(async () => {
+    const PAGE = 1000;
+    const acc: BenefitDbRow[] = [];
+    let from = 0;
+    while (true) {
+      const { data, error: e } = await supabase
+        .from("kaigo_benefit_management")
+        .select("user_id, service_type, provider_name, planned_units")
+        .eq("billing_month", monthKey)
+        .order("user_id", { ascending: true })
+        .order("service_type", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (e) {
+        toast.error("給付管理データの取得に失敗: " + e.message);
+        setBenefitRows([]);
+        return;
+      }
+      if (!data || data.length === 0) break;
+      acc.push(...(data as BenefitDbRow[]));
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    setBenefitRows(acc);
+    setBenefitChecked(new Set());
+  }, [supabase, monthKey]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更時の fetch
+    loadBenefits();
+  }, [loadBenefits]);
+
+  // 給付管理票を利用者単位に集約 (レセプト行と突合して氏名等を補完)
+  const benefitGroups = useMemo(() => {
+    const rowByUser = new Map(filteredRows.map((r) => [r.user_id, r]));
+    const byUser = new Map<string, BenefitDbRow[]>();
+    for (const b of benefitRows) {
+      if (!byUser.has(b.user_id)) byUser.set(b.user_id, []);
+      byUser.get(b.user_id)!.push(b);
+    }
+    return Array.from(byUser.entries())
+      .map(([userId, list]) => {
+        const seikyuRow = rowByUser.get(userId) ?? null;
+        return {
+          userId,
+          seikyuRow,
+          providers: [...new Set(list.map((b) => b.provider_name).filter(Boolean))] as string[],
+          totalPlanned: list.reduce((s, b) => s + (b.planned_units ?? 0), 0),
+          lineCount: list.length,
+        };
+      })
+      // カナフィルタはレセプト行が突合できた利用者にのみ適用
+      .filter((g) => !g.seikyuRow || kanaMatches(g.seikyuRow))
+      .sort((a, b) =>
+        (a.seikyuRow?.user_name_kana ?? a.seikyuRow?.user_name ?? a.userId).localeCompare(
+          b.seikyuRow?.user_name_kana ?? b.seikyuRow?.user_name ?? b.userId,
+          "ja",
+        ),
+      );
+  }, [benefitRows, filteredRows, kanaMatches]);
+  const benefitKokuhoCount = benefitGroups.filter(
+    (g) => statusByClient.get(g.userId)?.kokuho_target,
+  ).length;
+
+  // ── 給付管理票 作成区分 (8221 項5: 新規/修正/取消) — notes マーカーで永続化 ──
+  const setKyufuKubun = async (clientId: string, kubun: KyufuKanriKubun) => {
+    if (!officeId) {
+      toast.error("自事業所が未確定のため作成区分を保存できません");
+      return;
+    }
+    const cur = statusByClient.get(clientId);
+    const { error: e } = await supabase
+      .from("kaigo_billing_status")
+      .upsert(
+        {
+          client_id: clientId,
+          target_month: monthKey,
+          tenant_id: tenantId ?? "kt-group",
+          office_id: officeId,
+          tsukiokure: cur?.tsukiokure ?? false,
+          henrei: cur?.henrei ?? false,
+          kago: cur?.kago ?? false,
+          notes: setKyufuKanriKubunMarker(cur?.notes, kubun),
+        },
+        { onConflict: "client_id,target_month,office_id" },
+      );
+    if (e) {
+      toast.error("作成区分の保存に失敗: " + e.message);
+      return;
+    }
+    loadStatus();
+  };
+
+  // 給付管理票側のチェック → 国保対象化 (4b の作成区分と連動して 8221 に反映)
+  const markBenefitKokuho = async () => {
+    if (!officeId) {
+      toast.error("自事業所が未確定のため国保対象化できません");
+      return;
+    }
+    const targets = benefitGroups.filter(
+      (g) => benefitChecked.size === 0 || benefitChecked.has(g.userId),
+    );
+    if (targets.length === 0) return;
+    const now = new Date().toISOString();
+    const payload = targets.map((g) => {
+      const cur = statusByClient.get(g.userId);
+      return {
+        client_id: g.userId,
+        target_month: monthKey,
+        tenant_id: tenantId ?? "kt-group",
+        office_id: officeId,
+        issued_at: cur?.issued_at ?? now,
+        kokuho_target: true,
+        tsukiokure: cur?.tsukiokure ?? false,
+        henrei: cur?.henrei ?? false,
+        kago: cur?.kago ?? false,
+        notes: cur?.notes ?? null,
+      };
+    });
+    const { error: e } = await supabase
+      .from("kaigo_billing_status")
+      .upsert(payload, { onConflict: "client_id,target_month,office_id" });
+    if (e) {
+      toast.error("国保対象の保存に失敗: " + e.message);
+      return;
+    }
+    toast.success(`給付管理票 ${payload.length} 件を国保対象にしました`);
+    setBenefitChecked(new Set());
+    loadStatus();
+  };
+
+  // ── 集計エラーバナー (認定切れ/認定なし/単位0/加算矛盾) ──────────────────
+  const [hospMap, setHospMap] = useState<Map<string, HospitalizationPeriod[]>>(new Map());
+  useEffect(() => {
+    if (loading || rows.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更時の初期化
+      setHospMap(new Map());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const map = await getHospitalizationMap(
+          supabase,
+          rows.map((r) => r.user_id),
+        );
+        if (!cancelled) setHospMap(map);
+      } catch (e) {
+        console.error("入退院情報の取得に失敗:", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, rows, loading]);
+
+  const [checkOpen, setCheckOpen] = useState(false);
+  const checkIssues = useMemo(() => {
+    const issues: { user: string; kind: string; detail: string }[] = [];
+    const { from: mFrom, to: mTo } = monthRange(year, month);
+    for (const r of rows) {
+      if (r.yoboShienKubun === "itaku") continue;
+      // 認定なし
+      if (!r.care_level || !r.insured_number) {
+        issues.push({
+          user: r.user_name,
+          kind: "認定なし",
+          detail: !r.care_level ? "要介護度が未登録です" : "被保険者番号が未登録です",
+        });
+      } else {
+        // 認定切れ (認定有効期間が対象月に掛からない)
+        const certOk =
+          (!r.certStart || r.certStart <= mTo) && (!r.certEnd || r.certEnd >= mFrom);
+        if (!certOk) {
+          issues.push({
+            user: r.user_name,
+            kind: "認定切れ",
+            detail: `認定有効期間 ${r.certStart ?? "?"}〜${r.certEnd ?? "?"} が対象月外です`,
+          });
+        }
+      }
+      // 単位0
+      if (r.totalUnits <= 0) {
+        issues.push({ user: r.user_name, kind: "単位0", detail: "総単位数が 0 以下です" });
+      }
+      // 加算矛盾 (退院退所/入院時情報連携があるが対象月に入院記録なし)
+      const hasHospAddon = r.lines.some(
+        (l) => l.name.includes("退院・退所") || l.name.includes("入院時情報連携"),
+      );
+      if (hasHospAddon) {
+        const overlaps = hospitalizationsInRange(hospMap.get(r.user_id), mFrom, mTo);
+        if (overlaps.length === 0) {
+          issues.push({
+            user: r.user_name,
+            kind: "加算矛盾",
+            detail: "退院退所/入院時情報連携加算がありますが対象月に入院記録がありません",
+          });
+        }
+      }
+    }
+    return issues;
+  }, [rows, hospMap, year, month]);
+
   // ── フラグ (月遅れ/返戻/過誤) の upsert ──
   const setFlag = async (
     clientId: string,
     field: "tsukiokure" | "henrei" | "kago",
     value: boolean,
   ) => {
+    if (!officeId) {
+      toast.error("自事業所が未確定のためフラグを保存できません");
+      return;
+    }
     const cur = statusByClient.get(clientId);
     const payload: Record<string, unknown> = {
       client_id: clientId,
@@ -296,7 +533,13 @@ export function KyotakuKaigoSeikyuContent() {
   //    再請求行は元提供月 (origMonthKey) に対して upsert する。
   const printMeisaiFor = async (rowsToPrint: DisplayRow[]) => {
     if (rowsToPrint.length === 0) return;
+    if (!officeId) {
+      toast.error("自事業所が未確定のため発行状態を保存できません");
+      return;
+    }
     const now = new Date().toISOString();
+    // ⚠ 一括 upsert は全 payload のキー集合が揃っていないと PGRST102 になるため
+    //   notes まで含めて常に同じキー構成にする
     const payload = rowsToPrint.map((d) => {
       // 当月行のみ既存フラグを引き継ぐ (再請求行は過去月の別レコード)
       const cur = d.isReSeikyu ? undefined : statusByClient.get(d.row.user_id);
@@ -311,6 +554,7 @@ export function KyotakuKaigoSeikyuContent() {
         tsukiokure: d.reasons?.tsukiokure ?? cur?.tsukiokure ?? false,
         henrei: d.reasons?.henrei ?? cur?.henrei ?? false,
         kago: cur?.kago ?? false,
+        notes: d.isReSeikyu ? d.statusNotes ?? null : cur?.notes ?? null,
       };
     });
     const { error: e } = await supabase
@@ -347,12 +591,23 @@ export function KyotakuKaigoSeikyuContent() {
   //    当月行は「発行済」のみ (未発行はスキップ)。
   //    再請求行 (月遅れ/返戻) は元提供月に対し kokuho_target=true + notes='再請求' で立てる。
   const markKokuhoTarget = async () => {
+    if (!officeId) {
+      toast.error("自事業所が未確定のため国保対象化できません");
+      return;
+    }
     const now = new Date().toISOString();
+    // ⚠ PostgREST の一括 upsert は全行のキー集合が一致しないと PGRST102
+    //   ("All object keys must match") になるため、notes キーを常に含める
+    //   (当月行は既存 notes / kago を読み保持)
     const payload: Record<string, unknown>[] = [];
     let skipped = 0;
 
     for (const d of targetDisplayRows) {
       if (d.isReSeikyu) {
+        const mergedNotes = (() => {
+          const base = d.statusNotes ?? "";
+          return base.includes("再請求") ? base : base ? `${base}\n再請求` : "再請求";
+        })();
         payload.push({
           client_id: d.row.user_id,
           target_month: d.origMonthKey,
@@ -363,7 +618,7 @@ export function KyotakuKaigoSeikyuContent() {
           tsukiokure: d.reasons?.tsukiokure ?? false,
           henrei: d.reasons?.henrei ?? false,
           kago: false,
-          notes: "再請求",
+          notes: mergedNotes,
         });
       } else {
         const cur = statusByClient.get(d.row.user_id);
@@ -381,6 +636,7 @@ export function KyotakuKaigoSeikyuContent() {
           tsukiokure: cur.tsukiokure,
           henrei: cur.henrei,
           kago: cur.kago,
+          notes: cur.notes ?? null,
         });
       }
     }
@@ -535,6 +791,42 @@ export function KyotakuKaigoSeikyuContent() {
                 過去月の月遅れ・返戻 {reRows.length} 件を当月請求に合流しています
                 (元提供月で明細書・伝送に反映)。国保対象化すると一覧から外れます。
               </span>
+            </div>
+          )}
+
+          {/* ── 集計エラー (内容確認) バナー — ほのぼの集計処理の確認内容の代替 ── */}
+          {!loading && checkIssues.length > 0 && (
+            <div className="border-b border-amber-300 bg-amber-50 shrink-0 text-xs text-amber-900">
+              <button
+                type="button"
+                onClick={() => setCheckOpen((v) => !v)}
+                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-amber-100 transition-colors"
+              >
+                <AlertTriangle size={14} className="shrink-0 text-amber-600" />
+                <span className="font-semibold">内容確認 {checkIssues.length} 件</span>
+                <span className="text-amber-700">
+                  (認定切れ {checkIssues.filter((i) => i.kind === "認定切れ").length} /
+                  認定なし {checkIssues.filter((i) => i.kind === "認定なし").length} /
+                  単位0 {checkIssues.filter((i) => i.kind === "単位0").length} /
+                  加算矛盾 {checkIssues.filter((i) => i.kind === "加算矛盾").length})
+                </span>
+                <span className="ml-auto">
+                  {checkOpen ? <ChevronDown size={14} /> : <ChevronRightIcon size={14} />}
+                </span>
+              </button>
+              {checkOpen && (
+                <ul className="max-h-36 overflow-y-auto border-t border-amber-200 px-3 py-1.5 space-y-0.5">
+                  {checkIssues.map((i, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="shrink-0 rounded bg-amber-200 px-1 py-0 text-[10px] font-bold text-amber-900">
+                        {i.kind}
+                      </span>
+                      <span className="font-medium">{i.user}</span>
+                      <span className="text-amber-700">{i.detail}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
@@ -711,6 +1003,143 @@ export function KyotakuKaigoSeikyuContent() {
                     </div>
                   );
                 })}
+              </div>
+
+              {/* ── 下段: 給付管理票 (kaigo_benefit_management ベース) ── */}
+              <div className="border-t-2 border-gray-400 shrink-0 flex flex-col max-h-[38%] min-h-0">
+                <div className="bg-gradient-to-b from-emerald-50 to-emerald-100 border-b border-gray-300 px-3 py-1 flex items-center gap-2 text-[11px]">
+                  <span className="font-bold text-emerald-900">給付管理票</span>
+                  <span className="text-gray-500">{benefitGroups.length} 件</span>
+                  <button
+                    type="button"
+                    onClick={markBenefitKokuho}
+                    disabled={benefitGroups.length === 0}
+                    title="給付管理票を国保連請求 (8211/8221) の対象にする。作成区分 (新規/修正/取消) は行の選択が伝送に反映されます"
+                    className="ml-2 border border-blue-500 rounded bg-blue-100 px-2 py-0.5 text-blue-800 font-semibold hover:bg-blue-200 disabled:opacity-50"
+                  >
+                    国保対象 ({benefitChecked.size > 0 ? `チェック ${benefitChecked.size} 件` : "全件"})
+                  </button>
+                  <span className="ml-auto text-gray-400">
+                    給付管理データの編集は 請求管理 → 給付管理 (/billing/benefits) から
+                  </span>
+                </div>
+                {/* ヘッダー */}
+                <div className="grid grid-cols-[26px_60px_54px_54px_minmax(120px,1fr)_84px_minmax(120px,1fr)_72px_44px_44px_44px_84px] border-b border-gray-300 bg-gradient-to-b from-sky-100 to-sky-200 text-[11px] leading-4 font-medium text-gray-700 text-center">
+                  <div className="px-1 py-0.5" />
+                  <div className="px-1 py-0.5 border-l border-sky-300">状態</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">提供月</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">請求月</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">サービス事業所</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">被保険者番号</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">利用者名</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">単位数合計</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">月遅</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">返戻</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">過誤</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">再請求区分</div>
+                </div>
+                <div className="flex-1 overflow-y-auto min-h-0">
+                  {benefitGroups.length === 0 ? (
+                    <p className="text-gray-400 text-center py-4 text-[11px]">
+                      対象月の給付管理データがありません (給付管理画面で一括生成できます)
+                    </p>
+                  ) : benefitGroups.map((g) => {
+                    const st = statusByClient.get(g.userId);
+                    const isChecked = benefitChecked.has(g.userId);
+                    const kubun: KyufuKanriKubun =
+                      parseKyufuKanriKubun(st?.notes) ??
+                      (st?.tsukiokure || st?.henrei ? "2" : "1");
+                    return (
+                      <div
+                        key={g.userId}
+                        className={`grid grid-cols-[26px_60px_54px_54px_minmax(120px,1fr)_84px_minmax(120px,1fr)_72px_44px_44px_44px_84px] border-b border-gray-200 text-[11px] leading-4 ${isChecked ? "bg-indigo-50" : "bg-white hover:bg-sky-50"}`}
+                      >
+                        <div className="px-1 py-0.5 flex items-center justify-center">
+                          <button
+                            onClick={() =>
+                              setBenefitChecked((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(g.userId)) next.delete(g.userId);
+                                else next.add(g.userId);
+                                return next;
+                              })
+                            }
+                            className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center transition-all ${isChecked ? "border-indigo-500 bg-indigo-500" : "border-gray-400 bg-white"}`}
+                          >
+                            {isChecked && <span className="text-white text-[8px] font-bold leading-none">✓</span>}
+                          </button>
+                        </div>
+                        <div className="px-1 py-0.5 border-l border-gray-200">
+                          {st?.kokuho_target ? (
+                            <span className="text-red-600">国保対象</span>
+                          ) : st?.issued_at ? (
+                            <span className="text-emerald-700">発行済</span>
+                          ) : (
+                            <span className="text-gray-600">未発行</span>
+                          )}
+                        </div>
+                        <div className="px-1 py-0.5 border-l border-gray-200 font-mono whitespace-pre text-gray-700">
+                          {reiwaMonth(year, month)}
+                        </div>
+                        <div className="px-1 py-0.5 border-l border-gray-200 font-mono whitespace-pre text-gray-700">
+                          {reiwaMonth(year, month)}
+                        </div>
+                        <div
+                          className="px-1 py-0.5 border-l border-gray-200 text-gray-700 truncate"
+                          title={g.providers.join("、")}
+                        >
+                          {g.providers.join("、") || "—"}
+                          {g.lineCount > 1 && (
+                            <span className="text-gray-400"> ({g.lineCount}行)</span>
+                          )}
+                        </div>
+                        <div className="px-1 py-0.5 border-l border-gray-200 font-mono text-gray-700">
+                          {g.seikyuRow?.insured_number ?? "—"}
+                        </div>
+                        <div className="px-1 py-0.5 border-l border-gray-200 text-gray-800 truncate">
+                          {g.seikyuRow?.user_name ?? "(レセプト未生成)"}
+                        </div>
+                        <div className="px-1 py-0.5 border-l border-gray-200 text-right font-mono text-gray-700">
+                          {g.totalPlanned.toLocaleString()}
+                        </div>
+                        <div className="px-1 py-0.5 border-l border-gray-200 text-center">
+                          {st?.tsukiokure && <span className="text-red-600">月遅</span>}
+                        </div>
+                        <div className="px-1 py-0.5 border-l border-gray-200 text-center">
+                          {st?.henrei && <span className="text-red-600">返戻</span>}
+                        </div>
+                        <div className="px-1 py-0.5 border-l border-gray-200 text-center">
+                          {st?.kago && <span className="text-red-600">過誤</span>}
+                        </div>
+                        <div className="px-0.5 py-0.5 border-l border-gray-200 text-center">
+                          <select
+                            value={kubun}
+                            onChange={(e) => setKyufuKubun(g.userId, e.target.value as KyufuKanriKubun)}
+                            title="給付管理票情報作成区分 (8221 項5)。伝送ファイル出力に反映されます"
+                            className={`w-full text-[11px] leading-4 border border-gray-300 px-0 py-0 bg-white ${kubun !== "1" ? "text-red-600" : "text-gray-600"}`}
+                          >
+                            {(Object.keys(KYUFU_KANRI_KUBUN_LABELS) as KyufuKanriKubun[]).map((k) => (
+                              <option key={k} value={k}>
+                                {KYUFU_KANRI_KUBUN_LABELS[k]}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* 給付管理票フッタ */}
+                <div className="border-t border-gray-300 bg-gray-50 px-3 py-1 shrink-0 text-[11px] text-gray-700 flex items-center gap-4">
+                  <span className="inline-flex">
+                    <span className="border border-gray-400 bg-sky-100 px-2 py-0.5 whitespace-nowrap">合計件数</span>
+                    <span className="border border-gray-400 border-l-0 bg-white px-2 py-0.5 min-w-[56px] text-right font-mono">{benefitGroups.length.toLocaleString()}</span>
+                  </span>
+                  <span className="inline-flex">
+                    <span className="border border-gray-400 bg-sky-100 px-2 py-0.5 whitespace-nowrap">国保件数</span>
+                    <span className="border border-gray-400 border-l-0 bg-white px-2 py-0.5 min-w-[56px] text-right font-mono">{benefitKokuhoCount.toLocaleString()}</span>
+                  </span>
+                </div>
               </div>
 
               {/* ── フッター合計 (ほのぼの流: ラベル=水色枠 + 値=白枠右寄せ のボックス並び) ── */}

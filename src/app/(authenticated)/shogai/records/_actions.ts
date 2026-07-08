@@ -89,6 +89,7 @@ export async function submitCreateRecord(formData: FormData): Promise<void> {
   }
   const id = await createServiceRecord({
     tenant_id: raw.tenant_id,
+    office_id: raw.office_id || null,
     client_id: raw.client_id,
     service_date: raw.service_date,
     start_time: start,

@@ -65,7 +65,7 @@ const EMPTY_FORM: FormData = {
   insurer_municipality: "",
   service_types: [],
   copay_rate: 0.1,
-  self_payment_limit: 0,
+  self_payment_limit: null, // null = 未設定 / 0 = 負担0円 (低所得区分等)
   seiho_flag: false,
   soudan_office_name: null,
   soudan_manager_name: null,
@@ -134,7 +134,7 @@ export function ShougaiCertContent({
       insurer_municipality: r.insurer_municipality ?? "",
       service_types: Array.isArray(r.service_types) ? r.service_types : [],
       copay_rate: r.copay_rate ?? 0.1,
-      self_payment_limit: r.self_payment_limit ?? 0,
+      self_payment_limit: r.self_payment_limit ?? null, // null = 未設定を保持 (0 と区別)
       seiho_flag: r.seiho_flag ?? false,
       soudan_office_name: r.soudan_office_name ?? null,
       soudan_manager_name: r.soudan_manager_name ?? null,
@@ -156,8 +156,8 @@ export function ShougaiCertContent({
       .eq("client_id", userId)
       .order("certification_start_date", { ascending: false, nullsFirst: false });
     if (error) {
-      // 42P01 = table not exist (migration 未適用)
-      if (error.code !== "42P01") {
+      // 42P01 / PGRST205 = table not exist (migration 未適用)
+      if (error.code !== "42P01" && error.code !== "PGRST205") {
         toast.error("読み込み失敗: " + error.message);
       }
       return;
@@ -410,9 +410,11 @@ export function ShougaiCertContent({
           </FieldRow>
           <FieldRow label="自己負担月額上限">
             <span className="text-sm text-gray-900">
-              {form.self_payment_limit
-                ? `¥${form.self_payment_limit.toLocaleString()}`
-                : "—"}
+              {form.self_payment_limit != null ? (
+                `¥${form.self_payment_limit.toLocaleString()}${form.self_payment_limit === 0 ? " (負担0円)" : ""}`
+              ) : (
+                <span className="text-amber-600">未設定</span>
+              )}
             </span>
           </FieldRow>
           <FieldRow label="生保受給">
@@ -581,15 +583,24 @@ export function ShougaiCertContent({
             </div>
           </FieldRow>
           <FieldRow label="自己負担月額上限 (円)">
-            <input
-              type="number"
-              min={0}
-              value={form.self_payment_limit ?? 0}
-              onChange={(e) =>
-                upd("self_payment_limit", Number(e.target.value || 0))
-              }
-              className={`${inputCls} w-32 text-right`}
-            />
+            <div className="space-y-0.5">
+              <input
+                type="number"
+                min={0}
+                value={form.self_payment_limit ?? ""}
+                onChange={(e) =>
+                  upd(
+                    "self_payment_limit",
+                    e.target.value === "" ? null : Number(e.target.value),
+                  )
+                }
+                placeholder="未設定"
+                className={`${inputCls} w-32 text-right`}
+              />
+              <p className="text-[10px] text-gray-400">
+                0 = 負担0円 (低所得区分等) / 空欄 = 未設定。請求計算は 0 でも上限として適用されます
+              </p>
+            </div>
           </FieldRow>
           <FieldRow label="生保受給">
             <label className="inline-flex items-center gap-1 text-xs">

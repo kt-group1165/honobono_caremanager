@@ -60,6 +60,9 @@ export interface KyufuKanriLine {
   plannedUnits: number;
 }
 
+/** 給付管理票情報作成区分コード (8221 項5): 1=新規 / 2=修正 / 3=取消 */
+export type KyufuKanriSakuseiKubun = "1" | "2" | "3";
+
 export interface KyufuKanriUser {
   userName: string;
   insurerNumber: string;
@@ -73,6 +76,11 @@ export interface KyufuKanriUser {
   /** 区分支給限度基準額 (単位) */
   limitUnits: number;
   lines: KyufuKanriLine[];
+  /**
+   * 給付管理票情報作成区分 (1=新規 / 2=修正 / 3=取消)。
+   * 省略時は "1" (新規)。月遅れ・返戻の再請求分は通常 "2" (修正)。
+   */
+  sakuseiKubun?: KyufuKanriSakuseiKubun;
 }
 
 export interface KyotakuDensouOptions {
@@ -83,6 +91,13 @@ export interface KyotakuDensouOptions {
   month: number;
   /** 地域区分単価 (円) — 計画費の請求金額計算用 */
   unitPrice: number;
+  /**
+   * コントロールレコードの処理対象年月 (国保連が電算処理=審査を実行する年月)。
+   * 省略時はサービス提供月の翌月。
+   * 月遅れ再請求 (元提供月ファイル) を今月提出する場合は「今月+1」を明示指定する。
+   */
+  shoriYear?: number;
+  shoriMonth?: number;
 }
 
 interface BuildResult {
@@ -92,15 +107,32 @@ interface BuildResult {
   warnings: string[];
 }
 
-function assemble(dataParts: string[][], dataKind: string, office: string, ym: string, fileName: string): Omit<BuildResult, "warnings"> {
+/**
+ * コントロール/データ/エンドレコードを組み立てる。
+ * ⚠ shoriYm (項11 処理対象年月) は「国保連合会での電算処理 (審査) を実行する年月」
+ *   (_if_kyotaku.txt 注1)。サービス提供月ではない。
+ *   通常 = サービス提供月の翌月 (= 提出月と同月)。
+ *   例: 2000年4月サービス提供分を 5月に審査 → "200005"。
+ *   月遅れ再請求では元提供月に関わらず「今回提出分の審査月」を設定する。
+ */
+function assemble(dataParts: string[][], dataKind: string, office: string, shoriYm: string, fileName: string): Omit<BuildResult, "warnings"> {
   const lines: string[] = [];
   let recNo = 1;
   lines.push(
-    ["1", String(recNo++), "0", String(dataParts.length), dataKind, "0", "0", office, "0", "1", ym, "1"].join(","),
+    ["1", String(recNo++), "0", String(dataParts.length), dataKind, "0", "0", office, "0", "1", shoriYm, "1"].join(","),
   );
   for (const parts of dataParts) lines.push(["2", String(recNo++), ...parts].join(","));
   lines.push(["3", String(recNo++)].join(","));
   return { content: lines.join("\r\n") + "\r\n", fileName, dataRecordCount: dataParts.length };
+}
+
+/** 処理対象年月 (YYYYMM)。opts.shoriYear/Month 優先、既定はサービス提供月の翌月 */
+function shoriYmOf(opts: KyotakuDensouOptions): string {
+  if (opts.shoriYear && opts.shoriMonth) {
+    return `${opts.shoriYear}${String(opts.shoriMonth).padStart(2, "0")}`;
+  }
+  const d = new Date(opts.year, opts.month, 1); // 提供月の翌月 1 日
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 /** ファイル 1: 給付管理票 (8211 + 8221) */
@@ -114,13 +146,14 @@ export function buildKyufuKanriFile(
   if (!/^\d{10}$/.test(office)) warnings.push(`居宅介護支援事業所番号が 10 桁ではありません ("${office}")`);
   const today = new Date();
   const todayNum = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
-  // 提出年月 = サービス対象月の翌月
-  const submitDate = new Date(opts.year, opts.month, 1);
-  const submitYm = `${submitDate.getFullYear()}${String(submitDate.getMonth() + 1).padStart(2, "0")}`;
+  // 提出年月 = 処理対象年月 (通常サービス対象月の翌月。再請求時は opts.shoriYear/Month)
+  const submitYm = shoriYmOf(opts);
 
   const dataParts: string[][] = [];
 
-  // 8211 総括票 (自県分 新規のみの前提)
+  // 8211 総括票 — 作成区分 (新規/修正/取消) ごとの件数を集計 (自県分 訪問通所・居宅)
+  const kubunCount: Record<KyufuKanriSakuseiKubun, number> = { "1": 0, "2": 0, "3": 0 };
+  for (const u of users) kubunCount[u.sakuseiKubun ?? "1"]++;
   dataParts.push([
     "8211", // 1 交換情報識別番号
     submitYm, // 2 提出年月
@@ -128,12 +161,13 @@ export function buildKyufuKanriFile(
     office, // 4 事業所番号 (居宅介護支援事業所)
     "1", // 5 居宅サービス計画作成区分コード (1=居宅介護支援事業所作成)
     "0", "0", "0", "0", "0", "0", // 6-11 他県分 (訪問通所・居宅/短期入所 × 新規/修正/取消)
-    String(users.length), "0", "0", // 12-14 自県分 訪問通所・居宅 新規/修正/取消
+    String(kubunCount["1"]), String(kubunCount["2"]), String(kubunCount["3"]), // 12-14 自県分 訪問通所・居宅 新規/修正/取消
     "0", "0", "0", // 15-17 自県分 短期入所 新規/修正/取消
   ]);
 
   for (const u of users) {
     const careCode = CARE_LEVEL_CODE[(u.careLevel ?? "").trim()] ?? "";
+    const kubun: KyufuKanriSakuseiKubun = u.sakuseiKubun ?? "1";
     if (!u.insurerNumber) warnings.push(`${u.userName}: 保険者番号が未登録です`);
     if (!u.insuredNumber) warnings.push(`${u.userName}: 被保険者番号が未登録です`);
     if (!careCode) warnings.push(`${u.userName}: 要介護度 ("${u.careLevel ?? "未設定"}") をコードに変換できません`);
@@ -145,7 +179,7 @@ export function buildKyufuKanriFile(
       ym, // 2 対象年月
       u.insurerNumber, // 3 証記載保険者番号
       office, // 4 事業所番号 (居宅介護支援事業所)
-      "1", // 5 給付管理票情報作成区分コード (1=新規)
+      kubun, // 5 給付管理票情報作成区分コード (1=新規 / 2=修正 / 3=取消)
       todayNum, // 6 給付管理票作成年月日
       "3", // 7 給付管理票種別区分コード (3=居宅サービス給付管理票)
       lineNo, // 8 給付管理票明細行番号
@@ -157,10 +191,18 @@ export function buildKyufuKanriFile(
       ymNum(u.limitEnd), // 14 限度額適用期間 (終了)
     ];
 
-    // 明細行 (01〜98)
+    // 明細行 (01〜98)。99 行目は終端行のため明細は最大 98 行
+    let userLines = u.lines;
+    if (userLines.length > 98) {
+      warnings.push(
+        `${u.userName}: 給付管理票の明細が ${userLines.length} 行あり上限 98 行を超えるため 99 行目以降を出力できません (行番号 99 は終端行のため)`,
+      );
+      userLines = userLines.slice(0, 98);
+    }
     let total = 0;
-    u.lines.forEach((l, i) => {
+    userLines.forEach((l, i) => {
       if (!l.officeNumber) warnings.push(`${u.userName}: サービス事業所番号が未設定の行があります`);
+      if (!l.serviceKindCode) warnings.push(`${u.userName}: サービス種類コード未設定の行があります (SERVICE_KIND_CODE 未登録のサービス種別の可能性)`);
       total += l.plannedUnits;
       dataParts.push([
         ...head(String(i + 1).padStart(2, "0")),
@@ -191,7 +233,9 @@ export function buildKyufuKanriFile(
     ]);
   }
 
-  return { ...assemble(dataParts, "821", office, ym, `K${ym}.CSV`), warnings };
+  // ⚠ コントロールレコード項11 (処理対象年月) は「審査を実行する年月」=提出月
+  //   (_if_kyotaku.txt 注1)。サービス提供月 (ym) ではない。
+  return { ...assemble(dataParts, "821", office, submitYm, `K${ym}.CSV`), warnings };
 }
 
 export interface KeikakuhiUser {
@@ -344,5 +388,7 @@ export function buildKeikakuhiFile(
     ]);
   }
 
-  return { ...assemble(dataParts, "711", office, ym, `S${ym}.CSV`), warnings };
+  // ⚠ コントロールレコード項11 (処理対象年月) は「審査を実行する年月」=提出月
+  //   (_if_kyotaku.txt 注1: 2000年4月提供分を5月審査なら "200005")。
+  return { ...assemble(dataParts, "711", office, shoriYmOf(opts), `S${ym}.CSV`), warnings };
 }

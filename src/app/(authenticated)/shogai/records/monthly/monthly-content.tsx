@@ -78,7 +78,7 @@ interface MergedRow {
 
 export function ShogaiMonthlyContent() {
   const supabase = useMemo(() => createClient(), []);
-  const { currentOffice } = useBusinessType();
+  const { currentOffice, loading: btLoading } = useBusinessType();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -138,8 +138,8 @@ export function ShogaiMonthlyContent() {
       const sysMap = await getServiceSystemMap(supabase, allPlans.map((p) => p.service_type), { year, month });
       setPlans(allPlans.filter((p) => isShogaiService(sysMap, p.service_type)));
 
-      // 提供 = 障害実績
-      const { data: rec, error: e2 } = await supabase
+      // 提供 = 障害実績 (自事業所スコープ。office_id 未設定の旧データは含める)
+      let recQ = supabase
         .from("shogai_service_records")
         .select(
           "id, service_date, start_time, end_time, duration_minutes, service_type, service_category, service_code, unit_count, status",
@@ -147,7 +147,11 @@ export function ShogaiMonthlyContent() {
         .eq("client_id", userId)
         .gte("service_date", from)
         .lte("service_date", to)
-        .neq("status", "cancelled")
+        .neq("status", "cancelled");
+      if (currentOffice) {
+        recQ = recQ.or(`office_id.eq.${currentOffice.id},office_id.is.null`);
+      }
+      const { data: rec, error: e2 } = await recQ
         .order("service_date")
         .order("start_time");
       if (e2) throw new Error("実績取得失敗: " + e2.message);
@@ -190,7 +194,7 @@ export function ShogaiMonthlyContent() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, userId, from, to, year, month]);
+  }, [supabase, userId, from, to, year, month, currentOffice]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- mount/月・利用者変更時の fetch
@@ -239,6 +243,7 @@ export function ShogaiMonthlyContent() {
     const p = row.plan;
     const { error } = await supabase.from("shogai_service_records").insert({
       client_id: userId,
+      office_id: currentOffice?.id ?? null, // 自事業所を付与 (office スコープの対象にする)
       service_date: p.visit_date,
       start_time: p.start_time,
       end_time: p.end_time,
@@ -279,6 +284,15 @@ export function ShogaiMonthlyContent() {
   const nextMonth = () => {
     if (month === 12) { setYear(year + 1); setMonth(1); } else setMonth(month + 1);
   };
+
+  // 訪問介護 office 専用 (障害福祉の実績は訪問介護事業所で運用)
+  if (!btLoading && currentOffice && currentOffice.service_type !== "訪問介護") {
+    return (
+      <div className="m-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        この機能は訪問介護事業所専用です。ヘッダーの事業所切替で訪問介護の事業所を選択してください。
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 p-4">

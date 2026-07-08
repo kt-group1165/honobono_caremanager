@@ -132,8 +132,8 @@ export function StatsContent() {
         .or("tsukiokure.eq.true,henrei.eq.true,kago.eq.true")
         .order("target_month");
       if (error) {
-        // table 未作成 (migration 未適用) 時は 0 件として続行
-        if (error.code !== "42P01") {
+        // table 未作成 (直 SQL=42P01 / PostgREST schema cache=PGRST205) 時は 0 件として続行
+        if (error.code !== "42P01" && error.code !== "PGRST205") {
           toast.error("請求状態の取得に失敗: " + error.message);
         }
       } else {
@@ -141,20 +141,30 @@ export function StatsContent() {
       }
     }
 
-    // ── 2) 月次推移 (riyou_seikyu_payments) ──
-    let pays: PaymentRow[] = [];
+    // ── 2) 月次推移 (riyou_seikyu_payments) — order 付き page-loop (1000 行上限対策) ──
+    const pays: PaymentRow[] = [];
     {
-      const { data, error } = await supabase
-        .from("riyou_seikyu_payments")
-        .select("client_id, target_month, billed_amount, paid_amount")
-        .gte("target_month", fromMonth)
-        .lte("target_month", toMonth);
-      if (error) {
-        if (error.code !== "42P01") {
-          toast.error("入金状況の取得に失敗: " + error.message);
+      const PAGE = 1000;
+      let offset = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("riyou_seikyu_payments")
+          .select("client_id, target_month, billed_amount, paid_amount")
+          .gte("target_month", fromMonth)
+          .lte("target_month", toMonth)
+          .order("target_month", { ascending: true })
+          .order("client_id", { ascending: true })
+          .range(offset, offset + PAGE - 1);
+        if (error) {
+          if (error.code !== "42P01" && error.code !== "PGRST205") {
+            toast.error("入金状況の取得に失敗: " + error.message);
+          }
+          break;
         }
-      } else {
-        pays = (data ?? []) as PaymentRow[];
+        const rows = (data ?? []) as PaymentRow[];
+        pays.push(...rows);
+        if (rows.length < PAGE) break;
+        offset += PAGE;
       }
     }
 

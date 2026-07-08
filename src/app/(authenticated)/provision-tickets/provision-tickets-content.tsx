@@ -36,6 +36,10 @@ import {
 import { getServiceSystemMap, isShogaiService } from "@/lib/service-system-lookup";
 import { validInMonth } from "@/lib/service-code-valid";
 import { useBusinessType } from "@/lib/business-type-context";
+import {
+  insertVisitSchedules,
+  supportsKinkyuHoumon,
+} from "@/app/(authenticated)/shift-management/_shared";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -190,8 +194,10 @@ export function ProvisionTicketsContent({
   const [allStaff, setAllStaff] = useState<KaigoStaff[]>(initialStaff);
   const [serviceUnits, setServiceUnits] = useState<Record<string, number>>(initialServiceUnits);
   const [officeInfo] = useState<OfficeInfo | null>(initialOffice);
-  // 加算系 formula コード (cat=11 訪問介護 のみ抽出してデフォルト)
-  const [formulaCodes] = useState<FormulaCode[]>(initialFormulaCodes);
+  // 加算系 formula コード (cat=11 訪問介護 のみ抽出してデフォルト)。
+  // 初期値は SSR の validToday (= 今月世代)。月切替時は validInMonth で引き直す
+  // (処遇改善加算等は改定で率が変わるため、表示月に追従させる)。
+  const [formulaCodes, setFormulaCodes] = useState<FormulaCode[]>(initialFormulaCodes);
   // 自事業所が取得している加算 (currentOffice.applied_formula_codes から)
   // 設定変更は マスタ管理 → 自事業所管理 (/master/office) の「適用加算」セクションで行う (read-only here)
   const appliedFormulaCodes = useMemo(
@@ -210,6 +216,39 @@ export function ProvisionTicketsContent({
     unitsMonthRef.current = key;
     setServiceUnits({});
   }, [selectedMonth]);
+
+  // 加算系 formula コードも月切替時に「表示月に有効な世代」で引き直す
+  // (SSR 初期値は validToday 固定のため、過去月・未来月では世代がずれる)
+  const formulaMonthRef = useRef(format(new Date(), "yyyy-MM"));
+  useEffect(() => {
+    const key = format(selectedMonth, "yyyy-MM");
+    if (formulaMonthRef.current === key) return;
+    formulaMonthRef.current = key;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await validInMonth(
+        supabase
+          .from("kaigo_service_codes")
+          .select("service_code, service_category, service_name, units, calculation_type, formula")
+          .eq("system", "介護")
+          .not("formula", "is", null),
+        selectedMonth.getFullYear(),
+        selectedMonth.getMonth() + 1,
+      )
+        .order("service_category")
+        .order("service_code");
+      if (cancelled) return;
+      if (error) {
+        console.error("formula codes fetch failed:", error.message);
+        toast.error("加算コードの取得に失敗しました: " + error.message);
+        return;
+      }
+      setFormulaCodes((data ?? []) as FormulaCode[]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedMonth, supabase]);
 
   // serviceRows に serviceUnits 未登録の service_type が現れたら on-demand で単位数を補完
   // (月変更・行追加のたび。「基本」全件 fetch は 1000 行制限で欠けるため .in() で絞る。
@@ -651,6 +690,8 @@ export function ProvisionTicketsContent({
               end_time: row.end_time,
               service_type: row.service_type,
               status: "scheduled",
+              // C5: 発生元 office (列未適用 42703/PGRST204 は insertVisitSchedules が strip)
+              ...(currentOfficeId ? { office_id: currentOfficeId } : {}),
             });
           }
           if (cell.actual) {
@@ -662,6 +703,7 @@ export function ProvisionTicketsContent({
               end_time: row.end_time,
               service_type: row.service_type,
               status: "completed",
+              ...(currentOfficeId ? { office_id: currentOfficeId } : {}),
             });
           }
         }
@@ -669,10 +711,8 @@ export function ProvisionTicketsContent({
 
       if (toInsert.length > 0) {
         // .select() で実 INSERT 件数を取得し、想定件数と照合 (= 部分 fail の検知)
-        const { data: inserted, error } = await supabase
-          .from("kaigo_visit_schedule")
-          .insert(toInsert)
-          .select("id");
+        // office_id 列未適用 (42703/PGRST204) は insertVisitSchedules が strip して retry
+        const { data: inserted, error } = await insertVisitSchedules(supabase, toInsert, "id");
         if (error) throw error;
         const actual = inserted?.length ?? 0;
         if (actual !== toInsert.length) {
@@ -1559,6 +1599,21 @@ export function ProvisionTicketsContent({
                   )}
                 </div>
               )}
+
+              {/* ── 月次加算エディタ (利用者 × 月 × 事業所) ──
+                  billing-visit 側は表示専用化されるため、編集はここ (提供表) が正 */}
+              {currentOfficeId ? (
+                <MonthAddonsSection
+                  userId={userId}
+                  userName={userData?.name ?? "利用者"}
+                  monthStr={monthStr}
+                  officeId={currentOfficeId}
+                />
+              ) : (
+                <div className="no-print mt-4 max-w-2xl rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-400">
+                  月次加算の編集には事業所の選択 (?office=) が必要です
+                </div>
+              )}
             </div>
           )}
       </div>
@@ -1712,6 +1767,242 @@ export function ProvisionTicketsContent({
         />
       )}
     </>
+  );
+}
+
+// ─── 月次加算エディタ (kaigo_visit_month_addons) ─────────────────────────────
+// 利用者 × 月 × 事業所 の月次加算 (初回 / 緊急時 / 生活機能向上連携) を編集する。
+// billing-visit/kaigo-seikyu 側は表示専用 (集計は visit-seikyu/aggregate が参照)。
+function MonthAddonsSection({
+  userId,
+  userName,
+  monthStr,
+  officeId,
+}: {
+  userId: string;
+  userName: string;
+  monthStr: string; // 'YYYY-MM'
+  officeId: string;
+}) {
+  const supabase = useMemo(() => createClient(), []);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [tableMissing, setTableMissing] = useState(false);
+  const [shokai, setShokai] = useState(false);
+  const [seikatsuKino, setSeikatsuKino] = useState<"なし" | "Ⅰ" | "Ⅱ">("なし");
+  const [kinkyuCount, setKinkyuCount] = useState(0);
+  /** 初回加算の候補サジェスト (過去2ヶ月に実績なし = 新規利用者の可能性) */
+  const [shokaiSuggest, setShokaiSuggest] = useState<boolean | null>(null);
+  /** kinkyu_houmon フラグからの当月集計値 (列未適用環境では null = 参考非表示) */
+  const [kinkyuFromFlags, setKinkyuFromFlags] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount/月切替時の loading 表示 (HANDOVER §2)
+    setLoading(true);
+    (async () => {
+      // ① 既存の加算行
+      const { data, error } = await supabase
+        .from("kaigo_visit_month_addons")
+        .select("shokai, seikatsu_kino, kinkyu_count")
+        .eq("client_id", userId)
+        .eq("target_month", monthStr)
+        .eq("office_id", officeId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        if (error.code === "42P01" || error.code === "PGRST205") {
+          setTableMissing(true);
+          setLoading(false);
+          return;
+        }
+        console.error("month addons fetch failed:", error.message);
+        toast.error("月次加算の取得に失敗しました: " + error.message);
+        setLoading(false);
+        return;
+      }
+      const row = data as { shokai: boolean; seikatsu_kino: "なし" | "Ⅰ" | "Ⅱ"; kinkyu_count: number } | null;
+      setShokai(row?.shokai ?? false);
+      setSeikatsuKino(row?.seikatsu_kino ?? "なし");
+      setKinkyuCount(row?.kinkyu_count ?? 0);
+
+      // ② 初回加算候補: 過去2ヶ月間に実績 (completed) が無い利用者をサジェスト
+      const [y, m] = monthStr.split("-").map(Number);
+      if (y && m) {
+        const prevFrom = format(new Date(y, m - 3, 1), "yyyy-MM-dd");
+        const prevTo = format(new Date(y, m - 1, 0), "yyyy-MM-dd");
+        const { data: past, error: pastErr } = await supabase
+          .from("kaigo_visit_schedule")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("status", "completed")
+          .gte("visit_date", prevFrom)
+          .lte("visit_date", prevTo)
+          .limit(1);
+        if (!cancelled) {
+          if (pastErr) {
+            console.error("shokai suggest check failed:", pastErr.message);
+            setShokaiSuggest(null);
+          } else {
+            setShokaiSuggest((past ?? []).length === 0);
+          }
+        }
+      }
+
+      // ③ 緊急時: kinkyu_houmon フラグ (completed のみ) の当月集計を参考表示。
+      //    列未適用 (42703) 環境では手入力のみ (参考非表示)。
+      const kinkyuOk = await supportsKinkyuHoumon(supabase);
+      if (!cancelled && kinkyuOk && y && m) {
+        const from = `${monthStr}-01`;
+        const to = format(new Date(y, m, 0), "yyyy-MM-dd");
+        const { count, error: cntErr } = await supabase
+          .from("kaigo_visit_schedule")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("status", "completed")
+          .eq("kinkyu_houmon", true)
+          .gte("visit_date", from)
+          .lte("visit_date", to);
+        if (!cancelled) {
+          if (cntErr) {
+            console.error("kinkyu count failed:", cntErr.message);
+            setKinkyuFromFlags(null);
+          } else {
+            setKinkyuFromFlags(count ?? 0);
+          }
+        }
+      }
+      if (!cancelled) setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, userId, monthStr, officeId]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const { error } = await supabase
+      .from("kaigo_visit_month_addons")
+      .upsert(
+        {
+          client_id: userId,
+          target_month: monthStr,
+          office_id: officeId,
+          shokai,
+          seikatsu_kino: seikatsuKino,
+          kinkyu_count: Math.max(0, Math.round(kinkyuCount) || 0),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "client_id,target_month,office_id" },
+      );
+    setSaving(false);
+    if (error) {
+      if (error.code === "42P01" || error.code === "PGRST205") {
+        setTableMissing(true);
+        toast.error("kaigo_visit_month_addons テーブルが未作成です");
+        return;
+      }
+      toast.error("月次加算の保存に失敗しました: " + error.message);
+      return;
+    }
+    toast.success(`${userName} 様の月次加算を保存しました (請求集計に反映されます)`);
+  };
+
+  if (tableMissing) {
+    return (
+      <div className="no-print mt-4 max-w-2xl rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        月次加算テーブル (kaigo_visit_month_addons) が未作成のため編集できません。
+        migrations/applied_archive/kaigo_visit_month_addons.sql を適用してください。
+      </div>
+    );
+  }
+
+  return (
+    <div className="no-print mt-4 max-w-2xl rounded border border-purple-200 bg-purple-50/20 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-xs font-semibold text-purple-800">
+          月次加算 ({monthStr.replace("-", "年")}月 / 初回・緊急時・生活機能向上連携)
+        </h3>
+        <button
+          onClick={handleSave}
+          disabled={saving || loading}
+          className="flex items-center gap-1 rounded bg-purple-600 px-3 py-1 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+        >
+          {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+          加算を保存
+        </button>
+      </div>
+      {loading ? (
+        <div className="py-2 text-xs text-gray-400">
+          <Loader2 size={12} className="mr-1 inline animate-spin" /> 読込中...
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-start gap-x-6 gap-y-3 text-xs">
+          {/* 初回加算 */}
+          <div>
+            <label className="flex cursor-pointer items-center gap-1.5 text-gray-700">
+              <input
+                type="checkbox"
+                checked={shokai}
+                onChange={(e) => setShokai(e.target.checked)}
+                className="h-4 w-4 accent-purple-600"
+              />
+              初回加算
+            </label>
+            {shokaiSuggest === true && !shokai && (
+              <p className="mt-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                候補: 過去2ヶ月に実績がありません (新規利用の可能性)
+              </p>
+            )}
+          </div>
+          {/* 緊急時訪問介護加算 */}
+          <div>
+            <label className="mb-0.5 block text-gray-500">緊急時訪問介護加算 (回/月)</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={kinkyuCount}
+                min={0}
+                step={1}
+                onChange={(e) => setKinkyuCount(Number(e.target.value) || 0)}
+                className="w-16 rounded border border-gray-300 px-2 py-1 text-right text-xs"
+              />
+              {kinkyuFromFlags !== null && (
+                <button
+                  type="button"
+                  onClick={() => setKinkyuCount(kinkyuFromFlags)}
+                  className="rounded border border-purple-200 bg-white px-1.5 py-0.5 text-[10px] text-purple-700 hover:bg-purple-50"
+                  title="シフトの「緊急時訪問」チェック (実績のみ) の当月集計値を採用"
+                >
+                  集計値 {kinkyuFromFlags} 回を採用
+                </button>
+              )}
+            </div>
+            {kinkyuFromFlags === null && (
+              <p className="mt-0.5 text-[10px] text-gray-400">
+                (kinkyu_houmon 列未適用のため手入力。SQL 適用後はシフトのチェックから集計されます)
+              </p>
+            )}
+          </div>
+          {/* 生活機能向上連携加算 */}
+          <div>
+            <label className="mb-0.5 block text-gray-500">生活機能向上連携加算</label>
+            <select
+              value={seikatsuKino}
+              onChange={(e) => setSeikatsuKino(e.target.value as "なし" | "Ⅰ" | "Ⅱ")}
+              className="rounded border border-gray-300 px-2 py-1 text-xs"
+            >
+              <option value="なし">なし</option>
+              <option value="Ⅰ">Ⅰ (100単位)</option>
+              <option value="Ⅱ">Ⅱ (200単位)</option>
+            </select>
+          </div>
+        </div>
+      )}
+      <p className="mt-2 text-[10px] text-gray-400">
+        保存すると介護請求 (billing-visit) の集計に加算行として反映されます。単位数はマスタの対象月世代から自動解決。
+      </p>
+    </div>
   );
 }
 

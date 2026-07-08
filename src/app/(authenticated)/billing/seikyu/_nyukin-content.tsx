@@ -141,6 +141,7 @@ export function NyukinContent({
         .select("insurance_amount")
         .eq("billing_month", month)
         .in("status", ["confirmed", "submitted"])
+        .order("id", { ascending: true })
         .range(from, from + PAGE - 1);
       if (error) {
         toast.error("請求額の集計に失敗: " + error.message);

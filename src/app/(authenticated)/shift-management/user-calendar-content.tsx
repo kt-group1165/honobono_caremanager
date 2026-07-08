@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
@@ -33,12 +33,21 @@ import { getServiceSystemMap } from "@/lib/service-system-lookup";
 import { toHankakuDigits } from "@/lib/service-name-normalize";
 import {
   DOW_LABELS,
+  insertVisitSchedules,
   isStaffUnavailableAtTime,
+  staffTimeRelationWarning,
+  supportsKinkyuHoumon,
+  supportsStaff2Times,
   twoPersonMismatchWarning,
   type KaigoStaff,
   type StaffAvailabilitySlot,
   type VisitSchedule,
 } from "./_shared";
+import {
+  getHospitalizationMap,
+  isHospitalizedOn,
+  type HospitalizationPeriod,
+} from "@/lib/hospitalization";
 import {
   useKaigoVisitSchedulesByUser,
   useKaigoVisitSchedulesByMonthAll,
@@ -115,8 +124,38 @@ export function UserCalendar({
     mutateAllSched();
   };
 
+  // C3: kinkyu_houmon 列が DB に適用済みか (未適用ならチェックボックス非表示)
+  const [kinkyuSupported, setKinkyuSupported] = useState(false);
+  // 2人体制の個別時間列 (staff2_start_time 等) が適用済みか
+  const [staff2TimesSupported, setStaff2TimesSupported] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void supportsKinkyuHoumon(supabase).then((ok) => {
+      if (!cancelled) setKinkyuSupported(ok);
+    });
+    void supportsStaff2Times(supabase).then((ok) => {
+      if (!cancelled) setStaff2TimesSupported(ok);
+    });
+    return () => { cancelled = true; };
+  }, [supabase]);
+
+  // 入院期間 (🏥 バッジ用)。利用者切替で 1 回 fetch (期間は全履歴を取得済み)。
+  const [hospPeriods, setHospPeriods] = useState<HospitalizationPeriod[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    getHospitalizationMap(supabase, [userId])
+      .then((m) => {
+        if (!cancelled) setHospPeriods(m.get(userId) ?? []);
+      })
+      .catch((e) => {
+        // バッジは補助情報: 取得失敗は log のみ (画面は継続)
+        console.error("hospitalization fetch failed:", e);
+      });
+    return () => { cancelled = true; };
+  }, [supabase, userId]);
+
   const [editModal, setEditModal] = useState<VisitSchedule | null>(null);
-  const [editForm, setEditForm] = useState({ start_time: "", end_time: "", service_type: "", staff_id: "", staff_id_2: "", service_code: "", service_name: "" });
+  const [editForm, setEditForm] = useState({ start_time: "", end_time: "", service_type: "", staff_id: "", staff_id_2: "", service_code: "", service_name: "", kinkyu_houmon: false, staff2_custom: false, staff2_start: "", staff2_end: "" });
   const [editSaving, setEditSaving] = useState(false);
   const [editDeleting, setEditDeleting] = useState(false);
   const [showServiceSelector, setShowServiceSelector] = useState(false);
@@ -127,7 +166,7 @@ export function UserCalendar({
   const [editServiceSystem, setEditServiceSystem] = useState<string | null>(null);
   const [addServiceSystem, setAddServiceSystem] = useState<string | null>(null);
   const [addModal, setAddModal] = useState<string | null>(null);
-  const [addForm, setAddForm] = useState({ start_time: "09:00", end_time: "10:00", service_type: "", staff_id: "", staff_id_2: "", service_code: "", service_name: "" });
+  const [addForm, setAddForm] = useState({ start_time: "09:00", end_time: "10:00", service_type: "", staff_id: "", staff_id_2: "", service_code: "", service_name: "", kinkyu_houmon: false, staff2_custom: false, staff2_start: "", staff2_end: "" });
   const [addSaving, setAddSaving] = useState(false);
   const [showAddServiceSelector, setShowAddServiceSelector] = useState(false);
   // drag & drop: ドロップ先セルのハイライト用
@@ -139,7 +178,7 @@ export function UserCalendar({
     if (!sched) return;
     if (!copy && sched.visit_date === targetDate) return;
     if (copy) {
-      const { error } = await supabase.from("kaigo_visit_schedule").insert({
+      const { error } = await insertVisitSchedules(supabase, [{
         user_id: sched.user_id,
         staff_id: sched.staff_id,
         staff_id_2: sched.staff_id_2 ?? null,
@@ -149,7 +188,9 @@ export function UserCalendar({
         end_time: sched.end_time,
         service_type: sched.service_type,
         status: "scheduled",
-      });
+        // C5: 発生元 office (列未適用は helper が strip)
+        ...(currentOfficeId ? { office_id: currentOfficeId } : {}),
+      }]);
       if (error) {
         toast.error("コピーに失敗しました: " + error.message);
         return;
@@ -213,8 +254,46 @@ export function UserCalendar({
       staff_id_2: sched.staff_id_2 ?? "",
       service_code: "",
       service_name: sched.service_type,
+      kinkyu_houmon: sched.kinkyu_houmon ?? false,
+      staff2_custom: !!sched.staff2_start_time,
+      staff2_start: sched.staff2_start_time?.slice(0, 5) ?? "",
+      staff2_end: sched.staff2_end_time?.slice(0, 5) ?? "",
     });
     setShowEditStaff2(!!sched.staff_id_2);
+    // SWR の select には kinkyu_houmon / staff2_*_time を含めない
+    // (列未適用環境で 42703 になるため)。対応 DB では現在値を単発で引いて反映する。
+    const extraCols = [
+      ...(kinkyuSupported && sched.kinkyu_houmon === undefined ? ["kinkyu_houmon"] : []),
+      ...(staff2TimesSupported && sched.staff2_start_time === undefined
+        ? ["staff2_start_time", "staff2_end_time"]
+        : []),
+    ];
+    if (extraCols.length > 0) {
+      void supabase
+        .from("kaigo_visit_schedule")
+        .select(extraCols.join(", "))
+        .eq("id", sched.id)
+        .maybeSingle()
+        .then(({ data, error }: { data: unknown; error: { message: string } | null }) => {
+          if (error || !data) return;
+          const row = data as {
+            kinkyu_houmon?: boolean | null;
+            staff2_start_time?: string | null;
+            staff2_end_time?: string | null;
+          };
+          setEditForm((f) => ({
+            ...f,
+            ...(row.kinkyu_houmon !== undefined ? { kinkyu_houmon: !!row.kinkyu_houmon } : {}),
+            ...(row.staff2_start_time !== undefined
+              ? {
+                  staff2_custom: !!row.staff2_start_time,
+                  staff2_start: row.staff2_start_time?.slice(0, 5) ?? "",
+                  staff2_end: row.staff2_end_time?.slice(0, 5) ?? "",
+                }
+              : {}),
+          }));
+        });
+    }
   };
 
   const handleEditSave = async () => {
@@ -227,13 +306,21 @@ export function UserCalendar({
       return;
     }
     setEditSaving(true);
-    const updateData: Record<string, string | null> = {
+    const updateData: Record<string, string | boolean | null> = {
       start_time: editForm.start_time + ":00",
       end_time: editForm.end_time + ":00",
       service_type: editForm.service_name || editForm.service_type,
       staff_id: editForm.staff_id || null,
       staff_id_2: editForm.staff_id_2 || null,
     };
+    // C3: 緊急時訪問介護加算フラグ (列未適用環境では含めない)
+    if (kinkyuSupported) updateData.kinkyu_houmon = editForm.kinkyu_houmon;
+    // 2人体制の個別時間 (NULL = 本体と同じ)。列未適用環境では含めない
+    if (staff2TimesSupported) {
+      const useCustom = !!(editForm.staff_id_2 && editForm.staff2_custom && editForm.staff2_start && editForm.staff2_end);
+      updateData.staff2_start_time = useCustom ? editForm.staff2_start + ":00" : null;
+      updateData.staff2_end_time = useCustom ? editForm.staff2_end + ":00" : null;
+    }
     const { error } = await supabase
       .from("kaigo_visit_schedule")
       .update(updateData)
@@ -247,6 +334,16 @@ export function UserCalendar({
         editForm.staff_id_2 || null,
       );
       if (warn) toast.warning(warn);
+      // 職員2 個別時間の関係警告 (障害は制度上別算定なので出さない)
+      if (editForm.staff_id_2 && editForm.staff2_custom) {
+        const timeWarn = staffTimeRelationWarning(
+          editForm.start_time, editForm.end_time,
+          editForm.staff2_start, editForm.staff2_end,
+          editForm.service_name || editForm.service_type,
+          editServiceSystem === "障害",
+        );
+        if (timeWarn) toast.warning(timeWarn);
+      }
       setEditModal(null);
       refetchAfterMutation();
     }
@@ -293,7 +390,7 @@ export function UserCalendar({
   const openAddModal = (dateStr: string) => {
     setAddModal(dateStr);
     setAddServiceSystem(null);
-    setAddForm({ start_time: "09:00", end_time: "10:00", service_type: "", staff_id: "", staff_id_2: "", service_code: "", service_name: "" });
+    setAddForm({ start_time: "09:00", end_time: "10:00", service_type: "", staff_id: "", staff_id_2: "", service_code: "", service_name: "", kinkyu_houmon: false, staff2_custom: false, staff2_start: "", staff2_end: "" });
     setShowAddStaff2(false);
   };
 
@@ -304,17 +401,25 @@ export function UserCalendar({
       return;
     }
     setAddSaving(true);
-    const { error } = await supabase
-      .from("kaigo_visit_schedule")
-      .insert({
-        user_id: userId,
-        visit_date: addModal,
-        start_time: addForm.start_time + ":00",
-        end_time: addForm.end_time + ":00",
-        service_type: addForm.service_name || addForm.service_type,
-        staff_id: addForm.staff_id || null,
-        staff_id_2: addForm.staff_id_2 || null,
-      });
+    const addStaff2Custom = !!(addForm.staff_id_2 && addForm.staff2_custom && addForm.staff2_start && addForm.staff2_end);
+    const { error } = await insertVisitSchedules(supabase, [{
+      user_id: userId,
+      visit_date: addModal,
+      start_time: addForm.start_time + ":00",
+      end_time: addForm.end_time + ":00",
+      service_type: addForm.service_name || addForm.service_type,
+      staff_id: addForm.staff_id || null,
+      staff_id_2: addForm.staff_id_2 || null,
+      // C3/C5: 列未適用 (42703/PGRST204) は insertVisitSchedules が strip して retry
+      ...(kinkyuSupported ? { kinkyu_houmon: addForm.kinkyu_houmon } : {}),
+      ...(staff2TimesSupported
+        ? {
+            staff2_start_time: addStaff2Custom ? addForm.staff2_start + ":00" : null,
+            staff2_end_time: addStaff2Custom ? addForm.staff2_end + ":00" : null,
+          }
+        : {}),
+      ...(currentOfficeId ? { office_id: currentOfficeId } : {}),
+    }]);
     if (error) {
       toast.error("追加に失敗しました: " + error.message);
     } else {
@@ -324,6 +429,16 @@ export function UserCalendar({
         addForm.staff_id_2 || null,
       );
       if (warn) toast.warning(warn);
+      // 職員2 個別時間の関係警告 (障害は制度上別算定なので出さない)
+      if (addStaff2Custom) {
+        const timeWarn = staffTimeRelationWarning(
+          addForm.start_time, addForm.end_time,
+          addForm.staff2_start, addForm.staff2_end,
+          addForm.service_name || addForm.service_type,
+          addServiceSystem === "障害",
+        );
+        if (timeWarn) toast.warning(timeWarn);
+      }
       setAddModal(null);
       refetchAfterMutation();
     }
@@ -392,6 +507,7 @@ export function UserCalendar({
               const dow = getDay(day);
               const daySchedules = schedules.filter((s) => s.visit_date === dateStr);
               const isToday = isSameDay(day, new Date());
+              const hosp = isHospitalizedOn(hospPeriods, dateStr);
 
               return (
                 <div
@@ -431,6 +547,14 @@ export function UserCalendar({
                     >
                       {format(day, "d")}
                     </span>
+                    {hosp && (
+                      <span
+                        className="rounded bg-rose-100 px-1 py-0.5 text-[8px] font-bold text-rose-700 leading-none"
+                        title={`入院中${hosp.hospital_name ? ` (${hosp.hospital_name})` : ""}: ${hosp.admission_date}〜${hosp.discharge_date ?? "退院日未定"}`}
+                      >
+                        🏥入院中
+                      </span>
+                    )}
                     <button
                       onClick={(e) => { e.stopPropagation(); openAddModal(dateStr); }}
                       className="w-4 h-4 flex items-center justify-center rounded text-gray-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
@@ -644,6 +768,19 @@ export function UserCalendar({
                         };
                       })}
                   />
+                  {/* 2人体制の個別時間 (列未適用 DB では非表示) */}
+                  {staff2TimesSupported && editForm.staff_id_2 && (
+                    <Staff2TimeFields
+                      custom={editForm.staff2_custom}
+                      start={editForm.staff2_start}
+                      end={editForm.staff2_end}
+                      mainStart={editForm.start_time}
+                      mainEnd={editForm.end_time}
+                      serviceName={editForm.service_name || editForm.service_type}
+                      isShogai={editServiceSystem === "障害"}
+                      onChange={(patch) => setEditForm((f) => ({ ...f, ...patch }))}
+                    />
+                  )}
                 </div>
               ) : (
                 <button
@@ -653,6 +790,19 @@ export function UserCalendar({
                 >
                   ＋ 2人目を追加（2人体制）
                 </button>
+              )}
+
+              {/* C3: 緊急時訪問介護加算 (列未適用の DB では非表示) */}
+              {kinkyuSupported && (
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={editForm.kinkyu_houmon}
+                    onChange={(e) => setEditForm((f) => ({ ...f, kinkyu_houmon: e.target.checked }))}
+                    className="h-4 w-4 accent-red-600"
+                  />
+                  <span>緊急時訪問 (緊急時訪問介護加算)</span>
+                </label>
               )}
 
               {(() => {
@@ -847,6 +997,19 @@ export function UserCalendar({
                         };
                       })}
                   />
+                  {/* 2人体制の個別時間 (列未適用 DB では非表示) */}
+                  {staff2TimesSupported && addForm.staff_id_2 && (
+                    <Staff2TimeFields
+                      custom={addForm.staff2_custom}
+                      start={addForm.staff2_start}
+                      end={addForm.staff2_end}
+                      mainStart={addForm.start_time}
+                      mainEnd={addForm.end_time}
+                      serviceName={addForm.service_name || addForm.service_type}
+                      isShogai={addServiceSystem === "障害"}
+                      onChange={(patch) => setAddForm((f) => ({ ...f, ...patch }))}
+                    />
+                  )}
                 </div>
               ) : (
                 <button
@@ -856,6 +1019,19 @@ export function UserCalendar({
                 >
                   ＋ 2人目を追加（2人体制）
                 </button>
+              )}
+
+              {/* C3: 緊急時訪問介護加算 (列未適用の DB では非表示) */}
+              {kinkyuSupported && (
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={addForm.kinkyu_houmon}
+                    onChange={(e) => setAddForm((f) => ({ ...f, kinkyu_houmon: e.target.checked }))}
+                    className="h-4 w-4 accent-red-600"
+                  />
+                  <span>緊急時訪問 (緊急時訪問介護加算)</span>
+                </label>
               )}
 
               {(() => {
@@ -890,6 +1066,77 @@ export function UserCalendar({
               </button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── 職員2 の個別時間 (2人体制で担当時間が本体と異なる場合) ────────────────
+// チェック ON で職員2専用の開始・終了 time input を表示。OFF/NULL は本体時間と同じ扱い。
+// 列 (staff2_start_time) 未適用の DB では呼出側が描画しない。
+// shift-management-content の共有編集モーダルからも使う (export)。
+export function Staff2TimeFields({
+  custom,
+  start,
+  end,
+  mainStart,
+  mainEnd,
+  serviceName,
+  isShogai,
+  onChange,
+}: {
+  custom: boolean;
+  start: string;
+  end: string;
+  mainStart: string;
+  mainEnd: string;
+  serviceName: string;
+  isShogai: boolean;
+  onChange: (patch: { staff2_custom?: boolean; staff2_start?: string; staff2_end?: string }) => void;
+}) {
+  const warn = custom
+    ? staffTimeRelationWarning(mainStart, mainEnd, start, end, serviceName, isShogai)
+    : null;
+  return (
+    <div className="mt-2 space-y-2">
+      <label className="flex cursor-pointer items-center gap-1.5 text-xs text-gray-600">
+        <input
+          type="checkbox"
+          checked={custom}
+          onChange={(e) =>
+            onChange(
+              e.target.checked
+                ? { staff2_custom: true, staff2_start: start || mainStart, staff2_end: end || mainEnd }
+                : { staff2_custom: false },
+            )
+          }
+          className="h-3.5 w-3.5 accent-indigo-600"
+        />
+        個別時間 (職員2の担当時間が本体と異なる)
+      </label>
+      {custom && (
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="time"
+            value={start}
+            onChange={(e) => onChange({ staff2_start: e.target.value })}
+            className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+            title="職員2の開始時間"
+          />
+          <input
+            type="time"
+            value={end}
+            onChange={(e) => onChange({ staff2_end: e.target.value })}
+            className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+            title="職員2の終了時間"
+          />
+        </div>
+      )}
+      {warn && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          {warn}
         </div>
       )}
     </div>

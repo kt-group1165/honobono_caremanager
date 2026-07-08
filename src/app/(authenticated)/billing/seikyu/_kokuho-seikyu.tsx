@@ -29,6 +29,9 @@ import {
   SeikyuKanaSidebar,
   SeikyuMonthNav,
   loadKyotakuReSeikyuRows,
+  parseKyufuKanriKubun,
+  KYUFU_KANRI_KUBUN_LABELS,
+  type KyufuKanriKubun,
   type KyotakuSeikyuRow,
   type KyotakuReSeikyuRow,
 } from "./_seikyu-context";
@@ -40,15 +43,16 @@ import {
   type KeikakuhiUser,
 } from "@/lib/kokuho-densou/build-kyotaku";
 
-// 対象 / 提供年月 / 保険者番号 / 被保険者番号 / 利用者名 / 要介護度 / 単位数 / 保険請求額 / 状態
+// 対象 / 提供年月 / 保険者番号 / 被保険者番号 / 利用者名 / 要介護度 / 単位数 / 保険請求額 / 状態 / 給管作成区分
 const GRID_COLS =
-  "grid grid-cols-[32px_64px_88px_104px_1fr_72px_80px_96px_72px]";
+  "grid grid-cols-[32px_64px_88px_104px_1fr_72px_80px_96px_72px_80px]";
 
-// kaigo_billing_status の 1 行 (当月フラグ確認用)
+// kaigo_billing_status の 1 行 (当月フラグ確認 + 給付管理票作成区分マーカー用)
 interface BillingStatusRow {
   client_id: string;
   tsukiokure: boolean;
   henrei: boolean;
+  notes: string | null;
 }
 
 // 一覧の 1 行 (当月通常行 or 過去月の再請求行)
@@ -58,6 +62,8 @@ interface DisplayRow {
   origMonthKey: string; // 'YYYY-MM'
   isReSeikyu: boolean;
   reasons: { tsukiokure: boolean; henrei: boolean } | null;
+  /** kaigo_billing_status.notes (給付管理票 作成区分マーカー) */
+  statusNotes: string | null;
 }
 
 // .in() の URI Too Long 対策 chunk (claims-content と同じ 50 個)
@@ -102,11 +108,14 @@ export function KyotakuKokuhoSeikyuContent() {
     }
     const { data, error: e } = await supabase
       .from("kaigo_billing_status")
-      .select("client_id, tsukiokure, henrei")
+      .select("client_id, tsukiokure, henrei, notes")
       .eq("office_id", officeId)
       .eq("target_month", monthKey);
     if (e) {
-      if (e.code !== "42P01") toast.error("請求状態の取得に失敗: " + e.message);
+      // table 未作成 (42P01) / PostgREST schema cache 未反映 (PGRST205) は状態なしとして続行
+      if (e.code !== "42P01" && e.code !== "PGRST205") {
+        toast.error("請求状態の取得に失敗: " + e.message);
+      }
       setStatusByClient(new Map());
       return;
     }
@@ -151,6 +160,7 @@ export function KyotakuKokuhoSeikyuContent() {
       origMonthKey: r.__origMonthKey,
       isReSeikyu: true,
       reasons: r.__reasons,
+      statusNotes: r.__statusNotes,
     }));
     const cur: DisplayRow[] = filteredRows
       .filter((r) => {
@@ -164,9 +174,19 @@ export function KyotakuKokuhoSeikyuContent() {
         origMonthKey: monthKey,
         isReSeikyu: false,
         reasons: null,
+        statusNotes: statusByClient.get(r.user_id)?.notes ?? null,
       }));
     return [...re, ...cur];
   }, [filteredRows, reRows, kanaMatches, statusByClient, monthKey]);
+
+  // ── 給付管理票情報作成区分 (8221 項5: 1新規/2修正/3取消) ──
+  //    既定 = 当月行:新規 / 再請求行:修正。介護請求タブの給付管理票ペインで保存した
+  //    マーカー ([給管:修正] 等) があればそれを優先。行の select で出力直前に上書き可。
+  const [kubunOverride, setKubunOverride] = useState<Map<string, KyufuKanriKubun>>(new Map());
+  const effectiveKubun = (d: DisplayRow): KyufuKanriKubun =>
+    kubunOverride.get(d.key) ??
+    parseKyufuKanriKubun(d.statusNotes) ??
+    (d.isReSeikyu ? "2" : "1");
 
   const excludedCount = filteredRows.length - displayRows.filter((d) => !d.isReSeikyu).length;
 
@@ -221,10 +241,27 @@ export function KyotakuKokuhoSeikyuContent() {
       const files: { content: string; fileName: string; label: string; count: number }[] = [];
       const warnings: string[] = [];
 
+      // 処理対象年月 (コントロールレコード項11) = 審査実行月 = 今回提出分の翌月
+      // (_if_kyotaku.txt 注1)。再請求 (過去提供月) のファイルも提出は今なので同じ値。
+      const shoriDate = new Date(year, month, 1); // 表示中の請求月の翌月 1 日
+      const shoriYear = shoriDate.getFullYear();
+      const shoriMonth = shoriDate.getMonth() + 1;
+
       for (const [mKey, group] of [...byMonth.entries()].sort()) {
         const [oy, om] = mKey.split("-").map((n) => Number(n));
         if (!oy || !om) continue;
-        const opts = { officeNumber: officeNumber ?? "", year: oy, month: om, unitPrice };
+        const opts = {
+          officeNumber: officeNumber ?? "",
+          year: oy,
+          month: om,
+          unitPrice,
+          shoriYear,
+          shoriMonth,
+        };
+        // 給付管理票情報作成区分 (利用者ごと。既定=当月新規/再請求修正、UI で上書き可)
+        const kubunByUser = new Map<string, KyufuKanriKubun>(
+          group.map((d) => [d.row.user_id, effectiveKubun(d)]),
+        );
         const users = group.map((d) => d.row);
         const userIds = users.map((u) => u.user_id);
 
@@ -280,19 +317,35 @@ export function KyotakuKokuhoSeikyuContent() {
           );
         } else {
           // サービス事業所番号 (provider_name → offices.business_number)
+          // .in() は URI Too Long 回避のため chunk 化 (旧 slice(0,100) は 101 件目以降が
+          // 黙って未解決になっていた)
           const providerNames = [
             ...new Set(benefitRows.map((r) => r.provider_name).filter(Boolean)),
           ] as string[];
           const officeNoByName = new Map<string, string>();
-          if (providerNames.length > 0) {
+          for (const nameChunk of chunkArray(providerNames, IN_CHUNK_SIZE)) {
             const { data: offs, error: oe } = await supabase
               .from("offices")
               .select("name, business_number")
-              .in("name", providerNames.slice(0, 100));
+              .in("name", nameChunk);
             if (oe) throw new Error(`サービス事業所番号の取得に失敗: ${oe.message}`);
             for (const o of (offs ?? []) as { name: string; business_number: string | null }[]) {
               if (o.business_number) officeNoByName.set(o.name, o.business_number);
             }
+          }
+
+          // SERVICE_KIND_CODE 未登録の service_type を warning (8221 項19 が空になる)
+          const unknownServiceTypes = [
+            ...new Set(
+              benefitRows
+                .map((r) => r.service_type)
+                .filter((t) => t && !SERVICE_KIND_CODE[t]),
+            ),
+          ];
+          if (unknownServiceTypes.length > 0) {
+            warnings.push(
+              `[給付管理票 R${oy - 2018}/${om}] サービス種類コード未登録のサービス種別: ${unknownServiceTypes.join("、")} (SERVICE_KIND_CODE に追加が必要)`,
+            );
           }
 
           const rowsByUser = new Map<string, BenefitRow[]>();
@@ -312,6 +365,7 @@ export function KyotakuKokuhoSeikyuContent() {
               limitStart: u.certStart,
               limitEnd: u.certEnd,
               limitUnits: u.limitUnits,
+              sakuseiKubun: kubunByUser.get(u.user_id) ?? "1",
               lines: (rowsByUser.get(u.user_id) ?? []).map((r) => ({
                 officeNumber: r.provider_name
                   ? officeNoByName.get(r.provider_name) ?? ""
@@ -513,6 +567,7 @@ export function KyotakuKokuhoSeikyuContent() {
                 <div className="px-2 py-2 border-l border-gray-200 text-right">単位数</div>
                 <div className="px-2 py-2 border-l border-gray-200 text-right">保険請求額</div>
                 <div className="px-2 py-2 border-l border-gray-200 text-center">状態</div>
+                <div className="px-2 py-2 border-l border-gray-200 text-center" title="給付管理票情報作成区分 (8221 項5)">給管作成区分</div>
               </div>
 
               {displayRows.length === 0 ? (
@@ -576,6 +631,27 @@ export function KyotakuKokuhoSeikyuContent() {
                       ) : (
                         <span className="text-gray-500">当月</span>
                       )}
+                    </div>
+                    {/* 給付管理票 作成区分 (8221 項5) — 既定: 当月=新規 / 再請求=修正 */}
+                    <div className="px-1 py-1.5 border-l border-gray-100 text-center" onClick={(e) => e.stopPropagation()}>
+                      <select
+                        value={effectiveKubun(d)}
+                        onChange={(e) =>
+                          setKubunOverride((prev) => {
+                            const next = new Map(prev);
+                            next.set(d.key, e.target.value as KyufuKanriKubun);
+                            return next;
+                          })
+                        }
+                        title="給付管理票情報作成区分 (1=新規 / 2=修正 / 3=取消)。伝送ファイルの 8221 項5 と 8211 総括票の件数に反映"
+                        className={`w-full text-[11px] border border-gray-300 rounded px-0.5 py-0.5 bg-white ${effectiveKubun(d) !== "1" ? "text-red-600" : "text-gray-600"}`}
+                      >
+                        {(Object.keys(KYUFU_KANRI_KUBUN_LABELS) as KyufuKanriKubun[]).map((k) => (
+                          <option key={k} value={k}>
+                            {KYUFU_KANRI_KUBUN_LABELS[k]}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 );

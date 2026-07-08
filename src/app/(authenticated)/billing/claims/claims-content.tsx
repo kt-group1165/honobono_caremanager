@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
@@ -16,6 +17,7 @@ import {
   Check,
   X,
   Save,
+  Send,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   ChevronUp,
 } from "lucide-react";
@@ -27,11 +29,13 @@ import {
   type ClaimRow,
   type CertMapEntry,
   type ClaimsOfficeInfo,
-  ADDON_CODE_TO_DISCHARGE_TYPE,
-  ADDON_CODE_TO_HOSPITAL_TYPE,
-  ADDON_CODE_TO_TOKUTEI,
+  type CareLevelInfo,
   AUTO_ADDON_NOTES_MARKER,
-  KYOTAKU_ADDON_LAW_UNITS,
+  HOSPITAL_COORD_UNITS,
+  DISCHARGE_UNITS,
+  TOKUTEI_KASSAN_FALLBACK,
+  fetchKyotakuMasterForMonth,
+  reductionUnitsOf,
   type YoboShienKubun,
   YOBO_SHIEN_MARKER,
   getUnitPriceByArea,
@@ -41,6 +45,7 @@ import {
   setYoboShienMarker,
 } from "./claims-shared";
 import { validInMonth } from "@/lib/service-code-valid";
+import { resolveCertForMonth } from "@/lib/cert-for-month";
 import { useBusinessType } from "@/lib/business-type-context";
 
 // ---------------------------------------------------------------------------
@@ -84,28 +89,9 @@ interface Addings {
 // Constants
 // ---------------------------------------------------------------------------
 
-// 年度別単位数テーブル（kaigo_care_support_rates）から取得。フォールバック用の静的マップ。
-const CARE_LEVEL_MAP_FALLBACK: Record<
-  string,
-  { units: number; code: string; name: string }
-> = {
-  // 要支援は原則 kaigo_service_codes (対象月有効世代) から引く。ここは最終 fallback
-  // (R6.4 世代の 介護予防支援費Ⅱ = 居宅介護支援事業所の直接指定 472 単位)。
-  要支援1: { units: 472, code: "461112", name: "介護予防支援費Ⅱ (居宅介護支援事業所)" },
-  要支援2: { units: 472, code: "461112", name: "介護予防支援費Ⅱ (居宅介護支援事業所)" },
-  要介護1: { units: 1086, code: "432301", name: "居宅介護支援費Ⅰⅰ１" },
-  要介護2: { units: 1086, code: "432301", name: "居宅介護支援費Ⅰⅰ１" },
-  要介護3: { units: 1411, code: "432271", name: "居宅介護支援費Ⅰⅰ２" },
-  要介護4: { units: 1411, code: "432271", name: "居宅介護支援費Ⅰⅰ２" },
-  要介護5: { units: 1411, code: "432271", name: "居宅介護支援費Ⅰⅰ２" },
-};
-
-type CareLevelInfo = { units: number; code: string; name: string };
-
-function getFiscalYear(billingMonth: string): string {
-  const [y, m] = billingMonth.split("-").map(Number);
-  return m >= 4 ? String(y) : String(y - 1);
-}
+// 基本コード・単位は kaigo_service_codes の対象月有効世代 (fetchKyotakuMasterForMonth)
+// から解決する。静的フォールバックは claims-shared の KYOTAKU_BASE_FALLBACK
+// (byCareLevel に内包)。旧 kaigo_care_support_rates (年度キー) 参照は 2026-07-08 全廃。
 
 // ─────────────────────────────────────────────────────────────────────────
 // 介護予防支援費のサービスコード (46xx) を kaigo_service_codes から
@@ -149,36 +135,9 @@ async function fetchYoboShienCodes(
   return { I: pick("Ⅰ"), II: pick("Ⅱ") };
 }
 
-// 令和6年度改定 居宅介護支援 特定事業所加算単位数（フォールバック）
-// 本来は kaigo_tokutei_kassan_rates テーブルから取得
-const TOKUTEI_KASSAN_UNITS_FALLBACK: Record<string, number> = {
-  none: 0,
-  "Ⅰ": 519,
-  "Ⅱ": 421,
-  "Ⅲ": 323,
-  A: 114,
-  // 旧区分も残す（既存データ対応）
-  B: 421,
-  C: 323,
-};
-
-// 実際の単位数（一括生成時にDBから読み込み後に上書き）
-const TOKUTEI_KASSAN_UNITS: Record<string, number> = { ...TOKUTEI_KASSAN_UNITS_FALLBACK };
-
-const HOSPITAL_COORD_UNITS: Record<HospitalCoordType, number> = {
-  none: 0,
-  i: 250,
-  ii: 200,
-};
-
-const DISCHARGE_UNITS: Record<DischargeType, number> = {
-  none: 0,
-  i_i: 450,
-  i_ro: 600,
-  ii_i: 600,
-  ii_ro: 750,
-  iii: 900,
-};
+// 特定事業所加算 単位数 (実際の値は kaigo_service_codes の対象月有効世代から
+// fetchKyotakuMasterForMonth で読み込んで上書き。kaigo_tokutei_kassan_rates は全廃)
+const TOKUTEI_KASSAN_UNITS: Record<string, number> = { ...TOKUTEI_KASSAN_FALLBACK };
 
 const DISCHARGE_LABELS: Record<DischargeType, string> = {
   none: "なし",
@@ -233,9 +192,10 @@ function calcAdditionUnits(addings: Addings): number {
 }
 
 function calcReductionUnits(baseUnits: number, addings: Addings): number {
-  // Each reduction is floor(baseUnits * 1%)
-  const bcpRed = addings.bcp_not_prepared ? Math.floor(baseUnits * 1 / 100) : 0;
-  const abuseRed = addings.abuse_prevention_not_implemented ? Math.floor(baseUnits * 1 / 100) : 0;
+  // 公式合成コードと一致する round 方式:
+  //   減算量 = 所定 − round(所定×0.99) (例: 1411 → 14 / floor 方式だと 15 でズレる)
+  const bcpRed = addings.bcp_not_prepared ? reductionUnitsOf(baseUnits, 1) : 0;
+  const abuseRed = addings.abuse_prevention_not_implemented ? reductionUnitsOf(baseUnits, 1) : 0;
   return bcpRed + abuseRed;
 }
 
@@ -309,8 +269,9 @@ function generateCSV(
       (c.terminal_care ? (c.terminal_care_units ?? 400) : 0) +
       (c.emergency_conference ? (c.emergency_conference_units ?? 200) : 0);
     const reductionUnitsSum =
-      (c.bcp_not_prepared ? Math.floor(c.units * (c.bcp_reduction_pct ?? 1) / 100) : 0) +
-      (c.abuse_prevention_not_implemented ? Math.floor(c.units * (c.abuse_reduction_pct ?? 1) / 100) : 0);
+      (c.bcp_not_prepared ? reductionUnitsOf(c.units, c.bcp_reduction_pct || 1) : 0) +
+      (c.abuse_prevention_not_implemented ? reductionUnitsOf(c.units, c.abuse_reduction_pct || 1) : 0) +
+      (c.unei_kijun_gensan ? (c.unei_kijun_gensan_units ?? reductionUnitsOf(c.units, 50)) : 0);
     const row = [
       "明細",
       billingMonth.replace("-", ""),
@@ -361,8 +322,6 @@ interface EditModalProps {
 }
 
 function EditModal({ claim, certEntry, onClose, onSave }: EditModalProps) {
-  const supabase = createClient();
-
   const [addings, setAddings] = useState<Addings>({
     initial: claim.initial_addition,
     tokutei_kassan: normalizeTokuteiKassan(claim.tokutei_kassan_type as string | null),
@@ -381,27 +340,15 @@ function EditModal({ claim, certEntry, onClose, onSave }: EditModalProps) {
   const [unitPrice, setUnitPrice] = useState(claim.unit_price);
   const [saving, setSaving] = useState(false);
 
-  // Auto-fill tokutei_kassan and medical_coop_kassan from office settings
-  useEffect(() => {
-    supabase
-      .from("offices")
-      .select("tokutei_kassan_type, medical_cooperation_kassan")
-      .eq("app_type", "kaigo-app")
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }: { data: Record<string, unknown> | null }) => {
-        if (!data) return;
-        setAddings((prev) => ({
-          ...prev,
-          tokutei_kassan: data.tokutei_kassan_type ? normalizeTokuteiKassan(String(data.tokutei_kassan_type)) : prev.tokutei_kassan,
-          medical_coop_kassan: (data.medical_cooperation_kassan as boolean | null) ?? prev.medical_coop_kassan,
-        }));
-      });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // ※ 以前ここで事業所既定値 (offices.tokutei_kassan_type 等) を開くたび上書きしていたが、
+  //    既存 claim の値が失われる事故になるため廃止 (2026-07-08 総点検)。
 
   const addUnits = calcAdditionUnits(addings);
-  const reductionUnits = calcReductionUnits(claim.units, addings);
+  // 運営基準減算 (請求個人設定タブで設定) は保存時と同様プレビューにも反映
+  const uneiRedPreview = claim.unei_kijun_gensan
+    ? (claim.unei_kijun_gensan_units ?? reductionUnitsOf(claim.units, 50))
+    : 0;
+  const reductionUnits = calcReductionUnits(claim.units, addings) + uneiRedPreview;
   const { total_units, total_amount } = calcTotals(
     claim.units,
     addUnits,
@@ -701,61 +648,81 @@ export function ClaimsContent({
   const [editTarget, setEditTarget] = useState<ClaimRow | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [officeInfo] = useState<ClaimsOfficeInfo>(initialOfficeInfo);
+  const [officeInfo, setOfficeInfo] = useState<ClaimsOfficeInfo>(initialOfficeInfo);
+
+  // ── 自事業所 (currentOffice) が確定したら office 情報を id で引き直す ──
+  //    (server 初期値は app_type='kaigo-app' の先頭 1 件のため、複数事業所で不定になる)
+  useEffect(() => {
+    if (!currentOffice?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("offices")
+        .select("tokutei_kassan_type, medical_cooperation_kassan, area_category, unit_price, provider_number:business_number")
+        .eq("id", currentOffice.id)
+        .maybeSingle();
+      if (error) {
+        console.error("事業所情報の取得に失敗:", error.message);
+        return;
+      }
+      if (!cancelled && data) setOfficeInfo(data as ClaimsOfficeInfo);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, currentOffice?.id]);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
 
   const fetchClaims = useCallback(async () => {
     setLoading(true);
     try {
+      // 対象月の特定事業所加算単位をマスタ世代から更新 (EditModal 表示・再計算用)
+      try {
+        const master = await fetchKyotakuMasterForMonth(supabase, billingMonth);
+        Object.assign(TOKUTEI_KASSAN_UNITS, master.tokuteiUnits);
+      } catch (e) {
+        console.error("特定事業所加算単位の取得に失敗 (フォールバック値を使用):", e);
+      }
+
       // PostgREST 列エイリアスで kaigo_users 旧フィールド名を維持しつつ clients を埋め込む
       // kaigo_care_support_claims.user_id → clients.id (FK redirect 済)
-      const { data, error } = await supabase
-        .from("kaigo_care_support_claims")
-        .select("*, clients(name, name_kana:furigana, gender, phone, mobile_phone:mobile)")
-        .eq("billing_month", billingMonth)
-        .order("created_at", { ascending: true });
-
-      if (error) throw error;
-      const rows = (data as ClaimRow[]) || [];
+      // 1000 行制限対策の page-loop 付き
+      const PAGE = 1000;
+      const rows: ClaimRow[] = [];
+      {
+        let from = 0;
+        while (true) {
+          const { data, error } = await supabase
+            .from("kaigo_care_support_claims")
+            .select("*, clients(name, name_kana:furigana, gender, phone, mobile_phone:mobile)")
+            .eq("billing_month", billingMonth)
+            .order("created_at", { ascending: true })
+            .order("id", { ascending: true })
+            .range(from, from + PAGE - 1);
+          if (error) throw error;
+          if (!data || data.length === 0) break;
+          rows.push(...(data as ClaimRow[]));
+          if (data.length < PAGE) break;
+          from += PAGE;
+        }
+      }
       setClaims(rows);
 
-      // Fetch certifications for the users in these claims
+      // 認定情報は「対象月に有効な認定」で解決 (resolveCertForMonth)
       const userIds = [...new Set(rows.map((r) => r.user_id))];
       if (userIds.length > 0) {
-        // client_insurance_records, カラム名は新スキーマ
-        // PostgREST default 1000 行制限対策で page-loop で全件取得 + .in() も chunk 化
-        type CertRow = { client_id: string; care_level: string; insurer_number: string | null; insured_number: string | null; certification_start_date: string | null; certification_end_date: string | null };
-        const PAGE = 1000;
-        const certs: CertRow[] = [];
-        for (const idChunk of chunkArray(userIds, IN_CHUNK_SIZE)) {
-          let fromC = 0;
-          while (true) {
-            const { data, error: certsErr } = await supabase
-              .from("client_insurance_records")
-              .select("client_id, care_level, insurer_number, insured_number, certification_start_date, certification_end_date")
-              .in("client_id", idChunk)
-              .order("certification_date", { ascending: false })
-              .range(fromC, fromC + PAGE - 1);
-            if (certsErr) throw certsErr;
-            if (!data || data.length === 0) break;
-            certs.push(...(data as CertRow[]));
-            if (data.length < PAGE) break;
-            fromC += PAGE;
-          }
-        }
-
-        const map = new Map<string, { care_level: string; insurer_number: string | null; insured_number: string | null; start_date: string | null; end_date: string | null }>();
-        for (const cert of certs) {
-          if (!map.has(cert.client_id)) {
-            map.set(cert.client_id, {
-              care_level: cert.care_level,
-              insurer_number: cert.insurer_number ?? null,
-              insured_number: cert.insured_number ?? null,
-              start_date: cert.certification_start_date ?? null,
-              end_date: cert.certification_end_date ?? null,
-            });
-          }
+        const [by, bm] = billingMonth.split("-").map(Number);
+        const certRes = await resolveCertForMonth(supabase, userIds, by, bm);
+        const map = new Map<string, CertMapEntry>();
+        for (const [clientId, cert] of certRes) {
+          map.set(clientId, {
+            care_level: cert.care_level ?? "",
+            insurer_number: cert.insurer_number ?? null,
+            insured_number: cert.insured_number ?? null,
+            start_date: cert.certification_start_date ?? null,
+            end_date: cert.certification_end_date ?? null,
+          });
         }
         setCertMap(map);
       } else {
@@ -797,9 +764,13 @@ export function ClaimsContent({
   // ── Auto-generate ─────────────────────────────────────────────────────────
 
   const handleGenerate = async () => {
+    if (!currentOffice?.id) {
+      toast.error("自事業所が未確定です (設定 → 自事業所を選択してから実行してください)");
+      return;
+    }
     if (
       !window.confirm(
-        `${formatMonth(billingMonth)}のレセプトを一括生成します。\n既存データがある場合は上書きされます。よろしいですか？`
+        `${formatMonth(billingMonth)}のレセプトを一括生成します。\n既存データがある場合は上書きされます。\n※ 個別加算 (初回・退院退所・入院時情報連携等) は全て OFF で生成されます。請求 → 請求個人設定タブで利用者ごとに設定してください。\nよろしいですか？`
       )
     )
       return;
@@ -819,6 +790,7 @@ export function ClaimsContent({
             .eq("status", "active")
             .eq("is_facility", false)
             .is("deleted_at", null)
+            .order("id", { ascending: true })
             .range(fromU, fromU + PAGE_USERS - 1);
           if (usersErr) throw usersErr;
           if (!data || data.length === 0) break;
@@ -855,31 +827,14 @@ export function ClaimsContent({
         return;
       }
 
-      // 3. Fetch latest certifications for those users（client_insurance_records）
-      //    PostgREST default 1000 行制限対策で page-loop で全件取得 + .in() も chunk 化
-      const PAGE_CERTS = 1000;
-      const certs: { client_id: string; care_level: string; insurer_number: string | null; insured_number: string | null }[] = [];
-      {
-        const activeIds = Array.from(activeUserIds);
-        for (const idChunk of chunkArray(activeIds, IN_CHUNK_SIZE)) {
-          let fromC = 0;
-          while (true) {
-            const { data, error: certsErr } = await supabase
-              .from("client_insurance_records")
-              .select("client_id, care_level, insurer_number, insured_number")
-              .in("client_id", idChunk)
-              .order("certification_date", { ascending: false })
-              .range(fromC, fromC + PAGE_CERTS - 1);
-            if (certsErr) throw certsErr;
-            if (!data || data.length === 0) break;
-            certs.push(...(data as { client_id: string; care_level: string; insurer_number: string | null; insured_number: string | null }[]));
-            if (data.length < PAGE_CERTS) break;
-            fromC += PAGE_CERTS;
-          }
-        }
-      }
-
-      // Build map: user_id -> most recent cert
+      // 3. 認定情報を「対象月に有効な認定」で解決 (resolveCertForMonth)
+      const [genY, genM] = billingMonth.split("-").map(Number);
+      const certForMonth = await resolveCertForMonth(
+        supabase,
+        Array.from(activeUserIds),
+        genY,
+        genM,
+      );
       const certMap = new Map<
         string,
         {
@@ -888,22 +843,20 @@ export function ClaimsContent({
           insured_number: string | null;
         }
       >();
-      for (const cert of certs || []) {
-        if (!certMap.has(cert.client_id)) {
-          certMap.set(cert.client_id, {
-            care_level: cert.care_level,
-            insurer_number: cert.insurer_number ?? null,
-            insured_number: cert.insured_number ?? null,
-          });
-        }
+      for (const [clientId, cert] of certForMonth) {
+        if (!cert.care_level) continue;
+        certMap.set(clientId, {
+          care_level: cert.care_level,
+          insurer_number: cert.insurer_number ?? null,
+          insured_number: cert.insured_number ?? null,
+        });
       }
 
-      // 4. Fetch office settings for auto-apply（共通マスタ offices, kaigo-app の自事業所）
+      // 4. Fetch office settings for auto-apply（共通マスタ offices — 現在の自事業所を id で参照）
       const { data: officeSettings, error: officeErr } = await supabase
         .from("offices")
         .select("tokutei_kassan_type, medical_cooperation_kassan, unit_price, area_category")
-        .eq("app_type", "kaigo-app")
-        .limit(1)
+        .eq("id", currentOffice.id)
         .maybeSingle();
       if (officeErr) throw officeErr;
 
@@ -915,38 +868,16 @@ export function ClaimsContent({
         ? getUnitPriceByArea(officeArea)
         : Number(officeSettings?.unit_price ?? 10);
 
-      // 5. Fetch fiscal year rates from DB
-      const fy = getFiscalYear(billingMonth);
-      const [ratesRes, tkRatesRes] = await Promise.all([
-        supabase
-          .from("kaigo_care_support_rates")
-          .select("care_level, units, service_code, service_name")
-          .eq("fiscal_year", fy),
-        supabase
-          .from("kaigo_tokutei_kassan_rates")
-          .select("kassan_type, units")
-          .eq("fiscal_year", fy)
-          .eq("business_type", "居宅介護支援"),
-      ]);
-      if (ratesRes.error) throw ratesRes.error;
-      if (tkRatesRes.error) throw tkRatesRes.error;
-
-      const CARE_LEVEL_MAP: Record<string, CareLevelInfo> = { ...CARE_LEVEL_MAP_FALLBACK };
-      if (ratesRes.data && ratesRes.data.length > 0) {
-        for (const r of ratesRes.data) {
-          CARE_LEVEL_MAP[r.care_level] = {
-            units: r.units,
-            code: r.service_code,
-            name: r.service_name,
-          };
-        }
-      }
-
-      // 特定事業所加算単位数をDBから上書き
-      if (tkRatesRes.data && tkRatesRes.data.length > 0) {
-        for (const r of tkRatesRes.data) {
-          TOKUTEI_KASSAN_UNITS[r.kassan_type] = r.units;
-        }
+      // 5. 基本コード・単位 + 特定事業所加算単位を kaigo_service_codes の
+      //    「対象月に有効な世代」(validInMonth) から解決。
+      //    R8.6 改定 (2026-06〜) を含め世代管理はマスタ側で行う (年度テーブル参照は全廃)。
+      const monthMaster = await fetchKyotakuMasterForMonth(supabase, billingMonth);
+      const CARE_LEVEL_MAP: Record<string, CareLevelInfo> = monthMaster.byCareLevel;
+      Object.assign(TOKUTEI_KASSAN_UNITS, monthMaster.tokuteiUnits);
+      if (!monthMaster.fromMaster) {
+        toast.warning(
+          "kaigo_service_codes に対象月の居宅介護支援コードが見つかりません。静的フォールバック値で生成します",
+        );
       }
 
       // 5-a. 加算管理 (= /addons) から「この月に有効な」加算を取得。
@@ -972,6 +903,7 @@ export function ClaimsContent({
             .eq("office_id", currentOffice.id)
             .eq("business_type", "居宅介護支援")
             .eq("status", "active")
+            .order("id", { ascending: true })
             .range(fromA, fromA + PAGE_ADDONS - 1);
           if (addonsErr) throw addonsErr;
           if (!data || data.length === 0) break;
@@ -992,20 +924,6 @@ export function ClaimsContent({
           addonByCode.set(a.addon_code, a);
         }
       }
-
-      /** addon_code に対応する 単位数を取得 (DB rates → addon_unit → 法令 hardcode の順) */
-      const resolveAddonUnits = (code: string): number => {
-        const a = addonByCode.get(code);
-        // 特定事業所加算は kaigo_tokutei_kassan_rates を最優先
-        const tokuteiType = ADDON_CODE_TO_TOKUTEI[code];
-        if (tokuteiType) {
-          return TOKUTEI_KASSAN_UNITS[tokuteiType] ?? 0;
-        }
-        // ユーザが addon_unit を明示入力していればそれを使う
-        if (a && a.addon_unit != null) return a.addon_unit;
-        // 法令 hardcode fallback
-        return KYOTAKU_ADDON_LAW_UNITS[code] ?? 0;
-      };
 
       // 5-b. addons table 由来の office 単位加減算を決定。
       //   - 特定事業所加算: addons 優先、無ければ offices.tokutei_kassan_type を fallback
@@ -1030,56 +948,12 @@ export function ClaimsContent({
       }
       const officeMedicalCoop = officeSettings?.medical_cooperation_kassan ?? false;
       const officeTokuteiUnits = TOKUTEI_KASSAN_UNITS[officeTokutei] ?? 0;
-      const officeMedicalCoopUnits = officeMedicalCoop ? 125 : 0;
+      const officeMedicalCoopUnits = officeMedicalCoop ? monthMaster.medicalCoopUnits : 0;
 
-      // 5-c. 利用者単位の加算 (= 退院・退所 / 入院時情報連携 / ターミナル / 緊急時カンファ / 医療連携)
-      //   これらは事業所単位ではなく「該当する利用者にだけ算定」だが、
-      //   /addons には事業所単位でしか登録されていない。
-      //   → 当面は「事業所として算定届出済の加算は draft 段階で全員に自動算定」とする (= 安全側)
-      //     ユーザは行ごとの checkbox で個別に off にできる。
-      const autoHospitalCode = (() => {
-        if (addonByCode.has("入院時情報連携加算Ⅰ")) return "入院時情報連携加算Ⅰ";
-        if (addonByCode.has("入院時情報連携加算Ⅱ")) return "入院時情報連携加算Ⅱ";
-        return null;
-      })();
-      const autoDischargeCode = (() => {
-        if (addonByCode.has("退院・退所加算Ⅲ")) return "退院・退所加算Ⅲ";
-        if (addonByCode.has("退院・退所加算Ⅱロ")) return "退院・退所加算Ⅱロ";
-        if (addonByCode.has("退院・退所加算Ⅱイ")) return "退院・退所加算Ⅱイ";
-        if (addonByCode.has("退院・退所加算Ⅰロ")) return "退院・退所加算Ⅰロ";
-        if (addonByCode.has("退院・退所加算Ⅰイ")) return "退院・退所加算Ⅰイ";
-        return null;
-      })();
-      const autoMedicalCoordCode = addonByCode.has("医療連携加算") ? "医療連携加算" : null;
-      const autoTerminalCode = addonByCode.has("ターミナルケアマネジメント加算")
-        ? "ターミナルケアマネジメント加算"
-        : null;
-      const autoEmergencyCode = addonByCode.has("緊急時等居宅カンファレンス加算")
-        ? "緊急時等居宅カンファレンス加算"
-        : null;
-
-      // 5-d. 初回加算 自動算定 用に「過去 claims に既出の user_id」を取得。
-      //     billing_month は TEXT 'YYYY-MM' なので lexicographic 比較で「当月未満」が取れる。
-      //     当月 (= 既存の同 month claims) は手順 6 で delete されるため対象外。
-      type PriorClaimRow = { user_id: string };
-      const priorUserIds = new Set<string>();
-      {
-        const PAGE_PRIOR = 1000;
-        let fromP = 0;
-        while (true) {
-          const { data, error: priorErr } = await supabase
-            .from("kaigo_care_support_claims")
-            .select("user_id")
-            .lt("billing_month", billingMonth)
-            .range(fromP, fromP + PAGE_PRIOR - 1);
-          if (priorErr) throw priorErr;
-          if (!data || data.length === 0) break;
-          for (const r of data as PriorClaimRow[]) priorUserIds.add(r.user_id);
-          if (data.length < PAGE_PRIOR) break;
-          fromP += PAGE_PRIOR;
-        }
-      }
-      const initialAddonAvailable = addonByCode.has("初回加算");
+      // 5-c. 利用者単位の加算 (初回 / 退院・退所 / 入院時情報連携 / ターミナル /
+      //      緊急時カンファ / 通院時情報連携) は一括生成では全て OFF で生成する。
+      //      (旧: 届出があれば全員に自動算定 → 過剰請求リスクのため 2026-07-08 廃止。
+      //       利用者ごとの算定は 請求 → 請求個人設定タブ のマトリクスで設定する)
 
       // 5-e. 介護予防支援費 (要支援1/2) — kaigo_service_codes の対象月有効世代から取得
       //     (kaigo_care_support_rates の固定 443 単位は使わない。R6.4 以降は Ⅰ/Ⅱ の 2 区分)
@@ -1097,6 +971,7 @@ export function ClaimsContent({
             .select("user_id, billing_month, notes")
             .like("notes", "%[予防支援:%")
             .order("billing_month", { ascending: false })
+            .order("id", { ascending: true })
             .range(fromY, fromY + PAGE_YK - 1);
           if (ykErr) throw ykErr;
           if (!data || data.length === 0) break;
@@ -1179,56 +1054,23 @@ export function ClaimsContent({
         }
         if (!levelInfo) continue;
 
-        // ── 自動算定 加算 (= 事業所単位の届出加算を draft で全員に展開) ──
-        // 介護予防支援には居宅介護支援費の加算 (特定事業所・退院退所・入院時情報等) は
-        // 算定できないため、要支援者は初回加算 (介護予防支援 初回加算 300 単位) のみ自動算定
-        const uDischargeCode = isYobo ? null : autoDischargeCode;
-        const uHospitalCode = isYobo ? null : autoHospitalCode;
-        const uMedicalCoordCode = isYobo ? null : autoMedicalCoordCode;
-        const uTerminalCode = isYobo ? null : autoTerminalCode;
-        const uEmergencyCode = isYobo ? null : autoEmergencyCode;
+        // ── 事業所体制系の加算 (特定事業所・医療介護連携) のみ自動算定 ──
+        // 介護予防支援には居宅介護支援費の加算は算定できないため要支援者は無し。
+        // 個別加算 (初回・退院退所・入院時情報連携・通院時・ターミナル・緊急時カンファ)
+        // は全て OFF で生成 → 請求個人設定タブで利用者ごとに設定。
         const uTokutei: TokuteiKassanType = isYobo ? "none" : officeTokutei;
         const uTokuteiUnits = isYobo ? 0 : officeTokuteiUnits;
         const uMedicalCoop = isYobo ? false : officeMedicalCoop;
         const uMedicalCoopUnits = isYobo ? 0 : officeMedicalCoopUnits;
-        // 退院・退所加算
-        const dischargeType: DischargeType | null = uDischargeCode
-          ? (ADDON_CODE_TO_DISCHARGE_TYPE[uDischargeCode] ?? null)
-          : null;
-        const dischargeUnits = uDischargeCode ? resolveAddonUnits(uDischargeCode) : 0;
-        // 入院時情報連携加算
-        const hospitalType: HospitalCoordType | null = uHospitalCode
-          ? (ADDON_CODE_TO_HOSPITAL_TYPE[uHospitalCode] ?? null)
-          : null;
-        const hospitalUnits = uHospitalCode ? resolveAddonUnits(uHospitalCode) : 0;
-        // 医療連携加算 (= 通院時情報連携)
-        const medicalCoordUnits = uMedicalCoordCode ? resolveAddonUnits(uMedicalCoordCode) : 0;
-        // ターミナルケア
-        const terminalUnits = uTerminalCode ? resolveAddonUnits(uTerminalCode) : 0;
-        // 緊急時カンファレンス
-        const emergencyUnits = uEmergencyCode ? resolveAddonUnits(uEmergencyCode) : 0;
-        // 初回加算 (= 過去 claims に user_id が無い場合のみ)
-        const isInitial = initialAddonAvailable && !priorUserIds.has(user.id);
-        const initialUnits = isInitial ? (KYOTAKU_ADDON_LAW_UNITS["初回加算"] ?? 300) : 0;
 
-        const autoAddUnits =
-          uTokuteiUnits +
-          uMedicalCoopUnits +
-          dischargeUnits +
-          hospitalUnits +
-          medicalCoordUnits +
-          terminalUnits +
-          emergencyUnits +
-          initialUnits;
+        const autoAddUnits = uTokuteiUnits + uMedicalCoopUnits;
         const { total_amount } = calcTotals(levelInfo.units, autoAddUnits, 0, officeUnitPrice);
 
         // 自動算定の根拠を notes に印で残す
         const noteParts: string[] = [];
-        if (yoboKubun) {
-          noteParts.push(
-            `${AUTO_ADDON_NOTES_MARKER} ${levelInfo.name} ${levelInfo.units}単位 (kaigo_service_codes 対象月有効世代)`,
-          );
-        }
+        noteParts.push(
+          `${AUTO_ADDON_NOTES_MARKER} ${levelInfo.name} ${levelInfo.units}単位 (kaigo_service_codes 対象月有効世代)`,
+        );
         if (uTokutei !== "none") {
           noteParts.push(
             `${AUTO_ADDON_NOTES_MARKER} 特定事業所加算${uTokutei} (${tokuteiSource === "addons" ? "加算管理" : "/master/office"} 由来)`,
@@ -1237,12 +1079,6 @@ export function ClaimsContent({
         if (uMedicalCoop) {
           noteParts.push(`${AUTO_ADDON_NOTES_MARKER} 特定事業所医療介護連携加算 (/master/office)`);
         }
-        if (uDischargeCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${uDischargeCode} (加算管理)`);
-        if (uHospitalCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${uHospitalCode} (加算管理)`);
-        if (uMedicalCoordCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${uMedicalCoordCode} (加算管理)`);
-        if (uTerminalCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${uTerminalCode} (加算管理)`);
-        if (uEmergencyCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${uEmergencyCode} (加算管理)`);
-        if (isInitial) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} 初回加算 (= 過去月 claims なしと判定)`);
         // 単価 source
         noteParts.push(
           officeArea
@@ -1262,23 +1098,23 @@ export function ClaimsContent({
           unit_price: officeUnitPrice,
           total_amount,
           insurance_amount: total_amount,
-          initial_addition: isInitial,
-          initial_addition_units: initialUnits,
-          hospital_coordination: hospitalType !== null,
-          hospital_coordination_units: hospitalUnits,
-          discharge_addition: dischargeType !== null,
-          discharge_addition_units: dischargeUnits,
-          medical_coordination: medicalCoordUnits > 0,
-          medical_coordination_units: medicalCoordUnits,
+          initial_addition: false,
+          initial_addition_units: 0,
+          hospital_coordination: false,
+          hospital_coordination_units: 0,
+          discharge_addition: false,
+          discharge_addition_units: 0,
+          medical_coordination: false,
+          medical_coordination_units: 0,
           tokutei_kassan_type: uTokutei === "none" ? null : uTokutei,
           tokutei_kassan_units: uTokuteiUnits,
           medical_coop_kassan: uMedicalCoop,
           medical_coop_kassan_units: uMedicalCoopUnits,
-          discharge_type: dischargeType,
-          terminal_care: terminalUnits > 0,
-          terminal_care_units: terminalUnits,
-          emergency_conference: emergencyUnits > 0,
-          emergency_conference_units: emergencyUnits,
+          discharge_type: null,
+          terminal_care: false,
+          terminal_care_units: 0,
+          emergency_conference: false,
+          emergency_conference_units: 0,
           bcp_not_prepared: false,
           bcp_reduction_pct: 0,
           abuse_prevention_not_implemented: false,
@@ -1402,7 +1238,11 @@ export function ClaimsContent({
     if (!claim) return;
 
     const addUnits = calcAdditionUnits(addings);
-    const reductionUnits = calcReductionUnits(claim.units, addings);
+    // 運営基準減算 (請求個人設定タブで設定) は claim の既存値を維持して合算
+    const uneiRed = claim.unei_kijun_gensan
+      ? (claim.unei_kijun_gensan_units ?? reductionUnitsOf(claim.units, 50))
+      : 0;
+    const reductionUnits = calcReductionUnits(claim.units, addings) + uneiRed;
     const { total_amount, insurance_amount } = calcTotals(
       claim.units,
       addUnits,
@@ -1573,192 +1413,9 @@ export function ClaimsContent({
     toast.success(`${confirmed.length}件のCSVを出力しました`);
   };
 
-  // ── 国保連伝送用 固定長テキスト出力 ──────────────────────────────────
-  const handleKokuhoExport = async () => {
-    if (claims.length === 0) {
-      toast.error("出力するデータがありません");
-      return;
-    }
-    // 委託 (予防支援) は包括が請求するため出力対象外
-    const confirmed = claims.filter(
-      (c) => c.status !== "draft" && parseYoboShienKubun(c.notes) !== "itaku",
-    );
-    if (confirmed.length === 0) {
-      toast.error("確定済みのレセプトがありません。確定後に出力してください。");
-      return;
-    }
-
-    try {
-      // 自事業所設定を取得（共通マスタ offices, kaigo-app）
-      const { data: officeData } = await supabase
-        .from("offices")
-        .select("provider_number:business_number, area_category, unit_price")
-        .eq("app_type", "kaigo-app")
-        .limit(1)
-        .maybeSingle();
-
-      const providerNumber = (officeData as { provider_number?: string } | null)?.provider_number ?? "0000000000";
-      const unitPrice = Number(officeData?.unit_price ?? 10);
-      const areaCode = areaCategoryToCode(officeData?.area_category ?? "その他");
-
-      // 利用者情報（生年月日・性別）を取得（clients）
-      const userIds = [...new Set(confirmed.map((c) => c.user_id))];
-      const { data: usersData } = await supabase
-        .from("clients")
-        .select("id, birth_date, gender")
-        .in("id", userIds);
-      const userInfoMap = new Map<string, { birth_date: string | null; gender: string | null }>();
-      for (const u of usersData || []) {
-        userInfoMap.set(u.id, { birth_date: u.birth_date ?? null, gender: u.gender ?? null });
-      }
-
-      // Dynamic import to avoid server bundling
-      const { downloadCareMgmtFile } = await import("@/lib/kokuho-renkei");
-
-      const serviceYearMonth = billingMonth.replace("-", ""); // "2026-04" → "202604"
-
-      // ClaimRowからCareMgmtClaim形式に変換
-      const careMgmtClaims = confirmed.map((c) => {
-        const cert = certMap.get(c.user_id);
-        const userName = c.clients?.name ?? "";
-        const insuredNumber = cert?.insured_number ?? "";
-        const insurerNumber = cert?.insurer_number ?? "";
-        const careLevelCode = careLevelToCode(cert?.care_level ?? "");
-
-        // 加算レコード
-        const additions: Array<{
-          serviceItemCode: string;
-          units: number;
-          count: number;
-          serviceUnits: number;
-          note?: string;
-        }> = [];
-        if (c.initial_addition) {
-          additions.push({
-            serviceItemCode: "4000",
-            units: c.initial_addition_units,
-            count: 1,
-            serviceUnits: c.initial_addition_units,
-            note: "初回加算",
-          });
-        }
-        if (c.tokutei_kassan_type && c.tokutei_kassan_units > 0) {
-          additions.push({
-            serviceItemCode: "6132",
-            units: c.tokutei_kassan_units,
-            count: 1,
-            serviceUnits: c.tokutei_kassan_units,
-            note: `特定事業所加算(${c.tokutei_kassan_type})`,
-          });
-        }
-        if (c.medical_coop_kassan) {
-          additions.push({
-            serviceItemCode: "6135",
-            units: c.medical_coop_kassan_units || 125,
-            count: 1,
-            serviceUnits: c.medical_coop_kassan_units || 125,
-            note: "特定事業所医療介護連携加算",
-          });
-        }
-        if (c.hospital_coordination && c.hospital_coordination_units > 0) {
-          additions.push({
-            serviceItemCode: "4001",
-            units: c.hospital_coordination_units,
-            count: 1,
-            serviceUnits: c.hospital_coordination_units,
-            note: "入院時情報連携加算",
-          });
-        }
-        if (c.discharge_addition && c.discharge_addition_units > 0) {
-          additions.push({
-            serviceItemCode: "4002",
-            units: c.discharge_addition_units,
-            count: 1,
-            serviceUnits: c.discharge_addition_units,
-            note: "退院・退所加算",
-          });
-        }
-
-        const additionTotalUnits = additions.reduce((sum, a) => sum + a.serviceUnits, 0);
-        const totalUnits = c.units + additionTotalUnits;
-
-        const uInfo = userInfoMap.get(c.user_id);
-        const birthDate = (uInfo?.birth_date ?? "").replace(/-/g, "") || "19500101";
-        const genderCode = uInfo?.gender === "女" ? ("2" as const) : ("1" as const);
-
-        return {
-          base: {
-            exchangeId: "7121",
-            serviceYearMonth,
-            providerNumber,
-            serviceTypeCode: "43",
-            areaCode,
-            insuredNumber,
-            userName,
-            birthDate,
-            gender: genderCode,
-            careLevelCode,
-            certStartDate: (cert?.start_date ?? "20240401").replace(/-/g, ""),
-            certEndDate: (cert?.end_date ?? "20270331").replace(/-/g, ""),
-            insurerNumber,
-            totalUnits,
-          },
-          mainService: {
-            serviceItemCode: c.care_support_code.slice(-4),
-            units: c.units,
-            count: 1,
-            serviceUnits: c.units,
-            note: c.care_support_name,
-          },
-          additions,
-          shukei: {
-            actualDays: 1,
-            plannedUnits: totalUnits,
-            limitManagementUnits: 0, // 居宅介護支援費は限度額管理対象外
-            nonLimitUnits: totalUnits,
-            benefitUnits: totalUnits,
-            unitPrice,
-            totalCost: c.total_amount,
-            insuranceClaim: c.insurance_amount,
-            userCopay: 0, // 居宅介護支援は10割給付
-          },
-        };
-      });
-
-      downloadCareMgmtFile({
-        serviceYearMonth,
-        providerNumber,
-        areaCode,
-        unitPrice,
-        claims: careMgmtClaims,
-      });
-
-      toast.success(`${confirmed.length}件の国保連伝送用ファイルを出力しました`);
-    } catch (err) {
-      console.error(err);
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.error("伝送用ファイルの出力に失敗しました: " + msg);
-    }
-  };
-
-  // 要介護度→コード変換
-  const careLevelToCode = (careLevel: string): string => {
-    const map: Record<string, string> = {
-      "要支援1": "12", "要支援2": "13",
-      "要介護1": "21", "要介護2": "22", "要介護3": "23",
-      "要介護4": "24", "要介護5": "25",
-    };
-    return map[careLevel] ?? "00";
-  };
-
-  // 地域区分→コード変換
-  const areaCategoryToCode = (area: string): number => {
-    const map: Record<string, number> = {
-      "1級地": 1, "2級地": 2, "3級地": 3, "4級地": 4,
-      "5級地": 5, "6級地": 6, "7級地": 7, "その他": 8,
-    };
-    return map[area] ?? 8;
-  };
+  // ※ 旧「国保連伝送用 (7121 固定長)」出力は 2026-07-08 総点検で廃止。
+  //   加算・減算・公費の反映が不完全な旧経路のため、伝送は
+  //   請求 (/billing/seikyu) → 国保請求タブ の正式 7111/8121 + 8211/8221 経路に一本化。
 
   // ── Row expand ────────────────────────────────────────────────────────────
 
@@ -1886,16 +1543,15 @@ export function ClaimsContent({
             国保連CSV出力
           </button>
 
-          {/* 国保連伝送用（固定長テキスト）出力 */}
-          <button
-            onClick={handleKokuhoExport}
-            disabled={summary.confirmed === 0}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 transition-colors disabled:opacity-50"
-            title="確定済みレセプトから国保連伝送用ファイル（固定長テキスト・Shift-JIS）を出力"
+          {/* 伝送は 請求 → 国保請求タブの正式経路 (7111/8121 + 8211/8221) へ誘導 */}
+          <Link
+            href="/billing/seikyu"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 transition-colors"
+            title="国保連への伝送ファイル出力は 請求 → 国保請求タブから (正式インタフェース 7111/8121 + 給付管理票 8211/8221)"
           >
-            <Download size={14} />
-            国保連伝送用
-          </button>
+            <Send size={14} />
+            伝送は 請求 → 国保請求タブから
+          </Link>
         </div>
       </div>
 
@@ -2272,6 +1928,9 @@ export function ClaimsContent({
                           if (claim.medical_coordination) total += (claim.medical_coordination_units ?? 50);
                           if (claim.terminal_care) total += (claim.terminal_care_units ?? 400);
                           if (claim.emergency_conference) total += (claim.emergency_conference_units ?? 200);
+                          if (claim.bcp_not_prepared) total -= reductionUnitsOf(claim.units, claim.bcp_reduction_pct || 1);
+                          if (claim.abuse_prevention_not_implemented) total -= reductionUnitsOf(claim.units, claim.abuse_reduction_pct || 1);
+                          if (claim.unei_kijun_gensan) total -= claim.unei_kijun_gensan_units ?? reductionUnitsOf(claim.units, 50);
                           return total.toLocaleString("ja-JP");
                         })()}
                       </td>
@@ -2338,6 +1997,9 @@ export function ClaimsContent({
                         if (c.medical_coordination) t += (c.medical_coordination_units ?? 50);
                         if (c.terminal_care) t += (c.terminal_care_units ?? 400);
                         if (c.emergency_conference) t += (c.emergency_conference_units ?? 200);
+                        if (c.bcp_not_prepared) t -= reductionUnitsOf(c.units, c.bcp_reduction_pct || 1);
+                        if (c.abuse_prevention_not_implemented) t -= reductionUnitsOf(c.units, c.abuse_reduction_pct || 1);
+                        if (c.unei_kijun_gensan) t -= c.unei_kijun_gensan_units ?? reductionUnitsOf(c.units, 50);
                         return s + t;
                       }, 0).toLocaleString("ja-JP")}
                     </td>

@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Search, X } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { validInMonth } from "@/lib/service-code-valid"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
@@ -47,6 +48,11 @@ interface ServiceSelectorProps {
    */
   startTime?: string
   endTime?: string
+  /**
+   * 対象月 (帳票等、月が確定している画面用)。指定時は「その月に有効な世代」
+   * (validInMonth) でコードを引く。未指定時は従来どおり今日時点で有効な世代。
+   */
+  targetMonth?: { year: number; month: number }
 }
 
 // ─── 時間レンジ判定 (service_name から所要分を推定) ─────────────────────────
@@ -250,7 +256,7 @@ export function ServiceSelector(props: ServiceSelectorProps) {
   return <ServiceSelectorInner {...props} />
 }
 
-function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介護", startTime, endTime }: Omit<ServiceSelectorProps, "open">) {
+function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介護", startTime, endTime, targetMonth }: Omit<ServiceSelectorProps, "open">) {
   const [activeSystem, setActiveSystem] = React.useState<"介護" | "障害" | "総合事業" | "独自">(initialSystem);
   const CATEGORIES = CATEGORIES_BY_SYSTEM[activeSystem];
   const system = activeSystem;
@@ -277,6 +283,10 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
   // ── Fetch per category (system='介護' 全件で 15k 行 → PostgREST 1000 limit に
   //    引っ掛かり 訪問介護(11) 以外のカテゴリが返らない問題があったため、
   //    activeCategory も filter に含めて 1 カテゴリずつ取得する) ──
+  // targetMonth は毎 render 新 object で来る可能性があるため、year/month の
+  // primitive を依存に使う (無限 refetch 防止)
+  const tmYear = targetMonth?.year
+  const tmMonth = targetMonth?.month
   React.useEffect(() => {
     let cancelled = false
     // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
@@ -289,19 +299,26 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
         const supabase = createClient()
         // 介護 / 障害 / 総合事業 の同居テーブル → system でフィルタ必須
         //   さもないと service_category=11 が介護(訪問介護) と 障害(居宅介護) で重複表示される
-        // 有効期間: 今日時点で有効なコードのみ (valid_until=NULL は無期限有効)
+        // 有効期間: targetMonth 指定時は「対象月に有効な世代」(validInMonth)、
+        //   未指定時は従来どおり今日時点で有効な世代 (valid_until=NULL は無期限有効)
         // 訪問介護(11) は 5,500 件超あり PostgREST 1000 行制限に切られるため page-loop
         const today = new Date().toISOString().slice(0, 10)
         const PAGE = 1000
         const data: Record<string, unknown>[] = []
         for (let from = 0; ; from += PAGE) {
-          const { data: page, error: fetchError } = await supabase
+          let query = supabase
             .from("kaigo_service_codes")
             .select("service_code, service_name, short_name, units, service_category, service_category_name, calculation_type")
             .eq("system", system)
             .eq("service_category", activeCategory)
-            .lte("valid_from", today)
-            .or(`valid_until.is.null,valid_until.gte.${today}`)
+          if (tmYear !== undefined && tmMonth !== undefined) {
+            query = validInMonth(query, tmYear, tmMonth)
+          } else {
+            query = query
+              .lte("valid_from", today)
+              .or(`valid_until.is.null,valid_until.gte.${today}`)
+          }
+          const { data: page, error: fetchError } = await query
             .order("service_code", { ascending: true })
             .range(from, from + PAGE - 1)
           if (cancelled) return
@@ -328,7 +345,7 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
 
     fetchServices()
     return () => { cancelled = true }
-  }, [system, activeCategory])
+  }, [system, activeCategory, tmYear, tmMonth])
 
   // ── Escape key ───────────────────────────────────────────────────────────────
   React.useEffect(() => {

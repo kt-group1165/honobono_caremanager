@@ -685,6 +685,8 @@ export function MeisaiPrintSheet({
   officePostal,
   reiwa,
   month,
+  kanriTaishougaiUnits,
+  planUnits: planUnitsProp,
 }: {
   row: UserSeikyuRow;
   officeName: string | null;
@@ -694,6 +696,14 @@ export function MeisaiPrintSheet({
   officePostal: string | null;
   reiwa: number;
   month: number;
+  /**
+   * ⑥限度額管理対象外単位数 (初回加算・緊急時訪問介護加算等の告示対象外 + 処遇改善)。
+   * 指定時は ⑤限度額管理対象単位数 = 総単位数 − この値 で計算する。
+   * 未指定時は従来値 (⑤=row.baseUnits / ⑥=row.addonUnits) — 既存呼出互換。
+   */
+  kanriTaishougaiUnits?: number;
+  /** ④計画単位数 (kaigo_monthly_plan_units 等の計画値)。未指定時は従来値 (総単位数) */
+  planUnits?: number;
 }) {
   // 給付率 = 100 - 利用者負担割合(%)。copay_rate は分数 (0.1/0.2/0.3) で保持されている
   // (aggregate.ts: raw>=1 は /10 済み)。したがって給付率 = round((1 - copay_rate) * 100)。
@@ -741,10 +751,14 @@ export function MeisaiPrintSheet({
   const emptyRows = Math.max(0, MIN_ROWS - detailLines.length);
 
   // 集計欄の数値 (⑫)
-  const planUnits = row.totalUnits; // ④計画単位数
-  const kanriUnits = row.baseUnits; // ⑤限度額管理対象単位数 (本体)
-  const kanriGaiUnits = row.addonUnits; // ⑥限度額管理対象外単位数 (加算)
-  const kyufuUnits = row.totalUnits; // ⑦給付単位数
+  // ④計画単位数 = props 指定時は計画値、未指定は従来値 (総単位数)
+  const planUnits = planUnitsProp ?? row.totalUnits;
+  // ⑥限度額管理対象外単位数 = props 指定時は告示対象外加算 (初回・緊急時等) + 処遇改善、
+  //   未指定は従来値 (処遇改善のみ)。⑤ = 総単位数 − ⑥。
+  const kanriGaiUnits = kanriTaishougaiUnits ?? row.addonUnits;
+  const kanriUnits =
+    kanriTaishougaiUnits != null ? row.totalUnits - kanriTaishougaiUnits : row.baseUnits;
+  const kyufuUnits = row.totalUnits; // ⑦給付単位数 (④⑤の少ない方 + ⑥)
 
   // 給付費明細欄の共通ヘッダ style
   const th: React.CSSProperties = {

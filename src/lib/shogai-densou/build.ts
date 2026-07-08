@@ -89,8 +89,8 @@ export interface ShogaiDensouResult {
 
 // ─── コード値・整形 ──────────────────────────────────────────────────────────
 
-/** 決定サービスコード (契約情報レコード / 実績記録票のサービス内容) */
-function decisionCode(category: string | null): string {
+/** 決定サービスコード (契約情報レコード / 実績記録票のサービス内容)。印刷様式 (_shogai-meisai.tsx) からも参照 */
+export function decisionCode(category: string | null): string {
   const c = category ?? "";
   if (c.includes("乗降")) return "115000";
   if (c.includes("通院")) {
@@ -245,6 +245,19 @@ export function buildShogaiDensou(
     if (!u.row.beneficiary_number) {
       warnings.push(`${u.row.user_name}: 受給者証番号が未入力です`);
     }
+    // 負担上限月額 未設定 (null)。0 円は有効値 (低所得区分等) なので警告しない
+    if (u.row.self_payment_limit == null) {
+      warnings.push(
+        `${u.row.user_name}: 負担上限月額が未設定です — 受給者証で入力してください (負担 0 円の場合も 0 を入力)`,
+      );
+    }
+    // J41↔J121 乖離: 上限管理結果の保存後に実績 (総費用額) が変わっていないか
+    const selfLine = u.jogenOfficeLines?.find((l) => l.is_self);
+    if (selfLine && selfLine.total_amount !== u.row.totalAmount) {
+      warnings.push(
+        `${u.row.user_name}: 上限管理結果が実績と不一致です (保存時 総費用額 ${selfLine.total_amount.toLocaleString()} 円 → 現在 ${u.row.totalAmount.toLocaleString()} 円) — 障害請求画面で調整計算を再実行・保存してください`,
+      );
+    }
   }
 
   // ══ 1. J11 ファイル (J111 請求書 + J121 明細書) ══════════════════════════
@@ -288,8 +301,13 @@ export function buildShogaiDensou(
     const r = u.row;
     const muni = r.municipality ?? "";
     const jukyu = r.beneficiary_number ?? "";
-    const ichiwari = Math.floor(r.totalAmount * 0.1);
-    const jogenChosei = Math.min(r.self_payment_limit, ichiwari);
+    // 1割相当額 (totalAmount は整数なので /10 の floor で正確 — float 誤差回避)
+    const ichiwari = Math.floor(r.totalAmount / 10);
+    // 上限月額調整 = min(①上限月額, ②1割相当額)。上限未設定 (null) は調整なし = 1割相当額
+    const jogenChosei =
+      r.self_payment_limit != null
+        ? Math.min(r.self_payment_limit, ichiwari)
+        : ichiwari;
     const hasKanri = r.kanriResult != null;
     const kanriAfter = hasKanri ? r.userAmount : null;
     // 上限額管理事業所番号: 自事業所管理なら自事業所、他事業所管理なら受給者証の記載
@@ -308,7 +326,7 @@ export function buildShogaiDensou(
       "", "", // 8-9 氏名カナ (任意)
       areaCode, // 10 地域区分コード
       "1", // 11 就労継続支援A型事業者負担減免措置実施 (1:無し)
-      String(r.self_payment_limit), // 12 利用者負担上限月額①
+      r.self_payment_limit != null ? String(r.self_payment_limit) : "", // 12 利用者負担上限月額① (未設定は空 + 警告済)
       "1", // 13 就労継続支援A型減免対象者 (1:無し)
       "", // 14 障害支援区分コード (J131 のみ)
       hasKanri ? kanriOfficeNo : "", // 15 上限額管理事業所番号
@@ -541,7 +559,7 @@ export function buildShogaiDensou(
       "1", // 4 作成区分 (1:新規)
       muni, office, jukyu,
       "", "", // 8-9 氏名カナ (任意)
-      String(r.self_payment_limit), // 10 利用者負担上限月額
+      r.self_payment_limit != null ? String(r.self_payment_limit) : "", // 10 利用者負担上限月額 (未設定は空 + 警告済)
       String(r.kanriResult), // 11 管理結果
       String(sumTotal), String(sumUser), String(sumAdj), // 12-14 合計
     ]);

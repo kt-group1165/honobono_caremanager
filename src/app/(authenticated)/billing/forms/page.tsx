@@ -10,6 +10,7 @@ import {
 } from "./billing-forms-content";
 import { toKohiInfo, type KohiInfo } from "./forms-shared";
 import { resolveKohiForMonth } from "@/lib/kohi";
+import { resolveCertForMonth, type CertForMonth } from "@/lib/cert-for-month";
 
 function getCurrentMonth(): string {
   return format(new Date(), "yyyy-MM");
@@ -44,14 +45,33 @@ export default async function BillingFormsPage({
       }
     : null;
 
-  const { data: allClaimData } = await supabase
-    .from("kaigo_care_support_claims")
-    .select("*")
-    .eq("billing_month", billingMonth)
-    .neq("status", "draft");
-  const initialAllClaims = (allClaimData ?? []) as ClaimRow[];
+  // 1000 行制限対策の page-loop + order 付き
+  const initialAllClaims: ClaimRow[] = [];
+  {
+    const PAGE = 1000;
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("kaigo_care_support_claims")
+        .select("*")
+        .eq("billing_month", billingMonth)
+        .neq("status", "draft")
+        .order("id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) {
+        console.error("レセプトの取得に失敗:", error.message);
+        break;
+      }
+      if (!data || data.length === 0) break;
+      initialAllClaims.push(...(data as ClaimRow[]));
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+  }
 
-  // 公費 (生活保護等) 情報 — 対象月の全 claims 利用者 + 選択中利用者の最新保険記録
+  const [ky, km] = billingMonth.split("-").map(Number);
+
+  // 公費 (生活保護等) 情報 — 対象月の全 claims 利用者 + 選択中利用者
   const kohiUserIds = Array.from(
     new Set([
       ...initialAllClaims.map((c) => c.user_id),
@@ -59,35 +79,19 @@ export default async function BillingFormsPage({
     ]),
   );
   const initialKohiEntries: [string, KohiInfo][] = [];
+  let certForMonth = new Map<string, CertForMonth>();
   {
-    // 被保険者番号 (公費単独 = H 番号 判定用) — 最新 (effective_date DESC) の 1 件/利用者
-    const insuredByClient = new Map<string, string | null>();
-    for (let i = 0; i < kohiUserIds.length; i += 50) {
-      const chunk = kohiUserIds.slice(i, i + 50);
-      const { data, error } = await supabase
-        .from("client_insurance_records")
-        .select("client_id, insured_number, effective_date")
-        .in("client_id", chunk)
-        .order("effective_date", { ascending: false });
-      if (error) {
-        console.error("被保険者番号の取得に失敗:", error.message);
-        continue;
-      }
-      for (const r of (data ?? []) as {
-        client_id: string;
-        insured_number: string | null;
-      }[]) {
-        if (!insuredByClient.has(r.client_id)) {
-          insuredByClient.set(r.client_id, r.insured_number);
-        }
-      }
+    // 被保険者番号 (公費単独 = H 番号 判定用) + 認定情報は「対象月に有効な 1 件」で解決
+    try {
+      certForMonth = await resolveCertForMonth(supabase, kohiUserIds, ky, km);
+    } catch (e) {
+      console.error("認定情報の取得に失敗:", e instanceof Error ? e.message : String(e));
     }
     // 公費 (client_kohi_records) — 対象月に有効な 1 件を解決 (未作成時は旧列にフォールバック)
     try {
-      const [ky, km] = billingMonth.split("-").map(Number);
       const kohiRes = await resolveKohiForMonth(supabase, kohiUserIds, ky, km);
       for (const clientId of kohiUserIds) {
-        const insured = insuredByClient.get(clientId) ?? null;
+        const insured = certForMonth.get(clientId)?.insured_number ?? null;
         initialKohiEntries.push([
           clientId,
           toKohiInfo(insured, kohiRes.byClient.get(clientId) ?? null),
@@ -103,18 +107,12 @@ export default async function BillingFormsPage({
   let initialClaims: ClaimRow[] = [];
 
   if (userId) {
-    const [userRes, certRes, claimRes] = await Promise.all([
+    const [userRes, claimRes] = await Promise.all([
       supabase
         .from("clients")
         .select("id, name, furigana, gender, birth_date")
         .eq("id", userId)
         .maybeSingle(),
-      supabase
-        .from("client_insurance_records")
-        .select("insurer_number, insured_number, care_level, certification_start_date, certification_end_date")
-        .eq("client_id", userId)
-        .order("certification_start_date", { ascending: false, nullsFirst: false })
-        .limit(1),
       supabase
         .from("kaigo_care_support_claims")
         .select("*")
@@ -130,7 +128,8 @@ export default async function BillingFormsPage({
       gender: u.gender ?? "",
       birth_date: u.birth_date ?? "",
     } : null;
-    const cert = certRes.data?.[0];
+    // 認定は「対象月に有効な 1 件」(resolveCertForMonth) — 旧: 最新 1 件
+    const cert = certForMonth.get(userId);
     initialCertInfo = cert ? {
       insurer_number: cert.insurer_number ?? "",
       insured_number: cert.insured_number ?? "",

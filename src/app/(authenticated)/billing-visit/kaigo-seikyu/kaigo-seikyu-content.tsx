@@ -15,15 +15,17 @@
  *    元提供月で再集計し、当月一覧にバッジ付きで合流。明細書・伝送・国保対象化は
  *    各自の元提供月で反映する。
  *
- * ※ 実績単位の加算: 明細ペインで 初回 / 緊急時回数 / 生活機能向上連携 を設定
- *    (kaigo_visit_month_addons に upsert → 再集計)。初回加算は過去 2 ヶ月に
- *    completed 実績が無い利用者に「候補」バッジを出す (自動付与はしない)。
+ * ※ 実績単位の加算: 明細ペインは表示専用 (編集はサービス提供表 (実績) 画面へ移設)。
+ *    初回加算は過去 2 ヶ月に completed 実績が無い利用者に「候補」バッジを出す
+ *    (自動付与はしない。付与もサービス提供表側で行う)。
  *
  * ※ 区分支給限度基準の超過自費: 超過がある行に赤バッジ、明細ペインに内訳。
- *    超過分は保険請求から除外され利用者の全額自費 (利用請求へ) — aggregate.ts 参照。
+ *    超過分は保険請求から除外され selfPayAmount (全額自費) として利用請求へ
+ *    (利用者負担額 userAmount は法定負担のみ) — aggregate.ts 参照。
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Loader2,
   AlertCircle,
@@ -31,6 +33,7 @@ import {
   Printer,
   Landmark,
   Download,
+  ExternalLink,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
@@ -65,6 +68,7 @@ interface BillingStatusRow {
   tsukiokure: boolean;
   henrei: boolean;
   kago: boolean;
+  notes: string | null;
 }
 
 // 一覧の 1 行 (当月通常行 or 過去月の再請求行)
@@ -96,7 +100,7 @@ export function KaigoSeikyuContent() {
   const {
     year, month, filteredRows, kanaMatches, recordCount, loading, error, warnings,
     officeName, officeNumber, officeAddress, officePhone, officePostal,
-    officeId, tenantId, unitPrice, appliedFormulaCodes, reload,
+    officeId, tenantId, unitPrice, appliedFormulaCodes,
   } = useSeikyuContext();
   const { currentOffice } = useBusinessType();
   const supabase = useMemo(() => createClient(), []);
@@ -111,6 +115,8 @@ export function KaigoSeikyuContent() {
   const [meisaiPrintRows, setMeisaiPrintRows] = useState<DisplayRow[] | null>(null);
   // 月遅れ/返戻の再請求行 (過去月を元提供月で再集計したもの)
   const [reRows, setReRows] = useState<ReSeikyuRow[]>([]);
+  // 再請求の再集計時 warnings (認定フォールバック・入院重なり等)
+  const [reWarnings, setReWarnings] = useState<string[]>([]);
 
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
 
@@ -153,22 +159,25 @@ export function KaigoSeikyuContent() {
   const loadReRows = useCallback(async () => {
     if (!officeId || !tenantId) {
       setReRows([]);
+      setReWarnings([]);
       return;
     }
     try {
-      const list = await loadReSeikyuRows(supabase, {
+      const result = await loadReSeikyuRows(supabase, {
         officeId,
         tenantId,
         unitPrice,
         appliedFormulaCodes,
         currentMonthKey: monthKey,
       });
-      setReRows(list);
+      setReRows(result.rows);
+      setReWarnings(result.warnings);
     } catch (e) {
       toast.error(
         "再請求分の集計に失敗: " + (e instanceof Error ? e.message : String(e)),
       );
       setReRows([]);
+      setReWarnings([]);
     }
   }, [supabase, officeId, tenantId, unitPrice, appliedFormulaCodes, monthKey]);
 
@@ -186,12 +195,12 @@ export function KaigoSeikyuContent() {
     }
     const { data, error: e } = await supabase
       .from("kaigo_billing_status")
-      .select("client_id, issued_at, kokuho_target, tsukiokure, henrei, kago")
+      .select("client_id, issued_at, kokuho_target, tsukiokure, henrei, kago, notes")
       .eq("office_id", officeId)
       .eq("target_month", monthKey);
     if (e) {
       // table 未作成 (migration 未適用) 時は状態なしとして続行
-      if (e.code !== "42P01") toast.error("請求状態の取得に失敗: " + e.message);
+      if (!isTableMissingError(e.code)) toast.error("請求状態の取得に失敗: " + e.message);
       setStatusByClient(new Map());
       return;
     }
@@ -206,11 +215,9 @@ export function KaigoSeikyuContent() {
   }, [loadStatus]);
 
   // ── 実績単位の月次加算 (kaigo_visit_month_addons: 初回 / 緊急時 / 生活機能向上連携) ──
+  //    この画面は表示専用 (編集はサービス提供表 (実績) 画面へ移設)
   const [addonByClient, setAddonByClient] = useState<Map<string, MonthAddonRow>>(new Map());
   const [addonTableMissing, setAddonTableMissing] = useState(false);
-  const [addonSaving, setAddonSaving] = useState(false);
-  // 緊急時回数の入力ドラフト (blur / Enter で確定)
-  const [kinkyuDraft, setKinkyuDraft] = useState<string | null>(null);
 
   const loadAddons = useCallback(async () => {
     if (!officeId) {
@@ -243,62 +250,8 @@ export function KaigoSeikyuContent() {
     loadAddons();
   }, [loadAddons]);
 
-  // フラグ変更 → upsert → 再集計 (加算行が明細・合計・金額に反映される)
-  const saveAddon = async (
-    clientId: string,
-    patch: Partial<Pick<MonthAddonRow, "shokai" | "seikatsu_kino" | "kinkyu_count">>,
-  ) => {
-    if (!officeId) {
-      toast.error("事業所が未選択のため月次加算を保存できません");
-      return;
-    }
-    const cur = addonByClient.get(clientId);
-    const payload = {
-      client_id: clientId,
-      target_month: monthKey,
-      tenant_id: currentOffice?.tenant_id ?? "kt-group",
-      office_id: officeId,
-      shokai: cur?.shokai ?? false,
-      seikatsu_kino: cur?.seikatsu_kino ?? "なし",
-      kinkyu_count: cur?.kinkyu_count ?? 0,
-      ...patch,
-    };
-    setAddonSaving(true);
-    const { error: e } = await supabase
-      .from("kaigo_visit_month_addons")
-      .upsert(payload, { onConflict: "client_id,target_month,office_id" });
-    setAddonSaving(false);
-    if (e) {
-      if (isTableMissingError(e.code)) {
-        setAddonTableMissing(true);
-        toast.error(
-          "テーブル (kaigo_visit_month_addons) が未作成です — migrations/kaigo_visit_month_addons.sql を適用してください",
-        );
-      } else {
-        toast.error("月次加算の保存に失敗: " + e.message);
-      }
-      return;
-    }
-    await loadAddons();
-    reload(); // 集計へ反映 (加算行 → 総単位数・金額)
-  };
-
-  const commitKinkyuDraft = (clientId: string) => {
-    const v = (kinkyuDraft ?? "").trim();
-    setKinkyuDraft(null);
-    if (v === "") return;
-    const n = Number(v);
-    if (!Number.isInteger(n) || n < 0) {
-      toast.error("緊急時訪問介護加算の回数は 0 以上の整数を入力してください");
-      return;
-    }
-    const cur = addonByClient.get(clientId);
-    if ((cur?.kinkyu_count ?? 0) === n) return; // 変更なし
-    saveAddon(clientId, { kinkyu_count: n });
-  };
-
   // ── 初回加算の自動サジェスト: 過去 2 ヶ月に completed 実績が無ければ「候補」──
-  //    (自動付与はしない。バッジのワンクリックで ON)
+  //    (表示のみ。付与はサービス提供表 (実績) 画面で行う)
   const [shokaiCandidate, setShokaiCandidate] = useState(false);
   useEffect(() => {
     if (!selectedCurUserId) {
@@ -445,8 +398,38 @@ export function KaigoSeikyuContent() {
         }
       : undefined;
 
+  // ── 再請求行 (元提供月) の既存 kaigo_billing_status を取得 ──
+  //    upsert で既存の kago / notes 等を上書き消去しないための事前読取。
+  //    key = `${client_id}:${target_month}`
+  const fetchOrigStatus = useCallback(
+    async (rows: DisplayRow[]): Promise<Map<string, BillingStatusRow>> => {
+      const map = new Map<string, BillingStatusRow>();
+      const reOnly = rows.filter((d) => d.isReSeikyu);
+      if (!officeId || reOnly.length === 0) return map;
+      const months = [...new Set(reOnly.map((d) => d.origMonthKey))];
+      const ids = [...new Set(reOnly.map((d) => d.row.user_id))];
+      const { data, error: e } = await supabase
+        .from("kaigo_billing_status")
+        .select("client_id, target_month, issued_at, kokuho_target, tsukiokure, henrei, kago, notes")
+        .eq("office_id", officeId)
+        .in("target_month", months)
+        .in("client_id", ids);
+      if (e) {
+        if (!isTableMissingError(e.code)) {
+          toast.error("既存の請求状態の取得に失敗: " + e.message);
+        }
+        return map;
+      }
+      for (const r of (data ?? []) as (BillingStatusRow & { target_month: string })[]) {
+        map.set(`${r.client_id}:${r.target_month}`, r);
+      }
+      return map;
+    },
+    [supabase, officeId],
+  );
+
   // ── 明細書: 対象者の様式第二を印刷 → 印刷実行時に issued_at を now() で upsert (発行済化) ──
-  //    再請求行は元提供月 (origMonthKey) に対して upsert する。
+  //    再請求行は元提供月 (origMonthKey) に対して upsert する (既存 kago/notes は保持)。
   //    rowsToPrint 指定時 (行内ボタン) はその行のみ対象。
   const printMeisaiFor = async (rowsToPrint: DisplayRow[]) => {
     if (rowsToPrint.length === 0) return;
@@ -455,9 +438,13 @@ export function KaigoSeikyuContent() {
       return;
     }
     const now = new Date().toISOString();
+    const origStatus = await fetchOrigStatus(rowsToPrint);
+    // 全行で同一のキー集合にする (upsert の PGRST102「All object keys must match」予防)
     const payload = rowsToPrint.map((d) => {
-      // 当月行のみ既存フラグを引き継ぐ (再請求行は過去月の別レコード)
-      const cur = d.isReSeikyu ? undefined : statusByClient.get(d.row.user_id);
+      // 当月行は当月 status、再請求行は元提供月の既存レコードを引き継ぐ
+      const cur = d.isReSeikyu
+        ? origStatus.get(`${d.row.user_id}:${d.origMonthKey}`)
+        : statusByClient.get(d.row.user_id);
       return {
         client_id: d.row.user_id,
         target_month: d.origMonthKey,
@@ -469,6 +456,7 @@ export function KaigoSeikyuContent() {
         tsukiokure: d.reasons?.tsukiokure ?? cur?.tsukiokure ?? false,
         henrei: d.reasons?.henrei ?? cur?.henrei ?? false,
         kago: cur?.kago ?? false,
+        notes: cur?.notes ?? null,
       };
     });
     const { error: e } = await supabase
@@ -503,32 +491,42 @@ export function KaigoSeikyuContent() {
 
   // ── 国保対象: 選択行を kokuho_target=true に upsert ──
   //    当月行は「発行済」のみ (未発行はスキップ)。
-  //    再請求行 (月遅れ/返戻) は元提供月に対し kokuho_target=true + notes='再請求' で立てる
-  //    (未発行なら発行済化も同時に行う)。
+  //    再請求行 (月遅れ/返戻) は元提供月に対し kokuho_target=true で立てる
+  //    (未発行なら発行済化も同時に行う)。既存行の kago / notes は読み取って保持し、
+  //    notes は既存があれば「既存 / 再請求」と追記する (固定値での上書き消去をしない)。
+  //    payload は全行同一のキー集合 (PGRST102 予防)。
   const markKokuhoTarget = async () => {
     if (!officeId) {
       toast.error("事業所が未選択のため国保対象化できません");
       return;
     }
     const now = new Date().toISOString();
+    const origStatus = await fetchOrigStatus(targetDisplayRows);
     const payload: Record<string, unknown>[] = [];
     let skipped = 0;
 
     for (const d of targetDisplayRows) {
       if (d.isReSeikyu) {
-        // 再請求分: 元提供月に kokuho_target を立てる (発行済でなくても許可)
-        const prevNotes = "再請求";
+        // 再請求分: 元提供月に kokuho_target を立てる (発行済でなくても許可)。
+        // 既存レコードの kago / notes を保持 (notes は「再請求」を追記)
+        const cur = origStatus.get(`${d.row.user_id}:${d.origMonthKey}`);
+        const prevNotes = cur?.notes?.trim() || null;
+        const notes = prevNotes
+          ? prevNotes.includes("再請求")
+            ? prevNotes
+            : `${prevNotes} / 再請求`
+          : "再請求";
         payload.push({
           client_id: d.row.user_id,
           target_month: d.origMonthKey,
           tenant_id: currentOffice?.tenant_id ?? "kt-group",
           office_id: officeId,
-          issued_at: now,
+          issued_at: cur?.issued_at ?? now,
           kokuho_target: true,
-          tsukiokure: d.reasons?.tsukiokure ?? false,
-          henrei: d.reasons?.henrei ?? false,
-          kago: false,
-          notes: prevNotes,
+          tsukiokure: d.reasons?.tsukiokure ?? cur?.tsukiokure ?? false,
+          henrei: d.reasons?.henrei ?? cur?.henrei ?? false,
+          kago: cur?.kago ?? false,
+          notes,
         });
       } else {
         const cur = statusByClient.get(d.row.user_id);
@@ -546,6 +544,7 @@ export function KaigoSeikyuContent() {
           tsukiokure: cur.tsukiokure,
           henrei: cur.henrei,
           kago: cur.kago,
+          notes: cur.notes ?? null,
         });
       }
     }
@@ -609,9 +608,9 @@ export function KaigoSeikyuContent() {
           r.care_level ?? "",
           r.totalUnits,
           r.insuranceAmount,
-          r.userAmount,
+          r.userAmount, // 法定負担のみ (超過自費は次列)
           r.overUnits,
-          r.overAmount,
+          r.selfPayAmount,
           state,
         ].join(","),
       );
@@ -698,18 +697,22 @@ export function KaigoSeikyuContent() {
             </div>
           )}
 
-          {/* 集計時の warning (身体介護9系=単位数0の増分コード 等) */}
-          {!loading && warnings.length > 0 && (
-            <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
-              <AlertCircle size={14} className="mt-0.5 shrink-0" />
-              <div>
-                {warnings.slice(0, 5).map((w) => (
-                  <p key={w}>{w}</p>
-                ))}
-                {warnings.length > 5 && <p>…他 {warnings.length - 5} 件</p>}
+          {/* 集計時の warning (身体介護9系 / 総合事業除外 / 入院重なり / 認定フォールバック /
+              公費レコード未登録 等) + 再請求分の再集計 warning */}
+          {!loading && (warnings.length > 0 || reWarnings.length > 0) && (() => {
+            const allWarnings = [...new Set([...warnings, ...reWarnings])];
+            return (
+              <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                <div>
+                  {allWarnings.slice(0, 8).map((w) => (
+                    <p key={w}>{w}</p>
+                  ))}
+                  {allWarnings.length > 8 && <p>…他 {allWarnings.length - 8} 件</p>}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* 月遅れ/返戻の再請求 案内 */}
           {!loading && reRows.length > 0 && (
@@ -829,7 +832,7 @@ export function KaigoSeikyuContent() {
                         <span className="flex-1 truncate">{r.user_name}</span>
                         {r.overUnits > 0 && (
                           <span
-                            title={`区分支給限度基準 (${(r.limitUnits ?? 0).toLocaleString()} 単位) を超過。超過分 ${r.overUnits.toLocaleString()} 単位は保険請求に含めず、${r.overAmount.toLocaleString()} 円 (10割) を全額自費として利用請求に加算します`}
+                            title={`区分支給限度基準 (${(r.limitUnits ?? 0).toLocaleString()} 単位) を超過。超過分 ${r.overUnits.toLocaleString()} 単位は保険請求・法定負担に含めず、${r.selfPayAmount.toLocaleString()} 円 (10割) を超過自費として利用請求に加算します`}
                             className="shrink-0 rounded bg-red-100 px-1 py-0.5 text-[10px] font-bold text-red-700 whitespace-nowrap"
                           >
                             限度額超過 {r.overUnits.toLocaleString()}単位
@@ -984,10 +987,9 @@ export function KaigoSeikyuContent() {
                 </table>
               </div>
 
-              {/* ── 月次加算 (実績単位の加算) — 当月通常行のみ編集可 ── */}
+              {/* ── 月次加算 (実績単位の加算) — 表示専用。編集はサービス提供表 (実績) 画面へ移設 ── */}
               {selectedCurUserId && (() => {
                 const addon = addonByClient.get(selectedCurUserId);
-                const disabled = addonTableMissing || addonSaving;
                 return (
                   <div className="border-t border-gray-300 bg-gray-50 shrink-0 px-2 py-1.5 text-[11px]">
                     <div className="flex items-center gap-2">
@@ -998,60 +1000,42 @@ export function KaigoSeikyuContent() {
                         </span>
                       )}
                       {!addonTableMissing && shokaiCandidate && !addon?.shokai && (
-                        <button
-                          onClick={() => saveAddon(selectedCurUserId, { shokai: true })}
-                          disabled={disabled}
-                          title="過去 2 ヶ月に完了実績が無いため初回加算の候補です。クリックで ON にします (自動付与はしません)"
-                          className="rounded border border-amber-400 bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 hover:bg-amber-200 disabled:opacity-50"
+                        <span
+                          title="過去 2 ヶ月に完了実績が無いため初回加算の候補です (付与はサービス提供表 (実績) 画面で行います)"
+                          className="rounded border border-amber-400 bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800"
                         >
                           初回加算 候補
-                        </button>
+                        </span>
                       )}
-                      {addonSaving && (
-                        <Loader2 size={12} className="animate-spin text-gray-400" />
-                      )}
+                      <Link
+                        href="/provision-tickets"
+                        title="月次加算 (初回 / 緊急時 / 生活機能向上連携) の設定はサービス提供表 (実績) 画面で行います"
+                        className="ml-auto flex items-center gap-1 text-[10px] text-indigo-600 hover:text-indigo-800 hover:underline"
+                      >
+                        <ExternalLink size={11} />
+                        サービス提供表 (実績) で編集
+                      </Link>
                     </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <label className="flex items-center gap-1 cursor-pointer" title="訪問介護初回加算 (114001)">
-                        <input
-                          type="checkbox"
-                          checked={addon?.shokai ?? false}
-                          disabled={disabled}
-                          onChange={(e) => saveAddon(selectedCurUserId, { shokai: e.target.checked })}
-                          className="accent-blue-600"
-                        />
-                        <span className="text-gray-700">初回加算</span>
-                      </label>
-                      <label className="flex items-center gap-1" title="緊急時訪問介護加算 (114000) の当月回数">
-                        <span className="text-gray-700">緊急時</span>
-                        <input
-                          type="number"
-                          min={0}
-                          disabled={disabled}
-                          value={kinkyuDraft ?? String(addon?.kinkyu_count ?? 0)}
-                          onFocus={() => setKinkyuDraft(String(addon?.kinkyu_count ?? 0))}
-                          onChange={(e) => setKinkyuDraft(e.target.value)}
-                          onBlur={() => commitKinkyuDraft(selectedCurUserId)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") e.currentTarget.blur();
-                          }}
-                          className="w-12 rounded border border-gray-300 px-1 py-0.5 text-right font-mono bg-white disabled:opacity-50"
-                        />
-                        <span className="text-gray-500">回</span>
-                      </label>
-                      <label className="flex items-center gap-1" title="訪問介護生活機能向上連携加算 Ⅰ(114003) / Ⅱ(114002)">
-                        <span className="text-gray-700">生活機能向上</span>
-                        <select
-                          value={addon?.seikatsu_kino ?? "なし"}
-                          disabled={disabled}
-                          onChange={(e) => saveAddon(selectedCurUserId, { seikatsu_kino: e.target.value })}
-                          className="rounded border border-gray-300 px-1 py-0.5 bg-white disabled:opacity-50"
-                        >
-                          <option value="なし">なし</option>
-                          <option value="Ⅰ">Ⅰ</option>
-                          <option value="Ⅱ">Ⅱ</option>
-                        </select>
-                      </label>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-gray-700">
+                      <span title="訪問介護初回加算 (114001)">
+                        初回加算:{" "}
+                        <strong className={addon?.shokai ? "text-blue-700" : "text-gray-400 font-normal"}>
+                          {addon?.shokai ? "あり" : "なし"}
+                        </strong>
+                      </span>
+                      <span title="緊急時訪問介護加算 (114000)。シフトの緊急時訪問 (kinkyu_houmon) 実績があればそちらが優先されます">
+                        緊急時:{" "}
+                        <strong className={(addon?.kinkyu_count ?? 0) > 0 ? "text-blue-700 font-mono" : "text-gray-400 font-normal font-mono"}>
+                          {addon?.kinkyu_count ?? 0}
+                        </strong>{" "}
+                        回
+                      </span>
+                      <span title="訪問介護生活機能向上連携加算 Ⅰ(114003) / Ⅱ(114002)">
+                        生活機能向上:{" "}
+                        <strong className={addon?.seikatsu_kino && addon.seikatsu_kino !== "なし" ? "text-blue-700" : "text-gray-400 font-normal"}>
+                          {addon?.seikatsu_kino ?? "なし"}
+                        </strong>
+                      </span>
                     </div>
                   </div>
                 );
@@ -1076,7 +1060,7 @@ export function KaigoSeikyuContent() {
                   <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">
                     {selected.kohiAmount != null ? selected.kohiAmount.toLocaleString() : ""}
                   </div>
-                  {/* 利用者負担額 = 保険/公費で賄われない本人負担 + 限度額超過の全額自費 */}
+                  {/* 利用者負担額 = 保険/公費で賄われない法定の本人負担のみ (超過自費は別掲) */}
                   <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">利用者負担額</div>
                   <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">
                     {selected.userAmount.toLocaleString()}
@@ -1085,9 +1069,21 @@ export function KaigoSeikyuContent() {
                   <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">{selected.publicExpense ? "0" : ""}</div>
                   {selected.overUnits > 0 && (
                     <>
-                      <div className="bg-red-50 px-1.5 py-0.5 whitespace-nowrap text-red-700">超過単位数</div>
+                      <div
+                        className="bg-red-50 px-1.5 py-0.5 whitespace-nowrap text-red-700"
+                        title={
+                          selected.overSource === "manual"
+                            ? "ケアマネが利用票別表で確定した自事業所分の超過自費単位 (kaigo_gendo_allocation manual)"
+                            : "機械判定 (管理対象単位 − 区分支給限度基準)。ケアマネの別表割振りが確定するとそちらが優先されます"
+                        }
+                      >
+                        超過単位数
+                      </div>
                       <div className="bg-white px-1.5 py-0.5 text-right font-mono text-red-700">
                         {selected.overUnits.toLocaleString()}
+                        <span className="ml-0.5 font-sans text-[9px]">
+                          ({selected.overSource === "manual" ? "ケアマネ割振り" : "自動判定"})
+                        </span>
                       </div>
                       <div className="bg-red-50 px-1.5 py-0.5 whitespace-nowrap text-red-700">超過自費額</div>
                       <div className="bg-white px-1.5 py-0.5 text-right font-mono text-red-700">
@@ -1098,12 +1094,22 @@ export function KaigoSeikyuContent() {
                 </div>
                 {selected.overUnits > 0 && (
                   <p className="px-0.5 pt-1 text-[10px] text-red-600">
-                    区分支給限度基準 {(selected.limitUnits ?? 0).toLocaleString()} 単位に対し
-                    実績 {selected.grossBaseUnits.toLocaleString()} 単位 →
-                    超過 {selected.overUnits.toLocaleString()} 単位 × 単価{" "}
-                    {selected.unitPrice.toFixed(2)} 円 (10割) ={" "}
-                    {selected.overAmount.toLocaleString()} 円を全額自費として利用者負担額に加算
-                    (利用請求に反映)。超過分は保険請求・明細書 (様式第二) の集計に含めません。
+                    {selected.overSource === "manual" ? (
+                      <>
+                        限度額超過 {selected.overUnits.toLocaleString()} 単位 (ケアマネ割振り =
+                        利用票別表で確定した自事業所分の自費単位)
+                      </>
+                    ) : (
+                      <>
+                        区分支給限度基準 {(selected.limitUnits ?? 0).toLocaleString()} 単位に対し
+                        実績 {selected.grossBaseUnits.toLocaleString()} 単位 →
+                        超過 {selected.overUnits.toLocaleString()} 単位 (自動判定)
+                      </>
+                    )}
+                    {" "}× 単価 {selected.unitPrice.toFixed(2)} 円 (10割) ={" "}
+                    {selected.selfPayAmount.toLocaleString()} 円を超過自費として利用請求に加算。
+                    上記の利用者負担額 (法定) には含めません。超過分は保険請求・明細書
+                    (様式第二) の集計にも含めません。
                   </p>
                 )}
                 {selected.publicExpense && (
@@ -1136,6 +1142,18 @@ export function KaigoSeikyuContent() {
         <div className="hidden print:block">
           {(meisaiPrintRows ?? targetDisplayRows).map((d) => {
             const [oy, om] = d.origMonthKey.split("-").map((n) => Number(n));
+            // 契約 C1: 様式第二の限度額欄。
+            //   kanriTaishougaiUnits = 処遇改善等%加算 + 初回 + 緊急時 (限度額管理対象外)
+            //   planUnits = ④計画単位数 (kaigo_monthly_plan_units があればそれ、
+            //               無ければ基準内 (管理対象) 単位数)
+            // _meisai.tsx 側の optional props (kanriTaishougaiUnits? / planUnits?) へ
+            // spread で渡す (props 追加は別エージェント担当)。
+            const kanriProps = {
+              kanriTaishougaiUnits: d.row.kanriTaishougaiUnits,
+              planUnits:
+                d.row.planUnits ??
+                d.row.baseUnits - (d.row.kanriTaishougaiUnits - d.row.addonUnits),
+            };
             return (
               <MeisaiPrintSheet
                 key={d.key}
@@ -1147,6 +1165,7 @@ export function KaigoSeikyuContent() {
                 officePostal={officePostal}
                 reiwa={oy - 2018}
                 month={om}
+                {...kanriProps}
               />
             );
           })}
