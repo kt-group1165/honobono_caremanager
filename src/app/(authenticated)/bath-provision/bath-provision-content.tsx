@@ -14,7 +14,7 @@ const BATH_ROWS = [
   { code: "121122", label: "訪問入浴（部分浴・職員のみ）", bath_type: "部分浴" as const, staff_only: true },
 ];
 
-type Rec = { id: string; visit_date: string; service_code: string | null };
+type Rec = { id: string; visit_date: string; service_code: string | null; planned: boolean; actual: boolean };
 
 const WD = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -41,7 +41,7 @@ export function BathProvisionContent({ userId, userName }: { userId: string; use
       const { monthStart, monthEnd } = monthRange(y, m);
       const recQ = supabase
         .from("kaigo_bath_visit_records")
-        .select("id, visit_date, service_code")
+        .select("id, visit_date, service_code, planned, actual")
         .eq("client_id", userId)
         .gte("visit_date", monthStart)
         .lte("visit_date", monthEnd);
@@ -70,52 +70,61 @@ export function BathProvisionContent({ userId, userName }: { userId: string; use
     load();
   }, [load]);
 
-  // grid[code][day] = そのコード・その日の record 一覧
-  const grid = useMemo(() => {
-    const g: Record<string, Record<number, Rec[]>> = {};
-    for (const r of BATH_ROWS) g[r.code] = {};
+  // (code, day) → その日の record (1件想定)
+  const recByCell = useMemo(() => {
+    const map = new Map<string, Rec>();
     for (const rec of records) {
-      const code = rec.service_code ?? "";
       const day = Number(rec.visit_date.slice(8, 10));
-      if (!g[code]) continue;
-      (g[code][day] ??= []).push(rec);
+      map.set(`${rec.service_code ?? ""}-${day}`, rec);
     }
-    return g;
+    return map;
   }, [records]);
 
   const prevMonth = () => { const d = new Date(y, m - 2, 1); setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
   const nextMonth = () => { const d = new Date(y, m, 1); setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
 
-  // セル toggle: 空→追加(1件), 有→1件削除
-  const toggleCell = async (row: (typeof BATH_ROWS)[number], day: number) => {
+  // 予定/実績 セルの toggle。実績ONは予定も立てる(ほのぼの準拠)。両方offで削除。
+  const toggle = async (row: (typeof BATH_ROWS)[number], day: number, which: "planned" | "actual") => {
     if (!currentOfficeId) { alert("事業所を選択してください"); return; }
     const key = `${row.code}-${day}`;
     setBusyCell(key);
     try {
-      const existing = grid[row.code][day] ?? [];
-      if (existing.length > 0) {
-        const target = existing[existing.length - 1];
-        const { error } = await supabase.from("kaigo_bath_visit_records").delete().eq("id", target.id);
-        if (error) throw error;
-        setRecords((prev) => prev.filter((r) => r.id !== target.id));
-      } else {
-        const visit_date = `${month}-${String(day).padStart(2, "0")}`;
+      const rec = recByCell.get(key);
+      if (!rec) {
+        const planned = true;
+        const actual = which === "actual";
         const { data, error } = await supabase
           .from("kaigo_bath_visit_records")
           .insert({
             client_id: userId,
             office_id: currentOfficeId,
             tenant_id: currentOffice?.tenant_id ?? "kt-group",
-            visit_date,
+            visit_date: `${month}-${String(day).padStart(2, "0")}`,
             bath_type: row.bath_type,
             staff_only: row.staff_only,
             service_code: row.code,
             status: "confirmed",
+            planned,
+            actual,
           })
-          .select("id, visit_date, service_code")
+          .select("id, visit_date, service_code, planned, actual")
           .single();
         if (error) throw error;
         setRecords((prev) => [...prev, data as Rec]);
+      } else {
+        let planned = rec.planned;
+        let actual = rec.actual;
+        if (which === "planned") planned = !planned;
+        else { actual = !actual; if (actual) planned = true; }
+        if (!planned && !actual) {
+          const { error } = await supabase.from("kaigo_bath_visit_records").delete().eq("id", rec.id);
+          if (error) throw error;
+          setRecords((prev) => prev.filter((r) => r.id !== rec.id));
+        } else {
+          const { error } = await supabase.from("kaigo_bath_visit_records").update({ planned, actual }).eq("id", rec.id);
+          if (error) throw error;
+          setRecords((prev) => prev.map((r) => (r.id === rec.id ? { ...r, planned, actual } : r)));
+        }
       }
     } catch (e) {
       alert("更新に失敗しました: " + (e instanceof Error ? e.message : String(e)));
@@ -124,22 +133,41 @@ export function BathProvisionContent({ userId, userName }: { userId: string; use
     }
   };
 
-  // 単位集計
+  const counts = useCallback(
+    (code: string) => {
+      let planned = 0;
+      let actual = 0;
+      for (const d of days) {
+        const rec = recByCell.get(`${code}-${d}`);
+        if (rec?.planned) planned++;
+        if (rec?.actual) actual++;
+      }
+      return { planned, actual };
+    },
+    [days, recByCell],
+  );
+
   const summary = useMemo(() => {
     const rows = BATH_ROWS.map((r) => {
-      const count = days.reduce((s, d) => s + (grid[r.code][d]?.length ?? 0), 0);
+      const c = counts(r.code);
       const unit = unitByCode[r.code] ?? 0;
-      return { ...r, count, unit, total: count * unit };
-    }).filter((r) => r.count > 0 || unitByCode[r.code] != null);
-    const totalCount = rows.reduce((s, r) => s + r.count, 0);
-    const totalUnits = rows.reduce((s, r) => s + r.total, 0);
-    const days_used = new Set(records.map((r) => r.visit_date)).size;
-    return { rows, totalCount, totalUnits, days_used };
-  }, [grid, days, unitByCode, records]);
+      return { ...r, planned: c.planned, actual: c.actual, unit, actualUnits: c.actual * unit };
+    });
+    const totalActual = rows.reduce((s, r) => s + r.actual, 0);
+    const totalUnits = rows.reduce((s, r) => s + r.actualUnits, 0);
+    const daysUsed = new Set(records.filter((r) => r.actual).map((r) => r.visit_date)).size;
+    return { rows, totalActual, totalUnits, daysUsed };
+  }, [counts, unitByCode, records]);
+
+  const cellCls = (on: boolean, which: "planned" | "actual") =>
+    on
+      ? which === "planned"
+        ? "bg-blue-100 font-semibold text-blue-800"
+        : "bg-green-100 font-semibold text-green-800"
+      : "text-gray-300";
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-white">
-      {/* ツールバー */}
       <div className="flex items-center gap-3 border-b border-gray-200 bg-gray-50 px-4 py-2 shrink-0 no-print">
         <Droplets size={18} className="text-cyan-600" />
         <h1 className="text-sm font-semibold text-gray-800">訪問入浴 サービス提供表（実績）</h1>
@@ -149,14 +177,14 @@ export function BathProvisionContent({ userId, userName }: { userId: string; use
           <span className="px-1.5 text-sm font-semibold text-gray-800">{y}年{m}月</span>
           <button onClick={nextMonth} className="text-gray-500 hover:text-gray-800"><ChevronRight size={14} /></button>
         </div>
-        <span className="text-xs text-gray-400">実日数 {summary.days_used}日 / {summary.totalUnits.toLocaleString()}単位</span>
+        <span className="text-xs text-gray-400">実日数 {summary.daysUsed}日 / {summary.totalUnits.toLocaleString()}単位</span>
         <button onClick={() => window.print()} className="ml-auto flex items-center gap-1 rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800">
           <Printer size={14} />印刷
         </button>
       </div>
 
       <p className="border-b border-gray-100 bg-cyan-50 px-4 py-1 text-[11px] text-cyan-700 no-print">
-        セルをクリックで実績を追加/削除できます（詳細な入浴記録・バイタルは「入浴実施記録」で編集）。
+        予定/実績のセルをクリックで「1」を入力/削除できます（実績を入れると予定にも計上）。詳細な入浴記録・バイタルは「入浴実施記録」で編集。
       </p>
 
       <div className="flex-1 overflow-auto p-3" id="bath-provision-print">
@@ -170,7 +198,8 @@ export function BathProvisionContent({ userId, userName }: { userId: string; use
             <table className="border-collapse text-center text-[11px]">
               <thead>
                 <tr className="bg-gray-100">
-                  <th className="sticky left-0 z-10 border border-gray-300 bg-gray-100 px-2 py-1 text-left" style={{ minWidth: 180 }}>サービス内容</th>
+                  <th className="sticky left-0 z-10 border border-gray-300 bg-gray-100 px-2 py-1 text-left" style={{ minWidth: 170 }}>サービス内容</th>
+                  <th className="border border-gray-300 px-1 py-1" style={{ minWidth: 34 }}>区分</th>
                   {days.map((d) => {
                     const wd = new Date(y, m - 1, d).getDay();
                     return (
@@ -180,62 +209,77 @@ export function BathProvisionContent({ userId, userName }: { userId: string; use
                       </th>
                     );
                   })}
-                  <th className="border border-gray-300 px-2 py-1" style={{ minWidth: 36 }}>回数</th>
-                  <th className="border border-gray-300 px-2 py-1" style={{ minWidth: 56 }}>単位</th>
+                  <th className="border border-gray-300 px-2 py-1" style={{ minWidth: 34 }}>回数</th>
+                  <th className="border border-gray-300 px-2 py-1" style={{ minWidth: 54 }}>単位</th>
                 </tr>
               </thead>
-              <tbody>
-                {BATH_ROWS.map((row) => {
-                  const count = days.reduce((s, d) => s + (grid[row.code][d]?.length ?? 0), 0);
-                  const unit = unitByCode[row.code] ?? 0;
-                  return (
-                    <tr key={row.code}>
-                      <td className="sticky left-0 z-10 border border-gray-300 bg-white px-2 py-1 text-left">{row.label}</td>
+              {BATH_ROWS.map((row) => {
+                const c = counts(row.code);
+                const unit = unitByCode[row.code] ?? 0;
+                return (
+                  <tbody key={row.code}>
+                    {/* 予定 */}
+                    <tr>
+                      <td rowSpan={2} className="sticky left-0 z-10 border border-gray-300 bg-white px-2 py-1 text-left align-middle">{row.label}</td>
+                      <td className="border border-gray-300 bg-blue-50 px-1 py-1 text-[10px] text-blue-700">予定</td>
                       {days.map((d) => {
-                        const n = grid[row.code][d]?.length ?? 0;
+                        const rec = recByCell.get(`${row.code}-${d}`);
                         const key = `${row.code}-${d}`;
                         return (
-                          <td
-                            key={d}
-                            onClick={() => busyCell === null && toggleCell(row, d)}
-                            className={`cursor-pointer border border-gray-200 px-0.5 py-1 hover:bg-cyan-50 ${n > 0 ? "bg-cyan-100 font-semibold text-cyan-800" : "text-gray-300"}`}
-                          >
-                            {busyCell === key ? "…" : n > 1 ? n : n === 1 ? "○" : ""}
+                          <td key={d} onClick={() => busyCell === null && toggle(row, d, "planned")} className={`cursor-pointer border border-gray-200 px-0.5 py-1 hover:bg-blue-50 ${cellCls(!!rec?.planned, "planned")}`}>
+                            {busyCell === key ? "…" : rec?.planned ? "1" : ""}
                           </td>
                         );
                       })}
-                      <td className="border border-gray-300 px-2 py-1 font-semibold">{count || ""}</td>
-                      <td className="border border-gray-300 px-2 py-1 tabular-nums text-gray-600">{count > 0 ? (count * unit).toLocaleString() : ""}</td>
+                      <td className="border border-gray-300 px-2 py-1 text-blue-700">{c.planned || ""}</td>
+                      <td rowSpan={2} className="border border-gray-300 px-2 py-1 align-middle tabular-nums text-gray-600">{c.actual > 0 ? (c.actual * unit).toLocaleString() : ""}</td>
                     </tr>
-                  );
-                })}
-              </tbody>
+                    {/* 実績 */}
+                    <tr>
+                      <td className="border border-gray-300 bg-green-50 px-1 py-1 text-[10px] text-green-700">実績</td>
+                      {days.map((d) => {
+                        const rec = recByCell.get(`${row.code}-${d}`);
+                        const key = `${row.code}-${d}`;
+                        return (
+                          <td key={d} onClick={() => busyCell === null && toggle(row, d, "actual")} className={`cursor-pointer border border-gray-200 px-0.5 py-1 hover:bg-green-50 ${cellCls(!!rec?.actual, "actual")}`}>
+                            {busyCell === key ? "…" : rec?.actual ? "1" : ""}
+                          </td>
+                        );
+                      })}
+                      <td className="border border-gray-300 px-2 py-1 font-semibold text-green-700">{c.actual || ""}</td>
+                    </tr>
+                  </tbody>
+                );
+              })}
             </table>
 
             {/* 単位数集計 */}
-            <div className="mt-4 max-w-md">
-              <div className="mb-1 text-xs font-semibold text-gray-600">単位数集計</div>
+            <div className="mt-4 max-w-lg">
+              <div className="mb-1 text-xs font-semibold text-gray-600">単位数集計（実績）</div>
               <table className="w-full border-collapse text-xs">
                 <thead>
                   <tr className="bg-gray-100 text-gray-600">
                     <th className="border border-gray-300 px-2 py-1 text-left">サービス内容</th>
-                    <th className="border border-gray-300 px-2 py-1 text-right">回数</th>
+                    <th className="border border-gray-300 px-2 py-1 text-right">予定</th>
+                    <th className="border border-gray-300 px-2 py-1 text-right">実績</th>
                     <th className="border border-gray-300 px-2 py-1 text-right">単位/回</th>
-                    <th className="border border-gray-300 px-2 py-1 text-right">単位計</th>
+                    <th className="border border-gray-300 px-2 py-1 text-right">実績単位計</th>
                   </tr>
                 </thead>
                 <tbody>
                   {summary.rows.map((r) => (
                     <tr key={r.code}>
                       <td className="border border-gray-300 px-2 py-1 text-left">{r.label}</td>
-                      <td className="border border-gray-300 px-2 py-1 text-right tabular-nums">{r.count}</td>
+                      <td className="border border-gray-300 px-2 py-1 text-right tabular-nums text-gray-500">{r.planned}</td>
+                      <td className="border border-gray-300 px-2 py-1 text-right tabular-nums">{r.actual}</td>
                       <td className="border border-gray-300 px-2 py-1 text-right tabular-nums">{r.unit || "—"}</td>
-                      <td className="border border-gray-300 px-2 py-1 text-right tabular-nums font-semibold">{r.total.toLocaleString()}</td>
+                      <td className="border border-gray-300 px-2 py-1 text-right tabular-nums font-semibold">{r.actualUnits.toLocaleString()}</td>
                     </tr>
                   ))}
                   <tr className="bg-gray-50 font-semibold">
                     <td className="border border-gray-300 px-2 py-1 text-left">合計</td>
-                    <td className="border border-gray-300 px-2 py-1 text-right tabular-nums">{summary.totalCount}</td>
+                    <td className="border border-gray-300 px-2 py-1"></td>
+                    <td className="border border-gray-300 px-2 py-1 text-right tabular-nums">{summary.totalActual}</td>
                     <td className="border border-gray-300 px-2 py-1"></td>
                     <td className="border border-gray-300 px-2 py-1 text-right tabular-nums">{summary.totalUnits.toLocaleString()}</td>
                   </tr>

@@ -56,6 +56,7 @@ export async function aggregateBathVisitSeikyu(
     .select("client_id, visit_date, service_code, status")
     .gte("visit_date", monthStart)
     .lte("visit_date", monthEnd)
+    .eq("actual", true) // 実績のみ請求対象 (予定のみの行は除外)
     .in("status", ["confirmed", "submitted"]);
   if (opts.officeId) q = q.eq("office_id", opts.officeId);
   const { data: recData, error: recErr } = await q;
