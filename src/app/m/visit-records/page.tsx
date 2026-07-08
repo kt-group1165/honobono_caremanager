@@ -10,9 +10,11 @@
  *
  * - サイドバー / ヘッダなしのミニマル SP UI (/m/visit-procedures と同系統)
  * - 職員解決: members.auth_user_id = auth.uid()
- * - 一覧: kaigo_visit_schedule を visit_date + staff_id (主担当) で絞込み
- *   ※ MVP は staff_id (主担当) のみ対象。staff_id_2 / staff_id_3 /
- *     additional_staff の 2 人体制 従事者は対象外 (将来対応)。
+ * - 一覧: kaigo_visit_schedule を visit_date + (主担当 staff_id OR 従担当
+ *   staff_id_2 / staff_id_3 OR additional_staff jsonb に自分を含む) で絞込み。
+ *   従担当 (2 人体制の同行者) の訪問も記録・サイン可能。
+ *   ※ staff_id_2/3・additional_staff 列が未適用 (42703) や cs 演算子非対応の
+ *     環境では主 + 2/3 だけ、さらに主のみへ段階的に fallback する (握らず warning)。
  * - 署名保存: PC 版 visit-records-content.tsx (署名 v2 方式) を流用。
  *   dataURL → PNG blob → Storage "signatures" bucket upload →
  *   kaigo_visit_records に signature_image_path / signed_at / signer_name。
@@ -46,11 +48,23 @@ interface ScheduleRow {
   id: string;
   user_id: string;
   staff_id: string | null;
+  staff_id_2: string | null;
+  staff_id_3: string | null;
+  additional_staff: Array<{ staff_id: string }> | null;
   visit_date: string;
   start_time: string | null;
   end_time: string | null;
   service_type: string | null;
   clients: { name: string | null } | null;
+}
+
+// 自分がこの訪問で担う役割
+type StaffRole = "主" | "従";
+
+/** schedule 行から自分 (me = member.id) の役割を判定する。主担当を優先。 */
+function myRole(s: ScheduleRow, me: string): StaffRole {
+  if (s.staff_id === me) return "主";
+  return "従";
 }
 
 // schedule_id で既存 record を突合するための最小型
@@ -96,6 +110,13 @@ export default function MobileVisitRecordsPage() {
   const [bodyCare, setBodyCare] = useState("");
   const [livingSupport, setLivingSupport] = useState("");
   const [userCondition, setUserCondition] = useState("");
+  // バイタル (任意)。空文字 = 未入力 → 保存時 null。
+  const [vitalTemp, setVitalTemp] = useState("");
+  const [vitalBpSys, setVitalBpSys] = useState("");
+  const [vitalBpDia, setVitalBpDia] = useState("");
+  const [vitalPulse, setVitalPulse] = useState("");
+  const [vitalSpo2, setVitalSpo2] = useState("");
+  const [notes, setNotes] = useState("");
   const [signature, setSignature] = useState<string | null>(null);
   const [signerName, setSignerName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -144,25 +165,65 @@ export default function MobileVisitRecordsPage() {
   const fetchList = useCallback(async () => {
     if (!member) return;
     setListLoading(true);
-    // 担当訪問: staff_id (主担当) のみ。2 人体制 (staff_id_2/3) は MVP 対象外。
-    const { data: schData, error: schErr } = await supabase
-      .from("kaigo_visit_schedule")
-      .select(
-        "id, user_id, staff_id, visit_date, start_time, end_time, service_type, clients(name)"
-      )
-      .eq("visit_date", date)
-      .eq("staff_id", member.id)
-      .neq("status", "cancelled")
-      .order("start_time");
-    if (schErr) {
-      console.error("schedule fetch failed:", schErr.message);
-      toast.error("訪問予定の取得に失敗しました: " + schErr.message);
+    const me = member.id;
+    // 担当訪問: 主担当 (staff_id) OR 従担当 (staff_id_2/3 / additional_staff)。
+    // PostgREST の 42703 (列未適用) / cs 非対応時は段階的に fallback する。
+    // - full   : 主 + 2/3 + additional_staff(cs)
+    // - noCs    : 主 + 2/3           (additional_staff の cs を外す)
+    // - primary : 主のみ             (2/3 列も無い最古環境)
+    const SELECT_COLS =
+      "id, user_id, staff_id, staff_id_2, staff_id_3, additional_staff, visit_date, start_time, end_time, service_type, clients(name)";
+    // additional_staff は jsonb 配列 [{staff_id,...}]。contains (cs) で自分を含む行を拾う。
+    const csFilter = `additional_staff.cs.[{"staff_id":"${me}"}]`;
+    const orFull = `staff_id.eq.${me},staff_id_2.eq.${me},staff_id_3.eq.${me},${csFilter}`;
+    const orNoCs = `staff_id.eq.${me},staff_id_2.eq.${me},staff_id_3.eq.${me}`;
+
+    const runQuery = (orExpr: string | null) => {
+      let q = supabase
+        .from("kaigo_visit_schedule")
+        .select(SELECT_COLS)
+        .eq("visit_date", date)
+        .neq("status", "cancelled");
+      q = orExpr ? q.or(orExpr) : q.eq("staff_id", me);
+      return q.order("start_time");
+    };
+
+    // 42703 (undefined column) / cs 演算子エラーを判定
+    const isColumnOrCsError = (msg: string, code?: string): boolean =>
+      code === "42703" ||
+      /column .* does not exist/i.test(msg) ||
+      /operator does not exist/i.test(msg) ||
+      /invalid input syntax|cs\b|contains/i.test(msg);
+
+    let rows: ScheduleRow[];
+    // 1) full (OR + cs)
+    let res = await runQuery(orFull);
+    if (res.error && isColumnOrCsError(res.error.message, res.error.code)) {
+      console.warn("schedule OR+cs 非対応、主+2/3 に fallback:", res.error.message);
+      // 2) noCs (OR without cs)
+      res = await runQuery(orNoCs);
+      if (res.error && isColumnOrCsError(res.error.message, res.error.code)) {
+        console.warn("staff_id_2/3 列も未適用、主担当のみに fallback:", res.error.message);
+        // 3) primary only
+        res = await runQuery(null);
+      }
+    }
+    if (res.error) {
+      console.error("schedule fetch failed:", res.error.message);
+      toast.error("訪問予定の取得に失敗しました: " + res.error.message);
       setSchedules([]);
       setRecords([]);
       setListLoading(false);
       return;
     }
-    const rows = (schData ?? []) as unknown as ScheduleRow[];
+    rows = (res.data ?? []) as unknown as ScheduleRow[];
+    // fallback で additional_staff 列が来なくても型を満たすよう既定を補う
+    rows = rows.map((r) => ({
+      ...r,
+      staff_id_2: r.staff_id_2 ?? null,
+      staff_id_3: r.staff_id_3 ?? null,
+      additional_staff: r.additional_staff ?? null,
+    }));
     setSchedules(rows);
 
     // 当日分の既存 record を schedule_id で突合 (サイン済判定用)
@@ -206,6 +267,12 @@ export default function MobileVisitRecordsPage() {
     setBodyCare("");
     setLivingSupport("");
     setUserCondition("");
+    setVitalTemp("");
+    setVitalBpSys("");
+    setVitalBpDia("");
+    setVitalPulse("");
+    setVitalSpo2("");
+    setNotes("");
     setSignature(null);
     setSignerName(s.clients?.name ?? "");
   };
@@ -236,10 +303,23 @@ export default function MobileVisitRecordsPage() {
       return;
     }
 
+    // number 文字列 → number | null。空/非数値は null。
+    const numOrNull = (v: string): number | null => {
+      const t = v.trim();
+      if (!t) return null;
+      const n = Number(t);
+      return Number.isFinite(n) ? n : null;
+    };
     const body = {
       body_care: bodyCare.trim() || null,
       living_support: livingSupport.trim() || null,
       user_condition: userCondition.trim() || null,
+      vital_temperature: numOrNull(vitalTemp),
+      vital_bp_sys: numOrNull(vitalBpSys),
+      vital_bp_dia: numOrNull(vitalBpDia),
+      vital_pulse: numOrNull(vitalPulse),
+      vital_spo2: numOrNull(vitalSpo2),
+      notes: notes.trim() || null,
     };
 
     let recordId: string;
@@ -399,8 +479,20 @@ export default function MobileVisitRecordsPage() {
         <div className="space-y-3">
           {/* 訪問サマリ */}
           <section className="rounded-lg border border-gray-200 bg-white p-3 space-y-1">
-            <div className="text-base font-bold text-gray-900 break-words leading-tight">
-              {clientName}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-base font-bold text-gray-900 break-words leading-tight">
+                {clientName}
+              </span>
+              {member &&
+                (myRole(selected, member.id) === "主" ? (
+                  <span className="shrink-0 inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700">
+                    主担当
+                  </span>
+                ) : (
+                  <span className="shrink-0 inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                    従担当
+                  </span>
+                ))}
             </div>
             <div className="text-xs text-gray-600 tabular-nums">
               {formatJpDate(selected.visit_date)}
@@ -450,6 +542,83 @@ export default function MobileVisitRecordsPage() {
               <textarea
                 value={userCondition}
                 onChange={(e) => setUserCondition(e.target.value)}
+                rows={3}
+                className="w-full rounded-md border border-gray-300 px-2 py-2 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                placeholder="任意"
+              />
+            </div>
+          </section>
+
+          {/* バイタル (任意) */}
+          <section className="rounded-lg border border-gray-200 bg-white p-3 space-y-3">
+            <div className="text-sm font-semibold text-gray-900">バイタル (任意)</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">体温 (℃)</label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.1"
+                  value={vitalTemp}
+                  onChange={(e) => setVitalTemp(e.target.value)}
+                  className="w-full min-h-[44px] rounded-md border border-gray-300 px-2 py-2 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                  placeholder="36.5"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">脈拍 (回/分)</label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={vitalPulse}
+                  onChange={(e) => setVitalPulse(e.target.value)}
+                  className="w-full min-h-[44px] rounded-md border border-gray-300 px-2 py-2 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                  placeholder="72"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  血圧 収縮期 (mmHg)
+                </label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={vitalBpSys}
+                  onChange={(e) => setVitalBpSys(e.target.value)}
+                  className="w-full min-h-[44px] rounded-md border border-gray-300 px-2 py-2 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                  placeholder="120"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  血圧 拡張期 (mmHg)
+                </label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={vitalBpDia}
+                  onChange={(e) => setVitalBpDia(e.target.value)}
+                  className="w-full min-h-[44px] rounded-md border border-gray-300 px-2 py-2 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                  placeholder="80"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">SpO2 (%)</label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={vitalSpo2}
+                  onChange={(e) => setVitalSpo2(e.target.value)}
+                  className="w-full min-h-[44px] rounded-md border border-gray-300 px-2 py-2 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                  placeholder="98"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">特記事項</label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
                 rows={3}
                 className="w-full rounded-md border border-gray-300 px-2 py-2 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500"
                 placeholder="任意"
@@ -537,8 +706,20 @@ export default function MobileVisitRecordsPage() {
                       className="w-full text-left rounded-lg border border-gray-200 bg-white p-3 hover:bg-gray-50 min-h-[44px] flex items-center gap-3"
                     >
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold text-gray-900 break-words leading-tight">
-                          {s.clients?.name ?? "(利用者不明)"}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-semibold text-gray-900 break-words leading-tight">
+                            {s.clients?.name ?? "(利用者不明)"}
+                          </span>
+                          {member &&
+                            (myRole(s, member.id) === "主" ? (
+                              <span className="shrink-0 inline-flex items-center rounded-full bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+                                主担当
+                              </span>
+                            ) : (
+                              <span className="shrink-0 inline-flex items-center rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                                従担当
+                              </span>
+                            ))}
                         </div>
                         <div className="mt-0.5 text-xs text-gray-600 tabular-nums">
                           {(s.start_time || s.end_time) && (
