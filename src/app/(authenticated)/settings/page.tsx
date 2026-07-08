@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Settings, Eye, EyeOff, Building2, ChevronRight, CalendarDays, Plus, Save, Loader2, Trash2, Copy } from "lucide-react";
@@ -425,15 +425,17 @@ function FiscalYearTokuteiKassanSection() {
 // ─── 自事業所切替 ──────────────────────────────────────────────────────────
 
 // ─── 適用加算 (事業所単位の処遇改善加算等の選択) ───────────────────────────
+interface FormulaCandidate {
+  service_code: string;
+  service_category: string;
+  service_name: string;
+  formula: { type: string; numerator?: number; denominator?: number } | null;
+}
+
 function AppliedFormulaSection() {
   const supabase = useMemo(() => createClient(), []);
   const { currentOffice, currentOfficeId } = useBusinessType();
-  const [formulaCodes, setFormulaCodes] = useState<{
-    service_code: string;
-    service_category: string;
-    service_name: string;
-    formula: { type: string; numerator?: number; denominator?: number } | null;
-  }[]>([]);
+  const [formulaCodes, setFormulaCodes] = useState<FormulaCandidate[]>([]);
   const [applied, setApplied] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -582,6 +584,225 @@ function AppliedFormulaSection() {
             );
           })}
         </ul>
+      )}
+      <AddonPeriodsBlock candidates={formulaCodes} />
+    </div>
+  );
+}
+
+// ─── 適用加算の期間指定 (期中の区分変更を月単位で管理) ─────────────────────
+interface AddonPeriodRow {
+  id: string;
+  formula_code: string;
+  start_month: string | null;
+  end_month: string | null;
+  notes: string | null;
+}
+
+function AddonPeriodsBlock({ candidates }: { candidates: FormulaCandidate[] }) {
+  const supabase = useMemo(() => createClient(), []);
+  const { currentOffice, currentOfficeId } = useBusinessType();
+  const [periods, setPeriods] = useState<AddonPeriodRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tableMissing, setTableMissing] = useState(false);
+  const [newCode, setNewCode] = useState("");
+  const [newStart, setNewStart] = useState("");
+  const [newEnd, setNewEnd] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  const nameByCode = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of candidates) m.set(c.service_code, c.service_name);
+    return m;
+  }, [candidates]);
+
+  const load = useCallback(async () => {
+    if (!currentOfficeId) {
+      setPeriods([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("kaigo_office_addon_periods")
+      .select("id, formula_code, start_month, end_month, notes")
+      .eq("office_id", currentOfficeId)
+      .order("start_month", { ascending: true, nullsFirst: true });
+    if (error) {
+      // テーブル未作成 (42P01 / PGRST205) → 表示して続行 (それ以外は toast)
+      if (error.code === "42P01" || error.code === "PGRST205") {
+        setTableMissing(true);
+      } else {
+        toast.error("期間指定の読込に失敗: " + error.message);
+      }
+      setPeriods([]);
+      setLoading(false);
+      return;
+    }
+    setTableMissing(false);
+    setPeriods((data ?? []) as AddonPeriodRow[]);
+    setLoading(false);
+  }, [supabase, currentOfficeId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (依存変更で再読込)
+    load();
+  }, [load]);
+
+  const handleAdd = async () => {
+    if (!currentOfficeId || !currentOffice) {
+      toast.error("自事業所が選択されていません");
+      return;
+    }
+    if (!newCode) {
+      toast.error("加算コードを選択してください");
+      return;
+    }
+    if (newStart && newEnd && newStart > newEnd) {
+      toast.error("開始月が終了月より後になっています");
+      return;
+    }
+    setAdding(true);
+    const { error } = await supabase.from("kaigo_office_addon_periods").insert({
+      office_id: currentOfficeId,
+      formula_code: newCode,
+      start_month: newStart || null,
+      end_month: newEnd || null,
+      tenant_id: currentOffice.tenant_id,
+    });
+    setAdding(false);
+    if (error) {
+      if (error.code === "42P01" || error.code === "PGRST205") {
+        setTableMissing(true);
+        toast.error("テーブル (kaigo_office_addon_periods) が未作成です");
+      } else {
+        toast.error("追加に失敗: " + error.message);
+      }
+      return;
+    }
+    toast.success("期間指定を追加しました");
+    setNewCode("");
+    setNewStart("");
+    setNewEnd("");
+    await load();
+  };
+
+  const handleDelete = async (id: string) => {
+    const { error } = await supabase
+      .from("kaigo_office_addon_periods")
+      .delete()
+      .eq("id", id);
+    if (error) {
+      toast.error("削除に失敗: " + error.message);
+      return;
+    }
+    toast.success("期間指定を削除しました");
+    await load();
+  };
+
+  if (!currentOffice) return null;
+
+  return (
+    <div className="mt-5 border-t pt-4">
+      <h3 className="text-sm font-semibold text-gray-900">期間指定 (詳細)</h3>
+      <p className="text-xs text-gray-500 mt-1 mb-3">
+        期間指定があるとその月はこちらが優先されます。期中に処遇改善の区分を変更した場合に使います
+        (例: 5月まで処遇改善Ⅱ・6月からⅡ2)。開始月・終了月が空欄の行は「最初から」「無期限」扱いです。
+      </p>
+      {tableMissing ? (
+        <p className="text-sm text-amber-700 bg-amber-50 rounded px-3 py-2">
+          テーブル (kaigo_office_addon_periods) が未作成です。migration 適用後に利用できます。
+        </p>
+      ) : loading ? (
+        <p className="text-sm text-gray-400 py-2">読込中...</p>
+      ) : (
+        <>
+          {periods.length === 0 ? (
+            <p className="text-sm text-gray-400 py-1">
+              期間指定はありません (上のチェックの加算が常に適用されます)
+            </p>
+          ) : (
+            <table className="w-full text-sm mb-3">
+              <thead>
+                <tr className="bg-gray-50 border-y">
+                  <th className="px-2 py-1.5 text-left text-xs text-gray-600">加算</th>
+                  <th className="px-2 py-1.5 text-left text-xs text-gray-600">開始月</th>
+                  <th className="px-2 py-1.5 text-left text-xs text-gray-600">終了月</th>
+                  <th className="px-2 py-1.5" />
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {periods.map((p) => (
+                  <tr key={p.id}>
+                    <td className="px-2 py-1.5">
+                      <span className="text-gray-800">
+                        {nameByCode.get(p.formula_code) ?? p.formula_code}
+                      </span>{" "}
+                      <span className="text-[10px] text-gray-400 font-mono">{p.formula_code}</span>
+                      {p.notes && (
+                        <span className="ml-1 text-[10px] text-gray-400">({p.notes})</span>
+                      )}
+                    </td>
+                    <td className="px-2 py-1.5 text-gray-700">{p.start_month ?? "最初から"}</td>
+                    <td className="px-2 py-1.5 text-gray-700">{p.end_month ?? "無期限"}</td>
+                    <td className="px-2 py-1.5 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(p.id)}
+                        className="text-xs text-red-500 hover:text-red-700 inline-flex items-center gap-1"
+                      >
+                        <Trash2 size={12} /> 削除
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-gray-500">加算コード</span>
+              <select
+                value={newCode}
+                onChange={(e) => setNewCode(e.target.value)}
+                className="rounded border px-2 py-1 text-sm focus:border-blue-500 focus:outline-none max-w-xs"
+              >
+                <option value="">選択...</option>
+                {candidates.map((c) => (
+                  <option key={c.service_code} value={c.service_code}>
+                    {c.service_name} ({c.service_code})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-gray-500">開始月 (空=最初から)</span>
+              <input
+                type="month"
+                value={newStart}
+                onChange={(e) => setNewStart(e.target.value)}
+                className="rounded border px-2 py-1 text-sm focus:border-blue-500 focus:outline-none"
+              />
+            </label>
+            <label className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-gray-500">終了月 (空=無期限)</span>
+              <input
+                type="month"
+                value={newEnd}
+                onChange={(e) => setNewEnd(e.target.value)}
+                className="rounded border px-2 py-1 text-sm focus:border-blue-500 focus:outline-none"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={handleAdd}
+              disabled={adding || !newCode}
+              className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40 inline-flex items-center gap-1"
+            >
+              <Plus size={14} /> {adding ? "追加中..." : "行追加"}
+            </button>
+          </div>
+        </>
       )}
     </div>
   );

@@ -124,7 +124,10 @@ export async function aggregateMonthlyVisitSeikyu(
     month: number; // 1-12
     /** 自事業所の 地域単価 (offices.unit_price)。未指定 10.0 */
     unitPrice?: number;
-    /** 自事業所の applied_formula_codes (処遇改善等) */
+    /**
+     * 自事業所の applied_formula_codes (処遇改善等)。
+     * kaigo_office_addon_periods に対象月が期間内の行がある場合はそちらを優先。
+     */
     appliedFormulaCodes?: string[];
   },
 ): Promise<MonthlySeikyuResult> {
@@ -284,17 +287,48 @@ export async function aggregateMonthlyVisitSeikyu(
 
   // 4) 処遇改善加算の rate — 適用加算コードの formula をマスタから取得
   //    (monthly_aggregate: 所定単位 × numerator/denominator)
+  //    解決順序:
+  //      a. kaigo_office_addon_periods (期間指定) — 対象月が期間内の行があればその formula_code を優先
+  //         (期中の区分変更「5月まで処遇改善Ⅱ・6月からⅡ2」等に対応)
+  //      b. 該当 0 件 (テーブル未作成 42P01 含む) なら offices.applied_formula_codes にフォールバック
   let addonNum = 0;
   let addonDen = 1;
   let addonLabel: string | null = null;
   let addonCode: string | null = null;
-  if ((opts.appliedFormulaCodes ?? []).length > 0) {
+  let effectiveFormulaCodes: string[] = opts.appliedFormulaCodes ?? [];
+  if (opts.officeId) {
+    const { data: periodRows, error: periodError } = await supabase
+      .from("kaigo_office_addon_periods")
+      .select("formula_code, start_month, end_month")
+      .eq("office_id", opts.officeId);
+    if (periodError) {
+      // テーブル未作成 (直 SQL=42P01 / PostgREST schema cache=PGRST205) は
+      // 従来どおりフォールバック (それ以外は握りつぶさない)
+      if (periodError.code !== "42P01" && periodError.code !== "PGRST205") {
+        throw new Error(`加算期間取得失敗: ${periodError.message}`);
+      }
+    } else {
+      const inMonth = ((periodRows ?? []) as {
+        formula_code: string;
+        start_month: string | null;
+        end_month: string | null;
+      }[]).filter(
+        (r) =>
+          (r.start_month == null || r.start_month <= monthStr) &&
+          (r.end_month == null || r.end_month >= monthStr),
+      );
+      if (inMonth.length > 0) {
+        effectiveFormulaCodes = inMonth.map((r) => r.formula_code);
+      }
+    }
+  }
+  if (effectiveFormulaCodes.length > 0) {
     // 有効期間: 同一 service_code の世代が複数あるため対象月の世代の formula を採用
     const { data, error } = await validInMonth(
       supabase
         .from("kaigo_service_codes")
         .select("service_code, service_name, formula")
-        .in("service_code", opts.appliedFormulaCodes as string[])
+        .in("service_code", effectiveFormulaCodes)
         .eq("system", "介護")
         .not("formula", "is", null),
       opts.year,
