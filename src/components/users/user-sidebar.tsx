@@ -65,6 +65,9 @@ interface BadgeData {
 }
 
 interface WarnBadge {
+  /** 正方形バッジに出す 1 文字 (ほのぼの流の「未」等) */
+  short: string;
+  /** ホバー時に出す full ラベル */
   label: string;
   cls: string;
   title: string;
@@ -91,18 +94,20 @@ function computeWarnBadges(
   if (cert) {
     if (cert.care_level === "申請中") {
       out.push({
+        short: "未",
         label: "未申請",
-        cls: "bg-yellow-100 text-yellow-800",
-        title: "最新の認定が申請中です",
+        cls: "bg-yellow-100 text-yellow-800 border-yellow-300",
+        title: "未申請: 最新の認定が申請中です",
       });
     }
     const end = cert.certification_end_date;
     if (end) {
       if (end < today) {
         out.push({
+          short: "切",
           label: "認定切れ",
-          cls: "bg-red-100 text-red-700",
-          title: `認定有効期間が終了しています (〜${end})`,
+          cls: "bg-red-100 text-red-700 border-red-300",
+          title: `認定切れ: 認定有効期間が終了しています (〜${end})`,
         });
       } else {
         const days = Math.ceil(
@@ -110,9 +115,10 @@ function computeWarnBadges(
         );
         if (days <= CERT_RENEWAL_WARN_DAYS) {
           out.push({
+            short: "更",
             label: `更新${days}日`,
-            cls: "bg-amber-100 text-amber-800",
-            title: `認定有効期間の終了まで ${days} 日です (〜${end})`,
+            cls: "bg-amber-100 text-amber-800 border-amber-300",
+            title: `更新間近: 認定有効期間の終了まで ${days} 日です (〜${end})`,
           });
         }
       }
@@ -120,16 +126,18 @@ function computeWarnBadges(
   }
   if (!data.hasInsurance.has(clientId)) {
     out.push({
+      short: "保",
       label: "保険未登録",
-      cls: "bg-gray-100 text-gray-500",
-      title: "介護保険情報が未登録です",
+      cls: "bg-gray-100 text-gray-500 border-gray-300",
+      title: "保険未登録: 介護保険情報が未登録です",
     });
   }
   if (isCurrentlyHospitalized(data.hospitalization.get(clientId), today)) {
     out.push({
+      short: "院",
       label: "入院中",
-      cls: "bg-purple-100 text-purple-700",
-      title: "現在入院中です",
+      cls: "bg-purple-100 text-purple-700 border-purple-300",
+      title: "入院中: 現在入院中です",
     });
   }
   return out;
@@ -497,26 +505,18 @@ function UserSidebarInner(props: UserSidebarProps) {
                       <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
                         <span className="truncate text-sm leading-tight">{user.name}</span>
                         <ServiceCategoryBadge category={user.service_category} size="xs" />
-                        {warnBadges.slice(0, 2).map((b) => (
+                        {warnBadges.map((b) => (
                           <span
                             key={b.label}
                             title={b.title}
                             className={cn(
-                              "shrink-0 whitespace-nowrap rounded-full px-1.5 py-px text-[9px] font-medium leading-tight",
+                              "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border text-[10px] font-bold leading-none",
                               b.cls,
                             )}
                           >
-                            {b.label}
+                            {b.short}
                           </span>
                         ))}
-                        {warnBadges.length > 2 && (
-                          <span
-                            className="shrink-0 text-[9px] leading-tight text-gray-400"
-                            title={warnBadges.slice(2).map((b) => b.label).join(" / ")}
-                          >
-                            +{warnBadges.length - 2}
-                          </span>
-                        )}
                       </div>
                       <div className="truncate text-[10px] text-gray-400 leading-tight">{user.furigana ?? ""}</div>
                     </div>
