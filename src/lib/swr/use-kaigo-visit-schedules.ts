@@ -33,6 +33,11 @@ const SWR_OPTIONS = {
   keepPreviousData: true,
 } as const;
 
+// data 未着時に返す空配列。`data ?? []` だと毎レンダリングで新しい配列になり、
+// 参照比較で state 同期している消費側 (monthly-individual 等) が無限再レンダリング
+// に陥る (タブがフリーズする) ため、必ず同一参照を返す。
+const EMPTY_SCHEDULES: VisitSchedule[] = [];
+
 // ---------- byUser ----------
 
 async function fetchByUser(
@@ -92,7 +97,7 @@ export function useKaigoVisitSchedulesByUser(
     { ...SWR_OPTIONS, fallbackData },
   );
   return {
-    schedules: data ?? [],
+    schedules: data ?? EMPTY_SCHEDULES,
     isLoading,
     isValidating,
     error: error ?? null,
@@ -161,7 +166,7 @@ export function useKaigoVisitSchedulesByStaff(
     { ...SWR_OPTIONS, fallbackData },
   );
   return {
-    schedules: data ?? [],
+    schedules: data ?? EMPTY_SCHEDULES,
     isLoading,
     isValidating,
     error: error ?? null,
@@ -222,7 +227,7 @@ export function useKaigoVisitSchedulesByDate(
     { ...SWR_OPTIONS, fallbackData },
   );
   return {
-    schedules: data ?? [],
+    schedules: data ?? EMPTY_SCHEDULES,
     isLoading,
     isValidating,
     error: error ?? null,
@@ -260,7 +265,7 @@ export function useKaigoVisitSchedulesByMonthAll(
     { ...SWR_OPTIONS, fallbackData },
   );
   return {
-    schedules: data ?? [],
+    schedules: data ?? EMPTY_SCHEDULES,
     isLoading,
     isValidating,
     error: error ?? null,

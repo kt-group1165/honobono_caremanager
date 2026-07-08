@@ -685,6 +685,7 @@ export function TimelineView({
                         ? isStaffUnavailableAtTime(staffIdForCheck, dateStr, sched.start_time, sched.end_time, availability)
                         : false;
                       const isDraggingThis = dragging?.schedId === sched.id;
+                      const extraStaff = [sched.staff_id_2, sched.staff_id_3].filter(Boolean).length;
                       return (
                         <div
                           key={sched.id}
@@ -703,7 +704,7 @@ export function TimelineView({
                             cursor: dragging ? "grabbing" : "grab",
                             zIndex: isDraggingThis ? 5 : undefined,
                           }}
-                          title={`${sched.start_time?.slice(0, 5)}~${sched.end_time?.slice(0, 5)} ${label} ${sched.service_type}${isOnUnavail ? " ⚠勤務不可" : ""}\nダブルクリックで編集`}
+                          title={`${sched.start_time?.slice(0, 5)}~${sched.end_time?.slice(0, 5)} ${label}${extraStaff > 0 ? ` (2人体制 +${extraStaff}名)` : ""} ${sched.service_type}${isOnUnavail ? " ⚠勤務不可" : ""}\nダブルクリックで編集`}
                           onMouseDown={(e) => {
                             const container = e.currentTarget.parentElement;
                             if (container) handleBarMouseDown(e, sched, row.id, container);
@@ -713,7 +714,7 @@ export function TimelineView({
                             onEditSchedule?.(sched);
                           }}
                         >
-                          <span className="truncate font-semibold">{isOnUnavail && "⚠ "}{label}</span>
+                          <span className="truncate font-semibold">{isOnUnavail && "⚠ "}{label}{extraStaff > 0 ? ` +${extraStaff}` : ""}</span>
                           <span className="truncate">{serviceShortName(sched.service_type)}</span>
                         </div>
                       );

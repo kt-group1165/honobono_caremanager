@@ -73,6 +73,32 @@ export const SERVICE_TYPE_COLORS: Record<string, string> = {
   通院等乗降介助: "bg-orange-100 text-orange-700",
 };
 
+// ─── 2人体制 (「◯◯・２人」コード) の整合チェック ─────────────────────────────
+// kaigo_service_codes には「身体介護３・２人」等の全角「２人」variant がある。
+// staff_id_2 の割当とサービス名の「２人」有無が食い違ったら警告する (ブロックはしない)。
+
+export function isTwoPersonService(serviceName: string | null | undefined): boolean {
+  if (!serviceName) return false;
+  // マスタは全角「２人」だが、半角混在データも念のため許容
+  return serviceName.includes("２人") || serviceName.includes("2人");
+}
+
+/** 不整合なら警告文を返す (整合なら null) */
+export function twoPersonMismatchWarning(
+  serviceName: string | null | undefined,
+  staffId2: string | null | undefined,
+): string | null {
+  const twoPersonCode = isTwoPersonService(serviceName);
+  const hasSecond = !!staffId2;
+  if (hasSecond && !twoPersonCode) {
+    return "2人体制ですが1人用のサービスコードです。「◯◯・２人」コードの選択を推奨します";
+  }
+  if (!hasSecond && twoPersonCode) {
+    return "2人用コードですが職員が1人です";
+  }
+  return null;
+}
+
 export function timeToMinutes(t: string): number {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;

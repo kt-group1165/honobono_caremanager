@@ -15,7 +15,6 @@ import {
   Settings,
   Activity,
   UserCog,
-  Clock,
   ChevronLeft,
   ChevronRight,
   NotebookPen,
@@ -105,7 +104,6 @@ const NAV_HOME_CARE_SECTIONED: SectionSpec[] = [
     items: [
       { name: "ケアプラン取込", href: "/careplan-import", icon: FileText },
       { name: "利用状況・シフト管理", href: "/shift-management", icon: CalendarDays },
-      { name: "パターン登録", href: "/shift-management/patterns", icon: Clock },
       { name: "サービス提供表 (実績)", href: "/provision-tickets", icon: FileSpreadsheet },
       { name: "サービス実施記録", href: "/visit-records", icon: ClipboardCheck },
       { name: "訪問介護計画書", href: "/houmon-care-plans", icon: ClipboardList },

@@ -161,6 +161,15 @@ export function buildKokuhoDensou(
     if (!careLevelCode) warnings.push(`${r.user_name}: 要介護度 ("${r.care_level ?? "未設定"}") をコードに変換できません`);
     if (!r.birthDate) warnings.push(`${r.user_name}: 生年月日が未登録です`);
     if (!r.careOfficeNumber) warnings.push(`${r.user_name}: 担当居宅介護支援事業所 (事業所番号) が未登録です`);
+    // 区分支給限度基準の超過分は保険請求から除外済み (aggregate.ts で 10割自費へ振替)。
+    // 明細 02 レコードは実績全量、集計 10 の限度額管理対象単位数 (baseUnits) は
+    // 基準内のみ = 差分が超過分、という様式第二どおりの構造で出るが、取込側の
+    // 突合で気付けるよう warning で明示する。
+    if (r.overUnits > 0) {
+      warnings.push(
+        `${r.user_name}: 区分支給限度基準を ${r.overUnits} 単位超過しています — 超過分 (${r.overAmount.toLocaleString()}円) は保険請求に含めず全額自費 (利用請求) 扱いです`,
+      );
+    }
 
     // 公費単独 (H番号 10割公費): 保険給付率は空欄、公費1給付率 100。
     const benefitRate = r.kohiTandoku ? "" : String(Math.round((1 - r.copay_rate) * 100)); // 90 等
@@ -227,7 +236,10 @@ export function buildKokuhoDensou(
       "", "", "", "", "", "", // 51-56 公費3 合計情報
     ]);
 
-    // 明細情報レコード (02) — サービスコードごと
+    // 明細情報レコード (02) — サービスコードごと。
+    // 実績単位の月次加算 (初回 114001 / 緊急時 114000 / 生活機能向上連携 114003・114002) は
+    // aggregate.ts が details[] に加算行として積んでいるため、ここでそのまま 02 行になる。
+    // 処遇改善等の%加算 (addonCode) のみ別枠で 1 行追加する (従来どおり)。
     const detailLines: { code: string; unitPer: number; count: number; units: number }[] = [];
     for (const d of r.details) {
       if (!d.service_code) {
@@ -278,9 +290,12 @@ export function buildKokuhoDensou(
       insured, // 6
       svcKindCode, // 7 サービス種類コード
       String(r.serviceDays), // 8 サービス実日数
+      // 9-11: baseUnits は「区分支給限度基準内」の本体単位数 (aggregate.ts で
+      // 超過分を除外済み)。超過がある場合、明細 02 行の合計 (grossBaseUnits) より
+      // 小さくなり、その差 = 超過分は保険請求外 (全額自費) — 様式第二の標準的な扱い。
       String(r.baseUnits), // 9 計画単位数
-      String(r.baseUnits), // 10 限度額管理対象単位数
-      String(r.addonUnits), // 11 限度額管理対象外単位数 (処遇改善等は対象外)
+      String(r.baseUnits), // 10 限度額管理対象単位数 (基準内)
+      String(r.addonUnits), // 11 限度額管理対象外単位数 (処遇改善等は限度額管理の対象外)
       "", // 12 短期入所計画日数
       "", // 13 短期入所実日数
       String(r.totalUnits), // 14 保険 単位数合計

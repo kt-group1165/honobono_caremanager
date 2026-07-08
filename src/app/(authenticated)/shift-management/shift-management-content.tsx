@@ -7,6 +7,7 @@ import { resolvePreferredTenantId } from "@/lib/tenant-resolver";
 import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   CalendarDays,
   Clock,
   Download,
@@ -20,6 +21,7 @@ import {
   Check,
   Loader2,
   FileText,
+  NotebookPen,
 } from "lucide-react";
 import {
   format,
@@ -34,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { ServiceSelector } from "@/components/services/service-selector";
 import { StaffCombobox } from "@/components/shared/staff-combobox";
 import {
+  twoPersonMismatchWarning,
   type KaigoStaff,
   type KaigoUser,
   type SidebarTab,
@@ -686,9 +689,12 @@ export function ShiftManagementContent({
     service_code: "",
     service_name: "",
     staff_id: "",
+    staff_id_2: "",
   });
   const [pageEditSaving, setPageEditSaving] = useState(false);
   const [showPageServiceSelector, setShowPageServiceSelector] = useState(false);
+  // 職員2 (2人体制): 普段は 1 人運用なので折りたたみ
+  const [showPageStaff2, setShowPageStaff2] = useState(false);
 
   // Sync filters to URL (replace, no scroll). Skip on initial mount since URL already matches.
   const isInitialMount = useRef(true);
@@ -717,7 +723,9 @@ export function ShiftManagementContent({
       service_code: "",
       service_name: sched.service_type ?? "",
       staff_id: sched.staff_id ?? "",
+      staff_id_2: sched.staff_id_2 ?? "",
     });
+    setShowPageStaff2(!!sched.staff_id_2);
   };
 
   const handlePageEditSave = async () => {
@@ -731,12 +739,18 @@ export function ShiftManagementContent({
         // 具体的な service_name (例: 身体介護02) があればそれを、無ければ category (身体介護) を保存
         service_type: pageEditForm.service_name || pageEditForm.service_type,
         staff_id: pageEditForm.staff_id || null,
+        staff_id_2: pageEditForm.staff_id_2 || null,
       })
       .eq("id", pageEditModal.id);
     if (error) {
       toast.error("更新に失敗しました: " + error.message);
     } else {
       toast.success("更新しました");
+      const warn = twoPersonMismatchWarning(
+        pageEditForm.service_name || pageEditForm.service_type,
+        pageEditForm.staff_id_2 || null,
+      );
+      if (warn) toast.warning(warn);
       setPageEditModal(null);
     }
     setPageEditSaving(false);
@@ -856,6 +870,13 @@ export function ShiftManagementContent({
               </button>
             )}
           </div>
+          <button
+            onClick={() => confirmIfPending(() => router.push("/shift-management/patterns"))}
+            className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <NotebookPen size={15} />
+            パターン登録
+          </button>
           <button
             onClick={() => setShowPatternModal(true)}
             className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
@@ -1066,6 +1087,58 @@ export function ShiftManagementContent({
                   }))}
                 />
               </div>
+
+              {/* 職員2 (2人体制): 普段は折りたたみ */}
+              {showPageStaff2 ? (
+                <div>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="block text-xs text-gray-500">担当職員2（2人体制）</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPageEditForm((f) => ({ ...f, staff_id_2: "" }));
+                        setShowPageStaff2(false);
+                      }}
+                      className="text-xs text-gray-400 hover:text-red-500"
+                    >
+                      取り消す
+                    </button>
+                  </div>
+                  <StaffCombobox
+                    value={pageEditForm.staff_id_2}
+                    onChange={(id) => setPageEditForm((f) => ({ ...f, staff_id_2: id }))}
+                    options={staff
+                      .filter((s) => s.id !== pageEditForm.staff_id)
+                      .map((s) => ({
+                        id: s.id,
+                        name: s.name,
+                        furigana: (s as unknown as { furigana?: string | null }).furigana ?? null,
+                      }))}
+                  />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowPageStaff2(true)}
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  ＋ 2人目を追加（2人体制）
+                </button>
+              )}
+
+              {(() => {
+                const warn = twoPersonMismatchWarning(
+                  pageEditForm.service_name || pageEditForm.service_type,
+                  pageEditForm.staff_id_2 || null,
+                );
+                if (!warn) return null;
+                return (
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                    {warn}
+                  </div>
+                );
+              })()}
             </div>
             <div className="flex items-center justify-between border-t px-5 py-4">
               <button

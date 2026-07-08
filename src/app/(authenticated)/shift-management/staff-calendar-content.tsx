@@ -189,6 +189,7 @@ export function StaffCalendar({
                       const onUnavail = isScheduleOnUnavailableSlot(sched);
                       const conflict = isScheduleConflict(sched);
                       const isCompleted = sched.status === "completed";
+                      const extraStaff = [sched.staff_id_2, sched.staff_id_3].filter(Boolean).length;
                       const col =
                         SERVICE_TYPE_COLORS[sched.service_type] ?? "bg-gray-100 text-gray-700";
                       return (
@@ -206,6 +207,11 @@ export function StaffCalendar({
                           title={`クリックして編集${isCompleted ? "（実績）" : "（予定）"}${onUnavail ? " ⚠勤務不可" : ""}`}
                         >
                           {sched.start_time?.slice(0, 5)}~{sched.end_time?.slice(0, 5)} {sched.user_name ?? ""} {serviceShortName(sched.service_type)}
+                          {extraStaff > 0 && (
+                            <span className="ml-0.5 rounded bg-indigo-100 px-0.5 font-bold text-indigo-700" title={`2人体制 (+${extraStaff}名)`}>
+                              +{extraStaff}
+                            </span>
+                          )}
                           {(onUnavail || conflict) && <AlertTriangle size={8} className="inline ml-0.5" />}
                           {conflict && <span className="ml-0.5">重複</span>}
                         </button>

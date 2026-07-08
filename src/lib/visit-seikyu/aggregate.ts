@@ -9,10 +9,18 @@
  *   → 利用者ごとに 1 行の請求サマリ
  *
  * 金額計算 (介護保険の標準):
- *   総単位数 = Σ(サービス単位 × 回数) + 加算単位 (処遇改善等 = %加算)
+ *   明細単位数 = Σ(サービス単位 × 回数) + 実績単位の加算 (初回/緊急時/生活機能向上連携)
+ *   区分支給限度基準 (ほのぼの準拠):
+ *     基準値 = 計画単位数 (kaigo_monthly_plan_units) があればそれ、
+ *              無ければ認定の限度額 (client_insurance_records.service_limit_amount)。
+ *     明細単位数のうち基準値を超える分 (overUnits) は保険給付対象外
+ *     → 超過単位 × 単価 × 10割 を利用者の全額自費 (userAmount) に振り替える。
+ *     ※ 処遇改善加算等 (%加算) は区分支給限度基準の「対象外」なので
+ *        超過判定の単位数には含めない (基準内単位数に対してのみ計算する)。
+ *   総単位数 = 基準内単位数 + 加算単位 (処遇改善等 = %加算)
  *   総額     = floor(総単位数 × 地域単価)
- *   利用者負担 = floor(総額 × 負担割合)   ※ copay_rate 未設定は 1 割
- *   保険請求額 = 総額 - 利用者負担
+ *   保険請求額 = floor(総額 × 給付率)   ※ copay_rate 未設定は 1 割負担
+ *   利用者負担 = 総額 - 保険請求額 + 超過自費額
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -52,9 +60,21 @@ export interface UserSeikyuRow {
   care_level: string | null;
   /** 負担割合 (0.1 / 0.2 / 0.3)。レコード無し時は 0.1 */
   copay_rate: number;
-  /** 明細行 (サービス種類ごと) */
+  /** 明細行 (サービス種類ごと + 実績単位の加算行) */
   details: SeikyuDetailLine[];
-  /** 本体単位数 (加算前) */
+  /** 明細合計単位数 (details の合計 = 限度額超過分を含む実績全量。処遇改善は含まない) */
+  grossBaseUnits: number;
+  /**
+   * 区分支給限度基準の基準値 (単位)。
+   * 計画単位数 (kaigo_monthly_plan_units) 優先、無ければ認定の限度額
+   * (client_insurance_records.service_limit_amount)。どちらも無ければ null (= 限度額管理なし)。
+   */
+  limitUnits: number | null;
+  /** 基準超過単位数 (= max(0, grossBaseUnits - limitUnits)) */
+  overUnits: number;
+  /** 超過分の全額自費額 (円) = floor(overUnits × 単価 × 10割)。userAmount に含まれる */
+  overAmount: number;
+  /** 本体単位数 (処遇改善等の%加算を除く、区分支給限度基準内 = 保険給付対象) */
   baseUnits: number;
   /** 処遇改善等 加算単位数 */
   addonUnits: number;
@@ -114,6 +134,11 @@ export interface MonthlySeikyuResult {
   month: string;
   /** 対象実績 (completed) 総件数 */
   recordCount: number;
+  /**
+   * 集計時の注意事項 (UI で amber 表示 / toast 用)。
+   * 例: 身体介護9系 (units=0 の増分コード) が実績にある、加算コード未解決 等。
+   */
+  warnings: string[];
 }
 
 // 処遇改善加算等 (= 月次総単位数に % を掛ける加算) は
@@ -163,8 +188,10 @@ export async function aggregateMonthlyVisitSeikyu(
   }
 
   if (schedules.length === 0) {
-    return { rows: [], month: monthStr, recordCount: 0 };
+    return { rows: [], month: monthStr, recordCount: 0, warnings: [] };
   }
+
+  const warnings: string[] = [];
 
   // 2) service_name → units / short_name のマスタ
   // マスタは全角数字 (身体介護３) / schedule は半角混在のため
@@ -200,6 +227,83 @@ export async function aggregateMonthlyVisitSeikyu(
     get: (name: string) => unitByNorm.get(toHankakuDigits(name)),
   };
 
+  // 2.5) 実績単位の月次加算 (kaigo_visit_month_addons: 初回 / 緊急時 / 生活機能向上連携)
+  //     利用者×月×事業所のフラグを読み、該当利用者の明細に加算行として追加する。
+  //     単位数はハードコードせず kaigo_service_codes から対象月の有効世代で引く。
+  interface MonthAddonFlags {
+    shokai: boolean;
+    seikatsuKino: string; // 'なし' | 'Ⅰ' | 'Ⅱ'
+    kinkyuCount: number;
+  }
+  const monthAddonByClient = new Map<string, MonthAddonFlags>();
+  if (opts.officeId) {
+    const { data, error } = await supabase
+      .from("kaigo_visit_month_addons")
+      .select("client_id, shokai, seikatsu_kino, kinkyu_count")
+      .eq("office_id", opts.officeId)
+      .eq("target_month", monthStr);
+    if (error) {
+      // テーブル未作成 (直 SQL=42P01 / PostgREST schema cache=PGRST205) は
+      // 加算なしで続行 (UI 側で「SQL未適用」バナー案内)。それ以外は握りつぶさない
+      if (error.code !== "42P01" && error.code !== "PGRST205") {
+        throw new Error(`月次加算取得失敗: ${error.message}`);
+      }
+    } else {
+      for (const r of (data ?? []) as {
+        client_id: string;
+        shokai: boolean | null;
+        seikatsu_kino: string | null;
+        kinkyu_count: number | null;
+      }[]) {
+        monthAddonByClient.set(r.client_id, {
+          shokai: !!r.shokai,
+          seikatsuKino: r.seikatsu_kino ?? "なし",
+          kinkyuCount: r.kinkyu_count ?? 0,
+        });
+      }
+    }
+  }
+  // 加算マスタ (単位数・コード)。service_name は実 DB で確認済みの正式名称
+  // (訪問介護 service_category=11 / system=介護。単位数は世代管理 validInMonth で解決)
+  const MONTH_ADDON_NAMES = {
+    shokai: "訪問介護初回加算", // 114001
+    kinkyu: "緊急時訪問介護加算", // 114000
+    seikatsuI: "訪問介護生活機能向上連携加算Ⅰ", // 114003
+    seikatsuII: "訪問介護生活機能向上連携加算Ⅱ", // 114002
+  } as const;
+  const monthAddonMaster = new Map<
+    string,
+    { units: number; short: string | null; code: string | null }
+  >();
+  const hasAnyMonthAddon = Array.from(monthAddonByClient.values()).some(
+    (f) => f.shokai || f.kinkyuCount > 0 || f.seikatsuKino === "Ⅰ" || f.seikatsuKino === "Ⅱ",
+  );
+  if (hasAnyMonthAddon) {
+    const { data, error } = await validInMonth(
+      supabase
+        .from("kaigo_service_codes")
+        .select("service_name, short_name, units, service_code")
+        .eq("system", "介護")
+        .eq("service_category", "11")
+        .in("service_name", Object.values(MONTH_ADDON_NAMES)),
+      opts.year,
+      opts.month,
+    );
+    if (error) throw new Error(`月次加算コード取得失敗: ${error.message}`);
+    for (const r of (data ?? []) as {
+      service_name: string;
+      short_name: string | null;
+      units: number;
+      service_code: string | null;
+    }[]) {
+      monthAddonMaster.set(r.service_name, {
+        units: r.units,
+        short: r.short_name,
+        code: r.service_code,
+      });
+    }
+  }
+
   // 3) 利用者情報 (clients + 最新 insurance record)
   const userIds = Array.from(new Set(schedules.map((s) => s.user_id)));
   const clientById = new Map<
@@ -231,13 +335,15 @@ export async function aggregateMonthlyVisitSeikyu(
       /** 担当居宅介護支援事業所名 (直接入力) */
       careOfficeName: string | null;
       kohiHobetsu: string | null; kohiFutansha: string | null; kohiJukyusha: string | null;
+      /** 認定の区分支給限度基準額 (単位)。計画単位数が無い月のフォールバック基準 */
+      limitAmount: number | null;
     }
   >();
   for (let i = 0; i < userIds.length; i += 50) {
     const chunk = userIds.slice(i, i + 50);
     const { data, error } = await supabase
       .from("client_insurance_records")
-      .select("client_id, insurer_number, insurer_name, insured_number, care_level, copay_rate, public_expense, kohi_hobetsu, kohi_futansha_number, kohi_jukyusha_number, certification_start_date, certification_end_date, care_office_id, care_office_number, care_office_name, effective_date")
+      .select("client_id, insurer_number, insurer_name, insured_number, care_level, copay_rate, public_expense, kohi_hobetsu, kohi_futansha_number, kohi_jukyusha_number, certification_start_date, certification_end_date, care_office_id, care_office_number, care_office_name, service_limit_amount, effective_date")
       .in("client_id", chunk)
       .order("effective_date", { ascending: false });
     if (error) throw new Error(`保険情報取得失敗: ${error.message}`);
@@ -257,6 +363,7 @@ export async function aggregateMonthlyVisitSeikyu(
       care_office_id: string | null;
       care_office_number: string | null;
       care_office_name: string | null;
+      service_limit_amount: number | string | null;
     }[]) {
       // 最新 (effective_date DESC) の 1 件のみ採用
       if (!insByClient.has(r.client_id)) {
@@ -287,6 +394,10 @@ export async function aggregateMonthlyVisitSeikyu(
           kohiHobetsu: r.kohi_hobetsu?.trim() || null,
           kohiFutansha: r.kohi_futansha_number?.trim() || null,
           kohiJukyusha: r.kohi_jukyusha_number?.trim() || null,
+          limitAmount:
+            r.service_limit_amount != null && Number(r.service_limit_amount) > 0
+              ? Number(r.service_limit_amount)
+              : null,
         });
       }
     }
@@ -383,6 +494,36 @@ export async function aggregateMonthlyVisitSeikyu(
     }
   }
 
+  // 4.7) 区分支給限度基準の基準値: 計画単位数 (kaigo_monthly_plan_units)
+  //     月次情報タブで設定する「自事業所分の区分支給限度基準内単位数」。
+  //     あればこれが基準値、無ければ認定の限度額 (service_limit_amount) にフォールバック。
+  //     テーブル未作成 (42P01/PGRST205) は計画なしとして続行。
+  const planUnitsByClient = new Map<string, number>();
+  {
+    let planTableMissing = false;
+    for (let i = 0; i < userIds.length && !planTableMissing; i += 50) {
+      const chunk = userIds.slice(i, i + 50);
+      const { data, error } = await supabase
+        .from("kaigo_monthly_plan_units")
+        .select("client_id, planned_units")
+        .eq("target_month", `${monthStr}-01`)
+        .in("client_id", chunk);
+      if (error) {
+        if (error.code === "42P01" || error.code === "PGRST205") {
+          planTableMissing = true;
+          break;
+        }
+        throw new Error(`計画単位数取得失敗: ${error.message}`);
+      }
+      for (const r of (data ?? []) as { client_id: string; planned_units: number | null }[]) {
+        // 0 は「未設定」扱い (認定限度額フォールバックへ)
+        if (r.planned_units != null && r.planned_units > 0) {
+          planUnitsByClient.set(r.client_id, r.planned_units);
+        }
+      }
+    }
+  }
+
   const unitPrice = opts.unitPrice && opts.unitPrice > 0 ? opts.unitPrice : 10.0;
 
   // 5) 利用者ごとに集計
@@ -402,13 +543,21 @@ export async function aggregateMonthlyVisitSeikyu(
   for (const [userId, typeCounts] of byUser) {
     const client = clientById.get(userId);
     const ins = insByClient.get(userId);
+    const userLabel = client?.name ?? userId;
     const details: SeikyuDetailLine[] = [];
-    let baseUnits = 0;
+    let grossBaseUnits = 0;
     for (const [svcType, count] of typeCounts) {
       const master = unitByName.get(svcType);
       const unitPer = master?.units ?? 0;
+      // 身体介護9系 (units=0 の増分コード) は単独では請求単位にならない。
+      // 実績に紛れていたら合成後の正しいサービスへ修正が必要なので warning。
+      if (master && unitPer === 0) {
+        warnings.push(
+          `${userLabel}: 「${svcType}」は単位数 0 の増分コード (身体介護9系等) です — 実績のサービス内容を確認してください`,
+        );
+      }
       const units = unitPer * count;
-      baseUnits += units;
+      grossBaseUnits += units;
       details.push({
         service_type: svcType,
         short_name: master?.short ?? null,
@@ -418,11 +567,53 @@ export async function aggregateMonthlyVisitSeikyu(
         units,
       });
     }
+    // 実績単位の月次加算行 (初回 / 緊急時×回数 / 生活機能向上連携Ⅰ・Ⅱ)。
+    // これらは区分支給限度基準の「対象」なので grossBaseUnits に含める
+    // (処遇改善等の%加算のみ対象外)。
+    const flags = monthAddonByClient.get(userId);
+    if (flags) {
+      const pushMonthAddon = (name: string, count: number) => {
+        if (count <= 0) return;
+        const m = monthAddonMaster.get(name);
+        if (!m) {
+          warnings.push(
+            `${userLabel}: 加算「${name}」の単位数がマスタから引けません (対象月に有効な世代なし)`,
+          );
+          return;
+        }
+        const units = m.units * count;
+        grossBaseUnits += units;
+        details.push({
+          service_type: name,
+          short_name: m.short,
+          service_code: m.code,
+          unit_per: m.units,
+          count,
+          units,
+        });
+      };
+      if (flags.shokai) pushMonthAddon(MONTH_ADDON_NAMES.shokai, 1);
+      pushMonthAddon(MONTH_ADDON_NAMES.kinkyu, flags.kinkyuCount);
+      if (flags.seikatsuKino === "Ⅰ") pushMonthAddon(MONTH_ADDON_NAMES.seikatsuI, 1);
+      if (flags.seikatsuKino === "Ⅱ") pushMonthAddon(MONTH_ADDON_NAMES.seikatsuII, 1);
+    }
     details.sort((a, b) => b.units - a.units);
 
+    // ── 区分支給限度基準の超過自費 (ほのぼの準拠) ──
+    // 基準値 = 計画単位数 (あれば) > 認定限度額 (service_limit_amount)。どちらも無ければ管理なし。
+    // ※ 処遇改善加算等の%加算は区分支給限度基準の「対象外」なので、
+    //    超過判定は %加算前の grossBaseUnits で行う (加算単位は超過に数えない)。
+    const limitUnits = planUnitsByClient.get(userId) ?? ins?.limitAmount ?? null;
+    const overUnits = limitUnits != null ? Math.max(0, grossBaseUnits - limitUnits) : 0;
+    // 基準内単位数 = 保険給付対象。超過分は保険請求から外し 10割自費へ振替
+    const baseUnits = grossBaseUnits - overUnits;
+    // 処遇改善等 (%加算) は保険請求対象の基準内単位数に対して計算する
+    // (超過自費分には掛けない = 自費請求は素の単位×単価×10割)
     const addonUnits = addonNum > 0 ? Math.round((baseUnits * addonNum) / addonDen) : 0;
     const totalUnits = baseUnits + addonUnits;
     const totalAmount = Math.floor(totalUnits * unitPrice);
+    // 超過分の全額自費額 (円) = floor(超過単位 × 単価 × 10割)
+    const overAmount = Math.floor(overUnits * unitPrice);
     const copay = ins?.copay ?? 0.1;
     // 公費単独 (10割公費): 被保険者番号が 'H' 始まり = 介護保険未加入の生保受給者。
     // 保険給付なし → 総費用の全額を公費 (法別12 生活保護) で請求する。
@@ -440,7 +631,10 @@ export async function aggregateMonthlyVisitSeikyu(
       : publicExpense
       ? totalAmount - insuranceAmount
       : null;
-    const userAmount = publicExpense ? 0 : totalAmount - insuranceAmount;
+    // 利用者負担 = 保険/公費で賄われない本人負担 + 限度額超過の全額自費。
+    // 公費 (生活保護等) は本人負担分を公費へ振替するが、限度額超過分は
+    // 保険給付の枠外 = 公費対象外なので公費単独者でも自費 (overAmount) が乗る。
+    const userAmount = (publicExpense ? 0 : totalAmount - insuranceAmount) + overAmount;
 
     rows.push({
       user_id: userId,
@@ -453,6 +647,10 @@ export async function aggregateMonthlyVisitSeikyu(
       care_level: ins?.level ?? null,
       copay_rate: copay,
       details,
+      grossBaseUnits,
+      limitUnits,
+      overUnits,
+      overAmount,
       baseUnits,
       addonUnits,
       addonLabel,
@@ -492,5 +690,5 @@ export async function aggregateMonthlyVisitSeikyu(
     ),
   );
 
-  return { rows, month: monthStr, recordCount: schedules.length };
+  return { rows, month: monthStr, recordCount: schedules.length, warnings };
 }

@@ -169,12 +169,21 @@ export function UserContractsContent({
     }
   }, [supabase, userId]);
 
+  // 現在の事業所種別 (訪問介護 / 居宅介護支援) の契約書だけ表示する。
+  // 種別未設定 (旧データ) の行は隠すと消えたように見えるため表示する。
+  const currentServiceType = currentOffice?.service_type ?? null;
   const filtered = useMemo(() => {
     return contracts.filter((c) => {
       if (filterStatus && c.status !== filterStatus) return false;
+      if (
+        currentServiceType &&
+        c.business_type &&
+        c.business_type !== currentServiceType
+      )
+        return false;
       return true;
     });
-  }, [contracts, filterStatus]);
+  }, [contracts, filterStatus, currentServiceType]);
 
   const openNew = () => {
     const officeId = defaultOfficeId;

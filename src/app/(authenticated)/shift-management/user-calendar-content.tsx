@@ -34,6 +34,7 @@ import { toHankakuDigits } from "@/lib/service-name-normalize";
 import {
   DOW_LABELS,
   isStaffUnavailableAtTime,
+  twoPersonMismatchWarning,
   type KaigoStaff,
   type StaffAvailabilitySlot,
   type VisitSchedule,
@@ -115,15 +116,18 @@ export function UserCalendar({
   };
 
   const [editModal, setEditModal] = useState<VisitSchedule | null>(null);
-  const [editForm, setEditForm] = useState({ start_time: "", end_time: "", service_type: "", staff_id: "", service_code: "", service_name: "" });
+  const [editForm, setEditForm] = useState({ start_time: "", end_time: "", service_type: "", staff_id: "", staff_id_2: "", service_code: "", service_name: "" });
   const [editSaving, setEditSaving] = useState(false);
   const [editDeleting, setEditDeleting] = useState(false);
   const [showServiceSelector, setShowServiceSelector] = useState(false);
+  // 職員2 (2人体制) の入力欄: 普段は 1 人運用なので折りたたみ、リンクで展開
+  const [showEditStaff2, setShowEditStaff2] = useState(false);
+  const [showAddStaff2, setShowAddStaff2] = useState(false);
   // 選択したサービスの制度区分 (表示用バッジ。選択時に自動設定、手動変更しない)
   const [editServiceSystem, setEditServiceSystem] = useState<string | null>(null);
   const [addServiceSystem, setAddServiceSystem] = useState<string | null>(null);
   const [addModal, setAddModal] = useState<string | null>(null);
-  const [addForm, setAddForm] = useState({ start_time: "09:00", end_time: "10:00", service_type: "", staff_id: "", service_code: "", service_name: "" });
+  const [addForm, setAddForm] = useState({ start_time: "09:00", end_time: "10:00", service_type: "", staff_id: "", staff_id_2: "", service_code: "", service_name: "" });
   const [addSaving, setAddSaving] = useState(false);
   const [showAddServiceSelector, setShowAddServiceSelector] = useState(false);
   // drag & drop: ドロップ先セルのハイライト用
@@ -206,9 +210,11 @@ export function UserCalendar({
       end_time: sched.end_time?.slice(0, 5) ?? "10:00",
       service_type: sched.service_type,
       staff_id: sched.staff_id ?? "",
+      staff_id_2: sched.staff_id_2 ?? "",
       service_code: "",
       service_name: sched.service_type,
     });
+    setShowEditStaff2(!!sched.staff_id_2);
   };
 
   const handleEditSave = async () => {
@@ -226,15 +232,21 @@ export function UserCalendar({
       end_time: editForm.end_time + ":00",
       service_type: editForm.service_name || editForm.service_type,
       staff_id: editForm.staff_id || null,
+      staff_id_2: editForm.staff_id_2 || null,
     };
     const { error } = await supabase
       .from("kaigo_visit_schedule")
       .update(updateData)
       .eq("id", editModal.id);
     if (error) {
-      toast.error("更新に失敗しました");
+      toast.error("更新に失敗しました: " + error.message);
     } else {
       toast.success("予定を更新しました");
+      const warn = twoPersonMismatchWarning(
+        editForm.service_name || editForm.service_type,
+        editForm.staff_id_2 || null,
+      );
+      if (warn) toast.warning(warn);
       setEditModal(null);
       refetchAfterMutation();
     }
@@ -281,7 +293,8 @@ export function UserCalendar({
   const openAddModal = (dateStr: string) => {
     setAddModal(dateStr);
     setAddServiceSystem(null);
-    setAddForm({ start_time: "09:00", end_time: "10:00", service_type: "", staff_id: "", service_code: "", service_name: "" });
+    setAddForm({ start_time: "09:00", end_time: "10:00", service_type: "", staff_id: "", staff_id_2: "", service_code: "", service_name: "" });
+    setShowAddStaff2(false);
   };
 
   const handleAddSave = async () => {
@@ -300,11 +313,17 @@ export function UserCalendar({
         end_time: addForm.end_time + ":00",
         service_type: addForm.service_name || addForm.service_type,
         staff_id: addForm.staff_id || null,
+        staff_id_2: addForm.staff_id_2 || null,
       });
     if (error) {
-      toast.error("追加に失敗しました");
+      toast.error("追加に失敗しました: " + error.message);
     } else {
       toast.success("予定を追加しました");
+      const warn = twoPersonMismatchWarning(
+        addForm.service_name || addForm.service_type,
+        addForm.staff_id_2 || null,
+      );
+      if (warn) toast.warning(warn);
       setAddModal(null);
       refetchAfterMutation();
     }
@@ -424,6 +443,7 @@ export function UserCalendar({
                     {daySchedules.map((sched) => {
                       const unavail = isUnavailable(sched);
                       const isCompleted = sched.status === "completed";
+                      const extraStaff = [sched.staff_id_2, sched.staff_id_3].filter(Boolean).length;
                       return (
                         <button
                           key={sched.id}
@@ -444,7 +464,13 @@ export function UserCalendar({
                           )}
                           title={(isCompleted ? "実績（クリックして編集）" : "予定（クリックして編集）") + " / ドラッグで移動・Ctrl+ドラッグでコピー"}
                         >
-                          {sched.start_time?.slice(0, 5)}~{sched.end_time?.slice(0, 5)} {sched.staff_name ?? ""} {serviceShortName(sched.service_type)}
+                          {sched.start_time?.slice(0, 5)}~{sched.end_time?.slice(0, 5)} {sched.staff_name ?? ""}
+                          {extraStaff > 0 && (
+                            <span className="ml-0.5 rounded bg-indigo-100 px-0.5 font-bold text-indigo-700" title={`2人体制 (+${extraStaff}名)`}>
+                              +{extraStaff}
+                            </span>
+                          )}
+                          {" "}{serviceShortName(sched.service_type)}
                           {unavail && <AlertTriangle size={8} className="inline ml-0.5" />}
                         </button>
                       );
@@ -582,6 +608,66 @@ export function UserCalendar({
                   return null;
                 })()}
               </div>
+
+              {/* 職員2 (2人体制): 普段は折りたたみ */}
+              {showEditStaff2 ? (
+                <div>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="block text-xs font-medium text-gray-500">担当職員2（2人体制）</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditForm((f) => ({ ...f, staff_id_2: "" }));
+                        setShowEditStaff2(false);
+                      }}
+                      className="text-xs text-gray-400 hover:text-red-500"
+                    >
+                      取り消す
+                    </button>
+                  </div>
+                  <StaffCombobox
+                    value={editForm.staff_id_2}
+                    onChange={(id) => setEditForm((f) => ({ ...f, staff_id_2: id }))}
+                    options={allStaff
+                      .filter((s) => s.id !== editForm.staff_id)
+                      .map((s) => {
+                        const status = getStaffStatusForEdit(s.id);
+                        return {
+                          id: s.id,
+                          name: s.name,
+                          furigana: (s as unknown as { furigana?: string | null }).furigana ?? null,
+                          suffix: status.unavail
+                            ? " (対応不可)"
+                            : status.conflict
+                              ? " (重複)"
+                              : undefined,
+                        };
+                      })}
+                  />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowEditStaff2(true)}
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  ＋ 2人目を追加（2人体制）
+                </button>
+              )}
+
+              {(() => {
+                const warn = twoPersonMismatchWarning(
+                  editForm.service_name || editForm.service_type,
+                  editForm.staff_id_2 || null,
+                );
+                if (!warn) return null;
+                return (
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                    {warn}
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex items-center justify-between border-t px-5 py-4">
@@ -725,6 +811,66 @@ export function UserCalendar({
                   return null;
                 })()}
               </div>
+
+              {/* 職員2 (2人体制): 普段は折りたたみ */}
+              {showAddStaff2 ? (
+                <div>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="block text-xs font-medium text-gray-500">担当職員2（2人体制）</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAddForm((f) => ({ ...f, staff_id_2: "" }));
+                        setShowAddStaff2(false);
+                      }}
+                      className="text-xs text-gray-400 hover:text-red-500"
+                    >
+                      取り消す
+                    </button>
+                  </div>
+                  <StaffCombobox
+                    value={addForm.staff_id_2}
+                    onChange={(id) => setAddForm((f) => ({ ...f, staff_id_2: id }))}
+                    options={allStaff
+                      .filter((s) => s.id !== addForm.staff_id)
+                      .map((s) => {
+                        const status = getStaffStatusForAdd(s.id);
+                        return {
+                          id: s.id,
+                          name: s.name,
+                          furigana: (s as unknown as { furigana?: string | null }).furigana ?? null,
+                          suffix: status.unavail
+                            ? " (対応不可)"
+                            : status.conflict
+                              ? " (重複)"
+                              : undefined,
+                        };
+                      })}
+                  />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowAddStaff2(true)}
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  ＋ 2人目を追加（2人体制）
+                </button>
+              )}
+
+              {(() => {
+                const warn = twoPersonMismatchWarning(
+                  addForm.service_name || addForm.service_type,
+                  addForm.staff_id_2 || null,
+                );
+                if (!warn) return null;
+                return (
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                    {warn}
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex justify-end gap-2 border-t px-5 py-4">

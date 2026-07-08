@@ -980,6 +980,9 @@ export function RiyouSeikyuContent() {
 }
 
 // ─── 明細行の利用者負担額 比例配分 (端数は最大行に寄せて合計を一致させる) ──────
+// ※ userAmount には区分支給限度基準の超過自費 (overAmount = 超過単位×単価×10割) が
+//    含まれる (aggregate.ts)。ほのぼのは全額自費を別請求書にするが、ここでは
+//    利用請求の請求額に自然に合算する方式 (明細行へ比例配分)。
 interface RiyouLine {
   label: string;
   unitPer: number | null;

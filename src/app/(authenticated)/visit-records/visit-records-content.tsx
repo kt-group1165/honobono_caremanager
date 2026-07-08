@@ -13,14 +13,21 @@ import {
   User,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   CalendarDays,
+  CalendarClock,
+  CheckCircle2,
+  AlertTriangle,
   PenLine,
   Printer,
   Send,
 } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, addMonths } from "date-fns";
 import { TemplatePicker } from "@/components/templates/template-picker";
 import { SignaturePadModal } from "@/components/signature/SignaturePadModal";
+import { SignaturePad } from "@/components/signature-pad";
+import { resolvePreferredTenantId } from "@/lib/tenant-resolver";
 import { SendDocumentModal } from "@/components/shared/SendDocumentModal";
 import { useBusinessType } from "@/lib/business-type-context";
 import { useSignedUrls } from "@/lib/use-signed-url";
@@ -47,6 +54,9 @@ interface VisitRecord {
   service_category?: "kaigo" | "shougai" | null;
   staff_id: string | null;
   staff_name?: string | null;
+  // 予定 (kaigo_visit_schedule) との正式紐付け。
+  // migration 未適用環境では undefined になりうるため optional 扱いで参照する。
+  schedule_id?: string | null;
   // body care
   care_excretion: boolean;
   care_meal: boolean;
@@ -158,7 +168,47 @@ const SERVICE_TYPE_COLORS: Record<ServiceType, { bg: string; text: string; borde
 const inputClass =
   "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
+// 訪問予定 (kaigo_visit_schedule) — 本画面では読取専用 (書込は shift-management 側の管轄)
+interface VisitSchedule {
+  id: string;
+  user_id: string;
+  staff_id: string | null;
+  staff_id_2: string | null;
+  staff_id_3: string | null;
+  visit_date: string;
+  start_time: string | null;
+  end_time: string | null;
+  service_type: string | null; // shift 側の自由書式 (例: "身体日１．０", "家事日１．０")
+  status: "scheduled" | "completed" | "cancelled";
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// "10:00:00" → "10:00" (time input / 比較用)
+function hhmm(t: string | null | undefined): string {
+  return t ? t.slice(0, 5) : "";
+}
+
+// 予定の service_type (shift 側の自由書式) を記録の ServiceType 4 区分へベストエフォート変換
+function mapScheduleServiceType(s: string | null): ServiceType {
+  const t = s ?? "";
+  if (t.includes("乗降") || t.includes("通院")) return "通院等乗降介助";
+  const body = t.includes("身体") || t.includes("身");
+  const life = t.includes("生活") || t.includes("家事");
+  if (body && life) return "身体・生活";
+  if (life) return "生活援助";
+  return "身体介護";
+}
+
+// PostgREST の「列が存在しない」エラーから列名を抽出 (migration 未適用環境の fallback 用)
+// - PGRST204: Could not find the 'xxx' column of '...' in the schema cache
+// - 42703:    column kaigo_visit_records.xxx does not exist
+function extractMissingColumn(message: string): string | null {
+  const m =
+    message.match(/Could not find the '([^']+)' column/) ??
+    message.match(/column\s+(?:[\w"]+\.)?"?(\w+)"?\s+does not exist/);
+  return m ? m[1] : null;
+}
 
 function formatVisitDate(dateStr: string): string {
   try {
@@ -665,6 +715,173 @@ function CareRecordDetail({ record }: { record: VisitRecord }) {
   );
 }
 
+// ─── 記録カード (展開式) ─────────────────────────────────────────────────────
+// 予定行の中 (embedded) と「予定外の記録」リストの両方で使う共通カード。
+// module scope に置いて react-hooks/static-components rule を満たす。
+function RecordCard({
+  rec,
+  isExpanded,
+  onToggle,
+  onSign,
+  signatureSrc,
+  embedded,
+}: {
+  rec: VisitRecord;
+  isExpanded: boolean;
+  onToggle: () => void;
+  onSign: () => void;
+  /** 解決済みの署名画像 src (path → signed URL / v1 URL fallback)。null = 読み込み中 */
+  signatureSrc: string | null;
+  /** true = 予定行の中に埋め込み表示 (外枠なし) */
+  embedded?: boolean;
+}) {
+  const colors = SERVICE_TYPE_COLORS[rec.service_type] ?? SERVICE_TYPE_COLORS["身体介護"];
+  const careItems = getActiveCareItems(rec);
+  const duration = calcDuration(rec.start_time, rec.end_time);
+  return (
+    <div
+      className={
+        embedded
+          ? "bg-white"
+          : "rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
+      }
+    >
+      {/* Card header */}
+      <button
+        className="flex w-full items-start gap-4 p-4 text-left hover:bg-gray-50 transition-colors"
+        onClick={onToggle}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <span className="flex items-center gap-1 text-sm font-semibold text-gray-900">
+              <CalendarDays size={14} className="text-gray-400" />
+              {formatVisitDate(rec.visit_date)}
+            </span>
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${colors.bg} ${colors.text} ${colors.border}`}>
+              {rec.service_type}
+            </span>
+            {/* Phase Shougai-1: 制度区分 chip (kaigo/shougai 表示) */}
+            {rec.service_category === "shougai" && (
+              <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0 text-[10px] font-medium text-violet-700">
+                障害
+              </span>
+            )}
+            {rec.service_category === "kaigo" && (
+              <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0 text-[10px] font-medium text-blue-700">
+                介護
+              </span>
+            )}
+            {/* 署名済み chip (一覧を開かなくても分かるように) */}
+            {(rec.signature_image_path || rec.signature_image_url) && (
+              <span className="inline-flex items-center gap-0.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0 text-[10px] font-medium text-emerald-700">
+                <PenLine size={10} />
+                署名済
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+            <span className="flex items-center gap-1">
+              <Clock size={12} />
+              {formatTimeRange(rec.start_time, rec.end_time)}
+              {duration && <span className="ml-1 text-gray-400">({duration})</span>}
+            </span>
+            {rec.staff_name && (
+              <span className="flex items-center gap-1">
+                <User size={12} />
+                {rec.staff_name}
+              </span>
+            )}
+          </div>
+          {careItems.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {careItems.map((item) => (
+                <span
+                  key={item}
+                  className="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="shrink-0 text-gray-400 mt-1">
+          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </div>
+      </button>
+
+      {/* Expanded detail — 22カテゴリ対応 */}
+      {isExpanded && (
+        <div className="border-t bg-gray-50 px-4 py-4">
+          <CareRecordDetail record={rec} />
+
+          {/* 電子署名 */}
+          <div className="mt-4 border-t border-gray-200 pt-3">
+            <p className="mb-1.5 text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded">
+              利用者確認 (署名)
+            </p>
+            {(rec.signature_image_path || rec.signature_image_url) ? (
+              <div className="pl-2 space-y-2">
+                <div className="rounded-lg border border-gray-200 bg-white p-3 inline-block">
+                  {signatureSrc ? (
+                    /* eslint-disable-next-line @next/next/no-img-element -- Storage signed URL は外部 host (next/image 不適) */
+                    <img src={signatureSrc} alt="電子署名" className="max-h-32 w-auto" />
+                  ) : (
+                    <span className="text-[11px] text-gray-400">署名画像を読み込み中...</span>
+                  )}
+                </div>
+                <div className="text-xs text-gray-600 space-y-0.5">
+                  {rec.signer_name && (
+                    <div>署名者: <strong>{rec.signer_name}</strong></div>
+                  )}
+                  {rec.signed_at && (
+                    <div>
+                      署名日時:{" "}
+                      {(() => {
+                        try {
+                          return format(parseISO(rec.signed_at), "yyyy/M/d HH:mm");
+                        } catch {
+                          return rec.signed_at;
+                        }
+                      })()}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSign();
+                  }}
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  <PenLine size={12} />
+                  再署名
+                </button>
+              </div>
+            ) : (
+              <div className="pl-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSign();
+                  }}
+                  className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                >
+                  <PenLine size={12} />
+                  署名する
+                </button>
+                <p className="mt-1 text-[11px] text-gray-500">
+                  利用者または代理人の電子署名を取得します
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export interface VisitRecordsContentProps {
@@ -704,19 +921,30 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
     start_time: "",
     end_time: "",
   });
+  // 予定から作成する場合の元予定 (= schedule_id 紐付け + フォーム上部のバナー表示に使用)
+  const [formSchedule, setFormSchedule] = useState<VisitSchedule | null>(null);
+  // 利用者確認サイン (フォーム内インライン署名パッド)
+  const [formSignature, setFormSignature] = useState<string | null>(null);
+  const [formSignerName, setFormSignerName] = useState("");
   // 一覧の制度区分フィルタ (= 'all' / 'kaigo' / 'shougai')
   const [categoryFilter, setCategoryFilter] = useState<"all" | "kaigo" | "shougai">("all");
   const [formCare, setFormCare] = useState<CareData>(emptyCareData());
   const [formSection, setFormSection] = useState<string | null>("pre_check");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [signTarget, setSignTarget] = useState<VisitRecord | null>(null);
-  // 月次実績送付用
-  const [sendMonth, setSendMonth] = useState<string>(() => format(new Date(), "yyyy-MM"));
+  // 表示月 (予定一覧・記録一覧・月次実績送付の共通軸)
+  const [month, setMonth] = useState<string>(() => format(new Date(), "yyyy-MM"));
   const [showSendModal, setShowSendModal] = useState(false);
+  // migration 未適用で INSERT から除外した列名 (amber バナー表示用)
+  const [missingColumns, setMissingColumns] = useState<string[]>([]);
+
+  // 当該月の訪問予定 (kaigo_visit_schedule — 読取のみ)
+  const [schedules, setSchedules] = useState<VisitSchedule[]>([]);
+  const [schedulesLoading, setSchedulesLoading] = useState(true);
 
   // 当該月分の visit_records (date + start_time 昇順)
   const monthRecords = useMemo(() => {
-    const filtered = records.filter((r) => (r.visit_date ?? "").startsWith(sendMonth));
+    const filtered = records.filter((r) => (r.visit_date ?? "").startsWith(month));
     return [...filtered].sort((a, b) => {
       const ad = a.visit_date ?? "";
       const bd = b.visit_date ?? "";
@@ -726,7 +954,7 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
       if (at === bt) return 0;
       return at < bt ? -1 : 1;
     });
-  }, [records, sendMonth]);
+  }, [records, month]);
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
@@ -760,18 +988,137 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
     fetchRecords();
   }, [fetchRecords]);
 
+  // 当該月の訪問予定を取得 (kaigo_visit_schedule は読取のみ — 書込は shift-management 側)
+  // NOTE: loading の ON は月変更ハンドラ (changeMonth) 側で行う
+  //       (effect 内の同期 setState を避ける — react-hooks/set-state-in-effect)
+  const fetchSchedules = useCallback(async () => {
+    const [y, m] = month.split("-").map(Number);
+    if (!y || !m) return; // changeMonth で空値は弾いているため通常到達しない
+    const from = `${month}-01`;
+    const to = format(new Date(y, m, 1), "yyyy-MM-dd"); // 翌月 1 日 (排他)
+    const { data, error } = await supabase
+      .from("kaigo_visit_schedule")
+      .select("id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, status")
+      .eq("user_id", userId)
+      .gte("visit_date", from)
+      .lt("visit_date", to)
+      .order("visit_date")
+      .order("start_time");
+    if (error) {
+      console.error("schedule fetch failed:", error.message);
+      toast.error("訪問予定の取得に失敗しました: " + error.message);
+    } else {
+      setSchedules((data ?? []) as VisitSchedule[]);
+    }
+    setSchedulesLoading(false);
+  }, [supabase, userId, month]);
+
+  // 同一 month の重複 fetch を防ぐ guard (mount 時 + month 変更時のみ実行)
+  const lastFetchedMonth = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastFetchedMonth.current === month) return;
+    lastFetchedMonth.current = month;
+    fetchSchedules();
+  }, [month, fetchSchedules]);
+
+  // 表示月の変更 (予定を再取得するので loading を立てる)
+  const changeMonth = (next: string) => {
+    if (!next) return;
+    setMonth(next);
+    setSchedulesLoading(true);
+  };
+
+  // 予定⇄記録の突合:
+  //   1. record.schedule_id === schedule.id (正式リンク — 予定から作成した記録)
+  //   2. schedule_id 未設定の既存記録 (紐付け導入前のデータ) は
+  //      訪問日 + 開始時刻 (HH:MM) の一致でベストエフォート表示 (利用者は既に同一)
+  //   突合されなかった記録は「予定外の記録」として別グループに表示する。
+  const { scheduleRecordMap, unscheduledRecords } = useMemo(() => {
+    const map = new Map<string, VisitRecord>(); // schedule.id → record
+    const used = new Set<string>();
+    const byScheduleId = new Map<string, VisitRecord>();
+    for (const r of monthRecords) {
+      if (r.schedule_id) byScheduleId.set(r.schedule_id, r);
+    }
+    // pass 1: 正式リンク
+    for (const s of schedules) {
+      const linked = byScheduleId.get(s.id);
+      if (linked) {
+        map.set(s.id, linked);
+        used.add(linked.id);
+      }
+    }
+    // pass 2: 日付 + 開始時刻のベストエフォート
+    for (const s of schedules) {
+      if (map.has(s.id)) continue;
+      const st = hhmm(s.start_time);
+      const cand = monthRecords.find(
+        (r) =>
+          !used.has(r.id) &&
+          !r.schedule_id &&
+          r.visit_date === s.visit_date &&
+          hhmm(r.start_time) === st
+      );
+      if (cand) {
+        map.set(s.id, cand);
+        used.add(cand.id);
+      }
+    }
+    const unscheduled = monthRecords.filter((r) => !used.has(r.id));
+    return { scheduleRecordMap: map, unscheduledRecords: unscheduled };
+  }, [schedules, monthRecords]);
+
+  const recordedCount = scheduleRecordMap.size;
+
+  // 予定外の記録に制度区分フィルタを適用 (legacy 互換: 未設定は 'kaigo' 扱い)
+  const filteredUnscheduled = useMemo(
+    () =>
+      unscheduledRecords.filter((rec) => {
+        if (categoryFilter === "all") return true;
+        const c = rec.service_category ?? "kaigo";
+        return c === categoryFilter;
+      }),
+    [unscheduledRecords, categoryFilter]
+  );
+
+  // staff id → 氏名 (予定行の担当表示用)
+  const staffNamesOf = useCallback(
+    (s: VisitSchedule): string[] =>
+      [s.staff_id, s.staff_id_2, s.staff_id_3]
+        .filter((id): id is string => !!id)
+        .map((id) => staffList.find((x) => x.id === id)?.name ?? "(不明)"),
+    [staffList]
+  );
+
   // Form helpers
-  const handleOpenForm = () => {
-    setFormBase({
-      visit_date: format(new Date(), "yyyy-MM-dd"),
-      staff_id: "",
-      service_type: "身体介護",
-      service_category: pickDefaultCategory(userCategory),
-      start_time: "",
-      end_time: "",
-    });
+  // schedule を渡すと「予定から作成」: 日時・サービス種別・担当職員をプリフィルし schedule_id を紐付ける。
+  // 渡さない場合は従来のフリー入力 (予定外の飛び込み訪問用)。
+  const handleOpenForm = (schedule?: VisitSchedule) => {
+    if (schedule) {
+      setFormBase({
+        visit_date: schedule.visit_date,
+        staff_id: schedule.staff_id ?? "",
+        service_type: mapScheduleServiceType(schedule.service_type),
+        service_category: pickDefaultCategory(userCategory),
+        start_time: hhmm(schedule.start_time),
+        end_time: hhmm(schedule.end_time),
+      });
+      setFormSchedule(schedule);
+    } else {
+      setFormBase({
+        visit_date: format(new Date(), "yyyy-MM-dd"),
+        staff_id: "",
+        service_type: "身体介護",
+        service_category: pickDefaultCategory(userCategory),
+        start_time: "",
+        end_time: "",
+      });
+      setFormSchedule(null);
+    }
     setFormCare(emptyCareData());
     setFormSection("pre_check");
+    setFormSignature(null);
+    setFormSignerName(userName ?? "");
     setShowForm(true);
   };
 
@@ -781,17 +1128,20 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
 
   const handleSave = async () => {
     if (!formBase.visit_date) { toast.error("訪問日を入力してください"); return; }
+    if (formSignature && !formSignerName.trim()) {
+      toast.error("署名がある場合は署名者名を入力してください");
+      return;
+    }
 
     setSaving(true);
-    const payload = {
+    const payload: Record<string, unknown> = {
       user_id: userId,
       visit_date: formBase.visit_date,
       staff_id: formBase.staff_id || null,
       service_type: formBase.service_type,
       // Phase Shougai-1: 請求区分 (kaigo / shougai)
-      // migration 未適用 DB では列が無く INSERT エラー → その場合は除外したいが、
-      // SQL での試行錯誤を避けるため常に送信。列が存在しなければ Supabase 側で
-      // 400 が返るので silent failure を防げる ({error} を check 済)。
+      // migration 未適用 DB では列が無く INSERT エラー → 下の missing-column fallback で
+      // 当該列だけ除去して retry する (除去した列は toast + amber バナーで明示)。
       service_category: formBase.service_category,
       start_time: formBase.start_time || null,
       end_time: formBase.end_time || null,
@@ -809,17 +1159,89 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
       progress_notes: formCare.progress_notes || null,
       status: "draft",
     };
-
-    const { error } = await supabase.from("kaigo_visit_records").insert(payload);
-    setSaving(false);
-
-    if (error) {
-      toast.error("保存に失敗しました: " + error.message);
-    } else {
-      toast.success("サービス実施記録を保存しました");
-      setShowForm(false);
-      fetchRecords();
+    // 予定から作成した場合のみ紐付ける (予定外のフリー入力は schedule_id 無し)
+    if (formSchedule) {
+      payload.schedule_id = formSchedule.id;
     }
+
+    // INSERT — migration 未適用環境 (列が存在しない: PGRST204 / 42703) では
+    // エラーメッセージから欠損列を特定し、その列だけ除去して retry する。
+    // silent failure にはしない: 除去列は console.warn + toast + amber バナーで通知。
+    let insertedId: string | null = null;
+    const stripped: string[] = [];
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { data, error } = await supabase
+        .from("kaigo_visit_records")
+        .insert(payload)
+        .select("id")
+        .single();
+      if (!error) {
+        insertedId = (data as { id: string }).id;
+        break;
+      }
+      const missing =
+        error.code === "PGRST204" || error.code === "42703"
+          ? extractMissingColumn(error.message)
+          : null;
+      if (missing && missing in payload) {
+        delete payload[missing];
+        stripped.push(missing);
+        continue;
+      }
+      toast.error("保存に失敗しました: " + error.message);
+      setSaving(false);
+      return;
+    }
+    if (!insertedId) {
+      toast.error("保存に失敗しました (列除去 retry 上限)");
+      setSaving(false);
+      return;
+    }
+    if (stripped.length > 0) {
+      console.warn("kaigo_visit_records insert: DB 未適用列を除外して保存:", stripped.join(", "));
+      toast.warning(
+        `一部の列 (${stripped.join(", ")}) が DB 未適用のため除外して保存しました。` +
+          "migrations/kaigo_visit_records_schedule_signature.sql を実行してください"
+      );
+      setMissingColumns((prev) => Array.from(new Set([...prev, ...stripped])));
+    }
+
+    // 署名 (利用者確認サイン) — 既存の電子署名 v2 方式に統一:
+    // dataURL → PNG blob → Storage "signatures" bucket に upload → path を record に保存。
+    // 失敗しても記録本体は保存済みなので、一覧の「署名する」から再取得できる旨を案内。
+    if (formSignature) {
+      try {
+        const blob = await (await fetch(formSignature)).blob();
+        const tenant = await resolvePreferredTenantId(supabase);
+        if (!tenant.ok) throw new Error(tenant.error);
+        const path = `${tenant.tenantId}/kaigo_visit_records/${insertedId}.png`;
+        const { error: uploadErr } = await supabase.storage
+          .from("signatures")
+          .upload(path, blob, { contentType: "image/png", upsert: true });
+        if (uploadErr) throw uploadErr;
+        const { error: sigErr } = await supabase
+          .from("kaigo_visit_records")
+          .update({
+            signature_image_path: path,
+            signature_image_url: null, // v1 互換列は使わない
+            signed_at: new Date().toISOString(), // 署名日時は保存時に自動記録
+            signer_name: formSignerName.trim(),
+          })
+          .eq("id", insertedId);
+        if (sigErr) throw sigErr;
+      } catch (err: unknown) {
+        console.error("signature save failed:", err);
+        toast.error(
+          "記録は保存しましたが署名の保存に失敗しました (一覧の「署名する」から再取得できます): " +
+            (err instanceof Error ? err.message : String(err))
+        );
+      }
+    }
+
+    setSaving(false);
+    toast.success("サービス実施記録を保存しました");
+    setShowForm(false);
+    fetchRecords();
   };
 
   // Section toggle for form
@@ -866,17 +1288,11 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
       <div className="flex items-center justify-between border-b bg-white px-6 py-4">
         <div>
           <h1 className="text-xl font-bold text-gray-900">サービス実施記録</h1>
-          <p className="mt-0.5 text-xs text-gray-500">訪問介護サービスの実施内容を記録します</p>
+          <p className="mt-0.5 text-xs text-gray-500">
+            訪問予定から記録を作成します (予定外の飛び込み訪問はフリー入力)
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* 月次実績送付の対象月 */}
-          <input
-            type="month"
-            value={sendMonth}
-            onChange={(e) => setSendMonth(e.target.value)}
-            className="rounded-lg border px-2 py-1.5 text-sm text-gray-700"
-            title="実績送信の対象月"
-          />
           <button
             onClick={() => setShowSendModal(true)}
             disabled={!userName || !currentOffice || monthRecords.length === 0}
@@ -903,18 +1319,58 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
             <Printer size={14} />
             印刷
           </button>
+          {/* 予定外の飛び込み訪問用のフリー入力 (小さく残す) */}
           <button
-            onClick={handleOpenForm}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+            onClick={() => handleOpenForm()}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+            title="予定に無い飛び込み訪問の記録をフリー入力で作成"
           >
-            <Plus size={16} />
-            新規記録
+            <Plus size={14} />
+            予定外の記録を作成
           </button>
         </div>
       </div>
 
-      {/* Phase Shougai-1: 制度区分フィルタ */}
-      <div className="border-b bg-white px-6 py-2">
+      {/* 月ナビ + 制度区分フィルタ */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-white px-6 py-2">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => changeMonth(format(addMonths(parseISO(`${month}-01`), -1), "yyyy-MM"))}
+            className="rounded-md border border-gray-200 p-1.5 text-gray-500 hover:bg-gray-50"
+            title="前月"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <input
+            type="month"
+            value={month}
+            onChange={(e) => changeMonth(e.target.value)}
+            className="rounded-md border border-gray-200 px-2 py-1 text-sm font-medium text-gray-700"
+            title="表示月 (予定・記録・実績送信の対象月)"
+          />
+          <button
+            onClick={() => changeMonth(format(addMonths(parseISO(`${month}-01`), 1), "yyyy-MM"))}
+            className="rounded-md border border-gray-200 p-1.5 text-gray-500 hover:bg-gray-50"
+            title="翌月"
+          >
+            <ChevronRight size={14} />
+          </button>
+          <button
+            onClick={() => changeMonth(format(new Date(), "yyyy-MM"))}
+            className="ml-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+          >
+            今月
+          </button>
+          <span className="ml-3 text-xs text-gray-500">
+            予定 <strong className="text-gray-700">{schedules.length}</strong> 件
+            (記録済 <strong className="text-emerald-600">{recordedCount}</strong>
+            {" / "}未記録 <strong className="text-amber-600">{Math.max(schedules.length - recordedCount, 0)}</strong>)
+            {unscheduledRecords.length > 0 && (
+              <> ・予定外の記録 <strong className="text-gray-700">{unscheduledRecords.length}</strong> 件</>
+            )}
+          </span>
+        </div>
+        {/* Phase Shougai-1: 制度区分フィルタ */}
         <div className="flex items-center gap-2 text-xs">
           <span className="text-gray-500">制度区分:</span>
           {([
@@ -938,183 +1394,159 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
       </div>
 
       <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
-        {loading ? (
-            <div className="flex h-48 items-center justify-center text-sm text-gray-400">
-              <Loader2 size={20} className="animate-spin mr-2" />
-              読込中...
+        {/* migration 未適用の列があった場合の警告 (INSERT fallback で検知) */}
+        {missingColumns.length > 0 && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+            <div>
+              <p className="font-bold">SQL 未適用の列があります: {missingColumns.join(", ")}</p>
+              <p className="mt-0.5">
+                migrations/kaigo_visit_records_schedule_signature.sql を実行してください。
+                未適用の間、該当列は保存されません (予定との紐付けは日付+開始時刻による推定表示になります)。
+              </p>
             </div>
-          ) : records.length === 0 ? (
-            <div className="flex h-48 items-center justify-center text-sm text-gray-400">
-              <div className="text-center">
-                <ClipboardList size={32} className="mx-auto mb-2 text-gray-300" />
-                <p>記録がありません</p>
-                <button
-                  onClick={handleOpenForm}
-                  className="mt-3 text-blue-600 hover:underline text-xs"
-                >
-                  新規記録を作成する
-                </button>
-              </div>
+          </div>
+        )}
+
+        {loading || schedulesLoading ? (
+          <div className="flex h-48 items-center justify-center text-sm text-gray-400">
+            <Loader2 size={20} className="animate-spin mr-2" />
+            読込中...
+          </div>
+        ) : schedules.length === 0 && monthRecords.length === 0 ? (
+          <div className="flex h-48 items-center justify-center text-sm text-gray-400">
+            <div className="text-center">
+              <ClipboardList size={32} className="mx-auto mb-2 text-gray-300" />
+              <p>{month.replace("-", "年")}月の訪問予定・記録はありません</p>
+              <button
+                onClick={() => handleOpenForm()}
+                className="mt-3 text-blue-600 hover:underline text-xs"
+              >
+                予定外の記録を作成する
+              </button>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {records
-                .filter((rec) => {
-                  if (categoryFilter === "all") return true;
-                  // legacy 互換: service_category 未設定の record は 'kaigo' として扱う
-                  const c = rec.service_category ?? "kaigo";
-                  return c === categoryFilter;
-                })
-                .map((rec) => {
-                const colors = SERVICE_TYPE_COLORS[rec.service_type] ?? SERVICE_TYPE_COLORS["身体介護"];
-                const isExpanded = expandedId === rec.id;
-                const careItems = getActiveCareItems(rec);
-                const duration = calcDuration(rec.start_time, rec.end_time);
-                return (
-                  <div
-                    key={rec.id}
-                    className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
-                  >
-                    {/* Card header */}
-                    <button
-                      className="flex w-full items-start gap-4 p-4 text-left hover:bg-gray-50 transition-colors"
-                      onClick={() => setExpandedId(isExpanded ? null : rec.id)}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <span className="flex items-center gap-1 text-sm font-semibold text-gray-900">
-                            <CalendarDays size={14} className="text-gray-400" />
-                            {formatVisitDate(rec.visit_date)}
-                          </span>
-                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${colors.bg} ${colors.text} ${colors.border}`}>
-                            {rec.service_type}
-                          </span>
-                          {/* Phase Shougai-1: 制度区分 chip (kaigo/shougai 表示) */}
-                          {rec.service_category === "shougai" && (
-                            <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0 text-[10px] font-medium text-violet-700">
-                              障害
-                            </span>
-                          )}
-                          {rec.service_category === "kaigo" && (
-                            <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0 text-[10px] font-medium text-blue-700">
-                              介護
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
-                          <span className="flex items-center gap-1">
-                            <Clock size={12} />
-                            {formatTimeRange(rec.start_time, rec.end_time)}
-                            {duration && <span className="ml-1 text-gray-400">({duration})</span>}
-                          </span>
-                          {rec.staff_name && (
-                            <span className="flex items-center gap-1">
-                              <User size={12} />
-                              {rec.staff_name}
-                            </span>
-                          )}
-                        </div>
-                        {careItems.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {careItems.map((item) => (
-                              <span
-                                key={item}
-                                className="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600"
-                              >
-                                {item}
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* ── 訪問予定 (主役): 予定の中から「どの訪問の記録を作るか」を選ぶ ── */}
+            <section>
+              <h2 className="mb-2 flex items-center gap-1.5 text-sm font-bold text-gray-700">
+                <CalendarClock size={15} className="text-blue-600" />
+                訪問予定 ({schedules.length}件)
+              </h2>
+              {schedules.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-xs text-gray-400">
+                  この月の訪問予定はありません
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {schedules.map((s) => {
+                    const rec = scheduleRecordMap.get(s.id) ?? null;
+                    const cancelled = s.status === "cancelled";
+                    const staffNames = staffNamesOf(s);
+                    let dateLabel = s.visit_date;
+                    let dowLabel = "";
+                    try {
+                      const d = parseISO(s.visit_date);
+                      dateLabel = format(d, "M/d");
+                      dowLabel = format(d, "E", { locale: ja });
+                    } catch { dowLabel = ""; }
+                    return (
+                      <div
+                        key={s.id}
+                        className={`rounded-xl border bg-white shadow-sm overflow-hidden ${
+                          rec ? "border-emerald-200" : cancelled ? "border-gray-200 opacity-60" : "border-amber-200"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 px-4 py-2.5">
+                          <div className="w-12 shrink-0 text-center">
+                            <div className="text-sm font-bold text-gray-800">{dateLabel}</div>
+                            <div className="text-[11px] text-gray-400">{dowLabel && `(${dowLabel})`}</div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 text-sm text-gray-800">
+                              <span className="flex items-center gap-1 tabular-nums">
+                                <Clock size={12} className="text-gray-400" />
+                                {hhmm(s.start_time) || "--:--"} 〜 {hhmm(s.end_time) || "--:--"}
                               </span>
-                            ))}
+                              {s.service_type && (
+                                <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0 text-[11px] font-medium text-blue-700">
+                                  {s.service_type}
+                                </span>
+                              )}
+                              {cancelled && (
+                                <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0 text-[11px] font-medium text-red-600">
+                                  キャンセル
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-0.5 text-xs text-gray-500">
+                              担当: {staffNames.length > 0 ? staffNames.join("、") : "未定"}
+                            </div>
+                          </div>
+                          {rec ? (
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                              <CheckCircle2 size={13} />
+                              記録済み
+                            </span>
+                          ) : cancelled ? null : (
+                            <div className="flex shrink-0 items-center gap-2">
+                              <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                                未記録
+                              </span>
+                              <button
+                                onClick={() => handleOpenForm(s)}
+                                className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
+                              >
+                                <PenLine size={12} />
+                                記録を作成
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {/* 記録済み → 既存記録をカードで埋め込み表示 (クリックで展開閲覧) */}
+                        {rec && (
+                          <div className="border-t border-emerald-100">
+                            <RecordCard
+                              rec={rec}
+                              embedded
+                              isExpanded={expandedId === rec.id}
+                              onToggle={() => setExpandedId(expandedId === rec.id ? null : rec.id)}
+                              onSign={() => setSignTarget(rec)}
+                              signatureSrc={resolveSignatureSrc(rec)}
+                            />
                           </div>
                         )}
                       </div>
-                      <div className="shrink-0 text-gray-400 mt-1">
-                        {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                      </div>
-                    </button>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
 
-                    {/* Expanded detail — 22カテゴリ対応 */}
-                    {isExpanded && (
-                      <div className="border-t bg-gray-50 px-4 py-4">
-                        <CareRecordDetail record={rec} />
-
-                        {/* 電子署名 */}
-                        <div className="mt-4 border-t border-gray-200 pt-3">
-                          <p className="mb-1.5 text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded">
-                            電子署名
-                          </p>
-                          {(rec.signature_image_path || rec.signature_image_url) ? (
-                            <div className="pl-2 space-y-2">
-                              <div className="rounded-lg border border-gray-200 bg-white p-3 inline-block">
-                                {(() => {
-                                  const src = resolveSignatureSrc(rec);
-                                  if (!src) {
-                                    return (
-                                      <span className="text-[11px] text-gray-400">署名画像を読み込み中...</span>
-                                    );
-                                  }
-                                  return (
-                                    /* eslint-disable-next-line @next/next/no-img-element -- Storage signed URL は外部 host (next/image 不適) */
-                                    <img
-                                      src={src}
-                                      alt="電子署名"
-                                      className="max-h-32 w-auto"
-                                    />
-                                  );
-                                })()}
-                              </div>
-                              <div className="text-xs text-gray-600 space-y-0.5">
-                                {rec.signer_name && (
-                                  <div>署名者: <strong>{rec.signer_name}</strong></div>
-                                )}
-                                {rec.signed_at && (
-                                  <div>
-                                    署名日時:{" "}
-                                    {(() => {
-                                      try {
-                                        return format(parseISO(rec.signed_at), "yyyy/M/d HH:mm");
-                                      } catch {
-                                        return rec.signed_at;
-                                      }
-                                    })()}
-                                  </div>
-                                )}
-                              </div>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSignTarget(rec);
-                                }}
-                                className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                              >
-                                <PenLine size={12} />
-                                再署名
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="pl-2">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSignTarget(rec);
-                                }}
-                                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-                              >
-                                <PenLine size={12} />
-                                署名する
-                              </button>
-                              <p className="mt-1 text-[11px] text-gray-500">
-                                利用者または代理人の電子署名を取得します
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+            {/* ── 予定外の記録 (飛び込み訪問 / 予定に突合できなかった既存記録) ── */}
+            {filteredUnscheduled.length > 0 && (
+              <section>
+                <h2 className="mb-2 flex items-center gap-1.5 text-sm font-bold text-gray-700">
+                  <ClipboardList size={15} className="text-gray-500" />
+                  予定外の記録 ({filteredUnscheduled.length}件)
+                </h2>
+                <div className="space-y-3">
+                  {filteredUnscheduled.map((rec) => (
+                    <RecordCard
+                      key={rec.id}
+                      rec={rec}
+                      isExpanded={expandedId === rec.id}
+                      onToggle={() => setExpandedId(expandedId === rec.id ? null : rec.id)}
+                      onSign={() => setSignTarget(rec)}
+                      signatureSrc={resolveSignatureSrc(rec)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 印刷用 DOM (画面では hidden) */}
@@ -1128,7 +1560,7 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
           records={monthRecords}
           userName={userName ?? undefined}
           signedUrlMap={signedUrlMap}
-          headerLabel={`${sendMonth.replace("-", "年")}月 訪問介護実績`}
+          headerLabel={`${month.replace("-", "年")}月 訪問介護実績`}
         />
       </div>
 
@@ -1140,13 +1572,13 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
           sourceOfficeId={currentOffice.id}
           documentType="service_record_monthly"
           targetServiceTypes={["居宅介護支援"]}
-          title={`${sendMonth.replace("-", "年")}月 訪問介護実績 - ${userName} 様`}
+          title={`${month.replace("-", "年")}月 訪問介護実績 - ${userName} 様`}
           getHtmlSnapshot={() =>
             document.getElementById("visit-records-month-print")?.outerHTML ?? ""
           }
           payload={
             buildMonthlyServiceRecordPayload({
-              yearMonth: sendMonth,
+              yearMonth: month,
               clientId: userId,
               clientName: userName,
               records: monthRecords,
@@ -1166,11 +1598,29 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
         <div className="fixed inset-0 z-50 flex items-start justify-end overflow-auto bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl flex flex-col max-h-[calc(100vh-2rem)]">
             <div className="flex items-center justify-between border-b px-5 py-4">
-              <h2 className="text-base font-bold text-gray-900">サービス実施記録 — 新規</h2>
+              <h2 className="text-base font-bold text-gray-900">
+                サービス実施記録 — {formSchedule ? "予定から作成" : "新規 (予定外)"}
+              </h2>
               <button onClick={() => setShowForm(false)} className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><X size={18} /></button>
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              {/* 予定から作成する場合: 元予定のサマリを表示 (日時・担当はプリフィル済み) */}
+              {formSchedule && (
+                <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs text-blue-800">
+                  <CalendarClock size={15} className="mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-bold">
+                      {formatVisitDate(formSchedule.visit_date)} {hhmm(formSchedule.start_time)} 〜 {hhmm(formSchedule.end_time)}
+                      {formSchedule.service_type && ` / ${formSchedule.service_type}`}
+                    </p>
+                    <p className="mt-0.5 text-blue-600">
+                      予定の内容を下記フォームに自動入力しました (実際の訪問に合わせて修正できます)
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* 基本情報 */}
               <section>
                 <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">基本情報</h3>
@@ -1473,6 +1923,33 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
                   <FTextarea label="詳細報告" value={formCare.detailed_report} onChange={(v) => setFormCare({ ...formCare, detailed_report: v })} placeholder="詳細な報告内容..." rows={3} />
                 </div>
               )}
+
+              {/* 利用者確認 (署名) — フォーム最下部に常時表示 */}
+              <section className="border-t border-gray-200 pt-4">
+                <h3 className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-gray-500">
+                  <PenLine size={13} className="text-blue-600" />
+                  利用者確認 (署名)
+                </h3>
+                <p className="mb-3 text-[11px] text-gray-500">
+                  サービス内容を利用者または家族に確認いただきサインを取得します (任意)。
+                  署名日時は保存時に自動記録されます。あとから一覧の「署名する」で取得することもできます。
+                </p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-700">
+                      署名者名 (本人・家族名) {formSignature && <span className="text-red-500">*</span>}
+                    </label>
+                    <input
+                      type="text"
+                      value={formSignerName}
+                      onChange={(e) => setFormSignerName(e.target.value)}
+                      placeholder="本人 or 家族の氏名"
+                      className={inputClass}
+                    />
+                  </div>
+                  <SignaturePad value={formSignature} onChange={setFormSignature} disabled={saving} />
+                </div>
+              </section>
             </div>
 
             <div className="flex justify-end gap-3 border-t bg-gray-50 px-5 py-4">

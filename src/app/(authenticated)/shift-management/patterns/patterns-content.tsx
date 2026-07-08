@@ -515,7 +515,7 @@ export function PatternsContent({ userId, initialPatterns, initialStaff }: Patte
               ) : (
                 <CalendarPlus size={15} />
               )}
-              月間へ展開
+              この月にパターンを適用
             </button>
           </div>
           <button

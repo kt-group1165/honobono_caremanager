@@ -21,6 +21,8 @@ export function useSeikyuData() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [rows, setRows] = useState<UserSeikyuRow[]>([]);
   const [recordCount, setRecordCount] = useState(0);
+  // 集計時の注意事項 (身体介護9系=単位数0の増分コード混入 等)
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [officeNumber, setOfficeNumber] = useState<string | null>(null);
@@ -70,6 +72,7 @@ export function useSeikyuData() {
       });
       setRows(result.rows);
       setRecordCount(result.recordCount);
+      setWarnings(result.warnings);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -94,6 +97,7 @@ export function useSeikyuData() {
     onMonthChange,
     rows,
     recordCount,
+    warnings,
     loading: loading || btLoading,
     error,
     officeName: currentOffice?.name ?? null,

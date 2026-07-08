@@ -32,6 +32,7 @@ import { ja } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import {
   SERVICE_TYPE_COLORS,
+  twoPersonMismatchWarning,
   type KaigoStaff,
   type VisitSchedule,
 } from "./_shared";
@@ -197,6 +198,11 @@ export function MonthlyIndividualView({
     setSchedules((prev) =>
       prev.map((s) => (s.id === sched.id ? { ...s, [field]: next } : s)),
     );
+    // 2人体制の整合警告 (職員2 とサービス名の「２人」有無の食い違い。ブロックはしない)
+    if (field === "staff_id_2") {
+      const warn = twoPersonMismatchWarning(sched.service_type, next);
+      if (warn) toast.warning(warn);
+    }
   };
 
   const toggleStatus = async (sched: VisitSchedule) => {
@@ -351,12 +357,13 @@ export function MonthlyIndividualView({
   const saveCopyDate = async (copyRow: VisitSchedule, dateStr: string) => {
     const { data, error } = await supabase.from("kaigo_visit_schedule").insert({
       user_id: copyRow.user_id, staff_id: copyRow.staff_id,
+      staff_id_2: copyRow.staff_id_2 ?? null, staff_id_3: copyRow.staff_id_3 ?? null,
       visit_date: dateStr,
       start_time: copyRow.start_time, end_time: copyRow.end_time,
       service_type: copyRow.service_type, status: "scheduled",
     }).select("id").single();
     if (error) {
-      toast.error("保存に失敗しました");
+      toast.error("保存に失敗しました: " + error.message);
       return;
     }
     setSchedules((prev) => prev.map((s) =>
