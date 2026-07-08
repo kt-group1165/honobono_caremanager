@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Save, Building2, Loader2, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBusinessType } from "@/lib/business-type-context";
+import { AppliedFormulaSection } from "./_applied-formula";
 
 // 令和6年度改定 居宅介護支援 特定事業所加算
 const TOKUTEI_OPTIONS = [
@@ -408,6 +409,17 @@ export function OfficeContent({
           )}
         </div>
       </div>
+      )}
+
+      {/* 適用加算 (処遇改善加算等 = 訪問介護のみ表示。
+          月計 × 加算率で自動算定される加算のチェックと期間指定) */}
+      {form.service_type === "訪問介護" && (
+        <AppliedFormulaSection
+          key={form.id}
+          officeId={form.id}
+          tenantId={form.tenant_id}
+          serviceType={form.service_type}
+        />
       )}
 
       {/* 地域区分 */}

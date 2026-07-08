@@ -193,7 +193,7 @@ export function ProvisionTicketsContent({
   // 加算系 formula コード (cat=11 訪問介護 のみ抽出してデフォルト)
   const [formulaCodes] = useState<FormulaCode[]>(initialFormulaCodes);
   // 自事業所が取得している加算 (currentOffice.applied_formula_codes から)
-  // 設定変更は /settings ページの「適用加算」セクションで行う (read-only here)
+  // 設定変更は マスタ管理 → 自事業所管理 (/master/office) の「適用加算」セクションで行う (read-only here)
   const appliedFormulaCodes = useMemo(
     () => new Set(currentOffice?.applied_formula_codes ?? []),
     [currentOffice],
@@ -804,7 +804,7 @@ export function ProvisionTicketsContent({
   );
 
   // appliedFormulaCodes は currentOffice 由来 (read-only)。
-  // 設定変更は /settings ページの「適用加算」セクションで行う。
+  // 設定変更は マスタ管理 → 自事業所管理 (/master/office) の「適用加算」セクションで行う。
 
   // ── 月次実績 payload (居宅介護支援への送付用) ─────────────────────────────
   // grid 上の actual=true セルを 1 record とし、(date, start_time) で重複判定可能な
@@ -1521,7 +1521,7 @@ export function ProvisionTicketsContent({
                     </tfoot>
                   </table>
 
-                  {/* 適用加算 (read-only — 設定変更は /settings) */}
+                  {/* 適用加算 (read-only — 設定変更は /master/office) */}
                   {availableFormulaCodes.length > 0 && (
                     <div className="mt-2 rounded border border-purple-200 bg-purple-50/30 px-3 py-2">
                       <div className="flex items-center justify-between mb-1">
@@ -1529,10 +1529,10 @@ export function ProvisionTicketsContent({
                           適用中の加算 ({appliedFormulaCodes.size} / {availableFormulaCodes.length})
                         </div>
                         <a
-                          href="/settings"
+                          href="/master/office"
                           className="text-[10px] text-blue-600 hover:underline"
                         >
-                          設定で変更 →
+                          自事業所管理で変更 →
                         </a>
                       </div>
                       <div className="flex flex-wrap gap-1.5 text-[10px]">
@@ -1552,7 +1552,7 @@ export function ProvisionTicketsContent({
                             </span>
                           ))}
                         {appliedFormulaCodes.size === 0 && (
-                          <span className="text-gray-400">適用加算未設定 (設定画面で選択)</span>
+                          <span className="text-gray-400">適用加算未設定 (マスタ管理 → 自事業所管理で選択)</span>
                         )}
                       </div>
                     </div>
