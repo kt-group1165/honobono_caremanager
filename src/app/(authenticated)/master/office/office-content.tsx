@@ -361,7 +361,9 @@ export function OfficeContent({
         </div>
       </div>
 
-      {/* 加算設定 */}
+      {/* 加算設定 (居宅介護支援の特定事業所加算 = 居宅のみ表示。
+          訪問介護の特定事業所加算は%加算で別物のため、誤設定防止で非表示) */}
+      {form.service_type === "居宅介護支援" && (
       <div className="rounded-xl border bg-white p-6 shadow-sm space-y-4">
         <h2 className="text-sm font-bold text-gray-700 border-b pb-2">加算設定</h2>
 
@@ -406,6 +408,7 @@ export function OfficeContent({
           )}
         </div>
       </div>
+      )}
 
       {/* 地域区分 */}
       <div className="rounded-xl border bg-white p-6 shadow-sm space-y-4">
@@ -498,7 +501,8 @@ export function OfficeContent({
         </div>
       )}
 
-      {/* AI機能設定 */}
+      {/* AI機能設定 (AIケアプラン生成 = 居宅介護支援のみ表示) */}
+      {form.service_type === "居宅介護支援" && (
       <div className="rounded-xl border bg-white p-6 shadow-sm space-y-4">
         <h2 className="text-sm font-bold text-gray-700 border-b pb-2">AI機能設定</h2>
 
@@ -544,6 +548,7 @@ export function OfficeContent({
           </div>
         )}
       </div>
+      )}
 
       {/* 備考 */}
       <div className="rounded-xl border bg-white p-6 shadow-sm space-y-4">

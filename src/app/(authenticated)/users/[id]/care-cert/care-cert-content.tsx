@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { format, parseISO, addYears } from "date-fns";
-import { Trash2, RefreshCw, Save, FileCheck, Plus } from "lucide-react";
+import { Trash2, RefreshCw, Save, FileCheck, Plus, Search, X } from "lucide-react";
 import type { CareCertification, CareLevel } from "@/types/database";
 
 // ─── 定数 ────────────────────────────────────────────────────────────────────
@@ -35,9 +35,12 @@ type DbFields = {
   // certification_status の値域は DB 側で CHECK 制約済（認定済み / 申請中 / NULL）
   status: "認定済み" | "申請中";
   certification_number: string;
-  // 担当居宅介護支援事業所 (様式第二⑦ / 7131 の居宅サービス計画欄。外部ケアマネ事業所を直接入力)
-  care_office_number: string;      // 事業所番号 (10桁)
-  care_office_name: string;        // 事業所名 (任意)
+  // 担当居宅介護支援事業所 (様式第二⑦ / 7131 の居宅サービス計画欄)
+  // 2way: マスタ選択 (care_office_id) or 直接入力 (care_office_number/name)。
+  // 集計 (aggregate.ts) は number 直接入力を優先するため、選択時は number/name を空にして排他にする
+  care_office_id: string;          // care_offices (ケアマネ事業所マスタ) への FK。"" = null
+  care_office_number: string;      // 事業所番号 (10桁) — マスタに無い場合の直接入力
+  care_office_name: string;        // 事業所名 (任意) — 直接入力
   // 公費情報 (生活保護等 — 国保連伝送の公費欄に使用)
   kohi_hobetsu: string;            // 法別番号 (12=生活保護)
   kohi_futansha_number: string;    // 公費負担者番号 (8桁)
@@ -81,6 +84,7 @@ const EMPTY_FORM: FormData = {
   support_limit_amount: "",
   status: "認定済み",
   certification_number: "",
+  care_office_id: "",
   care_office_number: "",
   care_office_name: "",
   kohi_hobetsu: "",
@@ -137,6 +141,7 @@ function recToForm(rec: CareCertification): FormData {
     support_limit_amount: rec.service_limit_amount?.toString() ?? "",
     status: (rec.certification_status as DbFields["status"]) ?? "認定済み",
     certification_number: rec.certification_number ?? "",
+    care_office_id: (rec as unknown as { care_office_id?: string | null }).care_office_id ?? "",
     care_office_number: (rec as unknown as { care_office_number?: string | null }).care_office_number ?? "",
     care_office_name: (rec as unknown as { care_office_name?: string | null }).care_office_name ?? "",
     kohi_hobetsu: (rec as unknown as { kohi_hobetsu?: string | null }).kohi_hobetsu ?? "",
@@ -146,6 +151,93 @@ function recToForm(rec: CareCertification): FormData {
     kohi_end_date: (rec as unknown as { kohi_end_date?: string | null }).kohi_end_date ?? "",
     cert_status_type: rec.care_level === "申請中" ? "申請中" : "認定済み",
   };
+}
+
+// ─── ケアマネ事業所マスタ (care_offices) 選択 ────────────────────────────────
+
+/** care_offices (order-app と共有のケアマネ事業所マスタ) の選択肢 */
+type CareOfficeOption = {
+  id: string;
+  name: string;
+  office_number: string | null;
+};
+
+/** 名前 / 事業所番号で絞り込める検索付き combobox */
+function CareOfficeCombobox({
+  offices,
+  loading,
+  onSelect,
+}: {
+  offices: CareOfficeOption[];
+  loading: boolean;
+  onSelect: (office: CareOfficeOption) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const filtered = useMemo(() => {
+    const q = query.trim();
+    if (!q) return offices.slice(0, 30);
+    return offices
+      .filter(
+        (o) => o.name.includes(q) || (o.office_number ?? "").includes(q),
+      )
+      .slice(0, 30);
+  }, [offices, query]);
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <Search
+          size={12}
+          className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400"
+        />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
+          className="w-full border border-gray-300 rounded pl-6 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
+          placeholder="事業所名・番号で検索"
+        />
+      </div>
+      {open && (
+        <div className="absolute z-20 mt-0.5 max-h-48 w-full overflow-y-auto rounded border border-gray-200 bg-white shadow-lg">
+          {loading ? (
+            <div className="px-2 py-1.5 text-xs text-gray-400">読込中...</div>
+          ) : filtered.length === 0 ? (
+            <div className="px-2 py-1.5 text-xs text-gray-400">該当なし</div>
+          ) : (
+            filtered.map((o) => (
+              <button
+                type="button"
+                key={o.id}
+                // onBlur で閉じる前に click を成立させるため mousedown で選択
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onSelect(o);
+                  setQuery("");
+                  setOpen(false);
+                }}
+                className="block w-full px-2 py-1.5 text-left text-xs hover:bg-sky-50"
+              >
+                <span className="font-medium text-gray-800">{o.name}</span>
+                {o.office_number && (
+                  <span className="ml-1.5 font-mono text-[10px] text-gray-400">
+                    {o.office_number}
+                  </span>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── スタイル定数 ─────────────────────────────────────────────────────────────
@@ -180,6 +272,36 @@ export function CareCertContent({
   const [saving, setSaving] = useState(false);
   // 新規入力中フラグ（履歴 0 件のときの初回登録、および明示的「+ 新規」入力中の保存先分岐用）
   const [isNew, setIsNew] = useState(false);
+
+  // ── ケアマネ事業所マスタ (care_offices) — 担当居宅の「マスタから選択」用 ────
+  const [careOffices, setCareOffices] = useState<CareOfficeOption[]>([]);
+  const [careOfficesLoading, setCareOfficesLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("care_offices")
+        .select("id, name, office_number")
+        .order("name");
+      if (cancelled) return;
+      if (error) {
+        console.error("care_offices fetch failed:", error.message);
+        toast.error(`ケアマネ事業所マスタの取得に失敗: ${error.message}`);
+      } else {
+        setCareOffices((data ?? []) as CareOfficeOption[]);
+      }
+      setCareOfficesLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase]);
+
+  // 現在選択中のマスタ事業所 (care_office_id → マスタ解決)
+  const selectedCareOffice = form.care_office_id
+    ? careOffices.find((o) => o.id === form.care_office_id) ?? null
+    : null;
 
   // ── データ取得 (mutation 後の refetch 用) ───────────────────────────────────
 
@@ -250,6 +372,7 @@ export function CareCertContent({
           : null,
         certification_status: form.status,
         certification_number: form.certification_number || null,
+        care_office_id: form.care_office_id || null,
         care_office_number: form.care_office_number || null,
         care_office_name: form.care_office_name || null,
         kohi_hobetsu: form.kohi_hobetsu || null,
@@ -876,17 +999,71 @@ export function CareCertContent({
             </div>
 
             {/* 担当居宅介護支援事業所 (様式第二⑦ / 7131 居宅サービス計画欄) */}
+            {/* 2way: マスタから選択 (care_office_id) ⇔ 直接入力 (number/name)。相互排他 */}
             <div className="rounded border border-sky-200 bg-sky-50/40 p-2 space-y-2">
               <p className="text-xs font-bold text-sky-800">担当居宅介護支援事業所</p>
+
+              {/* ── マスタから選択 ── */}
               <div>
-                <label className={labelCls}>事業所番号（10桁）</label>
+                <label className={labelCls}>マスタから選択（ケアマネ事業所マスタ）</label>
+                {form.care_office_id ? (
+                  <div className="flex items-center justify-between gap-2 rounded border border-sky-300 bg-white px-2 py-1">
+                    <div className="min-w-0">
+                      {selectedCareOffice ? (
+                        <>
+                          <div className="truncate text-xs font-medium text-gray-800">
+                            {selectedCareOffice.name}
+                          </div>
+                          <div className="font-mono text-[10px] text-gray-500">
+                            {selectedCareOffice.office_number ?? "番号未登録"}
+                          </div>
+                        </>
+                      ) : careOfficesLoading ? (
+                        <div className="text-xs text-gray-400">マスタ読込中...</div>
+                      ) : (
+                        <div className="text-xs text-red-500">
+                          マスタに存在しない事業所です（削除された可能性）
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setField("care_office_id", "")}
+                      className="shrink-0 rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                      title="選択解除"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <CareOfficeCombobox
+                    offices={careOffices}
+                    loading={careOfficesLoading}
+                    onSelect={(o) =>
+                      // 選択時は直接入力をクリア (集計は number 直接入力優先のため排他にする)
+                      setForm((prev) => ({
+                        ...prev,
+                        care_office_id: o.id,
+                        care_office_number: "",
+                        care_office_name: "",
+                      }))
+                    }
+                  />
+                )}
+              </div>
+
+              {/* ── 直接入力 (マスタに無い場合) ── */}
+              <div>
+                <label className={labelCls}>事業所番号（10桁）— マスタに無い場合の直接入力</label>
                 <input
                   type="text"
                   inputMode="numeric"
                   value={form.care_office_number}
-                  onChange={(e) =>
-                    setField("care_office_number", e.target.value.replace(/[^0-9]/g, "").slice(0, 10))
-                  }
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 10);
+                    // 直接入力を始めたらマスタ選択は解除 (排他)
+                    setForm((prev) => ({ ...prev, care_office_number: v, care_office_id: "" }));
+                  }}
                   className={inp}
                   placeholder="0000000000"
                 />
@@ -896,13 +1073,16 @@ export function CareCertContent({
                 <input
                   type="text"
                   value={form.care_office_name}
-                  onChange={(e) => setField("care_office_name", e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setForm((prev) => ({ ...prev, care_office_name: v, care_office_id: "" }));
+                  }}
                   className={inp}
                   placeholder="〇〇居宅介護支援事業所"
                 />
               </div>
               <p className="text-[10px] text-gray-500">
-                訪問介護の担当居宅は外部ケアマネ事業所であることが多いため、ここに事業所番号を直接入力します。様式第二⑦・7131（居宅サービス計画）に反映されます。
+                通常はマスタ（マスタ管理 → ケアマネ事業所）から選択します。マスタに無い事業所のみ番号を直接入力してください（直接入力すると選択は解除されます）。様式第二⑦・7131（居宅サービス計画）に反映されます。
               </p>
             </div>
 
