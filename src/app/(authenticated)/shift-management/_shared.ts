@@ -40,6 +40,13 @@ export interface VisitSchedule {
   /** 職員3 の個別時間 (NULL = 本体と同じ) */
   staff3_start_time?: string | null;
   staff3_end_time?: string | null;
+  /**
+   * 追加職員 (主担当 staff_id を除く) の配列。index0=職員2, index1=職員3, index2=職員4…
+   * start_time/end_time が null は「本体 (start_time/end_time) と同じ時間」。
+   * 先頭2件は従来列 staff_id_2/staff_id_3 + staff2/3_*_time にミラーされる。
+   * migration kaigo_visit_schedule_additional_staff.sql 未適用環境では undefined。
+   */
+  additional_staff?: Array<{ staff_id: string; start_time: string | null; end_time: string | null }> | null;
   staff_name?: string | null;
   user_name?: string | null;
   _isCopy?: boolean; // ローカル複写行（未保存）
@@ -195,6 +202,109 @@ export function supportsKinkyuHoumon(supabase: SupabaseClient): Promise<boolean>
 /** kaigo_visit_schedule.staff2_start_time 等 (2人体制の個別時間) が存在するか */
 export function supportsStaff2Times(supabase: SupabaseClient): Promise<boolean> {
   return supportsScheduleColumn(supabase, "staff2_start_time");
+}
+
+/** kaigo_visit_schedule.additional_staff (jsonb, 追加職員 最大9名) が存在するか */
+export function supportsAdditionalStaff(supabase: SupabaseClient): Promise<boolean> {
+  return supportsScheduleColumn(supabase, "additional_staff");
+}
+
+// ─── 追加職員 (additional_staff) の共有ヘルパー ──────────────────────────────
+
+/** 主担当を除く追加職員の 1 要素 (フォーム/DB 共通形) */
+export interface AdditionalStaffEntry {
+  staff_id: string;
+  /** null = 本体 (start_time/end_time) と同じ時間 */
+  start_time: string | null;
+  end_time: string | null;
+}
+
+/**
+ * schedule 行から「主 + 追加」の職員を 1 つの配列で返す (read 画面 / 表示用)。
+ * additional_staff があればそれを、無ければ従来列 staff_id_2/3 + 個別時間から復元する。
+ * 時刻の null は本体時間と同じ扱い (呼出側で本体時刻を補完してよい)。
+ */
+export function normalizeScheduleStaff(
+  sched: Pick<
+    VisitSchedule,
+    | "staff_id"
+    | "start_time"
+    | "end_time"
+    | "staff_id_2"
+    | "staff_id_3"
+    | "staff2_start_time"
+    | "staff2_end_time"
+    | "staff3_start_time"
+    | "staff3_end_time"
+    | "additional_staff"
+  >,
+): Array<{ staff_id: string; start_time: string | null; end_time: string | null; role: "主" | "追加" }> {
+  const out: Array<{ staff_id: string; start_time: string | null; end_time: string | null; role: "主" | "追加" }> = [];
+  if (sched.staff_id) {
+    out.push({ staff_id: sched.staff_id, start_time: sched.start_time ?? null, end_time: sched.end_time ?? null, role: "主" });
+  }
+  // additional_staff (jsonb) を優先。無ければ従来列から復元。
+  if (Array.isArray(sched.additional_staff) && sched.additional_staff.length > 0) {
+    for (const a of sched.additional_staff) {
+      if (a && a.staff_id) {
+        out.push({ staff_id: a.staff_id, start_time: a.start_time ?? null, end_time: a.end_time ?? null, role: "追加" });
+      }
+    }
+  } else {
+    if (sched.staff_id_2) {
+      out.push({ staff_id: sched.staff_id_2, start_time: sched.staff2_start_time ?? null, end_time: sched.staff2_end_time ?? null, role: "追加" });
+    }
+    if (sched.staff_id_3) {
+      out.push({ staff_id: sched.staff_id_3, start_time: sched.staff3_start_time ?? null, end_time: sched.staff3_end_time ?? null, role: "追加" });
+    }
+  }
+  return out;
+}
+
+/**
+ * 追加職員のフォーム値から INSERT/UPDATE 用の payload 断片を生成する。
+ *
+ * - additional_staff: 全追加職員 (最大9名) を jsonb で書く (列適用時のみ)。
+ * - 後方互換ミラー: 先頭2件を従来列 staff_id_2/staff_id_3 + staff2/3_*_time にも書く。
+ *   これにより請求集計・2人加算・警告・各 read 画面 (従来列を読む既存コード) が無変更で動く。
+ *
+ * time は "HH:MM" (フォーム) を受け取り ":00" を補って "HH:MM:SS" にする。空 ("") は
+ * 「本体と同じ = null」とみなす。列未適用 (42703/PGRST204) は insertVisitSchedules /
+ * update 側で当該列が strip される想定なので、常に全列を含めて返す。
+ *
+ * @param entries 追加職員 (index0=職員2, index1=職員3, …)。staff_id が空の行は除外する。
+ */
+export function buildAdditionalStaffPayload(
+  entries: Array<{ staff_id: string; custom: boolean; start: string; end: string }>,
+): Record<string, unknown> {
+  // 有効な行 (staff_id あり) のみ
+  const valid = entries.filter((e) => e.staff_id);
+  const toTime = (v: string): string | null => (v ? (v.length === 5 ? v + ":00" : v) : null);
+  // additional_staff jsonb: custom ON かつ start/end 両方ありなら個別時間、それ以外は null (本体と同じ)
+  const jsonb = valid.map((e) => {
+    const useCustom = !!(e.custom && e.start && e.end);
+    return {
+      staff_id: e.staff_id,
+      start_time: useCustom ? toTime(e.start) : null,
+      end_time: useCustom ? toTime(e.end) : null,
+    };
+  });
+  const payload: Record<string, unknown> = {
+    additional_staff: jsonb.length > 0 ? jsonb : null,
+  };
+  // 後方互換ミラー: 先頭2件を従来列へ
+  const mirrorCols: Array<[string, string, string]> = [
+    ["staff_id_2", "staff2_start_time", "staff2_end_time"],
+    ["staff_id_3", "staff3_start_time", "staff3_end_time"],
+  ];
+  for (let i = 0; i < 2; i++) {
+    const [idCol, startCol, endCol] = mirrorCols[i];
+    const e = jsonb[i];
+    payload[idCol] = e ? e.staff_id : null;
+    payload[startCol] = e ? e.start_time : null;
+    payload[endCol] = e ? e.end_time : null;
+  }
+  return payload;
 }
 
 /** PostgREST の「列が存在しない」エラーから列名を抽出 (42703 / PGRST204) */

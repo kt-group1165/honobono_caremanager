@@ -7,7 +7,6 @@ import { resolvePreferredTenantId } from "@/lib/tenant-resolver";
 import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
 import {
-  AlertTriangle,
   CalendarDays,
   Clock,
   Download,
@@ -36,8 +35,10 @@ import { cn } from "@/lib/utils";
 import { ServiceSelector } from "@/components/services/service-selector";
 import { StaffCombobox } from "@/components/shared/staff-combobox";
 import {
+  buildAdditionalStaffPayload,
   insertVisitSchedules,
   staffTimeRelationWarning,
+  supportsAdditionalStaff,
   supportsKinkyuHoumon,
   supportsStaff2Times,
   twoPersonMismatchWarning,
@@ -49,9 +50,14 @@ import {
   type VisitPattern,
   type VisitSchedule,
 } from "./_shared";
+import {
+  AdditionalStaffSection,
+  additionalRowsFromSchedule,
+  type AdditionalStaffRow,
+} from "./additional-staff-section";
 import { getServiceSystemMap } from "@/lib/service-system-lookup";
 import { toHankakuDigits } from "@/lib/service-name-normalize";
-import { UserCalendar, Staff2TimeFields, type UserCalendarInitialData } from "./user-calendar-content";
+import { UserCalendar, type UserCalendarInitialData } from "./user-calendar-content";
 import { StaffCalendar, type StaffCalendarInitialData } from "./staff-calendar-content";
 import { TimelineView, type TimelineInitialData } from "./timeline-view-content";
 import { MonthlyIndividualView, type MonthlyIndividualInitialData } from "./monthly-individual-content";
@@ -698,21 +704,18 @@ export function ShiftManagementContent({
     service_code: "",
     service_name: "",
     staff_id: "",
-    staff_id_2: "",
     kinkyu_houmon: false,
-    staff2_custom: false,
-    staff2_start: "",
-    staff2_end: "",
   });
+  // 追加職員 (index0=職員2, index1=職員3, …)。最大9名
+  const [pageEditAdditional, setPageEditAdditional] = useState<AdditionalStaffRow[]>([]);
   const [pageEditSaving, setPageEditSaving] = useState(false);
   const [showPageServiceSelector, setShowPageServiceSelector] = useState(false);
-  // 職員2 (2人体制): 普段は 1 人運用なので折りたたみ
-  const [showPageStaff2, setShowPageStaff2] = useState(false);
   // 選択中サービスの制度区分 (障害なら個別時間の重なり警告を出さない)
   const [pageEditServiceSystem, setPageEditServiceSystem] = useState<string | null>(null);
-  // C3: kinkyu_houmon / staff2_*_time 列が DB に適用済みか (未適用なら UI 非表示)
+  // C3: kinkyu_houmon / staff2_*_time / additional_staff 列が DB に適用済みか (未適用なら UI 非表示)
   const [kinkyuSupported, setKinkyuSupported] = useState(false);
   const [staff2TimesSupported, setStaff2TimesSupported] = useState(false);
+  const [additionalStaffSupported, setAdditionalStaffSupported] = useState(false);
   useEffect(() => {
     let cancelled = false;
     void supportsKinkyuHoumon(supabase).then((ok) => {
@@ -720,6 +723,9 @@ export function ShiftManagementContent({
     });
     void supportsStaff2Times(supabase).then((ok) => {
       if (!cancelled) setStaff2TimesSupported(ok);
+    });
+    void supportsAdditionalStaff(supabase).then((ok) => {
+      if (!cancelled) setAdditionalStaffSupported(ok);
     });
     return () => { cancelled = true; };
   }, [supabase]);
@@ -751,13 +757,9 @@ export function ShiftManagementContent({
       service_code: "",
       service_name: sched.service_type ?? "",
       staff_id: sched.staff_id ?? "",
-      staff_id_2: sched.staff_id_2 ?? "",
       kinkyu_houmon: sched.kinkyu_houmon ?? false,
-      staff2_custom: !!sched.staff2_start_time,
-      staff2_start: sched.staff2_start_time?.slice(0, 5) ?? "",
-      staff2_end: sched.staff2_end_time?.slice(0, 5) ?? "",
     });
-    setShowPageStaff2(!!sched.staff_id_2);
+    setPageEditAdditional(additionalRowsFromSchedule(sched));
     // 制度区分 (介護/障害) を対象月世代で解決 (障害なら個別時間の重なり警告を抑止)
     setPageEditServiceSystem(null);
     if (sched.service_type && sched.visit_date) {
@@ -768,38 +770,37 @@ export function ShiftManagementContent({
         setPageEditServiceSystem(m.get(toHankakuDigits(sched.service_type)) ?? null);
       });
     }
-    // 呼出元 view の select に kinkyu_houmon / staff2_*_time が含まれない (列未適用
-    // 環境で 42703 になるため意図的に外している) ので、対応 DB では現在値を単発で引く
+    // 呼出元 view の select に kinkyu_houmon / staff2_*_time / additional_staff が含まれない
+    // (列未適用環境で 42703 になるため意図的に外している) ので、対応 DB では現在値を単発で引く。
+    // additional_staff (3人目以降含む) は select に無いので、対応 DB では必ず引き直す。
     const extraCols = [
       ...(kinkyuSupported && sched.kinkyu_houmon === undefined ? ["kinkyu_houmon"] : []),
-      ...(staff2TimesSupported && sched.staff2_start_time === undefined
-        ? ["staff2_start_time", "staff2_end_time"]
-        : []),
+      ...(staff2TimesSupported ? ["staff2_start_time", "staff2_end_time", "staff3_start_time", "staff3_end_time"] : []),
+      ...(additionalStaffSupported ? ["additional_staff", "staff_id_2", "staff_id_3"] : []),
     ];
     if (extraCols.length > 0) {
       void supabase
         .from("kaigo_visit_schedule")
-        .select(extraCols.join(", "))
+        .select([...new Set(extraCols)].join(", "))
         .eq("id", sched.id)
         .maybeSingle()
         .then(({ data, error }: { data: unknown; error: { message: string } | null }) => {
           if (error || !data) return;
           const row = data as {
             kinkyu_houmon?: boolean | null;
+            staff_id_2?: string | null;
+            staff_id_3?: string | null;
             staff2_start_time?: string | null;
             staff2_end_time?: string | null;
+            staff3_start_time?: string | null;
+            staff3_end_time?: string | null;
+            additional_staff?: Array<{ staff_id: string; start_time: string | null; end_time: string | null }> | null;
           };
-          setPageEditForm((f) => ({
-            ...f,
-            ...(row.kinkyu_houmon !== undefined ? { kinkyu_houmon: !!row.kinkyu_houmon } : {}),
-            ...(row.staff2_start_time !== undefined
-              ? {
-                  staff2_custom: !!row.staff2_start_time,
-                  staff2_start: row.staff2_start_time?.slice(0, 5) ?? "",
-                  staff2_end: row.staff2_end_time?.slice(0, 5) ?? "",
-                }
-              : {}),
-          }));
+          if (row.kinkyu_houmon !== undefined) {
+            setPageEditForm((f) => ({ ...f, kinkyu_houmon: !!row.kinkyu_houmon }));
+          }
+          // 追加職員を最新値で復元 (additional_staff 優先、無ければ従来列)
+          setPageEditAdditional(additionalRowsFromSchedule(row));
         });
     }
   };
@@ -813,15 +814,16 @@ export function ShiftManagementContent({
       // 具体的な service_name (例: 身体介護02) があればそれを、無ければ category (身体介護) を保存
       service_type: pageEditForm.service_name || pageEditForm.service_type,
       staff_id: pageEditForm.staff_id || null,
-      staff_id_2: pageEditForm.staff_id_2 || null,
     };
     // C3: 緊急時訪問介護加算フラグ (列未適用環境では含めない)
     if (kinkyuSupported) updatePayload.kinkyu_houmon = pageEditForm.kinkyu_houmon;
-    // 2人体制の個別時間 (NULL = 本体と同じ)。列未適用環境では含めない
-    const useStaff2Custom = !!(pageEditForm.staff_id_2 && pageEditForm.staff2_custom && pageEditForm.staff2_start && pageEditForm.staff2_end);
-    if (staff2TimesSupported) {
-      updatePayload.staff2_start_time = useStaff2Custom ? pageEditForm.staff2_start + ":00" : null;
-      updatePayload.staff2_end_time = useStaff2Custom ? pageEditForm.staff2_end + ":00" : null;
+    // 追加職員: additional_staff (jsonb) + 従来列 staff_id_2/3 + staff2/3_*_time にミラー。
+    // 列未適用環境では additional_staff / staff2/3_*_time を strip する (staff_id_2/3 は基本列)。
+    const addlPayload = buildAdditionalStaffPayload(pageEditAdditional);
+    for (const [k, v] of Object.entries(addlPayload)) {
+      if (k === "additional_staff" && !additionalStaffSupported) continue;
+      if ((k === "staff2_start_time" || k === "staff2_end_time" || k === "staff3_start_time" || k === "staff3_end_time") && !staff2TimesSupported) continue;
+      updatePayload[k] = v;
     }
     const { error } = await supabase
       .from("kaigo_visit_schedule")
@@ -831,16 +833,17 @@ export function ShiftManagementContent({
       toast.error("更新に失敗しました: " + error.message);
     } else {
       toast.success("更新しました");
+      // 職員2 (先頭の追加職員) について制度整合警告 (障害は制度上別算定なので出さない)
+      const first = pageEditAdditional.find((r) => r.staff_id);
       const warn = twoPersonMismatchWarning(
         pageEditForm.service_name || pageEditForm.service_type,
-        pageEditForm.staff_id_2 || null,
+        first?.staff_id || null,
       );
       if (warn) toast.warning(warn);
-      // 職員2 個別時間の関係警告 (障害は制度上別算定なので出さない)
-      if (useStaff2Custom) {
+      if (first && first.custom && first.start && first.end) {
         const timeWarn = staffTimeRelationWarning(
           pageEditForm.start_time, pageEditForm.end_time,
-          pageEditForm.staff2_start, pageEditForm.staff2_end,
+          first.start, first.end,
           pageEditForm.service_name || pageEditForm.service_type,
           pageEditServiceSystem === "障害",
         );
@@ -1183,56 +1186,22 @@ export function ShiftManagementContent({
                 />
               </div>
 
-              {/* 職員2 (2人体制): 普段は折りたたみ */}
-              {showPageStaff2 ? (
-                <div>
-                  <div className="mb-1 flex items-center justify-between">
-                    <label className="block text-xs text-gray-500">担当職員2（2人体制）</label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPageEditForm((f) => ({ ...f, staff_id_2: "" }));
-                        setShowPageStaff2(false);
-                      }}
-                      className="text-xs text-gray-400 hover:text-red-500"
-                    >
-                      取り消す
-                    </button>
-                  </div>
-                  <StaffCombobox
-                    value={pageEditForm.staff_id_2}
-                    onChange={(id) => setPageEditForm((f) => ({ ...f, staff_id_2: id }))}
-                    options={staff
-                      .filter((s) => s.id !== pageEditForm.staff_id)
-                      .map((s) => ({
-                        id: s.id,
-                        name: s.name,
-                        furigana: (s as unknown as { furigana?: string | null }).furigana ?? null,
-                      }))}
-                  />
-                  {/* 2人体制の個別時間 (列未適用 DB では非表示) */}
-                  {staff2TimesSupported && pageEditForm.staff_id_2 && (
-                    <Staff2TimeFields
-                      custom={pageEditForm.staff2_custom}
-                      start={pageEditForm.staff2_start}
-                      end={pageEditForm.staff2_end}
-                      mainStart={pageEditForm.start_time}
-                      mainEnd={pageEditForm.end_time}
-                      serviceName={pageEditForm.service_name || pageEditForm.service_type}
-                      isShogai={pageEditServiceSystem === "障害"}
-                      onChange={(patch) => setPageEditForm((f) => ({ ...f, ...patch }))}
-                    />
-                  )}
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setShowPageStaff2(true)}
-                  className="text-xs text-blue-600 hover:underline"
-                >
-                  ＋ 2人目を追加（2人体制）
-                </button>
-              )}
+              {/* 追加職員 (2人体制・同行、主 + 最大9名): 普段は折りたたみ */}
+              <AdditionalStaffSection
+                rows={pageEditAdditional}
+                onChange={setPageEditAdditional}
+                staffOptions={staff.map((s) => ({
+                  id: s.id,
+                  name: s.name,
+                  furigana: (s as unknown as { furigana?: string | null }).furigana ?? null,
+                }))}
+                mainStaffId={pageEditForm.staff_id}
+                mainStart={pageEditForm.start_time}
+                mainEnd={pageEditForm.end_time}
+                serviceName={pageEditForm.service_name || pageEditForm.service_type}
+                isShogai={pageEditServiceSystem === "障害"}
+                showCustomTime={staff2TimesSupported}
+              />
 
               {/* C3: 緊急時訪問介護加算 (列未適用の DB では非表示) */}
               {kinkyuSupported && (
@@ -1246,20 +1215,6 @@ export function ShiftManagementContent({
                   <span>緊急時訪問 (緊急時訪問介護加算)</span>
                 </label>
               )}
-
-              {(() => {
-                const warn = twoPersonMismatchWarning(
-                  pageEditForm.service_name || pageEditForm.service_type,
-                  pageEditForm.staff_id_2 || null,
-                );
-                if (!warn) return null;
-                return (
-                  <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                    <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-                    {warn}
-                  </div>
-                );
-              })()}
             </div>
             <div className="flex items-center justify-between border-t px-5 py-4">
               <button

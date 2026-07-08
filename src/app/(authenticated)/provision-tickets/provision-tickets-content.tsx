@@ -18,7 +18,6 @@ import {
   Download,
   Upload,
   Send,
-  AlertTriangle,
 } from "lucide-react";
 import { SendDocumentModal } from "@/components/shared/SendDocumentModal";
 import {
@@ -38,11 +37,16 @@ import { getServiceSystemMap, isShogaiService } from "@/lib/service-system-looku
 import { validInMonth } from "@/lib/service-code-valid";
 import { useBusinessType } from "@/lib/business-type-context";
 import {
+  buildAdditionalStaffPayload,
   insertVisitSchedules,
+  supportsAdditionalStaff,
   supportsStaff2Times,
-  staffTimeRelationWarning,
   twoPersonMismatchWarning,
 } from "@/app/(authenticated)/shift-management/_shared";
+import {
+  AdditionalStaffSection,
+  type AdditionalStaffRow,
+} from "@/app/(authenticated)/shift-management/additional-staff-section";
 import { resolveVisitAddonLines } from "@/lib/visit-addons";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -79,8 +83,13 @@ interface VisitSchedule {
   staff_name?: string | null;
   // 2人体制 (kaigo_visit_schedule の既存列。未適用 DB では undefined)
   staff_id_2?: string | null;
+  staff_id_3?: string | null;
   staff2_start_time?: string | null;
   staff2_end_time?: string | null;
+  staff3_start_time?: string | null;
+  staff3_end_time?: string | null;
+  // 追加職員 (jsonb, 最大9名)。未適用 DB では undefined
+  additional_staff?: Array<{ staff_id: string; start_time: string | null; end_time: string | null }> | null;
 }
 
 // A "row" in the provision ticket grid = unique combination of service + time.
@@ -94,12 +103,9 @@ export interface ServiceRow {
   end_time: string;
   staff_id?: string;
   staff_name?: string;
-  // 職員2 (2人体制)。staff2_custom=true のとき個別時間、false は本体時間
-  staff_id_2?: string;
-  staff2_name?: string;
-  staff2_custom?: boolean;
-  staff2_start?: string; // "HH:MM:SS" or ""
-  staff2_end?: string;
+  // 追加職員 (主担当を除く、最大9名)。index0=職員2, index1=職員3, …
+  // start/end は "HH:MM:SS" (個別時間) or null (本体と同じ)
+  additional?: Array<{ staff_id: string; start_time: string | null; end_time: string | null }>;
 }
 
 // Grid: rowKey -> day -> { planned: bool, actual: bool }
@@ -134,6 +140,35 @@ function isDowBg(year: number, month: number, day: number): string {
 
 function makeRowKey(serviceType: string, startTime: string, endTime: string): string {
   return `${serviceType}__${startTime}__${endTime}`;
+}
+
+/** AdditionalStaffRow[] (HH:MM フォーム) → ServiceRow.additional (HH:MM:SS or null) */
+function additionalStaffRowsToEntries(
+  rows: AdditionalStaffRow[],
+): Array<{ staff_id: string; start_time: string | null; end_time: string | null }> {
+  const toTime = (v: string): string | null => (v ? (v.length === 5 ? v + ":00" : v) : null);
+  return rows
+    .filter((r) => r.staff_id)
+    .map((r) => {
+      const useCustom = !!(r.custom && r.start && r.end);
+      return {
+        staff_id: r.staff_id,
+        start_time: useCustom ? toTime(r.start) : null,
+        end_time: useCustom ? toTime(r.end) : null,
+      };
+    });
+}
+
+/** ServiceRow.additional (HH:MM:SS) → AdditionalStaffRow[] (HH:MM フォーム) */
+function additionalEntriesToRows(
+  entries: Array<{ staff_id: string; start_time: string | null; end_time: string | null }> | undefined,
+): AdditionalStaffRow[] {
+  return (entries ?? []).map((e) => ({
+    staff_id: e.staff_id,
+    custom: !!e.start_time,
+    start: e.start_time?.slice(0, 5) ?? "",
+    end: e.end_time?.slice(0, 5) ?? "",
+  }));
 }
 
 function toWareki(date: Date): string {
@@ -265,10 +300,15 @@ export function ProvisionTicketsContent({
   const [addRowAddons, setAddRowAddons] = useState<Record<string, number>>({});
   // 2人体制の個別時間列 (staff2_start_time 等) が適用済みか
   const [staff2TimesSupported, setStaff2TimesSupported] = useState(false);
+  // additional_staff (jsonb, 追加職員 最大9名) 列が適用済みか
+  const [additionalStaffSupported, setAdditionalStaffSupported] = useState(false);
   useEffect(() => {
     let cancelled = false;
     void supportsStaff2Times(supabase).then((ok) => {
       if (!cancelled) setStaff2TimesSupported(ok);
+    });
+    void supportsAdditionalStaff(supabase).then((ok) => {
+      if (!cancelled) setAdditionalStaffSupported(ok);
     });
     return () => {
       cancelled = true;
@@ -412,16 +452,14 @@ export function ProvisionTicketsContent({
   const [showSendModal, setShowSendModal] = useState(false);
   const [addRowForm, setAddRowForm] = useState({
     start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", staff_id: "",
-    staff_id_2: "", staff2_custom: false, staff2_start: "", staff2_end: "",
   });
-  const [showAddStaff2, setShowAddStaff2] = useState(false);
+  const [addRowAdditional, setAddRowAdditional] = useState<AdditionalStaffRow[]>([]);
   const [showAddServiceSelector, setShowAddServiceSelector] = useState(false);
   const [editRowKey, setEditRowKey] = useState<string | null>(null);
   const [editRowForm, setEditRowForm] = useState({
     start_time: "", end_time: "", service_name: "", service_code: "", staff_id: "",
-    staff_id_2: "", staff2_custom: false, staff2_start: "", staff2_end: "",
   });
-  const [showEditStaff2, setShowEditStaff2] = useState(false);
+  const [editRowAdditional, setEditRowAdditional] = useState<AdditionalStaffRow[]>([]);
   const [showEditServiceSelector, setShowEditServiceSelector] = useState(false);
 
   const year = selectedMonth.getFullYear();
@@ -535,20 +573,25 @@ export function ProvisionTicketsContent({
     const from = `${monthStr}-01`;
     const to = `${monthStr}-${String(daysCount).padStart(2, "0")}`;
 
-    // staff2 列 (staff_id_2/staff2_start_time/staff2_end_time) は適用済み環境のみ select。
-    // 未適用 (42703) の場合は staff2 無しで再取得する。
+    // staff2 列 (staff_id_2/staff2_start_time/staff2_end_time) + additional_staff は
+    // 適用済み環境のみ select。未適用 (42703) の場合は無しで再取得する。
     const baseCols =
       "id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, members!kaigo_visit_schedule_staff_id_fkey(name)";
-    const staff2Cols = ", staff_id_2, staff2_start_time, staff2_end_time";
+    const staff2Cols = ", staff_id_2, staff_id_3, staff2_start_time, staff2_end_time, staff3_start_time, staff3_end_time";
+    const addlCols = ", additional_staff";
+    const fullCols =
+      baseCols +
+      (staff2TimesSupported ? staff2Cols : "") +
+      (additionalStaffSupported ? addlCols : "");
     let { data, error } = await supabase
       .from("kaigo_visit_schedule")
-      .select(staff2TimesSupported ? baseCols + staff2Cols : baseCols)
+      .select(fullCols)
       .eq("user_id", userId)
       .gte("visit_date", from)
       .lte("visit_date", to)
       .order("start_time");
     if (error && (error.code === "42703" || error.code === "PGRST200")) {
-      // staff2 列未適用: 基本列のみで再取得
+      // 列未適用: 基本列のみで再取得
       ({ data, error } = await supabase
         .from("kaigo_visit_schedule")
         .select(baseCols)
@@ -576,8 +619,12 @@ export function ProvisionTicketsContent({
       status: r.status,
       staff_name: r.members?.name ?? null,
       staff_id_2: r.staff_id_2 ?? null,
+      staff_id_3: r.staff_id_3 ?? null,
       staff2_start_time: r.staff2_start_time ?? null,
       staff2_end_time: r.staff2_end_time ?? null,
+      staff3_start_time: r.staff3_start_time ?? null,
+      staff3_end_time: r.staff3_end_time ?? null,
+      additional_staff: r.additional_staff ?? null,
     }));
 
     // 障害福祉サービスは介護保険の提供表に載せない (障害側の画面で扱う)
@@ -594,19 +641,22 @@ export function ProvisionTicketsContent({
     for (const s of schedules) {
       const key = makeRowKey(s.service_type, s.start_time, s.end_time);
       if (!rowMap.has(key)) {
+        // 追加職員: additional_staff (jsonb) 優先、無ければ従来列 staff_id_2/3 から復元
+        let additional: Array<{ staff_id: string; start_time: string | null; end_time: string | null }> = [];
+        if (Array.isArray(s.additional_staff) && s.additional_staff.length > 0) {
+          additional = s.additional_staff.filter((a) => a && a.staff_id);
+        } else {
+          if (s.staff_id_2) additional.push({ staff_id: s.staff_id_2, start_time: s.staff2_start_time ?? null, end_time: s.staff2_end_time ?? null });
+          if (s.staff_id_3) additional.push({ staff_id: s.staff_id_3, start_time: s.staff3_start_time ?? null, end_time: s.staff3_end_time ?? null });
+        }
         rowMap.set(key, {
           key,
           service_type: s.service_type,
           start_time: s.start_time,
           end_time: s.end_time,
-
           staff_id: s.staff_id ?? undefined,
           staff_name: s.staff_name ?? undefined,
-          staff_id_2: s.staff_id_2 ?? undefined,
-          // 個別時間 (staff2_start_time 有り) は custom、無しは本体時間
-          staff2_custom: !!s.staff2_start_time,
-          staff2_start: s.staff2_start_time ?? undefined,
-          staff2_end: s.staff2_end_time ?? undefined,
+          additional,
         });
       }
     }
@@ -639,7 +689,7 @@ export function ProvisionTicketsContent({
     setGrid(newGrid);
     setScheduleIds(newSchedIds);
     setLoading(false);
-  }, [userId, monthStr, daysCount, supabase, year, month, staff2TimesSupported]);
+  }, [userId, monthStr, daysCount, supabase, year, month, staff2TimesSupported, additionalStaffSupported]);
 
   // initial render は server からの initialServiceRows/initialGrid を使用、月切替時のみ refetch。
   // ただし client-side の利用者切替 (serverPreloaded=false) で mount された場合は
@@ -876,8 +926,8 @@ export function ProvisionTicketsContent({
       return;
     }
     const staffObj = allStaff.find((s) => s.id === addRowForm.staff_id);
-    const staff2Obj = allStaff.find((s) => s.id === addRowForm.staff_id_2);
-    const useStaff2Custom = !!(addRowForm.staff_id_2 && addRowForm.staff2_custom && addRowForm.staff2_start && addRowForm.staff2_end);
+    // additional 行を jsonb 形 (individual time は "HH:MM:SS" or null) に変換
+    const additional = additionalStaffRowsToEntries(addRowAdditional);
     setServiceRows((prev) => [...prev, {
       key,
       service_type: addRowForm.service_name,
@@ -885,14 +935,14 @@ export function ProvisionTicketsContent({
       end_time: addRowForm.end_time + ":00",
       staff_id: addRowForm.staff_id || undefined,
       staff_name: staffObj?.name ?? undefined,
-      staff_id_2: addRowForm.staff_id_2 || undefined,
-      staff2_name: staff2Obj?.name ?? undefined,
-      staff2_custom: useStaff2Custom,
-      staff2_start: useStaff2Custom ? addRowForm.staff2_start + ":00" : undefined,
-      staff2_end: useStaff2Custom ? addRowForm.staff2_end + ":00" : undefined,
+      additional,
     }]);
     setGrid((prev) => ({ ...prev, [key]: {} }));
     markDirty();
+    // 職員2 (先頭の追加職員) のコード整合警告
+    const first = addRowAdditional.find((r) => r.staff_id);
+    const warn = twoPersonMismatchWarning(addRowForm.service_name, first?.staff_id || null);
+    if (warn) toast.warning(warn);
 
     // モーダルで指定した「この訪問につく加算」を kaigo_visit_addon_lines に反映。
     // addRowAddons = { addon_code -> count }。既存 addonLines と加算合成 (回数加算) して upsert。
@@ -925,12 +975,8 @@ export function ProvisionTicketsContent({
       service_name: row.service_type,
       service_code: "",
       staff_id: row.staff_id ?? "",
-      staff_id_2: row.staff_id_2 ?? "",
-      staff2_custom: !!row.staff2_custom,
-      staff2_start: row.staff2_start?.slice(0, 5) ?? "",
-      staff2_end: row.staff2_end?.slice(0, 5) ?? "",
     });
-    setShowEditStaff2(!!row.staff_id_2);
+    setEditRowAdditional(additionalEntriesToRows(row.additional));
   };
 
   const handleEditRowSave = () => {
@@ -967,10 +1013,9 @@ export function ProvisionTicketsContent({
       // Remove old row
       setServiceRows((prev) => prev.filter((r) => r.key !== editRowKey));
     } else {
-      // Simple rename (+ staff / staff2 の反映)
+      // Simple rename (+ staff / 追加職員 の反映)
       const staffObj = allStaff.find((s) => s.id === editRowForm.staff_id);
-      const staff2Obj = allStaff.find((s) => s.id === editRowForm.staff_id_2);
-      const useStaff2Custom = !!(editRowForm.staff_id_2 && editRowForm.staff2_custom && editRowForm.staff2_start && editRowForm.staff2_end);
+      const additional = additionalStaffRowsToEntries(editRowAdditional);
       setServiceRows((prev) => prev.map((r) =>
         r.key === editRowKey
           ? {
@@ -981,14 +1026,14 @@ export function ProvisionTicketsContent({
               end_time: editRowForm.end_time + ":00",
               staff_id: editRowForm.staff_id || undefined,
               staff_name: staffObj?.name ?? undefined,
-              staff_id_2: editRowForm.staff_id_2 || undefined,
-              staff2_name: staff2Obj?.name ?? undefined,
-              staff2_custom: useStaff2Custom,
-              staff2_start: useStaff2Custom ? editRowForm.staff2_start + ":00" : undefined,
-              staff2_end: useStaff2Custom ? editRowForm.staff2_end + ":00" : undefined,
+              additional,
             }
           : r
       ));
+      // 職員2 (先頭の追加職員) のコード整合警告
+      const first = editRowAdditional.find((row) => row.staff_id);
+      const warn = twoPersonMismatchWarning(editRowForm.service_name, first?.staff_id || null);
+      if (warn) toast.warning(warn);
 
       if (newKey !== editRowKey) {
         setGrid((prev) => {
@@ -1023,15 +1068,17 @@ export function ProvisionTicketsContent({
       const toInsert: Record<string, unknown>[] = [];
       for (const row of serviceRows) {
         const rowGrid = grid[row.key] || {};
-        // 2人体制 (staff_id_2) + 個別時間。列未適用 (42703/PGRST204) は
-        // insertVisitSchedules が該当列を strip して retry する。
-        const staff2Fields: Record<string, unknown> = {};
-        if (row.staff_id_2) {
-          staff2Fields.staff_id_2 = row.staff_id_2;
-          const useCustom = !!(row.staff2_custom && row.staff2_start && row.staff2_end);
-          staff2Fields.staff2_start_time = useCustom ? row.staff2_start : null;
-          staff2Fields.staff2_end_time = useCustom ? row.staff2_end : null;
-        }
+        // 追加職員: additional_staff (jsonb) + 従来列 staff_id_2/3 + staff2/3_*_time にミラー。
+        // 列未適用 (42703/PGRST204) は insertVisitSchedules が該当列を strip して retry する。
+        // row.additional は既に "HH:MM:SS" or null 形なので custom フラグに畳んで helper に渡す。
+        const staff2Fields = buildAdditionalStaffPayload(
+          (row.additional ?? []).map((a) => ({
+            staff_id: a.staff_id,
+            custom: !!a.start_time,
+            start: a.start_time?.slice(0, 5) ?? "",
+            end: a.end_time?.slice(0, 5) ?? "",
+          })),
+        );
         for (const day of days) {
           const cell = rowGrid[day];
           if (!cell) continue;
@@ -1687,10 +1734,9 @@ export function ProvisionTicketsContent({
                   onClick={() => {
                     setAddRowForm({
                       start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", staff_id: "",
-                      staff_id_2: "", staff2_custom: false, staff2_start: "", staff2_end: "",
                     });
+                    setAddRowAdditional([]);
                     setAddRowAddons({});
-                    setShowAddStaff2(false);
                     setShowAddRow(true);
                   }}
                   className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 no-print"
@@ -2155,24 +2201,17 @@ export function ProvisionTicketsContent({
                 </select>
               </div>
 
-              {/* ── 職員2 (2人体制) + 個別時間 ── */}
-              <ProvisionStaff2Section
-                show={showAddStaff2}
-                onShow={() => setShowAddStaff2(true)}
-                onHide={() => {
-                  setShowAddStaff2(false);
-                  setAddRowForm((f) => ({ ...f, staff_id_2: "", staff2_custom: false, staff2_start: "", staff2_end: "" }));
-                }}
-                staffId2={addRowForm.staff_id_2}
-                staffOptions={allStaff.filter((s) => s.id !== addRowForm.staff_id)}
-                onStaff2Change={(id) => setAddRowForm((f) => ({ ...f, staff_id_2: id }))}
-                custom={addRowForm.staff2_custom}
-                start={addRowForm.staff2_start}
-                end={addRowForm.staff2_end}
+              {/* ── 追加職員 (2人体制・同行、主 + 最大9名) ── */}
+              <AdditionalStaffSection
+                rows={addRowAdditional}
+                onChange={setAddRowAdditional}
+                staffOptions={allStaff.map((s) => ({ id: s.id, name: s.name }))}
+                mainStaffId={addRowForm.staff_id}
                 mainStart={addRowForm.start_time}
                 mainEnd={addRowForm.end_time}
                 serviceName={addRowForm.service_name || addRowForm.service_type}
-                onTimeChange={(patch) => setAddRowForm((f) => ({ ...f, ...patch }))}
+                isShogai={false}
+                showCustomTime={staff2TimesSupported}
               />
 
               {/* ── この訪問につく加算 (kaigo_visit_addon_lines のマスタ駆動一覧) ── */}
@@ -2253,24 +2292,17 @@ export function ProvisionTicketsContent({
                 </select>
               </div>
 
-              {/* ── 職員2 (2人体制) + 個別時間 ── */}
-              <ProvisionStaff2Section
-                show={showEditStaff2}
-                onShow={() => setShowEditStaff2(true)}
-                onHide={() => {
-                  setShowEditStaff2(false);
-                  setEditRowForm((f) => ({ ...f, staff_id_2: "", staff2_custom: false, staff2_start: "", staff2_end: "" }));
-                }}
-                staffId2={editRowForm.staff_id_2}
-                staffOptions={allStaff.filter((s) => s.id !== editRowForm.staff_id)}
-                onStaff2Change={(id) => setEditRowForm((f) => ({ ...f, staff_id_2: id }))}
-                custom={editRowForm.staff2_custom}
-                start={editRowForm.staff2_start}
-                end={editRowForm.staff2_end}
+              {/* ── 追加職員 (2人体制・同行、主 + 最大9名) ── */}
+              <AdditionalStaffSection
+                rows={editRowAdditional}
+                onChange={setEditRowAdditional}
+                staffOptions={allStaff.map((s) => ({ id: s.id, name: s.name }))}
+                mainStaffId={editRowForm.staff_id}
                 mainStart={editRowForm.start_time}
                 mainEnd={editRowForm.end_time}
                 serviceName={editRowForm.service_name}
-                onTimeChange={(patch) => setEditRowForm((f) => ({ ...f, ...patch }))}
+                isShogai={false}
+                showCustomTime={staff2TimesSupported}
               />
             </div>
             <div className="flex justify-end gap-2 border-t px-5 py-4">
@@ -2326,127 +2358,6 @@ function HeaderPair({
       <span className={cn("text-sm", mono && "font-mono tabular-nums", strong && "font-semibold")}>
         {value || "—"}
       </span>
-    </div>
-  );
-}
-
-// ─── 職員2 (2人体制) + 個別時間 セクション ──────────────────────────────────
-// shift-management の Staff2TimeFields / staffTimeRelationWarning と同等の UI を
-// provision-tickets 内に自前実装 (共有コンポーネント化は避けてコピー方針)。
-// 提供表は介護保険のみを扱うため isShogai=false 固定 (障害は障害側画面)。
-function ProvisionStaff2Section({
-  show,
-  onShow,
-  onHide,
-  staffId2,
-  staffOptions,
-  onStaff2Change,
-  custom,
-  start,
-  end,
-  mainStart,
-  mainEnd,
-  serviceName,
-  onTimeChange,
-}: {
-  show: boolean;
-  onShow: () => void;
-  onHide: () => void;
-  staffId2: string;
-  staffOptions: KaigoStaff[];
-  onStaff2Change: (id: string) => void;
-  custom: boolean;
-  start: string;
-  end: string;
-  mainStart: string;
-  mainEnd: string;
-  serviceName: string;
-  onTimeChange: (patch: { staff2_custom?: boolean; staff2_start?: string; staff2_end?: string }) => void;
-}) {
-  if (!show) {
-    return (
-      <button
-        type="button"
-        onClick={onShow}
-        className="text-xs text-blue-600 hover:underline"
-      >
-        ＋ 2人目を追加（2人体制）
-      </button>
-    );
-  }
-  // 個別時間の重なり判定 (介護保険のみ)。custom OFF は本体時間なので判定不要
-  const timeWarn = custom
-    ? staffTimeRelationWarning(mainStart, mainEnd, start, end, serviceName, false)
-    : null;
-  // 2人体制なのに「２人」コードでない / 逆の警告
-  const codeWarn = twoPersonMismatchWarning(serviceName, staffId2 || null);
-  return (
-    <div className="space-y-2 rounded-lg border border-indigo-100 bg-indigo-50/30 p-3">
-      <div className="flex items-center justify-between">
-        <label className="block text-xs font-medium text-gray-500">担当職員2（2人体制）</label>
-        <button type="button" onClick={onHide} className="text-xs text-gray-400 hover:text-red-500">
-          取り消す
-        </button>
-      </div>
-      <select
-        value={staffId2}
-        onChange={(e) => onStaff2Change(e.target.value)}
-        className="w-full rounded-lg border border-gray-400 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-      >
-        <option value="">-- 選択 --</option>
-        {staffOptions.map((s) => (
-          <option key={s.id} value={s.id}>{s.name}</option>
-        ))}
-      </select>
-      {staffId2 && (
-        <div className="mt-1 space-y-2">
-          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-gray-600">
-            <input
-              type="checkbox"
-              checked={custom}
-              onChange={(e) =>
-                onTimeChange(
-                  e.target.checked
-                    ? { staff2_custom: true, staff2_start: start || mainStart, staff2_end: end || mainEnd }
-                    : { staff2_custom: false },
-                )
-              }
-              className="h-3.5 w-3.5 accent-indigo-600"
-            />
-            個別時間 (職員2の担当時間が本体と異なる)
-          </label>
-          {custom && (
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="time"
-                value={start}
-                onChange={(e) => onTimeChange({ staff2_start: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-                title="職員2の開始時間"
-              />
-              <input
-                type="time"
-                value={end}
-                onChange={(e) => onTimeChange({ staff2_end: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-                title="職員2の終了時間"
-              />
-            </div>
-          )}
-          {timeWarn && (
-            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-              {timeWarn}
-            </div>
-          )}
-          {codeWarn && (
-            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-              {codeWarn}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
