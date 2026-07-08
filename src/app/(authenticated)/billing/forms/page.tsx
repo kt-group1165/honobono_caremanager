@@ -9,6 +9,7 @@ import {
   type UserInfo,
 } from "./billing-forms-content";
 import { toKohiInfo, type KohiInfo } from "./forms-shared";
+import { resolveKohiForMonth } from "@/lib/kohi";
 
 function getCurrentMonth(): string {
   return format(new Date(), "yyyy-MM");
@@ -59,29 +60,41 @@ export default async function BillingFormsPage({
   );
   const initialKohiEntries: [string, KohiInfo][] = [];
   {
-    const seen = new Set<string>();
+    // 被保険者番号 (公費単独 = H 番号 判定用) — 最新 (effective_date DESC) の 1 件/利用者
+    const insuredByClient = new Map<string, string | null>();
     for (let i = 0; i < kohiUserIds.length; i += 50) {
       const chunk = kohiUserIds.slice(i, i + 50);
       const { data, error } = await supabase
         .from("client_insurance_records")
-        .select("client_id, insured_number, kohi_hobetsu, kohi_futansha_number, kohi_jukyusha_number, effective_date")
+        .select("client_id, insured_number, effective_date")
         .in("client_id", chunk)
         .order("effective_date", { ascending: false });
       if (error) {
-        console.error("公費情報の取得に失敗:", error.message);
+        console.error("被保険者番号の取得に失敗:", error.message);
         continue;
       }
       for (const r of (data ?? []) as {
         client_id: string;
         insured_number: string | null;
-        kohi_hobetsu: string | null;
-        kohi_futansha_number: string | null;
-        kohi_jukyusha_number: string | null;
       }[]) {
-        if (seen.has(r.client_id)) continue; // 最新 (effective_date DESC) の 1 件のみ
-        seen.add(r.client_id);
-        initialKohiEntries.push([r.client_id, toKohiInfo(r)]);
+        if (!insuredByClient.has(r.client_id)) {
+          insuredByClient.set(r.client_id, r.insured_number);
+        }
       }
+    }
+    // 公費 (client_kohi_records) — 対象月に有効な 1 件を解決 (未作成時は旧列にフォールバック)
+    try {
+      const [ky, km] = billingMonth.split("-").map(Number);
+      const kohiRes = await resolveKohiForMonth(supabase, kohiUserIds, ky, km);
+      for (const clientId of kohiUserIds) {
+        const insured = insuredByClient.get(clientId) ?? null;
+        initialKohiEntries.push([
+          clientId,
+          toKohiInfo(insured, kohiRes.byClient.get(clientId) ?? null),
+        ]);
+      }
+    } catch (e) {
+      console.error("公費情報の取得に失敗:", e instanceof Error ? e.message : String(e));
     }
   }
 

@@ -2,8 +2,13 @@
 // 両方から import する共有 module ("use client" を付けない)。
 // memory: feedback_use_client_const_export.md と同じ pattern (claims-shared.ts 参照)。
 
+import type { ResolvedKohi } from "@/lib/kohi";
+
 /**
- * 利用者ごとの公費 (生活保護等) 情報 — client_insurance_records の最新行から取得。
+ * 利用者ごとの公費 (生活保護等) 情報。
+ * 公費本体は client_kohi_records (利用者詳細の「公費」タブ) で管理し、
+ * resolveKohiForMonth (lib/kohi.ts) で対象月に有効な 1 件を解決した結果と、
+ * 被保険者番号 (client_insurance_records) を突合して組み立てる。
  *
  * パターン1 (公費併用): 介護保険の被保険者 + 法別12 (生活保護)。
  *   居宅介護支援費は 10 割給付で本人負担が元々 0 円のため公費振替額は 0 円だが、
@@ -30,20 +35,21 @@ export function isKohiTandokuInsured(insured: string | null | undefined): boolea
   return /^[Hh]/.test((insured ?? "").trim());
 }
 
-/** client_insurance_records の 1 行 (最新) から KohiInfo を組み立てる */
-export function toKohiInfo(rec: {
-  insured_number: string | null;
-  kohi_hobetsu: string | null;
-  kohi_futansha_number: string | null;
-  kohi_jukyusha_number: string | null;
-}): KohiInfo {
-  const tandoku = isKohiTandokuInsured(rec.insured_number);
-  const hobetsu = rec.kohi_hobetsu?.trim() || null;
+/**
+ * 被保険者番号 (最新認定) + resolveKohiForMonth の解決結果から KohiInfo を組み立てる。
+ * kohi = null は「対象月に有効な公費なし」。
+ */
+export function toKohiInfo(
+  insuredNumber: string | null,
+  kohi: ResolvedKohi | null,
+): KohiInfo {
+  const tandoku = isKohiTandokuInsured(insuredNumber);
+  const hobetsu = kohi?.hobetsu ?? null;
   return {
-    insuredNumber: rec.insured_number,
+    insuredNumber,
     kohiHobetsu: hobetsu,
-    kohiFutansha: rec.kohi_futansha_number?.trim() || null,
-    kohiJukyusha: rec.kohi_jukyusha_number?.trim() || null,
+    kohiFutansha: kohi?.futansha ?? null,
+    kohiJukyusha: kohi?.jukyusha ?? null,
     kohiTandoku: tandoku,
     hasKohi: tandoku || !!hobetsu,
   };

@@ -8,6 +8,7 @@ import { parseISO } from "date-fns";
 import { MeisaiForm } from "./_meisai";
 import { SeikyuForm, type SeikyuKohiRow, type SeikyuKohiTandoku } from "./_seikyu";
 import { toKohiInfo, type KohiInfo } from "./forms-shared";
+import { resolveKohiForMonth } from "@/lib/kohi";
 import { parseYoboShienKubun } from "../claims/claims-shared";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -213,29 +214,49 @@ export function BillingFormsContent({
     setAllClaims(rows);
 
     // 公費 (生活保護等) 情報を全 claims 利用者 + 選択中利用者について再取得
+    //   - 被保険者番号 (H 番号 = 公費単独 判定) は client_insurance_records の最新認定
+    //   - 公費本体は client_kohi_records から対象月に有効な 1 件 (lib/kohi.ts)
     const ids = Array.from(new Set([...rows.map((c) => c.user_id), userId]));
-    const map = new Map<string, KohiInfo>();
+    const insuredByClient = new Map<string, string | null>();
     for (let i = 0; i < ids.length; i += 50) {
       const chunk = ids.slice(i, i + 50);
-      const { data: recs, error: kohiErr } = await supabase
+      const { data: recs, error: insErr } = await supabase
         .from("client_insurance_records")
-        .select("client_id, insured_number, kohi_hobetsu, kohi_futansha_number, kohi_jukyusha_number, effective_date")
+        .select("client_id, insured_number, effective_date")
         .in("client_id", chunk)
         .order("effective_date", { ascending: false });
-      if (kohiErr) {
-        console.error("公費情報取得失敗:", kohiErr.message);
-        toast.error(`公費情報取得失敗: ${kohiErr.message}`);
+      if (insErr) {
+        console.error("被保険者番号取得失敗:", insErr.message);
+        toast.error(`被保険者番号取得失敗: ${insErr.message}`);
         return;
       }
       for (const r of (recs ?? []) as {
         client_id: string;
         insured_number: string | null;
-        kohi_hobetsu: string | null;
-        kohi_futansha_number: string | null;
-        kohi_jukyusha_number: string | null;
       }[]) {
-        if (!map.has(r.client_id)) map.set(r.client_id, toKohiInfo(r)); // 最新のみ
+        if (!insuredByClient.has(r.client_id)) {
+          insuredByClient.set(r.client_id, r.insured_number); // 最新のみ
+        }
       }
+    }
+    const map = new Map<string, KohiInfo>();
+    try {
+      const [ky, km] = billingMonth.split("-").map(Number);
+      const kohiRes = await resolveKohiForMonth(supabase, ids, ky, km);
+      for (const clientId of ids) {
+        map.set(
+          clientId,
+          toKohiInfo(
+            insuredByClient.get(clientId) ?? null,
+            kohiRes.byClient.get(clientId) ?? null,
+          ),
+        );
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("公費情報取得失敗:", msg);
+      toast.error(`公費情報取得失敗: ${msg}`);
+      return;
     }
     setKohiMap(map);
   }, [supabase, billingMonth, userId]);

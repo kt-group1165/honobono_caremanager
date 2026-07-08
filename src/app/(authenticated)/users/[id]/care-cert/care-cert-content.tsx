@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { format, parseISO, addYears } from "date-fns";
@@ -41,12 +42,7 @@ type DbFields = {
   care_office_id: string;          // care_offices (ケアマネ事業所マスタ) への FK。"" = null
   care_office_number: string;      // 事業所番号 (10桁) — マスタに無い場合の直接入力
   care_office_name: string;        // 事業所名 (任意) — 直接入力
-  // 公費情報 (生活保護等 — 国保連伝送の公費欄に使用)
-  kohi_hobetsu: string;            // 法別番号 (12=生活保護)
-  kohi_futansha_number: string;    // 公費負担者番号 (8桁)
-  kohi_jukyusha_number: string;    // 公費受給者番号 (7桁)
-  kohi_start_date: string;
-  kohi_end_date: string;
+  // 公費 (生活保護等) は「公費」タブ (client_kohi_records) で独立管理 (複数公費・期間履歴対応)
 };
 
 /** ローカルステート専用フィールド（DB列なし） */
@@ -87,11 +83,6 @@ const EMPTY_FORM: FormData = {
   care_office_id: "",
   care_office_number: "",
   care_office_name: "",
-  kohi_hobetsu: "",
-  kohi_futansha_number: "",
-  kohi_jukyusha_number: "",
-  kohi_start_date: "",
-  kohi_end_date: "",
   // Local
   insurer_name: "",
   copay_rate: "90",
@@ -144,11 +135,6 @@ function recToForm(rec: CareCertification): FormData {
     care_office_id: (rec as unknown as { care_office_id?: string | null }).care_office_id ?? "",
     care_office_number: (rec as unknown as { care_office_number?: string | null }).care_office_number ?? "",
     care_office_name: (rec as unknown as { care_office_name?: string | null }).care_office_name ?? "",
-    kohi_hobetsu: (rec as unknown as { kohi_hobetsu?: string | null }).kohi_hobetsu ?? "",
-    kohi_futansha_number: (rec as unknown as { kohi_futansha_number?: string | null }).kohi_futansha_number ?? "",
-    kohi_jukyusha_number: (rec as unknown as { kohi_jukyusha_number?: string | null }).kohi_jukyusha_number ?? "",
-    kohi_start_date: (rec as unknown as { kohi_start_date?: string | null }).kohi_start_date ?? "",
-    kohi_end_date: (rec as unknown as { kohi_end_date?: string | null }).kohi_end_date ?? "",
     cert_status_type: rec.care_level === "申請中" ? "申請中" : "認定済み",
   };
 }
@@ -375,11 +361,6 @@ export function CareCertContent({
         care_office_id: form.care_office_id || null,
         care_office_number: form.care_office_number || null,
         care_office_name: form.care_office_name || null,
-        kohi_hobetsu: form.kohi_hobetsu || null,
-        kohi_futansha_number: form.kohi_futansha_number || null,
-        kohi_jukyusha_number: form.kohi_jukyusha_number || null,
-        kohi_start_date: form.kohi_start_date || null,
-        kohi_end_date: form.kohi_end_date || null,
       };
 
       if (selectedId && !isNew) {
@@ -700,71 +681,14 @@ export function CareCertContent({
               />
             </div>
 
-            {/* 公費情報 (生活保護等) — 国保連伝送の公費欄に使用 */}
-            <div className="col-span-full rounded border border-purple-200 bg-purple-50/40 p-2">
-              <p className="mb-1.5 text-xs font-bold text-purple-800">公費情報 (生活保護等)</p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-                <div className="flex flex-col justify-end">
-                  <label className={labelCls}>法別番号</label>
-                  <select
-                    value={form.kohi_hobetsu}
-                    onChange={(e) => setField("kohi_hobetsu", e.target.value)}
-                    className={inp}
-                  >
-                    <option value="">なし</option>
-                    <option value="12">12: 生活保護</option>
-                    <option value="25">25: 中国残留邦人等</option>
-                    <option value="10">10: 感染症 (結核)</option>
-                    <option value="21">21: 精神通院医療</option>
-                  </select>
-                </div>
-                <div className="flex flex-col justify-end">
-                  <label className={labelCls}>公費負担者番号</label>
-                  <input
-                    type="text"
-                    value={form.kohi_futansha_number}
-                    onChange={(e) => setField("kohi_futansha_number", e.target.value)}
-                    className={inp}
-                    placeholder="8桁"
-                    disabled={!form.kohi_hobetsu}
-                  />
-                </div>
-                <div className="flex flex-col justify-end">
-                  <label className={labelCls}>公費受給者番号</label>
-                  <input
-                    type="text"
-                    value={form.kohi_jukyusha_number}
-                    onChange={(e) => setField("kohi_jukyusha_number", e.target.value)}
-                    className={inp}
-                    placeholder="7桁"
-                    disabled={!form.kohi_hobetsu}
-                  />
-                </div>
-                <div className="flex flex-col justify-end">
-                  <label className={labelCls}>公費適用 開始</label>
-                  <input
-                    type="date"
-                    value={form.kohi_start_date}
-                    onChange={(e) => setField("kohi_start_date", e.target.value)}
-                    className={inp}
-                    disabled={!form.kohi_hobetsu}
-                  />
-                </div>
-                <div className="flex flex-col justify-end">
-                  <label className={labelCls}>公費適用 終了</label>
-                  <input
-                    type="date"
-                    value={form.kohi_end_date}
-                    onChange={(e) => setField("kohi_end_date", e.target.value)}
-                    className={inp}
-                    disabled={!form.kohi_hobetsu}
-                  />
-                </div>
-              </div>
-              <p className="mt-1 text-[10px] text-gray-500">
-                法別 12 (生活保護) を設定すると、介護請求で利用者負担分が公費請求へ振替えられ、伝送ファイルの公費欄に出力されます。
-              </p>
-            </div>
+            {/* 公費 (生活保護等) は独立管理へ移行済み (client_kohi_records) */}
+            <p className="rounded border border-purple-200 bg-purple-50/40 p-2 text-[11px] text-purple-800">
+              公費 (生活保護等) は
+              <Link href={`/users/${userId}/kohi`} className="mx-0.5 font-bold underline hover:text-purple-600">
+                「公費」タブ
+              </Link>
+              で管理します (複数公費・期間履歴対応)。
+            </p>
 
             <div>
               <label className={labelCls}>保険証確認日</label>

@@ -29,6 +29,7 @@ import {
   toHankakuDigits,
 } from "@/lib/service-name-normalize";
 import { validInMonth } from "@/lib/service-code-valid";
+import { resolveKohiForMonth, kohiHobetsuLabel } from "@/lib/kohi";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -70,7 +71,10 @@ export interface UserSeikyuRow {
    * (client_insurance_records.service_limit_amount)。どちらも無ければ null (= 限度額管理なし)。
    */
   limitUnits: number | null;
-  /** 基準超過単位数 (= max(0, grossBaseUnits - limitUnits)) */
+  /**
+   * 基準超過単位数。超過判定は限度額管理対象の単位数
+   * (= grossBaseUnits − 初回加算・緊急時訪問介護加算 (限度額管理対象外/告示)) で行う。
+   */
   overUnits: number;
   /** 超過分の全額自費額 (円) = floor(overUnits × 単価 × 10割)。userAmount に含まれる */
   overAmount: number;
@@ -271,10 +275,9 @@ export async function aggregateMonthlyVisitSeikyu(
     seikatsuI: "訪問介護生活機能向上連携加算Ⅰ", // 114003
     seikatsuII: "訪問介護生活機能向上連携加算Ⅱ", // 114002
   } as const;
-  const monthAddonMaster = new Map<
-    string,
-    { units: number; short: string | null; code: string | null }
-  >();
+  // 単位数・service_code のみ使用。short_name は system 跨ぎの backfill で汚染されている
+  // (介護 114001 が障害の通院系に上書き) ため取得しない → 表示は固定ラベル (pushMonthAddon)
+  const monthAddonMaster = new Map<string, { units: number; code: string | null }>();
   const hasAnyMonthAddon = Array.from(monthAddonByClient.values()).some(
     (f) => f.shokai || f.kinkyuCount > 0 || f.seikatsuKino === "Ⅰ" || f.seikatsuKino === "Ⅱ",
   );
@@ -282,7 +285,7 @@ export async function aggregateMonthlyVisitSeikyu(
     const { data, error } = await validInMonth(
       supabase
         .from("kaigo_service_codes")
-        .select("service_name, short_name, units, service_code")
+        .select("service_name, units, service_code")
         .eq("system", "介護")
         .eq("service_category", "11")
         .in("service_name", Object.values(MONTH_ADDON_NAMES)),
@@ -292,13 +295,11 @@ export async function aggregateMonthlyVisitSeikyu(
     if (error) throw new Error(`月次加算コード取得失敗: ${error.message}`);
     for (const r of (data ?? []) as {
       service_name: string;
-      short_name: string | null;
       units: number;
       service_code: string | null;
     }[]) {
       monthAddonMaster.set(r.service_name, {
         units: r.units,
-        short: r.short_name,
         code: r.service_code,
       });
     }
@@ -334,7 +335,6 @@ export async function aggregateMonthlyVisitSeikyu(
       careOfficeNumberDirect: string | null;
       /** 担当居宅介護支援事業所名 (直接入力) */
       careOfficeName: string | null;
-      kohiHobetsu: string | null; kohiFutansha: string | null; kohiJukyusha: string | null;
       /** 認定の区分支給限度基準額 (単位)。計画単位数が無い月のフォールバック基準 */
       limitAmount: number | null;
     }
@@ -343,7 +343,7 @@ export async function aggregateMonthlyVisitSeikyu(
     const chunk = userIds.slice(i, i + 50);
     const { data, error } = await supabase
       .from("client_insurance_records")
-      .select("client_id, insurer_number, insurer_name, insured_number, care_level, copay_rate, public_expense, kohi_hobetsu, kohi_futansha_number, kohi_jukyusha_number, certification_start_date, certification_end_date, care_office_id, care_office_number, care_office_name, service_limit_amount, effective_date")
+      .select("client_id, insurer_number, insurer_name, insured_number, care_level, copay_rate, public_expense, certification_start_date, certification_end_date, care_office_id, care_office_number, care_office_name, service_limit_amount, effective_date")
       .in("client_id", chunk)
       .order("effective_date", { ascending: false });
     if (error) throw new Error(`保険情報取得失敗: ${error.message}`);
@@ -355,9 +355,6 @@ export async function aggregateMonthlyVisitSeikyu(
       care_level: string | null;
       copay_rate: number | null;
       public_expense: string | null;
-      kohi_hobetsu: string | null;
-      kohi_futansha_number: string | null;
-      kohi_jukyusha_number: string | null;
       certification_start_date: string | null;
       certification_end_date: string | null;
       care_office_id: string | null;
@@ -380,20 +377,12 @@ export async function aggregateMonthlyVisitSeikyu(
           insured: r.insured_number,
           level: r.care_level,
           copay,
-          publicExpense:
-            r.kohi_hobetsu?.trim()
-              ? `法別${r.kohi_hobetsu.trim()}${r.kohi_hobetsu.trim() === "12" ? " (生活保護)" : ""}`
-              : r.public_expense?.trim()
-              ? r.public_expense.trim()
-              : null,
+          publicExpense: r.public_expense?.trim() || null,
           certStart: r.certification_start_date,
           certEnd: r.certification_end_date,
           careOfficeId: r.care_office_id,
           careOfficeNumberDirect: r.care_office_number?.trim() || null,
           careOfficeName: r.care_office_name?.trim() || null,
-          kohiHobetsu: r.kohi_hobetsu?.trim() || null,
-          kohiFutansha: r.kohi_futansha_number?.trim() || null,
-          kohiJukyusha: r.kohi_jukyusha_number?.trim() || null,
           limitAmount:
             r.service_limit_amount != null && Number(r.service_limit_amount) > 0
               ? Number(r.service_limit_amount)
@@ -402,6 +391,13 @@ export async function aggregateMonthlyVisitSeikyu(
       }
     }
   }
+
+  // 3.5) 公費 (生活保護等) — client_kohi_records から対象月に有効な公費を解決
+  //     (優先 1 件のみ。複数公費の併用按分は非対応。テーブル未作成時は
+  //      旧 client_insurance_records.kohi_* にフォールバック → lib/kohi.ts 参照)
+  //     honninFutan (本人支払額/月) は現状の金額計算には入れない
+  //     (0 のみ想定。TODO: 本人支払額の公費請求からの控除対応)
+  const kohiRes = await resolveKohiForMonth(supabase, userIds, opts.year, opts.month);
 
   // 4) 処遇改善加算の rate — 適用加算コードの formula をマスタから取得
   //    (monthly_aggregate: 所定単位 × numerator/denominator)
@@ -568,11 +564,23 @@ export async function aggregateMonthlyVisitSeikyu(
       });
     }
     // 実績単位の月次加算行 (初回 / 緊急時×回数 / 生活機能向上連携Ⅰ・Ⅱ)。
-    // これらは区分支給限度基準の「対象」なので grossBaseUnits に含める
-    // (処遇改善等の%加算のみ対象外)。
+    // grossBaseUnits (明細合計) には全て含めるが、区分支給限度基準の超過判定では
+    // 初回加算・緊急時訪問介護加算 = 限度額管理対象外 (告示) を除外する (下記 kanriTaishougaiUnits)。
+    // 処遇改善等の%加算が対象外なのは従来どおり。
+    // 限度額管理対象外の加算単位数 (初回・緊急時)。超過判定から除外し、常に保険給付側に付く
+    let kanriTaishougaiUnits = 0;
     const flags = monthAddonByClient.get(userId);
     if (flags) {
-      const pushMonthAddon = (name: string, count: number) => {
+      // ※ 表示名はマスタの short_name を使わず固定ラベルにする。
+      //   kaigo_service_codes.short_name は system (介護/障害) を無視して backfill されており、
+      //   介護 114001「訪問介護初回加算」の short_name が障害の通院系で汚染されているため
+      //   (実 DB 確認済み)。単位数・service_code は従来どおりマスタから引く。
+      const pushMonthAddon = (
+        name: string,
+        count: number,
+        fixedLabel: string,
+        kanriTaishougai: boolean, // true = 支給限度基準額管理の対象外 (初回・緊急時)
+      ) => {
         if (count <= 0) return;
         const m = monthAddonMaster.get(name);
         if (!m) {
@@ -583,28 +591,35 @@ export async function aggregateMonthlyVisitSeikyu(
         }
         const units = m.units * count;
         grossBaseUnits += units;
+        if (kanriTaishougai) kanriTaishougaiUnits += units;
         details.push({
           service_type: name,
-          short_name: m.short,
+          short_name: fixedLabel,
           service_code: m.code,
           unit_per: m.units,
           count,
           units,
         });
       };
-      if (flags.shokai) pushMonthAddon(MONTH_ADDON_NAMES.shokai, 1);
-      pushMonthAddon(MONTH_ADDON_NAMES.kinkyu, flags.kinkyuCount);
-      if (flags.seikatsuKino === "Ⅰ") pushMonthAddon(MONTH_ADDON_NAMES.seikatsuI, 1);
-      if (flags.seikatsuKino === "Ⅱ") pushMonthAddon(MONTH_ADDON_NAMES.seikatsuII, 1);
+      // 初回・緊急時 = 限度額管理対象外 (告示)。生活機能向上連携は管理対象
+      if (flags.shokai) pushMonthAddon(MONTH_ADDON_NAMES.shokai, 1, "初回加算", true);
+      pushMonthAddon(MONTH_ADDON_NAMES.kinkyu, flags.kinkyuCount, "緊急時訪問介護加算", true);
+      if (flags.seikatsuKino === "Ⅰ")
+        pushMonthAddon(MONTH_ADDON_NAMES.seikatsuI, 1, "生活機能向上連携加算Ⅰ", false);
+      if (flags.seikatsuKino === "Ⅱ")
+        pushMonthAddon(MONTH_ADDON_NAMES.seikatsuII, 1, "生活機能向上連携加算Ⅱ", false);
     }
     details.sort((a, b) => b.units - a.units);
 
     // ── 区分支給限度基準の超過自費 (ほのぼの準拠) ──
     // 基準値 = 計画単位数 (あれば) > 認定限度額 (service_limit_amount)。どちらも無ければ管理なし。
     // ※ 処遇改善加算等の%加算は区分支給限度基準の「対象外」なので、
-    //    超過判定は %加算前の grossBaseUnits で行う (加算単位は超過に数えない)。
+    //    超過判定は %加算前の単位数で行う (加算単位は超過に数えない)。
+    // ※ 初回加算・緊急時訪問介護加算も限度額管理対象外 (告示) のため超過判定から除外する
+    //    (kanriTaishougaiUnits)。除外分は常に保険給付側 (baseUnits) に残る。
     const limitUnits = planUnitsByClient.get(userId) ?? ins?.limitAmount ?? null;
-    const overUnits = limitUnits != null ? Math.max(0, grossBaseUnits - limitUnits) : 0;
+    const managedUnits = grossBaseUnits - kanriTaishougaiUnits;
+    const overUnits = limitUnits != null ? Math.max(0, managedUnits - limitUnits) : 0;
     // 基準内単位数 = 保険給付対象。超過分は保険請求から外し 10割自費へ振替
     const baseUnits = grossBaseUnits - overUnits;
     // 処遇改善等 (%加算) は保険請求対象の基準内単位数に対して計算する
@@ -618,13 +633,17 @@ export async function aggregateMonthlyVisitSeikyu(
     // 公費単独 (10割公費): 被保険者番号が 'H' 始まり = 介護保険未加入の生保受給者。
     // 保険給付なし → 総費用の全額を公費 (法別12 生活保護) で請求する。
     const kohiTandoku = /^[Hh]/.test((ins?.insured ?? "").trim());
+    // 公費 (生活保護等) — 公費タブ (client_kohi_records) から対象月に有効な 1 件
+    const kohi = kohiRes.byClient.get(userId) ?? null;
     // 国保連方式: 保険請求額 = 費用総額 × 給付率 (1円未満切捨)、利用者負担 = 差引
     // (端数は利用者負担側に乗る。先に負担額を切捨てると 1 円ずれる)
     const insuranceAmount = kohiTandoku ? 0 : Math.floor(totalAmount * (1 - copay));
     // 公費 (生活保護等): 本人負担分を公費請求へ振替 (本人負担 0 の簡易版)
     // 公費単独時は kohi_hobetsu 未登録でも公費扱い (未登録は伝送 build 側で warning)
     const publicExpense =
-      ins?.publicExpense ?? (kohiTandoku ? "公費単独 (生活保護 10割)" : null);
+      (kohi ? kohiHobetsuLabel(kohi.hobetsu) : null) ??
+      ins?.publicExpense ??
+      (kohiTandoku ? "公費単独 (生活保護 10割)" : null);
     const kohiUnits = publicExpense ? totalUnits : null;
     const kohiAmount = kohiTandoku
       ? totalAmount
@@ -663,9 +682,9 @@ export async function aggregateMonthlyVisitSeikyu(
       kohiTandoku,
       kohiUnits,
       kohiAmount,
-      kohiHobetsu: ins?.kohiHobetsu ?? null,
-      kohiFutanshaNumber: ins?.kohiFutansha ?? null,
-      kohiJukyushaNumber: ins?.kohiJukyusha ?? null,
+      kohiHobetsu: kohi?.hobetsu ?? null,
+      kohiFutanshaNumber: kohi?.futansha ?? null,
+      kohiJukyushaNumber: kohi?.jukyusha ?? null,
       addonCode,
       birthDate: client?.birth ?? null,
       gender: client?.gender ?? null,

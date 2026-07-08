@@ -35,6 +35,7 @@ const BASIC_TABS: SubTab[] = [
 
 const INSURANCE_TABS: SubTab[] = [
   { label: "介護認定", href: "/care-cert" },
+  { label: "公費", href: "/kohi" },
   { label: "医療保険", href: "/medical" },
 ];
 

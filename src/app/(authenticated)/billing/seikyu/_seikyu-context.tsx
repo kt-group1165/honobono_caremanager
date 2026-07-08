@@ -26,6 +26,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
+import { resolveKohiForMonth } from "@/lib/kohi";
 import {
   getUnitPriceByArea,
   parseYoboShienKubun,
@@ -142,9 +143,6 @@ interface CertDbRow {
   certification_start_date: string | null;
   certification_end_date: string | null;
   service_limit_amount: number | null;
-  kohi_hobetsu: string | null;
-  kohi_futansha_number: string | null;
-  kohi_jukyusha_number: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -259,7 +257,7 @@ export async function fetchKyotakuClaimRows(
       const { data, error } = await supabase
         .from("client_insurance_records")
         .select(
-          "client_id, insurer_number, insurer_name, insured_number, care_level, certification_start_date, certification_end_date, service_limit_amount, kohi_hobetsu, kohi_futansha_number, kohi_jukyusha_number",
+          "client_id, insurer_number, insurer_name, insured_number, care_level, certification_start_date, certification_end_date, service_limit_amount",
         )
         .in("client_id", idChunk)
         .order("certification_date", { ascending: false })
@@ -274,9 +272,15 @@ export async function fetchKyotakuClaimRows(
     }
   }
 
+  // 2.5) 公費 (生活保護等) — client_kohi_records から対象月に有効な 1 件を解決
+  //      (テーブル未作成時は旧 kohi_* 列にフォールバック → lib/kohi.ts)
+  const [kohiYear, kohiMonth] = monthKey.split("-").map(Number);
+  const kohiRes = await resolveKohiForMonth(supabase, userIds, kohiYear, kohiMonth);
+
   // 3) 行の組み立て (ふりがな順)
   const rows: KyotakuSeikyuRow[] = billable.map((c) => {
     const cert = certMap.get(c.user_id);
+    const kohi = kohiRes.byClient.get(c.user_id) ?? null;
     const { lines, totalUnits } = buildClaimLines(c);
     // 公費単独 (みなし2号) = 被保険者番号が H 始まり
     const kohiTandoku = /^h/i.test((cert?.insured_number ?? "").trim());
@@ -306,9 +310,9 @@ export async function fetchKyotakuClaimRows(
       // 公費単独は保険給付なし (表示・集計は 10 割公費として扱う)
       insuranceAmount: kohiTandoku ? 0 : c.insurance_amount,
       kohiTandoku,
-      kohiHobetsu: cert?.kohi_hobetsu?.trim() || null,
-      kohiFutansha: cert?.kohi_futansha_number?.trim() || null,
-      kohiJukyusha: cert?.kohi_jukyusha_number?.trim() || null,
+      kohiHobetsu: kohi?.hobetsu ?? null,
+      kohiFutansha: kohi?.futansha ?? null,
+      kohiJukyusha: kohi?.jukyusha ?? null,
       yoboShienKubun: parseYoboShienKubun(c.notes),
     };
   });

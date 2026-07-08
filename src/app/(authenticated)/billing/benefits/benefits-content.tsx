@@ -22,6 +22,7 @@ import {
 import { format } from "date-fns";
 import Encoding from "encoding-japanese";
 import { useBusinessType } from "@/lib/business-type-context";
+import { resolveKohiForMonth } from "@/lib/kohi";
 import {
   buildKyufuKanriFile,
   buildKeikakuhiFile,
@@ -583,23 +584,20 @@ export function BenefitsContent({
       );
       const { data: certRows, error: cre } = await supabase
         .from("client_insurance_records")
-        .select("client_id, certification_start_date, certification_end_date, effective_date, kohi_hobetsu, kohi_futansha_number, kohi_jukyusha_number")
+        .select("client_id, certification_start_date, certification_end_date, effective_date")
         .in("client_id", ids)
         .order("effective_date", { ascending: false });
       if (cre) throw new Error("認定期間取得失敗: " + cre.message);
       const certPeriod = new Map<string, { s: string | null; e: string | null }>();
-      // 公費 (生活保護等) — 計画費請求 7111/8121 の公費欄用
-      const kohiByClient = new Map<string, { hobetsu: string | null; futansha: string | null; jukyusha: string | null }>();
-      for (const r of (certRows ?? []) as { client_id: string; certification_start_date: string | null; certification_end_date: string | null; kohi_hobetsu: string | null; kohi_futansha_number: string | null; kohi_jukyusha_number: string | null }[]) {
+      for (const r of (certRows ?? []) as { client_id: string; certification_start_date: string | null; certification_end_date: string | null }[]) {
         if (!certPeriod.has(r.client_id)) {
           certPeriod.set(r.client_id, { s: r.certification_start_date, e: r.certification_end_date });
-          kohiByClient.set(r.client_id, {
-            hobetsu: r.kohi_hobetsu?.trim() || null,
-            futansha: r.kohi_futansha_number?.trim() || null,
-            jukyusha: r.kohi_jukyusha_number?.trim() || null,
-          });
         }
       }
+      // 公費 (生活保護等) — 計画費請求 7111/8121 の公費欄用。
+      // client_kohi_records から対象月に有効な 1 件を解決 (未作成時は旧列にフォールバック)
+      const kohiRes = await resolveKohiForMonth(supabase, ids, y, m);
+      const kohiByClient = kohiRes.byClient;
 
       // サービス事業所番号 (provider_name → offices.business_number)
       const providerNames = Array.from(new Set(rows.map((r) => r.provider_name).filter(Boolean))) as string[];
