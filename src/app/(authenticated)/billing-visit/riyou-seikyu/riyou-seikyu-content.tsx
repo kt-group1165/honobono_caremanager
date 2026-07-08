@@ -12,6 +12,11 @@
  *     請求書発行時に名寄チェック 2 名以上を 1 枚の世帯合算請求書、
  *     それ以外は従来どおり 1 名 1 枚の個別請求書として同じ印刷 view 内で出す
  *   - 利用実費 (保険外) の入力 / 入金管理 (未収金)
+ *   - 軽減 (減免): kaigo_riyou_settings の軽減率を対象月有効分だけ適用
+ *     (ほのぼの「請求個人設定の軽減」相当。請求額 = 負担額 − 軽減額 + 実費)
+ *   - 前回領収欄: 前月の請求/入金から繰越額 (未収繰越 / 過入金充当) を算出し
+ *     請求書に印字 (当月の billed_amount 記録は従来どおり当月分のみ = 二重計上なし)
+ *   - 医療費控除対象額: iryohi_taisho の利用者のみ、生活援助を除く単位比率で按分
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -78,6 +83,33 @@ const PAYMENT_STATUS_CLS: Record<string, string> = {
 };
 
 const PAYMENT_METHOD_OPTIONS = ["", "振込", "現金", "口座振替"];
+
+// 請求個人設定 (軽減 / 医療費控除) — kaigo_riyou_settings (client_id UNIQUE)
+// ほのぼの「請求個人設定の軽減」相当
+interface RiyouSettingRow {
+  client_id: string;
+  /** 軽減率 (% 表記。NULL = 軽減なし) */
+  keigen_rate: number | null;
+  keigen_start_date: string | null;
+  keigen_end_date: string | null;
+  /** 医療費控除の対象者か */
+  iryohi_taisho: boolean;
+  notes: string | null;
+}
+
+// 軽減が対象月に有効か: 開始 <= 月末 かつ (終了 null or 終了 >= 月初)
+// (日付は YYYY-MM-DD の文字列比較で判定。"-31" は月末番兵として安全)
+function keigenActiveInMonth(
+  s: RiyouSettingRow | undefined,
+  monthKey: string,
+): boolean {
+  if (!s || s.keigen_rate == null || s.keigen_rate <= 0) return false;
+  const monthStart = `${monthKey}-01`;
+  const monthEnd = `${monthKey}-31`;
+  if (s.keigen_start_date && s.keigen_start_date > monthEnd) return false;
+  if (s.keigen_end_date && s.keigen_end_date < monthStart) return false;
+  return true;
+}
 
 // YYYY-MM-DD → R{Y}/{M}/{D} 表示 (order-app formatIssuedDateReiwa と同じ流儀)
 function fmtReiwaDate(iso: string | null): string {
@@ -149,6 +181,117 @@ export function RiyouSeikyuContent() {
     loadPayments();
   }, [loadPayments]);
 
+  // ── 前月の入金状況 (前回領収欄・繰越の算出用。②) ──
+  const prevMonthKey =
+    month === 1
+      ? `${year - 1}-12`
+      : `${year}-${String(month - 1).padStart(2, "0")}`;
+  const [prevPayments, setPrevPayments] = useState<Map<string, PaymentRow>>(new Map());
+  const loadPrevPayments = useCallback(async () => {
+    const { data, error: e } = await supabase
+      .from("riyou_seikyu_payments")
+      .select("id, client_id, billed_amount, paid_amount, paid_date, payment_method, status, issued_date")
+      .eq("target_month", prevMonthKey);
+    if (e) {
+      if (e.code !== "42P01") toast.error("前月入金状況取得失敗: " + e.message);
+      setPrevPayments(new Map());
+      return;
+    }
+    setPrevPayments(
+      new Map(((data ?? []) as PaymentRow[]).map((p) => [p.client_id, p])),
+    );
+  }, [supabase, prevMonthKey]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更時の fetch
+    loadPrevPayments();
+  }, [loadPrevPayments]);
+
+  // 繰越額 = 前月請求 − 前月入金 (正 = 未収繰越 / 負 = 過入金充当)。前月レコード無しは 0
+  const carryover = useCallback(
+    (userId: string) => {
+      const p = prevPayments.get(userId);
+      return p ? p.billed_amount - p.paid_amount : 0;
+    },
+    [prevPayments],
+  );
+
+  // ── 請求個人設定 (軽減 / 医療費控除。①③) — kaigo_riyou_settings ──
+  const [settings, setSettings] = useState<Map<string, RiyouSettingRow>>(new Map());
+  const loadSettings = useCallback(async () => {
+    if (rows.length === 0) {
+      setSettings(new Map());
+      return;
+    }
+    const ids = rows.map((r) => r.user_id);
+    const m = new Map<string, RiyouSettingRow>();
+    for (let i = 0; i < ids.length; i += 100) {
+      const chunk = ids.slice(i, i + 100);
+      const { data, error: e } = await supabase
+        .from("kaigo_riyou_settings")
+        .select("client_id, keigen_rate, keigen_start_date, keigen_end_date, iryohi_taisho, notes")
+        .in("client_id", chunk);
+      if (e) {
+        // table 未作成 (migration 未適用) 時は設定なしとして続行
+        if (e.code !== "42P01") toast.error("請求設定取得失敗: " + e.message);
+        setSettings(new Map());
+        return;
+      }
+      for (const s of (data ?? []) as RiyouSettingRow[]) m.set(s.client_id, s);
+    }
+    setSettings(m);
+  }, [supabase, rows]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更/行更新時の fetch
+    loadSettings();
+  }, [loadSettings]);
+
+  // 軽減額 = round(利用者負担額 × 軽減率 / 100)。対象月に有効な軽減のみ
+  const keigenAmount = useCallback(
+    (userId: string, userAmount: number) => {
+      const s = settings.get(userId);
+      if (!keigenActiveInMonth(s, monthKey)) return 0;
+      return Math.round((userAmount * (s!.keigen_rate ?? 0)) / 100);
+    },
+    [settings, monthKey],
+  );
+
+  // 行の請求額 = 利用者負担額 − 軽減額 + 実費
+  const rowBilled = useCallback(
+    (r: UserSeikyuRow) =>
+      r.userAmount - keigenAmount(r.user_id, r.userAmount) + jippiTotal(r.user_id),
+    [keigenAmount, jippiTotal],
+  );
+
+  // 医療費控除対象額 = round(軽減後負担額 × 対象単位比率)。
+  // 対象単位比率 = 「生活援助」を含まないサービスの単位数 ÷ 総単位数
+  // (生活援助中心型は控除対象外。加算は比率に按分される)
+  const iryohiAmount = useCallback(
+    (r: UserSeikyuRow) => {
+      const s = settings.get(r.user_id);
+      if (!s?.iryohi_taisho || r.totalUnits <= 0) return 0;
+      const eligibleUnits = r.details
+        .filter((d) => !d.service_type.includes("生活援助"))
+        .reduce((sum, d) => sum + d.units, 0);
+      const afterKeigen = r.userAmount - keigenAmount(r.user_id, r.userAmount);
+      return Math.round((afterKeigen * eligibleUnits) / r.totalUnits);
+    },
+    [settings, keigenAmount],
+  );
+
+  // 印刷/フッタ用の per-user 計算値 (rows 全体で計算しておく)
+  const keigenByUser = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of rows) m.set(r.user_id, keigenAmount(r.user_id, r.userAmount));
+    return m;
+  }, [rows, keigenAmount]);
+  const iryohiByUser = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of rows) {
+      if (settings.get(r.user_id)?.iryohi_taisho) m.set(r.user_id, iryohiAmount(r));
+    }
+    return m;
+  }, [rows, settings, iryohiAmount]);
+
   // 口座情報 (FB データ用) — clients の bank_* を月内の利用者分だけ fetch
   const [bankByUser, setBankByUser] = useState<Map<string, ClientBank>>(new Map());
   const loadBanks = useCallback(async () => {
@@ -188,10 +331,7 @@ export function RiyouSeikyuContent() {
   // 選択行 (order-app と同じく未選択時は右ペインに placeholder を出す)
   const selected =
     filteredRows.find((r) => r.user_id === selectedUserId) ?? null;
-  const totalBilled = filteredRows.reduce(
-    (s, r) => s + r.userAmount + jippiTotal(r.user_id),
-    0,
-  );
+  const totalBilled = filteredRows.reduce((s, r) => s + rowBilled(r), 0);
 
   const toggle = (id: string) =>
     setChecked((prev) => {
@@ -227,13 +367,14 @@ export function RiyouSeikyuContent() {
 
   const issueSeikyusho = async () => {
     // 発行記録: 請求額 + 発行日を upsert (入金状態は既存を保持、新規は 請求済)
+    // billed_amount は軽減後の当月分のみ (繰越は印字のみ = 二重計上を避ける)
     const today = new Date();
     const issued = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     const { error: upErr } = await supabase.from("riyou_seikyu_payments").upsert(
       targets.map((r) => ({
         client_id: r.user_id,
         target_month: monthKey,
-        billed_amount: r.userAmount + jippiTotal(r.user_id),
+        billed_amount: rowBilled(r),
         issued_date: issued,
       })),
       { onConflict: "client_id,target_month" },
@@ -258,9 +399,7 @@ export function RiyouSeikyuContent() {
       {
         client_id: r.user_id,
         target_month: monthKey,
-        billed_amount:
-          payments.get(r.user_id)?.billed_amount ??
-          r.userAmount + jippiTotal(r.user_id),
+        billed_amount: payments.get(r.user_id)?.billed_amount ?? rowBilled(r),
         payment_method: method || null,
       },
       { onConflict: "client_id,target_month" },
@@ -276,9 +415,7 @@ export function RiyouSeikyuContent() {
       {
         client_id: r.user_id,
         target_month: monthKey,
-        billed_amount:
-          payments.get(r.user_id)?.billed_amount ??
-          r.userAmount + jippiTotal(r.user_id),
+        billed_amount: payments.get(r.user_id)?.billed_amount ?? rowBilled(r),
         issued_date: date || null,
       },
       { onConflict: "client_id,target_month" },
@@ -319,7 +456,7 @@ export function RiyouSeikyuContent() {
         branchName: bank?.bank_branch ?? null,
         accountType: bank?.bank_account_type ?? null,
         accountNumber: bank?.bank_account_number ?? null,
-        amount: r.userAmount + jippiTotal(r.user_id),
+        amount: rowBilled(r), // 軽減後の当月請求額 (負担額 − 軽減 + 実費)
       };
     });
 
@@ -375,10 +512,39 @@ export function RiyouSeikyuContent() {
     return p && p.status !== "入金完";
   }).length;
 
+  // 軽減 / 繰越 / 医療費控除 の全体合計 (フッタ実値化用)
+  const keigenTotal = filteredRows.reduce(
+    (s, r) => s + (keigenByUser.get(r.user_id) ?? 0),
+    0,
+  );
+  const iryohiTotal = filteredRows.reduce(
+    (s, r) => s + (iryohiByUser.get(r.user_id) ?? 0),
+    0,
+  );
+  // 過入金充当額 = 負の繰越 (前月過入金) の合計絶対値 / 未収繰越 = 正の繰越の合計
+  const overpayTotal = filteredRows.reduce((s, r) => {
+    const c = carryover(r.user_id);
+    return s + (c < 0 ? -c : 0);
+  }, 0);
+  const misyuCarryTotal = filteredRows.reduce((s, r) => {
+    const c = carryover(r.user_id);
+    return s + (c > 0 ? c : 0);
+  }, 0);
+
   // 選択行のフッタ詳細 (未選択時は全体合計 — order-app と同じ)
-  const selAmount = selected
-    ? selected.userAmount + jippiTotal(selected.user_id)
-    : totalBilled;
+  const selAmount = selected ? rowBilled(selected) : totalBilled;
+  const selKeigen = selected
+    ? (keigenByUser.get(selected.user_id) ?? 0)
+    : keigenTotal;
+  const selIryohi = selected
+    ? (iryohiByUser.get(selected.user_id) ?? 0)
+    : iryohiTotal;
+  const selOverpay = selected
+    ? Math.max(0, -carryover(selected.user_id))
+    : overpayTotal;
+  const selMisyuCarry = selected
+    ? Math.max(0, carryover(selected.user_id))
+    : misyuCarryTotal;
 
   const checkedCount = filteredRows.filter((r) => checked.has(r.user_id)).length;
   const printScopeLabel =
@@ -541,8 +707,18 @@ export function RiyouSeikyuContent() {
                               ))}
                             </select>
                           </td>
-                          <td className="px-2 py-1 border border-gray-200 text-right font-mono">
-                            ¥{(r.userAmount + jippiTotal(r.user_id)).toLocaleString()}
+                          <td
+                            className="px-2 py-1 border border-gray-200 text-right font-mono"
+                            title={
+                              (keigenByUser.get(r.user_id) ?? 0) > 0
+                                ? `軽減 ▲¥${(keigenByUser.get(r.user_id) ?? 0).toLocaleString()} 適用後`
+                                : undefined
+                            }
+                          >
+                            ¥{rowBilled(r).toLocaleString()}
+                            {(keigenByUser.get(r.user_id) ?? 0) > 0 && (
+                              <span className="ml-1 text-[9px] text-rose-500 font-sans">軽</span>
+                            )}
                           </td>
                           <td
                             className="px-2 py-1 border border-gray-200"
@@ -607,17 +783,22 @@ export function RiyouSeikyuContent() {
                     合計金額 <span className="font-mono">¥{selAmount.toLocaleString()}</span>
                   </span>
                   <span>
-                    過入金充当額 <span className="font-mono">¥0</span>
+                    過入金充当額 <span className="font-mono">¥{selOverpay.toLocaleString()}</span>
                   </span>
                   <span>
-                    軽減額 <span className="font-mono">¥0</span>
+                    軽減額 <span className="font-mono">¥{selKeigen.toLocaleString()}</span>
                   </span>
                   <span>
-                    医療費控除対象額 <span className="font-mono">¥0</span>
+                    医療費控除対象額 <span className="font-mono">¥{selIryohi.toLocaleString()}</span>
                   </span>
                   <span>
                     消費税額 <span className="font-mono">¥0</span>
                   </span>
+                  {selMisyuCarry > 0 && (
+                    <span className="text-[10px] text-red-500 self-center">
+                      (未収繰越 ¥{selMisyuCarry.toLocaleString()})
+                    </span>
+                  )}
                   <span className="font-semibold text-gray-800">
                     請求金額 <span className="font-mono">¥{selAmount.toLocaleString()}</span>
                   </span>
@@ -679,6 +860,16 @@ export function RiyouSeikyuContent() {
                       ¥{selected.userAmount.toLocaleString()}
                     </span>
                   </div>
+                  {(keigenByUser.get(selected.user_id) ?? 0) > 0 && (
+                    <div className="flex justify-between text-rose-600">
+                      <span>
+                        軽減額 ({settings.get(selected.user_id)?.keigen_rate ?? 0}%)
+                      </span>
+                      <span className="font-mono">
+                        ▲¥{(keigenByUser.get(selected.user_id) ?? 0).toLocaleString()}
+                      </span>
+                    </div>
+                  )}
                   {jippiTotal(selected.user_id) > 0 && (
                     <div className="flex justify-between text-gray-600">
                       <span>実費合計</span>
@@ -690,9 +881,28 @@ export function RiyouSeikyuContent() {
                   <div className="flex justify-between text-gray-800 font-semibold pt-1 border-t border-gray-100 mt-1">
                     <span>合計</span>
                     <span className="font-mono">
-                      ¥{(selected.userAmount + jippiTotal(selected.user_id)).toLocaleString()}
+                      ¥{rowBilled(selected).toLocaleString()}
                     </span>
                   </div>
+                  {iryohiByUser.has(selected.user_id) && (
+                    <div className="flex justify-between text-gray-500 text-[10px]">
+                      <span>うち医療費控除対象額</span>
+                      <span className="font-mono">
+                        ¥{(iryohiByUser.get(selected.user_id) ?? 0).toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                  {carryover(selected.user_id) !== 0 && (
+                    <div className="flex justify-between text-gray-500 text-[10px]">
+                      <span>
+                        前月繰越 ({carryover(selected.user_id) > 0 ? "未収繰越" : "過入金充当"})
+                      </span>
+                      <span className="font-mono">
+                        {carryover(selected.user_id) < 0 ? "▲" : ""}¥
+                        {Math.abs(carryover(selected.user_id)).toLocaleString()}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* 利用実費 (保険外) の入力 */}
@@ -705,12 +915,20 @@ export function RiyouSeikyuContent() {
                     onChanged={loadJippi}
                   />
 
+                  {/* 請求設定 (軽減 / 医療費控除) — ほのぼの「請求個人設定」相当 */}
+                  <RiyouSettingsSection
+                    key={`setting-${selected.user_id}`}
+                    userId={selected.user_id}
+                    setting={settings.get(selected.user_id) ?? null}
+                    onChanged={loadSettings}
+                  />
+
                   {/* 入金登録 (未収金管理) */}
                   <PaymentSection
                     key={`pay-${selected.user_id}-${monthKey}`}
                     userId={selected.user_id}
                     monthKey={monthKey}
-                    billed={selected.userAmount + jippiTotal(selected.user_id)}
+                    billed={rowBilled(selected)}
                     payment={payments.get(selected.user_id) ?? null}
                     onChanged={loadPayments}
                   />
@@ -730,6 +948,9 @@ export function RiyouSeikyuContent() {
             <RiyouSeikyuHouseholdPrintSheet
               rows={printGroups.household}
               jippiByUser={jippiByUser}
+              keigenByUser={keigenByUser}
+              iryohiByUser={iryohiByUser}
+              prevPayments={prevPayments}
               officeName={officeName}
               reiwa={reiwa}
               month={month}
@@ -740,6 +961,13 @@ export function RiyouSeikyuContent() {
               key={r.user_id}
               row={r}
               jippi={jippiByUser.get(r.user_id) ?? []}
+              keigen={keigenByUser.get(r.user_id) ?? 0}
+              iryohi={
+                iryohiByUser.has(r.user_id)
+                  ? (iryohiByUser.get(r.user_id) ?? 0)
+                  : null
+              }
+              prevPayment={prevPayments.get(r.user_id) ?? null}
               officeName={officeName}
               reiwa={reiwa}
               month={month}
@@ -1039,16 +1267,129 @@ function PaymentSection({
   );
 }
 
+// ─── 請求設定 (軽減 / 医療費控除) — kaigo_riyou_settings に upsert ────────────
+function RiyouSettingsSection({
+  userId,
+  setting,
+  onChanged,
+}: {
+  userId: string;
+  setting: RiyouSettingRow | null;
+  onChanged: () => void;
+}) {
+  const supabase = useMemo(() => createClient(), []);
+  const [rate, setRate] = useState(
+    setting?.keigen_rate != null ? String(setting.keigen_rate) : "",
+  );
+  const [start, setStart] = useState(setting?.keigen_start_date ?? "");
+  const [end, setEnd] = useState(setting?.keigen_end_date ?? "");
+  const [iryohi, setIryohi] = useState(setting?.iryohi_taisho ?? false);
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    const rateNum = rate.trim() === "" ? null : Number(rate);
+    if (rateNum != null && (!Number.isFinite(rateNum) || rateNum < 0 || rateNum > 100)) {
+      toast.error("軽減率は 0〜100 の数値 (%) で入力してください");
+      return;
+    }
+    setSaving(true);
+    const { error } = await supabase.from("kaigo_riyou_settings").upsert(
+      {
+        client_id: userId,
+        keigen_rate: rateNum,
+        keigen_start_date: start || null,
+        keigen_end_date: end || null,
+        iryohi_taisho: iryohi,
+      },
+      { onConflict: "client_id" },
+    );
+    setSaving(false);
+    if (error) {
+      // table 未作成 (migration 未適用) も含めて必ず通知する
+      toast.error("請求設定の保存に失敗: " + error.message);
+      return;
+    }
+    toast.success("請求設定を保存しました");
+    onChanged();
+  };
+
+  return (
+    <div className="mt-3 rounded border border-rose-200 bg-rose-50/40 p-3 text-xs space-y-2">
+      <p className="font-bold text-rose-800">請求設定 (軽減・医療費控除)</p>
+      <div className="flex flex-wrap items-end gap-1.5">
+        <div className="w-16">
+          <label className="mb-0.5 block text-[10px] text-gray-500">軽減率 %</label>
+          <input
+            type="number"
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+            placeholder="なし"
+            min={0}
+            max={100}
+            className="w-full rounded border px-2 py-1.5 text-right tabular-nums focus:border-rose-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="mb-0.5 block text-[10px] text-gray-500">適用開始</label>
+          <input
+            type="date"
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+            className="rounded border px-2 py-1.5 focus:border-rose-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="mb-0.5 block text-[10px] text-gray-500">適用終了</label>
+          <input
+            type="date"
+            value={end}
+            onChange={(e) => setEnd(e.target.value)}
+            className="rounded border px-2 py-1.5 focus:border-rose-500 focus:outline-none"
+          />
+        </div>
+      </div>
+      <div className="flex items-center justify-between">
+        <label className="inline-flex items-center gap-1.5 cursor-pointer select-none text-gray-700">
+          <input
+            type="checkbox"
+            checked={iryohi}
+            onChange={(e) => setIryohi(e.target.checked)}
+            className="cursor-pointer"
+          />
+          医療費控除の対象者 (生活援助中心型を除き按分)
+        </label>
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className="rounded bg-rose-600 px-3 py-1.5 font-medium text-white hover:bg-rose-700 disabled:opacity-50"
+        >
+          保存
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── 印刷: 利用料請求書 (利用者 1 名 = 1 枚) ─────────────────────────────────
 function RiyouSeikyuPrintSheet({
   row,
   jippi,
+  keigen,
+  iryohi,
+  prevPayment,
   officeName,
   reiwa,
   month,
 }: {
   row: UserSeikyuRow;
   jippi: JippiEntry[];
+  /** 軽減額 (0 = 軽減なし) */
+  keigen: number;
+  /** 医療費控除対象額 (null = 対象者でない) */
+  iryohi: number | null;
+  /** 前月の請求/入金 (前回領収欄・繰越の印字用。null = 前月レコードなし) */
+  prevPayment: PaymentRow | null;
   officeName: string | null;
   reiwa: number;
   month: number;
@@ -1057,7 +1398,14 @@ function RiyouSeikyuPrintSheet({
   const issueDate = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
   const lines = splitUserAmount(row);
   const jippiSum = jippi.reduce((s, e) => s + e.amount, 0);
-  const grandTotal = row.userAmount + jippiSum;
+  // 当月請求額 = 利用者負担 − 軽減 + 実費
+  const monthTotal = row.userAmount - keigen + jippiSum;
+  // 繰越額 = 前回請求 − 前回入金 (正 = 未収繰越 / 負 = 過入金充当)
+  const carry = prevPayment
+    ? prevPayment.billed_amount - prevPayment.paid_amount
+    : 0;
+  // 今回御請求額 = 当月請求額 + 繰越額
+  const grandTotal = monthTotal + carry;
 
   return (
     <div className="p-10 text-black" style={{ pageBreakAfter: "always" }}>
@@ -1082,7 +1430,7 @@ function RiyouSeikyuPrintSheet({
 
       <div className="mb-6 flex items-center gap-3">
         <span className="border border-black px-4 py-2 text-lg font-bold">
-          ご請求金額 ¥{grandTotal.toLocaleString()} －
+          今回御請求額 ¥{grandTotal.toLocaleString()} －
         </span>
         <span className="text-xs">(消費税: 非課税)</span>
       </div>
@@ -1119,6 +1467,16 @@ function RiyouSeikyuPrintSheet({
               ¥{row.userAmount.toLocaleString()}
             </td>
           </tr>
+          {keigen > 0 && (
+            <tr>
+              <td className="border border-black px-2 py-1.5" colSpan={3}>
+                軽減額 (利用者負担額軽減)
+              </td>
+              <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+                ▲¥{keigen.toLocaleString()}
+              </td>
+            </tr>
+          )}
           {jippi.map((e) => (
             <tr key={e.id}>
               <td className="border border-black px-2 py-1.5">{e.item_name} (実費)</td>
@@ -1133,14 +1491,57 @@ function RiyouSeikyuPrintSheet({
           ))}
           <tr className="font-bold">
             <td className="border border-black px-2 py-1.5" colSpan={3}>
-              合計{jippiSum > 0 ? " (利用者負担 + 実費)" : ""}
+              当月請求額
+              {keigen > 0 || jippiSum > 0
+                ? ` (利用者負担${keigen > 0 ? " − 軽減" : ""}${jippiSum > 0 ? " + 実費" : ""})`
+                : ""}
             </td>
             <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+              ¥{monthTotal.toLocaleString()}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* 前回領収欄 (ほのぼの 請求書の前回領収欄・未収欄 相当) */}
+      <table className="mt-4 w-full border-collapse text-sm">
+        <thead>
+          <tr className="bg-gray-100">
+            <th className="border border-black px-2 py-1 text-right">前回請求額</th>
+            <th className="border border-black px-2 py-1 text-right">前回入金額</th>
+            <th className="border border-black px-2 py-1 text-right">
+              繰越額 (未収は+、過入金は▲)
+            </th>
+            <th className="border border-black px-2 py-1 text-right">今回御請求額</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+              {prevPayment ? `¥${prevPayment.billed_amount.toLocaleString()}` : "—"}
+            </td>
+            <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+              {prevPayment ? `¥${prevPayment.paid_amount.toLocaleString()}` : "—"}
+            </td>
+            <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+              {carry === 0
+                ? "¥0"
+                : carry > 0
+                  ? `¥${carry.toLocaleString()}`
+                  : `▲¥${(-carry).toLocaleString()}`}
+            </td>
+            <td className="border border-black px-2 py-1.5 text-right tabular-nums font-bold">
               ¥{grandTotal.toLocaleString()}
             </td>
           </tr>
         </tbody>
       </table>
+
+      {iryohi != null && (
+        <p className="mt-3 text-sm">
+          うち医療費控除対象額 ¥{iryohi.toLocaleString()}
+        </p>
+      )}
 
       <p className="mt-6 text-xs text-gray-700">
         ※ 本請求は介護保険サービス利用に伴う利用者負担分です (保険単位数{" "}
@@ -1154,12 +1555,21 @@ function RiyouSeikyuPrintSheet({
 function RiyouSeikyuHouseholdPrintSheet({
   rows,
   jippiByUser,
+  keigenByUser,
+  iryohiByUser,
+  prevPayments,
   officeName,
   reiwa,
   month,
 }: {
   rows: UserSeikyuRow[];
   jippiByUser: Map<string, JippiEntry[]>;
+  /** 利用者ごとの軽減額 (0 = 軽減なし) */
+  keigenByUser: Map<string, number>;
+  /** 医療費控除対象額 (対象者のみ entry あり) */
+  iryohiByUser: Map<string, number>;
+  /** 前月の請求/入金 (前回領収欄・繰越の印字用) */
+  prevPayments: Map<string, PaymentRow>;
   officeName: string | null;
   reiwa: number;
   month: number;
@@ -1167,12 +1577,29 @@ function RiyouSeikyuHouseholdPrintSheet({
   const today = new Date();
   const issueDate = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
   const rep = rows[0]; // 代表者 = 先頭
-  // 各利用者の 負担額 + 実費 = 明細 1 行、合計を世帯合算とする
+  // 各利用者の 負担額 − 軽減 + 実費 = 明細 1 行、合計を世帯合算とする
   const perUser = rows.map((r) => {
     const jippiSum = (jippiByUser.get(r.user_id) ?? []).reduce((s, e) => s + e.amount, 0);
-    return { row: r, jippiSum, subtotal: r.userAmount + jippiSum };
+    const keigen = keigenByUser.get(r.user_id) ?? 0;
+    return { row: r, jippiSum, keigen, subtotal: r.userAmount - keigen + jippiSum };
   });
-  const grandTotal = perUser.reduce((s, u) => s + u.subtotal, 0);
+  const monthTotal = perUser.reduce((s, u) => s + u.subtotal, 0);
+  const hasKeigen = perUser.some((u) => u.keigen > 0);
+  // 前回領収欄 (世帯合算 = 世帯メンバーの前月分を合算)
+  const prevList = rows
+    .map((r) => prevPayments.get(r.user_id))
+    .filter((p): p is PaymentRow => p != null);
+  const prevBilled = prevList.reduce((s, p) => s + p.billed_amount, 0);
+  const prevPaid = prevList.reduce((s, p) => s + p.paid_amount, 0);
+  const carry = prevBilled - prevPaid;
+  // 今回御請求額 = 当月請求額 + 繰越額
+  const grandTotal = monthTotal + carry;
+  // うち医療費控除対象額 (対象者がいる場合のみ印字)
+  const iryohiList = rows.filter((r) => iryohiByUser.has(r.user_id));
+  const iryohiSum = iryohiList.reduce(
+    (s, r) => s + (iryohiByUser.get(r.user_id) ?? 0),
+    0,
+  );
 
   return (
     <div className="p-10 text-black" style={{ pageBreakAfter: "always" }}>
@@ -1197,7 +1624,7 @@ function RiyouSeikyuHouseholdPrintSheet({
 
       <div className="mb-6 flex items-center gap-3">
         <span className="border border-black px-4 py-2 text-lg font-bold">
-          ご請求金額 ¥{grandTotal.toLocaleString()} －
+          今回御請求額 ¥{grandTotal.toLocaleString()} －
         </span>
         <span className="text-xs">(消費税: 非課税 / 世帯 {rows.length} 名分)</span>
       </div>
@@ -1207,6 +1634,9 @@ function RiyouSeikyuHouseholdPrintSheet({
           <tr className="bg-gray-100">
             <th className="border border-black px-2 py-1.5 text-left">利用者名</th>
             <th className="border border-black px-2 py-1.5 text-right w-28">利用者負担額</th>
+            {hasKeigen && (
+              <th className="border border-black px-2 py-1.5 text-right w-24">軽減額</th>
+            )}
             <th className="border border-black px-2 py-1.5 text-right w-24">実費</th>
             <th className="border border-black px-2 py-1.5 text-right w-28">小計</th>
           </tr>
@@ -1223,6 +1653,11 @@ function RiyouSeikyuHouseholdPrintSheet({
               <td className="border border-black px-2 py-1.5 text-right tabular-nums">
                 ¥{u.row.userAmount.toLocaleString()}
               </td>
+              {hasKeigen && (
+                <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+                  {u.keigen > 0 ? `▲¥${u.keigen.toLocaleString()}` : "—"}
+                </td>
+              )}
               <td className="border border-black px-2 py-1.5 text-right tabular-nums">
                 {u.jippiSum > 0 ? `¥${u.jippiSum.toLocaleString()}` : "—"}
               </td>
@@ -1232,18 +1667,60 @@ function RiyouSeikyuHouseholdPrintSheet({
             </tr>
           ))}
           <tr className="font-bold">
-            <td className="border border-black px-2 py-1.5" colSpan={3}>
-              世帯合計 ({rows.length} 名分)
+            <td className="border border-black px-2 py-1.5" colSpan={hasKeigen ? 4 : 3}>
+              当月請求額 (世帯 {rows.length} 名分)
             </td>
             <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+              ¥{monthTotal.toLocaleString()}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* 前回領収欄 (世帯メンバー合算) */}
+      <table className="mt-4 w-full border-collapse text-sm">
+        <thead>
+          <tr className="bg-gray-100">
+            <th className="border border-black px-2 py-1 text-right">前回請求額</th>
+            <th className="border border-black px-2 py-1 text-right">前回入金額</th>
+            <th className="border border-black px-2 py-1 text-right">
+              繰越額 (未収は+、過入金は▲)
+            </th>
+            <th className="border border-black px-2 py-1 text-right">今回御請求額</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+              {prevList.length > 0 ? `¥${prevBilled.toLocaleString()}` : "—"}
+            </td>
+            <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+              {prevList.length > 0 ? `¥${prevPaid.toLocaleString()}` : "—"}
+            </td>
+            <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+              {carry === 0
+                ? "¥0"
+                : carry > 0
+                  ? `¥${carry.toLocaleString()}`
+                  : `▲¥${(-carry).toLocaleString()}`}
+            </td>
+            <td className="border border-black px-2 py-1.5 text-right tabular-nums font-bold">
               ¥{grandTotal.toLocaleString()}
             </td>
           </tr>
         </tbody>
       </table>
 
+      {iryohiList.length > 0 && (
+        <p className="mt-3 text-sm">
+          うち医療費控除対象額 ¥{iryohiSum.toLocaleString()} (
+          {iryohiList.map((r) => r.user_name).join("、")})
+        </p>
+      )}
+
       <p className="mt-6 text-xs text-gray-700">
-        ※ 本請求は世帯内 {rows.length} 名分の介護保険サービス利用者負担分 + 実費を合算したものです。
+        ※ 本請求は世帯内 {rows.length} 名分の介護保険サービス利用者負担分
+        {hasKeigen ? " (軽減適用後)" : ""} + 実費を合算したものです。
         代表者 ({rep.user_name} 様) 宛に 1 枚で発行しています。
       </p>
     </div>
