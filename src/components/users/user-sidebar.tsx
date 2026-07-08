@@ -24,14 +24,17 @@ interface ClientRow {
   name: string;
   furigana: string | null;
   status: string;
+  care_level?: string | null;
   service_category?: ServiceCategoryValue;
 }
 
 // 介護/障害/両方 の絞り込みモード
 //   all     = すべて
-//   kaigo   = 介護のみ (= 'kaigo' | undefined (legacy 互換))
-//   shougai = 障害のみ (= 'shougai')
-//   both    = 両方利用のみ (= 'both')
+//   kaigo   = 介護保険利用者 (両方利用を含む)
+//   shougai = 障害福祉利用者 (両方利用を含む)
+//   both    = 介護・障害の両方を利用
+// 判定は clients.service_category ではなく実データから行う (下記 shougaiIds / isKaigo)。
+// service_category 列は未適用環境が多く、依存すると「障害」で全員消える事故が起きるため。
 // 利用者が単一の介護専用テナントの場合、初期は all。
 type CategoryFilter = "all" | "kaigo" | "shougai" | "both";
 const CATEGORY_FILTER_KEY = "kaigo.user_category_filter";
@@ -372,6 +375,55 @@ function UserSidebarInner(props: UserSidebarProps) {
     return () => { cancelled = true; };
   }, [users, supabase]);
 
+  // ── 制度区分フィルタ (介護/障害) 用の「障害福祉利用者」判定 ──────────────
+  // clients.service_category 列には依存しない (未作成環境で「障害」選択時に
+  // 全員消える事故の元)。受給者証 (shougai_certifications) を持つ利用者を障害と判定。
+  // テーブル未作成 (42P01/PGRST205) や取得失敗は空 Set (= 障害該当なし) で続行。
+  const [shougaiIds, setShougaiIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let cancelled = false;
+    const ids = users.map((u) => u.id);
+    if (ids.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 一覧が空なら障害判定もクリア (derived reset)
+      setShougaiIds(new Set());
+      return;
+    }
+    (async () => {
+      try {
+        const IN_CHUNK = 50;
+        const PAGE = 1000;
+        const found = new Set<string>();
+        for (let i = 0; i < ids.length; i += IN_CHUNK) {
+          const chunk = ids.slice(i, i + IN_CHUNK);
+          let offset = 0;
+          while (true) {
+            const { data, error } = await supabase
+              .from("shougai_certifications")
+              .select("client_id")
+              .in("client_id", chunk)
+              .range(offset, offset + PAGE - 1);
+            if (error) {
+              // テーブル未作成は空 Set で続行 (それ以外も同様に握らず warn)
+              throw new Error(error.message);
+            }
+            const rows = (data ?? []) as Array<{ client_id: string }>;
+            for (const r of rows) found.add(r.client_id);
+            if (rows.length < PAGE) break;
+            offset += PAGE;
+          }
+        }
+        if (!cancelled) setShougaiIds(found);
+      } catch (err) {
+        console.warn(
+          "障害受給者証の取得に失敗 (制度区分フィルタは介護扱いで続行):",
+          err instanceof Error ? err.message : err,
+        );
+        if (!cancelled) setShougaiIds(new Set());
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [users, supabase]);
+
   const today = useMemo(() => localToday(), []);
 
   const filtered = useMemo(() => {
@@ -379,16 +431,18 @@ function UserSidebarInner(props: UserSidebarProps) {
     if (filterMode === "office" && currentOfficeId) {
       list = list.filter((u) => officeUserIds.has(u.id));
     }
-    // 介護/障害/両方 絞り込み
-    //   kaigo:   service_category in ('kaigo','both') OR undefined (legacy 互換)
-    //   shougai: service_category in ('shougai','both')
-    //   both:    service_category === 'both'
+    // 介護/障害/両方 絞り込み (実データ判定。clients.service_category には依存しない)
+    //   障害 = 受給者証あり (shougaiIds)
+    //   介護 = 介護保険あり (care_level あり or client_insurance_records あり)
+    //   both = 介護 かつ 障害
     if (categoryFilter !== "all") {
+      const hasInsurance = badgeData?.hasInsurance;
       list = list.filter((u) => {
-        const c = u.service_category;
-        if (categoryFilter === "kaigo") return c == null || c === "kaigo" || c === "both";
-        if (categoryFilter === "shougai") return c === "shougai" || c === "both";
-        return c === "both";
+        const isShougai = shougaiIds.has(u.id);
+        const isKaigo = !!u.care_level || (hasInsurance?.has(u.id) ?? false);
+        if (categoryFilter === "kaigo") return isKaigo;
+        if (categoryFilter === "shougai") return isShougai;
+        return isKaigo && isShougai; // both
       });
     }
     if (search) {
@@ -398,7 +452,7 @@ function UserSidebarInner(props: UserSidebarProps) {
       );
     }
     return list;
-  }, [users, search, filterMode, currentOfficeId, officeUserIds, categoryFilter]);
+  }, [users, search, filterMode, currentOfficeId, officeUserIds, categoryFilter, shougaiIds, badgeData]);
 
   // Auto-select 1st visible user when nothing selected (URL mode のみ)
   // 明示モード (users/[id]/layout) は URL の path 側で id が決まるので auto-select 不要
@@ -481,7 +535,13 @@ function UserSidebarInner(props: UserSidebarProps) {
           <div className="p-3 text-center text-xs text-gray-400">読込中...</div>
         ) : filtered.length === 0 ? (
           <div className="p-3 text-center text-xs text-gray-400">
-            {filterMode === "office" ? "自事業所の利用者なし" : "該当なし"}
+            {categoryFilter === "shougai"
+              ? "障害福祉の利用者なし"
+              : categoryFilter === "both"
+              ? "介護・障害を両方利用する利用者なし"
+              : filterMode === "office"
+              ? "自事業所の利用者なし"
+              : "該当なし"}
           </div>
         ) : (
           <ul className="py-1">
