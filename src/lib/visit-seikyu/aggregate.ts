@@ -45,6 +45,10 @@ import {
   type GendoAllocationLine,
 } from "@/lib/gendo-allocation";
 import { aggregateSougouSeikyu } from "@/lib/visit-seikyu/aggregate-sougou";
+import {
+  SAME_BUILDING_REDUCTION,
+  type SameBuildingTier,
+} from "@/lib/visit-seikyu/same-building";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -440,6 +444,59 @@ export async function aggregateMonthlyVisitSeikyu(
   }
   const nameOf = (userId: string) => clientById.get(userId)?.name ?? userId;
 
+  // 3.2) 同一建物減算区分 (client_office_assignments.same_building_tier)
+  //     利用者×自事業所の属性 (月非依存)。null = 減算なし。
+  //     列未適用 (42703 / PGRST204) は空 Map = 減算なしでフォールバック。
+  const sameBuildingTierByClient = new Map<string, SameBuildingTier>();
+  if (opts.officeId) {
+    const { data, error } = await supabase
+      .from("client_office_assignments")
+      .select("client_id, same_building_tier")
+      .eq("office_id", opts.officeId)
+      .in("client_id", userIds)
+      .not("same_building_tier", "is", null);
+    if (error) {
+      // 列未適用 (直 SQL=42703 / PostgREST schema cache=PGRST204) は減算なしで続行。
+      // それ以外は握りつぶさない。
+      if (error.code !== "42703" && error.code !== "PGRST204" && !isColumnMissing(error)) {
+        throw new Error(`同一建物減算区分取得失敗: ${error.message}`);
+      }
+    } else {
+      for (const r of (data ?? []) as {
+        client_id: string;
+        same_building_tier: string | null;
+      }[]) {
+        const t = r.same_building_tier;
+        if (t === "1" || t === "2" || t === "3") {
+          sameBuildingTierByClient.set(r.client_id, t);
+        }
+      }
+    }
+  }
+
+  // 同一建物減算コード (114114/5/6) を対象月世代で解決 (units はマスタ 0 のため率は制度定数を使う)。
+  // 該当利用者がいる場合のみ引く。引けないコードは減算行生成時に warning + コード定数で出す。
+  const sameBuildingCodeMaster = new Map<string, string>(); // code -> service_name
+  if (sameBuildingTierByClient.size > 0) {
+    const codes = Object.values(SAME_BUILDING_REDUCTION).map((r) => r.code);
+    const { data, error } = await validInMonth(
+      supabase
+        .from("kaigo_service_codes")
+        .select("service_code, service_name")
+        .eq("system", "介護")
+        .eq("service_category", "11")
+        .in("service_code", codes),
+      opts.year,
+      opts.month,
+    );
+    if (error) throw new Error(`同一建物減算コード取得失敗: ${error.message}`);
+    for (const r of (data ?? []) as { service_code: string; service_name: string }[]) {
+      if (!sameBuildingCodeMaster.has(r.service_code)) {
+        sameBuildingCodeMaster.set(r.service_code, r.service_name);
+      }
+    }
+  }
+
   // 認定情報は「対象月に有効な認定」で解決する (共有リゾルバ)。
   // 月遅れ再請求は元提供月で aggregate されるため自然に当時の認定になる。
   const certByClient = await resolveCertForMonth(supabase, userIds, opts.year, opts.month);
@@ -717,6 +774,9 @@ export async function aggregateMonthlyVisitSeikyu(
         units,
       });
     }
+    // この時点の grossBaseUnits = 所定単位数 (基本サービスのみ)。
+    // 同一建物減算の母数は所定単位数のみ (加算には掛けない) なので、月加算より前に確定する。
+    const serviceBaseUnits = grossBaseUnits;
     // 実績単位の月次加算行 (初回 / 緊急時×回数 / 生活機能向上連携Ⅰ・Ⅱ)。
     // grossBaseUnits (明細合計) には全て含めるが、区分支給限度基準の超過判定では
     // 初回加算・緊急時訪問介護加算 = 限度額管理対象外 (告示) を除外する。
@@ -766,6 +826,34 @@ export async function aggregateMonthlyVisitSeikyu(
       if (seikatsuKino === "Ⅱ")
         pushMonthAddon(MONTH_ADDON_NAMES.seikatsuII, 1, "生活機能向上連携加算Ⅱ", false);
     }
+
+    // ── 同一建物減算 (令和6年度〜) ──
+    // 母数 = 所定単位数のみ (serviceBaseUnits = 基本サービス合計)。加算には掛けない。
+    // 減算 = -round(所定単位数 × 率)。減算行を grossBaseUnits に反映 (月加算後・超過判定前) →
+    // 区分支給限度基準・処遇改善% の母数へ自然に波及する。
+    const sbTier = sameBuildingTierByClient.get(userId);
+    if (sbTier && serviceBaseUnits > 0) {
+      const { code, rate, label } = SAME_BUILDING_REDUCTION[sbTier];
+      const reduction = -Math.round(serviceBaseUnits * rate);
+      if (reduction < 0) {
+        const resolvedName = sameBuildingCodeMaster.get(code);
+        if (!resolvedName) {
+          warnings.push(
+            `${userLabel}: 同一建物減算コード (${code}) が対象月 (${monthStr}) のマスタから引けません — コードのみで出力します`,
+          );
+        }
+        details.push({
+          service_type: resolvedName ?? label,
+          short_name: label,
+          service_code: code,
+          unit_per: reduction,
+          count: 1,
+          units: reduction,
+        });
+        grossBaseUnits += reduction;
+      }
+    }
+
     details.sort((a, b) => b.units - a.units);
 
     // ── 区分支給限度基準の超過自費 (ほのぼの準拠) ──

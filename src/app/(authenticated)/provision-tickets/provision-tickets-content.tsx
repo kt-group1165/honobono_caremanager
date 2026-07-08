@@ -48,6 +48,10 @@ import {
   type AdditionalStaffRow,
 } from "@/app/(authenticated)/shift-management/additional-staff-section";
 import { resolveVisitAddonLines } from "@/lib/visit-addons";
+import {
+  SAME_BUILDING_OPTIONS,
+  type SameBuildingTier,
+} from "@/lib/visit-seikyu/same-building";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -296,6 +300,10 @@ export function ProvisionTicketsContent({
   const [shokaiSuggest, setShokaiSuggest] = useState<boolean | null>(null);
   // kaigo_visit_addon_lines テーブル未作成 (42P01/PGRST205)
   const [addonTableMissing, setAddonTableMissing] = useState(false);
+  // 同一建物減算区分 ('' | '1' | '2' | '3')。client_office_assignments.same_building_tier。
+  const [sameBuildingTier, setSameBuildingTier] = useState<"" | SameBuildingTier>("");
+  // same_building_tier 列が未適用 (42703/PGRST204) → セレクタ無効化
+  const [sameBuildingColMissing, setSameBuildingColMissing] = useState(false);
   // モーダル内の加算入力 (追加時に upsert する一時状態): { addon_code -> count }
   const [addRowAddons, setAddRowAddons] = useState<Record<string, number>>({});
   // 2人体制の個別時間列 (staff2_start_time 等) が適用済みか
@@ -912,6 +920,72 @@ export function ProvisionTicketsContent({
       return true;
     },
     [supabase, userId, monthStr, currentOfficeId],
+  );
+
+  // ── 同一建物減算区分 (client_office_assignments.same_building_tier) の読込 ──
+  //    利用者×自事業所の属性 (月非依存)。列未適用 (42703/PGRST204) はセレクタ無効化。
+  useEffect(() => {
+    if (!currentOfficeId) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("client_office_assignments")
+        .select("same_building_tier")
+        .eq("client_id", userId)
+        .eq("office_id", currentOfficeId)
+        .is("end_date", null)
+        .limit(1);
+      if (cancelled) return;
+      if (error) {
+        if (error.code === "42703" || error.code === "PGRST204") {
+          setSameBuildingColMissing(true);
+          setSameBuildingTier("");
+          return;
+        }
+        console.error("same_building_tier fetch failed:", error.message);
+        toast.error("同一建物減算区分の取得に失敗しました: " + error.message);
+        return;
+      }
+      setSameBuildingColMissing(false);
+      const t = (data?.[0] as { same_building_tier: string | null } | undefined)?.same_building_tier;
+      setSameBuildingTier(t === "1" || t === "2" || t === "3" ? t : "");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, userId, currentOfficeId]);
+
+  // ── 同一建物減算区分の保存 (現役割当行 end_date is null を update) ──
+  const saveSameBuildingTier = useCallback(
+    async (next: "" | SameBuildingTier) => {
+      if (!currentOfficeId) {
+        toast.error("同一建物減算の保存には事業所の選択 (?office=) が必要です");
+        return;
+      }
+      const prev = sameBuildingTier;
+      setSameBuildingTier(next); // optimistic
+      const { error } = await supabase
+        .from("client_office_assignments")
+        .update({ same_building_tier: next === "" ? null : next })
+        .eq("client_id", userId)
+        .eq("office_id", currentOfficeId)
+        .is("end_date", null);
+      if (error) {
+        setSameBuildingTier(prev); // rollback
+        if (error.code === "42703" || error.code === "PGRST204") {
+          setSameBuildingColMissing(true);
+          toast.warning(
+            "same_building_tier 列が未適用のため保存できません (migrations/kaigo_visit_same_building.sql を適用してください)",
+          );
+          return;
+        }
+        console.error("same_building_tier update failed:", error.message);
+        toast.error("同一建物減算の保存に失敗しました: " + error.message);
+        return;
+      }
+      toast.success("同一建物減算区分を保存しました");
+    },
+    [supabase, userId, currentOfficeId, sameBuildingTier],
   );
 
   // ── Add service row ───────────────────────────────────────────────────────
@@ -2122,6 +2196,39 @@ export function ProvisionTicketsContent({
                           <span className="text-gray-400">適用加算未設定 (マスタ管理 → 自事業所管理で選択)</span>
                         )}
                       </div>
+                    </div>
+                  )}
+
+                  {/* 同一建物減算 (所定単位数に対する%減算)。client_office_assignments 単位 */}
+                  {currentOfficeId && (
+                    <div className="no-print mt-2 rounded border border-amber-200 bg-amber-50/40 px-3 py-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <label className="text-[11px] font-semibold text-amber-800">
+                          同一建物減算
+                        </label>
+                        <select
+                          value={sameBuildingTier}
+                          disabled={sameBuildingColMissing}
+                          onChange={(e) =>
+                            void saveSameBuildingTier(e.target.value as "" | SameBuildingTier)
+                          }
+                          className="rounded border border-amber-300 bg-white px-2 py-1 text-xs text-gray-800 focus:border-amber-500 focus:outline-none disabled:bg-gray-100 disabled:text-gray-400"
+                        >
+                          {SAME_BUILDING_OPTIONS.map((o) => (
+                            <option key={o.value || "none"} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="text-[10px] text-amber-600">
+                          所定単位数 (基本サービス) に対する減算。加算には掛かりません。
+                        </span>
+                      </div>
+                      {sameBuildingColMissing && (
+                        <div className="mt-1 text-[10px] text-amber-700">
+                          same_building_tier 列が未適用です (migrations/kaigo_visit_same_building.sql を適用してください)
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
