@@ -1485,10 +1485,15 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
                             </div>
                           </div>
                           {rec ? (
-                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                            <button
+                              onClick={() => setExpandedId(rec.id)}
+                              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+                              title="記録を表示"
+                            >
                               <CheckCircle2 size={13} />
                               記録済み
-                            </span>
+                              <ChevronRight size={12} />
+                            </button>
                           ) : cancelled ? null : (
                             <div className="flex shrink-0 items-center gap-2">
                               <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
@@ -1504,19 +1509,7 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
                             </div>
                           )}
                         </div>
-                        {/* 記録済み → 既存記録をカードで埋め込み表示 (クリックで展開閲覧) */}
-                        {rec && (
-                          <div className="border-t border-emerald-100">
-                            <RecordCard
-                              rec={rec}
-                              embedded
-                              isExpanded={expandedId === rec.id}
-                              onToggle={() => setExpandedId(expandedId === rec.id ? null : rec.id)}
-                              onSign={() => setSignTarget(rec)}
-                              signatureSrc={resolveSignatureSrc(rec)}
-                            />
-                          </div>
-                        )}
+                        {/* 記録済みの閲覧はモーダル (下部の記録閲覧モーダル) で表示 */}
                       </div>
                     );
                   })}
@@ -1536,8 +1529,8 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
                     <RecordCard
                       key={rec.id}
                       rec={rec}
-                      isExpanded={expandedId === rec.id}
-                      onToggle={() => setExpandedId(expandedId === rec.id ? null : rec.id)}
+                      isExpanded={false}
+                      onToggle={() => setExpandedId(rec.id)}
                       onSign={() => setSignTarget(rec)}
                       signatureSrc={resolveSignatureSrc(rec)}
                     />
@@ -1548,6 +1541,44 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
           </div>
         )}
       </div>
+
+      {/* ── 記録閲覧モーダル (予定行の「記録済み」/ 予定外カードのクリックで開く) ── */}
+      {(() => {
+        const viewRec = expandedId
+          ? records.find((r) => r.id === expandedId) ?? null
+          : null;
+        if (!viewRec) return null;
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+            onClick={() => setExpandedId(null)}
+          >
+            <div
+              className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-4 py-2.5">
+                <h3 className="text-sm font-bold text-gray-800">サービス実施記録</h3>
+                <button
+                  onClick={() => setExpandedId(null)}
+                  className="rounded p-1 text-gray-500 hover:bg-gray-100"
+                  title="閉じる"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <RecordCard
+                rec={viewRec}
+                embedded
+                isExpanded
+                onToggle={() => setExpandedId(null)}
+                onSign={() => setSignTarget(viewRec)}
+                signatureSrc={resolveSignatureSrc(viewRec)}
+              />
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 印刷用 DOM (画面では hidden) */}
       <div id="visit-records-print" className="hidden">
