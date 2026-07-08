@@ -26,6 +26,7 @@ import {
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useSeikyuData } from "./use-seikyu-data";
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
+import type { ShogaiSeikyuRow } from "@/lib/shogai-seikyu/aggregate";
 
 // ── かな行フィルター (order-app MonthlyInfoTab と同じ判定 map) ────────────────
 export const SEIKYU_KANA_ROWS = ["あ", "か", "さ", "た", "な", "は", "ま", "や", "ら", "わ", "他"];
@@ -56,6 +57,8 @@ type SeikyuContextValue = ReturnType<typeof useSeikyuData> & {
   filteredRows: UserSeikyuRow[];
   /** カナ絞込済みの総合事業 rows (7112/様式(予))。介護給付とは別様式 */
   filteredSougouRows: UserSeikyuRow[];
+  /** カナ絞込済みの障害 rows (利用請求タブの 3 制度統合用)。カナは user_name_kana */
+  filteredShogaiRows: ShogaiSeikyuRow[];
 };
 
 const SeikyuContext = createContext<SeikyuContextValue | null>(null);
@@ -84,6 +87,10 @@ export function SeikyuProvider({ children }: { children: ReactNode }) {
     () => data.sougouRows.filter(kanaMatches),
     [data.sougouRows, kanaMatches],
   );
+  const filteredShogaiRows = useMemo(
+    () => data.shogaiRows.filter(kanaMatches),
+    [data.shogaiRows, kanaMatches],
+  );
 
   const value: SeikyuContextValue = {
     ...data,
@@ -92,6 +99,7 @@ export function SeikyuProvider({ children }: { children: ReactNode }) {
     kanaMatches,
     filteredRows,
     filteredSougouRows,
+    filteredShogaiRows,
   };
 
   return (

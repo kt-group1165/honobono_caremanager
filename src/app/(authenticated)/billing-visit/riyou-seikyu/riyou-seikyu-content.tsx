@@ -37,7 +37,34 @@ import {
   SeikyuMonthNav,
 } from "../_shared/seikyu-context";
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
+import type { ShogaiSeikyuRow } from "@/lib/shogai-seikyu/aggregate";
 import { buildFbZengin, type FbTransferTarget } from "@/lib/fb-zengin";
+
+// ─── 3 制度統合の表示行モデル ────────────────────────────────────────────────
+// 介護 / 総合事業 は同型 UserSeikyuRow (既存ロジックをそのまま流用)。
+// 障害 は ShogaiSeikyuRow (請求額 = userAmount。軽減/実費/医療費控除は N/A)。
+// 入金の保存先が制度で異なる (介護・総合 → riyou_seikyu_payments /
+// 障害 → shogai_seikyu_payments) ため、行キーは `制度:client_id` で衝突を避ける。
+type SeikyuSystem = "介護" | "総合事業" | "障害";
+
+// 入金テーブルは 2 系統。行の system で読み書き先を振り分ける
+const paymentTableFor = (system: SeikyuSystem) =>
+  system === "障害" ? "shogai_seikyu_payments" : "riyou_seikyu_payments";
+
+// 制度区分バッジの配色 (介護=indigo / 総合=teal / 障害=violet)
+const SYSTEM_BADGE_CLS: Record<SeikyuSystem, string> = {
+  介護: "bg-indigo-100 text-indigo-700",
+  総合事業: "bg-teal-100 text-teal-700",
+  障害: "bg-violet-100 text-violet-700",
+};
+
+// 統合行: 介護/総合 は kaigo を、障害 は shogai を持つ判別 union。
+// key は制度またぎの client_id 衝突を避けるための一意キー。
+type UnifiedRow =
+  | { key: string; system: "介護" | "総合事業"; userId: string; kaigo: UserSeikyuRow }
+  | { key: string; system: "障害"; userId: string; shogai: ShogaiSeikyuRow };
+
+const rowKey = (system: SeikyuSystem, userId: string) => `${system}:${userId}`;
 
 // 利用者の口座情報 (FB データ用) — clients の bank_* 列
 interface ClientBank {
@@ -138,11 +165,23 @@ function fmtReiwaDate(iso: string | null): string {
 }
 
 export function RiyouSeikyuContent() {
-  const { year, month, rows, filteredRows, loading, error, officeName } =
-    useSeikyuContext();
+  const {
+    year,
+    month,
+    rows,
+    sougouRows,
+    filteredRows,
+    filteredSougouRows,
+    filteredShogaiRows,
+    loading,
+    error,
+    officeName,
+  } = useSeikyuContext();
   const supabase = useMemo(() => createClient(), []);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  // 対象 (発行/FB の絞込) と 名寄 (世帯合算) は別チェック列 (order-app と同じ)
+  // 選択行は `制度:client_id` の一意キーで保持 (制度またぎの衝突回避)
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  // 対象 (発行/FB の絞込) と 名寄 (世帯合算) は別チェック列 (order-app と同じ)。
+  // Set のキーは `制度:client_id` の一意キー (制度またぎの衝突回避)
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [merged, setMerged] = useState<Set<string>>(new Set());
   const [printing, setPrinting] = useState(false);
@@ -151,6 +190,20 @@ export function RiyouSeikyuContent() {
   const [jippiByUser, setJippiByUser] = useState<Map<string, JippiEntry[]>>(new Map());
 
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+
+  // ── 3 制度統合の表示行 (介護 → 総合 → 障害、各制度内はカナ順のまま) ──
+  //    介護/総合 は UserSeikyuRow を、障害 は ShogaiSeikyuRow を持つ union。
+  //    key は `制度:client_id` (同一 client_id が複数制度に跨っても衝突しない)。
+  const unifiedRows = useMemo<UnifiedRow[]>(() => {
+    const out: UnifiedRow[] = [];
+    for (const r of filteredRows)
+      out.push({ key: rowKey("介護", r.user_id), system: "介護", userId: r.user_id, kaigo: r });
+    for (const r of filteredSougouRows)
+      out.push({ key: rowKey("総合事業", r.user_id), system: "総合事業", userId: r.user_id, kaigo: r });
+    for (const r of filteredShogaiRows)
+      out.push({ key: rowKey("障害", r.user_id), system: "障害", userId: r.user_id, shogai: r });
+    return out;
+  }, [filteredRows, filteredSougouRows, filteredShogaiRows]);
 
   const loadJippi = useCallback(async () => {
     const { data, error: e } = await supabase
@@ -201,6 +254,41 @@ export function RiyouSeikyuContent() {
     loadPayments();
   }, [loadPayments]);
 
+  // 障害の入金状況 (shogai_seikyu_payments)。介護と同じ status 体系・列構成。
+  // client_id で持つ (介護 payments と別 Map なので client_id 衝突は問題にならない)
+  const [shogaiPayments, setShogaiPayments] = useState<Map<string, PaymentRow>>(new Map());
+  const loadShogaiPayments = useCallback(async () => {
+    const { data, error: e } = await supabase
+      .from("shogai_seikyu_payments")
+      .select("id, client_id, billed_amount, paid_amount, paid_date, payment_method, status, issued_date")
+      .eq("target_month", monthKey);
+    if (e) {
+      if (!isTableMissingError(e.code)) toast.error("障害入金状況取得失敗: " + e.message);
+      setShogaiPayments(new Map());
+      return;
+    }
+    setShogaiPayments(new Map(((data ?? []) as PaymentRow[]).map((p) => [p.client_id, p])));
+  }, [supabase, monthKey]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更時の fetch
+    loadShogaiPayments();
+  }, [loadShogaiPayments]);
+
+  // 制度で入金 Map を振り分けて 1 行分の入金を返す (障害 → shogai / それ以外 → 介護)
+  const paymentForRow = useCallback(
+    (row: UnifiedRow): PaymentRow | undefined =>
+      row.system === "障害"
+        ? shogaiPayments.get(row.userId)
+        : payments.get(row.userId),
+    [payments, shogaiPayments],
+  );
+  // 入金 reload も制度で振り分け
+  const reloadPaymentsFor = useCallback(
+    (system: SeikyuSystem) =>
+      system === "障害" ? loadShogaiPayments() : loadPayments(),
+    [loadShogaiPayments, loadPayments],
+  );
+
   // ── 前月の入金状況 (前回領収欄・繰越の算出用。②) ──
   const prevMonthKey =
     month === 1
@@ -235,14 +323,18 @@ export function RiyouSeikyuContent() {
     [prevPayments],
   );
 
+  // 介護 + 総合 の UserSeikyuRow 全体 (軽減/実費/医療費控除/口座 は両制度に同じ流儀を適用)。
+  // 障害はこれらが N/A なので含めない。
+  const kaigoAllRows = useMemo(() => [...rows, ...sougouRows], [rows, sougouRows]);
+
   // ── 請求個人設定 (軽減 / 医療費控除。①③) — kaigo_riyou_settings ──
   const [settings, setSettings] = useState<Map<string, RiyouSettingRow>>(new Map());
   const loadSettings = useCallback(async () => {
-    if (rows.length === 0) {
+    if (kaigoAllRows.length === 0) {
       setSettings(new Map());
       return;
     }
-    const ids = rows.map((r) => r.user_id);
+    const ids = Array.from(new Set(kaigoAllRows.map((r) => r.user_id)));
     const m = new Map<string, RiyouSettingRow>();
     for (let i = 0; i < ids.length; i += 100) {
       const chunk = ids.slice(i, i + 100);
@@ -259,7 +351,7 @@ export function RiyouSeikyuContent() {
       for (const s of (data ?? []) as RiyouSettingRow[]) m.set(s.client_id, s);
     }
     setSettings(m);
-  }, [supabase, rows]);
+  }, [supabase, kaigoAllRows]);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更/行更新時の fetch
     loadSettings();
@@ -283,6 +375,14 @@ export function RiyouSeikyuContent() {
     [keigenAmount, jippiTotal],
   );
 
+  // 統合行の請求額。介護/総合 は従来どおり rowBilled、障害 は userAmount (上限適用後)。
+  // 障害は軽減/実費/医療費控除が N/A なので userAmount がそのまま請求額。
+  const billedForRow = useCallback(
+    (row: UnifiedRow): number =>
+      row.system === "障害" ? row.shogai.userAmount : rowBilled(row.kaigo),
+    [rowBilled],
+  );
+
   // 医療費控除対象額 = round(軽減後負担額 × 対象単位比率)。
   // 対象単位比率 = 「生活援助」を含まないサービスの単位数 ÷ 総単位数
   // (生活援助中心型は控除対象外。加算は比率に按分される)
@@ -300,28 +400,29 @@ export function RiyouSeikyuContent() {
     [settings, keigenAmount],
   );
 
-  // 印刷/フッタ用の per-user 計算値 (rows 全体で計算しておく)
+  // 印刷/フッタ用の per-user 計算値 (介護 + 総合 全体で計算しておく)
   const keigenByUser = useMemo(() => {
     const m = new Map<string, number>();
-    for (const r of rows) m.set(r.user_id, keigenAmount(r.user_id, userPlusSelf(r)));
+    for (const r of kaigoAllRows) m.set(r.user_id, keigenAmount(r.user_id, userPlusSelf(r)));
     return m;
-  }, [rows, keigenAmount]);
+  }, [kaigoAllRows, keigenAmount]);
   const iryohiByUser = useMemo(() => {
     const m = new Map<string, number>();
-    for (const r of rows) {
+    for (const r of kaigoAllRows) {
       if (settings.get(r.user_id)?.iryohi_taisho) m.set(r.user_id, iryohiAmount(r));
     }
     return m;
-  }, [rows, settings, iryohiAmount]);
+  }, [kaigoAllRows, settings, iryohiAmount]);
 
-  // 口座情報 (FB データ用) — clients の bank_* を月内の利用者分だけ fetch
+  // 口座情報 (FB データ用) — clients の bank_* を月内の利用者分だけ fetch。
+  // FB は介護・総合のみ対象なので kaigoAllRows で十分 (障害は FB 除外)。
   const [bankByUser, setBankByUser] = useState<Map<string, ClientBank>>(new Map());
   const loadBanks = useCallback(async () => {
-    if (rows.length === 0) {
+    if (kaigoAllRows.length === 0) {
       setBankByUser(new Map());
       return;
     }
-    const ids = rows.map((r) => r.user_id);
+    const ids = Array.from(new Set(kaigoAllRows.map((r) => r.user_id)));
     const m = new Map<string, ClientBank>();
     for (let i = 0; i < ids.length; i += 100) {
       const chunk = ids.slice(i, i + 100);
@@ -344,61 +445,69 @@ export function RiyouSeikyuContent() {
       }
     }
     setBankByUser(m);
-  }, [supabase, rows]);
+  }, [supabase, kaigoAllRows]);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更/行更新時の fetch
     loadBanks();
   }, [loadBanks]);
 
-  // 選択行 (order-app と同じく未選択時は右ペインに placeholder を出す)
-  const selected =
-    filteredRows.find((r) => r.user_id === selectedUserId) ?? null;
-  const totalBilled = filteredRows.reduce((s, r) => s + rowBilled(r), 0);
+  // 選択行 (order-app と同じく未選択時は右ペインに placeholder を出す)。key で一意特定
+  const selected = unifiedRows.find((r) => r.key === selectedKey) ?? null;
+  const totalBilled = unifiedRows.reduce((s, r) => s + billedForRow(r), 0);
 
-  const toggle = (id: string) =>
+  const toggle = (key: string) =>
     setChecked((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   const toggleAll = () =>
     setChecked((prev) =>
-      prev.size === filteredRows.length
+      prev.size === unifiedRows.length
         ? new Set()
-        : new Set(filteredRows.map((r) => r.user_id)),
+        : new Set(unifiedRows.map((r) => r.key)),
     );
-  const toggleMerged = (id: string) =>
+  const toggleMerged = (key: string) =>
     setMerged((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
 
-  // 発行対象: チェックあり → その利用者のみ / チェックなし → 全件
+  // 発行対象: チェックあり → その行のみ / チェックなし → 全件
   const targets = useMemo(
     () =>
       checked.size > 0
-        ? filteredRows.filter((r) => checked.has(r.user_id))
-        : filteredRows,
-    [filteredRows, checked],
+        ? unifiedRows.filter((r) => checked.has(r.key))
+        : unifiedRows,
+    [unifiedRows, checked],
+  );
+
+  // FB (口座振替) / 名寄せ (世帯合算) / 介護帳票 は介護・総合のみ対象。障害は除外する。
+  const kaigoTargets = useMemo(
+    () => targets.filter((r) => r.system !== "障害"),
+    [targets],
   );
 
   const reiwa = year - 2018;
 
-  // 領収書の発行対象 = 入金済み (入金完 / 一部入金) かつ入金額 > 0 の行
+  // 領収書 (介護帳票) の発行対象 = 介護・総合 のうち入金済み (入金完 / 一部入金) かつ
+  // 入金額 > 0 の行。障害の帳票は障害請求タブ側にあるためここでは除外する。
   const ryoshuTargets = useMemo(
     () =>
-      targets.filter((r) => {
-        const p = payments.get(r.user_id);
-        return (
-          p != null &&
-          (p.status === "入金完" || p.status === "一部入金") &&
-          p.paid_amount > 0
-        );
-      }),
-    [targets, payments],
+      kaigoTargets
+        .filter((r) => {
+          const p = payments.get(r.userId);
+          return (
+            p != null &&
+            (p.status === "入金完" || p.status === "一部入金") &&
+            p.paid_amount > 0
+          );
+        })
+        .map((r) => ({ row: r.kaigo, payment: payments.get(r.userId)! })),
+    [kaigoTargets, payments],
   );
 
   const togglePrintDoc = (key: PrintDocKey) =>
@@ -420,26 +529,51 @@ export function RiyouSeikyuContent() {
       toast.error("領収書を発行できる行がありません (入金完 / 一部入金 の利用者のみ)");
       return;
     }
-    // 発行記録は「請求書」を含む場合のみ (領収書のみの印刷では発行日を更新しない)
-    // 発行記録: 請求額 + 発行日を upsert (入金状態は既存を保持、新規は 請求済)
-    // billed_amount は軽減後の当月分のみ (繰越は印字のみ = 二重計上を避ける)
+    // 発行記録は「請求書」を含む場合のみ (領収書のみの印刷では発行日を更新しない)。
+    // 発行記録: 請求額 + 発行日を upsert (入金状態は既存を保持、新規は 請求済)。
+    // billed_amount は当月分のみ (繰越は印字のみ = 二重計上を避ける)。
+    // 保存先は制度で振り分け (介護/総合 → riyou_seikyu_payments / 障害 → shogai_seikyu_payments)。
     if (printDocs.has("seikyu")) {
       const today = new Date();
       const issued = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-      const { error: upErr } = await supabase.from("riyou_seikyu_payments").upsert(
-        targets.map((r) => ({
-          client_id: r.user_id,
-          target_month: monthKey,
-          billed_amount: rowBilled(r),
-          issued_date: issued,
-        })),
-        { onConflict: "client_id,target_month" },
-      );
-      if (upErr && !isTableMissingError(upErr.code)) {
-        toast.error("発行記録の保存に失敗: " + upErr.message);
-      } else if (!upErr) {
-        loadPayments();
+      const kaigoUp = targets.filter((r) => r.system !== "障害");
+      const shogaiUp = targets.filter((r) => r.system === "障害");
+      let anyKaigo = false;
+      let anyShogai = false;
+      if (kaigoUp.length > 0) {
+        const { error: upErr } = await supabase.from("riyou_seikyu_payments").upsert(
+          kaigoUp.map((r) => ({
+            client_id: r.userId,
+            target_month: monthKey,
+            billed_amount: billedForRow(r),
+            issued_date: issued,
+          })),
+          { onConflict: "client_id,target_month" },
+        );
+        if (upErr && !isTableMissingError(upErr.code)) {
+          toast.error("発行記録の保存に失敗: " + upErr.message);
+        } else if (!upErr) {
+          anyKaigo = true;
+        }
       }
+      if (shogaiUp.length > 0) {
+        const { error: upErr } = await supabase.from("shogai_seikyu_payments").upsert(
+          shogaiUp.map((r) => ({
+            client_id: r.userId,
+            target_month: monthKey,
+            billed_amount: billedForRow(r),
+            issued_date: issued,
+          })),
+          { onConflict: "client_id,target_month" },
+        );
+        if (upErr && !isTableMissingError(upErr.code)) {
+          toast.error("障害の発行記録の保存に失敗: " + upErr.message);
+        } else if (!upErr) {
+          anyShogai = true;
+        }
+      }
+      if (anyKaigo) loadPayments();
+      if (anyShogai) loadShogaiPayments();
     }
     setPrinting(true);
     // print CSS 適用後に印刷 dialog
@@ -450,13 +584,15 @@ export function RiyouSeikyuContent() {
   };
 
   // ── 支払方法 / 請求書発行日 のインライン編集 (order-app の行内 select/date と同じ) ──
-  //    upsert は指定列のみ更新 (入金状態などは既存を保持 — issueSeikyusho と同じ流儀)
-  const setPaymentMethod = async (r: UserSeikyuRow, method: string) => {
-    const { error: e } = await supabase.from("riyou_seikyu_payments").upsert(
+  //    upsert は指定列のみ更新 (入金状態などは既存を保持 — issueSeikyusho と同じ流儀)。
+  //    保存先テーブルは行の制度で振り分ける。
+  const setPaymentMethod = async (row: UnifiedRow, method: string) => {
+    const table = paymentTableFor(row.system);
+    const { error: e } = await supabase.from(table).upsert(
       {
-        client_id: r.user_id,
+        client_id: row.userId,
         target_month: monthKey,
-        billed_amount: payments.get(r.user_id)?.billed_amount ?? rowBilled(r),
+        billed_amount: paymentForRow(row)?.billed_amount ?? billedForRow(row),
         payment_method: method || null,
       },
       { onConflict: "client_id,target_month" },
@@ -465,14 +601,15 @@ export function RiyouSeikyuContent() {
       if (!isTableMissingError(e.code)) toast.error("支払方法の保存に失敗: " + e.message);
       return;
     }
-    loadPayments();
+    reloadPaymentsFor(row.system);
   };
-  const setIssuedDate = async (r: UserSeikyuRow, date: string) => {
-    const { error: e } = await supabase.from("riyou_seikyu_payments").upsert(
+  const setIssuedDate = async (row: UnifiedRow, date: string) => {
+    const table = paymentTableFor(row.system);
+    const { error: e } = await supabase.from(table).upsert(
       {
-        client_id: r.user_id,
+        client_id: row.userId,
         target_month: monthKey,
-        billed_amount: payments.get(r.user_id)?.billed_amount ?? rowBilled(r),
+        billed_amount: paymentForRow(row)?.billed_amount ?? billedForRow(row),
         issued_date: date || null,
       },
       { onConflict: "client_id,target_month" },
@@ -481,28 +618,33 @@ export function RiyouSeikyuContent() {
       if (!isTableMissingError(e.code)) toast.error("発行日の保存に失敗: " + e.message);
       return;
     }
-    loadPayments();
+    reloadPaymentsFor(row.system);
   };
 
   // ─── 名寄せ (世帯合算) — order-app UserBillingTab の groupForPrint と同じ挙動 ──
   // 発行対象 (targets) のうち「名寄」チェックされた 2 名以上を 1 世帯グループに、
   // それ以外は 1 名 1 枚。請求書発行 (issueSeikyusho) の同じ印刷 view 内で出し分ける。
   const printGroups = useMemo(() => {
-    const household = targets.filter((r) => merged.has(r.user_id));
+    const kaigoRows = kaigoTargets.map((r) => r.kaigo);
+    const household = kaigoTargets
+      .filter((r) => merged.has(r.key))
+      .map((r) => r.kaigo);
     if (household.length >= 2) {
+      const hset = new Set(household.map((r) => r.user_id));
       return {
         household,
-        singles: targets.filter((r) => !merged.has(r.user_id)),
+        singles: kaigoRows.filter((r) => !hset.has(r.user_id)),
       };
     }
     // 名寄 1 名以下は合算にならないので全員個別
-    return { household: [] as UserSeikyuRow[], singles: targets };
-  }, [targets, merged]);
+    return { household: [] as UserSeikyuRow[], singles: kaigoRows };
+  }, [kaigoTargets, merged]);
 
   // ─── FB データ (全銀協 口座振替) ───────────────────────────────────────────
   const exportFbData = () => {
-    // 対象: 発行対象 (targets)。金額 (負担額 + 実費) を引落額とする
-    const fbTargets: FbTransferTarget[] = targets.map((r) => {
+    // 対象: 発行対象のうち介護・総合のみ (障害は FB 除外)。金額 (負担額 − 軽減 + 実費) を引落額とする
+    const fbTargets: FbTransferTarget[] = kaigoTargets.map((row) => {
+      const r = row.kaigo;
       const bank = bankByUser.get(r.user_id);
       return {
         customerNumber: r.insured_number ?? r.user_id.slice(0, 20),
@@ -554,63 +696,86 @@ export function RiyouSeikyuContent() {
     );
   };
 
-  // ── フッタ集計 (order-app の 件数合計/確定合計 に対応) ──
-  const issuedRows = filteredRows.filter((r) => payments.has(r.user_id));
+  // ── フッタ集計 (order-app の 件数合計/確定合計 に対応。全制度合算) ──
+  const issuedRows = unifiedRows.filter((r) => paymentForRow(r) != null);
   const issuedTotal = issuedRows.reduce(
-    (s, r) => s + (payments.get(r.user_id)?.billed_amount ?? 0),
+    (s, r) => s + (paymentForRow(r)?.billed_amount ?? 0),
     0,
   );
-  const paidTotal = filteredRows.reduce(
-    (s, r) => s + (payments.get(r.user_id)?.paid_amount ?? 0),
+  const paidTotal = unifiedRows.reduce(
+    (s, r) => s + (paymentForRow(r)?.paid_amount ?? 0),
     0,
   );
-  const misyuCount = filteredRows.filter((r) => {
-    const p = payments.get(r.user_id);
+  const misyuCount = unifiedRows.filter((r) => {
+    const p = paymentForRow(r);
     return p && p.status !== "入金完";
   }).length;
 
-  // 軽減 / 繰越 / 医療費控除 の全体合計 (フッタ実値化用)
-  const keigenTotal = filteredRows.reduce(
+  // 制度別の請求額小計 (介護 / 総合 / 障害)
+  const subtotalBySystem = useMemo(() => {
+    const m: Record<SeikyuSystem, number> = { 介護: 0, 総合事業: 0, 障害: 0 };
+    for (const r of unifiedRows) m[r.system] += billedForRow(r);
+    return m;
+  }, [unifiedRows, billedForRow]);
+  const countBySystem = useMemo(() => {
+    const m: Record<SeikyuSystem, number> = { 介護: 0, 総合事業: 0, 障害: 0 };
+    for (const r of unifiedRows) m[r.system] += 1;
+    return m;
+  }, [unifiedRows]);
+
+  // 軽減 / 繰越 / 医療費控除 の全体合計 (介護 + 総合 のみ。障害は N/A)。
+  const keigenTotal = kaigoAllRows.reduce(
     (s, r) => s + (keigenByUser.get(r.user_id) ?? 0),
     0,
   );
-  const iryohiTotal = filteredRows.reduce(
+  const iryohiTotal = kaigoAllRows.reduce(
     (s, r) => s + (iryohiByUser.get(r.user_id) ?? 0),
     0,
   );
-  // 過入金充当額 = 負の繰越 (前月過入金) の合計絶対値 / 未収繰越 = 正の繰越の合計
-  const overpayTotal = filteredRows.reduce((s, r) => {
+  // 過入金充当額 = 負の繰越 (前月過入金) の合計絶対値 / 未収繰越 = 正の繰越の合計 (介護 + 総合)
+  const overpayTotal = kaigoAllRows.reduce((s, r) => {
     const c = carryover(r.user_id);
     return s + (c < 0 ? -c : 0);
   }, 0);
-  const misyuCarryTotal = filteredRows.reduce((s, r) => {
+  const misyuCarryTotal = kaigoAllRows.reduce((s, r) => {
     const c = carryover(r.user_id);
     return s + (c > 0 ? c : 0);
   }, 0);
 
-  // 選択行のフッタ詳細 (未選択時は全体合計 — order-app と同じ)
-  const selAmount = selected ? rowBilled(selected) : totalBilled;
+  // 選択行のフッタ詳細 (未選択時は全体合計 — order-app と同じ)。
+  // 障害は軽減/繰越/医療費控除が N/A なので 0。
+  const selIsShogai = selected?.system === "障害";
+  const selKaigo = selected && !selIsShogai ? selected.kaigo : null;
+  const selAmount = selected ? billedForRow(selected) : totalBilled;
   const selKeigen = selected
-    ? (keigenByUser.get(selected.user_id) ?? 0)
+    ? selKaigo
+      ? (keigenByUser.get(selKaigo.user_id) ?? 0)
+      : 0
     : keigenTotal;
   const selIryohi = selected
-    ? (iryohiByUser.get(selected.user_id) ?? 0)
+    ? selKaigo
+      ? (iryohiByUser.get(selKaigo.user_id) ?? 0)
+      : 0
     : iryohiTotal;
   const selOverpay = selected
-    ? Math.max(0, -carryover(selected.user_id))
+    ? selKaigo
+      ? Math.max(0, -carryover(selKaigo.user_id))
+      : 0
     : overpayTotal;
   const selMisyuCarry = selected
-    ? Math.max(0, carryover(selected.user_id))
+    ? selKaigo
+      ? Math.max(0, carryover(selKaigo.user_id))
+      : 0
     : misyuCarryTotal;
 
-  const checkedCount = filteredRows.filter((r) => checked.has(r.user_id)).length;
+  const checkedCount = unifiedRows.filter((r) => checked.has(r.key)).length;
   const printScopeLabel =
-    checkedCount > 0 ? `対象 ${checkedCount} 名` : `全 ${filteredRows.length} 名`;
+    checkedCount > 0 ? `対象 ${checkedCount} 名` : `全 ${unifiedRows.length} 名`;
   const allChecked =
-    filteredRows.length > 0 && checked.size === filteredRows.length;
+    unifiedRows.length > 0 && checked.size === unifiedRows.length;
 
-  const statusBadge = (userId: string) => {
-    const p = payments.get(userId);
+  const statusBadge = (row: UnifiedRow) => {
+    const p = paymentForRow(row);
     if (!p)
       return (
         <span className="inline-block whitespace-nowrap px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[10px] font-semibold">
@@ -637,13 +802,16 @@ export function RiyouSeikyuContent() {
           {/* ツールバー */}
           <div className="border-b border-gray-300 bg-gray-100 px-3 py-2 shrink-0 flex items-center gap-2 flex-wrap">
             <SeikyuMonthNav />
-            <span className="text-xs text-gray-500">{filteredRows.length} 件</span>
+            <span className="text-xs text-gray-500">{unifiedRows.length} 件</span>
+            <span className="text-[10px] text-gray-400">
+              (介護 {countBySystem.介護} / 総合 {countBySystem.総合事業} / 障害 {countBySystem.障害})
+            </span>
             <div className="w-px h-5 bg-gray-300 mx-1" />
             <button
               type="button"
               onClick={issueSeikyusho}
-              disabled={filteredRows.length === 0 || printDocs.size === 0}
-              title={`選択した綴りを印刷 (${printScopeLabel})。請求書を含む場合は発行日を記録します。「名寄」チェック 2 名以上は 1 枚の世帯合算請求書になります。領収書は入金済み (入金完/一部入金) の行から発行します`}
+              disabled={unifiedRows.length === 0 || printDocs.size === 0}
+              title={`選択した綴りを印刷 (${printScopeLabel})。請求書を含む場合は発行日を記録します (保存先は制度で振り分け)。「名寄」チェック 2 名以上は 1 枚の世帯合算請求書になります (介護・総合のみ)。領収書は入金済み (入金完/一部入金) の行から発行します`}
               className="border border-emerald-500 rounded bg-emerald-50 px-2.5 py-1 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1.5 text-xs font-medium disabled:opacity-50"
             >
               <FileText size={13} />
@@ -671,12 +839,12 @@ export function RiyouSeikyuContent() {
             <button
               type="button"
               onClick={exportFbData}
-              disabled={filteredRows.length === 0}
-              title="全銀協 口座振替フォーマット (Shift_JIS) で FB データを出力"
+              disabled={kaigoTargets.length === 0}
+              title="全銀協 口座振替フォーマット (Shift_JIS) で FB データを出力 (介護・総合のみ / 障害は対象外)"
               className="border border-blue-500 rounded bg-blue-50 px-2.5 py-1 text-blue-700 hover:bg-blue-100 flex items-center gap-1.5 text-xs font-medium disabled:opacity-50"
             >
               <Banknote size={13} />
-              FBデータ ({targets.length}件)
+              FBデータ ({kaigoTargets.length}件)
             </button>
             <span className="text-[11px] text-gray-400">{printScopeLabel}</span>
           </div>
@@ -714,6 +882,7 @@ export function RiyouSeikyuContent() {
                         </label>
                       </th>
                       <th className="px-2 py-1.5 border border-gray-300 text-center w-10">名寄</th>
+                      <th className="px-2 py-1.5 border border-gray-300 text-center w-16">制度</th>
                       <th className="px-2 py-1.5 border border-gray-300 text-center w-16">状態</th>
                       <th className="px-2 py-1.5 border border-gray-300 text-left">利用者名</th>
                       <th className="px-2 py-1.5 border border-gray-300 text-left">事業所名</th>
@@ -724,39 +893,60 @@ export function RiyouSeikyuContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRows.map((r) => {
-                      const p = payments.get(r.user_id);
-                      const isSelected = selectedUserId === r.user_id;
+                    {unifiedRows.map((row) => {
+                      const p = paymentForRow(row);
+                      const isSelected = selectedKey === row.key;
+                      const isShogai = row.system === "障害";
+                      const userName = isShogai ? row.shogai.user_name : row.kaigo.user_name;
+                      const numberCell = isShogai
+                        ? row.shogai.beneficiary_number
+                        : row.kaigo.insured_number;
+                      const keigen = isShogai ? 0 : (keigenByUser.get(row.userId) ?? 0);
+                      const billed = billedForRow(row);
                       return (
                         <tr
-                          key={r.user_id}
+                          key={row.key}
                           className={`cursor-pointer ${isSelected ? "bg-indigo-50" : "hover:bg-blue-50"}`}
-                          onClick={() => setSelectedUserId(r.user_id)}
+                          onClick={() => setSelectedKey(row.key)}
                         >
                           <td className="px-2 py-1 border border-gray-200 text-center">
                             <input
                               type="checkbox"
-                              checked={checked.has(r.user_id)}
-                              onChange={() => toggle(r.user_id)}
+                              checked={checked.has(row.key)}
+                              onChange={() => toggle(row.key)}
                               onClick={(e) => e.stopPropagation()}
                               className="cursor-pointer"
                             />
                           </td>
                           <td className="px-2 py-1 border border-gray-200 text-center">
-                            <input
-                              type="checkbox"
-                              checked={merged.has(r.user_id)}
-                              onChange={() => toggleMerged(r.user_id)}
-                              onClick={(e) => e.stopPropagation()}
-                              className="cursor-pointer"
-                              title="名寄せ (チェックした利用者を世帯合算の請求書 1 枚に合算)"
-                            />
+                            {/* 名寄せは介護・総合のみ (障害は世帯合算対象外) */}
+                            {isShogai ? (
+                              <span className="text-[10px] text-gray-300" title="障害は名寄せ対象外">
+                                —
+                              </span>
+                            ) : (
+                              <input
+                                type="checkbox"
+                                checked={merged.has(row.key)}
+                                onChange={() => toggleMerged(row.key)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="cursor-pointer"
+                                title="名寄せ (チェックした利用者を世帯合算の請求書 1 枚に合算)"
+                              />
+                            )}
                           </td>
                           <td className="px-2 py-1 border border-gray-200 text-center">
-                            {statusBadge(r.user_id)}
+                            <span
+                              className={`inline-block whitespace-nowrap px-1.5 py-0.5 rounded text-[10px] font-semibold ${SYSTEM_BADGE_CLS[row.system]}`}
+                            >
+                              {row.system}
+                            </span>
+                          </td>
+                          <td className="px-2 py-1 border border-gray-200 text-center">
+                            {statusBadge(row)}
                           </td>
                           <td className="px-2 py-1 border border-gray-200 font-medium">
-                            {r.user_name}
+                            {userName}
                           </td>
                           <td
                             className="px-2 py-1 border border-gray-200 truncate max-w-[200px]"
@@ -765,7 +955,7 @@ export function RiyouSeikyuContent() {
                             {officeName ?? "-"}
                           </td>
                           <td className="px-2 py-1 border border-gray-200 font-mono">
-                            {r.insured_number ?? "-"}
+                            {numberCell ?? "-"}
                           </td>
                           <td
                             className="px-2 py-1 border border-gray-200"
@@ -773,7 +963,7 @@ export function RiyouSeikyuContent() {
                           >
                             <select
                               value={p?.payment_method ?? ""}
-                              onChange={(e) => setPaymentMethod(r, e.target.value)}
+                              onChange={(e) => setPaymentMethod(row, e.target.value)}
                               className="w-full bg-transparent border-0 text-xs focus:bg-white focus:border focus:border-indigo-300 focus:outline-none rounded px-1 py-0.5"
                             >
                               {PAYMENT_METHOD_OPTIONS.map((opt) => (
@@ -786,13 +976,13 @@ export function RiyouSeikyuContent() {
                           <td
                             className="px-2 py-1 border border-gray-200 text-right font-mono"
                             title={
-                              (keigenByUser.get(r.user_id) ?? 0) > 0
-                                ? `軽減 ▲¥${(keigenByUser.get(r.user_id) ?? 0).toLocaleString()} 適用後`
+                              keigen > 0
+                                ? `軽減 ▲¥${keigen.toLocaleString()} 適用後`
                                 : undefined
                             }
                           >
-                            ¥{rowBilled(r).toLocaleString()}
-                            {(keigenByUser.get(r.user_id) ?? 0) > 0 && (
+                            ¥{billed.toLocaleString()}
+                            {keigen > 0 && (
                               <span className="ml-1 text-[9px] text-rose-500 font-sans">軽</span>
                             )}
                           </td>
@@ -803,7 +993,7 @@ export function RiyouSeikyuContent() {
                             <input
                               type="date"
                               value={p?.issued_date ?? ""}
-                              onChange={(e) => setIssuedDate(r, e.target.value)}
+                              onChange={(e) => setIssuedDate(row, e.target.value)}
                               className="w-full bg-transparent border-0 text-xs focus:bg-white focus:border focus:border-indigo-300 focus:outline-none rounded px-1 py-0.5"
                             />
                             {p?.issued_date && (
@@ -815,9 +1005,9 @@ export function RiyouSeikyuContent() {
                         </tr>
                       );
                     })}
-                    {filteredRows.length === 0 && (
+                    {unifiedRows.length === 0 && (
                       <tr>
-                        <td colSpan={9} className="px-3 py-8 text-center text-gray-400 text-sm">
+                        <td colSpan={10} className="px-3 py-8 text-center text-gray-400 text-sm">
                           対象月の実績 (完了) がありません
                         </td>
                       </tr>
@@ -830,11 +1020,17 @@ export function RiyouSeikyuContent() {
               <div className="border-t border-gray-300 bg-gray-50 px-3 py-2 shrink-0 text-xs">
                 <div className="flex flex-wrap gap-x-6 gap-y-1 text-gray-700">
                   <span>
-                    件数合計 <span className="font-mono font-semibold">{filteredRows.length.toLocaleString()}</span>
+                    件数合計 <span className="font-mono font-semibold">{unifiedRows.length.toLocaleString()}</span>
                   </span>
                   <span>
                     請求額合計{" "}
                     <span className="font-mono font-semibold">¥{totalBilled.toLocaleString()}</span>
+                  </span>
+                  {/* 制度別小計 */}
+                  <span className="text-[11px] text-gray-500">
+                    (介護 ¥{subtotalBySystem.介護.toLocaleString()} / 総合 ¥
+                    {subtotalBySystem.総合事業.toLocaleString()} / 障害 ¥
+                    {subtotalBySystem.障害.toLocaleString()})
                   </span>
                   <span className="text-gray-500">
                     確 件数合計{" "}
@@ -890,7 +1086,9 @@ export function RiyouSeikyuContent() {
             <span className="text-sm font-semibold text-gray-700">利用明細欄</span>
             {selected && (
               <span className="text-xs text-gray-500 truncate max-w-[160px]">
-                {selected.user_name}
+                {selected.system === "障害"
+                  ? selected.shogai.user_name
+                  : selected.kaigo.user_name}
               </span>
             )}
           </div>
@@ -900,124 +1098,32 @@ export function RiyouSeikyuContent() {
                 左の行をクリックすると明細が表示されます
               </div>
             )}
-            {selected && (
-              <>
-                <table className="w-full text-xs border-collapse">
-                  <thead className="bg-gray-50 text-gray-600">
-                    <tr>
-                      <th className="px-2 py-1 border-b border-gray-200 text-left">利用料項目</th>
-                      <th className="px-2 py-1 border-b border-gray-200 text-right w-16">単価</th>
-                      <th className="px-2 py-1 border-b border-gray-200 text-right w-10">数量</th>
-                      <th className="px-2 py-1 border-b border-gray-200 text-right w-20">金額</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {splitUserAmount(selected).map((l) => (
-                      <tr key={l.label} className="border-b border-gray-100">
-                        <td className="px-2 py-1 text-gray-700">{l.label}</td>
-                        <td className="px-2 py-1 text-right font-mono">
-                          {l.unitPer != null ? l.unitPer.toLocaleString() : "—"}
-                        </td>
-                        <td className="px-2 py-1 text-right font-mono">{l.count}</td>
-                        <td className="px-2 py-1 text-right font-mono">
-                          ¥{l.amount.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                <div className="px-3 py-2 border-t border-gray-200 text-xs space-y-0.5">
-                  <div className="flex justify-between text-gray-600">
-                    <span>
-                      利用者負担額 ({Math.round(selected.copay_rate * 10)}割)
-                    </span>
-                    <span className="font-mono">
-                      ¥{selected.userAmount.toLocaleString()}
-                    </span>
-                  </div>
-                  {selected.selfPayAmount > 0 && (
-                    <div className="flex justify-between text-red-600">
-                      <span>限度額超過 全額自費 ({selected.overUnits.toLocaleString()}単位)</span>
-                      <span className="font-mono">
-                        ¥{selected.selfPayAmount.toLocaleString()}
-                      </span>
-                    </div>
-                  )}
-                  {(keigenByUser.get(selected.user_id) ?? 0) > 0 && (
-                    <div className="flex justify-between text-rose-600">
-                      <span>
-                        軽減額 ({settings.get(selected.user_id)?.keigen_rate ?? 0}%)
-                      </span>
-                      <span className="font-mono">
-                        ▲¥{(keigenByUser.get(selected.user_id) ?? 0).toLocaleString()}
-                      </span>
-                    </div>
-                  )}
-                  {jippiTotal(selected.user_id) > 0 && (
-                    <div className="flex justify-between text-gray-600">
-                      <span>実費合計</span>
-                      <span className="font-mono">
-                        ¥{jippiTotal(selected.user_id).toLocaleString()}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-gray-800 font-semibold pt-1 border-t border-gray-100 mt-1">
-                    <span>合計</span>
-                    <span className="font-mono">
-                      ¥{rowBilled(selected).toLocaleString()}
-                    </span>
-                  </div>
-                  {iryohiByUser.has(selected.user_id) && (
-                    <div className="flex justify-between text-gray-500 text-[10px]">
-                      <span>うち医療費控除対象額</span>
-                      <span className="font-mono">
-                        ¥{(iryohiByUser.get(selected.user_id) ?? 0).toLocaleString()}
-                      </span>
-                    </div>
-                  )}
-                  {carryover(selected.user_id) !== 0 && (
-                    <div className="flex justify-between text-gray-500 text-[10px]">
-                      <span>
-                        前月繰越 ({carryover(selected.user_id) > 0 ? "未収繰越" : "過入金充当"})
-                      </span>
-                      <span className="font-mono">
-                        {carryover(selected.user_id) < 0 ? "▲" : ""}¥
-                        {Math.abs(carryover(selected.user_id)).toLocaleString()}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* 利用実費 (保険外) の入力 */}
-                <div className="px-3 pb-3">
-                  <JippiSection
-                    key={`jippi-${selected.user_id}-${monthKey}`}
-                    userId={selected.user_id}
-                    monthKey={monthKey}
-                    entries={jippiByUser.get(selected.user_id) ?? []}
-                    onChanged={loadJippi}
-                  />
-
-                  {/* 請求設定 (軽減 / 医療費控除) — ほのぼの「請求個人設定」相当 */}
-                  <RiyouSettingsSection
-                    key={`setting-${selected.user_id}`}
-                    userId={selected.user_id}
-                    setting={settings.get(selected.user_id) ?? null}
-                    onChanged={loadSettings}
-                  />
-
-                  {/* 入金登録 (未収金管理) */}
-                  <PaymentSection
-                    key={`pay-${selected.user_id}-${monthKey}`}
-                    userId={selected.user_id}
-                    monthKey={monthKey}
-                    billed={rowBilled(selected)}
-                    payment={payments.get(selected.user_id) ?? null}
-                    onChanged={loadPayments}
-                  />
-                </div>
-              </>
+            {/* ── 介護 / 総合: 従来どおりの利用明細欄 (軽減・実費・医療費控除・入金) ── */}
+            {selected && selected.system !== "障害" && (
+              <RiyouKaigoDetail
+                selected={selected.kaigo}
+                monthKey={monthKey}
+                keigenByUser={keigenByUser}
+                iryohiByUser={iryohiByUser}
+                settings={settings}
+                jippiByUser={jippiByUser}
+                jippiTotal={jippiTotal}
+                rowBilled={rowBilled}
+                carryover={carryover}
+                payments={payments}
+                onJippiChanged={loadJippi}
+                onSettingsChanged={loadSettings}
+                onPaymentChanged={loadPayments}
+              />
+            )}
+            {/* ── 障害: 明細 + 入金のみ (軽減/実費/医療費控除は N/A) ── */}
+            {selected && selected.system === "障害" && (
+              <ShogaiRiyouDetail
+                selected={selected.shogai}
+                monthKey={monthKey}
+                payment={shogaiPayments.get(selected.userId) ?? null}
+                onPaymentChanged={loadShogaiPayments}
+              />
             )}
           </div>
         </div>
@@ -1073,11 +1179,11 @@ export function RiyouSeikyuContent() {
             .filter((k) => printDocs.has(k))
             .map((k) => (
               <div key={k}>
-                {ryoshuTargets.map((r) => (
+                {ryoshuTargets.map(({ row: r, payment: pay }) => (
                   <RyoshuPrintSheet
                     key={`${k}-${r.user_id}`}
                     row={r}
-                    payment={payments.get(r.user_id)!}
+                    payment={pay}
                     officeName={officeName}
                     reiwa={reiwa}
                     month={month}
@@ -1142,6 +1248,236 @@ function splitUserAmount(row: UserSeikyuRow): RiyouLine[] {
     });
   }
   return lines;
+}
+
+// ─── 介護 / 総合 の利用明細欄 (従来の右ペイン body を component 化。挙動は不変) ──
+//    軽減 / 実費 / 医療費控除 / 前月繰越 / 入金 (riyou_seikyu_payments) を扱う。
+function RiyouKaigoDetail({
+  selected,
+  monthKey,
+  keigenByUser,
+  iryohiByUser,
+  settings,
+  jippiByUser,
+  jippiTotal,
+  rowBilled,
+  carryover,
+  payments,
+  onJippiChanged,
+  onSettingsChanged,
+  onPaymentChanged,
+}: {
+  selected: UserSeikyuRow;
+  monthKey: string;
+  keigenByUser: Map<string, number>;
+  iryohiByUser: Map<string, number>;
+  settings: Map<string, RiyouSettingRow>;
+  jippiByUser: Map<string, JippiEntry[]>;
+  jippiTotal: (userId: string) => number;
+  rowBilled: (r: UserSeikyuRow) => number;
+  carryover: (userId: string) => number;
+  payments: Map<string, PaymentRow>;
+  onJippiChanged: () => void;
+  onSettingsChanged: () => void;
+  onPaymentChanged: () => void;
+}) {
+  return (
+    <>
+      <table className="w-full text-xs border-collapse">
+        <thead className="bg-gray-50 text-gray-600">
+          <tr>
+            <th className="px-2 py-1 border-b border-gray-200 text-left">利用料項目</th>
+            <th className="px-2 py-1 border-b border-gray-200 text-right w-16">単価</th>
+            <th className="px-2 py-1 border-b border-gray-200 text-right w-10">数量</th>
+            <th className="px-2 py-1 border-b border-gray-200 text-right w-20">金額</th>
+          </tr>
+        </thead>
+        <tbody>
+          {splitUserAmount(selected).map((l) => (
+            <tr key={l.label} className="border-b border-gray-100">
+              <td className="px-2 py-1 text-gray-700">{l.label}</td>
+              <td className="px-2 py-1 text-right font-mono">
+                {l.unitPer != null ? l.unitPer.toLocaleString() : "—"}
+              </td>
+              <td className="px-2 py-1 text-right font-mono">{l.count}</td>
+              <td className="px-2 py-1 text-right font-mono">
+                ¥{l.amount.toLocaleString()}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="px-3 py-2 border-t border-gray-200 text-xs space-y-0.5">
+        <div className="flex justify-between text-gray-600">
+          <span>利用者負担額 ({Math.round(selected.copay_rate * 10)}割)</span>
+          <span className="font-mono">¥{selected.userAmount.toLocaleString()}</span>
+        </div>
+        {selected.selfPayAmount > 0 && (
+          <div className="flex justify-between text-red-600">
+            <span>限度額超過 全額自費 ({selected.overUnits.toLocaleString()}単位)</span>
+            <span className="font-mono">¥{selected.selfPayAmount.toLocaleString()}</span>
+          </div>
+        )}
+        {(keigenByUser.get(selected.user_id) ?? 0) > 0 && (
+          <div className="flex justify-between text-rose-600">
+            <span>軽減額 ({settings.get(selected.user_id)?.keigen_rate ?? 0}%)</span>
+            <span className="font-mono">
+              ▲¥{(keigenByUser.get(selected.user_id) ?? 0).toLocaleString()}
+            </span>
+          </div>
+        )}
+        {jippiTotal(selected.user_id) > 0 && (
+          <div className="flex justify-between text-gray-600">
+            <span>実費合計</span>
+            <span className="font-mono">
+              ¥{jippiTotal(selected.user_id).toLocaleString()}
+            </span>
+          </div>
+        )}
+        <div className="flex justify-between text-gray-800 font-semibold pt-1 border-t border-gray-100 mt-1">
+          <span>合計</span>
+          <span className="font-mono">¥{rowBilled(selected).toLocaleString()}</span>
+        </div>
+        {iryohiByUser.has(selected.user_id) && (
+          <div className="flex justify-between text-gray-500 text-[10px]">
+            <span>うち医療費控除対象額</span>
+            <span className="font-mono">
+              ¥{(iryohiByUser.get(selected.user_id) ?? 0).toLocaleString()}
+            </span>
+          </div>
+        )}
+        {carryover(selected.user_id) !== 0 && (
+          <div className="flex justify-between text-gray-500 text-[10px]">
+            <span>
+              前月繰越 ({carryover(selected.user_id) > 0 ? "未収繰越" : "過入金充当"})
+            </span>
+            <span className="font-mono">
+              {carryover(selected.user_id) < 0 ? "▲" : ""}¥
+              {Math.abs(carryover(selected.user_id)).toLocaleString()}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="px-3 pb-3">
+        <JippiSection
+          key={`jippi-${selected.user_id}-${monthKey}`}
+          userId={selected.user_id}
+          monthKey={monthKey}
+          entries={jippiByUser.get(selected.user_id) ?? []}
+          onChanged={onJippiChanged}
+        />
+
+        <RiyouSettingsSection
+          key={`setting-${selected.user_id}`}
+          userId={selected.user_id}
+          setting={settings.get(selected.user_id) ?? null}
+          onChanged={onSettingsChanged}
+        />
+
+        <PaymentSection
+          key={`pay-${selected.user_id}-${monthKey}`}
+          userId={selected.user_id}
+          monthKey={monthKey}
+          billed={rowBilled(selected)}
+          payment={payments.get(selected.user_id) ?? null}
+          onChanged={onPaymentChanged}
+        />
+      </div>
+    </>
+  );
+}
+
+// ─── 障害 の利用明細欄 (明細 + 入金のみ。軽減/実費/医療費控除は N/A) ──────────────
+//    請求額 = userAmount (上限適用後)。入金は shogai_seikyu_payments に読み書きする。
+function ShogaiRiyouDetail({
+  selected,
+  monthKey,
+  payment,
+  onPaymentChanged,
+}: {
+  selected: ShogaiSeikyuRow;
+  monthKey: string;
+  payment: PaymentRow | null;
+  onPaymentChanged: () => void;
+}) {
+  return (
+    <>
+      <table className="w-full text-xs border-collapse">
+        <thead className="bg-gray-50 text-gray-600">
+          <tr>
+            <th className="px-2 py-1 border-b border-gray-200 text-left">サービス種類</th>
+            <th className="px-2 py-1 border-b border-gray-200 text-right w-16">単位</th>
+            <th className="px-2 py-1 border-b border-gray-200 text-right w-10">回数</th>
+            <th className="px-2 py-1 border-b border-gray-200 text-right w-20">単位計</th>
+          </tr>
+        </thead>
+        <tbody>
+          {selected.details.map((d) => (
+            <tr
+              key={`${d.service_type}-${d.service_code}-${d.service_category}`}
+              className="border-b border-gray-100"
+            >
+              <td className="px-2 py-1 text-gray-700">
+                {d.service_type}
+                {d.service_category ? ` (${d.service_category})` : ""}
+              </td>
+              <td className="px-2 py-1 text-right font-mono">{d.unit_per.toLocaleString()}</td>
+              <td className="px-2 py-1 text-right font-mono">{d.count}</td>
+              <td className="px-2 py-1 text-right font-mono">{d.units.toLocaleString()}</td>
+            </tr>
+          ))}
+          {selected.addons.map((a) => (
+            <tr key={a.service_code} className="border-b border-gray-100">
+              <td className="px-2 py-1 text-gray-700">{a.service_name}</td>
+              <td className="px-2 py-1 text-right font-mono">—</td>
+              <td className="px-2 py-1 text-right font-mono">1</td>
+              <td className="px-2 py-1 text-right font-mono">{a.units.toLocaleString()}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="px-3 py-2 border-t border-gray-200 text-xs space-y-0.5">
+        <div className="flex justify-between text-gray-600">
+          <span>総単位数</span>
+          <span className="font-mono">{selected.totalUnits.toLocaleString()} 単位</span>
+        </div>
+        <div className="flex justify-between text-gray-600">
+          <span>総費用額</span>
+          <span className="font-mono">¥{selected.totalAmount.toLocaleString()}</span>
+        </div>
+        <div className="flex justify-between text-gray-600">
+          <span>負担上限月額{selected.seiho ? " (生保)" : ""}</span>
+          <span className="font-mono">
+            {selected.self_payment_limit != null
+              ? `¥${selected.self_payment_limit.toLocaleString()}`
+              : "未設定"}
+          </span>
+        </div>
+        <div className="flex justify-between text-gray-800 font-semibold pt-1 border-t border-gray-100 mt-1">
+          <span>利用者負担額 (請求額)</span>
+          <span className="font-mono">¥{selected.userAmount.toLocaleString()}</span>
+        </div>
+        <p className="pt-1 text-[10px] text-gray-400">
+          ※ 障害福祉サービスは 軽減 / 実費 / 医療費控除 の対象外です (—)。
+        </p>
+      </div>
+
+      <div className="px-3 pb-3">
+        <PaymentSection
+          key={`shogai-pay-${selected.user_id}-${monthKey}`}
+          userId={selected.user_id}
+          monthKey={monthKey}
+          billed={selected.userAmount}
+          payment={payment}
+          onChanged={onPaymentChanged}
+          table="shogai_seikyu_payments"
+        />
+      </div>
+    </>
+  );
 }
 
 // ─── 利用実費の入力セクション ─────────────────────────────────────────────────
@@ -1278,12 +1614,15 @@ function PaymentSection({
   billed,
   payment,
   onChanged,
+  table = "riyou_seikyu_payments",
 }: {
   userId: string;
   monthKey: string;
   billed: number;
   payment: PaymentRow | null;
   onChanged: () => void;
+  /** 保存先テーブル (介護/総合 → riyou_seikyu_payments / 障害 → shogai_seikyu_payments) */
+  table?: "riyou_seikyu_payments" | "shogai_seikyu_payments";
 }) {
   const supabase = useMemo(() => createClient(), []);
   const today = new Date();
@@ -1299,7 +1638,7 @@ function PaymentSection({
     const status =
       asStatus ??
       (paid >= billed && billed > 0 ? "入金完" : paid > 0 ? "一部入金" : "請求済");
-    const { error } = await supabase.from("riyou_seikyu_payments").upsert(
+    const { error } = await supabase.from(table).upsert(
       {
         client_id: userId,
         target_month: monthKey,
