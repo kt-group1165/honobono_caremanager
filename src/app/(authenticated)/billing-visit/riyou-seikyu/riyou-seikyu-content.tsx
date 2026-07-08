@@ -323,6 +323,49 @@ export function RiyouSeikyuContent() {
     [prevPayments],
   );
 
+  // ── 障害の前月入金状況 (障害行の前月繰越の算出用) ──
+  //    介護と同じ流儀で shogai_seikyu_payments の前月分を読む。テーブル未作成・前月なしは 0。
+  const [prevShogaiPayments, setPrevShogaiPayments] = useState<
+    Map<string, PaymentRow>
+  >(new Map());
+  const loadPrevShogaiPayments = useCallback(async () => {
+    const { data, error: e } = await supabase
+      .from("shogai_seikyu_payments")
+      .select("id, client_id, billed_amount, paid_amount, paid_date, payment_method, status, issued_date")
+      .eq("target_month", prevMonthKey);
+    if (e) {
+      if (!isTableMissingError(e.code)) toast.error("障害前月入金状況取得失敗: " + e.message);
+      setPrevShogaiPayments(new Map());
+      return;
+    }
+    setPrevShogaiPayments(
+      new Map(((data ?? []) as PaymentRow[]).map((p) => [p.client_id, p])),
+    );
+  }, [supabase, prevMonthKey]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更時の fetch
+    loadPrevShogaiPayments();
+  }, [loadPrevShogaiPayments]);
+
+  // 障害の繰越額 = 前月請求 − 前月入金 (前月レコード無しは 0)。介護 carryover と同型。
+  const shogaiCarryover = useCallback(
+    (userId: string) => {
+      const p = prevShogaiPayments.get(userId);
+      return p ? p.billed_amount - p.paid_amount : 0;
+    },
+    [prevShogaiPayments],
+  );
+
+  // 制度で繰越を振り分け (障害 → shogaiCarryover / 介護・総合 → 従来 carryover)。
+  // 介護・総合 の既存 carryover は不変のまま流用する。
+  const carryoverForRow = useCallback(
+    (row: UnifiedRow) =>
+      row.system === "障害"
+        ? shogaiCarryover(row.userId)
+        : carryover(row.userId),
+    [shogaiCarryover, carryover],
+  );
+
   // 介護 + 総合 の UserSeikyuRow 全体 (軽減/実費/医療費控除/口座 は両制度に同じ流儀を適用)。
   // 障害はこれらが N/A なので含めない。
   const kaigoAllRows = useMemo(() => [...rows, ...sougouRows], [rows, sougouRows]);
@@ -732,15 +775,26 @@ export function RiyouSeikyuContent() {
     (s, r) => s + (iryohiByUser.get(r.user_id) ?? 0),
     0,
   );
-  // 過入金充当額 = 負の繰越 (前月過入金) の合計絶対値 / 未収繰越 = 正の繰越の合計 (介護 + 総合)
-  const overpayTotal = kaigoAllRows.reduce((s, r) => {
-    const c = carryover(r.user_id);
-    return s + (c < 0 ? -c : 0);
-  }, 0);
-  const misyuCarryTotal = kaigoAllRows.reduce((s, r) => {
-    const c = carryover(r.user_id);
-    return s + (c > 0 ? c : 0);
-  }, 0);
+  // 過入金充当額 = 負の繰越 (前月過入金) の合計絶対値 / 未収繰越 = 正の繰越の合計。
+  // 介護 + 総合 は従来 carryover、障害は shogaiCarryover を足す (介護分の値は不変)。
+  const overpayTotal =
+    kaigoAllRows.reduce((s, r) => {
+      const c = carryover(r.user_id);
+      return s + (c < 0 ? -c : 0);
+    }, 0) +
+    filteredShogaiRows.reduce((s, r) => {
+      const c = shogaiCarryover(r.user_id);
+      return s + (c < 0 ? -c : 0);
+    }, 0);
+  const misyuCarryTotal =
+    kaigoAllRows.reduce((s, r) => {
+      const c = carryover(r.user_id);
+      return s + (c > 0 ? c : 0);
+    }, 0) +
+    filteredShogaiRows.reduce((s, r) => {
+      const c = shogaiCarryover(r.user_id);
+      return s + (c > 0 ? c : 0);
+    }, 0);
 
   // 選択行のフッタ詳細 (未選択時は全体合計 — order-app と同じ)。
   // 障害は軽減/繰越/医療費控除が N/A なので 0。
@@ -757,15 +811,12 @@ export function RiyouSeikyuContent() {
       ? (iryohiByUser.get(selKaigo.user_id) ?? 0)
       : 0
     : iryohiTotal;
+  // 選択行の繰越は制度で振り分け (障害も含めて表示。介護/総合 は従来値のまま)。
   const selOverpay = selected
-    ? selKaigo
-      ? Math.max(0, -carryover(selKaigo.user_id))
-      : 0
+    ? Math.max(0, -carryoverForRow(selected))
     : overpayTotal;
   const selMisyuCarry = selected
-    ? selKaigo
-      ? Math.max(0, carryover(selKaigo.user_id))
-      : 0
+    ? Math.max(0, carryoverForRow(selected))
     : misyuCarryTotal;
 
   const checkedCount = unifiedRows.filter((r) => checked.has(r.key)).length;
@@ -1122,6 +1173,7 @@ export function RiyouSeikyuContent() {
                 selected={selected.shogai}
                 monthKey={monthKey}
                 payment={shogaiPayments.get(selected.userId) ?? null}
+                carryover={shogaiCarryover(selected.userId)}
                 onPaymentChanged={loadShogaiPayments}
               />
             )}
@@ -1395,11 +1447,14 @@ function ShogaiRiyouDetail({
   selected,
   monthKey,
   payment,
+  carryover,
   onPaymentChanged,
 }: {
   selected: ShogaiSeikyuRow;
   monthKey: string;
   payment: PaymentRow | null;
+  /** 前月繰越 (正 = 未収繰越 / 負 = 過入金充当 / 0 = 前月なし)。shogai_seikyu_payments 由来 */
+  carryover: number;
   onPaymentChanged: () => void;
 }) {
   return (
@@ -1460,6 +1515,14 @@ function ShogaiRiyouDetail({
           <span>利用者負担額 (請求額)</span>
           <span className="font-mono">¥{selected.userAmount.toLocaleString()}</span>
         </div>
+        {carryover !== 0 && (
+          <div className="flex justify-between text-gray-500 text-[10px]">
+            <span>前月繰越 ({carryover > 0 ? "未収繰越" : "過入金充当"})</span>
+            <span className="font-mono">
+              {carryover < 0 ? "▲" : ""}¥{Math.abs(carryover).toLocaleString()}
+            </span>
+          </div>
+        )}
         <p className="pt-1 text-[10px] text-gray-400">
           ※ 障害福祉サービスは 軽減 / 実費 / 医療費控除 の対象外です (—)。
         </p>
