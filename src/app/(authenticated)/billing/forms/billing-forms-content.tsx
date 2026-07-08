@@ -6,7 +6,9 @@ import { toast } from "sonner";
 import { FileText, Printer, Loader2 } from "lucide-react";
 import { parseISO } from "date-fns";
 import { MeisaiForm } from "./_meisai";
-import { SeikyuForm } from "./_seikyu";
+import { SeikyuForm, type SeikyuKohiRow, type SeikyuKohiTandoku } from "./_seikyu";
+import { toKohiInfo, type KohiInfo } from "./forms-shared";
+import { parseYoboShienKubun } from "../claims/claims-shared";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,6 +64,22 @@ export interface ClaimRow {
   emergency_conference: boolean;
   emergency_conference_units: number;
   status: string;
+  /** 予防支援区分マーカー ([予防支援:委託] = 請求対象外) 等を含む */
+  notes: string | null;
+}
+
+/** 1 claim の加算単位数合計 (基本単位に上乗せする分) */
+function claimAddonUnits(c: ClaimRow): number {
+  let add = 0;
+  if (c.initial_addition) add += c.initial_addition_units;
+  if (c.tokutei_kassan_units) add += c.tokutei_kassan_units;
+  if (c.medical_coop_kassan) add += c.medical_coop_kassan_units ?? 125;
+  if (c.hospital_coordination) add += c.hospital_coordination_units;
+  if (c.discharge_addition) add += c.discharge_addition_units;
+  if (c.medical_coordination) add += c.medical_coordination_units ?? 50;
+  if (c.terminal_care) add += c.terminal_care_units ?? 400;
+  if (c.emergency_conference) add += c.emergency_conference_units ?? 200;
+  return add;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -106,6 +124,8 @@ export interface BillingFormsContentProps {
   initialCertInfo: CertInfo | null;
   initialClaims: ClaimRow[];
   initialAllClaims: ClaimRow[];
+  /** 利用者ごとの公費 (生活保護等) 情報 (user_id → KohiInfo) */
+  initialKohiEntries: [string, KohiInfo][];
 }
 
 export function BillingFormsContent({
@@ -116,6 +136,7 @@ export function BillingFormsContent({
   initialCertInfo,
   initialClaims,
   initialAllClaims,
+  initialKohiEntries,
 }: BillingFormsContentProps) {
   const supabase = useMemo(() => createClient(), []);
 
@@ -128,6 +149,9 @@ export function BillingFormsContent({
   const [certInfo, setCertInfo] = useState<CertInfo | null>(initialCertInfo);
   const [claims, setClaims] = useState<ClaimRow[]>(initialClaims);
   const [allClaims, setAllClaims] = useState<ClaimRow[]>(initialAllClaims);
+  const [kohiMap, setKohiMap] = useState<Map<string, KohiInfo>>(
+    () => new Map(initialKohiEntries),
+  );
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -175,13 +199,46 @@ export function BillingFormsContent({
   }, [supabase, userId, billingMonth]);
 
   const fetchAllClaims = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("kaigo_care_support_claims")
       .select("*")
       .eq("billing_month", billingMonth)
       .neq("status", "draft");
-    setAllClaims((data as ClaimRow[]) ?? []);
-  }, [supabase, billingMonth]);
+    if (error) {
+      console.error("claims 取得失敗:", error.message);
+      toast.error(`レセプト取得失敗: ${error.message}`);
+      return;
+    }
+    const rows = (data as ClaimRow[]) ?? [];
+    setAllClaims(rows);
+
+    // 公費 (生活保護等) 情報を全 claims 利用者 + 選択中利用者について再取得
+    const ids = Array.from(new Set([...rows.map((c) => c.user_id), userId]));
+    const map = new Map<string, KohiInfo>();
+    for (let i = 0; i < ids.length; i += 50) {
+      const chunk = ids.slice(i, i + 50);
+      const { data: recs, error: kohiErr } = await supabase
+        .from("client_insurance_records")
+        .select("client_id, insured_number, kohi_hobetsu, kohi_futansha_number, kohi_jukyusha_number, effective_date")
+        .in("client_id", chunk)
+        .order("effective_date", { ascending: false });
+      if (kohiErr) {
+        console.error("公費情報取得失敗:", kohiErr.message);
+        toast.error(`公費情報取得失敗: ${kohiErr.message}`);
+        return;
+      }
+      for (const r of (recs ?? []) as {
+        client_id: string;
+        insured_number: string | null;
+        kohi_hobetsu: string | null;
+        kohi_futansha_number: string | null;
+        kohi_jukyusha_number: string | null;
+      }[]) {
+        if (!map.has(r.client_id)) map.set(r.client_id, toKohiInfo(r)); // 最新のみ
+      }
+    }
+    setKohiMap(map);
+  }, [supabase, billingMonth, userId]);
 
   // initial render は server からの initial data を使用、月切替時のみ refetch
   const isInitialMount = useRef(true);
@@ -194,32 +251,67 @@ export function BillingFormsContent({
     fetchAllClaims();
   }, [fetchData, fetchAllClaims]);
 
-  // Aggregated data for 請求書
+  // Aggregated data for 請求書 (様式第一)
+  // 公費単独 (被保険者番号 H = みなし2号・生保 10割公費) は保険請求欄に載せず、
+  // 公費請求欄の生保行に合算する。公費併用 (被保険者 + 法別12) は 10 割給付で
+  // 本人負担 0 円 → 公費振替額 0 円だが、公費請求欄に件数・単位数を再掲する。
   const seikyuSummary = useMemo(() => {
-    const totalCount = allClaims.length;
-    const totalUnits = allClaims.reduce((s, c) => s + c.units, 0);
-    const addUnits = allClaims.reduce((s, c) => {
-      let add = 0;
-      if (c.initial_addition) add += c.initial_addition_units;
-      if (c.tokutei_kassan_units) add += c.tokutei_kassan_units;
-      if (c.medical_coop_kassan) add += (c.medical_coop_kassan_units ?? 125);
-      if (c.hospital_coordination) add += c.hospital_coordination_units;
-      if (c.discharge_addition) add += c.discharge_addition_units;
-      if (c.medical_coordination) add += (c.medical_coordination_units ?? 50);
-      if (c.terminal_care) add += (c.terminal_care_units ?? 400);
-      if (c.emergency_conference) add += (c.emergency_conference_units ?? 200);
-      return s + add;
-    }, 0);
+    // 予防支援「委託」(包括が請求) は請求対象外
+    const billable = allClaims.filter((c) => parseYoboShienKubun(c.notes) !== "itaku");
+    const isTandoku = (c: ClaimRow) => kohiMap.get(c.user_id)?.kohiTandoku ?? false;
+    const hokenClaims = billable.filter((c) => !isTandoku(c));
+    const tandokuClaims = billable.filter(isTandoku);
+    const grandUnitsOf = (c: ClaimRow) => c.units + claimAddonUnits(c);
+
+    const totalCount = hokenClaims.length;
+    const totalUnits = hokenClaims.reduce((s, c) => s + c.units, 0);
+    const addUnits = hokenClaims.reduce((s, c) => s + claimAddonUnits(c), 0);
     const grandUnits = totalUnits + addUnits;
-    const totalAmount = allClaims.reduce((s, c) => s + c.total_amount, 0);
-    const insuranceAmount = allClaims.reduce((s, c) => s + c.insurance_amount, 0);
-    const userCopay = 0; // 居宅介護支援は10割給付
-    return { totalCount, totalUnits, addUnits, grandUnits, totalAmount, insuranceAmount, userCopay };
-  }, [allClaims]);
+    const totalAmount = hokenClaims.reduce((s, c) => s + c.total_amount, 0);
+    const insuranceAmount = hokenClaims.reduce((s, c) => s + c.insurance_amount, 0);
+    const userCopay = 0; // 居宅介護支援・介護予防支援は10割給付
+
+    // 公費併用分 (保険請求の再掲)。法別番号ごとに集計。振替額 = 費用 - 保険請求 (通常 0)
+    const byHobetsu = new Map<string, SeikyuKohiRow>();
+    for (const c of hokenClaims) {
+      const k = kohiMap.get(c.user_id);
+      if (!k?.hasKohi) continue;
+      const code = k.kohiHobetsu ?? "12";
+      const cur = byHobetsu.get(code) ?? { code, count: 0, units: 0, cost: 0, kohi: 0 };
+      cur.count += 1;
+      cur.units += grandUnitsOf(c);
+      cur.cost += c.total_amount;
+      cur.kohi += Math.max(0, c.total_amount - c.insurance_amount);
+      byHobetsu.set(code, cur);
+    }
+    const kohiRows: SeikyuKohiRow[] = Array.from(byHobetsu.values());
+    const kohiRequestAmount = kohiRows.reduce((s, k) => s + k.kohi, 0);
+
+    // 公費単独分 (10割公費: 費用合計 = 公費請求額)
+    const kohiTandoku: SeikyuKohiTandoku | undefined =
+      tandokuClaims.length > 0
+        ? {
+            count: tandokuClaims.length,
+            units: tandokuClaims.reduce((s, c) => s + grandUnitsOf(c), 0),
+            cost: tandokuClaims.reduce((s, c) => s + c.total_amount, 0),
+            kohi: tandokuClaims.reduce((s, c) => s + c.total_amount, 0),
+          }
+        : undefined;
+
+    return {
+      totalCount, totalUnits, addUnits, grandUnits, totalAmount, insuranceAmount,
+      userCopay, kohiRows, kohiRequestAmount, kohiTandoku,
+    };
+  }, [allClaims, kohiMap]);
+
+  // 予防支援「委託」(包括が請求) は明細書を発行しない
+  const selectedItaku =
+    claims.length > 0 && parseYoboShienKubun(claims[0].notes) === "itaku";
 
   // Claim detail for 明細書
   const meisaiDetail = useMemo(() => {
     if (claims.length === 0) return null;
+    if (parseYoboShienKubun(claims[0].notes) === "itaku") return null;
     const c = claims[0];
     const addLines: { name: string; code: string; units: number; count: number }[] = [];
     addLines.push({ name: c.care_support_name, code: c.care_support_code, units: c.units, count: 1 });
@@ -242,6 +334,35 @@ export function BillingFormsContent({
     const totalUnits = addLines.reduce((s, l) => s + l.units * l.count, 0);
     return { lines: addLines, totalUnits, totalAmount: c.total_amount, insuranceAmount: c.insurance_amount, unitPrice: c.unit_price };
   }, [claims]);
+
+  // 選択中利用者の公費情報 (様式第七の公費欄用)
+  const selectedKohi = kohiMap.get(userId);
+
+  // 様式第七 person1 (画面/印刷の両方で使用)
+  const meisaiPerson1 = useMemo(() => {
+    if (!meisaiDetail) return null;
+    return {
+      insuredNumber: certInfo?.insured_number ?? "",
+      userName: userInfo?.name ?? "",
+      userKana: userInfo?.name_kana ?? "",
+      birthDate: userInfo?.birth_date ?? "",
+      gender: userInfo?.gender ?? "",
+      careLevel: certInfo?.care_level ?? "",
+      certStart: certInfo?.start_date ?? "",
+      certEnd: certInfo?.end_date ?? "",
+      lines: meisaiDetail.lines.map((l) => ({ ...l, serviceUnits: l.units * l.count })),
+      totalServiceUnits: meisaiDetail.totalUnits,
+      // 公費単独 (H番号) は保険請求 0 円・全額 (10割) を公費請求
+      claimAmount: selectedKohi?.kohiTandoku
+        ? meisaiDetail.totalAmount
+        : meisaiDetail.insuranceAmount,
+      // 公費 (生活保護等) — 併用 (振替 0 円) でも負担者番号等は記載する
+      kohiFutanshaNumber: selectedKohi?.hasKohi ? selectedKohi.kohiFutansha : null,
+      kohiJukyushaNumber: selectedKohi?.hasKohi ? selectedKohi.kohiJukyusha : null,
+      kohiTandoku: selectedKohi?.kohiTandoku ?? false,
+      hasKohi: selectedKohi?.hasKohi ?? false,
+    };
+  }, [meisaiDetail, certInfo, userInfo, selectedKohi]);
 
   const { era, year, month } = toWarekiYM(billingMonth);
 
@@ -335,7 +456,11 @@ export function BillingFormsContent({
               </div>
             ) : activeTab === "meisai" ? (
               /* ── 明細書 ── */
-              !meisaiDetail ? (
+              selectedItaku ? (
+                <div className="rounded-lg border bg-white py-16 text-center text-sm text-gray-500">
+                  この利用者は介護予防支援「委託」(地域包括支援センターが請求) のため請求対象外です
+                </div>
+              ) : !meisaiDetail ? (
                 <div className="rounded-lg border bg-white py-16 text-center text-sm text-gray-500">
                   {billingMonth} の確定済みレセプトがありません
                 </div>
@@ -356,19 +481,7 @@ export function BillingFormsContent({
                       insurerNumber={certInfo?.insurer_number ?? ""}
                       unitPrice={meisaiDetail.unitPrice}
                       billingMonth={billingMonth}
-                      person1={{
-                        insuredNumber: certInfo?.insured_number ?? "",
-                        userName: userInfo?.name ?? "",
-                        userKana: userInfo?.name_kana ?? "",
-                        birthDate: userInfo?.birth_date ?? "",
-                        gender: userInfo?.gender ?? "",
-                        careLevel: certInfo?.care_level ?? "",
-                        certStart: certInfo?.start_date ?? "",
-                        certEnd: certInfo?.end_date ?? "",
-                        lines: meisaiDetail.lines.map((l) => ({ ...l, serviceUnits: l.units * l.count })),
-                        totalServiceUnits: meisaiDetail.totalUnits,
-                        claimAmount: meisaiDetail.insuranceAmount,
-                      }}
+                      person1={meisaiPerson1}
                       person2={null}
                     />
                   </div>
@@ -395,6 +508,10 @@ export function BillingFormsContent({
                     totalAmount={seikyuSummary.totalAmount}
                     insuranceAmount={seikyuSummary.insuranceAmount}
                     userCopay={seikyuSummary.userCopay}
+                    kohiSeg="kyotaku"
+                    kohiRequestAmount={seikyuSummary.kohiRequestAmount}
+                    kohiRows={seikyuSummary.kohiRows}
+                    kohiTandoku={seikyuSummary.kohiTandoku}
                   />
                 </div>
               </div>
@@ -414,19 +531,7 @@ export function BillingFormsContent({
             insurerNumber={certInfo?.insurer_number ?? ""}
             unitPrice={meisaiDetail.unitPrice}
             billingMonth={billingMonth}
-            person1={{
-              insuredNumber: certInfo?.insured_number ?? "",
-              userName: userInfo?.name ?? "",
-              userKana: userInfo?.name_kana ?? "",
-              birthDate: userInfo?.birth_date ?? "",
-              gender: userInfo?.gender ?? "",
-              careLevel: certInfo?.care_level ?? "",
-              certStart: certInfo?.start_date ?? "",
-              certEnd: certInfo?.end_date ?? "",
-              lines: meisaiDetail.lines.map((l) => ({ ...l, serviceUnits: l.units * l.count })),
-              totalServiceUnits: meisaiDetail.totalUnits,
-              claimAmount: meisaiDetail.insuranceAmount,
-            }}
+            person1={meisaiPerson1}
             person2={null}
           />
         )}
@@ -443,6 +548,10 @@ export function BillingFormsContent({
             totalAmount={seikyuSummary.totalAmount}
             insuranceAmount={seikyuSummary.insuranceAmount}
             userCopay={seikyuSummary.userCopay}
+            kohiSeg="kyotaku"
+            kohiRequestAmount={seikyuSummary.kohiRequestAmount}
+            kohiRows={seikyuSummary.kohiRows}
+            kohiTandoku={seikyuSummary.kohiTandoku}
           />
         )}
       </div>

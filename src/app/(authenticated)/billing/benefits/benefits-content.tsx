@@ -583,13 +583,22 @@ export function BenefitsContent({
       );
       const { data: certRows, error: cre } = await supabase
         .from("client_insurance_records")
-        .select("client_id, certification_start_date, certification_end_date, effective_date")
+        .select("client_id, certification_start_date, certification_end_date, effective_date, kohi_hobetsu, kohi_futansha_number, kohi_jukyusha_number")
         .in("client_id", ids)
         .order("effective_date", { ascending: false });
       if (cre) throw new Error("認定期間取得失敗: " + cre.message);
       const certPeriod = new Map<string, { s: string | null; e: string | null }>();
-      for (const r of (certRows ?? []) as { client_id: string; certification_start_date: string | null; certification_end_date: string | null }[]) {
-        if (!certPeriod.has(r.client_id)) certPeriod.set(r.client_id, { s: r.certification_start_date, e: r.certification_end_date });
+      // 公費 (生活保護等) — 計画費請求 7111/8121 の公費欄用
+      const kohiByClient = new Map<string, { hobetsu: string | null; futansha: string | null; jukyusha: string | null }>();
+      for (const r of (certRows ?? []) as { client_id: string; certification_start_date: string | null; certification_end_date: string | null; kohi_hobetsu: string | null; kohi_futansha_number: string | null; kohi_jukyusha_number: string | null }[]) {
+        if (!certPeriod.has(r.client_id)) {
+          certPeriod.set(r.client_id, { s: r.certification_start_date, e: r.certification_end_date });
+          kohiByClient.set(r.client_id, {
+            hobetsu: r.kohi_hobetsu?.trim() || null,
+            futansha: r.kohi_futansha_number?.trim() || null,
+            jukyusha: r.kohi_jukyusha_number?.trim() || null,
+          });
+        }
       }
 
       // サービス事業所番号 (provider_name → offices.business_number)
@@ -633,10 +642,12 @@ export function BenefitsContent({
       }));
       const keikakuUsers: KeikakuhiUser[] = groups.map((g) => {
         const rate = rateByLevel.get((g.user.certification?.care_level ?? "").trim());
+        const insuredNumber = g.user.certification?.insured_number ?? "";
+        const kohi = kohiByClient.get(g.user.id);
         return {
           userName: g.user.name,
           insurerNumber: g.user.certification?.insurer_number ?? "",
-          insuredNumber: g.user.certification?.insured_number ?? "",
+          insuredNumber,
           birthDate: clientExtra.get(g.user.id)?.birth_date ?? null,
           gender: clientExtra.get(g.user.id)?.gender ?? null,
           careLevel: g.user.certification?.care_level ?? null,
@@ -645,12 +656,29 @@ export function BenefitsContent({
           requestDate: null, // 届出年月日は未管理 → 認定開始日で代用 (警告表示)
           serviceCode: rate?.service_code ?? "",
           units: rate?.units ?? 0,
+          // 公費 (生活保護等)。H 番号 = みなし2号 = 公費単独 (10割公費)
+          kohiTandoku: /^h/i.test(insuredNumber.trim()),
+          kohiHobetsu: kohi?.hobetsu ?? null,
+          kohiFutanshaNumber: kohi?.futansha ?? null,
+          kohiJukyushaNumber: kohi?.jukyusha ?? null,
         };
       });
 
+      // 要支援 (介護予防支援) は kaigo_care_support_rates の旧コードの可能性がある
+      // (R6.4〜 は 461111/461112、R8.6〜 は 4621xx。正確な区分は /billing/seikyu の
+      //  国保請求タブがレセプト実データから出力する)
+      const preWarnings: string[] = [];
+      for (const u of keikakuUsers) {
+        if ((u.careLevel ?? "").startsWith("要支援")) {
+          preWarnings.push(
+            `${u.userName}: 要支援 (介護予防支援) の計画費は「請求 → 国保請求」タブからの出力を推奨 (この画面は旧世代コード ${u.serviceCode || "未設定"} の可能性)`,
+          );
+        }
+      }
+
       const f1 = buildKyufuKanriFile(kyufuUsers, opts);
       const f2 = buildKeikakuhiFile(keikakuUsers, opts);
-      const warnings = [...f1.warnings, ...f2.warnings];
+      const warnings = [...preWarnings, ...f1.warnings, ...f2.warnings];
       if (warnings.length > 0) {
         const list = warnings.slice(0, 12).join("\n・");
         if (

@@ -61,6 +61,18 @@ interface PersonData {
   lines: { name: string; code: string; units: number; count: number; serviceUnits: number }[];
   totalServiceUnits: number;
   claimAmount: number;
+  // ── 公費 (生活保護等)。省略時は公費なし (既存呼出互換) ──
+  /** 公費負担者番号 (8桁)。用紙上部の公費負担者番号欄に表示 */
+  kohiFutanshaNumber?: string | null;
+  /** 公費受給者番号 (7桁) */
+  kohiJukyushaNumber?: string | null;
+  /**
+   * 公費単独 (被保険者番号 H = みなし2号 10割公費)。
+   * 保険給付率 空欄・公費給付率 100 で表示する
+   */
+  kohiTandoku?: boolean;
+  /** 公費情報あり (単独 or 併用 = 給付率欄の公費 100 表示) */
+  hasKohi?: boolean;
 }
 
 interface Props {
@@ -188,7 +200,7 @@ function PersonBlock({
         {/* 公費 + 氏名 */}
         <tr style={{ height: 18 }}>
           <td style={{ ...h, fontSize: "5.5pt" }}>公費受給者番号</td>
-          <td style={c}></td>
+          <td style={c}><D v={person.kohiJukyushaNumber ?? ""} n={7} s={11} /></td>
           <td style={{ ...h, fontSize: "5.5pt" }}>氏名</td>
           <td style={{ ...c, fontWeight: "bold", fontSize: "10pt" }} colSpan={2}>{person.userName}</td>
         </tr>
@@ -320,7 +332,18 @@ export function MeisaiForm(props: Props) {
             </tr>
           ))}
           <tr style={{ height: 18 }}>
-            <td style={c} colSpan={5} />
+            {/* 給付率 (/100): 通常 保険100・公費空欄 / 公費併用 保険100・公費100 /
+                公費単独 (H番号) 保険空欄・公費100 */}
+            <td style={{ ...c, fontSize: "6.5pt" }} colSpan={5}>
+              給付率（/100）　保険{" "}
+              <span style={{ fontWeight: "bold", fontFamily: "monospace" }}>
+                {person.kohiTandoku ? "　" : "100"}
+              </span>
+              　公費{" "}
+              <span style={{ fontWeight: "bold", fontFamily: "monospace" }}>
+                {person.hasKohi || person.kohiTandoku ? "100" : "　"}
+              </span>
+            </td>
             <td style={{ ...cR, fontWeight: "bold", fontSize: "6pt" }}>請求額合計</td>
             <td style={{ ...cR, fontWeight: "bold", fontSize: "9pt" }}>
               {person.claimAmount > 0 ? person.claimAmount.toLocaleString() : ""}
@@ -348,7 +371,10 @@ export function MeisaiForm(props: Props) {
         <tbody>
           <tr style={{ height: 18 }}>
             <td style={{ ...h, width: "12%", borderTop: B2, borderLeft: B2 }}>公費負担者番号</td>
-            <td style={{ ...c, width: "20%", borderTop: B2 }}><D v="" n={8} s={14} /></td>
+            <td style={{ ...c, width: "20%", borderTop: B2 }}>
+              {/* 公費 (生活保護等) — person1 優先。併用 (振替 0 円) でも記載する */}
+              <D v={person1?.kohiFutanshaNumber ?? person2?.kohiFutanshaNumber ?? ""} n={8} s={14} />
+            </td>
             <td style={{ ...c, width: "5%", borderTop: B2 }} />
             <td style={{ ...h, width: "10%", borderTop: B2 }}>保険者番号</td>
             <td style={{ ...c, borderTop: B2, borderRight: B2 }}><D v={insurerNumber} n={6} s={14} /></td>

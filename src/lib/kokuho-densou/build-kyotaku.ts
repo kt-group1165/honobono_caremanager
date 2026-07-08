@@ -208,6 +208,19 @@ export interface KeikakuhiUser {
   /** 居宅介護支援費のサービスコード (6 桁) と単位数 (年度別マスタから) */
   serviceCode: string;
   units: number;
+  // ── 公費 (生活保護等)。省略時は公費なし (既存呼出互換) ──
+  /**
+   * 公費単独 (10割公費)。被保険者番号が 'H' 始まり (= 介護保険未加入の
+   * 生保受給者 = みなし2号)。保険請求分の 7111 に含めず、公費請求分の
+   * 7111 (区分2・法別12) へ全額 (10割) を計上する (build.ts の訪問介護と同じ扱い)。
+   */
+  kohiTandoku?: boolean;
+  /** 公費 法別番号 (12=生活保護 等) */
+  kohiHobetsu?: string | null;
+  /** 公費負担者番号 (8桁) — 8121 項8。生活保護単独の場合必須 */
+  kohiFutanshaNumber?: string | null;
+  /** 公費受給者番号 (7桁) — 8121 項9。生活保護単独の場合必須 */
+  kohiJukyushaNumber?: string | null;
 }
 
 /** ファイル 2: 居宅介護支援費請求 (7111 + 8121) */
@@ -223,12 +236,18 @@ export function buildKeikakuhiFile(
 
   const dataParts: string[][] = [];
 
-  const totalUnits = users.reduce((s, u) => s + u.units, 0);
-  // 計画費は 10 割給付 (利用者負担なし)
-  const amounts = users.map((u) => Math.floor((u.units * unitPrice100) / 100));
-  const totalAmount = amounts.reduce((s, a) => s + a, 0);
+  const amountOf = (u: KeikakuhiUser) => Math.floor((u.units * unitPrice100) / 100);
 
-  // 7111 請求書情報
+  // ── 公費単独 (被保険者番号 H = 生保 10割公費) は保険請求分レコードに含めない ──
+  // (build.ts 訪問介護と同じ扱い。様式第一では保険請求欄に記載せず公費請求欄の生保行へ)
+  const hokenUsers = users.filter((u) => !u.kohiTandoku);
+  const tandokuUsers = users.filter((u) => !!u.kohiTandoku);
+
+  const totalUnits = hokenUsers.reduce((s, u) => s + u.units, 0);
+  // 計画費は 10 割給付 (利用者負担なし)
+  const totalAmount = hokenUsers.reduce((s, u) => s + amountOf(u), 0);
+
+  // 7111 請求書情報 (保険請求分)
   dataParts.push([
     "7111",
     ym,
@@ -236,20 +255,65 @@ export function buildKeikakuhiFile(
     "1", // 保険・公費等区分コード (1:保険請求。共通編1.4 項番79)
     "0", // 法別番号 (保険請求分は0)
     "02", // 請求情報区分コード (02:居宅介護支援・介護予防支援。共通編1.4 項番80)
-    String(users.length), // 件数
+    String(hokenUsers.length), // 件数
     String(totalUnits), // 単位数
     String(totalAmount), // 費用合計
     String(totalAmount), // 保険請求額 (10 割)
-    "0", // 公費請求額
+    "0", // 公費請求額 (公費併用でも本人負担 0 円のため振替 0)
     "0", // 利用者負担
     "", "", "", "", "", "", // 特定入所者 (対象外)
   ]);
+
+  // 7111 請求書情報 (公費請求分 — 法別番号ごと)
+  // 居宅介護支援費は 10 割給付のため、公費併用 (被保険者 + 法別12) の公費請求額は
+  // 0 円 → 公費請求分レコードは公費単独 (H番号) 者のみから生成する。
+  // ⚠ 要取込チェック: 公費併用で公費請求額 0 円の利用者を公費請求分 7111 の
+  //    件数に計上する必要があるか (ここでは build.ts 同様、請求額 0 は計上しない)。
+  // 公費単独は法別未登録でも生保 (12) として合算する (未登録は warning)
+  const byHobetsu = new Map<string, KeikakuhiUser[]>();
+  for (const u of tandokuUsers) {
+    const h = u.kohiHobetsu?.trim() || "12";
+    if (!byHobetsu.has(h)) byHobetsu.set(h, []);
+    byHobetsu.get(h)!.push(u);
+  }
+  for (const [hobetsu, hUsers] of byHobetsu) {
+    dataParts.push([
+      "7111",
+      ym,
+      office,
+      "2", // 保険・公費等区分コード (2:公費請求。共通編1.4 項番79)
+      hobetsu, // 法別番号 (12=生活保護 等)
+      "02", // 請求情報区分コード (02:居宅介護支援・介護予防支援)
+      String(hUsers.length), // 件数
+      String(hUsers.reduce((s, u) => s + u.units, 0)), // 単位数
+      String(hUsers.reduce((s, u) => s + amountOf(u), 0)), // 費用合計
+      "0", // 保険請求額 (公費単独は保険給付なし)
+      String(hUsers.reduce((s, u) => s + amountOf(u), 0)), // 公費請求額 (10 割)
+      "0", // 利用者負担
+      "", "", "", "", "", "",
+    ]);
+  }
 
   for (const u of users) {
     const careCode = CARE_LEVEL_CODE[(u.careLevel ?? "").trim()] ?? "";
     if (!careCode) warnings.push(`${u.userName}: 要介護度 ("${u.careLevel ?? "未設定"}") をコードに変換できません`);
     if (!u.serviceCode) warnings.push(`${u.userName}: 居宅介護支援費のサービスコードが年度別単位数マスタにありません`);
     if (!u.requestDate) warnings.push(`${u.userName}: 計画作成依頼届出年月日が無いため認定開始日で代用しました`);
+
+    // 公費 (生活保護等): 併用 (振替 0 円) でも 8121 の項8/9 (負担者番号/受給者番号) は設定する
+    const hasKohi = !!u.kohiTandoku || !!u.kohiHobetsu?.trim();
+    if (u.kohiTandoku && !u.kohiHobetsu?.trim()) {
+      warnings.push(
+        `${u.userName}: 公費単独 (被保険者番号 H) なのに公費情報 (法別番号) が未登録です — 保険情報に法別12 (生活保護) を登録してください`,
+      );
+    }
+    if (hasKohi && !u.kohiFutanshaNumber?.trim()) {
+      warnings.push(`${u.userName}: 公費 (法別${u.kohiHobetsu?.trim() || "12"}) の負担者番号が未登録です${u.kohiTandoku ? " (生活保護単独は必須)" : ""}`);
+    }
+    if (u.kohiTandoku && !u.kohiJukyushaNumber?.trim()) {
+      warnings.push(`${u.userName}: 公費受給者番号が未登録です (生活保護単独は必須)`);
+    }
+
     dataParts.push([
       "8121", // 1
       office, // 2 事業所番号
@@ -257,18 +321,26 @@ export function buildKeikakuhiFile(
       ym, // 4 サービス提供年月
       u.insurerNumber, // 5 証記載保険者番号
       String(unitPrice100), // 6 単位数単価
-      u.insuredNumber, // 7 被保険者番号
-      "", // 8 公費負担者番号 (生保単独時のみ)
-      "", // 9 公費受給者番号
+      u.insuredNumber, // 7 被保険者番号 (英数10 — H番号可)
+      // 8-9 公費負担者番号/受給者番号 — 仕様書: 生活保護単独の場合必須。
+      //   併用 (振替 0 円) 時も記載する (様式第七の記載例準拠)。
+      //   ※ 8121 には 7131 のような公費分単位数の独立項目は無い (全18項目、仕様書確認済)。
+      hasKohi ? u.kohiFutanshaNumber?.trim() ?? "" : "", // 8 公費負担者番号
+      hasKohi ? u.kohiJukyushaNumber?.trim() ?? "" : "", // 9 公費受給者番号
       dateNum(u.birthDate), // 10 被保険者生年月日
       genderCode(u.gender), // 11 性別コード
+      // ⚠ 要取込チェック: 仕様書の ※5「被保険者でない生活保護受給者の場合は設定不要」が
+      //    どの項目 (要介護状態区分/認定有効期間) に掛かるかレイアウト上不明確。
+      //    ここでは H番号者も福祉事務所の要介護認定情報をそのまま設定する。
       careCode, // 12 要介護状態区分コード
       dateNum(u.certStart), // 13 認定有効期間 (開始)
       dateNum(u.certEnd), // 14 認定有効期間 (終了)
       dateNum(u.requestDate ?? u.certStart), // 15 計画作成依頼届出年月日
       u.serviceCode, // 16 サービスコード
       String(u.units), // 17 単位数
-      String(Math.floor((u.units * unitPrice100) / 100)), // 18 請求金額
+      // 18 請求金額 — 公費単独は全額が公費請求となるが、金額自体は同じ 10 割額。
+      //    (保険/公費の別は 7111 側の区分コードで表現される)
+      String(amountOf(u)), // 18 請求金額
     ]);
   }
 

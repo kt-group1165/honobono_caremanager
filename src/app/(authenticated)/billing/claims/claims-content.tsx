@@ -32,9 +32,15 @@ import {
   ADDON_CODE_TO_TOKUTEI,
   AUTO_ADDON_NOTES_MARKER,
   KYOTAKU_ADDON_LAW_UNITS,
+  type YoboShienKubun,
+  YOBO_SHIEN_MARKER,
   getUnitPriceByArea,
   isAddonActiveInMonth,
+  isYoboShienLevel,
+  parseYoboShienKubun,
+  setYoboShienMarker,
 } from "./claims-shared";
+import { validInMonth } from "@/lib/service-code-valid";
 import { useBusinessType } from "@/lib/business-type-context";
 
 // ---------------------------------------------------------------------------
@@ -83,8 +89,10 @@ const CARE_LEVEL_MAP_FALLBACK: Record<
   string,
   { units: number; code: string; name: string }
 > = {
-  要支援1: { units: 443, code: "461000", name: "介護予防支援費" },
-  要支援2: { units: 443, code: "461000", name: "介護予防支援費" },
+  // 要支援は原則 kaigo_service_codes (対象月有効世代) から引く。ここは最終 fallback
+  // (R6.4 世代の 介護予防支援費Ⅱ = 居宅介護支援事業所の直接指定 472 単位)。
+  要支援1: { units: 472, code: "461112", name: "介護予防支援費Ⅱ (居宅介護支援事業所)" },
+  要支援2: { units: 472, code: "461112", name: "介護予防支援費Ⅱ (居宅介護支援事業所)" },
   要介護1: { units: 1086, code: "432301", name: "居宅介護支援費Ⅰⅰ１" },
   要介護2: { units: 1086, code: "432301", name: "居宅介護支援費Ⅰⅰ１" },
   要介護3: { units: 1411, code: "432271", name: "居宅介護支援費Ⅰⅰ２" },
@@ -97,6 +105,48 @@ type CareLevelInfo = { units: number; code: string; name: string };
 function getFiscalYear(billingMonth: string): string {
   const [y, m] = billingMonth.split("-").map(Number);
   return m >= 4 ? String(y) : String(y - 1);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 介護予防支援費のサービスコード (46xx) を kaigo_service_codes から
+// 対象月に有効な世代 (validInMonth) で引く。
+// 実在コード (2026-07 時点の DB 確認済):
+//   R6.4〜R8.5 世代: 461111 介護予防支援費Ⅰ(地域包括支援センター) 442 単位
+//                    461112 介護予防支援費Ⅱ(居宅介護支援事業所)   472 単位
+//   R8.6〜   世代: 462111 介護予防支援Ⅰ 442 単位 / 462121 介護予防支援Ⅱ 472 単位
+//                  (地・山・小 や 虐防/業未 減算は名称に「・」を含む別コード)
+// ─────────────────────────────────────────────────────────────────────────
+type YoboShienCodes = { I: CareLevelInfo | null; II: CareLevelInfo | null };
+
+async function fetchYoboShienCodes(
+  supabase: ReturnType<typeof createClient>,
+  billingMonth: string,
+): Promise<YoboShienCodes> {
+  const [y, m] = billingMonth.split("-").map(Number);
+  const { data, error } = await validInMonth(
+    supabase
+      .from("kaigo_service_codes")
+      .select("service_code, service_name, units, valid_from")
+      .like("service_code", "46%")
+      .eq("system", "介護")
+      .eq("calculation_type", "基本"),
+    y,
+    m,
+  );
+  if (error) throw new Error(`介護予防支援費コード取得失敗: ${error.message}`);
+  type Row = { service_code: string; service_name: string; units: number; valid_from: string | null };
+  // 「・」付き (地域区分/減算 variant) を除いた素の基本コードのみ採用
+  const base = ((data ?? []) as Row[]).filter(
+    (r) => r.service_name.startsWith("介護予防支援") && !r.service_name.includes("・"),
+  );
+  const pick = (mark: "Ⅰ" | "Ⅱ"): CareLevelInfo | null => {
+    const cands = base
+      .filter((r) => r.service_name.includes(mark))
+      .sort((a, b) => (b.valid_from ?? "").localeCompare(a.valid_from ?? ""));
+    const c = cands[0];
+    return c ? { units: c.units, code: c.service_code, name: c.service_name } : null;
+  };
+  return { I: pick("Ⅰ"), II: pick("Ⅱ") };
 }
 
 // 令和6年度改定 居宅介護支援 特定事業所加算単位数（フォールバック）
@@ -1031,6 +1081,35 @@ export function ClaimsContent({
       }
       const initialAddonAvailable = addonByCode.has("初回加算");
 
+      // 5-e. 介護予防支援費 (要支援1/2) — kaigo_service_codes の対象月有効世代から取得
+      //     (kaigo_care_support_rates の固定 443 単位は使わない。R6.4 以降は Ⅰ/Ⅱ の 2 区分)
+      const yoboCodes = await fetchYoboShienCodes(supabase, billingMonth);
+
+      // 5-f. 利用者ごとの予防支援区分 (Ⅰ/Ⅱ/委託) — claims.notes のマーカーを
+      //     billing_month 降順で走査し、直近の選択を引き継ぐ (当月分は削除前なので含む)
+      const yoboKubunByUser = new Map<string, YoboShienKubun>();
+      {
+        const PAGE_YK = 1000;
+        let fromY = 0;
+        while (true) {
+          const { data, error: ykErr } = await supabase
+            .from("kaigo_care_support_claims")
+            .select("user_id, billing_month, notes")
+            .like("notes", "%[予防支援:%")
+            .order("billing_month", { ascending: false })
+            .range(fromY, fromY + PAGE_YK - 1);
+          if (ykErr) throw ykErr;
+          if (!data || data.length === 0) break;
+          for (const r of data as { user_id: string; notes: string | null }[]) {
+            if (yoboKubunByUser.has(r.user_id)) continue;
+            const k = parseYoboShienKubun(r.notes);
+            if (k) yoboKubunByUser.set(r.user_id, k);
+          }
+          if (data.length < PAGE_YK) break;
+          fromY += PAGE_YK;
+        }
+      }
+
       // 6. Delete existing claims for this month
       const { error: delErr } = await supabase
         .from("kaigo_care_support_claims")
@@ -1047,33 +1126,94 @@ export function ClaimsContent({
         const cert = certMap.get(user.id);
         if (!cert) continue;
 
-        const levelInfo = CARE_LEVEL_MAP[cert.care_level];
+        // ── 介護予防支援 (要支援1/2) の区分判定 ──
+        const isYobo = isYoboShienLevel(cert.care_level);
+        const yoboKubun: YoboShienKubun | null = isYobo
+          ? (yoboKubunByUser.get(user.id) ?? "II")
+          : null;
+
+        // 委託 (= 地域包括支援センターが請求) は請求対象外の 0 単位行を残す
+        // (区分選択の永続化 + 一覧での「請求対象外」表示のため。CSV/伝送出力からは除外)
+        if (yoboKubun === "itaku") {
+          rows.push({
+            user_id: user.id,
+            billing_month: billingMonth,
+            care_support_code: yoboCodes.II?.code ?? CARE_LEVEL_MAP[cert.care_level]?.code ?? "461112",
+            care_support_name: "介護予防支援 (委託)",
+            units: 0,
+            unit_price: officeUnitPrice,
+            total_amount: 0,
+            insurance_amount: 0,
+            initial_addition: false,
+            initial_addition_units: 0,
+            hospital_coordination: false,
+            hospital_coordination_units: 0,
+            discharge_addition: false,
+            discharge_addition_units: 0,
+            medical_coordination: false,
+            medical_coordination_units: 0,
+            tokutei_kassan_type: null,
+            tokutei_kassan_units: 0,
+            medical_coop_kassan: false,
+            medical_coop_kassan_units: 0,
+            discharge_type: null,
+            terminal_care: false,
+            terminal_care_units: 0,
+            emergency_conference: false,
+            emergency_conference_units: 0,
+            bcp_not_prepared: false,
+            bcp_reduction_pct: 0,
+            abuse_prevention_not_implemented: false,
+            abuse_reduction_pct: 0,
+            status: "draft",
+            notes: `${AUTO_ADDON_NOTES_MARKER} 介護予防支援 委託 (地域包括支援センターが請求するため請求対象外)\n${YOBO_SHIEN_MARKER.itaku}`,
+            created_at: now,
+          });
+          continue;
+        }
+
+        let levelInfo = CARE_LEVEL_MAP[cert.care_level];
+        if (yoboKubun) {
+          const yc = yoboKubun === "I" ? yoboCodes.I : yoboCodes.II;
+          if (yc) levelInfo = yc;
+        }
         if (!levelInfo) continue;
 
         // ── 自動算定 加算 (= 事業所単位の届出加算を draft で全員に展開) ──
+        // 介護予防支援には居宅介護支援費の加算 (特定事業所・退院退所・入院時情報等) は
+        // 算定できないため、要支援者は初回加算 (介護予防支援 初回加算 300 単位) のみ自動算定
+        const uDischargeCode = isYobo ? null : autoDischargeCode;
+        const uHospitalCode = isYobo ? null : autoHospitalCode;
+        const uMedicalCoordCode = isYobo ? null : autoMedicalCoordCode;
+        const uTerminalCode = isYobo ? null : autoTerminalCode;
+        const uEmergencyCode = isYobo ? null : autoEmergencyCode;
+        const uTokutei: TokuteiKassanType = isYobo ? "none" : officeTokutei;
+        const uTokuteiUnits = isYobo ? 0 : officeTokuteiUnits;
+        const uMedicalCoop = isYobo ? false : officeMedicalCoop;
+        const uMedicalCoopUnits = isYobo ? 0 : officeMedicalCoopUnits;
         // 退院・退所加算
-        const dischargeType: DischargeType | null = autoDischargeCode
-          ? (ADDON_CODE_TO_DISCHARGE_TYPE[autoDischargeCode] ?? null)
+        const dischargeType: DischargeType | null = uDischargeCode
+          ? (ADDON_CODE_TO_DISCHARGE_TYPE[uDischargeCode] ?? null)
           : null;
-        const dischargeUnits = autoDischargeCode ? resolveAddonUnits(autoDischargeCode) : 0;
+        const dischargeUnits = uDischargeCode ? resolveAddonUnits(uDischargeCode) : 0;
         // 入院時情報連携加算
-        const hospitalType: HospitalCoordType | null = autoHospitalCode
-          ? (ADDON_CODE_TO_HOSPITAL_TYPE[autoHospitalCode] ?? null)
+        const hospitalType: HospitalCoordType | null = uHospitalCode
+          ? (ADDON_CODE_TO_HOSPITAL_TYPE[uHospitalCode] ?? null)
           : null;
-        const hospitalUnits = autoHospitalCode ? resolveAddonUnits(autoHospitalCode) : 0;
+        const hospitalUnits = uHospitalCode ? resolveAddonUnits(uHospitalCode) : 0;
         // 医療連携加算 (= 通院時情報連携)
-        const medicalCoordUnits = autoMedicalCoordCode ? resolveAddonUnits(autoMedicalCoordCode) : 0;
+        const medicalCoordUnits = uMedicalCoordCode ? resolveAddonUnits(uMedicalCoordCode) : 0;
         // ターミナルケア
-        const terminalUnits = autoTerminalCode ? resolveAddonUnits(autoTerminalCode) : 0;
+        const terminalUnits = uTerminalCode ? resolveAddonUnits(uTerminalCode) : 0;
         // 緊急時カンファレンス
-        const emergencyUnits = autoEmergencyCode ? resolveAddonUnits(autoEmergencyCode) : 0;
+        const emergencyUnits = uEmergencyCode ? resolveAddonUnits(uEmergencyCode) : 0;
         // 初回加算 (= 過去 claims に user_id が無い場合のみ)
         const isInitial = initialAddonAvailable && !priorUserIds.has(user.id);
         const initialUnits = isInitial ? (KYOTAKU_ADDON_LAW_UNITS["初回加算"] ?? 300) : 0;
 
         const autoAddUnits =
-          officeTokuteiUnits +
-          officeMedicalCoopUnits +
+          uTokuteiUnits +
+          uMedicalCoopUnits +
           dischargeUnits +
           hospitalUnits +
           medicalCoordUnits +
@@ -1084,19 +1224,24 @@ export function ClaimsContent({
 
         // 自動算定の根拠を notes に印で残す
         const noteParts: string[] = [];
-        if (officeTokutei !== "none") {
+        if (yoboKubun) {
           noteParts.push(
-            `${AUTO_ADDON_NOTES_MARKER} 特定事業所加算${officeTokutei} (${tokuteiSource === "addons" ? "加算管理" : "/master/office"} 由来)`,
+            `${AUTO_ADDON_NOTES_MARKER} ${levelInfo.name} ${levelInfo.units}単位 (kaigo_service_codes 対象月有効世代)`,
           );
         }
-        if (officeMedicalCoop) {
+        if (uTokutei !== "none") {
+          noteParts.push(
+            `${AUTO_ADDON_NOTES_MARKER} 特定事業所加算${uTokutei} (${tokuteiSource === "addons" ? "加算管理" : "/master/office"} 由来)`,
+          );
+        }
+        if (uMedicalCoop) {
           noteParts.push(`${AUTO_ADDON_NOTES_MARKER} 特定事業所医療介護連携加算 (/master/office)`);
         }
-        if (autoDischargeCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoDischargeCode} (加算管理)`);
-        if (autoHospitalCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoHospitalCode} (加算管理)`);
-        if (autoMedicalCoordCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoMedicalCoordCode} (加算管理)`);
-        if (autoTerminalCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoTerminalCode} (加算管理)`);
-        if (autoEmergencyCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoEmergencyCode} (加算管理)`);
+        if (uDischargeCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${uDischargeCode} (加算管理)`);
+        if (uHospitalCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${uHospitalCode} (加算管理)`);
+        if (uMedicalCoordCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${uMedicalCoordCode} (加算管理)`);
+        if (uTerminalCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${uTerminalCode} (加算管理)`);
+        if (uEmergencyCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${uEmergencyCode} (加算管理)`);
         if (isInitial) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} 初回加算 (= 過去月 claims なしと判定)`);
         // 単価 source
         noteParts.push(
@@ -1104,6 +1249,8 @@ export function ClaimsContent({
             ? `${AUTO_ADDON_NOTES_MARKER} 単価 ${officeUnitPrice.toFixed(2)}円 (地域区分: ${officeArea})`
             : `${AUTO_ADDON_NOTES_MARKER} 単価 ${officeUnitPrice.toFixed(2)}円 (offices.unit_price)`,
         );
+        // 予防支援区分マーカー (Ⅰ/Ⅱ) — 次回一括生成時の引継ぎ用
+        if (yoboKubun) noteParts.push(YOBO_SHIEN_MARKER[yoboKubun]);
         const autoNotes = noteParts.join("\n");
 
         rows.push({
@@ -1123,10 +1270,10 @@ export function ClaimsContent({
           discharge_addition_units: dischargeUnits,
           medical_coordination: medicalCoordUnits > 0,
           medical_coordination_units: medicalCoordUnits,
-          tokutei_kassan_type: officeTokutei === "none" ? null : officeTokutei,
-          tokutei_kassan_units: officeTokuteiUnits,
-          medical_coop_kassan: officeMedicalCoop,
-          medical_coop_kassan_units: officeMedicalCoopUnits,
+          tokutei_kassan_type: uTokutei === "none" ? null : uTokutei,
+          tokutei_kassan_units: uTokuteiUnits,
+          medical_coop_kassan: uMedicalCoop,
+          medical_coop_kassan_units: uMedicalCoopUnits,
           discharge_type: dischargeType,
           terminal_care: terminalUnits > 0,
           terminal_care_units: terminalUnits,
@@ -1332,6 +1479,79 @@ export function ClaimsContent({
     await handleEditSave(claim.id, next, claim.unit_price);
   };
 
+  // ── 予防支援区分 (Ⅰ/Ⅱ/委託) の切替 ──────────────────────────────────────
+  const handleYoboKubunChange = async (claim: ClaimRow, kubun: YoboShienKubun) => {
+    try {
+      const notes = setYoboShienMarker(claim.notes, kubun);
+      if (kubun === "itaku") {
+        // 委託 = 包括が請求 → 請求対象外 (0 単位化 + 加算全解除)
+        const { error } = await supabase
+          .from("kaigo_care_support_claims")
+          .update({
+            care_support_name: "介護予防支援 (委託)",
+            units: 0,
+            total_amount: 0,
+            insurance_amount: 0,
+            initial_addition: false,
+            initial_addition_units: 0,
+            hospital_coordination: false,
+            hospital_coordination_units: 0,
+            discharge_addition: false,
+            discharge_addition_units: 0,
+            discharge_type: null,
+            medical_coordination: false,
+            medical_coordination_units: 0,
+            tokutei_kassan_type: null,
+            tokutei_kassan_units: 0,
+            medical_coop_kassan: false,
+            medical_coop_kassan_units: 0,
+            terminal_care: false,
+            terminal_care_units: 0,
+            emergency_conference: false,
+            emergency_conference_units: 0,
+            notes,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", claim.id);
+        if (error) throw error;
+      } else {
+        const codes = await fetchYoboShienCodes(supabase, billingMonth);
+        const yc = kubun === "I" ? codes.I : codes.II;
+        if (!yc) {
+          toast.error(
+            `対象月に有効な介護予防支援費(${kubun === "I" ? "Ⅰ" : "Ⅱ"})のサービスコードがマスタにありません`,
+          );
+          return;
+        }
+        const addings = claimToAddings(claim);
+        const addUnits = calcAdditionUnits(addings);
+        const reductionUnits = calcReductionUnits(yc.units, addings);
+        const { total_amount } = calcTotals(yc.units, addUnits, reductionUnits, claim.unit_price);
+        const { error } = await supabase
+          .from("kaigo_care_support_claims")
+          .update({
+            care_support_code: yc.code,
+            care_support_name: yc.name,
+            units: yc.units,
+            total_amount,
+            insurance_amount: total_amount,
+            notes,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", claim.id);
+        if (error) throw error;
+      }
+      toast.success("予防支援区分を更新しました");
+      fetchClaims();
+    } catch (err: unknown) {
+      console.error("予防支援区分の更新エラー:", err);
+      toast.error(
+        "予防支援区分の更新に失敗しました: " +
+          (err instanceof Error ? err.message : JSON.stringify(err)),
+      );
+    }
+  };
+
   // ── CSV Export ────────────────────────────────────────────────────────────
 
   const handleCSVExport = () => {
@@ -1339,7 +1559,10 @@ export function ClaimsContent({
       toast.error("出力するデータがありません");
       return;
     }
-    const confirmed = claims.filter((c) => c.status !== "draft");
+    // 委託 (予防支援) は包括が請求するため出力対象外
+    const confirmed = claims.filter(
+      (c) => c.status !== "draft" && parseYoboShienKubun(c.notes) !== "itaku",
+    );
     if (confirmed.length === 0) {
       toast.error("確定済みのレセプトがありません。確定後に出力してください。");
       return;
@@ -1356,7 +1579,10 @@ export function ClaimsContent({
       toast.error("出力するデータがありません");
       return;
     }
-    const confirmed = claims.filter((c) => c.status !== "draft");
+    // 委託 (予防支援) は包括が請求するため出力対象外
+    const confirmed = claims.filter(
+      (c) => c.status !== "draft" && parseYoboShienKubun(c.notes) !== "itaku",
+    );
     if (confirmed.length === 0) {
       toast.error("確定済みのレセプトがありません。確定後に出力してください。");
       return;
@@ -1798,6 +2024,9 @@ export function ClaimsContent({
                   <th className="border-r border-gray-200 px-1 py-2 text-center font-semibold text-gray-700 whitespace-nowrap" style={{ width: 50 }}>
                     要介護度
                   </th>
+                  <th className="border-r border-gray-200 px-1 py-2 text-center font-semibold text-purple-700 whitespace-nowrap" style={{ width: 76 }}>
+                    予防支援<br/>区分
+                  </th>
                   {/* 加算カラム */}
                   <th className="border-r border-gray-200 px-1 py-2 text-center font-semibold text-blue-700 whitespace-nowrap" style={{ width: 48 }}>
                     初回<br/>加算
@@ -1844,6 +2073,9 @@ export function ClaimsContent({
                   const certEntry = certMap.get(claim.user_id);
                   const user = claim.clients;
                   const disabled = claim.status !== "draft"; // 確定済みはロック
+                  // 委託 (予防支援) 行は請求対象外 → 加算入力もロック (区分 select は変更可)
+                  const itakuRow = parseYoboShienKubun(claim.notes) === "itaku";
+                  const addonDisabled = disabled || itakuRow;
                   const inputCls = "w-full border border-gray-300 rounded px-1 py-0.5 text-[11px] bg-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed";
                   return (
                     <tr
@@ -1888,12 +2120,32 @@ export function ClaimsContent({
                           {certEntry?.care_level?.replace("要介護", "介").replace("要支援", "支") ?? "—"}
                         </span>
                       </td>
+                      {/* 予防支援区分 (要支援のみ select) */}
+                      <td className="border-r border-gray-200 px-1 py-1.5 text-center">
+                        {isYoboShienLevel(certEntry?.care_level) ? (
+                          <select
+                            value={parseYoboShienKubun(claim.notes) ?? "II"}
+                            disabled={disabled /* 委託行でも区分は変更可 */}
+                            onChange={(e) =>
+                              handleYoboKubunChange(claim, e.target.value as YoboShienKubun)
+                            }
+                            className={inputCls}
+                            title="Ⅰ=地域包括支援センター / Ⅱ=居宅介護支援事業者の指定 / 委託=包括が請求 (請求対象外)"
+                          >
+                            <option value="I">Ⅰ 包括</option>
+                            <option value="II">Ⅱ 指定</option>
+                            <option value="itaku">委託</option>
+                          </select>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
                       {/* 初回加算 (checkbox) */}
                       <td className="border-r border-gray-200 px-1 py-1.5 text-center">
                         <input
                           type="checkbox"
                           checked={claim.initial_addition}
-                          disabled={disabled}
+                          disabled={addonDisabled}
                           onChange={(e) =>
                             handleQuickPatch(claim, { initial: e.target.checked })
                           }
@@ -1904,7 +2156,7 @@ export function ClaimsContent({
                       <td className="border-r border-gray-200 px-1 py-1.5">
                         <select
                           value={claim.discharge_type ?? "none"}
-                          disabled={disabled}
+                          disabled={addonDisabled}
                           onChange={(e) =>
                             handleQuickPatch(claim, { discharge: e.target.value as DischargeType })
                           }
@@ -1925,7 +2177,7 @@ export function ClaimsContent({
                             if (!claim.hospital_coordination) return "none";
                             return claim.hospital_coordination_units >= 250 ? "i" : "ii";
                           })()}
-                          disabled={disabled}
+                          disabled={addonDisabled}
                           onChange={(e) =>
                             handleQuickPatch(claim, { hospitalization: e.target.value as HospitalCoordType })
                           }
@@ -1941,7 +2193,7 @@ export function ClaimsContent({
                         <input
                           type="checkbox"
                           checked={claim.emergency_conference ?? false}
-                          disabled={disabled}
+                          disabled={addonDisabled}
                           onChange={(e) =>
                             handleQuickPatch(claim, { emergency_conference: e.target.checked })
                           }
@@ -1953,7 +2205,7 @@ export function ClaimsContent({
                         <input
                           type="checkbox"
                           checked={claim.terminal_care ?? false}
-                          disabled={disabled}
+                          disabled={addonDisabled}
                           onChange={(e) =>
                             handleQuickPatch(claim, { terminal_care: e.target.checked })
                           }
@@ -1965,7 +2217,7 @@ export function ClaimsContent({
                         <input
                           type="checkbox"
                           checked={claim.medical_coordination}
-                          disabled={disabled}
+                          disabled={addonDisabled}
                           onChange={(e) =>
                             handleQuickPatch(claim, { outpatient: e.target.checked })
                           }
@@ -1977,7 +2229,7 @@ export function ClaimsContent({
                         <input
                           type="checkbox"
                           checked={claim.medical_coop_kassan ?? false}
-                          disabled={disabled}
+                          disabled={addonDisabled}
                           onChange={(e) =>
                             handleQuickPatch(claim, { medical_coop_kassan: e.target.checked })
                           }
@@ -1989,7 +2241,7 @@ export function ClaimsContent({
                         <input
                           type="checkbox"
                           checked={claim.bcp_not_prepared ?? false}
-                          disabled={disabled}
+                          disabled={addonDisabled}
                           onChange={(e) =>
                             handleQuickPatch(claim, { bcp_not_prepared: e.target.checked })
                           }
@@ -2001,7 +2253,7 @@ export function ClaimsContent({
                         <input
                           type="checkbox"
                           checked={claim.abuse_prevention_not_implemented ?? false}
-                          disabled={disabled}
+                          disabled={addonDisabled}
                           onChange={(e) =>
                             handleQuickPatch(claim, { abuse_prevention_not_implemented: e.target.checked })
                           }
@@ -2025,7 +2277,13 @@ export function ClaimsContent({
                       </td>
                       {/* 請求額 */}
                       <td className="border-r border-gray-200 px-2 py-1.5 text-right font-semibold text-blue-700 whitespace-nowrap">
-                        {formatAmount(claim.insurance_amount)}
+                        {parseYoboShienKubun(claim.notes) === "itaku" ? (
+                          <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
+                            請求対象外
+                          </span>
+                        ) : (
+                          formatAmount(claim.insurance_amount)
+                        )}
                       </td>
                       {/* 状態 + 操作 */}
                       <td className="px-2 py-1.5 text-center whitespace-nowrap">
@@ -2064,7 +2322,7 @@ export function ClaimsContent({
                 <tfoot className="border-t-2 border-gray-300 bg-gray-100">
                   <tr>
                     <td
-                      colSpan={13}
+                      colSpan={14}
                       className="px-2 py-2 text-xs font-medium text-gray-700 text-right"
                     >
                       合計 ({claims.length}件)
@@ -2099,7 +2357,8 @@ export function ClaimsContent({
 
       {/* Footer note */}
       <p className="text-xs text-gray-400">
-        ※ 居宅介護支援費は10割給付のため利用者負担額は0円です。国保連CSV出力は確定済みレセプトのみ対象です。
+        ※ 居宅介護支援費・介護予防支援費は10割給付のため利用者負担額は0円です。国保連CSV出力は確定済みレセプトのみ対象です。
+        予防支援区分「委託」(= 地域包括支援センターが請求) の利用者は請求対象外となり、CSV・伝送出力に含まれません。
       </p>
     </div>
   );

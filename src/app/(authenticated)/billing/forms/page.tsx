@@ -8,6 +8,7 @@ import {
   type OfficeInfo,
   type UserInfo,
 } from "./billing-forms-content";
+import { toKohiInfo, type KohiInfo } from "./forms-shared";
 
 function getCurrentMonth(): string {
   return format(new Date(), "yyyy-MM");
@@ -48,6 +49,41 @@ export default async function BillingFormsPage({
     .eq("billing_month", billingMonth)
     .neq("status", "draft");
   const initialAllClaims = (allClaimData ?? []) as ClaimRow[];
+
+  // 公費 (生活保護等) 情報 — 対象月の全 claims 利用者 + 選択中利用者の最新保険記録
+  const kohiUserIds = Array.from(
+    new Set([
+      ...initialAllClaims.map((c) => c.user_id),
+      ...(userId ? [userId] : []),
+    ]),
+  );
+  const initialKohiEntries: [string, KohiInfo][] = [];
+  {
+    const seen = new Set<string>();
+    for (let i = 0; i < kohiUserIds.length; i += 50) {
+      const chunk = kohiUserIds.slice(i, i + 50);
+      const { data, error } = await supabase
+        .from("client_insurance_records")
+        .select("client_id, insured_number, kohi_hobetsu, kohi_futansha_number, kohi_jukyusha_number, effective_date")
+        .in("client_id", chunk)
+        .order("effective_date", { ascending: false });
+      if (error) {
+        console.error("公費情報の取得に失敗:", error.message);
+        continue;
+      }
+      for (const r of (data ?? []) as {
+        client_id: string;
+        insured_number: string | null;
+        kohi_hobetsu: string | null;
+        kohi_futansha_number: string | null;
+        kohi_jukyusha_number: string | null;
+      }[]) {
+        if (seen.has(r.client_id)) continue; // 最新 (effective_date DESC) の 1 件のみ
+        seen.add(r.client_id);
+        initialKohiEntries.push([r.client_id, toKohiInfo(r)]);
+      }
+    }
+  }
 
   let initialUserInfo: UserInfo | null = null;
   let initialCertInfo: CertInfo | null = null;
@@ -105,6 +141,7 @@ export default async function BillingFormsPage({
           initialCertInfo={initialCertInfo}
           initialClaims={initialClaims}
           initialAllClaims={initialAllClaims}
+          initialKohiEntries={initialKohiEntries}
         />
       ) : (
         <div className="flex-1 overflow-y-auto p-6">

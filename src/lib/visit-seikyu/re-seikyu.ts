@@ -62,6 +62,7 @@ export async function loadReSeikyuRows(
   const { data, error } = await supabase
     .from("kaigo_billing_status")
     .select("client_id, target_month, tsukiokure, henrei")
+    .eq("office_id", opts.officeId)
     .eq("kokuho_target", false)
     .or("tsukiokure.eq.true,henrei.eq.true")
     .lt("target_month", opts.currentMonthKey);

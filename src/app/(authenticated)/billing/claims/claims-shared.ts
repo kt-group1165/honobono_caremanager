@@ -125,6 +125,51 @@ export function isAddonActiveInMonth(
 // 自動算定 marker (= 後で手動修正できるよう notes に印を付ける)
 export const AUTO_ADDON_NOTES_MARKER = "[自動算定]";
 
+// ─────────────────────────────────────────────────────────────────────────
+// 介護予防支援 (要支援1/2) の請求区分
+//   I     = 介護予防支援費(Ⅰ) — 地域包括支援センターとして請求
+//   II    = 介護予防支援費(Ⅱ) — 居宅介護支援事業者の直接指定 (既定)
+//   itaku = 包括からの委託 — 地域包括支援センター側が請求するため請求対象外
+// 選択は kaigo_care_support_claims.notes のマーカーで永続化する
+// (専用列は増やさない。一括生成時は当月以前の最新マーカーを引き継ぐ)。
+// ─────────────────────────────────────────────────────────────────────────
+export type YoboShienKubun = "I" | "II" | "itaku";
+
+export const YOBO_SHIEN_MARKER: Record<YoboShienKubun, string> = {
+  I: "[予防支援:Ⅰ]",
+  II: "[予防支援:Ⅱ]",
+  itaku: "[予防支援:委託]",
+};
+
+/** notes からマーカーを読んで区分を返す (無ければ null) */
+export function parseYoboShienKubun(
+  notes: string | null | undefined,
+): YoboShienKubun | null {
+  if (!notes) return null;
+  if (notes.includes(YOBO_SHIEN_MARKER.itaku)) return "itaku";
+  if (notes.includes(YOBO_SHIEN_MARKER.I)) return "I";
+  if (notes.includes(YOBO_SHIEN_MARKER.II)) return "II";
+  return null;
+}
+
+/** notes の既存マーカーを除去して新しい区分マーカーを付け直す */
+export function setYoboShienMarker(
+  notes: string | null | undefined,
+  kubun: YoboShienKubun,
+): string {
+  const stripped = (notes ?? "")
+    .replace(/\[予防支援:[^\]]*\]/g, "")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+  const marker = YOBO_SHIEN_MARKER[kubun];
+  return stripped ? `${stripped}\n${marker}` : marker;
+}
+
+/** 要支援1/2 (= 介護予防支援の対象) か */
+export function isYoboShienLevel(level: string | null | undefined): boolean {
+  return level === "要支援1" || level === "要支援2";
+}
+
 export interface ClaimRow {
   id: string;
   user_id: string;

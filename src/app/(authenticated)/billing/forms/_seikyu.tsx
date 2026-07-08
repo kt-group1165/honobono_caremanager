@@ -62,6 +62,13 @@ interface Props {
   kohiRows?: SeikyuKohiRow[];
   /** 公費単独 (10割公費) の集計。保険請求欄に含めず生保行に合算。既定 なし */
   kohiTandoku?: SeikyuKohiTandoku;
+  /**
+   * 請求区分の行割当。
+   *   "svc"     (既定) = ①居宅・施設サービス等 行に計上 (訪問介護等)
+   *   "kyotaku"        = ②居宅介護支援・介護予防支援 行に計上。
+   *                      公費請求欄も 生保「居宅介護支援・居宅予防支援」行 (下段) を使う
+   */
+  kohiSeg?: "svc" | "kyotaku";
 }
 
 export function SeikyuForm(props: Props) {
@@ -71,6 +78,7 @@ export function SeikyuForm(props: Props) {
     kohiRequestAmount = 0,
     kohiRows = [],
     kohiTandoku,
+    kohiSeg = "svc",
   } = props;
   const kohiByCode = new Map(kohiRows.map((k) => [k.code, k]));
   // 生保行 (法別12 上段) = 保険請求の再掲分 + 公費単独分 の合算
@@ -104,12 +112,15 @@ export function SeikyuForm(props: Props) {
   })();
 
   // ── 保険請求 サービス費用 行データ ──
-  // ① 居宅・施設サービス等 に受領した単一区分の実績を入れる。② 居宅介護支援・介護予防支援 は 0。
-  const svc1 = {
+  // kohiSeg="svc" (既定): ① 居宅・施設サービス等 に実績を入れ、② は 0。
+  // kohiSeg="kyotaku":    ② 居宅介護支援・介護予防支援 に実績を入れ、① は 0。
+  const svcMain = {
     count: totalCount, units: totalUnits, cost: totalAmount,
     hoken: insuranceAmount, kohi: kohiRequestAmount, user: userCopay,
   };
-  const svc2 = { count: 0, units: 0, cost: 0, hoken: 0, kohi: 0, user: 0 };
+  const svcZero = { count: 0, units: 0, cost: 0, hoken: 0, kohi: 0, user: 0 };
+  const svc1 = kohiSeg === "kyotaku" ? svcZero : svcMain;
+  const svc2 = kohiSeg === "kyotaku" ? svcMain : svcZero;
   const svcTotal = {
     count: svc1.count + svc2.count, units: svc1.units + svc2.units,
     cost: svc1.cost + svc2.cost, hoken: svc1.hoken + svc2.hoken,
@@ -276,9 +287,12 @@ export function SeikyuForm(props: Props) {
         <tbody>
           {publicRows.map((row, idx) => {
             const rowKey = row.key ?? row.code;
-            // 法別行の明細は最初の 12 (居宅・施設サービス等) 行のみに反映。他は空欄。
             // 生保行は 再掲分 + 公費単独 (10割) 分の合算 (seihoRow)。
-            const k = !row.key && idx === 0 ? seihoRow : undefined;
+            // kohiSeg="svc":     生保 上段 (居宅・施設サービス等) 行に反映
+            // kohiSeg="kyotaku": 生保 下段 (居宅介護支援・居宅予防支援) 行に反映
+            const isSeihoTarget =
+              kohiSeg === "kyotaku" ? row.key === "12b" : !row.key && idx === 0;
+            const k = isSeihoTarget ? seihoRow : undefined;
             return (
               <tr key={rowKey} style={{ height: 26 }}>
                 <td style={{ ...h, width: "5%", fontSize: "7pt" }}>{row.key ? "" : row.code}</td>

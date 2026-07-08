@@ -65,8 +65,10 @@ const NAV_CARE_MANAGER_SECTIONED: SectionSpec[] = [
     title: "請求業務",
     items: [
       { name: "給付管理", href: "/billing/benefits", icon: Calculator },
-      { name: "レセプト", href: "/billing/claims", icon: FileSpreadsheet },
-      { name: "明細書・請求書", href: "/billing/forms", icon: FileText },
+      { name: "請求", href: "/billing/seikyu", icon: Calculator },
+      { name: "請求統計", href: "/billing/stats", icon: FileSpreadsheet },
+      // レセプト (/billing/claims) / 明細書・請求書 (/billing/forms) は
+      // /billing/seikyu の介護請求タブからリンク (画面自体は残置)
     ],
   },
   {

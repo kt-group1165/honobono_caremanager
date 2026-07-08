@@ -1,22 +1,22 @@
 "use client";
 
 /**
- * 介護請求 — 利用者ごとの月次請求管理 (見た目: ほのぼの NEXT の実画面に準拠)
+ * 介護請求 (居宅介護支援) — 利用者ごとの月次請求管理
+ * (見た目: billing-visit/kaigo-seikyu = ほのぼの NEXT の実画面に準拠)
  *
  * 左: あかさたな索引 / 中央: ツールバー + 高密度グリッドテーブル + 合計フッタ /
  * 右: 明細情報ペイン (行クリックで表示)。
  *
- * 機能 (従来どおり):
- *   - 行チェック + 状態表示 (未発行 / 発行済 / 国保対象)
+ * 機能:
+ *   - 行チェック + 状態表示 (未発行 / 発行済 / 国保対象 / 再請求)
  *   - 月遅 / 返戻 / 過誤 フラグ (kaigo_billing_status に upsert)
- *   - 明細書 (様式第二) / 請求書 (様式第一 総括) / 国保対象 / 確認用CSV
- *
- * ※ Phase 2: 月遅れ/返戻の再請求。過去月の月遅れ/返戻 (未・国保対象) を
- *    元提供月で再集計し、当月一覧にバッジ付きで合流。明細書・伝送・国保対象化は
- *    各自の元提供月で反映する。
+ *   - 明細書 (様式第七) / 請求書 (様式第一) の印刷 (billing/forms のコンポーネント再利用)
+ *   - 過去月の月遅れ/返戻 (未・国保対象) を元提供月のレセプトで当月一覧に合流 (再請求行)
+ *   - レセプト自体の生成・加算編集は既存 /billing/claims へリンク
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Loader2,
   AlertCircle,
@@ -24,31 +24,41 @@ import {
   Printer,
   Landmark,
   Download,
+  SquarePen,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
 import {
-  useSeikyuContext,
+  useKyotakuSeikyuContext,
   SeikyuKanaSidebar,
   SeikyuMonthNav,
-} from "../_shared/seikyu-context";
-import { MeisaiPrintSheet } from "../../billing/forms/_meisai";
-import { SeikyuForm } from "../../billing/forms/_seikyu";
+  loadKyotakuReSeikyuRows,
+  type KyotakuSeikyuRow,
+  type KyotakuReSeikyuRow,
+} from "./_seikyu-context";
+import { MeisaiForm } from "../forms/_meisai";
 import {
-  loadReSeikyuRows,
-  type ReSeikyuRow,
-} from "@/lib/visit-seikyu/re-seikyu";
-import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
+  SeikyuForm,
+  type SeikyuKohiRow,
+  type SeikyuKohiTandoku,
+} from "../forms/_seikyu";
+import type { ClaimStatus } from "../claims/claims-shared";
 
-// ほのぼの実画面の列順:
-// 対象 / 申請中 / 状態 / 提供月 / 請求月 / サービス事業所 / 被保険者番号 / 利用者名 / 月遅 / 返戻 / 過誤
+// ほのぼの実画面の列順 (居宅版):
+// 対象 / 状態 / 提供月 / 請求月 / サービス事業所 / 被保険者番号 / 利用者名 /
+// 単位数 / 金額 / レセプト / 月遅 / 返戻 / 過誤
 const GRID_COLS =
-  "grid grid-cols-[26px_44px_60px_54px_54px_minmax(110px,0.9fr)_84px_minmax(140px,1.1fr)_44px_44px_44px]";
+  "grid grid-cols-[26px_60px_54px_54px_minmax(100px,0.8fr)_84px_minmax(140px,1.1fr)_64px_76px_52px_44px_44px_44px]";
 
 // 和暦月表示 「R 8/ 5」 (ほのぼの流。1 桁は空白 pad、font-mono 前提)
 const reiwaMonth = (y: number, m: number) =>
-  `R${String(y - 2018).padStart(2, " ")}/${String(m).padStart(2, " ")}`;
+  `R${String(y - 2018).padStart(2, " ")}/${String(m).padStart(2, " ")}`;
+
+const CLAIM_STATUS_LABELS: Record<ClaimStatus, string> = {
+  draft: "未確定",
+  confirmed: "確定済",
+  submitted: "請求済",
+};
 
 // kaigo_billing_status の 1 行 (利用者 × 月)
 interface BillingStatusRow {
@@ -64,39 +74,33 @@ interface BillingStatusRow {
 interface DisplayRow {
   /** 一意キー (利用者 × 提供月)。当月="cur:<id>" / 再請求="re:<id>:<origMonthKey>" */
   key: string;
-  row: UserSeikyuRow;
+  row: KyotakuSeikyuRow;
   /** この行の提供月 (YYYY-MM)。当月行は当月、再請求行は元提供月 */
   origMonthKey: string;
-  /** 月遅れ/返戻の再請求行か */
   isReSeikyu: boolean;
   /** 再請求理由 (月遅れ/返戻)。当月通常行は null */
   reasons: { tsukiokure: boolean; henrei: boolean } | null;
 }
 
-export function KaigoSeikyuContent() {
+export function KyotakuKaigoSeikyuContent() {
   const {
-    year, month, filteredRows, kanaMatches, recordCount, loading, error,
+    year, month, monthKey, filteredRows, kanaMatches, loading, error,
     officeName, officeNumber, officeAddress, officePhone, officePostal,
-    officeId, tenantId, unitPrice, appliedFormulaCodes,
-  } = useSeikyuContext();
-  const { currentOffice } = useBusinessType();
+    officeId, tenantId,
+  } = useKyotakuSeikyuContext();
   const supabase = useMemo(() => createClient(), []);
 
-  // 選択・チェックは (利用者 × 提供月) 単位。月遅れ/返戻で同一利用者が
-  // 当月行 + 過去月行で二重に並ぶため、user_id 単体ではなく複合キーで持つ。
+  // 選択・チェックは (利用者 × 提供月) 単位 (再請求で同一利用者が二重に並ぶため)
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [statusByClient, setStatusByClient] = useState<Map<string, BillingStatusRow>>(new Map());
   const [printMode, setPrintMode] = useState<"meisai" | "seikyu" | null>(null);
   // 行内「明細書」ボタン用: 印刷対象を明示指定するとき (null = targetDisplayRows)
   const [meisaiPrintRows, setMeisaiPrintRows] = useState<DisplayRow[] | null>(null);
-  // 月遅れ/返戻の再請求行 (過去月を元提供月で再集計したもの)
-  const [reRows, setReRows] = useState<ReSeikyuRow[]>([]);
-
-  const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+  // 月遅れ/返戻の再請求行 (元提供月のレセプトを読み直したもの)
+  const [reRows, setReRows] = useState<KyotakuReSeikyuRow[]>([]);
 
   // ── 表示用の統合行 (当月通常行 + 再請求行)。カナ索引で共通絞込 ──
-  // rowKey: 当月行は "cur:<user_id>" / 再請求行は "re:<user_id>:<origMonthKey>"
   const displayRows = useMemo<DisplayRow[]>(() => {
     const cur: DisplayRow[] = filteredRows.map((r) => ({
       key: `cur:${r.user_id}`,
@@ -116,11 +120,12 @@ export function KaigoSeikyuContent() {
     return [...re, ...cur];
   }, [filteredRows, reRows, kanaMatches, monthKey]);
 
-  const selected =
-    displayRows.find((d) => d.key === selectedKey)?.row ?? null;
+  const selectedDisplay = displayRows.find((d) => d.key === selectedKey) ?? null;
+  const selected = selectedDisplay?.row ?? null;
 
   // 合計は当月の通常行のみ (再請求分は元提供月の別集計なので当月合計には含めない)
   const totalUnits = filteredRows.reduce((s, r) => s + r.totalUnits, 0);
+  const totalAmount = filteredRows.reduce((s, r) => s + r.insuranceAmount, 0);
   const kokuhoRows = filteredRows.filter(
     (r) => statusByClient.get(r.user_id)?.kokuho_target,
   );
@@ -134,21 +139,15 @@ export function KaigoSeikyuContent() {
       return;
     }
     try {
-      const list = await loadReSeikyuRows(supabase, {
-        officeId,
-        tenantId,
-        unitPrice,
-        appliedFormulaCodes,
-        currentMonthKey: monthKey,
-      });
+      const list = await loadKyotakuReSeikyuRows(supabase, monthKey, officeId);
       setReRows(list);
     } catch (e) {
       toast.error(
-        "再請求分の集計に失敗: " + (e instanceof Error ? e.message : String(e)),
+        "再請求分の読込に失敗: " + (e instanceof Error ? e.message : String(e)),
       );
       setReRows([]);
     }
-  }, [supabase, officeId, tenantId, unitPrice, appliedFormulaCodes, monthKey]);
+  }, [supabase, officeId, tenantId, monthKey]);
 
   useEffect(() => {
     if (loading) return;
@@ -189,15 +188,11 @@ export function KaigoSeikyuContent() {
     field: "tsukiokure" | "henrei" | "kago",
     value: boolean,
   ) => {
-    if (!officeId) {
-      toast.error("事業所が未選択のためフラグを保存できません");
-      return;
-    }
     const cur = statusByClient.get(clientId);
     const payload: Record<string, unknown> = {
       client_id: clientId,
       target_month: monthKey,
-      tenant_id: currentOffice?.tenant_id ?? "kt-group",
+      tenant_id: tenantId ?? "kt-group",
       office_id: officeId,
       // 既存値を保持しつつ対象フラグだけ更新
       tsukiokure: cur?.tsukiokure ?? false,
@@ -249,60 +244,58 @@ export function KaigoSeikyuContent() {
         : displayRows,
     [displayRows, checked],
   );
-  const targets = useMemo(
-    () => targetDisplayRows.map((d) => d.row),
-    [targetDisplayRows],
-  );
 
-  // 集計 (請求書用) — 様式第一 総括は当月の通常行のみを対象とする
+  // 請求書 (様式第一) は当月の通常行のみを対象とする
   // (再請求分は元提供月の別請求書になるため、当月総括には含めない)
   const seikyuTargets = useMemo(
     () => targetDisplayRows.filter((d) => !d.isReSeikyu).map((d) => d.row),
     [targetDisplayRows],
   );
-  // 公費単独 (被保険者番号 H = 生保 10割公費) は保険請求欄に記載しない。
-  // 公費請求欄の生保行に合算する (様式第一の公式記載例準拠)。
-  const hokenTargets = seikyuTargets.filter((r) => !r.kohiTandoku);
-  const tandokuTargets = seikyuTargets.filter((r) => r.kohiTandoku);
+  // 公費単独 (H番号 = みなし2号) は保険請求欄に載せず公費請求欄へ (billing-forms-content と同じ)
+  const hokenTargets = useMemo(
+    () => seikyuTargets.filter((r) => !r.kohiTandoku),
+    [seikyuTargets],
+  );
+  const tandokuTargets = useMemo(
+    () => seikyuTargets.filter((r) => r.kohiTandoku),
+    [seikyuTargets],
+  );
   const targetUnits = hokenTargets.reduce((s, r) => s + r.totalUnits, 0);
   const targetCost = hokenTargets.reduce((s, r) => s + r.totalAmount, 0);
   const targetInsurance = hokenTargets.reduce((s, r) => s + r.insuranceAmount, 0);
-  const targetUser = hokenTargets.reduce((s, r) => s + r.userAmount, 0);
-  // 保険請求分の公費 (生保等の本人負担振替分) — 公費請求欄の再掲元
-  const hokenKohiRows = hokenTargets.filter((r) => (r.kohiAmount ?? 0) > 0);
-  const targetKohi = hokenKohiRows.reduce((s, r) => s + (r.kohiAmount ?? 0), 0);
-  const seikyuKohiRows =
-    hokenKohiRows.length > 0
-      ? [
-          {
-            code: "12",
-            count: hokenKohiRows.length,
-            units: hokenKohiRows.reduce((s, r) => s + (r.kohiUnits ?? 0), 0),
-            cost: hokenKohiRows.reduce((s, r) => s + r.totalAmount, 0),
-            kohi: targetKohi,
-          },
-        ]
-      : [];
-  // 公費単独分の集計 (10割公費: 費用合計 = 公費請求額)
-  const seikyuKohiTandoku =
-    tandokuTargets.length > 0
-      ? {
-          count: tandokuTargets.length,
-          units: tandokuTargets.reduce((s, r) => s + r.totalUnits, 0),
-          cost: tandokuTargets.reduce((s, r) => s + r.totalAmount, 0),
-          kohi: tandokuTargets.reduce((s, r) => s + (r.kohiAmount ?? 0), 0),
-        }
-      : undefined;
 
-  // ── 明細書: 対象者の様式第二を印刷 → 印刷実行時に issued_at を now() で upsert (発行済化) ──
+  // 公費併用分 (10割給付なので振替 0 円だが件数・単位数を公費請求欄に再掲)
+  const seikyuKohiRows = useMemo(() => {
+    const byHobetsu = new Map<string, SeikyuKohiRow>();
+    for (const r of hokenTargets) {
+      if (!r.kohiHobetsu) continue;
+      const code = r.kohiHobetsu;
+      const cur = byHobetsu.get(code) ?? { code, count: 0, units: 0, cost: 0, kohi: 0 };
+      cur.count += 1;
+      cur.units += r.totalUnits;
+      cur.cost += r.totalAmount;
+      cur.kohi += Math.max(0, r.totalAmount - r.insuranceAmount);
+      byHobetsu.set(code, cur);
+    }
+    return Array.from(byHobetsu.values());
+  }, [hokenTargets]);
+  const seikyuKohiTandoku = useMemo<SeikyuKohiTandoku | undefined>(
+    () =>
+      tandokuTargets.length > 0
+        ? {
+            count: tandokuTargets.length,
+            units: tandokuTargets.reduce((s, r) => s + r.totalUnits, 0),
+            cost: tandokuTargets.reduce((s, r) => s + r.totalAmount, 0),
+            kohi: tandokuTargets.reduce((s, r) => s + r.totalAmount, 0),
+          }
+        : undefined,
+    [tandokuTargets],
+  );
+
+  // ── 明細書: 対象者の様式第七を印刷 → 印刷実行時に issued_at を now() で upsert (発行済化) ──
   //    再請求行は元提供月 (origMonthKey) に対して upsert する。
-  //    rowsToPrint 指定時 (行内ボタン) はその行のみ対象。
   const printMeisaiFor = async (rowsToPrint: DisplayRow[]) => {
     if (rowsToPrint.length === 0) return;
-    if (!officeId) {
-      toast.error("事業所が未選択のため発行できません");
-      return;
-    }
     const now = new Date().toISOString();
     const payload = rowsToPrint.map((d) => {
       // 当月行のみ既存フラグを引き継ぐ (再請求行は過去月の別レコード)
@@ -310,7 +303,7 @@ export function KaigoSeikyuContent() {
       return {
         client_id: d.row.user_id,
         target_month: d.origMonthKey,
-        tenant_id: currentOffice?.tenant_id ?? "kt-group",
+        tenant_id: tenantId ?? "kt-group",
         office_id: officeId,
         issued_at: now,
         // 既存フラグを保持 (再請求行は理由フラグを保持)
@@ -342,7 +335,7 @@ export function KaigoSeikyuContent() {
 
   // ── 請求書: 事業所単位の総括 (様式第一) を印刷 ──
   const printSeikyu = () => {
-    if (targets.length === 0) return;
+    if (seikyuTargets.length === 0) return;
     setPrintMode("seikyu");
     setTimeout(() => {
       window.print();
@@ -352,32 +345,25 @@ export function KaigoSeikyuContent() {
 
   // ── 国保対象: 選択行を kokuho_target=true に upsert ──
   //    当月行は「発行済」のみ (未発行はスキップ)。
-  //    再請求行 (月遅れ/返戻) は元提供月に対し kokuho_target=true + notes='再請求' で立てる
-  //    (未発行なら発行済化も同時に行う)。
+  //    再請求行 (月遅れ/返戻) は元提供月に対し kokuho_target=true + notes='再請求' で立てる。
   const markKokuhoTarget = async () => {
-    if (!officeId) {
-      toast.error("事業所が未選択のため国保対象化できません");
-      return;
-    }
     const now = new Date().toISOString();
     const payload: Record<string, unknown>[] = [];
     let skipped = 0;
 
     for (const d of targetDisplayRows) {
       if (d.isReSeikyu) {
-        // 再請求分: 元提供月に kokuho_target を立てる (発行済でなくても許可)
-        const prevNotes = "再請求";
         payload.push({
           client_id: d.row.user_id,
           target_month: d.origMonthKey,
-          tenant_id: currentOffice?.tenant_id ?? "kt-group",
+          tenant_id: tenantId ?? "kt-group",
           office_id: officeId,
           issued_at: now,
           kokuho_target: true,
           tsukiokure: d.reasons?.tsukiokure ?? false,
           henrei: d.reasons?.henrei ?? false,
           kago: false,
-          notes: prevNotes,
+          notes: "再請求",
         });
       } else {
         const cur = statusByClient.get(d.row.user_id);
@@ -388,7 +374,7 @@ export function KaigoSeikyuContent() {
         payload.push({
           client_id: d.row.user_id,
           target_month: monthKey,
-          tenant_id: currentOffice?.tenant_id ?? "kt-group",
+          tenant_id: tenantId ?? "kt-group",
           office_id: officeId,
           issued_at: cur.issued_at,
           kokuho_target: true,
@@ -428,9 +414,10 @@ export function KaigoSeikyuContent() {
       "被保険者番号",
       "利用者名",
       "要介護度",
+      "サービスコード",
       "総単位数",
       "保険請求額",
-      "利用者負担額",
+      "レセプト",
       "状態",
     ];
     const lines: string[] = [header.join(",")];
@@ -454,9 +441,10 @@ export function KaigoSeikyuContent() {
           r.insured_number ?? "",
           `"${r.user_name}"`,
           r.care_level ?? "",
+          r.serviceCode,
           r.totalUnits,
           r.insuranceAmount,
-          r.userAmount,
+          CLAIM_STATUS_LABELS[r.claimStatus],
           state,
         ].join(","),
       );
@@ -467,12 +455,13 @@ export function KaigoSeikyuContent() {
     });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `kaigo_seikyu_${ym}.csv`;
+    a.download = `kyotaku_seikyu_${ym}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
 
   const allChecked = checked.size === displayRows.length && displayRows.length > 0;
+  const meisaiTargets = meisaiPrintRows ?? targetDisplayRows;
 
   return (
     <>
@@ -491,14 +480,14 @@ export function KaigoSeikyuContent() {
             <button
               onClick={printMeisai}
               disabled={displayRows.length === 0}
-              title="対象者の介護給付費明細書 (様式第二) を印刷。印刷で発行済になります"
+              title="対象者の介護給付費明細書 (様式第七) を印刷。印刷で発行済になります"
               className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
             >
-              <FileText size={13} />明細書 ({targets.length}件)
+              <FileText size={13} />明細書 ({targetDisplayRows.length}件)
             </button>
             <button
               onClick={printSeikyu}
-              disabled={displayRows.length === 0}
+              disabled={seikyuTargets.length === 0}
               title="事業所単位の総括請求書 (様式第一) を印刷"
               className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
             >
@@ -520,6 +509,13 @@ export function KaigoSeikyuContent() {
               未発行のみ
             </button>
             <div className="ml-auto flex items-center gap-2">
+              <Link
+                href="/billing/claims"
+                title="レセプトの一括生成・加算編集・確定 (既存のレセプト管理画面)"
+                className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5"
+              >
+                <SquarePen size={13} />レセプト編集
+              </Link>
               <button
                 onClick={exportCsv}
                 disabled={displayRows.length === 0}
@@ -556,7 +552,7 @@ export function KaigoSeikyuContent() {
           ) : (
             <>
               <div className="flex-1 overflow-y-auto">
-                {/* ヘッダー行: 対象 / 申請中 / 状態 / 提供月 / 請求月 / サービス事業所 / 被保険者番号 / 利用者名 / 月遅 / 返戻 / 過誤 */}
+                {/* ヘッダー行 */}
                 <div className={`${GRID_COLS} border-b border-gray-400 bg-gradient-to-b from-sky-100 to-sky-200 text-[11px] leading-4 font-medium text-gray-700 text-center sticky top-0 z-10`}>
                   <div className="px-1 py-0.5 flex items-center justify-center">
                     <button
@@ -570,13 +566,15 @@ export function KaigoSeikyuContent() {
                       )}
                     </button>
                   </div>
-                  <div className="px-1 py-0.5 border-l border-sky-300">申請中</div>
                   <div className="px-1 py-0.5 border-l border-sky-300">状態</div>
                   <div className="px-1 py-0.5 border-l border-sky-300">提供月</div>
                   <div className="px-1 py-0.5 border-l border-sky-300">請求月</div>
                   <div className="px-1 py-0.5 border-l border-sky-300">サービス事業所</div>
                   <div className="px-1 py-0.5 border-l border-sky-300">被保険者番号</div>
                   <div className="px-1 py-0.5 border-l border-sky-300">利用者名</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">単位数</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">金額</div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">レセプト</div>
                   <div className="px-1 py-0.5 border-l border-sky-300">月遅</div>
                   <div className="px-1 py-0.5 border-l border-sky-300">返戻</div>
                   <div className="px-1 py-0.5 border-l border-sky-300">過誤</div>
@@ -584,7 +582,7 @@ export function KaigoSeikyuContent() {
 
                 {displayRows.length === 0 ? (
                   <p className="text-gray-400 text-center py-10">
-                    対象月の実績 (完了) がありません。サービス提供表で実績を確定してください。
+                    対象月のレセプトがありません。「レセプト編集」から一括生成してください。
                   </p>
                 ) : displayRows.map((d) => {
                   const r = d.row;
@@ -618,8 +616,6 @@ export function KaigoSeikyuContent() {
                           {isChecked && <span className="text-white text-[8px] font-bold leading-none">✓</span>}
                         </button>
                       </div>
-                      {/* 申請中: kaigo 側にデータなし → 空欄 (枠だけ揃える) */}
-                      <div className="px-1 py-0.5 border-l border-gray-200 text-center" />
                       {/* 状態: バッジ背景なしの素の色文字 (ほのぼの流)。国保対象 = 赤字 */}
                       <div className="px-1 py-0.5 border-l border-gray-200">
                         {d.isReSeikyu ? (
@@ -649,9 +645,21 @@ export function KaigoSeikyuContent() {
                         <span className="flex-1 truncate">{r.user_name}</span>
                         <button
                           onClick={(e) => { e.stopPropagation(); printMeisaiFor([d]); }}
-                          title="この利用者の明細書 (様式第二) を印刷"
+                          title="この利用者の明細書 (様式第七) を印刷"
                           className="shrink-0 text-[10px] leading-none border border-gray-300 rounded px-1 py-0.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
                         >明細書</button>
+                      </div>
+                      <div className="px-1 py-0.5 border-l border-gray-200 text-right font-mono text-gray-700">
+                        {r.totalUnits.toLocaleString()}
+                      </div>
+                      <div className="px-1 py-0.5 border-l border-gray-200 text-right font-mono text-gray-700">
+                        {r.insuranceAmount.toLocaleString()}
+                      </div>
+                      {/* レセプト状態 (draft は黄字で注意喚起) */}
+                      <div className="px-1 py-0.5 border-l border-gray-200 text-center">
+                        <span className={r.claimStatus === "draft" ? "text-yellow-600" : "text-gray-600"}>
+                          {CLAIM_STATUS_LABELS[r.claimStatus]}
+                        </span>
                       </div>
                       {/* 月遅 / 返戻 / 過誤 — 当月行は小さな select、再請求行は赤字の読取専用表示 */}
                       <div className="px-0.5 py-0.5 border-l border-gray-200 text-center" onClick={(e) => e.stopPropagation()}>
@@ -716,9 +724,12 @@ export function KaigoSeikyuContent() {
                     <span className="border border-gray-400 bg-sky-100 px-2 py-0.5 whitespace-nowrap">合計単位数</span>
                     <span className="border border-gray-400 border-l-0 bg-white px-2 py-0.5 min-w-[96px] text-right font-mono">{totalUnits.toLocaleString()}</span>
                   </span>
+                  <span className="inline-flex">
+                    <span className="border border-gray-400 bg-sky-100 px-2 py-0.5 whitespace-nowrap">保険請求額</span>
+                    <span className="border border-gray-400 border-l-0 bg-white px-2 py-0.5 min-w-[96px] text-right font-mono">{totalAmount.toLocaleString()}</span>
+                  </span>
                   <span className="ml-auto text-gray-500">
-                    実績 {recordCount.toLocaleString()} 件
-                    {reRows.length > 0 && <> / 再請求 {reRows.length.toLocaleString()} 件</>}
+                    {reRows.length > 0 && <>再請求 {reRows.length.toLocaleString()} 件</>}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
@@ -749,92 +760,50 @@ export function KaigoSeikyuContent() {
                   <thead className="bg-gradient-to-b from-sky-100 to-sky-200 border-b border-gray-400 sticky top-0">
                     <tr>
                       <th className="text-center px-1 py-0.5 font-medium text-gray-700 border-r border-sky-300">サービス内容</th>
-                      <th className="text-center px-1 py-0.5 font-medium text-gray-700 border-r border-sky-300 w-14 whitespace-nowrap">単位数/単価</th>
-                      <th className="text-center px-1 py-0.5 font-medium text-gray-700 border-r border-sky-300 w-8">回数</th>
                       <th className="text-center px-1 py-0.5 font-medium text-gray-700 border-r border-sky-300 w-12">単位数</th>
+                      <th className="text-center px-1 py-0.5 font-medium text-gray-700 border-r border-sky-300 w-8">回数</th>
                       <th className="text-center px-1 py-0.5 font-medium text-gray-700 w-16">摘要</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {selected.details.map((dt) => (
-                      <tr key={dt.service_type} className="border-b border-gray-200 bg-white">
+                    {selected.lines.map((dt, i) => (
+                      <tr key={`${dt.code}-${i}`} className="border-b border-gray-200 bg-white">
                         <td className="px-1 py-0.5 text-gray-700 leading-tight border-r border-gray-200">
-                          {dt.short_name ?? dt.service_type}
+                          {dt.name}
                         </td>
-                        <td className="px-1 py-0.5 text-right font-mono text-gray-700 border-r border-gray-200">
-                          {dt.unit_per.toLocaleString()}
+                        <td className={`px-1 py-0.5 text-right font-mono border-r border-gray-200 ${dt.units < 0 ? "text-red-600" : "text-gray-800"}`}>
+                          {dt.units.toLocaleString()}
                         </td>
                         <td className="px-1 py-0.5 text-right font-mono text-gray-700 border-r border-gray-200">
                           {dt.count}
                         </td>
-                        <td className="px-1 py-0.5 text-right font-mono text-gray-800 border-r border-gray-200">
-                          {dt.units.toLocaleString()}
-                        </td>
-                        <td className="px-1 py-0.5 text-gray-500 text-[10px] font-mono truncate" title={dt.service_code ?? ""}>
-                          {dt.service_code ?? ""}
+                        <td className="px-1 py-0.5 text-gray-500 text-[10px] font-mono truncate" title={dt.code}>
+                          {dt.code}
                         </td>
                       </tr>
                     ))}
-                    {selected.addonUnits > 0 && (
-                      <tr className="border-b border-gray-200 bg-white">
-                        <td className="px-1 py-0.5 text-gray-700 leading-tight border-r border-gray-200">
-                          {selected.addonLabel ?? "処遇改善加算"}
-                        </td>
-                        <td className="px-1 py-0.5 text-right font-mono text-gray-700 border-r border-gray-200">
-                          {selected.addonUnits.toLocaleString()}
-                        </td>
-                        <td className="px-1 py-0.5 text-right font-mono text-gray-700 border-r border-gray-200">1</td>
-                        <td className="px-1 py-0.5 text-right font-mono text-gray-800 border-r border-gray-200">
-                          {selected.addonUnits.toLocaleString()}
-                        </td>
-                        <td className="px-1 py-0.5 text-gray-500 text-[10px] font-mono truncate">
-                          {selected.addonCode ?? ""}
-                        </td>
-                      </tr>
-                    )}
                   </tbody>
                 </table>
               </div>
-              {/* 右下: ラベル箱 + 値箱 のペア grid (2 列 × 4 行、ほのぼの流) */}
+              {/* 右下: ラベル箱 + 値箱 のペア grid (ほのぼの流) */}
               <div className="border-t border-gray-400 bg-gray-100 shrink-0 p-1.5">
                 <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)] gap-px bg-gray-400 border border-gray-400 text-[11px] leading-4">
-                  <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">特定介護請求額</div>
-                  <div className="bg-white px-1.5 py-0.5 text-right font-mono" />
-                  <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">軽減額</div>
-                  <div className="bg-white px-1.5 py-0.5 text-right font-mono" />
                   <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">保険単位数</div>
                   <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">{selected.totalUnits.toLocaleString()}</div>
-                  <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">公費単位数</div>
-                  <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">
-                    {selected.kohiUnits != null ? selected.kohiUnits.toLocaleString() : ""}
-                  </div>
+                  <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">単位数単価</div>
+                  <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">{selected.unitPrice.toFixed(2)}</div>
+                  <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">費用合計</div>
+                  <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">{selected.totalAmount.toLocaleString()}</div>
                   <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">保険請求額</div>
                   <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">{selected.insuranceAmount.toLocaleString()}</div>
-                  <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">公費請求額</div>
-                  <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">
-                    {selected.kohiAmount != null ? selected.kohiAmount.toLocaleString() : ""}
-                  </div>
                   <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">利用者負担額</div>
-                  <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">
-                    {selected.publicExpense ? "0" : selected.userAmount.toLocaleString()}
-                  </div>
-                  <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">公費分本人負担</div>
-                  <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">{selected.publicExpense ? "0" : ""}</div>
+                  <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">0</div>
+                  <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">レセプト状態</div>
+                  <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">{CLAIM_STATUS_LABELS[selected.claimStatus]}</div>
                 </div>
-                {selected.publicExpense && (
-                  <p className="px-0.5 pt-1 text-[10px] text-purple-600">
-                    公費: {selected.publicExpense}
-                    {selected.kohiTandoku
-                      ? " (公費単独請求 = 保険給付なし・総費用の10割を公費請求)"
-                      : " (本人負担分を公費請求へ振替)"}
-                  </p>
-                )}
-                {selected.kohiTandoku && !selected.kohiHobetsu && (
-                  <p className="px-0.5 pt-0.5 text-[10px] text-amber-600">
-                    ⚠ 公費単独 (被保険者番号 H) ですが公費情報 (法別12 生活保護)
-                    が未登録です。保険情報に公費を登録してください。
-                  </p>
-                )}
+                <p className="px-0.5 pt-1 text-[10px] text-gray-500">
+                  居宅介護支援費は 10 割給付 (利用者負担なし)。加算・減算の編集は「レセプト編集」から。
+                </p>
               </div>
             </>
           ) : (
@@ -845,26 +814,52 @@ export function KaigoSeikyuContent() {
         </div>
       </div>
 
-      {/* ===== 印刷 view: 明細書 (様式第二) — 利用者 1 名 = 1 枚 ===== */}
-      {/* 再請求行は元提供月 (origMonthKey) で reiwa/month を出す */}
+      {/* ===== 印刷 view: 明細書 (様式第七) — 利用者 1 名 = 1 枚 ===== */}
+      {/* 再請求行は元提供月 (origMonthKey) の billingMonth で出す */}
       {printMode === "meisai" && (
         <div className="hidden print:block">
-          {(meisaiPrintRows ?? targetDisplayRows).map((d) => {
-            const [oy, om] = d.origMonthKey.split("-").map((n) => Number(n));
-            return (
-              <MeisaiPrintSheet
-                key={d.key}
-                row={d.row}
-                officeName={officeName}
-                officeNumber={officeNumber}
-                officeAddress={officeAddress}
-                officePhone={officePhone}
-                officePostal={officePostal}
-                reiwa={oy - 2018}
-                month={om}
+          <style>{`@media print { @page { size: A4 portrait; margin: 8mm; } }`}</style>
+          {meisaiTargets.map((d, i) => (
+            <div
+              key={d.key}
+              style={{ pageBreakAfter: i < meisaiTargets.length - 1 ? "always" : "auto" }}
+            >
+              <MeisaiForm
+                providerNumber={officeNumber ?? ""}
+                officeName={officeName ?? ""}
+                officeAddress={officeAddress ?? ""}
+                officePhone={officePhone ?? ""}
+                postalCode={officePostal ?? ""}
+                insurerNumber={d.row.insurer_number ?? ""}
+                unitPrice={d.row.unitPrice}
+                billingMonth={d.origMonthKey}
+                person1={{
+                  insuredNumber: d.row.insured_number ?? "",
+                  userName: d.row.user_name,
+                  userKana: d.row.user_name_kana ?? "",
+                  birthDate: d.row.birth_date ?? "",
+                  gender: d.row.gender ?? "",
+                  careLevel: d.row.care_level ?? "",
+                  certStart: d.row.certStart ?? "",
+                  certEnd: d.row.certEnd ?? "",
+                  lines: d.row.lines.map((l) => ({
+                    ...l,
+                    serviceUnits: l.units * l.count,
+                  })),
+                  totalServiceUnits: d.row.totalUnits,
+                  // 公費単独 (H番号) は保険請求 0 円・全額 (10割) を公費請求
+                  claimAmount: d.row.kohiTandoku
+                    ? d.row.totalAmount
+                    : d.row.insuranceAmount,
+                  kohiFutanshaNumber: d.row.kohiFutansha,
+                  kohiJukyushaNumber: d.row.kohiJukyusha,
+                  kohiTandoku: d.row.kohiTandoku,
+                  hasKohi: d.row.kohiTandoku || !!d.row.kohiHobetsu,
+                }}
+                person2={null}
               />
-            );
-          })}
+            </div>
+          ))}
         </div>
       )}
 
@@ -872,6 +867,7 @@ export function KaigoSeikyuContent() {
       {/* 総括は当月の通常分のみ (再請求は元提供月の別請求書扱い) */}
       {printMode === "seikyu" && (
         <div className="hidden print:block">
+          <style>{`@media print { @page { size: A4 portrait; margin: 8mm; } }`}</style>
           <SeikyuForm
             providerNumber={officeNumber ?? ""}
             officeName={officeName ?? ""}
@@ -883,10 +879,10 @@ export function KaigoSeikyuContent() {
             totalUnits={targetUnits}
             totalAmount={targetCost}
             insuranceAmount={targetInsurance}
-            userCopay={targetUser}
-            kubunLabel={"居宅サービス・地域密着型\nサービス・介護予防サービス"}
-            kohiRequestAmount={targetKohi}
+            userCopay={0}
+            kohiSeg="kyotaku"
             kohiRows={seikyuKohiRows}
+            kohiRequestAmount={seikyuKohiRows.reduce((s, k) => s + k.kohi, 0)}
             kohiTandoku={seikyuKohiTandoku}
           />
         </div>
