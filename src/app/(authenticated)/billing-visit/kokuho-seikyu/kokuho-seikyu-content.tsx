@@ -35,6 +35,7 @@ import {
   SeikyuMonthNav,
 } from "../_shared/seikyu-context";
 import { buildKokuhoDensou, type DensouRow } from "@/lib/kokuho-densou/build";
+import { buildSougouDensou } from "@/lib/kokuho-densou/build-sougou";
 import {
   loadReSeikyuRows,
   type ReSeikyuRow,
@@ -82,7 +83,7 @@ function downloadSjis(r: { content: string; fileName: string }) {
 
 export function KokuhoSeikyuContent() {
   const {
-    year, month, filteredRows, kanaMatches, loading, error,
+    year, month, filteredRows, filteredSougouRows, kanaMatches, loading, error,
     officeNumber, unitPrice, officeId, tenantId, appliedFormulaCodes,
   } = useSeikyuContext();
   const supabase = useMemo(() => createClient(), []);
@@ -259,6 +260,31 @@ export function KokuhoSeikyuContent() {
     );
   };
 
+  // ── 総合事業 伝送ファイル (7112/様式(予) / Shift_JIS) ──
+  //    介護給付 (7131) とは別様式なので独立の出力ボタン。当月分のみ (再請求は介護給付側で扱う)。
+  const exportSougouDensou = () => {
+    if (filteredSougouRows.length === 0) return;
+    const result = buildSougouDensou(filteredSougouRows as DensouRow[], {
+      officeNumber: officeNumber ?? "",
+      year,
+      month,
+      unitPrice,
+      seikyuYear: year,
+      seikyuMonth: month,
+    });
+    if (result.warnings.length > 0) {
+      const list = result.warnings.slice(0, 12).join("\n・");
+      const ok = window.confirm(
+        `総合事業の伝送で以下の項目が不足しています (取込チェックでエラーになる可能性があります):\n\n・${list}${result.warnings.length > 12 ? `\n…他 ${result.warnings.length - 12} 件` : ""}\n\nこのままファイルを出力しますか？`,
+      );
+      if (!ok) return;
+    }
+    downloadSjis(result);
+    toast.success(
+      `総合事業 伝送ファイルを出力しました: ${result.fileName} (${result.dataRecordCount} レコード)`,
+    );
+  };
+
   // 確認用 CSV (Excel で内容確認する用の明細一覧。伝送形式ではない)
   // 再請求行は元提供月を提供年月として出す。公費請求額・超過自費の列を含む
   const exportCsv = () => {
@@ -375,6 +401,16 @@ export function KokuhoSeikyuContent() {
             >
               <Send size={13} />伝送ファイル ({targets.length}件)
             </button>
+            {filteredSougouRows.length > 0 && (
+              <button
+                type="button"
+                onClick={exportSougouDensou}
+                title="総合事業 (介護予防・日常生活支援総合事業) の伝送ファイル (7112/様式(予) / Shift_JIS)。介護給付とは別様式"
+                className="border border-emerald-600 rounded bg-emerald-600 px-3 py-1 text-white font-semibold hover:bg-emerald-700 flex items-center gap-1.5"
+              >
+                <Send size={13} />総合事業 (7112) ({filteredSougouRows.length}件)
+              </button>
+            )}
           </div>
         </div>
 

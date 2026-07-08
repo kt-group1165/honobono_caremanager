@@ -54,6 +54,8 @@ type SeikyuContextValue = ReturnType<typeof useSeikyuData> & {
   kanaMatches: (r: { user_name_kana: string | null; user_name: string }) => boolean;
   /** カナ絞込済みの rows (各タブはこちらを表示に使う) */
   filteredRows: UserSeikyuRow[];
+  /** カナ絞込済みの総合事業 rows (7112/様式(予))。介護給付とは別様式 */
+  filteredSougouRows: UserSeikyuRow[];
 };
 
 const SeikyuContext = createContext<SeikyuContextValue | null>(null);
@@ -78,6 +80,10 @@ export function SeikyuProvider({ children }: { children: ReactNode }) {
     () => data.rows.filter(kanaMatches),
     [data.rows, kanaMatches],
   );
+  const filteredSougouRows = useMemo(
+    () => data.sougouRows.filter(kanaMatches),
+    [data.sougouRows, kanaMatches],
+  );
 
   const value: SeikyuContextValue = {
     ...data,
@@ -85,6 +91,7 @@ export function SeikyuProvider({ children }: { children: ReactNode }) {
     setKanaFilter,
     kanaMatches,
     filteredRows,
+    filteredSougouRows,
   };
 
   return (

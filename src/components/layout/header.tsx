@@ -16,7 +16,7 @@ export function Header() {
   };
 
   return (
-    <header className="flex h-14 items-center justify-between border-b bg-white px-6 print:hidden">
+    <header className="flex h-10 items-center justify-between border-b bg-white px-6 print:hidden">
       <div />
       <div className="flex items-center gap-4">
         <NotificationBadge />
@@ -26,7 +26,7 @@ export function Header() {
         </div>
         <button
           onClick={handleLogout}
-          className="flex items-center gap-1 rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+          className="flex items-center gap-1 rounded-md px-3 py-1 text-sm text-gray-600 hover:bg-gray-100"
         >
           <LogOut size={16} />
           <span>ログアウト</span>

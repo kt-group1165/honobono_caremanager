@@ -98,7 +98,7 @@ const isTableMissingError = (code: string | null | undefined) =>
 
 export function KaigoSeikyuContent() {
   const {
-    year, month, filteredRows, kanaMatches, recordCount, loading, error, warnings,
+    year, month, filteredRows, filteredSougouRows, kanaMatches, recordCount, loading, error, warnings,
     officeName, officeNumber, officeAddress, officePhone, officePostal,
     officeId, tenantId, unitPrice, appliedFormulaCodes,
   } = useSeikyuContext();
@@ -801,8 +801,10 @@ export function KaigoSeikyuContent() {
                           {isChecked && <span className="text-white text-[8px] font-bold leading-none">✓</span>}
                         </button>
                       </div>
-                      {/* 申請中: kaigo 側にデータなし → 空欄 (枠だけ揃える) */}
-                      <div className="px-1 py-0.5 border-l border-gray-200 text-center" />
+                      {/* 申請中: 対象月の認定が申請中 (care_level='申請中') なら 〇。認定済は空欄 */}
+                      <div className="px-1 py-0.5 border-l border-gray-200 text-center text-red-600 font-bold" title={r.care_level === "申請中" ? "対象月の認定が申請中です" : undefined}>
+                        {r.care_level === "申請中" ? "〇" : ""}
+                      </div>
                       {/* 状態: バッジ背景なしの素の色文字 (ほのぼの流)。国保対象 = 赤字 */}
                       <div className="px-1 py-0.5 border-l border-gray-200">
                         {d.isReSeikyu ? (
@@ -895,6 +897,9 @@ export function KaigoSeikyuContent() {
                   );
                 })}
               </div>
+
+              {/* ── 総合事業ブロック (7112/様式(予))。介護給付と混ぜず別枠で表示 ── */}
+              <SougouBlock rows={filteredSougouRows} />
 
               {/* ── フッター合計 (ほのぼの流: ラベル=水色枠 + 値=白枠右寄せ のボックス並び) ── */}
               <div className="border-t border-gray-400 bg-gray-100 px-3 py-1.5 shrink-0 text-[11px] text-gray-800">
@@ -1196,5 +1201,87 @@ export function KaigoSeikyuContent() {
         </div>
       )}
     </>
+  );
+}
+
+// ── 総合事業 (介護予防・日常生活支援総合事業) 訪問型サービス (A2) の請求ブロック ──
+//    介護給付 (7131) とは別様式 (7112/様式(予)) なので、介護保険分と混ぜず別枠で表示する。
+//    折りたたみトグル。行なしのときは何も出さない。
+function SougouBlock({ rows }: { rows: UserSeikyuRow[] }) {
+  const [open, setOpen] = useState(true);
+  if (rows.length === 0) return null;
+  const totalUnits = rows.reduce((s, r) => s + r.totalUnits, 0);
+  const totalInsurance = rows.reduce((s, r) => s + r.insuranceAmount, 0);
+  const totalUser = rows.reduce((s, r) => s + r.userAmount, 0);
+  return (
+    <div className="border-t-2 border-emerald-300 shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100"
+      >
+        <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-white">総合事業</span>
+        <span>訪問型サービス (A2) {rows.length} 件</span>
+        <span className="font-normal text-emerald-600">
+          — 介護給付とは別様式 (国保連 7112) で伝送します
+        </span>
+        <span className="ml-auto text-emerald-500">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="max-h-56 overflow-y-auto">
+          <table className="w-full text-[11px] leading-4 border-collapse">
+            <thead className="bg-emerald-100/70 border-b border-emerald-200 sticky top-0">
+              <tr className="text-gray-600">
+                <th className="text-left px-2 py-1 font-medium border-r border-emerald-200">被保険者番号</th>
+                <th className="text-left px-2 py-1 font-medium border-r border-emerald-200">利用者名</th>
+                <th className="text-left px-2 py-1 font-medium border-r border-emerald-200">要介護度</th>
+                <th className="text-left px-2 py-1 font-medium border-r border-emerald-200">サービス内容</th>
+                <th className="text-right px-2 py-1 font-medium border-r border-emerald-200">総単位数</th>
+                <th className="text-right px-2 py-1 font-medium border-r border-emerald-200">保険請求額</th>
+                <th className="text-right px-2 py-1 font-medium">利用者負担</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const svc = r.details
+                  .map((d) => d.short_name ?? d.service_type)
+                  .join(" / ");
+                return (
+                  <tr key={r.user_id} className="border-b border-emerald-100 bg-white">
+                    <td className="px-2 py-1 font-mono text-gray-700 border-r border-emerald-100">
+                      {r.insured_number ?? "—"}
+                    </td>
+                    <td className="px-2 py-1 text-gray-800 border-r border-emerald-100">{r.user_name}</td>
+                    <td className="px-2 py-1 text-gray-700 border-r border-emerald-100">{r.care_level ?? "—"}</td>
+                    <td className="px-2 py-1 text-gray-600 border-r border-emerald-100 truncate max-w-[220px]" title={svc}>
+                      {svc}
+                      {r.addonLabel && r.addonUnits > 0 && (
+                        <span className="ml-1 text-emerald-600">+{r.addonLabel}</span>
+                      )}
+                    </td>
+                    <td className="px-2 py-1 text-right font-mono text-gray-700 border-r border-emerald-100">
+                      {r.totalUnits.toLocaleString()}
+                    </td>
+                    <td className="px-2 py-1 text-right font-mono font-semibold text-emerald-700 border-r border-emerald-100">
+                      {r.insuranceAmount.toLocaleString()}
+                    </td>
+                    <td className="px-2 py-1 text-right font-mono text-gray-700">
+                      {r.userAmount.toLocaleString()}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="bg-emerald-50 px-3 py-1 text-[11px] text-emerald-800 flex flex-wrap gap-x-4 gap-y-0.5">
+        <span>合計 <strong className="font-mono">{rows.length}</strong> 件</span>
+        <span>総単位数 <strong className="font-mono">{totalUnits.toLocaleString()}</strong></span>
+        <span>保険請求額 <strong className="font-mono">¥{totalInsurance.toLocaleString()}</strong></span>
+        <span>利用者負担 <strong className="font-mono">¥{totalUser.toLocaleString()}</strong></span>
+        <span className="ml-auto text-emerald-600">伝送ファイル (7112) は「国保請求」タブから出力</span>
+      </div>
+    </div>
   );
 }

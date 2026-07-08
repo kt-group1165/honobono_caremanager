@@ -773,17 +773,33 @@ export function MeisaiPrintSheet({
 
   return (
     <div
+      className="meisai-print-sheet"
       style={{
-        pageBreakAfter: "always",
         padding: "4mm 5mm",
         fontFamily: '"MS Mincho","ＭＳ 明朝","游明朝",serif',
         color: "#000",
         fontSize: "8pt",
         lineHeight: 1.3,
         width: "210mm",
+        maxWidth: "210mm",
         boxSizing: "border-box",
+        breakInside: "avoid",
+        pageBreakInside: "avoid",
       }}
     >
+      {/* 様式第二の印刷制御: A4 縦・余白 0 (幅は div の 210mm + 内 padding で確保)。
+          1 名 = 1 枚。各 sheet の直後で改ページするが、最後の 1 枚の後には
+          空白ページを作らない (:last-child は改ページ抑止)。テーブルは途中で
+          割れない (break-inside:avoid)。共有コンポーネントなので caller 側の
+          印刷ラッパに依存せず、この style を自前で持つ。 */}
+      <style>{`
+        @media print {
+          @page { size: A4 portrait; margin: 0; }
+          .meisai-print-sheet { page-break-after: always; break-after: page; }
+          .meisai-print-sheet:last-child { page-break-after: auto; break-after: auto; }
+          .meisai-print-sheet table { page-break-inside: avoid; break-inside: avoid; }
+        }
+      `}</style>
       {/* ── 標題行 (様式第二 右上) ── */}
       <div
         style={{

@@ -44,6 +44,7 @@ import {
   resolveManualOverUnits,
   type GendoAllocationLine,
 } from "@/lib/gendo-allocation";
+import { aggregateSougouSeikyu } from "@/lib/visit-seikyu/aggregate-sougou";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,12 @@ export interface SeikyuDetailLine {
 }
 
 export interface UserSeikyuRow {
+  /**
+   * 制度区分。'介護' = 介護給付費 (7131/様式第二)、
+   * '総合事業' = 介護予防・日常生活支援総合事業費 (7112/様式(予))。
+   * 未指定 (省略) は '介護' とみなす (後方互換)。
+   */
+  system?: "介護" | "総合事業";
   user_id: string;
   user_name: string;
   user_name_kana: string | null;
@@ -170,6 +177,13 @@ export interface UserSeikyuRow {
 
 export interface MonthlySeikyuResult {
   rows: UserSeikyuRow[];
+  /**
+   * 総合事業 (介護予防・日常生活支援総合事業) 訪問型サービス (A2) の請求行。
+   * 介護給付 (rows) とは別様式 (7112/様式(予)) なので混ぜない。
+   * 各行の system は '総合事業'。実績が無ければ空配列。
+   * 総合事業を扱わない集計 (訪問入浴等) は省略可 (未指定 = 総合事業なし)。
+   */
+  sougouRows?: UserSeikyuRow[];
   /** 集計対象月 (YYYY-MM) */
   month: string;
   /** 対象実績 (completed) 総件数 */
@@ -276,7 +290,7 @@ export async function aggregateMonthlyVisitSeikyu(
   }
 
   if (schedules.length === 0) {
-    return { rows: [], month: monthStr, recordCount: 0, warnings: [] };
+    return { rows: [], sougouRows: [], month: monthStr, recordCount: 0, warnings: [] };
   }
 
   const warnings: string[] = [];
@@ -592,17 +606,22 @@ export async function aggregateMonthlyVisitSeikyu(
 
   // 5) 利用者ごとに集計
   // 障害福祉サービスは介護保険請求の対象外 (障害請求側で扱う) のため除外。
-  // 総合事業 (A2 等) も本バージョンでは介護保険請求から分離する (warning で通知)。
+  // 総合事業 (A2 等) は別様式 (7112/様式(予)) なので介護給付と分離し、
+  // aggregateSougouSeikyu で独立集計する (混ぜない)。
   const byUser = new Map<string, Map<string, number>>(); // user_id → (service_type → count)
   const daysByUser = new Map<string, Set<string>>(); // user_id → 訪問日 set (実日数)
   const visitDatesByUser = new Map<string, string[]>(); // user_id → 訪問日 list (入院重なり件数用)
-  const sogoCountByUser = new Map<string, number>(); // 総合事業の除外件数 (warning 用)
+  // 総合事業に該当する実績シフト (別ストリームで集計する)
+  const sougouSchedules: { user_id: string; service_type: string; visit_date: string }[] = [];
   for (const s of schedules) {
     const system = unitByNorm.get(toHankakuDigits(s.service_type))?.system;
     if (system === "障害") continue;
     if (system === "総合事業") {
-      // 総合事業の実績は介護保険の集計行から除外 (月額包括コードの回数乗算も回避)。
-      sogoCountByUser.set(s.user_id, (sogoCountByUser.get(s.user_id) ?? 0) + 1);
+      sougouSchedules.push({
+        user_id: s.user_id,
+        service_type: s.service_type,
+        visit_date: s.visit_date,
+      });
       continue;
     }
     if (!byUser.has(s.user_id)) byUser.set(s.user_id, new Map());
@@ -613,10 +632,24 @@ export async function aggregateMonthlyVisitSeikyu(
     if (!visitDatesByUser.has(s.user_id)) visitDatesByUser.set(s.user_id, []);
     visitDatesByUser.get(s.user_id)!.push(s.visit_date);
   }
-  for (const [userId, count] of sogoCountByUser) {
-    warnings.push(
-      `総合事業実績${count}件 (${nameOf(userId)}) は本バージョンでは介護保険請求に含めません (総合事業請求は今後対応)`,
+
+  // 総合事業ストリームの集計 (別様式 7112)。処遇改善率は事業所の適用加算コードから解決する
+  // (effectiveFormulaCodes は上の 4) で kaigo_office_addon_periods / applied_formula_codes を反映済)。
+  let sougouRows: UserSeikyuRow[] = [];
+  {
+    const { rows: sr, warnings: sw } = await aggregateSougouSeikyu(
+      supabase,
+      sougouSchedules,
+      {
+        officeId: opts.officeId,
+        year: opts.year,
+        month: opts.month,
+        unitPrice,
+        effectiveFormulaCodes,
+      },
     );
+    sougouRows = sr;
+    warnings.push(...sw);
   }
 
   // 5.2) 入退院との重なり検出 (client_hospitalizations。テーブル未作成は空 Map)
@@ -867,5 +900,5 @@ export async function aggregateMonthlyVisitSeikyu(
     ),
   );
 
-  return { rows, month: monthStr, recordCount: schedules.length, warnings };
+  return { rows, sougouRows, month: monthStr, recordCount: schedules.length, warnings };
 }

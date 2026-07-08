@@ -18,6 +18,7 @@ import {
   Download,
   Upload,
   Send,
+  AlertTriangle,
 } from "lucide-react";
 import { SendDocumentModal } from "@/components/shared/SendDocumentModal";
 import {
@@ -36,7 +37,13 @@ import {
 import { getServiceSystemMap, isShogaiService } from "@/lib/service-system-lookup";
 import { validInMonth } from "@/lib/service-code-valid";
 import { useBusinessType } from "@/lib/business-type-context";
-import { insertVisitSchedules } from "@/app/(authenticated)/shift-management/_shared";
+import {
+  insertVisitSchedules,
+  supportsStaff2Times,
+  staffTimeRelationWarning,
+  twoPersonMismatchWarning,
+} from "@/app/(authenticated)/shift-management/_shared";
+import { resolveVisitAddonLines } from "@/lib/visit-addons";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -70,9 +77,16 @@ interface VisitSchedule {
   service_type: string;
   status: string;
   staff_name?: string | null;
+  // 2人体制 (kaigo_visit_schedule の既存列。未適用 DB では undefined)
+  staff_id_2?: string | null;
+  staff2_start_time?: string | null;
+  staff2_end_time?: string | null;
 }
 
-// A "row" in the provision ticket grid = unique combination of service + time
+// A "row" in the provision ticket grid = unique combination of service + time.
+// ※ 提供表は kaigo_visit_schedule 行を編集する (content.services jsonb ではない)。
+//    2人体制は kaigo_visit_schedule の staff_id_2 / staff2_start_time / staff2_end_time
+//    列に持つ (列未適用 DB では insertVisitSchedules が strip)。
 export interface ServiceRow {
   key: string; // e.g. "身体介護1__09:00__10:00"
   service_type: string;
@@ -80,6 +94,12 @@ export interface ServiceRow {
   end_time: string;
   staff_id?: string;
   staff_name?: string;
+  // 職員2 (2人体制)。staff2_custom=true のとき個別時間、false は本体時間
+  staff_id_2?: string;
+  staff2_name?: string;
+  staff2_custom?: boolean;
+  staff2_start?: string; // "HH:MM:SS" or ""
+  staff2_end?: string;
 }
 
 // Grid: rowKey -> day -> { planned: bool, actual: bool }
@@ -122,17 +142,27 @@ function toWareki(date: Date): string {
   return format(date, "yyyy年M月d日");
 }
 
-/** 生活機能向上連携加算の区分 */
-type SeikatsuKino = "なし" | "Ⅰ" | "Ⅱ";
+// ── 加算マスタ (kaigo_visit_addon_lines 駆動) ────────────────────────────────
+// 旧 3固定 (初回/緊急時/生活機能向上) を廃止し、その事業所のサービス種別で使える
+// 「加算」を kaigo_service_codes から一覧表示 → 適用チェック + 回数で選択する
+// (ほのぼの「加算サービス項目」相当)。真実は kaigo_visit_addon_lines テーブル。
+//
+// 一覧の絞り込み条件:
+//   system='介護' AND service_category='11' (訪問介護)
+//   AND calculation_type='加算' AND validInMonth(対象月)
+//   AND 名称に「・」を含まない (複合コード=基本×加算の合成は除外、基本の加算のみ)
+// これで 初回(114001)/緊急時(114000)/生活機能向上Ⅰ(114003)/Ⅱ(114002)/中山間 等が出る。
+//
+// ※ 減算 (calculation_type='減算') は今回は一覧に出さない (次段階)。resolveVisitAddonLines
+//    は減算コード (負値) も解決できるが、書く側 (この画面) では加算のみ選択可能にする。
+const SHOKAI_ADDON_CODE = "114001"; // 訪問介護初回加算 (過去2ヶ月実績なし→候補ヒント)
 
-// サービス加算のマスタ名称 (aggregate.ts と同一。system=介護 / service_category=11)。
-// 単位数はハードコードせず kaigo_service_codes を validInMonth で引く。
-const ADDON_NAMES = {
-  shokai: "訪問介護初回加算", // 114001
-  kinkyu: "緊急時訪問介護加算", // 114000
-  seikatsuI: "訪問介護生活機能向上連携加算Ⅰ", // 114003
-  seikatsuII: "訪問介護生活機能向上連携加算Ⅱ", // 114002
-} as const;
+// 加算コード1件の一覧行 (対象月 validInMonth で解決)
+interface AddonCodeOption {
+  code: string;
+  name: string;
+  units: number;
+}
 
 /** 加算系 formula コード (処遇改善加算等の monthly_aggregate type) */
 export interface FormulaCode {
@@ -219,26 +249,31 @@ export function ProvisionTicketsContent({
   const [serviceRows, setServiceRows] = useState<ServiceRow[]>(initialServiceRows);
   const [grid, setGrid] = useState<GridState>(initialGrid);
 
-  // ── サービス加算 (kaigo_visit_month_addons が真実、加算行はその投影) ──────────
-  // 利用者 × 対象月 × 事業所 の月次加算フラグ。提供表に「加算行」として表示し、
-  // 単位数計算 (実績/予定) に含める。編集モーダルからも upsert する。
-  const [addonFlags, setAddonFlags] = useState<{ shokai: boolean; seikatsu_kino: SeikatsuKino; kinkyu_count: number }>({
-    shokai: false,
-    seikatsu_kino: "なし",
-    kinkyu_count: 0,
-  });
-  // 加算マスタ単位数 (対象月 validInMonth で解決)。service_name → units
-  const [addonUnitMaster, setAddonUnitMaster] = useState<Record<string, number>>({});
+  // ── サービス加算 (kaigo_visit_addon_lines が真実、加算行はその投影) ──────────
+  // 利用者 × 対象月 × 事業所 × 加算コード の可変明細。提供表に「加算行」として表示し、
+  // 単位数計算 (実績/予定) に含める。モーダルのチェックリストから upsert / delete する。
+  //
+  // addonLines: 現在保存済みの { addon_code -> count }
+  const [addonLines, setAddonLines] = useState<Record<string, number>>({});
+  // 訪問介護の加算コード一覧 (対象月 validInMonth で解決。calculation_type='加算' のみ)
+  const [addonOptions, setAddonOptions] = useState<AddonCodeOption[]>([]);
   // 初回加算候補サジェスト: 過去2ヶ月に completed 実績なし = 新規利用の可能性
   const [shokaiSuggest, setShokaiSuggest] = useState<boolean | null>(null);
-  // kaigo_visit_month_addons テーブル未作成 (42P01/PGRST205)
+  // kaigo_visit_addon_lines テーブル未作成 (42P01/PGRST205)
   const [addonTableMissing, setAddonTableMissing] = useState(false);
-  // モーダル内の加算入力 (追加時に upsert する一時状態)
-  const [addRowAddons, setAddRowAddons] = useState<{ shokai: boolean; kinkyu: boolean; seikatsu_kino: SeikatsuKino }>({
-    shokai: false,
-    kinkyu: false,
-    seikatsu_kino: "なし",
-  });
+  // モーダル内の加算入力 (追加時に upsert する一時状態): { addon_code -> count }
+  const [addRowAddons, setAddRowAddons] = useState<Record<string, number>>({});
+  // 2人体制の個別時間列 (staff2_start_time 等) が適用済みか
+  const [staff2TimesSupported, setStaff2TimesSupported] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void supportsStaff2Times(supabase).then((ok) => {
+      if (!cancelled) setStaff2TimesSupported(ok);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase]);
 
   // 改定 (世代) を跨ぐと同名サービスでも単位数が変わるため、月切替時はキャッシュを破棄して引き直す
   const unitsMonthRef = useRef(format(selectedMonth, "yyyy-MM"));
@@ -282,30 +317,45 @@ export function ProvisionTicketsContent({
     };
   }, [selectedMonth, supabase]);
 
-  // ── サービス加算のマスタ単位数を対象月世代で解決 (初回/緊急時/生活機能向上Ⅰ/Ⅱ) ──
+  // ── 訪問介護の「加算」コード一覧を対象月世代で解決 (マスタ駆動チェックリスト) ──
+  // 絞り込み: system=介護 / service_category=11 / calculation_type=加算 / validInMonth。
+  // 名称に「・」を含む複合コード (基本×加算の合成) は除外し、基本の加算のみを候補にする。
+  // ※ 減算 (calculation_type=減算) は今回は一覧に出さない (次段階)。
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const { data, error } = await validInMonth(
         supabase
           .from("kaigo_service_codes")
-          .select("service_name, units")
+          .select("service_code, service_name, units, calculation_type")
           .eq("system", "介護")
           .eq("service_category", "11")
-          .in("service_name", Object.values(ADDON_NAMES)),
+          .eq("calculation_type", "加算"),
         selectedMonth.getFullYear(),
         selectedMonth.getMonth() + 1,
-      );
+      )
+        .order("service_code");
       if (cancelled) return;
       if (error) {
-        console.error("addon unit master fetch failed:", error.message);
+        console.error("addon options fetch failed:", error.message);
+        toast.error("加算コードの取得に失敗しました: " + error.message);
         return;
       }
-      const next: Record<string, number> = {};
-      for (const r of (data ?? []) as { service_name: string; units: number }[]) {
-        next[r.service_name] = r.units;
+      const seen = new Set<string>();
+      const opts: AddonCodeOption[] = [];
+      for (const r of (data ?? []) as {
+        service_code: string;
+        service_name: string;
+        units: number;
+        calculation_type: string;
+      }[]) {
+        // 複合コード (「基本・加算」の合成) は除外 = 基本の加算のみ
+        if (r.service_name.includes("・")) continue;
+        if (seen.has(r.service_code)) continue;
+        seen.add(r.service_code);
+        opts.push({ code: r.service_code, name: r.service_name, units: r.units });
       }
-      setAddonUnitMaster(next);
+      setAddonOptions(opts);
     })();
     return () => {
       cancelled = true;
@@ -360,10 +410,18 @@ export function ProvisionTicketsContent({
 
   const [showAddRow, setShowAddRow] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
-  const [addRowForm, setAddRowForm] = useState({ start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", staff_id: "" });
+  const [addRowForm, setAddRowForm] = useState({
+    start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", staff_id: "",
+    staff_id_2: "", staff2_custom: false, staff2_start: "", staff2_end: "",
+  });
+  const [showAddStaff2, setShowAddStaff2] = useState(false);
   const [showAddServiceSelector, setShowAddServiceSelector] = useState(false);
   const [editRowKey, setEditRowKey] = useState<string | null>(null);
-  const [editRowForm, setEditRowForm] = useState({ start_time: "", end_time: "", service_name: "", service_code: "" });
+  const [editRowForm, setEditRowForm] = useState({
+    start_time: "", end_time: "", service_name: "", service_code: "", staff_id: "",
+    staff_id_2: "", staff2_custom: false, staff2_start: "", staff2_end: "",
+  });
+  const [showEditStaff2, setShowEditStaff2] = useState(false);
   const [showEditServiceSelector, setShowEditServiceSelector] = useState(false);
 
   const year = selectedMonth.getFullYear();
@@ -413,37 +471,35 @@ export function ProvisionTicketsContent({
     };
   }, [supabase, currentOfficeId, currentOffice, monthStr]);
 
-  // ── kaigo_visit_month_addons の当月フラグ + 初回加算候補サジェスト を読込 ──
+  // ── kaigo_visit_addon_lines の当月明細 + 初回加算候補サジェスト を読込 ──
   useEffect(() => {
     if (!currentOfficeId) return;
     let cancelled = false;
     (async () => {
-      // ① 既存の月次加算フラグ
+      // ① 既存の加算明細行 (addon_code -> count)
       const { data, error } = await supabase
-        .from("kaigo_visit_month_addons")
-        .select("shokai, seikatsu_kino, kinkyu_count")
+        .from("kaigo_visit_addon_lines")
+        .select("addon_code, count")
         .eq("client_id", userId)
         .eq("target_month", monthStr)
-        .eq("office_id", currentOfficeId)
-        .maybeSingle();
+        .eq("office_id", currentOfficeId);
       if (cancelled) return;
       if (error) {
         if (error.code === "42P01" || error.code === "PGRST205") {
           setAddonTableMissing(true);
-          setAddonFlags({ shokai: false, seikatsu_kino: "なし", kinkyu_count: 0 });
+          setAddonLines({});
           return;
         }
-        console.error("month addons fetch failed:", error.message);
+        console.error("addon lines fetch failed:", error.message);
         toast.error("加算の取得に失敗しました: " + error.message);
         return;
       }
       setAddonTableMissing(false);
-      const row = data as { shokai: boolean; seikatsu_kino: SeikatsuKino; kinkyu_count: number } | null;
-      setAddonFlags({
-        shokai: row?.shokai ?? false,
-        seikatsu_kino: row?.seikatsu_kino ?? "なし",
-        kinkyu_count: row?.kinkyu_count ?? 0,
-      });
+      const next: Record<string, number> = {};
+      for (const r of (data ?? []) as { addon_code: string; count: number }[]) {
+        next[r.addon_code] = r.count;
+      }
+      setAddonLines(next);
 
       // ② 初回加算候補: 過去2ヶ月間に completed 実績が無い利用者をサジェスト
       const [y, m] = monthStr.split("-").map(Number);
@@ -479,13 +535,28 @@ export function ProvisionTicketsContent({
     const from = `${monthStr}-01`;
     const to = `${monthStr}-${String(daysCount).padStart(2, "0")}`;
 
-    const { data, error } = await supabase
+    // staff2 列 (staff_id_2/staff2_start_time/staff2_end_time) は適用済み環境のみ select。
+    // 未適用 (42703) の場合は staff2 無しで再取得する。
+    const baseCols =
+      "id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, members!kaigo_visit_schedule_staff_id_fkey(name)";
+    const staff2Cols = ", staff_id_2, staff2_start_time, staff2_end_time";
+    let { data, error } = await supabase
       .from("kaigo_visit_schedule")
-      .select("id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, members!kaigo_visit_schedule_staff_id_fkey(name)")
+      .select(staff2TimesSupported ? baseCols + staff2Cols : baseCols)
       .eq("user_id", userId)
       .gte("visit_date", from)
       .lte("visit_date", to)
       .order("start_time");
+    if (error && (error.code === "42703" || error.code === "PGRST200")) {
+      // staff2 列未適用: 基本列のみで再取得
+      ({ data, error } = await supabase
+        .from("kaigo_visit_schedule")
+        .select(baseCols)
+        .eq("user_id", userId)
+        .gte("visit_date", from)
+        .lte("visit_date", to)
+        .order("start_time"));
+    }
 
     if (error) {
       toast.error("データの取得に失敗しました");
@@ -504,6 +575,9 @@ export function ProvisionTicketsContent({
       service_type: r.service_type,
       status: r.status,
       staff_name: r.members?.name ?? null,
+      staff_id_2: r.staff_id_2 ?? null,
+      staff2_start_time: r.staff2_start_time ?? null,
+      staff2_end_time: r.staff2_end_time ?? null,
     }));
 
     // 障害福祉サービスは介護保険の提供表に載せない (障害側の画面で扱う)
@@ -528,6 +602,11 @@ export function ProvisionTicketsContent({
 
           staff_id: s.staff_id ?? undefined,
           staff_name: s.staff_name ?? undefined,
+          staff_id_2: s.staff_id_2 ?? undefined,
+          // 個別時間 (staff2_start_time 有り) は custom、無しは本体時間
+          staff2_custom: !!s.staff2_start_time,
+          staff2_start: s.staff2_start_time ?? undefined,
+          staff2_end: s.staff2_end_time ?? undefined,
         });
       }
     }
@@ -560,7 +639,7 @@ export function ProvisionTicketsContent({
     setGrid(newGrid);
     setScheduleIds(newSchedIds);
     setLoading(false);
-  }, [userId, monthStr, daysCount, supabase, year, month]);
+  }, [userId, monthStr, daysCount, supabase, year, month, staff2TimesSupported]);
 
   // initial render は server からの initialServiceRows/initialGrid を使用、月切替時のみ refetch。
   // ただし client-side の利用者切替 (serverPreloaded=false) で mount された場合は
@@ -720,40 +799,66 @@ export function ProvisionTicketsContent({
     });
   };
 
-  // ── サービス加算 upsert (kaigo_visit_month_addons が真実) ────────────────────
-  // 加算行はこのテーブルの投影。onConflict は client_id,target_month,office_id。
+  // ── サービス加算 upsert (kaigo_visit_addon_lines が真実) ─────────────────────
+  // 加算行はこのテーブルの投影。onConflict は client_id,target_month,office_id,addon_code。
   // テーブル未作成 (42P01/PGRST205) は加算保存をスキップして amber toast。
-  const upsertAddonFlags = useCallback(
-    async (next: { shokai: boolean; seikatsu_kino: SeikatsuKino; kinkyu_count: number }): Promise<boolean> => {
+  const upsertAddonLine = useCallback(
+    async (addonCode: string, count: number): Promise<boolean> => {
       if (!currentOfficeId) {
         toast.error("加算の保存には事業所の選択 (?office=) が必要です");
         return false;
       }
+      const c = Math.max(0, Math.round(count) || 0);
+      // count=0 は削除扱い
+      if (c === 0) {
+        const { error } = await supabase
+          .from("kaigo_visit_addon_lines")
+          .delete()
+          .eq("client_id", userId)
+          .eq("target_month", monthStr)
+          .eq("office_id", currentOfficeId)
+          .eq("addon_code", addonCode);
+        if (error) {
+          if (error.code === "42P01" || error.code === "PGRST205") {
+            setAddonTableMissing(true);
+            toast.warning("加算テーブル (kaigo_visit_addon_lines) が未作成のため加算は保存されませんでした");
+            return false;
+          }
+          console.error("addon line delete failed:", error.message);
+          toast.error("加算の削除に失敗しました: " + error.message);
+          return false;
+        }
+        setAddonLines((prev) => {
+          const next = { ...prev };
+          delete next[addonCode];
+          return next;
+        });
+        return true;
+      }
       const { error } = await supabase
-        .from("kaigo_visit_month_addons")
+        .from("kaigo_visit_addon_lines")
         .upsert(
           {
             client_id: userId,
             target_month: monthStr,
             office_id: currentOfficeId,
-            shokai: next.shokai,
-            seikatsu_kino: next.seikatsu_kino,
-            kinkyu_count: Math.max(0, Math.round(next.kinkyu_count) || 0),
+            addon_code: addonCode,
+            count: c,
             updated_at: new Date().toISOString(),
           },
-          { onConflict: "client_id,target_month,office_id" },
+          { onConflict: "client_id,target_month,office_id,addon_code" },
         );
       if (error) {
         if (error.code === "42P01" || error.code === "PGRST205") {
           setAddonTableMissing(true);
-          toast.warning("加算テーブル (kaigo_visit_month_addons) が未作成のため加算は保存されませんでした");
+          toast.warning("加算テーブル (kaigo_visit_addon_lines) が未作成のため加算は保存されませんでした");
           return false;
         }
-        console.error("addon upsert failed:", error.message);
+        console.error("addon line upsert failed:", error.message);
         toast.error("加算の保存に失敗しました: " + error.message);
         return false;
       }
-      setAddonFlags(next);
+      setAddonLines((prev) => ({ ...prev, [addonCode]: c }));
       return true;
     },
     [supabase, userId, monthStr, currentOfficeId],
@@ -771,6 +876,8 @@ export function ProvisionTicketsContent({
       return;
     }
     const staffObj = allStaff.find((s) => s.id === addRowForm.staff_id);
+    const staff2Obj = allStaff.find((s) => s.id === addRowForm.staff_id_2);
+    const useStaff2Custom = !!(addRowForm.staff_id_2 && addRowForm.staff2_custom && addRowForm.staff2_start && addRowForm.staff2_end);
     setServiceRows((prev) => [...prev, {
       key,
       service_type: addRowForm.service_name,
@@ -778,21 +885,22 @@ export function ProvisionTicketsContent({
       end_time: addRowForm.end_time + ":00",
       staff_id: addRowForm.staff_id || undefined,
       staff_name: staffObj?.name ?? undefined,
+      staff_id_2: addRowForm.staff_id_2 || undefined,
+      staff2_name: staff2Obj?.name ?? undefined,
+      staff2_custom: useStaff2Custom,
+      staff2_start: useStaff2Custom ? addRowForm.staff2_start + ":00" : undefined,
+      staff2_end: useStaff2Custom ? addRowForm.staff2_end + ":00" : undefined,
     }]);
     setGrid((prev) => ({ ...prev, [key]: {} }));
+    markDirty();
 
-    // モーダルで指定した「この訪問につく加算」を kaigo_visit_month_addons に反映。
-    // 初回 = shokai true / 緊急時チェック = kinkyu_count += 1 / 生活機能向上 = seikatsu_kino。
+    // モーダルで指定した「この訪問につく加算」を kaigo_visit_addon_lines に反映。
+    // addRowAddons = { addon_code -> count }。既存 addonLines と加算合成 (回数加算) して upsert。
     // (処遇改善は行を作らず集計のみ = ここでは扱わない)
-    const wantAddon =
-      addRowAddons.shokai || addRowAddons.kinkyu || addRowAddons.seikatsu_kino !== "なし";
-    if (wantAddon) {
-      await upsertAddonFlags({
-        shokai: addonFlags.shokai || addRowAddons.shokai,
-        kinkyu_count: addonFlags.kinkyu_count + (addRowAddons.kinkyu ? 1 : 0),
-        seikatsu_kino:
-          addRowAddons.seikatsu_kino !== "なし" ? addRowAddons.seikatsu_kino : addonFlags.seikatsu_kino,
-      });
+    for (const [code, cnt] of Object.entries(addRowAddons)) {
+      if (cnt <= 0) continue;
+      const merged = (addonLines[code] ?? 0) + cnt;
+      await upsertAddonLine(code, merged);
     }
 
     setShowAddRow(false);
@@ -816,7 +924,13 @@ export function ProvisionTicketsContent({
       end_time: row.end_time.slice(0, 5),
       service_name: row.service_type,
       service_code: "",
+      staff_id: row.staff_id ?? "",
+      staff_id_2: row.staff_id_2 ?? "",
+      staff2_custom: !!row.staff2_custom,
+      staff2_start: row.staff2_start?.slice(0, 5) ?? "",
+      staff2_end: row.staff2_end?.slice(0, 5) ?? "",
     });
+    setShowEditStaff2(!!row.staff_id_2);
   };
 
   const handleEditRowSave = () => {
@@ -853,10 +967,26 @@ export function ProvisionTicketsContent({
       // Remove old row
       setServiceRows((prev) => prev.filter((r) => r.key !== editRowKey));
     } else {
-      // Simple rename
+      // Simple rename (+ staff / staff2 の反映)
+      const staffObj = allStaff.find((s) => s.id === editRowForm.staff_id);
+      const staff2Obj = allStaff.find((s) => s.id === editRowForm.staff_id_2);
+      const useStaff2Custom = !!(editRowForm.staff_id_2 && editRowForm.staff2_custom && editRowForm.staff2_start && editRowForm.staff2_end);
       setServiceRows((prev) => prev.map((r) =>
         r.key === editRowKey
-          ? { ...r, key: newKey, service_type: editRowForm.service_name, start_time: editRowForm.start_time + ":00", end_time: editRowForm.end_time + ":00" }
+          ? {
+              ...r,
+              key: newKey,
+              service_type: editRowForm.service_name,
+              start_time: editRowForm.start_time + ":00",
+              end_time: editRowForm.end_time + ":00",
+              staff_id: editRowForm.staff_id || undefined,
+              staff_name: staffObj?.name ?? undefined,
+              staff_id_2: editRowForm.staff_id_2 || undefined,
+              staff2_name: staff2Obj?.name ?? undefined,
+              staff2_custom: useStaff2Custom,
+              staff2_start: useStaff2Custom ? editRowForm.staff2_start + ":00" : undefined,
+              staff2_end: useStaff2Custom ? editRowForm.staff2_end + ":00" : undefined,
+            }
           : r
       ));
 
@@ -893,6 +1023,15 @@ export function ProvisionTicketsContent({
       const toInsert: Record<string, unknown>[] = [];
       for (const row of serviceRows) {
         const rowGrid = grid[row.key] || {};
+        // 2人体制 (staff_id_2) + 個別時間。列未適用 (42703/PGRST204) は
+        // insertVisitSchedules が該当列を strip して retry する。
+        const staff2Fields: Record<string, unknown> = {};
+        if (row.staff_id_2) {
+          staff2Fields.staff_id_2 = row.staff_id_2;
+          const useCustom = !!(row.staff2_custom && row.staff2_start && row.staff2_end);
+          staff2Fields.staff2_start_time = useCustom ? row.staff2_start : null;
+          staff2Fields.staff2_end_time = useCustom ? row.staff2_end : null;
+        }
         for (const day of days) {
           const cell = rowGrid[day];
           if (!cell) continue;
@@ -909,6 +1048,7 @@ export function ProvisionTicketsContent({
               status: "scheduled",
               // C5: 発生元 office (列未適用 42703/PGRST204 は insertVisitSchedules が strip)
               ...(currentOfficeId ? { office_id: currentOfficeId } : {}),
+              ...staff2Fields,
             });
           }
           if (cell.actual) {
@@ -921,6 +1061,7 @@ export function ProvisionTicketsContent({
               service_type: row.service_type,
               status: "completed",
               ...(currentOfficeId ? { office_id: currentOfficeId } : {}),
+              ...staff2Fields,
             });
           }
         }
@@ -1050,46 +1191,53 @@ export function ProvisionTicketsContent({
     return out;
   }, [availableFormulaCodes, appliedFormulaCodes, totalPlannedUnits, totalActualUnits]);
 
-  // ── サービス加算行 (kaigo_visit_month_addons の投影) ────────────────────────
-  // shokai / kinkyu_count / seikatsu_kino から表示用の加算行を導出する。
-  // 単位数はマスタ (addonUnitMaster = 対象月 validInMonth) から解決。
-  // これらは content.services には入れない (真実は kaigo_visit_month_addons)。
+  // ── サービス加算行 (kaigo_visit_addon_lines の投影) ─────────────────────────
+  // 単位解決は共有リゾルバ resolveVisitAddonLines (集計 aggregate.ts と同一経路) を使う。
+  // addonLines (保存済み addon_code -> count) が変わるたびに対象月マスタで解決し直す。
+  // これらは kaigo_visit_schedule 行には入れない (真実は kaigo_visit_addon_lines)。
+  const [resolvedAddonLines, setResolvedAddonLines] = useState<import("@/lib/visit-addons").VisitAddonLine[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // 保存済み加算が無い / 事業所未選択なら空。resolveVisitAddonLines は
+      // office 未指定・0件時に空 Map を返すのでそのまま流す。
+      if (!currentOfficeId || Object.keys(addonLines).length === 0) {
+        if (!cancelled) setResolvedAddonLines([]);
+        return;
+      }
+      try {
+        const map = await resolveVisitAddonLines(
+          supabase,
+          [userId],
+          selectedMonth.getFullYear(),
+          selectedMonth.getMonth() + 1,
+          currentOfficeId,
+        );
+        if (!cancelled) setResolvedAddonLines(map.get(userId) ?? []);
+      } catch (err) {
+        console.error("resolveVisitAddonLines failed:", err instanceof Error ? err.message : String(err));
+        if (!cancelled) setResolvedAddonLines([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, userId, currentOfficeId, selectedMonth, addonLines]);
+
   const addonRows = useMemo(() => {
-    const out: {
-      kind: "shokai" | "kinkyu" | "seikatsu";
-      label: string;
-      count: number;
-      unit: number;
-      units: number;
-    }[] = [];
-    if (addonFlags.shokai) {
-      const unit = addonUnitMaster[ADDON_NAMES.shokai] ?? 0;
-      out.push({ kind: "shokai", label: "初回加算", count: 1, unit, units: unit });
-    }
-    if (addonFlags.kinkyu_count > 0) {
-      const unit = addonUnitMaster[ADDON_NAMES.kinkyu] ?? 0;
-      const n = addonFlags.kinkyu_count;
-      out.push({
-        kind: "kinkyu",
-        label: `緊急時訪問介護加算 ×${n}回`,
-        count: n,
-        unit,
-        units: unit * n,
-      });
-    }
-    if (addonFlags.seikatsu_kino === "Ⅰ" || addonFlags.seikatsu_kino === "Ⅱ") {
-      const name = addonFlags.seikatsu_kino === "Ⅰ" ? ADDON_NAMES.seikatsuI : ADDON_NAMES.seikatsuII;
-      const unit = addonUnitMaster[name] ?? 0;
-      out.push({
-        kind: "seikatsu",
-        label: `生活機能向上連携加算${addonFlags.seikatsu_kino}`,
-        count: 1,
-        unit,
-        units: unit,
-      });
-    }
+    const out = resolvedAddonLines
+      // 書く側 (この画面) は加算のみ扱う。減算 (isReduction) は次段階なので表示しない
+      .filter((l) => !l.isReduction)
+      .map((l) => ({
+        code: l.code,
+        label: l.count > 1 ? `${l.name} ×${l.count}回` : l.name,
+        count: l.count,
+        unit: l.unitUnits,
+        units: l.totalUnits,
+      }));
+    out.sort((a, b) => a.code.localeCompare(b.code));
     return out;
-  }, [addonFlags, addonUnitMaster]);
+  }, [resolvedAddonLines]);
 
   // 加算行の合計単位数 (月次で予定=実績とも同額)。単位数計算エリアに含める。
   const addonTotalUnits = useMemo(
@@ -1097,7 +1245,7 @@ export function ProvisionTicketsContent({
     [addonRows],
   );
 
-  // 加算込みの最終合計 (処遇改善% + サービス加算 初回/緊急時/生活機能向上)
+  // 加算込みの最終合計 (処遇改善% + サービス加算 マスタ駆動一覧)
   const grandPlannedUnits = useMemo(
     () => totalPlannedUnits + formulaAdjustments.reduce((s, a) => s + a.plannedUnits, 0) + addonTotalUnits,
     [totalPlannedUnits, formulaAdjustments, addonTotalUnits],
@@ -1107,18 +1255,13 @@ export function ProvisionTicketsContent({
     [totalActualUnits, formulaAdjustments, addonTotalUnits],
   );
 
-  // 加算行の × ボタン: 該当加算フラグを解除して upsert
+  // 加算行の × ボタン: 該当加算コードを 1回分減らす (0 で削除)
   const removeAddonRow = useCallback(
-    (kind: "shokai" | "kinkyu" | "seikatsu") => {
-      const next = {
-        shokai: kind === "shokai" ? false : addonFlags.shokai,
-        // 緊急時は「1回減らす」(複数回のうち1件解除)。0 未満にはしない
-        kinkyu_count: kind === "kinkyu" ? Math.max(0, addonFlags.kinkyu_count - 1) : addonFlags.kinkyu_count,
-        seikatsu_kino: (kind === "seikatsu" ? "なし" : addonFlags.seikatsu_kino) as SeikatsuKino,
-      };
-      void upsertAddonFlags(next);
+    (code: string) => {
+      const cur = addonLines[code] ?? 0;
+      void upsertAddonLine(code, Math.max(0, cur - 1));
     },
-    [addonFlags, upsertAddonFlags],
+    [addonLines, upsertAddonLine],
   );
 
   // appliedFormulaCodes は currentOffice 由来 (read-only)。
@@ -1542,8 +1685,12 @@ export function ProvisionTicketsContent({
                 </h2>
                 <button
                   onClick={() => {
-                    setAddRowForm({ start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", staff_id: "" });
-                    setAddRowAddons({ shokai: false, kinkyu: false, seikatsu_kino: "なし" });
+                    setAddRowForm({
+                      start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", staff_id: "",
+                      staff_id_2: "", staff2_custom: false, staff2_start: "", staff2_end: "",
+                    });
+                    setAddRowAddons({});
+                    setShowAddStaff2(false);
                     setShowAddRow(true);
                   }}
                   className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 no-print"
@@ -1720,11 +1867,11 @@ export function ProvisionTicketsContent({
                         );
                       })}
 
-                      {/* ── 加算行 (kaigo_visit_month_addons の投影。content.services には無い) ── */}
+                      {/* ── 加算行 (kaigo_visit_addon_lines の投影。schedule 行には無い) ── */}
                       {addonRows.length > 0 && (
                         <tbody>
                           {addonRows.map((a) => (
-                            <tr key={`addon-${a.kind}`} className="bg-purple-50/60">
+                            <tr key={`addon-${a.code}`} className="bg-purple-50/60">
                               <td className="border border-gray-400 px-1 py-1 text-center text-[10px] text-purple-700 sticky left-0 bg-purple-50/60 z-10">
                                 <span className="inline-block rounded bg-purple-200 px-1 py-0.5 font-medium text-purple-800">加算</span>
                               </td>
@@ -1750,9 +1897,9 @@ export function ProvisionTicketsContent({
                               </td>
                               <td className="border border-gray-400 px-0 py-0 text-center no-print">
                                 <button
-                                  onClick={() => removeAddonRow(a.kind)}
+                                  onClick={() => removeAddonRow(a.code)}
                                   className="text-gray-300 hover:text-red-500 transition-colors"
-                                  title={a.kind === "kinkyu" && a.count > 1 ? "1回分を解除" : "加算を解除"}
+                                  title={a.count > 1 ? "1回分を解除" : "加算を解除"}
                                 >
                                   <X size={10} />
                                 </button>
@@ -1873,7 +2020,7 @@ export function ProvisionTicketsContent({
                       ))}
                       {/* サービス加算行 (初回/緊急時/生活機能向上。予定=実績とも同額) */}
                       {addonRows.map((a) => (
-                        <tr key={`fa-${a.kind}`} className="bg-purple-50/40 text-xs">
+                        <tr key={`fa-${a.code}`} className="bg-purple-50/40 text-xs">
                           <td className="border border-gray-200 px-2 py-1 text-purple-700">{a.label}</td>
                           <td className="border border-gray-200 px-2 py-1 text-right text-[10px] text-gray-400">
                             {a.unit > 0 ? `${a.unit.toLocaleString()}単位${a.count > 1 ? `×${a.count}` : ""}` : "—"}
@@ -1934,9 +2081,8 @@ export function ProvisionTicketsContent({
                 </div>
               )}
 
-              {/* サービス加算 (初回/緊急時/生活機能向上連携) の編集は
-                  「サービス追加」モーダル + 加算行の × ボタンで行う。
-                  処遇改善加算は行を作らず集計のみ (上の「適用中の加算」参照)。 */}
+              {/* サービス加算 (マスタ駆動の一覧) の編集は「サービス追加」モーダル +
+                  加算行の × ボタンで行う。処遇改善加算は行を作らず集計のみ (上の「適用中の加算」参照)。 */}
               {!currentOfficeId && (
                 <div className="no-print mt-4 max-w-2xl rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-400">
                   サービス加算の編集には事業所の選択 (?office=) が必要です
@@ -1944,8 +2090,8 @@ export function ProvisionTicketsContent({
               )}
               {addonTableMissing && currentOfficeId && (
                 <div className="no-print mt-4 max-w-2xl rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  加算テーブル (kaigo_visit_month_addons) が未作成のため、加算の保存・表示ができません。
-                  migrations/applied_archive/kaigo_visit_month_addons.sql を適用してください。
+                  加算テーブル (kaigo_visit_addon_lines) が未作成のため、加算の保存・表示ができません。
+                  migrations/kaigo_visit_addon_lines.sql を適用してください。
                 </div>
               )}
             </div>
@@ -2009,73 +2155,36 @@ export function ProvisionTicketsContent({
                 </select>
               </div>
 
-              {/* ── この訪問につく加算 (kaigo_visit_month_addons に反映) ── */}
-              <div className="rounded-lg border border-purple-200 bg-purple-50/40 p-3">
-                <div className="mb-2 text-xs font-semibold text-purple-800">この訪問につく加算</div>
-                {addonTableMissing ? (
-                  <p className="text-[11px] text-amber-700">
-                    加算テーブル (kaigo_visit_month_addons) が未作成のため加算は保存できません。
-                    migrations/applied_archive/kaigo_visit_month_addons.sql を適用してください。
-                  </p>
-                ) : !currentOfficeId ? (
-                  <p className="text-[11px] text-gray-400">加算の保存には事業所の選択 (?office=) が必要です</p>
-                ) : (
-                  <div className="space-y-2.5 text-xs">
-                    {/* 初回加算 */}
-                    <div>
-                      <label className="flex cursor-pointer items-center gap-1.5 text-gray-700">
-                        <input
-                          type="checkbox"
-                          checked={addRowAddons.shokai}
-                          onChange={(e) => setAddRowAddons((f) => ({ ...f, shokai: e.target.checked }))}
-                          className="h-4 w-4 accent-purple-600"
-                          disabled={addonFlags.shokai}
-                        />
-                        初回加算 <span className="text-[10px] text-gray-400">(月1回 / {addonUnitMaster[ADDON_NAMES.shokai] ?? 200}単位)</span>
-                      </label>
-                      {addonFlags.shokai && (
-                        <p className="mt-0.5 ml-5 text-[10px] text-purple-600">当月は既に初回加算あり</p>
-                      )}
-                      {shokaiSuggest === true && !addonFlags.shokai && !addRowAddons.shokai && (
-                        <p className="mt-0.5 ml-5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
-                          候補: 過去2ヶ月に実績がありません (新規利用の可能性)
-                        </p>
-                      )}
-                    </div>
-                    {/* 緊急時訪問介護加算 */}
-                    <div>
-                      <label className="flex cursor-pointer items-center gap-1.5 text-gray-700">
-                        <input
-                          type="checkbox"
-                          checked={addRowAddons.kinkyu}
-                          onChange={(e) => setAddRowAddons((f) => ({ ...f, kinkyu: e.target.checked }))}
-                          className="h-4 w-4 accent-purple-600"
-                        />
-                        緊急時訪問介護加算 <span className="text-[10px] text-gray-400">(この訪問が緊急時 / {addonUnitMaster[ADDON_NAMES.kinkyu] ?? 100}単位)</span>
-                      </label>
-                      {addonFlags.kinkyu_count > 0 && (
-                        <p className="mt-0.5 ml-5 text-[10px] text-purple-600">当月 {addonFlags.kinkyu_count} 回 (チェックで +1)</p>
-                      )}
-                    </div>
-                    {/* 生活機能向上連携加算 */}
-                    <div>
-                      <label className="mb-0.5 block text-gray-500">生活機能向上連携加算 (月1回)</label>
-                      <select
-                        value={addRowAddons.seikatsu_kino}
-                        onChange={(e) => setAddRowAddons((f) => ({ ...f, seikatsu_kino: e.target.value as SeikatsuKino }))}
-                        className="rounded border border-gray-300 px-2 py-1 text-xs"
-                      >
-                        <option value="なし">なし {addonFlags.seikatsu_kino !== "なし" ? `(現在: ${addonFlags.seikatsu_kino})` : ""}</option>
-                        <option value="Ⅰ">Ⅰ ({addonUnitMaster[ADDON_NAMES.seikatsuI] ?? 100}単位)</option>
-                        <option value="Ⅱ">Ⅱ ({addonUnitMaster[ADDON_NAMES.seikatsuII] ?? 200}単位)</option>
-                      </select>
-                    </div>
-                    <p className="text-[10px] text-gray-400">
-                      加算は提供表に「加算行」として表示され、請求集計に反映されます (処遇改善加算は集計のみで行は作りません)。
-                    </p>
-                  </div>
-                )}
-              </div>
+              {/* ── 職員2 (2人体制) + 個別時間 ── */}
+              <ProvisionStaff2Section
+                show={showAddStaff2}
+                onShow={() => setShowAddStaff2(true)}
+                onHide={() => {
+                  setShowAddStaff2(false);
+                  setAddRowForm((f) => ({ ...f, staff_id_2: "", staff2_custom: false, staff2_start: "", staff2_end: "" }));
+                }}
+                staffId2={addRowForm.staff_id_2}
+                staffOptions={allStaff.filter((s) => s.id !== addRowForm.staff_id)}
+                onStaff2Change={(id) => setAddRowForm((f) => ({ ...f, staff_id_2: id }))}
+                custom={addRowForm.staff2_custom}
+                start={addRowForm.staff2_start}
+                end={addRowForm.staff2_end}
+                mainStart={addRowForm.start_time}
+                mainEnd={addRowForm.end_time}
+                serviceName={addRowForm.service_name || addRowForm.service_type}
+                onTimeChange={(patch) => setAddRowForm((f) => ({ ...f, ...patch }))}
+              />
+
+              {/* ── この訪問につく加算 (kaigo_visit_addon_lines のマスタ駆動一覧) ── */}
+              <ProvisionAddonChecklist
+                addonTableMissing={addonTableMissing}
+                currentOfficeId={currentOfficeId}
+                addonOptions={addonOptions}
+                selected={addRowAddons}
+                onChange={setAddRowAddons}
+                existingLines={addonLines}
+                shokaiSuggest={shokaiSuggest}
+              />
             </div>
             <div className="flex justify-end gap-2 border-t px-5 py-4">
               <button onClick={() => setShowAddRow(false)} className="rounded-lg border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">キャンセル</button>
@@ -2136,6 +2245,33 @@ export function ProvisionTicketsContent({
                   }}
                 />
               </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">担当職員</label>
+                <select value={editRowForm.staff_id} onChange={(e) => setEditRowForm((f) => ({ ...f, staff_id: e.target.value }))} className="w-full rounded-lg border border-gray-400 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                  <option value="">-- 選択 --</option>
+                  {allStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+
+              {/* ── 職員2 (2人体制) + 個別時間 ── */}
+              <ProvisionStaff2Section
+                show={showEditStaff2}
+                onShow={() => setShowEditStaff2(true)}
+                onHide={() => {
+                  setShowEditStaff2(false);
+                  setEditRowForm((f) => ({ ...f, staff_id_2: "", staff2_custom: false, staff2_start: "", staff2_end: "" }));
+                }}
+                staffId2={editRowForm.staff_id_2}
+                staffOptions={allStaff.filter((s) => s.id !== editRowForm.staff_id)}
+                onStaff2Change={(id) => setEditRowForm((f) => ({ ...f, staff_id_2: id }))}
+                custom={editRowForm.staff2_custom}
+                start={editRowForm.staff2_start}
+                end={editRowForm.staff2_end}
+                mainStart={editRowForm.start_time}
+                mainEnd={editRowForm.end_time}
+                serviceName={editRowForm.service_name}
+                onTimeChange={(patch) => setEditRowForm((f) => ({ ...f, ...patch }))}
+              />
             </div>
             <div className="flex justify-end gap-2 border-t px-5 py-4">
               <button onClick={() => setEditRowKey(null)} className="rounded-lg border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">キャンセル</button>
@@ -2190,6 +2326,223 @@ function HeaderPair({
       <span className={cn("text-sm", mono && "font-mono tabular-nums", strong && "font-semibold")}>
         {value || "—"}
       </span>
+    </div>
+  );
+}
+
+// ─── 職員2 (2人体制) + 個別時間 セクション ──────────────────────────────────
+// shift-management の Staff2TimeFields / staffTimeRelationWarning と同等の UI を
+// provision-tickets 内に自前実装 (共有コンポーネント化は避けてコピー方針)。
+// 提供表は介護保険のみを扱うため isShogai=false 固定 (障害は障害側画面)。
+function ProvisionStaff2Section({
+  show,
+  onShow,
+  onHide,
+  staffId2,
+  staffOptions,
+  onStaff2Change,
+  custom,
+  start,
+  end,
+  mainStart,
+  mainEnd,
+  serviceName,
+  onTimeChange,
+}: {
+  show: boolean;
+  onShow: () => void;
+  onHide: () => void;
+  staffId2: string;
+  staffOptions: KaigoStaff[];
+  onStaff2Change: (id: string) => void;
+  custom: boolean;
+  start: string;
+  end: string;
+  mainStart: string;
+  mainEnd: string;
+  serviceName: string;
+  onTimeChange: (patch: { staff2_custom?: boolean; staff2_start?: string; staff2_end?: string }) => void;
+}) {
+  if (!show) {
+    return (
+      <button
+        type="button"
+        onClick={onShow}
+        className="text-xs text-blue-600 hover:underline"
+      >
+        ＋ 2人目を追加（2人体制）
+      </button>
+    );
+  }
+  // 個別時間の重なり判定 (介護保険のみ)。custom OFF は本体時間なので判定不要
+  const timeWarn = custom
+    ? staffTimeRelationWarning(mainStart, mainEnd, start, end, serviceName, false)
+    : null;
+  // 2人体制なのに「２人」コードでない / 逆の警告
+  const codeWarn = twoPersonMismatchWarning(serviceName, staffId2 || null);
+  return (
+    <div className="space-y-2 rounded-lg border border-indigo-100 bg-indigo-50/30 p-3">
+      <div className="flex items-center justify-between">
+        <label className="block text-xs font-medium text-gray-500">担当職員2（2人体制）</label>
+        <button type="button" onClick={onHide} className="text-xs text-gray-400 hover:text-red-500">
+          取り消す
+        </button>
+      </div>
+      <select
+        value={staffId2}
+        onChange={(e) => onStaff2Change(e.target.value)}
+        className="w-full rounded-lg border border-gray-400 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+      >
+        <option value="">-- 選択 --</option>
+        {staffOptions.map((s) => (
+          <option key={s.id} value={s.id}>{s.name}</option>
+        ))}
+      </select>
+      {staffId2 && (
+        <div className="mt-1 space-y-2">
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-gray-600">
+            <input
+              type="checkbox"
+              checked={custom}
+              onChange={(e) =>
+                onTimeChange(
+                  e.target.checked
+                    ? { staff2_custom: true, staff2_start: start || mainStart, staff2_end: end || mainEnd }
+                    : { staff2_custom: false },
+                )
+              }
+              className="h-3.5 w-3.5 accent-indigo-600"
+            />
+            個別時間 (職員2の担当時間が本体と異なる)
+          </label>
+          {custom && (
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="time"
+                value={start}
+                onChange={(e) => onTimeChange({ staff2_start: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                title="職員2の開始時間"
+              />
+              <input
+                type="time"
+                value={end}
+                onChange={(e) => onTimeChange({ staff2_end: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                title="職員2の終了時間"
+              />
+            </div>
+          )}
+          {timeWarn && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              {timeWarn}
+            </div>
+          )}
+          {codeWarn && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              {codeWarn}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── この訪問につく加算 (kaigo_visit_addon_lines のマスタ駆動チェックリスト) ────
+// その事業所のサービス種別 (訪問介護) で使える「加算」を kaigo_service_codes から
+// 一覧表示し、適用チェック + 回数で選択する (ほのぼの「加算サービス項目」相当)。
+// selected = { addon_code -> count } (0 or 未設定 = 非適用)。
+// 減算 (calculation_type='減算') は今回は一覧に出さない (次段階)。
+function ProvisionAddonChecklist({
+  addonTableMissing,
+  currentOfficeId,
+  addonOptions,
+  selected,
+  onChange,
+  existingLines,
+  shokaiSuggest,
+}: {
+  addonTableMissing: boolean;
+  currentOfficeId: string | null | undefined;
+  addonOptions: AddonCodeOption[];
+  selected: Record<string, number>;
+  onChange: (next: Record<string, number>) => void;
+  existingLines: Record<string, number>;
+  shokaiSuggest: boolean | null;
+}) {
+  const setCode = (code: string, count: number) => {
+    const next = { ...selected };
+    if (count <= 0) delete next[code];
+    else next[code] = count;
+    onChange(next);
+  };
+  return (
+    <div className="rounded-lg border border-purple-200 bg-purple-50/40 p-3">
+      <div className="mb-2 text-xs font-semibold text-purple-800">この訪問につく加算</div>
+      {addonTableMissing ? (
+        <p className="text-[11px] text-amber-700">
+          加算テーブル (kaigo_visit_addon_lines) が未作成のため加算は保存できません。
+          migrations/kaigo_visit_addon_lines.sql を適用してください。
+        </p>
+      ) : !currentOfficeId ? (
+        <p className="text-[11px] text-gray-400">加算の保存には事業所の選択 (?office=) が必要です</p>
+      ) : addonOptions.length === 0 ? (
+        <p className="text-[11px] text-gray-400">対象月に有効な訪問介護の加算コードがありません</p>
+      ) : (
+        <div className="max-h-56 space-y-2 overflow-y-auto text-xs">
+          {addonOptions.map((opt) => {
+            const count = selected[opt.code] ?? 0;
+            const checked = count > 0;
+            const alreadyN = existingLines[opt.code] ?? 0;
+            const isShokai = opt.code === SHOKAI_ADDON_CODE;
+            return (
+              <div key={opt.code}>
+                <div className="flex items-center gap-2">
+                  <label className="flex flex-1 cursor-pointer items-center gap-1.5 text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => setCode(opt.code, e.target.checked ? Math.max(1, count) : 0)}
+                      className="h-4 w-4 accent-purple-600"
+                    />
+                    <span className="break-words">{opt.name}</span>
+                    <span className="whitespace-nowrap text-[10px] text-gray-400">
+                      ({opt.units.toLocaleString()}単位)
+                    </span>
+                  </label>
+                  {checked && (
+                    <input
+                      type="number"
+                      min={1}
+                      value={count}
+                      onChange={(e) => setCode(opt.code, Math.max(1, parseInt(e.target.value, 10) || 1))}
+                      className="w-14 rounded border border-gray-300 px-1.5 py-0.5 text-right text-xs"
+                      title="回数"
+                    />
+                  )}
+                  <span className="w-6 text-right text-[10px] text-gray-400">回</span>
+                </div>
+                {alreadyN > 0 && (
+                  <p className="ml-6 mt-0.5 text-[10px] text-purple-600">
+                    当月 既に {alreadyN} 回 (チェックで加算)
+                  </p>
+                )}
+                {isShokai && shokaiSuggest === true && alreadyN === 0 && !checked && (
+                  <p className="ml-6 mt-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                    候補: 過去2ヶ月に実績がありません (新規利用の可能性)
+                  </p>
+                )}
+              </div>
+            );
+          })}
+          <p className="text-[10px] text-gray-400">
+            加算は提供表に「加算行」として表示され、請求集計に反映されます (処遇改善加算は集計のみで行は作りません。減算は次段階)。
+          </p>
+        </div>
+      )}
     </div>
   );
 }

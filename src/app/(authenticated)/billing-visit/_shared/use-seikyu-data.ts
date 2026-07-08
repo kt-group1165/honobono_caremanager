@@ -20,6 +20,8 @@ export function useSeikyuData() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [rows, setRows] = useState<UserSeikyuRow[]>([]);
+  // 総合事業 (7112/様式(予)) の請求行。介護給付 (rows) とは別様式なので分離して保持
+  const [sougouRows, setSougouRows] = useState<UserSeikyuRow[]>([]);
   const [recordCount, setRecordCount] = useState(0);
   // 集計時の注意事項 (身体介護9系=単位数0の増分コード混入 等)
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -84,6 +86,7 @@ export function useSeikyuData() {
       });
       if (gen !== genRef.current) return; // 月切替済み → 古い結果は破棄
       setRows(result.rows);
+      setSougouRows(result.sougouRows ?? []);
       setRecordCount(result.recordCount);
       setWarnings(result.warnings);
     } catch (e) {
@@ -110,6 +113,7 @@ export function useSeikyuData() {
     month,
     onMonthChange,
     rows,
+    sougouRows,
     recordCount,
     warnings,
     loading: loading || btLoading,

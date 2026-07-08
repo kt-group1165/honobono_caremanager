@@ -7,7 +7,6 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { differenceInYears, parseISO, format } from "date-fns";
 import { User, Download, Upload, Loader2 } from "lucide-react";
-import { UserSidebar } from "@/components/users/user-sidebar";
 import type { Client } from "@/types/database";
 import { useBusinessType } from "@/lib/business-type-context";
 import {
@@ -94,12 +93,6 @@ export function UserDetailLayoutShell({
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleSelectUser = (newId: string) => {
-    if (newId === id) return;
-    const suffix = pathname ? pathname.slice(`/users/${id}`.length) : "";
-    router.push(`/users/${newId}${suffix}`);
-  };
 
   // ── CSV出力 ────────────────────────────────────────────────────────────────
   const CSV_COLUMNS = [
@@ -390,12 +383,8 @@ export function UserDetailLayoutShell({
           : DISABILITY_TABS;
 
   return (
-    <div className="flex h-full -m-6">
-      <UserSidebar selectedUserId={id} onSelectUser={handleSelectUser} />
-
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="space-y-4">
-          {/* CSV入出力ツールバー */}
+    <div className="space-y-4">
+      {/* CSV入出力ツールバー */}
           <div className="flex items-center justify-end gap-2">
             <input
               ref={fileInputRef}
@@ -542,10 +531,8 @@ export function UserDetailLayoutShell({
             </nav>
           </div>
 
-          {/* 各サブページのコンテンツ */}
-          {children}
-        </div>
-      </div>
+      {/* 各サブページのコンテンツ */}
+      {children}
     </div>
   );
 }
