@@ -7,6 +7,7 @@ import { Search, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBusinessType } from "@/lib/business-type-context";
 import { useLocalStorage } from "@/lib/use-local-storage";
+import { confirmNav } from "@/lib/nav-guard";
 import {
   ServiceCategoryBadge,
   type ServiceCategoryValue,
@@ -182,6 +183,8 @@ function UserSidebarInner(props: UserSidebarProps) {
 
   const handleSelectUser = useCallback(
     (id: string) => {
+      // 未保存離脱ガード (提供表等が registerNavGuard 登録時のみ確認)
+      if (!confirmNav()) return;
       if (explicit) {
         props.onSelectUser?.(id);
         return;
