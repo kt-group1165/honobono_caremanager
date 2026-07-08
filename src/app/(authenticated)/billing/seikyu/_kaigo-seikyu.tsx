@@ -58,10 +58,10 @@ import {
 } from "@/lib/hospitalization";
 
 // ほのぼの実画面の列順 (居宅版):
-// 対象 / 状態 / 提供月 / 請求月 / サービス事業所 / 被保険者番号 / 利用者名 /
+// 対象 / 申請中 / 状態 / 提供月 / 請求月 / サービス事業所 / 被保険者番号 / 利用者名 /
 // 単位数 / 金額 / レセプト / 月遅 / 返戻 / 過誤
 const GRID_COLS =
-  "grid grid-cols-[26px_60px_54px_54px_minmax(100px,0.8fr)_84px_minmax(140px,1.1fr)_64px_76px_52px_44px_44px_44px]";
+  "grid grid-cols-[26px_44px_60px_54px_54px_minmax(100px,0.8fr)_84px_minmax(140px,1.1fr)_64px_76px_52px_44px_44px_44px]";
 
 // 和暦月表示 「R 8/ 5」 (ほのぼの流。1 桁は空白 pad、font-mono 前提)
 const reiwaMonth = (y: number, m: number) =>
@@ -719,6 +719,12 @@ export function KyotakuKaigoSeikyuContent() {
   const allChecked = checked.size === displayRows.length && displayRows.length > 0;
   const meisaiTargets = meisaiPrintRows ?? targetDisplayRows;
 
+  // 認定申請中 (care_level='申請中') は認定結果が出るまで国保連請求の対象外。
+  // 当月行のみ集計 (再請求行は元提供月の別集計)。行の amber 色付け + 上部バナー用。
+  const shinseichuCount = displayRows.filter(
+    (d) => !d.isReSeikyu && d.row.care_level === "申請中",
+  ).length;
+
   return (
     <>
       <div className="flex flex-1 min-h-0 print:hidden">
@@ -794,6 +800,17 @@ export function KyotakuKaigoSeikyuContent() {
             </div>
           )}
 
+          {/* 認定申請中の利用者 案内 (該当者がいるときのみ) */}
+          {!loading && shinseichuCount > 0 && (
+            <div className="border-b border-amber-300 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
+              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <span>
+                認定申請中の利用者が {shinseichuCount} 名います。認定結果が確定するまで国保連への請求対象外です
+                (該当行は amber で色付けしています)。
+              </span>
+            </div>
+          )}
+
           {/* ── 集計エラー (内容確認) バナー — ほのぼの集計処理の確認内容の代替 ── */}
           {!loading && checkIssues.length > 0 && (
             <div className="border-b border-amber-300 bg-amber-50 shrink-0 text-xs text-amber-900">
@@ -858,6 +875,7 @@ export function KyotakuKaigoSeikyuContent() {
                       )}
                     </button>
                   </div>
+                  <div className="px-1 py-0.5 border-l border-sky-300">申請中</div>
                   <div className="px-1 py-0.5 border-l border-sky-300">状態</div>
                   <div className="px-1 py-0.5 border-l border-sky-300">提供月</div>
                   <div className="px-1 py-0.5 border-l border-sky-300">請求月</div>
@@ -886,15 +904,26 @@ export function KyotakuKaigoSeikyuContent() {
                   // 月遅れ行 = 提供月 ≠ 請求月 (再請求合流) or 月遅フラグ → 提供月セルを黄色ハイライト
                   const isTsukiokure =
                     d.origMonthKey !== monthKey || !!st?.tsukiokure;
+                  // 認定申請中 (当月行のみ) = 国保連請求対象外 → 行を amber で色付け
+                  const isShinseichu = !d.isReSeikyu && r.care_level === "申請中";
                   return (
                     <div
                       key={d.key}
                       onClick={() => setSelectedKey(isDetail ? null : d.key)}
+                      title={
+                        isShinseichu
+                          ? "認定申請中のため請求できません (結果確定まで国保対象外)"
+                          : undefined
+                      }
                       className={`${GRID_COLS} border-b border-gray-200 text-[11px] leading-4 cursor-pointer transition-colors ${
+                        isShinseichu ? "border-l-2 border-l-amber-400" : ""
+                      } ${
                         isDetail
                           ? "bg-blue-100"
                           : isChecked
                           ? "bg-indigo-50"
+                          : isShinseichu
+                          ? "bg-amber-50 hover:bg-amber-100"
                           : "bg-white hover:bg-sky-50"
                       }`}
                     >
@@ -907,6 +936,10 @@ export function KyotakuKaigoSeikyuContent() {
                         >
                           {isChecked && <span className="text-white text-[8px] font-bold leading-none">✓</span>}
                         </button>
+                      </div>
+                      {/* 申請中: 対象月の認定が申請中 (care_level='申請中') なら 〇。認定済は空欄 */}
+                      <div className="px-1 py-0.5 border-l border-gray-200 text-center text-red-600 font-bold" title={isShinseichu ? "認定申請中のため請求できません (結果確定まで国保対象外)" : undefined}>
+                        {isShinseichu ? "〇" : ""}
                       </div>
                       {/* 状態: バッジ背景なしの素の色文字 (ほのぼの流)。国保対象 = 赤字 */}
                       <div className="px-1 py-0.5 border-l border-gray-200">
