@@ -53,6 +53,16 @@ interface ServiceSelectorProps {
    * (validInMonth) でコードを引く。未指定時は従来どおり今日時点で有効な世代。
    */
   targetMonth?: { year: number; month: number }
+  /**
+   * 「この訪問の加算」欄を表示するか (訪問介護の予定モーダル用の opt-in)。
+   * true かつ 介護タブのとき、サービス一覧の上に緊急時訪問介護加算のトグルを出す。
+   * 他画面 (帳票/提供表等) は未指定=非表示で従来どおり。
+   */
+  showVisitAddons?: boolean
+  /** 緊急時訪問介護加算の現在値 (showVisitAddons 時のトグル初期/表示) */
+  kinkyu?: boolean
+  /** 緊急時トグル変更時 (即時コミット。ポップアップは閉じない) */
+  onKinkyuChange?: (value: boolean) => void
 }
 
 // ─── 時間レンジ判定 (service_name から所要分を推定) ─────────────────────────
@@ -256,7 +266,7 @@ export function ServiceSelector(props: ServiceSelectorProps) {
   return <ServiceSelectorInner {...props} />
 }
 
-function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介護", startTime, endTime, targetMonth }: Omit<ServiceSelectorProps, "open">) {
+function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介護", startTime, endTime, targetMonth, showVisitAddons, kinkyu, onKinkyuChange }: Omit<ServiceSelectorProps, "open">) {
   const [activeSystem, setActiveSystem] = React.useState<"介護" | "障害" | "総合事業" | "独自">(initialSystem);
   const CATEGORIES = CATEGORIES_BY_SYSTEM[activeSystem];
   const system = activeSystem;
@@ -519,6 +529,22 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
             </label>
           )}
         </div>
+
+        {/* この訪問の加算 (訪問介護の予定モーダル用 opt-in。介護タブのみ) */}
+        {showVisitAddons && system === "介護" && (
+          <div className="shrink-0 border-b bg-red-50/40 px-4 py-2.5">
+            <div className="mb-1 text-xs font-medium text-gray-500">この訪問の加算</div>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={!!kinkyu}
+                onChange={(e) => onKinkyuChange?.(e.target.checked)}
+                className="h-4 w-4 accent-red-600"
+              />
+              <span>緊急時訪問 (緊急時訪問介護加算)</span>
+            </label>
+          </div>
+        )}
 
         {/* Service list */}
         <div className="flex-1 overflow-y-auto" style={{ maxHeight: "400px" }}>

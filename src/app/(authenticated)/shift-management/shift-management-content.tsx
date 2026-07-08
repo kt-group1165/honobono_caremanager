@@ -1162,6 +1162,9 @@ export function ShiftManagementContent({
                   onClose={() => setShowPageServiceSelector(false)}
                   startTime={pageEditForm.start_time}
                   endTime={pageEditForm.end_time}
+                  showVisitAddons={kinkyuSupported}
+                  kinkyu={pageEditForm.kinkyu_houmon}
+                  onKinkyuChange={(v) => setPageEditForm((f) => ({ ...f, kinkyu_houmon: v }))}
                   onSelect={(service) => {
                     setPageEditForm({
                       ...pageEditForm,
@@ -1172,6 +1175,9 @@ export function ShiftManagementContent({
                     setShowPageServiceSelector(false);
                   }}
                 />
+                {kinkyuSupported && pageEditForm.kinkyu_houmon && (
+                  <p className="mt-1 text-xs font-medium text-red-600">＋ 緊急時訪問介護加算</p>
+                )}
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">担当職員</label>
@@ -1202,19 +1208,6 @@ export function ShiftManagementContent({
                 isShogai={pageEditServiceSystem === "障害"}
                 showCustomTime={staff2TimesSupported}
               />
-
-              {/* C3: 緊急時訪問介護加算 (列未適用の DB では非表示) */}
-              {kinkyuSupported && (
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={pageEditForm.kinkyu_houmon}
-                    onChange={(e) => setPageEditForm((f) => ({ ...f, kinkyu_houmon: e.target.checked }))}
-                    className="h-4 w-4 accent-red-600"
-                  />
-                  <span>緊急時訪問 (緊急時訪問介護加算)</span>
-                </label>
-              )}
             </div>
             <div className="flex items-center justify-between border-t px-5 py-4">
               <button

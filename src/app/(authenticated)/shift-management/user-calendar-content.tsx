@@ -692,6 +692,9 @@ export function UserCalendar({
                   onClose={() => setShowServiceSelector(false)}
                   startTime={editForm.start_time}
                   endTime={editForm.end_time}
+                  showVisitAddons={kinkyuSupported}
+                  kinkyu={editForm.kinkyu_houmon}
+                  onKinkyuChange={(v) => setEditForm((f) => ({ ...f, kinkyu_houmon: v }))}
                   onSelect={(service) => {
                     setEditForm((f) => ({
                       ...f,
@@ -703,6 +706,9 @@ export function UserCalendar({
                     setShowServiceSelector(false);
                   }}
                 />
+                {kinkyuSupported && editForm.kinkyu_houmon && (
+                  <p className="mt-1 text-xs font-medium text-red-600">＋ 緊急時訪問介護加算</p>
+                )}
               </div>
 
               <div>
@@ -764,19 +770,6 @@ export function UserCalendar({
                 isShogai={editServiceSystem === "障害"}
                 showCustomTime={staff2TimesSupported}
               />
-
-              {/* C3: 緊急時訪問介護加算 (列未適用の DB では非表示) */}
-              {kinkyuSupported && (
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={editForm.kinkyu_houmon}
-                    onChange={(e) => setEditForm((f) => ({ ...f, kinkyu_houmon: e.target.checked }))}
-                    className="h-4 w-4 accent-red-600"
-                  />
-                  <span>緊急時訪問 (緊急時訪問介護加算)</span>
-                </label>
-              )}
             </div>
 
             <div className="flex items-center justify-between border-t px-5 py-4">
@@ -873,6 +866,9 @@ export function UserCalendar({
                   onClose={() => setShowAddServiceSelector(false)}
                   startTime={addForm.start_time}
                   endTime={addForm.end_time}
+                  showVisitAddons={kinkyuSupported}
+                  kinkyu={addForm.kinkyu_houmon}
+                  onKinkyuChange={(v) => setAddForm((f) => ({ ...f, kinkyu_houmon: v }))}
                   onSelect={(service) => {
                     setAddForm((f) => ({
                       ...f,
@@ -884,6 +880,9 @@ export function UserCalendar({
                     setShowAddServiceSelector(false);
                   }}
                 />
+                {kinkyuSupported && addForm.kinkyu_houmon && (
+                  <p className="mt-1 text-xs font-medium text-red-600">＋ 緊急時訪問介護加算</p>
+                )}
               </div>
 
               <div>
@@ -946,18 +945,6 @@ export function UserCalendar({
                 showCustomTime={staff2TimesSupported}
               />
 
-              {/* C3: 緊急時訪問介護加算 (列未適用の DB では非表示) */}
-              {kinkyuSupported && (
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={addForm.kinkyu_houmon}
-                    onChange={(e) => setAddForm((f) => ({ ...f, kinkyu_houmon: e.target.checked }))}
-                    className="h-4 w-4 accent-red-600"
-                  />
-                  <span>緊急時訪問 (緊急時訪問介護加算)</span>
-                </label>
-              )}
             </div>
 
             <div className="flex justify-end gap-2 border-t px-5 py-4">
