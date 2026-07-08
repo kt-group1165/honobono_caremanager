@@ -1086,17 +1086,17 @@ export function ClaimsContent({
         const noteParts: string[] = [];
         if (officeTokutei !== "none") {
           noteParts.push(
-            `${AUTO_ADDON_NOTES_MARKER} 特定事業所加算${officeTokutei} (${tokuteiSource === "addons" ? "/addons" : "/master/office"} 由来)`,
+            `${AUTO_ADDON_NOTES_MARKER} 特定事業所加算${officeTokutei} (${tokuteiSource === "addons" ? "加算管理" : "/master/office"} 由来)`,
           );
         }
         if (officeMedicalCoop) {
           noteParts.push(`${AUTO_ADDON_NOTES_MARKER} 特定事業所医療介護連携加算 (/master/office)`);
         }
-        if (autoDischargeCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoDischargeCode} (/addons)`);
-        if (autoHospitalCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoHospitalCode} (/addons)`);
-        if (autoMedicalCoordCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoMedicalCoordCode} (/addons)`);
-        if (autoTerminalCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoTerminalCode} (/addons)`);
-        if (autoEmergencyCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoEmergencyCode} (/addons)`);
+        if (autoDischargeCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoDischargeCode} (加算管理)`);
+        if (autoHospitalCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoHospitalCode} (加算管理)`);
+        if (autoMedicalCoordCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoMedicalCoordCode} (加算管理)`);
+        if (autoTerminalCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoTerminalCode} (加算管理)`);
+        if (autoEmergencyCode) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} ${autoEmergencyCode} (加算管理)`);
         if (isInitial) noteParts.push(`${AUTO_ADDON_NOTES_MARKER} 初回加算 (= 過去月 claims なしと判定)`);
         // 単価 source
         noteParts.push(

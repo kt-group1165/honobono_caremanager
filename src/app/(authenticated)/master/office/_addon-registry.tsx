@@ -1,34 +1,24 @@
 "use client";
 
-/**
- * 加算管理 一覧 + 編集 UI (居宅・訪問介護 両版共通)
- *
- * UI:
- *  - 現在 office + business_type に応じた加算一覧
- *  - 「+ 新規追加」inline row を一覧の上部に表示
- *  - 各行に「編集 / 削除 / 期限延長」操作
- *  - 加算コードは business_type に応じた dropdown
- *  - 算定根拠は textarea (= PDF link 等もテキストで)
- *  - status: active / expired / pending
- *
- * 通所介護モードは対象外 (= 居宅 / 訪問 専用)。
- */
+// ─── 加算管理 (事業所単位の加算 届出・算定台帳) ──────────────────────────────
+//
+// 旧トップメニュー /addons を自事業所管理へ統合したもの (2026-07-08)。
+//  - 居宅介護支援: ここで「算定中」の加算がレセプト作成時に自動反映される (billing/claims)
+//  - 訪問介護: 処遇改善加算等の率計算は上の「適用加算」が実体。こちらは届出管理台帳
+// 対象 table: kaigo_billing_addons (UNIQUE office_id + addon_code + applied_from)
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertCircle,
   CalendarDays,
   Loader2,
   Pencil,
   Plus,
   Save,
-  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import { useBusinessType } from "@/lib/business-type-context";
 import {
   createAddon,
   deleteAddon,
@@ -43,6 +33,13 @@ import {
   type AddonStatus,
   type BillingAddon,
 } from "@/lib/billing-addon/types";
+
+interface AddonRegistryProps {
+  officeId: string;
+  tenantId: string;
+  /** offices.service_type — 居宅介護支援 / 訪問介護 のみ表示 */
+  serviceType: string;
+}
 
 interface DraftRow {
   addon_code: string;
@@ -95,34 +92,22 @@ const STATUS_BADGE_CLS: Record<AddonStatus, string> = {
   pending: "bg-amber-50 text-amber-700 border-amber-200",
 };
 
-export function AddonsContent() {
+export function AddonRegistrySection({ officeId, tenantId, serviceType }: AddonRegistryProps) {
   const supabase = useMemo(() => createClient(), []);
-  const {
-    businessType,
-    currentOffice,
-    loading: btLoading,
-  } = useBusinessType();
 
-  const officeId = currentOffice?.id ?? null;
-  const tenantId = currentOffice?.tenant_id ?? null;
-
-  // 加算管理は 居宅介護支援 / 訪問介護 のみ対象。通所介護は対象外。
-  const businessTypeForAddon: AddonBusinessType | null =
-    businessType === "居宅介護支援" || businessType === "訪問介護"
-      ? businessType
-      : null;
+  const businessType: AddonBusinessType | null =
+    serviceType === "居宅介護支援" || serviceType === "訪問介護" ? serviceType : null;
 
   const [rows, setRows] = useState<BillingAddon[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // 新規追加 row
+  // 新規追加 row / 編集中 row (id → draft)
   const [addDraft, setAddDraft] = useState<DraftRow | null>(null);
-  // 編集中 row (id → draft)
   const [editDrafts, setEditDrafts] = useState<Record<string, DraftRow>>({});
 
-  const codesForType: readonly string[] = businessTypeForAddon
-    ? ADDON_CODES_BY_BUSINESS_TYPE[businessTypeForAddon]
+  const codesForType: readonly string[] = businessType
+    ? ADDON_CODES_BY_BUSINESS_TYPE[businessType]
     : [];
 
   const reload = async (oid: string, bt: AddonBusinessType) => {
@@ -137,8 +122,7 @@ export function AddonsContent() {
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- mount-time async fetch */
-    if (btLoading) return;
-    if (!officeId || !businessTypeForAddon) {
+    if (!officeId || !businessType) {
       setLoading(false);
       setRows([]);
       return;
@@ -146,8 +130,10 @@ export function AddonsContent() {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
+      setAddDraft(null);
+      setEditDrafts({});
       try {
-        const data = await getAddons(supabase, officeId, businessTypeForAddon);
+        const data = await getAddons(supabase, officeId, businessType);
         if (!cancelled) setRows(data);
       } catch (err) {
         console.error(err);
@@ -161,37 +147,9 @@ export function AddonsContent() {
       cancelled = true;
     };
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [supabase, officeId, businessTypeForAddon, btLoading]);
+  }, [supabase, officeId, businessType]);
 
-  // ─── ガード: 通所介護モード or 事業所未選択 ───
-  if (!btLoading && !businessTypeForAddon) {
-    return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Sparkles size={22} className="text-indigo-600 shrink-0" />
-          加算管理
-        </h1>
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-amber-800 flex items-start gap-3">
-          <AlertCircle size={20} className="shrink-0 mt-0.5" />
-          <div>
-            <p className="font-medium">この機能は 居宅介護支援 / 訪問介護 モードでのみ利用できます</p>
-            <p className="text-sm mt-1">
-              サイドバー下部の事業所セレクタから 居宅介護支援 または 訪問介護 の自事業所を選択してください。
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (btLoading || !currentOffice || !officeId || !tenantId || !businessTypeForAddon) {
-    return (
-      <div className="flex items-center justify-center py-12 text-gray-400">
-        <Loader2 size={20} className="animate-spin mr-2" />
-        読込中...
-      </div>
-    );
-  }
+  if (!businessType) return null;
 
   // ─── 新規追加 ───
   const startAdd = () => {
@@ -215,7 +173,7 @@ export function AddonsContent() {
       await createAddon(supabase, {
         tenant_id: tenantId,
         office_id: officeId,
-        business_type: businessTypeForAddon,
+        business_type: businessType,
         addon_code: addDraft.addon_code,
         addon_unit: parseUnit(addDraft.addon_unit),
         status: addDraft.status,
@@ -227,7 +185,7 @@ export function AddonsContent() {
       });
       toast.success("加算を追加しました");
       setAddDraft(null);
-      await reload(officeId, businessTypeForAddon);
+      await reload(officeId, businessType);
     } catch (err) {
       console.error(err);
       toast.error("追加失敗: " + (err instanceof Error ? err.message : String(err)));
@@ -273,7 +231,7 @@ export function AddonsContent() {
       });
       toast.success("更新しました");
       cancelEdit(id);
-      await reload(officeId, businessTypeForAddon);
+      await reload(officeId, businessType);
     } catch (err) {
       console.error(err);
       toast.error("更新失敗: " + (err instanceof Error ? err.message : String(err)));
@@ -289,7 +247,7 @@ export function AddonsContent() {
     try {
       await deleteAddon(supabase, r.id);
       toast.success("削除しました");
-      await reload(officeId, businessTypeForAddon);
+      await reload(officeId, businessType);
     } catch (err) {
       console.error(err);
       toast.error("削除失敗: " + (err instanceof Error ? err.message : String(err)));
@@ -315,7 +273,7 @@ export function AddonsContent() {
     try {
       await updateAddon(supabase, r.id, { expires_at: next });
       toast.success(`終了日を ${next} に更新しました`);
-      await reload(officeId, businessTypeForAddon);
+      await reload(officeId, businessType);
     } catch (err) {
       console.error(err);
       toast.error("期限延長失敗: " + (err instanceof Error ? err.message : String(err)));
@@ -325,118 +283,100 @@ export function AddonsContent() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* ── ヘッダ ── */}
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Sparkles size={22} className="text-indigo-600 shrink-0" />
-            加算管理
-          </h1>
-          <p className="mt-1 text-xs sm:text-sm text-gray-500">
-            事業所: <span className="font-medium text-gray-700">{currentOffice.name}</span>
-            <span className="mx-2 text-gray-300">/</span>
-            業種: <span className="font-medium text-gray-700">{businessTypeForAddon}</span>
-          </p>
-        </div>
-        <div className="shrink-0">
-          <button
-            type="button"
-            onClick={startAdd}
-            disabled={!!addDraft || saving}
-            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-          >
-            <Plus size={16} />
-            新規追加
-          </button>
-        </div>
+    <div className="rounded-xl border bg-white p-6 shadow-sm space-y-4">
+      <div className="flex items-center justify-between border-b pb-2">
+        <h2 className="text-sm font-bold text-gray-700">加算管理 (届出・算定台帳)</h2>
+        <button
+          type="button"
+          onClick={startAdd}
+          disabled={!!addDraft || saving}
+          className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+        >
+          <Plus size={14} />
+          新規追加
+        </button>
       </div>
 
-      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 flex items-start gap-2">
-        <AlertCircle size={14} className="shrink-0 mt-0.5" />
-        <div>
-          ここで登録した加算は事業所単位で管理されます。
-          算定根拠 (届出書類の所在等) と届出受理日を記録しておくと、加算届出の更新時期管理に役立ちます。
-        </div>
-      </div>
+      <p className="text-xs text-gray-500">
+        {businessType === "居宅介護支援"
+          ? "「算定中」の加算はレセプト作成時に自動反映されます。届出受理日・算定根拠 (届出書類の所在等) も記録しておくと運営指導時に役立ちます。"
+          : "処遇改善加算等の率計算は上の「適用加算」で行われます。この一覧は届出受理日・算定根拠を記録する台帳です。"}
+      </p>
 
-      {/* ── 一覧 ── */}
       {loading ? (
-        <div className="flex items-center justify-center py-12 text-gray-400">
-          <Loader2 size={20} className="animate-spin mr-2" />
+        <div className="flex items-center justify-center py-8 text-gray-400">
+          <Loader2 size={18} className="animate-spin mr-2" />
           読込中...
         </div>
       ) : (
-        <section className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs sm:text-sm">
-              <thead className="bg-gray-50 text-gray-600">
-                <tr>
-                  <th className="px-2 py-2 border-b border-gray-200 text-left w-44 sm:w-56">加算コード *</th>
-                  <th className="px-2 py-2 border-b border-gray-200 text-right w-20">単位</th>
-                  <th className="px-2 py-2 border-b border-gray-200 text-left w-28">状態</th>
-                  <th className="px-2 py-2 border-b border-gray-200 text-left w-32">開始日 *</th>
-                  <th className="px-2 py-2 border-b border-gray-200 text-left w-32">終了日</th>
-                  <th className="px-2 py-2 border-b border-gray-200 text-left w-32">届出日</th>
-                  <th className="px-2 py-2 border-b border-gray-200 text-left">算定根拠 / 備考</th>
-                  <th className="px-2 py-2 border-b border-gray-200 text-center w-44">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {/* 新規追加 inline row */}
-                {addDraft && (
-                  <DraftRowEditor
-                    draft={addDraft}
-                    onChange={setAddDraft}
-                    codes={codesForType}
-                    saving={saving}
-                    onSave={commitAdd}
-                    onCancel={cancelAdd}
-                    saveLabel="保存"
-                    rowBg="bg-indigo-50/40"
-                  />
-                )}
+        <div className="overflow-x-auto rounded-lg border border-gray-200">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <th className="px-2 py-2 border-b border-gray-200 text-left w-44 sm:w-56">加算コード *</th>
+                <th className="px-2 py-2 border-b border-gray-200 text-right w-16">単位</th>
+                <th className="px-2 py-2 border-b border-gray-200 text-left w-24">状態</th>
+                <th className="px-2 py-2 border-b border-gray-200 text-left w-28">開始日 *</th>
+                <th className="px-2 py-2 border-b border-gray-200 text-left w-28">終了日</th>
+                <th className="px-2 py-2 border-b border-gray-200 text-left w-28">届出日</th>
+                <th className="px-2 py-2 border-b border-gray-200 text-left">算定根拠 / 備考</th>
+                <th className="px-2 py-2 border-b border-gray-200 text-center w-40">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* 新規追加 inline row */}
+              {addDraft && (
+                <DraftRowEditor
+                  draft={addDraft}
+                  onChange={setAddDraft}
+                  codes={codesForType}
+                  saving={saving}
+                  onSave={commitAdd}
+                  onCancel={cancelAdd}
+                  saveLabel="保存"
+                  rowBg="bg-indigo-50/40"
+                />
+              )}
 
-                {rows.length === 0 && !addDraft ? (
-                  <tr>
-                    <td colSpan={8} className="px-3 py-10 text-center text-gray-400">
-                      加算が登録されていません。右上の「新規追加」から登録してください。
-                    </td>
-                  </tr>
-                ) : (
-                  rows.map((r) => {
-                    const editing = editDrafts[r.id];
-                    if (editing) {
-                      return (
-                        <DraftRowEditor
-                          key={r.id}
-                          draft={editing}
-                          onChange={(d) => setEditDrafts((prev) => ({ ...prev, [r.id]: d }))}
-                          codes={codesForType}
-                          saving={saving}
-                          onSave={() => commitEdit(r.id)}
-                          onCancel={() => cancelEdit(r.id)}
-                          saveLabel="更新"
-                          rowBg="bg-amber-50/40"
-                        />
-                      );
-                    }
+              {rows.length === 0 && !addDraft ? (
+                <tr>
+                  <td colSpan={8} className="px-3 py-8 text-center text-gray-400">
+                    加算が登録されていません。右上の「新規追加」から登録してください。
+                  </td>
+                </tr>
+              ) : (
+                rows.map((r) => {
+                  const editing = editDrafts[r.id];
+                  if (editing) {
                     return (
-                      <DisplayRow
+                      <DraftRowEditor
                         key={r.id}
-                        row={r}
+                        draft={editing}
+                        onChange={(d) => setEditDrafts((prev) => ({ ...prev, [r.id]: d }))}
+                        codes={codesForType}
                         saving={saving}
-                        onEdit={() => startEdit(r)}
-                        onDelete={() => handleDelete(r)}
-                        onExtend={() => handleExtendExpiry(r)}
+                        onSave={() => commitEdit(r.id)}
+                        onCancel={() => cancelEdit(r.id)}
+                        saveLabel="更新"
+                        rowBg="bg-amber-50/40"
                       />
                     );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                  }
+                  return (
+                    <DisplayRow
+                      key={r.id}
+                      row={r}
+                      saving={saving}
+                      onEdit={() => startEdit(r)}
+                      onDelete={() => handleDelete(r)}
+                      onExtend={() => handleExtendExpiry(r)}
+                    />
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
@@ -561,7 +501,7 @@ function DraftRowEditor({
         <select
           value={draft.addon_code}
           onChange={(e) => onChange({ ...draft, addon_code: e.target.value })}
-          className="w-full rounded border border-gray-300 px-2 py-1 text-xs sm:text-sm bg-white"
+          className="w-full rounded border border-gray-300 px-2 py-1 text-xs bg-white"
         >
           {/* 値が code 一覧に無ければ「(現在値)」として表示 (= enum 追加対応の braking 防止) */}
           {!codes.includes(draft.addon_code) && draft.addon_code && (
@@ -581,14 +521,14 @@ function DraftRowEditor({
           value={draft.addon_unit}
           onChange={(e) => onChange({ ...draft, addon_unit: e.target.value })}
           placeholder="例: 505"
-          className="w-full rounded border border-gray-300 px-2 py-1 text-xs sm:text-sm text-right tabular-nums"
+          className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-right tabular-nums"
         />
       </td>
       <td className="px-2 py-1.5 align-top">
         <select
           value={draft.status}
           onChange={(e) => onChange({ ...draft, status: e.target.value as AddonStatus })}
-          className="w-full rounded border border-gray-300 px-2 py-1 text-xs sm:text-sm bg-white"
+          className="w-full rounded border border-gray-300 px-2 py-1 text-xs bg-white"
         >
           {ADDON_STATUSES.map((s) => (
             <option key={s} value={s}>
@@ -602,7 +542,7 @@ function DraftRowEditor({
           type="date"
           value={draft.applied_from}
           onChange={(e) => onChange({ ...draft, applied_from: e.target.value })}
-          className="w-full rounded border border-gray-300 px-2 py-1 text-xs sm:text-sm"
+          className="w-full rounded border border-gray-300 px-2 py-1 text-xs"
         />
       </td>
       <td className="px-2 py-1.5 align-top">
@@ -610,7 +550,7 @@ function DraftRowEditor({
           type="date"
           value={draft.expires_at}
           onChange={(e) => onChange({ ...draft, expires_at: e.target.value })}
-          className="w-full rounded border border-gray-300 px-2 py-1 text-xs sm:text-sm"
+          className="w-full rounded border border-gray-300 px-2 py-1 text-xs"
         />
       </td>
       <td className="px-2 py-1.5 align-top">
@@ -618,7 +558,7 @@ function DraftRowEditor({
           type="date"
           value={draft.notification_filed_at}
           onChange={(e) => onChange({ ...draft, notification_filed_at: e.target.value })}
-          className="w-full rounded border border-gray-300 px-2 py-1 text-xs sm:text-sm"
+          className="w-full rounded border border-gray-300 px-2 py-1 text-xs"
         />
       </td>
       <td className="px-2 py-1.5 align-top">
@@ -627,7 +567,7 @@ function DraftRowEditor({
           onChange={(e) => onChange({ ...draft, basis_documents: e.target.value })}
           rows={2}
           placeholder="例: 加算届出書 (R6.4.1) / 保管: キャビネット A-3 / PDF: \\fileserver\addons\..."
-          className="w-full rounded border border-gray-300 px-2 py-1 text-xs sm:text-sm resize-y"
+          className="w-full rounded border border-gray-300 px-2 py-1 text-xs resize-y"
         />
         <textarea
           value={draft.notes}

@@ -65,7 +65,6 @@ const NAV_CARE_MANAGER: NavEntry[] = [
   { name: "入退院管理", href: "/hospitalizations", icon: CalendarDays },
   { name: "緊急時シート", href: "/emergency-sheets", icon: AlertTriangle },
   { name: "重要事項・契約書", href: "/user-contracts", icon: FileText },
-  { name: "加算管理", href: "/addons", icon: Calculator },
   { name: "レセプト", href: "/billing/claims", icon: FileSpreadsheet },
   { name: "明細書・請求書", href: "/billing/forms", icon: FileText },
   // 帳票作成: 全帳票がケアマネ業務メニューに移動したため非表示
@@ -87,7 +86,6 @@ const NAV_HOME_CARE: NavEntry[] = [
   { name: "訪問介護計画書", href: "/houmon-care-plans", icon: ClipboardList },
   { name: "手順書", href: "/visit-procedures", icon: BookOpen },
   { name: "重要事項・契約書", href: "/user-contracts", icon: FileText },
-  { name: "加算管理", href: "/addons", icon: Calculator },
   { name: "実績管理", href: "/visit-billing", icon: Calculator },
   { name: "帳票作成", href: "/reports-visit", icon: FileText },
   { name: "マスタ管理", href: "/master", icon: Settings },

@@ -7,6 +7,7 @@ import { Save, Building2, Loader2, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBusinessType } from "@/lib/business-type-context";
 import { AppliedFormulaSection } from "./_applied-formula";
+import { AddonRegistrySection } from "./_addon-registry";
 
 // 令和6年度改定 居宅介護支援 特定事業所加算
 const TOKUTEI_OPTIONS = [
@@ -416,6 +417,18 @@ export function OfficeContent({
       {form.service_type === "訪問介護" && (
         <AppliedFormulaSection
           key={form.id}
+          officeId={form.id}
+          tenantId={form.tenant_id}
+          serviceType={form.service_type}
+        />
+      )}
+
+      {/* 加算管理 (届出・算定台帳 = 旧トップメニュー /addons を統合。
+          居宅介護支援はレセプト作成が「算定中」の加算を自動反映、
+          訪問介護は届出管理台帳 (率計算は上の適用加算)) */}
+      {(form.service_type === "居宅介護支援" || form.service_type === "訪問介護") && (
+        <AddonRegistrySection
+          key={`addon-registry-${form.id}`}
           officeId={form.id}
           tenantId={form.tenant_id}
           serviceType={form.service_type}
