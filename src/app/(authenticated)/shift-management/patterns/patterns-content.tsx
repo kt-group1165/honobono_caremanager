@@ -442,13 +442,15 @@ export function PatternsContent({ userId, initialPatterns, initialStaff }: Patte
     setSavingId(pattern.tempId);
     try {
       if (pattern.days.some((d) => d.id) || pattern.id) {
-        await supabase
+        const { error: delError } = await supabase
           .from("kaigo_visit_patterns")
           .delete()
           .eq("user_id", userId)
           .eq("pattern_name", pattern.id || pattern.pattern_name);
+        if (delError) throw delError;
       }
 
+      let daysWithIds = pattern.days;
       if (pattern.days.length > 0) {
         const rows = pattern.days.map((d) => ({
           user_id: userId,
@@ -459,14 +461,23 @@ export function PatternsContent({ userId, initialPatterns, initialStaff }: Patte
           service_type: d.service_type,
           staff_id: d.staff_id || null,
         }));
-        const { error } = await supabase.from("kaigo_visit_patterns").insert(rows);
+        const { data: inserted, error } = await supabase
+          .from("kaigo_visit_patterns")
+          .insert(rows)
+          .select("id");
         if (error) throw error;
+        // INSERT の返却 id を days に反映する。これが無いと「月間へ展開」の
+        // 保存済み判定 (d.id) がリロードまで false のままになる
+        const ids = ((inserted ?? []) as { id: string }[]).map((r) => r.id);
+        daysWithIds = pattern.days.map((d, i) => ({ ...d, id: ids[i] ?? d.id }));
       }
 
       toast.success("パターンを保存しました");
       setPatterns((prev) =>
         prev.map((p) =>
-          p.tempId === pattern.tempId ? { ...p, id: pattern.pattern_name } : p
+          p.tempId === pattern.tempId
+            ? { ...p, id: pattern.pattern_name, days: daysWithIds }
+            : p
         )
       );
     } catch (err: unknown) {
