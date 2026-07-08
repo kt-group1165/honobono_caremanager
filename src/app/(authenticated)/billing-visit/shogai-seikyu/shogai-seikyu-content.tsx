@@ -122,6 +122,7 @@ export function ShogaiSeikyuContent() {
         year,
         month,
         unitPrice,
+        officeId: currentOffice?.id ?? null,
       });
       setRows(result.rows);
       setRecordCount(result.recordCount);
@@ -796,6 +797,24 @@ export function ShogaiSeikyuContent() {
                         </td>
                       </tr>
                     ))}
+                    {/* 処遇改善加算等 (月次加算、回数 1) */}
+                    {selected.addons.map((a) => (
+                      <tr key={a.service_code} className="bg-violet-50/60">
+                        <td className="px-2 py-1.5 text-violet-700">
+                          {a.service_name}
+                        </td>
+                        <td className="px-2 py-1.5 font-mono text-[10px]">
+                          {a.service_code}
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">
+                          {a.units.toLocaleString()}
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">1</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums font-semibold">
+                          {a.units.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
 
@@ -806,6 +825,16 @@ export function ShogaiSeikyuContent() {
                       {selected.totalUnits.toLocaleString()}
                     </span>
                   </div>
+                  {selected.addonUnits > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">
+                        うち{selected.addonLabel ?? "処遇改善加算"}
+                      </span>
+                      <span className="tabular-nums">
+                        {selected.addonUnits.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-gray-500">地域単価</span>
                     <span className="tabular-nums">

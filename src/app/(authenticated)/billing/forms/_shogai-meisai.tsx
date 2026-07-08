@@ -23,6 +23,11 @@ const SERVICE_TYPE_CODES: Record<string, string> = {
   同行援護: "14",
 };
 
+// サービス種類コード → 種類名 (処遇改善加算行の表示用 逆引き)
+const SERVICE_TYPE_NAMES: Record<string, string> = Object.fromEntries(
+  Object.entries(SERVICE_TYPE_CODES).map(([name, code]) => [code, name]),
+);
+
 // ─── 帳票部品 (_meisai.tsx の MeisaiPrintSheet と同じ流儀) ────────────────────
 
 // 桝目 (1 文字 = 1 マス)。右詰めで value を流し込み、余りは空マス
@@ -205,9 +210,10 @@ export function ShogaiMeisaiPrintSheet({
   const primaryType = row.details[0]?.service_type ?? "";
   const typeCode = SERVICE_TYPE_CODES[primaryType] ?? "";
 
-  // 明細行 (最低 6 行、空行で枠を埋める)
+  // 明細行 = 所定明細 + 処遇改善加算行 (最低 6 行、空行で枠を埋める)
   const MIN_ROWS = 6;
-  const emptyRows = Math.max(0, MIN_ROWS - row.details.length);
+  const bodyRows = row.details.length + row.addons.length;
+  const emptyRows = Math.max(0, MIN_ROWS - bodyRows);
 
   const th: React.CSSProperties = {
     border: "0.5pt solid #000",
@@ -440,7 +446,7 @@ export function ShogaiMeisaiPrintSheet({
             <tr key={`${d.service_code ?? d.service_type}-${i}`}>
               {i === 0 && (
                 <td
-                  rowSpan={row.details.length + emptyRows}
+                  rowSpan={bodyRows + emptyRows}
                   style={{ border: "0.5pt solid #000" }}
                 />
               )}
@@ -457,6 +463,28 @@ export function ShogaiMeisaiPrintSheet({
               <Vc style={{ ...R2, fontFamily: '"MS Gothic",monospace' }}>{d.count}</Vc>
               <Vc style={{ ...R2, fontFamily: '"MS Gothic",monospace' }}>
                 {d.units.toLocaleString()}
+              </Vc>
+              <Vc style={{ ...CT, fontSize: "7pt" }}></Vc>
+            </tr>
+          ))}
+          {/* 処遇改善加算等 (月次加算、回数 1) — J121 明細情報レコードと同じ行構成 */}
+          {row.addons.map((a) => (
+            <tr key={`addon-${a.service_code}`}>
+              {row.details.length === 0 && (
+                <td rowSpan={bodyRows + emptyRows} style={{ border: "0.5pt solid #000" }} />
+              )}
+              <Vc style={{ fontSize: "7.5pt" }}>
+                {SERVICE_TYPE_NAMES[a.service_code.slice(0, 2)] ?? ""} {a.service_name}
+              </Vc>
+              <Vc style={{ padding: 0 }}>
+                <DigitCells value={a.service_code} cells={6} cw={3.5} h={5} />
+              </Vc>
+              <Vc style={{ ...R2, fontFamily: '"MS Gothic",monospace' }}>
+                {a.units.toLocaleString()}
+              </Vc>
+              <Vc style={{ ...R2, fontFamily: '"MS Gothic",monospace' }}>1</Vc>
+              <Vc style={{ ...R2, fontFamily: '"MS Gothic",monospace' }}>
+                {a.units.toLocaleString()}
               </Vc>
               <Vc style={{ ...CT, fontSize: "7pt" }}></Vc>
             </tr>

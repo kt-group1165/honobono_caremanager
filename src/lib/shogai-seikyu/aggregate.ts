@@ -8,12 +8,21 @@
  *   → 利用者ごとに 1 行の請求サマリ + サービスコード別明細
  *
  * 金額計算 (障害者総合支援法の標準):
+ *   加算単位数 = round(サービス種類ごとの所定単位数合計 × 加算率)   ※処遇改善加算等 (monthly_aggregate)
+ *   総単位数 = 所定単位数 + 加算単位数
  *   総費用額 = floor(総単位数 × 地域単価)
  *   利用者負担 = min(floor(総費用額 × 負担率 10%), 負担上限月額)   ※生保は 0
  *   介護給付費請求額 = 総費用額 - 利用者負担
+ *
+ * 処遇改善加算等の区分は kaigo_office_addon_periods (office_id × formula_code ×
+ * 期間) から対象月で引き、kaigo_service_codes (system='障害') の formula
+ * ({type:'monthly_aggregate', numerator, denominator, rounding:'round'}) を突合する
+ * (介護の visit-seikyu/aggregate.ts と同じ仕組み)。加算率はサービス種類
+ * (居宅介護=11 / 重度訪問介護=12 — コード先頭 2 桁) ごとに別区分。
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { validInMonth } from "@/lib/service-code-valid";
 
 export interface ShogaiSeikyuDetail {
   /** サービス種別 (居宅介護 等) */
@@ -27,6 +36,16 @@ export interface ShogaiSeikyuDetail {
   /** 回数 */
   count: number;
   /** 小計単位数 */
+  units: number;
+}
+
+/** 処遇改善加算等の 1 行 (サービス種類ごとに 1 行、月 1 回算定) */
+export interface ShogaiAddonLine {
+  /** 加算サービスコード (115121 等 6 桁。先頭 2 桁 = サービス種類コード) */
+  service_code: string;
+  /** 加算名称 (居宅介護処遇改善加算Ⅱイ 等) */
+  service_name: string;
+  /** 加算単位数 = round(所定単位数合計 × 加算率) */
   units: number;
 }
 
@@ -45,6 +64,15 @@ export interface ShogaiSeikyuRow {
   /** 生保フラグ */
   seiho: boolean;
   details: ShogaiSeikyuDetail[];
+  /** 処遇改善加算等の加算行 (サービス種類ごと。加算なしは空配列) */
+  addons: ShogaiAddonLine[];
+  /** 加算単位数 合計 */
+  addonUnits: number;
+  /** 加算の名称 (先頭行。表示用) */
+  addonLabel: string | null;
+  /** 加算のサービスコード (先頭行) */
+  addonCode: string | null;
+  /** 総単位数 (所定 + 加算) */
   totalUnits: number;
   unitPrice: number;
   /** 総費用額 (円) */
@@ -78,6 +106,8 @@ export async function aggregateMonthlyShogaiSeikyu(
     year: number;
     month: number;
     unitPrice?: number;
+    /** 自事業所 office_id — 処遇改善加算の区分 (kaigo_office_addon_periods) 解決に使用 */
+    officeId?: string | null;
   },
 ): Promise<ShogaiSeikyuResult> {
   const monthStr = `${opts.year}-${String(opts.month).padStart(2, "0")}`;
@@ -179,6 +209,74 @@ export async function aggregateMonthlyShogaiSeikyu(
     }
   }
 
+  // 3.7) 処遇改善加算等の加算率 — kaigo_office_addon_periods (対象月で有効な区分)
+  //      → kaigo_service_codes (system='障害') の formula (monthly_aggregate) を突合。
+  //      サービス種類コード (コード先頭 2 桁: 11=居宅介護 / 12=重度訪問介護) ごとに 1 区分。
+  //      テーブル未作成 (42P01 / PGRST205) や該当なしは加算なし (従来どおり)。
+  interface AddonRate {
+    num: number;
+    den: number;
+    label: string;
+    code: string;
+  }
+  const addonByTypeCode = new Map<string, AddonRate>();
+  if (opts.officeId) {
+    const { data: periodRows, error: periodError } = await supabase
+      .from("kaigo_office_addon_periods")
+      .select("formula_code, start_month, end_month")
+      .eq("office_id", opts.officeId);
+    if (periodError) {
+      if (periodError.code !== "42P01" && periodError.code !== "PGRST205") {
+        throw new Error(`加算期間取得失敗: ${periodError.message}`);
+      }
+    } else {
+      const codes = ((periodRows ?? []) as {
+        formula_code: string;
+        start_month: string | null;
+        end_month: string | null;
+      }[])
+        .filter(
+          (r) =>
+            (r.start_month == null || r.start_month <= monthStr) &&
+            (r.end_month == null || r.end_month >= monthStr),
+        )
+        .map((r) => r.formula_code);
+      if (codes.length > 0) {
+        // 同一 service_code の世代が複数あるため対象月の世代の formula を採用
+        const { data, error } = await validInMonth(
+          supabase
+            .from("kaigo_service_codes")
+            .select("service_code, service_name, formula")
+            .in("service_code", codes)
+            .eq("system", "障害")
+            .not("formula", "is", null),
+          opts.year,
+          opts.month,
+        );
+        if (error) throw new Error(`加算コード取得失敗: ${error.message}`);
+        for (const r of (data ?? []) as {
+          service_code: string;
+          service_name: string;
+          formula: { type?: string; numerator?: number; denominator?: number } | null;
+        }[]) {
+          const f = r.formula;
+          if (f?.type === "monthly_aggregate" && f.numerator && f.denominator) {
+            const typeCode = r.service_code.slice(0, 2);
+            // 処遇改善Ⅰ〜Ⅳ等は種類内で排他のため先勝ち
+            if (!addonByTypeCode.has(typeCode)) {
+              addonByTypeCode.set(typeCode, {
+                num: f.numerator,
+                den: f.denominator,
+                label: r.service_name,
+                code: r.service_code,
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+
   // 4) 利用者 × (service_type + code) 集計
   const byUser = new Map<string, Map<string, ShogaiSeikyuDetail>>();
   for (const r of records) {
@@ -207,7 +305,30 @@ export async function aggregateMonthlyShogaiSeikyu(
     const client = clientById.get(userId);
     const cert = certByClient.get(userId);
     const details = Array.from(detailMap.values()).sort((a, b) => b.units - a.units);
-    const totalUnits = details.reduce((s, d) => s + d.units, 0);
+    const baseUnits = details.reduce((s, d) => s + d.units, 0);
+
+    // 処遇改善加算等: サービス種類 (コード先頭 2 桁 / 種類名) ごとに所定単位を集計し
+    // 加算単位 = round(所定単位数合計 × 加算率) を 1 月 1 行で算定
+    const unitsByType = new Map<string, number>();
+    for (const d of details) {
+      const tc =
+        d.service_code?.slice(0, 2) ?? SERVICE_TYPE_CODES[d.service_type] ?? null;
+      if (!tc) continue;
+      unitsByType.set(tc, (unitsByType.get(tc) ?? 0) + d.units);
+    }
+    const addons: ShogaiAddonLine[] = [];
+    for (const [tc, units] of unitsByType) {
+      const rate = addonByTypeCode.get(tc);
+      if (!rate || units <= 0) continue;
+      const au = Math.round((units * rate.num) / rate.den);
+      if (au > 0) {
+        addons.push({ service_code: rate.code, service_name: rate.label, units: au });
+      }
+    }
+    addons.sort((a, b) => a.service_code.localeCompare(b.service_code));
+    const addonUnits = addons.reduce((s, a) => s + a.units, 0);
+
+    const totalUnits = baseUnits + addonUnits;
     const totalAmount = Math.floor(totalUnits * unitPrice);
     const seiho = !!cert?.seiho_flag;
     const limit = cert?.self_payment_limit ?? 0;
@@ -236,6 +357,10 @@ export async function aggregateMonthlyShogaiSeikyu(
       self_payment_limit: limit,
       seiho,
       details,
+      addons,
+      addonUnits,
+      addonLabel: addons[0]?.service_name ?? null,
+      addonCode: addons[0]?.service_code ?? null,
       totalUnits,
       unitPrice,
       totalAmount,
@@ -267,6 +392,11 @@ const SERVICE_TYPE_CODES: Record<string, string> = {
   行動援護: "13",
   同行援護: "14",
 };
+
+/** サービス種類コード → 種類名 (加算行の表示用 逆引き) */
+export const SERVICE_TYPE_NAMES: Record<string, string> = Object.fromEntries(
+  Object.entries(SERVICE_TYPE_CODES).map(([name, code]) => [code, name]),
+);
 
 /**
  * 国保連請求 CSV 文字列を生成。
@@ -316,6 +446,31 @@ export function buildShogaiSeikyuCsv(
           d.unit_per,
           d.count,
           d.units,
+          r.totalUnits,
+          r.totalAmount,
+          r.self_payment_limit,
+          r.userAmount,
+          r.benefitAmount,
+        ].join(","),
+      );
+    }
+    // 処遇改善加算等 (月次加算、回数 1)
+    for (const a of r.addons) {
+      const tc = a.service_code.slice(0, 2);
+      lines.push(
+        [
+          ym,
+          r.municipality ?? "",
+          r.beneficiary_number ?? "",
+          `"${r.user_name}"`,
+          r.support_level ?? "",
+          tc,
+          `"${SERVICE_TYPE_NAMES[tc] ?? ""}"`,
+          a.service_code,
+          `"${a.service_name}"`,
+          a.units,
+          1,
+          a.units,
           r.totalUnits,
           r.totalAmount,
           r.self_payment_limit,

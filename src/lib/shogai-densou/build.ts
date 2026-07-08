@@ -354,6 +354,19 @@ export function buildShogaiDensou(
         "", // 11 摘要
       ]);
     }
+    // 処遇改善加算等 (monthly_aggregate) — 月 1 回の加算行 (回数 1)。
+    // 集計情報レコード (04) の給付単位数・総費用額は aggregate 側で加算込みのため
+    // r.totalUnits / r.totalAmount にそのまま含まれる。
+    for (const a of r.addons) {
+      seikyuParts.push([
+        "J121", "03", ym, muni, office, jukyu,
+        a.service_code, // 7 サービスコード (115121 等)
+        String(a.units), // 8 単位数 (= 加算単位数)
+        "1", // 9 回数
+        String(a.units), // 10 サービス単位数
+        "", // 11 摘要
+      ]);
+    }
 
     // 集計情報レコード (04) — 33 項目
     seikyuParts.push([
