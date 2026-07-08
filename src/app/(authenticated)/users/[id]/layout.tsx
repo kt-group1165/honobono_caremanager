@@ -41,13 +41,20 @@ export default async function UserDetailLayout({
   const supabase = await createClient();
 
   // getClientById は React.cache 経由なので、page.tsx 側で再度呼ばれても同一 Promise が返り DB クエリは 1 回
-  const [initialUser, assignsRes] = await Promise.all([
+  const [initialUser, assignsRes, shougaiCertRes] = await Promise.all([
     getClientById(id),
     supabase
       .from("client_office_assignments")
       .select("office_id, home_care_categories")
       .eq("client_id", id)
       .is("end_date", null),
+    // 受給者証 (障害) があれば、事業所への障害サービス割当が無くても障害福祉タブを出す。
+    // (割当だけで判定すると、受給者証だけ登録した利用者で障害タブが隠れる)
+    supabase
+      .from("shougai_certifications")
+      .select("id")
+      .eq("client_id", id)
+      .limit(1),
   ]);
 
   // [id] が無効 (削除済 / 別テナント / typo 等で DB に存在しない) なら
@@ -58,7 +65,9 @@ export default async function UserDetailLayout({
   }
 
   const rows = (assignsRes.data ?? []) as AssignmentRow[];
-  const initialHasDisabilityService = computeHasDisabilityService(rows);
+  // shougai_certifications テーブル未作成 (42P01/PGRST205) は 0 件扱い
+  const hasShougaiCert = !shougaiCertRes.error && (shougaiCertRes.data ?? []).length > 0;
+  const initialHasDisabilityService = computeHasDisabilityService(rows) || hasShougaiCert;
   // 自事業所判定 (client-side で currentOffice と突合し、外れていたら shell が /users へ戻す)
   const initialAssignedOfficeIds = rows
     .map((r) => r.office_id)
