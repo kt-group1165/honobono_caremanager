@@ -19,7 +19,6 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
 import {
   Loader2,
-  Accessibility,
   AlertCircle,
   Download,
   FileDown,
@@ -55,6 +54,34 @@ import {
 // table 未作成 (migration 未適用): 42P01 = SQL / PGRST205 = PostgREST schema cache
 const isMissingTable = (code: string | undefined) =>
   code === "42P01" || code === "PGRST205";
+
+// ── 介護請求 (kaigo-seikyu) と同じ高密度グリッド。障害の列にマッピング ──
+// 対象 / 状態 / 提供月 / 請求月 / サービス事業所 / 受給者証番号 / 利用者名 / 区分 / 入金 / 総単位数 / 給付費請求額 / 利用者負担
+const GRID_COLS =
+  "grid grid-cols-[26px_60px_54px_54px_minmax(100px,0.8fr)_84px_minmax(120px,1fr)_48px_56px_72px_84px_78px]";
+
+// 和暦月表示 「R 8/ 5」 (ほのぼの流。1 桁は空白 pad、font-mono 前提)
+const reiwaMonth = (y: number, m: number) =>
+  `R${String(y - 2018).padStart(2, " ")}/${String(m).padStart(2, " ")}`;
+
+// ── かな行フィルター (介護請求の SeikyuKanaSidebar と同じ判定 map) ──
+// shogai は SeikyuProvider を使わず local state で回すため、ここに自前で持つ
+const SHOGAI_KANA_ROWS = ["あ", "か", "さ", "た", "な", "は", "ま", "や", "ら", "わ", "他"];
+const SHOGAI_KANA_MAP: Record<string, string[]> = {
+  "あ": ["ア", "イ", "ウ", "エ", "オ"],
+  "か": ["カ", "キ", "ク", "ケ", "コ", "ガ", "ギ", "グ", "ゲ", "ゴ"],
+  "さ": ["サ", "シ", "ス", "セ", "ソ", "ザ", "ジ", "ズ", "ゼ", "ゾ"],
+  "た": ["タ", "チ", "ツ", "テ", "ト", "ダ", "ヂ", "ヅ", "デ", "ド"],
+  "な": ["ナ", "ニ", "ヌ", "ネ", "ノ"],
+  "は": ["ハ", "ヒ", "フ", "ヘ", "ホ", "バ", "ビ", "ブ", "ベ", "ボ", "パ", "ピ", "プ", "ペ", "ポ"],
+  "ま": ["マ", "ミ", "ム", "メ", "モ"],
+  "や": ["ヤ", "ユ", "ヨ"],
+  "ら": ["ラ", "リ", "ル", "レ", "ロ"],
+  "わ": ["ワ", "ヲ", "ン"],
+};
+const SHOGAI_ALL_KANA = Object.values(SHOGAI_KANA_MAP).flat();
+const shogaiToKana = (s: string) =>
+  s.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
 
 // shogai_billing_status の 1 行 (利用者 × 月) — 状態: 未発行 / 発行済 / 伝送対象
 interface ShogaiBillingStatusRow {
@@ -97,6 +124,8 @@ export function ShogaiSeikyuContent() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [officeNumber, setOfficeNumber] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  // かな行フィルタ (介護請求の左サイドバーと同じ。null = 全)
+  const [kanaFilter, setKanaFilter] = useState<string | null>(null);
   const [statusByClient, setStatusByClient] = useState<
     Map<string, ShogaiBillingStatusRow>
   >(new Map());
@@ -199,12 +228,26 @@ export function ShogaiSeikyuContent() {
     loadPayments();
   }, [loadPayments]);
 
-  const selected = rows.find((r) => r.user_id === selectedUserId) ?? rows[0] ?? null;
-  const totalUnits = rows.reduce((s, r) => s + r.totalUnits, 0);
-  const totalBenefit = rows.reduce((s, r) => s + r.benefitAmount, 0);
-  const totalUser = rows.reduce((s, r) => s + r.userAmount, 0);
+  // ── かな行フィルタ済みの表示行 (介護請求と同じ左サイドバー絞込) ──
+  const kanaMatches = useCallback(
+    (r: ShogaiSeikyuRow) => {
+      if (!kanaFilter) return true;
+      const first = shogaiToKana((r.user_name_kana ?? r.user_name).charAt(0));
+      return kanaFilter === "他"
+        ? !SHOGAI_ALL_KANA.includes(first)
+        : (SHOGAI_KANA_MAP[kanaFilter] ?? []).includes(first);
+    },
+    [kanaFilter],
+  );
+  const filteredRows = useMemo(() => rows.filter(kanaMatches), [rows, kanaMatches]);
 
-  // ── 対象チェック (kaigo-seikyu と同じ: チェックあり → その行 / なし → 全件) ──
+  const selected =
+    filteredRows.find((r) => r.user_id === selectedUserId) ?? filteredRows[0] ?? null;
+  const totalUnits = filteredRows.reduce((s, r) => s + r.totalUnits, 0);
+  const totalBenefit = filteredRows.reduce((s, r) => s + r.benefitAmount, 0);
+  const totalUser = filteredRows.reduce((s, r) => s + r.userAmount, 0);
+
+  // ── 対象チェック (kaigo-seikyu と同じ: チェックあり → その行 / なし → 表示中全件) ──
   const toggle = (id: string) =>
     setChecked((prev) => {
       const next = new Set(prev);
@@ -214,14 +257,20 @@ export function ShogaiSeikyuContent() {
     });
   const toggleAll = () =>
     setChecked((prev) =>
-      prev.size === rows.length ? new Set() : new Set(rows.map((r) => r.user_id)),
+      prev.size === filteredRows.length
+        ? new Set()
+        : new Set(filteredRows.map((r) => r.user_id)),
     );
   const targets = useMemo(
-    () => (checked.size > 0 ? rows.filter((r) => checked.has(r.user_id)) : rows),
-    [rows, checked],
+    () =>
+      checked.size > 0
+        ? filteredRows.filter((r) => checked.has(r.user_id))
+        : filteredRows,
+    [filteredRows, checked],
   );
-  const allChecked = rows.length > 0 && checked.size === rows.length;
-  const densouCount = rows.filter(
+  const allChecked =
+    filteredRows.length > 0 && checked.size === filteredRows.length;
+  const densouCount = filteredRows.filter(
     (r) => statusByClient.get(r.user_id)?.densou_target,
   ).length;
 
@@ -598,19 +647,35 @@ export function ShogaiSeikyuContent() {
   return (
     <>
     {/* printMode 中は画面を隠す (上限管理結果票の印刷は printMode=null のまま
-        overlay で出すため、常時 print:hidden にはしない) */}
-    <div className={`space-y-4 ${printMode ? "print:hidden" : ""}`}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-bold text-gray-900">
-            <Accessibility size={20} className="text-violet-600" />
-            障害請求
-          </h1>
-          <p className="mt-0.5 text-xs text-gray-500">
-            {currentOffice?.name ?? ""} — 障害福祉サービス実績 (確定) の月次集計・明細書/請求書・国保連伝送
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+        overlay で出すため、常時 print:hidden にはしない)。
+        レイアウトは介護請求 (kaigo-seikyu) と統一:
+        左=かな索引 / 中央=ツールバー+高密度グリッド+合計フッタ / 右=明細情報ペイン */}
+    <div className={`flex flex-1 min-h-0 ${printMode ? "print:hidden" : ""}`}>
+      {/* ── 左: 行カナ絞り込みサイドバー (介護請求と同一クラス) ── */}
+      <div className="w-10 shrink-0 border-r border-gray-200 bg-gray-50 flex flex-col items-center py-1 gap-0.5 overflow-y-auto">
+        <button
+          type="button"
+          onClick={() => setKanaFilter(null)}
+          className={`w-8 py-1 rounded text-sm font-bold transition-colors ${kanaFilter === null ? "bg-blue-500 text-white" : "hover:bg-gray-200 text-gray-600"}`}
+        >
+          全
+        </button>
+        {SHOGAI_KANA_ROWS.map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setKanaFilter(kanaFilter === k ? null : k)}
+            className={`w-8 py-1 rounded text-sm font-medium transition-colors ${kanaFilter === k ? "bg-blue-500 text-white" : "hover:bg-gray-200 text-gray-600"}`}
+          >
+            {k}
+          </button>
+        ))}
+      </div>
+
+      {/* ── 中央: メインテーブル ── */}
+      <div className="flex flex-col flex-1 min-w-0 border-r border-gray-200">
+        {/* ── ツールバー ── */}
+        <div className="border-b border-gray-300 bg-gray-100 px-3 py-2 shrink-0 flex items-center gap-2 flex-wrap">
           <MonthNav
             year={year}
             month={month}
@@ -619,161 +684,165 @@ export function ShogaiSeikyuContent() {
               setMonth(m);
             }}
           />
+          <span className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 font-medium">請求分</span>
+          <span className="text-xs text-gray-500">{filteredRows.length} 件</span>
+          <div className="w-px h-5 bg-gray-300 mx-1" />
           <button
             type="button"
-            disabled={rows.length === 0}
+            disabled={filteredRows.length === 0}
             onClick={printMeisai}
-            className="inline-flex items-center gap-1 rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50"
+            className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
             title="対象者の介護給付費・訓練等給付費等明細書を印刷。印刷で発行済になります"
           >
-            <FileText size={14} />
-            明細書 ({targets.length}件)
+            <FileText size={13} />明細書 ({targets.length}件)
           </button>
           <button
             type="button"
-            disabled={rows.length === 0 || jissekiLoading}
+            disabled={filteredRows.length === 0 || jissekiLoading}
             onClick={printJisseki}
-            className="inline-flex items-center gap-1 rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50"
+            className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
             title="対象者の居宅介護サービス提供実績記録票 (様式1) を印刷 (利用者 1 名 = 1 枚)"
           >
             {jissekiLoading ? (
-              <Loader2 size={14} className="animate-spin" />
+              <Loader2 size={13} className="animate-spin" />
             ) : (
-              <Printer size={14} />
+              <Printer size={13} />
             )}
             実績記録票 ({targets.length}件)
           </button>
           <button
             type="button"
-            disabled={rows.length === 0}
+            disabled={filteredRows.length === 0}
             onClick={printSeikyusho}
-            className="inline-flex items-center gap-1 rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50"
+            className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
             title="事業所単位の総括請求書 (市町村別 J111 相当) を印刷"
           >
-            <Printer size={14} />
-            請求書
+            <Printer size={13} />請求書
           </button>
           <button
             type="button"
-            disabled={rows.length === 0}
+            disabled={filteredRows.length === 0}
             onClick={printRiyouSeikyu}
-            className="inline-flex items-center gap-1 rounded-lg border border-emerald-500 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+            className="border border-emerald-500 rounded bg-emerald-50 px-2.5 py-1 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1.5 disabled:opacity-50"
             title="利用者向けの利用料請求書 (利用者負担額) を発行・印刷。発行日を記録します"
           >
-            <Receipt size={14} />
-            利用料請求書 ({targets.length}件)
+            <Receipt size={13} />利用料請求書 ({targets.length}件)
           </button>
           <button
             type="button"
-            disabled={rows.length === 0}
+            disabled={filteredRows.length === 0}
             onClick={markDensouTarget}
-            className="inline-flex items-center gap-1 rounded-lg border border-red-400 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+            className="border border-red-500 rounded bg-red-100 px-2.5 py-1 text-red-800 font-semibold hover:bg-red-200 flex items-center gap-1.5 disabled:opacity-50"
             title="発行済の利用者を国保連伝送の対象にする (未発行はスキップ)"
           >
-            <Send size={14} />
-            伝送対象
+            <Send size={13} />伝送対象
           </button>
-          <button
-            type="button"
-            disabled={rows.length === 0}
-            onClick={exportCsv}
-            className="inline-flex items-center gap-1 rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50"
-            title="内容確認用の明細 CSV を出力"
-          >
-            <Download size={14} />
-            確認用CSV
-          </button>
-          <button
-            type="button"
-            disabled={rows.length === 0 || densouLoading}
-            onClick={handleDensouExport}
-            className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
-            title="電子請求受付システム向け伝送ファイル (請求書・明細書 J11 / 実績記録票 J61 / 上限管理結果票 J41) を出力"
-          >
-            {densouLoading ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <FileDown size={14} />
+          <div className="ml-auto flex items-center gap-2">
+            {densouCount > 0 && (
+              <span className="text-[11px] font-medium text-red-600">
+                伝送対象 {densouCount} 件
+              </span>
             )}
-            伝送ファイル
-          </button>
-          {densouCount > 0 && (
-            <span className="text-[11px] font-medium text-red-600">
-              伝送対象 {densouCount} 件
-            </span>
-          )}
+            <button
+              type="button"
+              disabled={filteredRows.length === 0}
+              onClick={exportCsv}
+              className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
+              title="内容確認用の明細 CSV を出力"
+            >
+              <Download size={13} />確認用CSV
+            </button>
+            <button
+              type="button"
+              disabled={filteredRows.length === 0 || densouLoading}
+              onClick={handleDensouExport}
+              className="border border-violet-600 rounded bg-violet-600 px-3 py-1 text-white font-semibold hover:bg-violet-700 flex items-center gap-1.5 disabled:opacity-50"
+              title="電子請求受付システム向け伝送ファイル (請求書・明細書 J11 / 実績記録票 J61 / 上限管理結果票 J41) を出力"
+            >
+              {densouLoading ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <FileDown size={13} />
+              )}
+              伝送ファイル
+            </button>
+          </div>
         </div>
-      </div>
 
-      {error && (
-        <div className="flex items-start gap-2 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          {error}
-        </div>
-      )}
+        {error && (
+          <div className="border-b border-red-200 bg-red-50 px-3 py-2 shrink-0 flex items-start gap-2 text-sm text-red-700">
+            <AlertCircle size={16} className="mt-0.5 shrink-0" />
+            {error}
+          </div>
+        )}
 
-      {loading || btLoading ? (
-        <div className="flex items-center justify-center py-16 text-gray-400">
-          <Loader2 size={20} className="mr-2 animate-spin" />
-          集計中...
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="rounded-lg border border-dashed bg-gray-50 p-12 text-center text-sm text-gray-500">
-          対象月の実績 (確定) がありません。障害福祉 → サービス提供実績 で記録を確定してください。
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-          {/* 左: 利用者一覧 */}
-          <div className="lg:col-span-3 overflow-hidden rounded-lg border bg-white shadow-sm">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs text-gray-600">
-                <tr>
-                  <th className="px-2 py-2 text-center w-8">
-                    <input
-                      type="checkbox"
-                      checked={allChecked}
-                      onChange={toggleAll}
-                      className="cursor-pointer"
-                      title="全選択 (未チェック時は全件が対象)"
-                    />
-                  </th>
-                  <th className="px-3 py-2">状態</th>
-                  <th className="px-3 py-2">受給者証番号</th>
-                  <th className="px-3 py-2">利用者名</th>
-                  <th className="px-3 py-2">区分</th>
-                  <th className="px-3 py-2">入金</th>
-                  <th className="px-3 py-2 text-right">総単位数</th>
-                  <th className="px-3 py-2 text-right">給付費請求額</th>
-                  <th className="px-3 py-2 text-right">利用者負担</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {rows.map((r) => {
-                  const st = statusByClient.get(r.user_id);
-                  return (
-                  <tr
-                    key={r.user_id}
-                    onClick={() => setSelectedUserId(r.user_id)}
-                    className={
-                      "cursor-pointer transition-colors " +
-                      (selected?.user_id === r.user_id
-                        ? "bg-violet-50"
-                        : "hover:bg-gray-50")
-                    }
+        {loading || btLoading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 size={22} className="animate-spin text-violet-400" />
+          </div>
+        ) : (
+          <>
+            <div className="flex-1 overflow-y-auto">
+              {/* ヘッダー行: 対象 / 状態 / 提供月 / 請求月 / サービス事業所 / 受給者証番号 / 利用者名 / 区分 / 入金 / 総単位数 / 給付費請求額 / 利用者負担 */}
+              <div className={`${GRID_COLS} border-b border-gray-400 bg-gradient-to-b from-sky-100 to-sky-200 text-[11px] leading-4 font-medium text-gray-700 text-center sticky top-0 z-10`}>
+                <div className="px-1 py-0.5 flex items-center justify-center">
+                  <button
+                    onClick={toggleAll}
+                    title="全選択 (未チェック時は表示中全件が対象)"
+                    className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center transition-all ${
+                      allChecked ? "border-violet-500 bg-violet-500" : "border-gray-400 bg-white"
+                    }`}
                   >
-                    <td
-                      className="px-2 py-2 text-center"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked.has(r.user_id)}
-                        onChange={() => toggle(r.user_id)}
-                        className="cursor-pointer"
-                      />
-                    </td>
+                    {allChecked && (
+                      <span className="text-white text-[8px] font-bold leading-none">✓</span>
+                    )}
+                  </button>
+                </div>
+                <div className="px-1 py-0.5 border-l border-sky-300">状態</div>
+                <div className="px-1 py-0.5 border-l border-sky-300">提供月</div>
+                <div className="px-1 py-0.5 border-l border-sky-300">請求月</div>
+                <div className="px-1 py-0.5 border-l border-sky-300">サービス事業所</div>
+                <div className="px-1 py-0.5 border-l border-sky-300">受給者証番号</div>
+                <div className="px-1 py-0.5 border-l border-sky-300">利用者名</div>
+                <div className="px-1 py-0.5 border-l border-sky-300">区分</div>
+                <div className="px-1 py-0.5 border-l border-sky-300">入金</div>
+                <div className="px-1 py-0.5 border-l border-sky-300">総単位数</div>
+                <div className="px-1 py-0.5 border-l border-sky-300">給付費請求額</div>
+                <div className="px-1 py-0.5 border-l border-sky-300">利用者負担</div>
+              </div>
+
+              {filteredRows.length === 0 ? (
+                <p className="text-gray-400 text-center py-10">
+                  対象月の実績 (確定) がありません。障害福祉 → サービス提供実績 で記録を確定してください。
+                </p>
+              ) : filteredRows.map((r) => {
+                const st = statusByClient.get(r.user_id);
+                const isDetail = selectedUserId === r.user_id;
+                const isChecked = checked.has(r.user_id);
+                return (
+                  <div
+                    key={r.user_id}
+                    onClick={() => setSelectedUserId(isDetail ? null : r.user_id)}
+                    className={`${GRID_COLS} border-b border-gray-200 text-[11px] leading-4 cursor-pointer transition-colors ${
+                      isDetail
+                        ? "bg-violet-100"
+                        : isChecked
+                        ? "bg-violet-50"
+                        : "bg-white hover:bg-sky-50"
+                    }`}
+                  >
+                    <div className="px-1 py-0.5 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => toggle(r.user_id)}
+                        className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center transition-all ${
+                          isChecked ? "border-violet-500 bg-violet-500" : "border-gray-400 bg-white"
+                        }`}
+                      >
+                        {isChecked && <span className="text-white text-[8px] font-bold leading-none">✓</span>}
+                      </button>
+                    </div>
                     {/* 状態: バッジ背景なしの素の色文字 (介護請求と同じ)。伝送対象 = 赤字 */}
-                    <td className="px-3 py-2 text-xs">
+                    <div className="px-1 py-0.5 border-l border-gray-200 text-center">
                       {st?.densou_target ? (
                         <span className="text-red-600">伝送対象</span>
                       ) : st?.issued_at ? (
@@ -781,206 +850,201 @@ export function ShogaiSeikyuContent() {
                       ) : (
                         <span className="text-gray-600">未発行</span>
                       )}
-                    </td>
-                    <td className="px-3 py-2 font-mono text-xs">
+                    </div>
+                    {/* 提供月 = 請求月 = 当月 (障害は月遅れ/返戻の再請求合流なし) */}
+                    <div className="px-1 py-0.5 border-l border-gray-200 font-mono whitespace-pre text-gray-700">
+                      {reiwaMonth(year, month)}
+                    </div>
+                    <div className="px-1 py-0.5 border-l border-gray-200 font-mono whitespace-pre text-gray-700">
+                      {reiwaMonth(year, month)}
+                    </div>
+                    <div className="px-1 py-0.5 border-l border-gray-200 text-gray-700 truncate" title={currentOffice?.name ?? ""}>
+                      {currentOffice?.name ?? ""}
+                    </div>
+                    <div className="px-1 py-0.5 border-l border-gray-200 font-mono text-gray-700">
                       {r.beneficiary_number ?? "—"}
-                    </td>
-                    <td className="px-3 py-2 font-medium">
-                      {r.user_name}
+                    </div>
+                    <div className="px-1 py-0.5 border-l border-gray-200 text-gray-800 flex items-center gap-1 min-w-0">
+                      <span className="flex-1 truncate">{r.user_name}</span>
                       {r.seiho && (
-                        <span className="ml-1 rounded bg-amber-50 px-1 py-0.5 text-[9px] text-amber-700 ring-1 ring-amber-200">
+                        <span className="shrink-0 rounded bg-amber-50 px-1 py-0.5 text-[9px] text-amber-700 ring-1 ring-amber-200">
                           生保
                         </span>
                       )}
-                    </td>
-                    <td className="px-3 py-2 text-xs">{r.support_level ?? "—"}</td>
-                    <td className="px-3 py-2">{paymentBadge(r.user_id)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">
+                    </div>
+                    <div className="px-1 py-0.5 border-l border-gray-200 text-center text-gray-700">
+                      {r.support_level ?? "—"}
+                    </div>
+                    <div className="px-1 py-0.5 border-l border-gray-200 text-center">
+                      {paymentBadge(r.user_id)}
+                    </div>
+                    <div className="px-1 py-0.5 border-l border-gray-200 text-right font-mono text-gray-800 tabular-nums">
                       {r.totalUnits.toLocaleString()}
-                    </td>
-                    <td className="px-3 py-2 text-right font-semibold tabular-nums text-violet-700">
+                    </div>
+                    <div className="px-1 py-0.5 border-l border-gray-200 text-right font-mono font-semibold text-violet-700 tabular-nums">
                       {r.benefitAmount.toLocaleString()}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
+                    </div>
+                    <div className="px-1 py-0.5 border-l border-gray-200 text-right font-mono text-gray-800 tabular-nums">
                       {r.userAmount.toLocaleString()}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── フッター合計 (ほのぼの流: ラベル=水色枠 + 値=白枠右寄せ のボックス並び) ── */}
+            <div className="border-t border-gray-400 bg-gray-100 px-3 py-1.5 shrink-0 text-[11px] text-gray-800">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <span className="inline-flex">
+                  <span className="border border-gray-400 bg-sky-100 px-2 py-0.5 whitespace-nowrap">合計件数</span>
+                  <span className="border border-gray-400 border-l-0 bg-white px-2 py-0.5 min-w-[64px] text-right font-mono">{filteredRows.length.toLocaleString()}</span>
+                </span>
+                <span className="inline-flex">
+                  <span className="border border-gray-400 bg-sky-100 px-2 py-0.5 whitespace-nowrap">合計単位数</span>
+                  <span className="border border-gray-400 border-l-0 bg-white px-2 py-0.5 min-w-[96px] text-right font-mono">{totalUnits.toLocaleString()}</span>
+                </span>
+                <span className="ml-auto text-gray-500">実績 {recordCount.toLocaleString()} 件</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
+                <span className="inline-flex">
+                  <span className="border border-gray-400 bg-sky-100 px-2 py-0.5 whitespace-nowrap">給付費請求額</span>
+                  <span className="border border-gray-400 border-l-0 bg-white px-2 py-0.5 min-w-[96px] text-right font-mono text-violet-700">{totalBenefit.toLocaleString()}</span>
+                </span>
+                <span className="inline-flex">
+                  <span className="border border-gray-400 bg-sky-100 px-2 py-0.5 whitespace-nowrap">利用者負担合計</span>
+                  <span className="border border-gray-400 border-l-0 bg-white px-2 py-0.5 min-w-[96px] text-right font-mono">{totalUser.toLocaleString()}</span>
+                </span>
+                <span className="ml-auto text-[10px] text-gray-400">
+                  ※ 明細書の印刷で「発行済」、伝送対象ボタンで「伝送対象」に (介護請求と同じ流れ)
+                </span>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── 右：明細情報 (介護請求と同じ 青系帯 + 高密度明細)。障害固有ブロック(上限管理/入金管理)を内包 ── */}
+      <div className="w-96 shrink-0 flex flex-col bg-white">
+        <div className="border-b border-sky-700 bg-gradient-to-b from-sky-500 to-sky-600 px-3 py-1 text-xs font-bold text-white flex items-center gap-2">
+          <span>明細情報</span>
+          {selected && <span className="font-normal text-sky-100 truncate">{selected.user_name}</span>}
+        </div>
+        {selected ? (
+          <div className="flex-1 overflow-auto">
+            <table className="w-full text-[11px] leading-4 border-collapse">
+              <thead className="bg-gradient-to-b from-sky-100 to-sky-200 border-b border-gray-400 sticky top-0">
+                <tr>
+                  <th className="text-center px-1 py-0.5 font-medium text-gray-700 border-r border-sky-300">サービス内容</th>
+                  <th className="text-center px-1 py-0.5 font-medium text-gray-700 border-r border-sky-300 w-16 whitespace-nowrap">コード</th>
+                  <th className="text-center px-1 py-0.5 font-medium text-gray-700 border-r border-sky-300 w-12">単位数</th>
+                  <th className="text-center px-1 py-0.5 font-medium text-gray-700 border-r border-sky-300 w-8">回数</th>
+                  <th className="text-center px-1 py-0.5 font-medium text-gray-700 w-12">小計</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selected.details.map((d, i) => (
+                  <tr key={i} className="border-b border-gray-200 bg-white">
+                    <td className="px-1 py-0.5 text-gray-700 leading-tight border-r border-gray-200">
+                      {d.service_type}
+                      {d.service_category && (
+                        <span className="ml-1 text-[9px] text-gray-400">{d.service_category}</span>
+                      )}
+                    </td>
+                    <td className="px-1 py-0.5 text-gray-500 text-[10px] font-mono border-r border-gray-200 truncate" title={d.service_code ?? ""}>
+                      {d.service_code ?? "—"}
+                    </td>
+                    <td className="px-1 py-0.5 text-right font-mono text-gray-700 border-r border-gray-200 tabular-nums">
+                      {d.unit_per.toLocaleString()}
+                    </td>
+                    <td className="px-1 py-0.5 text-right font-mono text-gray-700 border-r border-gray-200 tabular-nums">
+                      {d.count}
+                    </td>
+                    <td className="px-1 py-0.5 text-right font-mono font-semibold text-gray-800 tabular-nums">
+                      {d.units.toLocaleString()}
                     </td>
                   </tr>
-                  );
-                })}
+                ))}
+                {/* 処遇改善加算等 (月次加算、回数 1) */}
+                {selected.addons.map((a) => (
+                  <tr key={a.service_code} className="border-b border-gray-200 bg-violet-50/60">
+                    <td className="px-1 py-0.5 text-violet-700 leading-tight border-r border-gray-200">
+                      {a.service_name}
+                    </td>
+                    <td className="px-1 py-0.5 text-gray-500 text-[10px] font-mono border-r border-gray-200 truncate">
+                      {a.service_code}
+                    </td>
+                    <td className="px-1 py-0.5 text-right font-mono text-gray-700 border-r border-gray-200 tabular-nums">
+                      {a.units.toLocaleString()}
+                    </td>
+                    <td className="px-1 py-0.5 text-right font-mono text-gray-700 border-r border-gray-200 tabular-nums">1</td>
+                    <td className="px-1 py-0.5 text-right font-mono font-semibold text-gray-800 tabular-nums">
+                      {a.units.toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
-              <tfoot className="border-t-2 border-gray-300 bg-gray-50 font-bold">
-                <tr>
-                  <td className="px-3 py-2 text-xs text-gray-500" colSpan={6}>
-                    合計 {rows.length} 名 / 実績 {recordCount} 件
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {totalUnits.toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-violet-700">
-                    {totalBenefit.toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {totalUser.toLocaleString()}
-                  </td>
-                </tr>
-              </tfoot>
             </table>
-          </div>
 
-          {/* 右: 明細 */}
-          <div className="lg:col-span-2 rounded-lg border bg-white shadow-sm">
-            <header className="border-b bg-gray-50 px-4 py-2 text-sm font-bold text-gray-800">
-              明細情報 {selected ? `— ${selected.user_name}` : ""}
-            </header>
-            {selected ? (
-              <div className="p-3">
-                <table className="min-w-full text-xs">
-                  <thead className="text-left text-[10px] text-gray-500">
-                    <tr>
-                      <th className="px-2 py-1">サービス</th>
-                      <th className="px-2 py-1">コード</th>
-                      <th className="px-2 py-1 text-right">単位数</th>
-                      <th className="px-2 py-1 text-right">回数</th>
-                      <th className="px-2 py-1 text-right">小計</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {selected.details.map((d, i) => (
-                      <tr key={i}>
-                        <td className="px-2 py-1.5">
-                          {d.service_type}
-                          {d.service_category && (
-                            <span className="ml-1 text-[9px] text-gray-400">
-                              {d.service_category}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-2 py-1.5 font-mono text-[10px]">
-                          {d.service_code ?? "—"}
-                        </td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">
-                          {d.unit_per.toLocaleString()}
-                        </td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">{d.count}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums font-semibold">
-                          {d.units.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                    {/* 処遇改善加算等 (月次加算、回数 1) */}
-                    {selected.addons.map((a) => (
-                      <tr key={a.service_code} className="bg-violet-50/60">
-                        <td className="px-2 py-1.5 text-violet-700">
-                          {a.service_name}
-                        </td>
-                        <td className="px-2 py-1.5 font-mono text-[10px]">
-                          {a.service_code}
-                        </td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">
-                          {a.units.toLocaleString()}
-                        </td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">1</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums font-semibold">
-                          {a.units.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                <div className="mt-4 space-y-1 rounded border bg-gray-50 p-3 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">合計単位数</span>
-                    <span className="font-bold tabular-nums">
-                      {selected.totalUnits.toLocaleString()}
-                    </span>
-                  </div>
-                  {selected.addonUnits > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">
-                        うち{selected.addonLabel ?? "処遇改善加算"}
-                      </span>
-                      <span className="tabular-nums">
-                        {selected.addonUnits.toLocaleString()}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">地域単価</span>
-                    <span className="tabular-nums">
-                      {selected.unitPrice.toFixed(2)} 円/単位
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">総費用額</span>
-                    <span className="tabular-nums">
-                      ¥{selected.totalAmount.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">
-                      負担上限月額 {selected.seiho ? "(生保 = 負担なし)" : ""}
-                    </span>
-                    <span className="tabular-nums">
-                      {selected.self_payment_limit != null ? (
-                        `¥${selected.self_payment_limit.toLocaleString()}`
-                      ) : (
-                        <span className="font-semibold text-amber-600">
-                          未設定 (受給者証で入力)
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">利用者負担額</span>
-                    <span className="font-bold tabular-nums">
-                      ¥{selected.userAmount.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-violet-700">
-                    <span className="font-bold">介護給付費請求額</span>
-                    <span className="font-bold tabular-nums">
-                      ¥{selected.benefitAmount.toLocaleString()}
-                    </span>
-                  </div>
+            {/* ── 金額サマリ (介護請求 右下の ラベル箱/値箱 grid と同じ様式) ── */}
+            <div className="border-t border-gray-400 bg-gray-100 shrink-0 p-1.5">
+              <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-px bg-gray-400 border border-gray-400 text-[11px] leading-4">
+                <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">合計単位数</div>
+                <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">{selected.totalUnits.toLocaleString()}</div>
+                {selected.addonUnits > 0 && (
+                  <>
+                    <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">うち{selected.addonLabel ?? "処遇改善加算"}</div>
+                    <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">{selected.addonUnits.toLocaleString()}</div>
+                  </>
+                )}
+                <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">地域単価</div>
+                <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">{selected.unitPrice.toFixed(2)} 円/単位</div>
+                <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">総費用額</div>
+                <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">¥{selected.totalAmount.toLocaleString()}</div>
+                <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">
+                  負担上限月額{selected.seiho ? " (生保=負担なし)" : ""}
                 </div>
-
-                {/* 上限額管理 (ほのぼのmore 上限管理事業所の登録に相当) */}
-                <JogenKanriSection
-                  key={`${selected.user_id}-${year}-${month}`}
-                  row={selected}
-                  year={year}
-                  month={month}
-                  onSaved={load}
-                />
-
-                {/* 入金管理 (利用料請求の未収金管理 — riyou-seikyu と同じ作り) */}
-                <ShogaiPaymentSection
-                  key={`pay-${selected.user_id}-${monthStr}`}
-                  userId={selected.user_id}
-                  monthKey={monthStr}
-                  billed={
-                    payments.get(selected.user_id)?.billed_amount ??
-                    selected.userAmount
-                  }
-                  payment={payments.get(selected.user_id) ?? null}
-                  onChanged={loadPayments}
-                />
+                <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">
+                  {selected.self_payment_limit != null ? (
+                    `¥${selected.self_payment_limit.toLocaleString()}`
+                  ) : (
+                    <span className="font-sans text-[10px] font-semibold text-amber-600">未設定 (受給者証で入力)</span>
+                  )}
+                </div>
+                <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">利用者負担額</div>
+                <div className="bg-white px-1.5 py-0.5 text-right font-mono font-bold text-gray-800">¥{selected.userAmount.toLocaleString()}</div>
+                <div className="bg-violet-100 px-1.5 py-0.5 whitespace-nowrap font-bold text-violet-800">介護給付費請求額</div>
+                <div className="bg-white px-1.5 py-0.5 text-right font-mono font-bold text-violet-700">¥{selected.benefitAmount.toLocaleString()}</div>
               </div>
-            ) : (
-              <div className="p-8 text-center text-xs text-gray-400">
-                左の一覧から利用者を選択
-              </div>
-            )}
+
+              {/* ── 障害固有: 利用者負担上限額管理 (介護請求には無いブロック) ── */}
+              <JogenKanriSection
+                key={`${selected.user_id}-${year}-${month}`}
+                row={selected}
+                year={year}
+                month={month}
+                onSaved={load}
+              />
+
+              {/* ── 障害固有: 入金管理 (利用料請求の未収金管理。介護請求には無いブロック) ── */}
+              <ShogaiPaymentSection
+                key={`pay-${selected.user_id}-${monthStr}`}
+                userId={selected.user_id}
+                monthKey={monthStr}
+                billed={
+                  payments.get(selected.user_id)?.billed_amount ??
+                  selected.userAmount
+                }
+                payment={payments.get(selected.user_id) ?? null}
+                onChanged={loadPayments}
+              />
+            </div>
           </div>
-        </div>
-      )}
-
-      <p className="text-[11px] text-gray-400">
-        ※ 明細書の印刷で「発行済」、伝送対象ボタンで「伝送対象」になります (介護請求と同じ流れ)。
-        「確認用CSV」は国保連 介護給付費・訓練等給付費等明細書 (J121) 相当の項目を持つ明細 CSV。
-        上限管理の設定 (管理事業所の登録) は 利用者管理 → 受給者証 で行います。
-      </p>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-xs text-gray-400">
+            行を選択してください
+          </div>
+        )}
+      </div>
     </div>
 
     {/* ===== 印刷 view: 明細書 (介護給付費・訓練等給付費等明細書) — 利用者 1 名 = 1 枚 ===== */}
