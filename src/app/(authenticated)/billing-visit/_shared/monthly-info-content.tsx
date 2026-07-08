@@ -78,7 +78,12 @@ export function MonthlyInfoContent() {
                 <th className="px-2 py-1.5 border border-gray-300 text-left">作成区分</th>
                 <th className="px-2 py-1.5 border border-gray-300 text-left">支援事業所番号</th>
                 <th className="px-2 py-1.5 border border-gray-300 text-left">居宅介護支援事業所名</th>
-                <th className="px-2 py-1.5 border border-gray-300 text-right">区分支給限度基準内単位数</th>
+                <th
+                  className="px-2 py-1.5 border border-gray-300 text-right cursor-help underline decoration-dotted decoration-gray-400 underline-offset-2"
+                  title="限度の枠内に収まったとケアマネが認めた、自事業所分の計画単位数。実績がこれを超えた分は保険請求できません (超過分は自費)。※現在は実績集計の単位数を表示中"
+                >
+                  区分支給限度基準内単位数
+                </th>
               </tr>
             </thead>
             <tbody>
