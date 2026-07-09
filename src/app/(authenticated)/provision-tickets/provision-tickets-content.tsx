@@ -288,6 +288,15 @@ export function ProvisionTicketsContent({
   const [serviceRows, setServiceRows] = useState<ServiceRow[]>(initialServiceRows);
   const [grid, setGrid] = useState<GridState>(initialGrid);
 
+  // ── 制度区分トグル (介護 / 障害) ──────────────────────────────────────────
+  // 提供表は kaigo_visit_schedule 行を編集する。集計元統一により障害請求も
+  // この schedule (completed の障害行) を集計するようになったため、障害モードで
+  // 障害サービス行の表示・追加・編集・単位確認をできるようにする。
+  //   - 介護モード: !isShogaiService (= 従来どおり。挙動不変)
+  //   - 障害モード: isShogaiService (= 障害サービス行のみ)
+  // 単位解決は行の system に応じて kaigo_service_codes.system で切り替える。
+  const [viewSystem, setViewSystem] = useState<"介護" | "障害">("介護");
+
   // ── サービス加算 (kaigo_visit_addon_lines が真実、加算行はその投影) ──────────
   // 利用者 × 対象月 × 事業所 × 加算コード の可変明細。提供表に「加算行」として表示し、
   // 単位数計算 (実績/予定) に含める。モーダルのチェックリストから upsert / delete する。
@@ -323,14 +332,15 @@ export function ProvisionTicketsContent({
     };
   }, [supabase]);
 
-  // 改定 (世代) を跨ぐと同名サービスでも単位数が変わるため、月切替時はキャッシュを破棄して引き直す
-  const unitsMonthRef = useRef(format(selectedMonth, "yyyy-MM"));
+  // 改定 (世代) を跨ぐと同名サービスでも単位数が変わるため、月切替時はキャッシュを破棄して引き直す。
+  // 制度区分 (viewSystem) 切替時も、介護/障害で同名の単位が異なりうるためキャッシュを破棄する。
+  const unitsMonthRef = useRef(`${format(selectedMonth, "yyyy-MM")}__介護`);
   useEffect(() => {
-    const key = format(selectedMonth, "yyyy-MM");
+    const key = `${format(selectedMonth, "yyyy-MM")}__${viewSystem}`;
     if (unitsMonthRef.current === key) return;
     unitsMonthRef.current = key;
     setServiceUnits({});
-  }, [selectedMonth]);
+  }, [selectedMonth, viewSystem]);
 
   // 加算系 formula コードも月切替時に「表示月に有効な世代」で引き直す
   // (SSR 初期値は validToday 固定のため、過去月・未来月では世代がずれる)
@@ -421,11 +431,16 @@ export function ProvisionTicketsContent({
     let cancelled = false;
     (async () => {
       // 有効期間: 対象月に有効な世代のみ (改定跨ぎの複数世代ヒット防止)
+      // system は表示中の制度区分 (viewSystem) で絞る。介護と障害で同名 基本 コードが
+      // 併存しうる (getServiceSystemMap の PRIORITY と同種の衝突) ため、行の制度区分で
+      // 単位を引かないと 障害行に 介護単位が混入する。介護モードでは system=介護 に
+      // 絞られるが 基本 コードは制度固有のため従来の解決結果と一致する。
       const { data, error } = await validInMonth(
         supabase
           .from("kaigo_service_codes")
           .select("service_name, units")
           .in("service_name", serviceNameVariantsAll(missing))
+          .eq("system", viewSystem)
           .eq("calculation_type", "基本"),
         selectedMonth.getFullYear(),
         selectedMonth.getMonth() + 1,
@@ -447,7 +462,7 @@ export function ProvisionTicketsContent({
     return () => {
       cancelled = true;
     };
-  }, [serviceRows, serviceUnits, supabase, selectedMonth]);
+  }, [serviceRows, serviceUnits, supabase, selectedMonth, viewSystem]);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   const [scheduleIds, setScheduleIds] = useState<Record<string, string>>({});
 
@@ -635,14 +650,18 @@ export function ProvisionTicketsContent({
       additional_staff: r.additional_staff ?? null,
     }));
 
-    // 障害福祉サービスは介護保険の提供表に載せない (障害側の画面で扱う)
+    // 制度区分トグルに連動して行を絞る。
+    //   介護モード: 障害サービスを除外 (= 従来どおり)
+    //   障害モード: 障害サービスのみ (障害請求は集計元統一で同 schedule を集計する)
     const systemMap = await getServiceSystemMap(
       supabase,
       allSchedules.map((s) => s.service_type),
       { year, month },
     );
-    const schedules = allSchedules.filter(
-      (s) => !isShogaiService(systemMap, s.service_type),
+    const schedules = allSchedules.filter((s) =>
+      viewSystem === "障害"
+        ? isShogaiService(systemMap, s.service_type)
+        : !isShogaiService(systemMap, s.service_type),
     );
 
     const rowMap = new Map<string, ServiceRow>();
@@ -697,7 +716,7 @@ export function ProvisionTicketsContent({
     setGrid(newGrid);
     setScheduleIds(newSchedIds);
     setLoading(false);
-  }, [userId, monthStr, daysCount, supabase, year, month, staff2TimesSupported, additionalStaffSupported]);
+  }, [userId, monthStr, daysCount, supabase, year, month, staff2TimesSupported, additionalStaffSupported, viewSystem]);
 
   // initial render は server からの initialServiceRows/initialGrid を使用、月切替時のみ refetch。
   // ただし client-side の利用者切替 (serverPreloaded=false) で mount された場合は
@@ -1700,6 +1719,31 @@ export function ProvisionTicketsContent({
                 )}>
                   {status === "draft" ? "下書き" : "完成"}
                 </span>
+                {/* ── 制度区分トグル (介護 / 障害) ── */}
+                <div className="ml-1 inline-flex items-center rounded-full border border-gray-200 bg-gray-100 p-0.5 text-xs">
+                  {(["介護", "障害"] as const).map((sys) => (
+                    <button
+                      key={sys}
+                      type="button"
+                      onClick={() => {
+                        if (sys === viewSystem) return;
+                        if (isDirty && !window.confirm("未保存の変更があります。破棄して切り替えますか？")) return;
+                        setIsDirty(false);
+                        setViewSystem(sys);
+                      }}
+                      className={cn(
+                        "rounded-full px-3 py-0.5 font-medium transition-colors",
+                        viewSystem === sys
+                          ? sys === "障害"
+                            ? "bg-orange-500 text-white shadow-sm"
+                            : "bg-blue-600 text-white shadow-sm"
+                          : "text-gray-500 hover:text-gray-800",
+                      )}
+                    >
+                      {sys === "障害" ? "障害福祉" : "介護保険"}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 {status === "draft" && (
@@ -1939,7 +1983,7 @@ export function ProvisionTicketsContent({
                                 {rowEstUnits > 0 ? rowEstUnits.toLocaleString() : ""}
                               </td>
                               <td className="border border-gray-400 px-1 py-0 text-center text-[10px] text-gray-600" rowSpan={2}>
-                                介護保険
+                                {viewSystem === "障害" ? "障害福祉" : "介護保険"}
                               </td>
                               <td className="border border-gray-400 px-0 py-0 text-center no-print" rowSpan={2}>
                                 <button
@@ -1987,8 +2031,9 @@ export function ProvisionTicketsContent({
                         );
                       })}
 
-                      {/* ── 加算行 (kaigo_visit_addon_lines の投影。schedule 行には無い) ── */}
-                      {addonRows.length > 0 && (
+                      {/* ── 加算行 (kaigo_visit_addon_lines の投影。schedule 行には無い) ──
+                          介護 (訪問介護) 専用。障害モードでは非表示 (障害の加算は集計側で自動)。 */}
+                      {viewSystem === "介護" && addonRows.length > 0 && (
                         <tbody>
                           {addonRows.map((a) => (
                             <tr key={`addon-${a.code}`} className="bg-purple-50/60">
@@ -2029,11 +2074,13 @@ export function ProvisionTicketsContent({
                         </tbody>
                       )}
 
-                      {serviceRows.length === 0 && addonRows.length === 0 && (
+                      {serviceRows.length === 0 && (viewSystem === "障害" || addonRows.length === 0) && (
                         <tbody>
                           <tr>
                             <td colSpan={3 + days.length + 4} className="border border-gray-400 px-4 py-8 text-center text-gray-400">
-                              サービスの予定がありません。「＋サービス追加」で追加するか、シフト管理から予定を作成してください。
+                              {viewSystem === "障害"
+                                ? "障害福祉サービスの予定がありません。「＋サービス追加」で障害サービスを追加してください。"
+                                : "サービスの予定がありません。「＋サービス追加」で追加するか、シフト管理から予定を作成してください。"}
                             </td>
                           </tr>
                         </tbody>
@@ -2125,7 +2172,7 @@ export function ProvisionTicketsContent({
                         <td className="border border-gray-200 px-2 py-1 text-right text-green-700 tabular-nums">{totalActual || ""}</td>
                         <td className="border border-gray-200 px-2 py-1 text-right text-green-700 tabular-nums">{totalActualUnits > 0 ? totalActualUnits.toLocaleString() : ""}</td>
                       </tr>
-                      {formulaAdjustments.map((a) => (
+                      {viewSystem === "介護" && formulaAdjustments.map((a) => (
                         <tr key={a.code} className="bg-purple-50/40 text-xs">
                           <td className="border border-gray-200 px-2 py-1 text-purple-700">
                             {a.name}
@@ -2138,8 +2185,8 @@ export function ProvisionTicketsContent({
                           <td className="border border-gray-200 px-2 py-1 text-right text-purple-700 tabular-nums">+{a.actualUnits.toLocaleString()}</td>
                         </tr>
                       ))}
-                      {/* サービス加算行 (初回/緊急時/生活機能向上。予定=実績とも同額) */}
-                      {addonRows.map((a) => (
+                      {/* サービス加算行 (初回/緊急時/生活機能向上。予定=実績とも同額) — 介護のみ */}
+                      {viewSystem === "介護" && addonRows.map((a) => (
                         <tr key={`fa-${a.code}`} className="bg-purple-50/40 text-xs">
                           <td className="border border-gray-200 px-2 py-1 text-purple-700">{a.label}</td>
                           <td className="border border-gray-200 px-2 py-1 text-right text-[10px] text-gray-400">
@@ -2151,7 +2198,7 @@ export function ProvisionTicketsContent({
                           <td className="border border-gray-200 px-2 py-1 text-right text-purple-700 tabular-nums">+{a.units.toLocaleString()}</td>
                         </tr>
                       ))}
-                      {(formulaAdjustments.length > 0 || addonRows.length > 0) && (
+                      {viewSystem === "介護" && (formulaAdjustments.length > 0 || addonRows.length > 0) && (
                         <tr className="bg-gray-100 font-bold text-xs">
                           <td className="border border-gray-200 px-2 py-1 text-right" colSpan={3}>加算込み 総合計</td>
                           <td className="border border-gray-200 px-2 py-1 text-right text-blue-700 tabular-nums">{grandPlannedUnits.toLocaleString()}</td>
@@ -2162,8 +2209,8 @@ export function ProvisionTicketsContent({
                     </tfoot>
                   </table>
 
-                  {/* 適用加算 (read-only — 設定変更は /master/office) */}
-                  {availableFormulaCodes.length > 0 && (
+                  {/* 適用加算 (read-only — 設定変更は /master/office)。介護のみ。 */}
+                  {viewSystem === "介護" && availableFormulaCodes.length > 0 && (
                     <div className="mt-2 rounded border border-purple-200 bg-purple-50/30 px-3 py-2">
                       <div className="flex items-center justify-between mb-1">
                         <div className="text-[11px] font-semibold text-purple-700">
@@ -2199,8 +2246,8 @@ export function ProvisionTicketsContent({
                     </div>
                   )}
 
-                  {/* 同一建物減算 (所定単位数に対する%減算)。client_office_assignments 単位 */}
-                  {currentOfficeId && (
+                  {/* 同一建物減算 (所定単位数に対する%減算)。client_office_assignments 単位。介護のみ。 */}
+                  {viewSystem === "介護" && currentOfficeId && (
                     <div className="no-print mt-2 rounded border border-amber-200 bg-amber-50/40 px-3 py-2">
                       <div className="flex items-center gap-2 flex-wrap">
                         <label className="text-[11px] font-semibold text-amber-800">
@@ -2236,12 +2283,12 @@ export function ProvisionTicketsContent({
 
               {/* サービス加算 (マスタ駆動の一覧) の編集は「サービス追加」モーダル +
                   加算行の × ボタンで行う。処遇改善加算は行を作らず集計のみ (上の「適用中の加算」参照)。 */}
-              {!currentOfficeId && (
+              {viewSystem === "介護" && !currentOfficeId && (
                 <div className="no-print mt-4 max-w-2xl rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-400">
                   サービス加算の編集には事業所の選択 (?office=) が必要です
                 </div>
               )}
-              {addonTableMissing && currentOfficeId && (
+              {viewSystem === "介護" && addonTableMissing && currentOfficeId && (
                 <div className="no-print mt-4 max-w-2xl rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                   加算テーブル (kaigo_visit_addon_lines) が未作成のため、加算の保存・表示ができません。
                   migrations/kaigo_visit_addon_lines.sql を適用してください。
@@ -2292,6 +2339,7 @@ export function ProvisionTicketsContent({
                 <ServiceSelector
                   open={showAddServiceSelector}
                   onClose={() => setShowAddServiceSelector(false)}
+                  system={viewSystem}
                   startTime={addRowForm.start_time}
                   endTime={addRowForm.end_time}
                   onSelect={(service) => {
@@ -2317,20 +2365,24 @@ export function ProvisionTicketsContent({
                 mainStart={addRowForm.start_time}
                 mainEnd={addRowForm.end_time}
                 serviceName={addRowForm.service_name || addRowForm.service_type}
-                isShogai={false}
+                isShogai={viewSystem === "障害"}
                 showCustomTime={staff2TimesSupported}
               />
 
-              {/* ── この訪問につく加算 (kaigo_visit_addon_lines のマスタ駆動一覧) ── */}
-              <ProvisionAddonChecklist
-                addonTableMissing={addonTableMissing}
-                currentOfficeId={currentOfficeId}
-                addonOptions={addonOptions}
-                selected={addRowAddons}
-                onChange={setAddRowAddons}
-                existingLines={addonLines}
-                shokaiSuggest={shokaiSuggest}
-              />
+              {/* ── この訪問につく加算 (kaigo_visit_addon_lines のマスタ駆動一覧) ──
+                  加算マスタ駆動チェックリストは介護 (訪問介護 cat=11) 専用。障害モードでは
+                  非表示 (障害の処遇改善は請求集計側で自動。per-client 加算はここでは扱わない)。 */}
+              {viewSystem === "介護" && (
+                <ProvisionAddonChecklist
+                  addonTableMissing={addonTableMissing}
+                  currentOfficeId={currentOfficeId}
+                  addonOptions={addonOptions}
+                  selected={addRowAddons}
+                  onChange={setAddRowAddons}
+                  existingLines={addonLines}
+                  shokaiSuggest={shokaiSuggest}
+                />
+              )}
             </div>
             <div className="flex justify-end gap-2 border-t px-5 py-4">
               <button onClick={() => setShowAddRow(false)} className="rounded-lg border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">キャンセル</button>
@@ -2383,6 +2435,7 @@ export function ProvisionTicketsContent({
                 <ServiceSelector
                   open={showEditServiceSelector}
                   onClose={() => setShowEditServiceSelector(false)}
+                  system={viewSystem}
                   startTime={editRowForm.start_time}
                   endTime={editRowForm.end_time}
                   onSelect={(service) => {
@@ -2408,7 +2461,7 @@ export function ProvisionTicketsContent({
                 mainStart={editRowForm.start_time}
                 mainEnd={editRowForm.end_time}
                 serviceName={editRowForm.service_name}
-                isShogai={false}
+                isShogai={viewSystem === "障害"}
                 showCustomTime={staff2TimesSupported}
               />
             </div>
