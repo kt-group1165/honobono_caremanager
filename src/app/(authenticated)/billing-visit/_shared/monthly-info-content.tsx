@@ -29,6 +29,7 @@ import { Loader2, AlertCircle, FileDown, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { monthRange } from "@/lib/cert-for-month";
+import { useBusinessType } from "@/lib/business-type-context";
 import {
   useSeikyuContext,
   SeikyuKanaSidebar,
@@ -90,6 +91,9 @@ export function MonthlyInfoContent() {
     tenantId,
   } = useSeikyuContext();
   const supabase = useMemo(() => createClient(), []);
+  const { businessType } = useBusinessType();
+  // 訪問入浴は計画単位数を bath_monthly_plan_units に持つ (schema 同型)
+  const planTable = businessType === "訪問入浴" ? "bath_monthly_plan_units" : "kaigo_monthly_plan_units";
 
   const targetMonth = `${year}-${String(month).padStart(2, "0")}-01`;
 
@@ -110,7 +114,7 @@ export function MonthlyInfoContent() {
     let missing = false;
     while (true) {
       const { data, error: qErr } = await supabase
-        .from("kaigo_monthly_plan_units")
+        .from(planTable)
         .select("client_id, planned_units, source")
         .eq("target_month", targetMonth)
         .range(from, from + PAGE - 1);
@@ -134,7 +138,7 @@ export function MonthlyInfoContent() {
     setPlanTableMissing(missing);
     setPlanMap(map);
     setPlanLoading(false);
-  }, [supabase, targetMonth]);
+  }, [supabase, targetMonth, planTable]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- mount/月変更時の fetch
@@ -157,7 +161,7 @@ export function MonthlyInfoContent() {
   const savePlanManual = useCallback(
     async (clientId: string, units: number) => {
       const { error: upErr } = await supabase
-        .from("kaigo_monthly_plan_units")
+        .from(planTable)
         .upsert(buildPayload(clientId, units, "manual"), {
           onConflict: "client_id,target_month",
         });
@@ -170,7 +174,7 @@ export function MonthlyInfoContent() {
         [clientId]: { planned_units: units, source: "manual" },
       }));
     },
-    [supabase, buildPayload],
+    [supabase, buildPayload, planTable],
   );
 
   const startEdit = (clientId: string, current: PlanEntry | undefined) => {
@@ -248,7 +252,7 @@ export function MonthlyInfoContent() {
         buildPayload(clientId, units, "careplan"),
       );
       const { error: upErr } = await supabase
-        .from("kaigo_monthly_plan_units")
+        .from(planTable)
         .upsert(payload, { onConflict: "client_id,target_month" });
       if (upErr) {
         toast.error(`計画単位数の取込に失敗: ${upErr.message}`);
@@ -277,7 +281,7 @@ export function MonthlyInfoContent() {
     setCopying(true);
     try {
       const { data, error: qErr } = await supabase
-        .from("kaigo_monthly_plan_units")
+        .from(planTable)
         .select("client_id, planned_units")
         .eq("target_month", prevMonthStr)
         .limit(1000);
@@ -299,7 +303,7 @@ export function MonthlyInfoContent() {
         buildPayload(r.client_id, r.planned_units ?? 0, "copy"),
       );
       const { error: upErr } = await supabase
-        .from("kaigo_monthly_plan_units")
+        .from(planTable)
         .upsert(payload, {
           onConflict: "client_id,target_month",
           ignoreDuplicates: true,

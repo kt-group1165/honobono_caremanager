@@ -29,6 +29,7 @@ import {
 import Encoding from "encoding-japanese";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { useBusinessType } from "@/lib/business-type-context";
 import {
   useSeikyuContext,
   SeikyuKanaSidebar,
@@ -86,6 +87,8 @@ export function KokuhoSeikyuContent() {
     year, month, filteredRows, filteredSougouRows, kanaMatches, loading, error,
     officeNumber, unitPrice, officeId, tenantId, appliedFormulaCodes,
   } = useSeikyuContext();
+  const { businessType } = useBusinessType();
+  const billingStatusTable = businessType === "訪問入浴" ? "bath_billing_status" : "kaigo_billing_status";
   const supabase = useMemo(() => createClient(), []);
 
   const [checked, setChecked] = useState<Set<string>>(new Set());
@@ -101,7 +104,7 @@ export function KokuhoSeikyuContent() {
       return;
     }
     const { data, error: e } = await supabase
-      .from("kaigo_billing_status")
+      .from(billingStatusTable)
       .select("client_id, tsukiokure, henrei")
       .eq("office_id", officeId)
       .eq("target_month", monthKey);
@@ -113,7 +116,7 @@ export function KokuhoSeikyuContent() {
     setStatusByClient(
       new Map(((data ?? []) as BillingStatusRow[]).map((r) => [r.client_id, r])),
     );
-  }, [supabase, monthKey, officeId]);
+  }, [supabase, monthKey, officeId, billingStatusTable]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更時の fetch

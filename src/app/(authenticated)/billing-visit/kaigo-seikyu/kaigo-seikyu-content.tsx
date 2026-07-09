@@ -102,7 +102,10 @@ export function KaigoSeikyuContent() {
     officeName, officeNumber, officeAddress, officePhone, officePostal,
     officeId, tenantId, unitPrice, appliedFormulaCodes,
   } = useSeikyuContext();
-  const { currentOffice } = useBusinessType();
+  const { currentOffice, businessType } = useBusinessType();
+  const isBath = businessType === "訪問入浴";
+  // 訪問入浴は月遅れ/返戻/過誤フラグを bath_billing_status に持つ (schema 同型)
+  const billingStatusTable = isBath ? "bath_billing_status" : "kaigo_billing_status";
   const supabase = useMemo(() => createClient(), []);
 
   // 選択・チェックは (利用者 × 提供月) 単位。月遅れ/返戻で同一利用者が
@@ -194,7 +197,7 @@ export function KaigoSeikyuContent() {
       return;
     }
     const { data, error: e } = await supabase
-      .from("kaigo_billing_status")
+      .from(billingStatusTable)
       .select("client_id, issued_at, kokuho_target, tsukiokure, henrei, kago, notes")
       .eq("office_id", officeId)
       .eq("target_month", monthKey);
@@ -207,7 +210,7 @@ export function KaigoSeikyuContent() {
     setStatusByClient(
       new Map(((data ?? []) as BillingStatusRow[]).map((r) => [r.client_id, r])),
     );
-  }, [supabase, monthKey, officeId]);
+  }, [supabase, monthKey, officeId, billingStatusTable]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更時の fetch
@@ -220,7 +223,8 @@ export function KaigoSeikyuContent() {
   const [addonTableMissing, setAddonTableMissing] = useState(false);
 
   const loadAddons = useCallback(async () => {
-    if (!officeId) {
+    // 訪問入浴は初回/緊急時/生活機能向上の月次加算が無い (加算は提供表のサービス追加→実績で計上)
+    if (!officeId || isBath) {
       setAddonByClient(new Map());
       return;
     }
@@ -243,7 +247,7 @@ export function KaigoSeikyuContent() {
     setAddonByClient(
       new Map(((data ?? []) as MonthAddonRow[]).map((r) => [r.client_id, r])),
     );
-  }, [supabase, officeId, monthKey]);
+  }, [supabase, officeId, monthKey, isBath]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 月/事業所変更時の fetch
@@ -310,7 +314,7 @@ export function KaigoSeikyuContent() {
       [field]: value,
     };
     const { error: e } = await supabase
-      .from("kaigo_billing_status")
+      .from(billingStatusTable)
       .upsert(payload, { onConflict: "client_id,target_month,office_id" });
     if (e) {
       toast.error("フラグの保存に失敗: " + e.message);
@@ -409,7 +413,7 @@ export function KaigoSeikyuContent() {
       const months = [...new Set(reOnly.map((d) => d.origMonthKey))];
       const ids = [...new Set(reOnly.map((d) => d.row.user_id))];
       const { data, error: e } = await supabase
-        .from("kaigo_billing_status")
+        .from(billingStatusTable)
         .select("client_id, target_month, issued_at, kokuho_target, tsukiokure, henrei, kago, notes")
         .eq("office_id", officeId)
         .in("target_month", months)
@@ -425,7 +429,7 @@ export function KaigoSeikyuContent() {
       }
       return map;
     },
-    [supabase, officeId],
+    [supabase, officeId, billingStatusTable],
   );
 
   // ── 明細書: 対象者の様式第二を印刷 → 印刷実行時に issued_at を now() で upsert (発行済化) ──
@@ -460,7 +464,7 @@ export function KaigoSeikyuContent() {
       };
     });
     const { error: e } = await supabase
-      .from("kaigo_billing_status")
+      .from(billingStatusTable)
       .upsert(payload, { onConflict: "client_id,target_month,office_id" });
     if (e) {
       toast.error("発行状態の保存に失敗: " + e.message);
@@ -556,7 +560,7 @@ export function KaigoSeikyuContent() {
       return;
     }
     const { error: e } = await supabase
-      .from("kaigo_billing_status")
+      .from(billingStatusTable)
       .upsert(payload, { onConflict: "client_id,target_month,office_id" });
     if (e) {
       toast.error("国保対象の保存に失敗: " + e.message);

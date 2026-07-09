@@ -11,6 +11,7 @@ import {
   aggregateMonthlyVisitSeikyu,
   type UserSeikyuRow,
 } from "@/lib/visit-seikyu/aggregate";
+import { aggregateBathVisitSeikyu } from "@/lib/bath-seikyu/aggregate";
 import {
   aggregateMonthlyShogaiSeikyu,
   type ShogaiSeikyuRow,
@@ -18,7 +19,7 @@ import {
 
 export function useSeikyuData() {
   const supabase = useMemo(() => createClient(), []);
-  const { currentOffice, loading: btLoading } = useBusinessType();
+  const { currentOffice, businessType, loading: btLoading } = useBusinessType();
 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -84,26 +85,41 @@ export function useSeikyuData() {
       // 介護/総合 (visit) と 障害 (shogai) を並行集計。
       // 障害側の失敗は介護/総合の集計を絶対に壊さないよう握って空配列で続行する
       // (障害の実績0・officeId 非該当・例外時)。介護/総合は従来どおり throw で中断。
+      // 訪問入浴事業所は入浴実績(kaigo_bath_visit_records)から集計。障害/総合は無し。
+      const isBath = businessType === "訪問入浴";
       const [result, shogaiResult] = await Promise.all([
-        aggregateMonthlyVisitSeikyu(supabase, {
-          officeId: currentOffice.id,
-          tenantId: currentOffice.tenant_id,
-          year,
-          month,
-          unitPrice: (officeRow as { unit_price?: number } | null)?.unit_price,
-          appliedFormulaCodes:
-            (officeRow as { applied_formula_codes?: string[] } | null)
-              ?.applied_formula_codes ?? [],
-        }),
-        aggregateMonthlyShogaiSeikyu(supabase, {
-          officeId: currentOffice.id,
-          year,
-          month,
-          unitPrice: (officeRow as { unit_price?: number } | null)?.unit_price,
-        }).catch((e) => {
-          console.warn("障害請求集計に失敗 (利用請求は介護/総合のみで続行):", e);
-          return { rows: [], month: "", recordCount: 0 };
-        }),
+        isBath
+          ? aggregateBathVisitSeikyu(supabase, {
+              officeId: currentOffice.id,
+              tenantId: currentOffice.tenant_id,
+              year,
+              month,
+              unitPrice: (officeRow as { unit_price?: number } | null)?.unit_price,
+              appliedFormulaCodes:
+                (officeRow as { applied_formula_codes?: string[] } | null)
+                  ?.applied_formula_codes ?? [],
+            })
+          : aggregateMonthlyVisitSeikyu(supabase, {
+              officeId: currentOffice.id,
+              tenantId: currentOffice.tenant_id,
+              year,
+              month,
+              unitPrice: (officeRow as { unit_price?: number } | null)?.unit_price,
+              appliedFormulaCodes:
+                (officeRow as { applied_formula_codes?: string[] } | null)
+                  ?.applied_formula_codes ?? [],
+            }),
+        isBath
+          ? Promise.resolve({ rows: [] as ShogaiSeikyuRow[], month: "", recordCount: 0 })
+          : aggregateMonthlyShogaiSeikyu(supabase, {
+              officeId: currentOffice.id,
+              year,
+              month,
+              unitPrice: (officeRow as { unit_price?: number } | null)?.unit_price,
+            }).catch((e) => {
+              console.warn("障害請求集計に失敗 (利用請求は介護/総合のみで続行):", e);
+              return { rows: [] as ShogaiSeikyuRow[], month: "", recordCount: 0 };
+            }),
       ]);
       if (gen !== genRef.current) return; // 月切替済み → 古い結果は破棄
       setRows(result.rows);
@@ -117,7 +133,7 @@ export function useSeikyuData() {
     } finally {
       if (gen === genRef.current) setLoading(false);
     }
-  }, [supabase, currentOffice, year, month]);
+  }, [supabase, currentOffice, businessType, year, month]);
 
   useEffect(() => {
     if (btLoading) return;
