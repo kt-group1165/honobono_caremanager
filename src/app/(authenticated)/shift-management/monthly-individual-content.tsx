@@ -746,7 +746,9 @@ export function MonthlyIndividualView({
                             </span>
                             <span className={cn(
                               "absolute top-0.5 h-[14px] w-[14px] rounded-full bg-white shadow transition-transform",
-                              isCompleted ? "translate-x-[24px]" : "translate-x-0.5"
+                              // ON(実) の白丸がオレンジ枠から右にはみ出ないよう内側で止める
+                              // (track w-10=40px / knob 14px → 右余白 4px)
+                              isCompleted ? "translate-x-[22px]" : "translate-x-0.5"
                             )} />
                           </span>
                         </button>
