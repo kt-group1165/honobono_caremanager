@@ -30,6 +30,7 @@ import Encoding from "encoding-japanese";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
+import { saveBlobToFile, saveFilesToFolder } from "@/lib/save-file";
 import {
   useSeikyuContext,
   SeikyuKanaSidebar,
@@ -68,18 +69,13 @@ interface DisplayRow {
 const isTableMissingError = (code: string | null | undefined) =>
   code === "42P01" || code === "PGRST205";
 
-// Shift_JIS でダウンロード (仕様: 伝送ファイルの文字コードはシフト JIS)
-function downloadSjis(r: { content: string; fileName: string }) {
-  const sjis = Encoding.convert(Encoding.stringToCode(r.content), {
+// Shift_JIS の Blob を作る (仕様: 伝送ファイルの文字コードはシフト JIS)
+function sjisBlob(content: string): Blob {
+  const sjis = Encoding.convert(Encoding.stringToCode(content), {
     to: "SJIS",
     from: "UNICODE",
   });
-  const blob = new Blob([new Uint8Array(sjis)], { type: "text/csv" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = r.fileName;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  return new Blob([new Uint8Array(sjis)], { type: "text/csv" });
 }
 
 export function KokuhoSeikyuContent() {
@@ -211,7 +207,7 @@ export function KokuhoSeikyuContent() {
 
   // 国保連伝送ファイル (正式インタフェース仕様: 7111 + 7131 / Shift_JIS)。
   // 提供月ごとに 1 ファイル。再請求分は元提供月のファイルとして出力する。
-  const exportDensou = () => {
+  const exportDensou = async () => {
     if (targets.length === 0) return;
 
     // 提供月ごとにグループ化 (再請求 = 元提供月 / 当月 = 選択月)
@@ -256,16 +252,20 @@ export function KokuhoSeikyuContent() {
       if (!ok) return;
     }
 
-    for (const f of files) downloadSjis(f);
+    const saved = await saveFilesToFolder(
+      files.map((f) => ({ blob: sjisBlob(f.content), fileName: f.fileName })),
+      "kokuho-densou",
+    );
+    if (!saved) return; // フォルダ選択をキャンセル
     toast.success(
-      `伝送ファイル ${files.length} 本を出力しました: ` +
+      `伝送ファイル ${files.length} 本を保存しました: ` +
         files.map((f) => `${f.fileName} (${f.label} ${f.count} 件)`).join(" / "),
     );
   };
 
   // ── 総合事業 伝送ファイル (7112/様式(予) / Shift_JIS) ──
   //    介護給付 (7131) とは別様式なので独立の出力ボタン。当月分のみ (再請求は介護給付側で扱う)。
-  const exportSougouDensou = () => {
+  const exportSougouDensou = async () => {
     if (filteredSougouRows.length === 0) return;
     const result = buildSougouDensou(filteredSougouRows as DensouRow[], {
       officeNumber: officeNumber ?? "",
@@ -282,15 +282,19 @@ export function KokuhoSeikyuContent() {
       );
       if (!ok) return;
     }
-    downloadSjis(result);
+    const saved = await saveFilesToFolder(
+      [{ blob: sjisBlob(result.content), fileName: result.fileName }],
+      "kokuho-densou",
+    );
+    if (!saved) return;
     toast.success(
-      `総合事業 伝送ファイルを出力しました: ${result.fileName} (${result.dataRecordCount} レコード)`,
+      `総合事業 伝送ファイルを保存しました: ${result.fileName} (${result.dataRecordCount} レコード)`,
     );
   };
 
   // 確認用 CSV (Excel で内容確認する用の明細一覧。伝送形式ではない)
   // 再請求行は元提供月を提供年月として出す。公費請求額・超過自費の列を含む
-  const exportCsv = () => {
+  const exportCsv = async () => {
     const ym = `${year}${String(month).padStart(2, "0")}`;
     const header = [
       "提供年月",
@@ -363,11 +367,7 @@ export function KokuhoSeikyuContent() {
     const blob = new Blob(["﻿" + lines.join("\r\n")], {
       type: "text/csv;charset=utf-8",
     });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `kokuho_seikyu_${ym}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    await saveBlobToFile(blob, `kokuho_seikyu_${ym}.csv`, "kokuho-csv");
   };
 
   const allChecked =
