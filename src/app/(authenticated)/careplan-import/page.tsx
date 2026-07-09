@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
+import Encoding from "encoding-japanese";
 import {
   Upload,
   FileText,
@@ -14,9 +15,18 @@ import {
   CalendarDays,
   Loader2,
   X,
+  FileDown,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getMaxUserNumber } from "@kt/shared/user-number";
+import { resolveCertForMonth, monthRange } from "@/lib/cert-for-month";
+import {
+  buildJissekiCsv,
+  type JissekiUser,
+  type JissekiVisit,
+} from "@/lib/careplan-v4/build-jisseki";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -442,9 +452,19 @@ export default function CareplanImportPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">ケアプラン取込</h1>
+        <h1 className="text-2xl font-bold text-gray-900">ケアプラン連携</h1>
         <p className="mt-1 text-sm text-gray-500">
-          居宅介護支援事業所から受け取ったCSVファイル（ケアプランデータ連携 標準様式）を取り込みます
+          居宅介護支援事業所から受け取ったCSVファイル（ケアプランデータ連携 標準様式）を取り込み、また実績情報（第6表）をエクスポートします
+        </p>
+      </div>
+
+      {/* 実績エクスポート (ケアプランデータ連携 V4 第6表/実績) */}
+      <JissekiExportSection />
+
+      <div className="border-t border-gray-200 pt-6">
+        <h2 className="text-lg font-semibold text-gray-900">ケアプラン取込</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          居宅介護支援事業所から受け取ったCSVファイルを取り込みます
         </p>
       </div>
 
@@ -593,6 +613,367 @@ export default function CareplanImportPage() {
         ケアプランデータ連携システム標準様式（v4.1）のCSVファイルに対応しています。
         利用者基本情報、居宅サービス計画書（第1表〜第3表）、サービス利用票（第6表）、利用票別表（第7表）を取り込みできます。
       </div>
+    </div>
+  );
+}
+
+// ─── 実績エクスポート (ケアプランデータ連携 V4 第6表/実績) ────────────────────
+// kaigo_visit_schedule status='completed' を利用者ごと・単月で第6表/実績 CSV に
+// 変換し、Shift-JIS で 利用者 1 名 = 1 ファイル ダウンロードする。
+// 送信先 (ケアマネ) 事業所番号・サービス種類コードは UI 入力 (未入力可)。
+
+function JissekiExportSection() {
+  const supabase = createClient();
+  const { currentOffice, loading: btLoading } = useBusinessType();
+
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [receiverOfficeNumber, setReceiverOfficeNumber] = useState("");
+  const [receiverServiceKind, setReceiverServiceKind] = useState("43"); // 居宅介護支援
+  const [exporting, setExporting] = useState(false);
+
+  const prevMonth = () => {
+    if (month === 1) { setYear(year - 1); setMonth(12); }
+    else setMonth(month - 1);
+  };
+  const nextMonth = () => {
+    if (month === 12) { setYear(year + 1); setMonth(1); }
+    else setMonth(month + 1);
+  };
+
+  // 送信元サービス種類コード: 事業所の service_type から推定 (訪問介護=11 / 訪問入浴=12)
+  const senderServiceKind =
+    currentOffice?.service_type === "訪問入浴" ? "12" : "11";
+
+  const downloadSjis = (fileName: string, content: string) => {
+    const sjis = Encoding.convert(Encoding.stringToCode(content), {
+      to: "SJIS",
+      from: "UNICODE",
+    });
+    const blob = new Blob([new Uint8Array(sjis)], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const handleExport = useCallback(async () => {
+    if (!currentOffice) {
+      toast.error("事業所が選択されていません。サイドバーで事業所を選択してください。");
+      return;
+    }
+    setExporting(true);
+    try {
+      const monthStr = `${year}-${String(month).padStart(2, "0")}`;
+      const { from, to } = monthRange(year, month);
+
+      // 送信元事業所番号
+      const { data: office, error: oe } = await supabase
+        .from("offices")
+        .select("name, business_number")
+        .eq("id", currentOffice.id)
+        .maybeSingle();
+      if (oe) {
+        toast.error("事業所情報の取得に失敗: " + oe.message);
+        return;
+      }
+      const senderOfficeNumber = ((office?.business_number ?? "") as string).trim();
+      const senderOfficeName = (office?.name ?? currentOffice.name ?? "") as string;
+
+      // 1) 当月の確定実績 (status='completed') を自事業所スコープで取得 (page-loop)
+      interface SchedRow {
+        user_id: string;
+        service_type: string;
+        visit_date: string;
+        start_time: string | null;
+        end_time: string | null;
+      }
+      const PAGE = 1000;
+      const schedules: SchedRow[] = [];
+      let offset = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("kaigo_visit_schedule")
+          .select("user_id, service_type, visit_date, start_time, end_time")
+          .eq("status", "completed")
+          .gte("visit_date", from)
+          .lte("visit_date", to)
+          .or(`office_id.eq.${currentOffice.id},office_id.is.null`)
+          .order("id", { ascending: true })
+          .range(offset, offset + PAGE - 1);
+        if (error) {
+          toast.error("実績の取得に失敗: " + error.message);
+          return;
+        }
+        const rows = (data ?? []) as SchedRow[];
+        schedules.push(...rows);
+        if (rows.length < PAGE) break;
+        offset += PAGE;
+      }
+
+      if (schedules.length === 0) {
+        toast.warning(`${monthStr} の確定実績がありません。`);
+        return;
+      }
+
+      // 2) 利用者ごとに実績を集約
+      const visitsByUser = new Map<string, JissekiVisit[]>();
+      for (const s of schedules) {
+        if (!visitsByUser.has(s.user_id)) visitsByUser.set(s.user_id, []);
+        visitsByUser.get(s.user_id)!.push({
+          date: s.visit_date,
+          serviceType: s.service_type,
+          startTime: s.start_time,
+          endTime: s.end_time,
+        });
+      }
+      const userIds = Array.from(visitsByUser.keys());
+
+      // 3) 利用者名 (clients)
+      const nameById = new Map<string, string>();
+      for (let i = 0; i < userIds.length; i += 50) {
+        const chunk = userIds.slice(i, i + 50);
+        const { data, error } = await supabase
+          .from("clients")
+          .select("id, name")
+          .in("id", chunk);
+        if (error) {
+          toast.error("利用者情報の取得に失敗: " + error.message);
+          return;
+        }
+        for (const c of (data ?? []) as { id: string; name: string }[]) {
+          nameById.set(c.id, c.name);
+        }
+      }
+
+      // 4) 対象月に有効な認定 (保険者番号 / 被保険者番号 / 担当ケアマネ事業所)
+      const certByClient = await resolveCertForMonth(supabase, userIds, year, month);
+
+      // 4.5) care_office_id → care_offices.office_number/name 解決 (直接入力優先)
+      const careOfficeIds = Array.from(
+        new Set(
+          Array.from(certByClient.values())
+            .map((v) => v.care_office_id)
+            .filter(Boolean) as string[],
+        ),
+      );
+      const careNumberById = new Map<string, string | null>();
+      const careNameById = new Map<string, string | null>();
+      if (careOfficeIds.length > 0) {
+        const { data, error } = await supabase
+          .from("care_offices")
+          .select("id, office_number, name")
+          .in("id", careOfficeIds);
+        if (error) {
+          toast.error("居宅介護支援事業所の取得に失敗: " + error.message);
+          return;
+        }
+        for (const o of (data ?? []) as {
+          id: string;
+          office_number: string | null;
+          name: string | null;
+        }[]) {
+          careNumberById.set(o.id, o.office_number);
+          careNameById.set(o.id, o.name);
+        }
+      }
+
+      // 5) 利用者ごとに JissekiUser を組み立て → 利用者 1 名 = 1 ファイルで出力
+      //    (出力単位 = 利用者ごと・単月。spec 2.6)
+      const receiver = receiverOfficeNumber.trim();
+      const recvKind = receiverServiceKind.trim();
+      let fileCount = 0;
+      let emptyCount = 0;
+      const allWarnings = new Set<string>();
+
+      // ふりがな相当が無いため利用者名順で安定化
+      const orderedIds = userIds.sort((a, b) =>
+        (nameById.get(a) ?? a).localeCompare(nameById.get(b) ?? b, "ja"),
+      );
+
+      for (const uid of orderedIds) {
+        const cert = certByClient.get(uid) ?? null;
+        const careNumber =
+          cert?.care_office_number?.trim() ||
+          (cert?.care_office_id
+            ? careNumberById.get(cert.care_office_id) ?? null
+            : null);
+        const careName =
+          cert?.care_office_name?.trim() ||
+          (cert?.care_office_id
+            ? careNameById.get(cert.care_office_id) ?? null
+            : null);
+        const user: JissekiUser = {
+          clientId: uid,
+          name: nameById.get(uid) ?? "(利用者不明)",
+          insurerNumber: cert?.insurer_number ?? null,
+          insuredNumber: cert?.insured_number ?? null,
+          careOfficeNumber: careNumber,
+          careOfficeName: careName,
+          visits: visitsByUser.get(uid) ?? [],
+        };
+
+        const result = await buildJissekiCsv(supabase, [user], {
+          year,
+          month,
+          senderOfficeNumber,
+          senderServiceKind,
+          receiverOfficeNumber: receiver || null,
+          receiverServiceKind: recvKind || null,
+          senderOfficeName,
+        });
+        result.warnings.forEach((w) => allWarnings.add(w));
+        if (!result.content) {
+          emptyCount++;
+          continue;
+        }
+        downloadSjis(result.fileName, result.content);
+        fileCount++;
+      }
+
+      if (allWarnings.size > 0) {
+        // 警告は toast (最大 5 件表示) + console
+        const list = Array.from(allWarnings);
+        console.warn("[jisseki-export] warnings:", list);
+        toast.warning(
+          `確認事項が ${list.length} 件あります:\n・` +
+            list.slice(0, 5).join("\n・") +
+            (list.length > 5 ? `\n… 他 ${list.length - 5} 件 (コンソール参照)` : ""),
+        );
+      }
+      if (fileCount > 0) {
+        toast.success(
+          `${fileCount} 名分の実績情報 (第6表) を出力しました` +
+            (emptyCount > 0 ? ` (連携対象サービスなし ${emptyCount} 名はスキップ)` : ""),
+        );
+      } else {
+        toast.error("出力できる連携対象サービス (介護保険) の実績がありませんでした。");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error(
+        "実績エクスポートに失敗: " + (e instanceof Error ? e.message : String(e)),
+      );
+    } finally {
+      setExporting(false);
+    }
+  }, [
+    supabase,
+    currentOffice,
+    year,
+    month,
+    senderServiceKind,
+    receiverOfficeNumber,
+    receiverServiceKind,
+  ]);
+
+  const reiwa = year - 2018;
+  const isVisitOffice =
+    currentOffice?.service_type === "訪問介護" ||
+    currentOffice?.service_type === "訪問看護" ||
+    currentOffice?.service_type === "訪問入浴";
+
+  return (
+    <div className="rounded-xl border border-violet-200 bg-violet-50/40 p-5">
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-600">
+          <FileDown size={20} />
+        </div>
+        <div className="flex-1">
+          <h2 className="text-lg font-semibold text-gray-900">
+            実績エクスポート（第6表 / V4）
+          </h2>
+          <p className="mt-0.5 text-sm text-gray-500">
+            当月の確定実績（サービス提供実績）を、ケアプランデータ連携標準仕様 V4 の
+            第6表【実績】CSV（Shift-JIS）で出力します。利用者 1 名 = 1 ファイル。
+          </p>
+        </div>
+      </div>
+
+      {!btLoading && !isVisitOffice && (
+        <div className="mt-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          この機能は訪問系サービス事業所向けです。ヘッダーの事業所切替で訪問介護等の事業所を選択してください。
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-wrap items-end gap-4">
+        {/* 対象月 */}
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-600">
+            対象月（サービス提供年月）
+          </label>
+          <div className="inline-flex items-center gap-1 rounded-lg border bg-white px-1 py-0.5">
+            <button
+              type="button"
+              onClick={prevMonth}
+              className="rounded p-1.5 text-gray-500 hover:bg-gray-100"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="min-w-[90px] text-center text-sm font-bold text-gray-800">
+              R{reiwa}/{month}（{year}年{month}月）
+            </span>
+            <button
+              type="button"
+              onClick={nextMonth}
+              className="rounded p-1.5 text-gray-500 hover:bg-gray-100"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* 送信先 (ケアマネ) 事業所番号 */}
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-600">
+            送信先事業所番号（ケアマネ・任意）
+          </label>
+          <input
+            type="text"
+            value={receiverOfficeNumber}
+            onChange={(e) => setReceiverOfficeNumber(e.target.value)}
+            placeholder="10桁（未入力可）"
+            inputMode="numeric"
+            className="w-40 rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-violet-500 focus:outline-none"
+          />
+        </div>
+
+        {/* 送信先サービス種類コード */}
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-600">
+            送信先サービス種類（2桁）
+          </label>
+          <input
+            type="text"
+            value={receiverServiceKind}
+            onChange={(e) => setReceiverServiceKind(e.target.value)}
+            placeholder="43"
+            maxLength={2}
+            className="w-20 rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-violet-500 focus:outline-none"
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={exporting || btLoading || !currentOffice}
+          className="flex items-center gap-2 rounded-lg bg-violet-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+        >
+          {exporting ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : (
+            <FileDown size={16} />
+          )}
+          実績CSVをエクスポート
+        </button>
+      </div>
+
+      <p className="mt-3 text-xs text-gray-400">
+        送信元事業所番号 = 自事業所（事業所管理の事業所番号）／送信元サービス種類 =
+        {senderServiceKind}。介護保険サービスのみ出力対象（障害・総合事業は除外）。
+      </p>
     </div>
   );
 }
