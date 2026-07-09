@@ -127,13 +127,15 @@ export async function aggregateMonthlyShogaiSeikyu(
     service_category: string | null;
     service_code: string | null;
     unit_count: number | null;
+    /** 重複排除用 (下流未使用)。shogai=service_date / schedule=visit_date */
+    service_date?: string | null;
   }
   const records: Rec[] = [];
   let offset = 0;
   while (true) {
     let q = supabase
       .from("shogai_service_records")
-      .select("client_id, service_type, service_category, service_code, unit_count")
+      .select("client_id, service_type, service_category, service_code, unit_count, service_date")
       .eq("status", "confirmed")
       .gte("service_date", from)
       .lte("service_date", to);
@@ -149,6 +151,85 @@ export async function aggregateMonthlyShogaiSeikyu(
     records.push(...rows);
     if (rows.length < PAGE) break;
     offset += PAGE;
+  }
+
+  // 1.5) シフト/提供表 (kaigo_visit_schedule の completed) の障害実績も集計元に統合する。
+  //   障害請求を予定/実績と連動させるため (2026-07-09)。介護請求が kaigo_visit_schedule
+  //   を集計元にするのと対称に、障害も同テーブルの completed 行を集計元にする。
+  //   service_type (サービス名) が障害マスタ (system='障害', validInMonth) に解決できる行のみ
+  //   障害実績とみなし、shogai_service_records と同じ Rec 形 (1件=1オカレンス,
+  //   unit_count=1件あたり単位数) にして追加する。介護/総合の行は名前解決に失敗するので自然に除外。
+  //   同一 (client × code × date) が shogai_service_records と両方にある場合は
+  //   スケジュール優先で重複排除 (二重計上防止)。
+  {
+    const keyOf = (r: Rec) => `${r.client_id}__${r.service_code ?? ""}__${r.service_date ?? ""}`;
+    interface SchedRow { user_id: string; service_type: string | null; visit_date: string }
+    const schedRows: SchedRow[] = [];
+    let soff = 0;
+    let schedOk = true;
+    while (true) {
+      let sq = supabase
+        .from("kaigo_visit_schedule")
+        .select("user_id, service_type, visit_date")
+        .eq("status", "completed")
+        .gte("visit_date", from)
+        .lte("visit_date", to);
+      if (opts.officeId) sq = sq.or(`office_id.eq.${opts.officeId},office_id.is.null`);
+      const { data, error } = await sq.order("id").range(soff, soff + PAGE - 1);
+      if (error) {
+        // office_id 列未適用(42703) 等は schedule 連携をスキップ (握らず warn)
+        console.warn("[shogai] シフト実績の取得に失敗 (schedule 連携スキップ):", error.message);
+        schedOk = false;
+        break;
+      }
+      const rows = (data ?? []) as SchedRow[];
+      schedRows.push(...rows);
+      if (rows.length < PAGE) break;
+      soff += PAGE;
+    }
+    if (schedOk && schedRows.length > 0) {
+      const names = Array.from(new Set(schedRows.map((s) => (s.service_type ?? "").trim()).filter(Boolean)));
+      const nameMap = new Map<string, { code: string; units: number; category: string | null }>();
+      for (let i = 0; i < names.length; i += 50) {
+        const chunk = names.slice(i, i + 50);
+        const { data, error } = await validInMonth(
+          supabase
+            .from("kaigo_service_codes")
+            .select("service_code, service_name, units, service_category")
+            .eq("system", "障害")
+            .in("service_name", chunk),
+          opts.year,
+          opts.month,
+        );
+        if (error) { console.warn("[shogai] 障害コード解決に失敗 (一部スキップ):", error.message); continue; }
+        for (const c of (data ?? []) as { service_code: string; service_name: string; units: number; service_category: string | null }[]) {
+          const k = c.service_name.trim();
+          if (!nameMap.has(k)) nameMap.set(k, { code: c.service_code, units: c.units, category: c.service_category });
+        }
+      }
+      const schedRecs: Rec[] = [];
+      for (const s of schedRows) {
+        const name = (s.service_type ?? "").trim();
+        const m = nameMap.get(name);
+        if (!m) continue; // 障害コードに解決できない = 介護/総合 → スキップ
+        schedRecs.push({
+          client_id: s.user_id,
+          service_type: name,
+          service_category: m.category,
+          service_code: m.code,
+          unit_count: m.units,
+          service_date: s.visit_date,
+        });
+      }
+      if (schedRecs.length > 0) {
+        // スケジュール優先: 同一 client×code×date の shogai_service_records 行を除外
+        const schedKeys = new Set(schedRecs.map(keyOf));
+        for (let i = records.length - 1; i >= 0; i--) {
+          if (schedKeys.has(keyOf(records[i]))) records.splice(i, 1);
+        }
+        records.push(...schedRecs);
+      }
+    }
   }
 
   if (records.length === 0) {
