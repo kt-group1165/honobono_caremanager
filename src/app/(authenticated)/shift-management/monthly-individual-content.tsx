@@ -19,6 +19,7 @@ import {
   RotateCcw,
   Trash2,
   X,
+  Plus,
 } from "lucide-react";
 import {
   format,
@@ -30,13 +31,24 @@ import {
 } from "date-fns";
 import { ja } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { ServiceSelector } from "@/components/services/service-selector";
+import { StaffCombobox } from "@/components/shared/staff-combobox";
 import {
   SERVICE_TYPE_COLORS,
+  buildAdditionalStaffPayload,
   insertVisitSchedules,
+  supportsAdditionalStaff,
+  supportsKinkyuHoumon,
+  supportsStaff2Times,
   twoPersonMismatchWarning,
+  staffTimeRelationWarning,
   type KaigoStaff,
   type VisitSchedule,
 } from "./_shared";
+import {
+  AdditionalStaffSection,
+  type AdditionalStaffRow,
+} from "./additional-staff-section";
 import {
   useKaigoVisitSchedulesByUser,
   useKaigoVisitSchedulesByStaff,
@@ -80,6 +92,38 @@ export function MonthlyIndividualView({
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkProcessing, setBulkProcessing] = useState(false);
+
+  // ─── サービス追加 (新規予定) モーダルの state ───
+  // 追加は利用者ビューでのみ有効 (この画面の entityId を user_id として INSERT する)
+  const canAdd = entityType === "user";
+  // 列適用状況 (未適用環境では ServiceSelector の緊急時トグルや個別時間 UI を出さない。
+  // INSERT 側は insertVisitSchedules が欠損列を strip して retry する)
+  const [kinkyuSupported, setKinkyuSupported] = useState(false);
+  const [staff2TimesSupported, setStaff2TimesSupported] = useState(false);
+  const [additionalStaffSupported, setAdditionalStaffSupported] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void supportsKinkyuHoumon(supabase).then((ok) => { if (!cancelled) setKinkyuSupported(ok); });
+    void supportsStaff2Times(supabase).then((ok) => { if (!cancelled) setStaff2TimesSupported(ok); });
+    void supportsAdditionalStaff(supabase).then((ok) => { if (!cancelled) setAdditionalStaffSupported(ok); });
+    return () => { cancelled = true; };
+  }, [supabase]);
+
+  const [addOpen, setAddOpen] = useState(false);
+  const [addForm, setAddForm] = useState({
+    visit_date: "",
+    start_time: "09:00",
+    end_time: "10:00",
+    service_type: "",
+    staff_id: "",
+    service_code: "",
+    service_name: "",
+    kinkyu_houmon: false,
+  });
+  const [addAdditional, setAddAdditional] = useState<AdditionalStaffRow[]>([]);
+  const [addServiceSystem, setAddServiceSystem] = useState<string | null>(null);
+  const [addSaving, setAddSaving] = useState(false);
+  const [showAddServiceSelector, setShowAddServiceSelector] = useState(false);
 
   const monthFrom = useMemo(() => format(startOfMonth(currentMonth), "yyyy-MM-dd"), [currentMonth]);
   const monthTo = useMemo(() => format(endOfMonth(currentMonth), "yyyy-MM-dd"), [currentMonth]);
@@ -446,6 +490,74 @@ export function MonthlyIndividualView({
     setSchedules((prev) => prev.filter((s) => s.id !== copyId));
   };
 
+  const openAddModal = () => {
+    // 対象月内の初期値 (当月に今日が含まれれば今日、なければ月初)
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    const defaultAddDate = todayStr >= monthFrom && todayStr <= monthTo ? todayStr : monthFrom;
+    setAddForm({
+      visit_date: defaultAddDate,
+      start_time: "09:00",
+      end_time: "10:00",
+      service_type: "",
+      staff_id: "",
+      service_code: "",
+      service_name: "",
+      kinkyu_houmon: false,
+    });
+    setAddAdditional([]);
+    setAddServiceSystem(null);
+    setAddOpen(true);
+  };
+
+  const handleAddSave = async () => {
+    if (!addForm.visit_date) { toast.error("利用日を選択してください"); return; }
+    if (!addForm.service_name) { toast.error("サービスを選択してください"); return; }
+    setAddSaving(true);
+    // 追加職員: additional_staff (jsonb) + 従来列 staff_id_2/3 + staff2/3_*_time ミラー。
+    // 列未適用は insertVisitSchedules が strip して retry
+    const addlPayload = buildAdditionalStaffPayload(addAdditional);
+    const payload: Record<string, unknown> = {
+      user_id: entityId,
+      visit_date: addForm.visit_date,
+      start_time: addForm.start_time + ":00",
+      end_time: addForm.end_time + ":00",
+      service_type: addForm.service_name || addForm.service_type,
+      staff_id: addForm.staff_id || null,
+      status: "scheduled",
+      // C3: 緊急時訪問介護加算 (列未適用は strip)
+      ...(kinkyuSupported ? { kinkyu_houmon: addForm.kinkyu_houmon } : {}),
+      ...addlPayload,
+      // C5: 発生元 office (列未適用は strip)
+      ...(currentOfficeId ? { office_id: currentOfficeId } : {}),
+    };
+    const { error } = await insertVisitSchedules(supabase, [payload]);
+    if (error) {
+      toast.error("追加に失敗しました: " + error.message);
+      setAddSaving(false);
+      return;
+    }
+    toast.success("予定を追加しました");
+    // 2人体制・時間関係の警告 (ブロックはしない)
+    const first = addAdditional.find((r) => r.staff_id);
+    const warn = twoPersonMismatchWarning(
+      addForm.service_name || addForm.service_type,
+      first?.staff_id || null,
+    );
+    if (warn) toast.warning(warn);
+    if (first && first.custom && first.start && first.end) {
+      const timeWarn = staffTimeRelationWarning(
+        addForm.start_time, addForm.end_time,
+        first.start, first.end,
+        addForm.service_name || addForm.service_type,
+        addServiceSystem === "障害",
+      );
+      if (timeWarn) toast.warning(timeWarn);
+    }
+    setAddOpen(false);
+    setAddSaving(false);
+    active.mutate();
+  };
+
   const bulkDelete = async () => {
     if (selectedIds.size === 0) { toast.error("対象を選択してください"); return; }
     const ok = window.confirm(`選択された${selectedIds.size}件を削除します。\n予定も実績も削除されますが、本当によろしいですか？`);
@@ -641,6 +753,16 @@ export function MonthlyIndividualView({
           削除
         </button>
         {bulkProcessing && <Loader2 size={14} className="animate-spin text-blue-500 ml-1" />}
+        {canAdd && (
+          <button
+            onClick={openAddModal}
+            disabled={bulkProcessing}
+            className="ml-auto inline-flex items-center gap-1 rounded border border-green-300 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 hover:bg-green-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <Plus size={12} />
+            サービス追加
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -917,7 +1039,166 @@ export function MonthlyIndividualView({
           </tbody>
         </table>
       </div>
+
+      {/* サービス追加モーダル (新規予定。介護・障害 両対応) */}
+      {addOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <h2 className="font-semibold text-gray-900">サービス追加 — {entityName}</h2>
+              <button onClick={() => setAddOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">利用日</label>
+                <input
+                  type="date"
+                  value={addForm.visit_date}
+                  min={monthFrom}
+                  max={monthTo}
+                  onChange={(e) => setAddForm((f) => ({ ...f, visit_date: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">開始時間</label>
+                  <input
+                    type="time"
+                    value={addForm.start_time}
+                    onChange={(e) => { const v = e.target.value; setAddForm((f) => ({ ...f, start_time: v, end_time: f.end_time <= v ? v : f.end_time })); }}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">終了時間</label>
+                  <input
+                    type="time"
+                    value={addForm.end_time}
+                    min={addForm.start_time}
+                    onChange={(e) => { const v = e.target.value; setAddForm((f) => ({ ...f, end_time: v < f.start_time ? f.start_time : v })); }}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                  サービス
+                  <ServiceSystemBadge system={addServiceSystem} />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowAddServiceSelector(true)}
+                  className="w-full flex items-center justify-between rounded-lg border border-gray-300 px-3 py-2 text-sm text-left hover:bg-gray-50 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
+                >
+                  <span className={addForm.service_name ? "text-gray-900" : "text-gray-400"}>
+                    {addForm.service_name || "サービスを選択..."}
+                  </span>
+                  {addForm.service_code ? (
+                    <span className="text-xs text-gray-400 font-mono">{addForm.service_code}</span>
+                  ) : (
+                    <ChevronRight size={14} className="text-gray-400" />
+                  )}
+                </button>
+                {/* ServiceSelector は 介護・障害 両タブを内包 (system 未指定でユーザーがタブ切替) */}
+                <ServiceSelector
+                  open={showAddServiceSelector}
+                  onClose={() => setShowAddServiceSelector(false)}
+                  startTime={addForm.start_time}
+                  endTime={addForm.end_time}
+                  showVisitAddons={kinkyuSupported}
+                  kinkyu={addForm.kinkyu_houmon}
+                  onKinkyuChange={(v) => setAddForm((f) => ({ ...f, kinkyu_houmon: v }))}
+                  onSelect={(service) => {
+                    setAddForm((f) => ({
+                      ...f,
+                      service_type: service.categoryName,
+                      service_code: service.code,
+                      service_name: service.name,
+                    }));
+                    setAddServiceSystem(service.system);
+                    setShowAddServiceSelector(false);
+                  }}
+                />
+                {kinkyuSupported && addForm.kinkyu_houmon && (
+                  <p className="mt-1 text-xs font-medium text-red-600">＋ 緊急時訪問介護加算</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">担当職員</label>
+                <StaffCombobox
+                  value={addForm.staff_id}
+                  onChange={(id) => setAddForm((f) => ({ ...f, staff_id: id }))}
+                  options={staff.map((s) => ({
+                    id: s.id,
+                    name: s.name,
+                    furigana: (s as unknown as { furigana?: string | null }).furigana ?? null,
+                  }))}
+                />
+              </div>
+
+              {/* 追加職員 (2人体制・同行、主 + 最大9名) */}
+              <AdditionalStaffSection
+                rows={addAdditional}
+                onChange={setAddAdditional}
+                staffOptions={staff.map((s) => ({
+                  id: s.id,
+                  name: s.name,
+                  furigana: (s as unknown as { furigana?: string | null }).furigana ?? null,
+                }))}
+                mainStaffId={addForm.staff_id}
+                mainStart={addForm.start_time}
+                mainEnd={addForm.end_time}
+                serviceName={addForm.service_name || addForm.service_type}
+                isShogai={addServiceSystem === "障害"}
+                showCustomTime={staff2TimesSupported && additionalStaffSupported}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 border-t px-5 py-4">
+              <button
+                onClick={() => setAddOpen(false)}
+                className="rounded-lg border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleAddSave}
+                disabled={addSaving}
+                className="flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {addSaving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                追加
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+// ─── サービス種別バッジ (選択したサービスの制度区分を自動表示) ────────────────
+function ServiceSystemBadge({ system }: { system: string | null }) {
+  if (!system) return null;
+  const label = system === "総合事業" ? "総合" : system === "独自" ? "独自" : system;
+  const cls =
+    system === "介護"
+      ? "bg-blue-100 text-blue-700"
+      : system === "総合事業"
+      ? "bg-emerald-100 text-emerald-700"
+      : system === "障害"
+      ? "bg-purple-100 text-purple-700"
+      : "bg-amber-100 text-amber-700";
+  return (
+    <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-bold", cls)}>
+      {label}
+    </span>
   );
 }
 
