@@ -32,6 +32,12 @@ import { serviceShortName } from "@/lib/service-short-name";
 import { getServiceSystemMap } from "@/lib/service-system-lookup";
 import { toHankakuDigits } from "@/lib/service-name-normalize";
 import {
+  isJudoHoumonService,
+  isDoukouService,
+  stripDoukou,
+  resolveDoukouVariant,
+} from "@/lib/shogai-doukou";
+import {
   buildAdditionalStaffPayload,
   DOW_LABELS,
   insertVisitSchedules,
@@ -170,6 +176,8 @@ export function UserCalendar({
   const [editForm, setEditForm] = useState({ start_time: "", end_time: "", service_type: "", staff_id: "", service_code: "", service_name: "", kinkyu_houmon: false });
   // 追加職員 (index0=職員2, index1=職員3, …)。最大9名
   const [editAdditional, setEditAdditional] = useState<AdditionalStaffRow[]>([]);
+  // 熟練同行 (重度訪問介護の同行支援): 障害の重訪で 2 人以上のとき
+  const [editDoukou, setEditDoukou] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editDeleting, setEditDeleting] = useState(false);
   const [showServiceSelector, setShowServiceSelector] = useState(false);
@@ -179,6 +187,7 @@ export function UserCalendar({
   const [addModal, setAddModal] = useState<string | null>(null);
   const [addForm, setAddForm] = useState({ start_time: "09:00", end_time: "10:00", service_type: "", staff_id: "", service_code: "", service_name: "", kinkyu_houmon: false });
   const [addAdditional, setAddAdditional] = useState<AdditionalStaffRow[]>([]);
+  const [addDoukou, setAddDoukou] = useState(false);
   const [addSaving, setAddSaving] = useState(false);
   const [showAddServiceSelector, setShowAddServiceSelector] = useState(false);
   // drag & drop: ドロップ先セルのハイライト用
@@ -260,13 +269,17 @@ export function UserCalendar({
     }).then((m) => {
       setEditServiceSystem(m.get(toHankakuDigits(sched.service_type)) ?? null);
     });
+    // 既存が同行コードなら doukou=true + 表示は base 名に戻す (自然な編集初期化)
+    const wasDoukou = isDoukouService(sched.service_type);
+    const displayName = wasDoukou ? stripDoukou(sched.service_type) : sched.service_type;
+    setEditDoukou(wasDoukou);
     setEditForm({
       start_time: sched.start_time?.slice(0, 5) ?? "09:00",
       end_time: sched.end_time?.slice(0, 5) ?? "10:00",
-      service_type: sched.service_type,
+      service_type: displayName,
       staff_id: sched.staff_id ?? "",
       service_code: "",
-      service_name: sched.service_type,
+      service_name: displayName,
       kinkyu_houmon: sched.kinkyu_houmon ?? false,
     });
     setEditAdditional(additionalRowsFromSchedule(sched));
@@ -315,10 +328,32 @@ export function UserCalendar({
       return;
     }
     setEditSaving(true);
+    // 熟練同行: 障害の重訪で 2 人以上 + チェック ON のとき、同行コードへ差し替え
+    const editBaseService = editForm.service_name || editForm.service_type;
+    let editServiceType = editBaseService;
+    const editHasSecond = editAdditional.some((r) => r.staff_id);
+    if (
+      editDoukou &&
+      editServiceSystem === "障害" &&
+      isJudoHoumonService(editBaseService) &&
+      editHasSecond
+    ) {
+      const variant = await resolveDoukouVariant(
+        supabase,
+        editBaseService,
+        Number(editModal.visit_date.slice(0, 4)),
+        Number(editModal.visit_date.slice(5, 7)),
+      );
+      if (variant) {
+        editServiceType = variant.name;
+      } else {
+        toast.warning("同行コードが見つかりません。基本コードで登録します");
+      }
+    }
     const updateData: Record<string, unknown> = {
       start_time: editForm.start_time + ":00",
       end_time: editForm.end_time + ":00",
-      service_type: editForm.service_name || editForm.service_type,
+      service_type: editServiceType,
       staff_id: editForm.staff_id || null,
     };
     // C3: 緊急時訪問介護加算フラグ (列未適用環境では含めない)
@@ -403,6 +438,7 @@ export function UserCalendar({
     setAddServiceSystem(null);
     setAddForm({ start_time: "09:00", end_time: "10:00", service_type: "", staff_id: "", service_code: "", service_name: "", kinkyu_houmon: false });
     setAddAdditional([]);
+    setAddDoukou(false);
   };
 
   const handleAddSave = async () => {
@@ -412,6 +448,28 @@ export function UserCalendar({
       return;
     }
     setAddSaving(true);
+    // 熟練同行: 障害の重訪で 2 人以上 + チェック ON のとき、同行コードへ差し替え
+    const addBaseService = addForm.service_name || addForm.service_type;
+    let addServiceType = addBaseService;
+    const addHasSecond = addAdditional.some((r) => r.staff_id);
+    if (
+      addDoukou &&
+      addServiceSystem === "障害" &&
+      isJudoHoumonService(addBaseService) &&
+      addHasSecond
+    ) {
+      const variant = await resolveDoukouVariant(
+        supabase,
+        addBaseService,
+        Number(addModal.slice(0, 4)),
+        Number(addModal.slice(5, 7)),
+      );
+      if (variant) {
+        addServiceType = variant.name;
+      } else {
+        toast.warning("同行コードが見つかりません。基本コードで登録します");
+      }
+    }
     // 追加職員: additional_staff (jsonb) + 従来列ミラー。列未適用は insertVisitSchedules が strip
     const addlPayload = buildAdditionalStaffPayload(addAdditional);
     const { error } = await insertVisitSchedules(supabase, [{
@@ -419,7 +477,7 @@ export function UserCalendar({
       visit_date: addModal,
       start_time: addForm.start_time + ":00",
       end_time: addForm.end_time + ":00",
-      service_type: addForm.service_name || addForm.service_type,
+      service_type: addServiceType,
       staff_id: addForm.staff_id || null,
       // C3/C5: 列未適用 (42703/PGRST204) は insertVisitSchedules が strip して retry
       ...(kinkyuSupported ? { kinkyu_houmon: addForm.kinkyu_houmon } : {}),
@@ -769,6 +827,9 @@ export function UserCalendar({
                 serviceName={editForm.service_name || editForm.service_type}
                 isShogai={editServiceSystem === "障害"}
                 showCustomTime={staff2TimesSupported}
+                doukou={editDoukou}
+                onDoukouChange={setEditDoukou}
+                serviceIsJudoHoumon={isJudoHoumonService(editForm.service_name || editForm.service_type)}
               />
             </div>
 
@@ -943,6 +1004,9 @@ export function UserCalendar({
                 serviceName={addForm.service_name || addForm.service_type}
                 isShogai={addServiceSystem === "障害"}
                 showCustomTime={staff2TimesSupported}
+                doukou={addDoukou}
+                onDoukouChange={setAddDoukou}
+                serviceIsJudoHoumon={isJudoHoumonService(addForm.service_name || addForm.service_type)}
               />
 
             </div>

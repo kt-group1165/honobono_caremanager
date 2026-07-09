@@ -6,6 +6,7 @@ import {
 } from "@/lib/service-name-normalize";
 import { getServiceSystemMap } from "@/lib/service-system-lookup";
 import { validInMonth } from "@/lib/service-code-valid";
+import { isJudoHoumonService, resolveDoukouVariant } from "@/lib/shogai-doukou";
 import { Fragment, useState, useEffect, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -121,6 +122,7 @@ export function MonthlyIndividualView({
     kinkyu_houmon: false,
   });
   const [addAdditional, setAddAdditional] = useState<AdditionalStaffRow[]>([]);
+  const [addDoukou, setAddDoukou] = useState(false);
   const [addServiceSystem, setAddServiceSystem] = useState<string | null>(null);
   const [addSaving, setAddSaving] = useState(false);
   const [showAddServiceSelector, setShowAddServiceSelector] = useState(false);
@@ -505,6 +507,7 @@ export function MonthlyIndividualView({
       kinkyu_houmon: false,
     });
     setAddAdditional([]);
+    setAddDoukou(false);
     setAddServiceSystem(null);
     setAddOpen(true);
   };
@@ -513,6 +516,28 @@ export function MonthlyIndividualView({
     if (!addForm.visit_date) { toast.error("利用日を選択してください"); return; }
     if (!addForm.service_name) { toast.error("サービスを選択してください"); return; }
     setAddSaving(true);
+    // 熟練同行: 障害の重訪で 2 人以上 + チェック ON のとき、同行コードへ差し替え
+    const addBaseService = addForm.service_name || addForm.service_type;
+    let addServiceType = addBaseService;
+    const addHasSecond = addAdditional.some((r) => r.staff_id);
+    if (
+      addDoukou &&
+      addServiceSystem === "障害" &&
+      isJudoHoumonService(addBaseService) &&
+      addHasSecond
+    ) {
+      const variant = await resolveDoukouVariant(
+        supabase,
+        addBaseService,
+        Number(addForm.visit_date.slice(0, 4)),
+        Number(addForm.visit_date.slice(5, 7)),
+      );
+      if (variant) {
+        addServiceType = variant.name;
+      } else {
+        toast.warning("同行コードが見つかりません。基本コードで登録します");
+      }
+    }
     // 追加職員: additional_staff (jsonb) + 従来列 staff_id_2/3 + staff2/3_*_time ミラー。
     // 列未適用は insertVisitSchedules が strip して retry
     const addlPayload = buildAdditionalStaffPayload(addAdditional);
@@ -521,7 +546,7 @@ export function MonthlyIndividualView({
       visit_date: addForm.visit_date,
       start_time: addForm.start_time + ":00",
       end_time: addForm.end_time + ":00",
-      service_type: addForm.service_name || addForm.service_type,
+      service_type: addServiceType,
       staff_id: addForm.staff_id || null,
       status: "scheduled",
       // C3: 緊急時訪問介護加算 (列未適用は strip)
@@ -1157,6 +1182,9 @@ export function MonthlyIndividualView({
                 serviceName={addForm.service_name || addForm.service_type}
                 isShogai={addServiceSystem === "障害"}
                 showCustomTime={staff2TimesSupported && additionalStaffSupported}
+                doukou={addDoukou}
+                onDoukouChange={setAddDoukou}
+                serviceIsJudoHoumon={isJudoHoumonService(addForm.service_name || addForm.service_type)}
               />
             </div>
 

@@ -57,6 +57,12 @@ import {
 } from "./additional-staff-section";
 import { getServiceSystemMap } from "@/lib/service-system-lookup";
 import { toHankakuDigits } from "@/lib/service-name-normalize";
+import {
+  isJudoHoumonService,
+  isDoukouService,
+  stripDoukou,
+  resolveDoukouVariant,
+} from "@/lib/shogai-doukou";
 import { UserCalendar, type UserCalendarInitialData } from "./user-calendar-content";
 import { StaffCalendar, type StaffCalendarInitialData } from "./staff-calendar-content";
 import { TimelineView, type TimelineInitialData } from "./timeline-view-content";
@@ -708,6 +714,7 @@ export function ShiftManagementContent({
   });
   // 追加職員 (index0=職員2, index1=職員3, …)。最大9名
   const [pageEditAdditional, setPageEditAdditional] = useState<AdditionalStaffRow[]>([]);
+  const [pageEditDoukou, setPageEditDoukou] = useState(false);
   const [pageEditSaving, setPageEditSaving] = useState(false);
   const [showPageServiceSelector, setShowPageServiceSelector] = useState(false);
   // 選択中サービスの制度区分 (障害なら個別時間の重なり警告を出さない)
@@ -750,12 +757,16 @@ export function ShiftManagementContent({
 
   const openPageEditModal = (sched: VisitSchedule) => {
     setPageEditModal(sched);
+    // 既存が同行コードなら doukou=true + 表示は base 名に戻す
+    const wasDoukou = isDoukouService(sched.service_type ?? "");
+    const displayName = wasDoukou ? stripDoukou(sched.service_type ?? "") : (sched.service_type ?? "");
+    setPageEditDoukou(wasDoukou);
     setPageEditForm({
       start_time: sched.start_time?.slice(0, 5) ?? "",
       end_time: sched.end_time?.slice(0, 5) ?? "",
-      service_type: sched.service_type ?? "",
+      service_type: displayName,
       service_code: "",
-      service_name: sched.service_type ?? "",
+      service_name: displayName,
       staff_id: sched.staff_id ?? "",
       kinkyu_houmon: sched.kinkyu_houmon ?? false,
     });
@@ -808,11 +819,34 @@ export function ShiftManagementContent({
   const handlePageEditSave = async () => {
     if (!pageEditModal) return;
     setPageEditSaving(true);
+    // 熟練同行: 障害の重訪で 2 人以上 + チェック ON のとき、同行コードへ差し替え
+    const pageBaseService = pageEditForm.service_name || pageEditForm.service_type;
+    let pageServiceType = pageBaseService;
+    const pageHasSecond = pageEditAdditional.some((r) => r.staff_id);
+    if (
+      pageEditDoukou &&
+      pageEditServiceSystem === "障害" &&
+      isJudoHoumonService(pageBaseService) &&
+      pageHasSecond &&
+      pageEditModal.visit_date
+    ) {
+      const variant = await resolveDoukouVariant(
+        supabase,
+        pageBaseService,
+        Number(pageEditModal.visit_date.slice(0, 4)),
+        Number(pageEditModal.visit_date.slice(5, 7)),
+      );
+      if (variant) {
+        pageServiceType = variant.name;
+      } else {
+        toast.warning("同行コードが見つかりません。基本コードで登録します");
+      }
+    }
     const updatePayload: Record<string, unknown> = {
       start_time: pageEditForm.start_time + ":00",
       end_time: pageEditForm.end_time + ":00",
       // 具体的な service_name (例: 身体介護02) があればそれを、無ければ category (身体介護) を保存
-      service_type: pageEditForm.service_name || pageEditForm.service_type,
+      service_type: pageServiceType,
       staff_id: pageEditForm.staff_id || null,
     };
     // C3: 緊急時訪問介護加算フラグ (列未適用環境では含めない)
@@ -1207,6 +1241,9 @@ export function ShiftManagementContent({
                 serviceName={pageEditForm.service_name || pageEditForm.service_type}
                 isShogai={pageEditServiceSystem === "障害"}
                 showCustomTime={staff2TimesSupported}
+                doukou={pageEditDoukou}
+                onDoukouChange={setPageEditDoukou}
+                serviceIsJudoHoumon={isJudoHoumonService(pageEditForm.service_name || pageEditForm.service_type)}
               />
             </div>
             <div className="flex items-center justify-between border-t px-5 py-4">

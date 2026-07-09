@@ -52,6 +52,14 @@ interface Props {
   isShogai: boolean;
   /** 個別時間 UI を出すか (staff2_*_time 列が適用済みか)。false でも職員追加は可 */
   showCustomTime: boolean;
+  /**
+   * 熟練同行 (重度訪問介護の同行支援) チェックの状態。
+   * 障害の重訪で 2 人以上のときのみ表示する。未配線 (undefined) なら非表示。
+   */
+  doukou?: boolean;
+  onDoukouChange?: (v: boolean) => void;
+  /** 選択中サービスが重度訪問介護か (同行チェック表示条件) */
+  serviceIsJudoHoumon?: boolean;
 }
 
 export function AdditionalStaffSection({
@@ -64,6 +72,9 @@ export function AdditionalStaffSection({
   serviceName,
   isShogai,
   showCustomTime,
+  doukou,
+  onDoukouChange,
+  serviceIsJudoHoumon,
 }: Props) {
   const addRow = () => {
     if (rows.length >= MAX_ADDITIONAL_STAFF) return;
@@ -91,6 +102,9 @@ export function AdditionalStaffSection({
 
   // 職員2 (先頭) のコード整合警告
   const codeWarn = twoPersonMismatchWarning(serviceName, rows[0]?.staff_id || null);
+
+  // 熟練同行 (重度訪問介護の同行支援): 障害の重訪で 2 人以上のときのみ表示
+  const showDoukou = !!(isShogai && serviceIsJudoHoumon && onDoukouChange && rows.length > 0);
 
   return (
     <div className="space-y-3">
@@ -182,6 +196,24 @@ export function AdditionalStaffSection({
           </div>
         );
       })}
+
+      {showDoukou && (
+        <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+          <input
+            type="checkbox"
+            checked={!!doukou}
+            onChange={(e) => onDoukouChange?.(e.target.checked)}
+            className="mt-0.5 h-3.5 w-3.5 accent-emerald-600"
+          />
+          <span>
+            熟練同行（同行支援・2人。所定90%で2人算定）
+            <br />
+            <span className="text-[10px] text-emerald-700">
+              ※ 熟練従業者が新任に同行して重訪提供時。保存時にサービスコードを同行コードへ差し替えます（120時間上限は手動運用）
+            </span>
+          </span>
+        </label>
+      )}
 
       {codeWarn && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">

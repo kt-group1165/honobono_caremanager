@@ -35,6 +35,12 @@ import {
 } from "@/lib/service-name-normalize";
 import { getServiceSystemMap, isShogaiService } from "@/lib/service-system-lookup";
 import { validInMonth } from "@/lib/service-code-valid";
+import {
+  isJudoHoumonService,
+  isDoukouService,
+  stripDoukou,
+  resolveDoukouVariant,
+} from "@/lib/shogai-doukou";
 import { useBusinessType } from "@/lib/business-type-context";
 import {
   buildAdditionalStaffPayload,
@@ -477,12 +483,15 @@ export function ProvisionTicketsContent({
     start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", staff_id: "",
   });
   const [addRowAdditional, setAddRowAdditional] = useState<AdditionalStaffRow[]>([]);
+  // 熟練同行 (重度訪問介護の同行支援): 障害モードの重訪で 2 人以上のとき
+  const [addRowDoukou, setAddRowDoukou] = useState(false);
   const [showAddServiceSelector, setShowAddServiceSelector] = useState(false);
   const [editRowKey, setEditRowKey] = useState<string | null>(null);
   const [editRowForm, setEditRowForm] = useState({
     start_time: "", end_time: "", service_name: "", service_code: "", staff_id: "",
   });
   const [editRowAdditional, setEditRowAdditional] = useState<AdditionalStaffRow[]>([]);
+  const [editRowDoukou, setEditRowDoukou] = useState(false);
   const [showEditServiceSelector, setShowEditServiceSelector] = useState(false);
 
   const year = selectedMonth.getFullYear();
@@ -1013,7 +1022,18 @@ export function ProvisionTicketsContent({
       toast.error("サービスを選択してください");
       return;
     }
-    const key = makeRowKey(addRowForm.service_name, addRowForm.start_time + ":00", addRowForm.end_time + ":00");
+    // 熟練同行: 障害モードの重訪で 2 人以上 + チェック ON のとき、同行コードへ差し替え
+    let rowServiceType = addRowForm.service_name;
+    const addHasSecond = addRowAdditional.some((r) => r.staff_id);
+    if (addRowDoukou && viewSystem === "障害" && isJudoHoumonService(addRowForm.service_name) && addHasSecond) {
+      const variant = await resolveDoukouVariant(supabase, addRowForm.service_name, year, month);
+      if (variant) {
+        rowServiceType = variant.name;
+      } else {
+        toast.warning("同行コードが見つかりません。基本コードで登録します");
+      }
+    }
+    const key = makeRowKey(rowServiceType, addRowForm.start_time + ":00", addRowForm.end_time + ":00");
     if (serviceRows.some((r) => r.key === key)) {
       toast.error("同じサービス行が既に存在します");
       return;
@@ -1023,7 +1043,7 @@ export function ProvisionTicketsContent({
     const additional = additionalStaffRowsToEntries(addRowAdditional);
     setServiceRows((prev) => [...prev, {
       key,
-      service_type: addRowForm.service_name,
+      service_type: rowServiceType,
       start_time: addRowForm.start_time + ":00",
       end_time: addRowForm.end_time + ":00",
       staff_id: addRowForm.staff_id || undefined,
@@ -1062,23 +1082,39 @@ export function ProvisionTicketsContent({
   // ── Edit row ───────────────────────────────────────────────────────────────
   const openEditRow = (row: ServiceRow) => {
     setEditRowKey(row.key);
+    // 既存が同行コードなら doukou=true + 表示は base 名に戻す
+    const wasDoukou = isDoukouService(row.service_type);
+    const displayName = wasDoukou ? stripDoukou(row.service_type) : row.service_type;
+    setEditRowDoukou(wasDoukou);
     setEditRowForm({
       start_time: row.start_time.slice(0, 5),
       end_time: row.end_time.slice(0, 5),
-      service_name: row.service_type,
+      service_name: displayName,
       service_code: "",
       staff_id: row.staff_id ?? "",
     });
     setEditRowAdditional(additionalEntriesToRows(row.additional));
   };
 
-  const handleEditRowSave = () => {
+  const handleEditRowSave = async () => {
     if (!editRowKey || !editRowForm.service_name) return;
     const oldRow = serviceRows.find((r) => r.key === editRowKey);
     if (!oldRow) return;
 
+    // 熟練同行: 障害モードの重訪で 2 人以上 + チェック ON のとき、同行コードへ差し替え
+    let editServiceType = editRowForm.service_name;
+    const editHasSecond = editRowAdditional.some((r) => r.staff_id);
+    if (editRowDoukou && viewSystem === "障害" && isJudoHoumonService(editRowForm.service_name) && editHasSecond) {
+      const variant = await resolveDoukouVariant(supabase, editRowForm.service_name, year, month);
+      if (variant) {
+        editServiceType = variant.name;
+      } else {
+        toast.warning("同行コードが見つかりません。基本コードで登録します");
+      }
+    }
+
     markDirty();
-    const newKey = makeRowKey(editRowForm.service_name, editRowForm.start_time + ":00", editRowForm.end_time + ":00");
+    const newKey = makeRowKey(editServiceType, editRowForm.start_time + ":00", editRowForm.end_time + ":00");
     const existingRow = serviceRows.find((r) => r.key === newKey && r.key !== editRowKey);
 
     if (existingRow) {
@@ -1114,7 +1150,7 @@ export function ProvisionTicketsContent({
           ? {
               ...r,
               key: newKey,
-              service_type: editRowForm.service_name,
+              service_type: editServiceType,
               start_time: editRowForm.start_time + ":00",
               end_time: editRowForm.end_time + ":00",
               staff_id: editRowForm.staff_id || undefined,
@@ -1854,6 +1890,7 @@ export function ProvisionTicketsContent({
                       start_time: "09:00", end_time: "10:00", service_type: "", service_code: "", service_name: "", staff_id: "",
                     });
                     setAddRowAdditional([]);
+                    setAddRowDoukou(false);
                     setAddRowAddons({});
                     setShowAddRow(true);
                   }}
@@ -2367,6 +2404,9 @@ export function ProvisionTicketsContent({
                 serviceName={addRowForm.service_name || addRowForm.service_type}
                 isShogai={viewSystem === "障害"}
                 showCustomTime={staff2TimesSupported}
+                doukou={addRowDoukou}
+                onDoukouChange={setAddRowDoukou}
+                serviceIsJudoHoumon={isJudoHoumonService(addRowForm.service_name || addRowForm.service_type)}
               />
 
               {/* ── この訪問につく加算 (kaigo_visit_addon_lines のマスタ駆動一覧) ──
@@ -2463,6 +2503,9 @@ export function ProvisionTicketsContent({
                 serviceName={editRowForm.service_name}
                 isShogai={viewSystem === "障害"}
                 showCustomTime={staff2TimesSupported}
+                doukou={editRowDoukou}
+                onDoukouChange={setEditRowDoukou}
+                serviceIsJudoHoumon={isJudoHoumonService(editRowForm.service_name)}
               />
             </div>
             <div className="flex justify-end gap-2 border-t px-5 py-4">
