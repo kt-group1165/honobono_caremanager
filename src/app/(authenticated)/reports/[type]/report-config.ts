@@ -10,6 +10,7 @@ export const REPORT_CONFIG: Record<string, ReportConfig> = {
   "care-plan-1":       { titleJa: "居宅サービス計画書（第1表）",        needsPeriod: false, landscape: true },
   "care-plan-2":       { titleJa: "居宅サービス計画書（第2表）",        needsPeriod: false, landscape: true },
   "care-plan-3":       { titleJa: "週間サービス計画表（第3表）",        needsPeriod: false, landscape: true },
+  "yobo-care-plan":    { titleJa: "介護予防サービス・支援計画書",        needsPeriod: false, landscape: true },
   "support-progress":  { titleJa: "居宅介護支援経過（第5表）",          needsPeriod: true,  landscape: true },
   "service-usage":        { titleJa: "利用票・提供票",                    needsPeriod: true,  landscape: true },
   "service-usage-detail": { titleJa: "サービス利用票別表",                needsPeriod: true,  landscape: true },

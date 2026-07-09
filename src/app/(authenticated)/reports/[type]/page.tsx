@@ -29,7 +29,7 @@ export default async function ReportTypePage({
     );
   }
 
-  const isCertLinked = ["care-plan-1", "care-plan-2", "care-plan-3"].includes(reportType);
+  const isCertLinked = ["care-plan-1", "care-plan-2", "care-plan-3", "yobo-care-plan"].includes(reportType);
 
   let initialDocs: ReportDoc[] = [];
   let initialCertifications: Certification[] = [];

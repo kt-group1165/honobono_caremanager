@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   Printer, Loader2, FileText, Plus, ChevronLeft, ChevronRight,
   Save, CheckCircle, Clock, Pencil, X, CalendarDays, Send,
-  Copy, RefreshCw,
+  Copy, RefreshCw, Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { ServiceSelector } from "@/components/services/service-selector";
@@ -692,9 +692,79 @@ function buildDefaultContent(
         limit_management: [] as { service_type: string; limit: number; total_units: number; over_units: number }[],
         short_stay_days: { prev: 0, current: 0, total: 0 },
       };
+    case "yobo-care-plan": {
+      // 介護予防サービス・支援計画書 (厚労省 標準様式)。
+      // アセスメント領域は 4 区分固定 (運動・移動 / 日常生活(家庭生活) /
+      // 社会参加・対人関係・コミュニケーション / 健康管理)。
+      const areas = YOBO_ASSESSMENT_AREAS.map((label) => ({
+        area: label,
+        current_status: "",   // アセスメント領域及び現在の状況
+        intention: "",        // 本人・家族の意欲・意向
+        area_issue: "",       // 領域における課題 (背景・原因) — 有/無 + 記述
+      }));
+      const goals = services.length > 0
+        ? services.map((sv) => ({
+            comprehensive_issue: "",      // 総合的課題
+            proposal: "",                 // 課題に対する目標と具体策の提案
+            proposal_intention: "",       // 具体策についての意向 本人・家族
+            goal: plan?.short_term_goals ?? "", // 目標
+            support_point: "",            // 目標についての支援のポイント
+            self_care: "",                // 本人等のセルフケアや家族の支援、インフォーマルサービス
+            insurance_service: sv.service_content ?? "", // 介護保険サービスまたは地域支援事業
+            service_type: sv.service_type ?? "",         // サービス種別
+            provider: sv.provider ?? "",                 // 事業所
+            period: "",                                  // 期間
+          }))
+        : [YOBO_EMPTY_GOAL()];
+      return {
+        user_name: user.name,
+        birth_date: user.birth_date ?? "",
+        cert_date: "",                                   // 認定年月日
+        cert_period: cert ? `${fmtReiwa(cert.start_date)}　〜　${fmtReiwa(cert.end_date)}` : "",
+        care_level: cert?.care_level ?? "",
+        plan_stage: "継続",                              // 初回・紹介・継続
+        cert_status: cert ? "認定済" : "申請中",         // 認定済・申請中
+        target_life_day: "",                             // 目標とする生活 (1日)
+        target_life_year: "",                            // 目標とする生活 (1年)
+        creator_name: carePlan1Defaults?.creator_name ?? "",
+        office_name: carePlan1Defaults?.office_name ?? "",
+        entrusted_office_name: "",                       // 委託の場合の事業所名
+        entrusted_creator_name: "",                      // 委託の場合の計画作成者
+        creation_date: fmtReiwa(plan?.start_date ?? today), // 計画作成 (変更) 日
+        initial_creation_date: fmtReiwa(plan?.start_date ?? null), // 初回作成日
+        areas,
+        goals,
+        health_status: "",                               // 健康状態について
+        needed_programs: "",                             // 必要な事業プログラム (運動器/栄養/口腔/閉じこもり/認知症/うつ)
+        overall_policy: plan?.long_term_goals ?? "",     // 総合的な方針 (生活不活発病の改善・予防のポイント)
+      };
+    }
     default:
       return { notes: "", created_from: "auto" };
   }
+}
+
+// 介護予防サービス・支援計画書のアセスメント領域 (標準様式の 4 区分)
+const YOBO_ASSESSMENT_AREAS = [
+  "運動・移動について",
+  "日常生活（家庭生活）について",
+  "社会参加・対人関係・コミュニケーションについて",
+  "健康管理について",
+] as const;
+
+type YoboArea = { area: string; current_status: string; intention: string; area_issue: string };
+type YoboGoal = {
+  comprehensive_issue: string; proposal: string; proposal_intention: string;
+  goal: string; support_point: string; self_care: string;
+  insurance_service: string; service_type: string; provider: string; period: string;
+};
+
+function YOBO_EMPTY_GOAL(): YoboGoal {
+  return {
+    comprehensive_issue: "", proposal: "", proposal_intention: "",
+    goal: "", support_point: "", self_care: "",
+    insurance_service: "", service_type: "", provider: "", period: "",
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -4032,6 +4102,374 @@ function PrintGeneric({ c, title }: { c: Record<string, unknown>; title: string 
   );
 }
 
+// ---------------------------------------------------------------------------
+// 介護予防サービス・支援計画書 (yobo-care-plan)
+// ---------------------------------------------------------------------------
+
+const YOBO_PROGRAM_OPTIONS = [
+  "運動器の機能向上",
+  "栄養改善",
+  "口腔機能の向上",
+  "閉じこもり予防・支援",
+  "認知症予防・支援",
+  "うつ予防・支援",
+] as const;
+
+function EditFormYoboCarePlan({ content, onChange }: {
+  content: Record<string, unknown>;
+  onChange: (c: Record<string, unknown>) => void;
+}) {
+  const s = (key: string) => String(content[key] ?? "");
+  const set = (key: string, v: unknown) => onChange({ ...content, [key]: v });
+
+  const areas: YoboArea[] = Array.isArray(content.areas) ? (content.areas as YoboArea[]) : [];
+  const goals: YoboGoal[] = Array.isArray(content.goals) ? (content.goals as YoboGoal[]) : [];
+
+  const setArea = (i: number, key: keyof YoboArea, v: string) => {
+    const next = areas.map((a, ai) => (ai === i ? { ...a, [key]: v } : a));
+    set("areas", next);
+  };
+  const setGoal = (i: number, key: keyof YoboGoal, v: string) => {
+    const next = goals.map((g, gi) => (gi === i ? { ...g, [key]: v } : g));
+    set("goals", next);
+  };
+  const addGoal = () => set("goals", [...goals, YOBO_EMPTY_GOAL()]);
+  const removeGoal = (i: number) => set("goals", goals.filter((_, gi) => gi !== i));
+
+  const inputCls = "w-full rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none";
+  const taCls = inputCls + " min-h-[48px]";
+  const labelCls = "block text-xs font-medium text-gray-600 mb-1";
+
+  return (
+    <div className="space-y-5">
+      {/* ヘッダー欄 */}
+      <div className="rounded-lg border bg-white p-4">
+        <h3 className="mb-3 text-sm font-bold text-gray-800">基本情報</h3>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div>
+            <label className={labelCls}>利用者名</label>
+            <input className={inputCls} value={s("user_name")} onChange={(e) => set("user_name", e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>認定年月日</label>
+            <input className={inputCls} value={s("cert_date")} onChange={(e) => set("cert_date", e.target.value)} placeholder="令和　年　月　日" />
+          </div>
+          <div>
+            <label className={labelCls}>認定の有効期間</label>
+            <input className={inputCls} value={s("cert_period")} onChange={(e) => set("cert_period", e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>要支援状態区分</label>
+            <input className={inputCls} value={s("care_level")} onChange={(e) => set("care_level", e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>計画区分</label>
+            <select className={inputCls} value={s("plan_stage")} onChange={(e) => set("plan_stage", e.target.value)}>
+              <option value="初回">初回</option>
+              <option value="紹介">紹介</option>
+              <option value="継続">継続</option>
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>認定状況</label>
+            <select className={inputCls} value={s("cert_status")} onChange={(e) => set("cert_status", e.target.value)}>
+              <option value="認定済">認定済</option>
+              <option value="申請中">申請中</option>
+            </select>
+          </div>
+          <div className="sm:col-span-2 lg:col-span-3">
+            <label className={labelCls}>目標とする生活（1日）</label>
+            <textarea className={taCls} value={s("target_life_day")} onChange={(e) => set("target_life_day", e.target.value)} />
+          </div>
+          <div className="sm:col-span-2 lg:col-span-3">
+            <label className={labelCls}>目標とする生活（1年）</label>
+            <textarea className={taCls} value={s("target_life_year")} onChange={(e) => set("target_life_year", e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>計画作成者氏名</label>
+            <input className={inputCls} value={s("creator_name")} onChange={(e) => set("creator_name", e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>計画作成（変更）日</label>
+            <input className={inputCls} value={s("creation_date")} onChange={(e) => set("creation_date", e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>初回作成日</label>
+            <input className={inputCls} value={s("initial_creation_date")} onChange={(e) => set("initial_creation_date", e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>委託の場合の事業所名</label>
+            <input className={inputCls} value={s("entrusted_office_name")} onChange={(e) => set("entrusted_office_name", e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>委託の場合の計画作成者</label>
+            <input className={inputCls} value={s("entrusted_creator_name")} onChange={(e) => set("entrusted_creator_name", e.target.value)} />
+          </div>
+        </div>
+      </div>
+
+      {/* アセスメント領域 (4 区分固定) */}
+      <div className="rounded-lg border bg-white p-4">
+        <h3 className="mb-3 text-sm font-bold text-gray-800">アセスメント領域と現在の状況</h3>
+        <div className="space-y-4">
+          {areas.map((a, i) => (
+            <div key={i} className="rounded-md border border-gray-200 p-3">
+              <div className="mb-2 text-xs font-semibold text-emerald-700">{a.area}</div>
+              <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
+                <div>
+                  <label className={labelCls}>アセスメント領域及び現在の状況</label>
+                  <textarea className={taCls} value={a.current_status} onChange={(e) => setArea(i, "current_status", e.target.value)} />
+                </div>
+                <div>
+                  <label className={labelCls}>本人・家族の意欲・意向</label>
+                  <textarea className={taCls} value={a.intention} onChange={(e) => setArea(i, "intention", e.target.value)} />
+                </div>
+                <div>
+                  <label className={labelCls}>領域における課題（背景・原因）</label>
+                  <textarea className={taCls} value={a.area_issue} onChange={(e) => setArea(i, "area_issue", e.target.value)} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 総合的課題 → 目標・支援計画 */}
+      <div className="rounded-lg border bg-white p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-bold text-gray-800">総合的課題に対する目標と支援計画</h3>
+          <button type="button" onClick={addGoal} className="flex items-center gap-1 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700">
+            <Plus size={13} /> 行を追加
+          </button>
+        </div>
+        <div className="space-y-4">
+          {goals.map((g, i) => (
+            <div key={i} className="rounded-md border border-gray-200 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-semibold text-gray-500">No. {i + 1}</span>
+                {goals.length > 1 && (
+                  <button type="button" onClick={() => removeGoal(i)} className="text-red-400 hover:text-red-600">
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
+                <div>
+                  <label className={labelCls}>総合的課題</label>
+                  <textarea className={taCls} value={g.comprehensive_issue} onChange={(e) => setGoal(i, "comprehensive_issue", e.target.value)} />
+                </div>
+                <div>
+                  <label className={labelCls}>課題に対する目標と具体策の提案</label>
+                  <textarea className={taCls} value={g.proposal} onChange={(e) => setGoal(i, "proposal", e.target.value)} />
+                </div>
+                <div>
+                  <label className={labelCls}>具体策についての意向（本人・家族）</label>
+                  <textarea className={taCls} value={g.proposal_intention} onChange={(e) => setGoal(i, "proposal_intention", e.target.value)} />
+                </div>
+                <div>
+                  <label className={labelCls}>目標</label>
+                  <textarea className={taCls} value={g.goal} onChange={(e) => setGoal(i, "goal", e.target.value)} />
+                </div>
+                <div>
+                  <label className={labelCls}>目標についての支援のポイント</label>
+                  <textarea className={taCls} value={g.support_point} onChange={(e) => setGoal(i, "support_point", e.target.value)} />
+                </div>
+                <div>
+                  <label className={labelCls}>本人等のセルフケア・家族の支援・インフォーマルサービス</label>
+                  <textarea className={taCls} value={g.self_care} onChange={(e) => setGoal(i, "self_care", e.target.value)} />
+                </div>
+                <div>
+                  <label className={labelCls}>介護保険サービスまたは地域支援事業</label>
+                  <textarea className={taCls} value={g.insurance_service} onChange={(e) => setGoal(i, "insurance_service", e.target.value)} />
+                </div>
+                <div>
+                  <label className={labelCls}>サービス種別</label>
+                  <input className={inputCls} value={g.service_type} onChange={(e) => setGoal(i, "service_type", e.target.value)} />
+                </div>
+                <div>
+                  <label className={labelCls}>事業所</label>
+                  <input className={inputCls} value={g.provider} onChange={(e) => setGoal(i, "provider", e.target.value)} />
+                </div>
+                <div>
+                  <label className={labelCls}>期間</label>
+                  <input className={inputCls} value={g.period} onChange={(e) => setGoal(i, "period", e.target.value)} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* フッター欄 */}
+      <div className="rounded-lg border bg-white p-4">
+        <h3 className="mb-3 text-sm font-bold text-gray-800">健康状態・方針</h3>
+        <div className="space-y-3">
+          <div>
+            <label className={labelCls}>健康状態について（主治医意見書、生活機能評価等を踏まえた留意点）</label>
+            <textarea className={taCls} value={s("health_status")} onChange={(e) => set("health_status", e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>必要な事業プログラム</label>
+            <div className="flex flex-wrap gap-3">
+              {YOBO_PROGRAM_OPTIONS.map((p) => {
+                const checked = s("needed_programs").includes(p);
+                return (
+                  <label key={p} className="flex items-center gap-1 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        const cur = s("needed_programs").split("／").map((x) => x.trim()).filter(Boolean);
+                        const next = e.target.checked
+                          ? [...cur.filter((x) => x !== p), p]
+                          : cur.filter((x) => x !== p);
+                        set("needed_programs", next.join("／"));
+                      }}
+                    />
+                    {p}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>総合的な方針（生活不活発病の改善・予防のポイント）</label>
+            <textarea className={taCls} value={s("overall_policy")} onChange={(e) => set("overall_policy", e.target.value)} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PrintYoboCarePlan({ c }: { c: Record<string, unknown> }) {
+  const s = (k: string) => String(c[k] ?? "");
+  const B = "1px solid #000";
+  const areas: YoboArea[] = Array.isArray(c.areas) ? (c.areas as YoboArea[]) : [];
+  const goals: YoboGoal[] = Array.isArray(c.goals) ? (c.goals as YoboGoal[]) : [];
+  const cellBase: React.CSSProperties = { border: B, padding: "2px 4px", fontSize: "7.5pt", verticalAlign: "top", whiteSpace: "pre-wrap" };
+  const th: React.CSSProperties = { ...cellBase, backgroundColor: "#f0f0f0", fontWeight: "bold", textAlign: "center" };
+  const td: React.CSSProperties = { ...cellBase, backgroundColor: "#fff" };
+
+  return (
+    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "8pt", color: "#000", width: "277mm" }}>
+      {/* タイトル */}
+      <div style={{ textAlign: "center", fontSize: "13pt", fontWeight: "bold", letterSpacing: "0.25em", marginBottom: "4px" }}>
+        介護予防サービス・支援計画書
+      </div>
+
+      {/* ヘッダー表 */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
+        <tbody>
+          <tr>
+            <td style={{ ...th, width: "10%" }}>利用者名</td>
+            <td style={{ ...td, width: "23%" }}>{s("user_name")}　殿</td>
+            <td style={{ ...th, width: "10%" }}>認定年月日</td>
+            <td style={{ ...td, width: "23%" }}>{s("cert_date")}</td>
+            <td style={{ ...th, width: "10%" }}>認定の有効期間</td>
+            <td style={{ ...td, width: "24%" }}>{s("cert_period")}</td>
+          </tr>
+          <tr>
+            <td style={th}>要支援状態区分</td>
+            <td style={td}>{s("care_level")}</td>
+            <td style={th}>計画区分</td>
+            <td style={td}>{s("plan_stage")}（{s("cert_status")}）</td>
+            <td style={th}>計画作成（変更）日</td>
+            <td style={td}>{s("creation_date")}（初回作成日 {s("initial_creation_date")}）</td>
+          </tr>
+          <tr>
+            <td style={th}>計画作成者氏名</td>
+            <td style={td}>{s("creator_name")}</td>
+            <td style={th}>担当地域包括支援センター／委託先</td>
+            <td style={td} colSpan={3}>
+              {s("office_name")}
+              {s("entrusted_office_name") ? `　委託先：${s("entrusted_office_name")}　${s("entrusted_creator_name")}` : ""}
+            </td>
+          </tr>
+          <tr>
+            <td style={th}>目標とする生活（1日）</td>
+            <td style={td} colSpan={2}>{s("target_life_day")}</td>
+            <td style={th}>目標とする生活（1年）</td>
+            <td style={td} colSpan={2}>{s("target_life_year")}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* アセスメント領域 */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
+        <thead>
+          <tr>
+            <th style={{ ...th, width: "22%" }}>アセスメント領域と現在の状況</th>
+            <th style={{ ...th, width: "39%" }}>本人・家族の意欲・意向</th>
+            <th style={{ ...th, width: "39%" }}>領域における課題（背景・原因）</th>
+          </tr>
+        </thead>
+        <tbody>
+          {areas.map((a, i) => (
+            <tr key={i}>
+              <td style={td}><strong>{a.area}</strong>{"\n"}{a.current_status}</td>
+              <td style={td}>{a.intention}</td>
+              <td style={td}>{a.area_issue}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* 総合的課題 → 目標・支援計画 */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "4px" }}>
+        <thead>
+          <tr>
+            <th style={{ ...th, width: "12%" }}>総合的課題</th>
+            <th style={{ ...th, width: "13%" }}>目標と具体策の提案</th>
+            <th style={{ ...th, width: "11%" }}>具体策への意向（本人・家族）</th>
+            <th style={{ ...th, width: "11%" }}>目標</th>
+            <th style={{ ...th, width: "11%" }}>支援のポイント</th>
+            <th style={{ ...th, width: "12%" }}>セルフケア・家族支援・インフォーマル</th>
+            <th style={{ ...th, width: "12%" }}>介護保険サービス／地域支援事業</th>
+            <th style={{ ...th, width: "8%" }}>サービス種別</th>
+            <th style={{ ...th, width: "8%" }}>事業所</th>
+            <th style={{ ...th, width: "6%" }}>期間</th>
+          </tr>
+        </thead>
+        <tbody>
+          {goals.map((g, i) => (
+            <tr key={i}>
+              <td style={td}>{g.comprehensive_issue}</td>
+              <td style={td}>{g.proposal}</td>
+              <td style={td}>{g.proposal_intention}</td>
+              <td style={td}>{g.goal}</td>
+              <td style={td}>{g.support_point}</td>
+              <td style={td}>{g.self_care}</td>
+              <td style={td}>{g.insurance_service}</td>
+              <td style={td}>{g.service_type}</td>
+              <td style={td}>{g.provider}</td>
+              <td style={td}>{g.period}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* フッター */}
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <tbody>
+          <tr>
+            <td style={{ ...th, width: "16%" }}>健康状態について</td>
+            <td style={td} colSpan={3}>{s("health_status")}</td>
+          </tr>
+          <tr>
+            <td style={th}>必要な事業プログラム</td>
+            <td style={td} colSpan={3}>{s("needed_programs")}</td>
+          </tr>
+          <tr>
+            <td style={th}>総合的な方針（生活不活発病の改善・予防のポイント）</td>
+            <td style={td} colSpan={3}>{s("overall_policy")}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function PrintView({ reportType, content, config }: {
   reportType: string; content: Record<string, unknown>; config: ReportConfig;
 }) {
@@ -4039,6 +4477,7 @@ export function PrintView({ reportType, content, config }: {
     case "care-plan-1":       return <PrintCarePlan1 c={content} />;
     case "care-plan-2":       return <PrintCarePlan2 c={content} />;
     case "care-plan-3":       return <PrintCarePlan3 c={content} />;
+    case "yobo-care-plan":    return <PrintYoboCarePlan c={content} />;
     case "support-progress":  return <PrintSupportProgress c={content} />;
     case "service-usage":        return <PrintServiceTicket c={content} title="サービス利用票・提供票" />;
     case "service-usage-detail": return <PrintServiceUsageDetail c={content} />;
@@ -4057,6 +4496,7 @@ function EditForm({ reportType, content, onChange, userId, reportMonth }: {
     case "care-plan-1":       return <EditFormCarePlan1 content={content} onChange={onChange} userId={userId} />;
     case "care-plan-2":       return <EditFormCarePlan2 content={content} onChange={onChange} userId={userId} />;
     case "care-plan-3":       return <EditFormCarePlan3 content={content} onChange={onChange} />;
+    case "yobo-care-plan":    return <EditFormYoboCarePlan content={content} onChange={onChange} />;
     case "support-progress":  return <EditFormSupportProgress content={content} onChange={onChange} />;
     case "service-usage":        return <EditFormServiceTicket content={content} onChange={onChange} reportMonth={reportMonth} />;
     case "service-usage-detail": return <EditFormUsageDetail content={content} onChange={onChange} userId={userId} reportMonth={reportMonth} />;
@@ -4757,7 +5197,7 @@ export function ReportsContent({ userId, reportType, initialDocs, initialCertifi
   const router = useRouter();
 
   const isCertLinked = useMemo(
-    () => ["care-plan-1", "care-plan-2", "care-plan-3"].includes(reportType),
+    () => ["care-plan-1", "care-plan-2", "care-plan-3", "yobo-care-plan"].includes(reportType),
     [reportType]
   );
 
@@ -5081,8 +5521,9 @@ export function ReportsContent({ userId, reportType, initialDocs, initialCertifi
                     {config.landscape && <span className="ml-2 rounded bg-blue-100 px-1 py-0.5 text-blue-600 text-[10px]">A4横</span>}
                   </p>
                   {/* 居宅サービス計画書 (1〜3表) は 3 ボタン常時表示で直接遷移
-                      (「次の表へ」を順に押さなくても任意の表へ飛べる) */}
-                  {isCertLinked && (
+                      (「次の表へ」を順に押さなくても任意の表へ飛べる)。
+                      介護予防サービス・支援計画書 (yobo-care-plan) は単票なので出さない。 */}
+                  {["care-plan-1", "care-plan-2", "care-plan-3"].includes(reportType) && (
                     <div className="mt-1.5 flex justify-center gap-1">
                       {(["care-plan-1", "care-plan-2", "care-plan-3"] as const).map((t, ti) => (
                         <button
