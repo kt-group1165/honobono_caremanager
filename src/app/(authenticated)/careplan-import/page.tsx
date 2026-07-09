@@ -18,6 +18,7 @@ import {
   FileDown,
   ChevronLeft,
   ChevronRight,
+  FileUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getMaxUserNumber } from "@kt/shared/user-number";
@@ -27,6 +28,16 @@ import {
   type JissekiUser,
   type JissekiVisit,
 } from "@/lib/careplan-v4/build-jisseki";
+import {
+  parseCsv,
+  detectRiyouhyouKind,
+  parseTable6Plan,
+  parseTable7Betsu,
+  aggregatePlanUnits,
+  type Table6PlanRecord,
+  type PlanUnitAgg,
+} from "@/lib/careplan-v4/parse-riyouhyou";
+import { validInMonth } from "@/lib/service-code-valid";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -460,6 +471,9 @@ export default function CareplanImportPage() {
 
       {/* 実績エクスポート (ケアプランデータ連携 V4 第6表/実績) */}
       <JissekiExportSection />
+
+      {/* 利用票取込 (ケアプランデータ連携 V4 第6表/計画 + 第7表/別表) */}
+      <RiyouhyouImportSection />
 
       <div className="border-t border-gray-200 pt-6">
         <h2 className="text-lg font-semibold text-gray-900">ケアプラン取込</h2>
@@ -974,6 +988,552 @@ function JissekiExportSection() {
         送信元事業所番号 = 自事業所（事業所管理の事業所番号）／送信元サービス種類 =
         {senderServiceKind}。介護保険サービスのみ出力対象（障害・総合事業は除外）。
       </p>
+    </div>
+  );
+}
+
+// ─── 利用票取込 (ケアプランデータ連携 V4 第6表/計画 + 第7表/別表) ──────────────
+// ケアマネから届く UPPLAN (第6表=計画/予定) と UPSIKYU (第7表=別表) の CSV を取込み、
+//   - 第6表 → kaigo_visit_schedule に予定 (status='scheduled') を upsert
+//   - 第7表 → kaigo_monthly_plan_units に計画単位数 (区分支給限度基準内単位数) を upsert
+// する。被保険者番号 → clients.insured_number 突合 (見つからなければ warning でスキップ)。
+// プレビュー (件数・対象利用者・突合不可一覧) を出し、確定ボタンで反映する。
+
+interface Riyouhyou6Preview {
+  fileName: string;
+  targetYm: string; // YYYYMM
+  records: Table6PlanRecord[];
+}
+interface Riyouhyou7Preview {
+  fileName: string;
+  plans: PlanUnitAgg[];
+}
+
+/** 突合済みの 1 予定行 (schedule upsert 用) */
+interface ResolvedSchedule {
+  clientId: string;
+  clientName: string;
+  visitDate: string; // ISO
+  startTime: string; // HH:MM:SS
+  endTime: string; // HH:MM:SS
+  serviceType: string; // service_name (逆引き結果)
+  serviceCode: string;
+}
+/** 突合済みの計画単位 (plan units upsert 用) */
+interface ResolvedPlanUnit {
+  clientId: string;
+  clientName: string;
+  targetMonth: string; // YYYY-MM-01
+  plannedUnits: number;
+}
+
+function RiyouhyouImportSection() {
+  const supabase = createClient();
+  const { currentOffice, loading: btLoading } = useBusinessType();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [parsing, setParsing] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [plan6, setPlan6] = useState<Riyouhyou6Preview[]>([]);
+  const [betsu7, setBetsu7] = useState<Riyouhyou7Preview[]>([]);
+  const [resolvedSchedules, setResolvedSchedules] = useState<ResolvedSchedule[]>([]);
+  const [resolvedPlanUnits, setResolvedPlanUnits] = useState<ResolvedPlanUnit[]>([]);
+  const [unmatched, setUnmatched] = useState<string[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [ready, setReady] = useState(false);
+
+  const resetPreview = () => {
+    setPlan6([]);
+    setBetsu7([]);
+    setResolvedSchedules([]);
+    setResolvedPlanUnits([]);
+    setUnmatched([]);
+    setWarnings([]);
+    setReady(false);
+  };
+
+  // ── ファイル選択 → SJIS デコード → パース → プレビュー構築 ───────────────────
+  const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const list = e.target.files;
+    if (!list || list.length === 0) return;
+    const files = Array.from(list);
+    setTimeout(() => { if (fileRef.current) fileRef.current.value = ""; }, 0);
+    if (!currentOffice) {
+      toast.error("事業所が選択されていません。ヘッダーで事業所を選択してください。");
+      return;
+    }
+    setParsing(true);
+    resetPreview();
+    try {
+      const p6: Riyouhyou6Preview[] = [];
+      const p7: Riyouhyou7Preview[] = [];
+      const warns: string[] = [];
+
+      for (const file of files) {
+        const buf = await file.arrayBuffer();
+        // Shift-JIS (MS932) → UNICODE
+        const text = Encoding.convert(new Uint8Array(buf), {
+          to: "UNICODE",
+          from: "SJIS",
+          type: "string",
+        }) as string;
+        const rows = parseCsv(text);
+        const kind = detectRiyouhyouKind(file.name, rows);
+        if (kind === "table-6-plan") {
+          const res = parseTable6Plan(rows);
+          res.warnings.forEach((w) => warns.push(`${file.name}: ${w}`));
+          if (res.targetMonths.length > 1) {
+            warns.push(`${file.name}: 複数の対象年月 (${res.targetMonths.join(", ")}) が混在しています`);
+          }
+          p6.push({ fileName: file.name, targetYm: res.targetMonths[0] ?? "", records: res.records });
+        } else if (kind === "table-7-betsu") {
+          const res = parseTable7Betsu(rows);
+          res.warnings.forEach((w) => warns.push(`${file.name}: ${w}`));
+          const senderCode = (currentOffice.business_number ?? "").trim();
+          const plans = aggregatePlanUnits(res.records, senderCode || null);
+          p7.push({ fileName: file.name, plans });
+        } else {
+          warns.push(`${file.name}: 第6表(UPPLAN)/第7表(UPSIKYU) と判定できませんでした — スキップ`);
+        }
+      }
+
+      // ── 突合: 被保険者番号 → clients.insured_number ───────────────────────────
+      const insuredNumbers = new Set<string>();
+      for (const f of p6) for (const r of f.records) insuredNumbers.add(r.insuredNumber);
+      for (const f of p7) for (const pl of f.plans) insuredNumbers.add(pl.insuredNumber);
+
+      // clients.insured_number (キャッシュ列) で突合。無ければ client_insurance_records も参照。
+      const clientByInsured = new Map<string, { id: string; name: string }>();
+      const insuredList = Array.from(insuredNumbers).filter(Boolean);
+      for (let i = 0; i < insuredList.length; i += 50) {
+        const chunk = insuredList.slice(i, i + 50);
+        const { data, error } = await supabase
+          .from("clients")
+          .select("id, name, insured_number")
+          .in("insured_number", chunk)
+          .eq("is_facility", false);
+        if (error) {
+          toast.error("利用者突合に失敗: " + error.message);
+          setParsing(false);
+          return;
+        }
+        for (const c of (data ?? []) as { id: string; name: string; insured_number: string | null }[]) {
+          const key = (c.insured_number ?? "").trim();
+          if (key && !clientByInsured.has(key)) clientByInsured.set(key, { id: c.id, name: c.name });
+        }
+      }
+      // clients で引けなかった被保険者番号を client_insurance_records で補完
+      const stillMissing = insuredList.filter((n) => !clientByInsured.has(n));
+      for (let i = 0; i < stillMissing.length; i += 50) {
+        const chunk = stillMissing.slice(i, i + 50);
+        const { data, error } = await supabase
+          .from("client_insurance_records")
+          .select("client_id, insured_number")
+          .in("insured_number", chunk);
+        if (error) {
+          // 補完は best-effort。失敗しても続行 (突合不可扱い)
+          console.warn("[riyouhyou-import] cert fallback failed:", error.message);
+          break;
+        }
+        const certRows = (data ?? []) as { client_id: string; insured_number: string | null }[];
+        const certClientIds = Array.from(new Set(certRows.map((r) => r.client_id)));
+        const nameById = new Map<string, string>();
+        for (let j = 0; j < certClientIds.length; j += 50) {
+          const ids = certClientIds.slice(j, j + 50);
+          const { data: cl } = await supabase.from("clients").select("id, name").in("id", ids).eq("is_facility", false);
+          for (const c of (cl ?? []) as { id: string; name: string }[]) nameById.set(c.id, c.name);
+        }
+        for (const rec of certRows) {
+          const key = (rec.insured_number ?? "").trim();
+          const name = nameById.get(rec.client_id);
+          if (key && name && !clientByInsured.has(key)) {
+            clientByInsured.set(key, { id: rec.client_id, name });
+          }
+        }
+      }
+
+      // 突合不可の被保険者番号一覧
+      const unmatchedSet = new Set<string>();
+      for (const n of insuredList) if (!clientByInsured.has(n)) unmatchedSet.add(n);
+
+      // ── サービスコード → service_name 逆引き (第6表の対象月世代で) ───────────────
+      // 対象月は第6表の targetYm を使う (複数月あれば月ごとに解決)。
+      const codesByMonth = new Map<string, Set<string>>();
+      for (const f of p6) {
+        for (const r of f.records) {
+          const ym = r.targetYm || f.targetYm;
+          if (!ym) continue;
+          if (!codesByMonth.has(ym)) codesByMonth.set(ym, new Set());
+          codesByMonth.get(ym)!.add(r.serviceCode);
+        }
+      }
+      // Map<`${ym}|${code}`, service_name>
+      const nameByMonthCode = new Map<string, string>();
+      for (const [ym, codes] of codesByMonth) {
+        const year = Number(ym.slice(0, 4));
+        const mon = Number(ym.slice(4, 6));
+        if (!year || !mon) continue;
+        const codeList = Array.from(codes);
+        for (let i = 0; i < codeList.length; i += 50) {
+          const chunk = codeList.slice(i, i + 50);
+          const { data, error } = await validInMonth(
+            supabase
+              .from("kaigo_service_codes")
+              .select("service_code, service_name, system")
+              .in("service_code", chunk),
+            year,
+            mon,
+          );
+          if (error) {
+            toast.error("サービスコード逆引きに失敗: " + error.message);
+            setParsing(false);
+            return;
+          }
+          // 同コードが複数制度にある場合は介護を優先
+          for (const rec of (data ?? []) as { service_code: string; service_name: string; system: string }[]) {
+            const key = `${ym}|${rec.service_code}`;
+            const prev = nameByMonthCode.get(key);
+            if (!prev || rec.system === "介護") nameByMonthCode.set(key, rec.service_name);
+          }
+        }
+      }
+
+      // ── 第6表 → ResolvedSchedule[] ───────────────────────────────────────────
+      const schedules: ResolvedSchedule[] = [];
+      for (const f of p6) {
+        for (const r of f.records) {
+          const client = clientByInsured.get(r.insuredNumber);
+          if (!client) continue; // 突合不可は unmatched に集約済み
+          const ym = r.targetYm || f.targetYm;
+          const serviceName = nameByMonthCode.get(`${ym}|${r.serviceCode}`);
+          if (!serviceName) {
+            warns.push(
+              `${client.name}: サービスコード ${r.serviceCode} (${r.serviceDate}) がマスタから引けません — この予定はスキップ`,
+            );
+            continue;
+          }
+          // 時刻: 時間表示なし (null) は 00:00 では意味が壊れるため、
+          // start/end 双方 null の行は「時刻未指定の予定」として 00:00:00 を入れる。
+          const start = r.startTime ? `${r.startTime}:00` : "00:00:00";
+          const end = r.endTime ? `${r.endTime}:00` : "00:00:00";
+          // サービス回数 > 1 は同一行の複数回。基本 1 訪問 = 1 行なので回数分に展開する。
+          const times = Math.max(1, r.count);
+          for (let k = 0; k < times; k++) {
+            schedules.push({
+              clientId: client.id,
+              clientName: client.name,
+              visitDate: r.serviceDate,
+              startTime: start,
+              endTime: end,
+              serviceType: serviceName,
+              serviceCode: r.serviceCode,
+            });
+          }
+        }
+      }
+
+      // ── 第7表 → ResolvedPlanUnit[] ───────────────────────────────────────────
+      const planUnits: ResolvedPlanUnit[] = [];
+      for (const f of p7) {
+        for (const pl of f.plans) {
+          const client = clientByInsured.get(pl.insuredNumber);
+          if (!client) continue;
+          if (!/^\d{6}$/.test(pl.targetYm)) {
+            warns.push(`${client.name}: 第7表の対象年月が不正 (${pl.targetYm}) — 計画単位をスキップ`);
+            continue;
+          }
+          planUnits.push({
+            clientId: client.id,
+            clientName: client.name,
+            targetMonth: `${pl.targetYm.slice(0, 4)}-${pl.targetYm.slice(4, 6)}-01`,
+            plannedUnits: pl.plannedUnits,
+          });
+        }
+      }
+
+      setPlan6(p6);
+      setBetsu7(p7);
+      setResolvedSchedules(schedules);
+      setResolvedPlanUnits(planUnits);
+      setUnmatched(Array.from(unmatchedSet));
+      setWarnings(warns);
+      setReady(p6.length > 0 || p7.length > 0);
+
+      if (p6.length === 0 && p7.length === 0) {
+        toast.error("取込対象 (第6表 UPPLAN / 第7表 UPSIKYU) のファイルがありませんでした。");
+      } else {
+        toast.success(
+          `プレビュー作成: 予定 ${schedules.length} 件 / 計画単位 ${planUnits.length} 件` +
+            (unmatchedSet.size > 0 ? ` (突合不可 ${unmatchedSet.size} 名)` : ""),
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("取込に失敗: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  // ── 確定 → DB 反映 ──────────────────────────────────────────────────────────
+  const handleApply = async () => {
+    if (!currentOffice) {
+      toast.error("事業所が選択されていません。");
+      return;
+    }
+    setApplying(true);
+    try {
+      let scheduleCount = 0;
+      let planCount = 0;
+
+      // 1) 第6表 → kaigo_visit_schedule 予定 upsert
+      //    同一 (user_id, visit_date, start_time, service_type) を再取込した際の
+      //    重複を防ぐため、対象利用者×対象月の既存 scheduled 行 (自事業所) を先に削除してから INSERT。
+      if (resolvedSchedules.length > 0) {
+        // 対象 (clientId × YYYY-MM) を収集
+        const monthsByClient = new Map<string, Set<string>>();
+        for (const s of resolvedSchedules) {
+          const ym = s.visitDate.slice(0, 7); // YYYY-MM
+          if (!monthsByClient.has(s.clientId)) monthsByClient.set(s.clientId, new Set());
+          monthsByClient.get(s.clientId)!.add(ym);
+        }
+        // 既存の scheduled 予定を対象範囲で削除 (self 事業所 + office_id NULL の未設定分)
+        for (const [clientId, months] of monthsByClient) {
+          for (const ym of months) {
+            const y = Number(ym.slice(0, 4));
+            const m = Number(ym.slice(5, 7));
+            const from = `${ym}-01`;
+            const to = `${ym}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
+            const { error: delErr } = await supabase
+              .from("kaigo_visit_schedule")
+              .delete()
+              .eq("user_id", clientId)
+              .eq("status", "scheduled")
+              .gte("visit_date", from)
+              .lte("visit_date", to)
+              .or(`office_id.eq.${currentOffice.id},office_id.is.null`);
+            if (delErr) {
+              toast.error(`既存予定の削除に失敗 (${clientId}): ${delErr.message}`);
+              setApplying(false);
+              return;
+            }
+          }
+        }
+        // INSERT (office_id 未適用環境では insertVisitSchedules 相当の strip が要るが、
+        //  ここでは office_id は必須の運用列として素の insert を使い、error は toast)。
+        const payload = resolvedSchedules.map((s) => ({
+          user_id: s.clientId,
+          visit_date: s.visitDate,
+          start_time: s.startTime,
+          end_time: s.endTime,
+          service_type: s.serviceType,
+          status: "scheduled",
+          office_id: currentOffice.id,
+        }));
+        // 500 行ずつ INSERT
+        for (let i = 0; i < payload.length; i += 500) {
+          const chunk = payload.slice(i, i + 500);
+          const { error } = await supabase.from("kaigo_visit_schedule").insert(chunk);
+          if (error) {
+            toast.error("予定の登録に失敗: " + error.message);
+            setApplying(false);
+            return;
+          }
+          scheduleCount += chunk.length;
+        }
+      }
+
+      // 2) 第7表 → kaigo_monthly_plan_units upsert (client_id, target_month) 一意
+      if (resolvedPlanUnits.length > 0) {
+        const rows = resolvedPlanUnits.map((p) => ({
+          tenant_id: currentOffice.tenant_id,
+          client_id: p.clientId,
+          target_month: p.targetMonth,
+          planned_units: p.plannedUnits,
+          source: "careplan",
+        }));
+        const { error } = await supabase
+          .from("kaigo_monthly_plan_units")
+          .upsert(rows, { onConflict: "client_id,target_month" });
+        if (error) {
+          toast.error("計画単位数の登録に失敗: " + error.message);
+          setApplying(false);
+          return;
+        }
+        planCount = rows.length;
+      }
+
+      toast.success(`反映完了: 予定 ${scheduleCount} 件 / 計画単位 ${planCount} 件`);
+      resetPreview();
+    } catch (err) {
+      console.error(err);
+      toast.error("反映に失敗: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  // プレビュー用: 対象利用者一覧
+  const previewUsers = Array.from(
+    new Map(
+      [
+        ...resolvedSchedules.map((s) => [s.clientId, s.clientName] as const),
+        ...resolvedPlanUnits.map((p) => [p.clientId, p.clientName] as const),
+      ].map(([id, name]) => [id, name]),
+    ).entries(),
+  );
+
+  return (
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-5">
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
+          <FileUp size={20} />
+        </div>
+        <div className="flex-1">
+          <h2 className="text-lg font-semibold text-gray-900">利用票取込（第6表・第7表 / V4）</h2>
+          <p className="mt-0.5 text-sm text-gray-500">
+            ケアマネから届いた サービス利用票（第6表=計画/予定 UPPLAN）と 利用票別表（第7表 UPSIKYU）の
+            CSV（Shift-JIS）を取り込み、予定（status=scheduled）と計画単位数に反映します。
+            被保険者番号で自事業所の利用者に突合します（突合できない場合はスキップ）。
+          </p>
+        </div>
+      </div>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".csv"
+        multiple
+        className="hidden"
+        onChange={handleFiles}
+      />
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={parsing || applying || btLoading || !currentOffice}
+          className="flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+        >
+          {parsing ? <Loader2 size={16} className="animate-spin" /> : <FileUp size={16} />}
+          CSVを選択してプレビュー
+        </button>
+        {ready && (
+          <button
+            type="button"
+            onClick={resetPreview}
+            className="text-sm text-gray-500 hover:text-red-500"
+          >
+            クリア
+          </button>
+        )}
+      </div>
+
+      {/* プレビュー */}
+      {ready && (
+        <div className="mt-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-lg border border-gray-200 bg-white p-3 text-center">
+              <div className="text-xs text-gray-500">第6表ファイル</div>
+              <div className="text-lg font-bold text-gray-900">{plan6.length}</div>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-white p-3 text-center">
+              <div className="text-xs text-gray-500">第7表ファイル</div>
+              <div className="text-lg font-bold text-gray-900">{betsu7.length}</div>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-white p-3 text-center">
+              <div className="text-xs text-gray-500">予定 (件)</div>
+              <div className="text-lg font-bold text-emerald-700">{resolvedSchedules.length}</div>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-white p-3 text-center">
+              <div className="text-xs text-gray-500">計画単位 (件)</div>
+              <div className="text-lg font-bold text-emerald-700">{resolvedPlanUnits.length}</div>
+            </div>
+          </div>
+
+          {/* 対象利用者 */}
+          {previewUsers.length > 0 && (
+            <div className="rounded-lg border border-gray-200 bg-white p-3">
+              <div className="mb-1 text-xs font-medium text-gray-600">
+                対象利用者 ({previewUsers.length} 名)
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {previewUsers.map(([id, name]) => (
+                  <span key={id} className="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800">
+                    {name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 計画単位数 内訳 */}
+          {resolvedPlanUnits.length > 0 && (
+            <div className="rounded-lg border border-gray-200 bg-white p-3">
+              <div className="mb-1 text-xs font-medium text-gray-600">計画単位数 (区分支給限度基準内・自事業所分)</div>
+              <div className="space-y-0.5 text-xs text-gray-700">
+                {resolvedPlanUnits.map((p, i) => (
+                  <div key={i} className="flex justify-between">
+                    <span>{p.clientName}（{p.targetMonth.slice(0, 7)}）</span>
+                    <span className="font-mono font-medium">{p.plannedUnits.toLocaleString()} 単位</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 突合不可 */}
+          {unmatched.length > 0 && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
+              <div className="mb-1 flex items-center gap-1 text-xs font-semibold text-amber-800">
+                <AlertTriangle size={12} />
+                突合できなかった被保険者番号 ({unmatched.length} 件) — スキップします
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {unmatched.map((n) => (
+                  <span key={n} className="rounded bg-amber-100 px-2 py-0.5 text-xs font-mono text-amber-800">
+                    {n}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 警告 */}
+          {warnings.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+              <div className="mb-1 text-xs font-semibold text-amber-800">確認事項 ({warnings.length})</div>
+              <ul className="max-h-40 space-y-0.5 overflow-y-auto text-xs text-amber-700">
+                {warnings.map((w, i) => (
+                  <li key={i}>・{w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+            確定すると、対象利用者×対象月の既存「予定(scheduled)」を自事業所分だけ入れ替え、計画単位数を上書きします。
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={resetPreview}
+              className="rounded-lg border px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              onClick={handleApply}
+              disabled={applying || (resolvedSchedules.length === 0 && resolvedPlanUnits.length === 0)}
+              className="flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {applying ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+              確定して反映
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
