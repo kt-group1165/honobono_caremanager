@@ -50,6 +50,9 @@ const NAV_CARE_MANAGER_SECTIONED: SectionSpec[] = [
     items: [
       { name: "アセスメント", href: "/assessments", icon: ClipboardCheck },
       { name: "居宅サービス計画書", href: "/reports/care-plan-1", icon: ClipboardList },
+      { name: "介護予防サービス・支援計画書", href: "/reports/yobo-care-plan", icon: ClipboardList },
+      { name: "課題整理総括表", href: "/care-reports/kadai-seiri", icon: FileSpreadsheet },
+      { name: "評価表", href: "/care-reports/hyouka", icon: ClipboardCheck },
       { name: "担当者会議録", href: "/meeting-minutes", icon: MessagesSquare },
       { name: "利用票・提供票", href: "/reports/service-usage", icon: CalendarDays },
       { name: "利用票別表", href: "/reports/service-usage-detail", icon: FileSpreadsheet },
