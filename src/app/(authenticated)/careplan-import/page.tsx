@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FileUp,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getMaxUserNumber } from "@kt/shared/user-number";
@@ -37,6 +38,17 @@ import {
   type Table6PlanRecord,
   type PlanUnitAgg,
 } from "@/lib/careplan-v4/parse-riyouhyou";
+import {
+  detectKeikakushoKind,
+  parseCarePlan1 as parseKeikakusho1,
+  parseCarePlan2 as parseKeikakusho2,
+  parseCarePlan3 as parseKeikakusho3,
+  parseUserSupplement,
+  parseDeleteFile,
+  ymToDateRange,
+  type UserSupplementParsed,
+  type DeleteRecord,
+} from "@/lib/careplan-v4/parse-keikakusho";
 import { validInMonth } from "@/lib/service-code-valid";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -53,41 +65,16 @@ interface ImportedFile {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = "";
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (inQuotes) {
-      if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
-      else if (ch === '"') { inQuotes = false; }
-      else { current += ch; }
-    } else {
-      if (ch === '"') { inQuotes = true; }
-      else if (ch === ",") { result.push(current); current = ""; }
-      else { current += ch; }
-    }
-  }
-  result.push(current);
-  return result;
-}
-
-function detectFileType(filename: string, rows: string[][]): ImportedFile["type"] {
+function detectFileType(filename: string): ImportedFile["type"] {
   const fn = filename.toUpperCase();
+  // 利用者補足 (UPHOSOKU) を「基本情報」枠で扱う (clients 更新の材料)
+  if (fn.includes("UPHOSOKU") || fn.includes("利用者補足")) return "user-info";
   if (fn.includes("UPKHON") || fn.includes("利用者基本")) return "user-info";
-  if (fn.includes("UP1KYO") || fn.includes("計画書1") || fn.includes("第1表")) return "care-plan-1";
-  if (fn.includes("UP2KYO") || fn.includes("計画書2") || fn.includes("第2表")) return "care-plan-2";
-  if (fn.includes("UP3KYO") || fn.includes("計画書3") || fn.includes("第3表")) return "care-plan-3";
-  if (fn.includes("DLTPLAN") || fn.includes("DLTJSK") || fn.includes("第6表") || fn.includes("利用票")) return "table-6";
-  if (fn.includes("DLTBET") || fn.includes("第7表") || fn.includes("別表")) return "table-7";
-
-  // ファイル名でわからなければ内容から推定
-  if (rows.length > 0) {
-    const cols = rows[0].length;
-    if (cols >= 40) return "table-6"; // 日別フラグ含む長い行
-    if (cols >= 15 && rows.some((r) => r[10]?.includes("目標") || r[6]?.includes("課題"))) return "care-plan-2";
-  }
+  // V4 命名 (UP1KYO/UP2KYO/UP3KYO) を優先判定
+  const k = detectKeikakushoKind(filename);
+  if (k === "care-plan-1") return "care-plan-1";
+  if (k === "care-plan-2") return "care-plan-2";
+  if (k === "care-plan-3") return "care-plan-3";
   return "unknown";
 }
 
@@ -115,81 +102,33 @@ function getTypeIcon(type: ImportedFile["type"]) {
   }
 }
 
-// Parse specific CSV types
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-function parseUserInfo(rows: string[][]): Record<string, any> {
-  if (rows.length === 0) return {};
-  const r = rows[0];
-  return {
-    insurer_no: r[1] ?? "",
-    insured_no: r[2] ?? "",
-    name: r[3] ?? "",
-    name_kana: r[4] ?? "",
-    birth_date: r[5] ? `${r[5].slice(0, 4)}-${r[5].slice(4, 6)}-${r[5].slice(6, 8)}` : "",
-    gender: r[6] === "1" ? "男" : r[6] === "2" ? "女" : "",
-    phone: r[7] ?? "",
-    address: r[8] ?? "",
-    care_level: r[9] ?? "",
-    provider_code: r[13] ?? "",
-    provider_name: r[14] ?? "",
-  };
-}
+// Parse specific CSV types (V4 準拠)。detectFileType の種別ごとに専用パーサへ委譲する。
+// parsed の中身は保存先が読むシェイプに一致させる:
+//   - user-info    : UserSupplementParsed + 表示用 name (clients 更新の材料)
+//   - care-plan-1/2/3 : kaigo_report_documents.content (careplan-csv-export.ts が読む jsonb)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-function parseCarePlan1(rows: string[][]): Record<string, any> {
-  if (rows.length === 0) return {};
-  const r = rows[0];
-  return {
-    creation_date: r[3] ?? "",
-    plan_type: r[4] === "1" ? "初回" : r[4] === "2" ? "紹介" : "継続",
-    care_level: r[6] ?? "",
-    provider_code: r[10] ?? "",
-    provider_name: r[11] ?? "",
-    creator_name: r[12] ?? "",
-    issue_analysis: r[13] ?? "",
-    review_opinion: r[14] ?? "",
-    overall_policy: r[15] ?? "",
-    living_support_reason: r[16] ?? "",
-  };
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-function parseCarePlan2(rows: string[][]): Record<string, any> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-  const services: Record<string, any>[] = [];
-  for (const r of rows) {
-    services.push({
-      needs: r[5] ?? "",
-      long_term_goal: r[6] ?? "",
-      long_term_period: r[7] ?? "",
-      short_term_goal: r[8] ?? "",
-      short_term_period: r[9] ?? "",
-      content: r[10] ?? "",
-      insurance_flag: r[11] === "1" ? "○" : "×",
-      type: r[12] ?? "",
-      provider: r[13] ?? "",
-      frequency: r[14] ?? "",
-      period: r[15] ?? "",
-    });
+function parseByType(type: ImportedFile["type"], rows: string[][]): { parsed: Record<string, any>; warnings: string[] } {
+  switch (type) {
+    case "user-info": {
+      const { record, warnings } = parseUserSupplement(rows);
+      return { parsed: record ? { ...record, name: record.name } : {}, warnings };
+    }
+    case "care-plan-1": {
+      const { record, warnings } = parseKeikakusho1(rows);
+      return { parsed: record ? { insured_no: record.insuredNumber, ...record.content } : {}, warnings };
+    }
+    case "care-plan-2": {
+      const { record, warnings } = parseKeikakusho2(rows);
+      return { parsed: record ? { insured_no: record.insuredNumber, ...record.content } : {}, warnings };
+    }
+    case "care-plan-3": {
+      const { record, warnings } = parseKeikakusho3(rows);
+      return { parsed: record ? { insured_no: record.insuredNumber, ...record.content } : {}, warnings };
+    }
+    default:
+      return { parsed: { rowCount: rows.length }, warnings: [] };
   }
-  return { services };
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-function parseCarePlan3(rows: string[][]): Record<string, any> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-  const schedule: Record<string, any>[] = [];
-  for (const r of rows) {
-    schedule.push({
-      service: r[4] ?? "",
-      day_of_week: r[5] ?? "",
-      start_time: r[6] ?? "",
-      end_time: r[7] ?? "",
-      daily_activities: r[8] ?? "",
-      other_services: r[9] ?? "",
-    });
-  }
-  return { schedule };
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
@@ -246,47 +185,28 @@ export default function CareplanImportPage() {
     setTimeout(() => { if (fileRef.current) fileRef.current.value = ""; }, 0);
 
     const newFiles: ImportedFile[] = [];
+    const allWarnings: string[] = [];
 
     for (const file of fileList) {
       try {
-        // Shift-JIS / UTF-8 両対応で読み込み
+        // Shift-JIS (MS932) → UNICODE (Phase1/2 と同じ流儀)
         const buf = await file.arrayBuffer();
-        let text = "";
-        try {
-          // まずShift-JIS(cp932)で試す
-          const decoder = new TextDecoder("shift-jis");
-          text = decoder.decode(buf);
-        } catch {
-          // 失敗したらUTF-8
-          text = new TextDecoder("utf-8").decode(buf);
-        }
-        // BOM除去
-        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+        const text = Encoding.convert(new Uint8Array(buf), {
+          to: "UNICODE",
+          from: "SJIS",
+          type: "string",
+        }) as string;
+        // フリーテキスト内 CRLF を跨ぐステートマシン parser (parse-riyouhyou と共通)
+        const rows = parseCsv(text);
 
-        const lines = text.split(/\r?\n/).filter((l) => l.trim());
-
-        if (lines.length === 0) {
+        if (rows.length === 0) {
           toast.error(`${file.name}: データが空です`);
           continue;
         }
 
-        // ヘッダー行判定
-        const firstLine = lines[0] ?? "";
-        const isHeader = !firstLine.match(/^\d/) && !firstLine.startsWith('"2');
-        const dataLines = isHeader ? lines.slice(1) : lines;
-
-        const rows = dataLines.map(parseCSVLine);
-        const type = detectFileType(file.name, rows);
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-        let parsed: Record<string, any> = {};
-        switch (type) {
-          case "user-info": parsed = parseUserInfo(rows); break;
-          case "care-plan-1": parsed = parseCarePlan1(rows); break;
-          case "care-plan-2": parsed = parseCarePlan2(rows); break;
-          case "care-plan-3": parsed = parseCarePlan3(rows); break;
-          default: parsed = { rowCount: rows.length };
-        }
+        const type = detectFileType(file.name);
+        const { parsed, warnings } = parseByType(type, rows);
+        warnings.forEach((w) => allWarnings.push(`${file.name}: ${w}`));
 
         newFiles.push({
           id: Math.random().toString(36).slice(2),
@@ -303,6 +223,14 @@ export default function CareplanImportPage() {
     }
 
     setFiles((prev) => [...prev, ...newFiles]);
+    if (allWarnings.length > 0) {
+      console.warn("[careplan-import] warnings:", allWarnings);
+      toast.warning(
+        `確認事項が ${allWarnings.length} 件あります:\n・` +
+          allWarnings.slice(0, 5).join("\n・") +
+          (allWarnings.length > 5 ? `\n… 他 ${allWarnings.length - 5} 件 (コンソール参照)` : ""),
+      );
+    }
     if (newFiles.length > 0) {
       toast.success(`${newFiles.length}件のCSVを読み込みました`);
     } else {
@@ -325,28 +253,47 @@ export default function CareplanImportPage() {
       // 利用者を特定: ドロップダウン > 基本情報CSV > 他CSVの被保険者番号/名前
       let userId: string | null = selectedUserId || null;
 
-      // 全CSVから被保険者番号・利用者名を抽出
+      // 全CSVから被保険者番号・利用者名を抽出 (利用者補足 UPHOSOKU 優先)
       let detectedInsuredNo = "";
       let detectedName = "";
       const userInfoFile = files.find((f) => f.type === "user-info");
-      if (userInfoFile) {
-        detectedInsuredNo = userInfoFile.parsed.insured_no ?? "";
-        detectedName = userInfoFile.parsed.name ?? "";
+      const supplement: UserSupplementParsed | null =
+        userInfoFile && userInfoFile.parsed.insuredNumber
+          ? (userInfoFile.parsed as unknown as UserSupplementParsed)
+          : null;
+      if (supplement) {
+        detectedInsuredNo = supplement.insuredNumber ?? "";
+        detectedName = supplement.name ?? "";
       }
-      // 利用者基本情報がなくても、他CSVの先頭行から被保険者番号を取得
+      // 補足が無くても、他CSVの被保険者番号 (No.3 = idx2) を取得
       if (!detectedInsuredNo) {
         for (const f of files) {
-          if (f.rows.length > 0 && f.rows[0].length >= 3) {
-            const candidate = f.rows[0][2]?.trim(); // 多くのCSVで3列目が被保険者番号
-            if (candidate && candidate.length >= 8 && /^[HhＨ]?\d+$/.test(candidate)) {
-              detectedInsuredNo = candidate;
-              break;
-            }
+          const cand = (f.parsed?.insured_no as string | undefined)?.trim();
+          if (cand && cand.length >= 8 && /^[HhＨ]?\d+$/.test(cand)) {
+            detectedInsuredNo = cand;
+            break;
           }
         }
       }
 
-      // 自動マッチ: 名前で検索（法人エントリは除外）
+      // 自動マッチ: 被保険者番号 → 名前 の順 (法人エントリは除外)
+      if (!userId && detectedInsuredNo) {
+        const { data, error } = await supabase
+          .from("clients")
+          .select("id, name")
+          .eq("insured_number", detectedInsuredNo)
+          .eq("is_facility", false)
+          .limit(1);
+        if (error) {
+          toast.error("利用者突合に失敗: " + error.message);
+          setSaving(false);
+          return;
+        }
+        if (data && data.length > 0) {
+          userId = data[0].id;
+          toast.info(`利用者「${data[0].name}」に被保険者番号で紐付けしました`);
+        }
+      }
       if (!userId && detectedName) {
         const { data } = await supabase
           .from("clients")
@@ -361,30 +308,30 @@ export default function CareplanImportPage() {
         }
       }
 
-      // 利用者基本情報CSVがあり、マッチしなければ新規作成
-      if (!userId && userInfoFile && detectedName) {
+      // 利用者補足があり、マッチしなければ新規作成
+      if (!userId && supplement && detectedName) {
         if (!currentOffice?.tenant_id) {
           toast.error("自事業所が選択されていないため、新規利用者を登録できません。サイドバーの事業所セレクタで選択してください。");
           setSaving(false);
           return;
         }
-        const info = userInfoFile.parsed;
         // user_number 採番（tenant 単位 max+1）。@kt/shared 共通 util。
         const userNumber = String((await getMaxUserNumber(supabase, currentOffice.tenant_id)) + 1);
 
         // 共通マスタ clients への INSERT。
-        // カラム名対応: name_kana → furigana / phone はそのまま
         const { data: newUser, error } = await supabase
           .from("clients")
           .insert({
             tenant_id: currentOffice.tenant_id,
             user_number: userNumber,
-            name: info.name,
-            furigana: info.name_kana || "",
-            gender: info.gender || "男",
-            birth_date: info.birth_date || "2000-01-01",
-            address: info.address || null,
-            phone: info.phone || null,
+            name: supplement.name,
+            furigana: supplement.furigana || "",
+            gender: supplement.gender || "男",
+            birth_date: supplement.birthDate || "2000-01-01",
+            address: supplement.address || null,
+            phone: supplement.phone || null,
+            insured_number: supplement.insuredNumber || null,
+            insurer_number: supplement.insurerNumber || null,
             status: "active",
             is_facility: false,
             is_provisional: false,
@@ -393,7 +340,7 @@ export default function CareplanImportPage() {
           .single();
         if (error) throw error;
         userId = newUser.id;
-        toast.success(`利用者「${info.name}」を新規登録しました`);
+        toast.success(`利用者「${supplement.name}」を新規登録しました`);
         savedCount++;
       }
 
@@ -403,39 +350,58 @@ export default function CareplanImportPage() {
         return;
       }
 
-      // ケアプランデータを保存 (kaigo_report_documentsに保存)
+      // 利用者補足があり既存利用者にマッチした場合: 空欄のみ補完更新 (既存値は壊さない)
+      if (supplement && userId) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
+        const patch: Record<string, any> = {};
+        if (supplement.furigana) patch.furigana = supplement.furigana;
+        if (supplement.birthDate) patch.birth_date = supplement.birthDate;
+        if (supplement.gender) patch.gender = supplement.gender;
+        if (supplement.address) patch.address = supplement.address;
+        if (supplement.phone) patch.phone = supplement.phone;
+        if (supplement.insuredNumber) patch.insured_number = supplement.insuredNumber;
+        if (supplement.insurerNumber) patch.insurer_number = supplement.insurerNumber;
+        if (Object.keys(patch).length > 0) {
+          const { error } = await supabase.from("clients").update(patch).eq("id", userId);
+          if (error) {
+            toast.error("利用者情報の更新に失敗: " + error.message);
+            setSaving(false);
+            return;
+          }
+          savedCount++;
+        }
+      }
+
+      // ケアプランデータを保存 (kaigo_report_documents に upsert)
       for (const file of files) {
-        if (file.type === "user-info") continue;
-        if (file.type === "unknown") continue;
-
-        const reportTypeMap: Record<string, string> = {
-          "care-plan-1": "care-plan-1",
-          "care-plan-2": "care-plan-2",
-          "care-plan-3": "care-plan-3",
-          "table-6": "service-usage",
-          "table-7": "service-usage-detail",
-        };
-
-        const reportType = reportTypeMap[file.type];
-        if (!reportType) continue;
+        if (file.type !== "care-plan-1" && file.type !== "care-plan-2" && file.type !== "care-plan-3") continue;
+        const reportType = file.type;
 
         // 既存の帳票を確認
-        const { data: existing } = await supabase
+        const { data: existing, error: selErr } = await supabase
           .from("kaigo_report_documents")
           .select("id")
           .eq("user_id", userId)
           .eq("report_type", reportType)
           .limit(1);
+        if (selErr) {
+          toast.error("帳票の確認に失敗: " + selErr.message);
+          setSaving(false);
+          return;
+        }
 
         if (existing && existing.length > 0) {
-          // 更新
-          await supabase
+          const { error } = await supabase
             .from("kaigo_report_documents")
             .update({ content: file.parsed, status: "draft" })
             .eq("id", existing[0].id);
+          if (error) {
+            toast.error(`${file.label} の更新に失敗: ` + error.message);
+            setSaving(false);
+            return;
+          }
         } else {
-          // 新規作成
-          await supabase
+          const { error } = await supabase
             .from("kaigo_report_documents")
             .insert({
               user_id: userId,
@@ -444,6 +410,11 @@ export default function CareplanImportPage() {
               content: file.parsed,
               status: "draft",
             });
+          if (error) {
+            toast.error(`${file.label} の保存に失敗: ` + error.message);
+            setSaving(false);
+            return;
+          }
         }
         savedCount++;
       }
@@ -475,10 +446,14 @@ export default function CareplanImportPage() {
       {/* 利用票取込 (ケアプランデータ連携 V4 第6表/計画 + 第7表/別表) */}
       <RiyouhyouImportSection />
 
+      {/* 削除レコード取込 (DLTPLAN=予定取消 / DLTJSK=実績取消 / DLT1KYO=計画書取消) */}
+      <DeleteImportSection />
+
       <div className="border-t border-gray-200 pt-6">
-        <h2 className="text-lg font-semibold text-gray-900">ケアプラン取込</h2>
+        <h2 className="text-lg font-semibold text-gray-900">計画書取込（第1〜3表・利用者補足 / V4）</h2>
         <p className="mt-1 text-sm text-gray-500">
-          居宅介護支援事業所から受け取ったCSVファイルを取り込みます
+          居宅介護支援事業所から受け取った 計画書第1〜3表（UP1KYO/UP2KYO/UP3KYO）と 利用者補足（UPHOSOKU）の CSV を取り込みます。
+          利用者補足は利用者マスタ（氏名・生年月日・住所等）の補完に、計画書は帳票（第1〜3表）に反映します。
         </p>
       </div>
 
@@ -500,7 +475,7 @@ export default function CareplanImportPage() {
           CSVファイルをクリックして選択
         </p>
         <p className="mt-1 text-xs text-gray-500">
-          複数ファイルを同時に選択できます（利用者基本情報、第1表〜第3表、第6表、第7表）
+          複数ファイルを同時に選択できます（利用者補足 UPHOSOKU、計画書第1〜3表 UP1KYO/UP2KYO/UP3KYO）
         </p>
       </div>
 
@@ -575,8 +550,8 @@ export default function CareplanImportPage() {
                     {file.type === "user-info" && file.parsed.name && (
                       <div className="mt-2 text-xs text-gray-600 bg-gray-50 rounded p-2">
                         利用者: <span className="font-medium">{file.parsed.name}</span>
-                        {file.parsed.care_level && <> / {file.parsed.care_level}</>}
-                        {file.parsed.provider_name && <> / 居宅: {file.parsed.provider_name}</>}
+                        {file.parsed.furigana && <> （{file.parsed.furigana}）</>}
+                        {file.parsed.insuredNumber && <> / 被保番: {file.parsed.insuredNumber}</>}
                       </div>
                     )}
                     {file.type === "care-plan-1" && file.parsed.overall_policy && (
@@ -624,8 +599,9 @@ export default function CareplanImportPage() {
       {/* Info */}
       <div className="rounded-lg border border-gray-200 bg-gray-50 px-5 py-4 text-sm text-gray-600">
         <strong className="font-medium text-gray-800">対応ファイル: </strong>
-        ケアプランデータ連携システム標準様式（v4.1）のCSVファイルに対応しています。
-        利用者基本情報、居宅サービス計画書（第1表〜第3表）、サービス利用票（第6表）、利用票別表（第7表）を取り込みできます。
+        ケアプランデータ連携標準仕様 V4 の CSV（Shift-JIS）に対応しています。
+        利用者補足（UPHOSOKU）、居宅サービス計画書 第1〜3表（UP1KYO/UP2KYO/UP3KYO）、サービス利用票 第6表（UPPLAN）・別表 第7表（UPSIKYU）、
+        実績（第6表 実績）エクスポート、削除レコード（DLTPLAN/DLTJSK/DLT1KYO）を取り込みできます。
       </div>
     </div>
   );
@@ -1530,6 +1506,339 @@ function RiyouhyouImportSection() {
             >
               {applying ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
               確定して反映
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── 削除レコード取込 (ケアプランデータ連携 V4) ───────────────────────────────
+// ケアマネから届く削除ファイルを取込み、対象データを削除する。
+//   - DLTPLAN  (第6表/計画=予定 削除) → kaigo_visit_schedule status='scheduled' を
+//                                       利用者×対象月 (自事業所) で削除
+//   - DLTJSK   (第6表/実績 削除)      → kaigo_visit_schedule status='completed' を
+//                                       利用者×対象月 (自事業所) で削除
+//   - DLT1KYO  (計画書第1表 削除)      → kaigo_report_documents の care-plan-1 / care-plan-2
+//                                       (第2表は第1表に連動して削除) を利用者単位で削除
+// 被保険者番号 → clients.insured_number 突合。プレビューで削除件数を出して確定。
+
+interface DeletePreviewRow {
+  kind: "delete-plan" | "delete-jisseki" | "delete-care-plan";
+  clientId: string;
+  clientName: string;
+  /** 表示用ラベル (対象月 or 計画作成日) */
+  targetLabel: string;
+  /** schedule 削除用の日付範囲 (計画/実績のみ) */
+  range: { from: string; to: string } | null;
+}
+
+function DeleteImportSection() {
+  const supabase = createClient();
+  const { currentOffice, loading: btLoading } = useBusinessType();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [parsing, setParsing] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [rows, setRows] = useState<DeletePreviewRow[]>([]);
+  const [unmatched, setUnmatched] = useState<string[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [ready, setReady] = useState(false);
+
+  const reset = () => {
+    setRows([]);
+    setUnmatched([]);
+    setWarnings([]);
+    setReady(false);
+  };
+
+  const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const list = e.target.files;
+    if (!list || list.length === 0) return;
+    const fileList = Array.from(list);
+    setTimeout(() => { if (fileRef.current) fileRef.current.value = ""; }, 0);
+    if (!currentOffice) {
+      toast.error("事業所が選択されていません。ヘッダーで事業所を選択してください。");
+      return;
+    }
+    setParsing(true);
+    reset();
+    try {
+      const warns: string[] = [];
+      // 種別 × 削除レコード を集約
+      const parsedRecords: { kind: DeletePreviewRow["kind"]; rec: DeleteRecord }[] = [];
+
+      for (const file of fileList) {
+        const buf = await file.arrayBuffer();
+        const text = Encoding.convert(new Uint8Array(buf), {
+          to: "UNICODE",
+          from: "SJIS",
+          type: "string",
+        }) as string;
+        const csvRows = parseCsv(text);
+        const res = parseDeleteFile(file.name, csvRows);
+        res.warnings.forEach((w) => warns.push(`${file.name}: ${w}`));
+        if (res.kind === "unknown") {
+          warns.push(`${file.name}: 削除ファイル (DLTPLAN/DLTJSK/DLT1KYO) と判定できませんでした — スキップ`);
+          continue;
+        }
+        for (const rec of res.records) parsedRecords.push({ kind: res.kind, rec });
+      }
+
+      if (parsedRecords.length === 0) {
+        setWarnings(warns);
+        toast.error("削除対象のレコードがありませんでした。");
+        setParsing(false);
+        return;
+      }
+
+      // 突合: 被保険者番号 → clients.insured_number
+      const insuredNumbers = Array.from(
+        new Set(parsedRecords.map((p) => p.rec.insuredNumber).filter(Boolean)),
+      );
+      const clientByInsured = new Map<string, { id: string; name: string }>();
+      for (let i = 0; i < insuredNumbers.length; i += 50) {
+        const chunk = insuredNumbers.slice(i, i + 50);
+        const { data, error } = await supabase
+          .from("clients")
+          .select("id, name, insured_number")
+          .in("insured_number", chunk)
+          .eq("is_facility", false);
+        if (error) {
+          toast.error("利用者突合に失敗: " + error.message);
+          setParsing(false);
+          return;
+        }
+        for (const c of (data ?? []) as { id: string; name: string; insured_number: string | null }[]) {
+          const key = (c.insured_number ?? "").trim();
+          if (key && !clientByInsured.has(key)) clientByInsured.set(key, { id: c.id, name: c.name });
+        }
+      }
+
+      const unmatchedSet = new Set<string>();
+      const previewRows: DeletePreviewRow[] = [];
+      for (const { kind, rec } of parsedRecords) {
+        const client = clientByInsured.get(rec.insuredNumber);
+        if (!client) {
+          unmatchedSet.add(rec.insuredNumber);
+          continue;
+        }
+        if (kind === "delete-care-plan") {
+          // DLT1KYO: targetKey = 計画作成(変更)日 (YYYYMMDD)。利用者単位で計画書を削除。
+          const label = /^\d{8}$/.test(rec.targetKey)
+            ? `${rec.targetKey.slice(0, 4)}/${rec.targetKey.slice(4, 6)}/${rec.targetKey.slice(6, 8)} 作成計画`
+            : rec.targetKey;
+          previewRows.push({ kind, clientId: client.id, clientName: client.name, targetLabel: label, range: null });
+        } else {
+          // DLTPLAN / DLTJSK: targetKey = 削除対象年月 (YYYYMM)
+          const range = ymToDateRange(rec.targetKey);
+          if (!range) {
+            warns.push(`${client.name}: 削除対象年月が不正 (${rec.targetKey}) — スキップ`);
+            continue;
+          }
+          previewRows.push({
+            kind,
+            clientId: client.id,
+            clientName: client.name,
+            targetLabel: `${rec.targetKey.slice(0, 4)}/${rec.targetKey.slice(4, 6)}`,
+            range,
+          });
+        }
+      }
+
+      setRows(previewRows);
+      setUnmatched(Array.from(unmatchedSet));
+      setWarnings(warns);
+      setReady(previewRows.length > 0);
+      if (previewRows.length === 0) {
+        toast.error("突合できた削除対象がありませんでした。");
+      } else {
+        toast.success(
+          `削除プレビュー: ${previewRows.length} 件` +
+            (unmatchedSet.size > 0 ? ` (突合不可 ${unmatchedSet.size} 名)` : ""),
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("削除ファイルの取込に失敗: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const handleApply = async () => {
+    if (!currentOffice) {
+      toast.error("事業所が選択されていません。");
+      return;
+    }
+    setApplying(true);
+    try {
+      let schedDeleted = 0;
+      let planDocDeleted = 0;
+
+      for (const row of rows) {
+        if (row.kind === "delete-plan" || row.kind === "delete-jisseki") {
+          if (!row.range) continue;
+          const status = row.kind === "delete-plan" ? "scheduled" : "completed";
+          const { error, count } = await supabase
+            .from("kaigo_visit_schedule")
+            .delete({ count: "exact" })
+            .eq("user_id", row.clientId)
+            .eq("status", status)
+            .gte("visit_date", row.range.from)
+            .lte("visit_date", row.range.to)
+            .or(`office_id.eq.${currentOffice.id},office_id.is.null`);
+          if (error) {
+            toast.error(`予定/実績の削除に失敗 (${row.clientName}): ${error.message}`);
+            setApplying(false);
+            return;
+          }
+          schedDeleted += count ?? 0;
+        } else if (row.kind === "delete-care-plan") {
+          // DLT1KYO: 第1表 + 連動する第2表 を削除
+          const { error, count } = await supabase
+            .from("kaigo_report_documents")
+            .delete({ count: "exact" })
+            .eq("user_id", row.clientId)
+            .in("report_type", ["care-plan-1", "care-plan-2"]);
+          if (error) {
+            toast.error(`計画書の削除に失敗 (${row.clientName}): ${error.message}`);
+            setApplying(false);
+            return;
+          }
+          planDocDeleted += count ?? 0;
+        }
+      }
+
+      toast.success(`削除完了: 予定/実績 ${schedDeleted} 件 / 計画書 ${planDocDeleted} 件`);
+      reset();
+    } catch (err) {
+      console.error(err);
+      toast.error("削除の反映に失敗: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const planCount = rows.filter((r) => r.kind === "delete-plan").length;
+  const jissekiCount = rows.filter((r) => r.kind === "delete-jisseki").length;
+  const carePlanCount = rows.filter((r) => r.kind === "delete-care-plan").length;
+
+  return (
+    <div className="rounded-xl border border-rose-200 bg-rose-50/40 p-5">
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rose-100 text-rose-600">
+          <Trash2 size={20} />
+        </div>
+        <div className="flex-1">
+          <h2 className="text-lg font-semibold text-gray-900">削除レコード取込（DLTPLAN / DLTJSK / DLT1KYO）</h2>
+          <p className="mt-0.5 text-sm text-gray-500">
+            ケアマネから届いた 削除ファイル（Shift-JIS）を取り込み、対象データを削除します。
+            DLTPLAN=予定（scheduled）取消 / DLTJSK=実績（completed）取消 / DLT1KYO=計画書（第1・2表）取消。
+            被保険者番号で自事業所の利用者に突合します（突合できない場合はスキップ）。
+          </p>
+        </div>
+      </div>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".csv"
+        multiple
+        className="hidden"
+        onChange={handleFiles}
+      />
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={parsing || applying || btLoading || !currentOffice}
+          className="flex items-center gap-2 rounded-lg bg-rose-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-50"
+        >
+          {parsing ? <Loader2 size={16} className="animate-spin" /> : <FileUp size={16} />}
+          削除CSVを選択してプレビュー
+        </button>
+        {ready && (
+          <button type="button" onClick={reset} className="text-sm text-gray-500 hover:text-red-500">
+            クリア
+          </button>
+        )}
+      </div>
+
+      {ready && (
+        <div className="mt-4 space-y-3">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-lg border border-gray-200 bg-white p-3 text-center">
+              <div className="text-xs text-gray-500">予定取消 (DLTPLAN)</div>
+              <div className="text-lg font-bold text-rose-700">{planCount}</div>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-white p-3 text-center">
+              <div className="text-xs text-gray-500">実績取消 (DLTJSK)</div>
+              <div className="text-lg font-bold text-rose-700">{jissekiCount}</div>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-white p-3 text-center">
+              <div className="text-xs text-gray-500">計画書取消 (DLT1KYO)</div>
+              <div className="text-lg font-bold text-rose-700">{carePlanCount}</div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-white p-3">
+            <div className="mb-1 text-xs font-medium text-gray-600">削除対象 ({rows.length} 件)</div>
+            <div className="max-h-48 space-y-0.5 overflow-y-auto text-xs text-gray-700">
+              {rows.map((r, i) => (
+                <div key={i} className="flex justify-between">
+                  <span>
+                    {r.clientName}
+                    <span className="ml-1 text-gray-400">
+                      {r.kind === "delete-plan" ? "予定" : r.kind === "delete-jisseki" ? "実績" : "計画書"}
+                    </span>
+                  </span>
+                  <span className="font-mono text-gray-500">{r.targetLabel}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {unmatched.length > 0 && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
+              <div className="mb-1 flex items-center gap-1 text-xs font-semibold text-amber-800">
+                <AlertTriangle size={12} />
+                突合できなかった被保険者番号 ({unmatched.length} 件) — スキップします
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {unmatched.map((n) => (
+                  <span key={n} className="rounded bg-amber-100 px-2 py-0.5 text-xs font-mono text-amber-800">{n}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {warnings.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+              <div className="mb-1 text-xs font-semibold text-amber-800">確認事項 ({warnings.length})</div>
+              <ul className="max-h-40 space-y-0.5 overflow-y-auto text-xs text-amber-700">
+                {warnings.map((w, i) => (<li key={i}>・{w}</li>))}
+              </ul>
+            </div>
+          )}
+
+          <div className="rounded border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+            確定すると、上記の予定/実績（自事業所分）および計画書を<strong>削除</strong>します。この操作は取り消せません。
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <button type="button" onClick={reset} className="rounded-lg border px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
+              キャンセル
+            </button>
+            <button
+              type="button"
+              onClick={handleApply}
+              disabled={applying || rows.length === 0}
+              className="flex items-center gap-2 rounded-lg bg-rose-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-50"
+            >
+              {applying ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+              削除を実行
             </button>
           </div>
         </div>
