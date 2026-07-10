@@ -49,6 +49,7 @@ const NAV_CARE_MANAGER_SECTIONED: SectionSpec[] = [
     title: "日常業務",
     items: [
       { name: "アセスメント", href: "/assessments", icon: ClipboardCheck },
+      { name: "予防アセスメント", href: "/assessments/yobo", icon: ClipboardCheck },
       { name: "居宅サービス計画書", href: "/reports/care-plan-1", icon: ClipboardList },
       { name: "介護予防サービス・支援計画書", href: "/reports/yobo-care-plan", icon: ClipboardList },
       { name: "課題整理総括表", href: "/care-reports/kadai-seiri", icon: FileSpreadsheet },
