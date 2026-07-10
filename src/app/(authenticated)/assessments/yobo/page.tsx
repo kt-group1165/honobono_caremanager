@@ -1,14 +1,14 @@
-import { ClipboardCheck } from "lucide-react";
+import { HeartPulse } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { UserSidebar } from "@/components/users/user-sidebar";
 import {
-  AssessmentsContent,
-  type Assessment,
+  YoboContent,
+  type YoboAssessment,
   type Certification,
   type KaigoUser,
-} from "./assessments-content";
+} from "./yobo-content";
 
-export default async function AssessmentsPage({
+export default async function YoboAssessmentPage({
   searchParams,
 }: {
   searchParams: Promise<{ user?: string }>;
@@ -17,7 +17,7 @@ export default async function AssessmentsPage({
 
   let initialUser: KaigoUser | null = null;
   let initialCertifications: Certification[] = [];
-  let initialAssessments: Assessment[] = [];
+  let initialAssessments: YoboAssessment[] = [];
 
   if (userId) {
     const supabase = await createClient();
@@ -41,17 +41,17 @@ export default async function AssessmentsPage({
       .from("kaigo_assessments")
       .select("*")
       .eq("user_id", userId)
-      .eq("assessment_type", "kaigo");
+      .eq("assessment_type", "yobo");
     if (initialCertId) q = q.eq("certification_id", initialCertId);
     const { data: assessRes } = await q.order("assessment_date", { ascending: false });
-    initialAssessments = (assessRes ?? []) as Assessment[];
+    initialAssessments = (assessRes ?? []) as YoboAssessment[];
   }
 
   return (
     <div className="flex h-full -m-6">
       <UserSidebar />
       {userId ? (
-        <AssessmentsContent
+        <YoboContent
           key={userId}
           userId={userId}
           initialUser={initialUser}
@@ -61,7 +61,7 @@ export default async function AssessmentsPage({
       ) : (
         <div className="flex-1 overflow-y-auto">
           <div className="flex flex-col items-center justify-center h-64 text-center">
-            <ClipboardCheck size={48} className="mb-4 text-gray-300" />
+            <HeartPulse size={48} className="mb-4 text-gray-300" />
             <p className="text-gray-500 text-sm">利用者を選択してください</p>
           </div>
         </div>

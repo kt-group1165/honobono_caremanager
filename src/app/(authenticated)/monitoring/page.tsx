@@ -19,11 +19,13 @@ export default async function MonitoringPage({
   let initialUser: KaigoUser | null = null;
   let initialCarePlans: CarePlanSummary[] = [];
   let initialSheets: MonitoringSheet[] = [];
+  // 予防様式判定用: 対象者の最新認定の要介護度
+  let careLevel: string | null = null;
 
   if (userId) {
     const supabase = await createClient();
 
-    const [userRes, planRes] = await Promise.all([
+    const [userRes, planRes, certRes] = await Promise.all([
       supabase
         .from("clients")
         // 実 DB 列は furigana (name_kana 列は存在しない) — PostgREST alias で型を維持
@@ -35,8 +37,17 @@ export default async function MonitoringPage({
         .select("id, plan_number, plan_type, start_date, end_date, status, short_term_goals")
         .eq("user_id", userId)
         .order("start_date", { ascending: false }),
+      // 最新認定の要介護度 (client_insurance_records)。care_level は clients 直列ではない
+      supabase
+        .from("client_insurance_records")
+        .select("care_level")
+        .eq("client_id", userId)
+        .order("certification_start_date", { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
     initialUser = (userRes.data ?? null) as KaigoUser | null;
+    careLevel = (certRes.data as { care_level: string | null } | null)?.care_level ?? null;
     let plans = (planRes.data ?? []) as CarePlanSummary[];
 
     // 自動移行: kaigo_care_plans が空でも帳票画面の計画書から復元
@@ -105,6 +116,12 @@ export default async function MonitoringPage({
     initialSheets = (data ?? []) as MonitoringSheet[];
   }
 
+  // 予防様式判定: 要支援1/2 及び 事業対象者 は介護予防支援モニタリング様式
+  const isPreventive =
+    careLevel === "要支援1" ||
+    careLevel === "要支援2" ||
+    careLevel === "事業対象者";
+
   return (
     <div className="flex h-full -m-6">
       <UserSidebar />
@@ -115,6 +132,8 @@ export default async function MonitoringPage({
           initialUser={initialUser}
           initialCarePlans={initialCarePlans}
           initialSheets={initialSheets}
+          isPreventive={isPreventive}
+          careLevel={careLevel}
         />
       ) : (
         <div className="flex-1 overflow-y-auto p-6">

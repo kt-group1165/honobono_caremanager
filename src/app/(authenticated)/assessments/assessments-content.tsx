@@ -154,7 +154,7 @@ export function AssessmentsContent({
   // Fetch assessments list (filtered by certification_id if selected)
   const fetchAssessments = useCallback(async () => {
     setLoadingList(true);
-    let query = supabase.from("kaigo_assessments").select("*").eq("user_id", userId);
+    let query = supabase.from("kaigo_assessments").select("*").eq("user_id", userId).eq("assessment_type", "kaigo");
     if (selectedCertId) query = query.eq("certification_id", selectedCertId);
     const { data, error } = await query.order("assessment_date", { ascending: false });
     if (error) {

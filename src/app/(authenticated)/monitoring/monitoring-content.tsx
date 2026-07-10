@@ -52,6 +52,104 @@ export interface MonitoringSheet {
   status: MonitoringStatus;
   care_plan_id: string | null;
   created_at: string;
+  form_type?: "要介護" | "予防" | null;
+}
+
+// ─── 予防版（介護予防支援モニタリング）──────────────────────────────────────
+// 要支援1/2・事業対象者 向け。頻度=少なくとも3月に1回＋サービス評価期間終了月。
+// 様式が要介護と全く異なるため kaigo_monitoring_sheets.preventive_content(jsonb) に格納。
+
+type PreventiveMonitoringType = "通常" | "サービス評価期間終了" | "状態変化時";
+type ContinuationDecision = "継続" | "変更" | "終了" | "";
+type PreventiveAchievement = "達成" | "一部達成" | "未達成" | "";
+
+interface PreventiveGoal {
+  goal: string; // 目標（本人等のセルフケア・支援内容）
+  period: string; // 期間（テキスト）
+  service: string; // 本人・家族・地域の取組／サービス
+  achievement: PreventiveAchievement; // 達成状況
+  evaluation: string; // 評価・今後の方針
+}
+
+interface PreventiveContent {
+  office_name: string;
+  evaluation_period_start: string;
+  evaluation_period_end: string;
+  monitoring_type: PreventiveMonitoringType;
+  next_monitoring_date: string;
+  overall_evaluation: string; // 総合的な評価・支援経過
+  user_family_intention: string; // 本人・家族の意向
+  continuation_decision: ContinuationDecision; // サービス継続の要否
+  continuation_reason: string;
+  goals: PreventiveGoal[];
+}
+
+const PREVENTIVE_ROWS = 5;
+
+function emptyPreventiveGoal(): PreventiveGoal {
+  return { goal: "", period: "", service: "", achievement: "", evaluation: "" };
+}
+
+function emptyPreventiveContent(): PreventiveContent {
+  return {
+    office_name: "",
+    evaluation_period_start: "",
+    evaluation_period_end: "",
+    monitoring_type: "通常",
+    next_monitoring_date: "",
+    overall_evaluation: "",
+    user_family_intention: "",
+    continuation_decision: "",
+    continuation_reason: "",
+    goals: Array.from({ length: PREVENTIVE_ROWS }, emptyPreventiveGoal),
+  };
+}
+
+/** 保存済 jsonb を安全に PreventiveContent へ正規化（欠損キー・型崩れを吸収） */
+function normalizePreventiveContent(raw: unknown): PreventiveContent {
+  const base = emptyPreventiveContent();
+  if (!raw || typeof raw !== "object") return base;
+  const r = raw as Record<string, unknown>;
+  const goalsRaw = Array.isArray(r.goals) ? r.goals : [];
+  const goals: PreventiveGoal[] = goalsRaw.map((g) => {
+    const gg = (g && typeof g === "object" ? g : {}) as Record<string, unknown>;
+    return {
+      goal: typeof gg.goal === "string" ? gg.goal : "",
+      period: typeof gg.period === "string" ? gg.period : "",
+      service: typeof gg.service === "string" ? gg.service : "",
+      achievement: (["達成", "一部達成", "未達成"].includes(gg.achievement as string)
+        ? (gg.achievement as PreventiveAchievement)
+        : "") as PreventiveAchievement,
+      evaluation: typeof gg.evaluation === "string" ? gg.evaluation : "",
+    };
+  });
+  while (goals.length < PREVENTIVE_ROWS) goals.push(emptyPreventiveGoal());
+  return {
+    office_name: typeof r.office_name === "string" ? r.office_name : "",
+    evaluation_period_start:
+      typeof r.evaluation_period_start === "string" ? r.evaluation_period_start : "",
+    evaluation_period_end:
+      typeof r.evaluation_period_end === "string" ? r.evaluation_period_end : "",
+    monitoring_type: (["通常", "サービス評価期間終了", "状態変化時"].includes(
+      r.monitoring_type as string
+    )
+      ? (r.monitoring_type as PreventiveMonitoringType)
+      : "通常") as PreventiveMonitoringType,
+    next_monitoring_date:
+      typeof r.next_monitoring_date === "string" ? r.next_monitoring_date : "",
+    overall_evaluation:
+      typeof r.overall_evaluation === "string" ? r.overall_evaluation : "",
+    user_family_intention:
+      typeof r.user_family_intention === "string" ? r.user_family_intention : "",
+    continuation_decision: (["継続", "変更", "終了"].includes(
+      r.continuation_decision as string
+    )
+      ? (r.continuation_decision as ContinuationDecision)
+      : "") as ContinuationDecision,
+    continuation_reason:
+      typeof r.continuation_reason === "string" ? r.continuation_reason : "",
+    goals,
+  };
 }
 
 /** ケアプラン選択タブ表示用の軽量型 */
@@ -258,6 +356,9 @@ export interface MonitoringContentProps {
   initialUser: KaigoUser | null;
   initialCarePlans: CarePlanSummary[];
   initialSheets: MonitoringSheet[];
+  /** 要支援1/2・事業対象者 = 介護予防支援モニタリング様式に分岐 */
+  isPreventive?: boolean;
+  careLevel?: string | null;
 }
 
 export function MonitoringContent({
@@ -265,6 +366,8 @@ export function MonitoringContent({
   initialUser,
   initialCarePlans,
   initialSheets,
+  isPreventive = false,
+  careLevel = null,
 }: MonitoringContentProps) {
   const supabase = useMemo(() => createClient(), []);
 
@@ -294,8 +397,23 @@ export function MonitoringContent({
   const [items, setItems] = useState<MonitoringItem[]>(
     Array.from({ length: FIXED_ROWS }, (_, i) => emptyItem(i + 1))
   );
+  // 予防様式の入力値（isPreventive のときのみ使用）
+  const [prev, setPrev] = useState<PreventiveContent>(() => emptyPreventiveContent());
   const [saving, setSaving] = useState(false);
   const [loadingCarePlan, setLoadingCarePlan] = useState(false);
+
+  const updatePrev = useCallback((patch: Partial<PreventiveContent>) => {
+    setPrev((p) => ({ ...p, ...patch }));
+  }, []);
+  const updatePrevGoal = useCallback(
+    (idx: number, patch: Partial<PreventiveGoal>) => {
+      setPrev((p) => ({
+        ...p,
+        goals: p.goals.map((g, i) => (i === idx ? { ...g, ...patch } : g)),
+      }));
+    },
+    []
+  );
 
   // 自動移行 (kaigo_care_plans が空でも帳票画面の計画書から復元) は server で実施済み
 
@@ -306,7 +424,7 @@ export function MonitoringContent({
     let query = supabase
       .from("kaigo_monitoring_sheets")
       .select(
-        "id, user_id, monitoring_date, assessor_name, status, care_plan_id, created_at"
+        "id, user_id, monitoring_date, assessor_name, status, care_plan_id, created_at, form_type"
       )
       .eq("user_id", userId)
       .order("monitoring_date", { ascending: false });
@@ -409,6 +527,7 @@ export function MonitoringContent({
     setAssessorName("");
     setSheetStatus("draft");
     setItems(Array.from({ length: FIXED_ROWS }, (_, i) => emptyItem(i + 1)));
+    setPrev(emptyPreventiveContent());
     setMode("edit");
 
     // 選択されたケアプランから短期目標・サービス情報を自動セット
@@ -449,6 +568,27 @@ export function MonitoringContent({
           }
         }
         if (sourced.length > 0) setItems(buildFixedRows(sourced));
+
+        // 予防様式: 目標・サービスを予防 goals に流し込む（期間はプランの評価期間）
+        if (isPreventive) {
+          const pStart = p.start_date ?? "";
+          const pEnd = p.end_date ?? "";
+          const periodText =
+            pStart || pEnd ? `${pStart || ""}〜${pEnd || ""}` : "";
+          const pGoals: PreventiveGoal[] = services.slice(0, PREVENTIVE_ROWS).map((svc) => ({
+            ...emptyPreventiveGoal(),
+            goal: p.short_term_goals ?? "",
+            period: periodText,
+            service: svc.service_type ?? "",
+          }));
+          while (pGoals.length < PREVENTIVE_ROWS) pGoals.push(emptyPreventiveGoal());
+          setPrev((prevState) => ({
+            ...prevState,
+            evaluation_period_start: pStart,
+            evaluation_period_end: pEnd,
+            goals: services.length > 0 ? pGoals : prevState.goals,
+          }));
+        }
       }
     } catch (err) {
       // 自動セットの失敗は致命的ではないので warn のみ (= UI は空のままで openNew は継続)
@@ -466,6 +606,26 @@ export function MonitoringContent({
     setAssessorName(sheet.assessor_name);
     setSheetStatus(sheet.status);
     if (sheet.care_plan_id) setSelectedCarePlanId(sheet.care_plan_id);
+
+    // 予防様式: preventive_content(jsonb) を読み込む（items テーブルは使わない）
+    if (sheet.form_type === "予防") {
+      const { data: row, error: pErr } = await supabase
+        .from("kaigo_monitoring_sheets")
+        .select("preventive_content")
+        .eq("id", sheet.id)
+        .maybeSingle();
+      if (pErr) {
+        toast.error("予防様式の読み込みに失敗しました: " + pErr.message);
+        return;
+      }
+      const content = normalizePreventiveContent(
+        (row as { preventive_content: unknown } | null)?.preventive_content
+      );
+      setPrev(content);
+      setOfficeName(content.office_name);
+      setMode("edit");
+      return;
+    }
 
     const { data: dbItems, error } = await supabase
       .from("kaigo_monitoring_items")
@@ -517,6 +677,44 @@ export function MonitoringContent({
   const handleSave = async () => {
     setSaving(true);
     try {
+      // ── 予防様式 (要支援1/2・事業対象者) ──────────────────────────────
+      if (isPreventive) {
+        const content: PreventiveContent = { ...prev, office_name: officeName };
+        if (editingSheetId) {
+          const { error } = await supabase
+            .from("kaigo_monitoring_sheets")
+            .update({
+              monitoring_date: monitoringDate,
+              assessor_name: assessorName,
+              status: sheetStatus,
+              care_plan_id: selectedCarePlanId,
+              form_type: "予防",
+              preventive_content: content,
+            })
+            .eq("id", editingSheetId);
+          if (error) throw error;
+        } else {
+          const { data, error } = await supabase
+            .from("kaigo_monitoring_sheets")
+            .insert({
+              user_id: userId,
+              monitoring_date: monitoringDate,
+              assessor_name: assessorName,
+              status: sheetStatus,
+              care_plan_id: selectedCarePlanId,
+              form_type: "予防",
+              preventive_content: content,
+            })
+            .select("id")
+            .single();
+          if (error) throw error;
+          setEditingSheetId(data.id);
+        }
+        toast.success("介護予防支援モニタリングを保存しました");
+        setSaving(false);
+        return;
+      }
+
       let sheetId = editingSheetId;
 
       if (sheetId) {
@@ -539,6 +737,7 @@ export function MonitoringContent({
             assessor_name: assessorName,
             status: sheetStatus,
             care_plan_id: selectedCarePlanId,
+            form_type: "要介護",
           })
           .select("id")
           .single();
@@ -618,11 +817,14 @@ export function MonitoringContent({
                 <div className="flex items-center gap-2">
                   <ClipboardList className="text-blue-600" size={24} />
                   <h1 className="text-xl font-bold text-gray-900">
-                    モニタリングシート
+                    {isPreventive
+                      ? "介護予防支援モニタリング"
+                      : "モニタリングシート"}
                   </h1>
                   {selectedUser && (
                     <span className="text-gray-500 text-sm">
                       — {selectedUser.name} 様
+                      {isPreventive && careLevel ? `（${careLevel}）` : ""}
                     </span>
                   )}
                 </div>
@@ -636,6 +838,17 @@ export function MonitoringContent({
                   新規作成
                 </button>
               </div>
+
+              {/* 予防版: 頻度ガイド */}
+              {isPreventive && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                  <span className="font-semibold">介護予防支援モニタリングの頻度</span>
+                  ：少なくとも
+                  <span className="font-bold">3月に1回</span>
+                  、及び<span className="font-bold">サービス評価期間が終了する月</span>
+                  に実施します（利用者の状態に著しい変化があったときは、その都度）。
+                </div>
+              )}
 
               {/* ケアプラン期間タブ */}
               {carePlans.length === 0 ? (
@@ -775,8 +988,8 @@ export function MonitoringContent({
             </div>
           )}
 
-          {/* ── EDIT MODE ── */}
-          {mode === "edit" && (
+          {/* ── EDIT MODE (要介護様式) ── */}
+          {mode === "edit" && !isPreventive && (
             <div className="space-y-5">
               {/* Toolbar */}
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1189,8 +1402,346 @@ export function MonitoringContent({
             </div>
           )}
 
-          {/* ── SCREEN PREVIEW (A4縦フィット) ── */}
-          {mode === "edit" && selectedUser && (
+          {/* ── EDIT MODE (予防様式: 介護予防支援モニタリング) ── */}
+          {mode === "edit" && isPreventive && (
+            <div className="space-y-5">
+              {/* Toolbar */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setMode("list")}
+                    className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    <ArrowLeft size={14} />
+                    一覧に戻る
+                  </button>
+                  <ClipboardList className="text-emerald-600" size={22} />
+                  <h1 className="text-lg font-bold text-gray-900">
+                    介護予防支援モニタリング
+                    {selectedUser && (
+                      <span className="ml-2 text-gray-500 text-sm font-normal">
+                        {selectedUser.name} 様
+                        {careLevel ? `（${careLevel}）` : ""}
+                      </span>
+                    )}
+                  </h1>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handlePrint}
+                    className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    <Printer size={14} />
+                    印刷
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                  >
+                    {saving ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Save size={14} />
+                    )}
+                    保存
+                  </button>
+                </div>
+              </div>
+
+              {/* 頻度ガイド */}
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs text-emerald-800">
+                実施頻度：少なくとも<span className="font-bold">3月に1回</span>、及び
+                <span className="font-bold">サービス評価期間終了月</span>
+                （状態に著しい変化があったときは都度）。
+              </div>
+
+              {/* Header fields */}
+              <div className="rounded-lg border bg-white shadow-sm p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      利用者名
+                    </label>
+                    <div className="rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                      {selectedUser?.name ?? "—"} 殿
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      モニタリング実施日
+                    </label>
+                    <input
+                      type="date"
+                      value={monitoringDate}
+                      onChange={(e) => setMonitoringDate(e.target.value)}
+                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      介護予防支援事業所名
+                    </label>
+                    <input
+                      type="text"
+                      value={officeName}
+                      onChange={(e) => setOfficeName(e.target.value)}
+                      placeholder="事業所名（地域包括支援センター等）"
+                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      担当者（計画作成者）
+                    </label>
+                    <input
+                      type="text"
+                      value={assessorName}
+                      onChange={(e) => setAssessorName(e.target.value)}
+                      placeholder="担当者名"
+                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      サービス評価期間（開始）
+                    </label>
+                    <input
+                      type="date"
+                      value={prev.evaluation_period_start}
+                      onChange={(e) => updatePrev({ evaluation_period_start: e.target.value })}
+                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      サービス評価期間（終了）
+                    </label>
+                    <input
+                      type="date"
+                      value={prev.evaluation_period_end}
+                      onChange={(e) => updatePrev({ evaluation_period_end: e.target.value })}
+                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      モニタリング区分
+                    </label>
+                    <select
+                      value={prev.monitoring_type}
+                      onChange={(e) =>
+                        updatePrev({
+                          monitoring_type: e.target.value as PreventiveMonitoringType,
+                        })
+                      }
+                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    >
+                      <option value="通常">通常（3月に1回）</option>
+                      <option value="サービス評価期間終了">サービス評価期間終了月</option>
+                      <option value="状態変化時">状態変化時</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      次回モニタリング予定
+                    </label>
+                    <input
+                      type="date"
+                      value={prev.next_monitoring_date}
+                      onChange={(e) => updatePrev({ next_monitoring_date: e.target.value })}
+                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    ステータス
+                  </label>
+                  <select
+                    value={sheetStatus}
+                    onChange={(e) => setSheetStatus(e.target.value as MonitoringStatus)}
+                    className="rounded-lg border px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="draft">下書き</option>
+                    <option value="completed">完了</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* 目標達成状況の評価 */}
+              <div className="rounded-lg border bg-white shadow-sm overflow-x-auto">
+                <div className="border-b bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800">
+                  目標の達成状況・サービスの評価
+                </div>
+                <table className="w-full border-collapse text-xs" style={{ minWidth: 1000 }}>
+                  <thead>
+                    <tr className="text-[11px] bg-gray-50">
+                      <th className="border border-gray-300 px-2 py-1.5 text-gray-600" style={{ width: 30 }}>
+                        No
+                      </th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-gray-600" style={{ width: 220 }}>
+                        目標（本人等のセルフケア・支援内容）
+                      </th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-gray-600" style={{ width: 130 }}>
+                        期間
+                      </th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-gray-600" style={{ width: 200 }}>
+                        本人・家族・地域の取組／サービス
+                      </th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-gray-600" style={{ width: 110 }}>
+                        達成状況
+                      </th>
+                      <th className="border border-gray-300 px-2 py-1.5 text-gray-600" style={{ width: 220 }}>
+                        評価・今後の方針
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {prev.goals.map((g, idx) => (
+                      <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50/40"}>
+                        <td className="border border-gray-200 px-1 py-1.5 text-center font-bold text-gray-600 align-top text-sm">
+                          {idx + 1}
+                        </td>
+                        <td className="border border-gray-200 px-1 py-1.5 align-top">
+                          <textarea
+                            value={g.goal}
+                            onChange={(e) => updatePrevGoal(idx, { goal: e.target.value })}
+                            rows={3}
+                            className="w-full resize-none bg-transparent text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:rounded px-0.5"
+                            placeholder="目標"
+                          />
+                        </td>
+                        <td className="border border-gray-200 px-1 py-1.5 align-top">
+                          <textarea
+                            value={g.period}
+                            onChange={(e) => updatePrevGoal(idx, { period: e.target.value })}
+                            rows={3}
+                            className="w-full resize-none bg-transparent text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:rounded px-0.5"
+                            placeholder="期間"
+                          />
+                        </td>
+                        <td className="border border-gray-200 px-1 py-1.5 align-top">
+                          <textarea
+                            value={g.service}
+                            onChange={(e) => updatePrevGoal(idx, { service: e.target.value })}
+                            rows={3}
+                            className="w-full resize-none bg-transparent text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:rounded px-0.5"
+                            placeholder="取組・サービス"
+                          />
+                        </td>
+                        <td className="border border-gray-200 px-2 py-1.5 align-top">
+                          <RadioGroup
+                            name={`pach_${idx}`}
+                            options={[
+                              { label: "達成", value: "達成" },
+                              { label: "一部達成", value: "一部達成" },
+                              { label: "未達成", value: "未達成" },
+                            ]}
+                            value={g.achievement}
+                            onChange={(v) => updatePrevGoal(idx, { achievement: v })}
+                          />
+                        </td>
+                        <td className="border border-gray-200 px-1 py-1.5 align-top">
+                          <textarea
+                            value={g.evaluation}
+                            onChange={(e) => updatePrevGoal(idx, { evaluation: e.target.value })}
+                            rows={3}
+                            className="w-full resize-none bg-transparent text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:rounded px-0.5"
+                            placeholder="評価・今後の方針"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 総合評価・継続要否 */}
+              <div className="rounded-lg border bg-white shadow-sm p-4 space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    総合的な評価・支援経過
+                  </label>
+                  <textarea
+                    value={prev.overall_evaluation}
+                    onChange={(e) => updatePrev({ overall_evaluation: e.target.value })}
+                    rows={4}
+                    className="w-full rounded-lg border px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    placeholder="心身の状況・生活の変化・支援経過など"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    本人・家族の意向
+                  </label>
+                  <textarea
+                    value={prev.user_family_intention}
+                    onChange={(e) => updatePrev({ user_family_intention: e.target.value })}
+                    rows={3}
+                    className="w-full rounded-lg border px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    placeholder="本人・家族の意向"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      介護予防サービス計画の継続の要否
+                    </label>
+                    <RadioGroup
+                      name="continuation"
+                      options={[
+                        { label: "継続", value: "継続" },
+                        { label: "変更（見直し）", value: "変更" },
+                        { label: "終了", value: "終了" },
+                      ]}
+                      value={prev.continuation_decision}
+                      onChange={(v) => updatePrev({ continuation_decision: v })}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      その理由
+                    </label>
+                    <textarea
+                      value={prev.continuation_reason}
+                      onChange={(e) => updatePrev({ continuation_reason: e.target.value })}
+                      rows={3}
+                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      placeholder="継続・変更・終了の理由"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom bar */}
+              <div className="flex justify-end gap-3 pb-6">
+                <button
+                  onClick={() => setMode("list")}
+                  className="rounded-lg border px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                >
+                  {saving ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Save size={14} />
+                  )}
+                  保存
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── SCREEN PREVIEW (A4縦フィット・要介護様式) ── */}
+          {mode === "edit" && !isPreventive && selectedUser && (
             <div className="mt-6 space-y-3 no-print">
               <div className="flex items-center gap-2">
                 <Printer size={18} className="text-gray-500" />
@@ -1274,9 +1825,9 @@ export function MonitoringContent({
           )}
       </div>
 
-      {/* ── PRINT VERSION ── */}
+      {/* ── PRINT VERSION (要介護様式) ── */}
       <div id="monitoring-print-root">
-        {selectedUser && mode === "edit" && (
+        {selectedUser && mode === "edit" && !isPreventive && (
           <div
             style={{
               padding: "8mm",
@@ -1823,6 +2374,232 @@ export function MonitoringContent({
                   >
                     <div style={{ fontWeight: "bold", marginBottom: "0.8mm" }}>
                       家族確認（署名・押印）
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* ── PRINT VERSION (予防様式: 介護予防支援モニタリング) ── */}
+        {selectedUser && mode === "edit" && isPreventive && (
+          <div
+            style={{
+              padding: "8mm",
+              fontFamily: '"MS Mincho", "ＭＳ 明朝", "Noto Serif JP", serif',
+              fontSize: "7pt",
+              color: "#000",
+              background: "#fff",
+              width: "194mm",
+              minHeight: "281mm",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            {/* Title */}
+            <div style={{ textAlign: "center", marginBottom: "2.5mm" }}>
+              <div
+                style={{
+                  fontSize: "11pt",
+                  fontWeight: "bold",
+                  letterSpacing: "0.15em",
+                  marginBottom: "1mm",
+                }}
+              >
+                介護予防支援・サービス評価表（モニタリング）
+              </div>
+              <div style={{ fontSize: "6.5pt" }}>
+                実施頻度：少なくとも3月に1回、及びサービス評価期間終了月（状態変化時は都度）
+              </div>
+            </div>
+
+            {/* Header info */}
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                marginBottom: "2.5mm",
+                fontSize: "7pt",
+              }}
+            >
+              <tbody>
+                <tr>
+                  <td style={{ border: "1pt solid #333", padding: "1mm 1.5mm", width: "25%" }}>
+                    <span style={{ fontWeight: "bold" }}>利用者名：</span>
+                    {selectedUser.name} 殿
+                  </td>
+                  <td style={{ border: "1pt solid #333", padding: "1mm 1.5mm", width: "25%" }}>
+                    <span style={{ fontWeight: "bold" }}>要介護度：</span>
+                    {careLevel || "　　　　"}
+                  </td>
+                  <td style={{ border: "1pt solid #333", padding: "1mm 1.5mm", width: "25%" }}>
+                    <span style={{ fontWeight: "bold" }}>実施日：</span>
+                    {monitoringDate ? toWareki(monitoringDate) : "　　年　月　日"}
+                  </td>
+                  <td style={{ border: "1pt solid #333", padding: "1mm 1.5mm", width: "25%" }}>
+                    <span style={{ fontWeight: "bold" }}>区分：</span>
+                    {prev.monitoring_type}
+                  </td>
+                </tr>
+                <tr>
+                  <td style={{ border: "1pt solid #333", padding: "1mm 1.5mm" }}>
+                    <span style={{ fontWeight: "bold" }}>事業所：</span>
+                    {officeName || "　　　　　　"}
+                  </td>
+                  <td style={{ border: "1pt solid #333", padding: "1mm 1.5mm" }}>
+                    <span style={{ fontWeight: "bold" }}>担当者：</span>
+                    {assessorName || "　　　　"}
+                  </td>
+                  <td style={{ border: "1pt solid #333", padding: "1mm 1.5mm" }}>
+                    <span style={{ fontWeight: "bold" }}>評価期間：</span>
+                    {prev.evaluation_period_start || prev.evaluation_period_end
+                      ? `${
+                          prev.evaluation_period_start
+                            ? format(parseISO(prev.evaluation_period_start), "yyyy/M/d")
+                            : ""
+                        }〜${
+                          prev.evaluation_period_end
+                            ? format(parseISO(prev.evaluation_period_end), "yyyy/M/d")
+                            : ""
+                        }`
+                      : "　"}
+                  </td>
+                  <td style={{ border: "1pt solid #333", padding: "1mm 1.5mm" }}>
+                    <span style={{ fontWeight: "bold" }}>次回予定：</span>
+                    {prev.next_monitoring_date
+                      ? toWareki(prev.next_monitoring_date)
+                      : "　"}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* 目標達成状況の評価テーブル */}
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: "6.5pt",
+                tableLayout: "fixed",
+              }}
+            >
+              <colgroup>
+                <col style={{ width: "4%" }} />
+                <col style={{ width: "26%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "23%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "24%" }} />
+              </colgroup>
+              <thead>
+                <tr style={{ background: "#dcfce7" }}>
+                  <th style={{ border: "1pt solid #333", padding: "1mm", textAlign: "center" }}>No</th>
+                  <th style={{ border: "1pt solid #333", padding: "1mm" }}>目標（本人等のセルフケア・支援内容）</th>
+                  <th style={{ border: "1pt solid #333", padding: "1mm" }}>期間</th>
+                  <th style={{ border: "1pt solid #333", padding: "1mm" }}>本人・家族・地域の取組／サービス</th>
+                  <th style={{ border: "1pt solid #333", padding: "1mm", textAlign: "center" }}>達成状況</th>
+                  <th style={{ border: "1pt solid #333", padding: "1mm" }}>評価・今後の方針</th>
+                </tr>
+              </thead>
+              <tbody>
+                {prev.goals.map((g, idx) => (
+                  <tr key={idx} style={{ height: "18mm", verticalAlign: "top" }}>
+                    <td style={{ border: "1pt solid #333", padding: "0.8mm", textAlign: "center", fontWeight: "bold" }}>
+                      {idx + 1}
+                    </td>
+                    <td style={{ border: "1pt solid #333", padding: "0.8mm", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                      {g.goal}
+                    </td>
+                    <td style={{ border: "1pt solid #333", padding: "0.8mm", whiteSpace: "pre-wrap", wordBreak: "break-all", fontSize: "5.5pt" }}>
+                      {g.period}
+                    </td>
+                    <td style={{ border: "1pt solid #333", padding: "0.8mm", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                      {g.service}
+                    </td>
+                    <td style={{ border: "1pt solid #333", padding: "0.8mm", verticalAlign: "top" }}>
+                      <div>
+                        <PrintRadio checked={g.achievement === "達成"} />
+                        達成
+                      </div>
+                      <div>
+                        <PrintRadio checked={g.achievement === "一部達成"} />
+                        一部達成
+                      </div>
+                      <div>
+                        <PrintRadio checked={g.achievement === "未達成"} />
+                        未達成
+                      </div>
+                    </td>
+                    <td style={{ border: "1pt solid #333", padding: "0.8mm", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                      {g.evaluation}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* 総合評価・継続要否 */}
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                marginTop: "2.5mm",
+                fontSize: "6.5pt",
+              }}
+            >
+              <tbody>
+                <tr>
+                  <td style={{ border: "1pt solid #333", padding: "1mm", width: "20%", fontWeight: "bold", background: "#f5f5f5", verticalAlign: "top" }}>
+                    総合的な評価・支援経過
+                  </td>
+                  <td style={{ border: "1pt solid #333", padding: "1mm", whiteSpace: "pre-wrap", wordBreak: "break-all", height: "22mm", verticalAlign: "top" }}>
+                    {prev.overall_evaluation}
+                  </td>
+                </tr>
+                <tr>
+                  <td style={{ border: "1pt solid #333", padding: "1mm", fontWeight: "bold", background: "#f5f5f5", verticalAlign: "top" }}>
+                    本人・家族の意向
+                  </td>
+                  <td style={{ border: "1pt solid #333", padding: "1mm", whiteSpace: "pre-wrap", wordBreak: "break-all", height: "15mm", verticalAlign: "top" }}>
+                    {prev.user_family_intention}
+                  </td>
+                </tr>
+                <tr>
+                  <td style={{ border: "1pt solid #333", padding: "1mm", fontWeight: "bold", background: "#f5f5f5", verticalAlign: "top" }}>
+                    介護予防サービス計画の
+                    <br />
+                    継続の要否
+                  </td>
+                  <td style={{ border: "1pt solid #333", padding: "1mm", verticalAlign: "top" }}>
+                    <div style={{ marginBottom: "1mm" }}>
+                      <PrintRadio checked={prev.continuation_decision === "継続"} />
+                      <span style={{ marginRight: "3pt" }}>継続</span>
+                      <PrintRadio checked={prev.continuation_decision === "変更"} />
+                      <span style={{ marginRight: "3pt" }}>変更（見直し）</span>
+                      <PrintRadio checked={prev.continuation_decision === "終了"} />
+                      終了
+                    </div>
+                    <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-all", borderTop: "0.5pt solid #aaa", paddingTop: "0.8mm" }}>
+                      理由：{prev.continuation_reason}
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* Signature area */}
+            <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "3mm", fontSize: "6.5pt" }}>
+              <tbody>
+                <tr>
+                  <td style={{ border: "1pt solid #666", padding: "1mm", width: "50%", height: "12mm", verticalAlign: "top" }}>
+                    <div style={{ fontWeight: "bold" }}>
+                      介護予防支援事業所（担当者印）
+                    </div>
+                  </td>
+                  <td style={{ border: "1pt solid #666", padding: "1mm", width: "50%", height: "12mm", verticalAlign: "top" }}>
+                    <div style={{ fontWeight: "bold" }}>
+                      利用者確認（署名・押印）
                     </div>
                   </td>
                 </tr>
