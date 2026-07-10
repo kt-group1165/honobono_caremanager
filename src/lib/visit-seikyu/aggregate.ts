@@ -918,17 +918,26 @@ export async function aggregateMonthlyVisitSeikyu(
         );
       }
     }
-    const kohiUnits = publicExpense ? totalUnits : null;
+    // 全額公費振替は 生保(法別12)・公費単独 のみ。部分公費(法別21/54/19等=本人負担が残る)を
+    // 全額振替すると公費過大請求→返戻になるため、kohi レコードが法別12以外なら振替しない
+    // (本人負担を残す)。旧テキストのみ(fallback)は移行期の安全網として従来どおり振替。
+    const kohiIsSeiho = kohiTandoku || kohi?.hobetsu === "12";
+    const transferToKohi = kohiIsSeiho || (!!publicExpense && !kohi);
+    if (kohi && !kohiIsSeiho) {
+      warnings.push(
+        `${userLabel}: 公費 (${kohiHobetsuLabel(kohi.hobetsu)}) は部分公費のため本人負担を残し、公費への全額振替は行いません — 本人負担上限(介護券)を確認してください`,
+      );
+    }
+    const kohiUnits = transferToKohi ? totalUnits : null;
     const kohiAmount = kohiTandoku
       ? totalAmount
-      : publicExpense
+      : transferToKohi
       ? totalAmount - insuranceAmount
       : null;
     // 利用者負担 (法定) = 保険/公費で賄われない本人負担のみ。
     // 限度額超過の全額自費は selfPayAmount に分離する (伝送・様式第一・確認CSVは法定のみ)。
-    // 公費 (生活保護等) は本人負担分を公費へ振替するが、限度額超過分は
-    // 保険給付の枠外 = 公費対象外なので公費単独者でも自費 (selfPayAmount) が発生する。
-    const userAmount = publicExpense ? 0 : totalAmount - insuranceAmount;
+    // 生保等は本人負担分を公費へ振替(userAmount=0)。部分公費は本人負担を残す。
+    const userAmount = transferToKohi ? 0 : totalAmount - insuranceAmount;
 
     rows.push({
       user_id: userId,

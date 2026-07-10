@@ -212,8 +212,11 @@ export function buildKokuhoDensou(
       "", // 16 旧措置入所者特例コード
       dateNum(r.certStart), // 17 認定有効期間 開始
       dateNum(r.certEnd), // 18 認定有効期間 終了
-      "1", // 19 居宅サービス計画作成区分コード (1=居宅介護支援事業所作成)
-      r.careOfficeNumber ?? "", // 20 事業所番号 (居宅介護支援事業所)
+      // 19 居宅サービス計画作成区分コード。1=居宅介護支援事業所作成(→項20必須), 2=被保険者(自己)作成(→項20空でも可)。
+      // careOfficeNumber 未解決で "1" 固定にすると項20空欄=必須欠落で返戻するため、番号が無ければ "2" で出す
+      // (該当利用者にケアマネがいる場合は warning(:171) が出るので、care_office_number を登録すれば "1" に戻る)。
+      r.careOfficeNumber ? "1" : "2", // 19
+      r.careOfficeNumber ?? "", // 20 事業所番号 (居宅介護支援事業所。区分2のときは空)
       "", // 21 開始年月日
       "", // 22 中止年月日
       "", // 23 中止理由・入所前状況
@@ -260,6 +263,9 @@ export function buildKokuhoDensou(
     if (r.addonUnits > 0) {
       if (r.addonCode) {
         // 処遇改善等の月次加算: 単位数 = 加算単位数、回数 = 1
+        if (r.addonUnits > 9999) {
+          warnings.push(`${r.user_name}: 処遇改善加算の単位数 (${r.addonUnits}) が4桁を超えています — 明細の単位数欄(4バイト)で桁溢れの可能性があります`);
+        }
         detailLines.push({ code: r.addonCode, unitPer: r.addonUnits, count: 1, units: r.addonUnits });
       } else {
         warnings.push(`${r.user_name}: 加算 (${r.addonLabel ?? "処遇改善"}) のサービスコードが不明です`);
