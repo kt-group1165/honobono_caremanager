@@ -20,6 +20,7 @@ import {
   ChevronRight,
   FileUp,
   Trash2,
+  HeartPulse,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getMaxUserNumber } from "@kt/shared/user-number";
@@ -49,6 +50,16 @@ import {
   type UserSupplementParsed,
   type DeleteRecord,
 } from "@/lib/careplan-v4/parse-keikakusho";
+import {
+  detectYoboKind,
+  parseYoboPlan,
+  parseYoboPlanSub,
+  parseYoboKihon,
+  parseYoboDelete,
+  type YoboCarePlanContent,
+  type YoboGoal,
+  type YoboKihonParsed,
+} from "@/lib/careplan-v4/parse-yobo";
 import { validInMonth } from "@/lib/service-code-valid";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -445,6 +456,9 @@ export default function CareplanImportPage() {
 
       {/* 利用票取込 (ケアプランデータ連携 V4 第6表/計画 + 第7表/別表) */}
       <RiyouhyouImportSection />
+
+      {/* 介護予防 取込 (UPYOBO/UPYOBO_SUB=予防計画書 + UPKIHON=予防利用者基本) */}
+      <YoboImportSection />
 
       {/* 削除レコード取込 (DLTPLAN=予定取消 / DLTJSK=実績取消 / DLT1KYO=計画書取消) */}
       <DeleteImportSection />
@@ -1839,6 +1853,473 @@ function DeleteImportSection() {
             >
               {applying ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
               削除を実行
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── 介護予防 取込 (ケアプランデータ連携 V4 / 令和6年7月改定追加) ──────────────
+// ケアマネ (地域包括支援センター) から届く介護予防系 CSV を取込む:
+//   - UPYOBO      (介護予防サービス・支援計画書 本体)
+//   - UPYOBO_SUB  (同 別表=支援計画。本体に goals[] として結合)
+//   - UPKIHON     (介護予防支援 利用者基本情報。clients 空欄補完の材料)
+//   - DLTYOBO     (介護予防計画書 削除。yobo-care-plan 帳票を利用者単位で削除)
+// UPYOBO+SUB → kaigo_report_documents (report_type='yobo-care-plan') に upsert。
+// 被保険者番号 → clients.insured_number 突合 (突合不可はスキップ+警告)。
+// プレビュー → 確定 の 2 段。既存の居宅計画書取込 (UP1KYO 等) とは非破壊で別枠。
+
+interface YoboPreviewRow {
+  clientId: string;
+  clientName: string;
+  content: YoboCarePlanContent; // 保存する jsonb (本体 + SUB goals)
+  goalCount: number;
+  hasSub: boolean;
+  /** UPKIHON があれば clients 空欄補完の材料 */
+  kihon: YoboKihonParsed | null;
+}
+interface YoboDeletePreviewRow {
+  clientId: string;
+  clientName: string;
+  targetLabel: string;
+}
+
+function YoboImportSection() {
+  const supabase = createClient();
+  const { currentOffice, loading: btLoading } = useBusinessType();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [parsing, setParsing] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [rows, setRows] = useState<YoboPreviewRow[]>([]);
+  const [deletes, setDeletes] = useState<YoboDeletePreviewRow[]>([]);
+  const [unmatched, setUnmatched] = useState<string[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [ready, setReady] = useState(false);
+
+  const reset = () => {
+    setRows([]);
+    setDeletes([]);
+    setUnmatched([]);
+    setWarnings([]);
+    setReady(false);
+  };
+
+  const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const list = e.target.files;
+    if (!list || list.length === 0) return;
+    const fileList = Array.from(list);
+    setTimeout(() => { if (fileRef.current) fileRef.current.value = ""; }, 0);
+    if (!currentOffice) {
+      toast.error("事業所が選択されていません。ヘッダーで事業所を選択してください。");
+      return;
+    }
+    setParsing(true);
+    reset();
+    try {
+      const warns: string[] = [];
+
+      // 被保険者番号キーで本体/別表/基本情報を集約
+      const planByInsured = new Map<
+        string,
+        { content: YoboCarePlanContent; insurerNumber: string }
+      >();
+      const goalsByInsured = new Map<string, YoboGoal[]>();
+      const kihonByInsured = new Map<string, YoboKihonParsed>();
+      const deleteRecords: { insuredNumber: string; targetKey: string }[] = [];
+
+      for (const file of fileList) {
+        const buf = await file.arrayBuffer();
+        // Shift-JIS (MS932) → UNICODE
+        const text = Encoding.convert(new Uint8Array(buf), {
+          to: "UNICODE",
+          from: "SJIS",
+          type: "string",
+        }) as string;
+        const csvRows = parseCsv(text);
+        const kind = detectYoboKind(file.name);
+        if (kind === "yobo-plan") {
+          const res = parseYoboPlan(csvRows);
+          res.warnings.forEach((w) => warns.push(`${file.name}: ${w}`));
+          if (res.record) {
+            planByInsured.set(res.record.insuredNumber, {
+              content: res.record.content as YoboCarePlanContent,
+              insurerNumber: res.record.insurerNumber,
+            });
+          }
+        } else if (kind === "yobo-plan-sub") {
+          const res = parseYoboPlanSub(csvRows);
+          res.warnings.forEach((w) => warns.push(`${file.name}: ${w}`));
+          if (res.insuredNumber) goalsByInsured.set(res.insuredNumber, res.goals);
+        } else if (kind === "yobo-kihon") {
+          const res = parseYoboKihon(csvRows);
+          res.warnings.forEach((w) => warns.push(`${file.name}: ${w}`));
+          if (res.record) kihonByInsured.set(res.record.insuredNumber, res.record);
+        } else if (kind === "yobo-delete") {
+          const res = parseYoboDelete(csvRows);
+          res.warnings.forEach((w) => warns.push(`${file.name}: ${w}`));
+          for (const rec of res.records) deleteRecords.push(rec);
+        } else {
+          warns.push(`${file.name}: 介護予防系 (UPYOBO/UPYOBO_SUB/UPKIHON/DLTYOBO) と判定できませんでした — スキップ`);
+        }
+      }
+
+      // 突合対象の被保険者番号一覧
+      const insuredNumbers = new Set<string>();
+      for (const n of planByInsured.keys()) insuredNumbers.add(n);
+      for (const n of goalsByInsured.keys()) insuredNumbers.add(n);
+      for (const n of kihonByInsured.keys()) insuredNumbers.add(n);
+      for (const r of deleteRecords) if (r.insuredNumber) insuredNumbers.add(r.insuredNumber);
+
+      // 被保険者番号 → clients.insured_number 突合
+      const clientByInsured = new Map<string, { id: string; name: string }>();
+      const insuredList = Array.from(insuredNumbers).filter(Boolean);
+      for (let i = 0; i < insuredList.length; i += 50) {
+        const chunk = insuredList.slice(i, i + 50);
+        const { data, error } = await supabase
+          .from("clients")
+          .select("id, name, insured_number")
+          .in("insured_number", chunk)
+          .eq("is_facility", false);
+        if (error) {
+          toast.error("利用者突合に失敗: " + error.message);
+          setParsing(false);
+          return;
+        }
+        for (const c of (data ?? []) as { id: string; name: string; insured_number: string | null }[]) {
+          const key = (c.insured_number ?? "").trim();
+          if (key && !clientByInsured.has(key)) clientByInsured.set(key, { id: c.id, name: c.name });
+        }
+      }
+
+      const unmatchedSet = new Set<string>();
+
+      // ── 計画書プレビュー行を構築 (本体がある被保険者番号のみ) ────────────────
+      const previewRows: YoboPreviewRow[] = [];
+      for (const [insured, plan] of planByInsured) {
+        const client = clientByInsured.get(insured);
+        if (!client) {
+          unmatchedSet.add(insured);
+          continue;
+        }
+        const subGoals = goalsByInsured.get(insured) ?? [];
+        // 本体には goals: [] が入っている。SUB があれば差し替え、無ければ空 1 行を確保。
+        const content: YoboCarePlanContent = {
+          ...plan.content,
+          goals:
+            subGoals.length > 0
+              ? subGoals
+              : [
+                  {
+                    comprehensive_issue: "",
+                    proposal: "",
+                    proposal_intention: "",
+                    goal: "",
+                    support_point: "",
+                    self_care: "",
+                    insurance_service: "",
+                    service_type: "",
+                    provider: "",
+                    period: "",
+                  },
+                ],
+        };
+        // 帳票の利用者名が空なら clients 名で補完
+        if (!content.user_name) content.user_name = client.name;
+        previewRows.push({
+          clientId: client.id,
+          clientName: client.name,
+          content,
+          goalCount: subGoals.length,
+          hasSub: subGoals.length > 0,
+          kihon: kihonByInsured.get(insured) ?? null,
+        });
+      }
+
+      // SUB だけ で本体が無い被保険者番号は警告
+      for (const insured of goalsByInsured.keys()) {
+        if (!planByInsured.has(insured)) {
+          warns.push(`別表(UPYOBO_SUB)のみで本体(UPYOBO)が無い被保険者番号 ${insured} — 支援計画は反映できません`);
+        }
+      }
+
+      // ── 削除プレビュー行 ────────────────────────────────────────────────────
+      const deleteRows: YoboDeletePreviewRow[] = [];
+      for (const rec of deleteRecords) {
+        const client = clientByInsured.get(rec.insuredNumber);
+        if (!client) {
+          unmatchedSet.add(rec.insuredNumber);
+          continue;
+        }
+        const label = /^\d{8}$/.test(rec.targetKey)
+          ? `${rec.targetKey.slice(0, 4)}/${rec.targetKey.slice(4, 6)}/${rec.targetKey.slice(6, 8)} 作成計画`
+          : rec.targetKey || "(全件)";
+        deleteRows.push({ clientId: client.id, clientName: client.name, targetLabel: label });
+      }
+
+      setRows(previewRows);
+      setDeletes(deleteRows);
+      setUnmatched(Array.from(unmatchedSet));
+      setWarnings(warns);
+      setReady(previewRows.length > 0 || deleteRows.length > 0);
+
+      if (previewRows.length === 0 && deleteRows.length === 0) {
+        toast.error("取込対象 (UPYOBO/UPYOBO_SUB/UPKIHON/DLTYOBO) のファイルがありませんでした。");
+      } else {
+        toast.success(
+          `プレビュー作成: 予防計画書 ${previewRows.length} 名 / 削除 ${deleteRows.length} 件` +
+            (unmatchedSet.size > 0 ? ` (突合不可 ${unmatchedSet.size} 名)` : ""),
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("介護予防 CSV の取込に失敗: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const handleApply = async () => {
+    if (!currentOffice) {
+      toast.error("事業所が選択されていません。");
+      return;
+    }
+    setApplying(true);
+    try {
+      let savedCount = 0;
+      let clientPatched = 0;
+      let deletedCount = 0;
+
+      // 1) 予防計画書を kaigo_report_documents (yobo-care-plan) に upsert
+      for (const row of rows) {
+        // 既存の yobo-care-plan を確認 (利用者単位で 1 件想定)
+        const { data: existing, error: selErr } = await supabase
+          .from("kaigo_report_documents")
+          .select("id")
+          .eq("user_id", row.clientId)
+          .eq("report_type", "yobo-care-plan")
+          .limit(1);
+        if (selErr) {
+          toast.error("帳票の確認に失敗: " + selErr.message);
+          setApplying(false);
+          return;
+        }
+        if (existing && existing.length > 0) {
+          const { error } = await supabase
+            .from("kaigo_report_documents")
+            .update({ content: row.content, status: "draft" })
+            .eq("id", existing[0].id);
+          if (error) {
+            toast.error(`${row.clientName} の予防計画書更新に失敗: ` + error.message);
+            setApplying(false);
+            return;
+          }
+        } else {
+          const { error } = await supabase
+            .from("kaigo_report_documents")
+            .insert({
+              user_id: row.clientId,
+              report_type: "yobo-care-plan",
+              title: "介護予防サービス・支援計画書",
+              content: row.content,
+              status: "draft",
+            });
+          if (error) {
+            toast.error(`${row.clientName} の予防計画書保存に失敗: ` + error.message);
+            setApplying(false);
+            return;
+          }
+        }
+        savedCount++;
+
+        // UPKIHON があれば clients を空欄のみ補完 (既存値は壊さない)
+        if (row.kihon) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
+          const patch: Record<string, any> = {};
+          const k = row.kihon;
+          if (k.furigana) patch.furigana = k.furigana;
+          if (k.birthDate) patch.birth_date = k.birthDate;
+          if (k.gender) patch.gender = k.gender;
+          if (k.address) patch.address = k.address;
+          if (k.phone) patch.phone = k.phone;
+          if (k.insurerNumber) patch.insurer_number = k.insurerNumber;
+          if (Object.keys(patch).length > 0) {
+            const { error } = await supabase.from("clients").update(patch).eq("id", row.clientId);
+            if (error) {
+              // 補完失敗は致命ではないため警告のみ (計画書は保存済み)
+              console.warn("[yobo-import] clients patch failed:", error.message);
+            } else {
+              clientPatched++;
+            }
+          }
+        }
+      }
+
+      // 2) DLTYOBO: yobo-care-plan 帳票を利用者単位で削除
+      for (const row of deletes) {
+        const { error, count } = await supabase
+          .from("kaigo_report_documents")
+          .delete({ count: "exact" })
+          .eq("user_id", row.clientId)
+          .eq("report_type", "yobo-care-plan");
+        if (error) {
+          toast.error(`${row.clientName} の予防計画書削除に失敗: ` + error.message);
+          setApplying(false);
+          return;
+        }
+        deletedCount += count ?? 0;
+      }
+
+      toast.success(
+        `反映完了: 予防計画書 ${savedCount} 名` +
+          (clientPatched > 0 ? ` / 利用者情報補完 ${clientPatched} 名` : "") +
+          (deletedCount > 0 ? ` / 削除 ${deletedCount} 件` : ""),
+      );
+      reset();
+    } catch (err) {
+      console.error(err);
+      toast.error("介護予防の反映に失敗: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-teal-200 bg-teal-50/40 p-5">
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-100 text-teal-600">
+          <HeartPulse size={20} />
+        </div>
+        <div className="flex-1">
+          <h2 className="text-lg font-semibold text-gray-900">介護予防 取込（UPYOBO / UPYOBO_SUB / UPKIHON / DLTYOBO）</h2>
+          <p className="mt-0.5 text-sm text-gray-500">
+            地域包括支援センター等から届いた 介護予防サービス・支援計画書（UPYOBO＋別表 UPYOBO_SUB）と
+            利用者基本情報（UPKIHON）の CSV（Shift-JIS）を取り込み、介護予防サービス・支援計画書に反映します。
+            被保険者番号で自事業所の利用者に突合します（突合できない場合はスキップ）。DLTYOBO は削除。
+          </p>
+        </div>
+      </div>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".csv"
+        multiple
+        className="hidden"
+        onChange={handleFiles}
+      />
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={parsing || applying || btLoading || !currentOffice}
+          className="flex items-center gap-2 rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
+        >
+          {parsing ? <Loader2 size={16} className="animate-spin" /> : <FileUp size={16} />}
+          CSVを選択してプレビュー
+        </button>
+        {ready && (
+          <button type="button" onClick={reset} className="text-sm text-gray-500 hover:text-red-500">
+            クリア
+          </button>
+        )}
+      </div>
+
+      {ready && (
+        <div className="mt-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-gray-200 bg-white p-3 text-center">
+              <div className="text-xs text-gray-500">予防計画書 (名)</div>
+              <div className="text-lg font-bold text-teal-700">{rows.length}</div>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-white p-3 text-center">
+              <div className="text-xs text-gray-500">別表あり (名)</div>
+              <div className="text-lg font-bold text-teal-700">{rows.filter((r) => r.hasSub).length}</div>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-white p-3 text-center">
+              <div className="text-xs text-gray-500">削除 (件)</div>
+              <div className="text-lg font-bold text-rose-700">{deletes.length}</div>
+            </div>
+          </div>
+
+          {rows.length > 0 && (
+            <div className="rounded-lg border border-gray-200 bg-white p-3">
+              <div className="mb-1 text-xs font-medium text-gray-600">対象利用者 ({rows.length} 名)</div>
+              <div className="max-h-48 space-y-0.5 overflow-y-auto text-xs text-gray-700">
+                {rows.map((r, i) => (
+                  <div key={i} className="flex justify-between">
+                    <span>
+                      {r.clientName}
+                      {r.kihon && <span className="ml-1 text-teal-500">＋基本情報</span>}
+                    </span>
+                    <span className="font-mono text-gray-500">
+                      支援計画 {r.hasSub ? `${r.goalCount} 件` : "なし"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {deletes.length > 0 && (
+            <div className="rounded-lg border border-rose-200 bg-rose-50/60 p-3">
+              <div className="mb-1 text-xs font-medium text-rose-700">削除対象 ({deletes.length} 件)</div>
+              <div className="max-h-40 space-y-0.5 overflow-y-auto text-xs text-rose-700">
+                {deletes.map((r, i) => (
+                  <div key={i} className="flex justify-between">
+                    <span>{r.clientName}</span>
+                    <span className="font-mono">{r.targetLabel}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {unmatched.length > 0 && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
+              <div className="mb-1 flex items-center gap-1 text-xs font-semibold text-amber-800">
+                <AlertTriangle size={12} />
+                突合できなかった被保険者番号 ({unmatched.length} 件) — スキップします
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {unmatched.map((n) => (
+                  <span key={n} className="rounded bg-amber-100 px-2 py-0.5 text-xs font-mono text-amber-800">{n}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {warnings.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+              <div className="mb-1 text-xs font-semibold text-amber-800">確認事項 ({warnings.length})</div>
+              <ul className="max-h-40 space-y-0.5 overflow-y-auto text-xs text-amber-700">
+                {warnings.map((w, i) => (<li key={i}>・{w}</li>))}
+              </ul>
+            </div>
+          )}
+
+          <div className="rounded border border-teal-300 bg-teal-50 px-3 py-2 text-xs text-teal-800">
+            確定すると、対象利用者の「介護予防サービス・支援計画書」を上書き保存します（UPKIHON があれば利用者マスタの空欄を補完）。DLTYOBO は該当利用者の予防計画書を削除します。
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={reset}
+              className="rounded-lg border px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              onClick={handleApply}
+              disabled={applying || (rows.length === 0 && deletes.length === 0)}
+              className="flex items-center gap-2 rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
+            >
+              {applying ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+              確定して反映
             </button>
           </div>
         </div>
