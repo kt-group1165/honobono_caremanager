@@ -115,10 +115,14 @@ export function StatsContent() {
   } = useBusinessType();
   const [fromMonth, setFromMonth] = useState(fiscalYearStart());
   const [toMonth, setToMonth] = useState(currentMonthKey());
-  const [tab, setTab] = useState<"flags" | "trend">("flags");
+  const [tab, setTab] = useState<"flags" | "trend" | "conc">("flags");
   const [loading, setLoading] = useState(true);
   const [flagRows, setFlagRows] = useState<FlagRow[]>([]);
   const [claimRows, setClaimRows] = useState<ClaimRow[]>([]);
+  // 特定事業所集中減算チェック用 (kaigo_benefit_management の provider×種類 集計)
+  const [benefitRows, setBenefitRows] = useState<
+    { service_type: string | null; provider_name: string | null; actual_units: number | null }[]
+  >([]);
   const [nyukinRows, setNyukinRows] = useState<NyukinRow[]>([]);
   const [hasNyukin, setHasNyukin] = useState(false);
   const [nameById, setNameById] = useState<Map<string, string>>(new Map());
@@ -157,15 +161,28 @@ export function StatsContent() {
       }
     }
 
-    // ── 2) 月次推移 (kaigo_care_support_claims。office_id 列は無く billing_month で集計) ──
-    //      PostgREST の 1000 行 limit を跨いでも欠けないよう range でページング
+    // ── 2) 月次推移 (kaigo_care_support_claims。office_id 列が無いため
+    //      client_office_assignments 経由で自事業所の利用者に絞る — 監査M-2:
+    //      2つ目の居宅事業所を作った時に他事業所分を合算しないため) ──
+    let officeClientIds: Set<string> | null = null;
+    {
+      const { data, error } = await supabase
+        .from("client_office_assignments")
+        .select("client_id")
+        .eq("office_id", currentOfficeId);
+      if (error) {
+        console.error("client_office_assignments fetch failed:", error.message);
+      } else {
+        officeClientIds = new Set(((data ?? []) as { client_id: string }[]).map((a) => a.client_id));
+      }
+    }
     let claims: ClaimRow[] = [];
     {
       const PAGE = 1000;
       for (let from = 0; ; from += PAGE) {
         const { data, error } = await supabase
           .from("kaigo_care_support_claims")
-          .select("billing_month, units, insurance_amount, status")
+          .select("billing_month, units, insurance_amount, status, user_id")
           .gte("billing_month", fromMonth)
           .lte("billing_month", toMonth)
           .range(from, from + PAGE - 1);
@@ -175,9 +192,11 @@ export function StatsContent() {
           }
           break;
         }
-        const rows = (data ?? []) as ClaimRow[];
+        let rows = (data ?? []) as (ClaimRow & { user_id?: string })[];
+        // 割当が取れた場合のみ自事業所の利用者に限定 (取得失敗時は従来どおり全件)
+        if (officeClientIds) rows = rows.filter((r) => !r.user_id || officeClientIds.has(r.user_id));
         claims = claims.concat(rows);
-        if (rows.length < PAGE) break;
+        if ((data ?? []).length < PAGE) break;
       }
     }
 
@@ -201,6 +220,32 @@ export function StatsContent() {
       }
     }
 
+    // ── 3.5) 特定事業所集中減算チェック用: 給付管理データ (provider×種類) ──
+    //   紹介率 (最多事業所のシェア) 80% 超で減算対象 (訪問介護/通所介護/地域密着型通所/福祉用具貸与)。
+    //   判定期間は本来 前期6ヶ月 (3〜8月 / 9〜2月) — 画面の期間指定で計算し注記する。
+    let benefits: { service_type: string | null; provider_name: string | null; actual_units: number | null; user_id?: string }[] = [];
+    {
+      const PAGE = 1000;
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+          .from("kaigo_benefit_management")
+          .select("service_type, provider_name, actual_units, user_id")
+          .gte("billing_month", fromMonth)
+          .lte("billing_month", toMonth)
+          .range(from, from + PAGE - 1);
+        if (error) {
+          if (error.code !== "42P01" && error.code !== "PGRST205") {
+            console.error("給付管理データの取得に失敗:", error.message);
+          }
+          break;
+        }
+        let rows = (data ?? []) as typeof benefits;
+        if (officeClientIds) rows = rows.filter((r) => !r.user_id || officeClientIds.has(r.user_id));
+        benefits = benefits.concat(rows);
+        if ((data ?? []).length < PAGE) break;
+      }
+    }
+
     // ── 4) 利用者名 (clients を client_id in で取得) ──
     const ids = [...new Set(flags.map((f) => f.client_id))];
     const names = new Map<string, string>();
@@ -221,6 +266,7 @@ export function StatsContent() {
 
     setFlagRows(flags);
     setClaimRows(claims);
+    setBenefitRows(benefits);
     setNyukinRows(nyukin);
     setHasNyukin(nyukinAvailable);
     setNameById(names);
@@ -368,6 +414,7 @@ export function StatsContent() {
           [
             { key: "flags", label: `月遅れ・返戻者一覧 (${flagRows.length})` },
             { key: "trend", label: "月次推移" },
+            { key: "conc", label: "集中減算チェック" },
           ] as const
         ).map((t) => (
           <button
@@ -469,7 +516,7 @@ export function StatsContent() {
             </table>
           </div>
         </div>
-      ) : (
+      ) : tab === "trend" ? (
         /* ── タブ 2: 月次推移 (件数/単位数/金額 + 月遅れ/返戻 + 入金状況) ── */
         <div className="space-y-2">
           <span className="text-[11px] text-gray-400">
@@ -571,6 +618,71 @@ export function StatsContent() {
             </table>
           </div>
         </div>
+      ) : (
+        /* ── タブ 3: 特定事業所集中減算チェック (監査M-2 対応) ──
+             紹介率 (給付管理データ上の最多事業所シェア) が 80% 超で減算対象。
+             対象: 訪問介護 / 通所介護 / 地域密着型通所介護 / 福祉用具貸与 */
+        (() => {
+          const TARGET_TYPES = ["訪問介護", "通所介護", "地域密着型通所介護", "福祉用具貸与"];
+          const byType = new Map<string, Map<string, number>>();
+          for (const b of benefitRows) {
+            const t = (b.service_type ?? "").trim();
+            const target = TARGET_TYPES.find((tt) => t.includes(tt));
+            if (!target) continue;
+            const provider = (b.provider_name ?? "(事業所未設定)").trim() || "(事業所未設定)";
+            const units = Number(b.actual_units ?? 0);
+            if (units <= 0) continue;
+            if (!byType.has(target)) byType.set(target, new Map());
+            const m = byType.get(target)!;
+            m.set(provider, (m.get(provider) ?? 0) + units);
+          }
+          const rows = TARGET_TYPES.map((t) => {
+            const m = byType.get(t);
+            if (!m || m.size === 0) return { type: t, total: 0, top: null as string | null, topUnits: 0, share: 0 };
+            const total = [...m.values()].reduce((s, v) => s + v, 0);
+            const [top, topUnits] = [...m.entries()].sort((a, b) => b[1] - a[1])[0];
+            return { type: t, total, top, topUnits, share: total > 0 ? (topUnits / total) * 100 : 0 };
+          });
+          return (
+            <div className="space-y-2">
+              <span className="text-[11px] text-gray-400">
+                給付管理データ ({fromMonth} 〜 {toMonth}) の事業所別シェア。
+                正式な判定期間は前期6ヶ月 (3〜8月→10月から適用 / 9〜2月→4月から適用) — 期間を合わせて確認してください。
+                紹介率 80% 超で特定事業所集中減算 (▲200単位/月)。正当な理由の届出があれば適用除外。
+              </span>
+              <div className="overflow-auto border border-gray-300 rounded">
+                <table className="min-w-full text-xs border-collapse">
+                  <thead className="bg-gray-100 text-gray-600">
+                    <tr>
+                      <th className="border border-gray-200 px-3 py-1.5 text-left">サービス種類</th>
+                      <th className="border border-gray-200 px-3 py-1.5 text-left">最多事業所</th>
+                      <th className="border border-gray-200 px-3 py-1.5 text-right">最多単位数</th>
+                      <th className="border border-gray-200 px-3 py-1.5 text-right">総単位数</th>
+                      <th className="border border-gray-200 px-3 py-1.5 text-right">紹介率</th>
+                      <th className="border border-gray-200 px-3 py-1.5 text-center">判定</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => (
+                      <tr key={r.type} className={r.share > 80 ? "bg-red-50" : ""}>
+                        <td className="border border-gray-200 px-3 py-1.5">{r.type}</td>
+                        <td className="border border-gray-200 px-3 py-1.5">{r.top ?? "—"}</td>
+                        <td className="border border-gray-200 px-3 py-1.5 text-right tabular-nums">{r.topUnits > 0 ? r.topUnits.toLocaleString() : "—"}</td>
+                        <td className="border border-gray-200 px-3 py-1.5 text-right tabular-nums">{r.total > 0 ? r.total.toLocaleString() : "—"}</td>
+                        <td className={`border border-gray-200 px-3 py-1.5 text-right tabular-nums ${r.share > 80 ? "text-red-600 font-bold" : ""}`}>
+                          {r.total > 0 ? `${r.share.toFixed(1)}%` : "—"}
+                        </td>
+                        <td className={`border border-gray-200 px-3 py-1.5 text-center font-semibold ${r.share > 80 ? "text-red-600" : "text-emerald-600"}`}>
+                          {r.total === 0 ? "—" : r.share > 80 ? "減算対象の可能性" : "OK"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()
       )}
     </div>
   );

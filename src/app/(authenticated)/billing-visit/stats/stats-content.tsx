@@ -141,7 +141,21 @@ export function StatsContent() {
       }
     }
 
-    // ── 2) 月次推移 (riyou_seikyu_payments) — order 付き page-loop (1000 行上限対策) ──
+    // ── 2) 月次推移 (riyou_seikyu_payments) — order 付き page-loop (1000 行上限対策)。
+    //      office_id 列が無いため client_office_assignments 経由で訪問介護 office の
+    //      利用者に絞る (監査M-1: 居宅/入浴等 他事業所の利用請求を合算しない) ──
+    let houmonClientIds: Set<string> | null = null;
+    if (houmonOfficeIds.length > 0) {
+      const { data, error } = await supabase
+        .from("client_office_assignments")
+        .select("client_id")
+        .in("office_id", houmonOfficeIds);
+      if (error) {
+        console.error("client_office_assignments fetch failed:", error.message);
+      } else {
+        houmonClientIds = new Set(((data ?? []) as { client_id: string }[]).map((a) => a.client_id));
+      }
+    }
     const pays: PaymentRow[] = [];
     {
       const PAGE = 1000;
@@ -162,7 +176,8 @@ export function StatsContent() {
           break;
         }
         const rows = (data ?? []) as PaymentRow[];
-        pays.push(...rows);
+        // 割当が取れた場合のみ絞る (取得失敗時は従来どおり全件)
+        pays.push(...(houmonClientIds ? rows.filter((r) => houmonClientIds.has(r.client_id)) : rows));
         if (rows.length < PAGE) break;
         offset += PAGE;
       }

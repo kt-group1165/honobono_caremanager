@@ -143,7 +143,8 @@ export async function aggregateBathVisitSeikyu(
     const copay = copayRaw == null || !Number.isFinite(copayRaw) || copayRaw <= 0 ? 0.1 : copayRaw >= 1 ? Math.min(copayRaw / 10, 1) : copayRaw;
     const limitAmount = cert?.service_limit_amount != null && Number(cert.service_limit_amount) > 0 ? Number(cert.service_limit_amount) : null;
 
-    // 明細: 基本(service_code ごと)
+    // 明細: 記録の service_code ごと。加算コード (124/126/128系) は
+    // 提供表の「サービス追加」経由で記録行として入ることがある。
     const detailMap = new Map<string, SeikyuDetailLine>();
     for (const r of recs) {
       const code = r.service_code;
@@ -154,14 +155,37 @@ export async function aggregateBathVisitSeikyu(
       if (ex) { ex.count += 1; ex.units += info.units; }
       else detailMap.set(code, { service_type: info.name, short_name: info.short, service_code: code, unit_per: info.units, count: 1, units: info.units });
     }
-    const details = Array.from(detailMap.values());
-    const serviceBaseUnits = details.reduce((s, d) => s + d.units, 0); // 所定単位(基本のみ)。中山間%の母数
-    let grossBaseUnits = serviceBaseUnits;
-    let shokaiUnits = 0; // 限度額管理対象外(初回)
+    // 所定単位 (基本 121xxx のみ) = %加算 (中山間等) の母数
+    const serviceBaseUnits = Array.from(detailMap.values())
+      .filter((d) => (d.service_code ?? "").startsWith("121"))
+      .reduce((s, d) => s + d.units, 0);
 
-    // 回単位加算
+    // %加算 (マスタ units=0 の率加算)。提供表のサービス追加で行として入った場合は
+    // 所定単位×率で単位数を計算し直す (0単位のまま出さない)
+    const RATE_ADDONS: Record<string, { rate: number; label: string }> = {
+      "128000": { rate: 0.15, label: "特別地域訪問入浴介護加算" },
+      "128100": { rate: 0.10, label: "訪問入浴小規模事業所加算" },
+      "128110": { rate: 0.05, label: "訪問入浴中山間地域等提供加算" },
+    };
+    for (const [code, { rate }] of Object.entries(RATE_ADDONS)) {
+      const row = detailMap.get(code);
+      if (row && serviceBaseUnits > 0) {
+        const cu = Math.round(serviceBaseUnits * rate);
+        row.unit_per = cu;
+        row.count = 1;
+        row.units = cu;
+      }
+    }
+
+    const details = Array.from(detailMap.values());
+    let grossBaseUnits = details.reduce((s, d) => s + d.units, 0);
+    // 限度額管理対象外(初回加算)。提供表経由の行もフラグ経由も同扱い
+    let shokaiUnits = detailMap.get(CODE_SHOKAI)?.units ?? 0;
+
+    // 記録フラグ由来の加算。同コードが既に行として存在する場合はスキップ (二重計上防止 —
+    // 記録のチェックと提供表サービス追加のどちらで入れても 1 回だけ算定される)
     const pushAddon = (code: string, count: number, taishougai: boolean) => {
-      if (count <= 0) return;
+      if (count <= 0 || detailMap.has(code)) return;
       const info = codeMap.get(code);
       if (!info) { warnings.push(`${name}: 加算コード${code}が対象月マスタに未一致`); return; }
       const units = info.units * count;
@@ -176,8 +200,8 @@ export async function aggregateBathVisitSeikyu(
     const ninchiII = recs.filter((r) => r.addon_ninchi === "II").length;
     if (ninchiI > 0) pushAddon(CODE_NINCHI.I, ninchiI, false);
     if (ninchiII > 0) pushAddon(CODE_NINCHI.II, ninchiII, false);
-    // 中山間地域等提供加算 = 所定単位 × 5% (いずれかの記録でON)
-    if (recs.some((r) => r.addon_chuusankan) && serviceBaseUnits > 0) {
+    // 中山間地域等提供加算 = 所定単位 × 5% (いずれかの記録でON、行が無い場合のみ)
+    if (recs.some((r) => r.addon_chuusankan) && serviceBaseUnits > 0 && !detailMap.has(CODE_CHUUSANKAN)) {
       const cu = Math.round(serviceBaseUnits * 0.05);
       const info = codeMap.get(CODE_CHUUSANKAN);
       grossBaseUnits += cu;

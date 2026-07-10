@@ -173,6 +173,15 @@ export function buildKyufuKanriFile(
     if (!careCode) warnings.push(`${u.userName}: 要介護度 ("${u.careLevel ?? "未設定"}") をコードに変換できません`);
     if (!u.birthDate) warnings.push(`${u.userName}: 生年月日が未登録です`);
     if (u.limitUnits <= 0) warnings.push(`${u.userName}: 区分支給限度基準額が未登録です`);
+    // 監査M-3: 短期入所のみのケアプランは「短期入所給付管理票」(8211 項15-17 /
+    // 8221 項7 種別区分) での集計が本来だが未対応 (現状は訪問通所・居宅 固定)。
+    // 該当利用者がいたら取込チェックで確認できるよう warning を出す。
+    const SHORT_STAY_KINDS = new Set(["21", "22", "23", "24", "25", "26"]);
+    if (u.lines.length > 0 && u.lines.every((l) => SHORT_STAY_KINDS.has(l.serviceKindCode))) {
+      warnings.push(
+        `${u.userName}: 明細が短期入所のみです — 短期入所給付管理票 (種別区分/8211項15-17) は未対応のため、訪問通所・居宅として出力します。取込チェックで要確認`,
+      );
+    }
 
     const head = (lineNo: string) => [
       "8221", // 1

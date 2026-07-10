@@ -839,6 +839,20 @@ export function MonitoringContent({
                 </button>
               </div>
 
+              {/* 要介護版: 当月未実施の警告 (運営基準: 月1回の利用者宅訪問+モニタリング記録。
+                  未実施は運営基準減算リスク — 監査M-7) */}
+              {!isPreventive && (() => {
+                const thisMonth = format(new Date(), "yyyy-MM");
+                const hasThisMonth = sheets.some((s) => (s.monitoring_date ?? "").startsWith(thisMonth));
+                if (hasThisMonth) return null;
+                return (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    <span className="font-semibold">今月（{thisMonth}）のモニタリングが未登録です。</span>
+                    要介護者は<span className="font-bold">月1回以上の利用者宅訪問とモニタリング記録</span>が運営基準です（未実施は運営基準減算の対象）。
+                  </div>
+                );
+              })()}
+
               {/* 予防版: 頻度ガイド */}
               {isPreventive && (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
 import {
   Receipt,
@@ -123,6 +124,7 @@ export function BillingContent({
   initialMonth: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
+  const { currentOfficeId } = useBusinessType();
   const [records, setRecords] = useState<BillingRecord[]>(initialRecords);
   const [loading, setLoading] = useState(false);
   const [filterMonth, setFilterMonth] = useState(initialMonth);
@@ -207,13 +209,14 @@ export function BillingContent({
     }
 
     try {
-      // 1. 自事業所設定（共通マスタ offices、kaigo-app の自事業所だけ取得）
-      const { data: officeData } = await supabase
+      // 1. 自事業所設定（共通マスタ offices）。選択中の事業所を優先 —
+      //    旧: app_type だけで limit(1) → 複数事業所時に任意の事業所番号/単価が使われる事故
+      let officeQ = supabase
         .from("offices")
         .select("business_number, area_category, unit_price")
-        .eq("app_type", "kaigo-app")
-        .limit(1)
-        .maybeSingle();
+        .eq("app_type", "kaigo-app");
+      if (currentOfficeId) officeQ = officeQ.eq("id", currentOfficeId);
+      const { data: officeData } = await officeQ.limit(1).maybeSingle();
       const providerNumber = officeData?.business_number ?? "0000000000";
       const unitPrice = Number(officeData?.unit_price ?? 10);
       const areaCode = areaCategoryToCode(officeData?.area_category ?? "その他");

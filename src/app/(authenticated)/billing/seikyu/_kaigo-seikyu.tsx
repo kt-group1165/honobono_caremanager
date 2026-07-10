@@ -800,6 +800,20 @@ export function KyotakuKaigoSeikyuContent() {
             </div>
           )}
 
+          {/* 逓減制の注意 (監査M-1: 取扱件数45件以上/常勤換算1人あたりで
+              居宅介護支援費ⅱ/ⅲ に逓減。判定機構が無いため件数閾値で注意喚起) */}
+          {!loading && filteredRows.length >= 45 && (
+            <div className="border-b border-amber-300 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              <span>
+                当月の請求対象が {filteredRows.length} 件あります。ケアマネ1人 (常勤換算) あたり
+                45件以上は<span className="font-semibold">逓減制 (居宅介護支援費ⅱ/ⅲ)</span> の対象です —
+                取扱件数 ÷ 常勤換算数を確認し、該当する場合は基本サービスコードを見直してください
+                (ICT活用・事務職員配置の緩和要件あり)。
+              </span>
+            </div>
+          )}
+
           {/* 認定申請中の利用者 案内 (該当者がいるときのみ) */}
           {!loading && shinseichuCount > 0 && (
             <div className="border-b border-amber-300 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">

@@ -247,6 +247,11 @@ export function HospitalizationsContent({
         }
 
         toast.success("入院情報を登録し、支援経過に自動追加しました");
+        // 加算連携リマインド (監査M-8: 入退院登録と加算算定が非連動のため案内で補完)
+        toast.info(
+          "病院へ利用者情報を提供した場合は「入院時情報連携加算」の算定を確認してください（請求 > 個人設定）",
+          { duration: 8000 },
+        );
       }
 
       setShowForm(false);
@@ -314,6 +319,11 @@ export function HospitalizationsContent({
       if (dis2Err) toast.error("支援経過(退院)の自動追加に失敗: " + dis2Err.message);
 
       toast.success("退院を登録し、支援経過に自動追加しました");
+      // 加算連携リマインド (監査M-8)
+      toast.info(
+        "病院からの情報収集・カンファレンス参加があれば「退院・退所加算」の算定を確認してください（請求 > 個人設定）",
+        { duration: 8000 },
+      );
       fetchRecords();
     } catch (err: unknown) {
       toast.error(
