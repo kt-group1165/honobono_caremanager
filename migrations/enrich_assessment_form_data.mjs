@@ -29,16 +29,6 @@ const EXECUTE = process.argv.includes("--execute");
 console.log(`[mode] ${EXECUTE ? "EXECUTE" : "DRY-RUN"}\n`);
 
 // ─── ヘルパ ───────────────────────────────────────────────────────────────────
-function ageFromBirth(birth) {
-  if (!birth) return "";
-  const b = new Date(birth);
-  const now = new Date();
-  let a = now.getFullYear() - b.getFullYear();
-  const m = now.getMonth() - b.getMonth();
-  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) a--;
-  return String(a);
-}
-
 function isoDaysAgo(days) {
   const d = new Date();
   d.setDate(d.getDate() - days);
@@ -70,17 +60,10 @@ function fillSupport(keys, opts = {}) {
 }
 
 // ─── per-user 用 サンプルバラエティ ─────────────────────────────────────────
-const RELATIONSHIPS = ["長男", "長女", "次男", "次女", "配偶者", "甥", "姪"];
 const EMERGENCY_NAMES = [
   ["佐藤 太郎", "長男"], ["田中 花子", "長女"], ["鈴木 健一", "次男"],
   ["高橋 美智子", "長女"], ["伊藤 隆", "甥"], ["渡辺 あや子", "次女"],
   ["山本 修", "長男"], ["中村 信夫", "長男"], ["小林 良子", "長女"], ["加藤 浩", "次男"],
-];
-const CARE_MGRS = [
-  "ＨａｮＡケアプランセンター花見川 / 山田 真理",
-  "Ｈａｮｱ居宅支援センターおゆみ野 / 木村 良太",
-  "千葉ムツミケアプラン高品 / 佐藤 純子",
-  "リンクスケアプラン茂原 / 高橋 一郎",
 ];
 const DOCTORS = [
   ["千葉北総合クリニック", "内科", "中村 弘"],
@@ -131,10 +114,8 @@ const clientById = new Map(clients.map(c => [c.id, c]));
 // 3. 各 assessment 用に form_data を組み立て
 function buildFormData(client, assessment, idx) {
   const existing = assessment.form_data ?? {};
-  const age = ageFromBirth(client.birth_date);
   const [emName, emRel] = pick(EMERGENCY_NAMES, idx);
   const consultName = pick(EMERGENCY_NAMES, idx + 3);
-  const careMgr = pick(CARE_MGRS, idx);
   const doctor = pick(DOCTORS, idx);
   const referral = pick(REFERRAL_ROUTES, idx);
   const ailment = existing.ailment || pick(AILMENTS, idx);
@@ -149,8 +130,6 @@ function buildFormData(client, assessment, idx) {
   const weightKg = String(45 + ((idx * 4) % 15));
 
   const phone = client.phone || `043-200-00${String(idx + 1).padStart(2, "0")}`;
-  const mobile = client.mobile || `090-1234-${String(5000 + idx).padStart(4, "0")}`;
-  const postal = client.postal_code || "264-0029";
   const address = client.address || "千葉県千葉市若葉区桜木1-1-1";
 
   const face_sheet = {

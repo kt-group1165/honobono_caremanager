@@ -61,7 +61,6 @@ if (!SB_URL || !SB_KEY) {
 
 const TENANT_ID = "kt-group";
 const HELPER_OFFICE_ID = "4f14d50c-76b5-4f44-ac41-ed6d01f53a30";  // 訪問介護
-const KYOTAKU_OFFICE_ID = "1b22d425-2ec4-4c2f-a002-c1c994e94507"; // 居宅支援センター
 const FAKE_MARKER = "[fake テスト用-houmon]";
 
 const EXECUTE = process.argv.includes("--execute");
@@ -83,7 +82,6 @@ const CLIENTS = [
 const TODAY = new Date();
 function addDays(d, n) { const c = new Date(d); c.setDate(c.getDate() + n); return c; }
 function ymd(d) { return d.toISOString().slice(0, 10); }
-function pick(arr, seed) { return arr[seed % arr.length]; }
 function rnd(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
 
 const SERVICE_TYPES = ["身体介護", "生活援助", "身体+生活"];

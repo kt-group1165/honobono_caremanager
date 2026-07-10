@@ -53,7 +53,6 @@ if (!SB_URL || !SB_KEY) { console.error("❌ env 読めず"); process.exit(1); }
 
 const TENANT_ID = "kt-group";
 const KYOTAKU_OFFICE_ID = "1b22d425-2ec4-4c2f-a002-c1c994e94507";
-const SAMPLE_MARKER = "fake-kyotaku-enrich-2026-07";
 const NOTES_SUFFIX = "[fake テスト用-kyotaku-enrich]";
 const INSURER_NUMBER = "122192";
 const EXECUTE = process.argv.includes("--execute");

@@ -219,7 +219,7 @@ for (const [svcCat, catNum, subCat, codePrefix, timeBrackets] of SHOGAI_BASE) {
 }
 
 // 障害 加算
-for (const [svcCat, catNum, _sub, code, name, units, calc, notes] of SHOGAI_ADDONS) {
+for (const [svcCat, catNum, , code, name, units, calc, notes] of SHOGAI_ADDONS) {
   rows.push({
     system: "障害",
     service_category: catNum,
@@ -236,7 +236,7 @@ for (const [svcCat, catNum, _sub, code, name, units, calc, notes] of SHOGAI_ADDO
 }
 
 // 総合事業
-for (const [_sys, catNum, catName, code, name, units] of SOUGOU_CODES) {
+for (const [, catNum, catName, code, name, units] of SOUGOU_CODES) {
   rows.push({
     system: "総合事業",
     service_category: catNum,

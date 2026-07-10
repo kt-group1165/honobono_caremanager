@@ -14,7 +14,6 @@ const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABA
 const TENANT = "kt-group";
 const OFFICE_ID = "4f14d50c-76b5-4f44-ac41-ed6d01f53a30"; // Ｈａｎａヘルパーステーションおゆみ野
 const MARKER = "[fake テスト用-shogai-v2]";
-const YM = "2026-07";
 
 // 3 名: 上限管理 自事業所 / 他事業所 / なし(生保)
 const CLIENTS = [

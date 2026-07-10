@@ -7,7 +7,7 @@
  * index から計算するため、途中に新規追加すると以降が自動リナンバー。
  */
 
-import { useState, useCallback, useLayoutEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import { ChevronUp, ChevronDown, Plus, Trash2, GripVertical } from "lucide-react";
 
 /**
@@ -300,7 +300,6 @@ function ArticleEditor({
             index={i}
             total={node.paragraphs.length}
             onChange={(next) => upsertPara(i, () => next)}
-            onInsertBefore={() => insertParagraphAt(i)}
             onInsertAfter={() => insertParagraphAt(i + 1)}
             onDelete={() => deleteParagraphAt(i)}
             onMoveUp={() => moveParaUp(i)}
@@ -326,7 +325,6 @@ function ParagraphEditor({
   index,
   total,
   onChange,
-  onInsertBefore,
   onInsertAfter,
   onDelete,
   onMoveUp,
@@ -336,7 +334,6 @@ function ParagraphEditor({
   index: number;
   total: number;
   onChange: (next: ParagraphNode) => void;
-  onInsertBefore: () => void;
   onInsertAfter: () => void;
   onDelete: () => void;
   onMoveUp: () => void;
