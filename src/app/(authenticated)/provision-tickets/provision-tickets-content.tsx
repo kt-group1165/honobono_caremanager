@@ -1185,13 +1185,17 @@ export function ProvisionTicketsContent({
       const to = `${monthStr}-${String(daysCount).padStart(2, "0")}`;
 
       // 既存月分を一旦 delete → 再 insert。delete 失敗を silent にしない
-      // (silent fail だと重複が積み上がる)
-      const { error: delError } = await supabase
+      // (silent fail だと重複が積み上がる)。
+      // ★ office_id で自事業所に限定 — 兼務利用者(複数 office)で他事業所のシフトを
+      //   巻き込み削除しないため (office_id 列は適用済)。currentOffice 未選択時のみ従来の全削除。
+      let delQ = supabase
         .from("kaigo_visit_schedule")
         .delete()
         .eq("user_id", userId)
         .gte("visit_date", from)
         .lte("visit_date", to);
+      if (currentOfficeId) delQ = delQ.eq("office_id", currentOfficeId);
+      const { error: delError } = await delQ;
       if (delError) throw delError;
 
       const toInsert: Record<string, unknown>[] = [];

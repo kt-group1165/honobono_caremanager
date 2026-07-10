@@ -289,9 +289,12 @@ export function MonthlyIndividualView({
       const { data: existing, error: existErr } = await supabase
         .from("kaigo_visit_records")
         .select("id")
+        // ★ 同日同開始時刻の別サービスと混同しないよう end_time + service_type まで一致で確認
         .eq("user_id", sched.user_id)
         .eq("visit_date", sched.visit_date)
         .eq("start_time", sched.start_time)
+        .eq("end_time", sched.end_time)
+        .eq("service_type", sched.service_type)
         .limit(1);
       if (existErr) {
         // 存在確認に失敗したまま INSERT すると重複記録を作りうるため中断
@@ -329,9 +332,13 @@ export function MonthlyIndividualView({
       const { error: delErr } = await supabase
         .from("kaigo_visit_records")
         .delete()
+        // ★ end_time + service_type まで一致で削除 — 同日同開始時刻の別サービス記録
+        //   (署名・バイタル入力済みを含む) を巻き込み削除しないため
         .eq("user_id", sched.user_id)
         .eq("visit_date", sched.visit_date)
-        .eq("start_time", sched.start_time);
+        .eq("start_time", sched.start_time)
+        .eq("end_time", sched.end_time)
+        .eq("service_type", sched.service_type);
       if (delErr) {
         // 記録が残ったまま schedule だけ予定に戻すと提供表・請求と食い違うため中断
         toast.error("実績記録の削除に失敗しました: " + delErr.message);
