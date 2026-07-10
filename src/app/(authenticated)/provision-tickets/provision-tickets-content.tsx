@@ -1217,7 +1217,11 @@ export function ProvisionTicketsContent({
           if (!cell) continue;
           const dateStr = `${monthStr}-${String(day).padStart(2, "0")}`;
 
-          if (cell.planned) {
+          // ★ 1行=1訪問 (status で予実を表現)。旧実装は「予定+実績」セルを
+          //   scheduled+completed の2行で保存し、シフト管理 (1行を status 反転) と
+          //   モデルが食い違って集計が二重計上されていた (監査#8)。
+          //   読取側は従来から completed → 予定+実績 と解釈するため互換。
+          if (cell.planned || cell.actual) {
             toInsert.push({
               user_id: userId,
               staff_id: row.staff_id || null,
@@ -1225,21 +1229,8 @@ export function ProvisionTicketsContent({
               start_time: row.start_time,
               end_time: row.end_time,
               service_type: row.service_type,
-              status: "scheduled",
+              status: cell.actual ? "completed" : "scheduled",
               // C5: 発生元 office (列未適用 42703/PGRST204 は insertVisitSchedules が strip)
-              ...(currentOfficeId ? { office_id: currentOfficeId } : {}),
-              ...staff2Fields,
-            });
-          }
-          if (cell.actual) {
-            toInsert.push({
-              user_id: userId,
-              staff_id: row.staff_id || null,
-              visit_date: dateStr,
-              start_time: row.start_time,
-              end_time: row.end_time,
-              service_type: row.service_type,
-              status: "completed",
               ...(currentOfficeId ? { office_id: currentOfficeId } : {}),
               ...staff2Fields,
             });

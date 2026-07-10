@@ -32,6 +32,8 @@ export interface ScheduleEntry {
   start_time: string | null;
   end_time: string | null;
   service_type: string;
+  /** kaigo_visit_schedule.status (scheduled/changed=予定, completed=実績) */
+  status: string;
   staff_name: string | null;
 }
 
@@ -82,7 +84,7 @@ export function VisitScheduleContent({
     let fetchError: unknown = null;
     while (true) {
       const { data, error } = await supabase
-        .from("kaigo_visit_records")
+        .from("kaigo_visit_schedule")
         .select(`
           id,
           user_id,
@@ -90,11 +92,13 @@ export function VisitScheduleContent({
           start_time,
           end_time,
           service_type,
+          status,
           clients(name),
           members(name)
         `)
         .gte("visit_date", fromDate)
         .lte("visit_date", to)
+        .neq("status", "cancelled")
         .order("visit_date")
         .order("start_time")
         .range(from, from + PAGE - 1);
@@ -116,6 +120,7 @@ export function VisitScheduleContent({
         start_time: r.start_time,
         end_time: r.end_time,
         service_type: r.service_type,
+        status: r.status ?? "scheduled",
         staff_name: r.members?.name ?? null,
       }));
       setEntries(mapped);
@@ -291,6 +296,11 @@ export function VisitScheduleContent({
                         <div className="flex items-center justify-between mb-1">
                           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${col.bg} ${col.text}`}>
                             {e.service_type}
+                          </span>
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                            e.status === "completed" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+                          }`}>
+                            {e.status === "completed" ? "実績" : "予定"}
                           </span>
                         </div>
                         <p className="flex items-center gap-1 text-sm font-semibold text-gray-900">
