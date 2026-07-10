@@ -4,6 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
+/** ローカル日付 YYYY-MM-DD (toISOString は UTC で JST 0-9時に前日になるため使わない) */
+function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+
 /**
  * 新版作成 (= 現行版を複製、version_no + 1、is_active=false)
  * 対象 kind の最新 version の content を base にする。
@@ -30,7 +37,7 @@ export async function createNewVersion(kind: string): Promise<void> {
     .insert({
       kind,
       version_no: nextVer,
-      effective_from: new Date().toISOString().slice(0, 10),
+      effective_from: localToday(),
       is_active: false,
       content: baseContent,
       parent_version_id: latest?.id ?? null,
@@ -62,7 +69,7 @@ export async function activateVersion(id: string, kind: string): Promise<void> {
   // 対象を is_active=true
   const { error: e2 } = await supabase
     .from("kaigo_contract_templates")
-    .update({ is_active: true, effective_from: new Date().toISOString().slice(0, 10) })
+    .update({ is_active: true, effective_from: localToday() })
     .eq("id", id);
   if (e2) throw new Error(`activate 失敗: ${e2.message}`);
 

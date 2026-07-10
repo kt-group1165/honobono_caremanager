@@ -802,7 +802,8 @@ export function CarePlanContent({ userId, initialPlans }: CarePlanContentProps) 
   const handleNew = async () => {
     setCreating(true);
     try {
-      const today = new Date().toISOString().split("T")[0];
+      const d = new Date(); // ローカル日付 (toISOString は UTC で JST 0-9時に前日になる)
+      const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       // 既存 active を draft 候補にしたければ手動で変更してもらう (自動 close はしない)
       const { data, error } = await supabase
         .from("kaigo_care_plans")

@@ -219,8 +219,9 @@ export function HospitalizationsContent({
         };
 
         const admissionPlanId = await findPlanId(form.admission_date);
-        await supabase.from("kaigo_support_records").insert({
+        const { error: admErr } = await supabase.from("kaigo_support_records").insert({
           user_id: userId,
+          tenant_id: "kt-group",
           record_date: form.admission_date,
           record_time: null,
           category: "その他",
@@ -228,11 +229,13 @@ export function HospitalizationsContent({
           staff_name: null,
           care_plan_id: admissionPlanId,
         });
+        if (admErr) toast.error("支援経過(入院)の自動追加に失敗: " + admErr.message);
 
         if (form.discharge_date) {
           const dischargePlanId = await findPlanId(form.discharge_date);
-          await supabase.from("kaigo_support_records").insert({
+          const { error: disErr } = await supabase.from("kaigo_support_records").insert({
             user_id: userId,
+            tenant_id: "kt-group",
             record_date: form.discharge_date,
             record_time: null,
             category: "その他",
@@ -240,6 +243,7 @@ export function HospitalizationsContent({
             staff_name: null,
             care_plan_id: dischargePlanId,
           });
+          if (disErr) toast.error("支援経過(退院)の自動追加に失敗: " + disErr.message);
         }
 
         toast.success("入院情報を登録し、支援経過に自動追加しました");
@@ -297,8 +301,9 @@ export function HospitalizationsContent({
         !p.end_date || p.end_date >= dischargeDate
       );
 
-      await supabase.from("kaigo_support_records").insert({
+      const { error: dis2Err } = await supabase.from("kaigo_support_records").insert({
         user_id: rec.client_id,
+        tenant_id: "kt-group",
         record_date: dischargeDate,
         record_time: null,
         category: "その他",
@@ -306,6 +311,7 @@ export function HospitalizationsContent({
         staff_name: null,
         care_plan_id: activePlan?.id ?? null,
       });
+      if (dis2Err) toast.error("支援経過(退院)の自動追加に失敗: " + dis2Err.message);
 
       toast.success("退院を登録し、支援経過に自動追加しました");
       fetchRecords();

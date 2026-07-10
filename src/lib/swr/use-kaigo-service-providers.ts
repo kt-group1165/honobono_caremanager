@@ -3,6 +3,9 @@
 import useSWR from "swr";
 import { createClient } from "@/lib/supabase/client";
 
+// SWR 返り値の参照安定化 (data??[] を毎回新配列にすると無限再レンダの温床)
+const EMPTY_PROVIDERS: never[] = [];
+
 /**
  * kaigo_service_providers (active のみ) 一覧取得 hook (SWR ベース)。
  *
@@ -41,7 +44,7 @@ export function useKaigoServiceProviders(fallbackData?: KaigoServiceProvider[]) 
     { ...SWR_OPTIONS, fallbackData },
   );
   return {
-    providers: data ?? [],
+    providers: data ?? EMPTY_PROVIDERS,
     isLoading,
     error: error ?? null,
     mutate: () => {

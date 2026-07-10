@@ -134,7 +134,9 @@ export function buildSougouDensou(
   // ── 7112 様式(予) 明細書 (利用者ごと: 基本 01 → 明細 02×n → 集計 10) ──
   for (const r of rows) {
     const rowYm = r.ym ?? ym;
-    const insurer = (r.insurer_number ?? "").trim();
+    // 証記載保険者番号は数字8桁 (6桁の保険者は前0埋め) — IF仕様
+    const insurerRaw = (r.insurer_number ?? "").trim();
+    const insurer = insurerRaw ? insurerRaw.padStart(8, "0") : "";
     const insured = (r.insured_number ?? "").trim();
     if (!insurer) warnings.push(`${r.user_name}: 保険者番号が未登録です`);
     if (!insured) warnings.push(`${r.user_name}: 被保険者番号が未登録です`);

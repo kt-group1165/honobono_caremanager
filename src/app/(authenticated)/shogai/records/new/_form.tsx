@@ -33,7 +33,8 @@ export function NewRecordForm({
   codes: Code[];
 }) {
   const { currentOffice } = useBusinessType();
-  const today = new Date().toISOString().slice(0, 10);
+  const _d = new Date(); // ローカル日付 (UTC ズレ防止)
+  const today = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, "0")}-${String(_d.getDate()).padStart(2, "0")}`;
   const [form, setForm] = useState({
     client_id: "",
     service_date: today,

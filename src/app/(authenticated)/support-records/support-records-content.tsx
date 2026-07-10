@@ -349,6 +349,7 @@ export function SupportRecordsContent({
     try {
       const payload = {
         user_id: userId,
+        tenant_id: "kt-group",
         care_plan_id: selectedCarePlanId,
         record_date: form.record_date,
         record_time: form.record_time || null,

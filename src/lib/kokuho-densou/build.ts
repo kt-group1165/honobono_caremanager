@@ -161,7 +161,9 @@ export function buildKokuhoDensou(
   for (const r of rows) {
     // 提供年月: 月遅れ/返戻の再請求では利用者ごとに元の提供月を使う (行 ym 優先)
     const rowYm = r.ym ?? ym;
-    const insurer = (r.insurer_number ?? "").trim();
+    // 証記載保険者番号は数字8桁 (6桁の保険者は前0埋め) — IF仕様
+    const insurerRaw = (r.insurer_number ?? "").trim();
+    const insurer = insurerRaw ? insurerRaw.padStart(8, "0") : "";
     const insured = (r.insured_number ?? "").trim();
     if (!insurer) warnings.push(`${r.user_name}: 保険者番号が未登録です`);
     if (!insured) warnings.push(`${r.user_name}: 被保険者番号が未登録です`);
@@ -313,7 +315,10 @@ export function buildKokuhoDensou(
       // 9-11: 超過分は保険請求外 (aggregate.ts で除外済み・selfPayAmount へ分離)。
       // 超過がある場合、管理対象 (10) は明細 02 行の合計より小さくなり、その差 =
       // 超過分は保険請求外 (全額自費) — 様式第二の標準的な扱い。
-      String(r.planUnits ?? kanriInUnits), // 9 計画単位数 (kaigo_monthly_plan_units があればそれ、無ければ基準内)
+      // 9 計画単位数: 月次情報の計画単位数 > 認定の区分支給限度基準 > 基準内 (最終フォールバック)。
+      // 旧: 無条件で基準内 (=⑤と同値) → 超過ありのとき「計画通りなのに超過」の矛盾が様式に残るため、
+      // 限度額があればそれを計画とみなす (ほのぼの同様の既定)。
+      String(r.planUnits ?? r.limitUnits ?? kanriInUnits),
       String(kanriInUnits), // 10 限度額管理対象単位数 (基準内)
       String(kanriGaiUnits), // 11 限度額管理対象外単位数 (処遇改善等 + 初回 + 緊急時)
       "", // 12 短期入所計画日数

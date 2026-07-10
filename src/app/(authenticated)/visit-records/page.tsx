@@ -41,6 +41,9 @@ export default async function VisitRecordsPage({
         .order("start_time", { ascending: false }),
       supabase.from("clients").select("*").eq("id", userId).maybeSingle(),
     ]);
+    // silent failure 防止: 取得失敗は「記録なし」に見えるため必ずログに残す
+    if (recordsRes.error) console.error("[visit-records] records fetch failed:", recordsRes.error.message);
+    if (clientRes.error) console.error("[visit-records] client fetch failed:", clientRes.error.message);
     initialRecords = (recordsRes.data ?? []).map((r: AnyRecord) => ({
       ...r,
       staff_name: r.members?.name ?? null,

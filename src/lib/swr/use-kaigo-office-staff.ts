@@ -4,6 +4,9 @@ import useSWR from "swr";
 import { createClient } from "@/lib/supabase/client";
 import type { KaigoStaff } from "@/app/(authenticated)/shift-management/_shared";
 
+// SWR 返り値の参照安定化 (data??[] を毎回新配列にすると無限再レンダの温床)
+const EMPTY_STAFF: never[] = [];
+
 /**
  * 自事業所 (officeId) に紐づく active member 一覧を取得する hook (SWR ベース)。
  *
@@ -44,7 +47,7 @@ export function useKaigoOfficeStaff(
     { ...SWR_OPTIONS, fallbackData },
   );
   return {
-    staff: data ?? [],
+    staff: data ?? EMPTY_STAFF,
     isLoading,
     error: error ?? null,
     mutate: () => {

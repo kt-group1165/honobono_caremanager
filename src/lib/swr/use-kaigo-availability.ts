@@ -4,6 +4,9 @@ import useSWR from "swr";
 import { createClient } from "@/lib/supabase/client";
 import type { StaffAvailabilitySlot } from "@/app/(authenticated)/shift-management/_shared";
 
+// SWR 返り値の参照安定化 (data??[] を毎回新配列にすると無限再レンダの温床)
+const EMPTY_AVAIL: never[] = [];
+
 /**
  * kaigo_staff_availability_monthly 取得 hook (SWR ベース)。
  *
@@ -51,7 +54,7 @@ export function useKaigoAvailability(
     { ...SWR_OPTIONS, fallbackData },
   );
   return {
-    availability: data ?? [],
+    availability: data ?? EMPTY_AVAIL,
     isLoading,
     error: error ?? null,
     mutate: () => {

@@ -177,7 +177,7 @@ export function buildKyufuKanriFile(
     const head = (lineNo: string) => [
       "8221", // 1
       ym, // 2 対象年月
-      u.insurerNumber, // 3 証記載保険者番号
+      u.insurerNumber ? u.insurerNumber.trim().padStart(8, "0") : "", // 3 証記載保険者番号 (数字8桁・前0埋め)
       office, // 4 事業所番号 (居宅介護支援事業所)
       kubun, // 5 給付管理票情報作成区分コード (1=新規 / 2=修正 / 3=取消)
       todayNum, // 6 給付管理票作成年月日
@@ -363,7 +363,7 @@ export function buildKeikakuhiFile(
       office, // 2 事業所番号
       "1", // 3 指定/基準該当等事業所区分コード
       ym, // 4 サービス提供年月
-      u.insurerNumber, // 5 証記載保険者番号
+      u.insurerNumber ? u.insurerNumber.trim().padStart(8, "0") : "", // 5 証記載保険者番号 (数字8桁・前0埋め)
       String(unitPrice100), // 6 単位数単価
       u.insuredNumber, // 7 被保険者番号 (英数10 — H番号可)
       // 8-9 公費負担者番号/受給者番号 — 仕様書: 生活保護単独の場合必須。

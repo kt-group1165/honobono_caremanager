@@ -23,7 +23,7 @@ export default async function VisitSchedulePage() {
   {
     let from = 0;
     while (true) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("kaigo_visit_records")
         .select(`
           id,
@@ -40,6 +40,8 @@ export default async function VisitSchedulePage() {
         .order("visit_date")
         .order("start_time")
         .range(from, from + PAGE - 1);
+      // silent failure 防止: 取得失敗は「予定なし」に見えるため必ずログに残す
+      if (error) console.error("[visit-schedule] kaigo_visit_records fetch failed:", error.message);
       if (!data || data.length === 0) break;
       rowsAll.push(...(data as unknown as Row[]));
       if (data.length < PAGE) break;

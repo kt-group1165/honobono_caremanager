@@ -107,9 +107,15 @@ export const emptyAttendee = (): Attendee => ({ affiliation: "", name: "" });
  * attendees は最低限の枠として 6 行 (= 一般的な担当者会議の出席者数) を初期表示。
  * UI で追加/削除可能。
  */
+/** ローカル日付 YYYY-MM-DD (toISOString は UTC で JST 0-9時に前日になるため使わない) */
+function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export function emptyContent(meetingDate?: string): MeetingContent {
   return {
-    meeting_date: meetingDate ?? new Date().toISOString().slice(0, 10),
+    meeting_date: meetingDate ?? localToday(),
     location: "",
     time_range: "",
     session_number: "",
