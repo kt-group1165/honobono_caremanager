@@ -70,21 +70,14 @@ export function monthRange(year: number, month: number): { from: string; to: str
 }
 
 /**
- * clientIds ごとに対象月 (year, month) に有効な認定を解決する。
- * 戻り値の Map に無い client は認定レコード自体が 0 件。
+ * client ごとの全認定行を集める (chunk + order 付き page-loop)。
+ * per-client の並びは certification_start_date DESC, effective_date DESC
+ * (resolveCertForMonth 従来の取得順そのまま)。
  */
-export async function resolveCertForMonth(
+async function fetchCertRowsByClient(
   supabase: SupabaseClient,
-  clientIds: string[],
-  year: number,
-  month: number,
-): Promise<Map<string, CertForMonth>> {
-  const out = new Map<string, CertForMonth>();
-  const ids = Array.from(new Set(clientIds));
-  if (ids.length === 0) return out;
-  const { from: monthStart, to: monthEnd } = monthRange(year, month);
-
-  // client ごとの全認定行を集める (chunk + order 付き page-loop)
+  ids: string[],
+): Promise<Map<string, DbRow[]>> {
   const byClient = new Map<string, DbRow[]>();
   for (let i = 0; i < ids.length; i += IN_CHUNK) {
     const chunk = ids.slice(i, i + IN_CHUNK);
@@ -108,34 +101,179 @@ export async function resolveCertForMonth(
       offset += PAGE;
     }
   }
+  return byClient;
+}
+
+function toCertForMonth(r: DbRow, isFallback: boolean): CertForMonth {
+  return {
+    insurer_number: r.insurer_number,
+    insurer_name: r.insurer_name,
+    insured_number: r.insured_number,
+    care_level: r.care_level,
+    copay_rate: r.copay_rate,
+    certification_start_date: r.certification_start_date,
+    certification_end_date: r.certification_end_date,
+    certification_status: r.certification_status,
+    service_limit_amount: r.service_limit_amount,
+    care_office_id: r.care_office_id,
+    care_office_number: r.care_office_number,
+    care_office_name: r.care_office_name,
+    effective_date: r.effective_date,
+    isFallback,
+  };
+}
+
+/** 対象月に有効な認定か (start <= 月末 AND (end IS NULL OR end >= 月初)) */
+const isValidInMonth = (r: DbRow, monthStart: string, monthEnd: string): boolean => {
+  if (!r.certification_start_date) return false;
+  if (r.certification_start_date > monthEnd) return false;
+  if (r.certification_end_date && r.certification_end_date < monthStart) return false;
+  return true;
+};
+
+/**
+ * clientIds ごとに対象月 (year, month) に有効な認定を解決する。
+ * 戻り値の Map に無い client は認定レコード自体が 0 件。
+ */
+export async function resolveCertForMonth(
+  supabase: SupabaseClient,
+  clientIds: string[],
+  year: number,
+  month: number,
+): Promise<Map<string, CertForMonth>> {
+  const out = new Map<string, CertForMonth>();
+  const ids = Array.from(new Set(clientIds));
+  if (ids.length === 0) return out;
+  const { from: monthStart, to: monthEnd } = monthRange(year, month);
+
+  const byClient = await fetchCertRowsByClient(supabase, ids);
 
   for (const [clientId, rows] of byClient) {
     // 1) 対象月に有効な認定 (start <= 月末 AND (end IS NULL OR end >= 月初))
-    const inMonth = rows.filter((r) => {
-      if (!r.certification_start_date) return false;
-      if (r.certification_start_date > monthEnd) return false;
-      if (r.certification_end_date && r.certification_end_date < monthStart) return false;
-      return true;
-    });
+    const inMonth = rows.filter((r) => isValidInMonth(r, monthStart, monthEnd));
     // rows は start_date DESC 順なので先頭が「対象月に有効な最新の認定」
     const picked = inMonth[0] ?? rows[0];
     if (!picked) continue;
-    out.set(clientId, {
-      insurer_number: picked.insurer_number,
-      insurer_name: picked.insurer_name,
-      insured_number: picked.insured_number,
-      care_level: picked.care_level,
-      copay_rate: picked.copay_rate,
-      certification_start_date: picked.certification_start_date,
-      certification_end_date: picked.certification_end_date,
-      certification_status: picked.certification_status,
-      service_limit_amount: picked.service_limit_amount,
-      care_office_id: picked.care_office_id,
-      care_office_number: picked.care_office_number,
-      care_office_name: picked.care_office_name,
-      effective_date: picked.effective_date,
-      isFallback: inMonth.length === 0,
-    });
+    out.set(clientId, toCertForMonth(picked, inMonth.length === 0));
   }
   return out;
+}
+
+/**
+ * clientIds ごとに「対象月に有効な全認定行」を certification_start_date 昇順で返す
+ * (月途中の資格変更 = 区分変更/保険者変更 の検出用。Phase 1)。
+ *
+ * resolveCertForMonth と違いフォールバックしない — 対象月に有効な認定が 1 件も無い
+ * client は Map に入らない。同一 certification_start_date の重複行 (編集履歴・二重登録)
+ * は effective_date が最新の 1 件に dedupe する (誤検出防止)。
+ */
+export async function resolveCertsInMonth(
+  supabase: SupabaseClient,
+  clientIds: string[],
+  year: number,
+  month: number,
+): Promise<Map<string, CertForMonth[]>> {
+  const out = new Map<string, CertForMonth[]>();
+  const ids = Array.from(new Set(clientIds));
+  if (ids.length === 0) return out;
+  const { from: monthStart, to: monthEnd } = monthRange(year, month);
+
+  const byClient = await fetchCertRowsByClient(supabase, ids);
+
+  for (const [clientId, rows] of byClient) {
+    // rows は start DESC, effective DESC — 同一 start は先頭 (= 最新 effective) を採用
+    const seenStart = new Set<string>();
+    const inMonth: DbRow[] = [];
+    for (const r of rows) {
+      if (!isValidInMonth(r, monthStart, monthEnd)) continue;
+      const start = r.certification_start_date!;
+      if (seenStart.has(start)) continue;
+      seenStart.add(start);
+      inMonth.push(r);
+    }
+    if (inMonth.length === 0) continue;
+    inMonth.reverse(); // start DESC → ASC (時系列順)
+    out.set(
+      clientId,
+      inMonth.map((r) => toCertForMonth(r, false)),
+    );
+  }
+  return out;
+}
+
+// ─── 月途中の資格変更 検出 (Phase 1: 検出のみ。レセプト行の分割は Phase 2) ──────
+
+export interface MidMonthCertChange {
+  /**
+   * ケース2: 保険者番号 / 被保険者番号 の月内変更 (転居等)。
+   * boundaryDate = 変更後認定の certification_start_date。
+   */
+  insurerChange: {
+    fromInsurer: string | null;
+    toInsurer: string | null;
+    fromInsured: string | null;
+    toInsured: string | null;
+    boundaryDate: string | null;
+  } | null;
+  /**
+   * ケース3: care_level の月内変更 (区分変更)。
+   * crossesSystem = 要支援 (事業対象者含む) ↔ 要介護 の制度跨ぎ。
+   */
+  careLevelChange: {
+    from: string;
+    to: string;
+    boundaryDate: string | null;
+    crossesSystem: boolean;
+  } | null;
+}
+
+const isYoboKubun = (level: string) => /要支援|事業対象者/.test(level);
+const trimOrEmpty = (v: string | null | undefined) => (v ?? "").trim();
+
+/**
+ * resolveCertsInMonth の結果 (start 昇順) から月内の資格変更を検出する。
+ * 片方が未入力 (null/空) の項目は変更とみなさない (データ入力途中の誤検出防止)。
+ * 変更なし (または認定が 1 件以下) は null。
+ */
+export function detectMidMonthChange(certs: CertForMonth[]): MidMonthCertChange | null {
+  if (certs.length < 2) return null;
+  let insurerChange: MidMonthCertChange["insurerChange"] = null;
+  let careLevelChange: MidMonthCertChange["careLevelChange"] = null;
+  for (let i = 1; i < certs.length; i++) {
+    const prev = certs[i - 1];
+    const cur = certs[i];
+    const boundary = cur.certification_start_date;
+    if (!insurerChange) {
+      const pIns = trimOrEmpty(prev.insurer_number);
+      const cIns = trimOrEmpty(cur.insurer_number);
+      const pNo = trimOrEmpty(prev.insured_number);
+      const cNo = trimOrEmpty(cur.insured_number);
+      const insurerDiff = pIns !== "" && cIns !== "" && pIns !== cIns;
+      const insuredDiff = pNo !== "" && cNo !== "" && pNo !== cNo;
+      if (insurerDiff || insuredDiff) {
+        insurerChange = {
+          fromInsurer: prev.insurer_number,
+          toInsurer: cur.insurer_number,
+          fromInsured: prev.insured_number,
+          toInsured: cur.insured_number,
+          boundaryDate: boundary,
+        };
+      }
+    }
+    if (!careLevelChange) {
+      const pLv = trimOrEmpty(prev.care_level);
+      const cLv = trimOrEmpty(cur.care_level);
+      if (pLv !== "" && cLv !== "" && pLv !== cLv) {
+        careLevelChange = {
+          from: pLv,
+          to: cLv,
+          boundaryDate: boundary,
+          crossesSystem: isYoboKubun(pLv) !== isYoboKubun(cLv),
+        };
+      }
+    }
+    if (insurerChange && careLevelChange) break;
+  }
+  if (!insurerChange && !careLevelChange) return null;
+  return { insurerChange, careLevelChange };
 }

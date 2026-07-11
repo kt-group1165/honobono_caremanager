@@ -22,7 +22,11 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { validInMonth, monthRange } from "@/lib/service-code-valid";
-import { resolveCertForMonth } from "@/lib/cert-for-month";
+import {
+  resolveCertForMonth,
+  resolveCertsInMonth,
+  detectMidMonthChange,
+} from "@/lib/cert-for-month";
 import { resolveKohiForMonth, kohiHobetsuLabel } from "@/lib/kohi";
 import type { MonthlySeikyuResult, UserSeikyuRow, SeikyuDetailLine } from "@/lib/visit-seikyu/aggregate";
 
@@ -35,6 +39,12 @@ type BathRec = {
   addon_chuusankan: boolean | null;
 };
 type Cl = { id: string; name: string | null; furigana: string | null; user_number: string | null; gender: string | null; birth_date: string | null };
+
+// 'YYYY-MM-DD' → 'M/D' (資格変更警告の表示用。visit-seikyu/aggregate.ts と同じ)
+const fmtMD = (iso: string) => {
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${Number(m[1])}/${Number(m[2])}` : iso;
+};
 
 // 回単位加算コード (種類12)
 const CODE_SHOKAI = "124113"; // 訪問入浴初回加算 200単位/月 (限度額管理対象外)
@@ -86,6 +96,8 @@ export async function aggregateBathVisitSeikyu(
 
   // 3) 認定(月次解決) / 公費 / 計画単位数 / 利用者
   const certByClient = await resolveCertForMonth(supabase, clientIds, year, month);
+  // 月途中の資格変更 (区分変更/保険者変更) 検出 + 限度額決定用 (Phase 1。visit-seikyu と同型)
+  const certsInMonthByClient = await resolveCertsInMonth(supabase, clientIds, year, month);
   const kohiRes = await resolveKohiForMonth(supabase, clientIds, year, month);
   const planByClient = new Map<string, number>();
   {
@@ -141,7 +153,49 @@ export async function aggregateBathVisitSeikyu(
     // 負担割合の正規化 (1/2/3 → 0.1/0.2/0.3)
     const copayRaw = cert?.copay_rate != null ? Number(cert.copay_rate) : null;
     const copay = copayRaw == null || !Number.isFinite(copayRaw) || copayRaw <= 0 ? 0.1 : copayRaw >= 1 ? Math.min(copayRaw / 10, 1) : copayRaw;
-    const limitAmount = cert?.service_limit_amount != null && Number(cert.service_limit_amount) > 0 ? Number(cert.service_limit_amount) : null;
+    // ── 月途中の資格変更 (Phase 1: 検出 + 限度額のみ。visit-seikyu/aggregate.ts と同型) ──
+    // ケース3: 月内に複数の認定があるときは service_limit_amount の最大値
+    // (= 重い方の区分支給限度基準額) を月全体に適用する。
+    // ※「重い方を月全体適用」は告示側の制度原則で repo 仕様書に明文なし — 要外部確認。
+    const certsInMonth = certsInMonthByClient.get(clientId) ?? [];
+    const midChange = detectMidMonthChange(certsInMonth);
+    const monthLimitCandidates = certsInMonth
+      .map((c) => (c.service_limit_amount != null ? Number(c.service_limit_amount) : NaN))
+      .filter((v) => Number.isFinite(v) && v > 0);
+    const limitAmount =
+      monthLimitCandidates.length > 0
+        ? Math.max(...monthLimitCandidates)
+        : cert?.service_limit_amount != null && Number(cert.service_limit_amount) > 0
+          ? Number(cert.service_limit_amount)
+          : null;
+    if (midChange?.careLevelChange) {
+      const c = midChange.careLevelChange;
+      const when = c.boundaryDate ? `, ${fmtMD(c.boundaryDate)}` : "";
+      if (c.crossesSystem) {
+        warnings.push(
+          `${name}さん: 月内に要支援↔要介護の区分変更 (${c.from}→${c.to}${when}) があります — 制度を跨ぐためレセプトの自動対応外です。手動対応してください`,
+        );
+      } else {
+        warnings.push(
+          `${name}さん: 月内に区分変更 (${c.from}→${c.to}${when})。限度額は重い方 (${(limitAmount ?? 0).toLocaleString()}単位) を適用。レセプトの要介護度は月末時点で出力`,
+        );
+      }
+    }
+    if (midChange?.insurerChange) {
+      // ケース2: Phase 1 は検出のみ (レセプト分割は未対応)
+      const ic = midChange.insurerChange;
+      const insurerDiff =
+        (ic.fromInsurer ?? "").trim() !== (ic.toInsurer ?? "").trim() &&
+        !!ic.fromInsurer &&
+        !!ic.toInsurer;
+      const label = insurerDiff ? "保険者" : "被保険者番号";
+      const desc = insurerDiff
+        ? `${ic.fromInsurer}→${ic.toInsurer}`
+        : `${ic.fromInsured ?? "?"}→${ic.toInsured ?? "?"}`;
+      warnings.push(
+        `${name}さん: ${label}が月内で変わっています (${desc})。レセプト分割は未対応 — 月遅れ保留か手動対応を検討してください`,
+      );
+    }
 
     // 明細: 記録の service_code ごと。加算コード (124/126/128系) は
     // 提供表の「サービス追加」経由で記録行として入ることがある。

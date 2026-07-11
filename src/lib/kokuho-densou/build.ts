@@ -260,10 +260,13 @@ export function buildKokuhoDensou(
     // 実績単位の月次加算 (初回 114001 / 緊急時 114000 / 生活機能向上連携 114003・114002) は
     // aggregate.ts が details[] に加算行として積んでいるため、ここでそのまま 02 行になる。
     // 処遇改善等の%加算 (addonCode) のみ別枠で 1 行追加する (従来どおり)。
-    // 保険優先の部分公費 (法別12以外・公費単独でない) は明細の公費対象欄 (項11/15) を
-    // aggregate.ts の期間按分値 (kohi_count/kohi_units) で出す。生保・公費単独は全量 (従来どおり)。
+    // 公費対象が按分されている行 (kohiUnits < totalUnits = 部分公費の期間按分・
+    // 月途中開始の生保・限度額超過キャップ) は明細の公費対象欄 (項11/15) を
+    // aggregate.ts の期間按分値 (kohi_count/kohi_units) で出し、%加算行の公費対象分も
+    // 按分して Σ明細(項15) = 集計(項18) の突合を保つ (Phase 1 で法別12にも適用)。
+    // 全量公費 (kohiUnits == totalUnits = フル月の生保・公費単独 等) は従来どおり全量。
     const kohiPriority =
-      hasKohi && !r.kohiTandoku && !!r.kohiHobetsu && r.kohiHobetsu !== "12";
+      hasKohi && r.kohiUnits != null && r.kohiUnits < r.totalUnits;
     const detailLines: {
       code: string;
       unitPer: number;

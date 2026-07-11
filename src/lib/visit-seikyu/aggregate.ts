@@ -25,8 +25,9 @@
  *   保険請求額 = floor(総額 × (10 − 負担割合×10) / 10)   ※ copay 0.1/0.2/0.3 → 1/2/3 の整数化
  *   利用者負担 (法定) = 総額 − 保険請求額 − 公費請求額
  *     公費あり: 本人負担 = min(公費対象の保険給付後負担, 本人負担上限月額 honnin_futan)、
- *               公費請求 = 保険給付後負担 − 本人負担 (生保/公費単独は全量、
- *               保険優先の部分公費は公費適用期間内の実績分のみ公費対象)
+ *               公費請求 = 保険給付後負担 − 本人負担 (フル月の生保/公費単独は全量、
+ *               公費適用期間が月の一部 (月途中開始の生保含む・公費単独除く) は
+ *               期間内の実績分のみ公費対象 = 期間按分。Phase 1 2026-07)
  *   超過自費 = floor(超過単位 × round(単価×100) / 100)   → selfPayAmount
  */
 
@@ -37,7 +38,11 @@ import {
 } from "@/lib/service-name-normalize";
 import { validInMonth } from "@/lib/service-code-valid";
 import { resolveKohiForMonth, kohiHobetsuLabel } from "@/lib/kohi";
-import { resolveCertForMonth } from "@/lib/cert-for-month";
+import {
+  resolveCertForMonth,
+  resolveCertsInMonth,
+  detectMidMonthChange,
+} from "@/lib/cert-for-month";
 import {
   getHospitalizationMap,
   hospitalizationsInRange,
@@ -579,6 +584,14 @@ export async function aggregateMonthlyVisitSeikyu(
   // 認定情報は「対象月に有効な認定」で解決する (共有リゾルバ)。
   // 月遅れ再請求は元提供月で aggregate されるため自然に当時の認定になる。
   const certByClient = await resolveCertForMonth(supabase, userIds, opts.year, opts.month);
+  // 月途中の資格変更 (区分変更 / 保険者変更) の検出と限度額決定用に、
+  // 対象月に有効な「全」認定行 (start 昇順) も引く (Phase 1)。
+  const certsInMonthByClient = await resolveCertsInMonth(
+    supabase,
+    userIds,
+    opts.year,
+    opts.month,
+  );
 
   // 旧 public_expense テキスト (認定タブの自由記入)。resolveCertForMonth は
   // この列を持たないため別途取得する。用途は
@@ -828,10 +841,52 @@ export async function aggregateMonthlyVisitSeikyu(
       copayRaw == null || !Number.isFinite(copayRaw) || copayRaw <= 0 ? 0.1
       : copayRaw >= 1 ? Math.min(copayRaw / 10, 1)
       : copayRaw;
+    // ── 月途中の資格変更 (Phase 1: 検出 + 限度額のみ。レセプト行の複製・分割は Phase 2) ──
+    const certsInMonth = certsInMonthByClient.get(userId) ?? [];
+    const midChange = detectMidMonthChange(certsInMonth);
+    // ケース3 (区分変更月の限度額): 月内に複数の認定があるときは
+    // service_limit_amount の最大値 (= 重い方の区分支給限度基準額) を月全体に適用する。
+    // ※「月途中の区分変更は重い方の要介護度の支給限度基準額を月全体に適用」は
+    //   告示側の制度原則によるもので、repo 内の伝送仕様書 (_if_*.txt) に明文なし
+    //   — 要外部確認 (2026-07 Phase 1)。
+    const monthLimitCandidates = certsInMonth
+      .map((c) => (c.service_limit_amount != null ? Number(c.service_limit_amount) : NaN))
+      .filter((v) => Number.isFinite(v) && v > 0);
     const limitAmount =
-      cert?.service_limit_amount != null && Number(cert.service_limit_amount) > 0
-        ? Number(cert.service_limit_amount)
-        : null;
+      monthLimitCandidates.length > 0
+        ? Math.max(...monthLimitCandidates)
+        : cert?.service_limit_amount != null && Number(cert.service_limit_amount) > 0
+          ? Number(cert.service_limit_amount)
+          : null;
+    if (midChange?.careLevelChange) {
+      const c = midChange.careLevelChange;
+      const when = c.boundaryDate ? `, ${fmtMD(c.boundaryDate)}` : "";
+      if (c.crossesSystem) {
+        // 要支援↔要介護の制度跨ぎは請求様式自体が変わるため自動対応外 (Phase 1)
+        warnings.push(
+          `${userLabel}さん: 月内に要支援↔要介護の区分変更 (${c.from}→${c.to}${when}) があります — 制度を跨ぐためレセプトの自動対応外です。手動対応してください`,
+        );
+      } else {
+        warnings.push(
+          `${userLabel}さん: 月内に区分変更 (${c.from}→${c.to}${when})。限度額は重い方 (${(limitAmount ?? 0).toLocaleString()}単位) を適用。レセプトの要介護度は月末時点で出力`,
+        );
+      }
+    }
+    if (midChange?.insurerChange) {
+      // ケース2 (保険者変更): Phase 1 は検出のみ。レセプト分割 (保険者ごとの明細書) は未対応
+      const ic = midChange.insurerChange;
+      const insurerDiff =
+        (ic.fromInsurer ?? "").trim() !== (ic.toInsurer ?? "").trim() &&
+        !!ic.fromInsurer &&
+        !!ic.toInsurer;
+      const label = insurerDiff ? "保険者" : "被保険者番号";
+      const desc = insurerDiff
+        ? `${ic.fromInsurer}→${ic.toInsurer}`
+        : `${ic.fromInsured ?? "?"}→${ic.toInsured ?? "?"}`;
+      warnings.push(
+        `${userLabel}さん: ${label}が月内で変わっています (${desc})。レセプト分割は未対応 — 月遅れ保留か手動対応を検討してください`,
+      );
+    }
 
     // ── 公費の解決 (明細行の公費対象回数を決めるため details 構築より前に行う) ──
     // 公費単独 (10割公費): 被保険者番号が 'H' 始まり = 介護保険未加入の生保受給者。
@@ -847,10 +902,10 @@ export async function aggregateMonthlyVisitSeikyu(
       !!kohi &&
       (kohi.start == null || d >= kohi.start) &&
       (kohi.end == null || d <= kohi.end);
-    // 期間按分するのは保険優先の部分公費 (法別12以外) のみ。
-    // 生保 (法別12)・公費単独は従来どおり全量を公費対象とする (挙動保存)。
-    const kohiProrate =
-      !!kohi && !kohiTandoku && kohi.hobetsu !== "12" && kohiPartialMonth;
+    // 期間按分は「公費適用期間が月の一部のみ」の公費すべて
+    // (Phase 1 で生保 法別12 の月途中開始/終了も按分に開放。2026-07)。
+    // 公費単独 (H番号 10割) のみ従来どおり全量を公費対象とする (挙動保存)。
+    const kohiProrate = !!kohi && !kohiTandoku && kohiPartialMonth;
 
     const details: SeikyuDetailLine[] = [];
     let grossBaseUnits = 0;
@@ -1050,7 +1105,10 @@ export async function aggregateMonthlyVisitSeikyu(
     // 本人負担、残りを公費請求」とする (2026-07 対応。従来は公費適用なし = 通常負担のままだった)。
     // 旧テキストのみ(fallback)は移行期の安全網として従来どおり全額振替。
     const kohiIsSeiho = kohiTandoku || kohi?.hobetsu === "12";
-    const transferToKohi = kohiIsSeiho || (!!publicExpense && !kohi);
+    // 全量振替 = フル月の生保 (法別12)・公費単独・旧テキストのみ (fallback)。
+    // 月途中開始/終了の生保 (kohiProrate=true) は期間按分ブランチ
+    // (honnin_futan 適用済) へ流す (Phase 1。2026-07)。
+    const transferToKohi = (kohiIsSeiho && !kohiProrate) || (!!publicExpense && !kohi);
     // 本人負担上限月額 (負値・小数は防御的に整数化。レコード無しは 0 = 従来挙動)
     const honninLimit = kohi ? Math.max(0, Math.floor(kohi.honninFutan)) : 0;
 
@@ -1073,7 +1131,8 @@ export async function aggregateMonthlyVisitSeikyu(
       kohiAmount = afterIns - kohiHonninFutan;
       userAmount = kohiHonninFutan;
     } else if (kohi) {
-      // 保険優先の部分公費 (法別21 精神通院 / 54 難病 / 19 被爆者 等):
+      // 保険優先の部分公費 (法別21 精神通院 / 54 難病 / 19 被爆者 等)
+      // および 月途中開始/終了の生保 (法別12, kohiProrate=true。Phase 1):
       //   公費対象単位数 = 公費適用期間内の実績分 (明細行の kohi_units) を
       //                    基準内単位数でキャップ (限度額超過の10割自費は公費対象外)
       //                    + 処遇改善等%加算の公費対象分 (全期間有効なら addonUnits に一致)
@@ -1098,7 +1157,8 @@ export async function aggregateMonthlyVisitSeikyu(
       kohiHonninFutan = Math.min(afterIns, honninLimit);
       kohiAmount = afterIns - kohiHonninFutan;
       userAmount = totalAmount - insuranceAmount - kohiAmount;
-      if (honninLimit === 0) {
+      // 生保 (法別12) は本人支払額 0 円が通常のため、この確認 warning は出さない
+      if (honninLimit === 0 && kohi.hobetsu !== "12") {
         warnings.push(
           `${userLabel}: 公費 (${kohiHobetsuLabel(kohi.hobetsu)}) の本人負担上限月額が 0 円のため保険給付後の負担分を全額公費請求します — 介護券・受給者証の本人支払額を公費タブで確認してください`,
         );
