@@ -152,17 +152,19 @@ export function KaigoSeikyuContent() {
   }, [supabase, officeId, isBath, monthKey]);
 
   // ── 表示用の統合行 (当月通常行 + 再請求行)。カナ索引で共通絞込 ──
-  // rowKey: 当月行は "cur:<user_id>" / 再請求行は "re:<user_id>:<origMonthKey>"
+  // rowKey: 当月行は "cur:<user_id>:<segmentIndex>" /
+  //         再請求行は "re:<user_id>:<origMonthKey>:<segmentIndex>"
+  // (segmentIndex は保険者変更 (転居) の分割行のみ 1 以上。通常は 0 — Phase 2)
   const displayRows = useMemo<DisplayRow[]>(() => {
     const cur: DisplayRow[] = filteredRows.map((r) => ({
-      key: `cur:${r.user_id}`,
+      key: `cur:${r.user_id}:${r.segmentIndex ?? 0}`,
       row: r,
       origMonthKey: monthKey,
       isReSeikyu: false,
       reasons: null,
     }));
     const re: DisplayRow[] = reRows.filter(kanaMatches).map((r) => ({
-      key: `re:${r.user_id}:${r.__origMonthKey}`,
+      key: `re:${r.user_id}:${r.__origMonthKey}:${r.segmentIndex ?? 0}`,
       row: r,
       origMonthKey: r.__origMonthKey,
       isReSeikyu: true,
@@ -476,13 +478,20 @@ export function KaigoSeikyuContent() {
     }
     const now = new Date().toISOString();
     const origStatus = await fetchOrigStatus(rowsToPrint);
-    // 全行で同一のキー集合にする (upsert の PGRST102「All object keys must match」予防)
-    const payload = rowsToPrint.map((d) => {
+    // 全行で同一のキー集合にする (upsert の PGRST102「All object keys must match」予防)。
+    // 保険者変更の分割セグメント行 (Phase 2) は status が利用者×月の 1 レコードなので
+    // 重複キー (client_id, target_month) を除去する (upsert の同一行二重更新エラー予防)
+    const seenStatusKey = new Set<string>();
+    const payload: Record<string, unknown>[] = [];
+    for (const d of rowsToPrint) {
+      const statusKey = `${d.row.user_id}:${d.origMonthKey}`;
+      if (seenStatusKey.has(statusKey)) continue;
+      seenStatusKey.add(statusKey);
       // 当月行は当月 status、再請求行は元提供月の既存レコードを引き継ぐ
       const cur = d.isReSeikyu
-        ? origStatus.get(`${d.row.user_id}:${d.origMonthKey}`)
+        ? origStatus.get(statusKey)
         : statusByClient.get(d.row.user_id);
-      return {
+      payload.push({
         client_id: d.row.user_id,
         target_month: d.origMonthKey,
         tenant_id: currentOffice?.tenant_id ?? "kt-group",
@@ -494,8 +503,8 @@ export function KaigoSeikyuContent() {
         henrei: d.reasons?.henrei ?? cur?.henrei ?? false,
         kago: cur?.kago ?? false,
         notes: cur?.notes ?? null,
-      };
-    });
+      });
+    }
     const { error: e } = await supabase
       .from(billingStatusTable)
       .upsert(payload, { onConflict: "client_id,target_month,office_id" });
@@ -541,8 +550,13 @@ export function KaigoSeikyuContent() {
     const origStatus = await fetchOrigStatus(targetDisplayRows);
     const payload: Record<string, unknown>[] = [];
     let skipped = 0;
+    // 分割セグメント行 (Phase 2) は status 1 レコード (利用者×月) に集約 (重複 upsert 予防)
+    const seenStatusKey = new Set<string>();
 
     for (const d of targetDisplayRows) {
+      const statusKey = `${d.row.user_id}:${d.origMonthKey}`;
+      if (seenStatusKey.has(statusKey)) continue;
+      seenStatusKey.add(statusKey);
       if (d.isReSeikyu) {
         // 再請求分: 元提供月に kokuho_target を立てる (発行済でなくても許可)。
         // 既存レコードの kago / notes を保持 (notes は「再請求」を追記)
@@ -628,7 +642,7 @@ export function KaigoSeikyuContent() {
       // 再請求行は元提供月 (YYYYMM) を提供年月として出す
       const rowYm = d.isReSeikyu ? d.origMonthKey.replace("-", "") : ym;
       const st = d.isReSeikyu ? undefined : statusByClient.get(r.user_id);
-      const state = d.isReSeikyu
+      const baseState = d.isReSeikyu
         ? d.reasons?.henrei
           ? "返戻(再請求)"
           : "月遅れ(再請求)"
@@ -637,6 +651,11 @@ export function KaigoSeikyuContent() {
         : st?.issued_at
         ? "発行済"
         : "未発行";
+      // 保険者変更 (転居) の分割行は状態に分割番号を付記 (Phase 2)
+      const state =
+        (r.segmentCount ?? 1) > 1
+          ? `${baseState}(分割${(r.segmentIndex ?? 0) + 1}/${r.segmentCount})`
+          : baseState;
       lines.push(
         [
           rowYm,
@@ -914,6 +933,14 @@ export function KaigoSeikyuContent() {
                       </div>
                       <div className="px-1 py-0.5 border-l border-gray-200 text-gray-800 flex items-center gap-1 min-w-0">
                         <span className="flex-1 truncate">{r.user_name}</span>
+                        {(r.segmentCount ?? 1) > 1 && (
+                          <span
+                            title={`保険者変更 (転居) によりレセプトを分割しています。この行は ${r.periodFrom ?? "?"}〜${r.periodTo ?? "?"} (保険者 ${r.insurer_number ?? "?"}) の明細書です`}
+                            className="shrink-0 rounded bg-purple-100 px-1 py-0.5 text-[10px] font-bold text-purple-700 whitespace-nowrap"
+                          >
+                            分割{(r.segmentIndex ?? 0) + 1}/{r.segmentCount}
+                          </span>
+                        )}
                         {r.overUnits > 0 && (
                           <span
                             title={`区分支給限度基準 (${(r.limitUnits ?? 0).toLocaleString()} 単位) を超過。超過分 ${r.overUnits.toLocaleString()} 単位は保険請求・法定負担に含めず、${r.selfPayAmount.toLocaleString()} 円 (10割) を超過自費として利用請求に加算します`}

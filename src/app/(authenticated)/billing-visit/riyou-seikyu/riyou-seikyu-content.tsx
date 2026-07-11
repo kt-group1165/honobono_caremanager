@@ -36,7 +36,7 @@ import {
   SeikyuKanaSidebar,
   SeikyuMonthNav,
 } from "../_shared/seikyu-context";
-import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
+import { mergeSegmentRows, type UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
 import type { ShogaiSeikyuRow } from "@/lib/shogai-seikyu/aggregate";
 import { buildFbZengin, type FbTransferTarget } from "@/lib/fb-zengin";
 
@@ -168,15 +168,23 @@ export function RiyouSeikyuContent() {
   const {
     year,
     month,
-    rows,
+    rows: rawRows,
     sougouRows,
-    filteredRows,
+    filteredRows: rawFilteredRows,
     filteredSougouRows,
     filteredShogaiRows,
     loading,
     error,
     officeName,
   } = useSeikyuContext();
+  // 保険者変更 (転居) の分割セグメント行 (Phase 2) は利用者単位に合算してから使う。
+  // 利用者請求書・軽減・実費・入金・FB 全銀はすべて利用者単位 (保険者をまたがない)
+  // なので、分割前の従来どおり「利用者 = 1 行」に戻す (分割行が無ければ同一参照)。
+  const rows = useMemo(() => mergeSegmentRows(rawRows), [rawRows]);
+  const filteredRows = useMemo(
+    () => mergeSegmentRows(rawFilteredRows),
+    [rawFilteredRows],
+  );
   const supabase = useMemo(() => createClient(), []);
   // 選択行は `制度:client_id` の一意キーで保持 (制度またぎの衝突回避)
   const [selectedKey, setSelectedKey] = useState<string | null>(null);

@@ -230,6 +230,94 @@ export interface MidMonthCertChange {
 const isYoboKubun = (level: string) => /要支援|事業対象者/.test(level);
 const trimOrEmpty = (v: string | null | undefined) => (v ?? "").trim();
 
+// ─── 保険者変更 (転居) のセグメント分割 (Phase 2: レセプト行の複製・分割) ─────
+
+/** 月内の 1 セグメント (from/to は両端含む 'YYYY-MM-DD') */
+export interface CertSegment {
+  from: string;
+  to: string;
+  /** このセグメント期間に適用する認定 (期間内で複数あれば最新 start の行) */
+  cert: CertForMonth;
+}
+
+export interface CertSegmentsResult {
+  /** start 昇順のセグメント。分割なし (変化点なし・判定不能) は 1 件 */
+  segments: CertSegment[];
+  /** 保険者/被保険者番号の変化点はあるが境界日が判定できず分割しなかった */
+  undetermined: boolean;
+}
+
+/** 'YYYY-MM-DD' の前日 (ローカル演算のみで TZ 安全) */
+const prevDay = (iso: string): string => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return iso;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+/**
+ * resolveCertsInMonth の結果 (start 昇順) を、保険者番号 (または被保険者番号) の
+ * 変化点で区切ったセグメント列にする (Phase 2: 転居月のレセプト分割用)。
+ *
+ * - 変化点なし (更新・区分変更のみ) は 1 セグメント。セグメントの cert は
+ *   期間内で最新 start の行 (= resolveCertForMonth の採用行と同じ向き)。
+ * - 境界日 = 変化後認定の certification_start_date (resolveCertsInMonth の行は
+ *   start 必須なので原則これ。無ければ effective_date フォールバック)。
+ *   ※ qualification_date (資格取得日) は client_insurance_records に UI 項目は
+ *     あるが共有リゾルバの取得列に含めていないため未使用 (要検討 Phase 3)。
+ * - 境界日が null または月初以前・月末より後なら判定不能 → 分割せず
+ *   undetermined=true (呼出側で warning)。
+ */
+export function resolveCertSegmentsForMonth(
+  certs: CertForMonth[],
+  year: number,
+  month: number,
+): CertSegmentsResult {
+  const { from: monthStart, to: monthEnd } = monthRange(year, month);
+  if (certs.length === 0) return { segments: [], undetermined: false };
+  let undetermined = false;
+  const segments: CertSegment[] = [
+    { from: monthStart, to: monthEnd, cert: certs[0] },
+  ];
+  for (let i = 1; i < certs.length; i++) {
+    const prev = certs[i - 1];
+    const cur = certs[i];
+    // detectMidMonthChange と同じ規則: 片方未入力の項目は変更とみなさない
+    const pIns = trimOrEmpty(prev.insurer_number);
+    const cIns = trimOrEmpty(cur.insurer_number);
+    const pNo = trimOrEmpty(prev.insured_number);
+    const cNo = trimOrEmpty(cur.insured_number);
+    const changed =
+      (pIns !== "" && cIns !== "" && pIns !== cIns) ||
+      (pNo !== "" && cNo !== "" && pNo !== cNo);
+    if (!changed) {
+      // 変化なし (認定更新・区分変更のみ) → 同一セグメント内で最新の認定を採用
+      segments[segments.length - 1].cert = cur;
+      continue;
+    }
+    const boundary = cur.certification_start_date ?? cur.effective_date;
+    if (!boundary || boundary <= monthStart || boundary > monthEnd) {
+      // 境界日が判定できない (月初以前 = 月内変更ではない、月末より後 = 期間矛盾)
+      undetermined = true;
+      segments[segments.length - 1].cert = cur;
+      continue;
+    }
+    const last = segments[segments.length - 1];
+    last.to = prevDay(boundary);
+    segments.push({ from: boundary, to: monthEnd, cert: cur });
+  }
+  if (undetermined) {
+    // 判定不能の変化点が 1 つでもあれば分割しない (月末時点の認定 1 セグメント)
+    return {
+      segments: [
+        { from: monthStart, to: monthEnd, cert: segments[segments.length - 1].cert },
+      ],
+      undetermined: true,
+    };
+  }
+  return { segments, undetermined: false };
+}
+
 /**
  * resolveCertsInMonth の結果 (start 昇順) から月内の資格変更を検出する。
  * 片方が未入力 (null/空) の項目は変更とみなさない (データ入力途中の誤検出防止)。

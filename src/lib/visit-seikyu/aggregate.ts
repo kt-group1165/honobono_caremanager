@@ -41,7 +41,9 @@ import { resolveKohiForMonth, kohiHobetsuLabel } from "@/lib/kohi";
 import {
   resolveCertForMonth,
   resolveCertsInMonth,
+  resolveCertSegmentsForMonth,
   detectMidMonthChange,
+  type CertForMonth,
 } from "@/lib/cert-for-month";
 import {
   getHospitalizationMap,
@@ -216,6 +218,16 @@ export interface UserSeikyuRow {
   careOfficeName: string | null;
   /** サービス実日数 (訪問した日の数) */
   serviceDays: number;
+  // ─── 月途中の保険者変更 (転居) による分割レセプト (Phase 2) ───
+  // 分割なし (通常) は 4 つとも undefined = 既存下流コードとの完全後方互換。
+  /** 分割レセプトのセグメント番号 (0 始まり)。分割なしは undefined */
+  segmentIndex?: number;
+  /** 分割レセプトの総セグメント数 (>= 2)。分割なしは undefined */
+  segmentCount?: number;
+  /** セグメント期間 開始 (YYYY-MM-DD)。分割なしは undefined */
+  periodFrom?: string;
+  /** セグメント期間 終了 (YYYY-MM-DD)。分割なしは undefined */
+  periodTo?: string;
 }
 
 export interface MonthlySeikyuResult {
@@ -455,20 +467,18 @@ export async function aggregateMonthlyVisitSeikyu(
   }
 
   // C3: 緊急時訪問介護加算の回数。kinkyu_houmon 列があれば
-  // 「completed かつ kinkyu_houmon=true」のシフト行数を利用者×月で数える。
+  // 「completed かつ kinkyu_houmon=true」のシフト行の訪問日を利用者×月で集める
+  // (回数 = 配列長。保険者変更の分割時は訪問日でセグメント判定する — Phase 2)。
   // 列未適用 (42703) は従来どおり kaigo_visit_month_addons.kinkyu_count にフォールバック。
-  const kinkyuCountByUser = new Map<string, number>();
+  const kinkyuDatesByUser = new Map<string, string[]>();
   if (hasKinkyuCol) {
     for (const s of schedules) {
       if (s.kinkyu_houmon) {
-        kinkyuCountByUser.set(s.user_id, (kinkyuCountByUser.get(s.user_id) ?? 0) + 1);
+        if (!kinkyuDatesByUser.has(s.user_id)) kinkyuDatesByUser.set(s.user_id, []);
+        kinkyuDatesByUser.get(s.user_id)!.push(s.visit_date);
       }
     }
   }
-  const kinkyuOf = (userId: string): number =>
-    hasKinkyuCol
-      ? kinkyuCountByUser.get(userId) ?? 0
-      : monthAddonByClient.get(userId)?.kinkyuCount ?? 0;
 
   // 加算マスタ (単位数・コード)。service_name は実 DB で確認済みの正式名称
   // (訪問介護 service_category=11 / system=介護。単位数は世代管理 validInMonth で解決)
@@ -484,7 +494,7 @@ export async function aggregateMonthlyVisitSeikyu(
   const hasAnyMonthAddon =
     Array.from(monthAddonByClient.values()).some(
       (f) => f.shokai || f.kinkyuCount > 0 || f.seikatsuKino === "Ⅰ" || f.seikatsuKino === "Ⅱ",
-    ) || kinkyuCountByUser.size > 0;
+    ) || kinkyuDatesByUser.size > 0;
   if (hasAnyMonthAddon) {
     const { data, error } = await validInMonth(
       supabase
@@ -760,7 +770,6 @@ export async function aggregateMonthlyVisitSeikyu(
   // service_type ごとに訪問日 list を保持する (回数 = 配列長。
   // 公費適用期間が月の一部の場合の「公費対象回数」判定に日付を使う)
   const byUser = new Map<string, Map<string, string[]>>(); // user_id → (service_type → 訪問日[])
-  const daysByUser = new Map<string, Set<string>>(); // user_id → 訪問日 set (実日数)
   const visitDatesByUser = new Map<string, string[]>(); // user_id → 訪問日 list (入院重なり件数用)
   // 総合事業に該当する実績シフト (別ストリームで集計する)
   const sougouSchedules: { user_id: string; service_type: string; visit_date: string }[] = [];
@@ -779,8 +788,6 @@ export async function aggregateMonthlyVisitSeikyu(
     const m = byUser.get(s.user_id)!;
     if (!m.has(s.service_type)) m.set(s.service_type, []);
     m.get(s.service_type)!.push(s.visit_date);
-    if (!daysByUser.has(s.user_id)) daysByUser.set(s.user_id, new Set());
-    daysByUser.get(s.user_id)!.add(s.visit_date);
     if (!visitDatesByUser.has(s.user_id)) visitDatesByUser.set(s.user_id, []);
     visitDatesByUser.get(s.user_id)!.push(s.visit_date);
   }
@@ -825,15 +832,35 @@ export async function aggregateMonthlyVisitSeikyu(
   }
 
   const rows: UserSeikyuRow[] = [];
-  for (const [userId, typeCounts] of byUser) {
+
+  // ── 1 セグメント (通常 = 月全体で 1 利用者 1 行) 分の請求行を組み立てる ──
+  // Phase 2 (保険者変更のレセプト分割) で per-user 集計本体を関数抽出した。
+  // seg.segCount === 1 のとき従来 (Phase 1) のコードパスと同値になるよう、
+  // 分割固有の分岐はすべて seg.segCount > 1 (または !seg.isLast) でガードしている。
+  interface SegmentInput {
+    /** セグメント番号 (0 始まり) */
+    segIndex: number;
+    /** 総セグメント数。1 = 分割なし (従来コードパス) */
+    segCount: number;
+    /** セグメント期間 開始 'YYYY-MM-DD' (分割なしは月初) */
+    segFrom: string;
+    /** セグメント期間 終了 'YYYY-MM-DD' (分割なしは月末) */
+    segTo: string;
+    /** 月末側セグメントか (算定日を特定できない月次加算の計上先) */
+    isLast: boolean;
+    /** このセグメントに適用する認定 */
+    cert: CertForMonth | null;
+    /** 分割なし時の従来 limitAmount (区分変更月の max 適用済)。分割時は未使用 */
+    monthLimitAmount: number | null;
+  }
+  const buildRowForSegment = (
+    userId: string,
+    typeCounts: Map<string, string[]>, // service_type → セグメント期間内の訪問日[]
+    seg: SegmentInput,
+  ): UserSeikyuRow => {
     const client = clientById.get(userId);
-    const cert = certByClient.get(userId) ?? null;
+    const cert = seg.cert;
     const userLabel = client?.name ?? userId;
-    if (cert?.isFallback) {
-      warnings.push(
-        `${userLabel}: 対象月 (${monthStr}) に有効な認定が見つからないため最新の認定情報で集計しています — 認定有効期間を確認してください`,
-      );
-    }
     // copay_rate は「割」単位 (1=1割, 2=2割, 3=3割) で格納されることが
     // あるため、1 以上は /10 して負担率に正規化する (0.1〜0.3 表記も許容)
     const copayRaw = cert?.copay_rate != null ? Number(cert.copay_rate) : null;
@@ -841,63 +868,37 @@ export async function aggregateMonthlyVisitSeikyu(
       copayRaw == null || !Number.isFinite(copayRaw) || copayRaw <= 0 ? 0.1
       : copayRaw >= 1 ? Math.min(copayRaw / 10, 1)
       : copayRaw;
-    // ── 月途中の資格変更 (Phase 1: 検出 + 限度額のみ。レセプト行の複製・分割は Phase 2) ──
-    const certsInMonth = certsInMonthByClient.get(userId) ?? [];
-    const midChange = detectMidMonthChange(certsInMonth);
-    // ケース3 (区分変更月の限度額): 月内に複数の認定があるときは
-    // service_limit_amount の最大値 (= 重い方の区分支給限度基準額) を月全体に適用する。
-    // ※「月途中の区分変更は重い方の要介護度の支給限度基準額を月全体に適用」は
-    //   告示側の制度原則によるもので、repo 内の伝送仕様書 (_if_*.txt) に明文なし
-    //   — 要外部確認 (2026-07 Phase 1)。
-    const monthLimitCandidates = certsInMonth
-      .map((c) => (c.service_limit_amount != null ? Number(c.service_limit_amount) : NaN))
-      .filter((v) => Number.isFinite(v) && v > 0);
+    // 区分支給限度基準の基準値 (認定側):
+    //   分割なし = 従来どおり月内認定の max (区分変更月対応。呼出側で計算済み)
+    //   分割あり = 各セグメントの認定の限度額をそれぞれ満額適用
+    //   ※「転居月は保険者ごとに支給限度基準額を満額適用」は制度原則によるもので、
+    //     repo 内の伝送仕様書 (_if_*.txt) に明文なし — 要外部確認 (2026-07 Phase 2)。
     const limitAmount =
-      monthLimitCandidates.length > 0
-        ? Math.max(...monthLimitCandidates)
-        : cert?.service_limit_amount != null && Number(cert.service_limit_amount) > 0
+      seg.segCount > 1
+        ? cert?.service_limit_amount != null && Number(cert.service_limit_amount) > 0
           ? Number(cert.service_limit_amount)
-          : null;
-    if (midChange?.careLevelChange) {
-      const c = midChange.careLevelChange;
-      const when = c.boundaryDate ? `, ${fmtMD(c.boundaryDate)}` : "";
-      if (c.crossesSystem) {
-        // 要支援↔要介護の制度跨ぎは請求様式自体が変わるため自動対応外 (Phase 1)
-        warnings.push(
-          `${userLabel}さん: 月内に要支援↔要介護の区分変更 (${c.from}→${c.to}${when}) があります — 制度を跨ぐためレセプトの自動対応外です。手動対応してください`,
-        );
-      } else {
-        warnings.push(
-          `${userLabel}さん: 月内に区分変更 (${c.from}→${c.to}${when})。限度額は重い方 (${(limitAmount ?? 0).toLocaleString()}単位) を適用。レセプトの要介護度は月末時点で出力`,
-        );
-      }
-    }
-    if (midChange?.insurerChange) {
-      // ケース2 (保険者変更): Phase 1 は検出のみ。レセプト分割 (保険者ごとの明細書) は未対応
-      const ic = midChange.insurerChange;
-      const insurerDiff =
-        (ic.fromInsurer ?? "").trim() !== (ic.toInsurer ?? "").trim() &&
-        !!ic.fromInsurer &&
-        !!ic.toInsurer;
-      const label = insurerDiff ? "保険者" : "被保険者番号";
-      const desc = insurerDiff
-        ? `${ic.fromInsurer}→${ic.toInsurer}`
-        : `${ic.fromInsured ?? "?"}→${ic.toInsured ?? "?"}`;
-      warnings.push(
-        `${userLabel}さん: ${label}が月内で変わっています (${desc})。レセプト分割は未対応 — 月遅れ保留か手動対応を検討してください`,
-      );
-    }
+          : null
+        : seg.monthLimitAmount;
 
     // ── 公費の解決 (明細行の公費対象回数を決めるため details 構築より前に行う) ──
     // 公費単独 (10割公費): 被保険者番号が 'H' 始まり = 介護保険未加入の生保受給者。
     const kohiTandoku = /^[Hh]/.test((cert?.insured_number ?? "").trim());
-    // 公費 (生活保護等) — 公費タブ (client_kohi_records) から対象月に有効な 1 件
-    const kohi = kohiRes.byClient.get(userId) ?? null;
-    // 公費適用期間が対象月の一部のみか (月途中で開始/終了する介護券・受給者証)
+    // 公費 (生活保護等) — 公費タブ (client_kohi_records) から対象月に有効な 1 件。
+    // 分割時 (Phase 2) はセグメント期間と交差しない公費を落とす (期間の引き直し)
+    const kohiMonth = kohiRes.byClient.get(userId) ?? null;
+    const kohi =
+      seg.segCount > 1 &&
+      kohiMonth &&
+      ((kohiMonth.start != null && kohiMonth.start > seg.segTo) ||
+        (kohiMonth.end != null && kohiMonth.end < seg.segFrom))
+        ? null
+        : kohiMonth;
+    // 公費適用期間が対象期間 (分割なしは対象月全体) の一部のみか
+    // (月途中で開始/終了する介護券・受給者証)
     const kohiPartialMonth =
       !!kohi &&
-      ((kohi.start != null && kohi.start > from) ||
-        (kohi.end != null && kohi.end < to));
+      ((kohi.start != null && kohi.start > seg.segFrom) ||
+        (kohi.end != null && kohi.end < seg.segTo));
     const inKohiPeriod = (d: string) =>
       !!kohi &&
       (kohi.start == null || d >= kohi.start) &&
@@ -953,10 +954,21 @@ export async function aggregateMonthlyVisitSeikyu(
     // 処遇改善等の%加算が対象外なのは従来どおり。
     // 限度額管理対象外の加算単位数 (初回・緊急時)。超過判定から除外し、常に保険給付側に付く
     let shokaiKinkyuUnits = 0;
+    // 分割時 (Phase 2): 初回・生活機能向上連携は算定日を特定できないため
+    // 月末側セグメント (isLast) に計上する。緊急時は kinkyu_houmon 列があれば
+    // 訪問日でセグメント判定、無ければ (月次加算テーブルの回数のみ = 日付なし)
+    // 月末側に全量。分割なし (segCount=1, isLast=true) は従来コードパスと同値。
     const flags = monthAddonByClient.get(userId);
-    const shokaiOn = flags?.shokai ?? false;
-    const seikatsuKino = flags?.seikatsuKino ?? "なし";
-    const kinkyuCount = kinkyuOf(userId); // C3: 列があればシフト実績、無ければ月次加算テーブル
+    const shokaiOn = seg.isLast && (flags?.shokai ?? false);
+    const seikatsuKino = seg.isLast ? flags?.seikatsuKino ?? "なし" : "なし";
+    // C3: 列があればシフト実績 (セグメント期間内)、無ければ月次加算テーブル
+    const kinkyuCount = hasKinkyuCol
+      ? (kinkyuDatesByUser.get(userId) ?? []).filter(
+          (d) => d >= seg.segFrom && d <= seg.segTo,
+        ).length
+      : seg.isLast
+        ? flags?.kinkyuCount ?? 0
+        : 0;
     if (shokaiOn || kinkyuCount > 0 || seikatsuKino === "Ⅰ" || seikatsuKino === "Ⅱ") {
       // ※ 表示名はマスタの short_name を使わず固定ラベルにする。
       //   kaigo_service_codes.short_name は system (介護/障害) を無視して backfill されており、
@@ -1047,15 +1059,20 @@ export async function aggregateMonthlyVisitSeikyu(
     //    超過判定は %加算前の単位数で行う (加算単位は超過に数えない)。
     // ※ 初回加算・緊急時訪問介護加算も限度額管理対象外 (告示) のため超過判定から除外する
     //    (shokaiKinkyuUnits)。除外分は常に保険給付側 (baseUnits) に残る。
-    const planUnits = planUnitsByClient.get(userId) ?? null;
+    // 分割時 (Phase 2): 計画単位数・ケアマネ手割振りは利用者×月の 1 値で
+    // セグメントに配分できないため使わず、各セグメントの認定限度額で機械判定する
+    // (該当データがある利用者は呼出側で warning)。分割なしは従来どおり。
+    const planUnits =
+      seg.segCount > 1 ? null : planUnitsByClient.get(userId) ?? null;
     const limitUnits = planUnits ?? limitAmount;
     const managedUnits = grossBaseUnits - shokaiKinkyuUnits;
     // 超過単位の決定 (優先順):
     //   1. ケアマネの手割振り (利用票別表で確定した自 office の自費単位 = 真値)
     //   2. 機械判定 (管理対象単位 − 基準値)。別表未確定・テーブル未作成・officeId 無しはこちら
-    const manualOver = opts.officeId
-      ? resolveManualOverUnits(gendoMap.get(userId), opts.officeId)
-      : null;
+    const manualOver =
+      opts.officeId && seg.segCount === 1
+        ? resolveManualOverUnits(gendoMap.get(userId), opts.officeId)
+        : null;
     const autoOver = limitUnits != null ? Math.max(0, managedUnits - limitUnits) : 0;
     // manual 値も自事業所の管理対象単位を超えては充当できない (baseUnits 負数防止)
     const overUnits = Math.min(manualOver ?? autoOver, managedUnits);
@@ -1174,7 +1191,12 @@ export async function aggregateMonthlyVisitSeikyu(
       userAmount = totalAmount - insuranceAmount;
     }
 
-    rows.push({
+    // サービス実日数 = セグメント期間内の訪問日の distinct 数
+    // (分割なしは従来の「利用者×月の訪問日 set」と同じ母集合 = 同値)
+    const segDays = new Set<string>();
+    for (const dates of typeCounts.values()) for (const d of dates) segDays.add(d);
+
+    const row: UserSeikyuRow = {
       user_id: userId,
       user_name: client?.name ?? "(利用者不明)",
       user_name_kana: client?.furigana ?? null,
@@ -1223,17 +1245,311 @@ export async function aggregateMonthlyVisitSeikyu(
       careOfficeName:
         cert?.care_office_name?.trim() ||
         (cert?.care_office_id ? officeNameById.get(cert.care_office_id) ?? null : null),
-      serviceDays: daysByUser.get(userId)?.size ?? 0,
-    });
+      serviceDays: segDays.size,
+    };
+    if (seg.segCount > 1) {
+      row.segmentIndex = seg.segIndex;
+      row.segmentCount = seg.segCount;
+      row.periodFrom = seg.segFrom;
+      row.periodTo = seg.segTo;
+    }
+    return row;
+  };
+
+  for (const [userId, typeCounts] of byUser) {
+    const client = clientById.get(userId);
+    const cert = certByClient.get(userId) ?? null;
+    const userLabel = client?.name ?? userId;
+    if (cert?.isFallback) {
+      warnings.push(
+        `${userLabel}: 対象月 (${monthStr}) に有効な認定が見つからないため最新の認定情報で集計しています — 認定有効期間を確認してください`,
+      );
+    }
+    // ── 月途中の資格変更 (Phase 1: 検出 / Phase 2: 保険者変更はレセプト分割) ──
+    const certsInMonth = certsInMonthByClient.get(userId) ?? [];
+    const midChange = detectMidMonthChange(certsInMonth);
+    // ケース3 (区分変更月の限度額): 月内に複数の認定があるときは
+    // service_limit_amount の最大値 (= 重い方の区分支給限度基準額) を月全体に適用する。
+    // ※「月途中の区分変更は重い方の要介護度の支給限度基準額を月全体に適用」は
+    //   告示側の制度原則によるもので、repo 内の伝送仕様書 (_if_*.txt) に明文なし
+    //   — 要外部確認 (2026-07 Phase 1)。
+    const monthLimitCandidates = certsInMonth
+      .map((c) => (c.service_limit_amount != null ? Number(c.service_limit_amount) : NaN))
+      .filter((v) => Number.isFinite(v) && v > 0);
+    const limitAmount =
+      monthLimitCandidates.length > 0
+        ? Math.max(...monthLimitCandidates)
+        : cert?.service_limit_amount != null && Number(cert.service_limit_amount) > 0
+          ? Number(cert.service_limit_amount)
+          : null;
+    if (midChange?.careLevelChange) {
+      const c = midChange.careLevelChange;
+      const when = c.boundaryDate ? `, ${fmtMD(c.boundaryDate)}` : "";
+      if (c.crossesSystem) {
+        // 要支援↔要介護の制度跨ぎは請求様式自体が変わるため自動対応外 (Phase 1)
+        warnings.push(
+          `${userLabel}さん: 月内に要支援↔要介護の区分変更 (${c.from}→${c.to}${when}) があります — 制度を跨ぐためレセプトの自動対応外です。手動対応してください`,
+        );
+      } else {
+        warnings.push(
+          `${userLabel}さん: 月内に区分変更 (${c.from}→${c.to}${when})。限度額は重い方 (${(limitAmount ?? 0).toLocaleString()}単位) を適用。レセプトの要介護度は月末時点で出力`,
+        );
+      }
+    }
+
+    // ── ケース2 (保険者変更 = 転居): 境界日でセグメント分割し、セグメントごとに
+    //    1 行 (= 1 明細書) を生成する (Phase 2: 行複製方式)。境界日が判定できない
+    //    場合は分割せず従来コードパス + warning。
+    let split: { seg: SegmentInput; typeCounts: Map<string, string[]> }[] | null = null;
+    if (midChange?.insurerChange) {
+      const ic = midChange.insurerChange;
+      const insurerDiff =
+        (ic.fromInsurer ?? "").trim() !== (ic.toInsurer ?? "").trim() &&
+        !!ic.fromInsurer &&
+        !!ic.toInsurer;
+      const label = insurerDiff ? "保険者" : "被保険者番号";
+      const desc = insurerDiff
+        ? `${ic.fromInsurer}→${ic.toInsurer}`
+        : `${ic.fromInsured ?? "?"}→${ic.toInsured ?? "?"}`;
+      const segRes = resolveCertSegmentsForMonth(certsInMonth, opts.year, opts.month);
+      if (segRes.segments.length >= 2) {
+        // セグメントごとに訪問日をフィルタ。実績の無いセグメントは行 (明細書) を出さない
+        const perSeg = segRes.segments
+          .map((s) => {
+            const filtered = new Map<string, string[]>();
+            for (const [svcType, dates] of typeCounts) {
+              const inSeg = dates.filter((d) => d >= s.from && d <= s.to);
+              if (inSeg.length > 0) filtered.set(svcType, inSeg);
+            }
+            return { s, filtered };
+          })
+          .filter((p) => p.filtered.size > 0);
+        if (perSeg.length >= 2) {
+          split = perSeg.map((p, i) => ({
+            typeCounts: p.filtered,
+            seg: {
+              segIndex: i,
+              segCount: perSeg.length,
+              segFrom: p.s.from,
+              segTo: p.s.to,
+              isLast: i === perSeg.length - 1,
+              cert: p.s.cert,
+              monthLimitAmount: null, // 分割時は各セグメントの認定限度額で機械判定
+            },
+          }));
+          const segDesc = perSeg
+            .map((p, i) => {
+              const part =
+                perSeg.length === 2 ? (i === 0 ? "前半" : "後半") : `第${i + 1}区分`;
+              const num =
+                (insurerDiff ? p.s.cert.insurer_number : p.s.cert.insured_number) ?? "?";
+              return `${part}: ${num}`;
+            })
+            .join(" / ");
+          warnings.push(
+            `${userLabel}さん: ${label}が月内で変わっています (${desc})。境界日 (${fmtMD(perSeg[1].s.from)}) で明細書を分割して出力しました (${segDesc})`,
+          );
+        } else if (perSeg.length === 1) {
+          // 実績が転居前後の片側期間のみ → 分割は不要。その期間の認定 (旧/新保険者) で 1 行出す
+          const p = perSeg[0];
+          split = [
+            {
+              typeCounts: p.filtered,
+              seg: {
+                segIndex: 0,
+                segCount: 1,
+                segFrom: p.s.from,
+                segTo: p.s.to,
+                isLast: true,
+                cert: p.s.cert,
+                // 実績のある期間の認定限度額を満額適用
+                monthLimitAmount:
+                  p.s.cert.service_limit_amount != null &&
+                  Number(p.s.cert.service_limit_amount) > 0
+                    ? Number(p.s.cert.service_limit_amount)
+                    : null,
+              },
+            },
+          ];
+          warnings.push(
+            `${userLabel}さん: ${label}が月内で変わっています (${desc}) が、実績が ${fmtMD(p.s.from)}〜${fmtMD(p.s.to)} のみのため分割せず、その期間の資格情報 (${(insurerDiff ? p.s.cert.insurer_number : p.s.cert.insured_number) ?? "?"}) で出力します`,
+          );
+        }
+      } else {
+        // 境界日が判定できない (変更後認定の開始日が月内に無い等) → 分割せず従来行
+        warnings.push(
+          `${userLabel}さん: ${label}が月内で変わっています (${desc}) が、変更後認定の開始日から境界日を判定できないため分割できません — 認定有効期間 (開始日) を確認するか手動対応してください`,
+        );
+      }
+    }
+
+    if (!split) {
+      // 従来コードパス (分割なし = 全利用者の通常ケース)
+      rows.push(
+        buildRowForSegment(userId, typeCounts, {
+          segIndex: 0,
+          segCount: 1,
+          segFrom: from,
+          segTo: to,
+          isLast: true,
+          cert,
+          monthLimitAmount: limitAmount,
+        }),
+      );
+      continue;
+    }
+
+    for (const part of split) {
+      rows.push(buildRowForSegment(userId, part.typeCounts, part.seg));
+    }
+
+    // 分割時の追加警告: 月単位の値 (月次加算・計画単位数・手割振り) は配分できない
+    if (split.length > 1) {
+      const flags = monthAddonByClient.get(userId);
+      const hasMonthAttributedAddon =
+        !!flags &&
+        (flags.shokai ||
+          flags.seikatsuKino === "Ⅰ" ||
+          flags.seikatsuKino === "Ⅱ" ||
+          (!hasKinkyuCol && flags.kinkyuCount > 0));
+      if (hasMonthAttributedAddon) {
+        warnings.push(
+          `${userLabel}さん: 算定日を特定できない月次加算 (初回・生活機能向上連携${hasKinkyuCol ? "" : "・緊急時"}) は月末側の明細書に計上しました — 算定先の保険者が正しいか確認してください`,
+        );
+      }
+      const hasPlan = planUnitsByClient.has(userId);
+      const hasManual =
+        !!opts.officeId &&
+        resolveManualOverUnits(gendoMap.get(userId), opts.officeId) != null;
+      if (hasPlan || hasManual) {
+        warnings.push(
+          `${userLabel}さん: ${[hasPlan ? "計画単位数" : null, hasManual ? "限度額の手割振り" : null].filter(Boolean).join("・")}は分割明細書に配分できないため適用せず、各期間の認定限度額で超過を機械判定しています — 転居月の限度額適用を保険者に確認してください`,
+        );
+      }
+    }
   }
 
-  // ふりがな順
-  rows.sort((a, b) =>
-    (a.user_name_kana ?? a.user_name).localeCompare(
+  // ふりがな順 (同一利用者の分割行はセグメント順)
+  rows.sort((a, b) => {
+    const c = (a.user_name_kana ?? a.user_name).localeCompare(
       b.user_name_kana ?? b.user_name,
       "ja",
-    ),
-  );
+    );
+    if (c !== 0) return c;
+    return (a.segmentIndex ?? 0) - (b.segmentIndex ?? 0);
+  });
 
   return { rows, sougouRows, month: monthStr, recordCount: schedules.length, warnings };
+}
+
+// ─── 分割セグメント行の利用者単位合算 (Phase 2) ──────────────────────────────
+
+/** null 許容の加算: 両方 null なら null、どちらかあれば 0 扱いで合算 */
+const sumNullable = (
+  a: number | null | undefined,
+  b: number | null | undefined,
+): number | null => (a == null && b == null ? null : (a ?? 0) + (b ?? 0));
+
+/**
+ * 保険者変更 (転居) で分割されたセグメント行を利用者単位に合算する。
+ * 利用者請求 (利用請求タブ)・月次情報など「利用者 = 1 行」前提の画面用
+ * (利用者請求書・軽減・実費・入金・FB 全銀は保険者をまたいでも利用者単位)。
+ *
+ * - 分割行が 1 件も無ければ入力配列をそのまま返す (参照安定 = memo 互換)。
+ * - 金額・単位数は合算 (セグメント期間は重ならないため単純加算で正)。
+ * - 明細行は同一サービス (code + 名称 + 単価) を回数・単位で合算。
+ * - 識別情報 (保険者・被保険者番号・要介護度・負担割合・認定期間) は
+ *   月末側セグメントの値を採用。公費識別は非 null 優先。
+ * - 合算後の行は segmentIndex 等を持たない (利用者 = 1 行に戻る)。
+ */
+export function mergeSegmentRows(rows: UserSeikyuRow[]): UserSeikyuRow[] {
+  if (!rows.some((r) => (r.segmentCount ?? 1) > 1)) return rows;
+  const out: UserSeikyuRow[] = [];
+  const idxByUser = new Map<string, number>(); // user_id → out の位置 (分割行のみ)
+  for (const r of rows) {
+    if ((r.segmentCount ?? 1) <= 1) {
+      out.push(r);
+      continue;
+    }
+    const idx = idxByUser.get(r.user_id);
+    if (idx == null) {
+      // 元の行 (details 含む) を破壊しないよう copy して積む
+      const copy: UserSeikyuRow = { ...r, details: r.details.map((d) => ({ ...d })) };
+      out.push(copy);
+      idxByUser.set(r.user_id, out.length - 1);
+      continue;
+    }
+    const base = out[idx];
+    // 明細: 同一サービス (code + 名称 + 単価) は合算、無ければ行追加
+    for (const d of r.details) {
+      const hit = base.details.find(
+        (b) =>
+          b.service_code === d.service_code &&
+          b.service_type === d.service_type &&
+          b.unit_per === d.unit_per,
+      );
+      if (hit) {
+        hit.count += d.count;
+        hit.units += d.units;
+        if (hit.kohi_count != null || d.kohi_count != null) {
+          hit.kohi_count = (hit.kohi_count ?? 0) + (d.kohi_count ?? 0);
+        }
+        if (hit.kohi_units != null || d.kohi_units != null) {
+          hit.kohi_units = (hit.kohi_units ?? 0) + (d.kohi_units ?? 0);
+        }
+      } else {
+        base.details.push({ ...d });
+      }
+    }
+    base.grossBaseUnits += r.grossBaseUnits;
+    base.limitUnits = sumNullable(base.limitUnits, r.limitUnits);
+    base.planUnits = sumNullable(base.planUnits, r.planUnits);
+    base.overUnits += r.overUnits;
+    base.overAmount += r.overAmount;
+    base.selfPayAmount += r.selfPayAmount;
+    base.baseUnits += r.baseUnits;
+    base.addonUnits += r.addonUnits;
+    base.kanriTaishougaiUnits += r.kanriTaishougaiUnits;
+    base.totalUnits += r.totalUnits;
+    base.totalAmount += r.totalAmount;
+    base.insuranceAmount += r.insuranceAmount;
+    base.userAmount += r.userAmount;
+    base.serviceDays += r.serviceDays; // 期間が重ならないため単純加算 = 実日数
+    base.kohiUnits = sumNullable(base.kohiUnits, r.kohiUnits);
+    base.kohiAmount = sumNullable(base.kohiAmount, r.kohiAmount);
+    base.kohiTargetCost = sumNullable(base.kohiTargetCost, r.kohiTargetCost);
+    base.kohiTargetInsurance = sumNullable(base.kohiTargetInsurance, r.kohiTargetInsurance);
+    base.kohiHonninFutan = sumNullable(base.kohiHonninFutan, r.kohiHonninFutan);
+    // 公費・担当居宅の識別情報は非 null 優先 (片側セグメントのみ公費のケース)
+    base.publicExpense = base.publicExpense ?? r.publicExpense;
+    base.kohiTandoku = base.kohiTandoku || r.kohiTandoku;
+    base.kohiHobetsu = base.kohiHobetsu ?? r.kohiHobetsu;
+    base.kohiFutanshaNumber = base.kohiFutanshaNumber ?? r.kohiFutanshaNumber;
+    base.kohiJukyushaNumber = base.kohiJukyushaNumber ?? r.kohiJukyushaNumber;
+    base.careOfficeNumber = base.careOfficeNumber ?? r.careOfficeNumber;
+    base.careOfficeName = base.careOfficeName ?? r.careOfficeName;
+    // 手割振りは分割時未適用のため常に auto
+    base.overSource = "auto";
+    // 識別情報 (保険者・被保険者番号・要介護度等) は月末側セグメントを採用
+    if ((r.segmentIndex ?? 0) > (base.segmentIndex ?? 0)) {
+      base.segmentIndex = r.segmentIndex;
+      base.insurer_number = r.insurer_number;
+      base.insurer_name = r.insurer_name;
+      base.insured_number = r.insured_number;
+      base.care_level = r.care_level;
+      base.copay_rate = r.copay_rate;
+      base.certStart = r.certStart;
+      base.certEnd = r.certEnd;
+    }
+  }
+  // 合算行はセグメント情報を落とす (利用者 = 1 行)
+  for (const r of out) {
+    if ((r.segmentCount ?? 1) > 1) {
+      delete r.segmentIndex;
+      delete r.segmentCount;
+      delete r.periodFrom;
+      delete r.periodTo;
+    }
+  }
+  return out;
 }

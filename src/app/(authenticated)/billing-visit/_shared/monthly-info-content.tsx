@@ -29,6 +29,7 @@ import { Loader2, AlertCircle, FileDown, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { monthRange } from "@/lib/cert-for-month";
+import { mergeSegmentRows } from "@/lib/visit-seikyu/aggregate";
 import { useBusinessType } from "@/lib/business-type-context";
 import {
   useSeikyuContext,
@@ -82,7 +83,7 @@ export function MonthlyInfoContent() {
   const {
     year,
     month,
-    filteredRows,
+    filteredRows: rawFilteredRows,
     recordCount,
     loading,
     error,
@@ -90,6 +91,12 @@ export function MonthlyInfoContent() {
     officeName,
     tenantId,
   } = useSeikyuContext();
+  // 保険者変更 (転居) の分割セグメント行 (Phase 2) は利用者単位に合算して表示する
+  // (計画単位数は利用者×月の 1 値。分割行が無ければ同一参照)
+  const filteredRows = useMemo(
+    () => mergeSegmentRows(rawFilteredRows),
+    [rawFilteredRows],
+  );
   const supabase = useMemo(() => createClient(), []);
   const { businessType } = useBusinessType();
   // 訪問入浴は計画単位数を bath_monthly_plan_units に持つ (schema 同型)

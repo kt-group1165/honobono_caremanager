@@ -135,15 +135,17 @@ export async function loadReSeikyuRows(
     }
   }
 
-  // 古い提供月 → ふりがな の順
+  // 古い提供月 → ふりがな → セグメント (保険者変更の分割行 — Phase 2) の順
   out.sort((a, b) => {
     if (a.__origMonthKey !== b.__origMonthKey) {
       return a.__origMonthKey < b.__origMonthKey ? -1 : 1;
     }
-    return (a.user_name_kana ?? a.user_name).localeCompare(
+    const c = (a.user_name_kana ?? a.user_name).localeCompare(
       b.user_name_kana ?? b.user_name,
       "ja",
     );
+    if (c !== 0) return c;
+    return (a.segmentIndex ?? 0) - (b.segmentIndex ?? 0);
   });
 
   return { rows: out, warnings };

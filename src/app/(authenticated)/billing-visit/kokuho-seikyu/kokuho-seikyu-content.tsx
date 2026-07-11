@@ -150,9 +150,10 @@ export function KokuhoSeikyuContent() {
   }, [loading, loadReRows]);
 
   // ── 表示行: 再請求 (過去分) を上、当月分 (月遅れ/返戻フラグ行は除外) を下 ──
+  // rowKey は保険者変更 (転居) の分割行 (Phase 2) を区別するため segmentIndex 付き
   const displayRows = useMemo<DisplayRow[]>(() => {
     const re: DisplayRow[] = reRows.filter(kanaMatches).map((r) => ({
-      key: `re:${r.user_id}:${r.__origMonthKey}`,
+      key: `re:${r.user_id}:${r.__origMonthKey}:${r.segmentIndex ?? 0}`,
       row: r,
       origMonthKey: r.__origMonthKey,
       isReSeikyu: true,
@@ -165,7 +166,7 @@ export function KokuhoSeikyuContent() {
         return !(st?.tsukiokure || st?.henrei);
       })
       .map((r) => ({
-        key: `cur:${r.user_id}`,
+        key: `cur:${r.user_id}:${r.segmentIndex ?? 0}`,
         row: r,
         origMonthKey: monthKey,
         isReSeikyu: false,
@@ -317,11 +318,16 @@ export function KokuhoSeikyuContent() {
     for (const d of targets) {
       const r = d.row;
       const rowYm = d.origMonthKey.replace("-", "");
-      const state = d.isReSeikyu
+      const baseState = d.isReSeikyu
         ? d.reasons?.henrei
           ? "返戻(再請求)"
           : "月遅れ(再請求)"
         : "当月";
+      // 保険者変更 (転居) の分割行は状態に分割番号を付記 (Phase 2)
+      const state =
+        (r.segmentCount ?? 1) > 1
+          ? `${baseState}(分割${(r.segmentIndex ?? 0) + 1}/${r.segmentCount})`
+          : baseState;
       const tail = [
         r.totalUnits,
         r.insuranceAmount,
@@ -513,6 +519,14 @@ export function KokuhoSeikyuContent() {
                     </div>
                     <div className="px-2 py-2 border-l border-gray-100 font-medium text-gray-800 truncate">
                       {r.user_name}
+                      {(r.segmentCount ?? 1) > 1 && (
+                        <span
+                          title={`保険者変更 (転居) によりレセプトを分割しています。この行は ${r.periodFrom ?? "?"}〜${r.periodTo ?? "?"} (保険者 ${r.insurer_number ?? "?"}) の明細書です`}
+                          className="ml-1 rounded bg-purple-100 px-1 py-0.5 text-[10px] font-bold text-purple-700 whitespace-nowrap"
+                        >
+                          分割{(r.segmentIndex ?? 0) + 1}/{r.segmentCount}
+                        </span>
+                      )}
                     </div>
                     <div className="px-2 py-2 border-l border-gray-100 text-gray-700">
                       {r.care_level ?? "—"}
