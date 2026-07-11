@@ -65,6 +65,10 @@ import {
   gensanFlagsLabel,
   resolveGensanVariant,
 } from "@/lib/visit-seikyu/gyakutai-bcp";
+import {
+  isSeikatsuEnjoChushin,
+  seikatsuEnjoKijunForCareLevel,
+} from "@/lib/visit-seikyu/seikatsu-enjo-limit";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1450,6 +1454,28 @@ export async function aggregateMonthlyVisitSeikyu(
       warnings.push(
         `${userLabel}: 対象月 (${monthStr}) に有効な認定が見つからないため最新の認定情報で集計しています — 認定有効期間を確認してください`,
       );
+    }
+    // ── 生活援助中心型の回数上限 (届出基準) チェック ──
+    // 厚生労働大臣が定める回数 (平成30年厚労省告示第218号: 要介護1=27/2=34/3=43/4=38/5=31 回/月)
+    // 「以上」の生活援助中心型を位置付けたケアプランは市町村届出が必要
+    // (居宅介護支援運営基準 13条18号の3。詳細は lib/visit-seikyu/seikatsu-enjo-limit.ts)。
+    // 回数 (units ではない) で判定。身体＋生活の複合 (身体N生活M) は対象外。
+    // 認定が申請中等で要介護度が引けない場合はスキップ (kijun = null)。
+    // 月途中の保険者変更で明細書が分割される利用者も、届出基準は暦月・利用者単位のため
+    // 分割前の月全体 (typeCounts) で数える。
+    {
+      const seKijun = seikatsuEnjoKijunForCareLevel(cert?.care_level);
+      if (seKijun) {
+        let seCount = 0;
+        for (const [svcType, dates] of typeCounts) {
+          if (isSeikatsuEnjoChushin(svcType)) seCount += dates.length;
+        }
+        if (seCount >= seKijun.limit) {
+          warnings.push(
+            `${userLabel}さん: 生活援助中心型が月${seCount}回で基準回数 (${seKijun.limit}回/要介護${seKijun.level}) 以上です — ケアプランの市町村届出が必要です (平成30年厚生労働省告示第218号)`,
+          );
+        }
+      }
     }
     // ── 月途中の資格変更 (Phase 1: 検出 / Phase 2: 保険者変更はレセプト分割) ──
     const certsInMonth = certsInMonthByClient.get(userId) ?? [];

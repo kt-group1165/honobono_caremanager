@@ -34,6 +34,7 @@ import {
   Landmark,
   Download,
   ExternalLink,
+  Building2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
@@ -55,6 +56,7 @@ import {
   type GensanPeriod,
 } from "@/lib/visit-seikyu/gyakutai-bcp";
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
+import { SameBuildingCheckPanel } from "./same-building-check-panel";
 
 // ほのぼの実画面の列順:
 // 対象 / 申請中 / 状態 / 提供月 / 請求月 / サービス事業所 / 被保険者番号 / 利用者名 / 月遅 / 返戻 / 過誤
@@ -103,7 +105,7 @@ const isTableMissingError = (code: string | null | undefined) =>
 
 export function KaigoSeikyuContent() {
   const {
-    year, month, filteredRows, filteredSougouRows, kanaMatches, recordCount, loading, error, warnings,
+    year, month, rows, sougouRows, filteredRows, filteredSougouRows, kanaMatches, recordCount, loading, error, warnings,
     officeName, officeNumber, officeAddress, officePhone, officePostal,
     officeId, tenantId, unitPrice, appliedFormulaCodes,
   } = useSeikyuContext();
@@ -127,6 +129,14 @@ export function KaigoSeikyuContent() {
   const [reWarnings, setReWarnings] = useState<string[]>([]);
   // 対象月に適用中の 虐防/業未 減算 (kaigo_office_gensan_periods。バナー表示用)
   const [gensanPeriods, setGensanPeriods] = useState<GensanPeriod[]>([]);
+  // 同一建物減算チェック パネル (提案・警告のみ。設定書換なし)
+  const [sameBuildingOpen, setSameBuildingOpen] = useState(false);
+  // チェック対象 = 当月の全実利用者 (カナ絞込前。介護給付 + 総合事業)
+  const sameBuildingUserIds = useMemo(
+    () =>
+      Array.from(new Set([...rows, ...sougouRows].map((r) => r.user_id))),
+    [rows, sougouRows],
+  );
 
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
 
@@ -756,6 +766,16 @@ export function KaigoSeikyuContent() {
             >
               未発行のみ
             </button>
+            {!isBath && (
+              <button
+                onClick={() => setSameBuildingOpen(true)}
+                disabled={loading || !officeId || sameBuildingUserIds.length === 0}
+                title="住所グルーピングで同一建物らしき集団を推定し、同一建物減算 (10%/15%/12%) の設定と突合します (提案のみ。設定変更はしません)"
+                className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Building2 size={13} />同一建物チェック
+              </button>
+            )}
             <div className="ml-auto flex items-center gap-2">
               <button
                 onClick={exportCsv}
@@ -1287,6 +1307,17 @@ export function KaigoSeikyuContent() {
           )}
         </div>
       </div>
+
+      {/* ===== 同一建物減算チェック (モーダル) ===== */}
+      {sameBuildingOpen && officeId && (
+        <SameBuildingCheckPanel
+          officeId={officeId}
+          year={year}
+          month={month}
+          monthUserIds={sameBuildingUserIds}
+          onClose={() => setSameBuildingOpen(false)}
+        />
+      )}
 
       {/* ===== 印刷 view: 明細書 (様式第二) — 利用者 1 名 = 1 枚 ===== */}
       {/* 再請求行は元提供月 (origMonthKey) で reiwa/month を出す */}

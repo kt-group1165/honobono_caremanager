@@ -58,6 +58,10 @@ import {
   SAME_BUILDING_OPTIONS,
   type SameBuildingTier,
 } from "@/lib/visit-seikyu/same-building";
+import {
+  isSeikatsuEnjoChushin,
+  seikatsuEnjoKijunForCareLevel,
+} from "@/lib/visit-seikyu/seikatsu-enjo-limit";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1316,6 +1320,30 @@ export function ProvisionTicketsContent({
   const totalPlannedUnits = useMemo(() => unitSummary.reduce((s, r) => s + r.plannedUnits, 0), [unitSummary]);
   const totalActualUnits = useMemo(() => unitSummary.reduce((s, r) => s + r.actualUnits, 0), [unitSummary]);
 
+  // ── 生活援助中心型の回数 / 届出基準 (平成30年厚労省告示第218号) ──────────
+  // 基準回数 (要介護1=27/2=34/3=43/4=38/5=31 回/月) 以上の生活援助中心型を
+  // 位置付けたケアプランは市町村届出が必要 (居宅介護支援運営基準 13条18号の3)。
+  // 要介護度が引けない (申請中・要支援等) 場合は判定しない (= null で非表示)。
+  // 身体＋生活の複合 (身体N生活M) は対象外 — isSeikatsuEnjoChushin 参照。
+  const seikatsuEnjoStatus = useMemo(() => {
+    const kijun = seikatsuEnjoKijunForCareLevel(userData?.care_level);
+    if (!kijun) return null;
+    let planned = 0;
+    let actual = 0;
+    for (const r of unitSummary) {
+      if (!isSeikatsuEnjoChushin(r.service_type)) continue;
+      planned += r.plannedCount;
+      actual += r.actualCount;
+    }
+    if (planned === 0 && actual === 0) return null;
+    return {
+      ...kijun,
+      planned,
+      actual,
+      over: Math.max(planned, actual) >= kijun.limit,
+    };
+  }, [unitSummary, userData]);
+
   // ── formula 加算系コード (処遇改善加算等) を「自事業所の category」で絞る ──
   // currentOffice.service_type → category prefix (簡易 mapping)
   const officeCategory = useMemo(() => {
@@ -2240,6 +2268,24 @@ export function ProvisionTicketsContent({
                       )}
                     </tfoot>
                   </table>
+
+                  {/* 生活援助中心型の回数 / 届出基準 (平成30年厚労省告示第218号)。
+                      基準回数以上 (予定 or 実績) は amber で届出を促す。介護のみ。 */}
+                  {viewSystem === "介護" && seikatsuEnjoStatus && (
+                    <div
+                      className={cn(
+                        "mt-2 rounded border px-3 py-1.5 text-[11px]",
+                        seikatsuEnjoStatus.over
+                          ? "border-amber-300 bg-amber-50 text-amber-800"
+                          : "border-gray-200 bg-gray-50 text-gray-500",
+                      )}
+                    >
+                      生活援助中心型: 予定 {seikatsuEnjoStatus.planned}回 / 実績 {seikatsuEnjoStatus.actual}回
+                      （届出基準 {seikatsuEnjoStatus.limit}回/要介護{seikatsuEnjoStatus.level}）
+                      {seikatsuEnjoStatus.over &&
+                        " — 基準回数以上です。ケアプランの市町村届出が必要です (平成30年厚労省告示第218号)"}
+                    </div>
+                  )}
 
                   {/* 適用加算 (read-only — 設定変更は /master/office)。介護のみ。 */}
                   {viewSystem === "介護" && availableFormulaCodes.length > 0 && (
