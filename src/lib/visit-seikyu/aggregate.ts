@@ -52,6 +52,12 @@ import {
   SAME_BUILDING_REDUCTION,
   type SameBuildingTier,
 } from "@/lib/visit-seikyu/same-building";
+import {
+  getGensanPeriodsForMonth,
+  gensanFlagsFromPeriods,
+  gensanFlagsLabel,
+  resolveGensanVariant,
+} from "@/lib/visit-seikyu/gyakutai-bcp";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -360,6 +366,51 @@ export async function aggregateMonthlyVisitSeikyu(
   const unitByName = {
     get: (name: string) => unitByNorm.get(toHankakuDigits(name)),
   };
+
+  // 2.2) 高齢者虐待防止措置未実施減算 / 業務継続計画(BCP)未策定減算 (各1%)。
+  //     訪問介護 (介護 system) には独立減算コードが無く、基本コードの合成
+  //     バリエーション (「身体介護２・虐防・業未」等) で算定するため、
+  //     事業所フラグ (kaigo_office_gensan_periods) が対象月に適用中なら
+  //     基本サービス行のマスタ解決を変種名へ差し替える (障害・総合事業は対象外)。
+  //     テーブル未適用は空 = 従来動作 (減算なし)。解決不能時は元コード + warning。
+  const gensanOverride = new Map<
+    string,
+    { units: number; short: string | null; code: string | null; name: string }
+  >();
+  if (opts.officeId) {
+    const gensanFlags = gensanFlagsFromPeriods(
+      await getGensanPeriodsForMonth(supabase, opts.officeId, monthStr),
+    );
+    if (gensanFlags.gyakutai || gensanFlags.bcp) {
+      const label = gensanFlagsLabel(gensanFlags);
+      const targetTypes = serviceTypes.filter(
+        (t) => unitByNorm.get(toHankakuDigits(t))?.system === "介護",
+      );
+      const resolved = await Promise.all(
+        targetTypes.map((t) =>
+          resolveGensanVariant(supabase, t, gensanFlags, opts.year, opts.month),
+        ),
+      );
+      targetTypes.forEach((svcType, i) => {
+        const v = resolved[i];
+        if (v) {
+          gensanOverride.set(svcType, {
+            units: v.units,
+            short: v.short ?? unitByName.get(svcType)?.short ?? null,
+            code: v.code,
+            name: v.name,
+          });
+        } else {
+          console.warn(
+            `[visit-seikyu] 減算バリエーション未解決: 「${svcType}」 (${label})`,
+          );
+          warnings.push(
+            `「${svcType}」の減算適用コード (${label}) が対象月 (${monthStr}) のマスタから引けません — 元のコードのまま (減算なしで) 集計します`,
+          );
+        }
+      });
+    }
+  }
 
   // 2.5) 実績単位の月次加算 (kaigo_visit_month_addons: 初回 / 緊急時 / 生活機能向上連携)
   //     利用者×月×事業所のフラグを読み、該当利用者の明細に加算行として追加する。
@@ -807,7 +858,10 @@ export async function aggregateMonthlyVisitSeikyu(
     let kohiServiceBaseUnits = 0;
     for (const [svcType, dates] of typeCounts) {
       const count = dates.length;
-      const master = unitByName.get(svcType);
+      // 虐防/業未 減算適用中は合成バリエーション (減算織込み済単位数) へ差し替える。
+      // 加算行 (初回加算等の独立行 = 後段 pushMonthAddon) は差し替え対象外。
+      const gensan = gensanOverride.get(svcType);
+      const master = gensan ?? unitByName.get(svcType);
       const unitPer = master?.units ?? 0;
       // 身体介護9系 (units=0 の増分コード) は単独では請求単位にならない。
       // 実績に紛れていたら合成後の正しいサービスへ修正が必要なので warning。
@@ -819,7 +873,7 @@ export async function aggregateMonthlyVisitSeikyu(
       const units = unitPer * count;
       grossBaseUnits += units;
       const line: SeikyuDetailLine = {
-        service_type: svcType,
+        service_type: gensan ? gensan.name : svcType,
         short_name: master?.short ?? null,
         service_code: master?.code ?? null,
         unit_per: unitPer,

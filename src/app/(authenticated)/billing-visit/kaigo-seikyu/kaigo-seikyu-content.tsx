@@ -49,6 +49,11 @@ import {
   loadReSeikyuRows,
   type ReSeikyuRow,
 } from "@/lib/visit-seikyu/re-seikyu";
+import {
+  getGensanPeriodsForMonth,
+  GENSAN_LABELS,
+  type GensanPeriod,
+} from "@/lib/visit-seikyu/gyakutai-bcp";
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
 
 // ほのぼの実画面の列順:
@@ -120,8 +125,31 @@ export function KaigoSeikyuContent() {
   const [reRows, setReRows] = useState<ReSeikyuRow[]>([]);
   // 再請求の再集計時 warnings (認定フォールバック・入院重なり等)
   const [reWarnings, setReWarnings] = useState<string[]>([]);
+  // 対象月に適用中の 虐防/業未 減算 (kaigo_office_gensan_periods。バナー表示用)
+  const [gensanPeriods, setGensanPeriods] = useState<GensanPeriod[]>([]);
 
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+
+  // ── 虐防/業未 減算の適用状況 (対象月)。テーブル未適用は空 = バナー非表示 ──
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!officeId || isBath) {
+        if (!cancelled) setGensanPeriods([]);
+        return;
+      }
+      try {
+        const periods = await getGensanPeriodsForMonth(supabase, officeId, monthKey);
+        if (!cancelled) setGensanPeriods(periods);
+      } catch (e) {
+        console.warn("減算適用状況の取得に失敗:", e);
+        if (!cancelled) setGensanPeriods([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, officeId, isBath, monthKey]);
 
   // ── 表示用の統合行 (当月通常行 + 再請求行)。カナ索引で共通絞込 ──
   // rowKey: 当月行は "cur:<user_id>" / 再請求行は "re:<user_id>:<origMonthKey>"
@@ -708,6 +736,23 @@ export function KaigoSeikyuContent() {
                 実績単位の加算テーブル (kaigo_visit_month_addons) が未作成です。
                 migrations/kaigo_visit_month_addons.sql を Supabase SQL Editor で適用すると、
                 初回・緊急時・生活機能向上連携加算を利用者×月で設定できます (適用まで加算なしで集計)。
+              </span>
+            </div>
+          )}
+
+          {/* 虐防/業未 減算 (体制未整備) 適用中バナー (対象月に適用期間がある場合のみ) */}
+          {!loading && gensanPeriods.length > 0 && (
+            <div className="border-b border-red-200 bg-red-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-red-800">
+              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <span>
+                {gensanPeriods
+                  .map(
+                    (p) =>
+                      `${GENSAN_LABELS[p.gensan_type]} (1%) を適用中 (${p.start_month ?? "最初から"}〜${p.end_month ?? "無期限"})`,
+                  )
+                  .join(" / ")}
+                — 基本サービスは減算織込み済の合成コード (・虐防/・業未) で集計しています
+                (設定: 自事業所管理 → 減算 (体制未整備))。
               </span>
             </div>
           )}

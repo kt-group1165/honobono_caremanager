@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useBusinessType } from "@/lib/business-type-context";
 import { AppliedFormulaSection } from "./_applied-formula";
 import { AddonRegistrySection } from "./_addon-registry";
+import { GensanSection } from "./_gensan-settings";
 
 // 令和6年度改定 居宅介護支援 特定事業所加算
 const TOKUTEI_OPTIONS = [
@@ -495,6 +496,17 @@ export function OfficeContent({
           officeId={form.id}
           tenantId={form.tenant_id}
           serviceType={form.service_type}
+        />
+      )}
+
+      {/* 減算 (体制未整備 = 訪問介護のみ表示。
+          虐防/業未 減算の適用期間。期間内の月は請求集計が基本コードを
+          合成バリエーション (・虐防/・業未) へ自動差し替え) */}
+      {form.service_type === "訪問介護" && (
+        <GensanSection
+          key={`gensan-${form.id}`}
+          officeId={form.id}
+          tenantId={form.tenant_id}
         />
       )}
 
