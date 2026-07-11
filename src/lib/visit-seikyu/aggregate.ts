@@ -457,39 +457,131 @@ export async function aggregateMonthlyVisitSeikyu(
     }
   }
 
-  // 2.5) 実績単位の月次加算 (kaigo_visit_month_addons: 初回 / 緊急時 / 生活機能向上連携)
+  // 2.5) 実績単位の月次加算 (初回 / 緊急時 / 生活機能向上連携)
   //     利用者×月×事業所のフラグを読み、該当利用者の明細に加算行として追加する。
   //     単位数はハードコードせず kaigo_service_codes から対象月の有効世代で引く。
+  //     入力経路は 2 系統あり、両方を読んでフラグに正規化してマージする:
+  //       a. kaigo_visit_month_addons (旧 3固定フラグ。書込 UI は撤去済みの移行期データ)
+  //       b. kaigo_visit_addon_lines (現行の月次加算エディタ = 提供表 provision-tickets)
+  //     santei_date (算定日。migrations/month_addon_santei_date.sql) 列があれば読み、
+  //     保険者変更のレセプト分割 / 公費期間按分の判定に使う (列未適用・NULL = 従来動作)。
   interface MonthAddonFlags {
     shokai: boolean;
     seikatsuKino: string; // 'なし' | 'Ⅰ' | 'Ⅱ'
     kinkyuCount: number;
+    /** 初回加算の算定日 (YYYY-MM-DD)。null = 未指定 (従来動作: 月末側計上 + warning) */
+    shokaiDate: string | null;
+    /** 生活機能向上連携加算の算定日。null = 未指定 (従来動作) */
+    seikatsuDate: string | null;
   }
   const monthAddonByClient = new Map<string, MonthAddonFlags>();
   if (opts.officeId) {
-    const { data, error } = await supabase
-      .from("kaigo_visit_month_addons")
-      .select("client_id, shokai, seikatsu_kino, kinkyu_count")
-      .eq("office_id", opts.officeId)
-      .eq("target_month", monthStr);
-    if (error) {
-      // テーブル未作成 (直 SQL=42P01 / PostgREST schema cache=PGRST205) は
-      // 加算なしで続行 (UI 側で「SQL未適用」バナー案内)。それ以外は握りつぶさない
-      if (error.code !== "42P01" && error.code !== "PGRST205") {
-        throw new Error(`月次加算取得失敗: ${error.message}`);
+    const getMonthAddonFlags = (clientId: string): MonthAddonFlags => {
+      let f = monthAddonByClient.get(clientId);
+      if (!f) {
+        f = { shokai: false, seikatsuKino: "なし", kinkyuCount: 0, shokaiDate: null, seikatsuDate: null };
+        monthAddonByClient.set(clientId, f);
       }
-    } else {
-      for (const r of (data ?? []) as {
-        client_id: string;
-        shokai: boolean | null;
-        seikatsu_kino: string | null;
-        kinkyu_count: number | null;
-      }[]) {
-        monthAddonByClient.set(r.client_id, {
-          shokai: !!r.shokai,
-          seikatsuKino: r.seikatsu_kino ?? "なし",
-          kinkyuCount: r.kinkyu_count ?? 0,
-        });
+      return f;
+    };
+    // a) 旧 3固定テーブル。santei_date 列未適用 (42703) は従来列のみで再取得 (算定日 null)
+    {
+      const baseSel = "client_id, shokai, seikatsu_kino, kinkyu_count";
+      let {
+        data,
+        error,
+      }: {
+        data: unknown[] | null;
+        error: { code?: string | null; message: string } | null;
+      } = await supabase
+        .from("kaigo_visit_month_addons")
+        .select(`${baseSel}, shokai_santei_date, seikatsu_santei_date`)
+        .eq("office_id", opts.officeId)
+        .eq("target_month", monthStr);
+      if (error && error.code !== "42P01" && error.code !== "PGRST205" && isColumnMissing(error)) {
+        ({ data, error } = await supabase
+          .from("kaigo_visit_month_addons")
+          .select(baseSel)
+          .eq("office_id", opts.officeId)
+          .eq("target_month", monthStr));
+      }
+      if (error) {
+        // テーブル未作成 (直 SQL=42P01 / PostgREST schema cache=PGRST205) は
+        // 加算なしで続行 (UI 側で「SQL未適用」バナー案内)。それ以外は握りつぶさない
+        if (error.code !== "42P01" && error.code !== "PGRST205") {
+          throw new Error(`月次加算取得失敗: ${error.message}`);
+        }
+      } else {
+        for (const r of (data ?? []) as {
+          client_id: string;
+          shokai: boolean | null;
+          seikatsu_kino: string | null;
+          kinkyu_count: number | null;
+          shokai_santei_date?: string | null;
+          seikatsu_santei_date?: string | null;
+        }[]) {
+          const f = getMonthAddonFlags(r.client_id);
+          f.shokai = !!r.shokai;
+          f.seikatsuKino = r.seikatsu_kino ?? "なし";
+          f.kinkyuCount = r.kinkyu_count ?? 0;
+          f.shokaiDate = r.shokai_santei_date ?? null;
+          f.seikatsuDate = r.seikatsu_santei_date ?? null;
+        }
+      }
+    }
+    // b) 現行の可変明細 (提供表の月次加算エディタが書く)。初回(114001)/緊急時(114000)/
+    //    生活機能向上Ⅰ(114003)/Ⅱ(114002) を旧フラグ形に正規化してマージする。
+    //    移行 SQL で両テーブルに同じ加算が入っている場合に二重計上しないよう
+    //    boolean は OR、回数は max で合成する。
+    {
+      const LINE_CODES = ["114001", "114000", "114003", "114002"];
+      let {
+        data,
+        error,
+      }: {
+        data: unknown[] | null;
+        error: { code?: string | null; message: string } | null;
+      } = await supabase
+        .from("kaigo_visit_addon_lines")
+        .select("client_id, addon_code, count, santei_date")
+        .eq("office_id", opts.officeId)
+        .eq("target_month", monthStr)
+        .in("addon_code", LINE_CODES);
+      if (error && error.code !== "42P01" && error.code !== "PGRST205" && isColumnMissing(error)) {
+        ({ data, error } = await supabase
+          .from("kaigo_visit_addon_lines")
+          .select("client_id, addon_code, count")
+          .eq("office_id", opts.officeId)
+          .eq("target_month", monthStr)
+          .in("addon_code", LINE_CODES));
+      }
+      if (error) {
+        if (error.code !== "42P01" && error.code !== "PGRST205") {
+          throw new Error(`月次加算 (加算行) 取得失敗: ${error.message}`);
+        }
+      } else {
+        for (const r of (data ?? []) as {
+          client_id: string;
+          addon_code: string;
+          count: number | null;
+          santei_date?: string | null;
+        }[]) {
+          const count = r.count ?? 0;
+          if (count <= 0) continue;
+          const f = getMonthAddonFlags(r.client_id);
+          const date = r.santei_date ?? null;
+          if (r.addon_code === "114001") {
+            f.shokai = true;
+            if (date) f.shokaiDate = date;
+          } else if (r.addon_code === "114000") {
+            f.kinkyuCount = Math.max(f.kinkyuCount, count);
+          } else {
+            // 114002 (Ⅱ) / 114003 (Ⅰ)。両方の行がある異常データは上位 (Ⅱ) を採用
+            const grade = r.addon_code === "114002" ? "Ⅱ" : "Ⅰ";
+            if (f.seikatsuKino !== "Ⅱ") f.seikatsuKino = grade;
+            if (date) f.seikatsuDate = date;
+          }
+        }
       }
     }
   }
@@ -882,6 +974,12 @@ export async function aggregateMonthlyVisitSeikyu(
     cert: CertForMonth | null;
     /** 分割なし時の従来 limitAmount (区分変更月の max 適用済)。分割時は未使用 */
     monthLimitAmount: number | null;
+    /**
+     * 月次加算 (初回 / 生活機能向上連携) をこのセグメントに計上するか。
+     * 分割時に算定日 (santei_date) からセグメントを特定できた場合に呼出側が設定する。
+     * undefined = 従来判定 (月末側 isLast に計上 + warning)。分割なしは常に undefined。
+     */
+    monthAddonHere?: { shokai: boolean; seikatsu: boolean };
   }
   const buildRowForSegment = (
     userId: string,
@@ -1037,13 +1135,17 @@ export async function aggregateMonthlyVisitSeikyu(
     // 処遇改善等の%加算が対象外なのは従来どおり。
     // 限度額管理対象外の加算単位数 (初回・緊急時)。超過判定から除外し、常に保険給付側に付く
     let shokaiKinkyuUnits = 0;
-    // 分割時 (Phase 2): 初回・生活機能向上連携は算定日を特定できないため
-    // 月末側セグメント (isLast) に計上する。緊急時は kinkyu_houmon 列があれば
+    // 分割時 (Phase 2): 初回・生活機能向上連携は、算定日 (santei_date) があれば
+    // 呼出側がセグメントを特定して seg.monthAddonHere で指定する。算定日なしは
+    // 従来どおり月末側セグメント (isLast) に計上する。緊急時は kinkyu_houmon 列があれば
     // 訪問日でセグメント判定、無ければ (月次加算テーブルの回数のみ = 日付なし)
-    // 月末側に全量。分割なし (segCount=1, isLast=true) は従来コードパスと同値。
+    // 月末側に全量。分割なし (segCount=1, isLast=true, monthAddonHere=undefined) は
+    // 従来コードパスと同値。
     const flags = monthAddonByClient.get(userId);
-    const shokaiOn = seg.isLast && (flags?.shokai ?? false);
-    const seikatsuKino = seg.isLast ? flags?.seikatsuKino ?? "なし" : "なし";
+    const shokaiOn = (seg.monthAddonHere?.shokai ?? seg.isLast) && (flags?.shokai ?? false);
+    const seikatsuKino = (seg.monthAddonHere?.seikatsu ?? seg.isLast)
+      ? flags?.seikatsuKino ?? "なし"
+      : "なし";
     // C3: 列があればシフト実績 (セグメント期間内)、無ければ月次加算テーブル
     const kinkyuCount = hasKinkyuCol
       ? (kinkyuDatesByUser.get(userId) ?? []).filter(
@@ -1052,6 +1154,10 @@ export async function aggregateMonthlyVisitSeikyu(
       : seg.isLast
         ? flags?.kinkyuCount ?? 0
         : 0;
+    // 公費期間按分時の月次加算の扱い (warning 文言用):
+    //   pushed = 月次加算行を 1 件以上出した / fallback = 算定日なしで全量公費対象にした
+    let monthAddonPushed = false;
+    let monthAddonKohiFallback = false;
     if (shokaiOn || kinkyuCount > 0 || seikatsuKino === "Ⅰ" || seikatsuKino === "Ⅱ") {
       // ※ 表示名はマスタの short_name を使わず固定ラベルにする。
       //   kaigo_service_codes.short_name は system (介護/障害) を無視して backfill されており、
@@ -1062,6 +1168,7 @@ export async function aggregateMonthlyVisitSeikyu(
         count: number,
         fixedLabel: string,
         kanriTaishougai: boolean, // true = 支給限度基準額管理の対象外 (初回・緊急時)
+        santeiDate: string | null, // 算定日。公費期間按分の内外判定に使う (null = 従来: 全量公費対象)
       ) => {
         if (count <= 0) return;
         const m = monthAddonMaster.get(name);
@@ -1083,25 +1190,50 @@ export async function aggregateMonthlyVisitSeikyu(
           units,
         };
         if (kohi) {
-          // 月次加算は月単位の算定のため、公費期間が月の一部でも全量を公費対象とする
-          // (期間按分時は kohiPartialMonth の warning で要確認を出す)
-          line.kohi_count = count;
-          line.kohi_units = units;
+          if (kohiProrate && santeiDate) {
+            // 算定日あり: 公費適用期間の内なら全量、外なら公費対象外 (0)
+            const kc = inKohiPeriod(santeiDate) ? count : 0;
+            line.kohi_count = kc;
+            line.kohi_units = m.units * kc;
+          } else {
+            // 算定日なし (従来): 月次加算は月単位の算定のため、公費期間が月の一部でも
+            // 全量を公費対象とする (期間按分時は kohiPartialMonth の warning で要確認を出す)
+            line.kohi_count = count;
+            line.kohi_units = units;
+            if (kohiProrate) monthAddonKohiFallback = true;
+          }
         }
         if (kohi2) {
-          line.kohi2_count = count;
-          line.kohi2_units = units;
+          if (kohi2Prorate && santeiDate) {
+            const kc2 = inKohi2Period(santeiDate) ? count : 0;
+            line.kohi2_count = kc2;
+            line.kohi2_units = m.units * kc2;
+          } else {
+            line.kohi2_count = count;
+            line.kohi2_units = units;
+            if (kohi2Prorate) monthAddonKohiFallback = true;
+          }
         }
         details.push(line);
+        monthAddonPushed = true;
       };
-      // 初回・緊急時 = 限度額管理対象外 (告示)。生活機能向上連携は管理対象
-      if (shokaiOn) pushMonthAddon(MONTH_ADDON_NAMES.shokai, 1, "初回加算", true);
-      pushMonthAddon(MONTH_ADDON_NAMES.kinkyu, kinkyuCount, "緊急時訪問介護加算", true);
+      // 初回・緊急時 = 限度額管理対象外 (告示)。生活機能向上連携は管理対象。
+      // 緊急時は算定日を持たない (kinkyu_houmon の訪問日はセグメント判定のみ) → null = 従来。
+      if (shokaiOn)
+        pushMonthAddon(MONTH_ADDON_NAMES.shokai, 1, "初回加算", true, flags?.shokaiDate ?? null);
+      pushMonthAddon(MONTH_ADDON_NAMES.kinkyu, kinkyuCount, "緊急時訪問介護加算", true, null);
       if (seikatsuKino === "Ⅰ")
-        pushMonthAddon(MONTH_ADDON_NAMES.seikatsuI, 1, "生活機能向上連携加算Ⅰ", false);
+        pushMonthAddon(MONTH_ADDON_NAMES.seikatsuI, 1, "生活機能向上連携加算Ⅰ", false, flags?.seikatsuDate ?? null);
       if (seikatsuKino === "Ⅱ")
-        pushMonthAddon(MONTH_ADDON_NAMES.seikatsuII, 1, "生活機能向上連携加算Ⅱ", false);
+        pushMonthAddon(MONTH_ADDON_NAMES.seikatsuII, 1, "生活機能向上連携加算Ⅱ", false, flags?.seikatsuDate ?? null);
     }
+    // 期間按分 warning の月次加算 注記 (下の kohiPartialMonth warning 2 箇所で使う)。
+    // 月次加算なし = 従来文言のまま / 全件算定日あり = 期間判定済みの旨に差し替え。
+    const monthAddonKohiNote = !monthAddonPushed
+      ? "月次加算は全量を公費対象にしています"
+      : monthAddonKohiFallback
+        ? "算定日未指定の月次加算は全量を公費対象にしています (提供表の月次加算で算定日を設定すると期間内外で判定します)"
+        : "月次加算は算定日で公費期間の内外を判定しました";
 
     // ── 同一建物減算 (令和6年度〜) ──
     // 母数 = 所定単位数のみ (serviceBaseUnits = 基本サービス合計)。加算には掛けない。
@@ -1299,7 +1431,7 @@ export async function aggregateMonthlyVisitSeikyu(
       }
       if (kohiPartialMonth) {
         warnings.push(
-          `${userLabel}: 公費 (${kohiHobetsuLabel(kohi.hobetsu)}) の適用期間 (${kohi.start ?? "制限なし"}〜${kohi.end ?? "制限なし"}) が月の一部のため、公費対象単位数を期間内の実績 (${kohiUnits}/${totalUnits} 単位) に按分しました — 月次加算は全量を公費対象にしています。レセプトを確認してください`,
+          `${userLabel}: 公費 (${kohiHobetsuLabel(kohi.hobetsu)}) の適用期間 (${kohi.start ?? "制限なし"}〜${kohi.end ?? "制限なし"}) が月の一部のため、公費対象単位数を期間内の実績 (${kohiUnits}/${totalUnits} 単位) に按分しました — ${monthAddonKohiNote}。レセプトを確認してください`,
         );
       }
       if (honninLimit === 0 && kohi.hobetsu !== "12") {
@@ -1361,7 +1493,7 @@ export async function aggregateMonthlyVisitSeikyu(
       }
       if (kohiPartialMonth) {
         warnings.push(
-          `${userLabel}: 公費 (${kohiHobetsuLabel(kohi.hobetsu)}) の適用期間 (${kohi.start ?? "制限なし"}〜${kohi.end ?? "制限なし"}) が月の一部のため、公費対象単位数を期間内の実績 (${kohiUnits}/${totalUnits} 単位) に按分しました — 月次加算は全量を公費対象にしています。レセプトを確認してください`,
+          `${userLabel}: 公費 (${kohiHobetsuLabel(kohi.hobetsu)}) の適用期間 (${kohi.start ?? "制限なし"}〜${kohi.end ?? "制限なし"}) が月の一部のため、公費対象単位数を期間内の実績 (${kohiUnits}/${totalUnits} 単位) に按分しました — ${monthAddonKohiNote}。レセプトを確認してください`,
         );
       }
     } else {
@@ -1516,6 +1648,9 @@ export async function aggregateMonthlyVisitSeikyu(
     //    1 行 (= 1 明細書) を生成する (Phase 2: 行複製方式)。境界日が判定できない
     //    場合は分割せず従来コードパス + warning。
     let split: { seg: SegmentInput; typeCounts: Map<string, string[]> }[] | null = null;
+    // 分割時に算定日からセグメントを特定できなかった月次加算のラベル
+    // (= 従来どおり月末側に計上 + warning を出す対象。分割なし/特定済みは空)
+    const monthAddonFallbackLabels: string[] = [];
     if (midChange?.insurerChange) {
       const ic = midChange.insurerChange;
       const insurerDiff =
@@ -1540,6 +1675,31 @@ export async function aggregateMonthlyVisitSeikyu(
           })
           .filter((p) => p.filtered.size > 0);
         if (perSeg.length >= 2) {
+          // 月次加算 (初回 / 生活機能向上連携) の計上先セグメントを算定日で特定する。
+          // 算定日がどのセグメント期間にも入らない (実績なしで落ちた期間・月外の入力ミス等)
+          // 場合は null = 従来判定 (月末側 + warning) にフォールバック。
+          const mFlags = monthAddonByClient.get(userId);
+          const segIdxOfDate = (d: string | null): number | null => {
+            if (!d) return null;
+            const i = perSeg.findIndex((p) => d >= p.s.from && d <= p.s.to);
+            return i >= 0 ? i : null;
+          };
+          const shokaiSegIdx = mFlags?.shokai ? segIdxOfDate(mFlags.shokaiDate) : null;
+          const seikatsuSegIdx =
+            mFlags && (mFlags.seikatsuKino === "Ⅰ" || mFlags.seikatsuKino === "Ⅱ")
+              ? segIdxOfDate(mFlags.seikatsuDate)
+              : null;
+          if (mFlags?.shokai && shokaiSegIdx == null) monthAddonFallbackLabels.push("初回");
+          if (
+            mFlags &&
+            (mFlags.seikatsuKino === "Ⅰ" || mFlags.seikatsuKino === "Ⅱ") &&
+            seikatsuSegIdx == null
+          ) {
+            monthAddonFallbackLabels.push("生活機能向上連携");
+          }
+          if (!hasKinkyuCol && (mFlags?.kinkyuCount ?? 0) > 0) {
+            monthAddonFallbackLabels.push("緊急時");
+          }
           split = perSeg.map((p, i) => ({
             typeCounts: p.filtered,
             seg: {
@@ -1550,6 +1710,11 @@ export async function aggregateMonthlyVisitSeikyu(
               isLast: i === perSeg.length - 1,
               cert: p.s.cert,
               monthLimitAmount: null, // 分割時は各セグメントの認定限度額で機械判定
+              monthAddonHere: {
+                shokai: shokaiSegIdx != null ? i === shokaiSegIdx : i === perSeg.length - 1,
+                seikatsu:
+                  seikatsuSegIdx != null ? i === seikatsuSegIdx : i === perSeg.length - 1,
+              },
             },
           }));
           const segDesc = perSeg
@@ -1618,18 +1783,13 @@ export async function aggregateMonthlyVisitSeikyu(
       rows.push(buildRowForSegment(userId, part.typeCounts, part.seg));
     }
 
-    // 分割時の追加警告: 月単位の値 (月次加算・計画単位数・手割振り) は配分できない
+    // 分割時の追加警告: 月単位の値 (月次加算・計画単位数・手割振り) は配分できない。
+    // 月次加算は算定日 (santei_date) でセグメントを特定できたものは正しい保険者側に
+    // 計上済みのため warning を出さない (算定日なしのみ従来どおり月末側 + warning)。
     if (split.length > 1) {
-      const flags = monthAddonByClient.get(userId);
-      const hasMonthAttributedAddon =
-        !!flags &&
-        (flags.shokai ||
-          flags.seikatsuKino === "Ⅰ" ||
-          flags.seikatsuKino === "Ⅱ" ||
-          (!hasKinkyuCol && flags.kinkyuCount > 0));
-      if (hasMonthAttributedAddon) {
+      if (monthAddonFallbackLabels.length > 0) {
         warnings.push(
-          `${userLabel}さん: 算定日を特定できない月次加算 (初回・生活機能向上連携${hasKinkyuCol ? "" : "・緊急時"}) は月末側の明細書に計上しました — 算定先の保険者が正しいか確認してください`,
+          `${userLabel}さん: 算定日を特定できない月次加算 (${monthAddonFallbackLabels.join("・")}) は月末側の明細書に計上しました — 算定先の保険者が正しいか確認してください (提供表の月次加算で算定日を設定すると自動判定されます)`,
         );
       }
       const hasPlan = planUnitsByClient.has(userId);

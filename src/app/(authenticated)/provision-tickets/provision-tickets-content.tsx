@@ -313,6 +313,10 @@ export function ProvisionTicketsContent({
   //
   // addonLines: 現在保存済みの { addon_code -> count }
   const [addonLines, setAddonLines] = useState<Record<string, number>>({});
+  // addonDates: 保存済みの算定日 { addon_code -> 'YYYY-MM-DD' } (santei_date。未指定は無し)
+  const [addonDates, setAddonDates] = useState<Record<string, string>>({});
+  // santei_date 列が未適用 (migrations/month_addon_santei_date.sql 前) → 日付入力を出さない
+  const [santeiDateSupported, setSanteiDateSupported] = useState(true);
   // 訪問介護の加算コード一覧 (対象月 validInMonth で解決。calculation_type='加算' のみ)
   const [addonOptions, setAddonOptions] = useState<AddonCodeOption[]>([]);
   // 初回加算候補サジェスト: 過去2ヶ月に completed 実績なし = 新規利用の可能性
@@ -325,6 +329,8 @@ export function ProvisionTicketsContent({
   const [sameBuildingColMissing, setSameBuildingColMissing] = useState(false);
   // モーダル内の加算入力 (追加時に upsert する一時状態): { addon_code -> count }
   const [addRowAddons, setAddRowAddons] = useState<Record<string, number>>({});
+  // モーダル内の加算 算定日 (任意): { addon_code -> 'YYYY-MM-DD' }
+  const [addRowAddonDates, setAddRowAddonDates] = useState<Record<string, string>>({});
   // 2人体制の個別時間列 (staff2_start_time 等) が適用済みか
   const [staff2TimesSupported, setStaff2TimesSupported] = useState(false);
   // additional_staff (jsonb, 追加職員 最大9名) 列が適用済みか
@@ -550,18 +556,31 @@ export function ProvisionTicketsContent({
     if (!currentOfficeId) return;
     let cancelled = false;
     (async () => {
-      // ① 既存の加算明細行 (addon_code -> count)
-      const { data, error } = await supabase
+      // ① 既存の加算明細行 (addon_code -> count + 算定日)。
+      //    santei_date 列未適用 (42703) は従来列のみで再取得し、日付入力を無効化
+      let santeiOk = true;
+      let { data, error } = await supabase
         .from("kaigo_visit_addon_lines")
-        .select("addon_code, count")
+        .select("addon_code, count, santei_date")
         .eq("client_id", userId)
         .eq("target_month", monthStr)
         .eq("office_id", currentOfficeId);
+      if (error && (error.code === "42703" || error.code === "PGRST204")) {
+        santeiOk = false;
+        ({ data, error } = await supabase
+          .from("kaigo_visit_addon_lines")
+          .select("addon_code, count")
+          .eq("client_id", userId)
+          .eq("target_month", monthStr)
+          .eq("office_id", currentOfficeId));
+      }
       if (cancelled) return;
+      setSanteiDateSupported(santeiOk);
       if (error) {
         if (error.code === "42P01" || error.code === "PGRST205") {
           setAddonTableMissing(true);
           setAddonLines({});
+          setAddonDates({});
           return;
         }
         console.error("addon lines fetch failed:", error.message);
@@ -570,10 +589,13 @@ export function ProvisionTicketsContent({
       }
       setAddonTableMissing(false);
       const next: Record<string, number> = {};
-      for (const r of (data ?? []) as { addon_code: string; count: number }[]) {
+      const nextDates: Record<string, string> = {};
+      for (const r of (data ?? []) as { addon_code: string; count: number; santei_date?: string | null }[]) {
         next[r.addon_code] = r.count;
+        if (r.santei_date) nextDates[r.addon_code] = r.santei_date;
       }
       setAddonLines(next);
+      setAddonDates(nextDates);
 
       // ② 初回加算候補: 過去2ヶ月間に completed 実績が無い利用者をサジェスト
       const [y, m] = monthStr.split("-").map(Number);
@@ -892,8 +914,10 @@ export function ProvisionTicketsContent({
   // ── サービス加算 upsert (kaigo_visit_addon_lines が真実) ─────────────────────
   // 加算行はこのテーブルの投影。onConflict は client_id,target_month,office_id,addon_code。
   // テーブル未作成 (42P01/PGRST205) は加算保存をスキップして amber toast。
+  // santeiDate: 算定日 (任意)。undefined = 既存値を保持 / null = 未指定 / 'YYYY-MM-DD' = 指定。
+  // santei_date 列未適用 (migration 前) は payload に含めない = 従来動作。
   const upsertAddonLine = useCallback(
-    async (addonCode: string, count: number): Promise<boolean> => {
+    async (addonCode: string, count: number, santeiDate?: string | null): Promise<boolean> => {
       if (!currentOfficeId) {
         toast.error("加算の保存には事業所の選択 (?office=) が必要です");
         return false;
@@ -923,21 +947,28 @@ export function ProvisionTicketsContent({
           delete next[addonCode];
           return next;
         });
+        setAddonDates((prev) => {
+          const next = { ...prev };
+          delete next[addonCode];
+          return next;
+        });
         return true;
       }
+      // upsert は行全体を書き換えるため、算定日未指定 (undefined) は既存値を引き継ぐ
+      const effectiveDate =
+        santeiDate !== undefined ? santeiDate : addonDates[addonCode] ?? null;
+      const payload: Record<string, unknown> = {
+        client_id: userId,
+        target_month: monthStr,
+        office_id: currentOfficeId,
+        addon_code: addonCode,
+        count: c,
+        updated_at: new Date().toISOString(),
+      };
+      if (santeiDateSupported) payload.santei_date = effectiveDate;
       const { error } = await supabase
         .from("kaigo_visit_addon_lines")
-        .upsert(
-          {
-            client_id: userId,
-            target_month: monthStr,
-            office_id: currentOfficeId,
-            addon_code: addonCode,
-            count: c,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "client_id,target_month,office_id,addon_code" },
-        );
+        .upsert(payload, { onConflict: "client_id,target_month,office_id,addon_code" });
       if (error) {
         if (error.code === "42P01" || error.code === "PGRST205") {
           setAddonTableMissing(true);
@@ -949,9 +980,15 @@ export function ProvisionTicketsContent({
         return false;
       }
       setAddonLines((prev) => ({ ...prev, [addonCode]: c }));
+      setAddonDates((prev) => {
+        const next = { ...prev };
+        if (santeiDateSupported && effectiveDate) next[addonCode] = effectiveDate;
+        else if (santeiDateSupported) delete next[addonCode];
+        return next;
+      });
       return true;
     },
-    [supabase, userId, monthStr, currentOfficeId],
+    [supabase, userId, monthStr, currentOfficeId, addonDates, santeiDateSupported],
   );
 
   // ── 同一建物減算区分 (client_office_assignments.same_building_tier) の読込 ──
@@ -1063,11 +1100,12 @@ export function ProvisionTicketsContent({
 
     // モーダルで指定した「この訪問につく加算」を kaigo_visit_addon_lines に反映。
     // addRowAddons = { addon_code -> count }。既存 addonLines と加算合成 (回数加算) して upsert。
+    // 算定日 (任意入力) はモーダルで指定があればそれ、無ければ既存値を保持 (undefined)。
     // (処遇改善は行を作らず集計のみ = ここでは扱わない)
     for (const [code, cnt] of Object.entries(addRowAddons)) {
       if (cnt <= 0) continue;
       const merged = (addonLines[code] ?? 0) + cnt;
-      await upsertAddonLine(code, merged);
+      await upsertAddonLine(code, merged, addRowAddonDates[code] || undefined);
     }
 
     setShowAddRow(false);
@@ -1422,6 +1460,22 @@ export function ProvisionTicketsContent({
       cancelled = true;
     };
   }, [supabase, userId, currentOfficeId, selectedMonth, addonLines]);
+
+  // 初回加算の算定日サジェスト: 当月の初回訪問日 (実績があれば実績、無ければ予定の最小日)
+  const firstVisitDate = useMemo(() => {
+    let minActual: number | null = null;
+    let minPlanned: number | null = null;
+    for (const rowData of Object.values(grid)) {
+      for (const [dayStr, cell] of Object.entries(rowData)) {
+        const d = parseInt(dayStr, 10);
+        if (!Number.isFinite(d)) continue;
+        if (cell.actual) minActual = minActual == null ? d : Math.min(minActual, d);
+        if (cell.planned) minPlanned = minPlanned == null ? d : Math.min(minPlanned, d);
+      }
+    }
+    const d = minActual ?? minPlanned;
+    return d == null ? null : `${monthStr}-${String(d).padStart(2, "0")}`;
+  }, [grid, monthStr]);
 
   const addonRows = useMemo(() => {
     const out = resolvedAddonLines
@@ -1915,6 +1969,7 @@ export function ProvisionTicketsContent({
                     setAddRowAdditional([]);
                     setAddRowDoukou(false);
                     setAddRowAddons({});
+                    setAddRowAddonDates({});
                     setShowAddRow(true);
                   }}
                   className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 no-print"
@@ -2110,6 +2165,7 @@ export function ProvisionTicketsContent({
                                 {a.unit > 0
                                   ? `月次加算 (${a.unit.toLocaleString()}単位${a.count > 1 ? ` × ${a.count}` : ""})`
                                   : "単位数マスタ未解決 (対象月世代を確認)"}
+                                {addonDates[a.code] ? `・算定日 ${addonDates[a.code]}` : ""}
                               </td>
                               <td className="border border-gray-400 px-0 py-0 text-center font-bold text-purple-700">
                                 {a.count}
@@ -2462,6 +2518,20 @@ export function ProvisionTicketsContent({
                   onChange={setAddRowAddons}
                   existingLines={addonLines}
                   shokaiSuggest={shokaiSuggest}
+                  dates={addRowAddonDates}
+                  onDateChange={(code, v) =>
+                    setAddRowAddonDates((prev) => {
+                      const next = { ...prev };
+                      if (v) next[code] = v;
+                      else delete next[code];
+                      return next;
+                    })
+                  }
+                  existingDates={addonDates}
+                  shokaiDefaultDate={firstVisitDate}
+                  dateMin={`${monthStr}-01`}
+                  dateMax={`${monthStr}-${String(daysCount).padStart(2, "0")}`}
+                  showSanteiDate={santeiDateSupported}
                 />
               )}
             </div>
@@ -2610,6 +2680,8 @@ function HeaderPair({
 // その事業所のサービス種別 (訪問介護) で使える「加算」を kaigo_service_codes から
 // 一覧表示し、適用チェック + 回数で選択する (ほのぼの「加算サービス項目」相当)。
 // selected = { addon_code -> count } (0 or 未設定 = 非適用)。
+// dates = { addon_code -> 算定日 (任意) }。レセプト分割 (保険者変更月) や公費の期間按分で
+// 計上先を自動判定するのに使う (未指定 = 従来どおり月末側計上 + warning)。
 // 減算 (calculation_type='減算') は今回は一覧に出さない (次段階)。
 function ProvisionAddonChecklist({
   addonTableMissing,
@@ -2619,6 +2691,13 @@ function ProvisionAddonChecklist({
   onChange,
   existingLines,
   shokaiSuggest,
+  dates,
+  onDateChange,
+  existingDates,
+  shokaiDefaultDate,
+  dateMin,
+  dateMax,
+  showSanteiDate,
 }: {
   addonTableMissing: boolean;
   currentOfficeId: string | null | undefined;
@@ -2627,6 +2706,17 @@ function ProvisionAddonChecklist({
   onChange: (next: Record<string, number>) => void;
   existingLines: Record<string, number>;
   shokaiSuggest: boolean | null;
+  /** モーダル内の算定日入力 (addon_code -> 'YYYY-MM-DD') */
+  dates: Record<string, string>;
+  onDateChange: (code: string, value: string) => void;
+  /** 保存済み行の算定日 (プレースホルダ表示用) */
+  existingDates: Record<string, string>;
+  /** 初回加算チェック時の算定日既定値 (= 当月の初回訪問日)。null = サジェストなし */
+  shokaiDefaultDate: string | null;
+  dateMin: string;
+  dateMax: string;
+  /** santei_date 列が適用済みか (未適用は日付入力を出さない = 従来 UI) */
+  showSanteiDate: boolean;
 }) {
   const setCode = (code: string, count: number) => {
     const next = { ...selected };
@@ -2660,7 +2750,20 @@ function ProvisionAddonChecklist({
                     <input
                       type="checkbox"
                       checked={checked}
-                      onChange={(e) => setCode(opt.code, e.target.checked ? Math.max(1, count) : 0)}
+                      onChange={(e) => {
+                        setCode(opt.code, e.target.checked ? Math.max(1, count) : 0);
+                        // 初回加算はチェック時に「当月の初回訪問日」を算定日の既定値としてサジェスト
+                        if (
+                          e.target.checked &&
+                          showSanteiDate &&
+                          isShokai &&
+                          !dates[opt.code] &&
+                          !existingDates[opt.code] &&
+                          shokaiDefaultDate
+                        ) {
+                          onDateChange(opt.code, shokaiDefaultDate);
+                        }
+                      }}
                       className="h-4 w-4 accent-purple-600"
                     />
                     <span className="break-words">{opt.name}</span>
@@ -2680,6 +2783,25 @@ function ProvisionAddonChecklist({
                   )}
                   <span className="w-6 text-right text-[10px] text-gray-400">回</span>
                 </div>
+                {checked && showSanteiDate && (
+                  <div className="ml-6 mt-1 flex items-center gap-1.5">
+                    <span className="whitespace-nowrap text-[10px] text-gray-500">算定日 (任意)</span>
+                    <input
+                      type="date"
+                      value={dates[opt.code] ?? ""}
+                      min={dateMin}
+                      max={dateMax}
+                      onChange={(e) => onDateChange(opt.code, e.target.value)}
+                      className="rounded border border-gray-300 px-1.5 py-0.5 text-xs"
+                      title="算定日。保険者変更月のレセプト分割や公費の期間按分で計上先の自動判定に使います (未指定 = 月末側に計上)"
+                    />
+                    {!dates[opt.code] && existingDates[opt.code] && (
+                      <span className="text-[10px] text-gray-400">
+                        保存済: {existingDates[opt.code]}
+                      </span>
+                    )}
+                  </div>
+                )}
                 {alreadyN > 0 && (
                   <p className="ml-6 mt-0.5 text-[10px] text-purple-600">
                     当月 既に {alreadyN} 回 (チェックで加算)
