@@ -269,25 +269,68 @@ export function KaigoSeikyuContent() {
       setAddonByClient(new Map());
       return;
     }
-    const { data, error: e } = await supabase
-      .from("kaigo_visit_month_addons")
-      .select("client_id, shokai, seikatsu_kino, kinkyu_count")
-      .eq("office_id", officeId)
-      .eq("target_month", monthKey);
-    if (e) {
-      // テーブル未作成 (SQL 未適用) は amber バナー案内、それ以外は toast
-      if (isTableMissingError(e.code)) {
-        setAddonTableMissing(true);
-      } else {
-        toast.error("月次加算の取得に失敗: " + e.message);
-      }
+    // 入力経路 2 系統 (集計 aggregate.ts と同じ) を読んでマージする:
+    //   a. kaigo_visit_month_addons (旧 3固定フラグ。移行期データ)
+    //   b. kaigo_visit_addon_lines の月次4コード (現行の提供表 加算エディタ)
+    // 両方に同じ加算がある場合は boolean は OR、回数は max (二重計上防止 = 集計と同規則)。
+    // ※ 月次4コード以外の加算行は集計の details に加算行として乗る (上の明細表に表示)。
+    const [oldRes, lineRes] = await Promise.all([
+      supabase
+        .from("kaigo_visit_month_addons")
+        .select("client_id, shokai, seikatsu_kino, kinkyu_count")
+        .eq("office_id", officeId)
+        .eq("target_month", monthKey),
+      supabase
+        .from("kaigo_visit_addon_lines")
+        .select("client_id, addon_code, count")
+        .eq("office_id", officeId)
+        .eq("target_month", monthKey)
+        .in("addon_code", ["114001", "114000", "114003", "114002"]),
+    ]);
+    const oldMissing = !!oldRes.error && isTableMissingError(oldRes.error.code);
+    const lineMissing = !!lineRes.error && isTableMissingError(lineRes.error.code);
+    if (oldRes.error && !oldMissing) {
+      toast.error("月次加算の取得に失敗: " + oldRes.error.message);
       setAddonByClient(new Map());
       return;
     }
-    setAddonTableMissing(false);
-    setAddonByClient(
-      new Map(((data ?? []) as MonthAddonRow[]).map((r) => [r.client_id, r])),
+    if (lineRes.error && !lineMissing) {
+      toast.error("月次加算 (加算行) の取得に失敗: " + lineRes.error.message);
+      setAddonByClient(new Map());
+      return;
+    }
+    // 両テーブルとも未作成のときのみ SQL 未適用バナー (片方あれば加算表示は成立する)
+    setAddonTableMissing(oldMissing && lineMissing);
+    const map = new Map<string, MonthAddonRow>(
+      oldMissing
+        ? []
+        : ((oldRes.data ?? []) as MonthAddonRow[]).map((r) => [r.client_id, r]),
     );
+    if (!lineMissing) {
+      for (const r of (lineRes.data ?? []) as {
+        client_id: string;
+        addon_code: string;
+        count: number | null;
+      }[]) {
+        const count = r.count ?? 0;
+        if (count <= 0) continue;
+        let f = map.get(r.client_id);
+        if (!f) {
+          f = { client_id: r.client_id, shokai: false, seikatsu_kino: "なし", kinkyu_count: 0 };
+          map.set(r.client_id, f);
+        }
+        if (r.addon_code === "114001") {
+          f.shokai = true;
+        } else if (r.addon_code === "114000") {
+          f.kinkyu_count = Math.max(f.kinkyu_count, count);
+        } else {
+          // 114002 (Ⅱ) / 114003 (Ⅰ)。両方ある異常データは上位 (Ⅱ) を採用
+          const grade = r.addon_code === "114002" ? "Ⅱ" : "Ⅰ";
+          if (f.seikatsu_kino !== "Ⅱ") f.seikatsu_kino = grade;
+        }
+      }
+    }
+    setAddonByClient(map);
   }, [supabase, officeId, monthKey, isBath]);
 
   useEffect(() => {
@@ -788,14 +831,14 @@ export function KaigoSeikyuContent() {
             </div>
           </div>
 
-          {/* SQL 未適用 (kaigo_visit_month_addons) 案内 */}
+          {/* SQL 未適用 (kaigo_visit_addon_lines / kaigo_visit_month_addons とも未作成) 案内 */}
           {addonTableMissing && (
             <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
               <AlertCircle size={14} className="mt-0.5 shrink-0" />
               <span>
-                実績単位の加算テーブル (kaigo_visit_month_addons) が未作成です。
-                migrations/kaigo_visit_month_addons.sql を Supabase SQL Editor で適用すると、
-                初回・緊急時・生活機能向上連携加算を利用者×月で設定できます (適用まで加算なしで集計)。
+                実績単位の加算テーブル (kaigo_visit_addon_lines / kaigo_visit_month_addons) が未作成です。
+                migrations/kaigo_visit_addon_lines.sql を Supabase SQL Editor で適用すると、
+                初回・緊急時・生活機能向上連携加算などを利用者×月で設定できます (適用まで加算なしで集計)。
               </span>
             </div>
           )}

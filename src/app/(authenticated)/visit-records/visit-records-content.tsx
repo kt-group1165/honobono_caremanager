@@ -31,6 +31,7 @@ import { resolvePreferredTenantId } from "@/lib/tenant-resolver";
 import { SendDocumentModal } from "@/components/shared/SendDocumentModal";
 import { useBusinessType } from "@/lib/business-type-context";
 import { useSignedUrls } from "@/lib/use-signed-url";
+import { resolveVisitAddonLines } from "@/lib/visit-addons";
 import { ja } from "date-fns/locale";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -298,7 +299,7 @@ interface MonthlyServiceRecordItem {
   provider_name: string;    // staff_name
   duration_minutes: number | null;
 }
-/** 月次加算 (kaigo_visit_month_addons 由来) の送付行 */
+/** 月次加算 (kaigo_visit_month_addons + kaigo_visit_addon_lines 由来) の送付行 */
 interface MonthlyAddonItem {
   name: string;   // 初回加算 / 緊急時訪問介護加算 / 生活機能向上連携加算Ⅰ・Ⅱ
   count: number;  // 当月回数
@@ -954,53 +955,96 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
   const [schedules, setSchedules] = useState<VisitSchedule[]>([]);
   const [schedulesLoading, setSchedulesLoading] = useState(true);
 
-  // 当月の月次加算 (kaigo_visit_month_addons、office スコープ)。
-  // 編集は provision-tickets の「月次加算」セクション — ここは送信ペイロード/印字用の読取のみ。
+  // 当月の月次加算 (office スコープ)。入力経路 2 系統を読んでマージする (集計 aggregate.ts と同規則):
+  //   a. kaigo_visit_month_addons (旧 3固定フラグ。移行期データ)
+  //   b. kaigo_visit_addon_lines (現行の提供表 加算エディタ)。月次4コード
+  //      (初回 114001 / 緊急時 114000 / 生機Ⅰ 114003 / Ⅱ 114002) はフラグへ正規化
+  //      (boolean は OR、回数は max = 二重計上防止)、それ以外は加算行としてそのまま送付/印字。
+  // 編集は provision-tickets の加算エディタ — ここは送信ペイロード/印字用の読取のみ。
   const [monthAddons, setMonthAddons] = useState<{
     shokai: boolean;
     seikatsu_kino: string;
     kinkyu_count: number;
   } | null>(null);
+  // 月次4コード以外の加算行 (名称×回数。単位はマスタ解決済 — resolveVisitAddonLines)
+  const [serviceAddonItems, setServiceAddonItems] = useState<MonthlyAddonItem[]>([]);
   useEffect(() => {
     if (!currentOffice) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- office 未確定時の derived reset
       setMonthAddons(null);
+      setServiceAddonItems([]);
       return;
     }
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase
-        .from("kaigo_visit_month_addons")
-        .select("shokai, seikatsu_kino, kinkyu_count")
-        .eq("client_id", userId)
-        .eq("target_month", month)
-        .eq("office_id", currentOffice.id)
-        .maybeSingle();
+      const [yStr, mStr] = month.split("-");
+      const [oldRes, lines] = await Promise.all([
+        supabase
+          .from("kaigo_visit_month_addons")
+          .select("shokai, seikatsu_kino, kinkyu_count")
+          .eq("client_id", userId)
+          .eq("target_month", month)
+          .eq("office_id", currentOffice.id)
+          .maybeSingle(),
+        // テーブル未作成 (42P01/PGRST205) は空 Map。その他は加算なしで継続 (console のみ)
+        resolveVisitAddonLines(supabase, [userId], Number(yStr), Number(mStr), currentOffice.id)
+          .then((map) => map.get(userId) ?? [])
+          .catch((e: unknown) => {
+            console.error("addon lines fetch failed:", e instanceof Error ? e.message : String(e));
+            return [];
+          }),
+      ]);
       if (cancelled) return;
-      if (error) {
+      let flags: { shokai: boolean; seikatsu_kino: string; kinkyu_count: number } | null = null;
+      if (oldRes.error) {
         // テーブル未作成 (42P01/PGRST205) は「加算なし」として継続
-        if (error.code !== "42P01" && error.code !== "PGRST205") {
-          console.error("month addons fetch failed:", error.message);
+        if (oldRes.error.code !== "42P01" && oldRes.error.code !== "PGRST205") {
+          console.error("month addons fetch failed:", oldRes.error.message);
         }
-        setMonthAddons(null);
-        return;
+      } else if (oldRes.data) {
+        const d = oldRes.data as { shokai: boolean | null; seikatsu_kino: string | null; kinkyu_count: number | null };
+        flags = {
+          shokai: !!d.shokai,
+          seikatsu_kino: d.seikatsu_kino ?? "なし",
+          kinkyu_count: d.kinkyu_count ?? 0,
+        };
       }
-      setMonthAddons((data ?? null) as typeof monthAddons);
+      const generic: MonthlyAddonItem[] = [];
+      for (const l of lines) {
+        if (l.count <= 0) continue;
+        if (l.code === "114001" || l.code === "114000" || l.code === "114002" || l.code === "114003") {
+          if (!flags) flags = { shokai: false, seikatsu_kino: "なし", kinkyu_count: 0 };
+          if (l.code === "114001") {
+            flags.shokai = true;
+          } else if (l.code === "114000") {
+            flags.kinkyu_count = Math.max(flags.kinkyu_count, l.count);
+          } else {
+            const grade = l.code === "114002" ? "Ⅱ" : "Ⅰ";
+            if (flags.seikatsu_kino !== "Ⅱ") flags.seikatsu_kino = grade;
+          }
+        } else {
+          generic.push({ name: l.name, count: l.count });
+        }
+      }
+      setMonthAddons(flags);
+      setServiceAddonItems(generic);
     })();
     return () => { cancelled = true; };
   }, [supabase, userId, month, currentOffice]);
 
-  // 月次加算 → 送付/印字用の加算行
+  // 月次加算 + サービス加算行 → 送付/印字用の加算行
   const addonItems = useMemo<MonthlyAddonItem[]>(() => {
-    if (!monthAddons) return [];
     const out: MonthlyAddonItem[] = [];
-    if (monthAddons.shokai) out.push({ name: "初回加算", count: 1 });
-    if (monthAddons.kinkyu_count > 0) out.push({ name: "緊急時訪問介護加算", count: monthAddons.kinkyu_count });
-    if (monthAddons.seikatsu_kino === "Ⅰ" || monthAddons.seikatsu_kino === "Ⅱ") {
-      out.push({ name: `生活機能向上連携加算${monthAddons.seikatsu_kino}`, count: 1 });
+    if (monthAddons) {
+      if (monthAddons.shokai) out.push({ name: "初回加算", count: 1 });
+      if (monthAddons.kinkyu_count > 0) out.push({ name: "緊急時訪問介護加算", count: monthAddons.kinkyu_count });
+      if (monthAddons.seikatsu_kino === "Ⅰ" || monthAddons.seikatsu_kino === "Ⅱ") {
+        out.push({ name: `生活機能向上連携加算${monthAddons.seikatsu_kino}`, count: 1 });
+      }
     }
+    out.push(...serviceAddonItems);
     return out;
-  }, [monthAddons]);
+  }, [monthAddons, serviceAddonItems]);
 
   // 当該月分の visit_records (date + start_time 昇順)
   const monthRecords = useMemo(() => {

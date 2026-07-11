@@ -84,6 +84,9 @@ export async function resolveVisitAddonLines(
       supabase
         .from("kaigo_service_codes")
         .select("service_code, service_name, units")
+        // 提供表の加算エディタは 介護 (cat=11) のコードのみ書く。障害 system に
+        // 同じ 6 桁コードが存在しうるため system で絞る (集計 aggregate.ts と同規則)
+        .eq("system", "介護")
         .in("service_code", chunk),
       year,
       month,

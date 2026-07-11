@@ -475,6 +475,15 @@ export async function aggregateMonthlyVisitSeikyu(
     seikatsuDate: string | null;
   }
   const monthAddonByClient = new Map<string, MonthAddonFlags>();
+  // 月次4コード以外の加算行 (提供表の加算エディタ = kaigo_visit_addon_lines 由来。
+  // 認知症専門ケア加算・口腔連携強化加算 等)。「単位×回数」の加算行として明細に足す (2.6)。
+  interface GenericAddonLine {
+    code: string;
+    count: number;
+    /** 算定日。レセ分割のセグメント判定・公費期間按分に使う (null = 月末側 + 全量公費対象) */
+    santeiDate: string | null;
+  }
+  const genericAddonsByClient = new Map<string, GenericAddonLine[]>();
   if (opts.officeId) {
     const getMonthAddonFlags = (clientId: string): MonthAddonFlags => {
       let f = monthAddonByClient.get(clientId);
@@ -529,12 +538,14 @@ export async function aggregateMonthlyVisitSeikyu(
         }
       }
     }
-    // b) 現行の可変明細 (提供表の月次加算エディタが書く)。初回(114001)/緊急時(114000)/
-    //    生活機能向上Ⅰ(114003)/Ⅱ(114002) を旧フラグ形に正規化してマージする。
+    // b) 現行の可変明細 (提供表の加算エディタが書く)。全加算コードを読み、
+    //    月次4コード 初回(114001)/緊急時(114000)/生活機能向上Ⅰ(114003)/Ⅱ(114002) は
+    //    旧フラグ形に正規化してマージ、それ以外は genericAddonsByClient に積んで
+    //    2.6) で「単位×回数」の加算行として明細に足す。
     //    移行 SQL で両テーブルに同じ加算が入っている場合に二重計上しないよう
     //    boolean は OR、回数は max で合成する。
     {
-      const LINE_CODES = ["114001", "114000", "114003", "114002"];
+      const MONTHLY_LINE_CODES = new Set(["114001", "114000", "114003", "114002"]);
       let {
         data,
         error,
@@ -545,15 +556,13 @@ export async function aggregateMonthlyVisitSeikyu(
         .from("kaigo_visit_addon_lines")
         .select("client_id, addon_code, count, santei_date")
         .eq("office_id", opts.officeId)
-        .eq("target_month", monthStr)
-        .in("addon_code", LINE_CODES);
+        .eq("target_month", monthStr);
       if (error && error.code !== "42P01" && error.code !== "PGRST205" && isColumnMissing(error)) {
         ({ data, error } = await supabase
           .from("kaigo_visit_addon_lines")
           .select("client_id, addon_code, count")
           .eq("office_id", opts.officeId)
-          .eq("target_month", monthStr)
-          .in("addon_code", LINE_CODES));
+          .eq("target_month", monthStr));
       }
       if (error) {
         if (error.code !== "42P01" && error.code !== "PGRST205") {
@@ -568,8 +577,20 @@ export async function aggregateMonthlyVisitSeikyu(
         }[]) {
           const count = r.count ?? 0;
           if (count <= 0) continue;
-          const f = getMonthAddonFlags(r.client_id);
           const date = r.santei_date ?? null;
+          if (!MONTHLY_LINE_CODES.has(r.addon_code)) {
+            // 月次4コード以外 → 2.6) の汎用加算行へ
+            if (!genericAddonsByClient.has(r.client_id)) {
+              genericAddonsByClient.set(r.client_id, []);
+            }
+            genericAddonsByClient.get(r.client_id)!.push({
+              code: r.addon_code,
+              count,
+              santeiDate: date,
+            });
+            continue;
+          }
+          const f = getMonthAddonFlags(r.client_id);
           if (r.addon_code === "114001") {
             f.shokai = true;
             if (date) f.shokaiDate = date;
@@ -582,6 +603,90 @@ export async function aggregateMonthlyVisitSeikyu(
             if (date) f.seikatsuDate = date;
           }
         }
+      }
+    }
+  }
+
+  // 2.6) 提供表の加算エディタ由来の非月次加算コードを対象月世代のマスタで解決する。
+  //     「単位×回数」で計算できる固定単位の加算のみ採用し、以下は二重計上・誤計算を
+  //     防ぐため集計に載せない (利用者ループで warning を出す):
+  //       - formula 持ち (処遇改善等の %加算) → 事業所単位の既存経路 (applied_formula_codes /
+  //         kaigo_office_addon_periods) で自動計算するため、加算エディタ分は無視
+  //       - calculation_type ≠ '加算' (同一建物減算・虐防/業未の合成コード等) →
+  //         自動算定側 (same_building_tier / kaigo_office_gensan_periods) に倒す
+  //       - units <= 0 (特別地域 118000 / 小規模 118100 / 中山間等提供 118110 /
+  //         特定事業所Ⅴ 116410 等の率加算 = マスタ単位数 0) → 率の自動計算は未対応
+  //       - 対象月に有効なマスタ世代なし
+  //     addon_lines が空 (通常) はこの節は完全 no-op = 従来と同値。
+  type GenericAddonMaster =
+    | { ok: true; name: string; units: number; code: string }
+    | { ok: false; name: string | null; reason: string };
+  const genericAddonMaster = new Map<string, GenericAddonMaster>();
+  {
+    const codes = Array.from(
+      new Set(
+        Array.from(genericAddonsByClient.values()).flatMap((lines) =>
+          lines.map((l) => l.code),
+        ),
+      ),
+    );
+    for (let i = 0; i < codes.length; i += 50) {
+      const chunk = codes.slice(i, i + 50);
+      const { data, error } = await validInMonth(
+        supabase
+          .from("kaigo_service_codes")
+          .select("service_code, service_name, units, calculation_type, formula")
+          .eq("system", "介護")
+          .in("service_code", chunk),
+        opts.year,
+        opts.month,
+      );
+      if (error) throw new Error(`加算行コード解決失敗: ${error.message}`);
+      for (const r of (data ?? []) as {
+        service_code: string;
+        service_name: string;
+        units: number;
+        calculation_type: string | null;
+        formula: unknown;
+      }[]) {
+        if (genericAddonMaster.has(r.service_code)) continue; // 先勝ち (validInMonth 済)
+        if (r.formula != null) {
+          genericAddonMaster.set(r.service_code, {
+            ok: false,
+            name: r.service_name,
+            reason:
+              "%加算 (処遇改善等) は事業所の適用加算 (マスタ管理 → 自事業所管理) 側で自動計算するため、加算エディタからは集計しません",
+          });
+        } else if (r.calculation_type !== "加算") {
+          genericAddonMaster.set(r.service_code, {
+            ok: false,
+            name: r.service_name,
+            reason: `加算コードではありません (${r.calculation_type ?? "区分不明"}) — 減算等は自動算定側で計上するため、加算エディタからは集計しません`,
+          });
+        } else if (!(r.units > 0)) {
+          genericAddonMaster.set(r.service_code, {
+            ok: false,
+            name: r.service_name,
+            reason:
+              "マスタ単位数が 0 の率加算 (特別地域/中山間等) のため自動計算できません — 手動対応してください",
+          });
+        } else {
+          genericAddonMaster.set(r.service_code, {
+            ok: true,
+            name: r.service_name,
+            units: r.units,
+            code: r.service_code,
+          });
+        }
+      }
+    }
+    for (const c of codes) {
+      if (!genericAddonMaster.has(c)) {
+        genericAddonMaster.set(c, {
+          ok: false,
+          name: null,
+          reason: `対象月 (${monthStr}) に有効なマスタ世代 (system=介護) から引けません`,
+        });
       }
     }
   }
@@ -980,6 +1085,12 @@ export async function aggregateMonthlyVisitSeikyu(
      * undefined = 従来判定 (月末側 isLast に計上 + warning)。分割なしは常に undefined。
      */
     monthAddonHere?: { shokai: boolean; seikatsu: boolean };
+    /**
+     * 非月次の加算行 (genericAddonsByClient) の計上先セグメント (addon_code → segIndex)。
+     * 分割時に呼出側が算定日 (santei_date) で解決して設定する (算定日なし・期間外は
+     * 月末側 = segCount-1 に解決済)。undefined (分割なし) は全行を計上。
+     */
+    genericAddonSegIdx?: Map<string, number>;
   }
   const buildRowForSegment = (
     userId: string,
@@ -1226,6 +1337,57 @@ export async function aggregateMonthlyVisitSeikyu(
         pushMonthAddon(MONTH_ADDON_NAMES.seikatsuI, 1, "生活機能向上連携加算Ⅰ", false, flags?.seikatsuDate ?? null);
       if (seikatsuKino === "Ⅱ")
         pushMonthAddon(MONTH_ADDON_NAMES.seikatsuII, 1, "生活機能向上連携加算Ⅱ", false, flags?.seikatsuDate ?? null);
+    }
+    // ── 提供表の加算エディタ由来の加算行 (月次4コード以外。2.6 で解決済) ──
+    // 単位×回数 の固定単位加算 (認知症専門ケア・口腔連携強化 等)。
+    // 限度額管理: 原則「管理対象」(告示の対象外 = 初回・緊急時・%加算系は
+    // この経路に来ない) なので shokaiKinkyuUnits には足さない = 超過判定に含める。
+    // レセ分割時は算定日でセグメント判定 (呼出側で解決済。算定日なしは月末側 + warning)。
+    // 公費按分は月次加算と同じ: 算定日あり = 公費期間の内外で全量/0、なし = 全量 + 注記。
+    // addon_lines が空なら no-op = 従来と完全同値。
+    for (const g of genericAddonsByClient.get(userId) ?? []) {
+      const m = genericAddonMaster.get(g.code);
+      if (!m || !m.ok) continue; // 未解決・対象外コードの warning は利用者ループ側で 1 回出す
+      if (seg.segCount > 1) {
+        const target = seg.genericAddonSegIdx?.get(g.code) ?? seg.segCount - 1;
+        if (target !== seg.segIndex) continue;
+      }
+      const units = m.units * g.count;
+      grossBaseUnits += units;
+      const line: SeikyuDetailLine = {
+        service_type: m.name,
+        // short_name はマスタの system 跨ぎ backfill 汚染 (pushMonthAddon の注記参照) を
+        // 避けるため使わない → 表示は service_name そのまま
+        short_name: null,
+        service_code: m.code,
+        unit_per: m.units,
+        count: g.count,
+        units,
+      };
+      if (kohi) {
+        if (kohiProrate && g.santeiDate) {
+          const kc = inKohiPeriod(g.santeiDate) ? g.count : 0;
+          line.kohi_count = kc;
+          line.kohi_units = m.units * kc;
+        } else {
+          line.kohi_count = g.count;
+          line.kohi_units = units;
+          if (kohiProrate) monthAddonKohiFallback = true;
+        }
+      }
+      if (kohi2) {
+        if (kohi2Prorate && g.santeiDate) {
+          const kc2 = inKohi2Period(g.santeiDate) ? g.count : 0;
+          line.kohi2_count = kc2;
+          line.kohi2_units = m.units * kc2;
+        } else {
+          line.kohi2_count = g.count;
+          line.kohi2_units = units;
+          if (kohi2Prorate) monthAddonKohiFallback = true;
+        }
+      }
+      details.push(line);
+      monthAddonPushed = true;
     }
     // 期間按分 warning の月次加算 注記 (下の kohiPartialMonth warning 2 箇所で使う)。
     // 月次加算なし = 従来文言のまま / 全件算定日あり = 期間判定済みの旨に差し替え。
@@ -1587,6 +1749,15 @@ export async function aggregateMonthlyVisitSeikyu(
         `${userLabel}: 対象月 (${monthStr}) に有効な認定が見つからないため最新の認定情報で集計しています — 認定有効期間を確認してください`,
       );
     }
+    // ── 提供表の加算エディタ由来で集計に載せない加算コードの warning (利用者×コードで 1 回) ──
+    for (const g of genericAddonsByClient.get(userId) ?? []) {
+      const m = genericAddonMaster.get(g.code);
+      if (m && !m.ok) {
+        warnings.push(
+          `${userLabel}: 提供表の加算${m.name ? `「${m.name}」` : ""} (${g.code}) は集計に含めません — ${m.reason}`,
+        );
+      }
+    }
     // ── 生活援助中心型の回数上限 (届出基準) チェック ──
     // 厚生労働大臣が定める回数 (平成30年厚労省告示第218号: 要介護1=27/2=34/3=43/4=38/5=31 回/月)
     // 「以上」の生活援助中心型を位置付けたケアプランは市町村届出が必要
@@ -1700,6 +1871,20 @@ export async function aggregateMonthlyVisitSeikyu(
           if (!hasKinkyuCol && (mFlags?.kinkyuCount ?? 0) > 0) {
             monthAddonFallbackLabels.push("緊急時");
           }
+          // 非月次の加算行 (加算エディタ由来) も算定日で計上先セグメントを解決する。
+          // 算定日なし・どのセグメントにも入らない → 月末側 (perSeg.length-1) + warning
+          const genericAddonSegIdx = new Map<string, number>();
+          for (const g of genericAddonsByClient.get(userId) ?? []) {
+            const gm = genericAddonMaster.get(g.code);
+            if (!gm?.ok) continue; // 集計対象外コードは帰属不要 (warning は上で出済)
+            const idx = segIdxOfDate(g.santeiDate);
+            if (idx == null) {
+              genericAddonSegIdx.set(g.code, perSeg.length - 1);
+              monthAddonFallbackLabels.push(gm.name);
+            } else {
+              genericAddonSegIdx.set(g.code, idx);
+            }
+          }
           split = perSeg.map((p, i) => ({
             typeCounts: p.filtered,
             seg: {
@@ -1710,6 +1895,7 @@ export async function aggregateMonthlyVisitSeikyu(
               isLast: i === perSeg.length - 1,
               cert: p.s.cert,
               monthLimitAmount: null, // 分割時は各セグメントの認定限度額で機械判定
+              genericAddonSegIdx,
               monthAddonHere: {
                 shokai: shokaiSegIdx != null ? i === shokaiSegIdx : i === perSeg.length - 1,
                 seikatsu:
@@ -1789,7 +1975,7 @@ export async function aggregateMonthlyVisitSeikyu(
     if (split.length > 1) {
       if (monthAddonFallbackLabels.length > 0) {
         warnings.push(
-          `${userLabel}さん: 算定日を特定できない月次加算 (${monthAddonFallbackLabels.join("・")}) は月末側の明細書に計上しました — 算定先の保険者が正しいか確認してください (提供表の月次加算で算定日を設定すると自動判定されます)`,
+          `${userLabel}さん: 算定日を特定できない加算 (${monthAddonFallbackLabels.join("・")}) は月末側の明細書に計上しました — 算定先の保険者が正しいか確認してください (提供表の加算で算定日を設定すると自動判定されます)`,
         );
       }
       const hasPlan = planUnitsByClient.has(userId);
