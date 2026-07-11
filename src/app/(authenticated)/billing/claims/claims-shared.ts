@@ -188,9 +188,152 @@ export const TOKUTEI_KASSAN_FALLBACK: Record<string, number> = {
   C: 323,
 };
 
+// ─────────────────────────────────────────────────────────────────────────
+// 逓減制 (令和6年度〜): ケアマネ 1 人 (常勤換算) あたりの取扱件数で基本コードが段階変化
+//   体制(Ⅰ) = 通常:            (ⅰ) 〜44件 / (ⅱ) 45〜59件 / (ⅲ) 60件〜
+//   体制(Ⅱ) = ICT活用・事務職員配置等 (緩和要件):
+//                               (ⅰ) 〜49件 / (ⅱ) 50〜59件 / (ⅲ) 60件〜
+//   取扱件数 = (要介護の給付管理利用者数 + 要支援利用者数 × 1/3) ÷ 常勤換算数
+//   (要支援 1/3 換算は R6.4 改定の取扱い。要支援自体は介護予防支援費で請求する
+//    ため ⅱ/ⅲ コードの充当対象は要介護のみ)
+//
+// 実DB確認値 (2026-07-11 REST 確認。R6 世代 2024-06-01〜2026-05-31 と
+// R8.6 世代 2026-06-01〜 で 12 コードとも同一コード・同一単位):
+//   432111 Ⅰⅰ１ 1086 / 432211 Ⅰⅰ２ 1411
+//   433111 Ⅰⅱ１  544 / 433211 Ⅰⅱ２  704
+//   434111 Ⅰⅲ１  326 / 434211 Ⅰⅲ２  422
+//   435011 Ⅱⅰ１ 1086 / 435211 Ⅱⅰ２ 1411
+//   435311 Ⅱⅱ１  527 / 435411 Ⅱⅱ２  683
+//   435511 Ⅱⅲ１  316 / 435611 Ⅱⅲ２  410
+//   (１ = 要介護1・2 / ２ = 要介護3〜5)
+// ─────────────────────────────────────────────────────────────────────────
+export type TeigenTaisei = "Ⅰ" | "Ⅱ";
+export type TeigenTier = "ⅰ" | "ⅱ" | "ⅲ";
+
+export const TEIGEN_TAISEI_LIST: TeigenTaisei[] = ["Ⅰ", "Ⅱ"];
+export const TEIGEN_TIER_LIST: TeigenTier[] = ["ⅰ", "ⅱ", "ⅲ"];
+
+/** 要介護1・2 (=１) / 要介護3〜5 (=２) の基本コードペア */
+export type TeigenPair = { light: CareLevelInfo; heavy: CareLevelInfo };
+
+/** マスタ未登録月の最終フォールバック (上記 実DB確認値の静的コピー) */
+export const KYOTAKU_TEIGEN_FALLBACK: Record<TeigenTaisei, Record<TeigenTier, TeigenPair>> = {
+  "Ⅰ": {
+    "ⅰ": {
+      light: { units: 1086, code: "432111", name: "居宅介護支援Ⅰⅰ１" },
+      heavy: { units: 1411, code: "432211", name: "居宅介護支援Ⅰⅰ２" },
+    },
+    "ⅱ": {
+      light: { units: 544, code: "433111", name: "居宅介護支援Ⅰⅱ１" },
+      heavy: { units: 704, code: "433211", name: "居宅介護支援Ⅰⅱ２" },
+    },
+    "ⅲ": {
+      light: { units: 326, code: "434111", name: "居宅介護支援Ⅰⅲ１" },
+      heavy: { units: 422, code: "434211", name: "居宅介護支援Ⅰⅲ２" },
+    },
+  },
+  "Ⅱ": {
+    "ⅰ": {
+      light: { units: 1086, code: "435011", name: "居宅介護支援Ⅱⅰ１" },
+      heavy: { units: 1411, code: "435211", name: "居宅介護支援Ⅱⅰ２" },
+    },
+    "ⅱ": {
+      light: { units: 527, code: "435311", name: "居宅介護支援Ⅱⅱ１" },
+      heavy: { units: 683, code: "435411", name: "居宅介護支援Ⅱⅱ２" },
+    },
+    "ⅲ": {
+      light: { units: 316, code: "435511", name: "居宅介護支援Ⅱⅲ１" },
+      heavy: { units: 410, code: "435611", name: "居宅介護支援Ⅱⅲ２" },
+    },
+  },
+};
+
+/**
+ * 逓減制の tier 判定 (pure)。
+ * @param cumCount その利用者までの累積取扱件数 (要支援 1/3 換算込み。1 始まり)
+ * @param fte 介護支援専門員の常勤換算数
+ * @param kanwa 緩和要件 (ICT活用・事務職員配置 = 体制(Ⅱ)) 該当か
+ *
+ * 「45件以上60件未満の部分」= 常勤換算 1 人あたり換算で 45件目〜59件目。
+ * cumCount ÷ fte が 45 (緩和時 50) 以上で (ⅱ)、60 以上で (ⅲ)。
+ */
+export function teigenTierForIndex(
+  cumCount: number,
+  fte: number,
+  kanwa: boolean,
+): TeigenTier {
+  if (fte <= 0) return "ⅰ";
+  const per = cumCount / fte;
+  const second = kanwa ? 50 : 45;
+  if (per < second) return "ⅰ";
+  if (per < 60) return "ⅱ";
+  return "ⅲ";
+}
+
+/**
+ * 逓減制 tier ごとの基本コードを要介護度から解決する。
+ * 要介護 1〜5 以外 (要支援/申請中 等) は null。
+ */
+export function resolveTeigenBase(
+  teigenBase: Record<TeigenTaisei, Record<TeigenTier, TeigenPair>>,
+  taisei: TeigenTaisei,
+  tier: TeigenTier,
+  careLevel: string,
+): CareLevelInfo | null {
+  const pair = teigenBase[taisei]?.[tier];
+  if (!pair) return null;
+  if (careLevel === "要介護1" || careLevel === "要介護2") return pair.light;
+  if (careLevel === "要介護3" || careLevel === "要介護4" || careLevel === "要介護5")
+    return pair.heavy;
+  return null;
+}
+
+/**
+ * サービス名から逓減制 tier を判定する (請求画面の表示用)。
+ * 「居宅介護支援Ⅰⅱ１」等の基本コード名にのみマッチ。それ以外は null。
+ */
+export function parseTeigenFromName(
+  name: string | null | undefined,
+): { taisei: TeigenTaisei; tier: TeigenTier } | null {
+  const m = (name ?? "").match(/^居宅介護支援([ⅠⅡ])([ⅰⅱⅲ])/);
+  if (!m) return null;
+  return { taisei: m[1] as TeigenTaisei, tier: m[2] as TeigenTier };
+}
+
+/**
+ * 事業所の逓減制設定。fte (常勤換算数) 未設定 or 列未適用 (migration
+ * teigen_settings.sql) の場合は null → 従来動作 (警告のみ) にフォールバック。
+ */
+export type TeigenSettings = { fte: number; kanwa: boolean };
+
+export async function fetchTeigenSettings(
+  supabase: SupabaseClient,
+  officeId: string,
+): Promise<TeigenSettings | null> {
+  const { data, error } = await supabase
+    .from("offices")
+    .select("caremane_jokin_kansan, teigen_kanwa")
+    .eq("id", officeId)
+    .maybeSingle();
+  if (error) {
+    // 列未適用 (42703 / PGRST204 等) は従来動作へフォールバック (握りつぶさず log)
+    console.warn(
+      "逓減制設定の取得に失敗 (migrations/teigen_settings.sql 未適用?)。従来どおり警告のみ:",
+      error.message,
+    );
+    return null;
+  }
+  const row = data as { caremane_jokin_kansan?: number | string | null; teigen_kanwa?: boolean | null } | null;
+  const fte = Number(row?.caremane_jokin_kansan ?? 0);
+  if (!Number.isFinite(fte) || fte <= 0) return null;
+  return { fte, kanwa: !!row?.teigen_kanwa };
+}
+
 export interface KyotakuMonthMaster {
-  /** 要介護度 → 基本コード・単位 (対象月有効世代) */
+  /** 要介護度 → 基本コード・単位 (対象月有効世代。逓減 (ⅰ) = 通常時) */
   byCareLevel: Record<string, CareLevelInfo>;
+  /** 逓減制: 体制(Ⅰ)/(Ⅱ) × tier (ⅰ/ⅱ/ⅲ) → 基本コードペア (対象月有効世代) */
+  teigenBase: Record<TeigenTaisei, Record<TeigenTier, TeigenPair>>;
   /** 特定事業所加算 区分 → 単位 (434002〜434006) */
   tokuteiUnits: Record<string, number>;
   /** 特定事業所医療介護連携加算 (434005) の単位 */
@@ -199,9 +342,16 @@ export interface KyotakuMonthMaster {
   fromMaster: boolean;
 }
 
+// 逓減制の基本コード 12 名称 (体制Ⅰ/Ⅱ × tier ⅰ/ⅱ/ⅲ × 要介護度グループ１/２)
+const KYOTAKU_TEIGEN_NAMES: string[] = TEIGEN_TAISEI_LIST.flatMap((t) =>
+  TEIGEN_TIER_LIST.flatMap((tier) => [
+    `居宅介護支援${t}${tier}１`,
+    `居宅介護支援${t}${tier}２`,
+  ]),
+);
+
 const KYOTAKU_MASTER_NAMES = [
-  "居宅介護支援Ⅰⅰ１",
-  "居宅介護支援Ⅰⅰ２",
+  ...KYOTAKU_TEIGEN_NAMES,
   "居宅支援特定事業所加算Ⅰ",
   "居宅支援特定事業所加算Ⅱ",
   "居宅支援特定事業所加算Ⅲ",
@@ -255,6 +405,20 @@ export async function fetchKyotakuMasterForMonth(
     byCareLevel["要介護5"] = i2;
   }
 
+  // 逓減制 12 コード (体制Ⅰ/Ⅱ × ⅰ/ⅱ/ⅲ × １/２)。マスタ優先・静的フォールバック
+  const teigenBase: Record<TeigenTaisei, Record<TeigenTier, TeigenPair>> = {
+    "Ⅰ": { "ⅰ": { ...KYOTAKU_TEIGEN_FALLBACK["Ⅰ"]["ⅰ"] }, "ⅱ": { ...KYOTAKU_TEIGEN_FALLBACK["Ⅰ"]["ⅱ"] }, "ⅲ": { ...KYOTAKU_TEIGEN_FALLBACK["Ⅰ"]["ⅲ"] } },
+    "Ⅱ": { "ⅰ": { ...KYOTAKU_TEIGEN_FALLBACK["Ⅱ"]["ⅰ"] }, "ⅱ": { ...KYOTAKU_TEIGEN_FALLBACK["Ⅱ"]["ⅱ"] }, "ⅲ": { ...KYOTAKU_TEIGEN_FALLBACK["Ⅱ"]["ⅲ"] } },
+  };
+  for (const taisei of TEIGEN_TAISEI_LIST) {
+    for (const tier of TEIGEN_TIER_LIST) {
+      const light = pick(`居宅介護支援${taisei}${tier}１`);
+      const heavy = pick(`居宅介護支援${taisei}${tier}２`);
+      if (light) teigenBase[taisei][tier] = { ...teigenBase[taisei][tier], light };
+      if (heavy) teigenBase[taisei][tier] = { ...teigenBase[taisei][tier], heavy };
+    }
+  }
+
   const tokuteiUnits: Record<string, number> = { ...TOKUTEI_KASSAN_FALLBACK };
   const tkMap: [string, string][] = [
     ["Ⅰ", "居宅支援特定事業所加算Ⅰ"],
@@ -270,6 +434,7 @@ export async function fetchKyotakuMasterForMonth(
 
   return {
     byCareLevel,
+    teigenBase,
     tokuteiUnits,
     medicalCoopUnits: mc?.units ?? 125,
     fromMaster: byName.size > 0,

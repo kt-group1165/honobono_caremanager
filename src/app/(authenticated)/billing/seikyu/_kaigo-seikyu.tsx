@@ -49,7 +49,7 @@ import {
   type SeikyuKohiRow,
   type SeikyuKohiTandoku,
 } from "../forms/_seikyu";
-import type { ClaimStatus } from "../claims/claims-shared";
+import { parseTeigenFromName, type ClaimStatus } from "../claims/claims-shared";
 import { monthRange } from "@/lib/cert-for-month";
 import {
   getHospitalizationMap,
@@ -719,6 +719,19 @@ export function KyotakuKaigoSeikyuContent() {
   const allChecked = checked.size === displayRows.length && displayRows.length > 0;
   const meisaiTargets = meisaiPrintRows ?? targetDisplayRows;
 
+  // ── 逓減制: 基本コードが (ⅱ)/(ⅲ) の利用者 (レセ一括生成の自動判定結果) ──
+  //    サービス名 (居宅介護支援Ⅰⅱ１ 等) から tier を復元して表示する。
+  const teigenApplied = useMemo(() => {
+    const ii: string[] = [];
+    const iii: string[] = [];
+    for (const r of rows) {
+      const t = parseTeigenFromName(r.serviceName);
+      if (!t || t.tier === "ⅰ") continue;
+      (t.tier === "ⅱ" ? ii : iii).push(r.user_name);
+    }
+    return { ii, iii };
+  }, [rows]);
+
   // 認定申請中 (care_level='申請中') は認定結果が出るまで国保連請求の対象外。
   // 当月行のみ集計 (再請求行は元提供月の別集計)。行の amber 色付け + 上部バナー用。
   const shinseichuCount = displayRows.filter(
@@ -800,15 +813,38 @@ export function KyotakuKaigoSeikyuContent() {
             </div>
           )}
 
-          {/* 逓減制の注意 (監査M-1: 取扱件数45件以上/常勤換算1人あたりで
-              居宅介護支援費ⅱ/ⅲ に逓減。判定機構が無いため件数閾値で注意喚起) */}
-          {!loading && filteredRows.length >= 45 && (
+          {/* 逓減制 (監査M-1): 一括生成の自動判定結果 (ⅱ/ⅲ 該当者) を表示。
+              判定が動いていない (= 常勤換算数 未設定) のに 45 件以上のときは従来の注意喚起 */}
+          {!loading && teigenApplied.ii.length + teigenApplied.iii.length > 0 && (
+            <div className="border-b border-indigo-200 bg-indigo-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-indigo-900">
+              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <span>
+                <span className="font-semibold">逓減制適用中</span> — 取扱件数の自動判定により
+                {teigenApplied.ii.length > 0 && (
+                  <> 居宅介護支援費(ⅱ): {teigenApplied.ii.length}名
+                    <span className="text-indigo-700"> ({teigenApplied.ii.join("、")})</span>
+                  </>
+                )}
+                {teigenApplied.ii.length > 0 && teigenApplied.iii.length > 0 && " / "}
+                {teigenApplied.iii.length > 0 && (
+                  <> 居宅介護支援費(ⅲ): {teigenApplied.iii.length}名
+                    <span className="text-indigo-700"> ({teigenApplied.iii.join("、")})</span>
+                  </>
+                )}
+                {" "}で算定しています (常勤換算数は 事業所設定 → 逓減制 で変更可)。
+              </span>
+            </div>
+          )}
+          {!loading &&
+            teigenApplied.ii.length + teigenApplied.iii.length === 0 &&
+            rows.length >= 45 && (
             <div className="border-b border-amber-300 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
               <AlertTriangle size={14} className="mt-0.5 shrink-0" />
               <span>
-                当月の請求対象が {filteredRows.length} 件あります。ケアマネ1人 (常勤換算) あたり
+                当月の請求対象が {rows.length} 件あります。ケアマネ1人 (常勤換算) あたり
                 45件以上は<span className="font-semibold">逓減制 (居宅介護支援費ⅱ/ⅲ)</span> の対象です —
-                取扱件数 ÷ 常勤換算数を確認し、該当する場合は基本サービスコードを見直してください
+                事業所設定 → 逓減制 で「介護支援専門員 常勤換算数」を設定すると、
+                レセプト一括生成時に基本サービスコードを自動判定します
                 (ICT活用・事務職員配置の緩和要件あり)。
               </span>
             </div>

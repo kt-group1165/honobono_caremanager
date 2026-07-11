@@ -31,8 +31,16 @@ export interface ResolvedKohi {
   futansha: string | null;
   /** 公費受給者番号 (7桁) */
   jukyusha: string | null;
-  /** 本人支払額/月 (介護券記載。0=なし)。※ 金額計算への反映は未対応 (TODO) */
+  /**
+   * 本人負担上限月額 (介護券・受給者証記載の本人支払額。0=なし)。
+   * 訪問介護請求 (visit-seikyu/aggregate.ts) は
+   * 本人負担 = min(保険給付後負担, この上限) / 公費請求 = 残り で計算に反映する。
+   */
   honninFutan: number;
+  /** 公費適用期間 開始 (YYYY-MM-DD)。null = 開始制限なし */
+  start: string | null;
+  /** 公費適用期間 終了 (YYYY-MM-DD)。null = 終了制限なし */
+  end: string | null;
 }
 
 export interface ResolveKohiResult {
@@ -155,6 +163,8 @@ export async function resolveKohiForMonth(
       futansha: top.futansha_number?.trim() || null,
       jukyusha: top.jukyusha_number?.trim() || null,
       honninFutan: top.honnin_futan ?? 0,
+      start: top.start_date,
+      end: top.end_date,
     });
   }
   return { byClient, fallback: false };
@@ -201,6 +211,8 @@ async function resolveKohiLegacy(
                 futansha: r.kohi_futansha_number?.trim() || null,
                 jukyusha: r.kohi_jukyusha_number?.trim() || null,
                 honninFutan: 0,
+                start: null,
+                end: null,
               }
             : null,
         );

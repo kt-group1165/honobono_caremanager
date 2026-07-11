@@ -1442,12 +1442,16 @@ export function MeisaiPrintSheet({
             <AggVc />
             <AggVc>{hasKohi ? (row.kohiAmount ?? 0).toLocaleString() : ""}</AggVc>
           </tr>
-          {/* ⑬ 公費分本人負担 (生保は 0) */}
+          {/* ⑬ 公費分本人負担 (本人負担上限月額の適用分。生保の既定 = 0) */}
           <tr>
             <AggLb>⑬公費分本人負担</AggLb>
-            <AggVc>{hasKohi ? "0" : ""}</AggVc>
+            <AggVc>
+              {hasKohi ? (row.kohiHonninFutan ?? 0).toLocaleString() : ""}
+            </AggVc>
             <AggVc />
-            <AggVc>{hasKohi ? "0" : ""}</AggVc>
+            <AggVc>
+              {hasKohi ? (row.kohiHonninFutan ?? 0).toLocaleString() : ""}
+            </AggVc>
           </tr>
         </tbody>
       </table>

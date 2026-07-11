@@ -140,19 +140,22 @@ export function buildKokuhoDensou(
     byHobetsu.get(h)!.push(r);
   }
   for (const [hobetsu, hRows] of byHobetsu) {
+    // 公費請求分は「公費対象分」の再掲: 単位数・費用・保険請求額は公費対象分
+    // (kohiUnits/kohiTargetCost/kohiTargetInsurance。生保等の全量公費は総量と同値)。
+    // 利用者負担 = 公費分本人負担 (本人負担上限月額の適用分。上限 0 なら従来どおり 0)。
     dataParts.push([
       "7111",
       ym,
       office,
       "2", // 保険・公費等区分コード (2:公費請求。共通編1.4 項番79)
-      hobetsu, // 法別番号 (12=生活保護 等)
+      hobetsu, // 法別番号 (12=生活保護, 21=精神通院, 54=難病 等)
       SEIKYU_JOHO_KUBUN,
       String(hRows.length),
-      String(hRows.reduce((s, r) => s + r.totalUnits, 0)),
-      String(hRows.reduce((s, r) => s + r.totalAmount, 0)),
-      String(hRows.reduce((s, r) => s + r.insuranceAmount, 0)),
+      String(hRows.reduce((s, r) => s + (r.kohiUnits ?? r.totalUnits), 0)),
+      String(hRows.reduce((s, r) => s + (r.kohiTargetCost ?? r.totalAmount), 0)),
+      String(hRows.reduce((s, r) => s + (r.kohiTargetInsurance ?? r.insuranceAmount), 0)),
       String(hRows.reduce((s, r) => s + (r.kohiAmount ?? 0), 0)),
-      "0", // 利用者負担 (公費振替後は 0)
+      String(hRows.reduce((s, r) => s + (r.kohiHonninFutan ?? 0), 0)), // 利用者負担 (公費分本人負担)
       "", "", "", "", "", "",
     ]);
   }
@@ -237,14 +240,17 @@ export function buildKokuhoDensou(
       "", // 32 公費3給付率
       String(r.totalUnits), // 33 合計 保険 サービス単位数
       String(r.insuranceAmount), // 34 同 請求額 (公費単独は 0)
-      String(r.userAmount), // 35 同 利用者負担額 (公費単独は 0)
+      // 35 利用者負担額 = 実際の本人負担 (部分公費は 本人負担上限月額 適用後。
+      //    公費対象外分の法定負担 + 公費分本人負担 (項41) の合算)
+      String(r.userAmount),
       "", // 36 緊急時施設療養費請求額
       "", // 37 特定診療費請求額
       "", // 38 特定入所者介護サービス費等請求額
       // 39-44 公費1 合計情報 (サービス単位数 / 請求額 / 本人負担額 / 緊急時 / 特定診療 / 特定入所者)
-      hasKohi ? String(r.totalUnits) : "",
-      hasKohi ? String(r.kohiAmount ?? 0) : "",
-      hasKohi ? "0" : "",
+      // 39 公費1対象サービス単位数 (部分公費は公費適用期間内の実績分のみ)
+      hasKohi ? String(r.kohiUnits ?? r.totalUnits) : "",
+      hasKohi ? String(r.kohiAmount ?? 0) : "", // 40 公費1請求額
+      hasKohi ? String(r.kohiHonninFutan ?? 0) : "", // 41 公費1本人負担額 (上限月額の適用分)
       "", "", "",
       "", "", "", "", "", "", // 45-50 公費2 合計情報
       "", "", "", "", "", "", // 51-56 公費3 合計情報
@@ -254,13 +260,31 @@ export function buildKokuhoDensou(
     // 実績単位の月次加算 (初回 114001 / 緊急時 114000 / 生活機能向上連携 114003・114002) は
     // aggregate.ts が details[] に加算行として積んでいるため、ここでそのまま 02 行になる。
     // 処遇改善等の%加算 (addonCode) のみ別枠で 1 行追加する (従来どおり)。
-    const detailLines: { code: string; unitPer: number; count: number; units: number }[] = [];
+    // 保険優先の部分公費 (法別12以外・公費単独でない) は明細の公費対象欄 (項11/15) を
+    // aggregate.ts の期間按分値 (kohi_count/kohi_units) で出す。生保・公費単独は全量 (従来どおり)。
+    const kohiPriority =
+      hasKohi && !r.kohiTandoku && !!r.kohiHobetsu && r.kohiHobetsu !== "12";
+    const detailLines: {
+      code: string;
+      unitPer: number;
+      count: number;
+      units: number;
+      kohiCount?: number;
+      kohiUnits?: number;
+    }[] = [];
     for (const d of r.details) {
       if (!d.service_code) {
         warnings.push(`${r.user_name}: "${d.service_type}" のサービスコードがマスタから引けません`);
         continue;
       }
-      detailLines.push({ code: d.service_code, unitPer: d.unit_per, count: d.count, units: d.units });
+      detailLines.push({
+        code: d.service_code,
+        unitPer: d.unit_per,
+        count: d.count,
+        units: d.units,
+        kohiCount: d.kohi_count,
+        kohiUnits: d.kohi_units,
+      });
     }
     if (r.addonUnits > 0) {
       if (r.addonCode) {
@@ -268,7 +292,27 @@ export function buildKokuhoDensou(
         if (r.addonUnits > 9999) {
           warnings.push(`${r.user_name}: 処遇改善加算の単位数 (${r.addonUnits}) が4桁を超えています — 明細の単位数欄(4バイト)で桁溢れの可能性があります`);
         }
-        detailLines.push({ code: r.addonCode, unitPer: r.addonUnits, count: 1, units: r.addonUnits });
+        const addonLine: (typeof detailLines)[number] = {
+          code: r.addonCode,
+          unitPer: r.addonUnits,
+          count: 1,
+          units: r.addonUnits,
+        };
+        if (kohiPriority) {
+          // 部分公費: %加算行の公費対象分 = 集計の公費対象単位数 − 明細行の公費対象合計
+          // (Σ明細(15) = 集計(18) の突合を成立させる。全量公費なら addonUnits と一致)
+          const detailKohiSum = detailLines.reduce(
+            (s, d) => s + (d.kohiUnits ?? d.units),
+            0,
+          );
+          const addonKohi = Math.min(
+            Math.max((r.kohiUnits ?? r.totalUnits) - detailKohiSum, 0),
+            r.addonUnits,
+          );
+          addonLine.kohiCount = addonKohi > 0 ? 1 : 0;
+          addonLine.kohiUnits = addonKohi;
+        }
+        detailLines.push(addonLine);
       } else {
         warnings.push(`${r.user_name}: 加算 (${r.addonLabel ?? "処遇改善"}) のサービスコードが不明です`);
       }
@@ -285,11 +329,12 @@ export function buildKokuhoDensou(
         d.code.slice(2, 6), // 8 サービス項目コード
         String(d.unitPer), // 9 単位数
         String(d.count), // 10 日数・回数
-        hasKohi ? String(d.count) : "", // 11 公費1対象日数・回数
+        // 11 公費1対象日数・回数 (部分公費は公費適用期間内の実績のみ。全量公費は count と同値)
+        hasKohi ? String(d.kohiCount ?? d.count) : "",
         "", // 12 公費2対象日数・回数
         "", // 13 公費3対象日数・回数
         String(d.units), // 14 サービス単位数
-        hasKohi ? String(d.units) : "", // 15 公費1対象サービス単位数
+        hasKohi ? String(d.kohiUnits ?? d.units) : "", // 15 公費1対象サービス単位数
         "", // 16 公費2対象サービス単位数
         "", // 17 公費3対象サービス単位数
         "", // 18 摘要
@@ -326,11 +371,11 @@ export function buildKokuhoDensou(
       String(r.totalUnits), // 14 保険 単位数合計
       String(Math.round(opts.unitPrice * 100)), // 15 単位数単価 (10.00円 → 1000)
       String(r.insuranceAmount), // 16 保険 請求額
-      String(r.userAmount), // 17 利用者負担額
+      String(r.userAmount), // 17 利用者負担額 (部分公費は本人負担上限月額 適用後)
       // 18-20 公費1 (単位数合計 / 請求額 / 本人負担額)
-      hasKohi ? String(r.totalUnits) : "",
-      hasKohi ? String(r.kohiAmount ?? 0) : "",
-      hasKohi ? "0" : "",
+      hasKohi ? String(r.kohiUnits ?? r.totalUnits) : "", // 18 公費対象単位数
+      hasKohi ? String(r.kohiAmount ?? 0) : "", // 19 公費請求額
+      hasKohi ? String(r.kohiHonninFutan ?? 0) : "", // 20 公費分本人負担額
       "", "", "", // 21-23 公費2
       "", "", "", // 24-26 公費3
       "", "", "", // 27-29 保険分出来高医療費

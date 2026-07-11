@@ -376,21 +376,26 @@ export function KaigoSeikyuContent() {
   const targetCost = hokenTargets.reduce((s, r) => s + r.totalAmount, 0);
   const targetInsurance = hokenTargets.reduce((s, r) => s + r.insuranceAmount, 0);
   const targetUser = hokenTargets.reduce((s, r) => s + r.userAmount, 0);
-  // 保険請求分の公費 (生保等の本人負担振替分) — 公費請求欄の再掲元
+  // 保険請求分の公費 (生保の振替分 + 保険優先公費の上限適用分) — 公費請求欄の再掲元。
+  // 法別番号ごとに集計する (法別21/54 等の部分公費は生保行に混ぜない)。
+  // 単位数・費用合計は公費対象分 (kohiUnits / kohiTargetCost。全量公費は総量と同値)。
   const hokenKohiRows = hokenTargets.filter((r) => (r.kohiAmount ?? 0) > 0);
   const targetKohi = hokenKohiRows.reduce((s, r) => s + (r.kohiAmount ?? 0), 0);
-  const seikyuKohiRows =
-    hokenKohiRows.length > 0
-      ? [
-          {
-            code: "12",
-            count: hokenKohiRows.length,
-            units: hokenKohiRows.reduce((s, r) => s + (r.kohiUnits ?? 0), 0),
-            cost: hokenKohiRows.reduce((s, r) => s + r.totalAmount, 0),
-            kohi: targetKohi,
-          },
-        ]
-      : [];
+  const seikyuKohiRows = (() => {
+    const byHobetsu = new Map<string, typeof hokenKohiRows>();
+    for (const r of hokenKohiRows) {
+      const h = r.kohiHobetsu ?? "12"; // 旧テキストのみの移行期データは生保扱い (aggregate と同基準)
+      if (!byHobetsu.has(h)) byHobetsu.set(h, []);
+      byHobetsu.get(h)!.push(r);
+    }
+    return Array.from(byHobetsu.entries()).map(([code, rs]) => ({
+      code,
+      count: rs.length,
+      units: rs.reduce((s, r) => s + (r.kohiUnits ?? 0), 0),
+      cost: rs.reduce((s, r) => s + (r.kohiTargetCost ?? r.totalAmount), 0),
+      kohi: rs.reduce((s, r) => s + (r.kohiAmount ?? 0), 0),
+    }));
+  })();
   // 公費単独分の集計 (10割公費: 費用合計 = 公費請求額)
   const seikyuKohiTandoku =
     tandokuTargets.length > 0
@@ -1154,7 +1159,9 @@ export function KaigoSeikyuContent() {
                     公費: {selected.publicExpense}
                     {selected.kohiTandoku
                       ? " (公費単独請求 = 保険給付なし・総費用の10割を公費請求)"
-                      : " (本人負担分を公費請求へ振替)"}
+                      : selected.kohiHobetsu && selected.kohiHobetsu !== "12"
+                        ? ` (保険優先公費: 本人負担 ${(selected.kohiHonninFutan ?? 0).toLocaleString()}円 = 上限月額適用 / 残りを公費請求)`
+                        : " (本人負担分を公費請求へ振替)"}
                   </p>
                 )}
                 {selected.kohiTandoku && !selected.kohiHobetsu && (

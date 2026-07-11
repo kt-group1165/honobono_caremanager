@@ -84,6 +84,11 @@ export type OfficeSettings = {
   is_active: boolean;
   // 訪問介護 手順書 モード: 'standalone'=手順書内で自入力 (先行スタート) / 'integrated'=本体 clients と連携
   visit_procedure_mode?: "standalone" | "integrated";
+  // 逓減制 (居宅介護支援)。migrations/teigen_settings.sql 適用前は列が無く undefined
+  /** 介護支援専門員の常勤換算数 (NULL/0 = 逓減制の自動判定をしない) */
+  caremane_jokin_kansan?: number | string | null;
+  /** 逓減制の緩和要件 (ICT活用・事務職員配置 = 居宅介護支援費(Ⅱ)体制) 該当 */
+  teigen_kanwa?: boolean | null;
 };
 
 // 旧区分 (A/B/C) → 新区分 (Ⅰ/Ⅱ/Ⅲ) のクライアント側変換は撤去済。
@@ -247,12 +252,37 @@ export function OfficeContent({
         visit_procedure_mode: form.visit_procedure_mode ?? "standalone",
       })
       .eq("id", form.id);
-    setSaving(false);
     if (error) {
+      setSaving(false);
       toast.error("保存に失敗しました: " + error.message);
-    } else {
-      toast.success("事業所設定を保存しました");
+      return;
     }
+    // 逓減制設定 (居宅のみ)。列未適用 (migrations/teigen_settings.sql) の環境でも
+    // 本体の保存が巻き添えで失敗しないよう別 UPDATE に分離する。
+    if (form.service_type === "居宅介護支援") {
+      const rawFte = form.caremane_jokin_kansan;
+      const fte =
+        rawFte == null || rawFte === "" || !Number.isFinite(Number(rawFte))
+          ? null
+          : Number(rawFte);
+      const { error: teigenErr } = await supabase
+        .from("offices")
+        .update({
+          caremane_jokin_kansan: fte,
+          teigen_kanwa: !!form.teigen_kanwa,
+        })
+        .eq("id", form.id);
+      if (teigenErr) {
+        setSaving(false);
+        toast.warning(
+          "逓減制設定は保存できませんでした (migrations/teigen_settings.sql が未適用の可能性): " +
+            teigenErr.message,
+        );
+        return;
+      }
+    }
+    setSaving(false);
+    toast.success("事業所設定を保存しました");
   };
 
   if (!form) {
@@ -408,6 +438,51 @@ export function OfficeContent({
               +125 単位/月
             </span>
           )}
+        </div>
+      </div>
+      )}
+
+      {/* 逓減制 (取扱件数による居宅介護支援費の自動判定 = 居宅のみ表示) */}
+      {form.service_type === "居宅介護支援" && (
+      <div className="rounded-xl border bg-white p-6 shadow-sm space-y-4">
+        <h2 className="text-sm font-bold text-gray-700 border-b pb-2">逓減制 (取扱件数)</h2>
+        <p className="text-xs text-gray-500">
+          介護支援専門員 1 人 (常勤換算) あたりの取扱件数が 45 件以上 (緩和要件該当なら 50 件以上) で
+          居宅介護支援費(ⅱ)、60 件以上で (ⅲ) に逓減します。常勤換算数を設定すると、
+          レセプト一括生成時に利用者ごとの基本サービスコードを自動判定します
+          (未設定の場合は従来どおり件数警告のみ)。
+        </p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              介護支援専門員 常勤換算数
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              value={form.caremane_jokin_kansan ?? ""}
+              onChange={(e) => handleChange("caremane_jokin_kansan", e.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="例: 2.5 (空欄 = 自動判定しない)"
+            />
+          </div>
+          <div className="flex items-end pb-1">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.teigen_kanwa ?? false}
+                onChange={(e) => handleChange("teigen_kanwa", e.target.checked)}
+                className="h-4 w-4 rounded accent-blue-600"
+              />
+              <span className="text-sm text-gray-700">
+                緩和要件 (ICT活用・事務職員配置) に該当
+                <span className="block text-xs text-gray-400">
+                  該当時は居宅介護支援費(Ⅱ) の体制で判定・請求します (閾値 50/60 件)
+                </span>
+              </span>
+            </label>
+          </div>
         </div>
       </div>
       )}

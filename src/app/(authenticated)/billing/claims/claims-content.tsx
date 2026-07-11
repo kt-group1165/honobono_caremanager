@@ -35,6 +35,10 @@ import {
   DISCHARGE_UNITS,
   TOKUTEI_KASSAN_FALLBACK,
   fetchKyotakuMasterForMonth,
+  fetchTeigenSettings,
+  teigenTierForIndex,
+  resolveTeigenBase,
+  type TeigenTier,
   reductionUnitsOf,
   type YoboShienKubun,
   YOBO_SHIEN_MARKER,
@@ -780,13 +784,14 @@ export function ClaimsContent({
       // 1. Fetch active users（clients、is_facility=false で法人エントリ除外）
       //    PostgREST default 1000 行制限対策で page-loop で全件取得
       const PAGE_USERS = 1000;
-      const users: { id: string; name: string }[] = [];
+      type GenUser = { id: string; name: string; user_number: string | null };
+      const users: GenUser[] = [];
       {
         let fromU = 0;
         while (true) {
           const { data, error: usersErr } = await supabase
             .from("clients")
-            .select("id, name")
+            .select("id, name, user_number")
             .eq("status", "active")
             .eq("is_facility", false)
             .is("deleted_at", null)
@@ -794,7 +799,7 @@ export function ClaimsContent({
             .range(fromU, fromU + PAGE_USERS - 1);
           if (usersErr) throw usersErr;
           if (!data || data.length === 0) break;
-          users.push(...(data as { id: string; name: string }[]));
+          users.push(...(data as GenUser[]));
           if (data.length < PAGE_USERS) break;
           fromU += PAGE_USERS;
         }
@@ -985,6 +990,61 @@ export function ClaimsContent({
         }
       }
 
+      // 5-g. 逓減制 (令和6年度〜): 事業所設定の「介護支援専門員 常勤換算数」が
+      //     設定されていれば、取扱件数から利用者ごとの基本コード tier (ⅰ/ⅱ/ⅲ) を
+      //     自動判定する。未設定 or 列未適用 (migrations/teigen_settings.sql) の
+      //     場合は null → 従来どおり (Ⅰ)ⅰ 固定 + 請求画面の件数警告のみ。
+      const teigen = await fetchTeigenSettings(supabase, currentOffice.id);
+
+      // 5-h. tier の事前割当。
+      //   取扱件数 = 要介護の給付管理利用者数 + 要支援 (委託除く) × 1/3
+      //   充当順は 利用者番号 (数値) → ふりがな無しのため名前 → id の決定的順序。
+      //   要支援 1/3 換算分は件数の先頭 (ⅰ側) に置く = 要介護がより早く ⅱ/ⅲ に
+      //   到達する保守的 (過大請求を避ける) 側の取り扱い。
+      const tierByUser = new Map<string, TeigenTier>();
+      let teigenSummary: { count: number; perCm: number; ii: number; iii: number } | null = null;
+      if (teigen) {
+        const yokaigoUsers: GenUser[] = [];
+        let yoboCount = 0;
+        for (const user of users) {
+          if (!activeUserIds.has(user.id)) continue;
+          const cert = certMap.get(user.id);
+          if (!cert) continue;
+          if (isYoboShienLevel(cert.care_level)) {
+            // 委託 (包括が給付管理・請求) は取扱件数に含めない
+            if ((yoboKubunByUser.get(user.id) ?? "II") !== "itaku") yoboCount++;
+          } else if (/^要介護[1-5]$/.test(cert.care_level)) {
+            yokaigoUsers.push(user);
+          }
+        }
+        yokaigoUsers.sort((a, b) => {
+          const na = Number(a.user_number);
+          const nb = Number(b.user_number);
+          const aNum = a.user_number != null && a.user_number !== "" && Number.isFinite(na);
+          const bNum = b.user_number != null && b.user_number !== "" && Number.isFinite(nb);
+          if (aNum && bNum && na !== nb) return na - nb;
+          if (aNum !== bNum) return aNum ? -1 : 1; // 番号ありを先
+          const byName = a.name.localeCompare(b.name, "ja");
+          if (byName !== 0) return byName;
+          return a.id.localeCompare(b.id);
+        });
+        const yoboOffset = yoboCount / 3;
+        yokaigoUsers.forEach((u, idx) => {
+          tierByUser.set(
+            u.id,
+            teigenTierForIndex(yoboOffset + idx + 1, teigen.fte, teigen.kanwa),
+          );
+        });
+        const totalCount = yoboOffset + yokaigoUsers.length;
+        const tiers = [...tierByUser.values()];
+        teigenSummary = {
+          count: totalCount,
+          perCm: totalCount / teigen.fte,
+          ii: tiers.filter((t) => t === "ⅱ").length,
+          iii: tiers.filter((t) => t === "ⅲ").length,
+        };
+      }
+
       // 6. Delete existing claims for this month
       const { error: delErr } = await supabase
         .from("kaigo_care_support_claims")
@@ -996,7 +1056,7 @@ export function ClaimsContent({
       const now = new Date().toISOString();
       const rows: Record<string, unknown>[] = [];
 
-      for (const user of users as { id: string; name: string }[]) {
+      for (const user of users) {
         if (!activeUserIds.has(user.id)) continue;
         const cert = certMap.get(user.id);
         if (!cert) continue;
@@ -1048,9 +1108,25 @@ export function ClaimsContent({
         }
 
         let levelInfo = CARE_LEVEL_MAP[cert.care_level];
+        let teigenTier: TeigenTier | null = null;
         if (yoboKubun) {
           const yc = yoboKubun === "I" ? yoboCodes.I : yoboCodes.II;
           if (yc) levelInfo = yc;
+        } else if (teigen) {
+          // 逓減制の自動判定 (要介護のみ)。体制 = 緩和要件該当なら (Ⅱ)、通常 (Ⅰ)
+          const tier = tierByUser.get(user.id);
+          if (tier) {
+            const info = resolveTeigenBase(
+              monthMaster.teigenBase,
+              teigen.kanwa ? "Ⅱ" : "Ⅰ",
+              tier,
+              cert.care_level,
+            );
+            if (info) {
+              levelInfo = info;
+              teigenTier = tier;
+            }
+          }
         }
         if (!levelInfo) continue;
 
@@ -1071,6 +1147,11 @@ export function ClaimsContent({
         noteParts.push(
           `${AUTO_ADDON_NOTES_MARKER} ${levelInfo.name} ${levelInfo.units}単位 (kaigo_service_codes 対象月有効世代)`,
         );
+        if (teigen && teigenSummary && teigenTier) {
+          noteParts.push(
+            `${AUTO_ADDON_NOTES_MARKER} 逓減制判定: 取扱件数 ${teigenSummary.count.toFixed(1)}件 ÷ 常勤換算 ${teigen.fte} = ${teigenSummary.perCm.toFixed(1)}件/人${teigen.kanwa ? " (緩和要件該当 = 体制Ⅱ)" : ""} → (${teigenTier})`,
+          );
+        }
         if (uTokutei !== "none") {
           noteParts.push(
             `${AUTO_ADDON_NOTES_MARKER} 特定事業所加算${uTokutei} (${tokuteiSource === "addons" ? "加算管理" : "/master/office"} 由来)`,
@@ -1144,6 +1225,17 @@ export function ClaimsContent({
       toast.success(
         `${formatMonth(billingMonth)}のレセプトを${rows.length}件生成しました`
       );
+      if (teigenSummary) {
+        if (teigenSummary.ii + teigenSummary.iii > 0) {
+          toast.info(
+            `逓減制: 取扱件数 ${teigenSummary.perCm.toFixed(1)}件/常勤換算 → 居宅介護支援費(ⅱ) ${teigenSummary.ii}名 / (ⅲ) ${teigenSummary.iii}名 に自動判定しました`,
+          );
+        } else {
+          toast.info(
+            `逓減制: 取扱件数 ${teigenSummary.perCm.toFixed(1)}件/常勤換算 — 全員 (ⅰ) で生成しました`,
+          );
+        }
+      }
       fetchClaims();
     } catch (err: unknown) {
       // Supabase JS は HTTP 414/500 等で空 message を返したり、ブラウザ fetch が

@@ -292,7 +292,13 @@ export function SeikyuForm(props: Props) {
             // kohiSeg="kyotaku": 生保 下段 (居宅介護支援・居宅予防支援) 行に反映
             const isSeihoTarget =
               kohiSeg === "kyotaku" ? row.key === "12b" : !row.key && idx === 0;
-            const k = isSeihoTarget ? seihoRow : undefined;
+            // 生保 (12) 以外の法別 (21 精神通院 / 54 難病 等) は kohiRows の該当行を表示する
+            // (生保は seihoRow = 再掲分 + 公費単独分の合算のみ。code 12 を除外して二重計上を防ぐ)
+            const k = isSeihoTarget
+              ? seihoRow
+              : row.code !== "12"
+                ? kohiByCode.get(row.code)
+                : undefined;
             return (
               <tr key={rowKey} style={{ height: 26 }}>
                 <td style={{ ...h, width: "5%", fontSize: "7pt" }}>{row.key ? "" : row.code}</td>
