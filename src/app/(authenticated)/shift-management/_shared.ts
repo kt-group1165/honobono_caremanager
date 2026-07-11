@@ -47,6 +47,12 @@ export interface VisitSchedule {
    * migration kaigo_visit_schedule_additional_staff.sql 未適用環境では undefined。
    */
   additional_staff?: Array<{ staff_id: string; start_time: string | null; end_time: string | null }> | null;
+  /** キャンセル操作日時。migration visit_cancel_fee.sql 未適用環境では undefined */
+  cancelled_at?: string | null;
+  /** キャンセル理由 (同 migration 未適用環境では undefined) */
+  cancel_reason?: string | null;
+  /** キャンセル料 (円)。0 = 記録のみ。>0 は riyou_jippi_entries に連動 */
+  cancel_fee?: number | null;
   staff_name?: string | null;
   user_name?: string | null;
   _isCopy?: boolean; // ローカル複写行（未保存）
@@ -207,6 +213,15 @@ export function supportsStaff2Times(supabase: SupabaseClient): Promise<boolean> 
 /** kaigo_visit_schedule.additional_staff (jsonb, 追加職員 最大9名) が存在するか */
 export function supportsAdditionalStaff(supabase: SupabaseClient): Promise<boolean> {
   return supportsScheduleColumn(supabase, "additional_staff");
+}
+
+/**
+ * kaigo_visit_schedule.cancel_fee 等 (キャンセル管理列) が存在するか。
+ * migration visit_cancel_fee.sql 未適用環境ではキャンセル UI を出さない
+ * (status='cancelled' 自体は 012 由来の CHECK で常時許可されている)。
+ */
+export function supportsCancelColumns(supabase: SupabaseClient): Promise<boolean> {
+  return supportsScheduleColumn(supabase, "cancel_fee");
 }
 
 // ─── 追加職員 (additional_staff) の共有ヘルパー ──────────────────────────────

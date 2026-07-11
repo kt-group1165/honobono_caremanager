@@ -37,7 +37,7 @@ import {
   toHankakuDigits,
 } from "@/lib/service-name-normalize";
 import { validInMonth } from "@/lib/service-code-valid";
-import { resolveKohiForMonth, kohiHobetsuLabel } from "@/lib/kohi";
+import { resolveKohisForMonth, kohiHobetsuLabel, type ResolvedKohi } from "@/lib/kohi";
 import {
   resolveCertForMonth,
   resolveCertsInMonth,
@@ -89,6 +89,10 @@ export interface SeikyuDetailLine {
   kohi_count?: number;
   /** 公費対象単位数 = unit_per × kohi_count (減算行は期間内按分) */
   kohi_units?: number;
+  /** 公費2対象回数 (複数公費併用時のみ設定。考え方は kohi_count と同じ) */
+  kohi2_count?: number;
+  /** 公費2対象単位数 = unit_per × kohi2_count (複数公費併用時のみ設定) */
+  kohi2_units?: number;
 }
 
 export interface UserSeikyuRow {
@@ -201,6 +205,26 @@ export interface UserSeikyuRow {
    * 様式第二 ⑬公費分本人負担 / 伝送 基本(41)・集計(20) に対応。公費なしは null
    */
   kohiHonninFutan?: number | null;
+  // ─── 公費2 (複数公費の併用。2026-07) ───
+  // 対象月に有効な公費が 2 件以上あるときのみ設定 (すべて optional = 後方互換。
+  // 公費 1 件の行は従来と完全同値の出力になる)。
+  // カスケード: 保険優先 → 公費1 (適用優先順の上位) → 公費2 → 本人。
+  /** 公費2 法別番号 (12=生活保護 等。生保は制度優先順位が最劣後のため通常こちら側) */
+  kohi2Hobetsu?: string | null;
+  /** 公費2 負担者番号 (8桁) */
+  kohi2FutanshaNumber?: string | null;
+  /** 公費2 受給者番号 (7桁) */
+  kohi2JukyushaNumber?: string | null;
+  /** 公費2対象単位数 (伝送 基本(45)・集計(21) に対応) */
+  kohi2Units?: number | null;
+  /** 公費2請求額 (円) = 公費2対象の保険給付後負担 − 公費1充当分 − 公費2本人負担 */
+  kohi2Amount?: number | null;
+  /** 公費2対象費用額 (円) = floor(公費2対象単位数 × 単価) */
+  kohi2TargetCost?: number | null;
+  /** 公費2対象部分の保険請求額 (円) */
+  kohi2TargetInsurance?: number | null;
+  /** 公費2分本人負担額 (円) = min(公費2適用後の残負担, 公費2の本人負担上限月額) */
+  kohi2HonninFutan?: number | null;
   // ─── 国保連伝送用の追加情報 ───
   /** 加算のサービスコード (116274 等) */
   addonCode: string | null;
@@ -623,12 +647,14 @@ export async function aggregateMonthlyVisitSeikyu(
     }
   }
 
-  // 3.5) 公費 (生活保護等) — client_kohi_records から対象月に有効な公費を解決
-  //     (優先 1 件のみ。複数公費の併用按分は非対応。テーブル未作成時は
-  //      旧 client_insurance_records.kohi_* にフォールバック → lib/kohi.ts 参照)
+  // 3.5) 公費 (生活保護等) — client_kohi_records から対象月に有効な公費を
+  //     「全件・適用優先順」で解決する (複数公費の併用対応。2026-07。
+  //      優先順: priority → 制度優先順位表 → start_date。テーブル未作成時は
+  //      旧 client_insurance_records.kohi_* (1 件) にフォールバック → lib/kohi.ts 参照)。
+  //     上位 2 件までカスケード (保険 → 公費1 → 公費2 → 本人)。3 件以上は warning。
   //     honninFutan (本人負担上限月額) は 5) の金額計算で
   //     本人負担 = min(保険給付後負担, 上限) / 公費請求 = 残り として反映する。
-  const kohiRes = await resolveKohiForMonth(supabase, userIds, opts.year, opts.month);
+  const kohiRes = await resolveKohisForMonth(supabase, userIds, opts.year, opts.month);
 
   // 4) 処遇改善加算の rate — 適用加算コードの formula をマスタから取得
   //    (monthly_aggregate: 所定単位 × numerator/denominator)
@@ -885,16 +911,50 @@ export async function aggregateMonthlyVisitSeikyu(
     // ── 公費の解決 (明細行の公費対象回数を決めるため details 構築より前に行う) ──
     // 公費単独 (10割公費): 被保険者番号が 'H' 始まり = 介護保険未加入の生保受給者。
     const kohiTandoku = /^[Hh]/.test((cert?.insured_number ?? "").trim());
-    // 公費 (生活保護等) — 公費タブ (client_kohi_records) から対象月に有効な 1 件。
+    // 公費 (生活保護等) — 公費タブ (client_kohi_records) から対象月に有効な公費を
+    // 適用優先順で全件 (lib/kohi.ts resolveKohisForMonth)。
     // 分割時 (Phase 2) はセグメント期間と交差しない公費を落とす (期間の引き直し)
-    const kohiMonth = kohiRes.byClient.get(userId) ?? null;
-    const kohi =
-      seg.segCount > 1 &&
-      kohiMonth &&
-      ((kohiMonth.start != null && kohiMonth.start > seg.segTo) ||
-        (kohiMonth.end != null && kohiMonth.end < seg.segFrom))
-        ? null
-        : kohiMonth;
+    const kohisMonth = kohiRes.byClient.get(userId) ?? [];
+    const kohisInSeg =
+      seg.segCount > 1
+        ? kohisMonth.filter(
+            (k) =>
+              !(
+                (k.start != null && k.start > seg.segTo) ||
+                (k.end != null && k.end < seg.segFrom)
+              ),
+          )
+        : kohisMonth;
+    // 併用は 2 件まで (伝送様式は公費3まであるが、実務上 2 併用超は極めて稀。
+    // 3 件以上は適用優先順の上位 2 件で計算し warning で確認を促す)
+    if (kohisInSeg.length > 2) {
+      warnings.push(
+        `${userLabel}: 対象月に有効な公費が ${kohisInSeg.length} 件あります — 適用優先順の上位 2 件 (${kohisInSeg
+          .slice(0, 2)
+          .map((k) => kohiHobetsuLabel(k.hobetsu))
+          .join(" + ")}) のみで計算します。3 件目以降 (${kohisInSeg
+          .slice(2)
+          .map((k) => kohiHobetsuLabel(k.hobetsu))
+          .join(", ")}) は手動対応してください`,
+      );
+    }
+    const kohi = kohisInSeg[0] ?? null;
+    let kohi2: ResolvedKohi | null = kohisInSeg[1] ?? null;
+    if (kohi2 && kohiTandoku) {
+      // 公費単独 (H番号 = 保険給付なし 10割公費) と複数公費の組合せは自動対応外。
+      // 従来どおり第1公費のみ (全量振替) で計算する。
+      warnings.push(
+        `${userLabel}: 公費単独 (被保険者番号 H) で公費が複数登録されています — 第1公費 (${kohiHobetsuLabel(kohi!.hobetsu)}) のみで計算します (公費単独の複数公費併用は自動対応外)。${kohiHobetsuLabel(kohi2.hobetsu)} は手動対応してください`,
+      );
+      kohi2 = null;
+    }
+    if (kohi2 && kohi!.hobetsu === "12") {
+      // 生保 (法別12) は他法優先の原則 (生活保護法4条) で常に最劣後のはず。
+      // priority 手入力で生保が先に来ている場合は計算順が制度と逆になる。
+      warnings.push(
+        `${userLabel}: 生活保護 (法別12) が第1公費になっています (公費タブの優先順位を確認してください) — 生保は他法優先の原則により通常は最後に適用します`,
+      );
+    }
     // 公費適用期間が対象期間 (分割なしは対象月全体) の一部のみか
     // (月途中で開始/終了する介護券・受給者証)
     const kohiPartialMonth =
@@ -909,11 +969,22 @@ export async function aggregateMonthlyVisitSeikyu(
     // (Phase 1 で生保 法別12 の月途中開始/終了も按分に開放。2026-07)。
     // 公費単独 (H番号 10割) のみ従来どおり全量を公費対象とする (挙動保存)。
     const kohiProrate = !!kohi && !kohiTandoku && kohiPartialMonth;
+    // 公費2 の期間按分 (考え方は公費1と同じ。公費2は kohiTandoku 時 null 済)
+    const kohi2PartialMonth =
+      !!kohi2 &&
+      ((kohi2.start != null && kohi2.start > seg.segFrom) ||
+        (kohi2.end != null && kohi2.end < seg.segTo));
+    const inKohi2Period = (d: string) =>
+      !!kohi2 &&
+      (kohi2.start == null || d >= kohi2.start) &&
+      (kohi2.end == null || d <= kohi2.end);
+    const kohi2Prorate = !!kohi2 && kohi2PartialMonth;
 
     const details: SeikyuDetailLine[] = [];
     let grossBaseUnits = 0;
     // 基本サービス行の公費対象単位数 (同一建物減算の按分母数用)
     let kohiServiceBaseUnits = 0;
+    let kohi2ServiceBaseUnits = 0;
     for (const [svcType, dates] of typeCounts) {
       const count = dates.length;
       // 虐防/業未 減算適用中は合成バリエーション (減算織込み済単位数) へ差し替える。
@@ -944,6 +1015,12 @@ export async function aggregateMonthlyVisitSeikyu(
         line.kohi_count = kc;
         line.kohi_units = unitPer * kc;
         kohiServiceBaseUnits += line.kohi_units;
+      }
+      if (kohi2) {
+        const kc2 = kohi2Prorate ? dates.filter(inKohi2Period).length : count;
+        line.kohi2_count = kc2;
+        line.kohi2_units = unitPer * kc2;
+        kohi2ServiceBaseUnits += line.kohi2_units;
       }
       details.push(line);
     }
@@ -1007,6 +1084,10 @@ export async function aggregateMonthlyVisitSeikyu(
           line.kohi_count = count;
           line.kohi_units = units;
         }
+        if (kohi2) {
+          line.kohi2_count = count;
+          line.kohi2_units = units;
+        }
         details.push(line);
       };
       // 初回・緊急時 = 限度額管理対象外 (告示)。生活機能向上連携は管理対象
@@ -1046,6 +1127,12 @@ export async function aggregateMonthlyVisitSeikyu(
           line.kohi_count = 1;
           line.kohi_units = kohiProrate
             ? -Math.round(Math.min(kohiServiceBaseUnits, serviceBaseUnits) * rate)
+            : reduction;
+        }
+        if (kohi2) {
+          line.kohi2_count = 1;
+          line.kohi2_units = kohi2Prorate
+            ? -Math.round(Math.min(kohi2ServiceBaseUnits, serviceBaseUnits) * rate)
             : reduction;
         }
         details.push(line);
@@ -1101,15 +1188,20 @@ export async function aggregateMonthlyVisitSeikyu(
     //     旧 public_expense テキストだけの利用者は公費にしない (誤請求防止) — warning で案内。
     //   - テーブル未作成環境 (kohiRes.fallback): 従来どおりテキストもフォールバックとして採用。
     const peText = publicExpenseTextByClient.get(userId) ?? null;
+    // 表示ラベル: 併用時は「法別54 (難病) + 法別12 (生活保護)」のように連結
+    const kohiLabel = kohi
+      ? kohiHobetsuLabel(kohi.hobetsu) +
+        (kohi2 ? ` + ${kohiHobetsuLabel(kohi2.hobetsu)}` : "")
+      : null;
     let publicExpense: string | null;
     if (kohiRes.fallback) {
       publicExpense =
-        (kohi ? kohiHobetsuLabel(kohi.hobetsu) : null) ??
+        kohiLabel ??
         peText ??
         (kohiTandoku ? "公費単独 (生活保護 10割)" : null);
     } else {
       publicExpense =
-        (kohi ? kohiHobetsuLabel(kohi.hobetsu) : null) ??
+        kohiLabel ??
         (kohiTandoku ? "公費単独 (生活保護 10割)" : null);
       if (!kohi && !kohiTandoku && peText) {
         warnings.push(
@@ -1130,14 +1222,95 @@ export async function aggregateMonthlyVisitSeikyu(
     const transferToKohi = (kohiIsSeiho && !kohiProrate) || (!!publicExpense && !kohi);
     // 本人負担上限月額 (負値・小数は防御的に整数化。レコード無しは 0 = 従来挙動)
     const honninLimit = kohi ? Math.max(0, Math.floor(kohi.honninFutan)) : 0;
+    const honninLimit2 = kohi2 ? Math.max(0, Math.floor(kohi2.honninFutan)) : 0;
 
     let kohiUnits: number | null = null;
     let kohiTargetCost: number | null = null;
     let kohiTargetInsurance: number | null = null;
     let kohiHonninFutan: number | null = null;
     let kohiAmount: number | null = null;
+    let kohi2Units: number | null = null;
+    let kohi2TargetCost: number | null = null;
+    let kohi2TargetInsurance: number | null = null;
+    let kohi2HonninFutan: number | null = null;
+    let kohi2Amount: number | null = null;
     let userAmount: number;
-    if (transferToKohi) {
+    if (kohi && kohi2) {
+      // ── 複数公費の併用カスケード (2026-07): 保険 → 公費1 → 公費2 → 本人 ──
+      // 公費負担医療は保険優先、複数公費は制度優先順位表 (lib/kohi.ts KOHI_HOBETSU_RANK)
+      // の順に適用し、生保 (法別12) は他法優先の原則 (生活保護法4条) で最後 =
+      // 他公費適用後の残りを負担する (典型例: 難病54 + 生保12)。
+      //
+      // 公費1: 単独時の「部分公費」ブランチと同一の式。
+      //   フル月公費 (kohi_units = 全量) なら kohiUnits = totalUnits /
+      //   kohiTargetCost = totalAmount / kohiTargetInsurance = insuranceAmount と
+      //   なり単独時の全量振替ブランチとも一致する (= 式の一般化であって挙動変更ではない)。
+      const k1DetailUnits = details.reduce((s, d) => s + (d.kohi_units ?? 0), 0);
+      const k1Base = Math.min(k1DetailUnits, baseUnits);
+      const k1Addon =
+        addonNum > 0
+          ? Math.min(addonUnits, Math.round((k1Base * addonNum) / addonDen))
+          : 0;
+      kohiUnits = k1Base + k1Addon;
+      kohiTargetCost = Math.min(
+        Math.floor((kohiUnits * unitPrice100) / 100),
+        totalAmount,
+      );
+      kohiTargetInsurance = Math.floor((kohiTargetCost * (10 - copayX10)) / 10);
+      const afterIns1 = kohiTargetCost - kohiTargetInsurance;
+      kohiHonninFutan = Math.min(afterIns1, honninLimit);
+      kohiAmount = afterIns1 - kohiHonninFutan;
+
+      // 公費2: 自身の対象範囲 (適用期間) の保険給付後負担から「公費1が既に
+      // 賄った分」を控除した残りを、本人負担上限月額 (honninLimit2) を除いて負担する。
+      // 通常の併用 (公費2 = 生保 フル月) は 公費1範囲 ⊆ 公費2範囲 なので控除は正確。
+      const k2DetailUnits = details.reduce((s, d) => s + (d.kohi2_units ?? 0), 0);
+      const k2Base = Math.min(k2DetailUnits, baseUnits);
+      const k2Addon =
+        addonNum > 0
+          ? Math.min(addonUnits, Math.round((k2Base * addonNum) / addonDen))
+          : 0;
+      kohi2Units = k2Base + k2Addon;
+      kohi2TargetCost = Math.min(
+        Math.floor((kohi2Units * unitPrice100) / 100),
+        totalAmount,
+      );
+      kohi2TargetInsurance = Math.floor((kohi2TargetCost * (10 - copayX10)) / 10);
+      const afterIns2 = kohi2TargetCost - kohi2TargetInsurance;
+      // 保険 + 公費1 適用後の残負担 (公費2はこれを超えて請求できない = 恒等式の担保)
+      const remaining = totalAmount - insuranceAmount - kohiAmount;
+      const base2 = Math.min(Math.max(afterIns2 - kohiAmount, 0), remaining);
+      kohi2HonninFutan = Math.min(base2, honninLimit2);
+      kohi2Amount = base2 - kohi2HonninFutan;
+      // 恒等式: 総額 = 保険 + 公費1 + 公費2 + 本人 (userAmount は残余で定義)
+      userAmount = totalAmount - insuranceAmount - kohiAmount - kohi2Amount;
+
+      // ── 併用時の確認 warning ──
+      if (kohi2PartialMonth) {
+        // 公費2 が月の一部のみ: 公費1充当分の控除が範囲の重なりを個別に見ない
+        // 近似 (控除過大 = 公費2請求が過少側) のためレセプト確認を促す
+        warnings.push(
+          `${userLabel}: 公費2 (${kohiHobetsuLabel(kohi2.hobetsu)}) の適用期間 (${kohi2.start ?? "制限なし"}〜${kohi2.end ?? "制限なし"}) が月の一部です — 公費1との適用範囲の重なりは概算 (公費1請求額を一律控除) のため、併用レセプトを確認してください`,
+        );
+      }
+      if (kohiPartialMonth) {
+        warnings.push(
+          `${userLabel}: 公費 (${kohiHobetsuLabel(kohi.hobetsu)}) の適用期間 (${kohi.start ?? "制限なし"}〜${kohi.end ?? "制限なし"}) が月の一部のため、公費対象単位数を期間内の実績 (${kohiUnits}/${totalUnits} 単位) に按分しました — 月次加算は全量を公費対象にしています。レセプトを確認してください`,
+        );
+      }
+      if (honninLimit === 0 && kohi.hobetsu !== "12") {
+        warnings.push(
+          `${userLabel}: 公費 (${kohiHobetsuLabel(kohi.hobetsu)}) の本人負担上限月額が 0 円のため保険給付後の負担分を全額公費請求します — 介護券・受給者証の本人支払額を公費タブで確認してください`,
+        );
+      }
+      if (kohiAmount === 0 && kohi2Amount > 0) {
+        // 公費1の請求が 0 円 (本人負担上限が高く全額本人負担側に落ちた等) の場合、
+        // 伝送・様式では公費1欄が空になり公費2欄のみ埋まる形は不正になり得る
+        warnings.push(
+          `${userLabel}: 公費1 (${kohiHobetsuLabel(kohi.hobetsu)}) の請求額が 0 円で公費2 (${kohiHobetsuLabel(kohi2.hobetsu)}) のみ請求が発生しています — 公費欄の繰上げは自動対応外のため、伝送前にレセプトを確認してください`,
+        );
+      }
+    } else if (transferToKohi) {
       // 生保 (法別12)・公費単独 (10割)・旧テキストのみ: 全量公費対象。
       // 本人負担 = min(保険給付後負担, 本人負担上限月額)。上限 0 (既定) なら
       // 従来どおり全額振替 (userAmount=0) = 挙動不変。
@@ -1249,6 +1422,17 @@ export async function aggregateMonthlyVisitSeikyu(
         (cert?.care_office_id ? officeNameById.get(cert.care_office_id) ?? null : null),
       serviceDays: segDays.size,
     };
+    if (kohi2) {
+      // 公費2 (複数公費の併用) — 併用時のみ設定 (公費1件の行は undefined = 従来と同一形状)
+      row.kohi2Hobetsu = kohi2.hobetsu;
+      row.kohi2FutanshaNumber = kohi2.futansha;
+      row.kohi2JukyushaNumber = kohi2.jukyusha;
+      row.kohi2Units = kohi2Units;
+      row.kohi2Amount = kohi2Amount;
+      row.kohi2TargetCost = kohi2TargetCost;
+      row.kohi2TargetInsurance = kohi2TargetInsurance;
+      row.kohi2HonninFutan = kohi2HonninFutan;
+    }
     if (seg.segCount > 1) {
       row.segmentIndex = seg.segIndex;
       row.segmentCount = seg.segCount;
@@ -1502,6 +1686,12 @@ export function mergeSegmentRows(rows: UserSeikyuRow[]): UserSeikyuRow[] {
         if (hit.kohi_units != null || d.kohi_units != null) {
           hit.kohi_units = (hit.kohi_units ?? 0) + (d.kohi_units ?? 0);
         }
+        if (hit.kohi2_count != null || d.kohi2_count != null) {
+          hit.kohi2_count = (hit.kohi2_count ?? 0) + (d.kohi2_count ?? 0);
+        }
+        if (hit.kohi2_units != null || d.kohi2_units != null) {
+          hit.kohi2_units = (hit.kohi2_units ?? 0) + (d.kohi2_units ?? 0);
+        }
       } else {
         base.details.push({ ...d });
       }
@@ -1525,12 +1715,20 @@ export function mergeSegmentRows(rows: UserSeikyuRow[]): UserSeikyuRow[] {
     base.kohiTargetCost = sumNullable(base.kohiTargetCost, r.kohiTargetCost);
     base.kohiTargetInsurance = sumNullable(base.kohiTargetInsurance, r.kohiTargetInsurance);
     base.kohiHonninFutan = sumNullable(base.kohiHonninFutan, r.kohiHonninFutan);
+    base.kohi2Units = sumNullable(base.kohi2Units, r.kohi2Units);
+    base.kohi2Amount = sumNullable(base.kohi2Amount, r.kohi2Amount);
+    base.kohi2TargetCost = sumNullable(base.kohi2TargetCost, r.kohi2TargetCost);
+    base.kohi2TargetInsurance = sumNullable(base.kohi2TargetInsurance, r.kohi2TargetInsurance);
+    base.kohi2HonninFutan = sumNullable(base.kohi2HonninFutan, r.kohi2HonninFutan);
     // 公費・担当居宅の識別情報は非 null 優先 (片側セグメントのみ公費のケース)
     base.publicExpense = base.publicExpense ?? r.publicExpense;
     base.kohiTandoku = base.kohiTandoku || r.kohiTandoku;
     base.kohiHobetsu = base.kohiHobetsu ?? r.kohiHobetsu;
     base.kohiFutanshaNumber = base.kohiFutanshaNumber ?? r.kohiFutanshaNumber;
     base.kohiJukyushaNumber = base.kohiJukyushaNumber ?? r.kohiJukyushaNumber;
+    base.kohi2Hobetsu = base.kohi2Hobetsu ?? r.kohi2Hobetsu;
+    base.kohi2FutanshaNumber = base.kohi2FutanshaNumber ?? r.kohi2FutanshaNumber;
+    base.kohi2JukyushaNumber = base.kohi2JukyushaNumber ?? r.kohi2JukyushaNumber;
     base.careOfficeNumber = base.careOfficeNumber ?? r.careOfficeNumber;
     base.careOfficeName = base.careOfficeName ?? r.careOfficeName;
     // 手割振りは分割時未適用のため常に auto

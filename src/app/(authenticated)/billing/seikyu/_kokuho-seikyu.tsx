@@ -41,8 +41,19 @@ import {
   buildKeikakuhiFile,
   SERVICE_KIND_CODE,
   type KyufuKanriUser,
+  type KyufuKanriSegment,
+  type KyufuKanriDailyActual,
   type KeikakuhiUser,
 } from "@/lib/kokuho-densou/build-kyotaku";
+import {
+  resolveCertsInMonth,
+  resolveCertSegmentsForMonth,
+} from "@/lib/cert-for-month";
+import { validInMonth } from "@/lib/service-code-valid";
+import {
+  serviceNameVariantsAll,
+  toHankakuDigits,
+} from "@/lib/service-name-normalize";
 
 // 対象 / 提供年月 / 保険者番号 / 被保険者番号 / 利用者名 / 要介護度 / 単位数 / 保険請求額 / 状態 / 給管作成区分
 const GRID_COLS =
@@ -362,6 +373,157 @@ export function KyotakuKokuhoSeikyuContent() {
             if (!rowsByUser.has(r.user_id)) rowsByUser.set(r.user_id, []);
             rowsByUser.get(r.user_id)!.push(r);
           }
+
+          // ── 月途中の保険者変更 (転居): 保険者別分割の材料を用意 ──
+          //   1. 認定セグメント (期間×保険者) — resolveCertSegmentsForMonth
+          //   2. 自事業所の訪問介護実績 (日別単位数) — 分割の按分根拠
+          //   境界日が判定できない利用者は材料を渡さない (builder 側で従来 warning)。
+          const splitSegmentsByUser = new Map<string, KyufuKanriSegment[]>();
+          const dailyActualsByUser = new Map<string, KyufuKanriDailyActual[]>();
+          const changedUsers = users.filter(
+            (u) => u.midMonthInsurerChange && rowsByUser.has(u.user_id),
+          );
+          if (changedUsers.length > 0) {
+            const changedIds = changedUsers.map((u) => u.user_id);
+            const certsRes = await resolveCertsInMonth(supabase, changedIds, oy, om);
+            for (const u of changedUsers) {
+              const segRes = resolveCertSegmentsForMonth(
+                certsRes.get(u.user_id) ?? [],
+                oy,
+                om,
+              );
+              if (segRes.undetermined || segRes.segments.length < 2) continue;
+              splitSegmentsByUser.set(
+                u.user_id,
+                segRes.segments.map((s) => ({
+                  from: s.from,
+                  to: s.to,
+                  insurerNumber: s.cert.insurer_number ?? "",
+                  insuredNumber: s.cert.insured_number ?? "",
+                  careLevel: s.cert.care_level,
+                  limitStart: s.cert.certification_start_date,
+                  limitEnd: s.cert.certification_end_date,
+                  // 転居月は新旧保険者それぞれで限度額満額 (制度根拠確認済)
+                  limitUnits: s.cert.service_limit_amount ?? 0,
+                })),
+              );
+            }
+          }
+          if (splitSegmentsByUser.size > 0) {
+            // 自事業所の訪問介護実績 (status=completed) を日別に取得
+            const targetIds = [...splitSegmentsByUser.keys()];
+            const monthStart = `${mKey}-01`;
+            const monthLastDay = new Date(oy, om, 0).getDate();
+            const monthEnd = `${mKey}-${String(monthLastDay).padStart(2, "0")}`;
+            interface VisitRow {
+              user_id: string;
+              service_type: string;
+              visit_date: string;
+              office_id?: string | null;
+            }
+            const visits: VisitRow[] = [];
+            let withOfficeCol = true; // office_id 列未適用 (42703) は列なしで再試行
+            for (const idChunk of chunkArray(targetIds, IN_CHUNK_SIZE)) {
+              let offset = 0;
+              while (true) {
+                const cols = withOfficeCol
+                  ? "user_id, service_type, visit_date, office_id"
+                  : "user_id, service_type, visit_date";
+                const { data: vData, error: ve } = await supabase
+                  .from("kaigo_visit_schedule")
+                  .select(cols)
+                  .eq("status", "completed")
+                  .gte("visit_date", monthStart)
+                  .lte("visit_date", monthEnd)
+                  .in("user_id", idChunk)
+                  .order("id", { ascending: true })
+                  .range(offset, offset + 999);
+                if (ve) {
+                  if (
+                    withOfficeCol &&
+                    (ve.code === "42703" || /does not exist/i.test(ve.message ?? ""))
+                  ) {
+                    withOfficeCol = false;
+                    continue;
+                  }
+                  throw new Error(`訪問介護実績の取得に失敗 (${mKey}): ${ve.message}`);
+                }
+                const vRows = (vData ?? []) as unknown as VisitRow[];
+                visits.push(...vRows);
+                if (vRows.length < 1000) break;
+                offset += 1000;
+              }
+            }
+
+            // サービス名 → 単位数/サービス種類 (kaigo_service_codes 対象月世代)
+            const SYSTEM_PRIORITY: Record<string, number> = {
+              "介護": 0, "総合事業": 1, "独自": 2, "障害": 3,
+            };
+            const masterByNorm = new Map<
+              string,
+              { units: number; kind: string; system: string }
+            >();
+            const stNames = [...new Set(visits.map((v) => v.service_type))];
+            for (const nameChunk of chunkArray(serviceNameVariantsAll(stNames), IN_CHUNK_SIZE)) {
+              const { data: codes, error: se } = await validInMonth(
+                supabase
+                  .from("kaigo_service_codes")
+                  .select("service_name, units, service_category, system")
+                  .in("service_name", nameChunk)
+                  .eq("calculation_type", "基本"),
+                oy,
+                om,
+              );
+              if (se) throw new Error(`サービスコードの取得に失敗: ${se.message}`);
+              for (const c of (codes ?? []) as {
+                service_name: string;
+                units: number;
+                service_category: string | null;
+                system: string;
+              }[]) {
+                if (!c.service_category) continue;
+                const key = toHankakuDigits(c.service_name);
+                const prev = masterByNorm.get(key);
+                if (!prev || (SYSTEM_PRIORITY[c.system] ?? 9) < (SYSTEM_PRIORITY[prev.system] ?? 9)) {
+                  masterByNorm.set(key, {
+                    units: c.units,
+                    kind: c.service_category,
+                    system: c.system,
+                  });
+                }
+              }
+            }
+
+            // 実績の office_id → 事業所番号 (給付管理行の officeNumber と照合するため)
+            const visitOfficeIds = [
+              ...new Set(visits.map((v) => v.office_id).filter((x): x is string => !!x)),
+            ];
+            const officeNoById = new Map<string, string>();
+            for (const idChunk of chunkArray(visitOfficeIds, IN_CHUNK_SIZE)) {
+              const { data: offRows, error: oe2 } = await supabase
+                .from("offices")
+                .select("id, business_number")
+                .in("id", idChunk);
+              if (oe2) throw new Error(`サービス事業所番号の取得に失敗: ${oe2.message}`);
+              for (const o of (offRows ?? []) as { id: string; business_number: string | null }[]) {
+                if (o.business_number) officeNoById.set(o.id, o.business_number);
+              }
+            }
+
+            for (const v of visits) {
+              const m = masterByNorm.get(toHankakuDigits(v.service_type));
+              if (!m) continue; // 単位数マスタ未一致の実績は按分根拠に使わない
+              const arr = dailyActualsByUser.get(v.user_id) ?? [];
+              arr.push({
+                date: v.visit_date,
+                serviceKindCode: m.kind,
+                officeNumber: v.office_id ? officeNoById.get(v.office_id) ?? null : null,
+                units: m.units,
+              });
+              dailyActualsByUser.set(v.user_id, arr);
+            }
+          }
+
           const kyufuUsers: KyufuKanriUser[] = users
             .filter((u) => rowsByUser.has(u.user_id))
             .map((u) => ({
@@ -375,14 +537,18 @@ export function KyotakuKokuhoSeikyuContent() {
               limitEnd: u.certEnd,
               limitUnits: u.limitUnits,
               sakuseiKubun: kubunByUser.get(u.user_id) ?? "1",
-              // 月途中の保険者変更 (転居) — builder 側で warning (1 票のみ出力)
+              // 月途中の保険者変更 (転居)。分割材料 (splitSegments + 日別実績) が
+              // 揃っていれば builder 側で保険者別に票を分割、無ければ従来 warning。
               midMonthInsurerChange: u.midMonthInsurerChange,
+              splitSegments: splitSegmentsByUser.get(u.user_id) ?? null,
+              dailyActuals: dailyActualsByUser.get(u.user_id) ?? [],
               lines: (rowsByUser.get(u.user_id) ?? []).map((r) => ({
                 officeNumber: r.provider_name
                   ? officeNoByName.get(r.provider_name) ?? ""
                   : "",
                 serviceKindCode: SERVICE_KIND_CODE[r.service_type] ?? "",
                 plannedUnits: r.planned_units ?? 0,
+                label: `${r.service_type}${r.provider_name ? ` (${r.provider_name})` : ""}`,
               })),
             }));
           const missingBenefit = users.length - kyufuUsers.length;
@@ -554,7 +720,8 @@ export function KyotakuKokuhoSeikyuContent() {
                 .map((d) => `${d.row.user_name} (${describeInsurerChange(d.row.midMonthInsurerChange!)})`)
                 .join(" / ")}
               。給付管理票・明細書の提出先を確認してください
-              (伝送ファイルは月末時点の保険者番号・被保険者番号で出力し、給付管理票の保険者別 2 票分割は未対応)。
+              (給付管理票 8221 は境界日が判定できる場合、保険者別の票に分割して出力します。
+              計画費 8121 と、境界日が判定できない場合の給付管理票は月末時点の保険者番号・被保険者番号で 1 本です)。
             </span>
           </div>
         )}

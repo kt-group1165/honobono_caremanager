@@ -11,6 +11,7 @@ import { Fragment, useState, useEffect, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
+  Ban,
   ChevronLeft,
   ChevronRight,
   CalendarDays,
@@ -39,6 +40,7 @@ import {
   buildAdditionalStaffPayload,
   insertVisitSchedules,
   supportsAdditionalStaff,
+  supportsCancelColumns,
   supportsKinkyuHoumon,
   supportsStaff2Times,
   twoPersonMismatchWarning,
@@ -60,6 +62,7 @@ import {
   isHospitalizedOn,
   type HospitalizationPeriod,
 } from "@/lib/hospitalization";
+import { removeCancelFeeJippi, syncCancelFeeJippi } from "@/lib/visit-cancel";
 
 export interface MonthlyIndividualInitialData {
   schedules: VisitSchedule[];
@@ -102,13 +105,66 @@ export function MonthlyIndividualView({
   const [kinkyuSupported, setKinkyuSupported] = useState(false);
   const [staff2TimesSupported, setStaff2TimesSupported] = useState(false);
   const [additionalStaffSupported, setAdditionalStaffSupported] = useState(false);
+  // キャンセル管理列 (migration visit_cancel_fee.sql)。未適用ならキャンセル UI 非表示
+  const [cancelSupported, setCancelSupported] = useState(false);
   useEffect(() => {
     let cancelled = false;
     void supportsKinkyuHoumon(supabase).then((ok) => { if (!cancelled) setKinkyuSupported(ok); });
     void supportsStaff2Times(supabase).then((ok) => { if (!cancelled) setStaff2TimesSupported(ok); });
     void supportsAdditionalStaff(supabase).then((ok) => { if (!cancelled) setAdditionalStaffSupported(ok); });
+    void supportsCancelColumns(supabase).then((ok) => { if (!cancelled) setCancelSupported(ok); });
     return () => { cancelled = true; };
   }, [supabase]);
+
+  // ─── キャンセル (欠課) モーダルの state ───
+  const [cancelModal, setCancelModal] = useState<VisitSchedule | null>(null);
+  const [cancelForm, setCancelForm] = useState({ reason: "", fee: "" });
+  const [cancelSaving, setCancelSaving] = useState(false);
+
+  // キャンセル済行の理由・料金。SWR/初期 fetch の select には cancel 列を含めない
+  // (列未適用環境で 42703 になるため)。対応 DB では cancelled 行分だけ単発で引く。
+  const [cancelInfo, setCancelInfo] = useState<
+    Map<string, { cancel_fee: number; cancel_reason: string | null }>
+  >(new Map());
+  useEffect(() => {
+    if (!cancelSupported) return;
+    const missing = schedules
+      .filter(
+        (s) =>
+          s.status === "cancelled" &&
+          !s._isCopy &&
+          s.cancel_fee === undefined &&
+          !cancelInfo.has(s.id),
+      )
+      .map((s) => s.id);
+    if (missing.length === 0) return;
+    let aborted = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("kaigo_visit_schedule")
+        .select("id, cancel_fee, cancel_reason")
+        .in("id", missing);
+      if (aborted) return;
+      if (error) {
+        console.error("cancel info fetch failed:", error.message);
+        return;
+      }
+      setCancelInfo((prev) => {
+        const next = new Map(prev);
+        for (const r of (data ?? []) as { id: string; cancel_fee: number | null; cancel_reason: string | null }[]) {
+          next.set(r.id, { cancel_fee: r.cancel_fee ?? 0, cancel_reason: r.cancel_reason });
+        }
+        return next;
+      });
+    })();
+    return () => { aborted = true; };
+  }, [schedules, cancelSupported, cancelInfo, supabase]);
+
+  // 行のキャンセル料 (行自身の値 → 単発 fetch 済 map → 0)
+  const cancelFeeOf = (s: VisitSchedule): number =>
+    s.cancel_fee ?? cancelInfo.get(s.id)?.cancel_fee ?? 0;
+  const cancelReasonOf = (s: VisitSchedule): string | null =>
+    s.cancel_reason ?? cancelInfo.get(s.id)?.cancel_reason ?? null;
 
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState({
@@ -282,6 +338,8 @@ export function MonthlyIndividualView({
   };
 
   const toggleStatus = async (sched: VisitSchedule) => {
+    // キャンセル行は実績変換の対象外 (解除してから)
+    if (sched.status === "cancelled") return;
     const isCurrentlyCompleted = sched.status === "completed";
     setTogglingId(sched.id);
 
@@ -359,6 +417,105 @@ export function MonthlyIndividualView({
     active.mutate();
   };
 
+  // ─── キャンセル (欠課) 操作 ───────────────────────────────────────────────
+  const openCancelModal = (sched: VisitSchedule) => {
+    const fee = cancelFeeOf(sched);
+    setCancelForm({
+      reason: cancelReasonOf(sched) ?? "",
+      fee: fee > 0 ? String(fee) : "",
+    });
+    setCancelModal(sched);
+  };
+
+  const handleCancelSave = async () => {
+    if (!cancelModal) return;
+    const fee = parseInt(cancelForm.fee, 10) || 0;
+    if (fee < 0) { toast.error("キャンセル料は 0 以上で入力してください"); return; }
+    const reason = cancelForm.reason.trim() || null;
+    setCancelSaving(true);
+    const cancelledAt = new Date().toISOString();
+    const { error } = await supabase
+      .from("kaigo_visit_schedule")
+      .update({
+        status: "cancelled",
+        cancelled_at: cancelledAt,
+        cancel_reason: reason,
+        cancel_fee: fee,
+      })
+      .eq("id", cancelModal.id);
+    if (error) {
+      toast.error("キャンセルの保存に失敗しました: " + error.message);
+      setCancelSaving(false);
+      return;
+    }
+    // キャンセル料 >0 は利用請求の実費へ連動 (0 は連動行を削除 = 記録のみ)
+    const sync = await syncCancelFeeJippi(supabase, cancelModal, fee, reason);
+    if (sync.error) {
+      toast.error(
+        "キャンセル料の実費連動に失敗: " + sync.error + " (利用請求タブの実費を手動で確認してください)",
+      );
+    } else if (sync.warning) {
+      toast.warning(sync.warning);
+    }
+    setSchedules((prev) =>
+      prev.map((s) =>
+        s.id === cancelModal.id
+          ? { ...s, status: "cancelled", cancelled_at: cancelledAt, cancel_reason: reason, cancel_fee: fee }
+          : s,
+      ),
+    );
+    setCancelInfo((prev) =>
+      new Map(prev).set(cancelModal.id, { cancel_fee: fee, cancel_reason: reason }),
+    );
+    if (!sync.error && !sync.warning) {
+      toast.success(
+        fee > 0
+          ? `キャンセルしました (キャンセル料 ¥${fee.toLocaleString()} を利用請求の実費に計上)`
+          : "キャンセルしました (キャンセル料なし)",
+      );
+    }
+    setCancelModal(null);
+    setCancelSaving(false);
+    active.mutate();
+  };
+
+  const handleUncancel = async () => {
+    if (!cancelModal) return;
+    setCancelSaving(true);
+    const { error } = await supabase
+      .from("kaigo_visit_schedule")
+      .update({ status: "scheduled", cancelled_at: null, cancel_reason: null, cancel_fee: 0 })
+      .eq("id", cancelModal.id);
+    if (error) {
+      toast.error("キャンセル解除に失敗しました: " + error.message);
+      setCancelSaving(false);
+      return;
+    }
+    // 連動していた実費行を削除 (二重計上・請求残り防止)
+    const rm = await removeCancelFeeJippi(supabase, cancelModal.id);
+    if (rm.error) {
+      toast.error(
+        "連動実費の削除に失敗: " + rm.error + " (利用請求タブの実費を手動で削除してください)",
+      );
+    }
+    setSchedules((prev) =>
+      prev.map((s) =>
+        s.id === cancelModal.id
+          ? { ...s, status: "scheduled", cancelled_at: null, cancel_reason: null, cancel_fee: 0 }
+          : s,
+      ),
+    );
+    setCancelInfo((prev) => {
+      const next = new Map(prev);
+      next.delete(cancelModal.id);
+      return next;
+    });
+    toast.success("キャンセルを解除し、予定に戻しました");
+    setCancelModal(null);
+    setCancelSaving(false);
+    active.mutate();
+  };
+
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -376,8 +533,11 @@ export function MonthlyIndividualView({
 
   const bulkToCompleted = async () => {
     if (selectedIds.size === 0) { toast.error("対象を選択してください"); return; }
-    const targets = schedules.filter((s) => selectedIds.has(s.id) && s.status !== "completed");
-    if (targets.length === 0) { toast.info("選択された予定はすべて実績済みです"); return; }
+    // キャンセル行は実績変換の対象外 (解除してから)
+    const targets = schedules.filter(
+      (s) => selectedIds.has(s.id) && s.status !== "completed" && s.status !== "cancelled",
+    );
+    if (targets.length === 0) { toast.info("選択された予定はすべて実績済みかキャンセル済みです"); return; }
     setBulkProcessing(true);
     const succeeded = new Set<string>();
     for (const sched of targets) {
@@ -464,6 +624,10 @@ export function MonthlyIndividualView({
           id: copyId,
           visit_date: "",
           status: "scheduled",
+          // キャンセル行の複写は通常の予定として作る (キャンセル情報は引き継がない)
+          cancelled_at: null,
+          cancel_reason: null,
+          cancel_fee: 0,
           _isCopy: true,
         });
       }
@@ -604,6 +768,14 @@ export function MonthlyIndividualView({
         succeeded.add(sched.id);
         continue;
       }
+      // キャンセル行の削除は連動実費行も先に消す (FK は SET NULL なので明示削除)
+      if (sched.status === "cancelled" && cancelSupported) {
+        const rm = await removeCancelFeeJippi(supabase, sched.id);
+        if (rm.error) {
+          console.error("riyou_jippi_entries delete error:", rm.error);
+          continue;
+        }
+      }
       const { error: recDelErr } = await supabase.from("kaigo_visit_records").delete()
         .eq("user_id", sched.user_id).eq("visit_date", sched.visit_date).eq("start_time", sched.start_time);
       if (recDelErr) {
@@ -681,6 +853,8 @@ export function MonthlyIndividualView({
     };
     for (const s of schedules) {
       if (s._isCopy || !s.visit_date) continue;
+      // キャンセル行は予定にも実績にも数えない (件数・料金は別サマリ)
+      if (s.status === "cancelled") continue;
       const done = s.status === "completed";
       const g = isShien(s.service_type)
         ? (done ? groups.shienActual : groups.shienPlanned)
@@ -738,8 +912,20 @@ export function MonthlyIndividualView({
           <button onClick={() => onMonthChange(addMonths(currentMonth, 1))} className="rounded border p-1 hover:bg-gray-50"><ChevronRight size={14} /></button>
         </div>
         <div className="flex items-center gap-2 text-xs text-gray-500">
-          予定 {schedules.filter((s) => s.status !== "completed").length}件
+          予定 {schedules.filter((s) => s.status !== "completed" && s.status !== "cancelled").length}件
           / 実績 {schedules.filter((s) => s.status === "completed").length}件
+          {(() => {
+            // キャンセルの件数・料金合計 (一覧性サマリ)
+            const cancelledRows = schedules.filter((s) => s.status === "cancelled" && !s._isCopy);
+            if (cancelledRows.length === 0) return null;
+            const feeSum = cancelledRows.reduce((sum, s) => sum + cancelFeeOf(s), 0);
+            return (
+              <span className="text-gray-600">
+                / <span className="font-medium text-red-600">キャンセル {cancelledRows.length}件</span>
+                {feeSum > 0 && <span className="text-red-600"> (料 ¥{feeSum.toLocaleString()})</span>}
+              </span>
+            );
+          })()}
           / 合計 {schedules.length}件
           / 実績単位 {schedules
             .filter((s) => s.status === "completed")
@@ -838,6 +1024,9 @@ export function MonthlyIndividualView({
                   </>
                 )}
                 <th className="border border-gray-300 px-2 py-1.5 text-center font-bold w-12">記録</th>
+                {cancelSupported && (
+                  <th className="border border-gray-300 px-1 py-1.5 text-center font-bold w-12">取消</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -849,6 +1038,8 @@ export function MonthlyIndividualView({
                 const isSat = dow === "土";
                 const isSun = dow === "日";
                 const isCompleted = sched.status === "completed";
+                const isCancelled = sched.status === "cancelled";
+                const rowCancelFee = isCancelled ? cancelFeeOf(sched) : 0;
                 const isToggling = togglingId === sched.id;
 
                 return (
@@ -856,7 +1047,9 @@ export function MonthlyIndividualView({
                     key={sched.id}
                     className={cn(
                       "hover:bg-yellow-50/50 transition-colors",
-                      isCopy ? "bg-green-50/40" : isSun ? "bg-red-50/20" : isSat ? "bg-blue-50/20" : ""
+                      isCopy ? "bg-green-50/40"
+                        : isCancelled ? "bg-gray-100/70 text-gray-400"
+                        : isSun ? "bg-red-50/20" : isSat ? "bg-blue-50/20" : ""
                     )}
                   >
                     <td className="border border-gray-300 px-1 py-1 text-center">
@@ -880,6 +1073,14 @@ export function MonthlyIndividualView({
                     <td className="border border-gray-300 px-1 py-1 text-center">
                       {isCopy ? (
                         <span className="text-[10px] text-green-600 font-bold">複写</span>
+                      ) : isCancelled ? (
+                        <button
+                          onClick={() => openCancelModal(sched)}
+                          className="rounded-full bg-gray-300 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-gray-400 transition-colors"
+                          title={`キャンセル済${cancelReasonOf(sched) ? ` (${cancelReasonOf(sched)})` : ""} — クリックで編集/解除`}
+                        >
+                          取消
+                        </button>
                       ) : (
                         <button
                           onClick={() => toggleStatus(sched)}
@@ -973,7 +1174,7 @@ export function MonthlyIndividualView({
                       className="border border-gray-300 px-2 py-1 whitespace-nowrap cursor-pointer hover:bg-blue-50"
                       onClick={() => onEditSchedule?.(sched)}
                     >
-                      <span className="font-mono">{sched.start_time?.slice(0, 5)}-{sched.end_time?.slice(0, 5)}</span>
+                      <span className={cn("font-mono", isCancelled && "line-through")}>{sched.start_time?.slice(0, 5)}-{sched.end_time?.slice(0, 5)}</span>
                       <span className="ml-1 text-gray-400">{durationShort(sched.start_time, sched.end_time)}</span>
                     </td>
                     <td className="border border-gray-300 px-1 py-1 text-center">
@@ -996,10 +1197,19 @@ export function MonthlyIndividualView({
                     <td className="border border-gray-300 px-2 py-1">
                       <span className={cn(
                         "inline-block rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap",
-                        SERVICE_TYPE_COLORS[sched.service_type] ?? "bg-gray-100 text-gray-700"
+                        SERVICE_TYPE_COLORS[sched.service_type] ?? "bg-gray-100 text-gray-700",
+                        isCancelled && "line-through opacity-60"
                       )}>
                         {sched.service_type}
                       </span>
+                      {isCancelled && (
+                        <span
+                          className="ml-1 inline-block rounded border border-red-200 bg-red-50 px-1 py-0.5 text-[9px] font-bold text-red-500 whitespace-nowrap"
+                          title={cancelReasonOf(sched) ?? undefined}
+                        >
+                          キャンセル{rowCancelFee > 0 ? ` ¥${rowCancelFee.toLocaleString()}` : ""}
+                        </span>
+                      )}
                     </td>
                     <td className="border border-gray-300 px-2 py-1 text-right font-mono whitespace-nowrap">
                       {serviceUnits[sched.service_type]
@@ -1040,6 +1250,29 @@ export function MonthlyIndividualView({
                         <span className="inline-block w-3 h-3 rounded-sm bg-orange-200 border border-orange-400" title="実績記録あり" />
                       )}
                     </td>
+                    {cancelSupported && (
+                      <td className="border border-gray-300 px-1 py-1 text-center">
+                        {isCopy ? null : isCancelled ? (
+                          <button
+                            onClick={() => openCancelModal(sched)}
+                            className="text-[10px] font-medium text-red-500 hover:text-red-700 underline decoration-dotted"
+                            title="キャンセル内容の編集 / 解除"
+                          >
+                            {rowCancelFee > 0 ? `¥${rowCancelFee.toLocaleString()}` : "編集"}
+                          </button>
+                        ) : isCompleted ? (
+                          <span className="text-gray-300" title="実績は一旦予定に戻してからキャンセルしてください">—</span>
+                        ) : (
+                          <button
+                            onClick={() => openCancelModal(sched)}
+                            className="text-gray-300 hover:text-red-500 transition-colors"
+                            title="キャンセル (欠課) にする"
+                          >
+                            <Ban size={14} />
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -1210,6 +1443,97 @@ export function MonthlyIndividualView({
                 {addSaving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
                 追加
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* キャンセル (欠課) モーダル — 理由 + キャンセル料 (自費)。料 >0 は利用請求の実費に連動 */}
+      {cancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-gray-900">
+                  {cancelModal.status === "cancelled" ? "キャンセル内容の編集" : "訪問をキャンセル (欠課)"}
+                </h2>
+                {cancelModal.status === "cancelled" && (
+                  <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs font-bold text-gray-600">キャンセル済</span>
+                )}
+              </div>
+              <button onClick={() => setCancelModal(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                <p className="font-semibold">
+                  {format(parseISO(cancelModal.visit_date), "yyyy年M月d日(E)", { locale: ja })}{" "}
+                  {cancelModal.start_time?.slice(0, 5)}-{cancelModal.end_time?.slice(0, 5)}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">{cancelModal.service_type}</p>
+              </div>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                キャンセルにすると保険請求 (実績集計) の対象外になります。
+                キャンセル料を入力すると利用請求タブの「利用実費」に自動計上されます (0 円 = 記録のみ)。
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">キャンセル理由</label>
+                <input
+                  type="text"
+                  value={cancelForm.reason}
+                  onChange={(e) => setCancelForm((f) => ({ ...f, reason: e.target.value }))}
+                  placeholder="例: 利用者都合 (当日連絡)"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">キャンセル料 (円・自費)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={cancelForm.fee}
+                  onChange={(e) => setCancelForm((f) => ({ ...f, fee: e.target.value }))}
+                  placeholder="0 (記録のみ)"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-right tabular-nums focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                />
+                {(parseInt(cancelForm.fee, 10) || 0) > 0 && (
+                  <p className="mt-1 text-xs font-medium text-emerald-700">
+                    ¥{(parseInt(cancelForm.fee, 10) || 0).toLocaleString()} を
+                    {Number(cancelModal.visit_date.slice(5, 7))}月の利用請求 (実費) に計上します
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-between border-t px-5 py-4">
+              {cancelModal.status === "cancelled" ? (
+                <button
+                  onClick={handleUncancel}
+                  disabled={cancelSaving}
+                  className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors"
+                >
+                  <RotateCcw size={14} />
+                  キャンセル解除 (予定に戻す)
+                </button>
+              ) : (
+                <span />
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCancelModal(null)}
+                  className="rounded-lg border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  閉じる
+                </button>
+                <button
+                  onClick={handleCancelSave}
+                  disabled={cancelSaving}
+                  className="flex items-center gap-1 rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                >
+                  {cancelSaving ? <Loader2 size={14} className="animate-spin" /> : <Ban size={14} />}
+                  {cancelModal.status === "cancelled" ? "更新" : "キャンセルする"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -711,6 +711,16 @@ export function MeisaiPrintSheet({
   // 公費給付率 100。集計欄は保険請求額 0 / 公費請求額 = 総費用 10割 (aggregate 済)。
   const kyufuRate = row.kohiTandoku ? null : Math.round((1 - row.copay_rate) * 100);
   const hasKohi = row.kohiTandoku || (!!row.kohiHobetsu && !!(row.kohiAmount ?? 0));
+  // 公費2 (複数公費の併用: 保険 → 公費1 → 公費2 → 本人 のカスケード)。
+  // 公式の紙様式は公費欄 1 組のため、公費2 は各欄に併記する (公費2なしは従来表示のまま)
+  const hasKohi2 = !!row.kohi2Hobetsu && !!(row.kohi2Amount ?? 0);
+  // 併記用の小書きスタイル
+  const kohi2Note: React.CSSProperties = {
+    display: "block",
+    fontSize: "5.5pt",
+    color: "#000",
+    whiteSpace: "nowrap",
+  };
 
   // 生年月日 (元号 + 年月日桝) / 性別
   const birth = warekiParts(row.birthDate);
@@ -880,6 +890,25 @@ export function MeisaiPrintSheet({
                 </span>
                 <DigitCells value={row.kohiJukyushaNumber ?? ""} cells={7} cw={5} />
               </div>
+              {hasKohi2 && (
+                /* 公費2 (複数公費の併用)。紙様式に公費2欄が無いため小書きで併記 */
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "1.5mm",
+                    marginTop: "1.5mm",
+                    fontSize: "6.5pt",
+                  }}
+                >
+                  <span style={{ width: "26mm" }}>
+                    公費2 負担者／受給者
+                  </span>
+                  <DigitCells value={row.kohi2FutanshaNumber ?? ""} cells={8} cw={4} />
+                  <span>／</span>
+                  <DigitCells value={row.kohi2JukyushaNumber ?? ""} cells={7} cw={4} />
+                </div>
+              )}
             </td>
             {/* 右: ① 提供年月 + ③ 保険者番号 */}
             <td
@@ -1388,21 +1417,28 @@ export function MeisaiPrintSheet({
               </div>
             </AggVc>
           </tr>
-          {/* ⑧ 公費分単位数 */}
+          {/* ⑧ 公費分単位数 (公費2は併記 — 伝送 集計(21) 対応値) */}
           <tr>
             <AggLb>⑧公費分単位数</AggLb>
-            <AggVc>{hasKohi ? (row.kohiUnits ?? 0).toLocaleString() : ""}</AggVc>
+            <AggVc>
+              {hasKohi ? (row.kohiUnits ?? 0).toLocaleString() : ""}
+              {hasKohi2 && (
+                <span style={kohi2Note}>
+                  公費2: {(row.kohi2Units ?? 0).toLocaleString()}
+                </span>
+              )}
+            </AggVc>
             <AggVc />
             <AggVc style={{ textAlign: "left" }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "7pt" }}>公費</span>
+                <span style={{ fontSize: "7pt" }}>公費{hasKohi2 ? "1/2" : ""}</span>
                 <span
                   style={{
                     fontFamily: '"MS Gothic",monospace',
                     fontWeight: "bold",
                   }}
                 >
-                  {hasKohi ? "100" : ""}
+                  {hasKohi ? (hasKohi2 ? "100/100" : "100") : ""}
                 </span>
               </div>
             </AggVc>
@@ -1435,22 +1471,46 @@ export function MeisaiPrintSheet({
             <AggVc />
             <AggVc>{row.userAmount.toLocaleString()}</AggVc>
           </tr>
-          {/* ⑫ 公費請求額 */}
+          {/* ⑫ 公費請求額 (公費2は併記 — 伝送 集計(22) 対応値) */}
           <tr>
             <AggLb>⑫公費請求額</AggLb>
-            <AggVc>{hasKohi ? (row.kohiAmount ?? 0).toLocaleString() : ""}</AggVc>
+            <AggVc>
+              {hasKohi ? (row.kohiAmount ?? 0).toLocaleString() : ""}
+              {hasKohi2 && (
+                <span style={kohi2Note}>
+                  公費2: {(row.kohi2Amount ?? 0).toLocaleString()}
+                </span>
+              )}
+            </AggVc>
             <AggVc />
-            <AggVc>{hasKohi ? (row.kohiAmount ?? 0).toLocaleString() : ""}</AggVc>
+            <AggVc>
+              {hasKohi ? (row.kohiAmount ?? 0).toLocaleString() : ""}
+              {hasKohi2 && (
+                <span style={kohi2Note}>
+                  公費2: {(row.kohi2Amount ?? 0).toLocaleString()}
+                </span>
+              )}
+            </AggVc>
           </tr>
-          {/* ⑬ 公費分本人負担 (本人負担上限月額の適用分。生保の既定 = 0) */}
+          {/* ⑬ 公費分本人負担 (本人負担上限月額の適用分。生保の既定 = 0。公費2は併記) */}
           <tr>
             <AggLb>⑬公費分本人負担</AggLb>
             <AggVc>
               {hasKohi ? (row.kohiHonninFutan ?? 0).toLocaleString() : ""}
+              {hasKohi2 && (
+                <span style={kohi2Note}>
+                  公費2: {(row.kohi2HonninFutan ?? 0).toLocaleString()}
+                </span>
+              )}
             </AggVc>
             <AggVc />
             <AggVc>
               {hasKohi ? (row.kohiHonninFutan ?? 0).toLocaleString() : ""}
+              {hasKohi2 && (
+                <span style={kohi2Note}>
+                  公費2: {(row.kohi2HonninFutan ?? 0).toLocaleString()}
+                </span>
+              )}
             </AggVc>
           </tr>
         </tbody>

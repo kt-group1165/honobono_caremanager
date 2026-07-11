@@ -105,7 +105,11 @@ export function buildKokuhoDensou(
   const totalUnits = hokenRows.reduce((s, r) => s + r.totalUnits, 0);
   const totalCost = hokenRows.reduce((s, r) => s + r.totalAmount, 0);
   const totalInsurance = hokenRows.reduce((s, r) => s + r.insuranceAmount, 0);
-  const totalKohi = hokenRows.reduce((s, r) => s + (r.kohiAmount ?? 0), 0);
+  // 公費請求額は公費1 + 公費2 (複数公費の併用。公費2なしの行は従来どおり公費1のみ)
+  const totalKohi = hokenRows.reduce(
+    (s, r) => s + (r.kohiAmount ?? 0) + (r.kohi2Amount ?? 0),
+    0,
+  );
   const totalUser = hokenRows.reduce((s, r) => s + r.userAmount, 0);
   dataParts.push([
     "7111", // 1 交換情報識別番号
@@ -129,17 +133,46 @@ export function buildKokuhoDensou(
   ]);
 
   // 公費請求分 (法別番号ごと。生活保護 12 等)
-  // 公費単独 (H番号) は法別未登録でも生保 (12) として合算する (未登録は warning)
-  const kohiRows = rows.filter(
-    (r) => (r.kohiHobetsu || r.kohiTandoku) && (r.kohiAmount ?? 0) > 0,
-  );
-  const byHobetsu = new Map<string, UserSeikyuRow[]>();
-  for (const r of kohiRows) {
-    const h = r.kohiHobetsu ?? "12";
-    if (!byHobetsu.has(h)) byHobetsu.set(h, []);
-    byHobetsu.get(h)!.push(r);
+  // 公費単独 (H番号) は法別未登録でも生保 (12) として合算する (未登録は warning)。
+  // 複数公費の併用行は公費1・公費2 をそれぞれの法別の行に積む
+  // (1 明細書 = その法別の件数 1 件。公費2なしの行は従来と同一出力)。
+  interface KohiSummaryEntry {
+    hobetsu: string;
+    units: number;
+    cost: number;
+    insurance: number;
+    kohi: number;
+    honnin: number;
   }
-  for (const [hobetsu, hRows] of byHobetsu) {
+  const kohiEntries: KohiSummaryEntry[] = [];
+  for (const r of rows) {
+    if ((r.kohiHobetsu || r.kohiTandoku) && (r.kohiAmount ?? 0) > 0) {
+      kohiEntries.push({
+        hobetsu: r.kohiHobetsu ?? "12",
+        units: r.kohiUnits ?? r.totalUnits,
+        cost: r.kohiTargetCost ?? r.totalAmount,
+        insurance: r.kohiTargetInsurance ?? r.insuranceAmount,
+        kohi: r.kohiAmount ?? 0,
+        honnin: r.kohiHonninFutan ?? 0,
+      });
+    }
+    if (r.kohi2Hobetsu && (r.kohi2Amount ?? 0) > 0) {
+      kohiEntries.push({
+        hobetsu: r.kohi2Hobetsu,
+        units: r.kohi2Units ?? 0,
+        cost: r.kohi2TargetCost ?? 0,
+        insurance: r.kohi2TargetInsurance ?? 0,
+        kohi: r.kohi2Amount ?? 0,
+        honnin: r.kohi2HonninFutan ?? 0,
+      });
+    }
+  }
+  const byHobetsu = new Map<string, KohiSummaryEntry[]>();
+  for (const e of kohiEntries) {
+    if (!byHobetsu.has(e.hobetsu)) byHobetsu.set(e.hobetsu, []);
+    byHobetsu.get(e.hobetsu)!.push(e);
+  }
+  for (const [hobetsu, es] of byHobetsu) {
     // 公費請求分は「公費対象分」の再掲: 単位数・費用・保険請求額は公費対象分
     // (kohiUnits/kohiTargetCost/kohiTargetInsurance。生保等の全量公費は総量と同値)。
     // 利用者負担 = 公費分本人負担 (本人負担上限月額の適用分。上限 0 なら従来どおり 0)。
@@ -150,12 +183,12 @@ export function buildKokuhoDensou(
       "2", // 保険・公費等区分コード (2:公費請求。共通編1.4 項番79)
       hobetsu, // 法別番号 (12=生活保護, 21=精神通院, 54=難病 等)
       SEIKYU_JOHO_KUBUN,
-      String(hRows.length),
-      String(hRows.reduce((s, r) => s + (r.kohiUnits ?? r.totalUnits), 0)),
-      String(hRows.reduce((s, r) => s + (r.kohiTargetCost ?? r.totalAmount), 0)),
-      String(hRows.reduce((s, r) => s + (r.kohiTargetInsurance ?? r.insuranceAmount), 0)),
-      String(hRows.reduce((s, r) => s + (r.kohiAmount ?? 0), 0)),
-      String(hRows.reduce((s, r) => s + (r.kohiHonninFutan ?? 0), 0)), // 利用者負担 (公費分本人負担)
+      String(es.length),
+      String(es.reduce((s, e) => s + e.units, 0)),
+      String(es.reduce((s, e) => s + e.cost, 0)),
+      String(es.reduce((s, e) => s + e.insurance, 0)),
+      String(es.reduce((s, e) => s + e.kohi, 0)),
+      String(es.reduce((s, e) => s + e.honnin, 0)), // 利用者負担 (公費分本人負担)
       "", "", "", "", "", "",
     ]);
   }
@@ -196,6 +229,14 @@ export function buildKokuhoDensou(
     // 給付率は整数演算: copay 0.1/0.2/0.3 → 1/2/3 → 90/80/70 (float 1円ズレ防止と同方針)
     const benefitRate = r.kohiTandoku ? "" : String((10 - Math.round(r.copay_rate * 10)) * 10); // 90 等
     const hasKohi = r.kohiTandoku || !!(r.kohiHobetsu && (r.kohiAmount ?? 0) > 0);
+    // 公費2 (複数公費の併用)。公費1と同じく請求額 > 0 の場合のみ公費2欄を出力する
+    // (公費2なしの行は全欄空 = 従来出力とバイト一致)
+    const hasKohi2 = !!(r.kohi2Hobetsu && (r.kohi2Amount ?? 0) > 0);
+    if (hasKohi2 && !r.kohi2FutanshaNumber) {
+      warnings.push(
+        `${r.user_name}: 公費2 (法別${r.kohi2Hobetsu}) の負担者番号が未登録です`,
+      );
+    }
     if (r.kohiTandoku && !r.kohiHobetsu) {
       warnings.push(
         `${r.user_name}: 公費単独 (被保険者番号 H) なのに公費情報 (法別番号) が未登録です — 保険情報に法別12 (生活保護) を登録してください`,
@@ -215,8 +256,8 @@ export function buildKokuhoDensou(
       insured, // 6 被保険者番号
       hasKohi ? r.kohiFutanshaNumber ?? "" : "", // 7 公費1 負担者番号
       hasKohi ? r.kohiJukyushaNumber ?? "" : "", // 8 公費1 受給者番号
-      "", // 9 公費2 負担者番号
-      "", // 10 公費2 受給者番号
+      hasKohi2 ? r.kohi2FutanshaNumber ?? "" : "", // 9 公費2 負担者番号
+      hasKohi2 ? r.kohi2JukyushaNumber ?? "" : "", // 10 公費2 受給者番号
       "", // 11 公費3 負担者番号
       "", // 12 公費3 受給者番号
       dateNum(r.birthDate), // 13 生年月日
@@ -248,7 +289,7 @@ export function buildKokuhoDensou(
       //    国保連の取込テストで要確認。ここでは「保険請求額=0・公費請求額=10割」の素直な形。
       benefitRate, // 29 保険給付率 (公費単独は空欄)
       hasKohi ? "100" : "", // 30 公費1給付率 (生活保護等は 100)
-      "", // 31 公費2給付率
+      hasKohi2 ? "100" : "", // 31 公費2給付率 (介護の保険優先公費は 100)
       "", // 32 公費3給付率
       String(r.totalUnits), // 33 合計 保険 サービス単位数
       String(r.insuranceAmount), // 34 同 請求額 (公費単独は 0)
@@ -264,7 +305,11 @@ export function buildKokuhoDensou(
       hasKohi ? String(r.kohiAmount ?? 0) : "", // 40 公費1請求額
       hasKohi ? String(r.kohiHonninFutan ?? 0) : "", // 41 公費1本人負担額 (上限月額の適用分)
       "", "", "",
-      "", "", "", "", "", "", // 45-50 公費2 合計情報
+      // 45-50 公費2 合計情報 (サービス単位数 / 請求額 / 本人負担額 / 緊急時 / 特定診療 / 特定入所者)
+      hasKohi2 ? String(r.kohi2Units ?? 0) : "", // 45 公費2対象サービス単位数
+      hasKohi2 ? String(r.kohi2Amount ?? 0) : "", // 46 公費2請求額
+      hasKohi2 ? String(r.kohi2HonninFutan ?? 0) : "", // 47 公費2本人負担額
+      "", "", "",
       "", "", "", "", "", "", // 51-56 公費3 合計情報
     ]);
 
@@ -279,6 +324,8 @@ export function buildKokuhoDensou(
     // 全量公費 (kohiUnits == totalUnits = フル月の生保・公費単独 等) は従来どおり全量。
     const kohiPriority =
       hasKohi && r.kohiUnits != null && r.kohiUnits < r.totalUnits;
+    const kohi2Priority =
+      hasKohi2 && r.kohi2Units != null && r.kohi2Units < r.totalUnits;
     const detailLines: {
       code: string;
       unitPer: number;
@@ -286,6 +333,8 @@ export function buildKokuhoDensou(
       units: number;
       kohiCount?: number;
       kohiUnits?: number;
+      kohi2Count?: number;
+      kohi2Units?: number;
     }[] = [];
     for (const d of r.details) {
       if (!d.service_code) {
@@ -299,6 +348,8 @@ export function buildKokuhoDensou(
         units: d.units,
         kohiCount: d.kohi_count,
         kohiUnits: d.kohi_units,
+        kohi2Count: d.kohi2_count,
+        kohi2Units: d.kohi2_units,
       });
     }
     if (r.addonUnits > 0) {
@@ -327,6 +378,19 @@ export function buildKokuhoDensou(
           addonLine.kohiCount = addonKohi > 0 ? 1 : 0;
           addonLine.kohiUnits = addonKohi;
         }
+        if (kohi2Priority) {
+          // 公費2の%加算按分も公費1と同方針 (Σ明細(16) = 集計(21) の突合)
+          const detailKohi2Sum = detailLines.reduce(
+            (s, d) => s + (d.kohi2Units ?? d.units),
+            0,
+          );
+          const addonKohi2 = Math.min(
+            Math.max((r.kohi2Units ?? 0) - detailKohi2Sum, 0),
+            r.addonUnits,
+          );
+          addonLine.kohi2Count = addonKohi2 > 0 ? 1 : 0;
+          addonLine.kohi2Units = addonKohi2;
+        }
         detailLines.push(addonLine);
       } else {
         warnings.push(`${r.user_name}: 加算 (${r.addonLabel ?? "処遇改善"}) のサービスコードが不明です`);
@@ -346,11 +410,11 @@ export function buildKokuhoDensou(
         String(d.count), // 10 日数・回数
         // 11 公費1対象日数・回数 (部分公費は公費適用期間内の実績のみ。全量公費は count と同値)
         hasKohi ? String(d.kohiCount ?? d.count) : "",
-        "", // 12 公費2対象日数・回数
+        hasKohi2 ? String(d.kohi2Count ?? d.count) : "", // 12 公費2対象日数・回数
         "", // 13 公費3対象日数・回数
         String(d.units), // 14 サービス単位数
         hasKohi ? String(d.kohiUnits ?? d.units) : "", // 15 公費1対象サービス単位数
-        "", // 16 公費2対象サービス単位数
+        hasKohi2 ? String(d.kohi2Units ?? d.units) : "", // 16 公費2対象サービス単位数
         "", // 17 公費3対象サービス単位数
         "", // 18 摘要
       ]);
@@ -391,7 +455,10 @@ export function buildKokuhoDensou(
       hasKohi ? String(r.kohiUnits ?? r.totalUnits) : "", // 18 公費対象単位数
       hasKohi ? String(r.kohiAmount ?? 0) : "", // 19 公費請求額
       hasKohi ? String(r.kohiHonninFutan ?? 0) : "", // 20 公費分本人負担額
-      "", "", "", // 21-23 公費2
+      // 21-23 公費2 (単位数合計 / 請求額 / 本人負担額) — 複数公費の併用時のみ
+      hasKohi2 ? String(r.kohi2Units ?? 0) : "", // 21 公費2単位数合計
+      hasKohi2 ? String(r.kohi2Amount ?? 0) : "", // 22 公費2請求額
+      hasKohi2 ? String(r.kohi2HonninFutan ?? 0) : "", // 23 公費2本人負担額
       "", "", "", // 24-26 公費3
       "", "", "", // 27-29 保険分出来高医療費
       "", "", "", // 30-32 公費1分出来高医療費

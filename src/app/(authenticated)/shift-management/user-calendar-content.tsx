@@ -225,6 +225,11 @@ export function UserCalendar({
         toast.error("実績は移動できません (Ctrl+ドラッグでコピーは可能)");
         return;
       }
+      // キャンセル済はキャンセル料 (実費連動) と月が紐づくため移動不可 (コピーは可)
+      if (sched.status === "cancelled") {
+        toast.error("キャンセル済の予定は移動できません (月間個別ビューで解除してください)");
+        return;
+      }
       const { error } = await supabase
         .from("kaigo_visit_schedule")
         .update({ visit_date: targetDate })
@@ -632,6 +637,7 @@ export function UserCalendar({
                     {daySchedules.map((sched) => {
                       const unavail = isUnavailable(sched);
                       const isCompleted = sched.status === "completed";
+                      const isCancelled = sched.status === "cancelled";
                       const extraStaff = [sched.staff_id_2, sched.staff_id_3].filter(Boolean).length;
                       return (
                         <button
@@ -645,13 +651,19 @@ export function UserCalendar({
                           onDragEnd={() => setDragOverDate(null)}
                           className={cn(
                             "w-full text-left rounded px-1 py-0.5 text-[8px] leading-tight whitespace-nowrap overflow-hidden text-ellipsis cursor-pointer transition-colors",
-                            unavail
+                            isCancelled
+                              ? "bg-gray-100 text-gray-400 line-through hover:bg-gray-200"
+                              : unavail
                               ? "bg-yellow-50 text-yellow-700 font-semibold hover:bg-yellow-100"
                               : isCompleted
                               ? "bg-red-50 text-red-600 font-semibold hover:bg-red-100"
                               : "bg-blue-50 text-blue-700 hover:bg-blue-100"
                           )}
-                          title={(isCompleted ? "実績（クリックして編集）" : "予定（クリックして編集）") + " / ドラッグで移動・Ctrl+ドラッグでコピー"}
+                          title={
+                            isCancelled
+                              ? "キャンセル（解除は月間個別ビューから）"
+                              : (isCompleted ? "実績（クリックして編集）" : "予定（クリックして編集）") + " / ドラッグで移動・Ctrl+ドラッグでコピー"
+                          }
                         >
                           {sched.start_time?.slice(0, 5)}~{sched.end_time?.slice(0, 5)} {sched.staff_name ?? ""}
                           {extraStaff > 0 && (
@@ -681,6 +693,8 @@ export function UserCalendar({
                 <h2 className="font-semibold text-gray-900">予定を編集</h2>
                 {editModal.status === "completed" ? (
                   <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-700">実績</span>
+                ) : editModal.status === "cancelled" ? (
+                  <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs font-bold text-gray-600">キャンセル</span>
                 ) : (
                   <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-700">予定</span>
                 )}

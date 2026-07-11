@@ -76,19 +76,26 @@ const ymNum = (iso: string | null | undefined) => (iso ? iso.replaceAll("-", "")
  * 月途中の保険者変更 (転居) 情報 — 呼出側が detectMidMonthChange (cert-for-month.ts)
  * で検出した内容を渡す (MidMonthCertChange["insurerChange"] と構造互換)。
  *
- * 採用した暫定ルール (2026-07-11):
- *   仕様書 (_if_kyotaku.txt) に「月途中の保険者変更時の取扱い」の明文は無い。
- *   給付管理票の点検事項 (L4564-4568)「同一の保険者・被保険者で、当該年月において
- *   同一の給付管理票が2件以上（複数）ないか。月途中で居宅介護支援事業所が変更に
- *   なった場合には、月末時点の居宅介護支援事業所が作成し提出することになる」より、
- *   給付管理票のキーは 保険者×被保険者×対象年月。
- *   → 保険者が月内で変わる場合、本来は保険者別に別票が必要になり得るが、
- *     給付管理データ (kaigo_benefit_management) が保険者別に分かれていないため
- *     2 票への分割は未対応 — 月末時点の保険者番号・被保険者番号で 1 票出力し warning。
- *   居宅介護支援費 (月額・計画費) は「月末時点の保険者に 1 本」が一般実務のため
- *   月末時点の保険者で出力する。
- *   ⚠要外部確認: 上記はいずれも仕様書に明文なし — 旧保険者分の給付管理票の要否・
- *   計画費の請求先は国保連合会/保険者に確認すること。
+ * 採用ルール (2026-07-11 保険者別分割対応):
+ *   仕様書 (_if_kyotaku.txt) に「月途中の保険者変更時の取扱い」の明文は無いが、
+ *   給付管理票の点検事項 (L4559-4568)「同一の保険者・被保険者で、当該年月において
+ *   同一の給付管理票が2件以上（複数）ないか」より、給付管理票のキーは
+ *   保険者×被保険者×対象年月 — 転居月は新旧保険者それぞれで限度額満額・
+ *   明細書も保険者別 (制度根拠確認済) のため、保険者別に別票を作成する。
+ *
+ *   給付管理票 (8221):
+ *     - splitSegments (期間別の認定セグメント。resolveCertSegmentsForMonth 由来)
+ *       が 2 件以上ある場合、保険者別に票を分割して出力する。
+ *       各票の被保険者番号・保険者番号・限度額 (項15 = 満額) はセグメントの認定から。
+ *     - 明細行の単位数配分は dailyActuals (自事業所の訪問介護実績 = 日別) を
+ *       按分根拠として、給付管理データの月合計をセグメント別実績の比で配分する
+ *       (実績合計 = 月合計なら実集計値そのまま。合計は必ず月合計と一致)。
+ *     - 日別根拠の無い行 (外部サービス等) は月末側 (新保険者側) に全量計上し warning。
+ *     - splitSegments が無い (境界日不明等で分割できない) 場合は従来どおり
+ *       月末時点の保険者番号・被保険者番号で 1 票出力し warning。
+ *   居宅介護支援費 (月額・計画費 8121) は「月末時点の保険者に 1 本」が一般実務のため
+ *   月末時点の保険者で出力する (分割しない)。
+ *   ⚠要外部確認: 計画費の請求先は仕様書に明文なし — 国保連合会/保険者に確認すること。
  */
 export interface MidMonthInsurerChange {
   fromInsurer: string | null;
@@ -115,6 +122,41 @@ export interface KyufuKanriLine {
   serviceKindCode: string;
   /** 給付計画単位数 */
   plannedUnits: number;
+  /** warning 表示用ラベル (例: "訪問介護(○○事業所)")。伝送内容には使わない */
+  label?: string;
+}
+
+/**
+ * 月内の認定セグメント (保険者別分割の 1 票分)。
+ * resolveCertSegmentsForMonth (cert-for-month.ts) の CertSegment から呼出側が変換する。
+ */
+export interface KyufuKanriSegment {
+  /** セグメント期間 (両端含む 'YYYY-MM-DD') */
+  from: string;
+  to: string;
+  insurerNumber: string;
+  insuredNumber: string;
+  careLevel: string | null;
+  /** 限度額適用期間 (このセグメントの認定の有効期間で代用) */
+  limitStart: string | null;
+  limitEnd: string | null;
+  /** 区分支給限度基準額 (単位) — 各セグメントの認定の限度額を満額設定 */
+  limitUnits: number;
+}
+
+/**
+ * 自事業所の訪問介護実績 (日別) — 保険者別分割の按分根拠。
+ * kaigo_visit_schedule (status=completed) 由来。
+ */
+export interface KyufuKanriDailyActual {
+  /** 実績日 ('YYYY-MM-DD') */
+  date: string;
+  /** サービス種類コード (2 桁。kaigo_service_codes.service_category) */
+  serviceKindCode: string;
+  /** サービス事業所番号 (10 桁)。office_id 未設定の移行期データは null */
+  officeNumber: string | null;
+  /** 1 回あたり単位数 (基本サービスコードの単位数) */
+  units: number;
 }
 
 /** 給付管理票情報作成区分コード (8221 項5): 1=新規 / 2=修正 / 3=取消 */
@@ -138,8 +180,18 @@ export interface KyufuKanriUser {
    * 省略時は "1" (新規)。月遅れ・返戻の再請求分は通常 "2" (修正)。
    */
   sakuseiKubun?: KyufuKanriSakuseiKubun;
-  /** 月途中の保険者変更 (転居)。渡すと warning を出す (出力は月末時点の保険者で 1 票) */
+  /**
+   * 月途中の保険者変更 (転居)。splitSegments が 2 件以上あれば保険者別に票を
+   * 分割して出力し、無ければ従来どおり月末時点の保険者で 1 票 + warning。
+   */
   midMonthInsurerChange?: MidMonthInsurerChange | null;
+  /**
+   * 保険者別分割用の認定セグメント (start 昇順・2 件以上で分割)。
+   * 境界日が判定できない場合は渡さない (= 従来 warning)。
+   */
+  splitSegments?: KyufuKanriSegment[] | null;
+  /** 自事業所の訪問介護実績 (日別) — 分割時の按分根拠。分割なしは不要 */
+  dailyActuals?: KyufuKanriDailyActual[];
 }
 
 export interface KyotakuDensouOptions {
@@ -194,6 +246,158 @@ function shoriYmOf(opts: KyotakuDensouOptions): string {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+// ─── 保険者別分割 (月途中の保険者変更 = 転居) ────────────────────────────────
+
+/** 1 票分の出力内容 (通常 = 利用者情報そのまま 1 票 / 保険者変更時 = セグメント別) */
+interface KyufuKanriTicket {
+  insurerNumber: string;
+  insuredNumber: string;
+  careLevel: string | null;
+  limitStart: string | null;
+  limitEnd: string | null;
+  /** 区分支給限度基準額 (項15)。分割票も各セグメントの認定の限度額を満額設定 */
+  limitUnits: number;
+  lines: KyufuKanriLine[];
+  /** 分割票のセグメント期間 (warning 表示用)。通常票 (分割なし) は null */
+  period: { from: string; to: string } | null;
+}
+
+/** 通常 (分割なし) の 1 票 — 従来出力と同一内容 */
+function singleTicket(u: KyufuKanriUser): KyufuKanriTicket {
+  return {
+    insurerNumber: u.insurerNumber,
+    insuredNumber: u.insuredNumber,
+    careLevel: u.careLevel,
+    limitStart: u.limitStart,
+    limitEnd: u.limitEnd,
+    limitUnits: u.limitUnits,
+    lines: u.lines,
+    period: null,
+  };
+}
+
+/** warning 表示用の行ラベル */
+function lineLabel(l: KyufuKanriLine): string {
+  return (
+    l.label ??
+    `サービス種類${l.serviceKindCode || "?"}${l.officeNumber ? ` (事業所 ${l.officeNumber})` : ""}`
+  );
+}
+
+/**
+ * 保険者別分割の票を組み立てる。
+ *
+ * 配分ルール:
+ *   - 各明細行 (サービス種類×事業所) に対応する日別実績 (dailyActuals) を
+ *     セグメント別に実集計し、給付管理データの月合計単位数をその比で配分する。
+ *     累積 round 方式のため配分合計は必ず月合計と一致し、実績合計 = 月合計の
+ *     場合は各セグメントの実集計値がそのまま載る。
+ *   - 日別実績が無い行 (外部サービス等) は按分根拠が無いため月末側
+ *     (新保険者側) に全量計上し warning (給付管理データの期間別手修正を案内)。
+ *   - 単位数が 0 になったセグメントの票は出力しない (票 1 枚に縮退することもある)。
+ */
+function buildSplitTickets(u: KyufuKanriUser, warnings: string[]): KyufuKanriTicket[] {
+  const segs = u.splitSegments!;
+  const daily = u.dailyActuals ?? [];
+  const n = segs.length;
+  const linesPerSeg: KyufuKanriLine[][] = segs.map(() => []);
+  const unallocated: string[] = [];
+
+  // 同一サービス種類コードの行数 (事業所番号不明の日別実績のフォールバック照合用)
+  const kindLineCount = new Map<string, number>();
+  for (const l of u.lines) {
+    kindLineCount.set(l.serviceKindCode, (kindLineCount.get(l.serviceKindCode) ?? 0) + 1);
+  }
+
+  for (const l of u.lines) {
+    // 行に対応する日別実績: サービス種類コード + 事業所番号 の一致で対応づける。
+    // 事業所番号を引けない実績 (office_id 未設定の移行期データ) は、その種類の行が
+    // 1 行だけの場合に限り対応づける (複数事業所の行への二重計上を防ぐ)。
+    const soleKindLine = (kindLineCount.get(l.serviceKindCode) ?? 0) === 1;
+    const matched = daily.filter(
+      (d) =>
+        d.serviceKindCode === l.serviceKindCode &&
+        ((!!d.officeNumber && d.officeNumber === l.officeNumber) ||
+          (!d.officeNumber && soleKindLine)),
+    );
+    const perSegActual = segs.map((s) =>
+      matched.reduce((sum, d) => (d.date >= s.from && d.date <= s.to ? sum + d.units : sum), 0),
+    );
+    const actualTotal = perSegActual.reduce((s, a) => s + a, 0);
+
+    if (l.plannedUnits <= 0 || actualTotal <= 0) {
+      // 日別の按分根拠が無い (外部サービス等) → 月末側 (新保険者側) に全量計上
+      linesPerSeg[n - 1].push(l);
+      if (l.plannedUnits > 0) unallocated.push(lineLabel(l));
+      continue;
+    }
+
+    // 月合計をセグメント別実績の比で配分 (累積 round — 合計は必ず月合計と一致)
+    let cumActual = 0;
+    let allocated = 0;
+    segs.forEach((_, i) => {
+      let alloc: number;
+      if (i === n - 1) {
+        alloc = l.plannedUnits - allocated;
+      } else {
+        cumActual += perSegActual[i];
+        const upto = Math.round((l.plannedUnits * cumActual) / actualTotal);
+        alloc = upto - allocated;
+        allocated = upto;
+      }
+      if (alloc !== 0) linesPerSeg[i].push({ ...l, plannedUnits: alloc });
+    });
+  }
+
+  const tickets: KyufuKanriTicket[] = [];
+  segs.forEach((s, i) => {
+    if (linesPerSeg[i].length === 0) return; // 単位の無いセグメントの票は作らない
+    tickets.push({
+      insurerNumber: s.insurerNumber,
+      insuredNumber: s.insuredNumber,
+      careLevel: s.careLevel,
+      limitStart: s.limitStart,
+      limitEnd: s.limitEnd,
+      limitUnits: s.limitUnits,
+      lines: linesPerSeg[i],
+      period: { from: s.from, to: s.to },
+    });
+  });
+
+  if (tickets.length >= 2) {
+    const desc = tickets
+      .map(
+        (t) =>
+          `保険者${t.insurerNumber || "?"} (${t.period!.from}〜${t.period!.to}): ${t.lines.reduce((s2, l) => s2 + l.plannedUnits, 0)}単位`,
+      )
+      .join(" / ");
+    warnings.push(
+      `${u.userName}: 保険者が月内で変わっているため、給付管理票を保険者別 ${tickets.length} 票に分割して出力します (${desc})`,
+    );
+  }
+  if (unallocated.length > 0) {
+    warnings.push(
+      `${u.userName}: 外部サービス ${[...new Set(unallocated)].join("、")} の単位はデータ上按分できない (日別実績なし) ため新保険者側 (月末時点の保険者) に全量計上しました — 実態と違う場合は「給付管理」画面で給付管理データを期間別に手修正してください`,
+    );
+  }
+  return tickets;
+}
+
+/** 利用者 → 票 (通常 1 票 / 保険者変更 + 分割材料ありは保険者別 N 票) */
+function ticketsOf(u: KyufuKanriUser, warnings: string[]): KyufuKanriTicket[] {
+  if ((u.splitSegments?.length ?? 0) >= 2) {
+    const split = buildSplitTickets(u, warnings);
+    if (split.length > 0) return split;
+    // 明細行なし等で分割票が組めない場合は従来どおり 1 票 (月末時点の保険者)
+  } else if (u.midMonthInsurerChange) {
+    const mc = u.midMonthInsurerChange;
+    warnings.push(
+      `${u.userName}: ${insurerChangeDesc(mc)} が月内で変わっています (境界日 ${mc.boundaryDate ?? "不明"})。境界日が判定できないため保険者別の票に分割できません — 月末時点の保険者番号・被保険者番号で 1 票のみ出力します (⚠要取込チェック: 給付管理票は保険者×被保険者×対象年月の単位のため旧保険者分の票が別途必要になる可能性があります。認定情報の適用開始日を確認するか、給付管理データを期間別に手修正してください)`,
+    );
+  }
+  return [singleTicket(u)];
+}
+
 /** ファイル 1: 給付管理票 (8211 + 8221) */
 export function buildKyufuKanriFile(
   users: KyufuKanriUser[],
@@ -227,13 +431,19 @@ export function buildKyufuKanriFile(
     );
   }
 
-  // 8211 総括票 — 作成区分 (新規/修正/取消) ごとの件数を集計。
+  // ── 利用者 → 票 (ticket) 展開 ──
+  // 通常は 1 利用者 = 1 票。月途中の保険者変更 (転居) で分割材料 (splitSegments)
+  // が揃っている利用者は保険者別に複数票へ分割する。
+  const userTickets = users.map((u) => ({ u, tickets: ticketsOf(u, warnings) }));
+
+  // 8211 総括票 — 作成区分 (新規/修正/取消) ごとの件数を「票数」で集計
+  // (保険者別に分割した利用者は票数分カウント = 8221 の票数と整合)。
   // 項12-14 の欄名は「自県分 訪問通所サービス・居宅サービス給付管理票」
   // (_if_kyotaku.txt 8211 レイアウト 項12-17)。種別3 (居宅サービス給付管理票) は
   // ここに計上し、項15-17 (短期入所サービス給付管理票の件数) は種別2 の票
   // (平成13年12月以前の対象年月のみ) 専用のため、平成14年1月以降は 0 が正。
   const kubunCount: Record<KyufuKanriSakuseiKubun, number> = { "1": 0, "2": 0, "3": 0 };
-  for (const u of users) kubunCount[u.sakuseiKubun ?? "1"]++;
+  for (const { u, tickets } of userTickets) kubunCount[u.sakuseiKubun ?? "1"] += tickets.length;
   dataParts.push([
     "8211", // 1 交換情報識別番号
     submitYm, // 2 提出年月
@@ -245,80 +455,82 @@ export function buildKyufuKanriFile(
     "0", "0", "0", // 15-17 自県分 短期入所サービス給付管理票 新規/修正/取消 (種別2 = H13.12 以前のみ → 0)
   ]);
 
-  for (const u of users) {
-    const careCode = CARE_LEVEL_CODE[(u.careLevel ?? "").trim()] ?? "";
+  for (const { u, tickets } of userTickets) {
     const kubun: KyufuKanriSakuseiKubun = u.sakuseiKubun ?? "1";
-    if (!u.insurerNumber) warnings.push(`${u.userName}: 保険者番号が未登録です`);
-    if (!u.insuredNumber) warnings.push(`${u.userName}: 被保険者番号が未登録です`);
-    if (!careCode) warnings.push(`${u.userName}: 要介護度 ("${u.careLevel ?? "未設定"}") をコードに変換できません`);
     if (!u.birthDate) warnings.push(`${u.userName}: 生年月日が未登録です`);
-    if (u.limitUnits <= 0) warnings.push(`${u.userName}: 区分支給限度基準額が未登録です`);
-    if (u.midMonthInsurerChange) {
-      const mc = u.midMonthInsurerChange;
-      warnings.push(
-        `${u.userName}: ${insurerChangeDesc(mc)} が月内で変わっています (境界日 ${mc.boundaryDate ?? "不明"})。月末時点の保険者番号・被保険者番号で 1 票のみ出力します — 給付管理票は保険者×被保険者×対象年月の単位のため旧保険者分の票が別途必要になる可能性があります (⚠要取込チェック: 給付管理データが保険者別に分かれていないため 2 票への分割は未対応。旧保険者分の要否を国保連合会/保険者に確認)`,
-      );
-    }
-
-    const head = (lineNo: string) => [
-      "8221", // 1
-      ym, // 2 対象年月
-      u.insurerNumber ? u.insurerNumber.trim().padStart(8, "0") : "", // 3 証記載保険者番号 (数字8桁・前0埋め)
-      office, // 4 事業所番号 (居宅介護支援事業所)
-      kubun, // 5 給付管理票情報作成区分コード (1=新規 / 2=修正 / 3=取消)
-      todayNum, // 6 給付管理票作成年月日
-      // 7 給付管理票種別区分コード。H14.01 以降の対象年月は短期入所も含め
-      //   常に 3 (居宅サービス給付管理票) — ※6 (1/2 は H13.12 以前のみ)
-      "3",
-      lineNo, // 8 給付管理票明細行番号
-      u.insuredNumber, // 9 被保険者番号
-      dateNum(u.birthDate), // 10 被保険者生年月日
-      genderCode(u.gender), // 11 性別コード
-      careCode, // 12 要介護状態区分コード
-      ymNum(u.limitStart), // 13 限度額適用期間 (開始)
-      ymNum(u.limitEnd), // 14 限度額適用期間 (終了)
-    ];
-
-    // 明細行 (01〜98)。99 行目は終端行のため明細は最大 98 行
-    let userLines = u.lines;
-    if (userLines.length > 98) {
-      warnings.push(
-        `${u.userName}: 給付管理票の明細が ${userLines.length} 行あり上限 98 行を超えるため 99 行目以降を出力できません (行番号 99 は終端行のため)`,
-      );
-      userLines = userLines.slice(0, 98);
-    }
-    let total = 0;
-    userLines.forEach((l, i) => {
+    // 明細行の共通項目チェック (分割しても行内容は同じなので利用者単位で 1 回)
+    for (const l of u.lines) {
       if (!l.officeNumber) warnings.push(`${u.userName}: サービス事業所番号が未設定の行があります`);
       if (!l.serviceKindCode) warnings.push(`${u.userName}: サービス種類コード未設定の行があります (SERVICE_KIND_CODE 未登録のサービス種別の可能性)`);
-      total += l.plannedUnits;
-      dataParts.push([
-        ...head(String(i + 1).padStart(2, "0")),
-        "", // 15 訪問通所/短期入所支給限度額 (明細行は未設定 — ※4)
-        "1", // 16 居宅サービス計画作成区分コード
-        l.officeNumber, // 17 事業所番号 (サービス事業所)
-        "1", // 18 指定/基準該当等事業所区分コード (1=指定)
-        l.serviceKindCode, // 19 サービス種類コード (短期入所 21/22/23/2A も同一票に記載)
-        String(l.plannedUnits), // 20 給付計画単位数 (種別3 は短期入所も単位数 — ※6。日数記載は種別2=H13.12以前のみ)
-        "", // 21 限度額管理期間における前月までの給付計画日数 (種別3 は設定不要 — ※6。種別2=短期入所票のみ必須)
-        "", "", "", // 22-24 (明細行は未設定 — ※4)
-      ]);
-    });
+    }
 
-    // 終端行 (99)
-    dataParts.push([
-      ...head("99"),
-      String(u.limitUnits), // 15 居宅サービス区分支給限度基準額 (単位数 — ※6。種別3 は訪問通所+短期入所 一本の限度額)
-      "1", // 16 居宅サービス計画作成区分コード
-      "", // 17 事業所番号 (終端行は未設定)
-      "", // 18
-      "", // 19
-      "", // 20
-      "", // 21 (種別3 は設定不要 — ※6)
-      String(total), // 22 指定サービス分小計 (単位数)
-      "0", // 23 基準該当サービス分小計
-      String(total), // 24 給付計画合計単位数
-    ]);
+    // 票ごと (通常 1 票 / 保険者別分割時は N 票) に 8221 明細 01〜98 + 終端 99 を出力
+    for (const t of tickets) {
+      const careCode = CARE_LEVEL_CODE[(t.careLevel ?? "").trim()] ?? "";
+      const seg = t.period ? ` (${t.period.from}〜${t.period.to} の分割票)` : "";
+      if (!t.insurerNumber) warnings.push(`${u.userName}: 保険者番号が未登録です${seg}`);
+      if (!t.insuredNumber) warnings.push(`${u.userName}: 被保険者番号が未登録です${seg}`);
+      if (!careCode) warnings.push(`${u.userName}: 要介護度 ("${t.careLevel ?? "未設定"}") をコードに変換できません${seg}`);
+      if (t.limitUnits <= 0) warnings.push(`${u.userName}: 区分支給限度基準額が未登録です${seg}`);
+
+      const head = (lineNo: string) => [
+        "8221", // 1
+        ym, // 2 対象年月 (分割票も同一の対象年月 — 票の別は項3/9 の保険者×被保険者)
+        t.insurerNumber ? t.insurerNumber.trim().padStart(8, "0") : "", // 3 証記載保険者番号 (数字8桁・前0埋め)
+        office, // 4 事業所番号 (居宅介護支援事業所)
+        kubun, // 5 給付管理票情報作成区分コード (1=新規 / 2=修正 / 3=取消)
+        todayNum, // 6 給付管理票作成年月日
+        // 7 給付管理票種別区分コード。H14.01 以降の対象年月は短期入所も含め
+        //   常に 3 (居宅サービス給付管理票) — ※6 (1/2 は H13.12 以前のみ)
+        "3",
+        lineNo, // 8 給付管理票明細行番号
+        t.insuredNumber, // 9 被保険者番号
+        dateNum(u.birthDate), // 10 被保険者生年月日
+        genderCode(u.gender), // 11 性別コード
+        careCode, // 12 要介護状態区分コード
+        ymNum(t.limitStart), // 13 限度額適用期間 (開始)
+        ymNum(t.limitEnd), // 14 限度額適用期間 (終了)
+      ];
+
+      // 明細行 (01〜98)。99 行目は終端行のため明細は最大 98 行
+      let ticketLines = t.lines;
+      if (ticketLines.length > 98) {
+        warnings.push(
+          `${u.userName}: 給付管理票の明細が ${ticketLines.length} 行あり上限 98 行を超えるため 99 行目以降を出力できません (行番号 99 は終端行のため)`,
+        );
+        ticketLines = ticketLines.slice(0, 98);
+      }
+      let total = 0;
+      ticketLines.forEach((l, i) => {
+        total += l.plannedUnits;
+        dataParts.push([
+          ...head(String(i + 1).padStart(2, "0")),
+          "", // 15 訪問通所/短期入所支給限度額 (明細行は未設定 — ※4)
+          "1", // 16 居宅サービス計画作成区分コード
+          l.officeNumber, // 17 事業所番号 (サービス事業所)
+          "1", // 18 指定/基準該当等事業所区分コード (1=指定)
+          l.serviceKindCode, // 19 サービス種類コード (短期入所 21/22/23/2A も同一票に記載)
+          String(l.plannedUnits), // 20 給付計画単位数 (種別3 は短期入所も単位数 — ※6。日数記載は種別2=H13.12以前のみ)
+          "", // 21 限度額管理期間における前月までの給付計画日数 (種別3 は設定不要 — ※6。種別2=短期入所票のみ必須)
+          "", "", "", // 22-24 (明細行は未設定 — ※4)
+        ]);
+      });
+
+      // 終端行 (99)
+      dataParts.push([
+        ...head("99"),
+        String(t.limitUnits), // 15 居宅サービス区分支給限度基準額 (単位数 — ※6。分割票は各セグメントの認定の限度額を満額)
+        "1", // 16 居宅サービス計画作成区分コード
+        "", // 17 事業所番号 (終端行は未設定)
+        "", // 18
+        "", // 19
+        "", // 20
+        "", // 21 (種別3 は設定不要 — ※6)
+        String(total), // 22 指定サービス分小計 (単位数)
+        "0", // 23 基準該当サービス分小計
+        String(total), // 24 給付計画合計単位数
+      ]);
+    }
   }
 
   // ⚠ コントロールレコード項11 (処理対象年月) は「審査を実行する年月」=提出月
