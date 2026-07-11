@@ -871,8 +871,10 @@ export async function aggregateMonthlyVisitSeikyu(
     // 区分支給限度基準の基準値 (認定側):
     //   分割なし = 従来どおり月内認定の max (区分変更月対応。呼出側で計算済み)
     //   分割あり = 各セグメントの認定の限度額をそれぞれ満額適用
-    //   ※「転居月は保険者ごとに支給限度基準額を満額適用」は制度原則によるもので、
-    //     repo 内の伝送仕様書 (_if_*.txt) に明文なし — 要外部確認 (2026-07 Phase 2)。
+    //   ※「転居月は保険者ごとに支給限度基準額を満額適用」— 2026-07-11 一次資料で確認済:
+    //     日割り/按分規定は存在しない。転居で被保険者資格が変わり暦月単位 (施行規則67条) の
+    //     別管理になる。厚労省QA (平成13年8月29日事務連絡 vol.116)「月の途中で保険者が
+    //     変わった場合、介護給付費明細書は2件提出」+ 国保連QA「支給限度額もそれぞれに管理」。
     const limitAmount =
       seg.segCount > 1
         ? cert?.service_limit_amount != null && Number(cert.service_limit_amount) > 0
@@ -1270,9 +1272,12 @@ export async function aggregateMonthlyVisitSeikyu(
     const midChange = detectMidMonthChange(certsInMonth);
     // ケース3 (区分変更月の限度額): 月内に複数の認定があるときは
     // service_limit_amount の最大値 (= 重い方の区分支給限度基準額) を月全体に適用する。
-    // ※「月途中の区分変更は重い方の要介護度の支給限度基準額を月全体に適用」は
-    //   告示側の制度原則によるもので、repo 内の伝送仕様書 (_if_*.txt) に明文なし
-    //   — 要外部確認 (2026-07 Phase 1)。
+    // ※「月途中の区分変更は重い方の要介護度の支給限度基準額を月全体に適用」—
+    //   2026-07-11 一次資料で確認済: 介護保険法施行規則 第68条第1項
+    //   「当該月において最も介護の必要の程度が高い要介護状態区分に応じた」限度額。
+    //   要支援→要介護跨ぎの月は同条2項 (要介護の限度額に予防サービス費を合算)。
+    //   厚労省QA 平成15年6月30日 vol.2 問22 も同旨。なお「月末時点」の区分を使うのは
+    //   明細書の被保険者欄・居宅介護支援費コードの話で、限度額は「重い方」。
     const monthLimitCandidates = certsInMonth
       .map((c) => (c.service_limit_amount != null ? Number(c.service_limit_amount) : NaN))
       .filter((v) => Number.isFinite(v) && v > 0);

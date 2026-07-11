@@ -499,10 +499,10 @@ export function OfficeContent({
         />
       )}
 
-      {/* 減算 (体制未整備 = 訪問介護のみ表示。
+      {/* 減算 (体制未整備 = 訪問介護・訪問入浴のみ表示。
           虐防/業未 減算の適用期間。期間内の月は請求集計が基本コードを
           合成バリエーション (・虐防/・業未) へ自動差し替え) */}
-      {form.service_type === "訪問介護" && (
+      {(form.service_type === "訪問介護" || form.service_type === "訪問入浴") && (
         <GensanSection
           key={`gensan-${form.id}`}
           officeId={form.id}

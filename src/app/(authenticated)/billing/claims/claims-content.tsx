@@ -18,6 +18,7 @@ import {
   X,
   Save,
   Send,
+  AlertTriangle,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   ChevronUp,
 } from "lucide-react";
@@ -49,7 +50,12 @@ import {
   setYoboShienMarker,
 } from "./claims-shared";
 import { validInMonth } from "@/lib/service-code-valid";
-import { resolveCertForMonth } from "@/lib/cert-for-month";
+import {
+  resolveCertForMonth,
+  resolveCertsInMonth,
+  detectMidMonthChange,
+  type MidMonthCertChange,
+} from "@/lib/cert-for-month";
 import { useBusinessType } from "@/lib/business-type-context";
 
 // ---------------------------------------------------------------------------
@@ -212,6 +218,17 @@ function calcTotals(
   const total_units = baseUnits + addUnits - reductionUnits;
   const total_amount = Math.floor(total_units * unitPrice);
   return { total_units, total_amount, insurance_amount: total_amount };
+}
+
+// 月途中の保険者変更 (転居) の表示用文言 ("保険者 1234→5678" / "被保険者番号 …→…")
+function describeInsurerChange(
+  mc: NonNullable<MidMonthCertChange["insurerChange"]>,
+): string {
+  const insurerDiff =
+    !!mc.fromInsurer && !!mc.toInsurer && mc.fromInsurer.trim() !== mc.toInsurer.trim();
+  return insurerDiff
+    ? `保険者 ${mc.fromInsurer}→${mc.toInsurer}`
+    : `被保険者番号 ${mc.fromInsured ?? "?"}→${mc.toInsured ?? "?"}`;
 }
 
 // chunked array helper: 大量 UUID を .in() に渡すと URI Too Long (HTTP 414) になり、
@@ -653,6 +670,8 @@ export function ClaimsContent({
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [officeInfo, setOfficeInfo] = useState<ClaimsOfficeInfo>(initialOfficeInfo);
+  // 月途中の保険者変更 (転居) のある利用者 — 警告バナー用
+  const [insurerChanges, setInsurerChanges] = useState<{ name: string; desc: string }[]>([]);
 
   // ── 自事業所 (currentOffice) が確定したら office 情報を id で引き直す ──
   //    (server 初期値は app_type='kaigo-app' の先頭 1 件のため、複数事業所で不定になる)
@@ -752,6 +771,44 @@ export function ClaimsContent({
     }
     fetchClaims();
   }, [fetchClaims]);
+
+  // ── 月途中の保険者変更 (転居) の検出 — 給付管理票・明細書の提出先確認の警告用 ──
+  //    (初回 server 描画分・一括生成後の再読込分の両方を claims 変化で拾う)
+  useEffect(() => {
+    const userIds = [...new Set(claims.map((c) => c.user_id))];
+    if (userIds.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更時のリセット
+      setInsurerChanges([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const [y, m] = billingMonth.split("-").map(Number);
+        const certsRes = await resolveCertsInMonth(supabase, userIds, y, m);
+        const nameById = new Map(
+          claims.map((c) => [c.user_id, c.clients?.name ?? c.user_id]),
+        );
+        const list: { name: string; desc: string }[] = [];
+        for (const [clientId, certs] of certsRes) {
+          const mc = detectMidMonthChange(certs)?.insurerChange;
+          if (!mc) continue;
+          list.push({
+            name: nameById.get(clientId) ?? clientId,
+            desc: describeInsurerChange(mc),
+          });
+        }
+        list.sort((a, b) => a.name.localeCompare(b.name, "ja"));
+        if (!cancelled) setInsurerChanges(list);
+      } catch (e) {
+        // 警告用途のため失敗しても画面は止めない (console のみ)
+        console.error("月途中の保険者変更チェックに失敗:", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, claims, billingMonth]);
 
   // ── Summary ───────────────────────────────────────────────────────────────
 
@@ -855,6 +912,37 @@ export function ClaimsContent({
           insurer_number: cert.insurer_number ?? null,
           insured_number: cert.insured_number ?? null,
         });
+      }
+
+      // 3-a. 月途中の保険者変更 (転居) の検出 — 警告のみ。
+      //      レセプト生成自体は月末時点の認定 (resolveCertForMonth の採用行) で行う
+      //      (居宅介護支援費は月額のため月末時点の保険者に 1 本 — ⚠要外部確認、
+      //       詳細は lib/kokuho-densou/build-kyotaku.ts MidMonthInsurerChange)。
+      try {
+        const certsInMonthRes = await resolveCertsInMonth(
+          supabase,
+          Array.from(activeUserIds),
+          genY,
+          genM,
+        );
+        const genNameById = new Map(users.map((u) => [u.id, u.name]));
+        const changed: string[] = [];
+        for (const [clientId, certs] of certsInMonthRes) {
+          const mc = detectMidMonthChange(certs)?.insurerChange;
+          if (!mc) continue;
+          changed.push(
+            `${genNameById.get(clientId) ?? clientId} (${describeInsurerChange(mc)})`,
+          );
+        }
+        if (changed.length > 0) {
+          toast.warning(
+            `保険者が月内で変わっている利用者がいます: ${changed.join("、")}。給付管理票・明細書の提出先を確認してください (レセプトは月末時点の保険者で生成します)`,
+            { duration: 12000 },
+          );
+        }
+      } catch (e) {
+        // 検出は警告用途のため一括生成自体は止めない
+        console.error("月途中の保険者変更チェックに失敗:", e);
       }
 
       // 4. Fetch office settings for auto-apply（共通マスタ offices — 現在の自事業所を id で参照）
@@ -1682,6 +1770,27 @@ export function ClaimsContent({
           <p className="text-2xl font-bold text-yellow-700">{summary.draft}件</p>
         </div>
       </div>
+
+      {/* 月途中の保険者変更 (転居) 警告 */}
+      {insurerChanges.length > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 shadow-sm flex items-start gap-2 text-sm text-amber-900">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
+          <div>
+            <p className="font-semibold">
+              保険者が月内で変わっている利用者が {insurerChanges.length} 名います —
+              給付管理票・明細書の提出先を確認してください
+            </p>
+            <ul className="mt-1 space-y-0.5 text-xs">
+              {insurerChanges.map((c, i) => (
+                <li key={i}>
+                  {c.name}: 保険者が月内で変わっています ({c.desc})。
+                  レセプト・給付管理票は月末時点の保険者番号・被保険者番号で出力されます
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
 
       {/* 事業所単位の加減算バー */}
       {officeInfo && (

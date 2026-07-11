@@ -130,11 +130,12 @@ export function KaigoSeikyuContent() {
 
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
 
-  // ── 虐防/業未 減算の適用状況 (対象月)。テーブル未適用は空 = バナー非表示 ──
+  // ── 虐防/業未 減算の適用状況 (対象月)。訪問介護・訪問入浴とも合成コード方式で
+  //    集計側が自動差し替えするため共通表示。テーブル未適用は空 = バナー非表示 ──
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!officeId || isBath) {
+      if (!officeId) {
         if (!cancelled) setGensanPeriods([]);
         return;
       }
@@ -149,7 +150,7 @@ export function KaigoSeikyuContent() {
     return () => {
       cancelled = true;
     };
-  }, [supabase, officeId, isBath, monthKey]);
+  }, [supabase, officeId, monthKey]);
 
   // ── 表示用の統合行 (当月通常行 + 再請求行)。カナ索引で共通絞込 ──
   // rowKey: 当月行は "cur:<user_id>:<segmentIndex>" /

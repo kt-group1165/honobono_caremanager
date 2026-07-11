@@ -27,7 +27,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { resolveKohiForMonth } from "@/lib/kohi";
-import { resolveCertForMonth } from "@/lib/cert-for-month";
+import {
+  resolveCertForMonth,
+  resolveCertsInMonth,
+  detectMidMonthChange,
+  type MidMonthCertChange,
+} from "@/lib/cert-for-month";
 import {
   getUnitPriceByArea,
   parseYoboShienKubun,
@@ -85,6 +90,23 @@ export interface KyotakuSeikyuRow {
   kohiJukyusha: string | null;
   /** 介護予防支援の区分 (notes マーカー)。"itaku" は請求対象外 (包括が請求) */
   yoboShienKubun: YoboShienKubun | null;
+  /**
+   * 月途中の保険者変更 (転居)。null = 変更なし。
+   * 検出時も出力 (明細書/給付管理票/伝送) は月末時点の保険者番号・被保険者番号で
+   * 行い、警告表示のみ (詳細は build-kyotaku.ts MidMonthInsurerChange の暫定ルール)。
+   */
+  midMonthInsurerChange: MidMonthCertChange["insurerChange"];
+}
+
+/** 保険者変更の表示用文言 ("保険者 1234→5678" / "被保険者番号 …→…") */
+export function describeInsurerChange(
+  mc: NonNullable<MidMonthCertChange["insurerChange"]>,
+): string {
+  const insurerDiff =
+    !!mc.fromInsurer && !!mc.toInsurer && mc.fromInsurer.trim() !== mc.toInsurer.trim();
+  return insurerDiff
+    ? `保険者 ${mc.fromInsurer}→${mc.toInsurer}`
+    : `被保険者番号 ${mc.fromInsured ?? "?"}→${mc.toInsured ?? "?"}`;
 }
 
 /** 月遅れ/返戻の再請求行 (元提供月で読み直したレセプト) */
@@ -351,6 +373,18 @@ export async function fetchKyotakuClaimRows(
   const [kohiYear, kohiMonth] = monthKey.split("-").map(Number);
   const kohiRes = await resolveKohiForMonth(supabase, userIds, kohiYear, kohiMonth);
 
+  // 2.6) 月途中の保険者変更 (転居) の検出 — 給付管理票・明細書の提出先確認の警告用。
+  //      検出しても出力自体は 2) の月末時点の認定 (resolveCertForMonth の採用行) で行う。
+  const certsInMonthRes = await resolveCertsInMonth(supabase, userIds, cy, cm);
+  const insurerChangeByUser = new Map<
+    string,
+    NonNullable<MidMonthCertChange["insurerChange"]>
+  >();
+  for (const [clientId, certs] of certsInMonthRes) {
+    const mc = detectMidMonthChange(certs);
+    if (mc?.insurerChange) insurerChangeByUser.set(clientId, mc.insurerChange);
+  }
+
   // 3) 行の組み立て (ふりがな順)
   const rows: KyotakuSeikyuRow[] = billable.map((c) => {
     const cert = certMap.get(c.user_id);
@@ -388,6 +422,7 @@ export async function fetchKyotakuClaimRows(
       kohiFutansha: kohi?.futansha ?? null,
       kohiJukyusha: kohi?.jukyusha ?? null,
       yoboShienKubun: parseYoboShienKubun(c.notes),
+      midMonthInsurerChange: insurerChangeByUser.get(c.user_id) ?? null,
     };
   });
   rows.sort((a, b) =>

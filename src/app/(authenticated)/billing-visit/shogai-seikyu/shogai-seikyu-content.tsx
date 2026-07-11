@@ -121,6 +121,8 @@ export function ShogaiSeikyuContent() {
   const [recordCount, setRecordCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // 集計時の注意事項 (月途中の市町村変更 等)。集計値には影響しない
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [officeNumber, setOfficeNumber] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
@@ -168,6 +170,7 @@ export function ShogaiSeikyuContent() {
       });
       setRows(result.rows);
       setRecordCount(result.recordCount);
+      setWarnings(result.warnings);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -773,6 +776,17 @@ export function ShogaiSeikyuContent() {
           <div className="border-b border-red-200 bg-red-50 px-3 py-2 shrink-0 flex items-start gap-2 text-sm text-red-700">
             <AlertCircle size={16} className="mt-0.5 shrink-0" />
             {error}
+          </div>
+        )}
+
+        {warnings.length > 0 && (
+          <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
+            <AlertCircle size={14} className="mt-0.5 shrink-0" />
+            <div className="space-y-0.5">
+              {warnings.map((w, i) => (
+                <div key={i}>{w}</div>
+              ))}
+            </div>
           </div>
         )}
 

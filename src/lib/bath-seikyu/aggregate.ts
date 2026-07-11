@@ -17,11 +17,23 @@
  *   - 公費(生保/公費単独=全額振替、部分公費=保険+本人負担で振替しない)
  *   - 回単位加算: 初回(124113 200/月 対象外)・認知症専門ケアⅠ/Ⅱ(126133/126134 /回)・中山間(128110 所定×5%)
  *   - 処遇改善(月次%)
- *   - 虐防/業未の事業所減算は別コード(121131等)で記録側が選択する前提(runtime減算しない)
+ *   - 虐防/業未 (高齢者虐待防止措置未実施減算 / BCP未策定減算 各1%):
+ *     訪問入浴 (種類12) も独立減算コードが無い合成コード方式 (121131/121141/121145 等)。
+ *     事業所フラグ (kaigo_office_gensan_periods) が対象月に適用中なら、基本サービス
+ *     コード (1211xx) をマスタ駆動で減算織込み済の合成コードへ差し替える
+ *     (visit-seikyu/gyakutai-bcp.ts の resolver を種類12で流用)。
+ *     テーブル未適用は空 = 従来動作 (減算なし)。解決不能時は元コード + warning。
+ *     記録側で直接 虐防/業未 コードを選んでいた場合も名称から再構成するため二重適用しない。
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { validInMonth, monthRange } from "@/lib/service-code-valid";
+import {
+  getGensanPeriodsForMonth,
+  gensanFlagsFromPeriods,
+  gensanFlagsLabel,
+  resolveGensanVariant,
+} from "@/lib/visit-seikyu/gyakutai-bcp";
 import {
   resolveCertForMonth,
   resolveCertsInMonth,
@@ -94,6 +106,50 @@ export async function aggregateBathVisitSeikyu(
     }
   }
 
+  // 2.5) 虐防/業未 減算 (kaigo_office_gensan_periods)。対象月に適用中なら
+  //      基本サービスコード (1211xx) → 減算織込み済合成コードの差し替え表を作る。
+  //      既に変種コードの記録も名称から再構成して解決する (二重適用しない。
+  //      解決先が同一コードなら差し替え不要なので登録しない)。
+  const gensanSwap = new Map<
+    string,
+    { code: string; name: string; units: number; short: string | null }
+  >();
+  if (opts.officeId) {
+    const gensanFlags = gensanFlagsFromPeriods(
+      await getGensanPeriodsForMonth(supabase, opts.officeId, monthKey),
+    );
+    if (gensanFlags.gyakutai || gensanFlags.bcp) {
+      const label = gensanFlagsLabel(gensanFlags);
+      const targets = baseCodes.filter(
+        (c) => c.startsWith("121") && codeMap.has(c),
+      );
+      const resolved = await Promise.all(
+        targets.map((c) =>
+          resolveGensanVariant(supabase, codeMap.get(c)!.name, gensanFlags, year, month, "12"),
+        ),
+      );
+      targets.forEach((c, i) => {
+        const v = resolved[i];
+        const base = codeMap.get(c)!;
+        if (v) {
+          if (v.code !== c) {
+            gensanSwap.set(c, {
+              code: v.code,
+              name: v.name,
+              units: v.units,
+              short: v.short ?? base.short,
+            });
+          }
+        } else {
+          console.warn(`[bath-seikyu] 減算バリエーション未解決: 「${base.name}」 (${label})`);
+          warnings.push(
+            `「${base.name}」の減算適用コード (${label}) が対象月 (${monthKey}) のマスタから引けません — 元のコードのまま (減算なしで) 集計します`,
+          );
+        }
+      });
+    }
+  }
+
   // 3) 認定(月次解決) / 公費 / 計画単位数 / 利用者
   const certByClient = await resolveCertForMonth(supabase, clientIds, year, month);
   // 月途中の資格変更 (区分変更/保険者変更) 検出 + 限度額決定用 (Phase 1。visit-seikyu と同型)
@@ -156,7 +212,8 @@ export async function aggregateBathVisitSeikyu(
     // ── 月途中の資格変更 (Phase 1: 検出 + 限度額のみ。visit-seikyu/aggregate.ts と同型) ──
     // ケース3: 月内に複数の認定があるときは service_limit_amount の最大値
     // (= 重い方の区分支給限度基準額) を月全体に適用する。
-    // ※「重い方を月全体適用」は告示側の制度原則で repo 仕様書に明文なし — 要外部確認。
+    // ※「重い方を月全体適用」= 介護保険法施行規則 第68条第1項で確認済 (2026-07-11。
+    //   詳細は visit-seikyu/aggregate.ts の同コメント参照)。
     const certsInMonth = certsInMonthByClient.get(clientId) ?? [];
     const midChange = detectMidMonthChange(certsInMonth);
     const monthLimitCandidates = certsInMonth
@@ -201,10 +258,13 @@ export async function aggregateBathVisitSeikyu(
     // 提供表の「サービス追加」経由で記録行として入ることがある。
     const detailMap = new Map<string, SeikyuDetailLine>();
     for (const r of recs) {
-      const code = r.service_code;
-      if (!code) { warnings.push(`${name}: サービスコード未設定の記録があります`); continue; }
-      const info = codeMap.get(code);
-      if (!info) { warnings.push(`${name}: コード${code}が対象月マスタに未一致`); continue; }
+      const rawCode = r.service_code;
+      if (!rawCode) { warnings.push(`${name}: サービスコード未設定の記録があります`); continue; }
+      // 虐防/業未 適用中は基本コードを減算織込み済の合成コードへ差し替え
+      const swap = gensanSwap.get(rawCode);
+      const info = swap ?? codeMap.get(rawCode);
+      if (!info) { warnings.push(`${name}: コード${rawCode}が対象月マスタに未一致`); continue; }
+      const code = swap ? swap.code : rawCode;
       const ex = detailMap.get(code);
       if (ex) { ex.count += 1; ex.units += info.units; }
       else detailMap.set(code, { service_type: info.name, short_name: info.short, service_code: code, unit_per: info.units, count: 1, units: info.units });

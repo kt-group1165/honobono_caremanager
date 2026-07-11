@@ -37,6 +37,7 @@ import {
   SeikyuMonthNav,
   loadKyotakuReSeikyuRows,
   parseKyufuKanriKubun,
+  describeInsurerChange,
   setKyufuKanriKubunMarker,
   KYUFU_KANRI_KUBUN_LABELS,
   type KyufuKanriKubun,
@@ -148,6 +149,12 @@ export function KyotakuKaigoSeikyuContent() {
 
   const selectedDisplay = displayRows.find((d) => d.key === selectedKey) ?? null;
   const selected = selectedDisplay?.row ?? null;
+
+  // ── 月途中の保険者変更 (転居) のある行 — 警告バナー用 ──
+  const insurerChangeRows = useMemo(
+    () => displayRows.filter((d) => d.row.midMonthInsurerChange),
+    [displayRows],
+  );
 
   // 合計は当月の通常行のみ (再請求分は元提供月の別集計なので当月合計には含めない)
   const totalUnits = filteredRows.reduce((s, r) => s + r.totalUnits, 0);
@@ -809,6 +816,24 @@ export function KyotakuKaigoSeikyuContent() {
               <span>
                 過去月の月遅れ・返戻 {reRows.length} 件を当月請求に合流しています
                 (元提供月で明細書・伝送に反映)。国保対象化すると一覧から外れます。
+              </span>
+            </div>
+          )}
+
+          {/* 月途中の保険者変更 (転居) 警告 */}
+          {!loading && insurerChangeRows.length > 0 && (
+            <div className="border-b border-red-200 bg-red-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-red-800">
+              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <span>
+                <span className="font-semibold">
+                  保険者が月内で変わっている利用者が {insurerChangeRows.length} 名います
+                </span>
+                {" — "}
+                {insurerChangeRows
+                  .map((d) => `${d.row.user_name} (${describeInsurerChange(d.row.midMonthInsurerChange!)})`)
+                  .join(" / ")}
+                。給付管理票・明細書の提出先を確認してください
+                (明細書・給付管理票は月末時点の保険者番号・被保険者番号で出力されます)。
               </span>
             </div>
           )}

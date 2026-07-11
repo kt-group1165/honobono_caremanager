@@ -72,6 +72,42 @@ const genderCode = (g: string | null | undefined) =>
 const dateNum = (iso: string | null | undefined) => (iso ? iso.replaceAll("-", "") : "");
 const ymNum = (iso: string | null | undefined) => (iso ? iso.replaceAll("-", "").slice(0, 6) : "");
 
+/**
+ * 月途中の保険者変更 (転居) 情報 — 呼出側が detectMidMonthChange (cert-for-month.ts)
+ * で検出した内容を渡す (MidMonthCertChange["insurerChange"] と構造互換)。
+ *
+ * 採用した暫定ルール (2026-07-11):
+ *   仕様書 (_if_kyotaku.txt) に「月途中の保険者変更時の取扱い」の明文は無い。
+ *   給付管理票の点検事項 (L4564-4568)「同一の保険者・被保険者で、当該年月において
+ *   同一の給付管理票が2件以上（複数）ないか。月途中で居宅介護支援事業所が変更に
+ *   なった場合には、月末時点の居宅介護支援事業所が作成し提出することになる」より、
+ *   給付管理票のキーは 保険者×被保険者×対象年月。
+ *   → 保険者が月内で変わる場合、本来は保険者別に別票が必要になり得るが、
+ *     給付管理データ (kaigo_benefit_management) が保険者別に分かれていないため
+ *     2 票への分割は未対応 — 月末時点の保険者番号・被保険者番号で 1 票出力し warning。
+ *   居宅介護支援費 (月額・計画費) は「月末時点の保険者に 1 本」が一般実務のため
+ *   月末時点の保険者で出力する。
+ *   ⚠要外部確認: 上記はいずれも仕様書に明文なし — 旧保険者分の給付管理票の要否・
+ *   計画費の請求先は国保連合会/保険者に確認すること。
+ */
+export interface MidMonthInsurerChange {
+  fromInsurer: string | null;
+  toInsurer: string | null;
+  fromInsured: string | null;
+  toInsured: string | null;
+  /** 変更後認定の適用開始日 (判定できない場合 null) */
+  boundaryDate: string | null;
+}
+
+/** 保険者変更 warning の共通文言 ("保険者 1234→5678" / "被保険者番号 …→…") */
+function insurerChangeDesc(mc: MidMonthInsurerChange): string {
+  const insurerDiff =
+    !!mc.fromInsurer && !!mc.toInsurer && mc.fromInsurer.trim() !== mc.toInsurer.trim();
+  return insurerDiff
+    ? `保険者 ${mc.fromInsurer}→${mc.toInsurer}`
+    : `被保険者番号 ${mc.fromInsured ?? "?"}→${mc.toInsured ?? "?"}`;
+}
+
 export interface KyufuKanriLine {
   /** サービス事業所番号 (10 桁) */
   officeNumber: string;
@@ -102,6 +138,8 @@ export interface KyufuKanriUser {
    * 省略時は "1" (新規)。月遅れ・返戻の再請求分は通常 "2" (修正)。
    */
   sakuseiKubun?: KyufuKanriSakuseiKubun;
+  /** 月途中の保険者変更 (転居)。渡すと warning を出す (出力は月末時点の保険者で 1 票) */
+  midMonthInsurerChange?: MidMonthInsurerChange | null;
 }
 
 export interface KyotakuDensouOptions {
@@ -215,6 +253,12 @@ export function buildKyufuKanriFile(
     if (!careCode) warnings.push(`${u.userName}: 要介護度 ("${u.careLevel ?? "未設定"}") をコードに変換できません`);
     if (!u.birthDate) warnings.push(`${u.userName}: 生年月日が未登録です`);
     if (u.limitUnits <= 0) warnings.push(`${u.userName}: 区分支給限度基準額が未登録です`);
+    if (u.midMonthInsurerChange) {
+      const mc = u.midMonthInsurerChange;
+      warnings.push(
+        `${u.userName}: ${insurerChangeDesc(mc)} が月内で変わっています (境界日 ${mc.boundaryDate ?? "不明"})。月末時点の保険者番号・被保険者番号で 1 票のみ出力します — 給付管理票は保険者×被保険者×対象年月の単位のため旧保険者分の票が別途必要になる可能性があります (⚠要取込チェック: 給付管理データが保険者別に分かれていないため 2 票への分割は未対応。旧保険者分の要否を国保連合会/保険者に確認)`,
+      );
+    }
 
     const head = (lineNo: string) => [
       "8221", // 1
@@ -309,6 +353,8 @@ export interface KeikakuhiUser {
   kohiFutanshaNumber?: string | null;
   /** 公費受給者番号 (7桁) — 8121 項9。生活保護単独の場合必須 */
   kohiJukyushaNumber?: string | null;
+  /** 月途中の保険者変更 (転居)。渡すと warning を出す (出力は月末時点の保険者に 1 本) */
+  midMonthInsurerChange?: MidMonthInsurerChange | null;
 }
 
 /** ファイル 2: 居宅介護支援費請求 (7111 + 8121) */
@@ -387,6 +433,12 @@ export function buildKeikakuhiFile(
     if (!careCode) warnings.push(`${u.userName}: 要介護度 ("${u.careLevel ?? "未設定"}") をコードに変換できません`);
     if (!u.serviceCode) warnings.push(`${u.userName}: 居宅介護支援費のサービスコードが年度別単位数マスタにありません`);
     if (!u.requestDate) warnings.push(`${u.userName}: 計画作成依頼届出年月日が無いため認定開始日で代用しました`);
+    if (u.midMonthInsurerChange) {
+      const mc = u.midMonthInsurerChange;
+      warnings.push(
+        `${u.userName}: ${insurerChangeDesc(mc)} が月内で変わっています (境界日 ${mc.boundaryDate ?? "不明"})。居宅介護支援費 (月額) は月末時点の保険者に 1 本で請求する扱いで出力します (⚠要外部確認: 月途中の保険者変更時の請求先は仕様書 (_if_kyotaku.txt) に明文なし — 提出先を国保連合会/保険者に確認)`,
+      );
+    }
 
     // 公費 (生活保護等): 併用 (振替 0 円) でも 8121 の項8/9 (負担者番号/受給者番号) は設定する
     const hasKohi = !!u.kohiTandoku || !!u.kohiHobetsu?.trim();

@@ -30,6 +30,7 @@ import {
   SeikyuMonthNav,
   loadKyotakuReSeikyuRows,
   parseKyufuKanriKubun,
+  describeInsurerChange,
   KYUFU_KANRI_KUBUN_LABELS,
   type KyufuKanriKubun,
   type KyotakuSeikyuRow,
@@ -190,6 +191,12 @@ export function KyotakuKokuhoSeikyuContent() {
 
   const excludedCount = filteredRows.length - displayRows.filter((d) => !d.isReSeikyu).length;
 
+  // ── 月途中の保険者変更 (転居) のある行 — 警告バナー用 ──
+  const insurerChangeRows = useMemo(
+    () => displayRows.filter((d) => d.row.midMonthInsurerChange),
+    [displayRows],
+  );
+
   const toggle = (key: string) =>
     setChecked((prev) => {
       const next = new Set(prev);
@@ -283,6 +290,8 @@ export function KyotakuKokuhoSeikyuContent() {
           kohiHobetsu: u.kohiHobetsu,
           kohiFutanshaNumber: u.kohiFutansha,
           kohiJukyushaNumber: u.kohiJukyusha,
+          // 月途中の保険者変更 (転居) — builder 側で warning (出力は月末時点の保険者)
+          midMonthInsurerChange: u.midMonthInsurerChange,
         }));
         const f2 = buildKeikakuhiFile(keikakuUsers, opts);
         warnings.push(...f2.warnings.map((w) => `[計画費 R${oy - 2018}/${om}] ${w}`));
@@ -366,6 +375,8 @@ export function KyotakuKokuhoSeikyuContent() {
               limitEnd: u.certEnd,
               limitUnits: u.limitUnits,
               sakuseiKubun: kubunByUser.get(u.user_id) ?? "1",
+              // 月途中の保険者変更 (転居) — builder 側で warning (1 票のみ出力)
+              midMonthInsurerChange: u.midMonthInsurerChange,
               lines: (rowsByUser.get(u.user_id) ?? []).map((r) => ({
                 officeNumber: r.provider_name
                   ? officeNoByName.get(r.provider_name) ?? ""
@@ -526,6 +537,24 @@ export function KyotakuKokuhoSeikyuContent() {
               {reRows.length > 0 && (
                 <>過去月の再請求 {reRows.length} 件を合流しています (元提供月のファイルとして出力)。</>
               )}
+            </span>
+          </div>
+        )}
+
+        {/* 月途中の保険者変更 (転居) 警告 */}
+        {!loading && insurerChangeRows.length > 0 && (
+          <div className="border-b border-red-200 bg-red-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-red-800">
+            <AlertCircle size={14} className="mt-0.5 shrink-0" />
+            <span>
+              <span className="font-semibold">
+                保険者が月内で変わっている利用者が {insurerChangeRows.length} 名います
+              </span>
+              {" — "}
+              {insurerChangeRows
+                .map((d) => `${d.row.user_name} (${describeInsurerChange(d.row.midMonthInsurerChange!)})`)
+                .join(" / ")}
+              。給付管理票・明細書の提出先を確認してください
+              (伝送ファイルは月末時点の保険者番号・被保険者番号で出力し、給付管理票の保険者別 2 票分割は未対応)。
             </span>
           </div>
         )}

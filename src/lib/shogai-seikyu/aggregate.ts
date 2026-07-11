@@ -98,6 +98,8 @@ export interface ShogaiSeikyuResult {
   rows: ShogaiSeikyuRow[];
   month: string; // YYYY-MM
   recordCount: number;
+  /** 集計時の注意事項 (月途中の市町村変更 等)。集計値には影響しない */
+  warnings: string[];
 }
 
 export async function aggregateMonthlyShogaiSeikyu(
@@ -233,7 +235,7 @@ export async function aggregateMonthlyShogaiSeikyu(
   }
 
   if (records.length === 0) {
-    return { rows: [], month: monthStr, recordCount: 0 };
+    return { rows: [], month: monthStr, recordCount: 0, warnings: [] };
   }
 
   // 2) 利用者情報
@@ -262,20 +264,27 @@ export async function aggregateMonthlyShogaiSeikyu(
     jogen_kanri_kubun: string | null;
     jogen_kanri_office_number: string | null;
     jogen_kanri_office_name: string | null;
+    certification_start_date: string | null;
+    certification_end_date: string | null;
   }
   const certByClient = new Map<string, Cert>();
+  // 月途中の市町村変更検出用に全件も保持 (解決自体は従来どおり最新 1 件)
+  const certsAllByClient = new Map<string, Cert[]>();
   for (let i = 0; i < userIds.length; i += 50) {
     const chunk = userIds.slice(i, i + 50);
     const { data, error } = await supabase
       .from("shougai_certifications")
       .select(
-        "client_id, beneficiary_number, insurer_municipality, support_level, self_payment_limit, seiho_flag, jogen_kanri_kubun, jogen_kanri_office_number, jogen_kanri_office_name, certification_start_date",
+        "client_id, beneficiary_number, insurer_municipality, support_level, self_payment_limit, seiho_flag, jogen_kanri_kubun, jogen_kanri_office_number, jogen_kanri_office_name, certification_start_date, certification_end_date",
       )
       .in("client_id", chunk)
       .order("certification_start_date", { ascending: false });
     if (error) throw new Error(`受給者証取得失敗: ${error.message}`);
     for (const r of (data ?? []) as Cert[]) {
       if (!certByClient.has(r.client_id)) certByClient.set(r.client_id, r);
+      const list = certsAllByClient.get(r.client_id);
+      if (list) list.push(r);
+      else certsAllByClient.set(r.client_id, [r]);
     }
   }
 
@@ -474,7 +483,38 @@ export async function aggregateMonthlyShogaiSeikyu(
     ),
   );
 
-  return { rows, month: monthStr, recordCount: records.length };
+  // 5) 月途中の市町村変更 (転居) の検出 — 検出のみで集計値は変えない。
+  //    障害の国保連請求 (J11 等) は市町村単位のため、対象月に有効な受給者証が
+  //    複数あり市町村番号が異なる場合はレセプトの提出先が月内で変わる。
+  //    現行の集計は最新 1 件の市町村に全実績を載せるので warning で知らせる。
+  const warnings: string[] = [];
+  for (const r of rows) {
+    const certs = certsAllByClient.get(r.user_id);
+    if (!certs || certs.length < 2) continue;
+    // 対象月と期間が重なる受給者証 (start <= 月末 かつ end >= 月初。null は開放期間)
+    const inMonth = certs.filter(
+      (c) =>
+        (c.certification_start_date == null || c.certification_start_date <= to) &&
+        (c.certification_end_date == null || c.certification_end_date >= from),
+    );
+    if (inMonth.length < 2) continue;
+    // 開始日 昇順 (旧→新) で市町村番号を並べ、連続重複を除去
+    inMonth.sort((a, b) =>
+      (a.certification_start_date ?? "").localeCompare(b.certification_start_date ?? ""),
+    );
+    const munis: string[] = [];
+    for (const c of inMonth) {
+      const m = (c.insurer_municipality ?? "").trim();
+      if (!m) continue; // 未入力は変更判定に含めない
+      if (munis[munis.length - 1] !== m) munis.push(m);
+    }
+    if (new Set(munis).size < 2) continue;
+    warnings.push(
+      `${r.user_name}さん: 月内に市町村変更があります (${munis.join("→")})。障害のレセプト分割は未対応 — 提出先を確認して手動対応してください`,
+    );
+  }
+
+  return { rows, month: monthStr, recordCount: records.length, warnings };
 }
 
 // ─── 国保連 CSV (介護給付費・訓練等給付費等明細書 J121 相当の簡易形式) ─────────

@@ -1,5 +1,5 @@
 /**
- * 訪問介護 (介護 system / サービス種類 11) の
+ * 訪問介護 (介護 system / サービス種類 11) ・訪問入浴介護 (同 12) の
  *   - 高齢者虐待防止措置未実施減算 (= 虐防)  所定単位数の 1% 減算
  *   - 業務継続計画未策定減算 (= 業未, BCP)   所定単位数の 1% 減算
  * のサービスコード解決 helper。
@@ -18,6 +18,14 @@
  *     - 特定事業所 suffix (Ⅰ/Ⅱ/Ⅲ/Ⅳ) は最後
  *     - 合成 core「身体７生活１」は変種では「身体７・虐防・業未・生１」と
  *       core が 身体N + ・生M に分解される (11B743 等で確認)
+ *
+ *   訪問入浴介護 (サービス種類 12) も同じ合成コード方式 (実マスタ確認済):
+ *     基本                "訪問入浴"                      121111  units=1266
+ *     ・虐防              "訪問入浴・虐防"                 121131  units=1253 (= 1266 − 1%)
+ *     ・業未              "訪問入浴・業未"                 121141  units=1253
+ *     ・虐防・業未         "訪問入浴・虐防・業未"            121145  units=1240 (= 1266 − 2%)
+ *   装飾 (職員のみ / 部分浴) より前に 虐防→業未 の順で入る
+ *   ("訪問入浴・虐防・業未・職員のみ・部分浴" 121148 で確認) — トークン規則は種類 11 と共通。
  *
  * 事業所フラグは kaigo_office_gensan_periods (適用期間付き。減算は改善までの期間性)
  * に持ち、対象月が期間内なら aggregate の読込層で基本サービス行の名称を
@@ -161,8 +169,9 @@ interface MasterRow {
  *   2. 完全一致が無ければ core prefix の LIKE で候補を集め、
  *      トークン multiset が期待どおり一致する行を選ぶ (並び順に依存しない安全網)。
  *
- * 対象: system='介護' かつ service_category='11' (訪問介護) のみ。
- * ※ calculation_type では絞らない — 合成変種は マスタ上 加算/減算 type の行がある。
+ * 対象: system='介護' かつ service_category=serviceCategory
+ *   ('11'=訪問介護 (default) / '12'=訪問入浴介護。トークン規則は共通)。
+ * ※ calculation_type では絞らない — 合成変種は マスタ上 基本/加算/減算 type の行がある。
  * 見つからなければ null (呼出側で base のまま集計 + warning)。
  */
 export async function resolveGensanVariant(
@@ -171,6 +180,7 @@ export async function resolveGensanVariant(
   flags: GensanFlags,
   year: number,
   month: number,
+  serviceCategory: "11" | "12" = "11",
 ): Promise<GensanVariant | null> {
   if (!baseServiceName || (!flags.gyakutai && !flags.bcp)) return null;
   const candidate = buildGensanCandidateName(baseServiceName, flags);
@@ -181,7 +191,7 @@ export async function resolveGensanVariant(
       .from("kaigo_service_codes")
       .select("service_code, service_name, units, short_name")
       .eq("system", "介護")
-      .eq("service_category", "11")
+      .eq("service_category", serviceCategory)
       .in("service_name", serviceNameVariants(candidate));
     const { data, error } = await validInMonth(q, year, month);
     if (error) {
@@ -209,7 +219,7 @@ export async function resolveGensanVariant(
       .from("kaigo_service_codes")
       .select("service_code, service_name, units, short_name")
       .eq("system", "介護")
-      .eq("service_category", "11")
+      .eq("service_category", serviceCategory)
       .like("service_name", `${cv}・%`);
     if (flags.gyakutai) q = q.like("service_name", "%虐防%");
     if (flags.bcp) q = q.like("service_name", "%業未%");
