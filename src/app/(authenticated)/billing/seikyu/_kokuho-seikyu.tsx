@@ -24,6 +24,7 @@ import {
 import Encoding from "encoding-japanese";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { ShinsaKekkaImport } from "@/components/kokuho-shinsa/shinsa-import";
 import {
   useKyotakuSeikyuContext,
   SeikyuKanaSidebar,
@@ -103,7 +104,7 @@ function downloadSjis(r: { content: string; fileName: string }) {
 export function KyotakuKokuhoSeikyuContent() {
   const {
     year, month, monthKey, filteredRows, kanaMatches, loading, error,
-    officeNumber, unitPrice, officeId,
+    officeNumber, unitPrice, officeId, tenantId, onMonthChange,
   } = useKyotakuSeikyuContext();
   const supabase = useMemo(() => createClient(), []);
 
@@ -666,6 +667,17 @@ export function KyotakuKokuhoSeikyuContent() {
           <span className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 font-medium">国保請求分</span>
           <span className="text-xs text-gray-500">{displayRows.length} 件</span>
           <div className="ml-auto flex items-center gap-2">
+            {/* 審査結果取込 (返戻/支払決定/増減表) — 国保連からの通知ファイルを取り込む */}
+            <ShinsaKekkaImport
+              officeId={officeId}
+              tenantId={tenantId}
+              officeNumber={officeNumber}
+              onNavigateMonth={onMonthChange}
+              onApplied={() => {
+                loadStatus();
+                loadReRows();
+              }}
+            />
             <button
               type="button"
               onClick={exportCsv}

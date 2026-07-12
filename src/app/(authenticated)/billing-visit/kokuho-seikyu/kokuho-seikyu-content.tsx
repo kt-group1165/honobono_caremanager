@@ -43,6 +43,7 @@ import {
   type ReSeikyuRow,
 } from "@/lib/visit-seikyu/re-seikyu";
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
+import { ShinsaKekkaImport } from "@/components/kokuho-shinsa/shinsa-import";
 
 // 介護請求タブと同じグリッド列定義の流儀 (格子テーブル)
 // 対象 / 提供年月 / 保険者番号 / 被保険者番号 / 利用者名 / 要介護度 / 単位数 / 保険請求額 / 利用者負担 / 状態
@@ -80,7 +81,7 @@ function sjisBlob(content: string): Blob {
 
 export function KokuhoSeikyuContent() {
   const {
-    year, month, filteredRows, filteredSougouRows, kanaMatches, loading, error,
+    year, month, onMonthChange, filteredRows, filteredSougouRows, kanaMatches, loading, error,
     officeNumber, unitPrice, officeId, tenantId, appliedFormulaCodes,
   } = useSeikyuContext();
   const { businessType } = useBusinessType();
@@ -392,6 +393,19 @@ export function KokuhoSeikyuContent() {
           <span className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 font-medium">国保請求分</span>
           <span className="text-xs text-gray-500">{displayRows.length} 件</span>
           <div className="ml-auto flex items-center gap-2">
+            {/* 審査結果取込 (返戻/支払決定/増減表)。訪問入浴は bath_billing_status のため対象外 */}
+            {billingStatusTable === "kaigo_billing_status" && (
+              <ShinsaKekkaImport
+                officeId={officeId}
+                tenantId={tenantId}
+                officeNumber={officeNumber}
+                onNavigateMonth={onMonthChange}
+                onApplied={() => {
+                  loadStatus();
+                  loadReRows();
+                }}
+              />
+            )}
             <button
               type="button"
               onClick={exportCsv}
