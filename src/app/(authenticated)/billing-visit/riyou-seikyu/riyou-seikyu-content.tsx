@@ -23,10 +23,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Loader2,
   AlertCircle,
+  AlertTriangle,
   FileText,
   Plus,
   Trash2,
   Banknote,
+  Upload,
+  X,
 } from "lucide-react";
 import Encoding from "encoding-japanese";
 import { createClient } from "@/lib/supabase/client";
@@ -39,6 +42,11 @@ import {
 import { mergeSegmentRows, type UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
 import type { ShogaiSeikyuRow } from "@/lib/shogai-seikyu/aggregate";
 import { buildFbZengin, type FbTransferTarget } from "@/lib/fb-zengin";
+import {
+  parseFbZenginResult,
+  type FbResultDetail,
+  type FbResultParse,
+} from "@/lib/fb-zengin-result";
 
 // ─── 3 制度統合の表示行モデル ────────────────────────────────────────────────
 // 介護 / 総合事業 は同型 UserSeikyuRow (既存ロジックをそのまま流用)。
@@ -110,6 +118,67 @@ const PAYMENT_STATUS_CLS: Record<string, string> = {
 };
 
 const PAYMENT_METHOD_OPTIONS = ["", "振込", "現金", "口座振替"];
+
+// ─── 振替結果取込 (FB 結果ファイル → 入金自動消込) ────────────────────────────
+// 全銀協フォーマットは依頼と結果が同一レイアウトで、金融機関が「振替結果コード」
+// 欄に結果 (0=振替済 / 1=資金不足 / …) を書き戻して返却する。ここでは
+// fb-zengin.ts の依頼レイアウトを正としてパースし (fb-zengin-result.ts)、
+// 振替済 (コード 0) を riyou_seikyu_payments に入金として自動記録する。
+// ⚠ 実ファイル未検証: 自前依頼ファイルとの往復は机上検証済みだが、実際の
+//   金融機関返却ファイルでの検証は未実施 (プレビューで必ず目視確認する)。
+
+// 取込済みマーカー (riyou_seikyu_payments.notes に付与して二重取込を防ぐ)
+const fbImportMarker = (monthKey: string) => `[FB振替取込 ${monthKey}]`;
+
+// プレビュー行の分類
+type FbRowKind =
+  | "import" // 振替済 → 入金消込の対象
+  | "failed" // 振替不能 (理由コード付き) → 入金は立てない
+  | "unmatched" // 顧客番号から利用者を特定できない (突合不能)
+  | "skip_marker" // 取込マーカーあり = この月は取込済み
+  | "skip_dup"; // 同一 client×月×金額 の入金が既にある (手入力済み疑い)
+
+interface FbPreviewRow {
+  detail: FbResultDetail;
+  kind: FbRowKind;
+  clientId: string | null;
+  clientName: string | null;
+  /** 請求残額 = 請求額 − 既入金 (利用者を特定できない場合 null) */
+  remaining: number | null;
+  /** 引落金額 ≠ 請求残額 (取込対象行のみ判定) */
+  amountMismatch: boolean;
+}
+
+// 取込時に参照する既存入金行 (notes 込みで別途 fetch する — PaymentRow は不変)
+interface FbPayRow {
+  client_id: string;
+  billed_amount: number;
+  paid_amount: number;
+  paid_date: string | null;
+  payment_method: string | null;
+  status: string;
+  notes: string | null;
+}
+
+interface FbImportState {
+  fileName: string;
+  parsed: FbResultParse;
+  /** パース警告 + UI 側の追加警告 (対象月ずれ 等) */
+  warnings: string[];
+  rows: FbPreviewRow[];
+  payByClient: Map<string, FbPayRow>;
+  /** 確定後の結果 (null = 未確定) */
+  done: { imported: number; amount: number; dbErrors: string[] } | null;
+}
+
+// プレビュー行の状態表示 (ラベル + 配色)
+const FB_KIND_BADGE: Record<FbRowKind, { label: string; cls: string }> = {
+  import: { label: "消込対象", cls: "bg-emerald-100 text-emerald-700" },
+  failed: { label: "振替不能", cls: "bg-red-100 text-red-700" },
+  unmatched: { label: "突合不能", cls: "bg-red-100 text-red-700" },
+  skip_marker: { label: "取込済み (スキップ)", cls: "bg-gray-100 text-gray-600" },
+  skip_dup: { label: "同額入金あり (スキップ)", cls: "bg-amber-100 text-amber-700" },
+};
 
 // テーブル未作成 (直 SQL=42P01 / PostgREST schema cache=PGRST205) 判定
 const isTableMissingError = (code: string | null | undefined) =>
@@ -747,6 +816,189 @@ export function RiyouSeikyuContent() {
     );
   };
 
+  // ─── 振替結果取込 (FB 結果ファイル → 入金自動消込) ─────────────────────────
+  const [fbImport, setFbImport] = useState<FbImportState | null>(null);
+  const [fbImporting, setFbImporting] = useState(false);
+
+  // 利用者ごとの当月請求額 (介護 + 総合 の合算。FB 依頼は制度別 2 レコードに
+  // なり得るが、入金行は client×月 で 1 行に共有されるため合算側で照合する)
+  const billedForClient = useCallback(
+    (clientId: string) =>
+      kaigoAllRows
+        .filter((r) => r.user_id === clientId)
+        .reduce((s, r) => s + rowBilled(r), 0),
+    [kaigoAllRows, rowBilled],
+  );
+
+  const handleFbResultFile = async (file: File) => {
+    // Shift_JIS 固定長 → Unicode 文字列 (全銀の許容文字は 1 文字 = 1 バイト)
+    const buf = new Uint8Array(await file.arrayBuffer());
+    const unicode = Encoding.convert(buf, {
+      to: "UNICODE",
+      from: "SJIS",
+      type: "string",
+    });
+    const parsed = parseFbZenginResult(unicode);
+    if (parsed.details.length === 0) {
+      toast.error(
+        `振替結果ファイルを読み取れません:\n${parsed.errors.join("\n")}`,
+      );
+      return;
+    }
+
+    const warnings = [...parsed.warnings];
+    // 対象月ずれの検知 (ヘッダーの引落日 MMDD の MM と表示中の対象月を照合)
+    const fileMM = parseInt(parsed.header?.transferMMDD.slice(0, 2) ?? "", 10);
+    if (Number.isFinite(fileMM) && fileMM >= 1 && fileMM <= 12 && fileMM !== month) {
+      warnings.push(
+        `ファイルの引落月 (${fileMM}月) が表示中の対象月 (${month}月) と異なります。取込前に対象月を確認してください`,
+      );
+    }
+
+    // 顧客番号 → 利用者の解決 (fb-zengin.ts の customerNumber 生成規則の逆):
+    //   依頼側は insured_number (被保険者番号) ?? user_id.slice(0, 20) を入れている
+    const byInsured = new Map<string, UserSeikyuRow>();
+    const byUuidPrefix = new Map<string, UserSeikyuRow>();
+    for (const r of kaigoAllRows) {
+      const ins = r.insured_number?.trim();
+      if (ins && !byInsured.has(ins)) byInsured.set(ins, r);
+      const pfx = r.user_id.slice(0, 20);
+      if (!byUuidPrefix.has(pfx)) byUuidPrefix.set(pfx, r);
+    }
+    const resolveClient = (customerNumber: string): UserSeikyuRow | null =>
+      byInsured.get(customerNumber) ?? byUuidPrefix.get(customerNumber) ?? null;
+
+    // 既存の入金行を notes 込みで取得 (二重取込マーカー / 手入力済みの検知用)
+    const clientIds = Array.from(
+      new Set(
+        parsed.details
+          .map((d) => resolveClient(d.customerNumber)?.user_id)
+          .filter((id): id is string => id != null),
+      ),
+    );
+    const payByClient = new Map<string, FbPayRow>();
+    for (let i = 0; i < clientIds.length; i += 100) {
+      const chunk = clientIds.slice(i, i + 100);
+      const { data, error: e } = await supabase
+        .from("riyou_seikyu_payments")
+        .select(
+          "client_id, billed_amount, paid_amount, paid_date, payment_method, status, notes",
+        )
+        .eq("target_month", monthKey)
+        .in("client_id", chunk);
+      if (e) {
+        // table 未作成なら既存入金なしとして続行、それ以外は取込を中止する
+        if (!isTableMissingError(e.code)) {
+          toast.error("既存の入金状況の取得に失敗: " + e.message);
+          return;
+        }
+        break;
+      }
+      for (const p of (data ?? []) as FbPayRow[]) payByClient.set(p.client_id, p);
+    }
+
+    const marker = fbImportMarker(monthKey);
+    const rows: FbPreviewRow[] = parsed.details.map((d) => {
+      const client = resolveClient(d.customerNumber);
+      const pay = client ? payByClient.get(client.user_id) : undefined;
+      const billed = client
+        ? (pay?.billed_amount ?? billedForClient(client.user_id))
+        : null;
+      const remaining = billed != null ? billed - (pay?.paid_amount ?? 0) : null;
+      let kind: FbRowKind;
+      if (!client) kind = "unmatched";
+      else if (!d.transferred) kind = "failed";
+      else if (pay?.notes?.includes(marker)) kind = "skip_marker";
+      else if (pay != null && pay.paid_amount > 0 && pay.paid_amount === d.amount)
+        kind = "skip_dup"; // 同一 client×月×金額 → 手入力済みの二重計上を防止
+      else kind = "import";
+      return {
+        detail: d,
+        kind,
+        clientId: client?.user_id ?? null,
+        clientName: client?.user_name ?? null,
+        remaining,
+        amountMismatch:
+          kind === "import" && remaining != null && d.amount !== remaining,
+      };
+    });
+
+    setFbImport({ fileName: file.name, parsed, warnings, rows, payByClient, done: null });
+  };
+
+  // 確定: 振替済 (コード 0) の消込対象を riyou_seikyu_payments へ入金記録する。
+  // 同一利用者が複数明細 (介護 + 総合 等) の場合は金額を合算して 1 行に upsert。
+  const confirmFbImport = async () => {
+    if (!fbImport || fbImporting) return;
+    const importRows = fbImport.rows.filter((r) => r.kind === "import");
+    if (importRows.length === 0) return;
+    setFbImporting(true);
+
+    // 入金日 = ヘッダーの引落日 (MMDD) + 表示中の年。不正値は今日にフォールバック
+    const mmdd = fbImport.parsed.header?.transferMMDD ?? "";
+    const mm = parseInt(mmdd.slice(0, 2), 10);
+    const dd = parseInt(mmdd.slice(2, 4), 10);
+    const today = new Date();
+    const paidDate =
+      Number.isFinite(mm) && mm >= 1 && mm <= 12 && Number.isFinite(dd) && dd >= 1 && dd <= 31
+        ? `${year}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`
+        : `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+    // 利用者単位に合算
+    const byClient = new Map<string, { amount: number; name: string | null }>();
+    for (const r of importRows) {
+      const cur = byClient.get(r.clientId!) ?? { amount: 0, name: r.clientName };
+      cur.amount += r.detail.amount;
+      byClient.set(r.clientId!, cur);
+    }
+
+    const marker = fbImportMarker(monthKey);
+    const dbErrors: string[] = [];
+    let imported = 0;
+    let importedAmount = 0;
+    for (const [clientId, g] of byClient) {
+      const existing = fbImport.payByClient.get(clientId);
+      const billed = existing?.billed_amount ?? billedForClient(clientId);
+      const newPaid = (existing?.paid_amount ?? 0) + g.amount;
+      const status =
+        newPaid >= billed && billed > 0 ? "入金完" : newPaid > 0 ? "一部入金" : "請求済";
+      const notes = existing?.notes ? `${existing.notes} ${marker}` : marker;
+      const { error: e } = await supabase.from("riyou_seikyu_payments").upsert(
+        {
+          client_id: clientId,
+          target_month: monthKey,
+          billed_amount: billed,
+          paid_amount: newPaid,
+          paid_date: paidDate,
+          payment_method: "口座振替",
+          status,
+          notes,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "client_id,target_month" },
+      );
+      if (e) {
+        dbErrors.push(`${g.name ?? clientId}: ${e.message}`);
+        continue;
+      }
+      imported++;
+      importedAmount += g.amount;
+    }
+
+    setFbImporting(false);
+    if (dbErrors.length > 0) {
+      toast.error(`入金登録に失敗した利用者があります (${dbErrors.length} 件)`);
+    } else {
+      toast.success(
+        `振替結果を消込しました (${imported} 名 / ¥${importedAmount.toLocaleString()})`,
+      );
+    }
+    setFbImport((prev) =>
+      prev ? { ...prev, done: { imported, amount: importedAmount, dbErrors } } : prev,
+    );
+    loadPayments();
+  };
+
   // ── フッタ集計 (order-app の 件数合計/確定合計 に対応。全制度合算) ──
   const issuedRows = unifiedRows.filter((r) => paymentForRow(r) != null);
   const issuedTotal = issuedRows.reduce(
@@ -905,6 +1157,23 @@ export function RiyouSeikyuContent() {
               <Banknote size={13} />
               FBデータ ({kaigoTargets.length}件)
             </button>
+            <label
+              title="金融機関から返却された振替結果ファイル (全銀協フォーマット / Shift_JIS) を取り込み、振替済 (結果コード 0) の明細を入金として自動消込します。⚠ 実際の金融機関返却ファイルでの検証は未実施のため、プレビュー内容を必ず確認してください"
+              className="border border-indigo-500 rounded bg-indigo-50 px-2.5 py-1 text-indigo-700 hover:bg-indigo-100 flex items-center gap-1.5 text-xs font-medium cursor-pointer"
+            >
+              <Upload size={13} />
+              振替結果取込
+              <input
+                type="file"
+                accept=".txt,.dat,.fb,text/plain"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleFbResultFile(f);
+                  e.target.value = ""; // 同じファイルの再選択を許可
+                }}
+              />
+            </label>
             <span className="text-[11px] text-gray-400">{printScopeLabel}</span>
           </div>
 
@@ -1189,6 +1458,17 @@ export function RiyouSeikyuContent() {
         </div>
       </div>
 
+      {/* ===== 振替結果取込 プレビュー / 確定 モーダル ===== */}
+      {fbImport && (
+        <FbResultImportDialog
+          state={fbImport}
+          importing={fbImporting}
+          monthLabel={`${year}年${month}月`}
+          onConfirm={confirmFbImport}
+          onClose={() => setFbImport(null)}
+        />
+      )}
+
       {/* ===== 印刷 view: 綴り選択 (請求書 / 請求書控え / 領収書 / 領収書控え) =====
           請求書: 名寄チェック 2 名以上 → 1 枚の世帯合算請求書 / それ以外 → 1 名 1 枚
           (order-app UserBillingTab の請求書発行と同じ操作感)。控えは同一内容に「控」表記。
@@ -1255,6 +1535,276 @@ export function RiyouSeikyuContent() {
         </div>
       )}
     </>
+  );
+}
+
+// ─── 振替結果取込 プレビュー / 確定 ダイアログ ────────────────────────────────
+// プレビュー: 成功/不能の件数・不能理由別集計・突合不能行 (赤字)・金額不一致警告。
+// 確定後: 消込結果 + 振替不能一覧 (再請求・現金回収の案内) を表示する。
+function FbResultImportDialog({
+  state,
+  importing,
+  monthLabel,
+  onConfirm,
+  onClose,
+}: {
+  state: FbImportState;
+  importing: boolean;
+  /** 表示中の対象月 (例: 2026年7月) */
+  monthLabel: string;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  const { parsed, rows, warnings, done, fileName } = state;
+  const importRows = rows.filter((r) => r.kind === "import");
+  const failedRows = rows.filter((r) => r.kind === "failed");
+  const unmatchedRows = rows.filter((r) => r.kind === "unmatched");
+  const skippedRows = rows.filter(
+    (r) => r.kind === "skip_marker" || r.kind === "skip_dup",
+  );
+  const importAmount = importRows.reduce((s, r) => s + r.detail.amount, 0);
+  const failedAmount = failedRows.reduce((s, r) => s + r.detail.amount, 0);
+  const mismatchCount = importRows.filter((r) => r.amountMismatch).length;
+
+  // 振替不能の理由コード別集計 (表示時のみ計算 — メモ化不要の軽量処理)
+  const failReasonMap = new Map<string, number>();
+  for (const r of failedRows) {
+    failReasonMap.set(r.detail.resultLabel, (failReasonMap.get(r.detail.resultLabel) ?? 0) + 1);
+  }
+  const failReasons = Array.from(failReasonMap.entries());
+
+  const mmdd = parsed.header?.transferMMDD ?? "";
+  const transferDayLabel =
+    mmdd.length === 4 ? `${parseInt(mmdd.slice(0, 2), 10)}/${parseInt(mmdd.slice(2, 4), 10)}` : "—";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6 print:hidden">
+      <div className="flex max-h-full w-full max-w-4xl flex-col rounded-lg bg-white shadow-xl">
+        {/* ヘッダー */}
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 shrink-0">
+          <div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+            <Upload size={15} className="text-indigo-600" />
+            振替結果取込 — {monthLabel}分
+            <span className="font-normal text-xs text-gray-500 truncate max-w-[240px]">
+              ({fileName})
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+            title="閉じる"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-auto px-4 py-3 text-xs space-y-3">
+          {/* ⚠ 実ファイル未検証注記 (常時表示) */}
+          <div className="flex items-start gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            <span>
+              自前の FB 依頼ファイルとの往復整合は確認済みですが、
+              <b>実際の金融機関が返却する結果ファイルでの検証は未実施</b>です。
+              初回取込時は下記プレビュー (利用者・金額・結果) を必ず目視確認してから確定してください。
+            </span>
+          </div>
+
+          {/* ファイル情報 */}
+          <div className="flex flex-wrap gap-x-5 gap-y-1 text-gray-600">
+            <span>
+              引落日 <b className="font-mono">{transferDayLabel}</b>
+            </span>
+            <span>
+              委託者 <b>{parsed.header?.consignorName || "—"}</b>
+            </span>
+            <span>
+              明細 <b className="font-mono">{rows.length}</b> 件
+            </span>
+            {parsed.trailer && (
+              <span>
+                トレーラ合計 <b className="font-mono">¥{parsed.trailer.totalAmount.toLocaleString()}</b>
+              </span>
+            )}
+          </div>
+
+          {/* パースエラー / 警告 */}
+          {parsed.errors.length > 0 && (
+            <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-red-700 space-y-0.5">
+              {parsed.errors.map((e, i) => (
+                <p key={i}>{e}</p>
+              ))}
+            </div>
+          )}
+          {warnings.length > 0 && (
+            <div className="rounded border border-amber-200 bg-amber-50/60 px-3 py-2 text-amber-700 space-y-0.5">
+              {warnings.map((w, i) => (
+                <p key={i}>・{w}</p>
+              ))}
+            </div>
+          )}
+
+          {/* 集計チップ */}
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded bg-emerald-100 px-2 py-1 font-semibold text-emerald-700">
+              振替済 (消込対象) {importRows.length} 件 / ¥{importAmount.toLocaleString()}
+            </span>
+            <span className="rounded bg-red-100 px-2 py-1 font-semibold text-red-700">
+              振替不能 {failedRows.length} 件 / ¥{failedAmount.toLocaleString()}
+            </span>
+            {unmatchedRows.length > 0 && (
+              <span className="rounded bg-red-100 px-2 py-1 font-semibold text-red-700">
+                突合不能 {unmatchedRows.length} 件
+              </span>
+            )}
+            {skippedRows.length > 0 && (
+              <span className="rounded bg-gray-100 px-2 py-1 font-semibold text-gray-600">
+                スキップ {skippedRows.length} 件 (取込済み/同額入金あり)
+              </span>
+            )}
+            {mismatchCount > 0 && (
+              <span className="rounded bg-amber-100 px-2 py-1 font-semibold text-amber-700">
+                ⚠ 金額不一致 {mismatchCount} 件
+              </span>
+            )}
+          </div>
+
+          {/* 不能理由別集計 */}
+          {failReasons.length > 0 && (
+            <div className="text-gray-600">
+              不能理由別:{" "}
+              {failReasons.map(([label, n]) => (
+                <span key={label} className="mr-3">
+                  {label} <b className="font-mono">{n}</b> 件
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* 明細テーブル */}
+          <table className="w-full border-collapse">
+            <thead className="bg-gray-100 text-gray-600">
+              <tr>
+                <th className="border border-gray-200 px-2 py-1 text-right w-10">行</th>
+                <th className="border border-gray-200 px-2 py-1 text-left">顧客番号</th>
+                <th className="border border-gray-200 px-2 py-1 text-left">利用者</th>
+                <th className="border border-gray-200 px-2 py-1 text-right w-24">引落金額</th>
+                <th className="border border-gray-200 px-2 py-1 text-left w-28">振替結果</th>
+                <th className="border border-gray-200 px-2 py-1 text-left">状態 / 備考</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const badge = FB_KIND_BADGE[r.kind];
+                const isRed = r.kind === "unmatched" || r.kind === "failed";
+                return (
+                  <tr key={r.detail.line} className={isRed ? "bg-red-50/50" : undefined}>
+                    <td className="border border-gray-200 px-2 py-1 text-right font-mono text-gray-400">
+                      {r.detail.line}
+                    </td>
+                    <td className="border border-gray-200 px-2 py-1 font-mono">
+                      {r.detail.customerNumber || "—"}
+                    </td>
+                    <td
+                      className={`border border-gray-200 px-2 py-1 ${r.clientName ? "" : "font-semibold text-red-600"}`}
+                    >
+                      {r.clientName ?? "突合不能 (該当利用者なし)"}
+                    </td>
+                    <td className="border border-gray-200 px-2 py-1 text-right font-mono">
+                      ¥{r.detail.amount.toLocaleString()}
+                    </td>
+                    <td
+                      className={`border border-gray-200 px-2 py-1 ${r.detail.transferred ? "text-emerald-700" : "font-semibold text-red-600"}`}
+                    >
+                      {r.detail.resultLabel}
+                      {r.detail.resultCode !== "" && (
+                        <span className="ml-1 text-[10px] text-gray-400">
+                          ({r.detail.resultCode})
+                        </span>
+                      )}
+                    </td>
+                    <td className="border border-gray-200 px-2 py-1">
+                      <span
+                        className={`inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-semibold ${badge.cls}`}
+                      >
+                        {badge.label}
+                      </span>
+                      {r.amountMismatch && r.remaining != null && (
+                        <span className="ml-1.5 text-[10px] font-semibold text-amber-700">
+                          ⚠ 請求残額 ¥{r.remaining.toLocaleString()} と不一致
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {/* 振替不能一覧の案内 (再請求・現金回収) */}
+          {failedRows.length > 0 && (
+            <div className="rounded border border-red-200 bg-red-50/60 px-3 py-2 text-red-700">
+              振替不能 {failedRows.length} 件には入金を立てていません (未収のまま残ります)。
+              理由コードを確認のうえ、<b>再請求 (請求書の再発行) または現金回収</b>をご案内ください。
+              口座解約 (取引なし) や依頼書なしの場合は口座情報の再登録が必要です。
+            </div>
+          )}
+
+          {/* 確定後の結果 */}
+          {done && (
+            <div className="rounded border border-emerald-300 bg-emerald-50 px-3 py-2 font-semibold text-emerald-800">
+              {done.imported} 名 / ¥{done.amount.toLocaleString()} を入金登録しました
+              (入金方法: 口座振替)。
+              {done.dbErrors.length > 0 && (
+                <span className="mt-1 block font-normal text-red-600">
+                  登録失敗: {done.dbErrors.join(" / ")}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* フッタ */}
+        <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-4 py-3 shrink-0">
+          {done ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded bg-gray-700 px-4 py-1.5 text-xs font-medium text-white hover:bg-gray-800"
+            >
+              閉じる
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={importing}
+                className="rounded border border-gray-300 bg-white px-4 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={onConfirm}
+                disabled={importing || importRows.length === 0}
+                title={
+                  importRows.length === 0
+                    ? "消込対象 (振替済かつ未取込) の明細がありません"
+                    : mismatchCount > 0
+                      ? "金額不一致の明細が含まれます。内容を確認のうえ確定してください"
+                      : undefined
+                }
+                className="flex items-center gap-1.5 rounded bg-indigo-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {importing && <Loader2 size={13} className="animate-spin" />}
+                入金消込を確定 ({importRows.length} 件 / ¥{importAmount.toLocaleString()})
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

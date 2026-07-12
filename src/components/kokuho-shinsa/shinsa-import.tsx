@@ -618,11 +618,11 @@ export function ShinsaKekkaImport({
             </div>
           )}
 
-          {/* ── 返戻 × 再請求未実施 の突合リスト ── */}
+          {/* ── 返戻・過誤 × 再請求未実施 の突合リスト ── */}
           <div className="border-t border-gray-200 pt-3">
             <p className="font-semibold text-gray-700 text-xs mb-1.5 flex items-center gap-1.5">
               <AlertCircle size={13} className="text-red-600" />
-              返戻のうち再請求未実施
+              返戻・過誤のうち再請求未実施
               {missed != null && (
                 <span className={missed.length > 0 ? "text-red-600" : "text-emerald-600"}>
                   {missed.length} 件
@@ -633,7 +633,7 @@ export function ShinsaKekkaImport({
               <p className="text-xs text-gray-400">読込中…</p>
             ) : missed.length === 0 ? (
               <p className="text-xs text-gray-500">
-                再請求待ちの返戻はありません (返戻フラグあり × 国保未対象の行が対象)
+                再請求待ちの返戻・過誤はありません (返戻または過誤フラグあり × 国保未対象の行が対象)
               </p>
             ) : (
               <div className="overflow-x-auto max-h-56 overflow-y-auto">
@@ -643,7 +643,7 @@ export function ShinsaKekkaImport({
                       <th className="border border-gray-200 px-1.5 py-1 text-left">提供月</th>
                       <th className="border border-gray-200 px-1.5 py-1 text-left">利用者</th>
                       <th className="border border-gray-200 px-1.5 py-1 text-left">フラグ</th>
-                      <th className="border border-gray-200 px-1.5 py-1 text-left">メモ (返戻事由)</th>
+                      <th className="border border-gray-200 px-1.5 py-1 text-left">メモ (返戻事由・過誤申立)</th>
                       <th className="border border-gray-200 px-1.5 py-1"></th>
                     </tr>
                   </thead>
@@ -653,8 +653,13 @@ export function ShinsaKekkaImport({
                         <td className="border border-gray-200 px-1.5 py-1">{r.targetMonth}</td>
                         <td className="border border-gray-200 px-1.5 py-1">{r.clientName}</td>
                         <td className="border border-gray-200 px-1.5 py-1">
-                          返戻{r.tsukiokure ? " / 月遅れ" : ""}
-                          {r.kago ? " / 過誤" : ""}
+                          {[
+                            r.henrei && "返戻",
+                            r.kago && "過誤",
+                            r.tsukiokure && "月遅れ",
+                          ]
+                            .filter(Boolean)
+                            .join(" / ")}
                         </td>
                         <td className="border border-gray-200 px-1.5 py-1 max-w-[18rem] truncate" title={r.notes ?? ""}>
                           {r.notes ?? ""}
@@ -684,8 +689,10 @@ export function ShinsaKekkaImport({
               </div>
             )}
             <p className="text-[11px] text-gray-400 mt-1">
-              判定: kaigo_billing_status で 返戻=あり かつ 国保対象化 (再請求の伝送) 未実施の行。
+              判定: kaigo_billing_status で 返戻または過誤=あり かつ 国保対象化 (再請求の伝送) 未実施の行。
               再請求すると国保請求画面で国保対象化され、この一覧から消えます。
+              過誤分は保険者の過誤決定 (支払控除) を確認してから再請求してください
+              (同月過誤は申立と同月に再請求)。
             </p>
           </div>
         </DialogContent>

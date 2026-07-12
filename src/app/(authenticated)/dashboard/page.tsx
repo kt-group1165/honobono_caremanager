@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import {
   Users,
@@ -9,9 +10,12 @@ import {
   AlertTriangle,
   TrendingUp,
   FileText,
+  CalendarClock,
 } from "lucide-react";
 import { format, differenceInYears, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { ja } from "date-fns/locale";
+import { useBusinessType } from "@/lib/business-type-context";
+import { runCertExpiryScan, type CertExpiryAlert } from "@/lib/cert-expiry-alert";
 
 // ---- Types ----
 
@@ -85,6 +89,33 @@ function SummaryCard({ title, value, icon, iconBg, sub }: SummaryCardProps) {
   );
 }
 
+// ---- Cert expiry stage badge ----
+
+function CertStageBadge({
+  stage,
+  daysLeft,
+}: {
+  stage: CertExpiryAlert["stage"];
+  daysLeft: number;
+}) {
+  if (stage === "expired") {
+    return (
+      <span className="inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 whitespace-nowrap">
+        期限切れ ({-daysLeft}日経過)
+      </span>
+    );
+  }
+  const cls =
+    stage === "within30"
+      ? "bg-amber-100 text-amber-700"
+      : "bg-yellow-50 text-yellow-700";
+  return (
+    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${cls}`}>
+      残{daysLeft}日
+    </span>
+  );
+}
+
 // ---- Main Page ----
 
 export default function DashboardPage() {
@@ -98,6 +129,14 @@ export default function DashboardPage() {
   const [recentServiceRecords, setRecentServiceRecords] = useState<RecentServiceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // 認定更新の能動アラート (段階判定 + 未通知分の notifications INSERT + カード表示)
+  const { businessType, loading: bizLoading, currentOfficeId, currentOffice } = useBusinessType();
+  const tenantId = currentOffice?.tenant_id ?? null;
+  const isCareManagement = businessType === "居宅介護支援";
+  const [certAlerts, setCertAlerts] = useState<CertExpiryAlert[]>([]);
+  const [certLoading, setCertLoading] = useState(true);
+  const [certError, setCertError] = useState<string | null>(null);
 
   const today = new Date();
   const todayStr = format(today, "yyyy-MM-dd");
@@ -248,6 +287,40 @@ export default function DashboardPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional dep stability
   }, []);
 
+  // 認定更新アラート: ダッシュボード読込時に判定 → 未通知分だけ notifications へ INSERT
+  useEffect(() => {
+    if (bizLoading) return; // office 解決待ち
+    let cancelled = false;
+    const run = async () => {
+      if (!currentOfficeId || !tenantId) {
+        setCertAlerts([]);
+        setCertLoading(false);
+        return;
+      }
+      setCertLoading(true);
+      setCertError(null);
+      try {
+        const supabase = createClient();
+        const alerts = await runCertExpiryScan(supabase, {
+          officeId: currentOfficeId,
+          tenantId,
+          isCareManagement,
+        });
+        if (!cancelled) setCertAlerts(alerts);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "認定更新アラートの生成に失敗しました";
+        console.error("cert expiry scan failed:", msg);
+        if (!cancelled) setCertError(msg);
+      } finally {
+        if (!cancelled) setCertLoading(false);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [bizLoading, currentOfficeId, tenantId, isCareManagement]);
+
   const dateLabel = format(today, "yyyy年M月d日（EEE）", { locale: ja });
 
   return (
@@ -308,6 +381,84 @@ export default function DashboardPage() {
           />
         </div>
       )}
+
+      {/* 認定更新が近い利用者 (60日以内 / 30日以内 / 期限切れ) */}
+      <section className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <CalendarClock size={18} className="text-amber-500" />
+            <h2 className="font-semibold text-gray-700">認定更新が近い利用者</h2>
+          </div>
+          {!certLoading && !certError && (
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                certAlerts.some((a) => a.stage === "expired")
+                  ? "bg-red-50 text-red-600"
+                  : "bg-amber-50 text-amber-600"
+              }`}
+            >
+              {certAlerts.length}名
+            </span>
+          )}
+        </div>
+
+        {certLoading ? (
+          <div className="space-y-3 p-5">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-8 animate-pulse rounded-lg bg-gray-100" />
+            ))}
+          </div>
+        ) : certError ? (
+          <div className="flex items-center gap-2 px-5 py-6 text-sm text-red-600">
+            <AlertTriangle size={16} />
+            <span>認定更新アラートの取得に失敗しました: {certError}</span>
+          </div>
+        ) : !currentOfficeId ? (
+          <p className="px-5 py-8 text-center text-sm text-gray-400">
+            事業所を選択してください
+          </p>
+        ) : certAlerts.length === 0 ? (
+          <p className="px-5 py-8 text-center text-sm text-gray-400">
+            60日以内に認定有効期間の満了を迎える利用者はいません
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500">
+                  <th className="px-4 py-3">氏名</th>
+                  <th className="px-4 py-3">介護度</th>
+                  <th className="px-4 py-3">認定有効期間 満了日</th>
+                  <th className="px-4 py-3">残り</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {certAlerts.map((a) => (
+                  <tr key={a.certId} className="hover:bg-gray-50/60 transition-colors">
+                    <td className="px-4 py-3 font-medium">
+                      <Link
+                        href={`/users/${a.clientId}/care-cert${currentOfficeId ? `?office=${encodeURIComponent(currentOfficeId)}` : ""}`}
+                        className="text-blue-600 hover:underline"
+                      >
+                        {a.clientName}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {a.careLevel ?? <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                      {format(parseISO(a.certEndDate), "yyyy/M/d", { locale: ja })}
+                    </td>
+                    <td className="px-4 py-3">
+                      <CertStageBadge stage={a.stage} daysLeft={a.daysLeft} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       {/* Tables section */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

@@ -12,8 +12,11 @@
  *        J121 = 基本情報(01) + 日数情報(02) + 明細情報(03) × n
  *               + 集計情報(04) + 契約情報(05) × n    … 利用者ごと
  *   2. J61 ファイル: J611 サービス提供実績記録票情報
- *        基本情報(01, 172項目) + 明細情報(02, 113項目) × n … 利用者ごと
- *        様式種別番号 0101 (居宅介護) のみ対応
+ *        基本情報(01, 172項目) + 明細情報(02, 113項目) × n … 利用者 × 様式ごと
+ *        対応様式: 0101 (様式1 居宅介護) / 0301 (様式3-1 重度訪問介護)
+ *        ※ 行動援護 (0201)・同行援護 (1901) 等は KT Group 未提供のため対象外
+ *          (提供開始時に IF 仕様書の該当様式定義を確認して追加すること)
+ *        ※ 0302 (様式3-2 重訪 時間帯集計) は平成21年4月以降不使用 — 送付しない
  *   3. J41 ファイル: J411 利用者負担上限額管理結果票情報
  *        基本情報(01) + 明細情報(02) × n … 自事業所が上限管理者の利用者のみ
  *
@@ -38,6 +41,8 @@ export interface ShogaiDensouVisit {
   durationMinutes: number | null;
   category: string | null; // 身体 / 家事 / 通院 等
   serviceCode: string | null;
+  /** マスタのサービス名 (重訪の「・２人」「・同行ｎ」判定に使用。不明は null) */
+  serviceName?: string | null;
 }
 
 /** 上限管理結果票の関係事業所行 (shogai_jogen_kanri_results.office_lines) */
@@ -116,6 +121,39 @@ function goukeiSlot(code: string): 1 | 2 | 3 | 4 | 5 {
   }
 }
 
+/** サービスコード先頭 2 桁 → サービス種類コード (11 居宅 / 12 重訪 / 13 行動 / 15 同行)。
+ *  コード未設定・非数値は従来どおり居宅介護 (11) 扱い */
+function serviceTypeCode(code: string | null): string {
+  const p = (code ?? "").slice(0, 2);
+  return /^\d{2}$/.test(p) ? p : "11";
+}
+
+// 実績記録票の様式種別番号 (IF仕様書 事業所編 (4) 様式と様式種別番号の対応):
+//   サービス種類 11 → 0101 (様式1 居宅介護) / 12 → 0301 (様式3-1 重度訪問介護)
+//   行動援護 (0201)・同行援護 (1901) 等は KT Group 未提供のため対象外
+//   0302 (様式3-2 重訪 時間帯集計) は平成21年4月以降不使用
+const SERVICE_TYPE_LABELS: Record<string, string> = {
+  "11": "居宅介護",
+  "12": "重度訪問介護",
+  "13": "行動援護",
+  "14": "同行援護", // 旧コード系
+  "15": "同行援護",
+};
+
+/** 重訪 明細 19 派遣人数: マスタ名の「・２人」表記 (同一時間の 2 人派遣は 1 行 + 派遣人数 2) */
+function juhoNinzu(name: string | null | undefined): number {
+  return /[2２]人/.test(name ?? "") ? 2 : 1;
+}
+
+/** 重訪 明細 80 同行支援: 熟練ヘルパー同行コード (124541 等) のマスタ名から判定。
+ *  1 = 障害支援区分6の利用者に支援 (熟練が新任に同行) / 2 = 重度包括対象者に支援 (令和6年4月以降定義) */
+function juhoDoukou(name: string | null | undefined): string {
+  const n = name ?? "";
+  if (/同行[1１]/.test(n)) return "1";
+  if (/同行[2２]/.test(n)) return "2";
+  return "";
+}
+
 /** 介護マスタの地域区分 → 障害 地域区分コード (01〜07 / 20:その他) */
 function areaKubunCode(area: string | null): string {
   const m = (area ?? "").match(/([1-7１-７])\s*級地/);
@@ -162,6 +200,69 @@ function parseContractAmounts(
   if (!single) return null;
   for (const c of codes) out.set(c, parseFloat(single[1]));
   return out;
+}
+
+/** 利用者 1 名のサービス種類別集計 (J111 明細 / J121 日数・集計レコードの種類分割用) */
+interface TypeAgg {
+  typeCode: string; // 11 / 12 / ...
+  units: number;
+  cost: number;
+  /** 決定利用者負担額 (複数種類時は先頭種類に集約 — 按分未検証) */
+  userAmt: number;
+  benefit: number;
+}
+
+/** details + addons をサービス種類コード別に集計する。
+ *  単一種類 (通常) は利用者計 (totalUnits / totalAmount 等) をそのまま使い従来出力と一致させる。
+ *  複数種類が混在する月は種類別単位数から費用を按分 (端数は先頭種類で調整) し、
+ *  利用者負担は先頭種類に集約する — 負担額の種類間配分は制度上未確定のため warning を出す。 */
+function userTypeAggs(
+  u: ShogaiDensouUser,
+  unitPrice100: number,
+  warnings: string[],
+): TypeAgg[] {
+  const r = u.row;
+  const unitsByType = new Map<string, number>();
+  for (const d of r.details) {
+    const tc = serviceTypeCode(d.service_code);
+    unitsByType.set(tc, (unitsByType.get(tc) ?? 0) + d.units);
+  }
+  for (const a of r.addons) {
+    const tc = serviceTypeCode(a.service_code);
+    unitsByType.set(tc, (unitsByType.get(tc) ?? 0) + a.units);
+  }
+  const types = Array.from(unitsByType.keys()).sort();
+  if (types.length <= 1) {
+    return [
+      {
+        typeCode: types[0] ?? "11",
+        units: r.totalUnits,
+        cost: r.totalAmount,
+        userAmt: r.userAmount,
+        benefit: r.benefitAmount,
+      },
+    ];
+  }
+  warnings.push(
+    `${r.user_name}: 複数サービス種類 (${types.map((t) => SERVICE_TYPE_LABELS[t] ?? t).join("+")}) が同月に混在しています — 利用者負担額は先頭種類に集約して出力します (種類間の按分は未検証。取込チェックで確認してください)`,
+  );
+  const aggs: TypeAgg[] = [];
+  let costRest = r.totalAmount;
+  let userRest = r.userAmount;
+  types.forEach((tc, i) => {
+    const units = unitsByType.get(tc)!;
+    // 末尾以外は種類別単位数から費用を計算し、端数差は最後の種類で吸収 (合計を利用者計と一致させる)
+    const cost =
+      i === types.length - 1
+        ? costRest
+        : Math.floor((units * unitPrice100) / 100);
+    costRest -= cost;
+    // 利用者負担は先頭種類から順に費用の範囲内で充当 (合計 = 決定利用者負担額)
+    const userAmt = Math.min(userRest, cost);
+    userRest -= userAmt;
+    aggs.push({ typeCode: tc, units, cost, userAmt, benefit: cost - userAmt });
+  });
+  return aggs;
 }
 
 /** コントロール+データ+エンドで包んでファイル文字列にする */
@@ -260,6 +361,13 @@ export function buildShogaiDensou(
     }
   }
 
+  // 利用者ごとのサービス種類別集計 (J111 明細 / J121 日数・集計の種類分割に共用)
+  const aggsByUser = new Map<string, TypeAgg[]>();
+  const unitPrice100 = Math.round(opts.unitPrice * 100);
+  for (const u of sorted) {
+    aggsByUser.set(u.row.user_id, userTypeAggs(u, unitPrice100, warnings));
+  }
+
   // ══ 1. J11 ファイル (J111 請求書 + J121 明細書) ══════════════════════════
   const seikyuParts: string[][] = [];
 
@@ -286,14 +394,34 @@ export function buildShogaiDensou(
       String(count), String(units), String(cost), String(benefit), // 17-20 合計
       "", String(userAmt), "", // 21-23
     ]);
-    // 明細情報レコード (02) — 14 項目 (サービス種類 11:居宅介護)
-    seikyuParts.push([
-      "J111", "02", ym, muni, office,
-      "1", // 6 給付種別 (1:介護給付費等)
-      "11", // 7 サービス種類コード
-      String(count), String(units), String(cost), String(benefit), // 8-11
-      "", String(userAmt), "", // 12-14 特対費/利用者負担額/自治体助成額
-    ]);
+    // 明細情報レコード (02) — 14 項目 × サービス種類 (11 居宅介護 / 12 重度訪問介護)
+    const byType = new Map<
+      string,
+      { count: number; units: number; cost: number; userAmt: number; benefit: number }
+    >();
+    for (const x of munUsers) {
+      for (const a of aggsByUser.get(x.row.user_id) ?? []) {
+        const t = byType.get(a.typeCode) ?? {
+          count: 0, units: 0, cost: 0, userAmt: 0, benefit: 0,
+        };
+        t.count += 1; // 件数 = その種類を含む明細書 (利用者) 数
+        t.units += a.units;
+        t.cost += a.cost;
+        t.userAmt += a.userAmt;
+        t.benefit += a.benefit;
+        byType.set(a.typeCode, t);
+      }
+    }
+    for (const tc of Array.from(byType.keys()).sort()) {
+      const t = byType.get(tc)!;
+      seikyuParts.push([
+        "J111", "02", ym, muni, office,
+        "1", // 6 給付種別 (1:介護給付費等)
+        tc, // 7 サービス種類コード
+        String(t.count), String(t.units), String(t.cost), String(t.benefit), // 8-11
+        "", String(t.userAmt), "", // 12-14 特対費/利用者負担額/自治体助成額
+      ]);
+    }
   }
 
   // ── J121 明細書 (利用者ごと) ──
@@ -315,9 +443,19 @@ export function buildShogaiDensou(
       r.jogenKanriKubun === "自事業所"
         ? office
         : (r.jogenKanriOfficeNumber ?? "");
-    const serviceDays = new Set(u.visits.map((v) => v.date)).size;
     const firstDate = u.visits.map((v) => v.date).sort()[0] ?? null;
-    const kaishiDate = dateNum(u.contractStartDate ?? firstDate);
+    // サービス種類別の実績 (日数レコード / 集計レコード / 実績記録票の様式分割に使用)
+    const aggs = aggsByUser.get(r.user_id) ?? [];
+    const visitsByType = new Map<string, ShogaiDensouVisit[]>();
+    for (const v of u.visits) {
+      const tc = serviceTypeCode(v.serviceCode);
+      if (!visitsByType.has(tc)) visitsByType.set(tc, []);
+      visitsByType.get(tc)!.push(v);
+    }
+    const typeDays = (tc: string) =>
+      new Set((visitsByType.get(tc) ?? []).map((v) => v.date)).size;
+    const typeFirstDate = (tc: string) =>
+      (visitsByType.get(tc) ?? []).map((v) => v.date).sort()[0] ?? firstDate;
 
     // 基本情報レコード (01) — 35 項目
     seikyuParts.push([
@@ -345,15 +483,17 @@ export function buildShogaiDensou(
       "", "", "", "", // 32-35 特定障害者特別給付費
     ]);
 
-    // 日数情報レコード (02) — 12 項目
-    seikyuParts.push([
-      "J121", "02", ym, muni, office, jukyu,
-      "11", // 7 サービス種類コード
-      kaishiDate, // 8 開始年月日
-      "", // 9 終了年月日
-      String(serviceDays), // 10 利用日数
-      "", "", // 11-12 入院/外泊日数
-    ]);
+    // 日数情報レコード (02) — 12 項目 × サービス種類
+    for (const a of aggs) {
+      seikyuParts.push([
+        "J121", "02", ym, muni, office, jukyu,
+        a.typeCode, // 7 サービス種類コード
+        dateNum(u.contractStartDate ?? typeFirstDate(a.typeCode)), // 8 開始年月日
+        "", // 9 終了年月日
+        String(typeDays(a.typeCode)), // 10 利用日数
+        "", "", // 11-12 入院/外泊日数
+      ]);
+    }
 
     // 明細情報レコード (03) — 11 項目 × サービスコード
     for (const d of r.details) {
@@ -386,96 +526,104 @@ export function buildShogaiDensou(
       ]);
     }
 
-    // 集計情報レコード (04) — 33 項目
-    seikyuParts.push([
-      "J121", "04", ym, muni, office, jukyu,
-      "11", // 7 サービス種類コード
-      "1", // 8 集計欄分類番号
-      String(serviceDays), // 9 サービス利用日数
-      String(r.totalUnits), // 10 給付単位数
-      unitPrice5, // 11 単位数単価
-      "0", // 12 給付率 (R6仕様: 0 固定)
-      String(r.totalAmount), // 13 総費用額
-      String(ichiwari), // 14 1割相当額
-      String(ichiwari), // 15 利用者負担額②
-      String(jogenChosei), // 16 上限月額調整
-      "", "", // 17-18 A型減免
-      hasKanri && kanriAfter != null ? String(kanriAfter) : "", // 19 調整後利用者負担額
-      hasKanri && kanriAfter != null ? String(kanriAfter) : "", // 20 上限額管理後利用者負担額
-      String(r.userAmount), // 21 決定利用者負担額
-      String(r.benefitAmount), // 22 請求額 給付費
-      "", "", "", // 23-25 高額/特対費/自治体助成
-      "", "", "", "", // 26-29 特定障害者特別給付費
-      "", "", "", "", // 30-33 利用日数管理票
-    ]);
+    // 集計情報レコード (04) — 33 項目 × サービス種類 (集計欄分類番号は種類ごとに 1 から採番)
+    aggs.forEach((a, i) => {
+      // 1割相当額 (a.cost は整数なので /10 の floor で正確)。単一種類時は従来の ichiwari と同値
+      const ichiwariT = Math.floor(a.cost / 10);
+      const jogenCoseiT =
+        r.self_payment_limit != null
+          ? Math.min(r.self_payment_limit, ichiwariT)
+          : ichiwariT;
+      seikyuParts.push([
+        "J121", "04", ym, muni, office, jukyu,
+        a.typeCode, // 7 サービス種類コード
+        String(i + 1), // 8 集計欄分類番号
+        String(typeDays(a.typeCode)), // 9 サービス利用日数
+        String(a.units), // 10 給付単位数
+        unitPrice5, // 11 単位数単価
+        "0", // 12 給付率 (R6仕様: 0 固定)
+        String(a.cost), // 13 総費用額
+        String(ichiwariT), // 14 1割相当額
+        String(ichiwariT), // 15 利用者負担額②
+        String(jogenCoseiT), // 16 上限月額調整
+        "", "", // 17-18 A型減免
+        hasKanri ? String(a.userAmt) : "", // 19 調整後利用者負担額
+        hasKanri ? String(a.userAmt) : "", // 20 上限額管理後利用者負担額
+        String(a.userAmt), // 21 決定利用者負担額
+        String(a.benefit), // 22 請求額 給付費
+        "", "", "", // 23-25 高額/特対費/自治体助成
+        "", "", "", "", // 26-29 特定障害者特別給付費
+        "", "", "", "", // 30-33 利用日数管理票
+      ]);
+    });
 
     // 契約情報レコード (05) — 11 項目 × 決定サービスコード
+    // 決定コードは居宅介護 (111000〜115000) のみ対応。重度訪問介護の決定コード
+    // (121000 重度包括対象者 / 122000 区分6該当者 / 123000 その他 / 120901 加算移動介護) は
+    // 受給者証の支給決定内容 (どの決定区分か) を構造化して保持していないため出力しない。
     const codes = Array.from(
-      new Set(r.details.map((d) => decisionCode(d.service_category))),
+      new Set(
+        r.details
+          .filter((d) => serviceTypeCode(d.service_code) === "11")
+          .map((d) => decisionCode(d.service_category)),
+      ),
     );
-    const amounts = parseContractAmounts(u.contractAmountText, codes);
-    if (!amounts) {
+    if (aggs.some((a) => a.typeCode === "12")) {
       warnings.push(
-        `${r.user_name}: 契約支給量が未入力のため契約情報レコードを出力しません (受給者証ページで入力してください)`,
+        `${r.user_name}: 重度訪問介護の契約情報レコード (決定コード 121000/122000/123000) は未対応のため出力しません — 契約支給量審査は取込チェックで確認してください`,
       );
-    } else {
-      for (const code of codes) {
-        const amt = amounts.get(code);
-        if (amt == null) {
-          warnings.push(
-            `${r.user_name}: 決定コード ${code} の契約支給量が読み取れません ("${u.contractAmountText}")`,
-          );
-          continue;
+    }
+    if (codes.length > 0) {
+      const amounts = parseContractAmounts(u.contractAmountText, codes);
+      if (!amounts) {
+        warnings.push(
+          `${r.user_name}: 契約支給量が未入力のため契約情報レコードを出力しません (受給者証ページで入力してください)`,
+        );
+      } else {
+        for (const code of codes) {
+          const amt = amounts.get(code);
+          if (amt == null) {
+            warnings.push(
+              `${r.user_name}: 決定コード ${code} の契約支給量が読み取れません ("${u.contractAmountText}")`,
+            );
+            continue;
+          }
+          seikyuParts.push([
+            "J121", "05", ym, muni, office, jukyu,
+            code, // 7 決定サービスコード
+            String(Math.round(amt * 100)).padStart(5, "0"), // 8 契約支給量 (整数3+小数2)
+            dateNum(u.contractStartDate ?? firstDate), // 9 契約開始年月日
+            "", // 10 契約終了年月日
+            (u.contractEntryNumber ?? "1").padStart(2, "0"), // 11 事業者記入欄番号
+          ]);
         }
-        seikyuParts.push([
-          "J121", "05", ym, muni, office, jukyu,
-          code, // 7 決定サービスコード
-          String(Math.round(amt * 100)).padStart(5, "0"), // 8 契約支給量 (整数3+小数2)
-          dateNum(u.contractStartDate ?? firstDate), // 9 契約開始年月日
-          "", // 10 契約終了年月日
-          (u.contractEntryNumber ?? "1").padStart(2, "0"), // 11 事業者記入欄番号
-        ]);
       }
     }
   }
 
-  // ══ 2. J61 ファイル (J611 実績記録票 様式1=0101) ═══════════════════════════
+  // ══ 2. J61 ファイル (J611 実績記録票 — 様式1 0101 / 様式3-1 0301) ═══════════
+  // サービス種類コード (コード先頭 2 桁) で様式を自動振り分けする。
+  // 行動援護 (0201)・同行援護 (1901) 等は KT Group 未提供のため対象外 (warning のみ)。
   const jissekiParts: string[][] = [];
   for (const u of sorted) {
     const r = u.row;
     const muni = r.municipality ?? "";
     const jukyu = r.beneficiary_number ?? "";
 
-    // 明細情報レコード (02) — 113 項目 × 提供日時
-    const visits = [...u.visits].sort((a, b) =>
-      (a.date + (a.startTime ?? "")).localeCompare(b.date + (b.startTime ?? "")),
-    );
-    // 提供通番: 同一決定コードで間隔 2 時間未満の連続提供は同一番号 (乗降は常に新番号)
-    let tsuban = 0;
-    let prevKey = "";
-    let prevEndMs = 0;
-    const goukei = new Map<number, { hours: number; count: number }>();
-    for (const v of visits) {
-      const code = decisionCode(v.category);
-      const startMs = v.startTime ? Date.parse(`${v.date}T${v.startTime}`) : 0;
-      const endMs = v.endTime ? Date.parse(`${v.date}T${v.endTime}`) : startMs;
-      const chain =
-        code !== "115000" &&
-        prevKey === `${v.date}_${code}` &&
-        startMs > 0 &&
-        prevEndMs > 0 &&
-        startMs - prevEndMs < 2 * 60 * 60 * 1000;
-      if (!chain) tsuban += 1;
-      prevKey = `${v.date}_${code}`;
-      prevEndMs = endMs;
-
-      const hours = (v.durationMinutes ?? 0) / 60;
-      const slot = goukeiSlot(code);
-      const g = goukei.get(slot) ?? { hours: 0, count: 0 };
-      g.hours += hours;
-      g.count += 1;
-      goukei.set(slot, g);
-
+    // J611 基本情報レコード (01) — 172 項目の共通ヘッダ部
+    const baseKihon = (yoshiki: string): string[] => {
+      const b = new Array<string>(172).fill("");
+      b[0] = "J611";
+      b[1] = "01";
+      b[2] = ym;
+      b[3] = muni;
+      b[4] = office;
+      b[5] = jukyu;
+      b[6] = yoshiki; // 7 様式種別番号
+      return b;
+    };
+    // J611 明細情報レコード (02) — 113 項目の共通ヘッダ部
+    const baseMeisai = (yoshiki: string): string[] => {
       const f = new Array<string>(113).fill("");
       f[0] = "J611";
       f[1] = "02";
@@ -483,52 +631,201 @@ export function buildShogaiDensou(
       f[3] = muni;
       f[4] = office;
       f[5] = jukyu;
-      f[6] = "0101"; // 様式種別番号 (居宅介護)
-      f[7] = String(tsuban); // 8 提供通番
-      f[8] = String(Number(v.date.slice(8, 10))).padStart(2, "0"); // 9 日付
-      f[9] = "1"; // 10 サービス提供回数
-      f[10] = code; // 11 サービス内容 (決定コード)
-      f[11] = "11"; // 12 ヘルパー資格 (11:初任者等)
-      f[13] = hhmm(v.startTime); // 14 開始時間
-      f[14] = hhmm(v.endTime); // 15 終了時間
-      if (code === "115000") {
-        f[16] = "1"; // 17 乗降 (回数)
-      } else if (hours > 0) {
-        f[15] = fmtHours4(hours); // 16 算定時間数
+      f[6] = yoshiki; // 7 様式種別番号
+      return f;
+    };
+
+    // サービス種類別に実績を分割 (コード未設定の実績は従来どおり居宅介護 0101 扱い)
+    const visitsByType = new Map<string, ShogaiDensouVisit[]>();
+    for (const v of u.visits) {
+      const tc = serviceTypeCode(v.serviceCode);
+      if (!visitsByType.has(tc)) visitsByType.set(tc, []);
+      visitsByType.get(tc)!.push(v);
+    }
+    for (const tc of Array.from(visitsByType.keys()).sort()) {
+      if (tc !== "11" && tc !== "12") {
+        warnings.push(
+          `${r.user_name}: ${SERVICE_TYPE_LABELS[tc] ?? `サービス種類 ${tc}`} の実績記録票様式は未対応のため出力しません (KT Group 未提供サービス)`,
+        );
       }
-      f[18] = "1"; // 19 派遣人数
-      jissekiParts.push(f);
+    }
+    const kyotakuVisits = visitsByType.get("11") ?? [];
+    const juhoVisits = visitsByType.get("12") ?? [];
+    const detailTypes = new Set(
+      (aggsByUser.get(r.user_id) ?? []).map((a) => a.typeCode),
+    );
+
+    // ── 様式1 (0101 居宅介護) ──────────────────────────────────────────────
+    // 居宅の実績がある利用者に加え、従来どおり実績ゼロの利用者 (重訪等も無い) も
+    // 空の基本情報レコードを出力する (出力対象の取りこぼしに気づけるように)
+    if (
+      kyotakuVisits.length > 0 ||
+      (juhoVisits.length === 0 && !detailTypes.has("12"))
+    ) {
+      // 明細情報レコード (02) × 提供日時
+      const visits = [...kyotakuVisits].sort((a, b) =>
+        (a.date + (a.startTime ?? "")).localeCompare(b.date + (b.startTime ?? "")),
+      );
+      // 提供通番: 同一決定コードで間隔 2 時間未満の連続提供は同一番号 (乗降は常に新番号)
+      let tsuban = 0;
+      let prevKey = "";
+      let prevEndMs = 0;
+      const goukei = new Map<number, { hours: number; count: number }>();
+      const rows: string[][] = [];
+      for (const v of visits) {
+        const code = decisionCode(v.category);
+        const startMs = v.startTime ? Date.parse(`${v.date}T${v.startTime}`) : 0;
+        const endMs = v.endTime ? Date.parse(`${v.date}T${v.endTime}`) : startMs;
+        const chain =
+          code !== "115000" &&
+          prevKey === `${v.date}_${code}` &&
+          startMs > 0 &&
+          prevEndMs > 0 &&
+          startMs - prevEndMs < 2 * 60 * 60 * 1000;
+        if (!chain) tsuban += 1;
+        prevKey = `${v.date}_${code}`;
+        prevEndMs = endMs;
+
+        const hours = (v.durationMinutes ?? 0) / 60;
+        const slot = goukeiSlot(code);
+        const g = goukei.get(slot) ?? { hours: 0, count: 0 };
+        g.hours += hours;
+        g.count += 1;
+        goukei.set(slot, g);
+
+        const f = baseMeisai("0101");
+        f[7] = String(tsuban); // 8 提供通番
+        f[8] = String(Number(v.date.slice(8, 10))).padStart(2, "0"); // 9 日付
+        f[9] = "1"; // 10 サービス提供回数
+        f[10] = code; // 11 サービス内容 (決定コード)
+        f[11] = "11"; // 12 ヘルパー資格 (11:初任者等)
+        f[13] = hhmm(v.startTime); // 14 開始時間
+        f[14] = hhmm(v.endTime); // 15 終了時間
+        if (code === "115000") {
+          f[16] = "1"; // 17 乗降 (回数)
+        } else if (hours > 0) {
+          f[15] = fmtHours4(hours); // 16 算定時間数
+        }
+        f[18] = "1"; // 19 派遣人数
+        rows.push(f);
+      }
+
+      // 基本情報レコード (01) — 合計1〜5 (項番16〜32): 内訳100% と 算定時間数計 のみ設定 (減算ヘルパーなし前提)
+      const b = baseKihon("0101");
+      const slotIdx: Record<number, { uchiwake: number; kei: number }> = {
+        1: { uchiwake: 15, kei: 18 }, // 項番16 / 19 (身体)
+        2: { uchiwake: 19, kei: 22 }, // 項番20 / 23 (通院伴う)
+        3: { uchiwake: 23, kei: 25 }, // 項番24 / 26 (家事)
+        4: { uchiwake: 26, kei: 28 }, // 項番27 / 29 (通院伴わず)
+        5: { uchiwake: 29, kei: 31 }, // 項番30 / 32 (乗降=回数)
+      };
+      for (const [slot, g] of goukei) {
+        const idx = slotIdx[slot];
+        if (slot === 5) {
+          b[idx.uchiwake] = String(g.count).padStart(3, "0");
+          b[idx.kei] = String(g.count).padStart(3, "0");
+        } else if (g.hours > 0) {
+          b[idx.uchiwake] = fmtHours5(g.hours);
+          b[idx.kei] = fmtHours5(g.hours);
+        }
+      }
+      jissekiParts.push(b, ...rows);
     }
 
-    // 基本情報レコード (01) — 172 項目 (明細より前に挿入)
-    const b = new Array<string>(172).fill("");
-    b[0] = "J611";
-    b[1] = "01";
-    b[2] = ym;
-    b[3] = muni;
-    b[4] = office;
-    b[5] = jukyu;
-    b[6] = "0101";
-    // 合計1〜5 (項番16〜32): 内訳100% と 算定時間数計 のみ設定 (減算ヘルパーなし前提)
-    const slotIdx: Record<number, { uchiwake: number; kei: number }> = {
-      1: { uchiwake: 15, kei: 18 }, // 項番16 / 19 (身体)
-      2: { uchiwake: 19, kei: 22 }, // 項番20 / 23 (通院伴う)
-      3: { uchiwake: 23, kei: 25 }, // 項番24 / 26 (家事)
-      4: { uchiwake: 26, kei: 28 }, // 項番27 / 29 (通院伴わず)
-      5: { uchiwake: 29, kei: 31 }, // 項番30 / 32 (乗降=回数)
-    };
-    for (const [slot, g] of goukei) {
-      const idx = slotIdx[slot];
-      if (slot === 5) {
-        b[idx.uchiwake] = String(g.count).padStart(3, "0");
-        b[idx.kei] = String(g.count).padStart(3, "0");
-      } else if (g.hours > 0) {
-        b[idx.uchiwake] = fmtHours5(g.hours);
-        b[idx.kei] = fmtHours5(g.hours);
+    // ── 様式3-1 (0301 重度訪問介護) ────────────────────────────────────────
+    // 0301 で設定する項目 (IF仕様書 (5)(6) 入力必須項目と様式の対応表 [令和6年4月以降]):
+    //   基本: 1-7(◎) / 19 合計1 算定時間数計 / 33 移動介護分 / 112 緊急時対応 /
+    //         113 初回 / 115 行動障害支援連携 / 147 移動介護緊急時支援 (各加算回)
+    //   明細: 1-9(◎) / 10 提供回数 / 14-16 開始・終了・算定時間数 / 18 移動 /
+    //         19 派遣人数 / 35 備考 / 36 提供状況(1:入院 2:入院(長期)) /
+    //         69 緊急時対応 / 70 初回 / 72 行動障害支援連携 / 80 同行支援 / 91 移動介護緊急時支援
+    if (juhoVisits.length > 0) {
+      const visits = [...juhoVisits].sort((a, b) =>
+        (a.date + (a.startTime ?? "")).localeCompare(b.date + (b.startTime ?? "")),
+      );
+      // 提供通番: 重訪は 1 日の所要時間を通算して算定するため、同一日の提供に
+      // 同一番号を設定する (明細※2 / 設定例③ No.1)。0 時またぎは日付単位で行が
+      // 分かれている前提 (実績データは日単位で保持)。
+      let tsuban = 0;
+      let prevDate = "";
+      const rows: string[][] = [];
+      const lastRowIdxByDate = new Map<string, number>();
+      const hoursByDate = new Map<string, number>();
+      let nobeHours = 0; // 基本19 算定時間数計 = 延べ時間 (設定例 No.4: 10h×2人派遣=20h)
+      let skippedNoTime = 0;
+      let unknownName = 0;
+      for (const v of visits) {
+        const hours = (v.durationMinutes ?? 0) / 60;
+        if (!v.startTime && !v.endTime && hours <= 0) {
+          skippedNoTime += 1;
+          continue;
+        }
+        if (v.serviceName == null) unknownName += 1;
+        if (v.date !== prevDate) {
+          tsuban += 1;
+          prevDate = v.date;
+        }
+        const ninzu = juhoNinzu(v.serviceName);
+        nobeHours += hours * ninzu;
+        hoursByDate.set(v.date, (hoursByDate.get(v.date) ?? 0) + hours);
+
+        const f = baseMeisai("0301");
+        f[7] = String(tsuban); // 8 提供通番
+        f[8] = String(Number(v.date.slice(8, 10))).padStart(2, "0"); // 9 日付
+        // 10 サービス提供回数: 二人派遣で時間がずれた場合のみ 1人目'1'/2人目'2' (明細※3)。
+        //    同一時間の 2 人派遣は「・２人」コード 1 行 + 派遣人数 2 で表すため設定しない (設定例 No.4)
+        f[13] = hhmm(v.startTime); // 14 開始時間
+        f[14] = hhmm(v.endTime); // 15 終了時間
+        // 16 算定時間数: 1 日通算を同一通番の最終行にまとめて設定 (後段で埋める)
+        // 18 移動: 移動介護 (決定コード 120901) の算定時間数 — 移動介護は未対応のため空欄
+        f[18] = String(ninzu); // 19 派遣人数
+        // 36 サービス提供の状況 (1:入院 2:入院(長期)) — 入院中の提供記録は未保持のため空欄
+        f[79] = juhoDoukou(v.serviceName); // 80 同行支援 (熟練ヘルパー同行 1:区分6利用者 2:重度包括対象者)
+        lastRowIdxByDate.set(v.date, rows.length);
+        rows.push(f);
       }
+      // 16 算定時間数 (整2+小2): 1 日の通算時間を同一日の最終行に設定 (設定例③ No.1/2)
+      for (const [date, idx] of lastRowIdxByDate) {
+        const h = hoursByDate.get(date) ?? 0;
+        if (h > 0) rows[idx][15] = fmtHours4(h);
+      }
+
+      // 基本情報レコード (01)
+      const b = baseKihon("0301");
+      // 19 合計1 算定時間数計 (整3+小2): 重訪は内訳 (項番16-18) を設定せず合計のみ (対応表)
+      if (nobeHours > 0) b[18] = fmtHours5(nobeHours);
+      // 33 算定 移動介護分 / 112 緊急時対応加算 / 113 初回加算 / 115 行動障害支援連携加算 /
+      // 147 移動介護緊急時支援加算: 実績データに保持していないため空欄 (下の warning で通知)
+      jissekiParts.push(b, ...rows);
+
+      // ⚠ データが無く埋められない項目の要確認 warning
+      if (skippedNoTime > 0) {
+        warnings.push(
+          `${r.user_name}: 重訪実績のうち時間情報の無い ${skippedNoTime} 件を実績記録票から除外しました — 実績の開始/終了時間を確認してください`,
+        );
+      }
+      if (unknownName > 0) {
+        warnings.push(
+          `${r.user_name}: 重訪実績 ${unknownName} 件のサービス名がマスタから解決できず、2人派遣/熟練同行の判定ができません — 派遣人数 1 として出力します (要確認)`,
+        );
+      }
+      const juhoKasan = r.details.filter(
+        (d) =>
+          serviceTypeCode(d.service_code) === "12" &&
+          /緊急時対応加算|初回加算|行動障害支援連携加算|移動介護緊急時支援加算|移動介護/.test(
+            `${d.service_type} ${d.service_category ?? ""}`,
+          ),
+      );
+      for (const k of juhoKasan) {
+        warnings.push(
+          `${r.user_name}: 重訪の加算「${k.service_type}」は実績記録票の加算欄 (基本情報 112/113/115/147・明細フラグ) に自動設定されません — 伝送前に要確認`,
+        );
+      }
+    } else if (detailTypes.has("12")) {
+      warnings.push(
+        `${r.user_name}: 重度訪問介護の請求明細がありますが時間つき実績が無いため実績記録票 (様式3-1) を出力しません — 実績データを確認してください`,
+      );
     }
-    // 利用者の明細の直前に基本情報を挿入
-    jissekiParts.splice(jissekiParts.length - visits.length, 0, b);
   }
 
   // ══ 3. J41 ファイル (J411 上限管理結果票 — 自事業所管理のみ) ═══════════════

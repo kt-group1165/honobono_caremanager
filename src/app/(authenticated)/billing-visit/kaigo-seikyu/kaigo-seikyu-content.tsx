@@ -11,9 +11,15 @@
  *   - 月遅 / 返戻 / 過誤 フラグ (kaigo_billing_status に upsert)
  *   - 明細書 (様式第二) / 請求書 (様式第一 総括) / 国保対象 / 確認用CSV
  *
- * ※ Phase 2: 月遅れ/返戻の再請求。過去月の月遅れ/返戻 (未・国保対象) を
+ * ※ Phase 2: 月遅れ/返戻/過誤の再請求。過去月の月遅れ/返戻/過誤 (未・国保対象) を
  *    元提供月で再集計し、当月一覧にバッジ付きで合流。明細書・伝送・国保対象化は
  *    各自の元提供月で反映する。
+ *
+ * ※ 過誤 (かご): 支払済レセプトの取下げ → 再請求。右ペインの「過誤申立」ブロックで
+ *    申立日・事由コード (4桁 = 様式番号 + 申立理由番号)・同月過誤を登録すると
+ *    kago=true + kokuho_target=false (取下げ) になり、翌月以降の請求に合流する。
+ *    通常過誤 = 過誤決定 (支払控除) の翌月以降に再請求 / 同月過誤 = 申立と同月に再請求。
+ *    保険者提出用の一覧はツールバー「過誤申立CSV」から出力 (様式は保険者ごと)。
  *
  * ※ 実績単位の加算: 明細ペインは表示専用 (編集はサービス提供表 (実績) 画面へ移設)。
  *    初回加算は過去 2 ヶ月に completed 実績が無い利用者に「候補」バッジを出す
@@ -48,8 +54,15 @@ import { MeisaiPrintSheet } from "../../billing/forms/_meisai";
 import { SeikyuForm } from "../../billing/forms/_seikyu";
 import {
   loadReSeikyuRows,
+  type ReSeikyuReasons,
   type ReSeikyuRow,
 } from "@/lib/visit-seikyu/re-seikyu";
+import {
+  buildKagoMoushitateCsv,
+  loadKagoMoushitateRows,
+  type KagoInfo,
+} from "@/lib/visit-seikyu/kago";
+import { KagoBlock, type KagoSaveFields } from "./kago-block";
 import {
   getGensanPeriodsForMonth,
   GENSAN_LABELS,
@@ -76,6 +89,10 @@ interface BillingStatusRow {
   henrei: boolean;
   kago: boolean;
   notes: string | null;
+  // 過誤申立の付帯列 (migrations/kago_saiseikyu.sql 適用後のみ)
+  kago_moushitate_date?: string | null;
+  kago_jiyu_code?: string | null;
+  kago_dougetsu?: boolean;
 }
 
 // 一覧の 1 行 (当月通常行 or 過去月の再請求行)
@@ -85,10 +102,12 @@ interface DisplayRow {
   row: UserSeikyuRow;
   /** この行の提供月 (YYYY-MM)。当月行は当月、再請求行は元提供月 */
   origMonthKey: string;
-  /** 月遅れ/返戻の再請求行か */
+  /** 月遅れ/返戻/過誤の再請求行か */
   isReSeikyu: boolean;
-  /** 再請求理由 (月遅れ/返戻)。当月通常行は null */
-  reasons: { tsukiokure: boolean; henrei: boolean } | null;
+  /** 再請求理由 (月遅れ/返戻/過誤)。当月通常行は null */
+  reasons: ReSeikyuReasons | null;
+  /** 過誤申立の付帯情報 (過誤の再請求行のみ)。当月通常行は statusByClient から引く */
+  kagoInfo: KagoInfo | null;
 }
 
 // kaigo_visit_month_addons の 1 行 (利用者 × 月 × 事業所 の実績単位加算フラグ)
@@ -173,6 +192,7 @@ export function KaigoSeikyuContent() {
       origMonthKey: monthKey,
       isReSeikyu: false,
       reasons: null,
+      kagoInfo: null,
     }));
     const re: DisplayRow[] = reRows.filter(kanaMatches).map((r) => ({
       key: `re:${r.user_id}:${r.__origMonthKey}:${r.segmentIndex ?? 0}`,
@@ -180,6 +200,7 @@ export function KaigoSeikyuContent() {
       origMonthKey: r.__origMonthKey,
       isReSeikyu: true,
       reasons: r.__reasons,
+      kagoInfo: r.__kago,
     }));
     // 再請求 (過去分) を上、当月を下に並べる
     return [...re, ...cur];
@@ -231,17 +252,33 @@ export function KaigoSeikyuContent() {
     loadReRows();
   }, [loading, loadReRows]);
 
+  // 過誤申立の付帯列 (kago_*) が未適用 (migrations/kago_saiseikyu.sql 未実行) か
+  const [kagoColsMissing, setKagoColsMissing] = useState(false);
+
   // ── kaigo_billing_status を (office_id, target_month) で読み、client_id で突合 ──
   const loadStatus = useCallback(async () => {
     if (!officeId) {
       setStatusByClient(new Map());
       return;
     }
-    const { data, error: e } = await supabase
+    const BASE = "client_id, issued_at, kokuho_target, tsukiokure, henrei, kago, notes";
+    const EXT = `${BASE}, kago_moushitate_date, kago_jiyu_code, kago_dougetsu`;
+    let { data, error: e } = await supabase
       .from(billingStatusTable)
-      .select("client_id, issued_at, kokuho_target, tsukiokure, henrei, kago, notes")
+      .select(EXT)
       .eq("office_id", officeId)
       .eq("target_month", monthKey);
+    if (e && e.code === "42703") {
+      // kago_* 列が未適用 → 基本列のみで再取得 (過誤ブロックは SQL未適用 表示)
+      setKagoColsMissing(true);
+      ({ data, error: e } = await supabase
+        .from(billingStatusTable)
+        .select(BASE)
+        .eq("office_id", officeId)
+        .eq("target_month", monthKey));
+    } else if (!e) {
+      setKagoColsMissing(false);
+    }
     if (e) {
       // table 未作成 (migration 未適用) 時は状態なしとして続行
       if (!isTableMissingError(e.code)) toast.error("請求状態の取得に失敗: " + e.message);
@@ -249,7 +286,7 @@ export function KaigoSeikyuContent() {
       return;
     }
     setStatusByClient(
-      new Map(((data ?? []) as BillingStatusRow[]).map((r) => [r.client_id, r])),
+      new Map(((data ?? []) as unknown as BillingStatusRow[]).map((r) => [r.client_id, r])),
     );
   }, [supabase, monthKey, officeId, billingStatusTable]);
 
@@ -404,6 +441,85 @@ export function KaigoSeikyuContent() {
       toast.error("フラグの保存に失敗: " + e.message);
       return;
     }
+    loadStatus();
+  };
+
+  // ── 過誤申立の登録 (右ペインの過誤ブロック) ──
+  //    kago=true + 申立日/事由コード/同月過誤 を保存し、kokuho_target=false に落とす
+  //    (= 取下げ。re-seikyu の「再請求未実施」判定に乗り、翌月以降の請求に合流する)
+  const saveKago = async (clientId: string, f: KagoSaveFields) => {
+    if (!officeId) {
+      toast.error("事業所が未選択のため過誤申立を保存できません");
+      return;
+    }
+    const cur = statusByClient.get(clientId);
+    const payload: Record<string, unknown> = {
+      client_id: clientId,
+      target_month: monthKey,
+      tenant_id: currentOffice?.tenant_id ?? "kt-group",
+      office_id: officeId,
+      kago: true,
+      kago_moushitate_date: f.moushitateDate,
+      kago_jiyu_code: f.jiyuCode,
+      kago_dougetsu: f.dougetsu,
+      // 取下げ = 国保対象から外す (再請求の伝送で再度 true になる)
+      kokuho_target: false,
+      // 他フラグは既存値を保持
+      tsukiokure: cur?.tsukiokure ?? false,
+      henrei: cur?.henrei ?? false,
+    };
+    const { error: e } = await supabase
+      .from(billingStatusTable)
+      .upsert(payload, { onConflict: "client_id,target_month,office_id" });
+    if (e) {
+      // 列未適用 (insert/update=PGRST204 / 直 SQL=42703)
+      if (e.code === "PGRST204" || e.code === "42703") {
+        toast.error(
+          "過誤申立の列が未適用です。migrations/kago_saiseikyu.sql を Supabase SQL Editor で適用してください",
+        );
+      } else {
+        toast.error("過誤申立の保存に失敗: " + e.message);
+      }
+      return;
+    }
+    toast.success(
+      "過誤申立を登録しました (国保対象から外れ、翌月以降の請求画面に再請求候補として合流します)",
+    );
+    loadStatus();
+  };
+
+  // ── 過誤申立の解除 (kago フラグ + 付帯情報をクリア。kokuho_target は触らない) ──
+  const clearKago = async (clientId: string) => {
+    if (!officeId) {
+      toast.error("事業所が未選択のため過誤申立を解除できません");
+      return;
+    }
+    const cur = statusByClient.get(clientId);
+    const payload: Record<string, unknown> = {
+      client_id: clientId,
+      target_month: monthKey,
+      tenant_id: currentOffice?.tenant_id ?? "kt-group",
+      office_id: officeId,
+      kago: false,
+      tsukiokure: cur?.tsukiokure ?? false,
+      henrei: cur?.henrei ?? false,
+    };
+    // 付帯列は適用済みの環境でのみクリア (未適用だと PGRST204 になるため)
+    if (!kagoColsMissing) {
+      payload.kago_moushitate_date = null;
+      payload.kago_jiyu_code = null;
+      payload.kago_dougetsu = false;
+    }
+    const { error: e } = await supabase
+      .from(billingStatusTable)
+      .upsert(payload, { onConflict: "client_id,target_month,office_id" });
+    if (e) {
+      toast.error("過誤申立の解除に失敗: " + e.message);
+      return;
+    }
+    toast.success(
+      "過誤申立を解除しました (国保対象は自動では戻しません。必要ならツールバーの「国保対象」で再度対象化してください)",
+    );
     loadStatus();
   };
 
@@ -575,7 +691,7 @@ export function KaigoSeikyuContent() {
         kokuho_target: cur?.kokuho_target ?? false,
         tsukiokure: d.reasons?.tsukiokure ?? cur?.tsukiokure ?? false,
         henrei: d.reasons?.henrei ?? cur?.henrei ?? false,
-        kago: cur?.kago ?? false,
+        kago: d.reasons?.kago ?? cur?.kago ?? false,
         notes: cur?.notes ?? null,
       });
     }
@@ -650,7 +766,7 @@ export function KaigoSeikyuContent() {
           kokuho_target: true,
           tsukiokure: d.reasons?.tsukiokure ?? cur?.tsukiokure ?? false,
           henrei: d.reasons?.henrei ?? cur?.henrei ?? false,
-          kago: cur?.kago ?? false,
+          kago: d.reasons?.kago ?? cur?.kago ?? false,
           notes,
         });
       } else {
@@ -717,9 +833,15 @@ export function KaigoSeikyuContent() {
       const rowYm = d.isReSeikyu ? d.origMonthKey.replace("-", "") : ym;
       const st = d.isReSeikyu ? undefined : statusByClient.get(r.user_id);
       const baseState = d.isReSeikyu
-        ? d.reasons?.henrei
-          ? "返戻(再請求)"
-          : "月遅れ(再請求)"
+        ? `${
+            [
+              d.reasons?.henrei && "返戻",
+              d.reasons?.kago && "過誤",
+              d.reasons?.tsukiokure && "月遅れ",
+            ]
+              .filter(Boolean)
+              .join("/") || "月遅れ"
+          }(再請求)`
         : st?.kokuho_target
         ? "国保対象"
         : st?.issued_at
@@ -754,6 +876,44 @@ export function KaigoSeikyuContent() {
     a.download = `kaigo_seikyu_${ym}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
+  };
+
+  // ── 過誤申立CSV: 過誤申立中 (kago=true × 国保未対象 = 取下げ済・再請求未実施) の
+  //    一覧を保険者提出の下書き用に出力する (様式そのものは保険者ごとなので一覧まで) ──
+  const exportKagoCsv = async () => {
+    if (!officeId) {
+      toast.error("事業所が未選択のため出力できません");
+      return;
+    }
+    try {
+      const { rows: kagoRows, colsMissing } = await loadKagoMoushitateRows(supabase, {
+        officeId,
+        table: billingStatusTable,
+      });
+      if (kagoRows.length === 0) {
+        toast.info(
+          "過誤申立中の行がありません (右ペインの過誤申立ブロックで登録した行が対象です)",
+        );
+        return;
+      }
+      if (colsMissing) {
+        toast.warning(
+          "migrations/kago_saiseikyu.sql が未適用のため、申立日・事由コードは空欄で出力します",
+        );
+      }
+      const csv = buildKagoMoushitateCsv(kagoRows);
+      // Excel 互換のため BOM 付き UTF-8
+      const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `kago_moushitate_${monthKey.replace("-", "")}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      toast.error(
+        "過誤申立CSVの出力に失敗: " + (e instanceof Error ? e.message : String(e)),
+      );
+    }
   };
 
   const allChecked = checked.size === displayRows.length && displayRows.length > 0;
@@ -821,6 +981,14 @@ export function KaigoSeikyuContent() {
             )}
             <div className="ml-auto flex items-center gap-2">
               <button
+                onClick={exportKagoCsv}
+                disabled={!officeId}
+                title="過誤申立中 (取下げ済・再請求未実施) の一覧を保険者提出の下書き用に CSV 出力します (申立様式は保険者ごとのため一覧まで)"
+                className="border border-red-400 rounded bg-white px-2.5 py-1 text-red-700 hover:bg-red-50 flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Download size={13} />過誤申立CSV
+              </button>
+              <button
                 onClick={exportCsv}
                 disabled={displayRows.length === 0}
                 title="明細一覧を Excel 閲覧用 CSV で出力"
@@ -877,16 +1045,28 @@ export function KaigoSeikyuContent() {
             );
           })()}
 
-          {/* 月遅れ/返戻の再請求 案内 */}
-          {!loading && reRows.length > 0 && (
-            <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
-              <AlertCircle size={14} className="mt-0.5 shrink-0" />
-              <span>
-                過去月の月遅れ・返戻 {reRows.length} 件を当月請求に合流しています
-                (元提供月で明細書・伝送に反映)。国保対象化すると一覧から外れます。
-              </span>
-            </div>
-          )}
+          {/* 月遅れ/返戻/過誤の再請求 案内 */}
+          {!loading && reRows.length > 0 && (() => {
+            const kagoCount = reRows.filter((r) => r.__reasons.kago).length;
+            return (
+              <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                <span>
+                  過去月の月遅れ・返戻・過誤 {reRows.length} 件を当月請求に合流しています
+                  (元提供月で明細書・伝送に反映)。国保対象化すると一覧から外れます。
+                  {kagoCount > 0 && (
+                    <>
+                      {" "}
+                      うち過誤 {kagoCount} 件は
+                      <strong>支払済レセプトの取下げ後の再請求</strong>です —
+                      返戻と異なり、通常過誤は保険者の過誤決定 (支払控除)
+                      を確認してから国保対象化してください (同月過誤は申立と同月に再請求)。
+                    </>
+                  )}
+                </span>
+              </div>
+            );
+          })()}
 
           {/* 認定申請中の利用者 案内 (該当者がいるときのみ) */}
           {!loading && shinseichuCount > 0 && (
@@ -1074,11 +1254,24 @@ export function KaigoSeikyuContent() {
                         )}
                       </div>
                       <div className="px-0.5 py-0.5 border-l border-gray-200 text-center" onClick={(e) => e.stopPropagation()}>
-                        {!d.isReSeikyu && (
+                        {d.isReSeikyu ? (
+                          d.reasons?.kago && (
+                            <span
+                              className="text-red-600"
+                              title={
+                                d.kagoInfo?.dougetsu
+                                  ? "同月過誤 (申立と同月に再請求)"
+                                  : "通常過誤 (過誤決定の翌月以降に再請求)"
+                              }
+                            >
+                              過誤
+                            </span>
+                          )
+                        ) : (
                           <select
                             value={st?.kago ? "過誤" : ""}
                             onChange={(e) => setFlag(r.user_id, "kago", e.target.value === "過誤")}
-                            title="過誤"
+                            title="過誤 (申立日・事由コードの登録と取下げは行選択 → 右ペインの過誤申立ブロックで)"
                             className={`w-full text-[11px] leading-4 border border-gray-300 px-0 py-0 bg-white ${st?.kago ? "text-red-600" : "text-gray-500"}`}
                           >
                             <option value=""></option>
@@ -1236,6 +1429,36 @@ export function KaigoSeikyuContent() {
                       </span>
                     </div>
                   </div>
+                );
+              })()}
+
+              {/* ── 過誤申立 (支払済レセプトの取下げ → 再請求) ── */}
+              {selectedDisplay && (() => {
+                const d = selectedDisplay;
+                const st = d.isReSeikyu ? undefined : statusByClient.get(d.row.user_id);
+                const kagoFlag = d.isReSeikyu ? !!d.reasons?.kago : !!st?.kago;
+                const info: KagoInfo | null = d.isReSeikyu
+                  ? d.kagoInfo
+                  : st
+                    ? {
+                        moushitateDate: st.kago_moushitate_date ?? null,
+                        jiyuCode: st.kago_jiyu_code ?? null,
+                        dougetsu: !!st.kago_dougetsu,
+                      }
+                    : null;
+                return (
+                  <KagoBlock
+                    // 保存/月移動で状態が変わったらフォームを初期化し直す
+                    key={`kago:${d.key}:${kagoFlag}:${info?.moushitateDate ?? ""}:${info?.jiyuCode ?? ""}:${info?.dougetsu ? 1 : 0}`}
+                    targetMonth={d.origMonthKey}
+                    kago={kagoFlag}
+                    kagoInfo={info}
+                    kokuhoTarget={!!st?.kokuho_target}
+                    colsMissing={kagoColsMissing}
+                    readOnly={d.isReSeikyu}
+                    onSave={(f) => saveKago(d.row.user_id, f)}
+                    onClear={() => clearKago(d.row.user_id)}
+                  />
                 );
               })()}
 

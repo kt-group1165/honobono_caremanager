@@ -2,11 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Check, ChevronRight, FileText, Loader2 } from "lucide-react";
+import { Bell, CalendarClock, Check, ChevronRight, FileText, Loader2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
+import {
+  isCertAlertNotification,
+  resolveCertClientId,
+} from "@/lib/cert-expiry-alert";
 import {
   getNotifications,
   markRead,
@@ -24,6 +29,10 @@ function formatDate(iso: string | null): string {
 
 function isDocumentRow(n: NotificationRow): boolean {
   return n.type === "document_received" && n.ref_table === "shared_documents" && !!n.ref_id;
+}
+
+function isCertRow(n: NotificationRow): boolean {
+  return isCertAlertNotification(n);
 }
 
 export default function NotificationsPage() {
@@ -73,10 +82,28 @@ export default function NotificationsPage() {
     setMarking(null);
   };
 
-  const handleClickRow = (row: NotificationRow) => {
+  const handleClickRow = async (row: NotificationRow) => {
+    const officeQs = currentOfficeId ? `?office=${encodeURIComponent(currentOfficeId)}` : "";
     if (isDocumentRow(row)) {
-      const officeQs = currentOfficeId ? `?office=${encodeURIComponent(currentOfficeId)}` : "";
       router.push(`/notifications/document/${row.ref_id}${officeQs}`);
+      return;
+    }
+    if (isCertRow(row)) {
+      // 認定更新アラート → 利用者の介護認定タブへ (ref_id = client_insurance_records.id)
+      const clientId = await resolveCertClientId(createClient(), row.ref_id!);
+      if (!clientId) {
+        console.error("認定更新通知の参照先が見つかりません:", row.ref_id);
+        return;
+      }
+      if (!row.read_at) {
+        await markRead(row.id);
+        setRows((prev) =>
+          prev.map((r) =>
+            r.id === row.id ? { ...r, read_at: new Date().toISOString() } : r,
+          ),
+        );
+      }
+      router.push(`/users/${clientId}/care-cert${officeQs}`);
     }
   };
 
@@ -178,7 +205,8 @@ function Row({
   onMarkRead?: () => void;
 }) {
   const isDoc = isDocumentRow(row);
-  const clickable = isDoc;
+  const isCert = isCertRow(row);
+  const clickable = isDoc || isCert;
   return (
     <li
       className={cn(
@@ -195,8 +223,8 @@ function Row({
         }
       }}
     >
-      <div className="mt-0.5 text-gray-400">
-        {isDoc ? <FileText size={18} /> : <Bell size={18} />}
+      <div className={cn("mt-0.5", isCert ? "text-amber-500" : "text-gray-400")}>
+        {isDoc ? <FileText size={18} /> : isCert ? <CalendarClock size={18} /> : <Bell size={18} />}
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-gray-900 truncate">{row.title}</div>
@@ -210,7 +238,7 @@ function Row({
           )}
         </div>
       </div>
-      {isDoc && (
+      {(isDoc || isCert) && (
         <button
           type="button"
           className="flex shrink-0 items-center gap-1 rounded-md border border-blue-300 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
@@ -219,7 +247,7 @@ function Row({
             onClick();
           }}
         >
-          内容を見る
+          {isDoc ? "内容を見る" : "利用者を開く"}
           <ChevronRight size={12} />
         </button>
       )}

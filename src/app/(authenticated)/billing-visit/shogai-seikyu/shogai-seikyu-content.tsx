@@ -37,6 +37,7 @@ import {
   buildShogaiSeikyuCsv,
   type ShogaiSeikyuRow,
 } from "@/lib/shogai-seikyu/aggregate";
+import { validInMonth } from "@/lib/service-code-valid";
 import {
   buildShogaiDensou,
   type ShogaiDensouUser,
@@ -439,11 +440,20 @@ export function ShogaiSeikyuContent() {
   };
 
   // ─── 月内の確定実績を取得 (実績記録票 印刷 / 伝送 J611 で共用) ──────────────
+  // 集計 (aggregate) と同じく shogai_service_records (confirmed) と
+  // kaigo_visit_schedule (completed, 障害サービス名) の union。
+  // 同一 client×code×date はスケジュール優先で重複排除 (二重計上防止)。
   const loadMonthVisits = useCallback(async (): Promise<
     Map<string, ShogaiDensouVisit[]>
   > => {
     const daysInMonth = new Date(year, month, 0).getDate();
-    const visitsByClient = new Map<string, ShogaiDensouVisit[]>();
+    const from = `${monthStr}-01`;
+    const to = `${monthStr}-${String(daysInMonth).padStart(2, "0")}`;
+    interface RawVisit {
+      client: string;
+      visit: ShogaiDensouVisit;
+    }
+    const recRows: RawVisit[] = [];
     const PAGE = 1000;
     let offset = 0;
     while (true) {
@@ -453,8 +463,8 @@ export function ShogaiSeikyuContent() {
           "client_id, service_date, start_time, end_time, duration_minutes, service_category, service_code",
         )
         .eq("status", "confirmed")
-        .gte("service_date", `${monthStr}-01`)
-        .lte("service_date", `${monthStr}-${String(daysInMonth).padStart(2, "0")}`);
+        .gte("service_date", from)
+        .lte("service_date", to);
       // 自事業所スコープ (office_id 未設定の旧データは含める) — aggregate と同条件
       if (currentOffice) {
         q = q.or(`office_id.eq.${currentOffice.id},office_id.is.null`);
@@ -473,18 +483,181 @@ export function ShogaiSeikyuContent() {
         service_code: string | null;
       }[];
       for (const rec of recs) {
-        if (!visitsByClient.has(rec.client_id)) visitsByClient.set(rec.client_id, []);
-        visitsByClient.get(rec.client_id)!.push({
-          date: rec.service_date,
-          startTime: rec.start_time,
-          endTime: rec.end_time,
-          durationMinutes: rec.duration_minutes,
-          category: rec.service_category,
-          serviceCode: rec.service_code,
+        recRows.push({
+          client: rec.client_id,
+          visit: {
+            date: rec.service_date,
+            startTime: rec.start_time,
+            endTime: rec.end_time,
+            durationMinutes: rec.duration_minutes,
+            category: rec.service_category,
+            serviceCode: rec.service_code,
+            serviceName: null, // 後段で 12xxxx (重訪) のみマスタから逆引き
+          },
         });
       }
       if (recs.length < PAGE) break;
       offset += PAGE;
+    }
+
+    // ── シフト/提供表 (kaigo_visit_schedule の completed) の障害実績を統合 ──
+    // service_type (サービス名) が障害マスタ (system='障害', validInMonth) に解決できる
+    // 行のみ障害実績とみなす (介護/総合は解決に失敗して自然に除外) — aggregate と同ロジック
+    const schedRaw: RawVisit[] = [];
+    {
+      interface SchedRow {
+        user_id: string;
+        service_type: string | null;
+        visit_date: string;
+        start_time: string | null;
+        end_time: string | null;
+      }
+      const schedRows: SchedRow[] = [];
+      let soff = 0;
+      let schedOk = true;
+      while (true) {
+        let sq = supabase
+          .from("kaigo_visit_schedule")
+          .select("user_id, service_type, visit_date, start_time, end_time")
+          .eq("status", "completed")
+          .gte("visit_date", from)
+          .lte("visit_date", to);
+        if (currentOffice) {
+          sq = sq.or(`office_id.eq.${currentOffice.id},office_id.is.null`);
+        }
+        const { data, error } = await sq.order("id").range(soff, soff + PAGE - 1);
+        if (error) {
+          // office_id 列未適用(42703) 等は schedule 連携をスキップ (握らず warn)
+          console.warn(
+            "[shogai] シフト実績の取得に失敗 (実績記録票への連携スキップ):",
+            error.message,
+          );
+          schedOk = false;
+          break;
+        }
+        const rows = (data ?? []) as SchedRow[];
+        schedRows.push(...rows);
+        if (rows.length < PAGE) break;
+        soff += PAGE;
+      }
+      if (schedOk && schedRows.length > 0) {
+        const names = Array.from(
+          new Set(
+            schedRows.map((s) => (s.service_type ?? "").trim()).filter(Boolean),
+          ),
+        );
+        const nameMap = new Map<string, { code: string; category: string | null }>();
+        for (let i = 0; i < names.length; i += 50) {
+          const chunk = names.slice(i, i + 50);
+          const { data, error } = await validInMonth(
+            supabase
+              .from("kaigo_service_codes")
+              .select("service_code, service_name, service_category")
+              .eq("system", "障害")
+              .in("service_name", chunk),
+            year,
+            month,
+          );
+          if (error) {
+            console.warn("[shogai] 障害コード解決に失敗 (一部スキップ):", error.message);
+            continue;
+          }
+          for (const c of (data ?? []) as {
+            service_code: string;
+            service_name: string;
+            service_category: string | null;
+          }[]) {
+            const k = c.service_name.trim();
+            if (!nameMap.has(k)) {
+              nameMap.set(k, { code: c.service_code, category: c.service_category });
+            }
+          }
+        }
+        // "HH:MM(:SS)" 2 つから分数を計算 (0 時またぎは +24h 扱い)
+        const diffMinutes = (s: string | null, e: string | null): number | null => {
+          if (!s || !e) return null;
+          const toMin = (t: string) =>
+            Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+          let d = toMin(e) - toMin(s);
+          if (d < 0) d += 24 * 60;
+          return d;
+        };
+        for (const s of schedRows) {
+          const name = (s.service_type ?? "").trim();
+          const m = nameMap.get(name);
+          if (!m) continue; // 障害コードに解決できない = 介護/総合 → スキップ
+          schedRaw.push({
+            client: s.user_id,
+            visit: {
+              date: s.visit_date,
+              startTime: s.start_time,
+              endTime: s.end_time,
+              durationMinutes: diffMinutes(s.start_time, s.end_time),
+              category: m.category,
+              serviceCode: m.code,
+              serviceName: name,
+            },
+          });
+        }
+      }
+    }
+
+    // ── 重複排除: 同一 client×code×date はスケジュール優先 (aggregate と同条件) ──
+    const keyOf = (r: RawVisit) =>
+      `${r.client}__${r.visit.serviceCode ?? ""}__${r.visit.date}`;
+    const schedKeys = new Set(schedRaw.map(keyOf));
+    const merged = [
+      ...recRows.filter((r) => !schedKeys.has(keyOf(r))),
+      ...schedRaw,
+    ];
+
+    // ── shogai_service_records 由来の重訪 (12xxxx) にサービス名を逆引き付与 ──
+    // (「・２人」「・同行ｎ」の派遣人数/同行支援判定は名前でしかできないため)
+    const juhoCodes = Array.from(
+      new Set(
+        merged
+          .filter(
+            (r) =>
+              r.visit.serviceName == null &&
+              (r.visit.serviceCode ?? "").startsWith("12"),
+          )
+          .map((r) => r.visit.serviceCode!),
+      ),
+    );
+    if (juhoCodes.length > 0) {
+      const codeNameMap = new Map<string, string>();
+      for (let i = 0; i < juhoCodes.length; i += 50) {
+        const chunk = juhoCodes.slice(i, i + 50);
+        const { data, error } = await validInMonth(
+          supabase
+            .from("kaigo_service_codes")
+            .select("service_code, service_name")
+            .eq("system", "障害")
+            .in("service_code", chunk),
+          year,
+          month,
+        );
+        if (error) {
+          console.warn("[shogai] 重訪コード名の逆引きに失敗 (一部スキップ):", error.message);
+          continue;
+        }
+        for (const c of (data ?? []) as { service_code: string; service_name: string }[]) {
+          if (!codeNameMap.has(c.service_code)) {
+            codeNameMap.set(c.service_code, c.service_name);
+          }
+        }
+      }
+      for (const r of merged) {
+        if (r.visit.serviceName == null && r.visit.serviceCode) {
+          r.visit.serviceName = codeNameMap.get(r.visit.serviceCode) ?? null;
+        }
+      }
+    }
+
+    const visitsByClient = new Map<string, ShogaiDensouVisit[]>();
+    for (const r of merged) {
+      if (!visitsByClient.has(r.client)) visitsByClient.set(r.client, []);
+      visitsByClient.get(r.client)!.push(r.visit);
     }
     return visitsByClient;
   }, [supabase, currentOffice, year, month, monthStr]);
@@ -1090,14 +1263,17 @@ export function ShogaiSeikyuContent() {
       </div>
     )}
 
-    {/* ===== 印刷 view: サービス提供実績記録票 (様式1 居宅介護) — 利用者 1 名 = 1 枚 ===== */}
+    {/* ===== 印刷 view: サービス提供実績記録票 (様式1 居宅介護) — 利用者 1 名 = 1 枚 =====
+        重度訪問介護 (12xxxx) は様式3-1 のため様式1 印刷から除外 (印刷様式は未実装。伝送 J611 は 0301 対応済) */}
     {printMode === "jisseki" && (
       <div className="hidden print:block">
         {targets.map((r) => (
           <ShogaiJissekiKirokuhyoPrintSheet
             key={r.user_id}
             row={r}
-            visits={jissekiVisits.get(r.user_id) ?? []}
+            visits={(jissekiVisits.get(r.user_id) ?? []).filter(
+              (v) => !(v.serviceCode ?? "").startsWith("12"),
+            )}
             officeName={currentOffice?.name ?? null}
             officeNumber={officeNumber}
             reiwa={year - 2018}

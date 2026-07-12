@@ -9,7 +9,7 @@
  *  出力: 国保連伝送ファイル (7111 + 7131 / Shift_JIS) + 確認用CSV
  *
  * kaigo_billing_status 連携 (居宅版 billing/seikyu/_kokuho-seikyu.tsx と同方針):
- *   - 当月分のうち 月遅れ/返戻 フラグの行は伝送対象から除外 (後月に再請求)
+ *   - 当月分のうち 月遅れ/返戻/過誤 フラグの行は伝送対象から除外 (過誤=取下げ済。後月に再請求)
  *   - 過去月の月遅れ/返戻 (未・国保対象) は再請求行として合流し、
  *     元提供月ごとに別ファイル (提供年月 = 元提供月) として出力する。
  *     コントロールレコードの処理対象年月 (審査月) は同じ提出バッチ
@@ -40,6 +40,7 @@ import { buildKokuhoDensou, type DensouRow } from "@/lib/kokuho-densou/build";
 import { buildSougouDensou } from "@/lib/kokuho-densou/build-sougou";
 import {
   loadReSeikyuRows,
+  type ReSeikyuReasons,
   type ReSeikyuRow,
 } from "@/lib/visit-seikyu/re-seikyu";
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
@@ -55,6 +56,7 @@ interface BillingStatusRow {
   client_id: string;
   tsukiokure: boolean;
   henrei: boolean;
+  kago: boolean;
 }
 
 // 一覧の 1 行 (当月通常行 or 過去月の再請求行)
@@ -63,7 +65,7 @@ interface DisplayRow {
   row: UserSeikyuRow;
   origMonthKey: string; // 'YYYY-MM'
   isReSeikyu: boolean;
-  reasons: { tsukiokure: boolean; henrei: boolean } | null;
+  reasons: ReSeikyuReasons | null; // 月遅れ/返戻/過誤
 }
 
 // テーブル未作成 (直 SQL=42P01 / PostgREST schema cache=PGRST205) 判定
@@ -94,7 +96,7 @@ export function KokuhoSeikyuContent() {
 
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
 
-  // ── kaigo_billing_status (当月) — 月遅れ/返戻の除外判定用 (事業所単位) ──
+  // ── kaigo_billing_status (当月) — 月遅れ/返戻/過誤の除外判定用 (事業所単位) ──
   const loadStatus = useCallback(async () => {
     if (!officeId) {
       setStatusByClient(new Map());
@@ -102,7 +104,7 @@ export function KokuhoSeikyuContent() {
     }
     const { data, error: e } = await supabase
       .from(billingStatusTable)
-      .select("client_id, tsukiokure, henrei")
+      .select("client_id, tsukiokure, henrei, kago")
       .eq("office_id", officeId)
       .eq("target_month", monthKey);
     if (e) {
@@ -163,8 +165,8 @@ export function KokuhoSeikyuContent() {
     const cur: DisplayRow[] = filteredRows
       .filter((r) => {
         const st = statusByClient.get(r.user_id);
-        // 月遅れ/返戻フラグの当月行は今回の伝送から除外 (後月に再請求)
-        return !(st?.tsukiokure || st?.henrei);
+        // 月遅れ/返戻/過誤フラグの当月行は今回の伝送から除外 (過誤=取下げ済。後月に再請求)
+        return !(st?.tsukiokure || st?.henrei || st?.kago);
       })
       .map((r) => ({
         key: `cur:${r.user_id}:${r.segmentIndex ?? 0}`,
@@ -320,9 +322,15 @@ export function KokuhoSeikyuContent() {
       const r = d.row;
       const rowYm = d.origMonthKey.replace("-", "");
       const baseState = d.isReSeikyu
-        ? d.reasons?.henrei
-          ? "返戻(再請求)"
-          : "月遅れ(再請求)"
+        ? `${
+            [
+              d.reasons?.henrei && "返戻",
+              d.reasons?.kago && "過誤",
+              d.reasons?.tsukiokure && "月遅れ",
+            ]
+              .filter(Boolean)
+              .join("/") || "月遅れ"
+          }(再請求)`
         : "当月";
       // 保険者変更 (転居) の分割行は状態に分割番号を付記 (Phase 2)
       const state =
@@ -443,10 +451,19 @@ export function KokuhoSeikyuContent() {
             <AlertCircle size={14} className="mt-0.5 shrink-0" />
             <span>
               {excludedCount > 0 && (
-                <>当月分のうち月遅れ・返戻フラグの {excludedCount} 件は伝送対象から除外しています (後月に再請求)。</>
+                <>当月分のうち月遅れ・返戻・過誤フラグの {excludedCount} 件は伝送対象から除外しています (後月に再請求)。</>
               )}
               {reRows.length > 0 && (
-                <>過去月の再請求 {reRows.length} 件を合流しています (元提供月のファイルとして出力)。</>
+                <>
+                  過去月の再請求 {reRows.length} 件を合流しています (元提供月のファイルとして出力)。
+                  {reRows.some((r) => r.__reasons.kago) && (
+                    <>
+                      {" "}
+                      過誤分は取下げ後の再請求です — 通常過誤は保険者の過誤決定 (支払控除)
+                      を確認してから伝送してください (同月過誤は申立と同月に伝送)。
+                    </>
+                  )}
+                </>
               )}
             </span>
           </div>
@@ -557,7 +574,13 @@ export function KokuhoSeikyuContent() {
                     <div className="px-2 py-2 border-l border-gray-100 text-center">
                       {d.isReSeikyu ? (
                         <span className="text-red-600">
-                          {d.reasons?.henrei ? "返戻" : "月遅"}
+                          {[
+                            d.reasons?.henrei && "返戻",
+                            d.reasons?.kago && "過誤",
+                            d.reasons?.tsukiokure && "月遅",
+                          ]
+                            .filter(Boolean)
+                            .join("/") || "月遅"}
                         </span>
                       ) : (
                         <span className="text-gray-500">当月</span>

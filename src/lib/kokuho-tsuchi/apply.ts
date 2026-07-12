@@ -6,7 +6,7 @@
  *   - 取込ファイル/明細行の raw 保存 (kokuho_shinsa_notice_files / _rows)
  *   - 返戻 (7411) → kaigo_billing_status.henrei 自動セット
  *   - 支払決定額通知 (7511/7513) → kokuho_nyukin_records.kettei_amount 取込
- *   - 「返戻あり × 再請求未実施」の突合リスト
+ *   - 「返戻・過誤あり × 再請求未実施」の突合リスト
  *
  * ⚠ 実ファイル未検証: パーサ (parse.ts) と同様、仕様書由来の実装。
  *   初回の実ファイル取込ではプレビューで突合結果・金額を必ず目視確認すること。
@@ -458,7 +458,7 @@ export async function markRowsApplied(
   if (error) throw new Error("反映済みマークの更新に失敗: " + error.message);
 }
 
-/* ══════════════════════ 返戻 × 再請求未実施 の突合リスト ══════════════════════ */
+/* ══════════════════ 返戻・過誤 × 再請求未実施 の突合リスト ══════════════════ */
 
 export interface MissedReSeikyuRow {
   clientId: string;
@@ -466,13 +466,16 @@ export interface MissedReSeikyuRow {
   targetMonth: string;
   notes: string | null;
   tsukiokure: boolean;
+  henrei: boolean;
   kago: boolean;
 }
 
 /**
- * 「返戻フラグあり × 再請求未実施」の一覧。
+ * 「返戻または過誤フラグあり × 再請求未実施」の一覧。
  * 再請求の実施済み判定は re-seikyu.ts と同じ: kokuho_target=false のうちは未実施
  * (再請求を伝送し国保対象化すると kokuho_target=true になる)。
+ * 過誤は請求画面の「過誤申立」ブロックで申立を登録 (= 取下げ = kokuho_target 解除)
+ * した時点からこの一覧に乗る (グリッドの過誤フラグだけでは国保対象のまま = 対象外)。
  */
 export async function loadMissedReSeikyu(
   supabase: SupabaseClient,
@@ -483,6 +486,7 @@ export async function loadMissedReSeikyu(
     target_month: string;
     notes: string | null;
     tsukiokure: boolean;
+    henrei: boolean;
     kago: boolean;
   }[] = [];
   // PostgREST 1000 行 limit 対応の page-loop
@@ -490,15 +494,15 @@ export async function loadMissedReSeikyu(
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
       .from("kaigo_billing_status")
-      .select("client_id, target_month, notes, tsukiokure, kago")
+      .select("client_id, target_month, notes, tsukiokure, henrei, kago")
       .eq("office_id", officeId)
-      .eq("henrei", true)
+      .or("henrei.eq.true,kago.eq.true")
       .eq("kokuho_target", false)
       .order("target_month", { ascending: false })
       .range(from, from + PAGE - 1);
     if (error) {
       if (isMissingTable(error.code)) return [];
-      throw new Error("返戻状態の取得に失敗: " + error.message);
+      throw new Error("返戻・過誤状態の取得に失敗: " + error.message);
     }
     rows.push(...((data ?? []) as typeof rows));
     if (!data || data.length < PAGE) break;
@@ -518,6 +522,7 @@ export async function loadMissedReSeikyu(
     targetMonth: r.target_month,
     notes: r.notes,
     tsukiokure: r.tsukiokure,
+    henrei: r.henrei,
     kago: r.kago,
   }));
 }
