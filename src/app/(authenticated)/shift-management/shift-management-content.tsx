@@ -55,6 +55,7 @@ import {
   additionalRowsFromSchedule,
   type AdditionalStaffRow,
 } from "./additional-staff-section";
+import { StaffSuggestChips } from "./staff-suggest-chips";
 import { getServiceSystemMap } from "@/lib/service-system-lookup";
 import { toHankakuDigits } from "@/lib/service-name-normalize";
 import {
@@ -1223,6 +1224,18 @@ export function ShiftManagementContent({
                     name: s.name,
                     furigana: (s as unknown as { furigana?: string | null }).furigana ?? null,
                   }))}
+                />
+                {/* 割当サジェスト (候補提示のみ)。この modal は月データを持たないため対象日 1 日分を自前 fetch */}
+                <StaffSuggestChips
+                  userId={pageEditModal.user_id}
+                  visitDate={pageEditModal.visit_date}
+                  startTime={pageEditForm.start_time}
+                  endTime={pageEditForm.end_time}
+                  staff={staff}
+                  currentStaffId={pageEditForm.staff_id}
+                  excludeScheduleId={pageEditModal.id}
+                  excludeStaffIds={pageEditAdditional.map((r) => r.staff_id).filter(Boolean)}
+                  onSelect={(id) => setPageEditForm((f) => ({ ...f, staff_id: id }))}
                 />
               </div>
 

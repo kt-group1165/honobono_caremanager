@@ -52,6 +52,7 @@ import {
   AdditionalStaffSection,
   type AdditionalStaffRow,
 } from "./additional-staff-section";
+import { StaffSuggestChips } from "./staff-suggest-chips";
 import {
   useKaigoVisitSchedulesByUser,
   useKaigoVisitSchedulesByStaff,
@@ -1404,6 +1405,17 @@ export function MonthlyIndividualView({
                     name: s.name,
                     furigana: (s as unknown as { furigana?: string | null }).furigana ?? null,
                   }))}
+                />
+                {/* 割当サジェスト (候補提示のみ)。この view は月データ (全利用者分) を持たないため対象日 1 日分を自前 fetch */}
+                <StaffSuggestChips
+                  userId={entityType === "user" ? entityId : null}
+                  visitDate={addForm.visit_date}
+                  startTime={addForm.start_time}
+                  endTime={addForm.end_time}
+                  staff={staff}
+                  currentStaffId={addForm.staff_id}
+                  excludeStaffIds={addAdditional.map((r) => r.staff_id).filter(Boolean)}
+                  onSelect={(id) => setAddForm((f) => ({ ...f, staff_id: id }))}
                 />
               </div>
 

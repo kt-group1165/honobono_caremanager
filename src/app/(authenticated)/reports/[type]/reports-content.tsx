@@ -35,6 +35,7 @@ import {
 } from "@/components/shared/ImportServiceRecordModal";
 import { Download as DownloadIcon, Inbox } from "lucide-react";
 import { fetchAssessmentContext, buildAiUserInfo } from "@/lib/ai/assessment-context";
+import { BunreiPicker, type BunreiCategory } from "@/components/bunrei/bunrei-picker";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -171,13 +172,22 @@ const TD = ({ children, className = "", colSpan, rowSpan, style }: {
 // Input helpers for edit mode
 // ---------------------------------------------------------------------------
 
-function FI({ label, value, onChange, textarea, rows = 3, className = "" }: {
+function FI({ label, value, onChange, textarea, rows = 3, className = "", bunrei }: {
   label: string; value: string; onChange: (v: string) => void;
   textarea?: boolean; rows?: number; className?: string;
+  /** 指定すると「文例」ボタン (文例データベースからの挿入) をラベル横に表示する */
+  bunrei?: BunreiCategory;
 }) {
   return (
     <div className={`flex flex-col gap-0.5 ${className}`}>
-      <label className="text-xs font-medium text-gray-500">{label}</label>
+      {bunrei ? (
+        <div className="flex items-center justify-between gap-1">
+          <label className="text-xs font-medium text-gray-500">{label}</label>
+          <BunreiPicker category={bunrei} currentText={value} onInsert={onChange} multiline={!!textarea} />
+        </div>
+      ) : (
+        <label className="text-xs font-medium text-gray-500">{label}</label>
+      )}
       {textarea ? (
         <textarea rows={rows} value={value} onChange={(e) => onChange(e.target.value)}
           className="rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
@@ -986,11 +996,11 @@ function EditFormCarePlan1({ content, onChange, userId }: {
       )}
 
       <FI label="利用者及び家族の生活に対する意向を踏まえた課題分析の結果" value={s("issue_analysis")}
-        onChange={(v) => set("issue_analysis", v)} textarea rows={4} className="col-span-2" />
+        onChange={(v) => set("issue_analysis", v)} textarea rows={4} className="col-span-2" bunrei="計画1-意向" />
       <FI label="介護認定審査会の意見及びサービスの種類の指定" value={s("review_opinion")}
         onChange={(v) => set("review_opinion", v)} textarea rows={3} className="col-span-2" />
       <FI label="総合的な援助の方針" value={s("overall_policy")}
-        onChange={(v) => set("overall_policy", v)} textarea rows={4} className="col-span-2" />
+        onChange={(v) => set("overall_policy", v)} textarea rows={4} className="col-span-2" bunrei="計画1-方針" />
       <FI label="生活援助中心型の算定理由" value={s("living_support_reason")}
         onChange={(v) => set("living_support_reason", v)} className="col-span-2" />
     </div>
@@ -1297,9 +1307,9 @@ function EditFormCarePlan2({ content, onChange, userId }: {
             <span className="text-sm font-bold text-blue-700">ニーズ {bi + 1}</span>
             {blocks.length > 1 && <button onClick={() => removeBlock(bi)} className="text-xs text-red-400 hover:text-red-600">削除</button>}
           </div>
-          <FI label="生活全般の解決すべき課題（ニーズ）" value={block.needs} onChange={(v) => updateBlock(bi, "needs", v)} textarea rows={2} />
+          <FI label="生活全般の解決すべき課題（ニーズ）" value={block.needs} onChange={(v) => updateBlock(bi, "needs", v)} textarea rows={2} bunrei="計画2-課題" />
           <div className="grid grid-cols-2 gap-2">
-            <FI label="長期目標" value={block.long_term_goal} onChange={(v) => updateBlock(bi, "long_term_goal", v)} textarea rows={2} />
+            <FI label="長期目標" value={block.long_term_goal} onChange={(v) => updateBlock(bi, "long_term_goal", v)} textarea rows={2} bunrei="計画2-長期目標" />
             <FI label="長期目標（期間）" value={block.long_term_period} onChange={(v) => updateBlock(bi, "long_term_period", v)} />
           </div>
 
@@ -1310,7 +1320,7 @@ function EditFormCarePlan2({ content, onChange, userId }: {
                 {block.goals.length > 1 && <button onClick={() => removeGoal(bi, gi)} className="text-xs text-red-400 hover:text-red-600">削除</button>}
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <FI label="短期目標" value={goal.short_term_goal} onChange={(v) => updateGoal(bi, gi, "short_term_goal", v)} textarea rows={2} />
+                <FI label="短期目標" value={goal.short_term_goal} onChange={(v) => updateGoal(bi, gi, "short_term_goal", v)} textarea rows={2} bunrei="計画2-短期目標" />
                 <FI label="短期目標（期間）" value={goal.short_term_period} onChange={(v) => updateGoal(bi, gi, "short_term_period", v)} />
               </div>
 
@@ -1322,7 +1332,7 @@ function EditFormCarePlan2({ content, onChange, userId }: {
                   {goal.services.length > 1 && <button onClick={() => removeSvc(bi, gi, si)} className="absolute right-1 top-0.5 text-gray-300 hover:text-red-400 z-10"><X size={10} /></button>}
                   {/* サービス内容 (広め) */}
                   <div className="flex-1 min-w-[180px]">
-                    <FI label="サービス内容" value={svc.content} onChange={(v) => updateSvc(bi, gi, si, "content", v)} />
+                    <FI label="サービス内容" value={svc.content} onChange={(v) => updateSvc(bi, gi, si, "content", v)} bunrei="計画2-サービス内容" />
                   </div>
                   {/* ※1 (極細) */}
                   <div className="flex flex-col gap-0.5 w-12 shrink-0">

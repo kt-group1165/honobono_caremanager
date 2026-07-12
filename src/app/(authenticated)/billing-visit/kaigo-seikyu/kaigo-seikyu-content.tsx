@@ -1657,6 +1657,8 @@ function SougouBlock({ rows }: { rows: UserSeikyuRow[] }) {
   const totalUnits = rows.reduce((s, r) => s + r.totalUnits, 0);
   const totalInsurance = rows.reduce((s, r) => s + r.insuranceAmount, 0);
   const totalUser = rows.reduce((s, r) => s + r.userAmount, 0);
+  // 限度額超過の全額自費 (aggregate-sougou.ts で保険請求から分離済。利用請求に加算)
+  const totalSelfPay = rows.reduce((s, r) => s + r.selfPayAmount, 0);
   return (
     <div className="border-t-2 border-emerald-300 shrink-0">
       <button
@@ -1702,6 +1704,14 @@ function SougouBlock({ rows }: { rows: UserSeikyuRow[] }) {
                       {r.addonLabel && r.addonUnits > 0 && (
                         <span className="ml-1 text-emerald-600">+{r.addonLabel}</span>
                       )}
+                      {r.overUnits > 0 && (
+                        <span
+                          className="ml-1 inline-block rounded bg-red-100 px-1 py-px text-[10px] font-semibold text-red-700"
+                          title={`限度額 (${(r.limitUnits ?? 0).toLocaleString()} 単位) を超過。超過分 ${r.overUnits.toLocaleString()} 単位は保険請求・法定負担に含めず、${r.selfPayAmount.toLocaleString()} 円 (10割) を超過自費として利用請求に加算します`}
+                        >
+                          限度額超過 {r.overUnits.toLocaleString()}単位
+                        </span>
+                      )}
                     </td>
                     <td className="px-2 py-1 text-right font-mono text-gray-700 border-r border-emerald-100">
                       {r.totalUnits.toLocaleString()}
@@ -1724,6 +1734,9 @@ function SougouBlock({ rows }: { rows: UserSeikyuRow[] }) {
         <span>総単位数 <strong className="font-mono">{totalUnits.toLocaleString()}</strong></span>
         <span>保険請求額 <strong className="font-mono">¥{totalInsurance.toLocaleString()}</strong></span>
         <span>利用者負担 <strong className="font-mono">¥{totalUser.toLocaleString()}</strong></span>
+        {totalSelfPay > 0 && (
+          <span className="text-red-700">超過自費 <strong className="font-mono">¥{totalSelfPay.toLocaleString()}</strong></span>
+        )}
         <span className="ml-auto text-emerald-600">伝送ファイル (7112) は「国保請求」タブから出力</span>
       </div>
     </div>

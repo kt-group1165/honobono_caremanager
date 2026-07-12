@@ -9,6 +9,8 @@
  * タブ 2: 月次推移 — kaigo_care_support_claims を月ごとに集計
  *         (請求件数 / 単位数 / 保険請求額) + 月遅れ数 / 返戻数。
  *         kokuho_nyukin_records があれば入金状況も併記 (table 未作成なら列非表示)
+ * タブ 4: 経営分析 — 給付管理ベースの担当利用者数推移 + 逓減状況
+ *         (keiei-bunseki-tab.tsx。タブを開いた時に月別クエリを並列で遅延読込)
  *
  * office 解決は useBusinessType (currentOfficeId)。居宅介護支援 office でのみ動作。
  * デザインは billing-visit/stats と同じトーン (グレーヘッダ格子・text-xs)。
@@ -20,6 +22,7 @@ import { BarChart3, Download, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
+import { KeieiBunsekiKyotakuTab } from "./keiei-bunseki-tab";
 
 // kaigo_billing_status の 1 行 (月遅れ・返戻・過誤のいずれか true のみ取得)
 interface FlagRow {
@@ -115,7 +118,7 @@ export function StatsContent() {
   } = useBusinessType();
   const [fromMonth, setFromMonth] = useState(fiscalYearStart());
   const [toMonth, setToMonth] = useState(currentMonthKey());
-  const [tab, setTab] = useState<"flags" | "trend" | "conc">("flags");
+  const [tab, setTab] = useState<"flags" | "trend" | "conc" | "keiei">("flags");
   const [loading, setLoading] = useState(true);
   const [flagRows, setFlagRows] = useState<FlagRow[]>([]);
   const [claimRows, setClaimRows] = useState<ClaimRow[]>([]);
@@ -415,6 +418,7 @@ export function StatsContent() {
             { key: "flags", label: `月遅れ・返戻者一覧 (${flagRows.length})` },
             { key: "trend", label: "月次推移" },
             { key: "conc", label: "集中減算チェック" },
+            { key: "keiei", label: "経営分析" },
           ] as const
         ).map((t) => (
           <button
@@ -432,7 +436,7 @@ export function StatsContent() {
         ))}
       </div>
 
-      {loading ? (
+      {loading && tab !== "keiei" ? (
         <div className="flex justify-center py-16">
           <Loader2 size={22} className="animate-spin text-indigo-400" />
         </div>
@@ -618,7 +622,7 @@ export function StatsContent() {
             </table>
           </div>
         </div>
-      ) : (
+      ) : tab === "conc" ? (
         /* ── タブ 3: 特定事業所集中減算チェック (監査M-2 対応) ──
              紹介率 (給付管理データ上の最多事業所シェア) が 80% 超で減算対象。
              対象: 訪問介護 / 通所介護 / 地域密着型通所介護 / 福祉用具貸与 */
@@ -683,7 +687,17 @@ export function StatsContent() {
             </div>
           );
         })()
-      )}
+      ) : null}
+
+      {/* ── タブ 4: 経営分析 (遅延読込。タブ切替でアンマウントしない = 再取得防止) ── */}
+      <div className={tab === "keiei" ? "" : "hidden"}>
+        <KeieiBunsekiKyotakuTab
+          active={tab === "keiei"}
+          officeId={currentOfficeId}
+          fromMonth={fromMonth}
+          toMonth={toMonth}
+        />
+      </div>
     </div>
   );
 }

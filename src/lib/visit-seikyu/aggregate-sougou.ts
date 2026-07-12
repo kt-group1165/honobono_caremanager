@@ -13,7 +13,10 @@
  *     事業所の適用処遇改善 (kaigo_office_addon_periods / offices.applied_formula_codes) が
  *     介護コード (116274 等) の場合、同率の総合事業 A2 処遇改善コードにマッピングして採用する。
  *   - 給付率 = 9割/1割 (要支援・事業対象者の総合事業も原則 1 割。負担割合は認定に従う)
- *   - 限度額 = 要支援枠 (深追いしない。当面は超過管理なし = 全量給付対象。TODO コメント参照)
+ *   - 限度額管理 = 認定の限度額 (service_limit_amount) 優先、無ければ 要介護度から
+ *     標準の区分支給限度基準額を補完 (SOUGOU_CARE_LEVEL_LIMITS 参照)。
+ *     超過分は介護給付 (aggregate.ts) と同じく保険請求から外して全額自費 (selfPayAmount) に分離。
+ *     処遇改善等の%加算は限度額管理対象外 (kanriTaishougaiUnits)。
  *
  * 戻り値は UserSeikyuRow (system='総合事業')。伝送 (build-sougou.ts) / 表示で共用する。
  */
@@ -33,6 +36,39 @@ interface SougouScheduleRow {
   service_type: string;
   visit_date: string;
 }
+
+/**
+ * 総合事業の限度額管理に使う「認定に限度額が未設定のとき」の標準補完値 (単位/月)。
+ *
+ * 制度根拠 (2026-07-12 一次資料確認):
+ *   - 要支援1/2: 要支援者が総合事業 (サービス事業) を利用する場合は、予防給付の
+ *     区分支給限度基準額 (要支援1=5,032 / 要支援2=10,531 単位。平成12年厚生省告示第33号、
+ *     令和元年10月改定後の額) の範囲内で「予防給付と総合事業を一体的に給付管理」する
+ *     (厚労省 介護予防・日常生活支援総合事業ガイドライン)。
+ *   - 事業対象者: 市町村が給付管理の上限額を定める。国ガイドラインの標準は
+ *     要支援1と同額 (5,032 単位)。保険者独自の上限は認定情報の限度額
+ *     (client_insurance_records.service_limit_amount) に登録すればそちらが優先される。
+ *   - 要介護1〜5: 総合事業は本来 要支援・事業対象者向けだが、区分変更月 (要支援→要介護) や
+ *     継続利用要介護者 (令和3年度弾力化) の実績が紛れ得るため、介護給付の
+ *     区分支給限度基準額で防御的に判定する (該当時は warning で確認を促す)。
+ *
+ * 合算管理の注意: 要支援の限度額は「予防給付 + 総合事業」の合算で管理される (正は
+ * 給付管理票 = 地域包括/国保連側)。本集計は自事業所の総合事業実績のみを機械判定する
+ * (介護給付側 aggregate.ts が自事業所実績のみで機械判定するのと同じ姿勢)。
+ * 予防給付や他事業所分を含む厳密な合算はケアマネの給付管理票に委ねる。
+ *
+ * ※ 単位数は reports-content.tsx の CARE_LEVEL_LIMITS と同値 (令和6年度改定でも据置)。
+ */
+const SOUGOU_CARE_LEVEL_LIMITS: Record<string, number> = {
+  事業対象者: 5032,
+  要支援1: 5032,
+  要支援2: 10531,
+  要介護1: 16765,
+  要介護2: 19705,
+  要介護3: 27048,
+  要介護4: 30938,
+  要介護5: 36217,
+};
 
 /**
  * 総合事業ストリームの集計。既に aggregate.ts で取得済みの
@@ -283,7 +319,7 @@ export async function aggregateSougouSeikyu(
 
     // 基本コードの単位を積む。月額包括 (1月につき) は回数を掛けない (月1)。
     const details: SeikyuDetailLine[] = [];
-    let baseUnits = 0;
+    let grossBaseUnits = 0;
     for (const [svcType, count] of typeCounts) {
       const master = masterOf(svcType);
       if (!master) {
@@ -295,7 +331,7 @@ export async function aggregateSougouSeikyu(
       const isMonthly = master.unitType.includes("月"); // '1月につき' = 月額包括
       const billCount = isMonthly ? 1 : count;
       const units = master.units * billCount;
-      baseUnits += units;
+      grossBaseUnits += units;
       details.push({
         service_type: svcType,
         short_name: master.short ?? null,
@@ -307,10 +343,44 @@ export async function aggregateSougouSeikyu(
     }
     details.sort((a, b) => b.units - a.units);
 
-    // 処遇改善 (%加算) は本体単位に対して計算 (介護と同方式)。総合事業に限度額超過管理は当面なし。
+    // ── 限度額管理 (aggregate.ts の区分支給限度基準と同方式) ──
+    // 基準値 = 認定の限度額 (service_limit_amount) 優先、無ければ要介護度から標準額を補完
+    // (SOUGOU_CARE_LEVEL_LIMITS。事業対象者=要支援1相当 5,032単位)。どちらも無ければ管理なし。
+    // ※ 計画単位数 (kaigo_monthly_plan_units) とケアマネ手割振り (kaigo_gendo_allocation) は
+    //   介護給付ストリームが消費する利用者×月の 1 値のため、総合事業側では使わない
+    //   (両ストリームに同一値を適用すると併用時に二重計上/二重控除になる)。
+    const careLevelNorm = toHankakuDigits((cert?.care_level ?? "").trim());
+    const certLimit =
+      cert?.service_limit_amount != null && Number(cert.service_limit_amount) > 0
+        ? Number(cert.service_limit_amount)
+        : null;
+    const limitUnits = certLimit ?? SOUGOU_CARE_LEVEL_LIMITS[careLevelNorm] ?? null;
+    if (limitUnits == null && grossBaseUnits > 0) {
+      warnings.push(
+        `${userLabel}: 総合事業の限度額を解決できません (要介護度「${cert?.care_level ?? "未設定"}」・認定の限度額なし) — 限度額管理なしで集計します。認定情報を確認してください`,
+      );
+    }
+    if (/^要介護/.test(careLevelNorm)) {
+      warnings.push(
+        `${userLabel}: 要介護度「${cert?.care_level}」で総合事業の実績があります — 区分変更月または継続利用要介護者の可能性があります。要介護者の限度額は介護給付と合算管理のため、機械判定 (総合事業分のみ) の超過を請求前に確認してください`,
+      );
+    }
+    // 管理対象 = 基本コードの全量 (総合事業ストリームは基本コードのみ積む。
+    // 初回加算等の実績単位加算は現状 集計経路なし)。処遇改善%加算は限度額管理対象外
+    // (介護給付と同じ扱い。サービスコード表の支給限度額管理「対象外」区分) のため
+    // 超過判定は %加算前の単位数で行う。
+    const managedUnits = grossBaseUnits;
+    const overUnits =
+      limitUnits != null ? Math.min(Math.max(0, managedUnits - limitUnits), managedUnits) : 0;
+    // 基準内単位数 = 保険給付対象。超過分は保険請求から外し 10割自費 (selfPayAmount) へ振替
+    const baseUnits = grossBaseUnits - overUnits;
+    // 処遇改善 (%加算) は保険給付対象の基準内単位に対して計算 (介護と同方式。
+    // 超過自費分には掛けない = 自費請求は素の単位×単価×10割)。
     const addonUnits = addonNum > 0 ? Math.round((baseUnits * addonNum) / addonDen) : 0;
     const totalUnits = baseUnits + addonUnits;
     const totalAmount = Math.floor((totalUnits * unitPrice100) / 100);
+    // 超過分の全額自費額 (円) = floor(超過単位 × 単価 × 10割)。介護給付と同じ整数演算
+    const overAmount = Math.floor((overUnits * unitPrice100) / 100);
 
     // 公費単独 (H番号) — 介護と同じ扱い
     const kohiTandoku = /^[Hh]/.test((cert?.insured_number ?? "").trim());
@@ -340,18 +410,18 @@ export async function aggregateSougouSeikyu(
       care_level: cert?.care_level ?? null,
       copay_rate: copay,
       details,
-      // 総合事業は当面 限度額超過管理なし (全量給付対象)。
-      // TODO: 要支援枠の区分支給限度基準を導入する場合は aggregate.ts と同じ超過振替を実装する。
-      grossBaseUnits: baseUnits,
-      limitUnits: null,
+      grossBaseUnits,
+      limitUnits,
+      // 計画単位数は介護給付側の運用 (月次情報タブ / 別表取込) のみ — 総合事業は未使用
       planUnits: null,
-      overUnits: 0,
+      overUnits,
+      // ケアマネ手割振り (kaigo_gendo_allocation) は総合事業側では使わない (上記コメント参照)
       overSource: "auto",
-      overAmount: 0,
-      selfPayAmount: 0,
+      overAmount,
+      selfPayAmount: overAmount,
       baseUnits,
       addonUnits,
-      // 限度額管理対象外 = 処遇改善%加算のみ (超過管理をしないので実質 addonUnits と同義)
+      // 限度額管理対象外単位数 = 処遇改善等%加算 (総合事業は初回・緊急時系の経路なし)
       kanriTaishougaiUnits: addonUnits,
       addonLabel,
       totalUnits,

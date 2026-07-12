@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   Save,
   Plus,
+  Star,
 } from "lucide-react";
 import {
   format,
@@ -56,6 +57,8 @@ import {
   additionalRowsFromSchedule,
   type AdditionalStaffRow,
 } from "./additional-staff-section";
+import { StaffSuggestChips } from "./staff-suggest-chips";
+import { PreferredStaffModal } from "./preferred-staff-modal";
 import {
   getHospitalizationMap,
   isHospitalizedOn,
@@ -192,6 +195,8 @@ export function UserCalendar({
   const [showAddServiceSelector, setShowAddServiceSelector] = useState(false);
   // drag & drop: ドロップ先セルのハイライト用
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
+  // 優先ヘルパー設定モーダル (割当サジェスト用)
+  const [showPreferredModal, setShowPreferredModal] = useState(false);
 
   // ドラッグ = 移動 / Ctrl (Alt) + ドラッグ = コピー
   const handleDropSchedule = async (schedId: string, targetDate: string, copy: boolean) => {
@@ -547,6 +552,13 @@ export function UserCalendar({
         >
           <ChevronRight size={16} />
         </button>
+        <button
+          onClick={() => setShowPreferredModal(true)}
+          className="rounded border p-1 text-gray-400 hover:bg-amber-50 hover:text-amber-600 transition-colors"
+          title="優先ヘルパー設定 (割当サジェスト用)"
+        >
+          <Star size={14} />
+        </button>
       </div>
 
       {loading ? (
@@ -816,6 +828,20 @@ export function UserCalendar({
                   );
                   return null;
                 })()}
+                {/* 割当サジェスト (候補提示のみ、手動選択はそのまま) */}
+                <StaffSuggestChips
+                  userId={editModal.user_id}
+                  visitDate={editModal.visit_date}
+                  startTime={editForm.start_time}
+                  endTime={editForm.end_time}
+                  staff={allStaff}
+                  currentStaffId={editForm.staff_id}
+                  excludeScheduleId={editModal.id}
+                  excludeStaffIds={editAdditional.map((r) => r.staff_id).filter(Boolean)}
+                  monthSchedules={allSchedules}
+                  availability={availability}
+                  onSelect={(id) => setEditForm((f) => ({ ...f, staff_id: id }))}
+                />
               </div>
 
               {/* 追加職員 (2人体制・同行、主 + 最大9名): 普段は折りたたみ */}
@@ -993,6 +1019,19 @@ export function UserCalendar({
                   );
                   return null;
                 })()}
+                {/* 割当サジェスト (候補提示のみ、手動選択はそのまま) */}
+                <StaffSuggestChips
+                  userId={userId}
+                  visitDate={addModal}
+                  startTime={addForm.start_time}
+                  endTime={addForm.end_time}
+                  staff={allStaff}
+                  currentStaffId={addForm.staff_id}
+                  excludeStaffIds={addAdditional.map((r) => r.staff_id).filter(Boolean)}
+                  monthSchedules={allSchedules}
+                  availability={availability}
+                  onSelect={(id) => setAddForm((f) => ({ ...f, staff_id: id }))}
+                />
               </div>
 
               {/* 追加職員 (2人体制・同行、主 + 最大9名): 普段は折りたたみ */}
@@ -1043,6 +1082,16 @@ export function UserCalendar({
             </div>
           </div>
         </div>
+      )}
+
+      {/* 優先ヘルパー設定 (割当サジェスト用、client_office_assignments.preferred_staff) */}
+      {showPreferredModal && (
+        <PreferredStaffModal
+          userId={userId}
+          userName={userName}
+          staff={allStaff}
+          onClose={() => setShowPreferredModal(false)}
+        />
       )}
     </div>
   );

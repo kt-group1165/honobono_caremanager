@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
+import { BunreiPicker } from "@/components/bunrei/bunrei-picker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1325,6 +1326,15 @@ export function MonitoringContent({
                             className="mt-1 w-full resize-none rounded border px-1 py-0.5 text-xs focus:border-blue-400 focus:outline-none"
                             placeholder="意見・コメント"
                           />
+                          <div className="mt-0.5 flex justify-end">
+                            <BunreiPicker
+                              category="モニタリング"
+                              currentText={item.satisfaction_comment}
+                              onInsert={(t) =>
+                                updateItem(item.item_number, { satisfaction_comment: t })
+                              }
+                            />
+                          </div>
                         </td>
                         {/* 達成度評価 */}
                         <td className="border border-gray-200 px-2 py-1.5 align-top">
@@ -1385,6 +1395,15 @@ export function MonitoringContent({
                             className="w-full resize-none bg-transparent text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 focus:rounded px-0.5"
                             placeholder="その理由・今後の方針・新たな目標"
                           />
+                          <div className="mt-0.5 flex justify-end">
+                            <BunreiPicker
+                              category="モニタリング"
+                              currentText={item.revision_reason}
+                              onInsert={(t) =>
+                                updateItem(item.item_number, { revision_reason: t })
+                              }
+                            />
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1676,9 +1695,16 @@ export function MonitoringContent({
               {/* 総合評価・継続要否 */}
               <div className="rounded-lg border bg-white shadow-sm p-4 space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    総合的な評価・支援経過
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-gray-600">
+                      総合的な評価・支援経過
+                    </label>
+                    <BunreiPicker
+                      category="モニタリング"
+                      currentText={prev.overall_evaluation}
+                      onInsert={(t) => updatePrev({ overall_evaluation: t })}
+                    />
+                  </div>
                   <textarea
                     value={prev.overall_evaluation}
                     onChange={(e) => updatePrev({ overall_evaluation: e.target.value })}
@@ -1688,9 +1714,16 @@ export function MonitoringContent({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    本人・家族の意向
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-gray-600">
+                      本人・家族の意向
+                    </label>
+                    <BunreiPicker
+                      category="計画1-意向"
+                      currentText={prev.user_family_intention}
+                      onInsert={(t) => updatePrev({ user_family_intention: t })}
+                    />
+                  </div>
                   <textarea
                     value={prev.user_family_intention}
                     onChange={(e) => updatePrev({ user_family_intention: e.target.value })}

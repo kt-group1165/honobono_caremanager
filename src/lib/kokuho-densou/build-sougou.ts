@@ -17,7 +17,11 @@
  *     (本実装は 7131 の項目順を流用。仕様書上は基本/明細/集計とも 7131 と同構成)
  *   - サービス種類コード = 英字 "A2" の 2 桁でよいか (数字前提の欄に英字を出す)
  *   - コントロールレコードのデータ種別 (711 → 総合事業は別値か)。本実装は "711" のまま。
- *   - 限度額管理: 総合事業は要支援枠。集計 10 の計画/管理対象/対象外は暫定で全量を管理対象とする。
+ *
+ * 限度額管理 (2026-07 正式化。aggregate-sougou.ts で超過分離済):
+ *   集計 10 の 計画単位数 = 認定/標準の限度額 (limitUnits) フォールバック、
+ *   限度額管理対象単位数 = 基準内の本体単位 (baseUnits)、
+ *   対象外単位数 = 処遇改善等%加算 (kanriTaishougaiUnits)。7131 (build.ts) と同方針。
  *
  * Shift_JIS への変換は呼出側 (UI) で行う (build.ts と同じ)。
  */
@@ -146,6 +150,13 @@ export function buildSougouDensou(
     if (!r.birthDate) warnings.push(`${r.user_name}: 生年月日が未登録です`);
     if (!r.careOfficeNumber)
       warnings.push(`${r.user_name}: 担当居宅介護支援事業所 (事業所番号) が未登録です`);
+    // 明細 02 レコードは実績全量、集計 10 の限度額管理対象単位数 (baseUnits) は
+    // 基準内のみ — 超過分は保険請求から除外済 (aggregate-sougou.ts)。build.ts と同方針。
+    if (r.overUnits > 0) {
+      warnings.push(
+        `${r.user_name}: 総合事業の限度額 (${(r.limitUnits ?? 0).toLocaleString()}単位) を ${r.overUnits.toLocaleString()} 単位超過しています — 超過分 (${r.overAmount.toLocaleString()}円) は保険請求に含めず全額自費 (利用請求) 扱いです`,
+      );
+    }
 
     const benefitRate = r.kohiTandoku
       ? ""
@@ -272,12 +283,13 @@ export function buildSougouDensou(
     }
 
     // 集計情報レコード (10) — サービス種類 (A2) 単位。
-    // 総合事業は要支援枠で当面 限度額超過管理をしないため、計画=管理対象=保険単位数、
-    // 管理対象外=処遇改善%加算 (kanriTaishougaiUnits = addonUnits) とする。
+    // 限度額管理 (2026-07 正式化): 管理対象 = 基準内の本体単位 (baseUnits。超過分は
+    // aggregate-sougou.ts で保険請求から除外済)、対象外 = 処遇改善等%加算。
+    // 計画単位数は build.ts (7131) と同じフォールバック (計画 > 限度額 > 基準内)。
     // ⚠ 要取込チェック: 総合事業の集計 10 の計画/管理対象/対象外の扱いを取込テストで確認。
     const svcKindCode = detailLines[0]?.kind ?? "A2";
-    const kanriGaiUnits = r.kanriTaishougaiUnits; // = addonUnits (総合事業は超過管理なし)
-    const kanriInUnits = r.baseUnits; // 本体単位 = 管理対象
+    const kanriGaiUnits = r.kanriTaishougaiUnits; // = addonUnits (処遇改善%加算 = 管理対象外)
+    const kanriInUnits = r.baseUnits; // 基準内の本体単位 = 限度額管理対象
     dataParts.push([
       "7112", // 1
       "10", // 2 レコード種別コード
@@ -287,8 +299,9 @@ export function buildSougouDensou(
       insured, // 6
       svcKindCode, // 7 サービス種類コード (A2)
       String(r.serviceDays), // 8 サービス実日数
-      String(kanriInUnits), // 9 計画単位数 (= 管理対象。総合事業は超過管理なし)
-      String(kanriInUnits), // 10 限度額管理対象単位数
+      // 9 計画単位数: 計画 (総合事業は未運用 = null) > 認定/標準の限度額 > 基準内
+      String(r.planUnits ?? r.limitUnits ?? kanriInUnits),
+      String(kanriInUnits), // 10 限度額管理対象単位数 (基準内)
       String(kanriGaiUnits), // 11 限度額管理対象外単位数 (処遇改善%加算)
       "", // 12 短期入所計画日数
       "", // 13 短期入所実日数

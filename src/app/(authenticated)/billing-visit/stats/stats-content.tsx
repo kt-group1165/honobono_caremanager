@@ -8,6 +8,8 @@
  *         いずれか true の行を期間で一覧 (利用者名は clients を join)。CSV 出力付き
  * タブ 2: 月次推移 — riyou_seikyu_payments を月ごとに集計
  *         (請求額合計 / 入金額合計 / 未収額 = billed−paid の正分 / 件数)
+ * タブ 3: 経営分析 — ほのぼの「経営分析」相当 (keiei-bunseki-tab.tsx)。
+ *         タブを開いた時に月別クエリを並列で遅延読込する
  *
  * デザインは請求 4 タブと同じトーン (グレーヘッダ格子・text-xs)。
  * table 未作成 (42P01) は空として続行、他エラーは toast。
@@ -17,6 +19,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BarChart3, Download, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { KeieiBunsekiTab } from "./keiei-bunseki-tab";
 
 // kaigo_billing_status の 1 行 (月遅れ・返戻・過誤のいずれか true のみ取得)
 interface FlagRow {
@@ -90,7 +93,7 @@ export function StatsContent() {
   const supabase = useMemo(() => createClient(), []);
   const [fromMonth, setFromMonth] = useState(fiscalYearStart());
   const [toMonth, setToMonth] = useState(currentMonthKey());
-  const [tab, setTab] = useState<"flags" | "trend">("flags");
+  const [tab, setTab] = useState<"flags" | "trend" | "keiei">("flags");
   const [loading, setLoading] = useState(true);
   const [flagRows, setFlagRows] = useState<FlagRow[]>([]);
   const [paymentRows, setPaymentRows] = useState<PaymentRow[]>([]);
@@ -322,6 +325,7 @@ export function StatsContent() {
           [
             { key: "flags", label: `月遅れ・返戻者一覧 (${flagRows.length})` },
             { key: "trend", label: "月次推移" },
+            { key: "keiei", label: "経営分析" },
           ] as const
         ).map((t) => (
           <button
@@ -339,7 +343,7 @@ export function StatsContent() {
         ))}
       </div>
 
-      {loading ? (
+      {loading && tab !== "keiei" ? (
         <div className="flex justify-center py-16">
           <Loader2 size={22} className="animate-spin text-indigo-400" />
         </div>
@@ -423,7 +427,7 @@ export function StatsContent() {
             </table>
           </div>
         </div>
-      ) : (
+      ) : tab === "trend" ? (
         /* ── タブ 2: 月次推移 (請求/入金/未収) ── */
         <div className="space-y-2">
           <span className="text-[11px] text-gray-400">
@@ -490,7 +494,17 @@ export function StatsContent() {
             </table>
           </div>
         </div>
-      )}
+      ) : null}
+
+      {/* ── タブ 3: 経営分析 (遅延読込。タブ切替でアンマウントしない = 再取得防止) ── */}
+      <div className={tab === "keiei" ? "" : "hidden"}>
+        <KeieiBunsekiTab
+          active={tab === "keiei"}
+          fromMonth={fromMonth}
+          toMonth={toMonth}
+          payments={paymentRows}
+        />
+      </div>
     </div>
   );
 }
