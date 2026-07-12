@@ -74,18 +74,30 @@ export async function aggregateBathVisitSeikyu(
   const unitPrice100 = Math.round(unitPrice * 100);
   const warnings: string[] = [];
 
-  // 1) 入浴実績 (実績=actual, 確定/請求済)
-  let q = supabase
-    .from("kaigo_bath_visit_records")
-    .select("client_id, visit_date, service_code, addon_shokai, addon_ninchi, addon_chuusankan")
-    .gte("visit_date", monthStart)
-    .lte("visit_date", monthEnd)
-    .eq("actual", true)
-    .in("status", ["confirmed", "submitted"]);
-  if (opts.officeId) q = q.eq("office_id", opts.officeId);
-  const { data: recData, error: recErr } = await q;
-  if (recErr) throw recErr;
-  const records = (recData ?? []) as BathRec[];
+  // 1) 入浴実績 (実績=actual, 確定/請求済) — order 付き page-loop (PostgREST 1000 行キャップ対策)
+  const PAGE = 1000;
+  const records: BathRec[] = [];
+  {
+    let offset = 0;
+    while (true) {
+      let q = supabase
+        .from("kaigo_bath_visit_records")
+        .select("client_id, visit_date, service_code, addon_shokai, addon_ninchi, addon_chuusankan")
+        .gte("visit_date", monthStart)
+        .lte("visit_date", monthEnd)
+        .eq("actual", true)
+        .in("status", ["confirmed", "submitted"]);
+      if (opts.officeId) q = q.eq("office_id", opts.officeId);
+      const { data: recData, error: recErr } = await q
+        .order("id", { ascending: true })
+        .range(offset, offset + PAGE - 1);
+      if (recErr) throw recErr;
+      const page = (recData ?? []) as BathRec[];
+      records.push(...page);
+      if (page.length < PAGE) break;
+      offset += PAGE;
+    }
+  }
   if (records.length === 0) return { rows: [], month: monthKey, recordCount: 0, warnings };
 
   const clientIds = Array.from(new Set(records.map((r) => r.client_id)));
@@ -157,12 +169,23 @@ export async function aggregateBathVisitSeikyu(
   const kohiRes = await resolveKohiForMonth(supabase, clientIds, year, month);
   const planByClient = new Map<string, number>();
   {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("bath_monthly_plan_units")
       .select("client_id, planned_units")
       .eq("target_month", `${monthKey}-01`);
-    for (const p of (data ?? []) as { client_id: string; planned_units: number | null }[]) {
-      if (p.planned_units != null) planByClient.set(p.client_id, p.planned_units);
+    if (error) {
+      // テーブル未作成 (直 SQL=42P01 / PostgREST schema cache=PGRST205) は
+      // 計画なし = 認定限度額フォールバックで続行。それ以外は握りつぶさず warning
+      if (error.code !== "42P01" && error.code !== "PGRST205") {
+        console.error("[bath-seikyu] 計画単位数取得失敗:", error.message);
+        warnings.push(
+          `計画単位数 (bath_monthly_plan_units) の取得に失敗しました (${error.message}) — 認定の限度額のみで超過判定しています`,
+        );
+      }
+    } else {
+      for (const p of (data ?? []) as { client_id: string; planned_units: number | null }[]) {
+        if (p.planned_units != null) planByClient.set(p.client_id, p.planned_units);
+      }
     }
   }
   const clientMap = new Map<string, Cl>();

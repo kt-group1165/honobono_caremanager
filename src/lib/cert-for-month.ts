@@ -238,6 +238,13 @@ export interface CertSegment {
   to: string;
   /** このセグメント期間に適用する認定 (期間内で複数あれば最新 start の行) */
   cert: CertForMonth;
+  /**
+   * セグメント期間に有効期間が重なる「全」認定の service_limit_amount の最大値。
+   * 同一保険者内の区分変更 (降格含む) がセグメント内にある場合も「最も介護の必要の
+   * 程度が高い区分」の限度額 (施行規則68条1項) を適用するため、cert (最新 start の
+   * 1 行) の値ではなくこちらを区分支給限度基準に使う。正の値が 1 件も無ければ null。
+   */
+  limitAmount: number | null;
 }
 
 export interface CertSegmentsResult {
@@ -253,6 +260,25 @@ const prevDay = (iso: string): string => {
   if (!m) return iso;
   const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) - 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+/**
+ * 期間 [from, to] に認定有効期間が重なる certs の service_limit_amount の最大値
+ * (= 施行規則68条1項「重い方」)。正の値が 1 件も無ければ null。
+ */
+const maxLimitInRange = (
+  certs: CertForMonth[],
+  from: string,
+  to: string,
+): number | null => {
+  let max: number | null = null;
+  for (const c of certs) {
+    if (!c.certification_start_date || c.certification_start_date > to) continue;
+    if (c.certification_end_date && c.certification_end_date < from) continue;
+    const v = c.service_limit_amount != null ? Number(c.service_limit_amount) : NaN;
+    if (Number.isFinite(v) && v > 0 && (max == null || v > max)) max = v;
+  }
+  return max;
 };
 
 /**
@@ -277,7 +303,7 @@ export function resolveCertSegmentsForMonth(
   if (certs.length === 0) return { segments: [], undetermined: false };
   let undetermined = false;
   const segments: CertSegment[] = [
-    { from: monthStart, to: monthEnd, cert: certs[0] },
+    { from: monthStart, to: monthEnd, cert: certs[0], limitAmount: null },
   ];
   for (let i = 1; i < certs.length; i++) {
     const prev = certs[i - 1];
@@ -304,17 +330,24 @@ export function resolveCertSegmentsForMonth(
     }
     const last = segments[segments.length - 1];
     last.to = prevDay(boundary);
-    segments.push({ from: boundary, to: monthEnd, cert: cur });
+    segments.push({ from: boundary, to: monthEnd, cert: cur, limitAmount: null });
   }
   if (undetermined) {
     // 判定不能の変化点が 1 つでもあれば分割しない (月末時点の認定 1 セグメント)
     return {
       segments: [
-        { from: monthStart, to: monthEnd, cert: segments[segments.length - 1].cert },
+        {
+          from: monthStart,
+          to: monthEnd,
+          cert: segments[segments.length - 1].cert,
+          limitAmount: maxLimitInRange(certs, monthStart, monthEnd),
+        },
       ],
       undetermined: true,
     };
   }
+  // 各セグメントの限度額 = 期間に重なる全認定の max (セグメント内の区分変更も「重い方」)
+  for (const s of segments) s.limitAmount = maxLimitInRange(certs, s.from, s.to);
   return { segments, undetermined: false };
 }
 

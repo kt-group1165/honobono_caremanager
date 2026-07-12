@@ -493,42 +493,47 @@ export async function aggregateMonthlyVisitSeikyu(
       }
       return f;
     };
-    // a) 旧 3固定テーブル。santei_date 列未適用 (42703) は従来列のみで再取得 (算定日 null)
+    // a) 旧 3固定テーブル。santei_date 列未適用 (42703) は従来列のみで再取得 (算定日 null)。
+    //    order 付き page-loop (PostgREST 1000 行キャップ対策)
     {
       const baseSel = "client_id, shokai, seikatsu_kino, kinkyu_count";
-      let {
-        data,
-        error,
-      }: {
-        data: unknown[] | null;
-        error: { code?: string | null; message: string } | null;
-      } = await supabase
-        .from("kaigo_visit_month_addons")
-        .select(`${baseSel}, shokai_santei_date, seikatsu_santei_date`)
-        .eq("office_id", opts.officeId)
-        .eq("target_month", monthStr);
-      if (error && error.code !== "42P01" && error.code !== "PGRST205" && isColumnMissing(error)) {
-        ({ data, error } = await supabase
-          .from("kaigo_visit_month_addons")
-          .select(baseSel)
-          .eq("office_id", opts.officeId)
-          .eq("target_month", monthStr));
+      const fullSel = `${baseSel}, shokai_santei_date, seikatsu_santei_date`;
+      interface MonthAddonDbRow {
+        client_id: string;
+        shokai: boolean | null;
+        seikatsu_kino: string | null;
+        kinkyu_count: number | null;
+        shokai_santei_date?: string | null;
+        seikatsu_santei_date?: string | null;
       }
-      if (error) {
-        // テーブル未作成 (直 SQL=42P01 / PostgREST schema cache=PGRST205) は
-        // 加算なしで続行 (UI 側で「SQL未適用」バナー案内)。それ以外は握りつぶさない
-        if (error.code !== "42P01" && error.code !== "PGRST205") {
+      let sel = fullSel;
+      let addonOffset = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("kaigo_visit_month_addons")
+          .select(sel)
+          .eq("office_id", opts.officeId)
+          .eq("target_month", monthStr)
+          .order("id", { ascending: true })
+          .range(addonOffset, addonOffset + PAGE - 1);
+        if (error) {
+          // santei_date 列未適用 → 従来列のみで同ページを再取得 (算定日 null)
+          if (
+            sel === fullSel &&
+            error.code !== "42P01" &&
+            error.code !== "PGRST205" &&
+            isColumnMissing(error)
+          ) {
+            sel = baseSel;
+            continue;
+          }
+          // テーブル未作成 (直 SQL=42P01 / PostgREST schema cache=PGRST205) は
+          // 加算なしで続行 (UI 側で「SQL未適用」バナー案内)。それ以外は握りつぶさない
+          if (error.code === "42P01" || error.code === "PGRST205") break;
           throw new Error(`月次加算取得失敗: ${error.message}`);
         }
-      } else {
-        for (const r of (data ?? []) as {
-          client_id: string;
-          shokai: boolean | null;
-          seikatsu_kino: string | null;
-          kinkyu_count: number | null;
-          shokai_santei_date?: string | null;
-          seikatsu_santei_date?: string | null;
-        }[]) {
+        const pageRows = (data ?? []) as unknown as MonthAddonDbRow[];
+        for (const r of pageRows) {
           const f = getMonthAddonFlags(r.client_id);
           f.shokai = !!r.shokai;
           f.seikatsuKino = r.seikatsu_kino ?? "なし";
@@ -536,6 +541,8 @@ export async function aggregateMonthlyVisitSeikyu(
           f.shokaiDate = r.shokai_santei_date ?? null;
           f.seikatsuDate = r.seikatsu_santei_date ?? null;
         }
+        if (pageRows.length < PAGE) break;
+        addonOffset += PAGE;
       }
     }
     // b) 現行の可変明細 (提供表の加算エディタが書く)。全加算コードを読み、
@@ -546,35 +553,46 @@ export async function aggregateMonthlyVisitSeikyu(
     //    boolean は OR、回数は max で合成する。
     {
       const MONTHLY_LINE_CODES = new Set(["114001", "114000", "114003", "114002"]);
-      let {
-        data,
-        error,
-      }: {
-        data: unknown[] | null;
-        error: { code?: string | null; message: string } | null;
-      } = await supabase
-        .from("kaigo_visit_addon_lines")
-        .select("client_id, addon_code, count, santei_date")
-        .eq("office_id", opts.officeId)
-        .eq("target_month", monthStr);
-      if (error && error.code !== "42P01" && error.code !== "PGRST205" && isColumnMissing(error)) {
-        ({ data, error } = await supabase
-          .from("kaigo_visit_addon_lines")
-          .select("client_id, addon_code, count")
-          .eq("office_id", opts.officeId)
-          .eq("target_month", monthStr));
+      const baseSel = "client_id, addon_code, count";
+      const fullSel = `${baseSel}, santei_date`;
+      interface AddonLineDbRow {
+        client_id: string;
+        addon_code: string;
+        count: number | null;
+        santei_date?: string | null;
       }
-      if (error) {
-        if (error.code !== "42P01" && error.code !== "PGRST205") {
+      // santei_date 列未適用 (42703) は従来列のみで再取得。order 付き page-loop
+      const lineRows: AddonLineDbRow[] = [];
+      let sel = fullSel;
+      let lineOffset = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("kaigo_visit_addon_lines")
+          .select(sel)
+          .eq("office_id", opts.officeId)
+          .eq("target_month", monthStr)
+          .order("id", { ascending: true })
+          .range(lineOffset, lineOffset + PAGE - 1);
+        if (error) {
+          if (
+            sel === fullSel &&
+            error.code !== "42P01" &&
+            error.code !== "PGRST205" &&
+            isColumnMissing(error)
+          ) {
+            sel = baseSel;
+            continue;
+          }
+          if (error.code === "42P01" || error.code === "PGRST205") break;
           throw new Error(`月次加算 (加算行) 取得失敗: ${error.message}`);
         }
-      } else {
-        for (const r of (data ?? []) as {
-          client_id: string;
-          addon_code: string;
-          count: number | null;
-          santei_date?: string | null;
-        }[]) {
+        const pageRows = (data ?? []) as unknown as AddonLineDbRow[];
+        lineRows.push(...pageRows);
+        if (pageRows.length < PAGE) break;
+        lineOffset += PAGE;
+      }
+      {
+        for (const r of lineRows) {
           const count = r.count ?? 0;
           if (count <= 0) continue;
           const date = r.santei_date ?? null;
@@ -768,19 +786,23 @@ export async function aggregateMonthlyVisitSeikyu(
   //     列未適用 (42703 / PGRST204) は空 Map = 減算なしでフォールバック。
   const sameBuildingTierByClient = new Map<string, SameBuildingTier>();
   if (opts.officeId) {
-    const { data, error } = await supabase
-      .from("client_office_assignments")
-      .select("client_id, same_building_tier")
-      .eq("office_id", opts.officeId)
-      .in("client_id", userIds)
-      .not("same_building_tier", "is", null);
-    if (error) {
-      // 列未適用 (直 SQL=42703 / PostgREST schema cache=PGRST204) は減算なしで続行。
-      // それ以外は握りつぶさない。
-      if (error.code !== "42703" && error.code !== "PGRST204" && !isColumnMissing(error)) {
-        throw new Error(`同一建物減算区分取得失敗: ${error.message}`);
+    // .in() の URL 長対策で他の fetch と同じく 50 件ずつ chunk
+    for (let i = 0; i < userIds.length; i += 50) {
+      const chunk = userIds.slice(i, i + 50);
+      const { data, error } = await supabase
+        .from("client_office_assignments")
+        .select("client_id, same_building_tier")
+        .eq("office_id", opts.officeId)
+        .in("client_id", chunk)
+        .not("same_building_tier", "is", null);
+      if (error) {
+        // 列未適用 (直 SQL=42703 / PostgREST schema cache=PGRST204) は減算なしで続行。
+        // それ以外は握りつぶさない。
+        if (error.code !== "42703" && error.code !== "PGRST204" && !isColumnMissing(error)) {
+          throw new Error(`同一建物減算区分取得失敗: ${error.message}`);
+        }
+        break; // 列未適用は以降の chunk も同じ結果 = 全体を減算なしにフォールバック
       }
-    } else {
       for (const r of (data ?? []) as {
         client_id: string;
         same_building_tier: string | null;
@@ -937,14 +959,20 @@ export async function aggregateMonthlyVisitSeikyu(
   const officeNumberById = new Map<string, string | null>();
   const officeNameById = new Map<string, string | null>();
   if (careOfficeIds.length > 0) {
-    const { data, error } = await supabase
-      .from("care_offices")
-      .select("id, office_number, name")
-      .in("id", careOfficeIds);
-    if (error) throw new Error(`居宅事業所取得失敗: ${error.message}`);
-    for (const o of (data ?? []) as { id: string; office_number: string | null; name: string | null }[]) {
-      officeNumberById.set(o.id, o.office_number);
-      officeNameById.set(o.id, o.name);
+    // .in() の URL 長・PostgREST 1000 行キャップ対策で 50 件ずつ chunk
+    // (id は PK のため 1 chunk の結果は最大 50 行 = page-loop 不要)
+    for (let i = 0; i < careOfficeIds.length; i += 50) {
+      const chunk = careOfficeIds.slice(i, i + 50);
+      const { data, error } = await supabase
+        .from("care_offices")
+        .select("id, office_number, name")
+        .in("id", chunk)
+        .order("id", { ascending: true });
+      if (error) throw new Error(`居宅事業所取得失敗: ${error.message}`);
+      for (const o of (data ?? []) as { id: string; office_number: string | null; name: string | null }[]) {
+        officeNumberById.set(o.id, o.office_number);
+        officeNameById.set(o.id, o.name);
+      }
     }
   }
 
@@ -1060,6 +1088,15 @@ export async function aggregateMonthlyVisitSeikyu(
 
   const rows: UserSeikyuRow[] = [];
 
+  // 利用者単位で 1 回だけ出す warning (レセ分割時に buildRowForSegment が
+  // セグメントごとに呼ばれても同じ注意を重複出力しないためのガード)
+  const warnedOnceKeys = new Set<string>();
+  const warnOncePerUser = (key: string, msg: string) => {
+    if (warnedOnceKeys.has(key)) return;
+    warnedOnceKeys.add(key);
+    warnings.push(msg);
+  };
+
   // ── 1 セグメント (通常 = 月全体で 1 利用者 1 行) 分の請求行を組み立てる ──
   // Phase 2 (保険者変更のレセプト分割) で per-user 集計本体を関数抽出した。
   // seg.segCount === 1 のとき従来 (Phase 1) のコードパスと同値になるよう、
@@ -1080,17 +1117,26 @@ export async function aggregateMonthlyVisitSeikyu(
     /** 分割なし時の従来 limitAmount (区分変更月の max 適用済)。分割時は未使用 */
     monthLimitAmount: number | null;
     /**
+     * 分割時 (segCount > 1) の区分支給限度基準額 = セグメント期間に重なる「全」認定の
+     * service_limit_amount の max (CertSegment.limitAmount 由来)。同一保険者内の
+     * 区分変更 (降格含む) がセグメント内にあっても「重い方」(施行規則68条1項) を適用する。
+     * 分割なしは未使用 (monthLimitAmount を使う)。
+     */
+    segLimitAmount?: number | null;
+    /**
      * 月次加算 (初回 / 生活機能向上連携) をこのセグメントに計上するか。
      * 分割時に算定日 (santei_date) からセグメントを特定できた場合に呼出側が設定する。
      * undefined = 従来判定 (月末側 isLast に計上 + warning)。分割なしは常に undefined。
      */
     monthAddonHere?: { shokai: boolean; seikatsu: boolean };
     /**
-     * 非月次の加算行 (genericAddonsByClient) の計上先セグメント (addon_code → segIndex)。
-     * 分割時に呼出側が算定日 (santei_date) で解決して設定する (算定日なし・期間外は
-     * 月末側 = segCount-1 に解決済)。undefined (分割なし) は全行を計上。
+     * 非月次の加算行 (genericAddonsByClient) の計上先セグメント
+     * (genericAddonsByClient 配列の行 index → segIndex。同一 addon_code が複数行
+     * あっても行単位で帰属を保つ)。分割時に呼出側が算定日 (santei_date) で解決して
+     * 設定する (算定日なし・期間外は月末側 = segCount-1 に解決済)。
+     * undefined (分割なし) は全行を計上。
      */
-    genericAddonSegIdx?: Map<string, number>;
+    genericAddonSegIdx?: Map<number, number>;
   }
   const buildRowForSegment = (
     userId: string,
@@ -1114,11 +1160,14 @@ export async function aggregateMonthlyVisitSeikyu(
     //     日割り/按分規定は存在しない。転居で被保険者資格が変わり暦月単位 (施行規則67条) の
     //     別管理になる。厚労省QA (平成13年8月29日事務連絡 vol.116)「月の途中で保険者が
     //     変わった場合、介護給付費明細書は2件提出」+ 国保連QA「支給限度額もそれぞれに管理」。
+    //   分割時はセグメント期間に重なる全認定の max (segLimitAmount = 同一保険者内の
+    //   区分変更がセグメント内にある場合も「重い方」施行規則68条1項) を使う。
     const limitAmount =
       seg.segCount > 1
-        ? cert?.service_limit_amount != null && Number(cert.service_limit_amount) > 0
-          ? Number(cert.service_limit_amount)
-          : null
+        ? seg.segLimitAmount ??
+          (cert?.service_limit_amount != null && Number(cert.service_limit_amount) > 0
+            ? Number(cert.service_limit_amount)
+            : null)
         : seg.monthLimitAmount;
 
     // ── 公費の解決 (明細行の公費対象回数を決めるため details 構築より前に行う) ──
@@ -1141,7 +1190,9 @@ export async function aggregateMonthlyVisitSeikyu(
     // 併用は 2 件まで (伝送様式は公費3まであるが、実務上 2 併用超は極めて稀。
     // 3 件以上は適用優先順の上位 2 件で計算し warning で確認を促す)
     if (kohisInSeg.length > 2) {
-      warnings.push(
+      // レセ分割時はセグメントごとに評価されるため利用者単位で 1 回だけ出す
+      warnOncePerUser(
+        `kohi3plus:${userId}`,
         `${userLabel}: 対象月に有効な公費が ${kohisInSeg.length} 件あります — 適用優先順の上位 2 件 (${kohisInSeg
           .slice(0, 2)
           .map((k) => kohiHobetsuLabel(k.hobetsu))
@@ -1257,14 +1308,23 @@ export async function aggregateMonthlyVisitSeikyu(
     const seikatsuKino = (seg.monthAddonHere?.seikatsu ?? seg.isLast)
       ? flags?.seikatsuKino ?? "なし"
       : "なし";
-    // C3: 列があればシフト実績 (セグメント期間内)、無ければ月次加算テーブル
-    const kinkyuCount = hasKinkyuCol
-      ? (kinkyuDatesByUser.get(userId) ?? []).filter(
-          (d) => d >= seg.segFrom && d <= seg.segTo,
-        ).length
-      : seg.isLast
-        ? flags?.kinkyuCount ?? 0
-        : 0;
+    // C3: kinkyu_houmon 列があり該当利用者にシフト実績 (kinkyu_houmon=true) が
+    // 1 件でもあればそれを真値とし、セグメント期間内の訪問日で数える。
+    // シフト実績が 0 件の利用者は加算エディタ (114000) / 旧月次加算テーブルの
+    // 回数 (flags.kinkyuCount) にフォールバック (isLast 計上・日付なし) —
+    // 列が存在するだけでエディタ入力の回数が無視される過少請求を防ぐ。
+    // 列未適用も同じフォールバック。
+    const kinkyuShiftDatesAll = kinkyuDatesByUser.get(userId) ?? [];
+    const kinkyuSegDates =
+      hasKinkyuCol && kinkyuShiftDatesAll.length > 0
+        ? kinkyuShiftDatesAll.filter((d) => d >= seg.segFrom && d <= seg.segTo)
+        : null;
+    const kinkyuCount =
+      kinkyuSegDates != null
+        ? kinkyuSegDates.length
+        : seg.isLast
+          ? flags?.kinkyuCount ?? 0
+          : 0;
     // 公費期間按分時の月次加算の扱い (warning 文言用):
     //   pushed = 月次加算行を 1 件以上出した / fallback = 算定日なしで全量公費対象にした
     let monthAddonPushed = false;
@@ -1279,7 +1339,9 @@ export async function aggregateMonthlyVisitSeikyu(
         count: number,
         fixedLabel: string,
         kanriTaishougai: boolean, // true = 支給限度基準額管理の対象外 (初回・緊急時)
-        santeiDate: string | null, // 算定日。公費期間按分の内外判定に使う (null = 従来: 全量公費対象)
+        // 算定日 (複数回算定の加算 = 緊急時は日ごとの配列)。公費期間按分の内外判定に
+        // 使う (null / 空 = 従来: 全量公費対象)
+        santeiDates: string[] | null,
       ) => {
         if (count <= 0) return;
         const m = monthAddonMaster.get(name);
@@ -1301,9 +1363,9 @@ export async function aggregateMonthlyVisitSeikyu(
           units,
         };
         if (kohi) {
-          if (kohiProrate && santeiDate) {
-            // 算定日あり: 公費適用期間の内なら全量、外なら公費対象外 (0)
-            const kc = inKohiPeriod(santeiDate) ? count : 0;
+          if (kohiProrate && santeiDates && santeiDates.length > 0) {
+            // 算定日あり: 公費適用期間内の算定日のみ公費対象 (複数回は日ごとに数える)
+            const kc = santeiDates.filter(inKohiPeriod).length;
             line.kohi_count = kc;
             line.kohi_units = m.units * kc;
           } else {
@@ -1315,8 +1377,8 @@ export async function aggregateMonthlyVisitSeikyu(
           }
         }
         if (kohi2) {
-          if (kohi2Prorate && santeiDate) {
-            const kc2 = inKohi2Period(santeiDate) ? count : 0;
+          if (kohi2Prorate && santeiDates && santeiDates.length > 0) {
+            const kc2 = santeiDates.filter(inKohi2Period).length;
             line.kohi2_count = kc2;
             line.kohi2_units = m.units * kc2;
           } else {
@@ -1329,14 +1391,25 @@ export async function aggregateMonthlyVisitSeikyu(
         monthAddonPushed = true;
       };
       // 初回・緊急時 = 限度額管理対象外 (告示)。生活機能向上連携は管理対象。
-      // 緊急時は算定日を持たない (kinkyu_houmon の訪問日はセグメント判定のみ) → null = 従来。
+      // 緊急時: シフト実績 (kinkyu_houmon) 由来は訪問日を算定日として公費期間の
+      // 内外を日ごとに判定する (kinkyuSegDates はセグメント期間で絞り込み済み =
+      // セグメント帰属も訪問日基準)。エディタ回数フォールバック分は日付なし → null = 従来。
       if (shokaiOn)
-        pushMonthAddon(MONTH_ADDON_NAMES.shokai, 1, "初回加算", true, flags?.shokaiDate ?? null);
-      pushMonthAddon(MONTH_ADDON_NAMES.kinkyu, kinkyuCount, "緊急時訪問介護加算", true, null);
+        pushMonthAddon(
+          MONTH_ADDON_NAMES.shokai, 1, "初回加算", true,
+          flags?.shokaiDate ? [flags.shokaiDate] : null,
+        );
+      pushMonthAddon(MONTH_ADDON_NAMES.kinkyu, kinkyuCount, "緊急時訪問介護加算", true, kinkyuSegDates);
       if (seikatsuKino === "Ⅰ")
-        pushMonthAddon(MONTH_ADDON_NAMES.seikatsuI, 1, "生活機能向上連携加算Ⅰ", false, flags?.seikatsuDate ?? null);
+        pushMonthAddon(
+          MONTH_ADDON_NAMES.seikatsuI, 1, "生活機能向上連携加算Ⅰ", false,
+          flags?.seikatsuDate ? [flags.seikatsuDate] : null,
+        );
       if (seikatsuKino === "Ⅱ")
-        pushMonthAddon(MONTH_ADDON_NAMES.seikatsuII, 1, "生活機能向上連携加算Ⅱ", false, flags?.seikatsuDate ?? null);
+        pushMonthAddon(
+          MONTH_ADDON_NAMES.seikatsuII, 1, "生活機能向上連携加算Ⅱ", false,
+          flags?.seikatsuDate ? [flags.seikatsuDate] : null,
+        );
     }
     // ── 提供表の加算エディタ由来の加算行 (月次4コード以外。2.6 で解決済) ──
     // 単位×回数 の固定単位加算 (認知症専門ケア・口腔連携強化 等)。
@@ -1345,11 +1418,14 @@ export async function aggregateMonthlyVisitSeikyu(
     // レセ分割時は算定日でセグメント判定 (呼出側で解決済。算定日なしは月末側 + warning)。
     // 公費按分は月次加算と同じ: 算定日あり = 公費期間の内外で全量/0、なし = 全量 + 注記。
     // addon_lines が空なら no-op = 従来と完全同値。
-    for (const g of genericAddonsByClient.get(userId) ?? []) {
+    const genericLines = genericAddonsByClient.get(userId) ?? [];
+    for (let gi = 0; gi < genericLines.length; gi++) {
+      const g = genericLines[gi];
       const m = genericAddonMaster.get(g.code);
       if (!m || !m.ok) continue; // 未解決・対象外コードの warning は利用者ループ側で 1 回出す
       if (seg.segCount > 1) {
-        const target = seg.genericAddonSegIdx?.get(g.code) ?? seg.segCount - 1;
+        // 帰属は行 index キー (同一 addon_code の複数行でも行単位で正しく振り分ける)
+        const target = seg.genericAddonSegIdx?.get(gi) ?? seg.segCount - 1;
         if (target !== seg.segIndex) continue;
       }
       const units = m.units * g.count;
@@ -1597,7 +1673,9 @@ export async function aggregateMonthlyVisitSeikyu(
         );
       }
       if (honninLimit === 0 && kohi.hobetsu !== "12") {
-        warnings.push(
+        // レセ分割時はセグメントごとに評価されるため利用者単位で 1 回だけ出す
+        warnOncePerUser(
+          `honnin0:${userId}:${kohi.hobetsu}`,
           `${userLabel}: 公費 (${kohiHobetsuLabel(kohi.hobetsu)}) の本人負担上限月額が 0 円のため保険給付後の負担分を全額公費請求します — 介護券・受給者証の本人支払額を公費タブで確認してください`,
         );
       }
@@ -1649,7 +1727,9 @@ export async function aggregateMonthlyVisitSeikyu(
       userAmount = totalAmount - insuranceAmount - kohiAmount;
       // 生保 (法別12) は本人支払額 0 円が通常のため、この確認 warning は出さない
       if (honninLimit === 0 && kohi.hobetsu !== "12") {
-        warnings.push(
+        // レセ分割時はセグメントごとに評価されるため利用者単位で 1 回だけ出す
+        warnOncePerUser(
+          `honnin0:${userId}:${kohi.hobetsu}`,
           `${userLabel}: 公費 (${kohiHobetsuLabel(kohi.hobetsu)}) の本人負担上限月額が 0 円のため保険給付後の負担分を全額公費請求します — 介護券・受給者証の本人支払額を公費タブで確認してください`,
         );
       }
@@ -1868,23 +1948,30 @@ export async function aggregateMonthlyVisitSeikyu(
           ) {
             monthAddonFallbackLabels.push("生活機能向上連携");
           }
-          if (!hasKinkyuCol && (mFlags?.kinkyuCount ?? 0) > 0) {
+          // 緊急時: シフト実績 (kinkyu_houmon) があれば訪問日でセグメント帰属済み。
+          // 列未適用 または シフト実績 0 件でエディタ回数にフォールバックする場合のみ
+          // 月末側計上 (= 帰属を特定できない) の warning 対象
+          if (
+            (mFlags?.kinkyuCount ?? 0) > 0 &&
+            (!hasKinkyuCol || (kinkyuDatesByUser.get(userId)?.length ?? 0) === 0)
+          ) {
             monthAddonFallbackLabels.push("緊急時");
           }
           // 非月次の加算行 (加算エディタ由来) も算定日で計上先セグメントを解決する。
+          // キーは行 index (同一 addon_code の複数行を後勝ちで潰さない)。
           // 算定日なし・どのセグメントにも入らない → 月末側 (perSeg.length-1) + warning
-          const genericAddonSegIdx = new Map<string, number>();
-          for (const g of genericAddonsByClient.get(userId) ?? []) {
+          const genericAddonSegIdx = new Map<number, number>();
+          (genericAddonsByClient.get(userId) ?? []).forEach((g, gi) => {
             const gm = genericAddonMaster.get(g.code);
-            if (!gm?.ok) continue; // 集計対象外コードは帰属不要 (warning は上で出済)
+            if (!gm?.ok) return; // 集計対象外コードは帰属不要 (warning は上で出済)
             const idx = segIdxOfDate(g.santeiDate);
             if (idx == null) {
-              genericAddonSegIdx.set(g.code, perSeg.length - 1);
+              genericAddonSegIdx.set(gi, perSeg.length - 1);
               monthAddonFallbackLabels.push(gm.name);
             } else {
-              genericAddonSegIdx.set(g.code, idx);
+              genericAddonSegIdx.set(gi, idx);
             }
-          }
+          });
           split = perSeg.map((p, i) => ({
             typeCounts: p.filtered,
             seg: {
@@ -1894,7 +1981,9 @@ export async function aggregateMonthlyVisitSeikyu(
               segTo: p.s.to,
               isLast: i === perSeg.length - 1,
               cert: p.s.cert,
-              monthLimitAmount: null, // 分割時は各セグメントの認定限度額で機械判定
+              monthLimitAmount: null, // 分割時は segLimitAmount で機械判定
+              // セグメント期間に重なる全認定の max (セグメント内の区分変更も「重い方」)
+              segLimitAmount: p.s.limitAmount,
               genericAddonSegIdx,
               monthAddonHere: {
                 shokai: shokaiSegIdx != null ? i === shokaiSegIdx : i === perSeg.length - 1,
@@ -1928,12 +2017,9 @@ export async function aggregateMonthlyVisitSeikyu(
                 segTo: p.s.to,
                 isLast: true,
                 cert: p.s.cert,
-                // 実績のある期間の認定限度額を満額適用
-                monthLimitAmount:
-                  p.s.cert.service_limit_amount != null &&
-                  Number(p.s.cert.service_limit_amount) > 0
-                    ? Number(p.s.cert.service_limit_amount)
-                    : null,
+                // 実績のある期間の認定限度額を満額適用 (期間に重なる複数認定は max =
+                // 施行規則68条1項「重い方」。CertSegment.limitAmount 由来)
+                monthLimitAmount: p.s.limitAmount,
               },
             },
           ];
@@ -2069,8 +2155,11 @@ export function mergeSegmentRows(rows: UserSeikyuRow[]): UserSeikyuRow[] {
       }
     }
     base.grossBaseUnits += r.grossBaseUnits;
-    base.limitUnits = sumNullable(base.limitUnits, r.limitUnits);
-    base.planUnits = sumNullable(base.planUnits, r.planUnits);
+    // 限度額・計画単位数は保険者ごとに独立管理 (転居月は各保険者で満額適用) のため
+    // 合算値に意味がない — 2 保険者分を足すと過大表示になるので合算行では null にする
+    // (消費側は null 耐性あり: limitUnits ?? 0 / planUnits ?? フォールバック)
+    base.limitUnits = null;
+    base.planUnits = null;
     base.overUnits += r.overUnits;
     base.overAmount += r.overAmount;
     base.selfPayAmount += r.selfPayAmount;
