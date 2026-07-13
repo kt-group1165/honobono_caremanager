@@ -289,6 +289,70 @@ export function CareCertContent({
     ? careOffices.find((o) => o.id === form.care_office_id) ?? null
     : null;
 
+  // ── 住所地特例 (clients.jusho_tokurei / jusho_tokurei_insurer_number) ────────
+  // 総合事業伝送 (71R1) で明細を種別14 (明細情報(住所地特例)) にする利用者単位の属性。
+  // 列未適用 (migrations/jusho_tokurei.sql 前 = 42703) の環境ではセクションごと非表示。
+  const [jushoAvailable, setJushoAvailable] = useState(false);
+  const [jushoTokurei, setJushoTokurei] = useState(false);
+  const [jushoInsurerNumber, setJushoInsurerNumber] = useState("");
+  const [jushoSaving, setJushoSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("jusho_tokurei, jusho_tokurei_insurer_number")
+        .eq("id", userId)
+        .single();
+      if (cancelled) return;
+      if (error) {
+        // 42703 = 列未適用 (migration 前) → 非表示のまま。それ以外はログのみ (認定タブ本体は生かす)
+        if (error.code !== "42703") {
+          console.error("clients 住所地特例列の取得に失敗:", error.message);
+        }
+        return;
+      }
+      setJushoAvailable(true);
+      setJushoTokurei(data?.jusho_tokurei === true);
+      setJushoInsurerNumber(data?.jusho_tokurei_insurer_number ?? "");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, userId]);
+
+  const handleJushoSave = async () => {
+    const num = jushoInsurerNumber.trim();
+    if (jushoTokurei && num && !/^\d{6}$/.test(num)) {
+      toast.error("施設所在保険者番号は数字6桁で入力してください");
+      return;
+    }
+    setJushoSaving(true);
+    try {
+      const { error } = await supabase
+        .from("clients")
+        .update({
+          jusho_tokurei: jushoTokurei,
+          jusho_tokurei_insurer_number: jushoTokurei && num ? num : null,
+        })
+        .eq("id", userId);
+      if (error) {
+        console.error("住所地特例の保存に失敗:", error.message);
+        toast.error(`住所地特例の保存に失敗: ${error.message}`);
+        return;
+      }
+      toast.success("住所地特例を保存しました");
+      if (jushoTokurei && !num) {
+        toast.warning(
+          "施設所在保険者番号が未設定です — 伝送では種別02 (通常明細) で出力されます",
+        );
+      }
+    } finally {
+      setJushoSaving(false);
+    }
+  };
+
   // ── データ取得 (mutation 後の refetch 用) ───────────────────────────────────
 
   const fetchRecords = useCallback(async () => {
@@ -1009,6 +1073,51 @@ export function CareCertContent({
                 通常はマスタ（マスタ管理 → ケアマネ事業所）から選択します。マスタに無い事業所のみ番号を直接入力してください（直接入力すると選択は解除されます）。様式第二⑦・7131（居宅サービス計画）に反映されます。
               </p>
             </div>
+
+            {/* 住所地特例 (利用者単位)。列未適用 (migration 前) は非表示 */}
+            {jushoAvailable && (
+              <div className="rounded border border-amber-200 bg-amber-50/40 p-2 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-amber-800">住所地特例</p>
+                  <button
+                    type="button"
+                    onClick={handleJushoSave}
+                    disabled={jushoSaving}
+                    className="inline-flex items-center gap-1 rounded border border-amber-300 bg-white px-2 py-0.5 text-[11px] font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-40 transition-colors"
+                  >
+                    <Save size={10} />
+                    保存
+                  </button>
+                </div>
+                <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={jushoTokurei}
+                    onChange={(e) => setJushoTokurei(e.target.checked)}
+                    className="accent-amber-600"
+                  />
+                  住所地特例対象者
+                </label>
+                {jushoTokurei && (
+                  <div>
+                    <label className={labelCls}>施設所在保険者番号（6桁）</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={jushoInsurerNumber}
+                      onChange={(e) =>
+                        setJushoInsurerNumber(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))
+                      }
+                      className={inp}
+                      placeholder="000000"
+                    />
+                    <p className="mt-1 text-[10px] text-gray-500">
+                      入所（居）する施設の所在する市町村の証記載保険者番号（保険者番号＝元の市町村とは別）。総合事業伝送（71R1）の明細を種別14（明細情報(住所地特例)）で出力します。未設定の場合は種別02で出力されます。
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div>
               <label className={labelCls}>支援事業所届出日</label>

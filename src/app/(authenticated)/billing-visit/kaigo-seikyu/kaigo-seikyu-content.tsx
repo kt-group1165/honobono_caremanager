@@ -1284,7 +1284,7 @@ export function KaigoSeikyuContent() {
                 })}
               </div>
 
-              {/* ── 総合事業ブロック (7112/様式(予))。介護給付と混ぜず別枠で表示 ── */}
+              {/* ── 総合事業ブロック (71R1/様式第二の三)。介護給付と混ぜず別枠で表示 ── */}
               <SougouBlock rows={filteredSougouRows} />
 
               {/* ── フッター合計 (ほのぼの流: ラベル=水色枠 + 値=白枠右寄せ のボックス並び) ── */}
@@ -1649,7 +1649,7 @@ export function KaigoSeikyuContent() {
 }
 
 // ── 総合事業 (介護予防・日常生活支援総合事業) 訪問型サービス (A2) の請求ブロック ──
-//    介護給付 (7131) とは別様式 (7112/様式(予)) なので、介護保険分と混ぜず別枠で表示する。
+//    介護給付 (7131) とは別様式 (明細書 71R1/様式第二の三、請求書 7113) なので、介護保険分と混ぜず別枠で表示する。
 //    折りたたみトグル。行なしのときは何も出さない。
 function SougouBlock({ rows }: { rows: UserSeikyuRow[] }) {
   const [open, setOpen] = useState(true);
@@ -1669,7 +1669,7 @@ function SougouBlock({ rows }: { rows: UserSeikyuRow[] }) {
         <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-white">総合事業</span>
         <span>訪問型サービス (A2) {rows.length} 件</span>
         <span className="font-normal text-emerald-600">
-          — 介護給付とは別様式 (国保連 7112) で伝送します
+          — 介護給付とは別様式 (国保連 71R1/7113) で伝送します
         </span>
         <span className="ml-auto text-emerald-500">{open ? "▲" : "▼"}</span>
       </button>
@@ -1712,6 +1712,14 @@ function SougouBlock({ rows }: { rows: UserSeikyuRow[] }) {
                           限度額超過 {r.overUnits.toLocaleString()}単位
                         </span>
                       )}
+                      {(r as UserSeikyuRow & { jushoTokurei?: boolean }).jushoTokurei && (
+                        <span
+                          className="ml-1 inline-block rounded bg-amber-100 px-1 py-px text-[10px] font-semibold text-amber-700"
+                          title="住所地特例対象者 — 伝送 (71R1) の明細は種別14 (明細情報(住所地特例)) で出力します (施設所在保険者番号 未設定時は種別02)"
+                        >
+                          住所地特例
+                        </span>
+                      )}
                     </td>
                     <td className="px-2 py-1 text-right font-mono text-gray-700 border-r border-emerald-100">
                       {r.totalUnits.toLocaleString()}
@@ -1737,7 +1745,7 @@ function SougouBlock({ rows }: { rows: UserSeikyuRow[] }) {
         {totalSelfPay > 0 && (
           <span className="text-red-700">超過自費 <strong className="font-mono">¥{totalSelfPay.toLocaleString()}</strong></span>
         )}
-        <span className="ml-auto text-emerald-600">伝送ファイル (7112) は「国保請求」タブから出力</span>
+        <span className="ml-auto text-emerald-600">伝送ファイル (71R1/7113) は「国保請求」タブから出力</span>
       </div>
     </div>
   );

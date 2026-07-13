@@ -267,7 +267,7 @@ export function KokuhoSeikyuContent() {
     );
   };
 
-  // ── 総合事業 伝送ファイル (7112/様式(予) / Shift_JIS) ──
+  // ── 総合事業 伝送ファイル (明細書 71R1/様式第二の三 + 請求書 7113 / Shift_JIS) ──
   //    介護給付 (7131) とは別様式なので独立の出力ボタン。当月分のみ (再請求は介護給付側で扱う)。
   const exportSougouDensou = async () => {
     if (filteredSougouRows.length === 0) return;
@@ -436,10 +436,10 @@ export function KokuhoSeikyuContent() {
               <button
                 type="button"
                 onClick={exportSougouDensou}
-                title="総合事業 (介護予防・日常生活支援総合事業) の伝送ファイル (7112/様式(予) / Shift_JIS)。介護給付とは別様式"
+                title="総合事業 (介護予防・日常生活支援総合事業) の伝送ファイル (明細書 71R1/様式第二の三 + 請求書 7113 / Shift_JIS)。介護給付とは別様式"
                 className="border border-emerald-600 rounded bg-emerald-600 px-3 py-1 text-white font-semibold hover:bg-emerald-700 flex items-center gap-1.5"
               >
-                <Send size={13} />総合事業 (7112) ({filteredSougouRows.length}件)
+                <Send size={13} />総合事業 (71R1) ({filteredSougouRows.length}件)
               </button>
             )}
           </div>

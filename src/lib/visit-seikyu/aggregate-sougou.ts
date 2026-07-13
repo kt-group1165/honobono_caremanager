@@ -1,8 +1,9 @@
 /**
  * 総合事業 (介護予防・日常生活支援総合事業) 訪問型サービス (A2) の請求集計
  *
- * 介護給付 (aggregate.ts) とは別様式 (国保連 7112 / 様式(予)) で請求するため、
- * 介護保険分と混ぜず 独立ストリームとして集計する。呼出は aggregate.ts から。
+ * 介護給付 (aggregate.ts) とは別様式 (国保連 明細書 71R1 / 様式第二の三、請求書 7113) で
+ * 請求するため、介護保険分と混ぜず 独立ストリームとして集計する。呼出は aggregate.ts から。
+ * (7112/様式(予) は「経過措置」= みなし用の別様式であり、独自サービス A2 では使わない)
  *
  * 集計仕様 (ほのぼの相当):
  *   - 基本コード (system='総合事業', service_category='A2') の units を対象月世代 (validInMonth) で解決
@@ -36,6 +37,21 @@ interface SougouScheduleRow {
   service_type: string;
   visit_date: string;
 }
+
+/**
+ * 総合事業の請求行 = UserSeikyuRow + 住所地特例 (種別14 レコード用) の optional 拡張。
+ * 71R1 明細書では住所地特例対象者の明細行を種別02 ではなく
+ * 種別14 (明細情報(住所地特例)。項番18 = 施設所在保険者番号) で出力する (build-sougou.ts)。
+ */
+export type SougouSeikyuRow = UserSeikyuRow & {
+  /** 住所地特例対象者 (clients.jusho_tokurei)。列未適用 (migration 前) は false */
+  jushoTokurei?: boolean;
+  /**
+   * 施設所在保険者番号 (数字6桁。clients.jusho_tokurei_insurer_number)。
+   * 住所地特例対象者が入所(居)する施設の所在する市町村の証記載保険者番号。
+   */
+  jushoTokureiInsurerNumber?: string | null;
+};
 
 /**
  * 総合事業の限度額管理に使う「認定に限度額が未設定のとき」の標準補完値 (単位/月)。
@@ -87,7 +103,7 @@ export async function aggregateSougouSeikyu(
     /** 事業所の適用処遇改善コード (介護 116274 等 or 総合事業 CB_A26184 等) — 対象月世代解決済でなくてよい */
     effectiveFormulaCodes: string[];
   },
-): Promise<{ rows: UserSeikyuRow[]; warnings: string[] }> {
+): Promise<{ rows: SougouSeikyuRow[]; warnings: string[] }> {
   const warnings: string[] = [];
   if (sougouSchedules.length === 0) return { rows: [], warnings };
 
@@ -139,32 +155,70 @@ export async function aggregateSougouSeikyu(
   const masterOf = (name: string) => masterByNorm.get(toHankakuDigits(name));
 
   // 2) 利用者情報 (clients + 対象月に有効な認定)
+  //    住所地特例列 (jusho_tokurei / jusho_tokurei_insurer_number) は
+  //    migrations/jusho_tokurei.sql 未適用の環境でも動くよう 42703 フォールバック付きで引く。
   const userIds = Array.from(new Set(sougouSchedules.map((s) => s.user_id)));
   const clientById = new Map<
     string,
-    { name: string; furigana: string | null; birth: string | null; gender: string | null; userNumber: string | null }
+    {
+      name: string;
+      furigana: string | null;
+      birth: string | null;
+      gender: string | null;
+      userNumber: string | null;
+      jushoTokurei: boolean;
+      jushoTokureiInsurerNumber: string | null;
+    }
   >();
+  const CLIENT_COLS_BASE = "id, name, furigana, birth_date, gender, user_number";
+  const CLIENT_COLS_JUSHO = `${CLIENT_COLS_BASE}, jusho_tokurei, jusho_tokurei_insurer_number`;
+  let jushoColsAvailable = true;
   for (let i = 0; i < userIds.length; i += 50) {
     const chunk = userIds.slice(i, i + 50);
-    const { data, error } = await supabase
-      .from("clients")
-      .select("id, name, furigana, birth_date, gender, user_number")
-      .in("id", chunk);
-    if (error) throw new Error(`利用者取得失敗 (総合事業): ${error.message}`);
-    for (const c of (data ?? []) as {
+    type ClientRow = {
       id: string;
       name: string;
       furigana: string | null;
       birth_date: string | null;
       gender: string | null;
       user_number: string | null;
-    }[]) {
+      jusho_tokurei?: boolean | null;
+      jusho_tokurei_insurer_number?: string | null;
+    };
+    let rowsData: ClientRow[] | null = null;
+    if (jushoColsAvailable) {
+      const { data, error } = await supabase
+        .from("clients")
+        .select(CLIENT_COLS_JUSHO)
+        .in("id", chunk);
+      if (error) {
+        if (error.code === "42703") {
+          // 住所地特例列が未適用 — 住所地特例なし (種別02) として続行
+          jushoColsAvailable = false;
+        } else {
+          throw new Error(`利用者取得失敗 (総合事業): ${error.message}`);
+        }
+      } else {
+        rowsData = (data ?? []) as unknown as ClientRow[];
+      }
+    }
+    if (rowsData == null) {
+      const { data, error } = await supabase
+        .from("clients")
+        .select(CLIENT_COLS_BASE)
+        .in("id", chunk);
+      if (error) throw new Error(`利用者取得失敗 (総合事業): ${error.message}`);
+      rowsData = (data ?? []) as unknown as ClientRow[];
+    }
+    for (const c of rowsData) {
       clientById.set(c.id, {
         name: c.name,
         furigana: c.furigana,
         birth: c.birth_date,
         gender: c.gender,
         userNumber: c.user_number,
+        jushoTokurei: c.jusho_tokurei === true,
+        jushoTokureiInsurerNumber: c.jusho_tokurei_insurer_number ?? null,
       });
     }
   }
@@ -300,7 +354,7 @@ export async function aggregateSougouSeikyu(
   const unitPrice = opts.unitPrice > 0 ? opts.unitPrice : 10.0;
   const unitPrice100 = Math.round(unitPrice * 100);
 
-  const rows: UserSeikyuRow[] = [];
+  const rows: SougouSeikyuRow[] = [];
   for (const [userId, typeCounts] of byUser) {
     const client = clientById.get(userId);
     const cert = certByClient.get(userId) ?? null;
@@ -448,6 +502,9 @@ export async function aggregateSougouSeikyu(
         cert?.care_office_name?.trim() ||
         (cert?.care_office_id ? officeNameById.get(cert.care_office_id) ?? null : null),
       serviceDays: daysByUser.get(userId)?.size ?? 0,
+      // 住所地特例 (種別14 レコード用)。列未適用 (42703 フォールバック) 時は false/null
+      jushoTokurei: client?.jushoTokurei ?? false,
+      jushoTokureiInsurerNumber: client?.jushoTokureiInsurerNumber ?? null,
     });
   }
 

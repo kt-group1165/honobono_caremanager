@@ -1,22 +1,40 @@
 /**
  * 国保連伝送ファイル (介護予防・日常生活支援総合事業費 請求書・明細書情報) 生成
  *
- * 介護給付費 (build.ts の 7111/7131) とは別様式。
- * 国保中央会「インタフェース仕様書」の総合事業様式:
- *   - 請求書情報   = 交換情報識別番号 "7112" (仕様書 _if_form2.txt 287-429行)
- *   - 明細書情報   = 様式(予) 介護予防・日常生活支援総合事業費請求明細書
- *                    (_if_form2.txt 3487-3670行)。交換情報識別番号 "7112"。
+ * 介護給付 (build.ts の 7111/7131) とは別様式。
+ * 国保中央会「インタフェース仕様書 (サービス事業所編 R5.4版)」の総合事業様式:
+ *   - 請求書情報 = 交換情報識別番号 "7113" (介護予防・日常生活支援総合事業費請求書情報。
+ *     12項目。_if_form2.txt 末尾「71R1/7113/種別14 抜粋」参照 = 仕様書全文 3483-3535行)
+ *   - 明細書情報 = 交換情報識別番号 "71R1" (介護予防・日常生活支援総合事業費請求明細書情報
+ *     = 様式第二の三。仕様書全文 2765-2780行 / 対応様式 3717-3718行)
+ *   ※ "7112"/"71P1" (様式(予)) は「総合事業費（経過措置）」= みなし指定サービス
+ *     (A1/A5 等) 用の別様式であり、独自サービス (A2 等) では使わない (2026-07-13 是正済。
+ *     仕様書全文 2343-2358行 / 2750-2764行。旧実装は請求書・明細書とも 7112 を誤設定していた)。
  *
- * レコード構造は 7131 (build.ts) とほぼ同一:
- *   請求書 (7112) 保険請求分 1 レコード + 公費請求分 n
- *   明細書 (7112) 利用者ごと: 基本情報 (01) → 明細情報 (02)×n → 集計情報 (10)
- * 差分は 交換情報識別番号 (7112) と サービス種類コード (A2 等 = 総合事業の英字始まりコード)。
+ * 様式第二の三 のレコード構成 (仕様書全文 3842-3923行 の様式対応表):
+ *   基本情報 (01) ◎ / 明細情報 (02) ○※7 / 明細情報(住所地特例) (14) ○※7 /
+ *   集計情報 (10) ◎ / 社会福祉法人軽減額 ○ (軽減がある場合のみ — 本実装は未出力)
+ *   ※7 = 明細情報レコード、明細情報(住所地特例)レコードの「いずれか一方、又は両方」入力。
+ *   基本/明細/集計 のレコードレイアウト自体は介護給付 (7131) と共通
+ *   (仕様書全文 5846-6129行 / 6164-6259行 / 6873-7036行)。
+ *
+ * 住所地特例 (2026-07 実装):
+ *   住所地特例対象者 (clients.jusho_tokurei) の明細行は 種別02 ではなく
+ *   種別14 (明細情報(住所地特例)。全19項目) で出力する。
+ *   項番1〜17・19 は明細02と同構成、項番18 = 施設所在保険者番号 (数字6桁)
+ *   =「住所地特例対象者が入所（居）する施設の所在する市町村の証記載保険者番号」
+ *   (利用者単位の属性。仕様書全文 6263-6331行)。
+ *   施設所在保険者番号が未設定/6桁数字でない場合は warning を出して種別02 で出力する (安全側)。
+ *
+ * レコード構造:
+ *   請求書 (7113) 保険請求分 1 レコード + 公費請求分 n
+ *   明細書 (71R1) 利用者ごと: 基本情報 (01) → 明細情報 (02/14)×n → 集計情報 (10)
  *
  * ⚠ 要取込チェック (初回伝送時に伝送通信ソフトの取込チェックで要確認):
- *   - 交換情報識別番号 7112 / 様式(予) の項目構成が 7131 と完全一致か
- *     (本実装は 7131 の項目順を流用。仕様書上は基本/明細/集計とも 7131 と同構成)
- *   - サービス種類コード = 英字 "A2" の 2 桁でよいか (数字前提の欄に英字を出す)
  *   - コントロールレコードのデータ種別 (711 → 総合事業は別値か)。本実装は "711" のまま。
+ *   - 請求書 (7113) の請求情報区分コード。本実装は "01" (居宅サービス系) を踏襲。
+ *   - 住所地特例対象者 (種別14) の単位数を集計情報 (10) にどう算入するか。
+ *     本実装は種別02 と同様に全量算入 (仕様上 14 は「02 の住所地特例版」で同構成のため)。
  *
  * 限度額管理 (2026-07 正式化。aggregate-sougou.ts で超過分離済):
  *   集計 10 の 計画単位数 = 認定/標準の限度額 (limitUnits) フォールバック、
@@ -27,9 +45,17 @@
  */
 
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
-import type { DensouRow, DensouBuildOptions, DensouBuildResult } from "@/lib/kokuho-densou/build";
+import type { SougouSeikyuRow } from "@/lib/visit-seikyu/aggregate-sougou";
+import type { DensouBuildOptions, DensouBuildResult } from "@/lib/kokuho-densou/build";
+
+/** 総合事業の伝送行 = SougouSeikyuRow (住所地特例 optional 拡張込み) + 再請求時の元提供月 */
+export type SougouDensouRow = SougouSeikyuRow & { ym?: string };
 
 // ─── コード値 ────────────────────────────────────────────────────────────────
+// 交換情報識別番号 (是正 2026-07-13: 旧実装の "7112" は経過措置=みなし用で誤り)
+const KOKAN_ID_SEIKYUSHO = "7113"; // 総合事業費請求書情報 (12項目)
+const KOKAN_ID_MEISAISHO = "71R1"; // 総合事業費請求明細書情報 (様式第二の三)
+
 // 要介護状態区分コード (総合事業は要支援・事業対象者が中心)
 const CARE_LEVEL_CODE: Record<string, string> = {
   事業対象者: "06",
@@ -43,7 +69,7 @@ const CARE_LEVEL_CODE: Record<string, string> = {
 };
 
 const HOKEN_KOHI_KUBUN_HOKEN = "1"; // 保険・公費等区分コード: 保険請求分
-// 総合事業の請求情報区分コード。様式(予) は "01" (居宅サービス系) を踏襲。
+// 総合事業の請求情報区分コード。"01" (居宅サービス系) を踏襲。
 // ⚠ 要取込チェック: 総合事業専用の区分値がある場合は差し替える。
 const SEIKYU_JOHO_KUBUN = "01";
 
@@ -67,11 +93,11 @@ function splitSougouCode(
 }
 
 /**
- * 総合事業費 (7112) の伝送ファイルを生成する。
- * rows は system='総合事業' の UserSeikyuRow (aggregateSougouSeikyu の出力)。
+ * 総合事業費 (明細書 71R1 / 請求書 7113) の伝送ファイルを生成する。
+ * rows は system='総合事業' の SougouSeikyuRow (aggregateSougouSeikyu の出力)。
  */
 export function buildSougouDensou(
-  rows: DensouRow[],
+  rows: SougouDensouRow[],
   opts: DensouBuildOptions,
 ): DensouBuildResult {
   const warnings: string[] = [];
@@ -85,7 +111,9 @@ export function buildSougouDensou(
 
   const dataParts: string[][] = [];
 
-  // ── 7112 総合事業費請求書情報 (保険請求分 1 レコード + 公費請求分) ──
+  // ── 7113 総合事業費請求書情報 (保険請求分 1 レコード + 公費請求分) ──
+  // 12項目構成 (7111 の18項目 = 特定入所者介護サービス費等 13-18 は 7113 に存在しない)。
+  // 項番10 は 7113 では「事業費請求額」(7112 の「保険請求額」に相当する総合事業費の請求額)。
   const hokenRows = rows.filter((r) => !r.kohiTandoku);
   const totalCount = hokenRows.length;
   const totalUnits = hokenRows.reduce((s, r) => s + r.totalUnits, 0);
@@ -94,16 +122,16 @@ export function buildSougouDensou(
   const totalKohi = hokenRows.reduce((s, r) => s + (r.kohiAmount ?? 0), 0);
   const totalUser = hokenRows.reduce((s, r) => s + r.userAmount, 0);
   dataParts.push([
-    "7112", // 1 交換情報識別番号 (総合事業費請求書)
+    KOKAN_ID_SEIKYUSHO, // 1 交換情報識別番号 ("7113" 固定)
     ym, // 2 サービス提供年月
     office, // 3 事業所番号
-    HOKEN_KOHI_KUBUN_HOKEN, // 4 保険・公費等区分コード (1:保険請求 固定)
+    HOKEN_KOHI_KUBUN_HOKEN, // 4 保険・公費等区分コード (1:保険請求)
     "0", // 5 法別番号 (保険者請求分は 0)
     SEIKYU_JOHO_KUBUN, // 6 請求情報区分コード
     String(totalCount), // 7 サービス費用 件数
     String(totalUnits), // 8 同 単位数
     String(totalCost), // 9 同 費用合計
-    String(totalInsurance), // 10 同 保険請求額
+    String(totalInsurance), // 10 同 事業費請求額
     String(totalKohi), // 11 同 公費請求額
     String(totalUser), // 12 同 利用者負担
   ]);
@@ -120,7 +148,7 @@ export function buildSougouDensou(
   }
   for (const [hobetsu, hRows] of byHobetsu) {
     dataParts.push([
-      "7112",
+      KOKAN_ID_SEIKYUSHO,
       ym,
       office,
       "2", // 保険・公費等区分コード (2:公費請求)
@@ -129,13 +157,13 @@ export function buildSougouDensou(
       String(hRows.length),
       String(hRows.reduce((s, r) => s + r.totalUnits, 0)),
       String(hRows.reduce((s, r) => s + r.totalAmount, 0)),
-      String(hRows.reduce((s, r) => s + r.insuranceAmount, 0)),
+      String(hRows.reduce((s, r) => s + r.insuranceAmount, 0)), // 事業費請求額
       String(hRows.reduce((s, r) => s + (r.kohiAmount ?? 0), 0)),
       "0", // 利用者負担 (公費振替後は 0)
     ]);
   }
 
-  // ── 7112 様式(予) 明細書 (利用者ごと: 基本 01 → 明細 02×n → 集計 10) ──
+  // ── 71R1 様式第二の三 明細書 (利用者ごと: 基本 01 → 明細 02/14×n → 集計 10) ──
   for (const r of rows) {
     const rowYm = r.ym ?? ym;
     // 証記載保険者番号は数字8桁 (6桁の保険者は前0埋め) — IF仕様
@@ -150,12 +178,34 @@ export function buildSougouDensou(
     if (!r.birthDate) warnings.push(`${r.user_name}: 生年月日が未登録です`);
     if (!r.careOfficeNumber)
       warnings.push(`${r.user_name}: 担当居宅介護支援事業所 (事業所番号) が未登録です`);
-    // 明細 02 レコードは実績全量、集計 10 の限度額管理対象単位数 (baseUnits) は
+    // 明細 02/14 レコードは実績全量、集計 10 の限度額管理対象単位数 (baseUnits) は
     // 基準内のみ — 超過分は保険請求から除外済 (aggregate-sougou.ts)。build.ts と同方針。
     if (r.overUnits > 0) {
       warnings.push(
         `${r.user_name}: 総合事業の限度額 (${(r.limitUnits ?? 0).toLocaleString()}単位) を ${r.overUnits.toLocaleString()} 単位超過しています — 超過分 (${r.overAmount.toLocaleString()}円) は保険請求に含めず全額自費 (利用請求) 扱いです`,
       );
+    }
+
+    // ── 住所地特例 (種別14) 判定 ──
+    // フラグ true かつ施設所在保険者番号が数字6桁のときのみ種別14。
+    // 番号が未設定/不正のときは種別02 で出力する (安全側 = 取込エラーを避ける)。
+    const jushoInsurer = (r.jushoTokureiInsurerNumber ?? "").trim();
+    let useJushoTokurei = false;
+    if (r.jushoTokurei === true) {
+      if (/^\d{6}$/.test(jushoInsurer)) {
+        useJushoTokurei = true;
+        warnings.push(
+          `${r.user_name}: 住所地特例対象者のため明細を種別14 (明細情報(住所地特例)・施設所在保険者番号 ${jushoInsurer}) で出力します — 集計情報への算入方法は初回取込チェックで要確認`,
+        );
+      } else if (jushoInsurer) {
+        warnings.push(
+          `${r.user_name}: 住所地特例対象者ですが施設所在保険者番号 ("${jushoInsurer}") が数字6桁ではありません — 種別02で出力します。介護認定タブで修正してください`,
+        );
+      } else {
+        warnings.push(
+          `${r.user_name}: 住所地特例対象者ですが施設所在保険者番号が未設定です — 種別02で出力します`,
+        );
+      }
     }
 
     const benefitRate = r.kohiTandoku
@@ -171,9 +221,9 @@ export function buildSougouDensou(
       warnings.push(`${r.user_name}: 公費 (法別${r.kohiHobetsu ?? "12"}) の負担者番号が未登録です`);
     }
 
-    // 基本情報レコード (01) — 様式(予)。7131 の 01 と同構成。
+    // 基本情報レコード (01) — 7131 の 01 と同構成 (仕様書全文 5846-6129行)。
     dataParts.push([
-      "7112", // 1 交換情報識別番号
+      KOKAN_ID_MEISAISHO, // 1 交換情報識別番号 ("71R1")
       "01", // 2 レコード種別コード
       rowYm, // 3 サービス提供年月
       office, // 4 事業所番号
@@ -220,7 +270,7 @@ export function buildSougouDensou(
       "", "", "", "", "", "", // 51-56 公費3 合計情報
     ]);
 
-    // 明細情報レコード (02) — サービスコードごと。
+    // 明細情報レコード (02 / 住所地特例は 14) — サービスコードごと。
     // 総合事業のサービスコードは CB_ / K_ プレフィックス付きなので、
     // splitSougouCode で サービス種類 (A2) + 項目 (4桁) に分解する。
     const detailLines: { kind: string; item: string; unitPer: number; count: number; units: number }[] = [];
@@ -260,13 +310,14 @@ export function buildSougouDensou(
       }
     }
     for (const d of detailLines) {
-      dataParts.push([
-        "7112", // 1
-        "02", // 2 レコード種別コード
+      // 項番1〜17 は 02/14 で同構成。14 のみ 項18=施設所在保険者番号 が挟まり摘要は項19。
+      const common = [
+        KOKAN_ID_MEISAISHO, // 1 交換情報識別番号 ("71R1")
+        useJushoTokurei ? "14" : "02", // 2 レコード種別コード
         rowYm, // 3 サービス提供年月
-        office, // 4
-        insurer, // 5
-        insured, // 6
+        office, // 4 事業所番号
+        insurer, // 5 証記載保険者番号
+        insured, // 6 被保険者番号
         d.kind, // 7 サービス種類コード (A2 等)
         d.item, // 8 サービス項目コード (4桁)
         String(d.unitPer), // 9 単位数
@@ -278,8 +329,12 @@ export function buildSougouDensou(
         hasKohi ? String(d.units) : "", // 15 公費1対象サービス単位数
         "", // 16 公費2対象サービス単位数
         "", // 17 公費3対象サービス単位数
-        "", // 18 摘要
-      ]);
+      ];
+      dataParts.push(
+        useJushoTokurei
+          ? [...common, jushoInsurer, ""] // 18 施設所在保険者番号 (数字6桁) / 19 摘要
+          : [...common, ""], // 18 摘要
+      );
     }
 
     // 集計情報レコード (10) — サービス種類 (A2) 単位。
@@ -287,11 +342,12 @@ export function buildSougouDensou(
     // aggregate-sougou.ts で保険請求から除外済)、対象外 = 処遇改善等%加算。
     // 計画単位数は build.ts (7131) と同じフォールバック (計画 > 限度額 > 基準内)。
     // ⚠ 要取込チェック: 総合事業の集計 10 の計画/管理対象/対象外の扱いを取込テストで確認。
+    //   住所地特例 (種別14) 分も 02 と同様に全量算入している (仕様上 14 は 02 の住所地特例版)。
     const svcKindCode = detailLines[0]?.kind ?? "A2";
     const kanriGaiUnits = r.kanriTaishougaiUnits; // = addonUnits (処遇改善%加算 = 管理対象外)
     const kanriInUnits = r.baseUnits; // 基準内の本体単位 = 限度額管理対象
     dataParts.push([
-      "7112", // 1
+      KOKAN_ID_MEISAISHO, // 1 交換情報識別番号 ("71R1")
       "10", // 2 レコード種別コード
       rowYm, // 3 サービス提供年月
       office, // 4
