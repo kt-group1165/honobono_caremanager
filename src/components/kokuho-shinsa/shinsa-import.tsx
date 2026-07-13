@@ -251,6 +251,9 @@ export function ShinsaKekkaImport({
         }
 
         await markRowsApplied(supabase, fileId);
+        // 成功したファイルは即座に選択リストから除去する
+        // (後続ファイルで失敗した場合、再確定でこのファイルの raw が二重保存されるのを防ぐ)
+        setFiles((prev) => prev.filter((p) => p !== f));
       }
       setFiles([]);
       setResultLines(lines);

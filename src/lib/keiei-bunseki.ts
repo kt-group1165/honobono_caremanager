@@ -278,24 +278,32 @@ export interface MonthVisitData {
 
 /**
  * 1 ヶ月分の訪問データを取得する (page-loop 付き)。
+ * officeId 指定時は kaigo_visit_schedule を自事業所 + office_id 未設定 (移行期データ)
+ * に限定する (visit-seikyu/aggregate.ts と同条件)。
  * kaigo_bath_visit_records は table 未作成なら 0 件として続行。
  */
 export async function fetchVisitMonthData(
   supabase: SupabaseClient,
   ym: string,
+  officeId?: string | null,
 ): Promise<{ data: MonthVisitData; error: string | null }> {
   const { start, end } = monthStartEnd(ym);
   const PAGE = 1000;
   const schedules: KeieiSchedRow[] = [];
   let error: string | null = null;
   for (let from = 0; ; from += PAGE) {
-    const { data, error: qErr } = await supabase
+    let q = supabase
       .from("kaigo_visit_schedule")
       .select(
         "user_id, staff_id, staff_id_2, staff_id_3, start_time, end_time, service_type, status",
       )
       .gte("visit_date", start)
-      .lte("visit_date", end)
+      .lte("visit_date", end);
+    if (officeId) {
+      // 自事業所スコープ (office_id 未設定の旧データは含める)
+      q = q.or(`office_id.eq.${officeId},office_id.is.null`);
+    }
+    const { data, error: qErr } = await q
       .order("id", { ascending: true })
       .range(from, from + PAGE - 1);
     if (qErr) {

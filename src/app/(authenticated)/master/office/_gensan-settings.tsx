@@ -115,6 +115,7 @@ export function GensanSection({
   };
 
   const handleDelete = async (id: string) => {
+    if (!window.confirm("この減算の適用期間を削除します。よろしいですか？")) return;
     const { error } = await supabase
       .from("kaigo_office_gensan_periods")
       .delete()

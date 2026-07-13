@@ -37,11 +37,12 @@ import {
   SeikyuMonthNav,
 } from "../_shared/seikyu-context";
 import { buildKokuhoDensou, type DensouRow } from "@/lib/kokuho-densou/build";
-import { buildSougouDensou } from "@/lib/kokuho-densou/build-sougou";
+import { buildSougouDensou, type SougouDensouRow } from "@/lib/kokuho-densou/build-sougou";
 import {
   loadReSeikyuRows,
   type ReSeikyuReasons,
   type ReSeikyuRow,
+  type ReSeikyuSougouRow,
 } from "@/lib/visit-seikyu/re-seikyu";
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
 import { ShinsaKekkaImport } from "@/components/kokuho-shinsa/shinsa-import";
@@ -93,6 +94,7 @@ export function KokuhoSeikyuContent() {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [statusByClient, setStatusByClient] = useState<Map<string, BillingStatusRow>>(new Map());
   const [reRows, setReRows] = useState<ReSeikyuRow[]>([]);
+  const [reSougouRows, setReSougouRows] = useState<ReSeikyuSougouRow[]>([]);
 
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
 
@@ -126,6 +128,7 @@ export function KokuhoSeikyuContent() {
   const loadReRows = useCallback(async () => {
     if (!officeId || !tenantId) {
       setReRows([]);
+      setReSougouRows([]);
       return;
     }
     try {
@@ -137,12 +140,15 @@ export function KokuhoSeikyuContent() {
         currentMonthKey: monthKey,
       });
       setReRows(result.rows);
+      // 総合事業ストリームの再請求行 (71R1 で元提供月ファイルとして出力)
+      setReSougouRows(result.sougouRows);
       // 再集計 warnings は介護請求タブで表示する (ここでは伝送時の build warnings に集約)
     } catch (e) {
       toast.error(
         "再請求分の集計に失敗: " + (e instanceof Error ? e.message : String(e)),
       );
       setReRows([]);
+      setReSougouRows([]);
     }
   }, [supabase, officeId, tenantId, unitPrice, appliedFormulaCodes, monthKey]);
 
@@ -180,6 +186,25 @@ export function KokuhoSeikyuContent() {
 
   const excludedCount =
     filteredRows.length - displayRows.filter((d) => !d.isReSeikyu).length;
+
+  // ── 総合事業 (71R1) の当月分/再請求分 — 介護給付 (7131) と同じ除外・合流ルール ──
+  // 当月分のうち 月遅れ/返戻/過誤 フラグの利用者は伝送から除外し (後月に再請求)、
+  // 過去月の再請求行 (reSougouRows) は元提供月ごとの別ファイルとして出力する。
+  // ※ 一覧テーブルには総合事業行は載せない (従来どおり出力ボタンのみ)
+  const sougouCurrentRows = useMemo(
+    () =>
+      filteredSougouRows.filter((r) => {
+        const st = statusByClient.get(r.user_id);
+        return !(st?.tsukiokure || st?.henrei || st?.kago);
+      }),
+    [filteredSougouRows, statusByClient],
+  );
+  const sougouExcludedCount = filteredSougouRows.length - sougouCurrentRows.length;
+  const reSougouMatched = useMemo(
+    () => reSougouRows.filter(kanaMatches),
+    [reSougouRows, kanaMatches],
+  );
+  const sougouTargetCount = sougouCurrentRows.length + reSougouMatched.length;
 
   const toggle = (key: string) =>
     setChecked((prev) => {
@@ -268,31 +293,61 @@ export function KokuhoSeikyuContent() {
   };
 
   // ── 総合事業 伝送ファイル (明細書 71R1/様式第二の三 + 請求書 7113 / Shift_JIS) ──
-  //    介護給付 (7131) とは別様式なので独立の出力ボタン。当月分のみ (再請求は介護給付側で扱う)。
+  //    介護給付 (7131) とは別様式なので独立の出力ボタン。
+  //    介護給付と同じく、当月分の 月遅れ/返戻/過誤 フラグ行は除外し、過去月の再請求行は
+  //    元提供月ごとの別ファイル (SG{元提供YYYYMM}.CSV) として出力する (2026-07-14)。
   const exportSougouDensou = async () => {
-    if (filteredSougouRows.length === 0) return;
-    const result = buildSougouDensou(filteredSougouRows as DensouRow[], {
-      officeNumber: officeNumber ?? "",
-      year,
-      month,
-      unitPrice,
-      seikyuYear: year,
-      seikyuMonth: month,
-    });
-    if (result.warnings.length > 0) {
-      const list = result.warnings.slice(0, 12).join("\n・");
+    if (sougouTargetCount === 0) return;
+
+    // 提供月ごとにグループ化 (再請求 = 元提供月 / 当月 = 選択月)。exportDensou と同構造
+    const byMonth = new Map<string, SougouDensouRow[]>();
+    for (const r of reSougouMatched) {
+      if (!byMonth.has(r.__origMonthKey)) byMonth.set(r.__origMonthKey, []);
+      byMonth.get(r.__origMonthKey)!.push(r); // ReSeikyuSougouRow は ym (元提供年月) 持ち
+    }
+    if (sougouCurrentRows.length > 0) {
+      if (!byMonth.has(monthKey)) byMonth.set(monthKey, []);
+      byMonth.get(monthKey)!.push(...(sougouCurrentRows as SougouDensouRow[]));
+    }
+
+    const files: { content: string; fileName: string; label: string; count: number }[] = [];
+    const warnings: string[] = [];
+    for (const [mKey, group] of [...byMonth.entries()].sort()) {
+      const [oy, om] = mKey.split("-").map((n) => Number(n));
+      if (!oy || !om) continue;
+      const result = buildSougouDensou(group, {
+        officeNumber: officeNumber ?? "",
+        year: oy,
+        month: om,
+        unitPrice,
+        // 処理対象年月 (審査月) は「今回の提出バッチの請求月の翌月」(exportDensou と同じ)
+        seikyuYear: year,
+        seikyuMonth: month,
+      });
+      warnings.push(...result.warnings.map((w) => `[R${oy - 2018}/${om}] ${w}`));
+      files.push({
+        content: result.content,
+        fileName: result.fileName,
+        label: `R${oy - 2018}/${om} 提供分`,
+        count: result.dataRecordCount,
+      });
+    }
+
+    if (warnings.length > 0) {
+      const list = warnings.slice(0, 12).join("\n・");
       const ok = window.confirm(
-        `総合事業の伝送で以下の項目が不足しています (取込チェックでエラーになる可能性があります):\n\n・${list}${result.warnings.length > 12 ? `\n…他 ${result.warnings.length - 12} 件` : ""}\n\nこのままファイルを出力しますか？`,
+        `総合事業の伝送で以下の項目が不足しています (取込チェックでエラーになる可能性があります):\n\n・${list}${warnings.length > 12 ? `\n…他 ${warnings.length - 12} 件` : ""}\n\nこのままファイルを出力しますか？`,
       );
       if (!ok) return;
     }
     const saved = await saveFilesToFolder(
-      [{ blob: sjisBlob(result.content), fileName: result.fileName }],
+      files.map((f) => ({ blob: sjisBlob(f.content), fileName: f.fileName })),
       "kokuho-densou",
     );
     if (!saved) return;
     toast.success(
-      `総合事業 伝送ファイルを保存しました: ${result.fileName} (${result.dataRecordCount} レコード)`,
+      `総合事業 伝送ファイル ${files.length} 本を保存しました: ` +
+        files.map((f) => `${f.fileName} (${f.label} ${f.count} レコード)`).join(" / "),
     );
   };
 
@@ -432,21 +487,21 @@ export function KokuhoSeikyuContent() {
             >
               <Send size={13} />伝送ファイル ({targets.length}件)
             </button>
-            {filteredSougouRows.length > 0 && (
+            {sougouTargetCount > 0 && (
               <button
                 type="button"
                 onClick={exportSougouDensou}
-                title="総合事業 (介護予防・日常生活支援総合事業) の伝送ファイル (明細書 71R1/様式第二の三 + 請求書 7113 / Shift_JIS)。介護給付とは別様式"
+                title="総合事業 (介護予防・日常生活支援総合事業) の伝送ファイル (明細書 71R1/様式第二の三 + 請求書 7113 / Shift_JIS)。介護給付とは別様式。再請求分は元提供月ごとに別ファイル"
                 className="border border-emerald-600 rounded bg-emerald-600 px-3 py-1 text-white font-semibold hover:bg-emerald-700 flex items-center gap-1.5"
               >
-                <Send size={13} />総合事業 (71R1) ({filteredSougouRows.length}件)
+                <Send size={13} />総合事業 (71R1) ({sougouTargetCount}件)
               </button>
             )}
           </div>
         </div>
 
         {/* 除外・再請求の案内 */}
-        {!loading && (excludedCount > 0 || reRows.length > 0) && (
+        {!loading && (excludedCount > 0 || reRows.length > 0 || sougouExcludedCount > 0 || reSougouMatched.length > 0) && (
           <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
             <AlertCircle size={14} className="mt-0.5 shrink-0" />
             <span>
@@ -463,6 +518,18 @@ export function KokuhoSeikyuContent() {
                       を確認してから伝送してください (同月過誤は申立と同月に伝送)。
                     </>
                   )}
+                </>
+              )}
+              {sougouExcludedCount > 0 && (
+                <>
+                  {" "}
+                  総合事業の当月分のうち月遅れ・返戻・過誤フラグの {sougouExcludedCount} 件は「総合事業 (71R1)」の伝送対象から除外しています。
+                </>
+              )}
+              {reSougouMatched.length > 0 && (
+                <>
+                  {" "}
+                  総合事業の過去月再請求 {reSougouMatched.length} 件は「総合事業 (71R1)」ボタンから元提供月のファイルとして出力します (一覧テーブルには表示されません)。
                 </>
               )}
             </span>

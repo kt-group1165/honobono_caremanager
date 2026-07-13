@@ -53,6 +53,9 @@ export function KeieiBunsekiKyotakuTab({
   const [monthly, setMonthly] = useState<KyotakuMonthlyMetrics[]>([]);
   // 逓減判定用の常勤換算数 (介護支援専門員)。手入力 (シフト連携は未実装)
   const [joukinInput, setJoukinInput] = useState("1");
+  /** fetch 失敗 (スピナー永続の解消用)。key が現 periodKey のときのみ表示 */
+  const [loadError, setLoadError] = useState<{ key: string; message: string } | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
   const loadedKeyRef = useRef<string | null>(null);
 
   const rangeValid =
@@ -60,6 +63,7 @@ export function KeieiBunsekiKyotakuTab({
   const periodKey = `${officeId}:${fromMonth}:${toMonth}`;
 
   useEffect(() => {
+    void retryTick; // 再試行ボタンで effect を再実行させるためのトリガー
     if (!active || !rangeValid || loadedKeyRef.current === periodKey) return;
     loadedKeyRef.current = periodKey;
     let stale = false;
@@ -68,21 +72,31 @@ export function KeieiBunsekiKyotakuTab({
       const targetMonths = monthsInRangeCapped(fromMonth, toMonth, MONTH_CAP);
       const baseMonth = prevMonthKey(targetMonths[0]);
 
-      // 自事業所の利用者 (client_office_assignments)。失敗時は全件 (フィルタなし) で続行
+      // 自事業所の利用者 (client_office_assignments) — order 付き page-loop (1000 行上限対策)。
+      // 失敗時は全件 (フィルタなし) で続行
       let clientFilter: Set<string> | null = null;
       {
-        const { data, error } = await supabase
-          .from("client_office_assignments")
-          .select("client_id")
-          .eq("office_id", officeId);
-        if (error) {
-          console.error("client_office_assignments fetch failed:", error.message);
-          toast.error("事業所割当の取得に失敗 (全件で集計します): " + error.message);
-        } else {
-          clientFilter = new Set(
-            ((data ?? []) as { client_id: string }[]).map((a) => a.client_id),
-          );
+        const PAGE = 1000;
+        const acc = new Set<string>();
+        let failed = false;
+        for (let from = 0; ; from += PAGE) {
+          const { data, error } = await supabase
+            .from("client_office_assignments")
+            .select("client_id")
+            .eq("office_id", officeId)
+            .order("id") // page-loop の安定順序
+            .range(from, from + PAGE - 1);
+          if (error) {
+            console.error("client_office_assignments fetch failed:", error.message);
+            toast.error("事業所割当の取得に失敗 (全件で集計します): " + error.message);
+            failed = true;
+            break;
+          }
+          const rows = (data ?? []) as { client_id: string }[];
+          for (const a of rows) acc.add(a.client_id);
+          if (rows.length < PAGE) break;
         }
+        if (!failed) clientFilter = acc;
       }
 
       // 月別 fetch (並列 4 本。各月内は page-loop)
@@ -106,13 +120,15 @@ export function KeieiBunsekiKyotakuTab({
     })().catch((e: unknown) => {
       if (stale) return;
       loadedKeyRef.current = null; // 失敗時は次回アクティブ化で再試行
-      toast.error("経営分析の集計に失敗: " + (e instanceof Error ? e.message : String(e)));
+      const message = e instanceof Error ? e.message : String(e);
+      setLoadError({ key: periodKey, message });
+      toast.error("経営分析の集計に失敗: " + message);
     });
 
     return () => {
       stale = true;
     };
-  }, [active, rangeValid, periodKey, fromMonth, toMonth, officeId, supabase]);
+  }, [active, rangeValid, periodKey, fromMonth, toMonth, officeId, supabase, retryTick]);
 
   const joukin = (() => {
     const v = parseFloat(joukinInput);
@@ -167,6 +183,26 @@ export function KeieiBunsekiKyotakuTab({
     );
   }
   if (loadedFor !== periodKey) {
+    // fetch 失敗時はスピナーを止め、再試行ボタンを出す
+    if (loadError && loadError.key === periodKey) {
+      return (
+        <div className="flex flex-col items-center gap-3 py-16">
+          <span className="text-xs text-red-600">
+            経営分析の集計に失敗しました: {loadError.message}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setLoadError(null);
+              setRetryTick((t) => t + 1);
+            }}
+            className="border border-gray-400 rounded bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
+          >
+            再試行
+          </button>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col items-center gap-2 py-16">
         <Loader2 size={22} className="animate-spin text-indigo-400" />

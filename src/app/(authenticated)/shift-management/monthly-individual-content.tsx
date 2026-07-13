@@ -544,7 +544,9 @@ export function MonthlyIndividualView({
     for (const sched of targets) {
       const { data: existing, error: existErr } = await supabase
         .from("kaigo_visit_records").select("id")
-        .eq("user_id", sched.user_id).eq("visit_date", sched.visit_date).eq("start_time", sched.start_time).limit(1);
+        // ★ 単発側と同じく end_time + service_type まで一致で確認 (同日同開始時刻の別サービスと混同しない)
+        .eq("user_id", sched.user_id).eq("visit_date", sched.visit_date).eq("start_time", sched.start_time)
+        .eq("end_time", sched.end_time).eq("service_type", sched.service_type).limit(1);
       if (existErr) {
         // 存在確認に失敗したまま INSERT すると重複記録を作りうるためこの行はスキップ
         console.error("visit_records existence check error:", existErr.message);
@@ -588,7 +590,9 @@ export function MonthlyIndividualView({
     const succeeded = new Set<string>();
     for (const sched of targets) {
       const { error: delErr } = await supabase.from("kaigo_visit_records").delete()
-        .eq("user_id", sched.user_id).eq("visit_date", sched.visit_date).eq("start_time", sched.start_time);
+        // ★ 単発側と同じく end_time + service_type まで一致で削除 (別サービス記録の巻き込み削除防止)
+        .eq("user_id", sched.user_id).eq("visit_date", sched.visit_date).eq("start_time", sched.start_time)
+        .eq("end_time", sched.end_time).eq("service_type", sched.service_type);
       if (delErr) {
         console.error("visit_records delete error:", delErr.message);
         continue;
@@ -778,7 +782,9 @@ export function MonthlyIndividualView({
         }
       }
       const { error: recDelErr } = await supabase.from("kaigo_visit_records").delete()
-        .eq("user_id", sched.user_id).eq("visit_date", sched.visit_date).eq("start_time", sched.start_time);
+        // ★ 単発側と同じく end_time + service_type まで一致で削除 (別サービス記録の巻き込み削除防止)
+        .eq("user_id", sched.user_id).eq("visit_date", sched.visit_date).eq("start_time", sched.start_time)
+        .eq("end_time", sched.end_time).eq("service_type", sched.service_type);
       if (recDelErr) {
         console.error("visit_records delete error:", recDelErr.message);
         continue;

@@ -328,6 +328,7 @@ export async function applyHenreiFlags(
     const { data, error } = await supabase
       .from("kaigo_billing_status")
       .select("client_id, target_month, notes, henrei")
+      .eq("office_id", officeId)
       .in("client_id", part)
       .in("target_month", months);
     if (error) throw new Error("請求状態の取得に失敗: " + error.message);
@@ -364,7 +365,7 @@ export async function applyHenreiFlags(
   for (const part of chunk(payloads, 200)) {
     const { error } = await supabase
       .from("kaigo_billing_status")
-      .upsert(part, { onConflict: "client_id,target_month" });
+      .upsert(part, { onConflict: "client_id,target_month,office_id" });
     if (error) throw new Error("返戻フラグの反映に失敗: " + error.message);
   }
 
@@ -454,7 +455,8 @@ export async function markRowsApplied(
     .from("kokuho_shinsa_notice_rows")
     .update({ applied: true, applied_at: new Date().toISOString() })
     .eq("file_id", fileId)
-    .or("and(notice_type.eq.henrei,match_status.eq.matched,record_kind.eq.D1),notice_type.eq.shiharai_kettei");
+    // 返戻は service_ym 非 null (= 提供年月不明で billing_status 反映をスキップした行に applied を付けない)
+    .or("and(notice_type.eq.henrei,match_status.eq.matched,record_kind.eq.D1,service_ym.not.is.null),notice_type.eq.shiharai_kettei");
   if (error) throw new Error("反映済みマークの更新に失敗: " + error.message);
 }
 

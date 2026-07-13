@@ -108,6 +108,12 @@ export function buildSougouDensou(
       `事業所番号が 10 桁の数字ではありません ("${office}") — 自事業所管理で正しい事業所番号を設定してください`,
     );
   }
+  // ⚠ 要取込チェック: 基本情報 (01) 項19 の区分値 (下記コメント参照)
+  if (rows.some((r) => r.careOfficeNumber)) {
+    warnings.push(
+      "総合事業明細書 (71R1) の居宅サービス計画作成区分コード (基本01 項19) は「3=介護予防支援事業所・地域包括支援センター作成」で出力します — 居宅介護支援事業所への委託等で「1」が正しい場合があるため、初回は伝送ソフトの取込チェックで確認してください",
+    );
+  }
 
   const dataParts: string[][] = [];
 
@@ -241,8 +247,16 @@ export function buildSougouDensou(
       "", // 16 旧措置入所者特例コード
       dateNum(r.certStart), // 17 認定有効期間 開始
       dateNum(r.certEnd), // 18 認定有効期間 終了
-      "1", // 19 居宅サービス計画作成区分コード (1=居宅介護支援事業所作成)
-      r.careOfficeNumber ?? "", // 20 事業所番号 (居宅介護支援事業所)
+      // 19 居宅サービス計画作成区分コード。総合事業 (介護予防ケアマネジメント) は
+      //    「3=介護予防支援事業所・地域包括支援センター作成」が本則
+      //    (r5_full.txt L5925-5942: 項20 は項19が「居宅介護支援事業所作成」又は
+      //    「介護予防支援事業所・地域包括支援センター作成」のとき必須 — 区分値として
+      //    包括作成が存在する。手元のコード一覧抜粋 _if_kyotaku.txt L14299-14301 は
+      //    1:居宅介護支援事業所作成 / 2:自己作成 のみ記載の旧版のため値 3 は取込チェックで要確認)。
+      //    careOfficeNumber 未解決で "1"/"3" 固定にすると項20空欄=必須欠落で返戻するため、
+      //    番号が無ければ "2" (自己作成) で出す (build.ts:269-273 の 7131 と同ロジック)。
+      r.careOfficeNumber ? "3" : "2", // 19
+      r.careOfficeNumber ?? "", // 20 事業所番号 (居宅介護支援事業所。区分2のときは空)
       "", // 21 開始年月日
       "", // 22 中止年月日
       "", // 23 中止理由・入所前状況
@@ -310,6 +324,13 @@ export function buildSougouDensou(
       }
     }
     for (const d of detailLines) {
+      // 項10 日数・回数 / 項11 公費1対象日数・回数 は「数字2桁」(_if_form2.txt L7666-7669) —
+      // 100 回以上は桁溢れで取込エラー/切り捨ての恐れがあるため warning で明示する
+      if (d.count > 99) {
+        warnings.push(
+          `${r.user_name}: 総合事業コード ${d.kind}${d.item} の回数 (${d.count}) が明細行の日数・回数欄 (数字2桁 = 上限99) を超えています — 取込エラーの可能性があるため実績を確認してください`,
+        );
+      }
       // 項番1〜17 は 02/14 で同構成。14 のみ 項18=施設所在保険者番号 が挟まり摘要は項19。
       const common = [
         KOKAN_ID_MEISAISHO, // 1 交換情報識別番号 ("71R1")
@@ -397,7 +418,11 @@ export function buildSougouDensou(
 
   return {
     content: lines.join("\r\n") + "\r\n",
-    fileName: `S${ym}.CSV`, // 総合事業 = S 始まり (介護給付は J 始まり)
+    // ファイル名: 英字始まり半角英数字8桁以内 + .CSV (_if_kyotaku.txt L11282。同一月の
+    // 交換情報は同一ファイル名を使わず送付元で識別できる名称とする — 同 L13460-13463)。
+    // 旧 `S{YYYYMM}` は build-kyotaku.ts の計画費請求ファイルと衝突するため
+    // 総合事業は `SG` 始まり (SG+YYYYMM = 8文字。介護給付は J、給付管理は K、計画費は S)
+    fileName: `SG${ym}.CSV`,
     dataRecordCount: dataParts.length,
     warnings,
   };

@@ -439,6 +439,33 @@ export async function aggregateSougouSeikyu(
     // 公費単独 (H番号) — 介護と同じ扱い
     const kohiTandoku = /^[Hh]/.test((cert?.insured_number ?? "").trim());
     const kohi = kohiRes.byClient.get(userId) ?? null;
+    // ── 部分公費の検出 (総合事業の公費按分は未対応 — 2026-07-14) ──
+    // 介護給付 (aggregate.ts) の期間按分・本人負担上限月額・複数公費カスケードは
+    // 総合事業ストリームには実装していない。以下の公費は「全量振替
+    // (kohiUnits=totalUnits / kohiAmount=費用−保険)」のまま出力されるため、
+    // 該当利用者を検出したら warning で手動確認を促す:
+    //   1. 法別12 (生活保護) 以外 — 給付率・負担の扱いが生保 10割振替と異なりうる
+    //   2. 本人負担上限月額 (honnin_futan) > 0 — 上限適用の按分計算が必要
+    //   3. 公費適用期間が対象月の一部 — 期間内実績のみ公費対象とする按分が必要
+    if (kohi) {
+      const monthStartIso = `${monthStr}-01`;
+      const daysInMonth = new Date(opts.year, opts.month, 0).getDate();
+      const monthEndIso = `${monthStr}-${String(daysInMonth).padStart(2, "0")}`;
+      const partialPeriod =
+        (kohi.start != null && kohi.start > monthStartIso) ||
+        (kohi.end != null && kohi.end < monthEndIso);
+      const partialReasons: string[] = [];
+      if (kohi.hobetsu !== "12") partialReasons.push(`法別${kohi.hobetsu} (生活保護以外)`);
+      if ((kohi.honninFutan ?? 0) > 0)
+        partialReasons.push(`本人負担上限月額 ${kohi.honninFutan.toLocaleString()}円`);
+      if (partialPeriod)
+        partialReasons.push(`公費適用期間が月の一部 (${kohi.start ?? "制限なし"}〜${kohi.end ?? "制限なし"})`);
+      if (partialReasons.length > 0) {
+        warnings.push(
+          `${userLabel}: 総合事業の公費按分 (期間按分・本人負担上限・法別12以外の給付率) は未対応です (${partialReasons.join("、")}) — 公費対象分を全量振替で集計するため、請求前に手動確認してください`,
+        );
+      }
+    }
     const copayX10 = Math.min(10, Math.max(0, Math.round(copay * 10)));
     const insuranceAmount = kohiTandoku ? 0 : Math.floor((totalAmount * (10 - copayX10)) / 10);
     const publicExpense =

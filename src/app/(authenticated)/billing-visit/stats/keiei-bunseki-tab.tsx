@@ -57,11 +57,14 @@ const fmtH = (min: number) => (min / 60).toFixed(1); // 分 → 時間 (小数1�
 
 export function KeieiBunsekiTab({
   active,
+  officeId,
   fromMonth,
   toMonth,
   payments,
 }: {
   active: boolean;
+  /** 自事業所 (kaigo_visit_schedule のスコープ)。null = スコープなし (全件) */
+  officeId: string | null;
   fromMonth: string;
   toMonth: string;
   payments: PaymentLite[];
@@ -73,13 +76,17 @@ export function KeieiBunsekiTab({
   const [monthly, setMonthly] = useState<VisitMonthlyMetrics[]>([]);
   const [staffRows, setStaffRows] = useState<StaffStatRow[]>([]);
   const [staffNames, setStaffNames] = useState<Map<string, string>>(new Map());
+  /** fetch 失敗 (スピナー永続の解消用)。key が現 periodKey のときのみ表示 */
+  const [loadError, setLoadError] = useState<{ key: string; message: string } | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
   const loadedKeyRef = useRef<string | null>(null);
 
   const rangeValid =
     /^\d{4}-\d{2}$/.test(fromMonth) && /^\d{4}-\d{2}$/.test(toMonth) && fromMonth <= toMonth;
-  const periodKey = `${fromMonth}:${toMonth}`;
+  const periodKey = `${officeId ?? "all"}:${fromMonth}:${toMonth}`;
 
   useEffect(() => {
+    void retryTick; // 再試行ボタンで effect を再実行させるためのトリガー
     if (!active || !rangeValid || loadedKeyRef.current === periodKey) return;
     loadedKeyRef.current = periodKey;
     let stale = false;
@@ -88,9 +95,9 @@ export function KeieiBunsekiTab({
       const targetMonths = monthsInRangeCapped(fromMonth, toMonth, MONTH_CAP);
       const baseMonth = prevMonthKey(targetMonths[0]);
 
-      // 月別 fetch (並列 4 本。各月内は page-loop)
+      // 月別 fetch (並列 4 本。各月内は page-loop。自事業所スコープ)
       const results = await mapWithConcurrency([baseMonth, ...targetMonths], 4, (m) =>
-        fetchVisitMonthData(supabase, m),
+        fetchVisitMonthData(supabase, m, officeId),
       );
       const byMonth = new Map<string, MonthVisitData>();
       let fetchError: string | null = null;
@@ -133,13 +140,15 @@ export function KeieiBunsekiTab({
     })().catch((e: unknown) => {
       if (stale) return;
       loadedKeyRef.current = null; // 失敗時は次回アクティブ化で再試行
-      toast.error("経営分析の集計に失敗: " + (e instanceof Error ? e.message : String(e)));
+      const message = e instanceof Error ? e.message : String(e);
+      setLoadError({ key: periodKey, message });
+      toast.error("経営分析の集計に失敗: " + message);
     });
 
     return () => {
       stale = true;
     };
-  }, [active, rangeValid, periodKey, fromMonth, toMonth, supabase]);
+  }, [active, rangeValid, periodKey, fromMonth, toMonth, officeId, supabase, retryTick]);
 
   // ── 単価分析 (利用請求は親 fetch 済の payments を再利用) ──
   const paymentByMonth = useMemo(() => {
@@ -249,6 +258,26 @@ export function KeieiBunsekiTab({
     );
   }
   if (loadedFor !== periodKey) {
+    // fetch 失敗時はスピナーを止め、再試行ボタンを出す
+    if (loadError && loadError.key === periodKey) {
+      return (
+        <div className="flex flex-col items-center gap-3 py-16">
+          <span className="text-xs text-red-600">
+            経営分析の集計に失敗しました: {loadError.message}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setLoadError(null);
+              setRetryTick((t) => t + 1);
+            }}
+            className="border border-gray-400 rounded bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
+          >
+            再試行
+          </button>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col items-center gap-2 py-16">
         <Loader2 size={22} className="animate-spin text-indigo-400" />

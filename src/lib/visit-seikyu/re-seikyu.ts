@@ -25,6 +25,7 @@ import {
   aggregateMonthlyVisitSeikyu,
   type UserSeikyuRow,
 } from "@/lib/visit-seikyu/aggregate";
+import type { SougouSeikyuRow } from "@/lib/visit-seikyu/aggregate-sougou";
 import type { KagoInfo } from "@/lib/visit-seikyu/kago";
 
 /** 再請求の理由 (複数同時に立ちうる) */
@@ -46,6 +47,18 @@ export type ReSeikyuRow = UserSeikyuRow & {
   __kago: KagoInfo | null;
 };
 
+/**
+ * 総合事業 (71R1) の再請求行 (2026-07-14 追加)。
+ * 介護給付 (7131) と同じく元提供月で再集計し、伝送は build-sougou.ts の
+ * SougouDensouRow.ym (行の元提供年月) に乗せて元提供月ごとの別ファイルで出力する。
+ */
+export type ReSeikyuSougouRow = SougouSeikyuRow & {
+  __origMonthKey: string;
+  ym: string;
+  __reasons: ReSeikyuReasons;
+  __kago: KagoInfo | null;
+};
+
 interface FlaggedRow {
   client_id: string;
   target_month: string; // 'YYYY-MM'
@@ -61,6 +74,8 @@ interface FlaggedRow {
 /** 再請求の読込結果 (再集計時の warnings も呼出側 = 介護請求タブで表示する) */
 export interface ReSeikyuResult {
   rows: ReSeikyuRow[];
+  /** 総合事業ストリームの再請求行 (71R1 で元提供月ファイルとして伝送する) */
+  sougouRows: ReSeikyuSougouRow[];
   /** 元提供月ごとの aggregate warnings (「[再請求 R8/5] …」形式) */
   warnings: string[];
 }
@@ -102,13 +117,13 @@ export async function loadReSeikyuRows(
     // table 未作成 (直 SQL=42P01 / PostgREST schema cache=PGRST205) は
     // 再請求なしで続行 (呼出側で握る)
     if (res.error.code === "42P01" || res.error.code === "PGRST205") {
-      return { rows: [], warnings: [] };
+      return { rows: [], sougouRows: [], warnings: [] };
     }
     throw new Error(`再請求対象の取得に失敗: ${res.error.message}`);
   }
 
   const flagged = (res.data ?? []) as unknown as FlaggedRow[];
-  if (flagged.length === 0) return { rows: [], warnings: [] };
+  if (flagged.length === 0) return { rows: [], sougouRows: [], warnings: [] };
 
   // 2) 月ごとにまとめ、client_id → reasons / 過誤付帯情報 を引けるようにする
   const byMonth = new Map<
@@ -135,6 +150,7 @@ export async function loadReSeikyuRows(
 
   // 3) 月ごとに元提供月で再集計 → 該当利用者のみ抽出
   const out: ReSeikyuRow[] = [];
+  const outSougou: ReSeikyuSougouRow[] = [];
   const warnings: string[] = [];
   for (const [monthKey, clientFlags] of byMonth) {
     const [y, m] = monthKey.split("-").map((n) => Number(n));
@@ -149,10 +165,15 @@ export async function loadReSeikyuRows(
       unitPrice: opts.unitPrice,
       appliedFormulaCodes: opts.appliedFormulaCodes ?? [],
     });
+    // 総合事業ストリーム (aggregate.ts が rows と独立に返す。実体は SougouSeikyuRow)
+    const sougou = (result.sougouRows ?? []) as SougouSeikyuRow[];
     // 再集計時の warnings (認定フォールバック・入院重なり等) も表示側へ伝播する。
     // ただし対象は再請求フラグの立っている利用者分のみに絞る (他利用者分はノイズ)
     const flaggedNames = new Set<string>();
     for (const r of result.rows) {
+      if (clientFlags.has(r.user_id)) flaggedNames.add(r.user_name);
+    }
+    for (const r of sougou) {
       if (clientFlags.has(r.user_id)) flaggedNames.add(r.user_name);
     }
     warnings.push(
@@ -172,10 +193,22 @@ export async function loadReSeikyuRows(
         __kago: flags.kago,
       });
     }
+    // 総合事業行も同じ判定で合流 (伝送は 71R1 側で元提供月ファイルとして出力)
+    for (const r of sougou) {
+      const flags = clientFlags.get(r.user_id);
+      if (!flags) continue;
+      outSougou.push({
+        ...r,
+        __origMonthKey: monthKey,
+        ym,
+        __reasons: flags.reasons,
+        __kago: flags.kago,
+      });
+    }
   }
 
   // 古い提供月 → ふりがな → セグメント (保険者変更の分割行 — Phase 2) の順
-  out.sort((a, b) => {
+  const byMonthThenKana = (a: ReSeikyuRow | ReSeikyuSougouRow, b: ReSeikyuRow | ReSeikyuSougouRow) => {
     if (a.__origMonthKey !== b.__origMonthKey) {
       return a.__origMonthKey < b.__origMonthKey ? -1 : 1;
     }
@@ -185,7 +218,9 @@ export async function loadReSeikyuRows(
     );
     if (c !== 0) return c;
     return (a.segmentIndex ?? 0) - (b.segmentIndex ?? 0);
-  });
+  };
+  out.sort(byMonthThenKana);
+  outSougou.sort(byMonthThenKana);
 
-  return { rows: out, warnings };
+  return { rows: out, sougouRows: outSougou, warnings };
 }

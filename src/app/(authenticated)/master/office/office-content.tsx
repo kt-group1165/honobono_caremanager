@@ -124,11 +124,15 @@ export function OfficeContent({
 
   const loadOffices = async () => {
     // 共通マスタ offices から、app_type='kaigo-app' の自事業所だけ取得
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("offices")
       .select("*")
       .eq("app_type", "kaigo-app")
       .order("name");
+    if (error) {
+      toast.error("事業所一覧の再取得に失敗: " + error.message);
+      return offices; // 既存表示を維持
+    }
     const list = normalizeOffices((data || []) as OfficeSettings[]);
     setOffices(list);
     return list;

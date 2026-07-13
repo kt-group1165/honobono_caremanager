@@ -397,6 +397,13 @@ export function buildKokuhoDensou(
       }
     }
     for (const d of detailLines) {
+      // 項10 日数・回数 / 項11 公費1対象日数・回数 は「数字2桁」(_if_form2.txt L7666-7669) —
+      // 100 回以上は桁溢れで取込エラー/切り捨ての恐れがあるため warning で明示する
+      if (d.count > 99) {
+        warnings.push(
+          `${r.user_name}: サービスコード ${d.code} の回数 (${d.count}) が明細行の日数・回数欄 (数字2桁 = 上限99) を超えています — 取込エラーの可能性があるため実績を確認してください`,
+        );
+      }
       dataParts.push([
         "7131", // 1
         "02", // 2 レコード種別コード

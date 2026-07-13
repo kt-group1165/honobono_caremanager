@@ -131,6 +131,7 @@ export async function scanCertExpiry(
       .select("client_id")
       .eq("office_id", officeId)
       .is("end_date", null)
+      .order("id") // page-loop の安定順序 (1000 行超で行落ち/重複しないように)
       .range(fromA, fromA + PAGE - 1);
     if (error) throw new Error(`自事業所利用者の取得に失敗: ${error.message}`);
     const rows = (data ?? []) as { client_id: string }[];
@@ -304,6 +305,7 @@ export async function syncCertExpiryNotifications(
       .eq("office_id", officeId)
       .eq("ref_table", CERT_ALERT_REF_TABLE)
       .in("type", CERT_ALERT_TYPES)
+      .order("id") // page-loop の安定順序 (1000 行超で行落ち/重複しないように)
       .range(offset, offset + PAGE - 1);
     if (error) throw new Error(`既存通知の取得に失敗: ${error.message}`);
     const rows = (data ?? []) as { type: string; ref_id: string | null }[];

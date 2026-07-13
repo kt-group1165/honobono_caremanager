@@ -206,7 +206,10 @@ export function KagoBlock({
       <div className="mt-1.5 flex items-center gap-2">
         <button
           type="button"
-          onClick={() => run(() => onSave({ moushitateDate: date, jiyuCode: `${yoshiki}${riyu}`, dougetsu }))}
+          onClick={() => {
+            if (!window.confirm(`提供月 ${targetMonth} の過誤申立を登録します。\nこの行は国保対象から外れます (取下げ)。よろしいですか？`)) return;
+            run(() => onSave({ moushitateDate: date, jiyuCode: `${yoshiki}${riyu}`, dougetsu }));
+          }}
           disabled={busy || colsMissing || !date}
           title="過誤フラグを立て、国保対象から外します (取下げ)。翌月以降の請求画面に再請求候補として合流します"
           className="border border-red-500 rounded bg-red-500 px-2.5 py-1 text-white font-semibold hover:bg-red-600 flex items-center gap-1 disabled:opacity-50"
@@ -217,7 +220,10 @@ export function KagoBlock({
         {kago && (
           <button
             type="button"
-            onClick={() => run(onClear)}
+            onClick={() => {
+              if (!window.confirm("過誤申立を解除します (フラグと申立情報を消去)。よろしいですか？")) return;
+              run(onClear);
+            }}
             disabled={busy}
             title="過誤フラグと申立情報を解除します (国保対象は自動では戻しません。必要ならツールバーの「国保対象」で再度対象化してください)"
             className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1 disabled:opacity-50"

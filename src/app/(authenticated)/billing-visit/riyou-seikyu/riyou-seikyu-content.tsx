@@ -908,6 +908,9 @@ export function RiyouSeikyuContent() {
       let kind: FbRowKind;
       if (!client) kind = "unmatched";
       else if (!d.transferred) kind = "failed";
+      // 月マーカーは「同一対象月で FB 取込済み」の印。同月に 2 バッチ目の FB ファイルを
+      // 取り込んだ場合もマーカーが付いた利用者は取込済み扱いでスキップされる (仕様)。
+      // 2 バッチ目に別利用者の振替が含まれるケースはその利用者にマーカーが無いので取込対象になる。
       else if (pay?.notes?.includes(marker)) kind = "skip_marker";
       else if (pay != null && pay.paid_amount > 0 && pay.paid_amount === d.amount)
         kind = "skip_dup"; // 同一 client×月×金額 → 手入力済みの二重計上を防止
@@ -934,14 +937,16 @@ export function RiyouSeikyuContent() {
     if (importRows.length === 0) return;
     setFbImporting(true);
 
-    // 入金日 = ヘッダーの引落日 (MMDD) + 表示中の年。不正値は今日にフォールバック
+    // 入金日 = ヘッダーの引落日 (MMDD) + 表示中の年。不正値は今日にフォールバック。
+    // 引落月 < 対象月 は年跨ぎ (12月請求→1月引落 等) なので翌年扱いにする
     const mmdd = fbImport.parsed.header?.transferMMDD ?? "";
     const mm = parseInt(mmdd.slice(0, 2), 10);
     const dd = parseInt(mmdd.slice(2, 4), 10);
     const today = new Date();
+    const paidYear = Number.isFinite(mm) && mm < month ? year + 1 : year;
     const paidDate =
       Number.isFinite(mm) && mm >= 1 && mm <= 12 && Number.isFinite(dd) && dd >= 1 && dd <= 31
-        ? `${year}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`
+        ? `${paidYear}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`
         : `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 
     // 利用者単位に合算

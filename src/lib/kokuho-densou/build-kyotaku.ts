@@ -642,6 +642,11 @@ export function buildKeikakuhiFile(
 
   for (const u of users) {
     const careCode = CARE_LEVEL_CODE[(u.careLevel ?? "").trim()] ?? "";
+    // 8121 の必須項目 (項5 証記載保険者番号 / 項7 被保険者番号 / 項10 生年月日) の未登録チェック
+    // (給付管理票 buildKyufuKanriFile と同様。欠落のまま出すと取込チェックで返戻する)
+    if (!u.insurerNumber?.trim()) warnings.push(`${u.userName}: 保険者番号が未登録です (計画費明細書 8121 項5 必須)`);
+    if (!u.insuredNumber?.trim()) warnings.push(`${u.userName}: 被保険者番号が未登録です (計画費明細書 8121 項7 必須)`);
+    if (!u.birthDate) warnings.push(`${u.userName}: 生年月日が未登録です (計画費明細書 8121 項10 必須)`);
     if (!careCode) warnings.push(`${u.userName}: 要介護度 ("${u.careLevel ?? "未設定"}") をコードに変換できません`);
     if (!u.serviceCode) warnings.push(`${u.userName}: 居宅介護支援費のサービスコードが年度別単位数マスタにありません`);
     if (!u.requestDate) warnings.push(`${u.userName}: 計画作成依頼届出年月日が無いため認定開始日で代用しました`);
@@ -666,12 +671,20 @@ export function buildKeikakuhiFile(
       warnings.push(`${u.userName}: 公費受給者番号が未登録です (生活保護単独は必須)`);
     }
 
+    // 項5 証記載保険者番号は「数字6桁」(_if_kyotaku.txt L8198-8215「６桁の保険者番号を設定する」)。
+    // 8221 項3 / 7131 項5 (数字8桁・前0埋め) とは桁数が異なるので混同しないこと。
+    // DB 値が8桁 (前0埋め済) の場合は下6桁を採用する。
+    const insurerRaw = (u.insurerNumber ?? "").trim();
+    const insurer6 =
+      insurerRaw.length > 6 ? insurerRaw.slice(-6)
+      : insurerRaw ? insurerRaw.padStart(6, "0")
+      : "";
     dataParts.push([
       "8121", // 1
       office, // 2 事業所番号
       "1", // 3 指定/基準該当等事業所区分コード
       ym, // 4 サービス提供年月
-      u.insurerNumber ? u.insurerNumber.trim().padStart(8, "0") : "", // 5 証記載保険者番号 (数字8桁・前0埋め)
+      insurer6, // 5 証記載保険者番号 (数字6桁 — 8桁ではない)
       String(unitPrice100), // 6 単位数単価
       u.insuredNumber, // 7 被保険者番号 (英数10 — H番号可)
       // 8-9 公費負担者番号/受給者番号 — 仕様書: 生活保護単独の場合必須。

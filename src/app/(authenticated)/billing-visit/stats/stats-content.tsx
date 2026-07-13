@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BarChart3, Download, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { useBusinessType } from "@/lib/business-type-context";
 import { KeieiBunsekiTab } from "./keiei-bunseki-tab";
 
 // kaigo_billing_status の 1 行 (月遅れ・返戻・過誤のいずれか true のみ取得)
@@ -91,6 +92,8 @@ function monthsInRange(from: string, to: string): string[] {
 
 export function StatsContent() {
   const supabase = useMemo(() => createClient(), []);
+  // 経営分析タブの自事業所スコープ用 (kaigo_visit_schedule.office_id)
+  const { currentOffice, loading: officeLoading } = useBusinessType();
   const [fromMonth, setFromMonth] = useState(fiscalYearStart());
   const [toMonth, setToMonth] = useState(currentMonthKey());
   const [tab, setTab] = useState<"flags" | "trend" | "keiei">("flags");
@@ -499,7 +502,8 @@ export function StatsContent() {
       {/* ── タブ 3: 経営分析 (遅延読込。タブ切替でアンマウントしない = 再取得防止) ── */}
       <div className={tab === "keiei" ? "" : "hidden"}>
         <KeieiBunsekiTab
-          active={tab === "keiei"}
+          active={tab === "keiei" && !officeLoading}
+          officeId={currentOffice?.id ?? null}
           fromMonth={fromMonth}
           toMonth={toMonth}
           payments={paymentRows}

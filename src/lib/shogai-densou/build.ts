@@ -516,6 +516,14 @@ export function buildShogaiDensou(
     // 集計情報レコード (04) の給付単位数・総費用額は aggregate 側で加算込みのため
     // r.totalUnits / r.totalAmount にそのまま含まれる。
     for (const a of r.addons) {
+      // 項8 単位数の桁: IF 仕様抜粋 (_if_shogai.txt L58-59「J121 明細情報レコード(03)」) に
+      // バイト数の明記が無いため、保守的に 5 桁 (99999) 超で桁溢れ warning を出す
+      // (処遇改善等の monthly_aggregate 加算は月合計単位に率を掛けるため大きくなりうる)
+      if (a.units > 99999) {
+        warnings.push(
+          `${r.user_name}: 加算「${a.service_code}」の単位数 (${a.units.toLocaleString()}) が 5 桁 (99999) を超えています — J121 明細 (03) 項8/10 の桁溢れで取込エラーの可能性があるため実績を確認してください`,
+        );
+      }
       seikyuParts.push([
         "J121", "03", ym, muni, office, jukyu,
         a.service_code, // 7 サービスコード (115121 等)
@@ -698,7 +706,9 @@ export function buildShogaiDensou(
         f[8] = String(Number(v.date.slice(8, 10))).padStart(2, "0"); // 9 日付
         f[9] = "1"; // 10 サービス提供回数
         f[10] = code; // 11 サービス内容 (決定コード)
-        f[11] = "11"; // 12 ヘルパー資格 (11:初任者等)
+        // 12 ヘルパー資格 (11:初任者等 12:基礎等 13:重訪 — _if_shogai.txt L103)。
+        //    担当ヘルパーの実資格データを保持していないため "11" 固定 (下の warning で通知)
+        f[11] = "11";
         f[13] = hhmm(v.startTime); // 14 開始時間
         f[14] = hhmm(v.endTime); // 15 終了時間
         if (code === "115000") {
@@ -730,6 +740,14 @@ export function buildShogaiDensou(
         }
       }
       jissekiParts.push(b, ...rows);
+
+      // ⚠ ヘルパー資格 (明細 項12) はヘルパーの実資格データを保持していないため
+      //   "11" (初任者等) 固定で出力している — 重訪側 (0301) の未保持項目 warning と同流儀で通知
+      if (rows.length > 0) {
+        warnings.push(
+          `${r.user_name}: 実績記録票 (様式1) のヘルパー資格 (明細 項12) は実資格データ未保持のため「11 (介護福祉士・初任者等)」固定で出力します — 実態と異なる場合 (基礎研修等 12 / 重訪研修 13) は伝送前に手修正してください`,
+        );
+      }
     }
 
     // ── 様式3-1 (0301 重度訪問介護) ────────────────────────────────────────
