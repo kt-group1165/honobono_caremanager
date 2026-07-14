@@ -48,6 +48,12 @@ import {
   type FbResultDetail,
   type FbResultParse,
 } from "@/lib/fb-zengin-result";
+import {
+  buildMergedClients,
+  RiyouSeikyuMergedPrintSheet,
+  type MergeInput,
+  type MergedClient,
+} from "./riyou-merge-print";
 
 // ─── 3 制度統合の表示行モデル ────────────────────────────────────────────────
 // 介護 / 総合事業 は同型 UserSeikyuRow (既存ロジックをそのまま流用)。
@@ -249,6 +255,7 @@ export function RiyouSeikyuContent() {
     loading,
     error,
     officeName,
+    officeId,
   } = useSeikyuContext();
   // 保険者変更 (転居) の分割セグメント行 (Phase 2) は利用者単位に合算してから使う。
   // 利用者請求書・軽減・実費・入金・FB 全銀はすべて利用者単位 (保険者をまたがない)
@@ -269,6 +276,12 @@ export function RiyouSeikyuContent() {
   // 印刷する綴り (請求書 / 請求書控え / 領収書 / 領収書控え — ほのぼの流の綴り選択)
   const [printDocs, setPrintDocs] = useState<Set<PrintDocKey>>(new Set(["seikyu"]));
   const [jippiByUser, setJippiByUser] = useState<Map<string, JippiEntry[]>>(new Map());
+  // ── 請求書の合算モード (印刷レイヤーのみ。金額計算 = aggregate は不変) ──
+  //   制度合算 (mergeSystems): ON = 同一利用者の 介護/総合/障害 を 1 枚に合算 (デフォルト)。
+  //     OFF = 従来どおり制度ごとに別枚 (介護/総合は既存シート、障害は障害請求タブ側)。
+  //   事業所合算 (mergeOffices): 同一法人の他事業所利用の検出・導線 (残タスク: 金額の法人横断合算)。
+  const [mergeSystems, setMergeSystems] = useState(true);
+  const [mergeOffices, setMergeOffices] = useState(false);
 
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
 
@@ -764,6 +777,213 @@ export function RiyouSeikyuContent() {
     return { household: [] as UserSeikyuRow[], singles: kaigoRows };
   }, [kaigoTargets, merged]);
 
+  // ── 制度合算 (mergeSystems ON) 用の合算モデル ────────────────────────────────
+  //   発行対象 (targets = 介護/総合/障害の全制度) を 1 明細 = 1 制度に落とし込み、
+  //   利用者単位に畳み込む。金額は billedForRow (既存関数) をそのまま subtotal に
+  //   詰めるだけなので、制度合算 OFF で個別に足した合計と 1 円も違わない。
+  //   名寄せ (世帯合算) は別軸: 名寄チェック 2 名以上を 1 世帯グループに束ねる。
+  const mergedPrintGroups = useMemo(() => {
+    const toInput = (row: UnifiedRow): MergeInput => {
+      if (row.system === "障害") {
+        const s = row.shogai;
+        const prev = prevShogaiPayments.get(row.userId);
+        return {
+          system: "障害",
+          userId: row.userId,
+          userName: s.user_name,
+          userNameKana: s.user_name_kana,
+          userNumber: null,
+          copayRate: null,
+          officeLabel: null,
+          base: s.userAmount,
+          keigen: 0,
+          jippi: 0,
+          subtotal: s.userAmount, // = billedForRow(障害)
+          iryohi: 0, // 障害は医療費控除 N/A
+          prevBilled: prev?.billed_amount ?? 0,
+          prevPaid: prev?.paid_amount ?? 0,
+        };
+      }
+      const r = row.kaigo;
+      const prev = prevPayments.get(row.userId);
+      return {
+        system: row.system,
+        userId: row.userId,
+        userName: r.user_name,
+        userNameKana: r.user_name_kana,
+        userNumber: r.user_number,
+        copayRate: r.copay_rate,
+        officeLabel: null,
+        base: userPlusSelf(r),
+        keigen: keigenByUser.get(r.user_id) ?? 0,
+        jippi: jippiTotal(r.user_id),
+        subtotal: rowBilled(r), // = billedForRow(介護/総合)
+        iryohi: iryohiByUser.get(r.user_id) ?? 0,
+        prevBilled: prev?.billed_amount ?? 0,
+        prevPaid: prev?.paid_amount ?? 0,
+      };
+    };
+    const clients = buildMergedClients(targets.map(toInput));
+    // 名寄せ (世帯合算): 介護/総合 の名寄チェックが付いた利用者 (2 名以上) を 1 枚に。
+    const householdIds = new Set(
+      targets
+        .filter((r) => r.system !== "障害" && merged.has(r.key))
+        .map((r) => r.userId),
+    );
+    const household = clients.filter((c) => householdIds.has(c.userId));
+    if (household.length >= 2) {
+      return {
+        household,
+        singles: clients.filter((c) => !householdIds.has(c.userId)),
+      };
+    }
+    return { household: [] as MergedClient[], singles: clients };
+  }, [
+    targets,
+    merged,
+    prevPayments,
+    prevShogaiPayments,
+    keigenByUser,
+    jippiTotal,
+    rowBilled,
+    iryohiByUser,
+  ]);
+
+  // ── 事業所合算 (mode 2): 同一法人の他事業所利用の「検出・導線」──────────────────
+  //   ※ 金額の法人横断合算 (aggregate を他事業所分も呼んで足す) は残タスク。
+  //   現状は「同一 company_id の他 kaigo 事業所」と、その事業所にも
+  //   client_office_assignments を持つ当タブ利用者の人数を検出して通知するのみ
+  //   (読み取り専用。金額・入金・伝送には一切影響しない)。
+  const [officeMergeInfo, setOfficeMergeInfo] = useState<{
+    loading: boolean;
+    error: string | null;
+    siblings: { id: string; name: string }[];
+    sharedUserCount: number;
+  } | null>(null);
+  const currentUserIdsKey = useMemo(
+    () =>
+      Array.from(new Set(unifiedRows.map((r) => r.userId)))
+        .sort()
+        .join(","),
+    [unifiedRows],
+  );
+  useEffect(() => {
+    if (!mergeOffices || !officeId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- トグル OFF 時のリセット
+      setOfficeMergeInfo(null);
+      return;
+    }
+    let cancelled = false;
+    const run = async () => {
+      setOfficeMergeInfo({
+        loading: true,
+        error: null,
+        siblings: [],
+        sharedUserCount: 0,
+      });
+      // 1) 自事業所の法人 (company_id)
+      const { data: selfOffice, error: e1 } = await supabase
+        .from("offices")
+        .select("company_id")
+        .eq("id", officeId)
+        .maybeSingle();
+      if (e1) {
+        if (!cancelled)
+          setOfficeMergeInfo({
+            loading: false,
+            error: `法人情報の取得に失敗: ${e1.message}`,
+            siblings: [],
+            sharedUserCount: 0,
+          });
+        return;
+      }
+      const companyId = (selfOffice as { company_id?: string | null } | null)
+        ?.company_id;
+      if (!companyId) {
+        if (!cancelled)
+          setOfficeMergeInfo({
+            loading: false,
+            error: null,
+            siblings: [],
+            sharedUserCount: 0,
+          });
+        return;
+      }
+      // 2) 同一法人の他 kaigo 事業所
+      const { data: sibs, error: e2 } = await supabase
+        .from("offices")
+        .select("id, name")
+        .eq("company_id", companyId)
+        .eq("app_type", "kaigo-app")
+        .neq("id", officeId)
+        .order("name");
+      if (e2) {
+        if (!cancelled)
+          setOfficeMergeInfo({
+            loading: false,
+            error: `他事業所の取得に失敗: ${e2.message}`,
+            siblings: [],
+            sharedUserCount: 0,
+          });
+        return;
+      }
+      const siblings = (sibs ?? []) as { id: string; name: string }[];
+      if (siblings.length === 0) {
+        if (!cancelled)
+          setOfficeMergeInfo({
+            loading: false,
+            error: null,
+            siblings: [],
+            sharedUserCount: 0,
+          });
+        return;
+      }
+      // 3) 他事業所にも所属する利用者 (client_office_assignments) を page-loop で取得
+      const sibIds = siblings.map((s) => s.id);
+      const sharedClientIds = new Set<string>();
+      let offset = 0;
+      const PAGE = 1000;
+      for (;;) {
+        const { data: assigns, error: e3 } = await supabase
+          .from("client_office_assignments")
+          .select("client_id")
+          .in("office_id", sibIds)
+          .order("client_id")
+          .range(offset, offset + PAGE - 1);
+        if (e3) {
+          if (!cancelled)
+            setOfficeMergeInfo({
+              loading: false,
+              error: `他事業所の利用者所属の取得に失敗: ${e3.message}`,
+              siblings,
+              sharedUserCount: 0,
+            });
+          return;
+        }
+        const chunk = (assigns ?? []) as { client_id: string }[];
+        for (const a of chunk) sharedClientIds.add(a.client_id);
+        if (chunk.length < PAGE) break;
+        offset += PAGE;
+      }
+      const currentIds = new Set(unifiedRows.map((r) => r.userId));
+      let sharedUserCount = 0;
+      for (const id of currentIds) if (sharedClientIds.has(id)) sharedUserCount += 1;
+      if (!cancelled)
+        setOfficeMergeInfo({
+          loading: false,
+          error: null,
+          siblings,
+          sharedUserCount,
+        });
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+    // currentUserIdsKey で利用者集合の変化にも追随 (unifiedRows 参照は key 経由)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mergeOffices, officeId, supabase, currentUserIdsKey]);
+
   // ─── 請求書一括印刷 (全員 or チェック中 を 1 印刷ジョブで連続出力) ──────────
   // 既存の単票印刷 (発行ボタン) とは独立した追加機能。発行日の記録は行わない。
   const [bulkPrintOpen, setBulkPrintOpen] = useState(false);
@@ -1165,6 +1385,34 @@ export function RiyouSeikyuContent() {
                 </span>
               )}
             </span>
+            {/* 合算モード (印刷レイヤーのみ。金額計算は不変) */}
+            <span className="flex items-center gap-2 border border-gray-300 rounded bg-white px-2 py-1 text-[11px] text-gray-700">
+              <span className="text-gray-400">合算:</span>
+              <label
+                className="flex items-center gap-0.5 cursor-pointer select-none whitespace-nowrap"
+                title="ON = 同一利用者の 介護 / 総合 / 障害 の利用者負担を 1 枚に合算 (制度別セクション + 合計)。OFF = 制度ごとに別枚 (従来どおり)"
+              >
+                <input
+                  type="checkbox"
+                  checked={mergeSystems}
+                  onChange={() => setMergeSystems((v) => !v)}
+                  className="cursor-pointer"
+                />
+                制度合算
+              </label>
+              <label
+                className="flex items-center gap-0.5 cursor-pointer select-none whitespace-nowrap"
+                title="ON = 同一法人 (company) の他事業所を利用している利用者を検出して通知します。※ 金額の法人横断合算は残タスク (現状は検出・導線のみ)"
+              >
+                <input
+                  type="checkbox"
+                  checked={mergeOffices}
+                  onChange={() => setMergeOffices((v) => !v)}
+                  className="cursor-pointer"
+                />
+                事業所合算
+              </label>
+            </span>
             <button
               type="button"
               onClick={() => setBulkPrintOpen(true)}
@@ -1204,6 +1452,42 @@ export function RiyouSeikyuContent() {
             </label>
             <span className="text-[11px] text-gray-400">{printScopeLabel}</span>
           </div>
+
+          {/* 事業所合算 (mode 2) の検出通知 (読み取り専用の導線) */}
+          {mergeOffices && officeMergeInfo && (
+            <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 shrink-0 text-xs text-amber-800">
+              {officeMergeInfo.loading ? (
+                <span className="flex items-center gap-1.5">
+                  <Loader2 size={13} className="animate-spin" />
+                  同一法人の他事業所利用を確認中…
+                </span>
+              ) : officeMergeInfo.error ? (
+                <span className="flex items-center gap-1.5 text-red-700">
+                  <AlertTriangle size={13} />
+                  {officeMergeInfo.error}
+                </span>
+              ) : officeMergeInfo.siblings.length === 0 ? (
+                <span>同一法人 (company) の他 介護事業所は見つかりませんでした。</span>
+              ) : (
+                <div className="flex flex-col gap-0.5">
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <AlertTriangle size={13} />
+                    同一法人の他事業所 {officeMergeInfo.siblings.length} 箇所を検出:{" "}
+                    {officeMergeInfo.siblings.map((s) => s.name).join(" / ")}
+                  </span>
+                  <span>
+                    うち当タブの利用者 {officeMergeInfo.sharedUserCount} 名が他事業所にも
+                    所属しています (他事業所の利用票で請求が発生している可能性)。
+                  </span>
+                  <span className="text-amber-600">
+                    ※ 金額の法人横断合算 (他事業所分の利用者負担を 1 枚に足し込む) は
+                    残タスクです。現状は検出・導線のみで、請求金額・印刷内容は
+                    当事業所分のままです。各事業所に切替えて個別に発行してください。
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           {error && (
             <div className="border-b border-red-200 bg-red-50 px-3 py-2 shrink-0 flex items-start gap-2 text-sm text-red-700">
@@ -1490,6 +1774,8 @@ export function RiyouSeikyuContent() {
       {bulkPrintOpen && (
         <RiyouBulkPrintView
           rows={bulkCandidateRows}
+          allRows={unifiedRows}
+          mergeSystems={mergeSystems}
           checkedKeys={checked}
           mergedKeys={merged}
           rowBilled={rowBilled}
@@ -1498,6 +1784,7 @@ export function RiyouSeikyuContent() {
           keigenByUser={keigenByUser}
           iryohiByUser={iryohiByUser}
           prevPayments={prevPayments}
+          prevShogaiPayments={prevShogaiPayments}
           officeName={officeName}
           reiwa={reiwa}
           year={year}
@@ -1527,6 +1814,33 @@ export function RiyouSeikyuContent() {
             .filter((k) => printDocs.has(k))
             .map((k) => {
               const isCopy = k === "seikyuHikae";
+              // 制度合算 ON → 利用者単位の合算シート (介護/総合/障害を 1 枚に)。
+              // OFF → 従来どおり 介護/総合 の既存シート (障害は障害請求タブ側)。
+              if (mergeSystems) {
+                return (
+                  <div key={k}>
+                    {mergedPrintGroups.household.length >= 2 && (
+                      <RiyouSeikyuMergedPrintSheet
+                        clients={mergedPrintGroups.household}
+                        officeName={officeName}
+                        reiwa={reiwa}
+                        month={month}
+                        isCopy={isCopy}
+                      />
+                    )}
+                    {mergedPrintGroups.singles.map((c) => (
+                      <RiyouSeikyuMergedPrintSheet
+                        key={`${k}-${c.userId}`}
+                        clients={[c]}
+                        officeName={officeName}
+                        reiwa={reiwa}
+                        month={month}
+                        isCopy={isCopy}
+                      />
+                    ))}
+                  </div>
+                );
+              }
               return (
                 <div key={k}>
                   {printGroups.household.length >= 2 && (
@@ -2994,6 +3308,8 @@ function RyoshuPrintSheet({
 // 並び順: 利用者番号 (clients.user_number) 順、番号なしは末尾でカナ順。
 function RiyouBulkPrintView({
   rows,
+  allRows,
+  mergeSystems,
   checkedKeys,
   mergedKeys,
   rowBilled,
@@ -3002,6 +3318,7 @@ function RiyouBulkPrintView({
   keigenByUser,
   iryohiByUser,
   prevPayments,
+  prevShogaiPayments,
   officeName,
   reiwa,
   year,
@@ -3010,6 +3327,10 @@ function RiyouBulkPrintView({
 }: {
   /** 対象候補 (介護・総合のみ。障害の帳票は障害請求タブ側のため対象外) */
   rows: KaigoUnifiedRow[];
+  /** 制度合算 ON 時に 障害分も 1 枚へ畳み込むための全制度行 */
+  allRows: UnifiedRow[];
+  /** 制度合算モード (ON = 同一利用者の 介護/総合/障害 を 1 枚に合算) */
+  mergeSystems: boolean;
   /** 一覧の「対象」チェック (制度:client_id キー) */
   checkedKeys: Set<string>;
   /** 一覧の「名寄」チェック (世帯合算。制度:client_id キー) */
@@ -3021,6 +3342,8 @@ function RiyouBulkPrintView({
   keigenByUser: Map<string, number>;
   iryohiByUser: Map<string, number>;
   prevPayments: Map<string, PaymentRow>;
+  /** 障害の前月入金 (制度合算 ON 時の障害セクションの前回領収欄用) */
+  prevShogaiPayments: Map<string, PaymentRow>;
   officeName: string | null;
   reiwa: number;
   year: number;
@@ -3081,6 +3404,81 @@ function RiyouBulkPrintView({
     return { household: [] as UserSeikyuRow[], singles: sorted.map((r) => r.kaigo) };
   }, [sorted, mergedKeys]);
 
+  // 制度合算 ON: scope 内の利用者について 介護/総合/障害 を 1 枚に畳み込む。
+  // 金額は単票と同じ既存関数 (rowBilled / userAmount) をそのまま subtotal に詰めるだけ。
+  const mergedGroups = useMemo(() => {
+    if (!mergeSystems)
+      return { household: [] as MergedClient[], singles: [] as MergedClient[] };
+    const scopedUserIds = new Set(sorted.map((r) => r.userId));
+    const jippiTotalFor = (uid: string) =>
+      (jippiByUser.get(uid) ?? []).reduce((s, e) => s + e.amount, 0);
+    const inputs: MergeInput[] = allRows
+      .filter((row) => scopedUserIds.has(row.userId))
+      .map((row): MergeInput => {
+        if (row.system === "障害") {
+          const s = row.shogai;
+          const prev = prevShogaiPayments.get(row.userId);
+          return {
+            system: "障害",
+            userId: row.userId,
+            userName: s.user_name,
+            userNameKana: s.user_name_kana,
+            userNumber: null,
+            copayRate: null,
+            officeLabel: null,
+            base: s.userAmount,
+            keigen: 0,
+            jippi: 0,
+            subtotal: s.userAmount,
+            iryohi: 0,
+            prevBilled: prev?.billed_amount ?? 0,
+            prevPaid: prev?.paid_amount ?? 0,
+          };
+        }
+        const r = row.kaigo;
+        const prev = prevPayments.get(row.userId);
+        return {
+          system: row.system,
+          userId: row.userId,
+          userName: r.user_name,
+          userNameKana: r.user_name_kana,
+          userNumber: r.user_number,
+          copayRate: r.copay_rate,
+          officeLabel: null,
+          base: userPlusSelf(r),
+          keigen: keigenByUser.get(r.user_id) ?? 0,
+          jippi: jippiTotalFor(r.user_id),
+          subtotal: rowBilled(r),
+          iryohi: iryohiByUser.get(r.user_id) ?? 0,
+          prevBilled: prev?.billed_amount ?? 0,
+          prevPaid: prev?.paid_amount ?? 0,
+        };
+      });
+    const clients = buildMergedClients(inputs);
+    const householdIds = new Set(
+      sorted.filter((r) => mergedKeys.has(r.key)).map((r) => r.userId),
+    );
+    const household = clients.filter((c) => householdIds.has(c.userId));
+    if (household.length >= 2) {
+      return {
+        household,
+        singles: clients.filter((c) => !householdIds.has(c.userId)),
+      };
+    }
+    return { household: [] as MergedClient[], singles: clients };
+  }, [
+    mergeSystems,
+    sorted,
+    allRows,
+    mergedKeys,
+    prevPayments,
+    prevShogaiPayments,
+    keigenByUser,
+    jippiByUser,
+    rowBilled,
+    iryohiByUser,
+  ]);
+
   // 領収書 = 対象のうち入金済み (入金完 / 一部入金 かつ 入金額 > 0)。
   // 既存の ryoshuTargets と同条件 (riyou_seikyu_payments 由来)
   const ryoshuRows = useMemo(
@@ -3097,7 +3495,9 @@ function RiyouBulkPrintView({
   );
 
   const seikyuSheetCount = docs.has("seikyu")
-    ? (groups.household.length >= 2 ? 1 : 0) + groups.singles.length
+    ? mergeSystems
+      ? (mergedGroups.household.length >= 2 ? 1 : 0) + mergedGroups.singles.length
+      : (groups.household.length >= 2 ? 1 : 0) + groups.singles.length
     : 0;
   const ryoshuSheetCount = docs.has("ryoshu") ? ryoshuRows.length : 0;
   const totalSheets = seikyuSheetCount + ryoshuSheetCount;
@@ -3174,7 +3574,12 @@ function RiyouBulkPrintView({
               onChange={() => toggleDoc("seikyu")}
               className="cursor-pointer"
             />
-            請求書 ({(groups.household.length >= 2 ? 1 : 0) + groups.singles.length} 枚)
+            請求書 (
+            {mergeSystems
+              ? (mergedGroups.household.length >= 2 ? 1 : 0) +
+                mergedGroups.singles.length
+              : (groups.household.length >= 2 ? 1 : 0) + groups.singles.length}{" "}
+            枚)
           </label>
           <label
             className="flex cursor-pointer select-none items-center gap-1 whitespace-nowrap"
@@ -3229,39 +3634,60 @@ function RiyouBulkPrintView({
               印刷対象がありません (対象・0円除外・綴りの条件をご確認ください)
             </p>
           )}
-          {docs.has("seikyu") && (
-            <>
-              {groups.household.length >= 2 && (
-                <RiyouSeikyuHouseholdPrintSheet
-                  rows={groups.household}
-                  jippiByUser={jippiByUser}
-                  keigenByUser={keigenByUser}
-                  iryohiByUser={iryohiByUser}
-                  prevPayments={prevPayments}
-                  officeName={officeName}
-                  reiwa={reiwa}
-                  month={month}
-                />
-              )}
-              {groups.singles.map((r) => (
-                <RiyouSeikyuPrintSheet
-                  key={`bulk-seikyu-${r.system ?? "介護"}-${r.user_id}`}
-                  row={r}
-                  jippi={jippiByUser.get(r.user_id) ?? []}
-                  keigen={keigenByUser.get(r.user_id) ?? 0}
-                  iryohi={
-                    iryohiByUser.has(r.user_id)
-                      ? (iryohiByUser.get(r.user_id) ?? 0)
-                      : null
-                  }
-                  prevPayment={prevPayments.get(r.user_id) ?? null}
-                  officeName={officeName}
-                  reiwa={reiwa}
-                  month={month}
-                />
-              ))}
-            </>
-          )}
+          {docs.has("seikyu") &&
+            (mergeSystems ? (
+              <>
+                {mergedGroups.household.length >= 2 && (
+                  <RiyouSeikyuMergedPrintSheet
+                    clients={mergedGroups.household}
+                    officeName={officeName}
+                    reiwa={reiwa}
+                    month={month}
+                  />
+                )}
+                {mergedGroups.singles.map((c) => (
+                  <RiyouSeikyuMergedPrintSheet
+                    key={`bulk-seikyu-merged-${c.userId}`}
+                    clients={[c]}
+                    officeName={officeName}
+                    reiwa={reiwa}
+                    month={month}
+                  />
+                ))}
+              </>
+            ) : (
+              <>
+                {groups.household.length >= 2 && (
+                  <RiyouSeikyuHouseholdPrintSheet
+                    rows={groups.household}
+                    jippiByUser={jippiByUser}
+                    keigenByUser={keigenByUser}
+                    iryohiByUser={iryohiByUser}
+                    prevPayments={prevPayments}
+                    officeName={officeName}
+                    reiwa={reiwa}
+                    month={month}
+                  />
+                )}
+                {groups.singles.map((r) => (
+                  <RiyouSeikyuPrintSheet
+                    key={`bulk-seikyu-${r.system ?? "介護"}-${r.user_id}`}
+                    row={r}
+                    jippi={jippiByUser.get(r.user_id) ?? []}
+                    keigen={keigenByUser.get(r.user_id) ?? 0}
+                    iryohi={
+                      iryohiByUser.has(r.user_id)
+                        ? (iryohiByUser.get(r.user_id) ?? 0)
+                        : null
+                    }
+                    prevPayment={prevPayments.get(r.user_id) ?? null}
+                    officeName={officeName}
+                    reiwa={reiwa}
+                    month={month}
+                  />
+                ))}
+              </>
+            ))}
           {docs.has("ryoshu") &&
             ryoshuRows.map(({ row: r, payment: pay }) => (
               <RyoshuPrintSheet
