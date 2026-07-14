@@ -500,24 +500,19 @@ export function KokuhoSeikyuContent() {
           </div>
         </div>
 
-        {/* 除外・再請求の案内 */}
-        {!loading && (excludedCount > 0 || reRows.length > 0 || sougouExcludedCount > 0 || reSougouMatched.length > 0) && (
+        {/* 除外・再請求の案内 (「再請求を合流」の情報は一覧の月遅行で自明のため出さない。
+            過誤の伝送前確認だけは compliance として残す) */}
+        {!loading && (excludedCount > 0 || reRows.some((r) => r.__reasons.kago) || sougouExcludedCount > 0 || reSougouMatched.length > 0) && (
           <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
             <AlertCircle size={14} className="mt-0.5 shrink-0" />
             <span>
               {excludedCount > 0 && (
                 <>当月分のうち月遅れ・返戻・過誤フラグの {excludedCount} 件は伝送対象から除外しています (後月に再請求)。</>
               )}
-              {reRows.length > 0 && (
+              {reRows.some((r) => r.__reasons.kago) && (
                 <>
-                  過去月の再請求 {reRows.length} 件を合流しています (元提供月のファイルとして出力)。
-                  {reRows.some((r) => r.__reasons.kago) && (
-                    <>
-                      {" "}
-                      過誤分は取下げ後の再請求です — 通常過誤は保険者の過誤決定 (支払控除)
-                      を確認してから伝送してください (同月過誤は申立と同月に伝送)。
-                    </>
-                  )}
+                  過去月の再請求のうち過誤分は取下げ後の再請求です — 通常過誤は保険者の
+                  過誤決定 (支払控除) を確認してから伝送してください (同月過誤は申立と同月に伝送)。
                 </>
               )}
               {sougouExcludedCount > 0 && (
@@ -551,8 +546,8 @@ export function KokuhoSeikyuContent() {
           <>
             <div className="flex-1 overflow-y-auto">
               {/* ヘッダー行 */}
-              <div className={`${GRID_COLS} border-b border-gray-300 bg-gray-100 text-xs font-semibold text-gray-600 sticky top-0 z-10`}>
-                <div className="px-1 py-2 flex items-center justify-center">
+              <div className={`${GRID_COLS} border-b border-gray-300 bg-gray-100 text-[11px] leading-4 font-semibold text-gray-600 sticky top-0 z-10`}>
+                <div className="px-1 py-0.5 flex items-center justify-center">
                   <button
                     onClick={toggleAll}
                     title="全選択"
@@ -565,15 +560,15 @@ export function KokuhoSeikyuContent() {
                     )}
                   </button>
                 </div>
-                <div className="px-2 py-2 border-l border-gray-200">提供年月</div>
-                <div className="px-2 py-2 border-l border-gray-200">保険者番号</div>
-                <div className="px-2 py-2 border-l border-gray-200">被保険者番号</div>
-                <div className="px-2 py-2 border-l border-gray-200">利用者名</div>
-                <div className="px-2 py-2 border-l border-gray-200">要介護度</div>
-                <div className="px-2 py-2 border-l border-gray-200 text-right">単位数</div>
-                <div className="px-2 py-2 border-l border-gray-200 text-right">保険請求額</div>
-                <div className="px-2 py-2 border-l border-gray-200 text-right">利用者負担</div>
-                <div className="px-2 py-2 border-l border-gray-200 text-center">状態</div>
+                <div className="px-2 py-0.5 border-l border-gray-200">提供年月</div>
+                <div className="px-2 py-0.5 border-l border-gray-200">保険者番号</div>
+                <div className="px-2 py-0.5 border-l border-gray-200">被保険者番号</div>
+                <div className="px-2 py-0.5 border-l border-gray-200">利用者名</div>
+                <div className="px-2 py-0.5 border-l border-gray-200">要介護度</div>
+                <div className="px-2 py-0.5 border-l border-gray-200 text-right">単位数</div>
+                <div className="px-2 py-0.5 border-l border-gray-200 text-right">保険請求額</div>
+                <div className="px-2 py-0.5 border-l border-gray-200 text-right">利用者負担</div>
+                <div className="px-2 py-0.5 border-l border-gray-200 text-center">状態</div>
               </div>
 
               {displayRows.length === 0 ? (
@@ -588,7 +583,7 @@ export function KokuhoSeikyuContent() {
                   <div
                     key={d.key}
                     onClick={() => toggle(d.key)}
-                    className={`${GRID_COLS} border-b border-gray-100 text-xs cursor-pointer transition-colors ${
+                    className={`${GRID_COLS} border-b border-gray-100 text-[11px] leading-4 cursor-pointer transition-colors ${
                       isChecked
                         ? "bg-indigo-50"
                         : idx % 2 === 0
@@ -596,7 +591,7 @@ export function KokuhoSeikyuContent() {
                         : "bg-gray-50/50 hover:bg-gray-100"
                     }`}
                   >
-                    <div className="px-1 py-2 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                    <div className="px-1 py-0.5 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => toggle(d.key)}
                         className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
@@ -606,16 +601,16 @@ export function KokuhoSeikyuContent() {
                         {isChecked && <span className="text-white text-[8px] font-bold leading-none">✓</span>}
                       </button>
                     </div>
-                    <div className={`px-2 py-2 border-l border-gray-100 text-gray-500 ${d.isReSeikyu ? "bg-yellow-100" : ""}`}>
+                    <div className={`px-2 py-0.5 border-l border-gray-100 text-gray-500 ${d.isReSeikyu ? "bg-yellow-100" : ""}`}>
                       R{oy - 2018}/{om}
                     </div>
-                    <div className="px-2 py-2 border-l border-gray-100 font-mono text-gray-700">
+                    <div className="px-2 py-0.5 border-l border-gray-100 font-mono text-gray-700">
                       {r.insurer_number ?? "—"}
                     </div>
-                    <div className="px-2 py-2 border-l border-gray-100 font-mono text-gray-700">
+                    <div className="px-2 py-0.5 border-l border-gray-100 font-mono text-gray-700">
                       {r.insured_number ?? "—"}
                     </div>
-                    <div className="px-2 py-2 border-l border-gray-100 font-medium text-gray-800 truncate">
+                    <div className="px-2 py-0.5 border-l border-gray-100 font-medium text-gray-800 truncate">
                       {r.user_name}
                       {(r.segmentCount ?? 1) > 1 && (
                         <span
@@ -626,19 +621,19 @@ export function KokuhoSeikyuContent() {
                         </span>
                       )}
                     </div>
-                    <div className="px-2 py-2 border-l border-gray-100 text-gray-700">
+                    <div className="px-2 py-0.5 border-l border-gray-100 text-gray-700">
                       {r.care_level ?? "—"}
                     </div>
-                    <div className="px-2 py-2 border-l border-gray-100 text-right font-mono text-gray-700">
+                    <div className="px-2 py-0.5 border-l border-gray-100 text-right font-mono text-gray-700">
                       {r.totalUnits.toLocaleString()}
                     </div>
-                    <div className="px-2 py-2 border-l border-gray-100 text-right font-mono font-semibold text-indigo-700">
+                    <div className="px-2 py-0.5 border-l border-gray-100 text-right font-mono font-semibold text-indigo-700">
                       {r.insuranceAmount.toLocaleString()}
                     </div>
-                    <div className="px-2 py-2 border-l border-gray-100 text-right font-mono text-gray-700">
+                    <div className="px-2 py-0.5 border-l border-gray-100 text-right font-mono text-gray-700">
                       {r.userAmount.toLocaleString()}
                     </div>
-                    <div className="px-2 py-2 border-l border-gray-100 text-center">
+                    <div className="px-2 py-0.5 border-l border-gray-100 text-center">
                       {d.isReSeikyu ? (
                         <span className="text-red-600">
                           {[
