@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   FileText,
   Plus,
+  Printer,
   Trash2,
   Banknote,
   Upload,
@@ -73,6 +74,9 @@ type UnifiedRow =
   | { key: string; system: "障害"; userId: string; shogai: ShogaiSeikyuRow };
 
 const rowKey = (system: SeikyuSystem, userId: string) => `${system}:${userId}`;
+
+// 介護・総合のみの統合行 (一括印刷用。障害の帳票は障害請求タブ側にあるため対象外)
+type KaigoUnifiedRow = Extract<UnifiedRow, { system: "介護" | "総合事業" }>;
 
 // 利用者の口座情報 (FB データ用) — clients の bank_* 列
 interface ClientBank {
@@ -760,6 +764,15 @@ export function RiyouSeikyuContent() {
     return { household: [] as UserSeikyuRow[], singles: kaigoRows };
   }, [kaigoTargets, merged]);
 
+  // ─── 請求書一括印刷 (全員 or チェック中 を 1 印刷ジョブで連続出力) ──────────
+  // 既存の単票印刷 (発行ボタン) とは独立した追加機能。発行日の記録は行わない。
+  const [bulkPrintOpen, setBulkPrintOpen] = useState(false);
+  // 一括印刷の対象候補 = 介護・総合のみ (障害の帳票は障害請求タブ側にあるため対象外)
+  const bulkCandidateRows = useMemo(
+    () => unifiedRows.filter((r): r is KaigoUnifiedRow => r.system !== "障害"),
+    [unifiedRows],
+  );
+
   // ─── FB データ (全銀協 口座振替) ───────────────────────────────────────────
   const exportFbData = () => {
     // 対象: 発行対象のうち介護・総合のみ (障害は FB 除外)。金額 (負担額 − 軽減 + 実費) を引落額とする
@@ -1154,6 +1167,16 @@ export function RiyouSeikyuContent() {
             </span>
             <button
               type="button"
+              onClick={() => setBulkPrintOpen(true)}
+              disabled={bulkCandidateRows.length === 0}
+              title="対象月の請求書 (・領収書) を全員分またはチェック中の利用者分、1 回の印刷ジョブで連続出力します (ブラウザの印刷 → PDF 保存で一括 PDF 化)。発行日の記録は行いません (記録は「発行」ボタン)。障害は対象外"
+              className="border border-purple-500 rounded bg-purple-50 px-2.5 py-1 text-purple-700 hover:bg-purple-100 flex items-center gap-1.5 text-xs font-medium disabled:opacity-50"
+            >
+              <Printer size={13} />
+              請求書一括印刷
+            </button>
+            <button
+              type="button"
               onClick={exportFbData}
               disabled={kaigoTargets.length === 0}
               title="全銀協 口座振替フォーマット (Shift_JIS) で FB データを出力 (介護・総合のみ / 障害は対象外)"
@@ -1462,6 +1485,26 @@ export function RiyouSeikyuContent() {
           </div>
         </div>
       </div>
+
+      {/* ===== 請求書一括印刷 プレビュー (単票コンポーネントを page-break で連結) ===== */}
+      {bulkPrintOpen && (
+        <RiyouBulkPrintView
+          rows={bulkCandidateRows}
+          checkedKeys={checked}
+          mergedKeys={merged}
+          rowBilled={rowBilled}
+          payments={payments}
+          jippiByUser={jippiByUser}
+          keigenByUser={keigenByUser}
+          iryohiByUser={iryohiByUser}
+          prevPayments={prevPayments}
+          officeName={officeName}
+          reiwa={reiwa}
+          year={year}
+          month={month}
+          onClose={() => setBulkPrintOpen(false)}
+        />
+      )}
 
       {/* ===== 振替結果取込 プレビュー / 確定 モーダル ===== */}
       {fbImport && (
@@ -2938,6 +2981,300 @@ function RyoshuPrintSheet({
       <p className="mt-6 text-xs text-gray-700">
         ※ 介護保険サービスの利用者負担分は消費税非課税です。
       </p>
+    </div>
+  );
+}
+
+// ─── 請求書一括印刷ビュー (全員/チェック中 を 1 印刷ジョブで連続出力) ──────────
+// 単票の RiyouSeikyuPrintSheet / RiyouSeikyuHouseholdPrintSheet / RyoshuPrintSheet を
+// 利用者ごとに page-break-after で連結するだけの view。金額計算はコピーせず、
+// 既存の rowBilled / keigenByUser / jippiByUser / prevPayments をそのまま渡す
+// (= 単票印刷と 1 円も違わない)。名寄せ (世帯合算) も発行ボタンと同じ挙動。
+// 発行日の記録 (riyou_seikyu_payments への upsert) は行わない — 記録は「発行」ボタン側。
+// 並び順: 利用者番号 (clients.user_number) 順、番号なしは末尾でカナ順。
+function RiyouBulkPrintView({
+  rows,
+  checkedKeys,
+  mergedKeys,
+  rowBilled,
+  payments,
+  jippiByUser,
+  keigenByUser,
+  iryohiByUser,
+  prevPayments,
+  officeName,
+  reiwa,
+  year,
+  month,
+  onClose,
+}: {
+  /** 対象候補 (介護・総合のみ。障害の帳票は障害請求タブ側のため対象外) */
+  rows: KaigoUnifiedRow[];
+  /** 一覧の「対象」チェック (制度:client_id キー) */
+  checkedKeys: Set<string>;
+  /** 一覧の「名寄」チェック (世帯合算。制度:client_id キー) */
+  mergedKeys: Set<string>;
+  /** 行の請求額 = (負担額 + 超過自費) − 軽減 + 実費 — 単票と同じ既存関数 */
+  rowBilled: (r: UserSeikyuRow) => number;
+  payments: Map<string, PaymentRow>;
+  jippiByUser: Map<string, JippiEntry[]>;
+  keigenByUser: Map<string, number>;
+  iryohiByUser: Map<string, number>;
+  prevPayments: Map<string, PaymentRow>;
+  officeName: string | null;
+  reiwa: number;
+  year: number;
+  month: number;
+  onClose: () => void;
+}) {
+  // 対象 (全員 / チェック中) — チェックが 1 件も無いときは「全員」固定
+  const [scope, setScope] = useState<"all" | "checked">("all");
+  // 0 円請求 (当月請求額 = 0) の利用者を除外するオプション
+  const [excludeZero, setExcludeZero] = useState(false);
+  // 印刷する綴り (請求書 / 領収書)。領収書は入金済み行のみ = 追加コストほぼ 0 なので同梱
+  const [docs, setDocs] = useState<Set<"seikyu" | "ryoshu">>(new Set(["seikyu"]));
+
+  const checkedRows = useMemo(
+    () => rows.filter((r) => checkedKeys.has(r.key)),
+    [rows, checkedKeys],
+  );
+
+  // 対象行の確定: scope → 0円除外 → 利用者番号順ソート
+  const { sorted, excludedZeroCount } = useMemo(() => {
+    const scoped = scope === "checked" ? checkedRows : rows;
+    const nonZero = excludeZero
+      ? scoped.filter((r) => rowBilled(r.kaigo) !== 0)
+      : scoped;
+    const out = [...nonZero].sort((a, b) => {
+      const na = a.kaigo.user_number;
+      const nb = b.kaigo.user_number;
+      if (na != null && nb != null) {
+        const c = na.localeCompare(nb, "ja", { numeric: true });
+        if (c !== 0) return c;
+      } else if (na != null) {
+        return -1; // 番号ありを先に
+      } else if (nb != null) {
+        return 1;
+      }
+      // 番号なし同士 (または同番号) はカナ順で安定化
+      return (a.kaigo.user_name_kana ?? a.kaigo.user_name).localeCompare(
+        b.kaigo.user_name_kana ?? b.kaigo.user_name,
+        "ja",
+      );
+    });
+    return { sorted: out, excludedZeroCount: scoped.length - nonZero.length };
+  }, [rows, checkedRows, scope, excludeZero, rowBilled]);
+
+  // 名寄せ (世帯合算): 対象内の名寄チェック 2 名以上 → 1 枚の世帯合算請求書、
+  // それ以外は 1 名 1 枚 (発行ボタンの printGroups と同じ判定)
+  const groups = useMemo(() => {
+    const household = sorted
+      .filter((r) => mergedKeys.has(r.key))
+      .map((r) => r.kaigo);
+    if (household.length >= 2) {
+      const hset = new Set(household.map((r) => r.user_id));
+      return {
+        household,
+        singles: sorted.map((r) => r.kaigo).filter((r) => !hset.has(r.user_id)),
+      };
+    }
+    return { household: [] as UserSeikyuRow[], singles: sorted.map((r) => r.kaigo) };
+  }, [sorted, mergedKeys]);
+
+  // 領収書 = 対象のうち入金済み (入金完 / 一部入金 かつ 入金額 > 0)。
+  // 既存の ryoshuTargets と同条件 (riyou_seikyu_payments 由来)
+  const ryoshuRows = useMemo(
+    () =>
+      sorted
+        .map((r) => ({ row: r.kaigo, payment: payments.get(r.userId) }))
+        .filter(
+          (x): x is { row: UserSeikyuRow; payment: PaymentRow } =>
+            x.payment != null &&
+            (x.payment.status === "入金完" || x.payment.status === "一部入金") &&
+            x.payment.paid_amount > 0,
+        ),
+    [sorted, payments],
+  );
+
+  const seikyuSheetCount = docs.has("seikyu")
+    ? (groups.household.length >= 2 ? 1 : 0) + groups.singles.length
+    : 0;
+  const ryoshuSheetCount = docs.has("ryoshu") ? ryoshuRows.length : 0;
+  const totalSheets = seikyuSheetCount + ryoshuSheetCount;
+
+  const toggleDoc = (k: "seikyu" | "ryoshu") =>
+    setDocs((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-gray-200 print:static print:block print:bg-white">
+      {/* ── 操作バー (印刷には出さない) ── */}
+      <div className="shrink-0 border-b border-gray-300 bg-white px-4 py-2 flex items-center gap-3 flex-wrap text-xs print:hidden">
+        <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-800">
+          <Printer size={15} className="text-purple-600" />
+          請求書一括印刷 — 令和{reiwa}年{month}月分 ({year}-
+          {String(month).padStart(2, "0")})
+        </span>
+        <span className="font-mono font-semibold text-gray-700">
+          対象 {sorted.length} 名 / {totalSheets} 枚
+        </span>
+        {/* 対象選択 (全員 / チェック中) */}
+        <span className="flex items-center gap-2 rounded border border-gray-300 bg-gray-50 px-2 py-1">
+          <label className="flex cursor-pointer select-none items-center gap-1 whitespace-nowrap">
+            <input
+              type="radio"
+              name="bulk-print-scope"
+              checked={scope === "all"}
+              onChange={() => setScope("all")}
+              className="cursor-pointer"
+            />
+            全員 ({rows.length})
+          </label>
+          <label
+            className={`flex items-center gap-1 whitespace-nowrap select-none ${checkedRows.length === 0 ? "text-gray-400" : "cursor-pointer"}`}
+            title={checkedRows.length === 0 ? "一覧の「対象」列でチェックすると選べます" : undefined}
+          >
+            <input
+              type="radio"
+              name="bulk-print-scope"
+              checked={scope === "checked"}
+              disabled={checkedRows.length === 0}
+              onChange={() => setScope("checked")}
+              className="cursor-pointer disabled:cursor-not-allowed"
+            />
+            チェック中 ({checkedRows.length})
+          </label>
+        </span>
+        {/* 0 円請求の除外 */}
+        <label
+          className="flex cursor-pointer select-none items-center gap-1 whitespace-nowrap rounded border border-gray-300 bg-gray-50 px-2 py-1"
+          title="当月請求額が 0 円の利用者を印刷対象から除外します (繰越のみの利用者も除外されます)"
+        >
+          <input
+            type="checkbox"
+            checked={excludeZero}
+            onChange={(e) => setExcludeZero(e.target.checked)}
+            className="cursor-pointer"
+          />
+          0円請求を除外
+          {excludeZero && excludedZeroCount > 0 && (
+            <span className="text-[10px] text-gray-500">({excludedZeroCount} 名除外)</span>
+          )}
+        </label>
+        {/* 綴り (請求書 / 領収書) */}
+        <span className="flex items-center gap-2 rounded border border-gray-300 bg-gray-50 px-2 py-1">
+          <label className="flex cursor-pointer select-none items-center gap-1 whitespace-nowrap">
+            <input
+              type="checkbox"
+              checked={docs.has("seikyu")}
+              onChange={() => toggleDoc("seikyu")}
+              className="cursor-pointer"
+            />
+            請求書 ({(groups.household.length >= 2 ? 1 : 0) + groups.singles.length} 枚)
+          </label>
+          <label
+            className="flex cursor-pointer select-none items-center gap-1 whitespace-nowrap"
+            title="入金済み (入金完 / 一部入金) の利用者のみ発行できます"
+          >
+            <input
+              type="checkbox"
+              checked={docs.has("ryoshu")}
+              onChange={() => toggleDoc("ryoshu")}
+              className="cursor-pointer"
+            />
+            領収書 ({ryoshuRows.length} 枚)
+          </label>
+        </span>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => window.print()}
+            disabled={totalSheets === 0}
+            title="ブラウザの印刷ダイアログを開きます。「PDF に保存」を選ぶと全員分が 1 つの PDF になります"
+            className="flex items-center gap-1.5 rounded bg-purple-600 px-4 py-1.5 font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+          >
+            <Printer size={13} />
+            印刷 / PDF保存 ({totalSheets} 枚)
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-gray-300 bg-white px-4 py-1.5 font-medium text-gray-600 hover:bg-gray-50"
+          >
+            閉じる
+          </button>
+        </div>
+      </div>
+      {/* 注記行 (印刷には出さない) */}
+      <div className="shrink-0 border-b border-gray-300 bg-gray-50 px-4 py-1 text-[10px] text-gray-500 flex flex-wrap gap-x-4 gap-y-0.5 print:hidden">
+        <span>並び順: 利用者番号順 (番号なしは末尾・カナ順)</span>
+        <span>※ 発行日の記録は行いません (記録が必要な場合は一覧の「発行」ボタンをご利用ください)</span>
+        <span>※ 障害は対象外 (帳票は障害請求タブ側)</span>
+        {sorted.length > 50 && (
+          <span className="font-semibold text-amber-600">
+            ⚠ 件数が多いためプレビュー生成・印刷ダイアログの準備に時間がかかる場合があります。重い場合は一覧の「対象」チェックで 50 名前後ずつに分割して印刷してください
+          </span>
+        )}
+      </div>
+
+      {/* ── プレビュー本体 = そのまま印刷対象 (単票を page-break-after で連結) ── */}
+      <div className="flex-1 overflow-auto py-4 print:overflow-visible print:py-0">
+        <div className="mx-auto w-[210mm] max-w-full bg-white shadow print:mx-0 print:w-auto print:max-w-none print:shadow-none">
+          {totalSheets === 0 && (
+            <p className="p-10 text-center text-sm text-gray-500">
+              印刷対象がありません (対象・0円除外・綴りの条件をご確認ください)
+            </p>
+          )}
+          {docs.has("seikyu") && (
+            <>
+              {groups.household.length >= 2 && (
+                <RiyouSeikyuHouseholdPrintSheet
+                  rows={groups.household}
+                  jippiByUser={jippiByUser}
+                  keigenByUser={keigenByUser}
+                  iryohiByUser={iryohiByUser}
+                  prevPayments={prevPayments}
+                  officeName={officeName}
+                  reiwa={reiwa}
+                  month={month}
+                />
+              )}
+              {groups.singles.map((r) => (
+                <RiyouSeikyuPrintSheet
+                  key={`bulk-seikyu-${r.system ?? "介護"}-${r.user_id}`}
+                  row={r}
+                  jippi={jippiByUser.get(r.user_id) ?? []}
+                  keigen={keigenByUser.get(r.user_id) ?? 0}
+                  iryohi={
+                    iryohiByUser.has(r.user_id)
+                      ? (iryohiByUser.get(r.user_id) ?? 0)
+                      : null
+                  }
+                  prevPayment={prevPayments.get(r.user_id) ?? null}
+                  officeName={officeName}
+                  reiwa={reiwa}
+                  month={month}
+                />
+              ))}
+            </>
+          )}
+          {docs.has("ryoshu") &&
+            ryoshuRows.map(({ row: r, payment: pay }) => (
+              <RyoshuPrintSheet
+                key={`bulk-ryoshu-${r.system ?? "介護"}-${r.user_id}`}
+                row={r}
+                payment={pay}
+                officeName={officeName}
+                reiwa={reiwa}
+                month={month}
+              />
+            ))}
+        </div>
+      </div>
     </div>
   );
 }

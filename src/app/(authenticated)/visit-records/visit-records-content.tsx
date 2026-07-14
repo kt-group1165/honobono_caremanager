@@ -29,6 +29,7 @@ import { SignaturePadModal } from "@/components/signature/SignaturePadModal";
 import { SignaturePad } from "@/components/signature-pad";
 import { resolvePreferredTenantId } from "@/lib/tenant-resolver";
 import { SendDocumentModal } from "@/components/shared/SendDocumentModal";
+import { VoiceInputButton } from "@/components/shared/VoiceInputButton";
 import { useBusinessType } from "@/lib/business-type-context";
 import { useSignedUrls } from "@/lib/use-signed-url";
 import { resolveVisitAddonLines } from "@/lib/visit-addons";
@@ -183,6 +184,11 @@ interface VisitSchedule {
   end_time: string | null;
   service_type: string | null; // shift 側の自由書式 (例: "身体日１．０", "家事日１．０")
   status: "scheduled" | "completed" | "cancelled";
+  // スマホ打刻 (/m/visit-records)。migrations/visit_clock.sql 未適用環境では
+  // 列が無い → fetch 側で 42703 を検知して列なし SELECT に fallback するため optional。
+  // ここでは参考表示のみ (編集経路なし)。
+  clock_in_at?: string | null;
+  clock_out_at?: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -190,6 +196,15 @@ interface VisitSchedule {
 // "10:00:00" → "10:00" (time input / 比較用)
 function hhmm(t: string | null | undefined): string {
   return t ? t.slice(0, 5) : "";
+}
+
+// 打刻 TIMESTAMPTZ → "HH:mm" (ローカル時刻)。parse 不能はそのまま返す。
+function fmtClockHm(iso: string): string {
+  try {
+    return format(new Date(iso), "HH:mm");
+  } catch {
+    return iso;
+  }
 }
 
 // 予定の service_type (shift 側の自由書式) を記録の ServiceType 4 区分へベストエフォート変換
@@ -384,13 +399,18 @@ function FInput({ label, value, onChange, placeholder, type = "text" }: { label:
   );
 }
 function FTextarea({ label, value, onChange, placeholder, rows = 2 }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; rows?: number }) {
+  // 音声入力 (VoiceInputButton) がカーソル位置を読むための ref
+  const taRef = useRef<HTMLTextAreaElement>(null);
   return (
     <div>
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center justify-between mb-1 gap-2">
         <label className="block text-xs font-medium text-gray-700">{label}</label>
-        <TemplatePicker category="visit_record" currentText={value} onInsert={onChange} />
+        <div className="flex items-center gap-1.5">
+          <VoiceInputButton targetRef={taRef} value={value} onChange={onChange} />
+          <TemplatePicker category="visit_record" currentText={value} onInsert={onChange} />
+        </div>
       </div>
-      <textarea rows={rows} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={inputClass} />
+      <textarea ref={taRef} rows={rows} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={inputClass} />
     </div>
   );
 }
@@ -1106,19 +1126,29 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
     if (!y || !m) return; // changeMonth で空値は弾いているため通常到達しない
     const from = `${month}-01`;
     const to = format(new Date(y, m, 1), "yyyy-MM-dd"); // 翌月 1 日 (排他)
-    const { data, error } = await supabase
-      .from("kaigo_visit_schedule")
-      .select("id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, status")
-      .eq("user_id", userId)
-      .gte("visit_date", from)
-      .lt("visit_date", to)
-      .order("visit_date")
-      .order("start_time");
-    if (error) {
-      console.error("schedule fetch failed:", error.message);
-      toast.error("訪問予定の取得に失敗しました: " + error.message);
+    const BASE_COLS =
+      "id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, status";
+    const runQuery = (cols: string) =>
+      supabase
+        .from("kaigo_visit_schedule")
+        .select(cols)
+        .eq("user_id", userId)
+        .gte("visit_date", from)
+        .lt("visit_date", to)
+        .order("visit_date")
+        .order("start_time");
+    // スマホ打刻列 (migrations/visit_clock.sql) を参考表示用に一緒に読む。
+    // 未適用環境 (42703) では列なし SELECT に fallback (打刻表示なしで従来通り)。
+    let res = await runQuery(BASE_COLS + ", clock_in_at, clock_out_at");
+    if (res.error && /clock_(in|out)_at/i.test(res.error.message)) {
+      console.warn("clock_in_at/clock_out_at 列が未適用のため打刻表示なしで再取得:", res.error.message);
+      res = await runQuery(BASE_COLS);
+    }
+    if (res.error) {
+      console.error("schedule fetch failed:", res.error.message);
+      toast.error("訪問予定の取得に失敗しました: " + res.error.message);
     } else {
-      setSchedules((data ?? []) as VisitSchedule[]);
+      setSchedules((res.data ?? []) as unknown as VisitSchedule[]);
     }
     setSchedulesLoading(false);
   }, [supabase, userId, month]);
@@ -1598,6 +1628,13 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
                             <div className="mt-0.5 text-xs text-gray-500">
                               担当: {staffNames.length > 0 ? staffNames.join("、") : "未定"}
                             </div>
+                            {/* スマホ打刻 (参考表示のみ。編集経路なし) */}
+                            {(s.clock_in_at || s.clock_out_at) && (
+                              <div className="mt-0.5 text-[11px] text-gray-400 tabular-nums">
+                                打刻 {s.clock_in_at ? fmtClockHm(s.clock_in_at) : "--:--"} 〜{" "}
+                                {s.clock_out_at ? fmtClockHm(s.clock_out_at) : "--:--"}
+                              </div>
+                            )}
                           </div>
                           {rec ? (
                             <button

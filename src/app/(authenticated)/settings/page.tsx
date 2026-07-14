@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Settings, Eye, EyeOff, Building2, ChevronRight, Copy } from "lucide-react";
+import { Settings, Eye, EyeOff, Building2, ChevronRight, Copy, Database } from "lucide-react";
 import Link from "next/link";
 import { useBusinessType } from "@/lib/business-type-context";
 
@@ -224,6 +224,23 @@ export default function SettingsPage() {
           <div>
             <h2 className="font-semibold text-gray-900">自事業所管理</h2>
             <p className="text-xs text-gray-500">複数の自事業所の登録・編集・切替</p>
+          </div>
+        </div>
+        <ChevronRight size={18} className="text-gray-400" />
+      </Link>
+
+      {/* Data Export Link */}
+      <Link
+        href="/settings/data-export"
+        className="flex items-center justify-between rounded-lg border bg-white p-5 shadow-sm hover:shadow-md transition-shadow max-w-lg"
+      >
+        <div className="flex items-center gap-3">
+          <div className="rounded-lg bg-blue-50 p-2.5">
+            <Database size={20} className="text-blue-600" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-gray-900">データエクスポート</h2>
+            <p className="text-xs text-gray-500">全データを CSV / JSON で一括出力 (移行容易性・BCP バックアップ)</p>
           </div>
         </div>
         <ChevronRight size={18} className="text-gray-400" />

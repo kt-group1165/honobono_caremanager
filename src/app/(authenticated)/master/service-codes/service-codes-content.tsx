@@ -22,6 +22,7 @@ export type ServiceSystem = "介護" | "障害" | "総合事業" | "独自";
 
 import type { ServiceCodeFormula } from "@/lib/service-code-calc";
 import { formulaToDescription } from "@/lib/service-code-calc";
+import { ServiceCodeImportDialog } from "./service-code-import-dialog";
 
 export interface ServiceCode {
   id: string;
@@ -292,6 +293,9 @@ export function ServiceCodesContent({
   const [importValidFrom, setImportValidFrom] = useState<string>("2024-06-01");
   const [importValidUntil, setImportValidUntil] = useState<string>("");
   const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
+
+  // CSV取込 (世代管理) — import_batch_id 付き・取り消し可能な新経路 (既存 CSV取込 とは独立)
+  const [batchImportOpen, setBatchImportOpen] = useState(false);
 
   // ─── Data fetch (refetch after CRUD) ────────────────────────────────────────
 
@@ -913,6 +917,14 @@ export function ServiceCodesContent({
             >
               <Upload className="w-4 h-4" />
               CSV取込
+            </button>
+            <button
+              onClick={() => setBatchImportOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-indigo-300 text-indigo-700 text-sm font-medium rounded-lg hover:bg-indigo-50 transition-colors"
+              title="改定・新規市町村対応: 総合事業 単位数表標準マスタ / 汎用CSV を世代クローズ付きで取込 (取込単位で取り消し可能)"
+            >
+              <Upload className="w-4 h-4" />
+              CSV取込 (世代管理)
             </button>
             <button
               onClick={handleCsvExport}
@@ -1779,6 +1791,14 @@ export function ServiceCodesContent({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── CSV取込 (世代管理) dialog — 既存 CSV取込 とは独立の追加経路 ── */}
+      {batchImportOpen && (
+        <ServiceCodeImportDialog
+          onClose={() => setBatchImportOpen(false)}
+          onImported={fetchRecords}
+        />
       )}
 
       {/* ── Delete confirm dialog ── */}

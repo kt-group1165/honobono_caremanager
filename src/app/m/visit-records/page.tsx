@@ -20,7 +20,7 @@
  *   kaigo_visit_records に signature_image_path / signed_at / signer_name。
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format, addDays } from "date-fns";
 import {
@@ -31,11 +31,13 @@ import {
   LogOut,
   CheckCircle2,
   ArrowLeft,
+  Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { SignaturePad } from "@/components/signature-pad";
 import { resolvePreferredTenantId } from "@/lib/tenant-resolver";
+import { VoiceInputButton } from "@/components/shared/VoiceInputButton";
 
 // ─── 型 ───────────────────────────────────────────────────────────────────────
 
@@ -55,6 +57,10 @@ interface ScheduleRow {
   start_time: string | null;
   end_time: string | null;
   service_type: string | null;
+  // 打刻 (migrations/visit_clock.sql 未適用の環境では列が無い → fetch 側で
+  // 42703 を検知して打刻機能を無効化するため optional 扱い)
+  clock_in_at?: string | null;
+  clock_out_at?: string | null;
   clients: { name: string | null } | null;
 }
 
@@ -77,6 +83,16 @@ interface ExistingRecord {
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 const hhmm = (t: string | null): string => (t ? t.slice(0, 5) : "");
+
+/** 打刻 TIMESTAMPTZ → "HH:mm" (ローカル時刻)。parse 不能はそのまま返す。 */
+function fmtClock(iso: string | null | undefined): string {
+  if (!iso) return "";
+  try {
+    return format(new Date(iso), "HH:mm");
+  } catch {
+    return iso;
+  }
+}
 
 function formatJpDate(s: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
@@ -106,6 +122,14 @@ export default function MobileVisitRecordsPage() {
   // 選択中の訪問 (フォーム表示)。null = 一覧表示。
   const [selected, setSelected] = useState<ScheduleRow | null>(null);
 
+  // 打刻列 (clock_in_at/clock_out_at) が DB に適用済みか。
+  // 未適用 (42703) を fetch 時に検知したら false にして打刻ボタンを非表示にする。
+  // ref は fetchList の依存に入れず再フェッチループを避けるための鏡。
+  const [clockSupported, setClockSupported] = useState(true);
+  const clockSupportedRef = useRef(true);
+  // 打刻の保存中フラグ ("scheduleId:in" / "scheduleId:out")
+  const [clocking, setClocking] = useState<string | null>(null);
+
   // フォーム state
   const [bodyCare, setBodyCare] = useState("");
   const [livingSupport, setLivingSupport] = useState("");
@@ -120,6 +144,12 @@ export default function MobileVisitRecordsPage() {
   const [signature, setSignature] = useState<string | null>(null);
   const [signerName, setSignerName] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // 音声入力 (VoiceInputButton) がカーソル位置を読むための textarea ref
+  const bodyCareRef = useRef<HTMLTextAreaElement>(null);
+  const livingSupportRef = useRef<HTMLTextAreaElement>(null);
+  const userConditionRef = useRef<HTMLTextAreaElement>(null);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
 
   // ── 1) 職員 (member) 解決 ──────────────────────────────────────────────────
   useEffect(() => {
@@ -171,17 +201,19 @@ export default function MobileVisitRecordsPage() {
     // - full   : 主 + 2/3 + additional_staff(cs)
     // - noCs    : 主 + 2/3           (additional_staff の cs を外す)
     // - primary : 主のみ             (2/3 列も無い最古環境)
-    const SELECT_COLS =
+    const BASE_COLS =
       "id, user_id, staff_id, staff_id_2, staff_id_3, additional_staff, visit_date, start_time, end_time, service_type, clients(name)";
+    // 打刻列 (migrations/visit_clock.sql)。未適用環境では 42703 → 打刻機能を無効化して再取得。
+    const CLOCK_COLS = ", clock_in_at, clock_out_at";
     // additional_staff は jsonb 配列 [{staff_id,...}]。contains (cs) で自分を含む行を拾う。
     const csFilter = `additional_staff.cs.[{"staff_id":"${me}"}]`;
     const orFull = `staff_id.eq.${me},staff_id_2.eq.${me},staff_id_3.eq.${me},${csFilter}`;
     const orNoCs = `staff_id.eq.${me},staff_id_2.eq.${me},staff_id_3.eq.${me}`;
 
-    const runQuery = (orExpr: string | null) => {
+    const runQuery = (orExpr: string | null, withClock: boolean) => {
       let q = supabase
         .from("kaigo_visit_schedule")
-        .select(SELECT_COLS)
+        .select(withClock ? BASE_COLS + CLOCK_COLS : BASE_COLS)
         .eq("visit_date", date)
         .neq("status", "cancelled");
       q = orExpr ? q.or(orExpr) : q.eq("staff_id", me);
@@ -194,19 +226,33 @@ export default function MobileVisitRecordsPage() {
       /column .* does not exist/i.test(msg) ||
       /operator does not exist/i.test(msg) ||
       /invalid input syntax|cs\b|contains/i.test(msg);
+    // 打刻列そのものの未適用 (42703 でメッセージに clock_in_at / clock_out_at)
+    const isClockColumnError = (msg: string): boolean =>
+      /clock_(in|out)_at/i.test(msg);
 
-    let rows: ScheduleRow[];
-    // 1) full (OR + cs)
-    let res = await runQuery(orFull);
-    if (res.error && isColumnOrCsError(res.error.message, res.error.code)) {
-      console.warn("schedule OR+cs 非対応、主+2/3 に fallback:", res.error.message);
-      // 2) noCs (OR without cs)
-      res = await runQuery(orNoCs);
-      if (res.error && isColumnOrCsError(res.error.message, res.error.code)) {
-        console.warn("staff_id_2/3 列も未適用、主担当のみに fallback:", res.error.message);
-        // 3) primary only
-        res = await runQuery(null);
+    // 既存の 3 段 fallback (full → noCs → primary) を打刻列あり/なしで実行
+    const runChain = async (withClock: boolean) => {
+      // 1) full (OR + cs)
+      let res = await runQuery(orFull, withClock);
+      if (res.error && !isClockColumnError(res.error.message) && isColumnOrCsError(res.error.message, res.error.code)) {
+        console.warn("schedule OR+cs 非対応、主+2/3 に fallback:", res.error.message);
+        // 2) noCs (OR without cs)
+        res = await runQuery(orNoCs, withClock);
+        if (res.error && !isClockColumnError(res.error.message) && isColumnOrCsError(res.error.message, res.error.code)) {
+          console.warn("staff_id_2/3 列も未適用、主担当のみに fallback:", res.error.message);
+          // 3) primary only
+          res = await runQuery(null, withClock);
+        }
       }
+      return res;
+    };
+
+    let res = await runChain(clockSupportedRef.current);
+    if (clockSupportedRef.current && res.error && isClockColumnError(res.error.message)) {
+      console.warn("clock_in_at/clock_out_at 列が未適用のため打刻機能を無効化:", res.error.message);
+      clockSupportedRef.current = false;
+      setClockSupported(false);
+      res = await runChain(false);
     }
     if (res.error) {
       console.error("schedule fetch failed:", res.error.message);
@@ -216,13 +262,15 @@ export default function MobileVisitRecordsPage() {
       setListLoading(false);
       return;
     }
-    rows = (res.data ?? []) as unknown as ScheduleRow[];
-    // fallback で additional_staff 列が来なくても型を満たすよう既定を補う
+    let rows = (res.data ?? []) as unknown as ScheduleRow[];
+    // fallback で additional_staff / 打刻列が来なくても型を満たすよう既定を補う
     rows = rows.map((r) => ({
       ...r,
       staff_id_2: r.staff_id_2 ?? null,
       staff_id_3: r.staff_id_3 ?? null,
       additional_staff: r.additional_staff ?? null,
+      clock_in_at: r.clock_in_at ?? null,
+      clock_out_at: r.clock_out_at ?? null,
     }));
     setSchedules(rows);
 
@@ -260,6 +308,38 @@ export default function MobileVisitRecordsPage() {
     }
     return map;
   }, [records]);
+
+  // ── 打刻 (開始/終了) ──────────────────────────────────────────────────────
+  // 押下時刻を kaigo_visit_schedule.clock_in_at / clock_out_at に記録する。
+  // 予定の start_time / end_time は変更しない (打刻は別データ = 予実対比用)。
+  // 打刻済みの再押下は confirm の上で現在時刻に訂正する。
+  const handleClock = async (s: ScheduleRow, kind: "in" | "out") => {
+    const col = kind === "in" ? "clock_in_at" : "clock_out_at";
+    const label = kind === "in" ? "開始" : "終了";
+    const existing = kind === "in" ? s.clock_in_at : s.clock_out_at;
+    if (existing) {
+      const ok = window.confirm(
+        `${label}打刻は ${fmtClock(existing)} で記録済みです。現在時刻で訂正しますか?`
+      );
+      if (!ok) return;
+    }
+    const now = new Date().toISOString();
+    const key = `${s.id}:${kind}`;
+    setClocking(key);
+    const { error } = await supabase
+      .from("kaigo_visit_schedule")
+      .update({ [col]: now })
+      .eq("id", s.id);
+    setClocking(null);
+    if (error) {
+      console.error("clock update failed:", error.message);
+      toast.error(`${label}打刻に失敗しました: ` + error.message);
+      return;
+    }
+    setSchedules((prev) => prev.map((r) => (r.id === s.id ? { ...r, [col]: now } : r)));
+    setSelected((prev) => (prev && prev.id === s.id ? { ...prev, [col]: now } : prev));
+    toast.success(`${label}打刻を記録しました (${fmtClock(now)})`);
+  };
 
   // ── フォームを開く ─────────────────────────────────────────────────────────
   const openForm = (s: ScheduleRow) => {
@@ -507,15 +587,31 @@ export default function MobileVisitRecordsPage() {
             {selected.service_type && (
               <div className="text-xs text-gray-500 break-words">{selected.service_type}</div>
             )}
+            {clockSupported && (selected.clock_in_at || selected.clock_out_at) && (
+              <div className="flex items-center gap-1 text-xs text-gray-600 tabular-nums">
+                <Clock size={12} className="text-gray-400" />
+                打刻 {selected.clock_in_at ? fmtClock(selected.clock_in_at) : "--:--"}
+                〜{selected.clock_out_at ? fmtClock(selected.clock_out_at) : "--:--"}
+              </div>
+            )}
           </section>
 
           {/* 実施内容 (任意) */}
           <section className="rounded-lg border border-gray-200 bg-white p-3 space-y-3">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                身体介護 (実施メモ)
-              </label>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label className="block text-xs font-medium text-gray-700">
+                  身体介護 (実施メモ)
+                </label>
+                <VoiceInputButton
+                  targetRef={bodyCareRef}
+                  value={bodyCare}
+                  onChange={setBodyCare}
+                  disabled={saving}
+                />
+              </div>
               <textarea
+                ref={bodyCareRef}
                 value={bodyCare}
                 onChange={(e) => setBodyCare(e.target.value)}
                 rows={3}
@@ -524,10 +620,19 @@ export default function MobileVisitRecordsPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                生活援助 (実施メモ)
-              </label>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label className="block text-xs font-medium text-gray-700">
+                  生活援助 (実施メモ)
+                </label>
+                <VoiceInputButton
+                  targetRef={livingSupportRef}
+                  value={livingSupport}
+                  onChange={setLivingSupport}
+                  disabled={saving}
+                />
+              </div>
               <textarea
+                ref={livingSupportRef}
                 value={livingSupport}
                 onChange={(e) => setLivingSupport(e.target.value)}
                 rows={3}
@@ -536,10 +641,19 @@ export default function MobileVisitRecordsPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                利用者の状態
-              </label>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label className="block text-xs font-medium text-gray-700">
+                  利用者の状態
+                </label>
+                <VoiceInputButton
+                  targetRef={userConditionRef}
+                  value={userCondition}
+                  onChange={setUserCondition}
+                  disabled={saving}
+                />
+              </div>
               <textarea
+                ref={userConditionRef}
                 value={userCondition}
                 onChange={(e) => setUserCondition(e.target.value)}
                 rows={3}
@@ -615,8 +729,17 @@ export default function MobileVisitRecordsPage() {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">特記事項</label>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label className="block text-xs font-medium text-gray-700">特記事項</label>
+                <VoiceInputButton
+                  targetRef={notesRef}
+                  value={notes}
+                  onChange={setNotes}
+                  disabled={saving}
+                />
+              </div>
               <textarea
+                ref={notesRef}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
@@ -742,6 +865,51 @@ export default function MobileVisitRecordsPage() {
                         <ChevronRight size={18} className="shrink-0 text-gray-300" />
                       )}
                     </button>
+                    {/* 打刻 (開始/終了)。列未適用 (clockSupported=false) の環境では非表示 */}
+                    {clockSupported && (
+                      <div className="mt-1 flex gap-2">
+                        <button
+                          onClick={() => handleClock(s, "in")}
+                          disabled={clocking !== null}
+                          className={`flex-1 min-h-[44px] inline-flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-semibold disabled:opacity-50 ${
+                            s.clock_in_at
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
+                          }`}
+                        >
+                          {clocking === `${s.id}:in` ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Clock size={14} />
+                          )}
+                          {s.clock_in_at ? (
+                            <span className="tabular-nums">開始 {fmtClock(s.clock_in_at)}</span>
+                          ) : (
+                            "開始"
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleClock(s, "out")}
+                          disabled={clocking !== null}
+                          className={`flex-1 min-h-[44px] inline-flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-semibold disabled:opacity-50 ${
+                            s.clock_out_at
+                              ? "border-orange-200 bg-orange-50 text-orange-700"
+                              : "border-orange-500 bg-orange-500 text-white hover:bg-orange-600"
+                          }`}
+                        >
+                          {clocking === `${s.id}:out` ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Clock size={14} />
+                          )}
+                          {s.clock_out_at ? (
+                            <span className="tabular-nums">終了 {fmtClock(s.clock_out_at)}</span>
+                          ) : (
+                            "終了"
+                          )}
+                        </button>
+                      </div>
+                    )}
                   </li>
                 );
               })}
