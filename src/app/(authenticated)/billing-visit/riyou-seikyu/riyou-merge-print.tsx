@@ -256,24 +256,57 @@ const yen = (n: number) => `¥${(n ?? 0).toLocaleString()}`;
 const lastDayOf = (gYear: number, month: number) =>
   new Date(gYear, month, 0).getDate();
 
+// ── フォント 4 段階 (ひな形 pt 比を A4 印刷 px に落とす) ──────────────────────
+//   タイトル ≈18pt→17px / 見出し ≈13pt→12px / 本文 ≈9pt→9px / 小 ≈7pt→8px。
+const FONT = {
+  title: "text-[17px] font-bold leading-tight",
+  heading: "text-[12px] font-semibold leading-snug",
+  body: "text-[9px] leading-snug",
+  small: "text-[8px] leading-tight",
+} as const;
+
+// ── 罫線 2 種 (細 0.5px = テーブル格子 / 太 1.5px = マスタ設定可能な強調枠) ──
+const BOX_THICK = "border-[1.5px] border-black";
+// テーブルのセル (border-collapse 前提で細罫 0.5px。余白は詰めめ px2)
+const CELL = "border-[0.5px] border-black px-1 py-[2px] align-top";
+const CELL_R = `${CELL} text-right tabular-nums`;
+const CELL_C = `${CELL} text-center`;
+const TH = `${CELL} text-center font-normal`;
+
 // ── ひな形 小部品 (module 直下に置いて nested-component 警告を避ける) ──────────
-function HinaCheck({ on }: { on: boolean }) {
-  return <span className="mr-1 inline-block font-bold">{on ? "☑" : "□"}</span>;
-}
-function HinaBox({ label, value }: { label: string; value: string }) {
+//   制度チェックの □/☑ は色分けが本物の意匠 (介護=橙 / 障害=紫 / 自費=緑)。ラベルは黒。
+function HinaCheck({ on, color }: { on: boolean; color: string }) {
   return (
-    <div className="min-w-[92px] border border-black text-center">
-      <div className="border-b border-black bg-gray-50 px-1 py-0.5 text-[9px] leading-tight">
+    <span className={`mr-1 inline-block text-[12px] font-bold ${color}`}>
+      {on ? "☑" : "□"}
+    </span>
+  );
+}
+// 下部小箱 (ラベル上・¥値下。細罫)
+function HinaBox({
+  label,
+  value,
+  valueClass = "",
+}: {
+  label: string;
+  value: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="w-[92px] border-[0.5px] border-black text-center">
+      <div className="border-b-[0.5px] border-black bg-gray-50 px-1 py-[1px] text-[8px] leading-tight">
         {label}
       </div>
-      <div className="px-1 py-0.5 text-[11px] tabular-nums">{value}</div>
+      <div
+        className={`px-1 py-[2px] text-right text-[9px] tabular-nums ${valueClass}`}
+      >
+        {value}
+      </div>
     </div>
   );
 }
 // 明細テーブルの空セル (備考 / 控除 / 単価 / 時間 など Phase 1 は未使用)
-const emptyCell = (key: string) => (
-  <td key={key} className="border border-black px-1 py-0.5" />
-);
+const emptyCell = (key: string) => <td key={key} className={CELL} />;
 
 /**
  * 合算 利用料請求書 (1 枚) — ほのぼの MORE 型ひな形レイアウト (Phase 1)。
@@ -351,115 +384,124 @@ export function RiyouSeikyuMergedPrintSheet({
 
   return (
     <div
-      className="relative bg-white p-8 text-black"
-      style={{ pageBreakAfter: "always" }}
+      className={`relative mx-auto bg-white p-5 text-black ${FONT.body}`}
+      style={{ pageBreakAfter: "always", maxWidth: "760px" }}
     >
-      {/* ── ヘッダー: タイトル/宛先 | 発行日/自社情報 | 制度チェック ── */}
-      <div className="mb-2 flex items-start justify-between gap-4">
+      {/* ── ヘッダー: [タイトル+宛先] [封筒表記] [発行日+自社情報] [制度チェック] ── */}
+      <div className="mb-2 flex items-start justify-between gap-3">
         {/* 左: タイトル枠 + 宛先 */}
         <div className="min-w-0 flex-1">
-          <div className="inline-block border-2 border-black px-3 py-1 text-lg font-bold">
+          <div className={`inline-block ${BOX_THICK} px-2 py-[2px] ${FONT.title}`}>
             {HINAGATA_FIXED.title}
             {isCopy ? "（控）" : ""}
           </div>
-          <div className="mt-1 text-[11px]">{HINAGATA_FIXED.zaichu}</div>
-          <div className="mt-3 text-[13px] leading-6">
+          <div className={`mt-3 ${FONT.body} leading-5`}>
             <div>〒{rep.postalCode ?? ""}</div>
             <div>{rep.address ?? ""}</div>
-            <div className="mt-1 text-[15px] font-semibold">
+            <div className="mt-1 text-[13px] font-semibold">
               {rep.userName}　様
               {isHousehold ? `　他 ${clients.length - 1} 名` : ""}
               {rep.userNumber ? (
-                <span className="ml-2 text-[11px] font-normal text-gray-600">
+                <span className="ml-2 text-[9px] font-normal text-gray-600">
                   （{rep.userNumber}）
                 </span>
               ) : null}
             </div>
           </div>
         </div>
-        {/* 中: 発行日 + 自社情報 */}
-        <div className="w-64 shrink-0 text-[12px] leading-5">
+        {/* 中: 封筒表記 (ご請求書・領収書在中) */}
+        <div className={`w-24 shrink-0 pt-8 text-center ${FONT.body}`}>
+          {HINAGATA_FIXED.zaichu}
+        </div>
+        {/* 右: 発行日 + 自社情報 */}
+        <div className={`w-52 shrink-0 ${FONT.body} leading-[15px]`}>
           <div className="mb-1 text-right">{issueDate}</div>
           <div>〒{compPostal}</div>
           <div>{compAddress}</div>
           <div className="font-semibold">{compName}</div>
           <div>{invoiceNo}</div>
           <div>TEL：{compPhone}</div>
-          <div className="mt-1 text-[11px]">{HINAGATA_FIXED.ouinShoryaku}</div>
         </div>
-        {/* 右: 制度チェック */}
-        <div className="w-40 shrink-0 self-start border border-black p-2 text-[12px] leading-6">
+        {/* 最右: 制度チェック (□介護=橙 / □障害=紫 / □自費=緑。色分けは本物の意匠) */}
+        <div
+          className={`w-32 shrink-0 self-start border-[0.5px] border-black px-2 py-2 ${FONT.body} leading-6`}
+        >
           <div>
-            <HinaCheck on={hasKaigo} />
-            <span className="text-orange-600">：介護</span>
+            <HinaCheck on={hasKaigo} color="text-orange-600" />：介護
           </div>
           <div>
-            <HinaCheck on={hasShogai} />
-            <span className="text-violet-600">：障害</span>
+            <HinaCheck on={hasShogai} color="text-violet-600" />：障害
           </div>
           <div>
-            <HinaCheck on={hasJihi} />
-            <span className="text-green-600">：事業所書式(自費)</span>
+            <HinaCheck on={hasJihi} color="text-green-600" />
+            ：事業所書式(自費)
           </div>
         </div>
       </div>
 
-      {/* ── 拝啓文ブロック ── */}
-      <div className="mb-2 border border-black p-2 text-[11px] leading-5">
-        <div>{HINAGATA_FIXED.haikei}</div>
-        <div className="text-right">{HINAGATA_FIXED.keigu}</div>
+      {/* ── 拝啓文ブロック (太枠。左=本文 / 右=押印省略・印影欄) ── */}
+      <div className={`mb-2 flex ${BOX_THICK}`}>
+        <div className={`flex-1 p-2 ${FONT.body} leading-[15px]`}>
+          <div>{HINAGATA_FIXED.haikei}</div>
+          <div className="text-right">{HINAGATA_FIXED.keigu}</div>
+        </div>
+        <div className={`w-52 shrink-0 border-l-[0.5px] border-black p-2 ${FONT.body}`}>
+          {HINAGATA_FIXED.ouinShoryaku}
+        </div>
       </div>
 
-      {/* ── 口座振替テーブル ── */}
-      <table className="mb-2 w-full border-collapse text-[11px]">
+      {/* ── 口座振替テーブル (細罫 6 列) ── */}
+      <table className={`mb-2 w-full border-collapse ${FONT.body}`}>
+        <colgroup>
+          <col style={{ width: "15%" }} />
+          <col style={{ width: "15%" }} />
+          <col style={{ width: "12%" }} />
+          <col style={{ width: "24%" }} />
+          <col style={{ width: "18%" }} />
+          <col style={{ width: "16%" }} />
+        </colgroup>
         <thead>
-          <tr className="bg-gray-50">
-            <th className="border border-black px-1 py-0.5">振替日</th>
-            <th className="border border-black px-1 py-0.5">金融機関</th>
-            <th className="border border-black px-1 py-0.5">支店名</th>
-            <th className="border border-black px-1 py-0.5">種目・口座番号</th>
-            <th className="border border-black px-1 py-0.5">口座名義人</th>
-            <th className="border border-black px-1 py-0.5">お引落予定金額</th>
+          <tr>
+            <th className={TH}>振替日</th>
+            <th className={TH}>金融機関</th>
+            <th className={TH}>支店名</th>
+            <th className={TH}>種目・口座番号</th>
+            <th className={TH}>口座名義人</th>
+            <th className={TH}>お引落予定金額</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td className="border border-black px-1 py-0.5 text-center">
-              {HINAGATA_FIXED.transferDatePlaceholder}
-            </td>
-            <td className="border border-black px-1 py-0.5 text-center">
-              {bankRep?.bankName ?? ""}
-            </td>
-            <td className="border border-black px-1 py-0.5 text-center">
-              {bankRep?.bankBranch ?? ""}
-            </td>
-            <td className="border border-black px-1 py-0.5 text-center">
+            <td className={CELL_C}>{HINAGATA_FIXED.transferDatePlaceholder}</td>
+            <td className={CELL_C}>{bankRep?.bankName ?? ""}</td>
+            <td className={CELL_C}>{bankRep?.bankBranch ?? ""}</td>
+            <td className={CELL_C}>
               {[bankRep?.bankAccountType, bankRep?.bankAccountNumber]
                 .filter(Boolean)
                 .join(" ")}
             </td>
-            <td className="border border-black px-1 py-0.5 text-center">
-              {bankRep?.bankAccountHolder ?? ""}
-            </td>
-            <td className="border border-black px-1 py-0.5 text-right font-semibold tabular-nums">
-              {yen(monthTotal)}
-            </td>
+            <td className={CELL_C}>{bankRep?.bankAccountHolder ?? ""}</td>
+            <td className={`${CELL_R} font-semibold`}>{yen(monthTotal)}</td>
           </tr>
         </tbody>
       </table>
 
-      {/* ── 引落金額内訳 ── */}
-      <div className="mb-3 border border-black p-2 text-[11px] leading-5">
-        <div className="mb-1 font-semibold">引落金額内訳</div>
-        {breakdownItems.length === 0 ? (
-          <div className="text-gray-400">（内訳なし）</div>
-        ) : (
-          breakdownItems.map((it, i) => (
-            <div key={`${it.name}-${it.office}-${i}`}>
-              {it.name}　様　{it.office}　{month}月利用　{yen(it.amount)}
-            </div>
-          ))
-        )}
+      {/* ── 引落金額内訳 (太枠。左=内訳行 / 右=過誤・相殺文言 [Phase1 空]) ── */}
+      <div className={`mb-3 flex ${BOX_THICK} ${FONT.body}`}>
+        <div className="flex-1 p-2 leading-5">
+          <div className="mb-1 font-semibold">引落金額内訳</div>
+          {breakdownItems.length === 0 ? (
+            <div className="text-gray-400">（内訳なし）</div>
+          ) : (
+            breakdownItems.map((it, i) => (
+              <div key={`${it.name}-${it.office}-${i}`}>
+                {it.name}　様　{it.office}　{month}月利用　{yen(it.amount)}
+              </div>
+            ))
+          )}
+        </div>
+        {/* 過誤(過大/過小請求)・相殺残額の文言欄 (Phase1 は固定テンプレ非表示のため空) */}
+        <div className="w-[42%] shrink-0 border-l border-dashed border-black p-2 leading-5" />
       </div>
 
       {/* ── 事業所別ご利用内訳 (事業所×制度ごとに繰り返し・制度色で枠色分け) ── */}
@@ -472,14 +514,14 @@ export function RiyouSeikyuMergedPrintSheet({
           return (
             <div
               key={`${c.userId}-${si}`}
-              className={`mb-3 border ${color.border}`}
+              className={`mb-3 border-[0.5px] ${color.border}`}
             >
-              {/* お問い合わせ先 */}
-              <div className={`${color.tint} px-2 py-0.5 text-[11px]`}>
+              {/* お問い合わせ先 (小) */}
+              <div className={`px-2 pt-1 ${FONT.small}`}>
                 お問い合わせ先　{s.officePhone ?? ""}
               </div>
-              {/* 事業所名 + ご利用内訳見出し */}
-              <div className="border-y border-black px-2 py-1 text-[11px] leading-5">
+              {/* 事業所名 + ご利用内訳見出し (本文サイズ・事業所名のみ制度色で強調) */}
+              <div className={`px-2 pb-1 pt-0.5 ${FONT.body} leading-4`}>
                 <span className={`font-semibold ${color.heading}`}>
                   {officeDisp}
                 </span>
@@ -487,29 +529,30 @@ export function RiyouSeikyuMergedPrintSheet({
                 {monthEnd}日】　居宅介護支援事業者名：
               </div>
 
-              {/* 明細① 単位数テーブル */}
-              <table className="w-full border-collapse text-[11px]">
+              {/* 明細① 単位数テーブル (細罫 6 列) */}
+              <table className={`w-full border-collapse ${FONT.body}`}>
+                <colgroup>
+                  <col style={{ width: "27%" }} />
+                  <col style={{ width: "25%" }} />
+                  <col style={{ width: "7%" }} />
+                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "19%" }} />
+                </colgroup>
                 <thead>
-                  <tr className={color.tint}>
-                    <th className="border border-black px-1 py-0.5 text-left">
-                      内訳
-                    </th>
-                    <th className="border border-black px-1 py-0.5">備考</th>
-                    <th className="w-8 border border-black px-1 py-0.5">控除</th>
-                    <th className="w-20 border border-black px-1 py-0.5">
-                      単位数
-                    </th>
-                    <th className="w-12 border border-black px-1 py-0.5">回数</th>
-                    <th className="w-24 border border-black px-1 py-0.5">単位</th>
+                  <tr>
+                    <th className={`${TH} text-left`}>内訳</th>
+                    <th className={TH}>備考</th>
+                    <th className={TH}>控除</th>
+                    <th className={TH}>単位数</th>
+                    <th className={TH}>回数</th>
+                    <th className={TH}>単位</th>
                   </tr>
                 </thead>
                 <tbody>
                   {s.lines.length === 0 && (
                     <tr>
-                      <td
-                        colSpan={6}
-                        className="border border-black px-1 py-0.5 text-center text-gray-400"
-                      >
+                      <td colSpan={6} className={`${CELL_C} text-gray-400`}>
                         （明細なし）
                       </td>
                     </tr>
@@ -520,125 +563,123 @@ export function RiyouSeikyuMergedPrintSheet({
                       ln.count > 0 ? Math.round(ln.units / ln.count) : ln.units;
                     return (
                       <tr key={`l${li}`}>
-                        <td className="border border-black px-1 py-0.5">
-                          {ln.serviceName}
-                        </td>
+                        <td className={CELL}>{ln.serviceName}</td>
                         {emptyCell("b")}
                         {emptyCell("k")}
-                        <td className="border border-black px-1 py-0.5 text-right tabular-nums">
-                          {perOnce.toLocaleString()}
-                        </td>
-                        <td className="border border-black px-1 py-0.5 text-right tabular-nums">
-                          {ln.count}
-                        </td>
-                        <td className="border border-black px-1 py-0.5 text-right tabular-nums">
+                        <td className={CELL_R}>{perOnce.toLocaleString()}</td>
+                        <td className={CELL_R}>{ln.count}</td>
+                        <td className={CELL_R}>
                           {ln.units.toLocaleString()}単位
                         </td>
                       </tr>
                     );
                   })}
-                  <tr className="font-semibold">
-                    <td
-                      colSpan={5}
-                      className="border border-black px-1 py-0.5 text-right"
-                    >
+                  <tr>
+                    {emptyCell("e1")}
+                    {emptyCell("e2")}
+                    {emptyCell("e3")}
+                    <td colSpan={2} className={`${CELL_C} font-semibold`}>
                       合計単位数
                     </td>
-                    <td className="border border-black px-1 py-0.5 text-right tabular-nums">
+                    <td className={`${CELL_R} font-semibold`}>
                       {unitsTotal.toLocaleString()}単位
                     </td>
                   </tr>
                 </tbody>
               </table>
 
-              {/* 明細② 金額テーブル */}
-              <table className="w-full border-collapse border-t-0 text-[11px]">
+              {/* 明細② 金額テーブル (細罫 7 列。上テーブルと連結のため border-t-0) */}
+              <table
+                className={`w-full border-collapse border-t-0 ${FONT.body}`}
+              >
+                <colgroup>
+                  <col style={{ width: "24%" }} />
+                  <col style={{ width: "21%" }} />
+                  <col style={{ width: "6%" }} />
+                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "18%" }} />
+                </colgroup>
                 <thead>
-                  <tr className={color.tint}>
-                    <th className="border border-black px-1 py-0.5 text-left">
-                      内訳
-                    </th>
-                    <th className="border border-black px-1 py-0.5">備考</th>
-                    <th className="w-8 border border-black px-1 py-0.5">控除</th>
-                    <th className="w-16 border border-black px-1 py-0.5">単価</th>
-                    <th className="w-14 border border-black px-1 py-0.5">時間</th>
-                    <th className="w-12 border border-black px-1 py-0.5">回数</th>
-                    <th className="w-24 border border-black px-1 py-0.5">金額</th>
+                  <tr>
+                    <th className={`${TH} text-left`}>内訳</th>
+                    <th className={TH}>備考</th>
+                    <th className={TH}>控除</th>
+                    <th className={TH}>単価</th>
+                    <th className={TH}>時間</th>
+                    <th className={TH}>回数</th>
+                    <th className={TH}>金額</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td className="border border-black px-1 py-0.5">
-                      利用者負担額
-                    </td>
+                    <td className={CELL}>利用者負担額</td>
                     {emptyCell("b")}
                     {emptyCell("k")}
                     {emptyCell("t")}
                     {emptyCell("j")}
                     {emptyCell("c")}
-                    <td className="border border-black px-1 py-0.5 text-right tabular-nums">
-                      {yen(s.base)}
-                    </td>
+                    <td className={CELL_R}>{yen(s.base)}</td>
                   </tr>
                   {s.jippi > 0 && (
                     <tr>
-                      <td className="border border-black px-1 py-0.5">
-                        自費請求額
-                      </td>
+                      <td className={CELL}>自費請求額</td>
                       {emptyCell("b")}
                       {emptyCell("k")}
                       {emptyCell("t")}
                       {emptyCell("j")}
                       {emptyCell("c")}
-                      <td className="border border-black px-1 py-0.5 text-right tabular-nums">
-                        {yen(s.jippi)}
-                      </td>
+                      <td className={CELL_R}>{yen(s.jippi)}</td>
                     </tr>
                   )}
                   {s.keigen > 0 && (
                     <tr>
-                      <td className="border border-black px-1 py-0.5">軽減額</td>
+                      <td className={CELL}>軽減額</td>
                       {emptyCell("b")}
                       {emptyCell("k")}
                       {emptyCell("t")}
                       {emptyCell("j")}
                       {emptyCell("c")}
-                      <td className="border border-black px-1 py-0.5 text-right tabular-nums text-red-600">
+                      <td className={`${CELL_R} text-red-600`}>
                         ▲{yen(s.keigen)}
                       </td>
                     </tr>
                   )}
-                  <tr className="font-semibold">
-                    <td
-                      colSpan={6}
-                      className="border border-black px-1 py-0.5 text-right"
-                    >
+                  {/* 利用者負担額 計 (ひな形: 左 4 列は空・時間/回数域に見出し・金額に計) */}
+                  <tr>
+                    {emptyCell("f1")}
+                    {emptyCell("f2")}
+                    {emptyCell("f3")}
+                    {emptyCell("f4")}
+                    <td colSpan={2} className={`${CELL_C} font-semibold`}>
                       利用者負担額
                     </td>
-                    <td className="border border-black px-1 py-0.5 text-right tabular-nums">
+                    <td className={`${CELL_R} font-semibold`}>
                       {yen(s.subtotal)}
                     </td>
                   </tr>
                 </tbody>
               </table>
 
-              {/* 下部 小箱 (医療費控除 / 減免 / 軽減 / 消費税 / (障害)上限金額) */}
+              {/* 下部 小箱 (障害=上限金額 / それ以外=医療費控除対象額 を先頭に) */}
               <div className="flex flex-wrap gap-2 p-2">
-                <HinaBox label="医療費控除対象額" value={yen(s.iryohi)} />
+                {s.system === "障害" ? (
+                  <HinaBox label="上限金額" value={yen(0)} />
+                ) : (
+                  <HinaBox label="医療費控除対象額" value={yen(s.iryohi)} />
+                )}
                 <HinaBox label="減免額" value={yen(0)} />
                 <HinaBox label="軽減額" value={yen(s.keigen)} />
                 <HinaBox label="消費税（内消費税）" value={yen(0)} />
-                {s.system === "障害" && (
-                  <HinaBox label="上限金額" value={yen(0)} />
-                )}
               </div>
             </div>
           );
         }),
       )}
 
-      {/* ── 【備考】自由記述枠 (Phase 1 は空欄) ── */}
-      <div className="mt-2 border border-black p-2 text-[11px]">
+      {/* ── 【備考】自由記述枠 (太枠。Phase 1 は空欄) ── */}
+      <div className={`mt-2 ${BOX_THICK} p-2 ${FONT.body}`}>
         <span className="font-semibold">【備考】</span>
       </div>
     </div>
