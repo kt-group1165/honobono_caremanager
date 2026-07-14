@@ -18,7 +18,7 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ServiceSystem = "介護" | "障害" | "総合事業" | "独自";
+export type ServiceSystem = "介護" | "障害" | "総合事業" | "独自" | "地域生活支援";
 
 import type { ServiceCodeFormula } from "@/lib/service-code-calc";
 import { formulaToDescription } from "@/lib/service-code-calc";
@@ -47,6 +47,7 @@ const SERVICE_SYSTEMS: { value: ServiceSystem; label: string; color: string }[] 
   { value: "障害", label: "障害福祉", color: "bg-purple-100 text-purple-700 border-purple-200" },
   { value: "総合事業", label: "総合事業", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
   { value: "独自", label: "独自サービス", color: "bg-amber-100 text-amber-700 border-amber-200" },
+  { value: "地域生活支援", label: "地域生活支援 (千葉市)", color: "bg-violet-100 text-violet-700 border-violet-200" },
 ];
 
 type FormData = Omit<ServiceCode, "id" | "created_at" | "updated_at">;
@@ -143,12 +144,20 @@ const UNIQ_CATEGORIES: { value: string; label: string }[] = [
   { value: "90", label: "90:独自サービス" },
 ];
 
+// 地域生活支援給付 (千葉市・市独自コード)
+const CHIIKI_CATEGORIES: { value: string; label: string }[] = [
+  { value: "02", label: "02:移動支援" },
+  { value: "04", label: "04:訪問入浴サービス" },
+  { value: "05", label: "05:日中一時支援" },
+];
+
 // system 別カテゴリ map
 const CATEGORIES_BY_SYSTEM: Record<ServiceSystem, { value: string; label: string }[]> = {
   介護: KAIGO_CATEGORIES,
   障害: SHOGAI_CATEGORIES,
   総合事業: SOGO_CATEGORIES,
   独自: UNIQ_CATEGORIES,
+  地域生活支援: CHIIKI_CATEGORIES,
 };
 
 // system + service_category → service_category_name の lookup
@@ -210,6 +219,11 @@ const CATEGORY_NAMES_BY_SYSTEM: Record<ServiceSystem, Record<string, string>> = 
   },
   独自: {
     "90": "独自サービス",
+  },
+  地域生活支援: {
+    "02": "移動支援",
+    "04": "訪問入浴サービス",
+    "05": "日中一時支援",
   },
 };
 

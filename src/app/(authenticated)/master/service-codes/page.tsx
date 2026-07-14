@@ -1,9 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { ServiceCodesContent, type ServiceCode } from "./service-codes-content";
 
-type SystemValue = "介護" | "障害" | "総合事業";
+type SystemValue = "介護" | "障害" | "総合事業" | "地域生活支援";
 
-const VALID_SYSTEMS: SystemValue[] = ["介護", "障害", "総合事業"];
+const VALID_SYSTEMS: SystemValue[] = ["介護", "障害", "総合事業", "地域生活支援"];
 
 /**
  * /master/service-codes

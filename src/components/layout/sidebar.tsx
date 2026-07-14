@@ -174,11 +174,37 @@ const NAV_BATH_SECTIONED: SectionSpec[] = [
   },
 ];
 
+// ── 移動支援版 (千葉市地域生活支援給付) — 記録中心のシンプル構成
+const NAV_IDOU_SECTIONED: SectionSpec[] = [
+  {
+    items: [
+      { name: "ダッシュボード", href: "/dashboard", icon: LayoutDashboard },
+      { name: "通知", href: "/notifications", icon: Bell },
+      { name: "利用者管理", href: "/users", icon: Users },
+    ],
+  },
+  {
+    title: "日常業務",
+    items: [
+      { name: "移動支援記録", href: "/idou-records", icon: ClipboardCheck },
+    ],
+  },
+  {
+    title: "管理",
+    items: [
+      { name: "職員管理", href: "/staff", icon: UserCog },
+      { name: "設定", href: "/settings", icon: Settings },
+      { name: "マニュアル", href: "/manual", icon: BookOpen },
+    ],
+  },
+];
+
 const BUSINESS_TYPE_LABELS: Record<string, { label: string; color: string }> = {
   "居宅介護支援": { label: "ケアマネ版", color: "text-blue-600" },
   "訪問介護": { label: "訪問介護版", color: "text-green-600" },
   "訪問入浴": { label: "訪問入浴版", color: "text-cyan-600" },
   "通所介護": { label: "通所介護版", color: "text-orange-600" },
+  "移動支援": { label: "移動支援版", color: "text-violet-600" },
 };
 
 export function Sidebar() {
@@ -207,6 +233,8 @@ function SidebarV2({ onSwitchLayout }: { onSwitchLayout: () => void }) {
   const sections: SectionSpec[] =
     businessType === "訪問入浴"
       ? NAV_BATH_SECTIONED
+      : businessType === "移動支援"
+      ? NAV_IDOU_SECTIONED
       : businessType === "訪問介護"
       ? NAV_HOME_CARE_SECTIONED
       : NAV_CARE_MANAGER_SECTIONED;

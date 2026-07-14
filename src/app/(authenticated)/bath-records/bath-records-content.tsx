@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
+import { resolveChiikiBathCode } from "@/lib/idou-shien-code";
 import {
   ChevronLeft, ChevronRight, Plus, Loader2, X, Pencil, Trash2, Droplets,
 } from "lucide-react";
@@ -20,6 +21,8 @@ type BathRecord = {
   end_time: string | null;
   bath_type: "全身浴" | "部分浴";
   staff_only: boolean;
+  /** 制度: 介護保険の訪問入浴介護 / 千葉市地域生活支援給付 (障害) の訪問入浴サービス */
+  scheme: "介護保険" | "地域生活支援";
   service_code: string | null;
   staff_ids: string[];
   vital_temperature: number | null;
@@ -58,6 +61,7 @@ const emptyForm = (): FormState => ({
   end_time: "",
   bath_type: "全身浴",
   staff_only: false,
+  scheme: "介護保険",
   staff_ids: [],
   vital_temperature: null,
   vital_bp_sys: null,
@@ -209,6 +213,7 @@ export function BathRecordsContent() {
                   <td className="px-3 py-1.5 text-gray-700">{r.visit_date.slice(5)}</td>
                   <td className="px-3 py-1.5 font-medium text-gray-800">{clientName(r.client_id)}</td>
                   <td className="px-3 py-1.5 text-gray-600">
+                    {r.scheme === "地域生活支援" && <span className="mr-1 rounded bg-violet-50 px-1 py-0.5 text-[10px] text-violet-600">障害</span>}
                     {r.bath_type}{r.staff_only && <span className="ml-1 text-amber-600">職員のみ</span>}
                   </td>
                   <td className="px-3 py-1.5 text-gray-500">
@@ -284,7 +289,10 @@ function BathRecordForm({
       ...f,
       office_id: officeId,
       tenant_id: tenantId,
-      service_code: resolveBathCode(f.bath_type, f.staff_only),
+      service_code:
+        f.scheme === "地域生活支援"
+          ? resolveChiikiBathCode(f.staff_only, false)
+          : resolveBathCode(f.bath_type, f.staff_only),
       start_time: f.start_time || null,
       end_time: f.end_time || null,
       condition_before: f.condition_before || null,
@@ -336,22 +344,38 @@ function BathRecordForm({
 
           {/* 算定 */}
           <div className="rounded-xl bg-cyan-50 p-3">
+            <div className="mb-2 flex items-center gap-3">
+              <span className="text-xs font-medium text-gray-600">制度</span>
+              {(["介護保険", "地域生活支援"] as const).map((sc) => (
+                <label key={sc} className="flex items-center gap-1 text-sm">
+                  <input type="radio" checked={f.scheme === sc} onChange={() => set("scheme", sc)} className="accent-cyan-600" />
+                  {sc === "地域生活支援" ? "地域生活支援給付 (障害・千葉市)" : "介護保険"}
+                </label>
+              ))}
+            </div>
             <div className="flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-gray-600">入浴種別</span>
-                {(["全身浴", "部分浴"] as const).map((bt) => (
-                  <label key={bt} className="flex items-center gap-1 text-sm">
-                    <input type="radio" checked={f.bath_type === bt} onChange={() => set("bath_type", bt)} className="accent-cyan-600" />
-                    {bt === "部分浴" ? "部分浴・清拭" : bt}
-                  </label>
-                ))}
-              </div>
+              {f.scheme === "介護保険" && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-600">入浴種別</span>
+                  {(["全身浴", "部分浴"] as const).map((bt) => (
+                    <label key={bt} className="flex items-center gap-1 text-sm">
+                      <input type="radio" checked={f.bath_type === bt} onChange={() => set("bath_type", bt)} className="accent-cyan-600" />
+                      {bt === "部分浴" ? "部分浴・清拭" : bt}
+                    </label>
+                  ))}
+                </div>
+              )}
               <label className="flex items-center gap-1.5 text-sm">
                 <input type="checkbox" checked={f.staff_only} onChange={(e) => set("staff_only", e.target.checked)} className="accent-cyan-600" />
-                職員のみ（看護職員同行なし・減算）
+                {f.scheme === "地域生活支援" ? "介護職員3人（看護職員なし）" : "職員のみ（看護職員同行なし・減算）"}
               </label>
             </div>
-            <p className="mt-1.5 text-[11px] text-gray-500">算定コード: <span className="font-mono font-semibold text-cyan-700">{resolveBathCode(f.bath_type, f.staff_only)}</span></p>
+            <p className="mt-1.5 text-[11px] text-gray-500">
+              算定コード: <span className="font-mono font-semibold text-cyan-700">
+                {f.scheme === "地域生活支援" ? resolveChiikiBathCode(f.staff_only, false) : resolveBathCode(f.bath_type, f.staff_only)}
+              </span>
+              {f.scheme === "地域生活支援" && <span className="ml-2 text-gray-400">週2回限度 (千葉市算定基準)。中止時コード等は請求機能で対応</span>}
+            </p>
           </div>
 
           {/* 従事職員 */}

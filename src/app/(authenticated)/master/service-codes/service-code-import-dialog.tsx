@@ -62,7 +62,7 @@ interface ImportBatchRecord {
   created_at: string;
 }
 
-const SYSTEMS: ImportServiceSystem[] = ["介護", "障害", "総合事業", "独自"];
+const SYSTEMS: ImportServiceSystem[] = ["介護", "障害", "総合事業", "独自", "地域生活支援"];
 
 const FORMAT_LABELS: Record<string, string> = {
   sougou_standard: "総合事業 単位数表標準マスタ",

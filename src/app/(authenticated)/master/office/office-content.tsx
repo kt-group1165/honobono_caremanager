@@ -360,7 +360,7 @@ export function OfficeContent({
       <div className="rounded-xl border-2 border-blue-200 bg-blue-50/30 p-6 shadow-sm space-y-4">
         <h2 className="text-sm font-bold text-blue-700 border-b border-blue-200 pb-2">事業種別</h2>
         <div className="flex items-center gap-4">
-          {["居宅介護支援", "訪問介護", "通所介護"].map((type) => (
+          {["居宅介護支援", "訪問介護", "通所介護", "訪問入浴", "移動支援"].map((type) => (
             <label key={type} className={cn(
               "flex items-center gap-2 rounded-lg border-2 px-4 py-3 cursor-pointer transition-all",
               form.service_type === type

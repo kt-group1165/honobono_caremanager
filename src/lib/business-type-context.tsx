@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-type BusinessType = "居宅介護支援" | "訪問介護" | "訪問入浴" | "通所介護";
+type BusinessType = "居宅介護支援" | "訪問介護" | "訪問入浴" | "通所介護" | "移動支援";
 
 /**
  * 共通マスタ offices の行を kaigo-app コンテキストで使う形に整形した型。
@@ -57,6 +57,7 @@ const BusinessTypeContext = createContext<BusinessTypeContextValue>({
 function mapBusinessType(dbValue: string): BusinessType {
   if (dbValue === "通所介護") return "通所介護";
   if (dbValue === "訪問入浴") return "訪問入浴";
+  if (dbValue === "移動支援") return "移動支援";
   if (dbValue === "訪問介護" || dbValue === "訪問看護") return "訪問介護";
   // '居宅介護支援' / その他 → '居宅介護支援'
   return "居宅介護支援";
@@ -125,7 +126,7 @@ export function BusinessTypeProvider({ children }: { children: ReactNode }) {
       if (selected?.service_type) {
         setBusinessTypeState(mapBusinessType(selected.service_type));
         setIsLocked(false);
-      } else if (modeParam === "訪問介護" || modeParam === "訪問入浴" || modeParam === "居宅介護支援" || modeParam === "通所介護") {
+      } else if (modeParam === "訪問介護" || modeParam === "訪問入浴" || modeParam === "居宅介護支援" || modeParam === "通所介護" || modeParam === "移動支援") {
         // 事業所未登録時のフォールバック（開発・テスト用）
         setBusinessTypeState(modeParam as BusinessType);
         setIsLocked(true);

@@ -32,7 +32,7 @@
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type ImportServiceSystem = "介護" | "障害" | "総合事業" | "独自";
+export type ImportServiceSystem = "介護" | "障害" | "総合事業" | "独自" | "地域生活支援";
 export type ImportCalcType = "基本" | "加算" | "減算";
 
 /** CSV から抽出した取込候補 1 行 */
@@ -486,6 +486,11 @@ export const CATEGORY_NAME_FALLBACK: Record<
   総合事業: SOUGOU_CATEGORY_NAMES,
   独自: {
     "90": "独自サービス",
+  },
+  地域生活支援: {
+    "02": "移動支援",
+    "04": "訪問入浴サービス",
+    "05": "日中一時支援",
   },
 };
 
