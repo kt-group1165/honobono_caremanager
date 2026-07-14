@@ -3134,6 +3134,15 @@ function EditFormGeneric({ content, onChange, label = "内容（JSON編集）" }
 // Print views per report type
 // ---------------------------------------------------------------------------
 
+/** ほのぼの帳票と同様の「○で囲む」選択表示 (楕円囲み) */
+function Maru({ children }: { children: React.ReactNode }) {
+  return (
+    <span style={{ border: "1.5px solid #000", borderRadius: "50%", padding: "0 4px", display: "inline-block", lineHeight: "1.3" }}>
+      {children}
+    </span>
+  );
+}
+
 function PrintCarePlan1({ c }: { c: Record<string, unknown> }) {
   const s = (k: string) => String(c[k] ?? "");
   const B = "1px solid #000";
@@ -3158,10 +3167,10 @@ function PrintCarePlan1({ c }: { c: Record<string, unknown> }) {
       {/* 初回・紹介・継続 / 認定済・申請中 */}
       <div style={{ textAlign: "right", marginBottom: "4px", fontSize: "8.5pt" }}>
         <span style={{ border: B, padding: "1px 6px", marginRight: "8px" }}>
-          {["初回","紹介","継続"].map((t, i) => <span key={t}>{i > 0 ? "　・　" : ""}{s("plan_type") === t ? <b>{t}</b> : t}</span>)}
+          {["初回","紹介","継続"].map((t, i) => <span key={t}>{i > 0 ? "　・　" : ""}{s("plan_type") === t ? <Maru>{t}</Maru> : t}</span>)}
         </span>
         <span style={{ border: B, padding: "1px 6px" }}>
-          {["認定済","申請中"].map((t, i) => <span key={t}>{i > 0 ? "　・　" : ""}{s("cert_status") === t ? <b>{t}</b> : t}</span>)}
+          {["認定済","申請中"].map((t, i) => <span key={t}>{i > 0 ? "　・　" : ""}{s("cert_status") === t ? <Maru>{t}</Maru> : t}</span>)}
         </span>
       </div>
 
@@ -3212,7 +3221,7 @@ function PrintCarePlan1({ c }: { c: Record<string, unknown> }) {
             <td style={{ ...tdStyle, fontSize: "9pt", letterSpacing: "0.1em" }}>
               {["要介護１","要介護２","要介護３","要介護４","要介護５"].map((lv, i) => {
                 const match = s("care_level").replace(/\d/, (d: string) => "１２３４５"["12345".indexOf(d)] || d);
-                return <span key={lv}>{i > 0 ? "　・　" : ""}{match === lv ? <b style={{ textDecoration: "underline" }}>{lv}</b> : lv}</span>;
+                return <span key={lv}>{i > 0 ? "　・　" : ""}{match === lv ? <Maru>{lv}</Maru> : lv}</span>;
               })}
             </td>
           </tr>
@@ -3276,7 +3285,27 @@ function PrintCarePlan1({ c }: { c: Record<string, unknown> }) {
           <tr>
             <td style={{ ...thStyle, width: "18%", height: "36px", textAlign: "center", padding: "4px" }}>生活援助中心型の<br />算　定　理　由</td>
             <td style={{ ...tdStyle, fontSize: "9pt", padding: "6px 8px" }}>
-              {s("living_support_reason") || "１．一人暮らし　　２．家族等が障害、疾病等　　３．その他（　　　　　　　　　　　）"}
+              {(() => {
+                // 選択肢は常に全部表示し、該当番号のみ○で囲む (ほのぼの帳票と同形)。
+                // living_support_reason 例: "３．その他（サ高住入居）" / "1" / "一人暮らし"
+                const v = s("living_support_reason");
+                const num =
+                  v.match(/[1-3１-３]/)?.[0]?.normalize("NFKC") ??
+                  (v.includes("一人暮らし") ? "1" : v.includes("家族") ? "2" : v.includes("その他") ? "3" : "");
+                const sonotaText = v.match(/[（(]([^）)]*)[）)]/)?.[1] ?? "";
+                const opts: [string, string][] = [
+                  ["1", "一人暮らし"],
+                  ["2", "家族等が障害、疾病等"],
+                  ["3", `その他（${sonotaText || "　　　　　　　　　　"}）`],
+                ];
+                return opts.map(([n, label], i) => (
+                  <span key={n}>
+                    {i > 0 ? "　　" : ""}
+                    {num === n ? <><Maru>{"１２３"[i]}</Maru>　</> : `${"１２３"[i]}．`}
+                    {label}
+                  </span>
+                ));
+              })()}
             </td>
           </tr>
         </tbody>
