@@ -1155,7 +1155,7 @@ export function KaigoSeikyuContent() {
                       <div className="px-1 py-0.5 border-l border-gray-200 font-mono whitespace-pre text-gray-700">
                         {reiwaMonth(year, month)}
                       </div>
-                      <div className="px-1 py-0.5 border-l border-gray-200 text-gray-700 truncate" title={officeName ?? ""}>
+                      <div className="min-w-0 px-1 py-0.5 border-l border-gray-200 text-gray-700 truncate" title={officeName ?? ""}>
                         {officeName ?? ""}
                       </div>
                       <div className="px-1 py-0.5 border-l border-gray-200 font-mono text-gray-700">

@@ -1104,7 +1104,7 @@ export function ShogaiSeikyuContent({
                       </div>
                     )}
                     {colOffice && (
-                      <div className="px-1 py-0.5 border-l border-gray-200 text-gray-700 truncate" title={currentOffice?.name ?? ""}>
+                      <div className="min-w-0 px-1 py-0.5 border-l border-gray-200 text-gray-700 truncate" title={currentOffice?.name ?? ""}>
                         {currentOffice?.name ?? ""}
                       </div>
                     )}
