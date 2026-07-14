@@ -57,10 +57,10 @@ import {
 const isMissingTable = (code: string | undefined) =>
   code === "42P01" || code === "PGRST205";
 
-// ── 介護請求 (kaigo-seikyu) と同じ高密度グリッド。障害の列にマッピング ──
-// 対象 / 状態 / 提供月 / 請求月 / サービス事業所 / 受給者証番号 / 利用者名 / 区分 / 入金 / 総単位数 / 給付費請求額 / 利用者負担
-const GRID_COLS =
-  "grid grid-cols-[26px_60px_54px_54px_minmax(100px,0.8fr)_84px_minmax(120px,1fr)_48px_56px_72px_84px_78px]";
+// ── 介護請求 (kaigo-seikyu) と同じ高密度グリッド。列は view ごとに出し分け
+//    (gridTemplate をコンポーネント内で動的生成)。
+//    対象 / 状態 / 提供月 / 請求月 / サービス事業所 / 受給者証番号 / 利用者名 /
+//    区分 / 入金 / 総単位数 / 給付費請求額 / 利用者負担
 
 // 和暦月表示 「R 8/ 5」 (ほのぼの流。1 桁は空白 pad、font-mono 前提)
 const reiwaMonth = (y: number, m: number) =>
@@ -132,6 +132,32 @@ export function ShogaiSeikyuContent({
   // 対象月は請求画面共通 (SeikyuProvider) の月を使う。障害の 月次情報 と
   // 障害請求/利用請求/国保請求 が同じ月で連動する (自前月 state は廃止)。
   const { year, month, onMonthChange } = useSeikyuContext();
+
+  // ── view ごとの表示列 (グリッド幅が右ペインで潰れて末列が切れるのを防ぐ) ──
+  //   利用請求: 状態/提供月/請求月/サービス事業所 を省き、入金 を出す
+  //   国保請求: 入金/利用者負担 を省く (伝送は保険給付分)
+  const colState = view !== "riyou";
+  const colMonths = view !== "riyou";
+  const colOffice = view !== "riyou";
+  const colNyukin = view === "riyou";
+  const colFutan = view !== "kokuho";
+  const gridTemplate = [
+    "26px", // 対象
+    colState && "60px", // 状態
+    colMonths && "54px", // 提供月
+    colMonths && "54px", // 請求月
+    colOffice && "minmax(90px,0.8fr)", // サービス事業所
+    "84px", // 受給者証番号
+    "minmax(110px,1fr)", // 利用者名
+    "48px", // 区分
+    colNyukin && "56px", // 入金
+    "72px", // 総単位数
+    "84px", // 給付費請求額
+    colFutan && "78px", // 利用者負担
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   const [rows, setRows] = useState<ShogaiSeikyuRow[]>([]);
   const [recordCount, setRecordCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -993,7 +1019,10 @@ export function ShogaiSeikyuContent({
           <>
             <div className="flex-1 overflow-y-auto">
               {/* ヘッダー行: 対象 / 状態 / 提供月 / 請求月 / サービス事業所 / 受給者証番号 / 利用者名 / 区分 / 入金 / 総単位数 / 給付費請求額 / 利用者負担 */}
-              <div className={`${GRID_COLS} border-b border-gray-400 bg-gradient-to-b from-sky-100 to-sky-200 text-[11px] leading-4 font-medium text-gray-700 text-center sticky top-0 z-10`}>
+              <div
+                className="grid border-b border-gray-400 bg-gradient-to-b from-sky-100 to-sky-200 text-[11px] leading-4 font-medium text-gray-700 text-center sticky top-0 z-10"
+                style={{ gridTemplateColumns: gridTemplate }}
+              >
                 <div className="px-1 py-0.5 flex items-center justify-center">
                   <button
                     onClick={toggleAll}
@@ -1007,17 +1036,17 @@ export function ShogaiSeikyuContent({
                     )}
                   </button>
                 </div>
-                <div className="px-1 py-0.5 border-l border-sky-300">状態</div>
-                <div className="px-1 py-0.5 border-l border-sky-300">提供月</div>
-                <div className="px-1 py-0.5 border-l border-sky-300">請求月</div>
-                <div className="px-1 py-0.5 border-l border-sky-300">サービス事業所</div>
+                {colState && <div className="px-1 py-0.5 border-l border-sky-300">状態</div>}
+                {colMonths && <div className="px-1 py-0.5 border-l border-sky-300">提供月</div>}
+                {colMonths && <div className="px-1 py-0.5 border-l border-sky-300">請求月</div>}
+                {colOffice && <div className="px-1 py-0.5 border-l border-sky-300">サービス事業所</div>}
                 <div className="px-1 py-0.5 border-l border-sky-300">受給者証番号</div>
                 <div className="px-1 py-0.5 border-l border-sky-300">利用者名</div>
                 <div className="px-1 py-0.5 border-l border-sky-300">区分</div>
-                <div className="px-1 py-0.5 border-l border-sky-300">入金</div>
+                {colNyukin && <div className="px-1 py-0.5 border-l border-sky-300">入金</div>}
                 <div className="px-1 py-0.5 border-l border-sky-300">総単位数</div>
                 <div className="px-1 py-0.5 border-l border-sky-300">給付費請求額</div>
-                <div className="px-1 py-0.5 border-l border-sky-300">利用者負担</div>
+                {colFutan && <div className="px-1 py-0.5 border-l border-sky-300">利用者負担</div>}
               </div>
 
               {filteredRows.length === 0 ? (
@@ -1032,7 +1061,8 @@ export function ShogaiSeikyuContent({
                   <div
                     key={r.user_id}
                     onClick={() => setSelectedUserId(isDetail ? null : r.user_id)}
-                    className={`${GRID_COLS} border-b border-gray-200 text-[11px] leading-4 cursor-pointer transition-colors ${
+                    style={{ gridTemplateColumns: gridTemplate }}
+                    className={`grid border-b border-gray-200 text-[11px] leading-4 cursor-pointer transition-colors ${
                       isDetail
                         ? "bg-violet-100"
                         : isChecked
@@ -1051,25 +1081,33 @@ export function ShogaiSeikyuContent({
                       </button>
                     </div>
                     {/* 状態: バッジ背景なしの素の色文字 (介護請求と同じ)。伝送対象 = 赤字 */}
-                    <div className="px-1 py-0.5 border-l border-gray-200 text-center">
-                      {st?.densou_target ? (
-                        <span className="text-red-600">伝送対象</span>
-                      ) : st?.issued_at ? (
-                        <span className="text-emerald-700">発行済</span>
-                      ) : (
-                        <span className="text-gray-600">未発行</span>
-                      )}
-                    </div>
+                    {colState && (
+                      <div className="px-1 py-0.5 border-l border-gray-200 text-center">
+                        {st?.densou_target ? (
+                          <span className="text-red-600">伝送対象</span>
+                        ) : st?.issued_at ? (
+                          <span className="text-emerald-700">発行済</span>
+                        ) : (
+                          <span className="text-gray-600">未発行</span>
+                        )}
+                      </div>
+                    )}
                     {/* 提供月 = 請求月 = 当月 (障害は月遅れ/返戻の再請求合流なし) */}
-                    <div className="px-1 py-0.5 border-l border-gray-200 font-mono whitespace-pre text-gray-700">
-                      {reiwaMonth(year, month)}
-                    </div>
-                    <div className="px-1 py-0.5 border-l border-gray-200 font-mono whitespace-pre text-gray-700">
-                      {reiwaMonth(year, month)}
-                    </div>
-                    <div className="px-1 py-0.5 border-l border-gray-200 text-gray-700 truncate" title={currentOffice?.name ?? ""}>
-                      {currentOffice?.name ?? ""}
-                    </div>
+                    {colMonths && (
+                      <div className="px-1 py-0.5 border-l border-gray-200 font-mono whitespace-pre text-gray-700">
+                        {reiwaMonth(year, month)}
+                      </div>
+                    )}
+                    {colMonths && (
+                      <div className="px-1 py-0.5 border-l border-gray-200 font-mono whitespace-pre text-gray-700">
+                        {reiwaMonth(year, month)}
+                      </div>
+                    )}
+                    {colOffice && (
+                      <div className="px-1 py-0.5 border-l border-gray-200 text-gray-700 truncate" title={currentOffice?.name ?? ""}>
+                        {currentOffice?.name ?? ""}
+                      </div>
+                    )}
                     <div className="px-1 py-0.5 border-l border-gray-200 font-mono text-gray-700">
                       {r.beneficiary_number ?? "—"}
                     </div>
@@ -1084,18 +1122,22 @@ export function ShogaiSeikyuContent({
                     <div className="px-1 py-0.5 border-l border-gray-200 text-center text-gray-700">
                       {r.support_level ?? "—"}
                     </div>
-                    <div className="px-1 py-0.5 border-l border-gray-200 text-center">
-                      {paymentBadge(r.user_id)}
-                    </div>
+                    {colNyukin && (
+                      <div className="px-1 py-0.5 border-l border-gray-200 text-center">
+                        {paymentBadge(r.user_id)}
+                      </div>
+                    )}
                     <div className="px-1 py-0.5 border-l border-gray-200 text-right font-mono text-gray-800 tabular-nums">
                       {r.totalUnits.toLocaleString()}
                     </div>
                     <div className="px-1 py-0.5 border-l border-gray-200 text-right font-mono font-semibold text-violet-700 tabular-nums">
                       {r.benefitAmount.toLocaleString()}
                     </div>
-                    <div className="px-1 py-0.5 border-l border-gray-200 text-right font-mono text-gray-800 tabular-nums">
-                      {r.userAmount.toLocaleString()}
-                    </div>
+                    {colFutan && (
+                      <div className="px-1 py-0.5 border-l border-gray-200 text-right font-mono text-gray-800 tabular-nums">
+                        {r.userAmount.toLocaleString()}
+                      </div>
+                    )}
                   </div>
                 );
               })}
