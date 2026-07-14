@@ -533,6 +533,8 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
               className="w-full rounded-md border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
+          {/* 候補のみ表示 + 告示準拠で判定 を 1 行に並べる (障害時のみ 2 個目が出る) */}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
           {durationMinutes !== null && hasTimeConcept && (
             <label className="flex items-center gap-2 text-sm text-gray-700 select-none cursor-pointer">
               <input
@@ -578,6 +580,7 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
               </span>
             </label>
           )}
+          </div>
         </div>
 
         {/* この訪問の加算 (訪問介護の予定モーダル用 opt-in。介護タブのみ) */}
