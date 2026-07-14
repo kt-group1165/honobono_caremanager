@@ -44,31 +44,10 @@ export const HINAGATA_FIXED = {
   transferDatePlaceholder: "　　年　月　日",
 } as const;
 
-// 事業所枠の制度色 (ひな形: 介護=橙 / 障害=紫 / 自費(事業所書式)=緑)。
-//   総合事業は介護系として橙に寄せる。一覧の SYSTEM_BADGE_CLS とは別体系
-//   (ひな形の制度チェック □介護(橙) □障害(紫) □事業所書式(自費)(緑) に合わせる)。
-const SECTION_COLOR = {
-  kaigo: {
-    border: "border-orange-500",
-    heading: "text-orange-700",
-    tint: "bg-orange-50",
-    check: "text-orange-600",
-  },
-  shogai: {
-    border: "border-violet-500",
-    heading: "text-violet-700",
-    tint: "bg-violet-50",
-    check: "text-violet-600",
-  },
-  jihi: {
-    border: "border-green-600",
-    heading: "text-green-700",
-    tint: "bg-green-50",
-    check: "text-green-600",
-  },
-} as const;
-const sectionKind = (s: MergedSection): "kaigo" | "shogai" =>
-  s.system === "障害" ? "shogai" : "kaigo";
+// 制度ラベル (モノクロ体裁: 制度色は使わず、黒枠の文字バッジで区別する)。
+//   介護給付 = 介護 / 介護予防・日常生活支援総合事業 = 総合 / 障害福祉サービス = 障害。
+const systemLabel = (s: MergedSection): string =>
+  s.system === "障害" ? "障害" : s.system === "総合事業" ? "総合" : "介護";
 
 /** 口座情報 (clients.bank_*)。表示専用 */
 export interface MergeBank {
@@ -142,6 +121,11 @@ export interface MergeInput {
   bank?: MergeBank | null;
   /** この事業所の問い合わせ先電話 (offices.phone)。他事業所分は Phase 1 では null */
   officePhone?: string | null;
+  /**
+   * ご利用日 (提供実績の day-of-month。表示専用。空なら暦のみ)。
+   * ★ money-safety: 金額計算には一切使わない (カレンダー描画のみ)。
+   */
+  serviceDays?: number[];
 }
 
 /** 合算後の 1 利用者 (制度別セクションを内包) */
@@ -158,6 +142,8 @@ export interface MergedSection {
   iryohi: number;
   /** この事業所の問い合わせ先電話 (ひな形の「お問い合わせ先」)。無ければ null */
   officePhone: string | null;
+  /** ご利用日 (提供実績の day-of-month。表示専用) */
+  serviceDays: number[];
 }
 export interface MergedClient {
   userId: string;
@@ -219,6 +205,7 @@ export function buildMergedClients(inputs: MergeInput[]): MergedClient[] {
         lines: s.lines,
         iryohi: s.iryohi,
         officePhone: s.officePhone ?? null,
+        serviceDays: s.serviceDays ?? [],
       })),
       clientTotal: sorted.reduce((sum, s) => sum + s.subtotal, 0),
       iryohi: sorted.reduce((sum, s) => sum + s.iryohi, 0),
@@ -307,6 +294,70 @@ function HinaBox({
 }
 // 明細テーブルの空セル (備考 / 控除 / 単価 / 時間 など Phase 1 は未使用)
 const emptyCell = (key: string) => <td key={key} className={CELL} />;
+
+// ご利用日カレンダー (幅 52mm ≒ 200px の小型月次暦。提供実績日を黒ピルで塗る)。
+//   日=赤 / 土=青 の曜日色はひな形どおり維持 (制度枠のモノクロ化とは別)。
+const CAL_WD = ["日", "月", "火", "水", "木", "金", "土"];
+const calWdColor = (i: number) =>
+  i === 0 ? "text-red-600" : i === 6 ? "text-blue-600" : "";
+function UseDaysCalendar({
+  gYear,
+  month,
+  days,
+}: {
+  gYear: number;
+  month: number;
+  days: number[];
+}) {
+  const daysInMonth = new Date(gYear, month, 0).getDate();
+  const firstDow = new Date(gYear, month - 1, 1).getDay(); // 0=日
+  const used = new Set(days);
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+  const weeks: (number | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  return (
+    <table className="w-full table-fixed border-collapse">
+      <thead>
+        <tr>
+          {CAL_WD.map((w, i) => (
+            <th
+              key={w}
+              className={`border-[0.4px] border-black bg-gray-50 text-center text-[7px] font-semibold leading-[13px] ${calWdColor(i)}`}
+            >
+              {w}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {weeks.map((wk, wi) => (
+          <tr key={wi}>
+            {wk.map((d, di) => (
+              <td
+                key={di}
+                className={`h-[14px] border-[0.4px] border-black p-0 text-center align-middle text-[7px] tabular-nums ${
+                  d == null ? "bg-gray-50" : ""
+                }`}
+              >
+                {d != null &&
+                  (used.has(d) ? (
+                    <span className="inline-block min-w-[12px] rounded-[6px] bg-black px-[2px] font-bold leading-[12px] text-white">
+                      {d}
+                    </span>
+                  ) : (
+                    <span className={calWdColor(di)}>{d}</span>
+                  ))}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
 
 /**
  * 合算 利用料請求書 (1 枚) — ほのぼの MORE 型ひな形レイアウト (Phase 1)。
@@ -427,13 +478,13 @@ export function RiyouSeikyuMergedPrintSheet({
           className={`w-32 shrink-0 self-start border-[0.5px] border-black px-2 py-2 ${FONT.body} leading-6`}
         >
           <div>
-            <HinaCheck on={hasKaigo} color="text-orange-600" />：介護
+            <HinaCheck on={hasKaigo} color="text-black" />：介護
           </div>
           <div>
-            <HinaCheck on={hasShogai} color="text-violet-600" />：障害
+            <HinaCheck on={hasShogai} color="text-black" />：障害
           </div>
           <div>
-            <HinaCheck on={hasJihi} color="text-green-600" />
+            <HinaCheck on={hasJihi} color="text-black" />
             ：事業所書式(自費)
           </div>
         </div>
@@ -507,25 +558,28 @@ export function RiyouSeikyuMergedPrintSheet({
       {/* ── 事業所別ご利用内訳 (事業所×制度ごとに繰り返し・制度色で枠色分け) ── */}
       {clients.map((c) =>
         c.sections.map((s, si) => {
-          const kind = sectionKind(s);
-          const color = SECTION_COLOR[kind];
           const unitsTotal = sectionUnits(s);
           const officeDisp = s.officeLabel ?? officeName ?? "";
           return (
             <div
               key={`${c.userId}-${si}`}
-              className={`mb-3 border-[0.5px] ${color.border}`}
+              className="mb-3 border-[0.5px] border-black"
             >
-              {/* お問い合わせ先 (小) */}
-              <div className={`px-2 pt-1 ${FONT.small}`}>
-                お問い合わせ先　{s.officePhone ?? ""}
-              </div>
-              {/* 事業所名 + ご利用内訳見出し (本文サイズ・事業所名のみ制度色で強調) */}
-              <div className={`px-2 pb-1 pt-0.5 ${FONT.body} leading-4`}>
-                <span className={`font-semibold ${color.heading}`}>
-                  {officeDisp}
+              {/* 事業所名 + 制度バッジ (モノクロ: 黒枠の文字ラベルで制度を区別) */}
+              <div className="flex items-center gap-2 border-b-[0.5px] border-black bg-gray-50 px-2 py-1">
+                <span
+                  className={`inline-block rounded-[2px] border border-black px-[6px] py-[1px] font-bold tracking-wide ${FONT.small}`}
+                >
+                  {systemLabel(s)}
                 </span>
-                　【ご利用内訳　{c.userName}様　期間：{month}月1日〜{month}月
+                <span className={`font-semibold ${FONT.body}`}>{officeDisp}</span>
+                <span className={`ml-auto ${FONT.small} text-gray-600`}>
+                  お問い合わせ先　{s.officePhone ?? ""}
+                </span>
+              </div>
+              {/* ご利用内訳見出し */}
+              <div className={`px-2 pb-1 pt-1 ${FONT.body} leading-4`}>
+                【ご利用内訳　{c.userName}様　期間：{month}月1日〜{month}月
                 {monthEnd}日】　居宅介護支援事業者名：
               </div>
 
@@ -641,9 +695,7 @@ export function RiyouSeikyuMergedPrintSheet({
                       {emptyCell("t")}
                       {emptyCell("j")}
                       {emptyCell("c")}
-                      <td className={`${CELL_R} text-red-600`}>
-                        ▲{yen(s.keigen)}
-                      </td>
+                      <td className={CELL_R}>▲{yen(s.keigen)}</td>
                     </tr>
                   )}
                   {/* 利用者負担額 計 (ひな形: 左 4 列は空・時間/回数域に見出し・金額に計) */}
@@ -662,20 +714,69 @@ export function RiyouSeikyuMergedPrintSheet({
                 </tbody>
               </table>
 
-              {/* 下部 小箱 (障害=上限金額 / それ以外=医療費控除対象額 を先頭に) */}
+              {/* 下部 小箱 (障害=負担上限月額/上限管理後負担 / それ以外=医療費控除対象額) */}
               <div className="flex flex-wrap gap-2 p-2">
                 {s.system === "障害" ? (
-                  <HinaBox label="上限金額" value={yen(0)} />
+                  <>
+                    {/* 負担上限月額は受給者証の値。Phase 1 は未取得のため「−」プレースホルダ */}
+                    <HinaBox label="負担上限月額" value="−" />
+                    {/* 上限管理後負担 = 集計済みの利用者負担額 (subtotal)。再計算しない */}
+                    <HinaBox label="上限管理後負担" value={yen(s.subtotal)} />
+                    <HinaBox label="減免額" value={yen(0)} />
+                    <HinaBox label="消費税（内消費税）" value={yen(0)} />
+                  </>
                 ) : (
-                  <HinaBox label="医療費控除対象額" value={yen(s.iryohi)} />
+                  <>
+                    <HinaBox label="医療費控除対象額" value={yen(s.iryohi)} />
+                    <HinaBox label="減免額" value={yen(0)} />
+                    <HinaBox label="軽減額" value={yen(s.keigen)} />
+                    <HinaBox label="消費税（内消費税）" value={yen(0)} />
+                  </>
                 )}
-                <HinaBox label="減免額" value={yen(0)} />
-                <HinaBox label="軽減額" value={yen(s.keigen)} />
-                <HinaBox label="消費税（内消費税）" value={yen(0)} />
               </div>
             </div>
           );
         }),
+      )}
+
+      {/* ── ご利用日カレンダー (事業所ブロック外。事業所ごとに小型暦を横並び) ── */}
+      {clients.some((c) => c.sections.some((s) => s.serviceDays.length > 0)) && (
+        <div className={`mb-3 border-[0.5px] border-black p-2 ${FONT.body}`}>
+          <div className="mb-1 font-semibold">ご利用日（{month}月）</div>
+          <div className="flex flex-wrap gap-3">
+            {clients.flatMap((c) => {
+              // 同一事業所の複数制度は 1 暦に畳む (提供日は事業所単位で共有のため)
+              const byOffice = new Map<
+                string,
+                { systems: Set<string>; days: Set<number> }
+              >();
+              for (const s of c.sections) {
+                if (s.serviceDays.length === 0) continue;
+                const key = s.officeLabel ?? officeName ?? "";
+                if (!byOffice.has(key))
+                  byOffice.set(key, { systems: new Set(), days: new Set() });
+                const g = byOffice.get(key)!;
+                g.systems.add(systemLabel(s));
+                for (const d of s.serviceDays) g.days.add(d);
+              }
+              return Array.from(byOffice, ([office, g], oi) => {
+                const days = Array.from(g.days).sort((a, b) => a - b);
+                return (
+                  <div key={`${c.userId}-${oi}`} className="w-[200px]">
+                    <div className="mb-0.5 text-[8px] font-semibold leading-tight">
+                      {isHousehold ? `${c.userName}様　` : ""}
+                      {office}（{Array.from(g.systems).join("・")}）
+                    </div>
+                    <UseDaysCalendar gYear={gYear} month={month} days={days} />
+                    <div className={`mt-0.5 ${FONT.small} text-gray-600`}>
+                      提供日　計{days.length}日
+                    </div>
+                  </div>
+                );
+              });
+            })}
+          </div>
+        </div>
       )}
 
       {/* ── 【備考】自由記述枠 (太枠。Phase 1 は空欄) ── */}

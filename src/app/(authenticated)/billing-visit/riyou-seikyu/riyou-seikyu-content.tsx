@@ -680,6 +680,70 @@ export function RiyouSeikyuContent() {
     loadBanks();
   }, [loadBanks]);
 
+  // ── ご利用日 (提供実績日) — kaigo_visit_schedule の completed を月内で取得 (表示専用) ──
+  //   ★ money-safety: 金額計算には一切使わない。請求書のご利用日カレンダー描画のみ。
+  //   介護/総合/障害 いずれも同テーブルの completed 行が実績元 (aggregate と対称)。
+  //   自事業所スコープ (office_id 列があれば絞る。未適用=42703 は列なしで再取得)。
+  const [serviceDaysByUser, setServiceDaysByUser] = useState<Map<string, number[]>>(
+    new Map(),
+  );
+  const loadServiceDays = useCallback(async () => {
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const from = `${monthKey}-01`;
+    const to = `${monthKey}-${String(daysInMonth).padStart(2, "0")}`;
+    // office_id で自事業所に絞る。列未適用時は絞らず取得 (aggregate と同じ流儀)。
+    const fetchPage = async (withOffice: boolean, start: number) => {
+      let q = supabase
+        .from("kaigo_visit_schedule")
+        .select("user_id, visit_date")
+        .eq("status", "completed")
+        .gte("visit_date", from)
+        .lte("visit_date", to)
+        .order("user_id")
+        .range(start, start + 999);
+      if (withOffice && officeId) q = q.eq("office_id", officeId);
+      return q;
+    };
+    const m = new Map<string, Set<number>>();
+    let withOffice = true;
+    let start = 0;
+    // page-loop (1000 行上限を跨ぐ月に備える)
+    for (;;) {
+      let { data, error: e } = await fetchPage(withOffice, start);
+      if (e && e.code === "42703" && withOffice) {
+        // office_id 列未適用 → 列なしで最初から取り直す
+        withOffice = false;
+        start = 0;
+        m.clear();
+        ({ data, error: e } = await fetchPage(false, 0));
+      }
+      if (e) {
+        if (!isTableMissingError(e.code))
+          console.warn("ご利用日取得失敗:", e.message);
+        setServiceDaysByUser(new Map());
+        return;
+      }
+      const rows = (data ?? []) as { user_id: string; visit_date: string }[];
+      for (const r of rows) {
+        const day = parseInt(r.visit_date.slice(8, 10), 10);
+        if (!Number.isFinite(day)) continue;
+        if (!m.has(r.user_id)) m.set(r.user_id, new Set());
+        m.get(r.user_id)!.add(day);
+      }
+      if (rows.length < 1000) break;
+      start += 1000;
+    }
+    setServiceDaysByUser(
+      new Map(
+        Array.from(m, ([k, v]) => [k, Array.from(v).sort((a, b) => a - b)]),
+      ),
+    );
+  }, [supabase, monthKey, year, month, officeId]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 月/事業所変更時の fetch
+    loadServiceDays();
+  }, [loadServiceDays]);
+
   // ── 自社情報 (ひな形ヘッダーの法人情報) — offices.company_id → companies ──
   //   companies.name (法人名) を優先し、住所/電話/郵便番号は offices の値を fallback。
   //   インボイス登録番号は companies に列が無いため Phase 1 は固定プレースホルダ。
@@ -1022,6 +1086,7 @@ export function RiyouSeikyuContent() {
           address: meta?.address ?? null,
           bank: toMergeBank(meta),
           officePhone,
+          serviceDays: serviceDaysByUser.get(row.userId) ?? [],
         };
       }
       const r = row.kaigo;
@@ -1048,6 +1113,7 @@ export function RiyouSeikyuContent() {
         address: meta?.address ?? null,
         bank: toMergeBank(meta),
         officePhone,
+        serviceDays: serviceDaysByUser.get(row.userId) ?? [],
       };
     };
     // 自事業所分 (targets) + 他事業所分 (対象 client に限定) を 1 リストで畳み込む。
@@ -1090,6 +1156,7 @@ export function RiyouSeikyuContent() {
     siblingInputsAll,
     bankByUser,
     officePhone,
+    serviceDaysByUser,
   ]);
 
   // 事業所合算: このシート群が実際に複数事業所を横断しているか (title の (事業所合算) 用)
