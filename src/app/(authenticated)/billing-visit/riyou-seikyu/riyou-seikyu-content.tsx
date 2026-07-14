@@ -40,6 +40,7 @@ import {
   SeikyuKanaSidebar,
   SeikyuMonthNav,
 } from "../_shared/seikyu-context";
+import { useCrossOfficeSeikyu } from "../_shared/use-cross-office-seikyu";
 import { mergeSegmentRows, type UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
 import type { ShogaiSeikyuRow } from "@/lib/shogai-seikyu/aggregate";
 import { buildFbZengin, type FbTransferTarget } from "@/lib/fb-zengin";
@@ -105,6 +106,10 @@ interface JippiEntry {
 }
 
 const JIPPI_SUGGESTIONS = ["交通費", "キャンセル料", "日用品費", "その他"];
+
+// 事業所合算が無い/無効時に使う安定した空配列 (再レンダリング抑止)
+const EMPTY_CLIENT_IDS: readonly string[] = [];
+const EMPTY_MERGE_INPUTS: MergeInput[] = [];
 
 // 入金状況 (ほのぼの 利用請求タブ: 状態 = 確定/入金完 + 未収金管理)
 interface PaymentRow {
@@ -279,11 +284,24 @@ export function RiyouSeikyuContent() {
   // ── 請求書の合算モード (印刷レイヤーのみ。金額計算 = aggregate は不変) ──
   //   制度合算 (mergeSystems): ON = 同一利用者の 介護/総合/障害 を 1 枚に合算 (デフォルト)。
   //     OFF = 従来どおり制度ごとに別枚 (介護/総合は既存シート、障害は障害請求タブ側)。
-  //   事業所合算 (mergeOffices): 同一法人の他事業所利用の検出・導線 (残タスク: 金額の法人横断合算)。
+  //   事業所合算 (mergeOffices): ON = 同一法人 (company_id) の全 kaigo 事業所分の
+  //     利用者負担を横断集計し、利用者ごとに 1 枚へ合算する (法人が違えば別枚)。
+  //     OFF = 自事業所分のみ (従来)。デフォルト ON。
   const [mergeSystems, setMergeSystems] = useState(true);
-  const [mergeOffices, setMergeOffices] = useState(false);
+  const [mergeOffices, setMergeOffices] = useState(true);
 
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+
+  // ── 事業所合算: 同一法人の他事業所分の利用者負担を集計 (use-cross-office-seikyu) ──
+  //   自事業所分は下の既存 context データを再利用するため、ここでは取得しない。
+  //   集計関数は自事業所と同一 (officeId 差し替えのみ) なので金額は各事業所タブと一致。
+  const crossOffice = useCrossOfficeSeikyu({
+    enabled: mergeOffices,
+    supabase,
+    selfOfficeId: officeId,
+    year,
+    month,
+  });
 
   // ── 3 制度統合の表示行 (介護 → 総合 → 障害、各制度内はカナ順のまま) ──
   //    介護/総合 は UserSeikyuRow を、障害 は ShogaiSeikyuRow を持つ union。
@@ -465,13 +483,26 @@ export function RiyouSeikyuContent() {
   const kaigoAllRows = useMemo(() => [...rows, ...sougouRows], [rows, sougouRows]);
 
   // ── 請求個人設定 (軽減 / 医療費控除。①③) — kaigo_riyou_settings ──
+  //   軽減率は client 単位 (kaigo_riyou_settings は client_id UNIQUE) なので、
+  //   事業所合算 ON のときは他事業所のみの利用者分も含めて読む
+  //   (= 他事業所セクションの軽減額 keigenAmount(clientId, base) を効かせるため)。
+  const crossClientIds = crossOffice.data?.clientIds ?? EMPTY_CLIENT_IDS;
+  const crossClientIdsKey = useMemo(
+    () => crossClientIds.slice().sort().join(","),
+    [crossClientIds],
+  );
   const [settings, setSettings] = useState<Map<string, RiyouSettingRow>>(new Map());
   const loadSettings = useCallback(async () => {
-    if (kaigoAllRows.length === 0) {
+    const ids = Array.from(
+      new Set<string>([
+        ...kaigoAllRows.map((r) => r.user_id),
+        ...crossClientIds,
+      ]),
+    );
+    if (ids.length === 0) {
       setSettings(new Map());
       return;
     }
-    const ids = Array.from(new Set(kaigoAllRows.map((r) => r.user_id)));
     const m = new Map<string, RiyouSettingRow>();
     for (let i = 0; i < ids.length; i += 100) {
       const chunk = ids.slice(i, i + 100);
@@ -488,7 +519,9 @@ export function RiyouSeikyuContent() {
       for (const s of (data ?? []) as RiyouSettingRow[]) m.set(s.client_id, s);
     }
     setSettings(m);
-  }, [supabase, kaigoAllRows]);
+    // crossClientIdsKey で他事業所利用者の変化にも追随 (crossClientIds 参照は key 経由)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase, kaigoAllRows, crossClientIdsKey]);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更/行更新時の fetch
     loadSettings();
@@ -777,6 +810,73 @@ export function RiyouSeikyuContent() {
     return { household: [] as UserSeikyuRow[], singles: kaigoRows };
   }, [kaigoTargets, merged]);
 
+  // ── 事業所合算: 他事業所分の MergeInput (全 sibling client 分。利用者単位で後段が畳み込む) ──
+  //   ★ money-safety: base は集計関数そのままの利用者負担 (法定負担+超過自費 / 障害=userAmount)。
+  //   軽減 (keigen) は client 単位の率なので他事業所 base にも keigenAmount で適用
+  //   (= 他事業所タブが自分で出す軽減後額と一致)。
+  //   実費 (jippi) / 医療費控除 (iryohi) / 前月繰越 (prev) は client-月 単位で
+  //   自事業所タブが管理する値。二重計上を避けるため他事業所セクションでは 0 とし、
+  //   自事業所セクションに一度だけ計上する (下の toInput が自事業所分を持つ)。
+  const siblingInputsAll = useMemo<MergeInput[]>(() => {
+    if (!mergeOffices || !crossOffice.data) return EMPTY_MERGE_INPUTS;
+    const out: MergeInput[] = [];
+    const pushKaigo = (
+      officeLabel: string,
+      system: "介護" | "総合事業",
+      rowsIn: UserSeikyuRow[],
+    ) => {
+      for (const r of rowsIn) {
+        const base = userPlusSelf(r);
+        const keigen = keigenAmount(r.user_id, base);
+        out.push({
+          system,
+          userId: r.user_id,
+          userName: r.user_name,
+          userNameKana: r.user_name_kana,
+          userNumber: r.user_number,
+          copayRate: r.copay_rate,
+          officeLabel,
+          base,
+          keigen,
+          jippi: 0,
+          subtotal: base - keigen,
+          iryohi: 0,
+          prevBilled: 0,
+          prevPaid: 0,
+        });
+      }
+    };
+    for (const office of crossOffice.data.byOffice) {
+      // 介護給付 (訪問介護/看護/入浴) は保険者変更の分割セグメントを利用者単位に合算 (自事業所と同流儀)
+      pushKaigo(office.officeName, "介護", mergeSegmentRows(office.kaigoRows));
+      pushKaigo(office.officeName, "総合事業", office.sougouRows);
+      for (const s of office.shogaiRows) {
+        out.push({
+          system: "障害",
+          userId: s.user_id,
+          userName: s.user_name,
+          userNameKana: s.user_name_kana,
+          userNumber: null,
+          copayRate: null,
+          officeLabel: office.officeName,
+          base: s.userAmount,
+          keigen: 0,
+          jippi: 0,
+          subtotal: s.userAmount,
+          iryohi: 0,
+          prevBilled: 0,
+          prevPaid: 0,
+        });
+      }
+    }
+    return out;
+  }, [mergeOffices, crossOffice.data, keigenAmount]);
+
+  // 自事業所セクションに付ける事業所ラベル (事業所合算 ON のときのみ表示)
+  const selfOfficeLabel = officeName;
+  // 集計対象の他事業所が 1 つ以上あるか (バナー・title 表示・companyMerged 判定に使う)
+  const hasSiblingOffices = (crossOffice.data?.offices.length ?? 0) > 0;
+
   // ── 制度合算 (mergeSystems ON) 用の合算モデル ────────────────────────────────
   //   発行対象 (targets = 介護/総合/障害の全制度) を 1 明細 = 1 制度に落とし込み、
   //   利用者単位に畳み込む。金額は billedForRow (既存関数) をそのまま subtotal に
@@ -794,7 +894,7 @@ export function RiyouSeikyuContent() {
           userNameKana: s.user_name_kana,
           userNumber: null,
           copayRate: null,
-          officeLabel: null,
+          officeLabel: mergeOffices ? selfOfficeLabel : null,
           base: s.userAmount,
           keigen: 0,
           jippi: 0,
@@ -813,7 +913,7 @@ export function RiyouSeikyuContent() {
         userNameKana: r.user_name_kana,
         userNumber: r.user_number,
         copayRate: r.copay_rate,
-        officeLabel: null,
+        officeLabel: mergeOffices ? selfOfficeLabel : null,
         base: userPlusSelf(r),
         keigen: keigenByUser.get(r.user_id) ?? 0,
         jippi: jippiTotal(r.user_id),
@@ -823,7 +923,18 @@ export function RiyouSeikyuContent() {
         prevPaid: prev?.paid_amount ?? 0,
       };
     };
-    const clients = buildMergedClients(targets.map(toInput));
+    // 自事業所分 (targets) + 他事業所分 (対象 client に限定) を 1 リストで畳み込む。
+    // 他事業所分は自事業所の発行対象になっている利用者のみに付与する
+    // (= この事業所タブが請求する利用者に他事業所の負担を足し込む。他事業所のみの
+    //  利用者はその事業所タブで請求されるため、ここでは新規シートを作らない)。
+    const targetClientIds = new Set(targets.map((r) => r.userId));
+    const siblingForTargets = siblingInputsAll.filter((i) =>
+      targetClientIds.has(i.userId),
+    );
+    const clients = buildMergedClients([
+      ...targets.map(toInput),
+      ...siblingForTargets,
+    ]);
     // 名寄せ (世帯合算): 介護/総合 の名寄チェックが付いた利用者 (2 名以上) を 1 枚に。
     const householdIds = new Set(
       targets
@@ -847,142 +958,23 @@ export function RiyouSeikyuContent() {
     jippiTotal,
     rowBilled,
     iryohiByUser,
+    mergeOffices,
+    selfOfficeLabel,
+    siblingInputsAll,
   ]);
 
-  // ── 事業所合算 (mode 2): 同一法人の他事業所利用の「検出・導線」──────────────────
-  //   ※ 金額の法人横断合算 (aggregate を他事業所分も呼んで足す) は残タスク。
-  //   現状は「同一 company_id の他 kaigo 事業所」と、その事業所にも
-  //   client_office_assignments を持つ当タブ利用者の人数を検出して通知するのみ
-  //   (読み取り専用。金額・入金・伝送には一切影響しない)。
-  const [officeMergeInfo, setOfficeMergeInfo] = useState<{
-    loading: boolean;
-    error: string | null;
-    siblings: { id: string; name: string }[];
-    sharedUserCount: number;
-  } | null>(null);
-  const currentUserIdsKey = useMemo(
-    () =>
-      Array.from(new Set(unifiedRows.map((r) => r.userId)))
-        .sort()
-        .join(","),
-    [unifiedRows],
-  );
-  useEffect(() => {
-    if (!mergeOffices || !officeId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- トグル OFF 時のリセット
-      setOfficeMergeInfo(null);
-      return;
-    }
-    let cancelled = false;
-    const run = async () => {
-      setOfficeMergeInfo({
-        loading: true,
-        error: null,
-        siblings: [],
-        sharedUserCount: 0,
-      });
-      // 1) 自事業所の法人 (company_id)
-      const { data: selfOffice, error: e1 } = await supabase
-        .from("offices")
-        .select("company_id")
-        .eq("id", officeId)
-        .maybeSingle();
-      if (e1) {
-        if (!cancelled)
-          setOfficeMergeInfo({
-            loading: false,
-            error: `法人情報の取得に失敗: ${e1.message}`,
-            siblings: [],
-            sharedUserCount: 0,
-          });
-        return;
-      }
-      const companyId = (selfOffice as { company_id?: string | null } | null)
-        ?.company_id;
-      if (!companyId) {
-        if (!cancelled)
-          setOfficeMergeInfo({
-            loading: false,
-            error: null,
-            siblings: [],
-            sharedUserCount: 0,
-          });
-        return;
-      }
-      // 2) 同一法人の他 kaigo 事業所
-      const { data: sibs, error: e2 } = await supabase
-        .from("offices")
-        .select("id, name")
-        .eq("company_id", companyId)
-        .eq("app_type", "kaigo-app")
-        .neq("id", officeId)
-        .order("name");
-      if (e2) {
-        if (!cancelled)
-          setOfficeMergeInfo({
-            loading: false,
-            error: `他事業所の取得に失敗: ${e2.message}`,
-            siblings: [],
-            sharedUserCount: 0,
-          });
-        return;
-      }
-      const siblings = (sibs ?? []) as { id: string; name: string }[];
-      if (siblings.length === 0) {
-        if (!cancelled)
-          setOfficeMergeInfo({
-            loading: false,
-            error: null,
-            siblings: [],
-            sharedUserCount: 0,
-          });
-        return;
-      }
-      // 3) 他事業所にも所属する利用者 (client_office_assignments) を page-loop で取得
-      const sibIds = siblings.map((s) => s.id);
-      const sharedClientIds = new Set<string>();
-      let offset = 0;
-      const PAGE = 1000;
-      for (;;) {
-        const { data: assigns, error: e3 } = await supabase
-          .from("client_office_assignments")
-          .select("client_id")
-          .in("office_id", sibIds)
-          .order("client_id")
-          .range(offset, offset + PAGE - 1);
-        if (e3) {
-          if (!cancelled)
-            setOfficeMergeInfo({
-              loading: false,
-              error: `他事業所の利用者所属の取得に失敗: ${e3.message}`,
-              siblings,
-              sharedUserCount: 0,
-            });
-          return;
-        }
-        const chunk = (assigns ?? []) as { client_id: string }[];
-        for (const a of chunk) sharedClientIds.add(a.client_id);
-        if (chunk.length < PAGE) break;
-        offset += PAGE;
-      }
-      const currentIds = new Set(unifiedRows.map((r) => r.userId));
-      let sharedUserCount = 0;
-      for (const id of currentIds) if (sharedClientIds.has(id)) sharedUserCount += 1;
-      if (!cancelled)
-        setOfficeMergeInfo({
-          loading: false,
-          error: null,
-          siblings,
-          sharedUserCount,
-        });
-    };
-    run();
-    return () => {
-      cancelled = true;
-    };
-    // currentUserIdsKey で利用者集合の変化にも追随 (unifiedRows 参照は key 経由)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mergeOffices, officeId, supabase, currentUserIdsKey]);
+  // 事業所合算: このシート群が実際に複数事業所を横断しているか (title の (事業所合算) 用)
+  const companyMergedActive = mergeOffices && hasSiblingOffices;
+
+  // ── 事業所合算バナー用の派生情報 (集計は use-cross-office-seikyu が実施) ──────────
+  //   当タブの利用者のうち、他事業所にも当月の利用者負担がある人数 (= 合算が効いた人数)。
+  const officeMergeSharedCount = useMemo(() => {
+    if (!mergeOffices) return 0;
+    const siblingClientIds = new Set(crossOffice.data?.clientIds ?? EMPTY_CLIENT_IDS);
+    let n = 0;
+    for (const r of unifiedRows) if (siblingClientIds.has(r.userId)) n += 1;
+    return n;
+  }, [mergeOffices, crossOffice.data, unifiedRows]);
 
   // ─── 請求書一括印刷 (全員 or チェック中 を 1 印刷ジョブで連続出力) ──────────
   // 既存の単票印刷 (発行ボタン) とは独立した追加機能。発行日の記録は行わない。
@@ -1402,7 +1394,7 @@ export function RiyouSeikyuContent() {
               </label>
               <label
                 className="flex items-center gap-0.5 cursor-pointer select-none whitespace-nowrap"
-                title="ON = 同一法人 (company) の他事業所を利用している利用者を検出して通知します。※ 金額の法人横断合算は残タスク (現状は検出・導線のみ)"
+                title="ON (既定) = 同一法人 (company_id) の全 介護事業所分の利用者負担を横断集計し、利用者ごとに 1 枚へ合算します (法人が違えば別枚)。OFF = 自事業所分のみ (従来)。金額は各事業所タブの集計と一致 (印刷・表示レイヤーのみ / 発行記録・入金は事業所別のまま)"
               >
                 <input
                   type="checkbox"
@@ -1411,6 +1403,9 @@ export function RiyouSeikyuContent() {
                   className="cursor-pointer"
                 />
                 事業所合算
+                {mergeOffices && crossOffice.loading && (
+                  <Loader2 size={11} className="animate-spin text-indigo-400" />
+                )}
               </label>
             </span>
             <button
@@ -1453,36 +1448,44 @@ export function RiyouSeikyuContent() {
             <span className="text-[11px] text-gray-400">{printScopeLabel}</span>
           </div>
 
-          {/* 事業所合算 (mode 2) の検出通知 (読み取り専用の導線) */}
-          {mergeOffices && officeMergeInfo && (
-            <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 shrink-0 text-xs text-amber-800">
-              {officeMergeInfo.loading ? (
+          {/* 事業所合算 (法人横断) の状態表示 (集計結果を印刷レイヤーに反映済) */}
+          {mergeOffices && (
+            <div className="border-b border-indigo-200 bg-indigo-50 px-3 py-2 shrink-0 text-xs text-indigo-800">
+              {crossOffice.loading ? (
                 <span className="flex items-center gap-1.5">
                   <Loader2 size={13} className="animate-spin" />
-                  同一法人の他事業所利用を確認中…
+                  同一法人の他事業所分を集計中…
                 </span>
-              ) : officeMergeInfo.error ? (
-                <span className="flex items-center gap-1.5 text-red-700">
-                  <AlertTriangle size={13} />
-                  {officeMergeInfo.error}
+              ) : crossOffice.errors.length > 0 ? (
+                <div className="flex flex-col gap-0.5 text-red-700">
+                  {crossOffice.errors.map((e, i) => (
+                    <span key={i} className="flex items-center gap-1.5">
+                      <AlertTriangle size={13} />
+                      {e}
+                    </span>
+                  ))}
+                  <span className="text-red-600">
+                    ※ 集計できた事業所分のみ合算しています。失敗分は含まれません。
+                  </span>
+                </div>
+              ) : !hasSiblingOffices ? (
+                <span>
+                  同一法人 (company) の他 介護事業所は無いか、当月の利用者負担がありません。
+                  自事業所分のみで表示しています。
                 </span>
-              ) : officeMergeInfo.siblings.length === 0 ? (
-                <span>同一法人 (company) の他 介護事業所は見つかりませんでした。</span>
               ) : (
                 <div className="flex flex-col gap-0.5">
-                  <span className="flex items-center gap-1.5 font-medium">
-                    <AlertTriangle size={13} />
-                    同一法人の他事業所 {officeMergeInfo.siblings.length} 箇所を検出:{" "}
-                    {officeMergeInfo.siblings.map((s) => s.name).join(" / ")}
+                  <span className="font-medium">
+                    同一法人の {crossOffice.data?.offices.length} 事業所を合算中:{" "}
+                    {(crossOffice.data?.offices ?? []).map((s) => s.name).join(" / ")}
                   </span>
                   <span>
-                    うち当タブの利用者 {officeMergeInfo.sharedUserCount} 名が他事業所にも
-                    所属しています (他事業所の利用票で請求が発生している可能性)。
+                    当タブの利用者のうち {officeMergeSharedCount} 名が他事業所にも
+                    当月の利用者負担があり、1 枚の請求書に合算表示しています。
                   </span>
-                  <span className="text-amber-600">
-                    ※ 金額の法人横断合算 (他事業所分の利用者負担を 1 枚に足し込む) は
-                    残タスクです。現状は検出・導線のみで、請求金額・印刷内容は
-                    当事業所分のままです。各事業所に切替えて個別に発行してください。
+                  <span className="text-indigo-500">
+                    ※ 発行記録・入金・FB は従来どおり事業所別・制度別です
+                    (合算請求書に対する入金の合算管理はスコープ外)。
                   </span>
                 </div>
               )}
@@ -1776,6 +1779,9 @@ export function RiyouSeikyuContent() {
           rows={bulkCandidateRows}
           allRows={unifiedRows}
           mergeSystems={mergeSystems}
+          mergeOffices={mergeOffices}
+          companyMerged={companyMergedActive}
+          siblingInputsAll={siblingInputsAll}
           checkedKeys={checked}
           mergedKeys={merged}
           rowBilled={rowBilled}
@@ -1826,6 +1832,7 @@ export function RiyouSeikyuContent() {
                         reiwa={reiwa}
                         month={month}
                         isCopy={isCopy}
+                        companyMerged={companyMergedActive}
                       />
                     )}
                     {mergedPrintGroups.singles.map((c) => (
@@ -1836,6 +1843,7 @@ export function RiyouSeikyuContent() {
                         reiwa={reiwa}
                         month={month}
                         isCopy={isCopy}
+                        companyMerged={companyMergedActive}
                       />
                     ))}
                   </div>
@@ -3310,6 +3318,9 @@ function RiyouBulkPrintView({
   rows,
   allRows,
   mergeSystems,
+  mergeOffices,
+  companyMerged,
+  siblingInputsAll,
   checkedKeys,
   mergedKeys,
   rowBilled,
@@ -3331,6 +3342,12 @@ function RiyouBulkPrintView({
   allRows: UnifiedRow[];
   /** 制度合算モード (ON = 同一利用者の 介護/総合/障害 を 1 枚に合算) */
   mergeSystems: boolean;
+  /** 事業所合算モード (ON = 同一法人の他事業所分も 1 枚に合算) */
+  mergeOffices: boolean;
+  /** 事業所合算が実際に効いている (他事業所あり) か。シート見出しの (事業所合算) 判定用 */
+  companyMerged: boolean;
+  /** 他事業所分の MergeInput (全 client。scope 内 client のみ後段で採用) */
+  siblingInputsAll: MergeInput[];
   /** 一覧の「対象」チェック (制度:client_id キー) */
   checkedKeys: Set<string>;
   /** 一覧の「名寄」チェック (世帯合算。制度:client_id キー) */
@@ -3425,7 +3442,7 @@ function RiyouBulkPrintView({
             userNameKana: s.user_name_kana,
             userNumber: null,
             copayRate: null,
-            officeLabel: null,
+            officeLabel: mergeOffices ? officeName : null,
             base: s.userAmount,
             keigen: 0,
             jippi: 0,
@@ -3444,7 +3461,7 @@ function RiyouBulkPrintView({
           userNameKana: r.user_name_kana,
           userNumber: r.user_number,
           copayRate: r.copay_rate,
-          officeLabel: null,
+          officeLabel: mergeOffices ? officeName : null,
           base: userPlusSelf(r),
           keigen: keigenByUser.get(r.user_id) ?? 0,
           jippi: jippiTotalFor(r.user_id),
@@ -3454,6 +3471,12 @@ function RiyouBulkPrintView({
           prevPaid: prev?.paid_amount ?? 0,
         };
       });
+    // 事業所合算: scope 内 client の他事業所セクションを追加 (単票と同じ集計値)
+    if (mergeOffices) {
+      for (const si of siblingInputsAll) {
+        if (scopedUserIds.has(si.userId)) inputs.push(si);
+      }
+    }
     const clients = buildMergedClients(inputs);
     const householdIds = new Set(
       sorted.filter((r) => mergedKeys.has(r.key)).map((r) => r.userId),
@@ -3468,6 +3491,9 @@ function RiyouBulkPrintView({
     return { household: [] as MergedClient[], singles: clients };
   }, [
     mergeSystems,
+    mergeOffices,
+    officeName,
+    siblingInputsAll,
     sorted,
     allRows,
     mergedKeys,
@@ -3643,6 +3669,7 @@ function RiyouBulkPrintView({
                     officeName={officeName}
                     reiwa={reiwa}
                     month={month}
+                    companyMerged={companyMerged}
                   />
                 )}
                 {mergedGroups.singles.map((c) => (
@@ -3652,6 +3679,7 @@ function RiyouBulkPrintView({
                     officeName={officeName}
                     reiwa={reiwa}
                     month={month}
+                    companyMerged={companyMerged}
                   />
                 ))}
               </>

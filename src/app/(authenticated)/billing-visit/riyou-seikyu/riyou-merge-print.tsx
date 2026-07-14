@@ -193,9 +193,20 @@ export function RiyouSeikyuMergedPrintSheet({
   );
   const multiSystem = systems.length >= 2;
 
+  // このシートが実際に複数事業所を横断しているか (section の officeLabel が 2 種類以上)。
+  // prop companyMerged はフォールバック (呼び出し側が明示 ON にした場合)。
+  const officeLabels = Array.from(
+    new Set(
+      clients
+        .flatMap((c) => c.sections.map((s) => s.officeLabel))
+        .filter((l): l is string => !!l),
+    ),
+  );
+  const isCompanyMerged = companyMerged && officeLabels.length >= 2;
+
   const titleSuffix = isHousehold
     ? " (世帯合算)"
-    : companyMerged
+    : isCompanyMerged
       ? " (事業所合算)"
       : multiSystem
         ? " (制度合算)"
@@ -381,7 +392,9 @@ export function RiyouSeikyuMergedPrintSheet({
         {isHousehold
           ? `。世帯内 ${clients.length} 名分を代表者 (${rep.userName} 様) 宛に 1 枚で発行しています`
           : ""}
-        {companyMerged ? "。法人内の複数事業所分を合算しています" : ""}
+        {isCompanyMerged
+          ? `。法人内の複数事業所分 (${officeLabels.join("・")}) を合算しています`
+          : ""}
         。
       </p>
     </div>
