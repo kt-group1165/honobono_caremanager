@@ -124,6 +124,8 @@ export function IdouRecordsContent() {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [records, setRecords] = useState<IdouRecord[]>([]);
   const [plans, setPlans] = useState<PlanRow[]>([]);
+  // client_id → 支給量(分/月)。受給者証未登録は標準25h
+  const [shikyuMin, setShikyuMin] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<IdouRecord | "new" | null>(null);
   const [prefill, setPrefill] = useState<FormState | null>(null);
@@ -144,7 +146,7 @@ export function IdouRecordsContent() {
       if (aErr) throw aErr;
       const ids = Array.from(new Set((assigns ?? []).map((a: { client_id: string }) => a.client_id)));
       const [y, mo] = month.split("-").map(Number);
-      const [clientsRes, staffRes, recordsRes, planRes] = await Promise.all([
+      const [clientsRes, staffRes, recordsRes, planRes, shikyuRes] = await Promise.all([
         ids.length
           ? supabase.from("clients").select("id, name, furigana, user_number").in("id", ids).is("deleted_at", null).order("furigana")
           : Promise.resolve({ data: [], error: null }),
@@ -165,6 +167,10 @@ export function IdouRecordsContent() {
           .lte("visit_date", `${month}-31`)
           .order("visit_date")
           .order("start_time"),
+        // 地域生活支援受給者証の支給量 (超過警告の閾値)
+        ids.length
+          ? supabase.from("chiiki_recipient_certs").select("client_id, shikyu_minutes").in("client_id", ids)
+          : Promise.resolve({ data: [], error: null }),
       ]);
       if (clientsRes.error) throw clientsRes.error;
       if (staffRes.error) throw staffRes.error;
@@ -173,6 +179,11 @@ export function IdouRecordsContent() {
       setClients((clientsRes.data ?? []) as Client[]);
       setStaff((staffRes.data ?? []) as Staff[]);
       setRecords((recordsRes.data ?? []) as IdouRecord[]);
+      setShikyuMin(new Map(
+        ((shikyuRes.data ?? []) as { client_id: string; shikyu_minutes: number | null }[])
+          .filter((r) => r.shikyu_minutes != null)
+          .map((r) => [r.client_id, r.shikyu_minutes as number]),
+      ));
 
       // 予定を「移動支援 (地域生活支援給付)」に絞る (名称→制度区分 lookup)
       const allPlans = (planRes.data ?? []) as PlanRow[];
@@ -217,12 +228,14 @@ export function IdouRecordsContent() {
   const totalCalcMin = records.reduce((s, r) => s + (r.calc_minutes ?? 0), 0);
   const totalUnits = records.reduce((s, r) => s + (r.units ?? 0) * (r.staff_count === 2 ? 2 : 1), 0);
 
-  // 標準支給量 (月25時間) は利用者ごとの基準。利用者別に算定時間を合算して超過者を出す
+  // 支給量は利用者ごとの基準 (受給者証の支給量、未登録は標準25h)。利用者別に合算して超過者を出す
   const overStdUsers = useMemo(() => {
     const byUser = new Map<string, number>();
     for (const r of records) byUser.set(r.client_id, (byUser.get(r.client_id) ?? 0) + (r.calc_minutes ?? 0));
-    return [...byUser.entries()].filter(([, min]) => min > 25 * 60).map(([cid, min]) => ({ cid, min }));
-  }, [records]);
+    return [...byUser.entries()]
+      .map(([cid, min]) => ({ cid, min, limit: shikyuMin.get(cid) ?? 25 * 60 }))
+      .filter((u) => u.min > u.limit);
+  }, [records, shikyuMin]);
 
   const draftCount = records.filter((r) => r.status === "draft").length;
   const confirmMonth = async () => {
@@ -303,7 +316,7 @@ export function IdouRecordsContent() {
         {overStdUsers.length > 0 && (
           <div className="flex items-center gap-1.5 rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
             <AlertTriangle size={14} />
-            標準支給量(月25時間)超過: {overStdUsers.map((u) => `${clientName(u.cid)}(${fmtMin(u.min)})`).join("、")}
+            支給量超過: {overStdUsers.map((u) => `${clientName(u.cid)}(${fmtMin(u.min)}/${fmtMin(u.limit)})`).join("、")}
           </div>
         )}
       </div>

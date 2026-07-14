@@ -79,8 +79,9 @@ export function IdouBillingContent() {
   const [idouRows, setIdouRows] = useState<IdouRow[]>([]);
   const [bathRows, setBathRows] = useState<BathRow[]>([]);
   const [codeInfo, setCodeInfo] = useState<Map<string, { name: string; unit: number }>>(new Map());
-  // client_id → 受給者証情報 (番号 / 負担上限月額 / 生保フラグ)。障害福祉受給者証を流用
-  const [certs, setCerts] = useState<Map<string, { number: string; limit: number; seiho: boolean }>>(new Map());
+  // client_id → 受給者証情報 (番号 / 契約支給量 / 負担上限月額 / 生保フラグ)。
+  // 地域生活支援受給者証 (chiiki_recipient_certs) を優先、無ければ障害福祉受給者証を流用
+  const [certs, setCerts] = useState<Map<string, { number: string; contract: string; limit: number; seiho: boolean }>>(new Map());
   const [loading, setLoading] = useState(true);
 
   const [y, mo] = month.split("-").map(Number);
@@ -93,7 +94,7 @@ export function IdouBillingContent() {
       const { data: assigns } = await supabase
         .from("client_office_assignments").select("client_id").eq("office_id", currentOfficeId);
       const ids = Array.from(new Set((assigns ?? []).map((a: { client_id: string }) => a.client_id)));
-      const [clientsRes, idouRes, bathRes, certRes] = await Promise.all([
+      const [clientsRes, idouRes, bathRes, certRes, chiikiCertRes] = await Promise.all([
         ids.length
           ? supabase.from("clients").select("id, name").in("id", ids).is("deleted_at", null).order("furigana")
           : Promise.resolve({ data: [], error: null }),
@@ -109,6 +110,11 @@ export function IdouBillingContent() {
               .in("client_id", ids)
               .order("certification_start_date", { ascending: false })
           : Promise.resolve({ data: [], error: null }),
+        ids.length
+          ? supabase.from("chiiki_recipient_certs")
+              .select("client_id, beneficiary_number, shikyu_amount_text, self_payment_limit, seiho_flag")
+              .in("client_id", ids)
+          : Promise.resolve({ data: [], error: null }),
       ]);
       setClients((clientsRes.data ?? []) as Client[]);
       const idou = (idouRes.data ?? []) as IdouRow[];
@@ -116,18 +122,30 @@ export function IdouBillingContent() {
       setIdouRows(idou);
       setBathRows(bath);
 
-      // 受給者証: 同一利用者は最新 (certification_start_date 降順の先頭) を採用
-      const certMap = new Map<string, { number: string; limit: number; seiho: boolean }>();
+      // 受給者証: 障害福祉 (最新) を土台に、地域生活支援受給者証があれば上書き
+      const certMap = new Map<string, { number: string; contract: string; limit: number; seiho: boolean }>();
       for (const c of (certRes.data ?? []) as {
         client_id: string; beneficiary_number: string | null; self_payment_limit: number | null; seiho_flag: boolean | null;
       }[]) {
         if (!certMap.has(c.client_id)) {
           certMap.set(c.client_id, {
             number: c.beneficiary_number ?? "",
+            contract: "",
             limit: c.self_payment_limit ?? 0,
             seiho: c.seiho_flag ?? false,
           });
         }
+      }
+      for (const c of (chiikiCertRes.data ?? []) as {
+        client_id: string; beneficiary_number: string | null; shikyu_amount_text: string | null;
+        self_payment_limit: number | null; seiho_flag: boolean | null;
+      }[]) {
+        certMap.set(c.client_id, {
+          number: c.beneficiary_number ?? certMap.get(c.client_id)?.number ?? "",
+          contract: c.shikyu_amount_text ?? "",
+          limit: c.self_payment_limit ?? 0,
+          seiho: c.seiho_flag ?? false,
+        });
       }
       setCerts(certMap);
 
@@ -326,6 +344,7 @@ export function IdouBillingContent() {
                     y={y} mo={mo}
                     clientName={clientName(cid)}
                     cert={certs.get(cid)?.number ?? ""}
+                    contract={certs.get(cid)?.contract ?? ""}
                     officeName={currentOffice?.name ?? ""}
                     officeNumber={currentOffice?.business_number ?? ""}
                     rows={idouOfClient}
@@ -336,6 +355,7 @@ export function IdouBillingContent() {
                     y={y} mo={mo}
                     clientName={clientName(cid)}
                     cert={certs.get(cid)?.number ?? ""}
+                    contract={certs.get(cid)?.contract ?? ""}
                     officeName={currentOffice?.name ?? ""}
                     officeNumber={currentOffice?.business_number ?? ""}
                     rows={bathOfClient}
@@ -482,8 +502,8 @@ function MeisaishoSheet({ y, mo, clientName, cert, officeName, officeNumber, lin
 }
 
 // ── 様式3-1 移動支援サービス提供実績記録票 ──────────────────────────────────
-function JissekiSheet({ y, mo, clientName, cert, officeName, officeNumber, rows }: {
-  y: number; mo: number; clientName: string; cert: string; officeName: string; officeNumber: string;
+function JissekiSheet({ y, mo, clientName, cert, contract, officeName, officeNumber, rows }: {
+  y: number; mo: number; clientName: string; cert: string; contract: string; officeName: string; officeNumber: string;
   rows: IdouRow[];
 }) {
   const sorted = [...rows].sort((a, b) => a.service_date.localeCompare(b.service_date) || hm(a.start_time).localeCompare(hm(b.start_time)));
@@ -508,6 +528,10 @@ function JissekiSheet({ y, mo, clientName, cert, officeName, officeNumber, rows 
             <td className="border border-black px-2 py-1 font-mono">{officeNumber || "　"}</td>
             <td className="border border-black bg-gray-100 px-2 py-1">事業者及びその事業所</td>
             <td className="border border-black px-2 py-1">{officeName}</td>
+          </tr>
+          <tr>
+            <td className="border border-black bg-gray-100 px-2 py-1">契約支給量</td>
+            <td className="border border-black px-2 py-1" colSpan={3}>{contract || "　"}</td>
           </tr>
         </tbody>
       </table>
@@ -567,8 +591,8 @@ function JissekiSheet({ y, mo, clientName, cert, officeName, officeNumber, rows 
 }
 
 // ── 様式3-2 訪問入浴サービス提供実績記録票 (地域生活支援) ────────────────────
-function BathJissekiSheet({ y, mo, clientName, cert, officeName, officeNumber, rows }: {
-  y: number; mo: number; clientName: string; cert: string; officeName: string; officeNumber: string;
+function BathJissekiSheet({ y, mo, clientName, cert, contract, officeName, officeNumber, rows }: {
+  y: number; mo: number; clientName: string; cert: string; contract: string; officeName: string; officeNumber: string;
   rows: BathRow[];
 }) {
   const sorted = [...rows].sort((a, b) => a.visit_date.localeCompare(b.visit_date) || hm(a.start_time).localeCompare(hm(b.start_time)));
@@ -591,6 +615,10 @@ function BathJissekiSheet({ y, mo, clientName, cert, officeName, officeNumber, r
             <td className="border border-black px-2 py-1 font-mono">{officeNumber || "　"}</td>
             <td className="border border-black bg-gray-100 px-2 py-1">事業者及びその事業所</td>
             <td className="border border-black px-2 py-1">{officeName}</td>
+          </tr>
+          <tr>
+            <td className="border border-black bg-gray-100 px-2 py-1">契約支給量</td>
+            <td className="border border-black px-2 py-1" colSpan={3}>{contract || "　"}</td>
           </tr>
         </tbody>
       </table>
