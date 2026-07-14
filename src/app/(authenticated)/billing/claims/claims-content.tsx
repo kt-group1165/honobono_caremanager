@@ -1840,7 +1840,7 @@ export function ClaimsContent({
               ));
             })()}
             <a
-              href="/master/office"
+              href="/master/offices?tab=group"
               className="ml-auto text-xs text-blue-600 hover:underline"
             >
               事業所設定を編集 →

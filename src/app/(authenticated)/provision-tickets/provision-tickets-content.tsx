@@ -2351,7 +2351,7 @@ export function ProvisionTicketsContent({
                           適用中の加算 ({appliedFormulaCodes.size} / {availableFormulaCodes.length})
                         </div>
                         <a
-                          href="/master/office"
+                          href="/master/offices?tab=group"
                           className="text-[10px] text-blue-600 hover:underline"
                         >
                           自事業所管理で変更 →

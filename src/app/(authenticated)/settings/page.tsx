@@ -299,7 +299,7 @@ export default function SettingsPage() {
 
       {/* Office Settings Link */}
       <Link
-        href="/master/office"
+        href="/master/offices?tab=group"
         className="flex items-center justify-between rounded-lg border bg-white p-5 shadow-sm hover:shadow-md transition-shadow max-w-lg"
       >
         <div className="flex items-center gap-3">

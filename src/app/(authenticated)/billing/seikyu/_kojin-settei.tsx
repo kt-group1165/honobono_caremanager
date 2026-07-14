@@ -460,7 +460,7 @@ export function KyotakuKojinSetteiContent() {
             </span>
           )}
           <a href="/addons" className="text-blue-600 hover:underline">加算管理 →</a>
-          <a href="/master/office" className="text-blue-600 hover:underline">自事業所管理 →</a>
+          <a href="/master/offices?tab=group" className="text-blue-600 hover:underline">自事業所管理 →</a>
         </div>
 
         {error && (
