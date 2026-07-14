@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useSWRConfig } from "swr";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { resolvePreferredTenantId } from "@/lib/tenant-resolver";
@@ -678,6 +679,11 @@ export function ShiftManagementContent({
   initialMonthlyIndividualData,
 }: ShiftManagementContentProps) {
   const supabase = useMemo(() => createClient(), []);
+  const { mutate: globalMutate } = useSWRConfig();
+  // 予定編集モーダルの保存/削除後、各ビューの SWR キャッシュ (kaigo-schedules:*) を
+  // 一括再検証して一覧に即時反映する (byUser/byStaff/byDate/byMonthAll すべて)。
+  const revalidateSchedules = () =>
+    globalMutate((key) => typeof key === "string" && key.startsWith("kaigo-schedules:"));
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -884,6 +890,7 @@ export function ShiftManagementContent({
         );
         if (timeWarn) toast.warning(timeWarn);
       }
+      void revalidateSchedules(); // 一覧へ即時反映 (時間変更等)
       setPageEditModal(null);
     }
     setPageEditSaving(false);
@@ -899,6 +906,7 @@ export function ShiftManagementContent({
       toast.error("削除に失敗しました: " + error.message);
     } else {
       toast.success("削除しました");
+      void revalidateSchedules(); // 一覧へ即時反映
       setPageEditModal(null);
     }
   };
