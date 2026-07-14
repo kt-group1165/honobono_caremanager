@@ -1321,8 +1321,9 @@ export function KaigoSeikyuContent() {
           )}
         </div>
 
-        {/* ── 右：明細情報 (ほのぼの流: 青系帯 + 高密度明細 + ラベル箱/値箱 grid) ── */}
-        <div className="w-80 shrink-0 flex flex-col bg-white">
+        {/* ── 右：明細情報 (ほのぼの流: 青系帯 + 高密度明細 + ラベル箱/値箱 grid)。
+            幅は障害請求ペイン (w-96) に合わせる ── */}
+        <div className="w-96 shrink-0 flex flex-col bg-white">
           <div className="border-b border-sky-700 bg-gradient-to-b from-sky-500 to-sky-600 px-3 py-1 text-xs font-bold text-white flex items-center gap-2">
             <span>明細情報</span>
             {selected && <span className="font-normal text-sky-100 truncate">{selected.user_name}</span>}
