@@ -111,7 +111,20 @@ const PAYMENT_STATUS_CLS: Record<string, string> = {
   未収: "bg-red-100 text-red-700",
 };
 
-export function ShogaiSeikyuContent() {
+/**
+ * 表示 view — 障害の請求工程を 3 タブに出し分ける (親の制度トグル配下)。
+ *   seikyu = 障害請求 (レセプト: 明細書 / 実績記録票 / 総括請求書 + 上限額管理)
+ *   riyou  = 利用請求 (利用料請求書 + 入金管理)
+ *   kokuho = 国保請求 (伝送対象 / 確認用CSV / 伝送ファイル)
+ * state・データ・印刷 view は共通。親は同一要素を保持するので view 切替で再 fetch しない。
+ */
+export type ShogaiSeikyuView = "seikyu" | "riyou" | "kokuho";
+
+export function ShogaiSeikyuContent({
+  view = "seikyu",
+}: {
+  view?: ShogaiSeikyuView;
+} = {}) {
   const supabase = useMemo(() => createClient(), []);
   const { currentOffice, loading: btLoading } = useBusinessType();
 
@@ -860,89 +873,104 @@ export function ShogaiSeikyuContent() {
               setMonth(m);
             }}
           />
-          <span className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 font-medium">請求分</span>
+          <span className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 font-medium">
+            {view === "riyou" ? "利用請求" : view === "kokuho" ? "国保伝送" : "請求分"}
+          </span>
           <span className="text-xs text-gray-500">{filteredRows.length} 件</span>
           <div className="w-px h-5 bg-gray-300 mx-1" />
-          <button
-            type="button"
-            disabled={filteredRows.length === 0}
-            onClick={printMeisai}
-            className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
-            title="対象者の介護給付費・訓練等給付費等明細書を印刷。印刷で発行済になります"
-          >
-            <FileText size={13} />明細書 ({targets.length}件)
-          </button>
-          <button
-            type="button"
-            disabled={filteredRows.length === 0 || jissekiLoading}
-            onClick={printJisseki}
-            className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
-            title="対象者の居宅介護サービス提供実績記録票 (様式1) を印刷 (利用者 1 名 = 1 枚)"
-          >
-            {jissekiLoading ? (
-              <Loader2 size={13} className="animate-spin" />
-            ) : (
-              <Printer size={13} />
-            )}
-            実績記録票 ({targets.length}件)
-          </button>
-          <button
-            type="button"
-            disabled={filteredRows.length === 0}
-            onClick={printSeikyusho}
-            className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
-            title="事業所単位の総括請求書 (市町村別 J111 相当) を印刷"
-          >
-            <Printer size={13} />請求書
-          </button>
-          <button
-            type="button"
-            disabled={filteredRows.length === 0}
-            onClick={printRiyouSeikyu}
-            className="border border-emerald-500 rounded bg-emerald-50 px-2.5 py-1 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1.5 disabled:opacity-50"
-            title="利用者向けの利用料請求書 (利用者負担額) を発行・印刷。発行日を記録します"
-          >
-            <Receipt size={13} />利用料請求書 ({targets.length}件)
-          </button>
-          <button
-            type="button"
-            disabled={filteredRows.length === 0}
-            onClick={markDensouTarget}
-            className="border border-red-500 rounded bg-red-100 px-2.5 py-1 text-red-800 font-semibold hover:bg-red-200 flex items-center gap-1.5 disabled:opacity-50"
-            title="発行済の利用者を国保連伝送の対象にする (未発行はスキップ)"
-          >
-            <Send size={13} />伝送対象
-          </button>
-          <div className="ml-auto flex items-center gap-2">
-            {densouCount > 0 && (
-              <span className="text-[11px] font-medium text-red-600">
-                伝送対象 {densouCount} 件
-              </span>
-            )}
+          {/* 障害請求 (レセプト): 明細書 / 実績記録票 / 総括請求書 */}
+          {view === "seikyu" && (
+            <>
+              <button
+                type="button"
+                disabled={filteredRows.length === 0}
+                onClick={printMeisai}
+                className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
+                title="対象者の介護給付費・訓練等給付費等明細書を印刷。印刷で発行済になります"
+              >
+                <FileText size={13} />明細書 ({targets.length}件)
+              </button>
+              <button
+                type="button"
+                disabled={filteredRows.length === 0 || jissekiLoading}
+                onClick={printJisseki}
+                className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
+                title="対象者の居宅介護サービス提供実績記録票 (様式1) を印刷 (利用者 1 名 = 1 枚)"
+              >
+                {jissekiLoading ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <Printer size={13} />
+                )}
+                実績記録票 ({targets.length}件)
+              </button>
+              <button
+                type="button"
+                disabled={filteredRows.length === 0}
+                onClick={printSeikyusho}
+                className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
+                title="事業所単位の総括請求書 (市町村別 J111 相当) を印刷"
+              >
+                <Printer size={13} />請求書
+              </button>
+            </>
+          )}
+          {/* 利用請求: 利用料請求書 (本人負担分) */}
+          {view === "riyou" && (
             <button
               type="button"
               disabled={filteredRows.length === 0}
-              onClick={exportCsv}
-              className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
-              title="内容確認用の明細 CSV を出力"
+              onClick={printRiyouSeikyu}
+              className="border border-emerald-500 rounded bg-emerald-50 px-2.5 py-1 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1.5 disabled:opacity-50"
+              title="利用者向けの利用料請求書 (利用者負担額) を発行・印刷。発行日を記録します"
             >
-              <Download size={13} />確認用CSV
+              <Receipt size={13} />利用料請求書 ({targets.length}件)
             </button>
-            <button
-              type="button"
-              disabled={filteredRows.length === 0 || densouLoading}
-              onClick={handleDensouExport}
-              className="border border-violet-600 rounded bg-violet-600 px-3 py-1 text-white font-semibold hover:bg-violet-700 flex items-center gap-1.5 disabled:opacity-50"
-              title="電子請求受付システム向け伝送ファイル (請求書・明細書 J11 / 実績記録票 J61 / 上限管理結果票 J41) を出力"
-            >
-              {densouLoading ? (
-                <Loader2 size={13} className="animate-spin" />
-              ) : (
-                <FileDown size={13} />
-              )}
-              伝送ファイル
-            </button>
-          </div>
+          )}
+          {/* 国保請求: 伝送対象化 / 確認用CSV / 伝送ファイル (J11/J61/J41) */}
+          {view === "kokuho" && (
+            <>
+              <button
+                type="button"
+                disabled={filteredRows.length === 0}
+                onClick={markDensouTarget}
+                className="border border-red-500 rounded bg-red-100 px-2.5 py-1 text-red-800 font-semibold hover:bg-red-200 flex items-center gap-1.5 disabled:opacity-50"
+                title="発行済の利用者を国保連伝送の対象にする (未発行はスキップ)"
+              >
+                <Send size={13} />伝送対象
+              </button>
+              <div className="ml-auto flex items-center gap-2">
+                {densouCount > 0 && (
+                  <span className="text-[11px] font-medium text-red-600">
+                    伝送対象 {densouCount} 件
+                  </span>
+                )}
+                <button
+                  type="button"
+                  disabled={filteredRows.length === 0}
+                  onClick={exportCsv}
+                  className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
+                  title="内容確認用の明細 CSV を出力"
+                >
+                  <Download size={13} />確認用CSV
+                </button>
+                <button
+                  type="button"
+                  disabled={filteredRows.length === 0 || densouLoading}
+                  onClick={handleDensouExport}
+                  className="border border-violet-600 rounded bg-violet-600 px-3 py-1 text-white font-semibold hover:bg-violet-700 flex items-center gap-1.5 disabled:opacity-50"
+                  title="電子請求受付システム向け伝送ファイル (請求書・明細書 J11 / 実績記録票 J61 / 上限管理結果票 J41) を出力"
+                >
+                  {densouLoading ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <FileDown size={13} />
+                  )}
+                  伝送ファイル
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {error && (
@@ -1203,27 +1231,31 @@ export function ShogaiSeikyuContent() {
                 <div className="bg-white px-1.5 py-0.5 text-right font-mono font-bold text-violet-700">¥{selected.benefitAmount.toLocaleString()}</div>
               </div>
 
-              {/* ── 障害固有: 利用者負担上限額管理 (介護請求には無いブロック) ── */}
-              <JogenKanriSection
-                key={`${selected.user_id}-${year}-${month}`}
-                row={selected}
-                year={year}
-                month={month}
-                onSaved={load}
-              />
+              {/* ── 障害固有: 利用者負担上限額管理 (障害請求・利用請求で表示。国保請求では非表示) ── */}
+              {view !== "kokuho" && (
+                <JogenKanriSection
+                  key={`${selected.user_id}-${year}-${month}`}
+                  row={selected}
+                  year={year}
+                  month={month}
+                  onSaved={load}
+                />
+              )}
 
-              {/* ── 障害固有: 入金管理 (利用料請求の未収金管理。介護請求には無いブロック) ── */}
-              <ShogaiPaymentSection
-                key={`pay-${selected.user_id}-${monthStr}`}
-                userId={selected.user_id}
-                monthKey={monthStr}
-                billed={
-                  payments.get(selected.user_id)?.billed_amount ??
-                  selected.userAmount
-                }
-                payment={payments.get(selected.user_id) ?? null}
-                onChanged={loadPayments}
-              />
+              {/* ── 障害固有: 入金管理 (利用料請求の未収金管理。利用請求タブのみ) ── */}
+              {view === "riyou" && (
+                <ShogaiPaymentSection
+                  key={`pay-${selected.user_id}-${monthStr}`}
+                  userId={selected.user_id}
+                  monthKey={monthStr}
+                  billed={
+                    payments.get(selected.user_id)?.billed_amount ??
+                    selected.userAmount
+                  }
+                  payment={payments.get(selected.user_id) ?? null}
+                  onChanged={loadPayments}
+                />
+              )}
             </div>
           </div>
         ) : (

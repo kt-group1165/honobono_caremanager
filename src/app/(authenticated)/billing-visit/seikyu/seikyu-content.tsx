@@ -22,7 +22,10 @@ import { ShogaiMonthlyInfoContent } from "../_shared/shogai-monthly-info-content
 import { KaigoSeikyuContent } from "../kaigo-seikyu/kaigo-seikyu-content";
 import { RiyouSeikyuContent } from "../riyou-seikyu/riyou-seikyu-content";
 import { KokuhoSeikyuContent } from "../kokuho-seikyu/kokuho-seikyu-content";
-import { ShogaiSeikyuContent } from "../shogai-seikyu/shogai-seikyu-content";
+import {
+  ShogaiSeikyuContent,
+  type ShogaiSeikyuView,
+} from "../shogai-seikyu/shogai-seikyu-content";
 
 type Seido = "kaigo" | "shogai";
 type SeikyuTab =
@@ -31,7 +34,9 @@ type SeikyuTab =
   | "riyou"
   | "kokuho"
   | "shogai-monthly"
-  | "shogai";
+  | "shogai"
+  | "shogai-riyou"
+  | "shogai-kokuho";
 
 // 制度ごとの工程タブ定義
 const KAIGO_TABS: { id: SeikyuTab; label: string }[] = [
@@ -43,6 +48,8 @@ const KAIGO_TABS: { id: SeikyuTab; label: string }[] = [
 const SHOGAI_TABS: { id: SeikyuTab; label: string }[] = [
   { id: "shogai-monthly", label: "月次情報" },
   { id: "shogai", label: "障害請求" },
+  { id: "shogai-riyou", label: "利用請求" },
+  { id: "shogai-kokuho", label: "国保請求" },
 ];
 
 // 制度トグル (介護 / 障害) — order-app のセグメント型トグルと同トーン
@@ -135,6 +142,13 @@ function SeikyuInner() {
     setTab(s === "shogai" ? "shogai-monthly" : "monthly");
   };
 
+  // 障害の 請求 / 利用請求 / 国保請求 は同一 ShogaiSeikyuContent を view 出し分け。
+  // 3 タブで同じ要素を保つと React が再マウントせず、月切替のみで再集計 (fetch 1 回)。
+  const shogaiView: ShogaiSeikyuView =
+    tab === "shogai-riyou" ? "riyou" : tab === "shogai-kokuho" ? "kokuho" : "seikyu";
+  const showShogaiSeikyu =
+    tab === "shogai" || tab === "shogai-riyou" || tab === "shogai-kokuho";
+
   return (
     // layout の main (p-6) を打ち消して order-app と同じ全面白ベースにする。
     // 高さは main の可視領域いっぱい (padding 3rem ぶんを足し戻す)。
@@ -153,7 +167,7 @@ function SeikyuInner() {
       {tab === "riyou" && <RiyouSeikyuContent />}
       {tab === "kokuho" && <KokuhoSeikyuContent />}
       {tab === "shogai-monthly" && !isBath && <ShogaiMonthlyInfoContent />}
-      {tab === "shogai" && !isBath && <ShogaiSeikyuContent />}
+      {showShogaiSeikyu && !isBath && <ShogaiSeikyuContent view={shogaiView} />}
     </div>
   );
 }
