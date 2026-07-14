@@ -174,7 +174,7 @@ const NAV_BATH_SECTIONED: SectionSpec[] = [
   },
 ];
 
-// ── 移動支援版 (千葉市地域生活支援給付) — 記録中心のシンプル構成
+// ── 移動支援版 (千葉市地域生活支援給付) — シフト→記録→請求の流れ
 const NAV_IDOU_SECTIONED: SectionSpec[] = [
   {
     items: [
@@ -186,6 +186,7 @@ const NAV_IDOU_SECTIONED: SectionSpec[] = [
   {
     title: "日常業務",
     items: [
+      { name: "利用状況・シフト管理", href: "/shift-management", icon: CalendarDays },
       { name: "移動支援記録", href: "/idou-records", icon: ClipboardCheck },
     ],
   },

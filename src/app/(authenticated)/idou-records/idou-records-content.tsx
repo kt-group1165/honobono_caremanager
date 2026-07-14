@@ -20,12 +20,25 @@ import {
   calcMinutes,
   type IdouCodeResult,
 } from "@/lib/idou-shien-code";
+import { getServiceSystemMap } from "@/lib/service-system-lookup";
+import { toHankakuDigits } from "@/lib/service-name-normalize";
 import {
-  ChevronLeft, ChevronRight, Plus, Loader2, X, Pencil, Trash2, Footprints, AlertTriangle,
+  ChevronLeft, ChevronRight, Plus, Loader2, X, Pencil, Trash2, Footprints, AlertTriangle, ArrowRight, CalendarClock,
 } from "lucide-react";
 
 type Client = { id: string; name: string; furigana: string | null; user_number: string | null };
 type Staff = { id: string; name: string };
+
+// シフトカレンダー (kaigo_visit_schedule) 由来の予定。実績と (利用者,日付,開始) で突合する
+type PlanRow = {
+  id: string;
+  user_id: string;
+  visit_date: string;
+  start_time: string | null;
+  end_time: string | null;
+  service_type: string; // サービス名 (例「移動1日中2.0」)
+  staff_id: string | null;
+};
 
 type IdouRecord = {
   id: string;
@@ -82,6 +95,20 @@ const emptyForm = (): FormState => ({
   status: "draft",
 });
 
+// 予定 (シフト) を実績フォームの初期値に変換する。
+// 開始/終了は計画・実績の両方に入れ、実績はそのまま確定前の下書きにする。
+const formFromPlan = (p: PlanRow): FormState => ({
+  ...emptyForm(),
+  client_id: p.user_id,
+  service_date: p.visit_date,
+  plan_start_time: hm(p.start_time),
+  plan_end_time: hm(p.end_time),
+  start_time: hm(p.start_time),
+  end_time: hm(p.end_time),
+  with_body_care: /移動1/.test(p.service_type), // 名称「移動1〜」= 身体介護有り
+  staff_ids: p.staff_id ? [p.staff_id] : [],
+});
+
 export function IdouRecordsContent() {
   const supabase = useMemo(() => createClient(), []);
   const { currentOffice, currentOfficeId } = useBusinessType();
@@ -93,8 +120,10 @@ export function IdouRecordsContent() {
   const [clients, setClients] = useState<Client[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [records, setRecords] = useState<IdouRecord[]>([]);
+  const [plans, setPlans] = useState<PlanRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<IdouRecord | "new" | null>(null);
+  const [prefill, setPrefill] = useState<FormState | null>(null);
 
   const clientName = useCallback(
     (id: string) => clients.find((c) => c.id === id)?.name ?? "(不明)",
@@ -111,7 +140,8 @@ export function IdouRecordsContent() {
         .eq("office_id", currentOfficeId);
       if (aErr) throw aErr;
       const ids = Array.from(new Set((assigns ?? []).map((a: { client_id: string }) => a.client_id)));
-      const [clientsRes, staffRes, recordsRes] = await Promise.all([
+      const [y, mo] = month.split("-").map(Number);
+      const [clientsRes, staffRes, recordsRes, planRes] = await Promise.all([
         ids.length
           ? supabase.from("clients").select("id, name, furigana, user_number").in("id", ids).is("deleted_at", null).order("furigana")
           : Promise.resolve({ data: [], error: null }),
@@ -123,13 +153,38 @@ export function IdouRecordsContent() {
           .gte("service_date", `${month}-01`)
           .lte("service_date", `${month}-31`)
           .order("service_date", { ascending: false }),
+        // シフトカレンダーの当月予定 (自事業所)。移動支援のものだけ後で残す
+        supabase
+          .from("kaigo_visit_schedule")
+          .select("id, user_id, visit_date, start_time, end_time, service_type, staff_id")
+          .eq("office_id", currentOfficeId)
+          .gte("visit_date", `${month}-01`)
+          .lte("visit_date", `${month}-31`)
+          .order("visit_date")
+          .order("start_time"),
       ]);
       if (clientsRes.error) throw clientsRes.error;
       if (staffRes.error) throw staffRes.error;
       if (recordsRes.error) throw recordsRes.error;
+      if (planRes.error) throw planRes.error;
       setClients((clientsRes.data ?? []) as Client[]);
       setStaff((staffRes.data ?? []) as Staff[]);
       setRecords((recordsRes.data ?? []) as IdouRecord[]);
+
+      // 予定を「移動支援 (地域生活支援給付)」に絞る (名称→制度区分 lookup)
+      const allPlans = (planRes.data ?? []) as PlanRow[];
+      if (allPlans.length) {
+        const sysMap = await getServiceSystemMap(
+          supabase,
+          allPlans.map((p) => p.service_type),
+          { year: y, month: mo },
+        );
+        setPlans(
+          allPlans.filter((p) => sysMap.get(toHankakuDigits(p.service_type)) === "地域生活支援"),
+        );
+      } else {
+        setPlans([]);
+      }
     } catch (e) {
       console.error("移動支援記録の読込に失敗:", e instanceof Error ? e.message : e);
     } finally {
@@ -158,6 +213,21 @@ export function IdouRecordsContent() {
   // 月間集計 (算定時間)
   const totalCalcMin = records.reduce((s, r) => s + (r.calc_minutes ?? 0), 0);
   const totalUnits = records.reduce((s, r) => s + (r.units ?? 0) * (r.staff_count === 2 ? 2 : 1), 0);
+
+  // 未実績の予定 = シフトにあるが、対応する実績 (利用者+日付+開始) がまだ無いもの
+  const unlinkedPlans = useMemo(() => {
+    const recKeys = new Set(
+      records.map((r) => `${r.client_id}__${r.service_date}__${hm(r.start_time)}`),
+    );
+    return plans.filter(
+      (p) => !recKeys.has(`${p.user_id}__${p.visit_date}__${hm(p.start_time)}`),
+    );
+  }, [plans, records]);
+
+  const createFromPlan = (p: PlanRow) => {
+    setPrefill(formFromPlan(p));
+    setEditing("new");
+  };
 
   if (currentOffice && currentOffice.service_type !== "移動支援") {
     return (
@@ -207,11 +277,35 @@ export function IdouRecordsContent() {
         )}
       </div>
 
+      {/* 未実績の予定 (シフトから作成) */}
+      {!loading && unlinkedPlans.length > 0 && (
+        <div className="mb-4 rounded-xl border border-violet-100 bg-violet-50/40 p-3">
+          <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-violet-700">
+            <CalendarClock size={15} />シフトの予定で未実績のもの ({unlinkedPlans.length})
+            <span className="ml-1 text-[11px] font-normal text-violet-400">→ をクリックで実績を作成</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {unlinkedPlans.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => createFromPlan(p)}
+                className="flex items-center gap-1.5 rounded-lg border border-violet-200 bg-white px-2.5 py-1.5 text-xs hover:bg-violet-50"
+              >
+                <span className="font-medium text-gray-700">{p.visit_date.slice(5).replace("-", "/")}</span>
+                <span className="text-gray-500">{clientName(p.user_id)}</span>
+                <span className="text-gray-400">{hm(p.start_time)}-{hm(p.end_time)}</span>
+                <ArrowRight size={13} className="text-violet-600" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-16"><Loader2 className="animate-spin text-gray-300" size={28} /></div>
       ) : records.length === 0 ? (
         <p className="rounded-xl border border-dashed border-gray-200 py-16 text-center text-sm text-gray-400">
-          {month.replace("-", "年")}月の記録はまだありません
+          {unlinkedPlans.length > 0 ? "上の予定から実績を作成できます" : `${month.replace("-", "年")}月の記録はまだありません`}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white shadow-sm">
@@ -273,12 +367,13 @@ export function IdouRecordsContent() {
         <IdouRecordForm
           supabase={supabase}
           record={editing === "new" ? null : editing}
+          prefill={editing === "new" ? prefill : null}
           clients={clients}
           staff={staff}
           officeId={currentOfficeId}
           tenantId={currentOffice?.tenant_id ?? "kt-group"}
-          onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); load(); }}
+          onClose={() => { setEditing(null); setPrefill(null); }}
+          onSaved={() => { setEditing(null); setPrefill(null); load(); }}
         />
       )}
     </div>
@@ -286,10 +381,11 @@ export function IdouRecordsContent() {
 }
 
 function IdouRecordForm({
-  supabase, record, clients, staff, officeId, tenantId, onClose, onSaved,
+  supabase, record, prefill, clients, staff, officeId, tenantId, onClose, onSaved,
 }: {
   supabase: ReturnType<typeof createClient>;
   record: IdouRecord | null;
+  prefill: FormState | null;
   clients: Client[];
   staff: Staff[];
   officeId: string;
@@ -298,7 +394,7 @@ function IdouRecordForm({
   onSaved: () => void;
 }) {
   const [f, setF] = useState<FormState>(() => {
-    if (!record) return emptyForm();
+    if (!record) return prefill ?? emptyForm();
     const { id: _id, office_id: _o, tenant_id: _t, service_code: _s, units: _u, calc_minutes: _c, ...rest } = record;
     void _id; void _o; void _t; void _s; void _u; void _c;
     return { ...emptyForm(), ...rest, plan_start_time: hm(rest.plan_start_time), plan_end_time: hm(rest.plan_end_time), start_time: hm(rest.start_time), end_time: hm(rest.end_time) };

@@ -1100,7 +1100,7 @@ export function UserCalendar({
 // ─── サービス種別バッジ (選択したサービスの制度区分を自動表示) ────────────────
 function ServiceSystemBadge({ system }: { system: string | null }) {
   if (!system) return null;
-  const label = system === "総合事業" ? "総合" : system === "独自" ? "独自" : system;
+  const label = system === "総合事業" ? "総合" : system === "独自" ? "独自" : system === "地域生活支援" ? "地域" : system;
   const cls =
     system === "介護"
       ? "bg-blue-100 text-blue-700"
@@ -1108,6 +1108,8 @@ function ServiceSystemBadge({ system }: { system: string | null }) {
       ? "bg-emerald-100 text-emerald-700"
       : system === "障害"
       ? "bg-purple-100 text-purple-700"
+      : system === "地域生活支援"
+      ? "bg-violet-100 text-violet-700"
       : "bg-amber-100 text-amber-700";
   return (
     <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-bold", cls)}>

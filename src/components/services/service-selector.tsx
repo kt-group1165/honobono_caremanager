@@ -37,7 +37,7 @@ interface ServiceSelectorProps {
     category: string
     categoryName: string
     /** 選択時に開いていた制度区分タブ (サービスの制度区分) */
-    system: "介護" | "障害" | "総合事業" | "独自"
+    system: "介護" | "障害" | "総合事業" | "独自" | "地域生活支援"
   }) => void
   /**
    * 制度区分フィルタ (初期タブ)。
@@ -45,9 +45,10 @@ interface ServiceSelectorProps {
    * - "障害": 障害福祉サービス
    * - "総合事業": 介護予防・日常生活支援総合事業
    * - "独自": 独自サービス (法定外・保険請求対象外。同行 等)
+   * - "地域生活支援": 地域生活支援給付 (千葉市。移動支援 / 訪問入浴[障害])
    * provision-tickets / reports / shift-management は全て介護保険なので未指定 = "介護"。
    */
-  system?: "介護" | "障害" | "総合事業" | "独自"
+  system?: "介護" | "障害" | "総合事業" | "独自" | "地域生活支援"
   /**
    * 予定の開始/終了時間 (HH:MM)。指定時のみ「候補のみ」チェックが表示される。
    * チェック ON で「該当時間 (= end - start 分) に収まるサービス」だけが残る。
@@ -196,7 +197,7 @@ function parseServiceTimeZone(name: string): TimeZone {
  * 介護保険・総合事業は「早朝専用コード」がなく早朝も「・夜」コードを使うため、
  * 早朝 slot → 夜間 サービス への match を許容する。障害福祉は 4 区分独立。
  */
-function timeZoneMatches(slot: TimeZone, svc: TimeZone, system: "介護" | "障害" | "総合事業" | "独自"): boolean {
+function timeZoneMatches(slot: TimeZone, svc: TimeZone, system: "介護" | "障害" | "総合事業" | "独自" | "地域生活支援"): boolean {
   if (slot === svc) return true;
   if (system !== "障害" && slot === "早朝" && svc === "夜間") return true;
   return false;
@@ -260,14 +261,21 @@ const CATEGORIES_UNIQ = [
   { code: "90", name: "独自サービス" },
 ] as const;
 
+// 地域生活支援給付 (千葉市・市独自コード)
+const CATEGORIES_CHIIKI = [
+  { code: "02", name: "移動支援" },
+  { code: "04", name: "訪問入浴" },
+] as const;
+
 const CATEGORIES_BY_SYSTEM: Record<
-  "介護" | "障害" | "総合事業" | "独自",
+  "介護" | "障害" | "総合事業" | "独自" | "地域生活支援",
   ReadonlyArray<{ code: string; name: string }>
 > = {
   介護: CATEGORIES_KAIGO,
   障害: CATEGORIES_SHOGAI,
   総合事業: CATEGORIES_SOUGOU,
   独自: CATEGORIES_UNIQ,
+  地域生活支援: CATEGORIES_CHIIKI,
 };
 
 // 一覧の最大描画行数 (訪問介護は 5,500 件超あり全行描画は重い。検索/候補で絞る前提)
@@ -283,7 +291,7 @@ export function ServiceSelector(props: ServiceSelectorProps) {
 }
 
 function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介護", startTime, endTime, targetMonth, showVisitAddons, kinkyu, onKinkyuChange }: Omit<ServiceSelectorProps, "open">) {
-  const [activeSystem, setActiveSystem] = React.useState<"介護" | "障害" | "総合事業" | "独自">(initialSystem);
+  const [activeSystem, setActiveSystem] = React.useState<"介護" | "障害" | "総合事業" | "独自" | "地域生活支援">(initialSystem);
   const CATEGORIES = CATEGORIES_BY_SYSTEM[activeSystem];
   const system = activeSystem;
   const [services, setServices] = React.useState<ServiceCode[]>([])
@@ -408,7 +416,9 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
 
   // 福祉用具貸与 (17) は所要時間の概念なし。総合事業は名称が時間コード化されて
   // いない (週 N 回・月額等) ため、独自サービス共々 candidate filter の対象外。
-  const hasTimeConcept = activeCategory !== "17" && system !== "独自" && system !== "総合事業"
+  // 地域生活支援 (移動支援) はコード名が「移動1日中2.0」等で介護/障害の命名規則と
+  // 異なり、時間候補フィルタが効かないため対象外 (検索/カテゴリで選ぶ)。
+  const hasTimeConcept = activeCategory !== "17" && system !== "独自" && system !== "総合事業" && system !== "地域生活支援"
 
   // ── Filtered list ────────────────────────────────────────────────────────────
   // services は activeCategory 単位で fetch されているので、ここでは
@@ -467,10 +477,10 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
           </button>
         </div>
 
-        {/* System tabs (介護/障害/総合事業/独自) */}
+        {/* System tabs (介護/障害/総合事業/独自/地域生活支援) */}
         <div className="shrink-0 border-b bg-white">
           <div className="flex gap-0 px-3 pt-2">
-            {(["介護", "障害", "総合事業", "独自"] as const).map((sys) => (
+            {(["介護", "障害", "総合事業", "独自", "地域生活支援"] as const).map((sys) => (
               <button
                 key={sys}
                 type="button"
@@ -485,7 +495,7 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
                     : "border-transparent text-gray-500 hover:text-gray-800"
                 )}
               >
-                {{ 介護: "介護保険", 障害: "障害福祉", 総合事業: "総合事業", 独自: "独自サービス" }[sys]}
+                {{ 介護: "介護保険", 障害: "障害福祉", 総合事業: "総合事業", 独自: "独自サービス", 地域生活支援: "地域生活支援" }[sys]}
               </button>
             ))}
           </div>
