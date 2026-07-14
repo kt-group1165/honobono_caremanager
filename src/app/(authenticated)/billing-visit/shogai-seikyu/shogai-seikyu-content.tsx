@@ -32,6 +32,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
 import { MonthNav } from "../_shared/month-nav";
+import { useSeikyuContext } from "../_shared/seikyu-context";
 import {
   aggregateMonthlyShogaiSeikyu,
   buildShogaiSeikyuCsv,
@@ -128,9 +129,9 @@ export function ShogaiSeikyuContent({
   const supabase = useMemo(() => createClient(), []);
   const { currentOffice, loading: btLoading } = useBusinessType();
 
-  const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
+  // 対象月は請求画面共通 (SeikyuProvider) の月を使う。障害の 月次情報 と
+  // 障害請求/利用請求/国保請求 が同じ月で連動する (自前月 state は廃止)。
+  const { year, month, onMonthChange } = useSeikyuContext();
   const [rows, setRows] = useState<ShogaiSeikyuRow[]>([]);
   const [recordCount, setRecordCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -865,14 +866,7 @@ export function ShogaiSeikyuContent({
       <div className="flex flex-col flex-1 min-w-0 border-r border-gray-200">
         {/* ── ツールバー ── */}
         <div className="border-b border-gray-300 bg-gray-100 px-3 py-2 shrink-0 flex items-center gap-2 flex-wrap">
-          <MonthNav
-            year={year}
-            month={month}
-            onChange={(y, m) => {
-              setYear(y);
-              setMonth(m);
-            }}
-          />
+          <MonthNav year={year} month={month} onChange={onMonthChange} />
           <span className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 font-medium">
             {view === "riyou" ? "利用請求" : view === "kokuho" ? "国保伝送" : "請求分"}
           </span>
