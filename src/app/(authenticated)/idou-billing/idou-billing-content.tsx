@@ -79,8 +79,8 @@ export function IdouBillingContent() {
   const [idouRows, setIdouRows] = useState<IdouRow[]>([]);
   const [bathRows, setBathRows] = useState<BathRow[]>([]);
   const [codeInfo, setCodeInfo] = useState<Map<string, { name: string; unit: number }>>(new Map());
-  const [certs, setCerts] = useState<Map<string, string>>(new Map()); // client_id → 受給者証番号
-  const [burden10, setBurden10] = useState<Set<string>>(new Set()); // 課税世帯 (10%負担) の利用者
+  // client_id → 受給者証情報 (番号 / 負担上限月額 / 生保フラグ)。障害福祉受給者証を流用
+  const [certs, setCerts] = useState<Map<string, { number: string; limit: number; seiho: boolean }>>(new Map());
   const [loading, setLoading] = useState(true);
 
   const [y, mo] = month.split("-").map(Number);
@@ -104,7 +104,10 @@ export function IdouBillingContent() {
           .eq("office_id", currentOfficeId).eq("scheme", "地域生活支援")
           .gte("visit_date", `${month}-01`).lte("visit_date", `${month}-31`).neq("status", "draft"),
         ids.length
-          ? supabase.from("shougai_certifications").select("client_id, beneficiary_number").in("client_id", ids)
+          ? supabase.from("shougai_certifications")
+              .select("client_id, beneficiary_number, self_payment_limit, seiho_flag, certification_start_date")
+              .in("client_id", ids)
+              .order("certification_start_date", { ascending: false })
           : Promise.resolve({ data: [], error: null }),
       ]);
       setClients((clientsRes.data ?? []) as Client[]);
@@ -113,9 +116,18 @@ export function IdouBillingContent() {
       setIdouRows(idou);
       setBathRows(bath);
 
-      const certMap = new Map<string, string>();
-      for (const c of (certRes.data ?? []) as { client_id: string; beneficiary_number: string | null }[]) {
-        if (c.beneficiary_number && !certMap.has(c.client_id)) certMap.set(c.client_id, c.beneficiary_number);
+      // 受給者証: 同一利用者は最新 (certification_start_date 降順の先頭) を採用
+      const certMap = new Map<string, { number: string; limit: number; seiho: boolean }>();
+      for (const c of (certRes.data ?? []) as {
+        client_id: string; beneficiary_number: string | null; self_payment_limit: number | null; seiho_flag: boolean | null;
+      }[]) {
+        if (!certMap.has(c.client_id)) {
+          certMap.set(c.client_id, {
+            number: c.beneficiary_number ?? "",
+            limit: c.self_payment_limit ?? 0,
+            seiho: c.seiho_flag ?? false,
+          });
+        }
       }
       setCerts(certMap);
 
@@ -150,27 +162,47 @@ export function IdouBillingContent() {
     setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
   };
 
+  // 2人目従業者コード = base+1 (千葉市コード表は単独/・2人 が連番。単位は同額)
+  const secondPersonCode = (base: string): { code: string; name: string; unit: number } => {
+    const code = String(Number(base) + 1).padStart(6, "0");
+    const info = codeInfo.get(base);
+    return { code, name: (info?.name ?? base) + "・2人", unit: info?.unit ?? 0 };
+  };
+
   // 利用者ごとに明細行を集計
   const perClient = useMemo(() => {
     const map = new Map<string, MeisaiLine[]>();
-    const addLine = (clientId: string, code: string | null) => {
-      if (!code) return;
-      const info = codeInfo.get(code);
-      const unit = info?.unit ?? 0;
-      const name = info?.name ?? code;
+    const addLine = (clientId: string, code: string, name: string, unit: number) => {
       let lines = map.get(clientId);
       if (!lines) { lines = []; map.set(clientId, lines); }
       const ex = lines.find((l) => l.code === code);
       if (ex) { ex.count += 1; ex.total += unit; }
       else lines.push({ code, name, unit, count: 1, total: unit });
     };
+    const addByCode = (clientId: string, code: string | null) => {
+      if (!code) return;
+      const info = codeInfo.get(code);
+      addLine(clientId, code, info?.name ?? code, info?.unit ?? 0);
+    };
     for (const r of idouRows) {
-      addLine(r.client_id, r.service_code);
-      if (r.staff_count === 2 && r.service_code) addLine(r.client_id, r.service_code); // 2人目 = 同単位もう1行
+      addByCode(r.client_id, r.service_code);
+      // 2人目従業者は ・2人 コードで別行 (同単位)
+      if (r.staff_count === 2 && r.service_code) {
+        const s = secondPersonCode(r.service_code);
+        addLine(r.client_id, s.code, s.name, s.unit);
+      }
     }
-    for (const b of bathRows) addLine(b.client_id, b.service_code);
+    for (const b of bathRows) addByCode(b.client_id, b.service_code);
     return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- secondPersonCode は codeInfo に依存
   }, [idouRows, bathRows, codeInfo]);
+
+  // 利用者の負担額 = 生保→0 / それ以外→ min(総費用×10%, 負担上限月額)。上限0(非課税)→0
+  const clientBurden = useCallback((clientId: string, cost: number): number => {
+    const c = certs.get(clientId);
+    if (!c || c.seiho) return 0;
+    return Math.min(Math.floor(cost * 0.1), c.limit);
+  }, [certs]);
 
   const clientIdsWithData = useMemo(
     () => Array.from(new Set([...idouRows, ...bathRows].map((r) => r.client_id))),
@@ -184,11 +216,11 @@ export function IdouBillingContent() {
     for (const [cid, lines] of perClient) {
       const clientUnits = lines.reduce((s, l) => s + l.total, 0);
       totalUnits += clientUnits;
-      if (burden10.has(cid)) burden += Math.floor(clientUnits * UNIT_YEN * 0.1);
+      burden += clientBurden(cid, clientUnits * UNIT_YEN);
     }
     const totalCost = totalUnits * UNIT_YEN;
     return { count: perClient.size, totalUnits, totalCost, burden, cityClaim: totalCost - burden };
-  }, [perClient, burden10]);
+  }, [perClient, clientBurden]);
 
   if (currentOffice && currentOffice.service_type !== "移動支援") {
     return (
@@ -219,26 +251,25 @@ export function IdouBillingContent() {
         </div>
       </div>
 
-      {/* 課税世帯 (10%負担) 指定 */}
+      {/* 利用者負担 (受給者証の負担上限月額から算定。読み取り専用) */}
       {!loading && clientIdsWithData.length > 0 && (
         <div className="mb-4 rounded-xl border border-gray-100 bg-white p-3 text-sm shadow-sm print:hidden">
-          <p className="mb-2 text-xs font-medium text-gray-500">利用者負担割合 (既定=無料。市民税課税世帯のみ10%にチェック)</p>
-          <div className="flex flex-wrap gap-3">
-            {clientIdsWithData.map((cid) => (
-              <label key={cid} className="flex items-center gap-1.5">
-                <input
-                  type="checkbox"
-                  checked={burden10.has(cid)}
-                  onChange={(e) => setBurden10((prev) => {
-                    const next = new Set(prev);
-                    if (e.target.checked) next.add(cid); else next.delete(cid);
-                    return next;
-                  })}
-                  className="accent-violet-600"
-                />
-                {clientName(cid)} <span className="text-[11px] text-gray-400">{burden10.has(cid) ? "10%" : "無料"}</span>
-              </label>
-            ))}
+          <p className="mb-2 text-xs font-medium text-gray-500">
+            利用者負担 (障害福祉受給者証の負担上限月額から算定 / 生保・非課税=無料)。
+            上限額の変更は 利用者管理 → 障害福祉タブの受給者証から。
+          </p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {clientIdsWithData.map((cid) => {
+              const c = certs.get(cid);
+              const label = !c || c.seiho ? (c?.seiho ? "生保=無料" : "受給者証未登録=無料")
+                : c.limit === 0 ? "非課税=無料" : `上限 ¥${c.limit.toLocaleString()}/月`;
+              return (
+                <span key={cid} className="text-xs">
+                  <span className="text-gray-700">{clientName(cid)}</span>
+                  <span className="ml-1 text-gray-400">{label}</span>
+                </span>
+              );
+            })}
           </div>
         </div>
       )}
@@ -260,27 +291,31 @@ export function IdouBillingContent() {
           />
 
           {/* 利用者ごとに 明細書 + 実績記録票 */}
-          {clientIdsWithData.map((cid) => (
-            <div key={cid}>
-              <MeisaishoSheet
-                y={y} mo={mo}
-                clientName={clientName(cid)}
-                cert={certs.get(cid) ?? ""}
-                officeName={currentOffice?.name ?? ""}
-                officeNumber={currentOffice?.business_number ?? ""}
-                lines={perClient.get(cid) ?? []}
-                burden10={burden10.has(cid)}
-              />
-              <JissekiSheet
-                y={y} mo={mo}
-                clientName={clientName(cid)}
-                cert={certs.get(cid) ?? ""}
-                officeName={currentOffice?.name ?? ""}
-                officeNumber={currentOffice?.business_number ?? ""}
-                rows={idouRows.filter((r) => r.client_id === cid)}
-              />
-            </div>
-          ))}
+          {clientIdsWithData.map((cid) => {
+            const lines = perClient.get(cid) ?? [];
+            const cost = lines.reduce((s, l) => s + l.total, 0) * UNIT_YEN;
+            return (
+              <div key={cid}>
+                <MeisaishoSheet
+                  y={y} mo={mo}
+                  clientName={clientName(cid)}
+                  cert={certs.get(cid)?.number ?? ""}
+                  officeName={currentOffice?.name ?? ""}
+                  officeNumber={currentOffice?.business_number ?? ""}
+                  lines={lines}
+                  burden={clientBurden(cid, cost)}
+                />
+                <JissekiSheet
+                  y={y} mo={mo}
+                  clientName={clientName(cid)}
+                  cert={certs.get(cid)?.number ?? ""}
+                  officeName={currentOffice?.name ?? ""}
+                  officeNumber={currentOffice?.business_number ?? ""}
+                  rows={idouRows.filter((r) => r.client_id === cid)}
+                />
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -342,13 +377,12 @@ function SeikyushoSheet({ y, mo, officeName, officeNumber, summary }: {
 }
 
 // ── 様式13 地域生活支援給付費明細書 ─────────────────────────────────────────
-function MeisaishoSheet({ y, mo, clientName, cert, officeName, officeNumber, lines, burden10 }: {
+function MeisaishoSheet({ y, mo, clientName, cert, officeName, officeNumber, lines, burden }: {
   y: number; mo: number; clientName: string; cert: string; officeName: string; officeNumber: string;
-  lines: MeisaiLine[]; burden10: boolean;
+  lines: MeisaiLine[]; burden: number;
 }) {
   const totalUnits = lines.reduce((s, l) => s + l.total, 0);
   const totalCost = totalUnits * UNIT_YEN;
-  const burden = burden10 ? Math.floor(totalCost * 0.1) : 0;
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-6 text-black shadow-sm print:border-0 print:shadow-none" style={{ pageBreakAfter: "always" }}>
       <div className="mb-1 flex items-end justify-between text-xs">
