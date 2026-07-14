@@ -260,28 +260,17 @@ export function KyotakuKokuhoSeikyuContent() {
     try {
       // 未確定 (draft) レセプトは伝送に含めない (claims-content の国保連出力と同じ方針)
       const draftRows = targets.filter((d) => d.row.claimStatus === "draft");
-      let exportTargets = targets.filter((d) => d.row.claimStatus !== "draft");
-
-      // 要支援者 (介護予防支援=46) は居宅(43)とは別事業所番号の請求になるため、
-      // 43 の伝送からは除外する (43 番号での誤請求を防ぐ)。46 のファイル生成は未対応。
-      const yoboExcluded = exportTargets.filter((d) => (d.row.care_level ?? "").startsWith("要支援"));
-      if (yoboExcluded.length > 0) {
-        exportTargets = exportTargets.filter((d) => !(d.row.care_level ?? "").startsWith("要支援"));
-        const names = yoboExcluded.map((d) => d.row.user_name).join("、");
-        const numState = yoboNumber
-          ? `介護予防支援(46)の事業所番号 ${yoboNumber} は登録済みですが、46の伝送ファイル自動生成は未対応です。予防分は別途対応してください`
-          : `事業所マスタで介護予防支援(46)の事業所番号を登録してください`;
-        toast.warning(`要支援の利用者 ${yoboExcluded.length} 名 (${names}) を居宅(43)伝送から除外しました。${numState}`);
-      }
+      const exportTargets = targets.filter((d) => d.row.claimStatus !== "draft");
 
       if (exportTargets.length === 0) {
         toast.error(
-          yoboExcluded.length > 0
-            ? "確定済みレセプトは要支援 (介護予防支援) のみで、居宅(43)伝送の対象がありません。予防分は46番号で別途請求してください。"
-            : "確定済み (confirmed / submitted) のレセプトがありません。「レセプト編集」で確定してください。",
+          "確定済み (confirmed / submitted) のレセプトがありません。「レセプト編集」で確定してください。",
         );
         return;
       }
+      // 要支援者 (介護予防支援=46) は居宅(43)と別事業所番号で請求するため、月内で
+      // 43(要介護)/46(要支援) にパーティションして各番号で別ファイルを生成する。
+      const isYobo = (d: DisplayRow) => (d.row.care_level ?? "").startsWith("要支援");
 
       // 提供月ごとにグループ化
       const byMonth = new Map<string, DisplayRow[]>();
@@ -299,11 +288,14 @@ export function KyotakuKokuhoSeikyuContent() {
       const shoriYear = shoriDate.getFullYear();
       const shoriMonth = shoriDate.getMonth() + 1;
 
-      for (const [mKey, group] of [...byMonth.entries()].sort()) {
-        const [oy, om] = mKey.split("-").map((n) => Number(n));
-        if (!oy || !om) continue;
+      // 1提供月・1事業所番号ぶんのファイル (計画費 + 給付管理票) を生成して files に push。
+      // 要介護は43(officeNumber)、要支援は46(yoboNumber) で別々に呼ぶ。
+      const buildForGroup = async (
+        mKey: string, oy: number, om: number, group: DisplayRow[],
+        officeNum: string, labelSuffix: string,
+      ) => {
         const opts = {
-          officeNumber: officeNumber ?? "",
+          officeNumber: officeNum,
           year: oy,
           month: om,
           unitPrice,
@@ -338,12 +330,14 @@ export function KyotakuKokuhoSeikyuContent() {
           // 月途中の保険者変更 (転居) — builder 側で warning (出力は月末時点の保険者)
           midMonthInsurerChange: u.midMonthInsurerChange,
         }));
+        // 予防(46)は 43 と同月だと fileName (K/S+ym.CSV) が衝突するため接頭辞 Y を付ける
+        const fname = (base: string) => (labelSuffix ? "Y" + base : base);
         const f2 = buildKeikakuhiFile(keikakuUsers, opts);
-        warnings.push(...f2.warnings.map((w) => `[計画費 R${oy - 2018}/${om}] ${w}`));
+        warnings.push(...f2.warnings.map((w) => `[計画費 R${oy - 2018}/${om}${labelSuffix}] ${w}`));
         files.push({
           content: f2.content,
-          fileName: f2.fileName,
-          label: `計画費請求 R${oy - 2018}/${om}`,
+          fileName: fname(f2.fileName),
+          label: `計画費請求 R${oy - 2018}/${om}${labelSuffix}`,
           count: f2.dataRecordCount,
         });
 
@@ -593,13 +587,31 @@ export function KyotakuKokuhoSeikyuContent() {
           }
           if (kyufuUsers.length > 0) {
             const f1 = buildKyufuKanriFile(kyufuUsers, opts);
-            warnings.push(...f1.warnings.map((w) => `[給付管理票 R${oy - 2018}/${om}] ${w}`));
+            warnings.push(...f1.warnings.map((w) => `[給付管理票 R${oy - 2018}/${om}${labelSuffix}] ${w}`));
             files.push({
               content: f1.content,
-              fileName: f1.fileName,
-              label: `給付管理票 R${oy - 2018}/${om}`,
+              fileName: fname(f1.fileName),
+              label: `給付管理票 R${oy - 2018}/${om}${labelSuffix}`,
               count: f1.dataRecordCount,
             });
+          }
+        }
+      };
+
+      // 提供月ごとに 要介護(43) / 要支援(46) へパーティションして生成
+      for (const [mKey, group] of [...byMonth.entries()].sort()) {
+        const [oy, om] = mKey.split("-").map((n) => Number(n));
+        if (!oy || !om) continue;
+        const kaigoG = group.filter((d) => !isYobo(d));
+        const yoboG = group.filter((d) => isYobo(d));
+        if (kaigoG.length > 0) await buildForGroup(mKey, oy, om, kaigoG, officeNumber ?? "", "");
+        if (yoboG.length > 0) {
+          if (yoboNumber) {
+            await buildForGroup(mKey, oy, om, yoboG, yoboNumber, " 予防");
+          } else {
+            warnings.push(
+              `[予防 R${oy - 2018}/${om}] 要支援 ${yoboG.length}名 (${yoboG.map((d) => d.row.user_name).join("、")}) は介護予防支援(46)の事業所番号が未登録のため出力できません。事業所マスタで46番号を登録してください`,
+            );
           }
         }
       }
