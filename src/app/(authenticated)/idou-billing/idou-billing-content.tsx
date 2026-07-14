@@ -228,11 +228,11 @@ export function IdouBillingContent() {
     return { count: perClient.size, totalUnits, totalCost, burden, cityClaim: totalCost - burden };
   }, [perClient, clientBurden]);
 
-  if (currentOffice && currentOffice.service_type !== "移動支援") {
+  if (currentOffice && currentOffice.service_type !== "移動支援" && currentOffice.service_type !== "訪問入浴") {
     return (
       <div className="p-6">
         <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-700">
-          この画面は移動支援事業所専用です。右上の事業所切替から移動支援の事業所を選択してください。
+          この画面は地域生活支援給付 (移動支援・訪問入浴) の事業所専用です。右上の事業所切替から該当事業所を選択してください。
         </p>
       </div>
     );
@@ -304,10 +304,12 @@ export function IdouBillingContent() {
             summary={summary}
           />
 
-          {/* 利用者ごとに 明細書 + 実績記録票 */}
+          {/* 利用者ごとに 明細書 + 実績記録票 (移動支援=3-1 / 訪問入浴=3-2) */}
           {clientIdsWithData.map((cid) => {
             const lines = perClient.get(cid) ?? [];
             const cost = lines.reduce((s, l) => s + l.total, 0) * UNIT_YEN;
+            const idouOfClient = idouRows.filter((r) => r.client_id === cid);
+            const bathOfClient = bathRows.filter((r) => r.client_id === cid);
             return (
               <div key={cid}>
                 <MeisaishoSheet
@@ -319,14 +321,26 @@ export function IdouBillingContent() {
                   lines={lines}
                   burden={clientBurden(cid, cost)}
                 />
-                <JissekiSheet
-                  y={y} mo={mo}
-                  clientName={clientName(cid)}
-                  cert={certs.get(cid)?.number ?? ""}
-                  officeName={currentOffice?.name ?? ""}
-                  officeNumber={currentOffice?.business_number ?? ""}
-                  rows={idouRows.filter((r) => r.client_id === cid)}
-                />
+                {idouOfClient.length > 0 && (
+                  <JissekiSheet
+                    y={y} mo={mo}
+                    clientName={clientName(cid)}
+                    cert={certs.get(cid)?.number ?? ""}
+                    officeName={currentOffice?.name ?? ""}
+                    officeNumber={currentOffice?.business_number ?? ""}
+                    rows={idouOfClient}
+                  />
+                )}
+                {bathOfClient.length > 0 && (
+                  <BathJissekiSheet
+                    y={y} mo={mo}
+                    clientName={clientName(cid)}
+                    cert={certs.get(cid)?.number ?? ""}
+                    officeName={currentOffice?.name ?? ""}
+                    officeNumber={currentOffice?.business_number ?? ""}
+                    rows={bathOfClient}
+                  />
+                )}
               </div>
             );
           })}
@@ -547,6 +561,71 @@ function JissekiSheet({ y, mo, clientName, cert, officeName, officeNumber, rows 
       </table>
       <p className="mt-2 text-[9px] text-gray-600">
         ※ 算定時間 = 実績時間 − 運転等控除。要支援区間の説明・院内介助等は備考に記載 (提出前に手書き追記可)。
+      </p>
+    </div>
+  );
+}
+
+// ── 様式3-2 訪問入浴サービス提供実績記録票 (地域生活支援) ────────────────────
+function BathJissekiSheet({ y, mo, clientName, cert, officeName, officeNumber, rows }: {
+  y: number; mo: number; clientName: string; cert: string; officeName: string; officeNumber: string;
+  rows: BathRow[];
+}) {
+  const sorted = [...rows].sort((a, b) => a.visit_date.localeCompare(b.visit_date) || hm(a.start_time).localeCompare(hm(b.start_time)));
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-6 text-black shadow-sm print:border-0 print:shadow-none" style={{ pageBreakAfter: "always" }}>
+      <div className="mb-1 flex items-end justify-between text-xs">
+        <span>様式3-2</span><span>令和{y - 2018}年{mo}月分</span>
+      </div>
+      <h1 className="mb-3 text-center text-lg font-bold tracking-widest">訪問入浴サービス提供実績記録票</h1>
+      <table className="mb-3 w-full border-collapse text-xs">
+        <tbody>
+          <tr>
+            <td className="border border-black bg-gray-100 px-2 py-1 w-28">受給者証番号</td>
+            <td className="border border-black px-2 py-1 font-mono">{cert || "　"}</td>
+            <td className="border border-black bg-gray-100 px-2 py-1 w-36">支給決定障害者氏名</td>
+            <td className="border border-black px-2 py-1">{clientName}</td>
+          </tr>
+          <tr>
+            <td className="border border-black bg-gray-100 px-2 py-1">事業所番号</td>
+            <td className="border border-black px-2 py-1 font-mono">{officeNumber || "　"}</td>
+            <td className="border border-black bg-gray-100 px-2 py-1">事業者及びその事業所</td>
+            <td className="border border-black px-2 py-1">{officeName}</td>
+          </tr>
+        </tbody>
+      </table>
+      <table className="w-full border-collapse text-[10px]">
+        <thead>
+          <tr className="bg-gray-100">
+            <th className="border border-black px-1 py-1">実施日</th>
+            <th className="border border-black px-1 py-1">曜日</th>
+            <th className="border border-black px-1 py-1">開始時間</th>
+            <th className="border border-black px-1 py-1">終了時間</th>
+            <th className="border border-black px-1 py-1">入浴方法</th>
+            <th className="border border-black px-1 py-1">利用者確認欄</th>
+            <th className="border border-black px-1 py-1">備考</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((r) => (
+            <tr key={r.id} className="tabular-nums">
+              <td className="border border-black px-1 py-1 text-center">{parseInt(r.visit_date.slice(8), 10)}</td>
+              <td className="border border-black px-1 py-1 text-center">{dow(r.visit_date)}</td>
+              <td className="border border-black px-1 py-1 text-center font-mono">{hm(r.start_time)}</td>
+              <td className="border border-black px-1 py-1 text-center font-mono">{hm(r.end_time)}</td>
+              <td className="border border-black px-1 py-1 text-center">{r.staff_only ? "介護職員3人" : "実施"}</td>
+              <td className="border border-black px-1 py-1"></td>
+              <td className="border border-black px-1 py-1"></td>
+            </tr>
+          ))}
+          <tr className="font-bold">
+            <td className="border border-black px-1 py-1 text-center" colSpan={4}>合計 {sorted.length} 回</td>
+            <td className="border border-black px-1 py-1" colSpan={3}></td>
+          </tr>
+        </tbody>
+      </table>
+      <p className="mt-2 text-[9px] text-gray-600">
+        ※ 週2回限度 (日曜起点)。中止時の理由等は備考に記載 (提出前に手書き追記可)。
       </p>
     </div>
   );

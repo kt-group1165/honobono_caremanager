@@ -162,6 +162,7 @@ const NAV_BATH_SECTIONED: SectionSpec[] = [
     items: [
       { name: "サービス提供表 (実績)", href: "/bath-provision", icon: FileSpreadsheet },
       { name: "請求", href: "/billing-visit/seikyu", icon: Calculator },
+      { name: "地域生活支援 請求 (障害)", href: "/idou-billing", icon: Calculator },
     ],
   },
   {
