@@ -146,6 +146,8 @@ type CareOfficeOption = {
   id: string;
   name: string;
   office_number: string | null;
+  // 自社 offices への紐づけ。非 null = 自社グループ事業所 (self_office_id 未適用 DB では常に null)
+  self_office_id?: string | null;
 };
 
 /** 名前 / 事業所番号で絞り込める検索付き combobox */
@@ -161,15 +163,18 @@ function CareOfficeCombobox({
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
 
-  const filtered = useMemo(() => {
+  // 自社 (self_office_id あり) / 他社 に分けて表示。自社を上に。
+  const { own, other } = useMemo(() => {
     const q = query.trim();
-    if (!q) return offices.slice(0, 30);
-    return offices
-      .filter(
-        (o) => o.name.includes(q) || (o.office_number ?? "").includes(q),
-      )
-      .slice(0, 30);
+    const hit = q
+      ? offices.filter((o) => o.name.includes(q) || (o.office_number ?? "").includes(q))
+      : offices;
+    return {
+      own: hit.filter((o) => o.self_office_id).slice(0, 30),
+      other: hit.filter((o) => !o.self_office_id).slice(0, 30),
+    };
   }, [offices, query]);
+  const hasAny = own.length > 0 || other.length > 0;
 
   return (
     <div className="relative">
@@ -195,30 +200,61 @@ function CareOfficeCombobox({
         <div className="absolute z-20 mt-0.5 max-h-48 w-full overflow-y-auto rounded border border-gray-200 bg-white shadow-lg">
           {loading ? (
             <div className="px-2 py-1.5 text-xs text-gray-400">読込中...</div>
-          ) : filtered.length === 0 ? (
+          ) : !hasAny ? (
             <div className="px-2 py-1.5 text-xs text-gray-400">該当なし</div>
           ) : (
-            filtered.map((o) => (
-              <button
-                type="button"
-                key={o.id}
-                // onBlur で閉じる前に click を成立させるため mousedown で選択
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  onSelect(o);
-                  setQuery("");
-                  setOpen(false);
-                }}
-                className="block w-full px-2 py-1.5 text-left text-xs hover:bg-sky-50"
-              >
-                <span className="font-medium text-gray-800">{o.name}</span>
-                {o.office_number && (
-                  <span className="ml-1.5 font-mono text-[10px] text-gray-400">
-                    {o.office_number}
+            <>
+              {own.length > 0 && (
+                <div className="px-2 py-1 text-[10px] font-bold text-indigo-600 bg-indigo-50/60 sticky top-0">
+                  自社グループ
+                </div>
+              )}
+              {own.map((o) => (
+                <button
+                  type="button"
+                  key={o.id}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onSelect(o);
+                    setQuery("");
+                    setOpen(false);
+                  }}
+                  className="block w-full px-2 py-1.5 text-left text-xs hover:bg-indigo-50"
+                >
+                  <span className="mr-1 rounded bg-indigo-100 px-1 text-[9px] font-medium text-indigo-700">
+                    自社
                   </span>
-                )}
-              </button>
-            ))
+                  <span className="font-medium text-gray-800">{o.name}</span>
+                  {o.office_number && (
+                    <span className="ml-1.5 font-mono text-[10px] text-gray-400">{o.office_number}</span>
+                  )}
+                </button>
+              ))}
+              {other.length > 0 && (
+                <div className="px-2 py-1 text-[10px] font-bold text-gray-500 bg-gray-50 sticky top-0">
+                  他社
+                </div>
+              )}
+              {other.map((o) => (
+                <button
+                  type="button"
+                  key={o.id}
+                  // onBlur で閉じる前に click を成立させるため mousedown で選択
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onSelect(o);
+                    setQuery("");
+                    setOpen(false);
+                  }}
+                  className="block w-full px-2 py-1.5 text-left text-xs hover:bg-sky-50"
+                >
+                  <span className="font-medium text-gray-800">{o.name}</span>
+                  {o.office_number && (
+                    <span className="ml-1.5 font-mono text-[10px] text-gray-400">{o.office_number}</span>
+                  )}
+                </button>
+              ))}
+            </>
           )}
         </div>
       )}
@@ -266,17 +302,33 @@ export function CareCertContent({
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase
+      // self_office_id (自社紐づけ) 込みで取得。列未適用 DB では旧 select に fallback
+      let data: CareOfficeOption[] | null = null;
+      const withSelf = await supabase
         .from("care_offices")
-        .select("id, name, office_number")
+        .select("id, name, office_number, self_office_id")
         .order("name");
-      if (cancelled) return;
-      if (error) {
-        console.error("care_offices fetch failed:", error.message);
-        toast.error(`ケアマネ事業所マスタの取得に失敗: ${error.message}`);
-      } else {
-        setCareOffices((data ?? []) as CareOfficeOption[]);
+      if (!withSelf.error) {
+        data = (withSelf.data ?? []) as CareOfficeOption[];
+      } else if (["42703", "PGRST204", "PGRST205"].includes(withSelf.error.code ?? "")) {
+        const plain = await supabase
+          .from("care_offices")
+          .select("id, name, office_number")
+          .order("name");
+        if (plain.error) {
+          if (!cancelled) {
+            console.error("care_offices fetch failed:", plain.error.message);
+            toast.error(`ケアマネ事業所マスタの取得に失敗: ${plain.error.message}`);
+          }
+        } else {
+          data = (plain.data ?? []) as CareOfficeOption[];
+        }
+      } else if (!cancelled) {
+        console.error("care_offices fetch failed:", withSelf.error.message);
+        toast.error(`ケアマネ事業所マスタの取得に失敗: ${withSelf.error.message}`);
       }
+      if (cancelled) return;
+      if (data) setCareOffices(data);
       setCareOfficesLoading(false);
     })();
     return () => {

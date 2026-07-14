@@ -9,6 +9,10 @@ import type { ServiceProvider } from "../providers/providers-content";
 // 旧 /master/office · /master/care-offices · /master/providers はここへ ?tab= 付きで
 // リダイレクトされる。各タブの初期データを 3 本並行 fetch して client シェルへ渡す。
 
+// self_office_id IS NULL = 他社のみ。自社紐づけ済 (self_office_id あり) は
+// 自社グループタブ側の offices に出るため、他社タブからは除外する。
+const CARE_FULL =
+  "id, tenant_id, name, office_number, created_at, self_office_id, partner_company_id, partner_companies(name)";
 const CARE_WITH_PARTNER =
   "id, tenant_id, name, office_number, created_at, partner_company_id, partner_companies(name)";
 const CARE_PLAIN = "id, tenant_id, name, office_number, created_at";
@@ -29,16 +33,28 @@ async function fetchGroupOffices(
 async function fetchCareOffices(
   supabase: Awaited<ReturnType<typeof createClient>>,
 ): Promise<CareOffice[]> {
-  // partner_companies 適用済なら法人名を embed、未適用なら旧 select にフォールバック
-  const res = await supabase.from("care_offices").select(CARE_WITH_PARTNER).order("name");
-  if (!res.error) return (res.data ?? []) as unknown as CareOffice[];
-  if (isMissingPartnerSchemaError(res.error.code)) {
-    const fb = await supabase.from("care_offices").select(CARE_PLAIN).order("name");
-    if (fb.error) console.error("care_offices fetch failed:", fb.error.message);
-    return (fb.data ?? []) as CareOffice[];
+  // ① self_office_id + partner 両適用: 他社 (self_office_id IS NULL) のみ
+  const full = await supabase
+    .from("care_offices")
+    .select(CARE_FULL)
+    .is("self_office_id", null)
+    .order("name");
+  if (!full.error) return (full.data ?? []) as unknown as CareOffice[];
+  if (!isMissingPartnerSchemaError(full.error.code)) {
+    console.error("care_offices fetch failed:", full.error.message);
+    return [];
   }
-  console.error("care_offices fetch failed:", res.error.message);
-  return [];
+  // ② self_office_id 未適用: partner 法人名のみ (全件、フィルタなし)
+  const withPartner = await supabase.from("care_offices").select(CARE_WITH_PARTNER).order("name");
+  if (!withPartner.error) return (withPartner.data ?? []) as unknown as CareOffice[];
+  if (!isMissingPartnerSchemaError(withPartner.error.code)) {
+    console.error("care_offices fetch failed:", withPartner.error.message);
+    return [];
+  }
+  // ③ partner も未適用: 旧 select
+  const plain = await supabase.from("care_offices").select(CARE_PLAIN).order("name");
+  if (plain.error) console.error("care_offices fetch failed:", plain.error.message);
+  return (plain.data ?? []) as CareOffice[];
 }
 
 async function fetchProviders(

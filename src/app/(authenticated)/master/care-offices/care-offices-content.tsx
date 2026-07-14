@@ -26,6 +26,8 @@ export interface CareOffice {
   // partner_companies 未適用 DB では返らない (optional)
   partner_company_id?: string | null;
   partner_companies?: { name: string } | null;
+  // 自社 offices への紐づけ。他社リストは self_office_id IS NULL のみ (page.tsx で絞込)
+  self_office_id?: string | null;
 }
 
 const TENANT_ID = "kt-group";
