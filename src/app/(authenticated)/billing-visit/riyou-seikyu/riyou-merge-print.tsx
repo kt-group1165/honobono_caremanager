@@ -34,6 +34,18 @@ const SYSTEM_BADGE: Record<MergeSystem, string> = {
 };
 
 /**
+ * サービス明細行 (表示専用)。集計 (aggregate) の details / addons をそのまま詰める。
+ * ★ money-safety: units は表示だけ。円は行ごとに割らず、セクション subtotal を正とする。
+ */
+export interface MergedLine {
+  serviceName: string;
+  /** 小計単位数 (details.units / addon.units)。減算行は負値になり得る */
+  units: number;
+  /** 実績回数 (加算行は 1) */
+  count: number;
+}
+
+/**
  * 合算前の 1 明細 (= 1 利用者 × 1 制度 × 1 事業所 の利用者負担)。
  * 呼び出し側 (riyou-seikyu-content) が既存の billed 計算結果をそのまま詰める。
  */
@@ -48,6 +60,8 @@ export interface MergeInput {
   copayRate: number | null;
   /** セクション見出しに添える事業所名 (事業所合算のときだけ意味を持つ。単一事業所は null) */
   officeLabel: string | null;
+  /** サービス明細行 (表示専用。空なら「明細なし・小計のみ」にフォールバック) */
+  lines: MergedLine[];
   /** 費用側の表示額。介護/総合 = 法定負担 + 超過自費 (userPlusSelf) / 障害 = userAmount */
   base: number;
   /** 軽減額 (介護/総合のみ。障害は 0) */
@@ -72,6 +86,8 @@ export interface MergedSection {
   keigen: number;
   jippi: number;
   subtotal: number;
+  /** サービス明細行 (表示専用) */
+  lines: MergedLine[];
 }
 export interface MergedClient {
   userId: string;
@@ -123,6 +139,7 @@ export function buildMergedClients(inputs: MergeInput[]): MergedClient[] {
         keigen: s.keigen,
         jippi: s.jippi,
         subtotal: s.subtotal,
+        lines: s.lines,
       })),
       clientTotal: sorted.reduce((sum, s) => sum + s.subtotal, 0),
       iryohi: sorted.reduce((sum, s) => sum + s.iryohi, 0),
@@ -212,63 +229,150 @@ export function RiyouSeikyuMergedPrintSheet({
         ? " (制度合算)"
         : "";
 
-  // セクション行の表示 (利用者名は各利用者の先頭行に rowSpan で 1 回だけ)
+  // ── サービス明細レイアウト ──────────────────────────────────────────────
+  //   [事業所] → 制度 → サービス明細行 (サービス名 / 単位数 / 回数) → セクション小計 (円)
+  //   → 利用者合計 (単位数合計 + 当月請求額 円)。
+  //   表示専用: 単位数は details/addons をそのまま並べるだけで、円は行に割らない。
+  //   事業所見出しは 2 事業所以上のときだけ (単独は省略 = 従来の見た目に近づける)。
+  //   制度見出しは 2 制度以上のときだけ。
+  const showOffice = officeLabels.length >= 2;
+  const showSystem = multiSystem;
+  const COLS = 4; // サービス名 / 単位数 / 回数 / 金額
+
+  const sectionUnits = (s: MergedSection) =>
+    s.lines.reduce((u, l) => u + l.units, 0);
+  // 負担 − 軽減 + 実費 の内訳注記 (軽減/実費がある行のみ。従来の列表示を凝縮)
+  const breakdownText = (base: number, keigen: number, jippi: number) => {
+    if (keigen <= 0 && jippi <= 0) return null;
+    const parts = [`負担 ${yen(base)}`];
+    if (keigen > 0) parts.push(`− 軽減 ${yen(keigen)}`);
+    if (jippi > 0) parts.push(`+ 実費 ${yen(jippi)}`);
+    return parts.join(" ");
+  };
+
   const bodyRows: ReactNode[] = [];
   for (const c of clients) {
-    c.sections.forEach((s, i) => {
+    const cUnits = c.sections.reduce((u, s) => u + sectionUnits(s), 0);
+    const cBase = c.sections.reduce((s, x) => s + x.base, 0);
+    const cKeigen = c.sections.reduce((s, x) => s + x.keigen, 0);
+    const cJippi = c.sections.reduce((s, x) => s + x.jippi, 0);
+    const multiSection = c.sections.length >= 2;
+
+    // 世帯合算のときは利用者名を見出し行に (単独請求書では上部の宛名で足りる)
+    if (isHousehold) {
       bodyRows.push(
-        <tr key={`${c.userId}-${s.system}-${s.officeLabel ?? ""}-${i}`}>
-          {i === 0 && (
-            <td
-              className="border border-black px-2 py-1.5 align-top"
-              rowSpan={c.sections.length}
-            >
-              {c.userName}
-              {c.copayRate != null && (
-                <span className="ml-1 text-xs text-gray-500">
-                  ({Math.round(c.copayRate * 10)}割)
-                </span>
-              )}
-            </td>
-          )}
-          <td className="border border-black px-2 py-1.5">
-            <span
-              className={`inline-block rounded px-1.5 py-0.5 text-xs font-semibold ${SYSTEM_BADGE[s.system]}`}
-            >
-              {s.system}
-            </span>
-            {s.officeLabel && (
-              <span className="ml-1 text-xs text-gray-600">{s.officeLabel}</span>
+        <tr key={`${c.userId}-name`} className="bg-gray-100 font-semibold">
+          <td className="border border-black px-2 py-1" colSpan={COLS}>
+            {c.userName} 様
+            {c.copayRate != null && (
+              <span className="ml-1 text-xs text-gray-500">
+                ({Math.round(c.copayRate * 10)}割)
+              </span>
             )}
-          </td>
-          <td className="border border-black px-2 py-1.5 text-right tabular-nums">
-            {yen(s.base)}
-          </td>
-          <td className="border border-black px-2 py-1.5 text-right tabular-nums">
-            {s.keigen > 0 ? `▲${yen(s.keigen)}` : "—"}
-          </td>
-          <td className="border border-black px-2 py-1.5 text-right tabular-nums">
-            {s.jippi > 0 ? yen(s.jippi) : "—"}
-          </td>
-          <td className="border border-black px-2 py-1.5 text-right tabular-nums font-semibold">
-            {yen(s.subtotal)}
-          </td>
-        </tr>,
-      );
-    });
-    // 世帯合算のときは利用者ごとに小計行を挟む (制度が複数ある利用者のみ)
-    if (isHousehold && c.sections.length >= 2) {
-      bodyRows.push(
-        <tr key={`${c.userId}-subtotal`} className="bg-gray-50 font-medium">
-          <td className="border border-black px-2 py-1" colSpan={5}>
-            {c.userName} 様 小計
-          </td>
-          <td className="border border-black px-2 py-1 text-right tabular-nums">
-            {yen(c.clientTotal)}
           </td>
         </tr>,
       );
     }
+
+    // 事業所単位でグループ化 (挿入順を維持)
+    const byOffice = new Map<string, MergedSection[]>();
+    for (const s of c.sections) {
+      const key = s.officeLabel ?? "";
+      if (!byOffice.has(key)) byOffice.set(key, []);
+      byOffice.get(key)!.push(s);
+    }
+
+    for (const [officeKey, secs] of byOffice) {
+      if (showOffice && officeKey) {
+        bodyRows.push(
+          <tr key={`${c.userId}-off-${officeKey}`} className="bg-gray-50">
+            <td
+              className="border border-black px-2 py-1 text-sm font-medium"
+              colSpan={COLS}
+            >
+              【{officeKey}】
+            </td>
+          </tr>,
+        );
+      }
+      for (const s of secs) {
+        const sKey = `${c.userId}-${officeKey}-${s.system}`;
+        if (showSystem) {
+          bodyRows.push(
+            <tr key={`${sKey}-hd`}>
+              <td className="border border-black px-2 py-1" colSpan={COLS}>
+                <span
+                  className={`inline-block rounded px-1.5 py-0.5 text-xs font-semibold ${SYSTEM_BADGE[s.system]}`}
+                >
+                  {s.system}
+                </span>
+              </td>
+            </tr>,
+          );
+        }
+        // サービス明細行 (details / addons)。空 = フォールバック (小計のみ)
+        s.lines.forEach((ln, li) => {
+          bodyRows.push(
+            <tr key={`${sKey}-l${li}`}>
+              <td className="border border-black px-2 py-1 pl-4">
+                {ln.serviceName}
+              </td>
+              <td className="border border-black px-2 py-1 text-right tabular-nums">
+                {ln.units.toLocaleString()}
+              </td>
+              <td className="border border-black px-2 py-1 text-right tabular-nums">
+                {ln.count}
+              </td>
+              <td className="border border-black px-2 py-1" />
+            </tr>,
+          );
+        });
+        // セクション小計 (円) — 制度/事業所が複数あるときのみ (単独は利用者合計で足りる)
+        if (multiSection) {
+          const bd = breakdownText(s.base, s.keigen, s.jippi);
+          bodyRows.push(
+            <tr key={`${sKey}-st`} className="bg-gray-50">
+              <td className="border border-black px-2 py-1" colSpan={2}>
+                <span className="font-medium">小計</span>
+                <span className="ml-1 text-xs text-gray-500">
+                  {s.system}
+                  {showOffice && s.officeLabel ? ` / ${s.officeLabel}` : ""}
+                  {bd ? ` (${bd})` : ""}
+                </span>
+              </td>
+              <td className="border border-black px-2 py-1 text-right tabular-nums">
+                {sectionUnits(s).toLocaleString()} 単位
+              </td>
+              <td className="border border-black px-2 py-1 text-right tabular-nums font-semibold">
+                {yen(s.subtotal)}
+              </td>
+            </tr>,
+          );
+        }
+      }
+    }
+
+    // 利用者合計 (単位数合計 + 当月請求額)。単独セクションの内訳注記もここに凝縮
+    const cbd = !multiSection ? breakdownText(cBase, cKeigen, cJippi) : null;
+    bodyRows.push(
+      <tr key={`${c.userId}-total`} className="font-bold">
+        <td className="border border-black px-2 py-1.5">
+          {isHousehold ? `${c.userName} 様 合計` : "合計"}
+          {cbd && (
+            <span className="ml-1 text-xs font-normal text-gray-500">
+              ({cbd})
+            </span>
+          )}
+        </td>
+        <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+          {cUnits.toLocaleString()} 単位
+        </td>
+        <td className="border border-black px-2 py-1.5" />
+        <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+          {yen(c.clientTotal)}
+        </td>
+      </tr>,
+    );
   }
 
   return (
@@ -314,25 +418,24 @@ export function RiyouSeikyuMergedPrintSheet({
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="bg-gray-100">
-            <th className="border border-black px-2 py-1.5 text-left">利用者名</th>
-            <th className="border border-black px-2 py-1.5 text-left w-40">制度</th>
-            <th className="border border-black px-2 py-1.5 text-right w-28">利用者負担</th>
-            <th className="border border-black px-2 py-1.5 text-right w-24">軽減額</th>
-            <th className="border border-black px-2 py-1.5 text-right w-24">実費</th>
-            <th className="border border-black px-2 py-1.5 text-right w-28">小計</th>
+            <th className="border border-black px-2 py-1.5 text-left">サービス名</th>
+            <th className="border border-black px-2 py-1.5 text-right w-28">単位数</th>
+            <th className="border border-black px-2 py-1.5 text-right w-20">回数</th>
+            <th className="border border-black px-2 py-1.5 text-right w-28">金額</th>
           </tr>
         </thead>
         <tbody>
           {bodyRows}
-          <tr className="font-bold">
-            <td className="border border-black px-2 py-1.5" colSpan={5}>
-              当月請求額
-              {isHousehold ? ` (世帯 ${clients.length} 名分)` : ""}
-            </td>
-            <td className="border border-black px-2 py-1.5 text-right tabular-nums">
-              {yen(monthTotal)}
-            </td>
-          </tr>
+          {isHousehold && (
+            <tr className="font-bold bg-gray-100">
+              <td className="border border-black px-2 py-1.5" colSpan={3}>
+                当月請求額 (世帯 {clients.length} 名分)
+              </td>
+              <td className="border border-black px-2 py-1.5 text-right tabular-nums">
+                {yen(monthTotal)}
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
 

@@ -54,6 +54,7 @@ import {
   RiyouSeikyuMergedPrintSheet,
   type MergeInput,
   type MergedClient,
+  type MergedLine,
 } from "./riyou-merge-print";
 
 // ─── 3 制度統合の表示行モデル ────────────────────────────────────────────────
@@ -204,6 +205,40 @@ const isTableMissingError = (code: string | null | undefined) =>
 // 従来どおりの請求額を維持する (内訳は splitUserAmount で別行表示)。
 const userPlusSelf = (r: UserSeikyuRow) => r.userAmount + r.selfPayAmount;
 
+// ── 合算請求書のサービス明細行 (表示専用。集計の details / addons をそのまま詰める) ──
+//   ★ money-safety: units は表示だけ。円 (subtotal) は各制度の billed をそのまま使う。
+// 介護 / 総合: details (基本サービス + 実績単位加算) + 処遇改善等%加算 (addonUnits) を 1 行に。
+//   処遇改善は details に含まれないため addonLabel で名称そのまま出す。
+function kaigoMergeLines(r: UserSeikyuRow): MergedLine[] {
+  const lines: MergedLine[] = r.details.map((d) => ({
+    serviceName: d.service_type,
+    units: d.units,
+    count: d.count,
+  }));
+  if (r.addonUnits > 0) {
+    lines.push({
+      serviceName: r.addonLabel ?? "処遇改善加算等",
+      units: r.addonUnits,
+      count: 1,
+    });
+  }
+  return lines;
+}
+// 障害: details (所定サービス) + addons (処遇改善・特別地域等。月 1 回 = 回数 1)。
+function shogaiMergeLines(s: ShogaiSeikyuRow): MergedLine[] {
+  const lines: MergedLine[] = s.details.map((d) => ({
+    serviceName: d.service_category
+      ? `${d.service_type}（${d.service_category}）`
+      : d.service_type,
+    units: d.units,
+    count: d.count,
+  }));
+  for (const a of s.addons) {
+    lines.push({ serviceName: a.service_name, units: a.units, count: 1 });
+  }
+  return lines;
+}
+
 // 印刷する綴り (ほのぼの流の綴り選択)。領収書は入金済み (入金完/一部入金) の行のみ発行
 type PrintDocKey = "seikyu" | "seikyuHikae" | "ryoshu" | "ryoshuHikae";
 const PRINT_DOC_LABELS: { key: PrintDocKey; label: string }[] = [
@@ -289,6 +324,8 @@ export function RiyouSeikyuContent() {
   //     OFF = 自事業所分のみ (従来)。デフォルト ON。
   const [mergeSystems, setMergeSystems] = useState(true);
   const [mergeOffices, setMergeOffices] = useState(true);
+  // 事業所合算バナーの詳細 (事業所名リスト + 注記) の展開 (既定は折りたたみ)
+  const [officeBannerOpen, setOfficeBannerOpen] = useState(false);
 
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
 
@@ -836,6 +873,7 @@ export function RiyouSeikyuContent() {
           userNumber: r.user_number,
           copayRate: r.copay_rate,
           officeLabel,
+          lines: kaigoMergeLines(r),
           base,
           keigen,
           jippi: 0,
@@ -859,6 +897,7 @@ export function RiyouSeikyuContent() {
           userNumber: null,
           copayRate: null,
           officeLabel: office.officeName,
+          lines: shogaiMergeLines(s),
           base: s.userAmount,
           keigen: 0,
           jippi: 0,
@@ -895,6 +934,7 @@ export function RiyouSeikyuContent() {
           userNumber: null,
           copayRate: null,
           officeLabel: mergeOffices ? selfOfficeLabel : null,
+          lines: shogaiMergeLines(s),
           base: s.userAmount,
           keigen: 0,
           jippi: 0,
@@ -914,6 +954,7 @@ export function RiyouSeikyuContent() {
         userNumber: r.user_number,
         copayRate: r.copay_rate,
         officeLabel: mergeOffices ? selfOfficeLabel : null,
+        lines: kaigoMergeLines(r),
         base: userPlusSelf(r),
         keigen: keigenByUser.get(r.user_id) ?? 0,
         jippi: jippiTotal(r.user_id),
@@ -1448,45 +1489,48 @@ export function RiyouSeikyuContent() {
             <span className="text-[11px] text-gray-400">{printScopeLabel}</span>
           </div>
 
-          {/* 事業所合算 (法人横断) の状態表示 (集計結果を印刷レイヤーに反映済) */}
-          {mergeOffices && (
-            <div className="border-b border-indigo-200 bg-indigo-50 px-3 py-2 shrink-0 text-xs text-indigo-800">
+          {/* 事業所合算 (法人横断) の状態表示 — 1 行要約 + ▾詳細 展開 (集計は印刷レイヤーに反映済)。
+              siblング無し (合算不発) はバナー自体を出さない (画面を占有しない) */}
+          {mergeOffices && (crossOffice.loading || crossOffice.errors.length > 0 || hasSiblingOffices) && (
+            <div className="border-b border-slate-200 bg-slate-50 px-3 py-1 shrink-0 text-xs text-slate-600">
               {crossOffice.loading ? (
                 <span className="flex items-center gap-1.5">
-                  <Loader2 size={13} className="animate-spin" />
+                  <Loader2 size={12} className="animate-spin" />
                   同一法人の他事業所分を集計中…
                 </span>
               ) : crossOffice.errors.length > 0 ? (
-                <div className="flex flex-col gap-0.5 text-red-700">
-                  {crossOffice.errors.map((e, i) => (
-                    <span key={i} className="flex items-center gap-1.5">
-                      <AlertTriangle size={13} />
-                      {e}
-                    </span>
-                  ))}
-                  <span className="text-red-600">
-                    ※ 集計できた事業所分のみ合算しています。失敗分は含まれません。
-                  </span>
-                </div>
-              ) : !hasSiblingOffices ? (
-                <span>
-                  同一法人 (company) の他 介護事業所は無いか、当月の利用者負担がありません。
-                  自事業所分のみで表示しています。
+                <span
+                  className="flex items-center gap-1.5 text-red-700"
+                  title={crossOffice.errors.join("\n")}
+                >
+                  <AlertTriangle size={12} className="shrink-0" />
+                  一部事業所の集計に失敗 ({crossOffice.errors.length} 件)・成功分のみ合算中
                 </span>
               ) : (
                 <div className="flex flex-col gap-0.5">
-                  <span className="font-medium">
-                    同一法人の {crossOffice.data?.offices.length} 事業所を合算中:{" "}
-                    {(crossOffice.data?.offices ?? []).map((s) => s.name).join(" / ")}
-                  </span>
-                  <span>
-                    当タブの利用者のうち {officeMergeSharedCount} 名が他事業所にも
-                    当月の利用者負担があり、1 枚の請求書に合算表示しています。
-                  </span>
-                  <span className="text-indigo-500">
-                    ※ 発行記録・入金・FB は従来どおり事業所別・制度別です
-                    (合算請求書に対する入金の合算管理はスコープ外)。
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      title={(crossOffice.data?.offices ?? []).map((s) => s.name).join(" / ")}
+                    >
+                      同一法人 {crossOffice.data?.offices.length} 事業所を合算中・共有利用者{" "}
+                      {officeMergeSharedCount} 名
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setOfficeBannerOpen((v) => !v)}
+                      className="text-slate-400 hover:text-slate-600"
+                    >
+                      {officeBannerOpen ? "▴閉じる" : "▾詳細"}
+                    </button>
+                  </div>
+                  {officeBannerOpen && (
+                    <div className="pb-0.5 text-[11px] text-slate-500">
+                      {(crossOffice.data?.offices ?? []).map((s) => s.name).join(" / ")}
+                      <span className="ml-1">
+                        ※ 発行記録・入金・FB は従来どおり事業所別・制度別 (合算入金管理はスコープ外)
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -3443,6 +3487,7 @@ function RiyouBulkPrintView({
             userNumber: null,
             copayRate: null,
             officeLabel: mergeOffices ? officeName : null,
+            lines: shogaiMergeLines(s),
             base: s.userAmount,
             keigen: 0,
             jippi: 0,
@@ -3462,6 +3507,7 @@ function RiyouBulkPrintView({
           userNumber: r.user_number,
           copayRate: r.copay_rate,
           officeLabel: mergeOffices ? officeName : null,
+          lines: kaigoMergeLines(r),
           base: userPlusSelf(r),
           keigen: keigenByUser.get(r.user_id) ?? 0,
           jippi: jippiTotalFor(r.user_id),
