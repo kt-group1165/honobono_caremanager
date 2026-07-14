@@ -1028,45 +1028,9 @@ export function KaigoSeikyuContent() {
             </div>
           )}
 
-          {/* 集計時の warning (身体介護9系 / 総合事業除外 / 入院重なり / 認定フォールバック /
-              公費レコード未登録 等) + 再請求分の再集計 warning */}
-          {!loading && (warnings.length > 0 || reWarnings.length > 0) && (() => {
-            const allWarnings = [...new Set([...warnings, ...reWarnings])];
-            return (
-              <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
-                <AlertCircle size={14} className="mt-0.5 shrink-0" />
-                <div>
-                  {allWarnings.slice(0, 8).map((w) => (
-                    <p key={w}>{w}</p>
-                  ))}
-                  {allWarnings.length > 8 && <p>…他 {allWarnings.length - 8} 件</p>}
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* 月遅れ/返戻/過誤の再請求 案内 */}
-          {!loading && reRows.length > 0 && (() => {
-            const kagoCount = reRows.filter((r) => r.__reasons.kago).length;
-            return (
-              <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
-                <AlertCircle size={14} className="mt-0.5 shrink-0" />
-                <span>
-                  過去月の月遅れ・返戻・過誤 {reRows.length} 件を当月請求に合流しています
-                  (元提供月で明細書・伝送に反映)。国保対象化すると一覧から外れます。
-                  {kagoCount > 0 && (
-                    <>
-                      {" "}
-                      うち過誤 {kagoCount} 件は
-                      <strong>支払済レセプトの取下げ後の再請求</strong>です —
-                      返戻と異なり、通常過誤は保険者の過誤決定 (支払控除)
-                      を確認してから国保対象化してください (同月過誤は申立と同月に再請求)。
-                    </>
-                  )}
-                </span>
-              </div>
-            );
-          })()}
+          {/* 集計 warning / 月遅れ合流の案内は一覧の「下」に移動した (下部の
+              「注意書き (一覧下)」ブロック)。警告の増減で一覧ヘッダーの位置が
+              ずれないようにするため。 */}
 
           {/* 認定申請中の利用者 案内 (該当者がいるときのみ) */}
           {!loading && shinseichuCount > 0 && (
@@ -1316,6 +1280,44 @@ export function KaigoSeikyuContent() {
               </div>
             </>
           )}
+          {/* ── 注意書き (一覧下): 集計 warning / 月遅れ合流。一覧ヘッダーの位置を
+              固定するため一覧の下 (カラム末尾) に配置する ── */}
+          {!loading && (warnings.length > 0 || reWarnings.length > 0) && (() => {
+            const allWarnings = [...new Set([...warnings, ...reWarnings])];
+            return (
+              <div className="border-t border-amber-200 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                <div>
+                  {allWarnings.slice(0, 8).map((w) => (
+                    <p key={w}>{w}</p>
+                  ))}
+                  {allWarnings.length > 8 && <p>…他 {allWarnings.length - 8} 件</p>}
+                </div>
+              </div>
+            );
+          })()}
+
+          {!loading && reRows.length > 0 && (() => {
+            const kagoCount = reRows.filter((r) => r.__reasons.kago).length;
+            return (
+              <div className="border-t border-amber-200 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                <span>
+                  過去月の月遅れ・返戻・過誤 {reRows.length} 件を当月請求に合流しています
+                  (元提供月で明細書・伝送に反映)。国保対象化すると一覧から外れます。
+                  {kagoCount > 0 && (
+                    <>
+                      {" "}
+                      うち過誤 {kagoCount} 件は
+                      <strong>支払済レセプトの取下げ後の再請求</strong>です —
+                      返戻と異なり、通常過誤は保険者の過誤決定 (支払控除)
+                      を確認してから国保対象化してください (同月過誤は申立と同月に再請求)。
+                    </>
+                  )}
+                </span>
+              </div>
+            );
+          })()}
         </div>
 
         {/* ── 右：明細情報 (ほのぼの流: 青系帯 + 高密度明細 + ラベル箱/値箱 grid) ── */}

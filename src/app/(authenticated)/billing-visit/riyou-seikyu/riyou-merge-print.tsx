@@ -119,6 +119,11 @@ export interface MergeInput {
   address?: string | null;
   /** 口座情報 (clients.bank_*) */
   bank?: MergeBank | null;
+  /**
+   * 居宅介護支援事業者名 (client_insurance_records.care_office_id → care_offices.name)。
+   * client 単位のため自事業所分にだけ入れれば足りる (表示専用)。
+   */
+  careOfficeName?: string | null;
   /** この事業所の問い合わせ先電話 (offices.phone)。他事業所分は Phase 1 では null */
   officePhone?: string | null;
   /**
@@ -166,6 +171,8 @@ export interface MergedClient {
   address: string | null;
   /** 口座情報 (clients.bank_*) */
   bank: MergeBank | null;
+  /** 居宅介護支援事業者名 (care_offices.name)。無ければ null */
+  careOfficeName: string | null;
 }
 
 const SYSTEM_ORDER: Record<MergeSystem, number> = { 介護: 0, 総合事業: 1, 障害: 2 };
@@ -216,6 +223,8 @@ export function buildMergedClients(inputs: MergeInput[]): MergedClient[] {
       postalCode: sorted.find((s) => s.postalCode != null)?.postalCode ?? null,
       address: sorted.find((s) => s.address != null)?.address ?? null,
       bank: sorted.find((s) => s.bank != null)?.bank ?? null,
+      careOfficeName:
+        sorted.find((s) => s.careOfficeName != null)?.careOfficeName ?? null,
     });
   }
   // 利用者番号順 (番号なしは末尾・カナ順) — 一括印刷と同じ並び
@@ -580,7 +589,7 @@ export function RiyouSeikyuMergedPrintSheet({
               {/* ご利用内訳見出し */}
               <div className={`px-2 pb-1 pt-1 ${FONT.body} leading-4`}>
                 【ご利用内訳　{c.userName}様　期間：{month}月1日〜{month}月
-                {monthEnd}日】　居宅介護支援事業者名：
+                {monthEnd}日】　居宅介護支援事業者名：{c.careOfficeName ?? ""}
               </div>
 
               {/* 明細① 単位数テーブル (細罫 6 列) */}

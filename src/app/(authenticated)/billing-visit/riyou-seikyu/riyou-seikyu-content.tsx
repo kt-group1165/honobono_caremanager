@@ -744,6 +744,70 @@ export function RiyouSeikyuContent() {
     loadServiceDays();
   }, [loadServiceDays]);
 
+  // ── 居宅介護支援事業者名 (請求書の「居宅介護支援事業者名：」欄。表示専用) ──
+  //   源: client_insurance_records.care_office_id → care_offices.name (様式第二と同源)。
+  //   client 単位。複数保険記録がある場合は effective_date 降順で最新の care_office を採用。
+  const [careOfficeByUser, setCareOfficeByUser] = useState<Map<string, string>>(
+    new Map(),
+  );
+  const loadCareOffices = useCallback(async () => {
+    const ids = Array.from(new Set(kaigoAllRows.map((r) => r.user_id)));
+    if (ids.length === 0) {
+      setCareOfficeByUser(new Map());
+      return;
+    }
+    // 1) client → care_office_id (最新の非 null)
+    const careOfficeIdByClient = new Map<string, string>();
+    for (let i = 0; i < ids.length; i += 100) {
+      const chunk = ids.slice(i, i + 100);
+      const { data, error: e } = await supabase
+        .from("client_insurance_records")
+        .select("client_id, care_office_id, effective_date")
+        .in("client_id", chunk)
+        .not("care_office_id", "is", null)
+        .order("effective_date", { ascending: false });
+      if (e) {
+        if (!isTableMissingError(e.code))
+          console.warn("居宅介護支援事業者の取得失敗:", e.message);
+        continue;
+      }
+      for (const r of (data ?? []) as {
+        client_id: string;
+        care_office_id: string;
+      }[]) {
+        if (!careOfficeIdByClient.has(r.client_id))
+          careOfficeIdByClient.set(r.client_id, r.care_office_id);
+      }
+    }
+    // 2) care_office_id → name
+    const officeIds = Array.from(new Set(careOfficeIdByClient.values()));
+    const nameById = new Map<string, string>();
+    for (let i = 0; i < officeIds.length; i += 100) {
+      const chunk = officeIds.slice(i, i + 100);
+      const { data, error: e } = await supabase
+        .from("care_offices")
+        .select("id, name")
+        .in("id", chunk);
+      if (e) {
+        if (!isTableMissingError(e.code))
+          console.warn("居宅介護支援事業所名の取得失敗:", e.message);
+        continue;
+      }
+      for (const c of (data ?? []) as { id: string; name: string }[])
+        nameById.set(c.id, c.name);
+    }
+    const m = new Map<string, string>();
+    for (const [client, oid] of careOfficeIdByClient) {
+      const n = nameById.get(oid);
+      if (n) m.set(client, n);
+    }
+    setCareOfficeByUser(m);
+  }, [supabase, kaigoAllRows]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 月/行変更時の fetch
+    loadCareOffices();
+  }, [loadCareOffices]);
+
   // ── 自社情報 (ひな形ヘッダーの法人情報) — offices.company_id → companies ──
   //   companies.name (法人名) を優先し、住所/電話/郵便番号は offices の値を fallback。
   //   インボイス登録番号は companies に列が無いため Phase 1 は固定プレースホルダ。
@@ -1085,6 +1149,7 @@ export function RiyouSeikyuContent() {
           postalCode: meta?.postal_code ?? null,
           address: meta?.address ?? null,
           bank: toMergeBank(meta),
+          careOfficeName: careOfficeByUser.get(row.userId) ?? null,
           officePhone,
           serviceDays: serviceDaysByUser.get(row.userId) ?? [],
         };
@@ -1112,6 +1177,7 @@ export function RiyouSeikyuContent() {
         postalCode: meta?.postal_code ?? null,
         address: meta?.address ?? null,
         bank: toMergeBank(meta),
+        careOfficeName: careOfficeByUser.get(row.userId) ?? null,
         officePhone,
         serviceDays: serviceDaysByUser.get(row.userId) ?? [],
       };
@@ -1157,6 +1223,7 @@ export function RiyouSeikyuContent() {
     bankByUser,
     officePhone,
     serviceDaysByUser,
+    careOfficeByUser,
   ]);
 
   // 事業所合算: このシート群が実際に複数事業所を横断しているか (title の (事業所合算) 用)
@@ -1726,7 +1793,7 @@ export function RiyouSeikyuContent() {
                       <th className="px-2 py-1.5 border border-gray-300 text-center w-10">名寄</th>
                       <th className="px-2 py-1.5 border border-gray-300 text-center w-16">制度</th>
                       <th className="px-2 py-1.5 border border-gray-300 text-center w-16">状態</th>
-                      <th className="px-2 py-1.5 border border-gray-300 text-left">利用者名</th>
+                      <th className="px-2 py-1.5 border border-gray-300 text-left whitespace-nowrap">利用者名</th>
                       <th className="px-2 py-1.5 border border-gray-300 text-left">事業所名</th>
                       <th className="px-2 py-1.5 border border-gray-300 text-left w-24">番号</th>
                       <th className="px-2 py-1.5 border border-gray-300 text-left w-24">支払方法</th>
@@ -1787,7 +1854,7 @@ export function RiyouSeikyuContent() {
                           <td className="px-2 py-1 border border-gray-200 text-center">
                             {statusBadge(row)}
                           </td>
-                          <td className="px-2 py-1 border border-gray-200 font-medium">
+                          <td className="px-2 py-1 border border-gray-200 font-medium whitespace-nowrap">
                             {userName}
                           </td>
                           <td
