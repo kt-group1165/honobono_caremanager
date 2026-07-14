@@ -246,6 +246,7 @@ export function BathRecordsContent() {
           staff={staff}
           officeId={currentOfficeId}
           tenantId={currentOffice?.tenant_id ?? "kt-group"}
+          allRecords={records}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); load(); }}
         />
@@ -254,8 +255,16 @@ export function BathRecordsContent() {
   );
 }
 
+// 日曜起点の週 (Sun-Sat) キー = その週の日曜の YYYY-MM-DD
+function weekKey(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() - dt.getDay()); // 日曜へ戻す
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+}
+
 function BathRecordForm({
-  supabase, record, clients, staff, officeId, tenantId, onClose, onSaved,
+  supabase, record, clients, staff, officeId, tenantId, allRecords, onClose, onSaved,
 }: {
   supabase: ReturnType<typeof createClient>;
   record: BathRecord | null;
@@ -263,6 +272,7 @@ function BathRecordForm({
   staff: Staff[];
   officeId: string;
   tenantId: string;
+  allRecords: BathRecord[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -279,6 +289,18 @@ function BathRecordForm({
   const numOrNull = (s: string): number | null => (s === "" ? null : Number(s));
   const toggleStaff = (id: string) =>
     setF((p) => ({ ...p, staff_ids: p.staff_ids.includes(id) ? p.staff_ids.filter((x) => x !== id) : [...p.staff_ids, id] }));
+
+  // 地域生活支援 訪問入浴: 週2回限度 (日曜起点の週)。同一利用者・同一週の既存件数を数える
+  const chiikiWeekCount =
+    f.scheme === "地域生活支援" && f.client_id && f.visit_date
+      ? allRecords.filter(
+          (r) =>
+            r.id !== record?.id &&
+            r.scheme === "地域生活支援" &&
+            r.client_id === f.client_id &&
+            weekKey(r.visit_date) === weekKey(f.visit_date),
+        ).length
+      : 0;
 
   const handleSave = async () => {
     if (!f.client_id) { setError("利用者を選択してください"); return; }
@@ -376,6 +398,11 @@ function BathRecordForm({
               </span>
               {f.scheme === "地域生活支援" && <span className="ml-2 text-gray-400">週2回限度 (千葉市算定基準)。中止時コード等は請求機能で対応</span>}
             </p>
+            {f.scheme === "地域生活支援" && chiikiWeekCount >= 2 && (
+              <p className="mt-1.5 flex items-center gap-1 text-[11px] font-medium text-amber-600">
+                ⚠ この利用者は同じ週 (日〜土) に既に {chiikiWeekCount} 件あります。週2回を超える分は原則算定できません
+              </p>
+            )}
           </div>
 
           {/* 従事職員 */}

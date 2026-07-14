@@ -18,10 +18,13 @@ import { useBusinessType } from "@/lib/business-type-context";
 import {
   resolveIdouCode,
   calcMinutes,
+  compositeNameFromTimes,
   type IdouCodeResult,
 } from "@/lib/idou-shien-code";
 import { getServiceSystemMap } from "@/lib/service-system-lookup";
 import { toHankakuDigits } from "@/lib/service-name-normalize";
+import { validInMonth } from "@/lib/service-code-valid";
+import { ServiceSelector } from "@/components/services/service-selector";
 import {
   ChevronLeft, ChevronRight, Plus, Loader2, X, Pencil, Trash2, Footprints, AlertTriangle, ArrowRight, CalendarClock,
 } from "lucide-react";
@@ -401,24 +404,70 @@ function IdouRecordForm({
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // 手動選択したコード (自動解決を上書き)
+  const [manualPick, setManualPick] = useState<{ code: string; name: string; units: number } | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
+  // 複合時間帯コードの自動 lookup 結果 (null=未探索 / "none"=該当なし)
+  const [autoComposite, setAutoComposite] = useState<{ code: string; name: string; units: number } | "none" | null>(null);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setF((p) => ({ ...p, [k]: v }));
   const toggleStaff = (id: string) =>
     setF((p) => ({ ...p, staff_ids: p.staff_ids.includes(id) ? p.staff_ids.filter((x) => x !== id) : [...p.staff_ids, id] }));
 
-  // 算定プレビュー
+  // 算定プレビュー (単一時間帯は同期解決)
   const cMin = calcMinutes(f.start_time ?? "", f.end_time ?? "", f.deduct_minutes);
   const resolved = f.start_time && f.end_time
     ? resolveIdouCode(f.start_time, f.end_time, f.deduct_minutes, f.with_body_care)
     : null;
-  const codeOk = resolved !== null && "code" in resolved;
+  const singleOk = resolved !== null && "code" in resolved;
+  const isCrossBand = resolved !== null && "reason" in resolved && resolved.reason === "cross_band";
+
+  // 時刻/身体介護が変わったら手動選択は破棄 (整合性維持)
+  const timeKey = `${f.start_time}|${f.end_time}|${f.deduct_minutes}|${f.with_body_care}`;
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 時刻変更に伴う derived reset
+    setManualPick(null);
+  }, [timeKey]);
+
+  // 複合時間帯: サービス名を組み立てて投入済マスタを lookup
+  useEffect(() => {
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 非複合/該当なしの derived reset
+    if (!isCrossBand) { setAutoComposite(null); return; }
+    const name = compositeNameFromTimes(f.start_time ?? "", f.end_time ?? "", f.deduct_minutes, f.with_body_care);
+    if (!name) { setAutoComposite("none"); return; }
+    const [y, mo] = f.service_date.split("-").map(Number);
+    (async () => {
+      const { data } = await validInMonth(
+        supabase
+          .from("kaigo_service_codes")
+          .select("service_code, service_name, units")
+          .eq("system", "地域生活支援")
+          .eq("service_name", name),
+        y, mo,
+      );
+      if (cancelled) return;
+      const row = (data ?? [])[0] as { service_code: string; service_name: string; units: number } | undefined;
+      setAutoComposite(row ? { code: row.service_code, name: row.service_name, units: row.units } : "none");
+    })();
+    return () => { cancelled = true; };
+  }, [supabase, isCrossBand, timeKey, f.service_date, f.start_time, f.end_time, f.deduct_minutes, f.with_body_care]);
+
+  // 最終確定コード: 手動 > 単一帯自動 > 複合自動
+  const finalCode: { code: string; name: string; units: number } | null =
+    manualPick
+      ? manualPick
+      : singleOk
+      ? { code: (resolved as IdouCodeResult).code, name: (resolved as IdouCodeResult).label, units: (resolved as IdouCodeResult).units }
+      : autoComposite && autoComposite !== "none"
+      ? autoComposite
+      : null;
 
   const handleSave = async () => {
     if (!f.client_id) { setError("利用者を選択してください"); return; }
     if (!f.service_date) { setError("日付を入力してください"); return; }
     setSaving(true);
     setError("");
-    const r = codeOk ? (resolved as IdouCodeResult) : null;
     const payload = {
       ...f,
       office_id: officeId,
@@ -428,8 +477,8 @@ function IdouRecordForm({
       start_time: f.start_time || null,
       end_time: f.end_time || null,
       calc_minutes: cMin,
-      service_code: r?.code ?? null,
-      units: r?.units ?? null,
+      service_code: finalCode?.code ?? null,
+      units: finalCode?.units ?? null,
       destination: f.destination || null,
       notes: f.notes || null,
     };
@@ -504,25 +553,48 @@ function IdouRecordForm({
                 </select>
               </label>
             </div>
-            <div className="mt-2 text-[11px] text-gray-600">
-              算定時間: <span className="font-semibold">{cMin != null ? `${Math.floor(cMin / 60)}時間${cMin % 60}分` : "-"}</span>
-              {" ／ "}
-              {resolved === null ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-600">
+              <span>算定時間: <span className="font-semibold">{cMin != null ? `${Math.floor(cMin / 60)}時間${cMin % 60}分` : "-"}</span></span>
+              <span className="text-gray-300">/</span>
+              {finalCode ? (
+                <span>
+                  算定コード: <span className="font-mono font-semibold text-violet-700">{finalCode.code}</span>
+                  {" "}({finalCode.name} / {finalCode.units.toLocaleString()}単位{f.staff_count === 2 ? ` ×2人 = ${(finalCode.units * 2).toLocaleString()}単位` : ""})
+                  {manualPick && <span className="ml-1 rounded bg-violet-100 px-1 text-violet-600">手動</span>}
+                  {!manualPick && isCrossBand && <span className="ml-1 rounded bg-emerald-100 px-1 text-emerald-700">複合自動</span>}
+                </span>
+              ) : resolved === null ? (
                 <span className="text-gray-400">実績時刻を入力するとコードを自動判定します</span>
-              ) : "code" in resolved ? (
-                <>
-                  算定コード: <span className="font-mono font-semibold text-violet-700">{resolved.code}</span>
-                  {" "}({resolved.label} / {resolved.units.toLocaleString()}単位{f.staff_count === 2 ? ` ×2人 = ${(resolved.units * 2).toLocaleString()}単位` : ""})
-                </>
-              ) : resolved.reason === "cross_band" ? (
-                <span className="font-medium text-amber-600">時間帯跨ぎ ({resolved.bands.join("+")}) — 複合コードは請求機能 (Phase 2) で対応予定。コード未確定で保存されます</span>
-              ) : resolved.reason === "over_max" ? (
+              ) : isCrossBand && autoComposite === null ? (
+                <span className="text-gray-400">複合コードを照合中…</span>
+              ) : isCrossBand ? (
+                <span className="font-medium text-amber-600">
+                  時間帯跨ぎ ({(resolved as { bands: string[] }).bands.join("+")}) — 該当する複合コードがマスタに無いため、手動で選択してください
+                </span>
+              ) : "reason" in resolved && resolved.reason === "over_max" ? (
                 <span className="font-medium text-amber-600">{resolved.band}帯の上限 ({resolved.maxBrackets * 0.5}時間) を超えています</span>
               ) : (
                 <span className="text-gray-400">時刻の入力が不正です</span>
               )}
+              <button
+                type="button"
+                onClick={() => setShowPicker(true)}
+                className="ml-auto rounded border border-violet-200 bg-white px-2 py-0.5 text-violet-600 hover:bg-violet-50"
+              >
+                コードを手動選択
+              </button>
             </div>
           </div>
+
+          <ServiceSelector
+            open={showPicker}
+            onClose={() => setShowPicker(false)}
+            system="地域生活支援"
+            onSelect={(svc) => {
+              setManualPick({ code: svc.code, name: svc.name, units: svc.units });
+              setShowPicker(false);
+            }}
+          />
 
           {/* 行き先・従事職員 */}
           <div>

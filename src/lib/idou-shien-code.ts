@@ -144,3 +144,71 @@ export function resolveChiikiBathCode(kaigoStaff3: boolean, aborted: boolean): s
   if (aborted) return kaigoStaff3 ? "041121" : "041120";
   return kaigoStaff3 ? "041111" : "041110";
 }
+
+// ── 複合時間帯 (時間帯跨ぎ) の解決 ────────────────────────────────────────────
+// 自前で単位を再計算せず、実績時刻から「複合サービス名」を組み立てて投入済マスタ
+// (703件) を lookup する。マスタに該当が無い組合せは呼び出し側で手動選択に逃がす。
+
+export interface BandSegment { band: IdouBand; minutes: number; }
+
+// 1日内の時間帯境界 (分): 6:00 / 8:00 / 18:00 / 22:00 / 24:00
+const DAY_BOUNDS = [6 * 60, 8 * 60, 18 * 60, 22 * 60, 24 * 60];
+
+/**
+ * [startMin, endMin) (endMin は日跨ぎで 1440 超も可) を時間帯セグメントに時系列分割。
+ * 深夜は 22:00-24:00 と 0:00-6:00 が連続すると 1 セグメントに結合する。
+ */
+export function splitIntoBands(startMin: number, endMin: number): BandSegment[] {
+  const segs: BandSegment[] = [];
+  let cur = startMin;
+  let guard = 0;
+  while (cur < endMin && guard++ < 100) {
+    const dayMin = ((cur % 1440) + 1440) % 1440;
+    const band = bandOf(dayMin);
+    const nextBoundInDay = DAY_BOUNDS.find((b) => b > dayMin) ?? 1440;
+    const dayStart = cur - dayMin;
+    const segEnd = Math.min(dayStart + nextBoundInDay, endMin);
+    segs.push({ band, minutes: segEnd - cur });
+    cur = segEnd;
+  }
+  // 隣接同帯 (深夜の 24:00 跨ぎ 等) を結合
+  const merged: BandSegment[] = [];
+  for (const s of segs) {
+    const last = merged[merged.length - 1];
+    if (last && last.band === s.band) last.minutes += s.minutes;
+    else merged.push({ ...s });
+  }
+  return merged;
+}
+
+/** セグメント列 → 複合サービス名 (seed の命名と一致。例「移動1深夜0.5・早朝1.5・日中0.5」) */
+export function buildCompositeName(withBodyCare: boolean, segs: BandSegment[]): string {
+  const prefix = withBodyCare ? "移動1" : "移動2";
+  return (
+    prefix +
+    segs.map((s) => `${s.band}${(Math.ceil(s.minutes / 30) * 0.5).toFixed(1)}`).join("・")
+  );
+}
+
+/**
+ * 実績時刻から複合サービス名を導出 (単一時間帯なら null)。
+ * deduct > 0 の複合は控除の帯配分が判断を要するため null (手動へ)。
+ */
+export function compositeNameFromTimes(
+  startTime: string,
+  endTime: string,
+  deductMinutes: number,
+  withBodyCare: boolean,
+): string | null {
+  if (!startTime || !endTime) return null;
+  const s = toMin(startTime);
+  let e = toMin(endTime);
+  if (e <= s) {
+    if (s >= 22 * 60 && e <= 6 * 60) e += 24 * 60;
+    else return null;
+  }
+  const segs = splitIntoBands(s, e);
+  if (segs.length <= 1) return null; // 単一帯は resolveIdouCode が扱う
+  if (deductMinutes > 0) return null; // 控除ありの複合は手動
+  return buildCompositeName(withBodyCare, segs);
+}
