@@ -981,7 +981,9 @@ export function KaigoSeikyuContent() {
                 <Building2 size={13} />同一建物チェック
               </button>
             )}
-            <div className="ml-auto flex items-center gap-2">
+            {/* 過誤申立CSV / 確認用CSV は ml-auto で右寄せせず他ボタンと同列に流す
+                (右寄せ+flex-wrap だと幅不足時に2段目へ折り返して「行ずれ」して見えるため) */}
+            <div className="flex items-center gap-2">
               <button
                 onClick={exportKagoCsv}
                 disabled={!officeId}
