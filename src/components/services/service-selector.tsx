@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client"
 import { validInMonth } from "@/lib/service-code-valid"
 import {
   getShogaiTimeBracketMode,
+  setShogaiTimeBracketMode,
   SHOGAI_TIME_BRACKET_DEFAULT,
   type ShogaiTimeBracketMode,
 } from "@/lib/shogai-time-bracket"
@@ -299,7 +300,8 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
   // よくある使い方 (「この時間枠で取れるサービス何？」) を素直に満たす。
   const durationMinutes = React.useMemo(() => calcDurationMinutes(startTime, endTime), [startTime, endTime])
   const [candidateOnly, setCandidateOnly] = React.useState<boolean>(durationMinutes !== null)
-  // 障害の時間区分判定モード (設定 > 障害 時間区分。取得失敗は ほのぼの互換 で続行)
+  // 障害の時間区分判定モード。モーダル内チェックでその場切替でき、
+  // 変更は app_settings に保存して次回以降のデフォルトにする (過去入力には影響しない)。
   const [shogaiMode, setShogaiMode] = React.useState<ShogaiTimeBracketMode>(SHOGAI_TIME_BRACKET_DEFAULT)
   React.useEffect(() => {
     let cancelled = false
@@ -308,6 +310,13 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
     })
     return () => { cancelled = true }
   }, [])
+  const changeShogaiMode = (next: ShogaiTimeBracketMode) => {
+    setShogaiMode(next)
+    // 保存失敗しても画面上の切替は生かす (次回デフォルトにならないだけ)
+    setShogaiTimeBracketMode(createClient(), next).catch((err) =>
+      console.warn("時間区分モードの保存に失敗:", err instanceof Error ? err.message : err),
+    )
+  }
   // start/end が変わるたびに「該当時間が定義された場合は候補モードを ON 復帰」
   React.useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (時間レンジ変化による意図的な derived reset)
@@ -549,6 +558,23 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
                   </>
                 )}
                 )
+              </span>
+            </label>
+          )}
+          {/* 障害のみ: 時間区分の境界判定をその場で切替 (60分ちょうど問題) */}
+          {durationMinutes !== null && hasTimeConcept && activeSystem === "障害" && (
+            <label className="flex items-center gap-2 text-sm text-gray-700 select-none cursor-pointer">
+              <input
+                type="checkbox"
+                checked={shogaiMode === "kokuji"}
+                onChange={(e) => changeShogaiMode(e.target.checked ? "kokuji" : "honobono")}
+                className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+              />
+              告示準拠で判定
+              <span className="text-xs text-gray-500">
+                {shogaiMode === "kokuji"
+                  ? "(60分ちょうど → 1.5)"
+                  : "(OFF = ほのぼの互換: 60分ちょうど → 1.0)"}
               </span>
             </label>
           )}
