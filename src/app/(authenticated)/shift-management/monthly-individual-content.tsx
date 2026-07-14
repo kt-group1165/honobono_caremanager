@@ -19,7 +19,9 @@ import {
   Loader2,
   Copy,
   RotateCcw,
+  Save,
   Trash2,
+  Undo2,
   X,
   Plus,
 } from "lucide-react";
@@ -78,6 +80,8 @@ interface MonthlyIndividualViewProps {
   staff: KaigoStaff[];
   onEditSchedule?: (sched: VisitSchedule) => void;
   initialData: MonthlyIndividualInitialData;
+  /** 未保存 (pending 状態変更 or 複写行) の有無を親へ通知。親は view/利用者/職員 切替を confirmIfPending でガードする */
+  onPendingChangesChange?: (hasPending: boolean) => void;
 }
 
 export function MonthlyIndividualView({
@@ -89,14 +93,24 @@ export function MonthlyIndividualView({
   staff,
   onEditSchedule,
   initialData,
+  onPendingChangesChange,
 }: MonthlyIndividualViewProps) {
   const supabase = useMemo(() => createClient(), []);
   const { currentOfficeId } = useBusinessType();
   // 楽観的 local state (複写行 _isCopy 等)。SWR data の到着で sync する。
   const [schedules, setSchedules] = useState<VisitSchedule[]>(initialData.schedules);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkProcessing, setBulkProcessing] = useState(false);
+
+  // 実績反映 (予実トグル / 実績変換 / 予定に戻す) は「保存ボタンで確定」方式。
+  // ここでは DB を書かず pending として貯め (id → 変更後 status)、保存時に一括コミットする。
+  const [pendingStatus, setPendingStatus] = useState<Map<string, "completed" | "scheduled">>(
+    () => new Map(),
+  );
+  // sync effect (SWR→local) から最新 pending を参照するための ref ミラー
+  const pendingStatusRef = useRef(pendingStatus);
+  useEffect(() => { pendingStatusRef.current = pendingStatus; }, [pendingStatus]);
+  const [saving, setSaving] = useState(false);
 
   // ─── サービス追加 (新規予定) モーダルの state ───
   // 追加は利用者ビューでのみ有効 (この画面の entityId を user_id として INSERT する)
@@ -255,17 +269,60 @@ export function MonthlyIndividualView({
     return () => { cancelled = true; };
   }, [supabase, entityType, entityId]);
 
-  // SWR data → local state へ sync (未保存のローカル複写行 _isCopy は保持する)
-  const lastSwrRef = useRef(swrSchedules);
-  useEffect(() => {
-    if (swrSchedules !== lastSwrRef.current) {
-      lastSwrRef.current = swrSchedules;
-      setSchedules((prev) => {
-        const pendingCopies = prev.filter((s) => s._isCopy);
-        return pendingCopies.length > 0 ? [...swrSchedules, ...pendingCopies] : swrSchedules;
-      });
-    }
+  // server truth の status (pending が server 値に戻ったら pending から外す判定に使う)
+  const serverStatusById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of swrSchedules) m.set(s.id, s.status ?? "scheduled");
+    return m;
   }, [swrSchedules]);
+
+  // SWR data → local state へ sync。以下を保持する:
+  //  - 未保存の複写行 _isCopy (DB 未挿入)
+  //  - 未保存の pending 状態変更 (実績反映)。server 行に override を再適用する
+  // ★ sentinel(null) 初期化: マウント時に swrSchedules が既にキャッシュ済 (同一参照) でも
+  //   初回 sync を必ず走らせる (タブ切替直後に空表示になるバグの修正)。
+  const lastSwrRef = useRef<VisitSchedule[] | null>(null);
+  useEffect(() => {
+    if (swrSchedules === lastSwrRef.current) return;
+    lastSwrRef.current = swrSchedules;
+    setSchedules((prev) => {
+      const pendingCopies = prev.filter((s) => s._isCopy);
+      const overrides = pendingStatusRef.current;
+      const merged =
+        overrides.size === 0
+          ? swrSchedules
+          : swrSchedules.map((s) => {
+              const ov = overrides.get(s.id);
+              return ov ? { ...s, status: ov } : s;
+            });
+      return pendingCopies.length > 0 ? [...merged, ...pendingCopies] : merged;
+    });
+  }, [swrSchedules]);
+
+  // ─── 未保存 (dirty) 判定 + 離脱警告 ───────────────────────────────────────────
+  // dirty = pending 状態変更あり or ローカル複写行あり
+  const dirty = pendingStatus.size > 0 || schedules.some((s) => s._isCopy);
+  // 親へ通知 (親は confirmIfPending で 利用者/職員/ビュー 切替をガード)
+  useEffect(() => {
+    onPendingChangesChange?.(dirty);
+  }, [dirty, onPendingChangesChange]);
+  // アンマウント時は親の pending フラグをクリア (別 view に残さない)
+  useEffect(() => {
+    return () => { onPendingChangesChange?.(false); };
+  }, [onPendingChangesChange]);
+  // ブラウザ閉じる / リロード / 戻る (非 SPA) の離脱警告
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  // 月切替は key 変更で当 component が再マウント → pending が失われるため、dirty 時は confirm
+  const guardedMonthChange = (d: Date) => {
+    if (dirty && !window.confirm("未保存の変更があります。破棄して月を移動しますか？")) return;
+    onMonthChange(d);
+  };
 
   // 単位数を on-demand 補完 (提供表と同パターン:
   //  「基本」全件 fetch は 1000 行制限で欠けるため .in() で絞る。
@@ -338,17 +395,43 @@ export function MonthlyIndividualView({
     }
   };
 
-  const toggleStatus = async (sched: VisitSchedule) => {
-    // キャンセル行は実績変換の対象外 (解除してから)
-    if (sched.status === "cancelled") return;
-    const isCurrentlyCompleted = sched.status === "completed";
-    setTogglingId(sched.id);
+  // pending へ状態変更を積む共通処理 (DB は書かない)。
+  // server 値と一致する状態に戻したら pending から外す (= 実質未変更)。
+  const stageStatus = (targets: VisitSchedule[], next: "completed" | "scheduled") => {
+    if (targets.length === 0) return;
+    const ids = new Set(targets.map((t) => t.id));
+    // 表示を楽観更新
+    setSchedules((prev) => prev.map((s) => (ids.has(s.id) ? { ...s, status: next } : s)));
+    setPendingStatus((prev) => {
+      const map = new Map(prev);
+      for (const t of targets) {
+        if (serverStatusById.get(t.id) === next) map.delete(t.id);
+        else map.set(t.id, next);
+      }
+      return map;
+    });
+  };
 
-    if (!isCurrentlyCompleted) {
+  // 予実トグル (単発)。DB 書込はせず pending に積むだけ (保存ボタンで確定)。
+  const toggleStatus = (sched: VisitSchedule) => {
+    // キャンセル行・複写行・保存中は対象外
+    if (sched.status === "cancelled" || sched._isCopy || saving) return;
+    const next = sched.status === "completed" ? "scheduled" : "completed";
+    stageStatus([sched], next);
+  };
+
+  // pending 1 件を DB にコミット (保存ボタンから呼ぶ)。成功で true。
+  // 副作用: 実績化=visit_records(draft) insert / 予定戻し=visit_records delete。
+  // ★ end_time + service_type まで一致で確認/削除 — 同日同開始時刻の別サービス記録
+  //   (署名・バイタル入力済みを含む) と混同・巻き込み削除しないため (99f248b)。
+  const commitStatusChange = async (
+    sched: VisitSchedule,
+    target: "completed" | "scheduled",
+  ): Promise<boolean> => {
+    if (target === "completed") {
       const { data: existing, error: existErr } = await supabase
         .from("kaigo_visit_records")
         .select("id")
-        // ★ 同日同開始時刻の別サービスと混同しないよう end_time + service_type まで一致で確認
         .eq("user_id", sched.user_id)
         .eq("visit_date", sched.visit_date)
         .eq("start_time", sched.start_time)
@@ -357,9 +440,8 @@ export function MonthlyIndividualView({
         .limit(1);
       if (existErr) {
         // 存在確認に失敗したまま INSERT すると重複記録を作りうるため中断
-        toast.error("実績記録の確認に失敗しました: " + existErr.message);
-        setTogglingId(null);
-        return;
+        console.error("visit_records existence check error:", existErr.message);
+        return false;
       }
       if (!existing || existing.length === 0) {
         // status CHECK 制約は draft/confirmed/submitted のみ。自動生成は下書き記録として作る
@@ -373,26 +455,23 @@ export function MonthlyIndividualView({
           status: "draft",
         });
         if (error) {
-          toast.error("実績登録に失敗しました: " + error.message);
-          console.error("visit_records insert error:", error);
-          setTogglingId(null);
-          return;
+          console.error("visit_records insert error:", error.message);
+          return false;
         }
       }
-      const { error: upErr } = await supabase.from("kaigo_visit_schedule").update({ status: "completed" }).eq("id", sched.id);
+      const { error: upErr } = await supabase
+        .from("kaigo_visit_schedule")
+        .update({ status: "completed" })
+        .eq("id", sched.id);
       if (upErr) {
-        toast.error("実績変更に失敗しました: " + upErr.message);
-        setTogglingId(null);
-        return;
+        console.error("visit_schedule update error:", upErr.message);
+        return false;
       }
-      setSchedules((prev) => prev.map((s) => s.id === sched.id ? { ...s, status: "completed" } : s));
-      toast.success("実績に変更しました（提供表にも反映）");
+      return true;
     } else {
       const { error: delErr } = await supabase
         .from("kaigo_visit_records")
         .delete()
-        // ★ end_time + service_type まで一致で削除 — 同日同開始時刻の別サービス記録
-        //   (署名・バイタル入力済みを含む) を巻き込み削除しないため
         .eq("user_id", sched.user_id)
         .eq("visit_date", sched.visit_date)
         .eq("start_time", sched.start_time)
@@ -400,22 +479,60 @@ export function MonthlyIndividualView({
         .eq("service_type", sched.service_type);
       if (delErr) {
         // 記録が残ったまま schedule だけ予定に戻すと提供表・請求と食い違うため中断
-        toast.error("実績記録の削除に失敗しました: " + delErr.message);
-        setTogglingId(null);
-        return;
+        console.error("visit_records delete error:", delErr.message);
+        return false;
       }
-      const { error: upErr } = await supabase.from("kaigo_visit_schedule").update({ status: "scheduled" }).eq("id", sched.id);
+      const { error: upErr } = await supabase
+        .from("kaigo_visit_schedule")
+        .update({ status: "scheduled" })
+        .eq("id", sched.id);
       if (upErr) {
-        toast.error("予定への変更に失敗しました: " + upErr.message);
-        setTogglingId(null);
-        return;
+        console.error("visit_schedule update error:", upErr.message);
+        return false;
       }
-      setSchedules((prev) => prev.map((s) => s.id === sched.id ? { ...s, status: "scheduled" } : s));
-      toast.success("予定に戻しました（提供表の実績も削除）");
+      return true;
     }
-    setTogglingId(null);
-    // SWR cache を server truth で更新 (月/エンティティ切替時の stale 表示防止)
+  };
+
+  // 保存: pending 状態変更を一括コミット。成功分のみ pending から外す (失敗分は残す = silent failure なし)。
+  const handleSaveActuals = async () => {
+    if (pendingStatus.size === 0 || saving) return;
+    setSaving(true);
+    const entries = Array.from(pendingStatus.entries());
+    const done = new Set<string>(); // pending から外す id (成功 or 行消失)
+    let successCount = 0;
+    let failCount = 0;
+    for (const [id, target] of entries) {
+      const sched = schedules.find((s) => s.id === id);
+      if (!sched) { done.add(id); continue; } // 行が消えている (削除済等) → pending 掃除のみ
+      const ok = await commitStatusChange(sched, target);
+      if (ok) { done.add(id); successCount++; } else { failCount++; }
+    }
+    setPendingStatus((prev) => {
+      const next = new Map(prev);
+      for (const id of done) next.delete(id);
+      return next;
+    });
+    setSaving(false);
+    if (failCount === 0) {
+      toast.success(`${successCount}件の実績反映を保存しました（提供表にも反映）`);
+    } else {
+      toast.error(`${successCount}/${entries.length}件のみ保存できました（失敗分は未保存のまま・コンソール参照）`);
+    }
+    // server truth で SWR を更新。sync effect が残 pending override / 複写行を保持して再適用する。
     active.mutate();
+  };
+
+  // 破棄: pending 状態変更を捨て、表示を server 値に戻す (複写行は保持)。
+  const handleDiscardActuals = () => {
+    if (saving) return;
+    setSchedules((prev) =>
+      prev.map((s) => {
+        const srv = serverStatusById.get(s.id);
+        return srv && !s._isCopy && s.status !== srv ? { ...s, status: srv } : s;
+      }),
+    );
+    setPendingStatus(new Map());
   };
 
   // ─── キャンセル (欠課) 操作 ───────────────────────────────────────────────
@@ -532,87 +649,27 @@ export function MonthlyIndividualView({
     }
   };
 
-  const bulkToCompleted = async () => {
+  // 一括「実績変換」: DB は書かず pending に積む (保存ボタンで確定)。
+  const bulkToCompleted = () => {
     if (selectedIds.size === 0) { toast.error("対象を選択してください"); return; }
-    // キャンセル行は実績変換の対象外 (解除してから)
+    // キャンセル行・複写行は実績変換の対象外
     const targets = schedules.filter(
-      (s) => selectedIds.has(s.id) && s.status !== "completed" && s.status !== "cancelled",
+      (s) => selectedIds.has(s.id) && s.status !== "completed" && s.status !== "cancelled" && !s._isCopy,
     );
     if (targets.length === 0) { toast.info("選択された予定はすべて実績済みかキャンセル済みです"); return; }
-    setBulkProcessing(true);
-    const succeeded = new Set<string>();
-    for (const sched of targets) {
-      const { data: existing, error: existErr } = await supabase
-        .from("kaigo_visit_records").select("id")
-        // ★ 単発側と同じく end_time + service_type まで一致で確認 (同日同開始時刻の別サービスと混同しない)
-        .eq("user_id", sched.user_id).eq("visit_date", sched.visit_date).eq("start_time", sched.start_time)
-        .eq("end_time", sched.end_time).eq("service_type", sched.service_type).limit(1);
-      if (existErr) {
-        // 存在確認に失敗したまま INSERT すると重複記録を作りうるためこの行はスキップ
-        console.error("visit_records existence check error:", existErr.message);
-        continue;
-      }
-      if (!existing || existing.length === 0) {
-        const { error } = await supabase.from("kaigo_visit_records").insert({
-          user_id: sched.user_id, staff_id: sched.staff_id,
-          visit_date: sched.visit_date, start_time: sched.start_time, end_time: sched.end_time,
-          service_type: sched.service_type, status: "draft",
-        });
-        if (error) {
-          console.error("visit_records insert error:", error.message);
-          continue;
-        }
-      }
-      const { error: upErr } = await supabase.from("kaigo_visit_schedule").update({ status: "completed" }).eq("id", sched.id);
-      if (upErr) {
-        console.error("visit_schedule update error:", upErr.message);
-        continue;
-      }
-      succeeded.add(sched.id);
-    }
-    setSchedules((prev) => prev.map((s) => succeeded.has(s.id) ? { ...s, status: "completed" } : s));
-    if (succeeded.size === targets.length) {
-      toast.success(`${succeeded.size}件を実績に変換しました`);
-    } else {
-      toast.error(`${succeeded.size}/${targets.length}件のみ実績に変換できました (失敗分はコンソール参照)`);
-    }
+    stageStatus(targets, "completed");
     setSelectedIds(new Set());
-    setBulkProcessing(false);
-    active.mutate();
+    toast.success(`${targets.length}件を実績変換しました（保存ボタンで確定）`);
   };
 
-  const bulkToScheduled = async () => {
+  // 一括「予定に戻す」: DB は書かず pending に積む (保存ボタンで確定)。
+  const bulkToScheduled = () => {
     if (selectedIds.size === 0) { toast.error("対象を選択してください"); return; }
-    const targets = schedules.filter((s) => selectedIds.has(s.id) && s.status === "completed");
+    const targets = schedules.filter((s) => selectedIds.has(s.id) && s.status === "completed" && !s._isCopy);
     if (targets.length === 0) { toast.info("選択された予定はすべて予定状態です"); return; }
-    setBulkProcessing(true);
-    // 行ごとに error をチェックし、成功分のみ state 反映 (silent failure 防止)
-    const succeeded = new Set<string>();
-    for (const sched of targets) {
-      const { error: delErr } = await supabase.from("kaigo_visit_records").delete()
-        // ★ 単発側と同じく end_time + service_type まで一致で削除 (別サービス記録の巻き込み削除防止)
-        .eq("user_id", sched.user_id).eq("visit_date", sched.visit_date).eq("start_time", sched.start_time)
-        .eq("end_time", sched.end_time).eq("service_type", sched.service_type);
-      if (delErr) {
-        console.error("visit_records delete error:", delErr.message);
-        continue;
-      }
-      const { error: upErr } = await supabase.from("kaigo_visit_schedule").update({ status: "scheduled" }).eq("id", sched.id);
-      if (upErr) {
-        console.error("visit_schedule update error:", upErr.message);
-        continue;
-      }
-      succeeded.add(sched.id);
-    }
-    setSchedules((prev) => prev.map((s) => succeeded.has(s.id) ? { ...s, status: "scheduled" } : s));
-    if (succeeded.size === targets.length) {
-      toast.success(`${succeeded.size}件を予定に戻しました`);
-    } else {
-      toast.error(`${succeeded.size}/${targets.length}件のみ予定に戻せました (失敗分はコンソール参照)`);
-    }
+    stageStatus(targets, "scheduled");
     setSelectedIds(new Set());
-    setBulkProcessing(false);
-    active.mutate();
+    toast.success(`${targets.length}件を予定に戻しました（保存ボタンで確定）`);
   };
 
   const bulkCopy = () => {
@@ -797,6 +854,13 @@ export function MonthlyIndividualView({
       succeeded.add(sched.id);
     }
     setSchedules((prev) => prev.filter((s) => !succeeded.has(s.id)));
+    // 削除した行の pending 状態変更は無効になるので掃除 (stale pending 防止)
+    setPendingStatus((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Map(prev);
+      for (const id of succeeded) next.delete(id);
+      return next.size === prev.size ? prev : next;
+    });
     if (succeeded.size === targets.length) {
       toast.success(`${succeeded.size}件を削除しました`);
     } else {
@@ -914,9 +978,9 @@ export function MonthlyIndividualView({
       <div className="flex items-center justify-between px-4 py-2 border-b bg-white">
         <div className="flex items-center gap-2">
           <span className="text-sm font-bold text-gray-900">{entityName}</span>
-          <button onClick={() => onMonthChange(subMonths(currentMonth, 1))} className="rounded border p-1 hover:bg-gray-50"><ChevronLeft size={14} /></button>
+          <button onClick={() => guardedMonthChange(subMonths(currentMonth, 1))} className="rounded border p-1 hover:bg-gray-50"><ChevronLeft size={14} /></button>
           <span className="text-sm font-semibold">{format(currentMonth, "yyyy年M月", { locale: ja })}</span>
-          <button onClick={() => onMonthChange(addMonths(currentMonth, 1))} className="rounded border p-1 hover:bg-gray-50"><ChevronRight size={14} /></button>
+          <button onClick={() => guardedMonthChange(addMonths(currentMonth, 1))} className="rounded border p-1 hover:bg-gray-50"><ChevronRight size={14} /></button>
         </div>
         <div className="flex items-center gap-2 text-xs text-gray-500">
           予定 {schedules.filter((s) => s.status !== "completed" && s.status !== "cancelled").length}件
@@ -947,7 +1011,7 @@ export function MonthlyIndividualView({
         </span>
         <button
           onClick={bulkToCompleted}
-          disabled={bulkProcessing || selectedIds.size === 0}
+          disabled={bulkProcessing || saving || selectedIds.size === 0}
           className="inline-flex items-center gap-1 rounded border border-orange-300 bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700 hover:bg-orange-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           <Check size={12} />
@@ -955,7 +1019,7 @@ export function MonthlyIndividualView({
         </button>
         <button
           onClick={bulkToScheduled}
-          disabled={bulkProcessing || selectedIds.size === 0}
+          disabled={bulkProcessing || saving || selectedIds.size === 0}
           className="inline-flex items-center gap-1 rounded border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           <RotateCcw size={12} />
@@ -963,7 +1027,7 @@ export function MonthlyIndividualView({
         </button>
         <button
           onClick={bulkCopy}
-          disabled={bulkProcessing || selectedIds.size === 0}
+          disabled={bulkProcessing || saving || selectedIds.size === 0}
           className="inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           <Copy size={12} />
@@ -971,23 +1035,49 @@ export function MonthlyIndividualView({
         </button>
         <button
           onClick={bulkDelete}
-          disabled={bulkProcessing || selectedIds.size === 0}
+          disabled={bulkProcessing || saving || selectedIds.size === 0}
           className="inline-flex items-center gap-1 rounded border border-red-300 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           <Trash2 size={12} />
           削除
         </button>
         {bulkProcessing && <Loader2 size={14} className="animate-spin text-blue-500 ml-1" />}
-        {canAdd && (
-          <button
-            onClick={openAddModal}
-            disabled={bulkProcessing}
-            className="ml-auto inline-flex items-center gap-1 rounded border border-green-300 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 hover:bg-green-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            <Plus size={12} />
-            サービス追加
-          </button>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {/* 実績反映 (予実トグル / 実績変換 / 予定に戻す) の未保存 pending。保存で一括コミット */}
+          {pendingStatus.size > 0 && (
+            <>
+              <span className="text-xs font-medium text-amber-600 whitespace-nowrap">
+                {pendingStatus.size}件の未保存の実績反映
+              </span>
+              <button
+                onClick={handleDiscardActuals}
+                disabled={saving}
+                className="inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <Undo2 size={12} />
+                取消
+              </button>
+              <button
+                onClick={handleSaveActuals}
+                disabled={saving}
+                className="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                保存
+              </button>
+            </>
+          )}
+          {canAdd && (
+            <button
+              onClick={openAddModal}
+              disabled={bulkProcessing || saving}
+              className="inline-flex items-center gap-1 rounded border border-green-300 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 hover:bg-green-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <Plus size={12} />
+              サービス追加
+            </button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -1047,7 +1137,8 @@ export function MonthlyIndividualView({
                 const isCompleted = sched.status === "completed";
                 const isCancelled = sched.status === "cancelled";
                 const rowCancelFee = isCancelled ? cancelFeeOf(sched) : 0;
-                const isToggling = togglingId === sched.id;
+                // pending 状態変更 (未保存) の行はハイライト
+                const isPending = pendingStatus.has(sched.id);
 
                 return (
                   <tr
@@ -1091,14 +1182,19 @@ export function MonthlyIndividualView({
                       ) : (
                         <button
                           onClick={() => toggleStatus(sched)}
-                          disabled={isToggling}
-                          title={isCompleted ? "実績 → 予定に戻す" : "予定 → 実績に変更"}
+                          disabled={saving}
+                          title={
+                            (isCompleted ? "実績 → 予定に戻す" : "予定 → 実績に変更") +
+                            (isPending ? " (未保存 — 保存ボタンで確定)" : "")
+                          }
                         >
                           {/* ラベルをピル内部に置く (隣接だと列が縮んだ時に重なる) */}
                           <span className={cn(
                             "relative inline-block h-[18px] w-10 shrink-0 rounded-full align-middle transition-colors",
                             isCompleted ? "bg-orange-500" : "bg-gray-300",
-                            isToggling && "opacity-50"
+                            // 未保存の pending はリング表示 / 保存中は淡色
+                            isPending && "ring-2 ring-amber-400 ring-offset-1",
+                            saving && "opacity-50"
                           )}>
                             <span className={cn(
                               "absolute top-1/2 -translate-y-1/2 text-[10px] font-bold leading-none",

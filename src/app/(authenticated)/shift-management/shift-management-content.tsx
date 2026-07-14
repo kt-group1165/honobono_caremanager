@@ -1075,6 +1075,7 @@ export function ShiftManagementContent({
                   onMonthChange={setCurrentMonth}
                   staff={staff}
                   onEditSchedule={openPageEditModal}
+                  onPendingChangesChange={setHasPendingChanges}
                   initialData={isMonthlyMatchingInitial && initialMonthlyIndividualData
                     ? initialMonthlyIndividualData
                     : emptyMonthlyData}
