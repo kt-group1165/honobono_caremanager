@@ -206,7 +206,9 @@ export function KaigoSeikyuContent() {
     return [...re, ...cur];
   }, [filteredRows, reRows, kanaMatches, monthKey]);
 
-  const selectedDisplay = displayRows.find((d) => d.key === selectedKey) ?? null;
+  // 未選択時は先頭行にフォールバック (障害請求と同じく明細ペインを既定で開く)
+  const selectedDisplay =
+    displayRows.find((d) => d.key === selectedKey) ?? displayRows[0] ?? null;
   const selected = selectedDisplay?.row ?? null;
   // 月次加算の編集は当月の通常行のみ (再請求行は元提供月のデータなので編集不可)
   const selectedCurUserId =

@@ -861,7 +861,9 @@ export function RiyouSeikyuContent() {
   );
 
   // 選択行 (order-app と同じく未選択時は右ペインに placeholder を出す)。key で一意特定
-  const selected = unifiedRows.find((r) => r.key === selectedKey) ?? null;
+  // 未選択時は先頭行にフォールバック (介護請求/障害請求と同じく明細ペインを既定で開く)
+  const selected =
+    unifiedRows.find((r) => r.key === selectedKey) ?? unifiedRows[0] ?? null;
   const totalBilled = unifiedRows.reduce((s, r) => s + billedForRow(r), 0);
 
   const toggle = (key: string) =>
