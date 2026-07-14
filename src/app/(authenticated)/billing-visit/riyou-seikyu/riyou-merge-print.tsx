@@ -304,7 +304,9 @@ function HinaBox({
 // 明細テーブルの空セル (備考 / 控除 / 単価 / 時間 など Phase 1 は未使用)
 const emptyCell = (key: string) => <td key={key} className={CELL} />;
 
-// ご利用日カレンダー (幅 52mm ≒ 200px の小型月次暦。提供実績日を黒ピルで塗る)。
+// ご利用日カレンダー (幅 52mm ≒ 200px の小型月次暦。提供実績日を○囲みで示す)。
+//   ★ 背景塗り (bg-black+白文字) は印刷時にブラウザが背景色を落として
+//     白文字だけ残り読めなくなるため使わない。枠線の○は印刷でも確実に出る。
 //   日=赤 / 土=青 の曜日色はひな形どおり維持 (制度枠のモノクロ化とは別)。
 const CAL_WD = ["日", "月", "火", "水", "木", "金", "土"];
 const calWdColor = (i: number) =>
@@ -353,7 +355,7 @@ function UseDaysCalendar({
               >
                 {d != null &&
                   (used.has(d) ? (
-                    <span className="inline-block min-w-[12px] rounded-[6px] bg-black px-[2px] font-bold leading-[12px] text-white">
+                    <span className="inline-block min-w-[12px] rounded-full border-[0.8px] border-black px-[1px] font-bold leading-[11px]">
                       {d}
                     </span>
                   ) : (
