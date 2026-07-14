@@ -112,6 +112,24 @@ export function KyotakuKokuhoSeikyuContent() {
   const [statusByClient, setStatusByClient] = useState<Map<string, BillingStatusRow>>(new Map());
   const [reRows, setReRows] = useState<KyotakuReSeikyuRow[]>([]);
   const [exporting, setExporting] = useState(false);
+  // 介護予防支援(46)の事業所番号 (office_service_designations)。要支援者は43と別番号で請求
+  const [yoboNumber, setYoboNumber] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 事業所切替時の derived reset/fetch
+    if (!officeId) { setYoboNumber(null); return; }
+    (async () => {
+      const { data } = await supabase
+        .from("office_service_designations")
+        .select("business_number")
+        .eq("office_id", officeId)
+        .eq("service_category", "46")
+        .maybeSingle();
+      if (!cancelled) setYoboNumber(((data?.business_number ?? "") as string).trim() || null);
+    })();
+    return () => { cancelled = true; };
+  }, [supabase, officeId]);
 
   // ── kaigo_billing_status (当月) — 月遅れ/返戻の除外判定用 (事業所単位) ──
   const loadStatus = useCallback(async () => {
@@ -242,10 +260,25 @@ export function KyotakuKokuhoSeikyuContent() {
     try {
       // 未確定 (draft) レセプトは伝送に含めない (claims-content の国保連出力と同じ方針)
       const draftRows = targets.filter((d) => d.row.claimStatus === "draft");
-      const exportTargets = targets.filter((d) => d.row.claimStatus !== "draft");
+      let exportTargets = targets.filter((d) => d.row.claimStatus !== "draft");
+
+      // 要支援者 (介護予防支援=46) は居宅(43)とは別事業所番号の請求になるため、
+      // 43 の伝送からは除外する (43 番号での誤請求を防ぐ)。46 のファイル生成は未対応。
+      const yoboExcluded = exportTargets.filter((d) => (d.row.care_level ?? "").startsWith("要支援"));
+      if (yoboExcluded.length > 0) {
+        exportTargets = exportTargets.filter((d) => !(d.row.care_level ?? "").startsWith("要支援"));
+        const names = yoboExcluded.map((d) => d.row.user_name).join("、");
+        const numState = yoboNumber
+          ? `介護予防支援(46)の事業所番号 ${yoboNumber} は登録済みですが、46の伝送ファイル自動生成は未対応です。予防分は別途対応してください`
+          : `事業所マスタで介護予防支援(46)の事業所番号を登録してください`;
+        toast.warning(`要支援の利用者 ${yoboExcluded.length} 名 (${names}) を居宅(43)伝送から除外しました。${numState}`);
+      }
+
       if (exportTargets.length === 0) {
         toast.error(
-          "確定済み (confirmed / submitted) のレセプトがありません。「レセプト編集」で確定してください。",
+          yoboExcluded.length > 0
+            ? "確定済みレセプトは要支援 (介護予防支援) のみで、居宅(43)伝送の対象がありません。予防分は46番号で別途請求してください。"
+            : "確定済み (confirmed / submitted) のレセプトがありません。「レセプト編集」で確定してください。",
         );
         return;
       }
