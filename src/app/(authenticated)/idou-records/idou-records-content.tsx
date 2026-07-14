@@ -217,6 +217,28 @@ export function IdouRecordsContent() {
   const totalCalcMin = records.reduce((s, r) => s + (r.calc_minutes ?? 0), 0);
   const totalUnits = records.reduce((s, r) => s + (r.units ?? 0) * (r.staff_count === 2 ? 2 : 1), 0);
 
+  // 標準支給量 (月25時間) は利用者ごとの基準。利用者別に算定時間を合算して超過者を出す
+  const overStdUsers = useMemo(() => {
+    const byUser = new Map<string, number>();
+    for (const r of records) byUser.set(r.client_id, (byUser.get(r.client_id) ?? 0) + (r.calc_minutes ?? 0));
+    return [...byUser.entries()].filter(([, min]) => min > 25 * 60).map(([cid, min]) => ({ cid, min }));
+  }, [records]);
+
+  const draftCount = records.filter((r) => r.status === "draft").length;
+  const confirmMonth = async () => {
+    if (draftCount === 0) return;
+    if (!confirm(`当月の下書き ${draftCount} 件を確定しますか? (確定すると請求集計に含まれます)`)) return;
+    const { error } = await supabase
+      .from("kaigo_idou_shien_records")
+      .update({ status: "confirmed" })
+      .eq("office_id", currentOfficeId)
+      .gte("service_date", `${month}-01`)
+      .lte("service_date", `${month}-31`)
+      .eq("status", "draft");
+    if (error) { alert("一括確定に失敗: " + error.message); return; }
+    load();
+  };
+
   // 未実績の予定 = シフトにあるが、対応する実績 (利用者+日付+開始) がまだ無いもの
   const unlinkedPlans = useMemo(() => {
     const recKeys = new Set(
@@ -254,7 +276,12 @@ export function IdouRecordsContent() {
           <button onClick={() => moveMonth(-1)} className="rounded-lg border border-gray-200 p-1.5 hover:bg-gray-50"><ChevronLeft size={16} /></button>
           <span className="min-w-24 text-center text-sm font-semibold text-gray-700">{month.replace("-", "年")}月</span>
           <button onClick={() => moveMonth(1)} className="rounded-lg border border-gray-200 p-1.5 hover:bg-gray-50"><ChevronRight size={16} /></button>
-          <button onClick={() => setEditing("new")} className="ml-2 flex items-center gap-1.5 rounded-xl bg-violet-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-violet-700">
+          {draftCount > 0 && (
+            <button onClick={confirmMonth} className="ml-2 rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm font-medium text-violet-600 hover:bg-violet-50">
+              当月一括確定 ({draftCount})
+            </button>
+          )}
+          <button onClick={() => setEditing("new")} className="ml-1 flex items-center gap-1.5 rounded-xl bg-violet-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-violet-700">
             <Plus size={15} />新規記録
           </button>
         </div>
@@ -267,15 +294,16 @@ export function IdouRecordsContent() {
         </div>
         <div className="rounded-xl border border-gray-100 bg-white px-4 py-2.5 text-sm shadow-sm">
           <span className="text-gray-500">算定時間計 </span><span className="font-semibold text-gray-800">{fmtMin(totalCalcMin)}</span>
-          <span className="ml-1 text-[11px] text-gray-400">(標準支給量 月25時間)</span>
+          <span className="ml-1 text-[11px] text-gray-400">(標準支給量 月25時間/人)</span>
         </div>
         <div className="rounded-xl border border-gray-100 bg-white px-4 py-2.5 text-sm shadow-sm">
           <span className="text-gray-500">単位数計 </span><span className="font-semibold text-gray-800">{totalUnits.toLocaleString()}</span>
           <span className="ml-1 text-[11px] text-gray-400">(1単位=10円)</span>
         </div>
-        {totalCalcMin > 25 * 60 && (
+        {overStdUsers.length > 0 && (
           <div className="flex items-center gap-1.5 rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
-            <AlertTriangle size={14} />標準支給量 (月25時間) を超えています (事業所計)
+            <AlertTriangle size={14} />
+            標準支給量(月25時間)超過: {overStdUsers.map((u) => `${clientName(u.cid)}(${fmtMin(u.min)})`).join("、")}
           </div>
         )}
       </div>
