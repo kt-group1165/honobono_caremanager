@@ -5811,16 +5811,20 @@ export function ReportsContent({ userId, reportType: reportTypeProp, initialDocs
               router.push(`/reports/${type}?${sp.toString()}`);
             };
             return (
-              <div className="no-print mb-4 flex items-center justify-between">
+              <div className="no-print mb-4 flex items-center gap-2">
+                {/* 左右ボタンは等幅 (flex-1 basis-0) にして中央タイトルの位置を
+                    表の切替 (ボタンラベル幅の差) で動かさない */}
+                <div className="flex flex-1 basis-0 justify-start min-w-0">
                 <button
                   onClick={() => prevType && navigateTo(prevType)}
                   disabled={!prevType}
-                  className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed whitespace-nowrap"
                 >
                   <ChevronLeft size={16} />
                   {prevType ? REPORT_CONFIG[prevType]?.titleJa ?? "" : ""}
                 </button>
-                <div className="text-center">
+                </div>
+                <div className="text-center flex-shrink-0">
                   <h1 className="text-lg font-bold text-gray-900">{config.titleJa}</h1>
                   <p className="text-xs text-gray-400">
                     {currentIdx + 1} / {reportOrder.length}
@@ -5848,14 +5852,16 @@ export function ReportsContent({ userId, reportType: reportTypeProp, initialDocs
                     </div>
                   )}
                 </div>
+                <div className="flex flex-1 basis-0 justify-end min-w-0">
                 <button
                   onClick={() => nextType && navigateTo(nextType)}
                   disabled={!nextType}
-                  className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed whitespace-nowrap"
                 >
                   {nextType ? REPORT_CONFIG[nextType]?.titleJa ?? "" : ""}
                   <ChevronRight size={16} />
                 </button>
+                </div>
               </div>
             );
           })()}
