@@ -546,7 +546,7 @@ export function KokuhoSeikyuContent() {
           <>
             <div className="flex-1 overflow-y-auto">
               {/* ヘッダー行 */}
-              <div className={`${GRID_COLS} border-b border-gray-300 bg-gray-100 text-[11px] leading-4 font-semibold text-gray-600 sticky top-0 z-10`}>
+              <div className={`${GRID_COLS} border-b border-gray-400 bg-gradient-to-b from-sky-100 to-sky-200 text-[11px] leading-4 font-medium text-gray-700 sticky top-0 z-10`}>
                 <div className="px-1 py-0.5 flex items-center justify-center">
                   <button
                     onClick={toggleAll}
@@ -575,7 +575,7 @@ export function KokuhoSeikyuContent() {
                 <p className="text-gray-400 text-center py-10">
                   対象月の実績 (完了) がありません
                 </p>
-              ) : displayRows.map((d, idx) => {
+              ) : displayRows.map((d) => {
                 const r = d.row;
                 const isChecked = checked.has(d.key);
                 const [oy, om] = d.origMonthKey.split("-").map((n) => Number(n));
@@ -583,12 +583,10 @@ export function KokuhoSeikyuContent() {
                   <div
                     key={d.key}
                     onClick={() => toggle(d.key)}
-                    className={`${GRID_COLS} border-b border-gray-100 text-[11px] leading-4 cursor-pointer transition-colors ${
+                    className={`${GRID_COLS} border-b border-gray-200 text-[11px] leading-4 cursor-pointer transition-colors ${
                       isChecked
-                        ? "bg-indigo-50"
-                        : idx % 2 === 0
-                        ? "bg-white hover:bg-gray-50"
-                        : "bg-gray-50/50 hover:bg-gray-100"
+                        ? "bg-violet-50"
+                        : "bg-white hover:bg-sky-50"
                     }`}
                   >
                     <div className="px-1 py-0.5 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>

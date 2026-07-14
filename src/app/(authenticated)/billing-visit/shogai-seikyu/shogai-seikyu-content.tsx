@@ -889,7 +889,7 @@ export function ShogaiSeikyuContent({
       </div>
 
       {/* ── 中央: メインテーブル ── */}
-      <div className="flex flex-col flex-1 min-w-0 border-r border-gray-200">
+      <div className={`flex flex-col flex-1 min-w-0 ${view === "kokuho" ? "" : "border-r border-gray-200"}`}>
         {/* ── ツールバー ── */}
         <div className="border-b border-gray-300 bg-gray-100 px-3 py-2 shrink-0 flex items-center gap-2 flex-wrap">
           <MonthNav year={year} month={month} onChange={onMonthChange} />
@@ -1174,7 +1174,9 @@ export function ShogaiSeikyuContent({
         )}
       </div>
 
-      {/* ── 右：明細情報 (介護請求と同じ 青系帯 + 高密度明細)。障害固有ブロック(上限管理/入金管理)を内包 ── */}
+      {/* ── 右：明細情報 (介護請求と同じ 青系帯 + 高密度明細)。障害固有ブロック(上限管理/入金管理)を内包。
+             国保請求は伝送リストのみで明細ペイン非表示 (介護国保とレイアウトを揃える) ── */}
+      {view !== "kokuho" && (
       <div className="w-96 shrink-0 flex flex-col bg-white">
         <div className="border-b border-sky-700 bg-gradient-to-b from-sky-500 to-sky-600 px-3 py-1 text-xs font-bold text-white flex items-center gap-2">
           <span>明細情報</span>
@@ -1267,16 +1269,14 @@ export function ShogaiSeikyuContent({
                 <div className="bg-white px-1.5 py-0.5 text-right font-mono font-bold text-violet-700">¥{selected.benefitAmount.toLocaleString()}</div>
               </div>
 
-              {/* ── 障害固有: 利用者負担上限額管理 (障害請求・利用請求で表示。国保請求では非表示) ── */}
-              {view !== "kokuho" && (
-                <JogenKanriSection
-                  key={`${selected.user_id}-${year}-${month}`}
-                  row={selected}
-                  year={year}
-                  month={month}
-                  onSaved={load}
-                />
-              )}
+              {/* ── 障害固有: 利用者負担上限額管理 (このペインは国保請求では非表示なので常時表示) ── */}
+              <JogenKanriSection
+                key={`${selected.user_id}-${year}-${month}`}
+                row={selected}
+                year={year}
+                month={month}
+                onSaved={load}
+              />
 
               {/* ── 障害固有: 入金管理 (利用料請求の未収金管理。利用請求タブのみ) ── */}
               {view === "riyou" && (
@@ -1300,6 +1300,7 @@ export function ShogaiSeikyuContent({
           </div>
         )}
       </div>
+      )}
     </div>
 
     {/* ===== 印刷 view: 明細書 (介護給付費・訓練等給付費等明細書) — 利用者 1 名 = 1 枚 ===== */}
