@@ -336,9 +336,9 @@ export function RiyouSeikyuContent() {
   // 印刷する綴り (請求書 / 請求書控え / 領収書 / 領収書控え — ほのぼの流の綴り選択)
   const [printDocs, setPrintDocs] = useState<Set<PrintDocKey>>(new Set(["seikyu"]));
   const [jippiByUser, setJippiByUser] = useState<Map<string, JippiEntry[]>>(new Map());
-  // ── 請求書の合算モード (印刷レイヤーのみ。金額計算 = aggregate は不変) ──
-  //   制度合算 (mergeSystems): ON = 同一利用者の 介護/総合/障害 を 1 枚に合算 (デフォルト)。
-  //     OFF = 従来どおり制度ごとに別枚 (介護/総合は既存シート、障害は障害請求タブ側)。
+  // ── 請求書の合算モード (一覧の表示制度 + 印刷レイヤーに効く。金額計算 = aggregate は不変) ──
+  //   制度合算 (mergeSystems): ON = 一覧に 介護/総合/障害 を並べ、同一利用者を 1 枚に合算 (デフォルト)。
+  //     OFF = この画面は 介護/総合 のみ表示し、制度ごとに別枚 (障害は障害請求タブ側で扱う)。
   //   事業所合算 (mergeOffices): ON = 同一法人 (company_id) の全 kaigo 事業所分の
   //     利用者負担を横断集計し、利用者ごとに 1 枚へ合算する (法人が違えば別枚)。
   //     OFF = 自事業所分のみ (従来)。デフォルト ON。
@@ -369,10 +369,14 @@ export function RiyouSeikyuContent() {
       out.push({ key: rowKey("介護", r.user_id), system: "介護", userId: r.user_id, kaigo: r });
     for (const r of filteredSougouRows)
       out.push({ key: rowKey("総合事業", r.user_id), system: "総合事業", userId: r.user_id, kaigo: r });
-    for (const r of filteredShogaiRows)
-      out.push({ key: rowKey("障害", r.user_id), system: "障害", userId: r.user_id, shogai: r });
+    // 障害は「制度合算 ON」のときだけ一覧に出す (OFF = この画面 (介護タブ) は
+    // 介護 + 総合 のみ表示。障害の利用請求は障害タブで扱う)。合算 ON のときだけ
+    // 制度横断で 1 リストに並べ、1 枚の合算請求書を作れるようにする。
+    if (mergeSystems)
+      for (const r of filteredShogaiRows)
+        out.push({ key: rowKey("障害", r.user_id), system: "障害", userId: r.user_id, shogai: r });
     return out;
-  }, [filteredRows, filteredSougouRows, filteredShogaiRows]);
+  }, [filteredRows, filteredSougouRows, filteredShogaiRows, mergeSystems]);
 
   const loadJippi = useCallback(async () => {
     const { data, error: e } = await supabase
@@ -1642,12 +1646,12 @@ export function RiyouSeikyuContent() {
                 </span>
               )}
             </span>
-            {/* 合算モード (印刷レイヤーのみ。金額計算は不変) */}
+            {/* 合算モード (一覧の表示制度 + 印刷レイヤーに効く。金額計算は不変) */}
             <span className="flex items-center gap-2 border border-gray-300 rounded bg-white px-2 py-1 text-[11px] text-gray-700">
               <span className="text-gray-400">合算:</span>
               <label
                 className="flex items-center gap-0.5 cursor-pointer select-none whitespace-nowrap"
-                title="ON = 同一利用者の 介護 / 総合 / 障害 の利用者負担を 1 枚に合算 (制度別セクション + 合計)。OFF = 制度ごとに別枚 (従来どおり)"
+                title="ON = 介護 / 総合 / 障害 を 1 リストに並べ、同一利用者の利用者負担を 1 枚に合算 (制度別セクション + 合計)。OFF = この画面は 介護 + 総合 のみ表示し、制度ごとに別枚 (障害は障害タブで請求)"
               >
                 <input
                   type="checkbox"
