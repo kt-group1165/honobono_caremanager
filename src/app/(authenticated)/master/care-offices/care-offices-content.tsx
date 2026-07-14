@@ -8,7 +8,14 @@
 import { useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Plus, Trash2, Search, Home, Loader2, Save, X, Pencil } from "lucide-react";
+import { Plus, Trash2, Search, Home, Loader2, Save, X, Pencil, Building2 } from "lucide-react";
+import { OpendataSearch } from "../opendata-search";
+import {
+  isMissingPartnerSchemaError,
+  normalizeOfficeName,
+  upsertPartnerCompany,
+  type OpendataOffice,
+} from "../partner-companies";
 
 export interface CareOffice {
   id: string;
@@ -16,9 +23,19 @@ export interface CareOffice {
   name: string;
   office_number: string | null;
   created_at: string | null;
+  // partner_companies 未適用 DB では返らない (optional)
+  partner_company_id?: string | null;
+  partner_companies?: { name: string } | null;
 }
 
 const TENANT_ID = "kt-group";
+
+const SELECT_WITH_PARTNER =
+  "id, tenant_id, name, office_number, created_at, partner_company_id, partner_companies(name)";
+const SELECT_PLAIN = "id, tenant_id, name, office_number, created_at";
+
+/** opendata 選択で保持する法人情報 (登録時に partner_companies へ upsert) */
+type SelectedCorp = { corp_number: string; corp_name: string | null };
 
 type FormState = {
   name: string;
@@ -37,7 +54,7 @@ function validateForm(form: FormState): string | null {
 
 /** Supabase error → ユーザー向けメッセージ */
 function friendlyError(err: { code?: string; message: string }, action: string): string {
-  if (err.code === "23505") return "同名の事業所が既に登録されています";
+  if (err.code === "23505") return "同名/同番号の事業所が既に登録されています";
   if (err.code === "23503")
     return "この事業所は利用者の保険情報等から参照されているため削除できません";
   return `${action}に失敗しました: ${err.message}`;
@@ -53,6 +70,8 @@ export function CareOfficesContent({ initialOffices }: { initialOffices: CareOff
   // 新規追加フォーム
   const [isCreating, setIsCreating] = useState(false);
   const [createForm, setCreateForm] = useState<FormState>(EMPTY_FORM);
+  // opendata 候補選択時の法人情報 (手入力登録時は null = 法人リンクなし)
+  const [createCorp, setCreateCorp] = useState<SelectedCorp | null>(null);
 
   // 行インライン編集
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -62,16 +81,17 @@ export function CareOfficesContent({ initialOffices }: { initialOffices: CareOff
   const [deleteTarget, setDeleteTarget] = useState<CareOffice | null>(null);
 
   const fetchOffices = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("care_offices")
-      .select("id, tenant_id, name, office_number, created_at")
-      .order("name");
-    if (error) {
-      console.error("care_offices fetch failed:", error.message);
-      toast.error(`ケアマネ事業所の取得に失敗しました: ${error.message}`);
+    // partner_companies 未適用 DB では embed が失敗するため旧 select にフォールバック
+    let res = await supabase.from("care_offices").select(SELECT_WITH_PARTNER).order("name");
+    if (res.error && isMissingPartnerSchemaError(res.error.code)) {
+      res = await supabase.from("care_offices").select(SELECT_PLAIN).order("name");
+    }
+    if (res.error) {
+      console.error("care_offices fetch failed:", res.error.message);
+      toast.error(`ケアマネ事業所の取得に失敗しました: ${res.error.message}`);
       return;
     }
-    setOffices((data ?? []) as CareOffice[]);
+    setOffices((res.data ?? []) as unknown as CareOffice[]);
   }, [supabase]);
 
   const filtered = useMemo(() => {
@@ -84,6 +104,15 @@ export function CareOfficesContent({ initialOffices }: { initialOffices: CareOff
 
   // ── 新規追加 ────────────────────────────────────────────────────────────
 
+  /** opendata 候補選択 → name / office_number 自動入力 + 法人情報を保持 */
+  const applyOpendata = (o: OpendataOffice) => {
+    setCreateForm({
+      name: o.name ?? "",
+      office_number: (o.office_number ?? "").replace(/[^0-9]/g, "").slice(0, 10),
+    });
+    setCreateCorp(o.corp_number ? { corp_number: o.corp_number, corp_name: o.corp_name } : null);
+  };
+
   const handleCreate = async () => {
     const validationError = validateForm(createForm);
     if (validationError) {
@@ -92,11 +121,64 @@ export function CareOfficesContent({ initialOffices }: { initialOffices: CareOff
     }
     setSaving(true);
     try {
-      const { error } = await supabase.from("care_offices").insert({
+      const officeNumber = createForm.office_number || null;
+      const name = createForm.name.trim();
+
+      // 重複ガード 1: 事業所番号の完全一致 → ブロック
+      if (officeNumber) {
+        const { data: dup, error: dupErr } = await supabase
+          .from("care_offices")
+          .select("id, name")
+          .eq("office_number", officeNumber)
+          .limit(1);
+        if (dupErr) {
+          console.error("care_offices duplicate check failed:", dupErr.message);
+          toast.error(`重複チェックに失敗しました: ${dupErr.message}`);
+          return;
+        }
+        if (dup && dup.length > 0) {
+          toast.error(`既に登録済み: ${dup[0].name}`);
+          return;
+        }
+      }
+
+      // 重複ガード 2: 正規化名 (空白除去) 一致 → 警告 (confirm で登録は可能)
+      const normalized = normalizeOfficeName(name);
+      const sameName = offices.find((o) => normalizeOfficeName(o.name) === normalized);
+      if (
+        sameName &&
+        !window.confirm(
+          `同名の事業所「${sameName.name}」が既に登録されています。このまま登録しますか？`,
+        )
+      ) {
+        return;
+      }
+
+      // 法人リンク: opendata 選択で corp_number がある場合のみ partner_companies に upsert
+      // (テーブル未適用 = missingSchema の場合は連携スキップして登録続行)
+      let partnerCompanyId: string | null = null;
+      if (createCorp?.corp_number) {
+        const corp = await upsertPartnerCompany(
+          supabase,
+          createCorp.corp_number,
+          createCorp.corp_name,
+        );
+        if (corp.error) {
+          console.error("partner_companies upsert failed:", corp.error);
+          toast.error(`法人マスタの登録に失敗しました: ${corp.error}`);
+          return;
+        }
+        partnerCompanyId = corp.id;
+      }
+
+      const payload: Record<string, unknown> = {
         tenant_id: TENANT_ID,
-        name: createForm.name.trim(),
-        office_number: createForm.office_number || null,
-      });
+        name,
+        office_number: officeNumber,
+      };
+      if (partnerCompanyId) payload.partner_company_id = partnerCompanyId;
+
+      const { error } = await supabase.from("care_offices").insert(payload);
       if (error) {
         toast.error(friendlyError(error, "登録"));
         return;
@@ -104,6 +186,7 @@ export function CareOfficesContent({ initialOffices }: { initialOffices: CareOff
       toast.success("ケアマネ事業所を登録しました");
       setIsCreating(false);
       setCreateForm(EMPTY_FORM);
+      setCreateCorp(null);
       await fetchOffices();
     } finally {
       setSaving(false);
@@ -189,6 +272,7 @@ export function CareOfficesContent({ initialOffices }: { initialOffices: CareOff
             onClick={() => {
               setIsCreating(true);
               setCreateForm(EMPTY_FORM);
+              setCreateCorp(null);
             }}
             className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
           >
@@ -208,13 +292,36 @@ export function CareOfficesContent({ initialOffices }: { initialOffices: CareOff
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-800">新規ケアマネ事業所登録</h2>
             <button
-              onClick={() => setIsCreating(false)}
+              onClick={() => {
+                setIsCreating(false);
+                setCreateCorp(null);
+              }}
               className="text-gray-400 hover:text-gray-600"
               title="閉じる"
             >
               <X size={16} />
             </button>
           </div>
+
+          {/* 公表データ検索 (選択で name / office_number 自動入力 + 法人リンク) */}
+          <div className="mb-3">
+            <OpendataSearch serviceType={{ eq: "居宅介護支援" }} onSelect={applyOpendata} />
+          </div>
+
+          {createCorp && (
+            <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-xs text-indigo-700">
+              <Building2 size={12} />
+              法人: {createCorp.corp_name ?? `法人番号 ${createCorp.corp_number}`}
+              <button
+                onClick={() => setCreateCorp(null)}
+                className="ml-1 text-indigo-400 hover:text-indigo-600"
+                title="法人リンクを解除"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-64 flex-1">
               <label className="mb-1 block text-xs font-medium text-gray-700">
@@ -274,6 +381,7 @@ export function CareOfficesContent({ initialOffices }: { initialOffices: CareOff
             <tr className="border-b bg-gray-50 text-left text-xs text-gray-600">
               <th className="px-4 py-2.5 font-medium">事業所名</th>
               <th className="w-40 px-4 py-2.5 font-medium">事業所番号</th>
+              <th className="w-48 px-4 py-2.5 font-medium">法人</th>
               <th className="w-32 px-4 py-2.5 font-medium">登録日</th>
               <th className="w-24 px-4 py-2.5 text-center font-medium">操作</th>
             </tr>
@@ -281,7 +389,7 @@ export function CareOfficesContent({ initialOffices }: { initialOffices: CareOff
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-sm text-gray-400">
+                <td colSpan={5} className="px-4 py-10 text-center text-sm text-gray-400">
                   <Home size={32} className="mx-auto mb-2 text-gray-300" />
                   {search ? "検索条件に一致する事業所がありません" : "ケアマネ事業所が登録されていません"}
                 </td>
@@ -315,6 +423,9 @@ export function CareOfficesContent({ initialOffices }: { initialOffices: CareOff
                             className="w-full rounded border px-2 py-1 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                             placeholder="10桁"
                           />
+                        </td>
+                        <td className="px-4 py-2 text-xs text-gray-500">
+                          {office.partner_companies?.name ?? "—"}
                         </td>
                         <td className="px-4 py-2 text-xs text-gray-400">
                           {office.created_at ? office.created_at.slice(0, 10) : "—"}
@@ -351,6 +462,9 @@ export function CareOfficesContent({ initialOffices }: { initialOffices: CareOff
                           {office.office_number ?? (
                             <span className="text-xs text-gray-300">未登録</span>
                           )}
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-gray-500">
+                          {office.partner_companies?.name ?? "—"}
                         </td>
                         <td className="px-4 py-2.5 text-xs text-gray-400">
                           {office.created_at ? office.created_at.slice(0, 10) : "—"}

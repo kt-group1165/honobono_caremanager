@@ -13,6 +13,13 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { OpendataSearch } from "../opendata-search";
+import {
+  isMissingPartnerSchemaError,
+  normalizeOfficeName,
+  upsertPartnerCompany,
+  type OpendataOffice,
+} from "../partner-companies";
 
 type ProviderStatus = "active" | "inactive";
 
@@ -29,20 +36,52 @@ export interface ServiceProvider {
   unit_price: number;
   status: ProviderStatus;
   created_at?: string;
+  // partner_companies 未適用 DB では返らない (optional)
+  partner_company_id?: string | null;
+  partner_companies?: { name: string } | null;
 }
 
+// サービス種類コード → 名称 (reports-content の STANDARD_SERVICE_CATEGORIES と同内容)。
+// opendata の service_type 名称 → コード変換 (SERVICE_NAME_TO_CODE) の元にもなる
 const SERVICE_CATEGORY_MAP: Record<string, string> = {
   "11": "訪問介護",
+  "12": "訪問入浴介護",
   "13": "訪問看護",
-  "14": "訪問リハ",
+  "14": "訪問リハビリテーション",
   "15": "通所介護",
-  "16": "通所リハ",
+  "16": "通所リハビリテーション",
   "17": "福祉用具貸与",
-  "21": "短期入所",
+  "21": "短期入所生活介護",
+  "22": "短期入所療養介護",
+  "23": "特定施設入居者生活介護",
+  "24": "福祉用具購入",
+  "25": "住宅改修",
+  "31": "居宅療養管理指導",
+  "32": "介護老人福祉施設",
+  "33": "介護老人保健施設",
+  "34": "介護療養型医療施設",
+  "36": "認知症対応型共同生活介護",
   "43": "居宅介護支援",
+  "46": "介護予防支援",
+  "71": "定期巡回・随時対応型訪問介護看護",
+  "72": "夜間対応型訪問介護",
+  "73": "認知症対応型通所介護",
+  "74": "小規模多機能型居宅介護",
+  "75": "看護小規模多機能型居宅介護",
+  "76": "地域密着型通所介護",
+  "77": "地域密着型特定施設入居者生活介護",
+  "78": "地域密着型介護老人福祉施設入所者生活介護",
+  A1: "訪問型サービス(総合事業)",
+  A2: "通所型サービス(総合事業)",
+  A3: "その他生活支援サービス(総合事業)",
 };
 
 const SERVICE_CATEGORY_CODES = Object.keys(SERVICE_CATEGORY_MAP);
+
+// opendata の service_type (名称) → サービス種類コード
+const SERVICE_NAME_TO_CODE: Record<string, string> = Object.fromEntries(
+  Object.entries(SERVICE_CATEGORY_MAP).map(([code, name]) => [name, code]),
+);
 
 const UNIT_PRICE_OPTIONS = [10.0, 10.14, 10.27, 10.42, 10.7, 10.84, 11.05, 11.12];
 
@@ -174,6 +213,11 @@ function ProviderSidebar({
                         {p.provider_name_kana}
                       </div>
                     )}
+                    {p.partner_companies?.name && (
+                      <div className="truncate text-[10px] text-indigo-400 leading-tight">
+                        {p.partner_companies.name}
+                      </div>
+                    )}
                     {p.status === "inactive" && (
                       <span className="inline-block mt-0.5 rounded bg-gray-100 px-1 text-[9px] text-gray-500">
                         無効
@@ -211,6 +255,11 @@ export function ProvidersContent({
   });
   const [isCreating, setIsCreating] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  // opendata 候補選択時の法人情報 (手入力登録時は null = 法人リンクなし)
+  const [createCorp, setCreateCorp] = useState<{
+    corp_number: string;
+    corp_name: string | null;
+  } | null>(null);
   const [form, setForm] = useState<Omit<ServiceProvider, "id" | "created_at">>(() => {
     const firstActive = initialProviders.find((p) => p.status === "active") ?? initialProviders[0];
     return firstActive ? formFromProvider(firstActive) : EMPTY_FORM;
@@ -218,14 +267,22 @@ export function ProvidersContent({
 
   const fetchProviders = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    // partner_companies 未適用 DB では embed が失敗するため旧 select にフォールバック
+    let res = await supabase
       .from("kaigo_service_providers")
-      .select("*")
+      .select("*, partner_companies(name)")
       .order("provider_name_kana");
-    if (error) {
-      toast.error("事業所データの取得に失敗しました");
+    if (res.error && isMissingPartnerSchemaError(res.error.code)) {
+      res = await supabase
+        .from("kaigo_service_providers")
+        .select("*")
+        .order("provider_name_kana");
+    }
+    if (res.error) {
+      console.error("kaigo_service_providers fetch failed:", res.error.message);
+      toast.error(`事業所データの取得に失敗しました: ${res.error.message}`);
     } else {
-      setProviders(data || []);
+      setProviders((res.data ?? []) as unknown as ServiceProvider[]);
     }
     setLoading(false);
   }, [supabase]);
@@ -242,10 +299,28 @@ export function ProvidersContent({
     setIsCreating(true);
     setSelectedId(null);
     setForm(EMPTY_FORM);
+    setCreateCorp(null);
+  };
+
+  /** opendata 候補選択 → 事業所情報を自動入力 + 法人情報を保持 */
+  const applyOpendata = (o: OpendataOffice) => {
+    const code = o.service_type ? SERVICE_NAME_TO_CODE[o.service_type] : undefined;
+    setForm((prev) => ({
+      ...prev,
+      provider_number: (o.office_number ?? "").replace(/[^0-9]/g, "").slice(0, 10),
+      provider_name: o.name ?? "",
+      provider_name_kana: o.name_kana ?? "",
+      address: [o.address, o.address_detail].filter(Boolean).join(""),
+      phone: o.phone_number ?? "",
+      fax: o.fax_number ?? "",
+      service_categories: code ? [code] : prev.service_categories,
+    }));
+    setCreateCorp(o.corp_number ? { corp_number: o.corp_number, corp_name: o.corp_name } : null);
   };
 
   const cancelCreate = () => {
     setIsCreating(false);
+    setCreateCorp(null);
     if (providers.length > 0) {
       const firstActive = providers.find((p) => p.status === "active") ?? providers[0];
       if (firstActive) {
@@ -278,11 +353,57 @@ export function ProvidersContent({
     e.preventDefault();
     setSaving(true);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         ...form,
         service_categories: form.service_categories as string[],
       };
       if (isCreating) {
+        // 重複ガード 1: 事業所番号の完全一致 → ブロック (DB 側も UNIQUE)
+        const { data: dup, error: dupErr } = await supabase
+          .from("kaigo_service_providers")
+          .select("id, provider_name")
+          .eq("provider_number", form.provider_number)
+          .limit(1);
+        if (dupErr) {
+          console.error("kaigo_service_providers duplicate check failed:", dupErr.message);
+          toast.error(`重複チェックに失敗しました: ${dupErr.message}`);
+          return;
+        }
+        if (dup && dup.length > 0) {
+          toast.error(`既に登録済み: ${dup[0].provider_name}`);
+          return;
+        }
+
+        // 重複ガード 2: 正規化名 (空白除去) 一致 → 警告 (confirm で登録は可能)
+        const normalized = normalizeOfficeName(form.provider_name);
+        const sameName = providers.find(
+          (p) => normalizeOfficeName(p.provider_name) === normalized,
+        );
+        if (
+          sameName &&
+          !window.confirm(
+            `同名の事業所「${sameName.provider_name}」が既に登録されています。このまま登録しますか？`,
+          )
+        ) {
+          return;
+        }
+
+        // 法人リンク: opendata 選択で corp_number がある場合のみ partner_companies に upsert
+        // (テーブル未適用 = missingSchema の場合は連携スキップして登録続行)
+        if (createCorp?.corp_number) {
+          const corp = await upsertPartnerCompany(
+            supabase,
+            createCorp.corp_number,
+            createCorp.corp_name,
+          );
+          if (corp.error) {
+            console.error("partner_companies upsert failed:", corp.error);
+            toast.error(`法人マスタの登録に失敗しました: ${corp.error}`);
+            return;
+          }
+          if (corp.id) payload.partner_company_id = corp.id;
+        }
+
         const { data, error } = await supabase
           .from("kaigo_service_providers")
           .insert([payload])
@@ -292,6 +413,7 @@ export function ProvidersContent({
         toast.success("事業所を登録しました");
         await fetchProviders();
         setIsCreating(false);
+        setCreateCorp(null);
         if (data) setSelectedId(data.id);
       } else if (selectedId) {
         const { error } = await supabase
@@ -303,9 +425,14 @@ export function ProvidersContent({
         await fetchProviders();
       }
     } catch (err: unknown) {
-      toast.error(
-        "保存に失敗しました: " + (err instanceof Error ? err.message : String(err))
-      );
+      const pgErr = err as { code?: string; message?: string };
+      if (pgErr.code === "23505") {
+        toast.error("同名/同番号の事業所が既に登録されています");
+      } else {
+        toast.error(
+          "保存に失敗しました: " + (err instanceof Error ? err.message : String(err))
+        );
+      }
     } finally {
       setSaving(false);
     }
@@ -389,6 +516,31 @@ export function ProvidersContent({
                 新規登録
               </button>
             </div>
+          </div>
+        )}
+
+        {/* 公表データ検索 (新規登録時のみ。選択で事業所情報を自動入力 + 法人リンク) */}
+        {isCreating && (
+          <div className="mb-4 space-y-2">
+            <OpendataSearch
+              serviceType={{ neq: "居宅介護支援" }}
+              onSelect={applyOpendata}
+              emptyMessage="該当なし。公表データ未取込のサービス種別は手入力で登録してください (CSV 取込は order-app の事業所マスタ画面)。"
+            />
+            {createCorp && (
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-xs text-indigo-700">
+                <Building2 size={12} />
+                法人: {createCorp.corp_name ?? `法人番号 ${createCorp.corp_number}`}
+                <button
+                  type="button"
+                  onClick={() => setCreateCorp(null)}
+                  className="ml-1 text-indigo-400 hover:text-indigo-600"
+                  title="法人リンクを解除"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -486,6 +638,16 @@ export function ProvidersContent({
                     placeholder="マルマルカイゴサービス"
                   />
                 </div>
+                {!isCreating && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      運営法人
+                    </label>
+                    <div className="rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                      {selectedProvider?.partner_companies?.name ?? "—"}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 提供サービス */}
@@ -513,7 +675,12 @@ export function ProvidersContent({
                           onChange={() => toggleServiceCategory(code)}
                         />
                         <span className="leading-tight">
-                          <span className={cn("mr-1 rounded px-1 text-[10px]", SERVICE_BADGE_COLORS[code])}>
+                          <span
+                            className={cn(
+                              "mr-1 rounded px-1 text-[10px]",
+                              SERVICE_BADGE_COLORS[code] ?? "bg-gray-100 text-gray-600",
+                            )}
+                          >
                             {code}
                           </span>
                           {SERVICE_CATEGORY_MAP[code]}
