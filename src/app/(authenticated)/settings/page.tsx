@@ -1,11 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Settings, Eye, EyeOff, Building2, ChevronRight, Copy, Database } from "lucide-react";
+import { Settings, Eye, EyeOff, Building2, ChevronRight, Copy, Database, Timer } from "lucide-react";
 import Link from "next/link";
 import { useBusinessType } from "@/lib/business-type-context";
+import {
+  getShogaiTimeBracketMode,
+  setShogaiTimeBracketMode,
+  SHOGAI_TIME_BRACKET_LABELS,
+  type ShogaiTimeBracketMode,
+} from "@/lib/shogai-time-bracket";
 
 // ─── 年度別 居宅介護支援費 単位数 (廃止) ──────────────────────────────────
 // 2026-07-08 総点検: レセプト生成は kaigo_care_support_rates (年度キー) を参照せず
@@ -131,6 +137,82 @@ function OfficeSwitcher() {
   );
 }
 
+// ─── 障害 時間区分判定モード ─────────────────────────────────────────────────
+// 60分ちょうどの予定を 身体1.0 (ほのぼの互換) と 身体1.5 (告示準拠) の
+// どちらの候補にするか。予定/実績のサービスコード選択の候補絞り込みに効く。
+
+function ShogaiTimeBracketCard() {
+  const [mode, setMode] = useState<ShogaiTimeBracketMode | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getShogaiTimeBracketMode(createClient()).then((m) => {
+      if (!cancelled) setMode(m);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const save = async (next: ShogaiTimeBracketMode) => {
+    const prev = mode;
+    setMode(next);
+    setSaving(true);
+    try {
+      await setShogaiTimeBracketMode(createClient(), next);
+      toast.success(`障害の時間区分判定を「${SHOGAI_TIME_BRACKET_LABELS[next]}」に変更しました`);
+    } catch (err) {
+      setMode(prev);
+      toast.error(`保存失敗: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border bg-white p-5 shadow-sm max-w-2xl">
+      <div className="flex items-center gap-2 mb-1">
+        <Timer size={18} className="text-emerald-600" />
+        <h2 className="font-semibold text-gray-900">障害福祉: 時間区分の判定モード</h2>
+      </div>
+      <p className="text-xs text-gray-500 mb-3">
+        60分ちょうどの予定 (例 19:00〜20:00) をどの時間区分コードの候補にするかを切り替えます。
+        告示原文は「30分以上1時間未満=1.0 / 1時間以上=1.5」ですが、ほのぼのMORE は 60分→1.0 に自動割当していました。
+        <br />
+        <span className="text-gray-400">※ 介護保険 (訪問介護 身体介護N) の判定は従来どおり告示準拠のまま変わりません。</span>
+      </p>
+      <div className="space-y-2">
+        {(["honobono", "kokuji"] as const).map((m) => (
+          <label
+            key={m}
+            className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-all ${
+              mode === m ? "border-emerald-500 bg-emerald-50" : "border-gray-200 hover:bg-gray-50"
+            } ${mode === null || saving ? "opacity-60 pointer-events-none" : ""}`}
+          >
+            <input
+              type="radio"
+              name="shogai-time-bracket"
+              checked={mode === m}
+              onChange={() => save(m)}
+              className="accent-emerald-600"
+            />
+            <div className="min-w-0">
+              <span className="text-sm font-semibold text-gray-900">
+                {SHOGAI_TIME_BRACKET_LABELS[m]}
+                {m === "honobono" && <span className="ml-2 text-[10px] font-normal text-gray-400">デフォルト</span>}
+              </span>
+              <p className="text-[11px] text-gray-500">
+                {m === "honobono"
+                  ? "ほのぼのと同じ単位数で請求が続く (現行踏襲・安全側)"
+                  : "告示の文言どおり。同じ60分予定で1区分上がる (増収方向。切替前に市町村へ照会推奨)"}
+              </p>
+            </div>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const supabase = createClient();
   const [currentPassword, setCurrentPassword] = useState("");
@@ -211,6 +293,9 @@ export default function SettingsPage() {
 
       {/* 自事業所切替 */}
       <OfficeSwitcher />
+
+      {/* 障害 時間区分判定モード */}
+      <ShogaiTimeBracketCard />
 
       {/* Office Settings Link */}
       <Link

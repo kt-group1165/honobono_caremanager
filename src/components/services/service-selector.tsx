@@ -4,6 +4,11 @@ import * as React from "react"
 import { Search, X } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { validInMonth } from "@/lib/service-code-valid"
+import {
+  getShogaiTimeBracketMode,
+  SHOGAI_TIME_BRACKET_DEFAULT,
+  type ShogaiTimeBracketMode,
+} from "@/lib/shogai-time-bracket"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
@@ -68,7 +73,12 @@ interface ServiceSelectorProps {
 // ─── 時間レンジ判定 (service_name から所要分を推定) ─────────────────────────
 
 /**
- * service_name から所要時間レンジ [minMin, maxMin] (両端含む) を推定。
+ * service_name から所要時間レンジ [minMin, maxMin) (min 含む / max 含まず) を推定。
+ * 告示の「◯分以上◯分未満」に対応 (例: 60分ちょうどは 身体1.0 ではなく 身体1.5)。
+ *
+ * 障害 X.Y 表記のみ shogaiMode で境界が変わる:
+ *   'kokuji'   (告示準拠)     : 1.0 = [30, 60)  → 60分は 1.5
+ *   'honobono' (ほのぼの互換) : 1.0 = (30, 60]  → 60分は 1.0 (MORE の自動割当と同じ)
  * 対応パターン:
  *   ・介護 訪問介護:
  *       身体介護０１              → [0,  20)
@@ -78,12 +88,15 @@ interface ServiceSelectorProps {
  *       生活援助２               → [20, 45)   (令和6年度: 20分以上45分未満)
  *       生活援助３               → [45, ∞)    (令和6年度: 45分以上)
  *   ・障害 居宅介護等: X.Y時間表記 (0.5刻み)
- *       身体日/早朝/夜/深 X.Y   → ((X.Y - 0.5)*60, X.Y*60]   例: 1.0 = (30, 60]
+ *       身体日/早朝/夜/深 X.Y   → [(X.Y - 0.5)*60, X.Y*60)   例: 1.0 = [30, 60)
  *       家事/通院/乗降/重訪 など同じパターン
  *   ・上記いずれにも該当しない (加算・地域区分・処遇改善 等) → null
  * null は「時間概念なし」を意味し、候補フィルタ ON 時は非表示扱い。
  */
-function parseServiceDurationMinutes(name: string): { min: number; max: number } | null {
+function parseServiceDurationMinutes(
+  name: string,
+  shogaiMode: ShogaiTimeBracketMode = SHOGAI_TIME_BRACKET_DEFAULT,
+): { min: number; max: number } | null {
   const toAscii = (s: string) =>
     s.replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xFEE0));
 
@@ -115,8 +128,10 @@ function parseServiceDurationMinutes(name: string): { min: number; max: number }
     const decPart = toAscii(shogai[2]);
     const hours = parseFloat(`${intPart}.${decPart}`);
     if (!isNaN(hours) && hours > 0 && hours <= 24) {
-      const maxMin = Math.round(hours * 60);
-      const minMin = Math.max(0, Math.round((hours - 0.5) * 60));
+      // 判定は整数分なので、ほのぼの互換 (両端 +1) で (30, 60] 相当になる
+      const shift = shogaiMode === "honobono" ? 1 : 0;
+      const maxMin = Math.round(hours * 60) + shift;
+      const minMin = Math.max(0, Math.round((hours - 0.5) * 60) + shift);
       return { min: minMin, max: maxMin };
     }
   }
@@ -284,6 +299,15 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
   // よくある使い方 (「この時間枠で取れるサービス何？」) を素直に満たす。
   const durationMinutes = React.useMemo(() => calcDurationMinutes(startTime, endTime), [startTime, endTime])
   const [candidateOnly, setCandidateOnly] = React.useState<boolean>(durationMinutes !== null)
+  // 障害の時間区分判定モード (設定 > 障害 時間区分。取得失敗は ほのぼの互換 で続行)
+  const [shogaiMode, setShogaiMode] = React.useState<ShogaiTimeBracketMode>(SHOGAI_TIME_BRACKET_DEFAULT)
+  React.useEffect(() => {
+    let cancelled = false
+    getShogaiTimeBracketMode(createClient()).then((m) => {
+      if (!cancelled) setShogaiMode(m)
+    })
+    return () => { cancelled = true }
+  }, [])
   // start/end が変わるたびに「該当時間が定義された場合は候補モードを ON 復帰」
   React.useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (時間レンジ変化による意図的な derived reset)
@@ -386,7 +410,7 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
     return services.filter((s) => {
       if (applyCandidate) {
         // 1) 所要時間レンジで絞る
-        const range = parseServiceDurationMinutes(s.name)
+        const range = parseServiceDurationMinutes(s.name, shogaiMode)
         if (!range) return false
         if (durationMinutes < range.min || durationMinutes >= range.max) return false
         // 2) 時間帯 (夜/深/早朝/日中) で絞る
@@ -401,7 +425,7 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
         s.name.toLowerCase().includes(lowerQuery)
       )
     })
-  }, [services, hasTimeConcept, query, candidateOnly, durationMinutes, slotZone, system])
+  }, [services, hasTimeConcept, query, candidateOnly, durationMinutes, slotZone, system, shogaiMode])
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
