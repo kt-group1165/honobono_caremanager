@@ -92,6 +92,12 @@ export interface ShogaiSeikyuRow {
   kanriResult: number | null;
   /** 管理結果後の当事業所分 利用者負担額 (区分 1/3 のとき userAmount に反映済) */
   kanriResultAmount: number | null;
+  // ─── 月次情報 (請求前チェック) 用 ───
+  /** 受給者証 認定有効期間 (開始 / 終了)。null = 未設定 (開放期間) */
+  certStart: string | null;
+  certEnd: string | null;
+  /** 支給量を超過したサービス種別のラベル (空 = 超過なし)。金額には影響しない目視警告用 */
+  shikyuryoOver: string[];
 }
 
 export interface ShogaiSeikyuResult {
@@ -574,6 +580,9 @@ export async function aggregateMonthlyShogaiSeikyu(
       jogenKanriOfficeName: cert?.jogen_kanri_office_name ?? null,
       kanriResult: kanri?.kanri_result ?? null,
       kanriResultAmount: kanri?.kanri_result_amount ?? null,
+      certStart: cert?.certification_start_date ?? null,
+      certEnd: cert?.certification_end_date ?? null,
+      shikyuryoOver: [],
     });
   }
 
@@ -697,6 +706,7 @@ export async function aggregateMonthlyShogaiSeikyu(
             warnings.push(
               `${r.user_name}さん: ${def.label}が支給量${fmtMin(lim)}を超えています (実績${fmtMin(act.minutes)})`,
             );
+            r.shikyuryoOver.push(def.label);
           }
         } else if (def.kind === "count") {
           const lim = v.count ?? 0;
@@ -704,6 +714,7 @@ export async function aggregateMonthlyShogaiSeikyu(
             warnings.push(
               `${r.user_name}さん: ${def.label}が支給量${lim}回を超えています (実績${act.count}回)`,
             );
+            r.shikyuryoOver.push(def.label);
           }
         } else {
           const lim = v.units ?? 0;
@@ -711,6 +722,7 @@ export async function aggregateMonthlyShogaiSeikyu(
             warnings.push(
               `${r.user_name}さん: ${def.label}が支給量${lim}単位を超えています (実績${act.units}単位)`,
             );
+            r.shikyuryoOver.push(def.label);
           }
         }
       }
@@ -735,6 +747,7 @@ export async function aggregateMonthlyShogaiSeikyu(
           warnings.push(
             `${r.user_name}さん: 重度訪問介護が支給量${fmtMin(juhoLimit)}を超えています (実績${fmtMin(act.minutes)})${note}`,
           );
+          r.shikyuryoOver.push("重度訪問介護");
         }
       }
     }
