@@ -209,6 +209,12 @@ export function IdouBillingContent() {
     [idouRows, bathRows],
   );
 
+  // 確定済みだがコード未確定 = 請求に含まれない記録 (silent failure 防止)
+  const unresolved = useMemo(
+    () => [...idouRows, ...bathRows].filter((r) => !r.service_code),
+    [idouRows, bathRows],
+  );
+
   // 請求書 (事業所集計)
   const summary = useMemo(() => {
     let totalUnits = 0;
@@ -271,6 +277,14 @@ export function IdouBillingContent() {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* コード未確定の記録の警告 (請求から漏れる) */}
+      {!loading && unresolved.length > 0 && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 print:hidden">
+          ⚠ 算定コードが未確定の記録が {unresolved.length} 件あり、請求に含まれていません。
+          移動支援記録で該当記録を開き「コードを手動選択」で確定してください。
         </div>
       )}
 
