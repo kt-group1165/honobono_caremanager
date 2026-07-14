@@ -79,34 +79,80 @@ export interface PartnerUpsertResult {
 }
 
 /**
- * 法人番号で partner_companies に upsert 相当を行い id を返す。
- * corp_number の UNIQUE は partial index (WHERE corp_number IS NOT NULL) のため、
- * PostgREST の on_conflict (ON CONFLICT (corp_number)) では arbiter に一致せず
- * 42P10 になる。そこで select → insert (+ 23505 race は再 select) で実装する。
+ * 法人番号が国税庁の 13 桁形式として妥当か。
+ * opendata には Excel 経由で "3.04E+12" のような指数表記に壊れた corp_number が
+ * 混在している (2026-07-14 監査: 1,600/1,602 件が壊れ) ため、
+ * corp_number は必ずこれで検証してから名寄せキーに使うこと。
+ */
+export function isValidCorpNumber(v: string | null | undefined): v is string {
+  return !!v && /^\d{13}$/.test(v);
+}
+
+/**
+ * partner_companies への find-or-create。
+ * 名寄せキー: ①法人番号 (13 桁として妥当な場合のみ) → ②法人名 (trim 一致)。
+ * 番号が壊れている opendata でも法人名で名寄せでき、後日正しい番号付きで
+ * 再取込された場合は既存行 (番号 null) に番号を補完する。
+ * (select → insert 方式。23505 race は再 select)
  */
 export async function upsertPartnerCompany(
   supabase: SupabaseClient,
-  corpNumber: string,
+  corpNumber: string | null,
   corpName: string | null,
 ): Promise<PartnerUpsertResult> {
-  const { data: existing, error: selErr } = await supabase
-    .from("partner_companies")
-    .select("id")
-    .eq("corp_number", corpNumber)
-    .maybeSingle();
-  if (selErr) {
-    if (isMissingPartnerSchemaError(selErr.code)) {
-      return { id: null, missingSchema: true, error: null };
-    }
-    return { id: null, missingSchema: false, error: selErr.message };
-  }
-  if (existing?.id) return { id: existing.id as string, missingSchema: false, error: null };
+  const validNumber = isValidCorpNumber(corpNumber) ? corpNumber : null;
+  const name = corpName?.trim() || null;
+  if (!validNumber && !name) return { id: null, missingSchema: false, error: null };
 
+  // ① 法人番号で検索
+  if (validNumber) {
+    const { data: byNum, error: numErr } = await supabase
+      .from("partner_companies")
+      .select("id")
+      .eq("corp_number", validNumber)
+      .maybeSingle();
+    if (numErr) {
+      if (isMissingPartnerSchemaError(numErr.code)) {
+        return { id: null, missingSchema: true, error: null };
+      }
+      return { id: null, missingSchema: false, error: numErr.message };
+    }
+    if (byNum?.id) return { id: byNum.id as string, missingSchema: false, error: null };
+  }
+
+  // ② 法人名で検索
+  if (name) {
+    const { data: byName, error: nameErr } = await supabase
+      .from("partner_companies")
+      .select("id, corp_number")
+      .eq("name", name)
+      .limit(1);
+    if (nameErr) {
+      if (isMissingPartnerSchemaError(nameErr.code)) {
+        return { id: null, missingSchema: true, error: null };
+      }
+      return { id: null, missingSchema: false, error: nameErr.message };
+    }
+    const hit = byName?.[0];
+    if (hit?.id) {
+      if (validNumber && !hit.corp_number) {
+        // 名前で先に作られた行に正しい法人番号を補完 (失敗しても連携自体は続行)
+        const { error: fillErr } = await supabase
+          .from("partner_companies")
+          .update({ corp_number: validNumber, updated_at: new Date().toISOString() })
+          .eq("id", hit.id);
+        if (fillErr) console.error("corp_number 補完に失敗:", fillErr.message);
+      }
+      return { id: hit.id as string, missingSchema: false, error: null };
+    }
+  }
+
+  // ③ 新規作成
   const { data: inserted, error: insErr } = await supabase
     .from("partner_companies")
     .insert({
-      corp_number: corpNumber,
-      name: corpName?.trim() || `法人番号 ${corpNumber}`,
+      corp_number: validNumber,
+      name: name ?? `法人番号 ${validNumber}`,
       source: "opendata",
     })
     .select("id")
@@ -115,12 +161,12 @@ export async function upsertPartnerCompany(
     if (isMissingPartnerSchemaError(insErr.code)) {
       return { id: null, missingSchema: true, error: null };
     }
-    if (insErr.code === "23505") {
+    if (insErr.code === "23505" && validNumber) {
       // 同時登録 race → 再取得
       const { data: raced, error: reErr } = await supabase
         .from("partner_companies")
         .select("id")
-        .eq("corp_number", corpNumber)
+        .eq("corp_number", validNumber)
         .maybeSingle();
       if (reErr || !raced?.id) {
         return { id: null, missingSchema: false, error: reErr?.message ?? insErr.message };

@@ -35,7 +35,7 @@ const SELECT_WITH_PARTNER =
 const SELECT_PLAIN = "id, tenant_id, name, office_number, created_at";
 
 /** opendata 選択で保持する法人情報 (登録時に partner_companies へ upsert) */
-type SelectedCorp = { corp_number: string; corp_name: string | null };
+type SelectedCorp = { corp_number: string | null; corp_name: string | null };
 
 type FormState = {
   name: string;
@@ -110,7 +110,13 @@ export function CareOfficesContent({ initialOffices }: { initialOffices: CareOff
       name: o.name ?? "",
       office_number: (o.office_number ?? "").replace(/[^0-9]/g, "").slice(0, 10),
     });
-    setCreateCorp(o.corp_number ? { corp_number: o.corp_number, corp_name: o.corp_name } : null);
+    // 法人番号は Excel 経由で壊れていることがあるため、法人名だけでも保持する
+    // (名寄せは upsertPartnerCompany 側で 13 桁検証 → 法人名 fallback)
+    setCreateCorp(
+      o.corp_number || o.corp_name
+        ? { corp_number: o.corp_number, corp_name: o.corp_name }
+        : null,
+    );
   };
 
   const handleCreate = async () => {
@@ -154,10 +160,10 @@ export function CareOfficesContent({ initialOffices }: { initialOffices: CareOff
         return;
       }
 
-      // 法人リンク: opendata 選択で corp_number がある場合のみ partner_companies に upsert
+      // 法人リンク: opendata 選択で法人情報がある場合のみ partner_companies に upsert
       // (テーブル未適用 = missingSchema の場合は連携スキップして登録続行)
       let partnerCompanyId: string | null = null;
-      if (createCorp?.corp_number) {
+      if (createCorp && (createCorp.corp_number || createCorp.corp_name)) {
         const corp = await upsertPartnerCompany(
           supabase,
           createCorp.corp_number,

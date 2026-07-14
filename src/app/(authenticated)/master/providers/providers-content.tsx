@@ -257,7 +257,7 @@ export function ProvidersContent({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   // opendata 候補選択時の法人情報 (手入力登録時は null = 法人リンクなし)
   const [createCorp, setCreateCorp] = useState<{
-    corp_number: string;
+    corp_number: string | null;
     corp_name: string | null;
   } | null>(null);
   const [form, setForm] = useState<Omit<ServiceProvider, "id" | "created_at">>(() => {
@@ -315,7 +315,13 @@ export function ProvidersContent({
       fax: o.fax_number ?? "",
       service_categories: code ? [code] : prev.service_categories,
     }));
-    setCreateCorp(o.corp_number ? { corp_number: o.corp_number, corp_name: o.corp_name } : null);
+    // 法人番号は Excel 経由で壊れていることがあるため、法人名だけでも保持する
+    // (名寄せは upsertPartnerCompany 側で 13 桁検証 → 法人名 fallback)
+    setCreateCorp(
+      o.corp_number || o.corp_name
+        ? { corp_number: o.corp_number, corp_name: o.corp_name }
+        : null,
+    );
   };
 
   const cancelCreate = () => {
@@ -388,9 +394,9 @@ export function ProvidersContent({
           return;
         }
 
-        // 法人リンク: opendata 選択で corp_number がある場合のみ partner_companies に upsert
+        // 法人リンク: opendata 選択で法人情報がある場合のみ partner_companies に upsert
         // (テーブル未適用 = missingSchema の場合は連携スキップして登録続行)
-        if (createCorp?.corp_number) {
+        if (createCorp && (createCorp.corp_number || createCorp.corp_name)) {
           const corp = await upsertPartnerCompany(
             supabase,
             createCorp.corp_number,
