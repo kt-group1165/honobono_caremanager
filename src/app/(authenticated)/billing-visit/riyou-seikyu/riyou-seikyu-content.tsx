@@ -1773,10 +1773,10 @@ export function RiyouSeikyuContent() {
             <>
               {/* テーブル (order-app UserBillingTab と同一列構成) */}
               <div className="flex-1 overflow-auto">
-                <table className="min-w-full text-xs border-collapse">
-                  <thead className="bg-gray-100 text-gray-700 sticky top-0 z-10">
+                <table className="min-w-full text-[11px] leading-4 border-collapse">
+                  <thead className="bg-gradient-to-b from-sky-100 to-sky-200 text-gray-700 sticky top-0 z-10">
                     <tr>
-                      <th className="px-2 py-1.5 border border-gray-300 text-center w-10">
+                      <th className="px-1 py-0.5 border border-gray-300 text-center w-10">
                         <label
                           className="inline-flex cursor-pointer select-none flex-col items-center gap-0.5"
                           title="全選択"
@@ -1790,15 +1790,15 @@ export function RiyouSeikyuContent() {
                           <span className="text-[9px] font-normal">対象</span>
                         </label>
                       </th>
-                      <th className="px-2 py-1.5 border border-gray-300 text-center w-10">名寄</th>
-                      <th className="px-2 py-1.5 border border-gray-300 text-center w-16">制度</th>
-                      <th className="px-2 py-1.5 border border-gray-300 text-center w-16">状態</th>
-                      <th className="px-2 py-1.5 border border-gray-300 text-left whitespace-nowrap">利用者名</th>
-                      <th className="px-2 py-1.5 border border-gray-300 text-left">事業所名</th>
-                      <th className="px-2 py-1.5 border border-gray-300 text-left w-24">番号</th>
-                      <th className="px-2 py-1.5 border border-gray-300 text-left w-24">支払方法</th>
-                      <th className="px-2 py-1.5 border border-gray-300 text-right w-24">請求額</th>
-                      <th className="px-2 py-1.5 border border-gray-300 text-left w-44 whitespace-nowrap">請求書発行日</th>
+                      <th className="px-1 py-0.5 border border-gray-300 text-center w-10">名寄</th>
+                      <th className="px-1 py-0.5 border border-gray-300 text-center w-16">制度</th>
+                      <th className="px-1 py-0.5 border border-gray-300 text-center w-16">状態</th>
+                      <th className="px-1 py-0.5 border border-gray-300 text-left whitespace-nowrap">利用者名</th>
+                      <th className="px-1 py-0.5 border border-gray-300 text-left">事業所名</th>
+                      <th className="px-1 py-0.5 border border-gray-300 text-left w-24">番号</th>
+                      <th className="px-1 py-0.5 border border-gray-300 text-left w-24">支払方法</th>
+                      <th className="px-1 py-0.5 border border-gray-300 text-right w-24">請求額</th>
+                      <th className="px-1 py-0.5 border border-gray-300 text-left w-44 whitespace-nowrap">請求書発行日</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1818,7 +1818,7 @@ export function RiyouSeikyuContent() {
                           className={`cursor-pointer ${isSelected ? "bg-indigo-50" : "hover:bg-blue-50"}`}
                           onClick={() => setSelectedKey(row.key)}
                         >
-                          <td className="px-2 py-1 border border-gray-200 text-center">
+                          <td className="px-1 py-0.5 border border-gray-200 text-center">
                             <input
                               type="checkbox"
                               checked={checked.has(row.key)}
@@ -1827,7 +1827,7 @@ export function RiyouSeikyuContent() {
                               className="cursor-pointer"
                             />
                           </td>
-                          <td className="px-2 py-1 border border-gray-200 text-center">
+                          <td className="px-1 py-0.5 border border-gray-200 text-center">
                             {/* 名寄せは介護・総合のみ (障害は世帯合算対象外) */}
                             {isShogai ? (
                               <span className="text-[10px] text-gray-300" title="障害は名寄せ対象外">
@@ -1844,30 +1844,30 @@ export function RiyouSeikyuContent() {
                               />
                             )}
                           </td>
-                          <td className="px-2 py-1 border border-gray-200 text-center">
+                          <td className="px-1 py-0.5 border border-gray-200 text-center">
                             <span
                               className={`inline-block whitespace-nowrap px-1.5 py-0.5 rounded text-[10px] font-semibold ${SYSTEM_BADGE_CLS[row.system]}`}
                             >
                               {row.system}
                             </span>
                           </td>
-                          <td className="px-2 py-1 border border-gray-200 text-center">
+                          <td className="px-1 py-0.5 border border-gray-200 text-center">
                             {statusBadge(row)}
                           </td>
-                          <td className="px-2 py-1 border border-gray-200 font-medium whitespace-nowrap">
+                          <td className="px-1 py-0.5 border border-gray-200 font-medium whitespace-nowrap">
                             {userName}
                           </td>
                           <td
-                            className="px-2 py-1 border border-gray-200 truncate max-w-[200px]"
+                            className="px-1 py-0.5 border border-gray-200 truncate max-w-[200px]"
                             title={officeName ?? ""}
                           >
                             {officeName ?? "-"}
                           </td>
-                          <td className="px-2 py-1 border border-gray-200 font-mono">
+                          <td className="px-1 py-0.5 border border-gray-200 font-mono">
                             {numberCell ?? "-"}
                           </td>
                           <td
-                            className="px-2 py-1 border border-gray-200"
+                            className="px-1 py-0.5 border border-gray-200"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <select
@@ -1883,7 +1883,7 @@ export function RiyouSeikyuContent() {
                             </select>
                           </td>
                           <td
-                            className="px-2 py-1 border border-gray-200 text-right font-mono"
+                            className="px-1 py-0.5 border border-gray-200 text-right font-mono"
                             title={
                               keigen > 0
                                 ? `軽減 ▲¥${keigen.toLocaleString()} 適用後`
@@ -1896,7 +1896,7 @@ export function RiyouSeikyuContent() {
                             )}
                           </td>
                           <td
-                            className="px-2 py-1 border border-gray-200 whitespace-nowrap"
+                            className="px-1 py-0.5 border border-gray-200 whitespace-nowrap"
                             onClick={(e) => e.stopPropagation()}
                           >
                             {/* 発行日 (西暦入力) + 令和表記を同一行に置き、請求済でも
@@ -1929,8 +1929,9 @@ export function RiyouSeikyuContent() {
                 </table>
               </div>
 
-              {/* フッタ: 総合計 + 選択行詳細 (order-app と同一レイアウト) */}
-              <div className="border-t border-gray-300 bg-gray-50 px-3 py-2 shrink-0 text-xs">
+              {/* フッタ: 総合計 + 選択行詳細 (order-app と同一レイアウト)。
+                  介護請求/障害請求のフッタと同じ box 帯に合わせる */}
+              <div className="border-t border-gray-400 bg-gray-100 px-3 py-1.5 shrink-0 text-[11px]">
                 <div className="flex flex-wrap gap-x-6 gap-y-1 text-gray-700">
                   <span>
                     件数合計 <span className="font-mono font-semibold">{unifiedRows.length.toLocaleString()}</span>
@@ -1993,12 +1994,12 @@ export function RiyouSeikyuContent() {
           )}
         </div>
 
-        {/* ── 右ペイン: 利用明細欄 ── */}
-        <div className="w-80 shrink-0 flex flex-col bg-white">
-          <div className="border-b border-gray-300 bg-gray-100 px-3 py-2 shrink-0 flex items-center justify-between">
-            <span className="text-sm font-semibold text-gray-700">利用明細欄</span>
+        {/* ── 右ペイン: 利用明細欄 (幅・青帯を介護請求/障害請求の明細情報ペインに揃える) ── */}
+        <div className="w-96 shrink-0 flex flex-col bg-white">
+          <div className="border-b border-sky-700 bg-gradient-to-b from-sky-500 to-sky-600 px-3 py-1 shrink-0 flex items-center justify-between">
+            <span className="text-xs font-bold text-white">利用明細欄</span>
             {selected && (
-              <span className="text-xs text-gray-500 truncate max-w-[160px]">
+              <span className="text-xs text-sky-100 truncate max-w-[160px]">
                 {selected.system === "障害"
                   ? selected.shogai.user_name
                   : selected.kaigo.user_name}
