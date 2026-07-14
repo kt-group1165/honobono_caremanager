@@ -4,6 +4,7 @@ import * as React from "react"
 import { Search, X } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { validInMonth } from "@/lib/service-code-valid"
+import { DEFAULT_CHIIKI_MUNICIPALITY } from "@/lib/idou-shien-code"
 import {
   getShogaiTimeBracketMode,
   setShogaiTimeBracketMode,
@@ -362,6 +363,10 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
             .select("service_code, service_name, short_name, units, service_category, service_category_name, calculation_type")
             .eq("system", system)
             .eq("service_category", activeCategory)
+          // 地域生活支援は市町村ごとにコード体系が別 → 市町村で絞る (現状は千葉市のみ)
+          if (system === "地域生活支援") {
+            query = query.eq("municipality", DEFAULT_CHIIKI_MUNICIPALITY)
+          }
           if (tmYear !== undefined && tmMonth !== undefined) {
             query = validInMonth(query, tmYear, tmMonth)
           } else {

@@ -26,6 +26,7 @@ import { dirname, join } from "node:path";
 
 const EXECUTE = process.argv.includes("--execute");
 const SYSTEM = "地域生活支援";
+const MUNICIPALITY = "千葉市"; // 地域生活支援は市町村ごとにコード体系が別。この投入は千葉市分
 const VALID_FROM = "2024-04-01"; // 令和6年4月1日適用
 const NOTES = "千葉市地域生活支援給付 R6.4.1適用";
 const BATCH = 500;
@@ -232,6 +233,7 @@ function buildRows() {
     const category = code.slice(0, 2);
     rows.push({
       system: SYSTEM,
+      municipality: MUNICIPALITY,
       service_category: category,
       service_category_name: category === "02" ? "移動支援" : "訪問入浴サービス",
       service_code: code,

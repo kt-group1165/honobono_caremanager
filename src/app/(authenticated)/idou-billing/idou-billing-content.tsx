@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { validInMonth } from "@/lib/service-code-valid";
+import { DEFAULT_CHIIKI_MUNICIPALITY } from "@/lib/idou-shien-code";
 import { ChevronLeft, ChevronRight, Loader2, Printer, Footprints } from "lucide-react";
 
 const UNIT_YEN = 10;
@@ -155,7 +156,8 @@ export function IdouBillingContent() {
       if (codes.length) {
         const { data: cn } = await validInMonth(
           supabase.from("kaigo_service_codes").select("service_code, service_name, units")
-            .eq("system", "地域生活支援").in("service_code", codes.slice(0, 300)),
+            .eq("system", "地域生活支援").eq("municipality", DEFAULT_CHIIKI_MUNICIPALITY)
+            .in("service_code", codes.slice(0, 300)),
           y, mo,
         );
         for (const c of (cn ?? []) as { service_code: string; service_name: string; units: number }[]) {

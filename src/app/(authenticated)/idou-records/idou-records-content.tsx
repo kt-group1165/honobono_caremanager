@@ -19,6 +19,7 @@ import {
   resolveIdouCode,
   calcMinutes,
   compositeNameFromTimes,
+  DEFAULT_CHIIKI_MUNICIPALITY,
   type IdouCodeResult,
 } from "@/lib/idou-shien-code";
 import { getServiceSystemMap } from "@/lib/service-system-lookup";
@@ -484,6 +485,7 @@ function IdouRecordForm({
           .from("kaigo_service_codes")
           .select("service_code, service_name, units")
           .eq("system", "地域生活支援")
+          .eq("municipality", DEFAULT_CHIIKI_MUNICIPALITY)
           .eq("service_name", name),
         y, mo,
       );

@@ -145,6 +145,11 @@ export function resolveChiikiBathCode(kaigoStaff3: boolean, aborted: boolean): s
   return kaigoStaff3 ? "041111" : "041110";
 }
 
+// 地域生活支援コードの既定市町村。市町村ごとにコード体系が別なので、コード検索は
+// この市町村で絞る。2市目を入れたら利用者の受給者証 (chiiki_recipient_certs.municipality)
+// 由来の値に差し替える。
+export const DEFAULT_CHIIKI_MUNICIPALITY = "千葉市";
+
 // ── 複合時間帯 (時間帯跨ぎ) の解決 ────────────────────────────────────────────
 // 自前で単位を再計算せず、実績時刻から「複合サービス名」を組み立てて投入済マスタ
 // (703件) を lookup する。マスタに該当が無い組合せは呼び出し側で手動選択に逃がす。
