@@ -19,7 +19,6 @@ import {
   resolveIdouCode,
   calcMinutes,
   compositeNameFromTimes,
-  DEFAULT_CHIIKI_MUNICIPALITY,
   type IdouCodeResult,
 } from "@/lib/idou-shien-code";
 import { getServiceSystemMap } from "@/lib/service-system-lookup";
@@ -127,6 +126,8 @@ export function IdouRecordsContent() {
   const [plans, setPlans] = useState<PlanRow[]>([]);
   // client_id → 支給量(分/月)。受給者証未登録は標準25h
   const [shikyuMin, setShikyuMin] = useState<Map<string, number>>(new Map());
+  // client_id → 受給者証の市町村 (存在 = 受給者証登録済み)。未登録はサービス選択ブロック
+  const [certMuni, setCertMuni] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<IdouRecord | "new" | null>(null);
   const [prefill, setPrefill] = useState<FormState | null>(null);
@@ -168,9 +169,9 @@ export function IdouRecordsContent() {
           .lte("visit_date", `${month}-31`)
           .order("visit_date")
           .order("start_time"),
-        // 地域生活支援受給者証の支給量 (超過警告の閾値)
+        // 地域生活支援受給者証 (支給量=警告閾値 / 市町村=登録有無・コード体系)
         ids.length
-          ? supabase.from("chiiki_recipient_certs").select("client_id, shikyu_minutes").in("client_id", ids)
+          ? supabase.from("chiiki_recipient_certs").select("client_id, shikyu_minutes, municipality").in("client_id", ids)
           : Promise.resolve({ data: [], error: null }),
       ]);
       if (clientsRes.error) throw clientsRes.error;
@@ -180,11 +181,11 @@ export function IdouRecordsContent() {
       setClients((clientsRes.data ?? []) as Client[]);
       setStaff((staffRes.data ?? []) as Staff[]);
       setRecords((recordsRes.data ?? []) as IdouRecord[]);
+      const chiikiRows = (shikyuRes.data ?? []) as { client_id: string; shikyu_minutes: number | null; municipality: string | null }[];
       setShikyuMin(new Map(
-        ((shikyuRes.data ?? []) as { client_id: string; shikyu_minutes: number | null }[])
-          .filter((r) => r.shikyu_minutes != null)
-          .map((r) => [r.client_id, r.shikyu_minutes as number]),
+        chiikiRows.filter((r) => r.shikyu_minutes != null).map((r) => [r.client_id, r.shikyu_minutes as number]),
       ));
+      setCertMuni(new Map(chiikiRows.map((r) => [r.client_id, r.municipality ?? "千葉市"])));
 
       // 予定を「移動支援 (地域生活支援給付)」に絞る (名称→制度区分 lookup)
       const allPlans = (planRes.data ?? []) as PlanRow[];
@@ -415,6 +416,7 @@ export function IdouRecordsContent() {
           prefill={editing === "new" ? prefill : null}
           clients={clients}
           staff={staff}
+          certMuni={certMuni}
           officeId={currentOfficeId}
           tenantId={currentOffice?.tenant_id ?? "kt-group"}
           onClose={() => { setEditing(null); setPrefill(null); }}
@@ -426,13 +428,14 @@ export function IdouRecordsContent() {
 }
 
 function IdouRecordForm({
-  supabase, record, prefill, clients, staff, officeId, tenantId, onClose, onSaved,
+  supabase, record, prefill, clients, staff, certMuni, officeId, tenantId, onClose, onSaved,
 }: {
   supabase: ReturnType<typeof createClient>;
   record: IdouRecord | null;
   prefill: FormState | null;
   clients: Client[];
   staff: Staff[];
+  certMuni: Map<string, string>;
   officeId: string;
   tenantId: string;
   onClose: () => void;
@@ -456,6 +459,10 @@ function IdouRecordForm({
   const toggleStaff = (id: string) =>
     setF((p) => ({ ...p, staff_ids: p.staff_ids.includes(id) ? p.staff_ids.filter((x) => x !== id) : [...p.staff_ids, id] }));
 
+  // 受給者証の市町村 (未登録 = undefined)。未登録はコード解決・保存をブロック
+  const muni = f.client_id ? certMuni.get(f.client_id) : undefined;
+  const noCert = !!f.client_id && muni === undefined;
+
   // 算定プレビュー (単一時間帯は同期解決)
   const cMin = calcMinutes(f.start_time ?? "", f.end_time ?? "", f.deduct_minutes);
   const resolved = f.start_time && f.end_time
@@ -471,11 +478,11 @@ function IdouRecordForm({
     setManualPick(null);
   }, [timeKey]);
 
-  // 複合時間帯: サービス名を組み立てて投入済マスタを lookup
+  // 複合時間帯: サービス名を組み立てて投入済マスタ (利用者の市町村) を lookup
   useEffect(() => {
     let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- 非複合/該当なしの derived reset
-    if (!isCrossBand) { setAutoComposite(null); return; }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 非複合/該当なし/受給者証未登録の derived reset
+    if (!isCrossBand || !muni) { setAutoComposite(muni ? null : "none"); return; }
     const name = compositeNameFromTimes(f.start_time ?? "", f.end_time ?? "", f.deduct_minutes, f.with_body_care);
     if (!name) { setAutoComposite("none"); return; }
     const [y, mo] = f.service_date.split("-").map(Number);
@@ -485,7 +492,7 @@ function IdouRecordForm({
           .from("kaigo_service_codes")
           .select("service_code, service_name, units")
           .eq("system", "地域生活支援")
-          .eq("municipality", DEFAULT_CHIIKI_MUNICIPALITY)
+          .eq("municipality", muni)
           .eq("service_name", name),
         y, mo,
       );
@@ -494,11 +501,13 @@ function IdouRecordForm({
       setAutoComposite(row ? { code: row.service_code, name: row.service_name, units: row.units } : "none");
     })();
     return () => { cancelled = true; };
-  }, [supabase, isCrossBand, timeKey, f.service_date, f.start_time, f.end_time, f.deduct_minutes, f.with_body_care]);
+  }, [supabase, isCrossBand, muni, timeKey, f.service_date, f.start_time, f.end_time, f.deduct_minutes, f.with_body_care]);
 
   // 最終確定コード: 手動 > 単一帯自動 > 複合自動
   const finalCode: { code: string; name: string; units: number } | null =
-    manualPick
+    noCert
+      ? null // 受給者証未登録は市町村不明 → コード確定不可
+      : manualPick
       ? manualPick
       : singleOk
       ? { code: (resolved as IdouCodeResult).code, name: (resolved as IdouCodeResult).label, units: (resolved as IdouCodeResult).units }
@@ -508,6 +517,7 @@ function IdouRecordForm({
 
   const handleSave = async () => {
     if (!f.client_id) { setError("利用者を選択してください"); return; }
+    if (noCert) { setError("この利用者は地域生活支援受給者証が未登録です。先に受給者証を登録してください"); return; }
     if (!f.service_date) { setError("日付を入力してください"); return; }
     setSaving(true);
     setError("");
@@ -558,6 +568,13 @@ function IdouRecordForm({
               <input type="date" value={f.service_date} onChange={(e) => set("service_date", e.target.value)} className={inputCls} />
             </div>
           </div>
+
+          {noCert && (
+            <div className="flex items-center gap-1.5 rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
+              <AlertTriangle size={14} />
+              この利用者は地域生活支援受給者証が未登録です。先に「管理 &gt; 地域生活支援 受給者証」で登録してください (登録するとコードを算定できます)。
+            </div>
+          )}
 
           {/* 計画 / 実績 */}
           <div className="grid grid-cols-2 gap-3">
@@ -621,8 +638,9 @@ function IdouRecordForm({
               )}
               <button
                 type="button"
+                disabled={noCert}
                 onClick={() => setShowPicker(true)}
-                className="ml-auto rounded border border-violet-200 bg-white px-2 py-0.5 text-violet-600 hover:bg-violet-50"
+                className="ml-auto rounded border border-violet-200 bg-white px-2 py-0.5 text-violet-600 hover:bg-violet-50 disabled:opacity-40"
               >
                 コードを手動選択
               </button>
@@ -633,6 +651,7 @@ function IdouRecordForm({
             open={showPicker}
             onClose={() => setShowPicker(false)}
             system="地域生活支援"
+            chiikiMunicipality={muni ?? null}
             onSelect={(svc) => {
               setManualPick({ code: svc.code, name: svc.name, units: svc.units });
               setShowPicker(false);
@@ -685,7 +704,7 @@ function IdouRecordForm({
           </select>
           <div className="flex gap-2">
             <button onClick={onClose} className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">キャンセル</button>
-            <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50">
+            <button onClick={handleSave} disabled={saving || noCert} title={noCert ? "受給者証未登録のため保存できません" : undefined} className="flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50">
               {saving && <Loader2 size={14} className="animate-spin" />}保存
             </button>
           </div>

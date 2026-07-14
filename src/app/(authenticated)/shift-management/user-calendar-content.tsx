@@ -175,6 +175,17 @@ export function UserCalendar({
     return () => { cancelled = true; };
   }, [supabase, userId]);
 
+  // 地域生活支援受給者証の市町村 (この利用者)。undefined=未取得/未登録 → 地域生活支援タブはブロック
+  const [chiikiMuni, setChiikiMuni] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    supabase.from("chiiki_recipient_certs").select("municipality").eq("client_id", userId).maybeSingle()
+      .then(({ data }: { data: { municipality: string | null } | null }) => {
+        if (!cancelled) setChiikiMuni(data?.municipality ?? null);
+      });
+    return () => { cancelled = true; };
+  }, [supabase, userId]);
+
   const [editModal, setEditModal] = useState<VisitSchedule | null>(null);
   const [editForm, setEditForm] = useState({ start_time: "", end_time: "", service_type: "", staff_id: "", service_code: "", service_name: "", kinkyu_houmon: false });
   // 追加職員 (index0=職員2, index1=職員3, …)。最大9名
@@ -776,6 +787,7 @@ export function UserCalendar({
                   onClose={() => setShowServiceSelector(false)}
                   startTime={editForm.start_time}
                   endTime={editForm.end_time}
+                  chiikiMunicipality={chiikiMuni}
                   showVisitAddons={kinkyuSupported}
                   kinkyu={editForm.kinkyu_houmon}
                   onKinkyuChange={(v) => setEditForm((f) => ({ ...f, kinkyu_houmon: v }))}
@@ -967,6 +979,7 @@ export function UserCalendar({
                   onClose={() => setShowAddServiceSelector(false)}
                   startTime={addForm.start_time}
                   endTime={addForm.end_time}
+                  chiikiMunicipality={chiikiMuni}
                   showVisitAddons={kinkyuSupported}
                   kinkyu={addForm.kinkyu_houmon}
                   onKinkyuChange={(v) => setAddForm((f) => ({ ...f, kinkyu_houmon: v }))}

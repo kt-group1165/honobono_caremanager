@@ -71,6 +71,13 @@ interface ServiceSelectorProps {
   kinkyu?: boolean
   /** 緊急時トグル変更時 (即時コミット。ポップアップは閉じない) */
   onKinkyuChange?: (value: boolean) => void
+  /**
+   * 地域生活支援タブで絞る市町村。
+   * - 未指定 (undefined): 既定 (千葉市)。地域生活支援を使わない一般呼び出し用
+   * - string: その市町村のコードのみ表示
+   * - null: 受給者証未登録 = 市町村不明。地域生活支援タブではコードを出さずブロック
+   */
+  chiikiMunicipality?: string | null
 }
 
 // ─── 時間レンジ判定 (service_name から所要分を推定) ─────────────────────────
@@ -291,10 +298,13 @@ export function ServiceSelector(props: ServiceSelectorProps) {
   return <ServiceSelectorInner {...props} />
 }
 
-function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介護", startTime, endTime, targetMonth, showVisitAddons, kinkyu, onKinkyuChange }: Omit<ServiceSelectorProps, "open">) {
+function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介護", startTime, endTime, targetMonth, showVisitAddons, kinkyu, onKinkyuChange, chiikiMunicipality }: Omit<ServiceSelectorProps, "open">) {
   const [activeSystem, setActiveSystem] = React.useState<"介護" | "障害" | "総合事業" | "独自" | "地域生活支援">(initialSystem);
   const CATEGORIES = CATEGORIES_BY_SYSTEM[activeSystem];
   const system = activeSystem;
+  // 地域生活支援の実効市町村。undefined=既定(千葉市) / null=受給者証未登録でブロック
+  const chiikiMuni = chiikiMunicipality === undefined ? DEFAULT_CHIIKI_MUNICIPALITY : chiikiMunicipality;
+  const chiikiBlocked = system === "地域生活支援" && chiikiMuni == null;
   const [services, setServices] = React.useState<ServiceCode[]>([])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -363,9 +373,10 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
             .select("service_code, service_name, short_name, units, service_category, service_category_name, calculation_type")
             .eq("system", system)
             .eq("service_category", activeCategory)
-          // 地域生活支援は市町村ごとにコード体系が別 → 市町村で絞る (現状は千葉市のみ)
+          // 地域生活支援は市町村ごとにコード体系が別 → 市町村で絞る。市町村不明はブロック
           if (system === "地域生活支援") {
-            query = query.eq("municipality", DEFAULT_CHIIKI_MUNICIPALITY)
+            if (chiikiMuni == null) { setServices([]); return } // finally で loading 解除
+            query = query.eq("municipality", chiikiMuni)
           }
           if (tmYear !== undefined && tmMonth !== undefined) {
             query = validInMonth(query, tmYear, tmMonth)
@@ -401,7 +412,7 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
 
     fetchServices()
     return () => { cancelled = true }
-  }, [system, activeCategory, tmYear, tmMonth])
+  }, [system, activeCategory, tmYear, tmMonth, chiikiMuni])
 
   // ── Escape key ───────────────────────────────────────────────────────────────
   React.useEffect(() => {
@@ -616,25 +627,32 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
 
         {/* Service list */}
         <div className="flex-1 overflow-y-auto" style={{ maxHeight: "400px" }}>
-          {loading && (
+          {chiikiBlocked && (
+            <div className="flex flex-col items-center justify-center gap-1 py-12 px-6 text-center text-sm text-amber-600">
+              <span className="font-medium">地域生活支援受給者証が未登録です</span>
+              <span className="text-xs text-gray-500">利用者の受給者証を登録すると、その市町村のサービスコードを選択できます (管理 &gt; 地域生活支援 受給者証)</span>
+            </div>
+          )}
+
+          {!chiikiBlocked && loading && (
             <div className="flex items-center justify-center py-12 text-sm text-gray-500">
               読み込み中...
             </div>
           )}
 
-          {error && !loading && (
+          {!chiikiBlocked && error && !loading && (
             <div className="flex items-center justify-center py-12 text-sm text-red-500">
               {error}
             </div>
           )}
 
-          {!loading && !error && filtered.length === 0 && (
+          {!chiikiBlocked && !loading && !error && filtered.length === 0 && (
             <div className="flex items-center justify-center py-12 text-sm text-gray-400">
               該当するサービスコードが見つかりません。
             </div>
           )}
 
-          {!loading && !error && filtered.length > 0 && (
+          {!chiikiBlocked && !loading && !error && filtered.length > 0 && (
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-gray-50 z-10">
                 <tr>
