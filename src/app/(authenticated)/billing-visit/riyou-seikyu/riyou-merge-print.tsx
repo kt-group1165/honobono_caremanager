@@ -22,16 +22,73 @@
  *   (制度合算・事業所合算と独立に効く)。
  */
 
-import type { ReactNode } from "react";
-
 export type MergeSystem = "介護" | "総合事業" | "障害";
 
-// 制度バッジ配色 (一覧の SYSTEM_BADGE_CLS と揃える)
-const SYSTEM_BADGE: Record<MergeSystem, string> = {
-  介護: "bg-indigo-100 text-indigo-700",
-  総合事業: "bg-teal-100 text-teal-700",
-  障害: "bg-violet-100 text-violet-700",
-};
+// ── ひな形 (ほのぼの MORE 型) の固定文言・固定値 (Phase 1) ────────────────────
+//   Phase 2 でマスタ化予定の項目はここに集約しておく (拝啓文 / 押印省略 / 登録番号
+//   プレースホルダ / 振替日プレースホルダ)。編集は 1 箇所で済むようにする。
+export const HINAGATA_FIXED = {
+  /** 帳票タイトル (左上の枠) */
+  title: "ご利用料金のご案内",
+  /** 封筒表記 */
+  zaichu: "ご請求書・領収書在中",
+  /** 拝啓文 (口座振替の案内。Phase 2 でマスタ化予定) */
+  haikei:
+    "拝啓　毎々格別のお引立に預かり厚く御礼申し上げます。さて、ご利用分の請求書をお送りさせていただきましたので、ご査収の程よろしくお願いいたします。また、下記振替日にご指定口座より自動振替となりますので、お手数ですが前日までにお口座にご入金をお願いいたします。",
+  keigu: "敬具",
+  /** 押印省略の注記 */
+  ouinShoryaku: "※押印は省略させていただきます。",
+  /** インボイス登録番号: companies に列が無いため固定プレースホルダ (Phase 2 でマスタ化) */
+  invoiceNumberPrefix: "登録番号：T",
+  /** 振替日: 保存先が無いため空欄プレースホルダ (Phase 2 でマスタ化) */
+  transferDatePlaceholder: "　　年　月　日",
+} as const;
+
+// 事業所枠の制度色 (ひな形: 介護=橙 / 障害=紫 / 自費(事業所書式)=緑)。
+//   総合事業は介護系として橙に寄せる。一覧の SYSTEM_BADGE_CLS とは別体系
+//   (ひな形の制度チェック □介護(橙) □障害(紫) □事業所書式(自費)(緑) に合わせる)。
+const SECTION_COLOR = {
+  kaigo: {
+    border: "border-orange-500",
+    heading: "text-orange-700",
+    tint: "bg-orange-50",
+    check: "text-orange-600",
+  },
+  shogai: {
+    border: "border-violet-500",
+    heading: "text-violet-700",
+    tint: "bg-violet-50",
+    check: "text-violet-600",
+  },
+  jihi: {
+    border: "border-green-600",
+    heading: "text-green-700",
+    tint: "bg-green-50",
+    check: "text-green-600",
+  },
+} as const;
+const sectionKind = (s: MergedSection): "kaigo" | "shogai" =>
+  s.system === "障害" ? "shogai" : "kaigo";
+
+/** 口座情報 (clients.bank_*)。表示専用 */
+export interface MergeBank {
+  bankName: string | null;
+  bankBranch: string | null;
+  bankAccountType: string | null;
+  bankAccountNumber: string | null;
+  bankAccountHolder: string | null;
+}
+
+/** シート単位の自社情報 (companies / offices 由来 + 固定プレースホルダ) */
+export interface SheetCompany {
+  /** 法人名 (companies.name。無ければ officeName) */
+  name: string | null;
+  postalCode: string | null;
+  address: string | null;
+  phone: string | null;
+  /** 登録番号 (Phase 1 は null → プレースホルダ表示) */
+  invoiceNumber: string | null;
+}
 
 /**
  * サービス明細行 (表示専用)。集計 (aggregate) の details / addons をそのまま詰める。
@@ -76,6 +133,15 @@ export interface MergeInput {
   prevBilled: number;
   /** 前月入金額 (同上) */
   prevPaid: number;
+  // ── ひな形 (Phase 1) 表示専用の追加項目 (任意。無ければ空欄で崩れない) ──
+  /** 宛先 郵便番号 (clients.postal_code)。client 単位なので自事業所分にだけ入れれば足りる */
+  postalCode?: string | null;
+  /** 宛先 住所 (clients.address) */
+  address?: string | null;
+  /** 口座情報 (clients.bank_*) */
+  bank?: MergeBank | null;
+  /** この事業所の問い合わせ先電話 (offices.phone)。他事業所分は Phase 1 では null */
+  officePhone?: string | null;
 }
 
 /** 合算後の 1 利用者 (制度別セクションを内包) */
@@ -88,6 +154,10 @@ export interface MergedSection {
   subtotal: number;
   /** サービス明細行 (表示専用) */
   lines: MergedLine[];
+  /** 医療費控除対象額 (この制度分。ひな形の事業所別小箱に表示) */
+  iryohi: number;
+  /** この事業所の問い合わせ先電話 (ひな形の「お問い合わせ先」)。無ければ null */
+  officePhone: string | null;
 }
 export interface MergedClient {
   userId: string;
@@ -103,6 +173,13 @@ export interface MergedClient {
   /** 前月請求合計 / 前月入金合計 (制度横断で合算) */
   prevBilled: number;
   prevPaid: number;
+  // ── ひな形 (Phase 1) 表示専用 ──
+  /** 宛先 郵便番号 */
+  postalCode: string | null;
+  /** 宛先 住所 */
+  address: string | null;
+  /** 口座情報 (clients.bank_*) */
+  bank: MergeBank | null;
 }
 
 const SYSTEM_ORDER: Record<MergeSystem, number> = { 介護: 0, 総合事業: 1, 障害: 2 };
@@ -140,11 +217,18 @@ export function buildMergedClients(inputs: MergeInput[]): MergedClient[] {
         jippi: s.jippi,
         subtotal: s.subtotal,
         lines: s.lines,
+        iryohi: s.iryohi,
+        officePhone: s.officePhone ?? null,
       })),
       clientTotal: sorted.reduce((sum, s) => sum + s.subtotal, 0),
       iryohi: sorted.reduce((sum, s) => sum + s.iryohi, 0),
       prevBilled: sorted.reduce((sum, s) => sum + s.prevBilled, 0),
       prevPaid: sorted.reduce((sum, s) => sum + s.prevPaid, 0),
+      // 宛先・口座は client 単位。制度/事業所をまたいで最初に得られた非 null を採用
+      // (自事業所セクションが持ち、他事業所セクションは null で渡す想定)。
+      postalCode: sorted.find((s) => s.postalCode != null)?.postalCode ?? null,
+      address: sorted.find((s) => s.address != null)?.address ?? null,
+      bank: sorted.find((s) => s.bank != null)?.bank ?? null,
     });
   }
   // 利用者番号順 (番号なしは末尾・カナ順) — 一括印刷と同じ並び
@@ -167,14 +251,42 @@ export function buildMergedClients(inputs: MergeInput[]): MergedClient[] {
   return clients;
 }
 
-const yen = (n: number) => `¥${n.toLocaleString()}`;
+const yen = (n: number) => `¥${(n ?? 0).toLocaleString()}`;
+// 月末日 (期間表記用)
+const lastDayOf = (gYear: number, month: number) =>
+  new Date(gYear, month, 0).getDate();
+
+// ── ひな形 小部品 (module 直下に置いて nested-component 警告を避ける) ──────────
+function HinaCheck({ on }: { on: boolean }) {
+  return <span className="mr-1 inline-block font-bold">{on ? "☑" : "□"}</span>;
+}
+function HinaBox({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-[92px] border border-black text-center">
+      <div className="border-b border-black bg-gray-50 px-1 py-0.5 text-[9px] leading-tight">
+        {label}
+      </div>
+      <div className="px-1 py-0.5 text-[11px] tabular-nums">{value}</div>
+    </div>
+  );
+}
+// 明細テーブルの空セル (備考 / 控除 / 単価 / 時間 など Phase 1 は未使用)
+const emptyCell = (key: string) => (
+  <td key={key} className="border border-black px-1 py-0.5" />
+);
 
 /**
- * 合算 利用料請求書 (1 枚)。
- * - clients 1 名 = 個別 (制度別セクション + 利用者合計)
- * - clients 2 名以上 = 世帯合算 (利用者ごとにセクション + 世帯合計)
+ * 合算 利用料請求書 (1 枚) — ほのぼの MORE 型ひな形レイアウト (Phase 1)。
  *
- * 金額はすべて呼び出し側が計算済みの subtotal を足すだけ (このコンポーネントは計算しない)。
+ * 構成 (ひな形準拠):
+ *   ヘッダー (タイトル枠 / 宛先 / 発行日 / 自社情報 / 制度チェック)
+ *   → 拝啓文ブロック → 口座振替テーブル → 引落金額内訳
+ *   → 事業所別ご利用内訳 (事業所×制度ごとに繰り返し・制度色で枠色分け)
+ *   → 【備考】自由記述枠。
+ *
+ * ★ money-safety: 金額は呼び出し側が計算済みの subtotal / clientTotal を
+ *   足すだけ (このコンポーネントは一切再計算しない)。お引落予定金額 = Σ clientTotal。
+ *   過誤相殺・繰越は Phase 3 スコープのためここでは扱わない。
  */
 export function RiyouSeikyuMergedPrintSheet({
   clients,
@@ -182,324 +294,353 @@ export function RiyouSeikyuMergedPrintSheet({
   reiwa,
   month,
   isCopy = false,
-  /** 事業所合算 (法人横断) の請求書か (見出し表記の切替) */
-  companyMerged = false,
+  /** 自社情報 (companies / offices 由来。null = officeName + 空欄にフォールバック) */
+  company = null,
 }: {
   clients: MergedClient[];
   officeName: string | null;
   reiwa: number;
   month: number;
   isCopy?: boolean;
+  /** 事業所合算 (法人横断) 判定は section.officeLabel で行うため companyMerged prop は受けるだけ */
   companyMerged?: boolean;
+  company?: SheetCompany | null;
 }) {
   const today = new Date();
   const issueDate = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
   const isHousehold = clients.length >= 2;
   const rep = clients[0];
+  const gYear = reiwa + 2018;
+  const monthEnd = lastDayOf(gYear, month);
 
+  // お引落予定金額 = Σ clientTotal (= Σ subtotal)。再計算せず加算のみ。
   const monthTotal = clients.reduce((s, c) => s + c.clientTotal, 0);
-  const prevBilled = clients.reduce((s, c) => s + c.prevBilled, 0);
-  const prevPaid = clients.reduce((s, c) => s + c.prevPaid, 0);
-  const carry = prevBilled - prevPaid;
-  const grandTotal = monthTotal + carry;
-  const hasPrev = clients.some((c) => c.prevBilled !== 0 || c.prevPaid !== 0);
 
-  // 制度の顔ぶれ (見出し補足用)
-  const systems = Array.from(
-    new Set(clients.flatMap((c) => c.sections.map((s) => s.system))),
+  // 制度チェック (□介護(橙) / □障害(紫) / □事業所書式(自費)(緑))
+  const hasKaigo = clients.some((c) =>
+    c.sections.some((s) => s.system !== "障害"),
   );
-  const multiSystem = systems.length >= 2;
-
-  // このシートが実際に複数事業所を横断しているか (section の officeLabel が 2 種類以上)。
-  // prop companyMerged はフォールバック (呼び出し側が明示 ON にした場合)。
-  const officeLabels = Array.from(
-    new Set(
-      clients
-        .flatMap((c) => c.sections.map((s) => s.officeLabel))
-        .filter((l): l is string => !!l),
-    ),
+  const hasShogai = clients.some((c) =>
+    c.sections.some((s) => s.system === "障害"),
   );
-  const isCompanyMerged = companyMerged && officeLabels.length >= 2;
+  const hasJihi = clients.some((c) => c.sections.some((s) => s.jippi > 0));
 
-  const titleSuffix = isHousehold
-    ? " (世帯合算)"
-    : isCompanyMerged
-      ? " (事業所合算)"
-      : multiSystem
-        ? " (制度合算)"
-        : "";
-
-  // ── サービス明細レイアウト ──────────────────────────────────────────────
-  //   [事業所] → 制度 → サービス明細行 (サービス名 / 単位数 / 回数) → セクション小計 (円)
-  //   → 利用者合計 (単位数合計 + 当月請求額 円)。
-  //   表示専用: 単位数は details/addons をそのまま並べるだけで、円は行に割らない。
-  //   事業所見出しは 2 事業所以上のときだけ (単独は省略 = 従来の見た目に近づける)。
-  //   制度見出しは 2 制度以上のときだけ。
-  const showOffice = officeLabels.length >= 2;
-  const showSystem = multiSystem;
-  const COLS = 4; // サービス名 / 単位数 / 回数 / 金額
+  // 自社情報 (companies 優先 → 無ければ officeName / 空欄)
+  const compName = company?.name ?? officeName ?? "";
+  const compPostal = company?.postalCode ?? "";
+  const compAddress = company?.address ?? "";
+  const compPhone = company?.phone ?? "";
+  const invoiceNo = `${HINAGATA_FIXED.invoiceNumberPrefix}${company?.invoiceNumber ?? ""}`;
 
   const sectionUnits = (s: MergedSection) =>
     s.lines.reduce((u, l) => u + l.units, 0);
-  // 負担 − 軽減 + 実費 の内訳注記 (軽減/実費がある行のみ。従来の列表示を凝縮)
-  const breakdownText = (base: number, keigen: number, jippi: number) => {
-    if (keigen <= 0 && jippi <= 0) return null;
-    const parts = [`負担 ${yen(base)}`];
-    if (keigen > 0) parts.push(`− 軽減 ${yen(keigen)}`);
-    if (jippi > 0) parts.push(`+ 実費 ${yen(jippi)}`);
-    return parts.join(" ");
-  };
 
-  const bodyRows: ReactNode[] = [];
+  // 引落金額内訳: (利用者 × 事業所) 単位に subtotal を集約 (再計算せず加算のみ)
+  const breakdownItems: { name: string; office: string; amount: number }[] = [];
   for (const c of clients) {
-    const cUnits = c.sections.reduce((u, s) => u + sectionUnits(s), 0);
-    const cBase = c.sections.reduce((s, x) => s + x.base, 0);
-    const cKeigen = c.sections.reduce((s, x) => s + x.keigen, 0);
-    const cJippi = c.sections.reduce((s, x) => s + x.jippi, 0);
-    const multiSection = c.sections.length >= 2;
-
-    // 世帯合算のときは利用者名を見出し行に (単独請求書では上部の宛名で足りる)
-    if (isHousehold) {
-      bodyRows.push(
-        <tr key={`${c.userId}-name`} className="bg-gray-100 font-semibold">
-          <td className="border border-black px-2 py-1" colSpan={COLS}>
-            {c.userName} 様
-            {c.copayRate != null && (
-              <span className="ml-1 text-xs text-gray-500">
-                ({Math.round(c.copayRate * 10)}割)
-              </span>
-            )}
-          </td>
-        </tr>,
-      );
-    }
-
-    // 事業所単位でグループ化 (挿入順を維持)
-    const byOffice = new Map<string, MergedSection[]>();
+    const byOffice = new Map<string, number>();
     for (const s of c.sections) {
-      const key = s.officeLabel ?? "";
-      if (!byOffice.has(key)) byOffice.set(key, []);
-      byOffice.get(key)!.push(s);
+      const key = s.officeLabel ?? officeName ?? "";
+      byOffice.set(key, (byOffice.get(key) ?? 0) + s.subtotal);
     }
-
-    for (const [officeKey, secs] of byOffice) {
-      if (showOffice && officeKey) {
-        bodyRows.push(
-          <tr key={`${c.userId}-off-${officeKey}`} className="bg-gray-50">
-            <td
-              className="border border-black px-2 py-1 text-sm font-medium"
-              colSpan={COLS}
-            >
-              【{officeKey}】
-            </td>
-          </tr>,
-        );
-      }
-      for (const s of secs) {
-        const sKey = `${c.userId}-${officeKey}-${s.system}`;
-        if (showSystem) {
-          bodyRows.push(
-            <tr key={`${sKey}-hd`}>
-              <td className="border border-black px-2 py-1" colSpan={COLS}>
-                <span
-                  className={`inline-block rounded px-1.5 py-0.5 text-xs font-semibold ${SYSTEM_BADGE[s.system]}`}
-                >
-                  {s.system}
-                </span>
-              </td>
-            </tr>,
-          );
-        }
-        // サービス明細行 (details / addons)。空 = フォールバック (小計のみ)
-        s.lines.forEach((ln, li) => {
-          bodyRows.push(
-            <tr key={`${sKey}-l${li}`}>
-              <td className="border border-black px-2 py-1 pl-4">
-                {ln.serviceName}
-              </td>
-              <td className="border border-black px-2 py-1 text-right tabular-nums">
-                {ln.units.toLocaleString()}
-              </td>
-              <td className="border border-black px-2 py-1 text-right tabular-nums">
-                {ln.count}
-              </td>
-              <td className="border border-black px-2 py-1" />
-            </tr>,
-          );
-        });
-        // セクション小計 (円) — 制度/事業所が複数あるときのみ (単独は利用者合計で足りる)
-        if (multiSection) {
-          const bd = breakdownText(s.base, s.keigen, s.jippi);
-          bodyRows.push(
-            <tr key={`${sKey}-st`} className="bg-gray-50">
-              <td className="border border-black px-2 py-1" colSpan={2}>
-                <span className="font-medium">小計</span>
-                <span className="ml-1 text-xs text-gray-500">
-                  {s.system}
-                  {showOffice && s.officeLabel ? ` / ${s.officeLabel}` : ""}
-                  {bd ? ` (${bd})` : ""}
-                </span>
-              </td>
-              <td className="border border-black px-2 py-1 text-right tabular-nums">
-                {sectionUnits(s).toLocaleString()} 単位
-              </td>
-              <td className="border border-black px-2 py-1 text-right tabular-nums font-semibold">
-                {yen(s.subtotal)}
-              </td>
-            </tr>,
-          );
-        }
-      }
-    }
-
-    // 利用者合計 (単位数合計 + 当月請求額)。単独セクションの内訳注記もここに凝縮
-    const cbd = !multiSection ? breakdownText(cBase, cKeigen, cJippi) : null;
-    bodyRows.push(
-      <tr key={`${c.userId}-total`} className="font-bold">
-        <td className="border border-black px-2 py-1.5">
-          {isHousehold ? `${c.userName} 様 合計` : "合計"}
-          {cbd && (
-            <span className="ml-1 text-xs font-normal text-gray-500">
-              ({cbd})
-            </span>
-          )}
-        </td>
-        <td className="border border-black px-2 py-1.5 text-right tabular-nums">
-          {cUnits.toLocaleString()} 単位
-        </td>
-        <td className="border border-black px-2 py-1.5" />
-        <td className="border border-black px-2 py-1.5 text-right tabular-nums">
-          {yen(c.clientTotal)}
-        </td>
-      </tr>,
-    );
+    for (const [office, amount] of byOffice)
+      breakdownItems.push({ name: c.userName, office, amount });
   }
 
+  const bankRep = rep.bank;
+
   return (
-    <div className="p-10 text-black relative" style={{ pageBreakAfter: "always" }}>
-      {isCopy && (
-        <span className="absolute right-10 top-8 border border-black px-2 py-1 text-sm font-bold">
-          控
-        </span>
-      )}
-      <h1 className="mb-8 text-center text-2xl font-bold tracking-[0.5em]">
-        利用料請求書{titleSuffix}
-        {isCopy ? " (控)" : ""}
-      </h1>
-
-      <div className="mb-8 flex items-start justify-between">
-        <div>
-          <p className="inline-block border-b border-black pb-1 pr-12 text-lg">
-            {rep.userName} 様{" "}
-            {isHousehold ? `他 ${clients.length - 1} 名` : ""}
-          </p>
-          <p className="mt-3 text-sm">
-            令和{reiwa}年{month}月分のサービス利用料を下記のとおり
-            {isHousehold ? " (世帯合算) " : ""}ご請求申し上げます。
-          </p>
+    <div
+      className="relative bg-white p-8 text-black"
+      style={{ pageBreakAfter: "always" }}
+    >
+      {/* ── ヘッダー: タイトル/宛先 | 発行日/自社情報 | 制度チェック ── */}
+      <div className="mb-2 flex items-start justify-between gap-4">
+        {/* 左: タイトル枠 + 宛先 */}
+        <div className="min-w-0 flex-1">
+          <div className="inline-block border-2 border-black px-3 py-1 text-lg font-bold">
+            {HINAGATA_FIXED.title}
+            {isCopy ? "（控）" : ""}
+          </div>
+          <div className="mt-1 text-[11px]">{HINAGATA_FIXED.zaichu}</div>
+          <div className="mt-3 text-[13px] leading-6">
+            <div>〒{rep.postalCode ?? ""}</div>
+            <div>{rep.address ?? ""}</div>
+            <div className="mt-1 text-[15px] font-semibold">
+              {rep.userName}　様
+              {isHousehold ? `　他 ${clients.length - 1} 名` : ""}
+              {rep.userNumber ? (
+                <span className="ml-2 text-[11px] font-normal text-gray-600">
+                  （{rep.userNumber}）
+                </span>
+              ) : null}
+            </div>
+          </div>
         </div>
-        <div className="text-right text-sm leading-6">
-          <p>発行日: {issueDate}</p>
-          <p className="mt-3 font-medium">{officeName ?? ""}</p>
+        {/* 中: 発行日 + 自社情報 */}
+        <div className="w-64 shrink-0 text-[12px] leading-5">
+          <div className="mb-1 text-right">{issueDate}</div>
+          <div>〒{compPostal}</div>
+          <div>{compAddress}</div>
+          <div className="font-semibold">{compName}</div>
+          <div>{invoiceNo}</div>
+          <div>TEL：{compPhone}</div>
+          <div className="mt-1 text-[11px]">{HINAGATA_FIXED.ouinShoryaku}</div>
+        </div>
+        {/* 右: 制度チェック */}
+        <div className="w-40 shrink-0 self-start border border-black p-2 text-[12px] leading-6">
+          <div>
+            <HinaCheck on={hasKaigo} />
+            <span className="text-orange-600">：介護</span>
+          </div>
+          <div>
+            <HinaCheck on={hasShogai} />
+            <span className="text-violet-600">：障害</span>
+          </div>
+          <div>
+            <HinaCheck on={hasJihi} />
+            <span className="text-green-600">：事業所書式(自費)</span>
+          </div>
         </div>
       </div>
 
-      <div className="mb-6 flex items-center gap-3">
-        <span className="border border-black px-4 py-2 text-lg font-bold">
-          今回御請求額 {yen(grandTotal)} －
-        </span>
-        <span className="text-xs">
-          (消費税: 非課税
-          {isHousehold ? ` / 世帯 ${clients.length} 名分` : ""}
-          {multiSystem ? ` / ${systems.join("・")}` : ""})
-        </span>
+      {/* ── 拝啓文ブロック ── */}
+      <div className="mb-2 border border-black p-2 text-[11px] leading-5">
+        <div>{HINAGATA_FIXED.haikei}</div>
+        <div className="text-right">{HINAGATA_FIXED.keigu}</div>
       </div>
 
-      <table className="w-full border-collapse text-sm">
+      {/* ── 口座振替テーブル ── */}
+      <table className="mb-2 w-full border-collapse text-[11px]">
         <thead>
-          <tr className="bg-gray-100">
-            <th className="border border-black px-2 py-1.5 text-left">サービス名</th>
-            <th className="border border-black px-2 py-1.5 text-right w-28">単位数</th>
-            <th className="border border-black px-2 py-1.5 text-right w-20">回数</th>
-            <th className="border border-black px-2 py-1.5 text-right w-28">金額</th>
-          </tr>
-        </thead>
-        <tbody>
-          {bodyRows}
-          {isHousehold && (
-            <tr className="font-bold bg-gray-100">
-              <td className="border border-black px-2 py-1.5" colSpan={3}>
-                当月請求額 (世帯 {clients.length} 名分)
-              </td>
-              <td className="border border-black px-2 py-1.5 text-right tabular-nums">
-                {yen(monthTotal)}
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-
-      {/* 前回領収欄 (制度横断で合算した前月請求/入金) */}
-      <table className="mt-4 w-full border-collapse text-sm">
-        <thead>
-          <tr className="bg-gray-100">
-            <th className="border border-black px-2 py-1 text-right">前回請求額</th>
-            <th className="border border-black px-2 py-1 text-right">前回入金額</th>
-            <th className="border border-black px-2 py-1 text-right">
-              繰越額 (未収は+、過入金は▲)
-            </th>
-            <th className="border border-black px-2 py-1 text-right">今回御請求額</th>
+          <tr className="bg-gray-50">
+            <th className="border border-black px-1 py-0.5">振替日</th>
+            <th className="border border-black px-1 py-0.5">金融機関</th>
+            <th className="border border-black px-1 py-0.5">支店名</th>
+            <th className="border border-black px-1 py-0.5">種目・口座番号</th>
+            <th className="border border-black px-1 py-0.5">口座名義人</th>
+            <th className="border border-black px-1 py-0.5">お引落予定金額</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td className="border border-black px-2 py-1.5 text-right tabular-nums">
-              {hasPrev ? yen(prevBilled) : "—"}
+            <td className="border border-black px-1 py-0.5 text-center">
+              {HINAGATA_FIXED.transferDatePlaceholder}
             </td>
-            <td className="border border-black px-2 py-1.5 text-right tabular-nums">
-              {hasPrev ? yen(prevPaid) : "—"}
+            <td className="border border-black px-1 py-0.5 text-center">
+              {bankRep?.bankName ?? ""}
             </td>
-            <td className="border border-black px-2 py-1.5 text-right tabular-nums">
-              {carry === 0
-                ? "¥0"
-                : carry > 0
-                  ? yen(carry)
-                  : `▲${yen(-carry)}`}
+            <td className="border border-black px-1 py-0.5 text-center">
+              {bankRep?.bankBranch ?? ""}
             </td>
-            <td className="border border-black px-2 py-1.5 text-right tabular-nums font-bold">
-              {yen(grandTotal)}
+            <td className="border border-black px-1 py-0.5 text-center">
+              {[bankRep?.bankAccountType, bankRep?.bankAccountNumber]
+                .filter(Boolean)
+                .join(" ")}
+            </td>
+            <td className="border border-black px-1 py-0.5 text-center">
+              {bankRep?.bankAccountHolder ?? ""}
+            </td>
+            <td className="border border-black px-1 py-0.5 text-right font-semibold tabular-nums">
+              {yen(monthTotal)}
             </td>
           </tr>
         </tbody>
       </table>
 
-      {clients.some((c) => c.iryohi > 0) && (
-        <p className="mt-3 text-sm">
-          うち医療費控除対象額 {yen(clients.reduce((s, c) => s + c.iryohi, 0))}
-          {isHousehold
-            ? ` (${clients
-                .filter((c) => c.iryohi > 0)
-                .map((c) => c.userName)
-                .join("、")})`
-            : ""}
-        </p>
+      {/* ── 引落金額内訳 ── */}
+      <div className="mb-3 border border-black p-2 text-[11px] leading-5">
+        <div className="mb-1 font-semibold">引落金額内訳</div>
+        {breakdownItems.length === 0 ? (
+          <div className="text-gray-400">（内訳なし）</div>
+        ) : (
+          breakdownItems.map((it, i) => (
+            <div key={`${it.name}-${it.office}-${i}`}>
+              {it.name}　様　{it.office}　{month}月利用　{yen(it.amount)}
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* ── 事業所別ご利用内訳 (事業所×制度ごとに繰り返し・制度色で枠色分け) ── */}
+      {clients.map((c) =>
+        c.sections.map((s, si) => {
+          const kind = sectionKind(s);
+          const color = SECTION_COLOR[kind];
+          const unitsTotal = sectionUnits(s);
+          const officeDisp = s.officeLabel ?? officeName ?? "";
+          return (
+            <div
+              key={`${c.userId}-${si}`}
+              className={`mb-3 border ${color.border}`}
+            >
+              {/* お問い合わせ先 */}
+              <div className={`${color.tint} px-2 py-0.5 text-[11px]`}>
+                お問い合わせ先　{s.officePhone ?? ""}
+              </div>
+              {/* 事業所名 + ご利用内訳見出し */}
+              <div className="border-y border-black px-2 py-1 text-[11px] leading-5">
+                <span className={`font-semibold ${color.heading}`}>
+                  {officeDisp}
+                </span>
+                　【ご利用内訳　{c.userName}様　期間：{month}月1日〜{month}月
+                {monthEnd}日】　居宅介護支援事業者名：
+              </div>
+
+              {/* 明細① 単位数テーブル */}
+              <table className="w-full border-collapse text-[11px]">
+                <thead>
+                  <tr className={color.tint}>
+                    <th className="border border-black px-1 py-0.5 text-left">
+                      内訳
+                    </th>
+                    <th className="border border-black px-1 py-0.5">備考</th>
+                    <th className="w-8 border border-black px-1 py-0.5">控除</th>
+                    <th className="w-20 border border-black px-1 py-0.5">
+                      単位数
+                    </th>
+                    <th className="w-12 border border-black px-1 py-0.5">回数</th>
+                    <th className="w-24 border border-black px-1 py-0.5">単位</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {s.lines.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="border border-black px-1 py-0.5 text-center text-gray-400"
+                      >
+                        （明細なし）
+                      </td>
+                    </tr>
+                  )}
+                  {s.lines.map((ln, li) => {
+                    // 単位数 (1 回あたり) = 小計単位数 ÷ 回数 (表示専用の按分)
+                    const perOnce =
+                      ln.count > 0 ? Math.round(ln.units / ln.count) : ln.units;
+                    return (
+                      <tr key={`l${li}`}>
+                        <td className="border border-black px-1 py-0.5">
+                          {ln.serviceName}
+                        </td>
+                        {emptyCell("b")}
+                        {emptyCell("k")}
+                        <td className="border border-black px-1 py-0.5 text-right tabular-nums">
+                          {perOnce.toLocaleString()}
+                        </td>
+                        <td className="border border-black px-1 py-0.5 text-right tabular-nums">
+                          {ln.count}
+                        </td>
+                        <td className="border border-black px-1 py-0.5 text-right tabular-nums">
+                          {ln.units.toLocaleString()}単位
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  <tr className="font-semibold">
+                    <td
+                      colSpan={5}
+                      className="border border-black px-1 py-0.5 text-right"
+                    >
+                      合計単位数
+                    </td>
+                    <td className="border border-black px-1 py-0.5 text-right tabular-nums">
+                      {unitsTotal.toLocaleString()}単位
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* 明細② 金額テーブル */}
+              <table className="w-full border-collapse border-t-0 text-[11px]">
+                <thead>
+                  <tr className={color.tint}>
+                    <th className="border border-black px-1 py-0.5 text-left">
+                      内訳
+                    </th>
+                    <th className="border border-black px-1 py-0.5">備考</th>
+                    <th className="w-8 border border-black px-1 py-0.5">控除</th>
+                    <th className="w-16 border border-black px-1 py-0.5">単価</th>
+                    <th className="w-14 border border-black px-1 py-0.5">時間</th>
+                    <th className="w-12 border border-black px-1 py-0.5">回数</th>
+                    <th className="w-24 border border-black px-1 py-0.5">金額</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="border border-black px-1 py-0.5">
+                      利用者負担額
+                    </td>
+                    {emptyCell("b")}
+                    {emptyCell("k")}
+                    {emptyCell("t")}
+                    {emptyCell("j")}
+                    {emptyCell("c")}
+                    <td className="border border-black px-1 py-0.5 text-right tabular-nums">
+                      {yen(s.base)}
+                    </td>
+                  </tr>
+                  {s.jippi > 0 && (
+                    <tr>
+                      <td className="border border-black px-1 py-0.5">
+                        自費請求額
+                      </td>
+                      {emptyCell("b")}
+                      {emptyCell("k")}
+                      {emptyCell("t")}
+                      {emptyCell("j")}
+                      {emptyCell("c")}
+                      <td className="border border-black px-1 py-0.5 text-right tabular-nums">
+                        {yen(s.jippi)}
+                      </td>
+                    </tr>
+                  )}
+                  {s.keigen > 0 && (
+                    <tr>
+                      <td className="border border-black px-1 py-0.5">軽減額</td>
+                      {emptyCell("b")}
+                      {emptyCell("k")}
+                      {emptyCell("t")}
+                      {emptyCell("j")}
+                      {emptyCell("c")}
+                      <td className="border border-black px-1 py-0.5 text-right tabular-nums text-red-600">
+                        ▲{yen(s.keigen)}
+                      </td>
+                    </tr>
+                  )}
+                  <tr className="font-semibold">
+                    <td
+                      colSpan={6}
+                      className="border border-black px-1 py-0.5 text-right"
+                    >
+                      利用者負担額
+                    </td>
+                    <td className="border border-black px-1 py-0.5 text-right tabular-nums">
+                      {yen(s.subtotal)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* 下部 小箱 (医療費控除 / 減免 / 軽減 / 消費税 / (障害)上限金額) */}
+              <div className="flex flex-wrap gap-2 p-2">
+                <HinaBox label="医療費控除対象額" value={yen(s.iryohi)} />
+                <HinaBox label="減免額" value={yen(0)} />
+                <HinaBox label="軽減額" value={yen(s.keigen)} />
+                <HinaBox label="消費税（内消費税）" value={yen(0)} />
+                {s.system === "障害" && (
+                  <HinaBox label="上限金額" value={yen(0)} />
+                )}
+              </div>
+            </div>
+          );
+        }),
       )}
 
-      <p className="mt-6 text-xs text-gray-700">
-        ※ 本請求は
-        {systems.includes("障害")
-          ? "介護保険・障害福祉サービス"
-          : "介護保険サービス"}
-        利用に伴う利用者負担分です
-        {multiSystem ? ` (${systems.join("・")} を合算)` : ""}
-        {isHousehold
-          ? `。世帯内 ${clients.length} 名分を代表者 (${rep.userName} 様) 宛に 1 枚で発行しています`
-          : ""}
-        {isCompanyMerged
-          ? `。法人内の複数事業所分 (${officeLabels.join("・")}) を合算しています`
-          : ""}
-        。
-      </p>
+      {/* ── 【備考】自由記述枠 (Phase 1 は空欄) ── */}
+      <div className="mt-2 border border-black p-2 text-[11px]">
+        <span className="font-semibold">【備考】</span>
+      </div>
     </div>
   );
 }

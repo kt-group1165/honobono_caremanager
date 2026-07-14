@@ -55,6 +55,8 @@ import {
   type MergeInput,
   type MergedClient,
   type MergedLine,
+  type MergeBank,
+  type SheetCompany,
 } from "./riyou-merge-print";
 
 // ─── 3 制度統合の表示行モデル ────────────────────────────────────────────────
@@ -86,14 +88,29 @@ const rowKey = (system: SeikyuSystem, userId: string) => `${system}:${userId}`;
 // 介護・総合のみの統合行 (一括印刷用。障害の帳票は障害請求タブ側にあるため対象外)
 type KaigoUnifiedRow = Extract<UnifiedRow, { system: "介護" | "総合事業" }>;
 
-// 利用者の口座情報 (FB データ用) — clients の bank_* 列
+// 利用者の口座情報 (FB データ用) — clients の bank_* 列 + ひな形の宛先 (郵便番号/住所)
 interface ClientBank {
   bank_name: string | null;
   bank_branch: string | null;
   bank_account_type: string | null;
   bank_account_number: string | null;
   bank_account_holder: string | null;
+  // ひな形 宛先 (Phase 1 表示専用)
+  postal_code: string | null;
+  address: string | null;
 }
+
+// ClientBank → ひな形の口座 (MergeBank) へ変換 (表示専用)
+const toMergeBank = (b: ClientBank | undefined): MergeBank | null =>
+  b
+    ? {
+        bankName: b.bank_name,
+        bankBranch: b.bank_branch,
+        bankAccountType: b.bank_account_type,
+        bankAccountNumber: b.bank_account_number,
+        bankAccountHolder: b.bank_account_holder,
+      }
+    : null;
 
 // 利用実費 (保険外費用) — ほのぼの 訪問介護請求管理編 1-3 対応
 interface JippiEntry {
@@ -296,6 +313,9 @@ export function RiyouSeikyuContent() {
     error,
     officeName,
     officeId,
+    officeAddress,
+    officePhone,
+    officePostal,
   } = useSeikyuContext();
   // 保険者変更 (転居) の分割セグメント行 (Phase 2) は利用者単位に合算してから使う。
   // 利用者請求書・軽減・実費・入金・FB 全銀はすべて利用者単位 (保険者をまたがない)
@@ -635,7 +655,7 @@ export function RiyouSeikyuContent() {
       const chunk = ids.slice(i, i + 100);
       const { data, error: e } = await supabase
         .from("clients")
-        .select("id, bank_name, bank_branch, bank_account_type, bank_account_number, bank_account_holder")
+        .select("id, bank_name, bank_branch, bank_account_type, bank_account_number, bank_account_holder, postal_code, address")
         .in("id", chunk);
       if (e) {
         toast.error("口座情報取得失敗: " + e.message);
@@ -648,6 +668,8 @@ export function RiyouSeikyuContent() {
           bank_account_type: c.bank_account_type,
           bank_account_number: c.bank_account_number,
           bank_account_holder: c.bank_account_holder,
+          postal_code: c.postal_code,
+          address: c.address,
         });
       }
     }
@@ -657,6 +679,58 @@ export function RiyouSeikyuContent() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更/行更新時の fetch
     loadBanks();
   }, [loadBanks]);
+
+  // ── 自社情報 (ひな形ヘッダーの法人情報) — offices.company_id → companies ──
+  //   companies.name (法人名) を優先し、住所/電話/郵便番号は offices の値を fallback。
+  //   インボイス登録番号は companies に列が無いため Phase 1 は固定プレースホルダ。
+  const [companyName, setCompanyName] = useState<string | null>(null);
+  const loadCompany = useCallback(async () => {
+    if (!officeId) {
+      setCompanyName(null);
+      return;
+    }
+    const { data: off, error: oe } = await supabase
+      .from("offices")
+      .select("company_id")
+      .eq("id", officeId)
+      .maybeSingle();
+    if (oe) {
+      // 取得失敗は officeName フォールバックで続行 (帳票は崩さない)
+      setCompanyName(null);
+      return;
+    }
+    const companyId = (off as { company_id?: string | null } | null)?.company_id;
+    if (!companyId) {
+      setCompanyName(null);
+      return;
+    }
+    const { data: co, error: ce } = await supabase
+      .from("companies")
+      .select("name")
+      .eq("id", companyId)
+      .maybeSingle();
+    if (ce) {
+      setCompanyName(null);
+      return;
+    }
+    setCompanyName((co as { name?: string | null } | null)?.name ?? null);
+  }, [supabase, officeId]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 事業所変更時の fetch
+    loadCompany();
+  }, [loadCompany]);
+
+  // ひな形シートに渡す自社情報 (companies.name 優先 / 住所・電話・郵便は offices)
+  const sheetCompany = useMemo<SheetCompany>(
+    () => ({
+      name: companyName ?? officeName,
+      postalCode: officePostal,
+      address: officeAddress,
+      phone: officePhone,
+      invoiceNumber: null, // Phase 1: 固定プレースホルダ (companies に列なし)
+    }),
+    [companyName, officeName, officePostal, officeAddress, officePhone],
+  );
 
   // 選択行 (order-app と同じく未選択時は右ペインに placeholder を出す)。key で一意特定
   const selected = unifiedRows.find((r) => r.key === selectedKey) ?? null;
@@ -926,6 +1000,7 @@ export function RiyouSeikyuContent() {
       if (row.system === "障害") {
         const s = row.shogai;
         const prev = prevShogaiPayments.get(row.userId);
+        const meta = bankByUser.get(row.userId);
         return {
           system: "障害",
           userId: row.userId,
@@ -942,10 +1017,16 @@ export function RiyouSeikyuContent() {
           iryohi: 0, // 障害は医療費控除 N/A
           prevBilled: prev?.billed_amount ?? 0,
           prevPaid: prev?.paid_amount ?? 0,
+          // ひな形 表示専用 (自事業所セクションに宛先・口座・問い合わせ先を付与)
+          postalCode: meta?.postal_code ?? null,
+          address: meta?.address ?? null,
+          bank: toMergeBank(meta),
+          officePhone,
         };
       }
       const r = row.kaigo;
       const prev = prevPayments.get(row.userId);
+      const meta = bankByUser.get(row.userId);
       return {
         system: row.system,
         userId: row.userId,
@@ -962,6 +1043,11 @@ export function RiyouSeikyuContent() {
         iryohi: iryohiByUser.get(r.user_id) ?? 0,
         prevBilled: prev?.billed_amount ?? 0,
         prevPaid: prev?.paid_amount ?? 0,
+        // ひな形 表示専用 (自事業所セクションに宛先・口座・問い合わせ先を付与)
+        postalCode: meta?.postal_code ?? null,
+        address: meta?.address ?? null,
+        bank: toMergeBank(meta),
+        officePhone,
       };
     };
     // 自事業所分 (targets) + 他事業所分 (対象 client に限定) を 1 リストで畳み込む。
@@ -1002,6 +1088,8 @@ export function RiyouSeikyuContent() {
     mergeOffices,
     selfOfficeLabel,
     siblingInputsAll,
+    bankByUser,
+    officePhone,
   ]);
 
   // 事業所合算: このシート群が実際に複数事業所を横断しているか (title の (事業所合算) 用)
@@ -1836,6 +1924,9 @@ export function RiyouSeikyuContent() {
           prevPayments={prevPayments}
           prevShogaiPayments={prevShogaiPayments}
           officeName={officeName}
+          officePhone={officePhone}
+          company={sheetCompany}
+          bankByUser={bankByUser}
           reiwa={reiwa}
           year={year}
           month={month}
@@ -1877,6 +1968,7 @@ export function RiyouSeikyuContent() {
                         month={month}
                         isCopy={isCopy}
                         companyMerged={companyMergedActive}
+                        company={sheetCompany}
                       />
                     )}
                     {mergedPrintGroups.singles.map((c) => (
@@ -1888,6 +1980,7 @@ export function RiyouSeikyuContent() {
                         month={month}
                         isCopy={isCopy}
                         companyMerged={companyMergedActive}
+                        company={sheetCompany}
                       />
                     ))}
                   </div>
@@ -3375,6 +3468,9 @@ function RiyouBulkPrintView({
   prevPayments,
   prevShogaiPayments,
   officeName,
+  officePhone,
+  company,
+  bankByUser,
   reiwa,
   year,
   month,
@@ -3406,6 +3502,12 @@ function RiyouBulkPrintView({
   /** 障害の前月入金 (制度合算 ON 時の障害セクションの前回領収欄用) */
   prevShogaiPayments: Map<string, PaymentRow>;
   officeName: string | null;
+  /** 自事業所の問い合わせ先電話 (ひな形の「お問い合わせ先」) */
+  officePhone: string | null;
+  /** ひな形ヘッダーの自社情報 */
+  company: SheetCompany;
+  /** 利用者の宛先・口座 (ひな形の宛先/口座振替欄) */
+  bankByUser: Map<string, ClientBank>;
   reiwa: number;
   year: number;
   month: number;
@@ -3479,6 +3581,7 @@ function RiyouBulkPrintView({
         if (row.system === "障害") {
           const s = row.shogai;
           const prev = prevShogaiPayments.get(row.userId);
+          const meta = bankByUser.get(row.userId);
           return {
             system: "障害",
             userId: row.userId,
@@ -3495,10 +3598,15 @@ function RiyouBulkPrintView({
             iryohi: 0,
             prevBilled: prev?.billed_amount ?? 0,
             prevPaid: prev?.paid_amount ?? 0,
+            postalCode: meta?.postal_code ?? null,
+            address: meta?.address ?? null,
+            bank: toMergeBank(meta),
+            officePhone,
           };
         }
         const r = row.kaigo;
         const prev = prevPayments.get(row.userId);
+        const meta = bankByUser.get(row.userId);
         return {
           system: row.system,
           userId: row.userId,
@@ -3515,6 +3623,10 @@ function RiyouBulkPrintView({
           iryohi: iryohiByUser.get(r.user_id) ?? 0,
           prevBilled: prev?.billed_amount ?? 0,
           prevPaid: prev?.paid_amount ?? 0,
+          postalCode: meta?.postal_code ?? null,
+          address: meta?.address ?? null,
+          bank: toMergeBank(meta),
+          officePhone,
         };
       });
     // 事業所合算: scope 内 client の他事業所セクションを追加 (単票と同じ集計値)
@@ -3539,6 +3651,8 @@ function RiyouBulkPrintView({
     mergeSystems,
     mergeOffices,
     officeName,
+    officePhone,
+    bankByUser,
     siblingInputsAll,
     sorted,
     allRows,
@@ -3716,6 +3830,7 @@ function RiyouBulkPrintView({
                     reiwa={reiwa}
                     month={month}
                     companyMerged={companyMerged}
+                    company={company}
                   />
                 )}
                 {mergedGroups.singles.map((c) => (
@@ -3726,6 +3841,7 @@ function RiyouBulkPrintView({
                     reiwa={reiwa}
                     month={month}
                     companyMerged={companyMerged}
+                    company={company}
                   />
                 ))}
               </>
