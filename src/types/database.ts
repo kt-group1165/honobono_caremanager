@@ -310,6 +310,18 @@ export type ShougaiPrimaryDisability =
   | "難病"
   | "重複障害";
 
+// 2026-07-14: shougai_cert_more_fields.sql で追加 (ほのぼのMORE 相当まで拡張)
+// 事業者記入欄 (受給者証の予備欄等)。最大 6 枠。
+export type ShougaiProviderEntry = { no: number; label: string; value: string };
+// 支給量の細分内訳。時間項目は {hours,minutes}、回項目は {count}、単位項目は {units}。
+export type ShougaiShikyuryoUnit = {
+  hours?: number;
+  minutes?: number;
+  count?: number;
+  units?: number;
+};
+export type ShougaiShikyuryoDetails = Record<string, ShougaiShikyuryoUnit>;
+
 export type ShougaiCertification = {
   id: string;
   tenant_id: string;
@@ -336,6 +348,21 @@ export type ShougaiCertification = {
   contract_amount_text: string | null;      // 契約支給量 (例: 身体介護 10時間/月)
   contract_start_date: string | null;       // 契約開始日
   contract_entry_number: string | null;     // 受給者証 事業者記入欄番号
+  // 2026-07-14: shougai_cert_more_fields.sql で追加 (ほのぼのMORE 相当まで拡張)
+  issue_date: string | null;                 // 交付年月日
+  is_applying: boolean;                      // 申請中
+  income_category: string | null;            // 所得区分 (生活保護/低所得1/低所得2/一般1/一般2)
+  shafuku_genmen: boolean;                   // 社会福祉法人減免
+  reduced_payment_limit: number | null;      // 利用者負担軽減後上限月額 (円)
+  municipality_defined_amount: number | null; // 市町村が定める額 (円)
+  household_multi_jogen: boolean;            // 同一世帯の複数利用者で上限管理
+  flag_rousha: boolean;                      // 聾者
+  flag_h30_after: boolean;                   // H30.4以降支給決定
+  flag_severe: boolean;                      // 著しく重度の者
+  flag_short_multi: boolean;                 // 短時間複数訪問
+  flag_special_area: boolean;                // 特別地域加算 (請求に%加算が乗る)
+  provider_entries: ShougaiProviderEntry[] | null; // 事業者記入欄 (最大6枠)
+  shikyuryo_details: ShougaiShikyuryoDetails | null; // 支給量の時間/回内訳
   notes: string | null;
   created_at: string;
   updated_at: string;

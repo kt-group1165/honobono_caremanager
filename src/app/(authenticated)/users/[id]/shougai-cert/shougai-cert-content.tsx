@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
@@ -9,6 +9,8 @@ import type {
   ShougaiCertification,
   ShougaiSupportLevel,
   ShougaiPrimaryDisability,
+  ShougaiProviderEntry,
+  ShougaiShikyuryoDetails,
 } from "@/types/database";
 
 // ─── マスタ値 ─────────────────────────────────────────────────────────────────
@@ -51,6 +53,65 @@ const SERVICE_TYPE_OPTIONS = [
   "共同生活援助",
 ] as const;
 
+// 所得区分 (ほのぼのMORE のプルダウン相当)
+const INCOME_CATEGORIES = [
+  "生活保護",
+  "低所得1",
+  "低所得2",
+  "一般1",
+  "一般2",
+] as const;
+
+// 支給量の細分内訳 (ほのぼのMORE の支給量入力に対応)
+//   kind: time = 時間+分 / count = 回 / units = 単位
+const SHIKYURYO_ITEMS = [
+  { key: "shintai", label: "身体介護中心", kind: "time" },
+  { key: "jouko", label: "乗降介助中心", kind: "count" },
+  { key: "kaji", label: "家事援助中心", kind: "time" },
+  { key: "tsuuin", label: "通院介助中心", kind: "time" },
+  { key: "tsuuin_shintai", label: "通院介助・身体あり", kind: "time" },
+  { key: "doukou", label: "同行援護中心", kind: "time" },
+  { key: "doukou_shintai", label: "同行援護・身体あり", kind: "time" },
+  { key: "koudou", label: "行動援護中心", kind: "time" },
+  { key: "juudo_houkatsu", label: "重度包括中心", kind: "units" },
+  { key: "juudo_houmon_houkatsu", label: "重度訪問介護包括支援", kind: "time" },
+  { key: "juudo_houmon_kubun6", label: "重度訪問介護区分6該当", kind: "time" },
+  { key: "juudo_houmon_sonota", label: "重度訪問介護その他", kind: "time" },
+] as const;
+
+// SQL 未適用 (42703) 時に payload から除外し、UI からも隠す列
+const EXT_KEYS = [
+  "issue_date",
+  "is_applying",
+  "income_category",
+  "shafuku_genmen",
+  "reduced_payment_limit",
+  "municipality_defined_amount",
+  "household_multi_jogen",
+  "flag_rousha",
+  "flag_h30_after",
+  "flag_severe",
+  "flag_short_multi",
+  "flag_special_area",
+  "provider_entries",
+  "shikyuryo_details",
+] as const;
+
+// 事業者記入欄を常に 6 枠に正規化。string[] / {no,label,value}[] の両形式を許容。
+function normalizeProviderEntries(
+  pe: ShougaiProviderEntry[] | string[] | null | undefined,
+): ShougaiProviderEntry[] {
+  const base = Array.isArray(pe) ? pe : [];
+  return Array.from({ length: 6 }, (_, i) => {
+    const raw = base[i] as ShougaiProviderEntry | string | undefined;
+    const value =
+      typeof raw === "string" ? raw : (raw?.value ?? "");
+    const label =
+      typeof raw === "string" || !raw?.label ? `予備${i + 1}` : raw.label;
+    return { no: i + 1, label, value };
+  });
+}
+
 type FormData = Omit<
   ShougaiCertification,
   "id" | "client_id" | "tenant_id" | "created_at" | "updated_at"
@@ -76,6 +137,20 @@ const EMPTY_FORM: FormData = {
   contract_amount_text: null,
   contract_start_date: null,
   contract_entry_number: null,
+  issue_date: null,
+  is_applying: false,
+  income_category: null,
+  shafuku_genmen: false,
+  reduced_payment_limit: null,
+  municipality_defined_amount: null,
+  household_multi_jogen: false,
+  flag_rousha: false,
+  flag_h30_after: false,
+  flag_severe: false,
+  flag_short_multi: false,
+  flag_special_area: false,
+  provider_entries: normalizeProviderEntries(null),
+  shikyuryo_details: {},
   notes: "",
 };
 
@@ -123,6 +198,36 @@ export function ShougaiCertContent({
   const [editing, setEditing] = useState(false);
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
+  // 拡張列 (ほのぼのMORE 相当) が DB に存在するか。SQL 未適用時は false → 該当欄を非表示。
+  const [extAvailable, setExtAvailable] = useState<boolean>(
+    initialRecords.length > 0 ? "issue_date" in initialRecords[0] : true,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { error } = await supabase
+        .from("shougai_certifications")
+        .select("issue_date")
+        .limit(1);
+      if (cancelled) return;
+      if (error) {
+        // 42703 = undefined_column (列未追加) / 42P01・PGRST205 = table 未存在
+        if (
+          error.code === "42703" ||
+          error.code === "42P01" ||
+          error.code === "PGRST205"
+        ) {
+          setExtAvailable(false);
+        }
+      } else {
+        setExtAvailable(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase]);
 
   function recordToForm(r: ShougaiCertification): FormData {
     return {
@@ -145,6 +250,20 @@ export function ShougaiCertContent({
       contract_amount_text: r.contract_amount_text ?? null,
       contract_start_date: r.contract_start_date ?? null,
       contract_entry_number: r.contract_entry_number ?? null,
+      issue_date: r.issue_date ?? null,
+      is_applying: r.is_applying ?? false,
+      income_category: r.income_category ?? null,
+      shafuku_genmen: r.shafuku_genmen ?? false,
+      reduced_payment_limit: r.reduced_payment_limit ?? null,
+      municipality_defined_amount: r.municipality_defined_amount ?? null,
+      household_multi_jogen: r.household_multi_jogen ?? false,
+      flag_rousha: r.flag_rousha ?? false,
+      flag_h30_after: r.flag_h30_after ?? false,
+      flag_severe: r.flag_severe ?? false,
+      flag_short_multi: r.flag_short_multi ?? false,
+      flag_special_area: r.flag_special_area ?? false,
+      provider_entries: normalizeProviderEntries(r.provider_entries),
+      shikyuryo_details: (r.shikyuryo_details ?? {}) as ShougaiShikyuryoDetails,
       notes: r.notes ?? "",
     };
   }
@@ -223,7 +342,19 @@ export function ShougaiCertContent({
     }
     setSaving(true);
     try {
-      const payload = {
+      // 事業者記入欄: 全 value 空なら null で保存 (DB を汚さない)
+      const providerForSave =
+        (form.provider_entries ?? []).some((e) => (e.value ?? "").trim())
+          ? form.provider_entries
+          : null;
+      // 支給量内訳: 空 object なら null
+      const shikyuryoForSave =
+        form.shikyuryo_details &&
+        Object.keys(form.shikyuryo_details).length > 0
+          ? form.shikyuryo_details
+          : null;
+
+      const payload: Record<string, unknown> = {
         ...form,
         client_id: userId,
         beneficiary_number: form.beneficiary_number || null,
@@ -233,8 +364,18 @@ export function ShougaiCertContent({
         contract_amount_text: form.contract_amount_text || null,
         contract_start_date: form.contract_start_date || null,
         contract_entry_number: form.contract_entry_number || null,
+        issue_date: form.issue_date || null,
+        income_category: form.income_category || null,
+        reduced_payment_limit: form.reduced_payment_limit ?? null,
+        municipality_defined_amount: form.municipality_defined_amount ?? null,
+        provider_entries: providerForSave,
+        shikyuryo_details: shikyuryoForSave,
         notes: form.notes || null,
       };
+      // SQL 未適用環境では拡張列を除外 (= 従来通り保存できる)
+      if (!extAvailable) {
+        for (const k of EXT_KEYS) delete payload[k];
+      }
       if (selectedId && !isNew) {
         const { error } = await supabase
           .from("shougai_certifications")
@@ -289,6 +430,48 @@ export function ShougaiCertContent({
           : [...f.service_types, st],
       };
     });
+  };
+
+  // 支給量内訳の 1 フィールド更新 (空になった項目は削除)
+  const updShikyuryo = (
+    key: string,
+    field: "hours" | "minutes" | "count" | "units",
+    raw: string,
+  ) => {
+    setForm((f) => {
+      const next: ShougaiShikyuryoDetails = { ...(f.shikyuryo_details ?? {}) };
+      const item = { ...(next[key] ?? {}) };
+      const n = raw === "" ? undefined : Number(raw);
+      if (n === undefined || Number.isNaN(n)) delete item[field];
+      else item[field] = n;
+      if (Object.keys(item).length === 0) delete next[key];
+      else next[key] = item;
+      return { ...f, shikyuryo_details: next };
+    });
+  };
+
+  // 事業者記入欄の value 更新
+  const updProviderEntry = (idx: number, value: string) => {
+    setForm((f) => {
+      const entries = normalizeProviderEntries(f.provider_entries);
+      entries[idx] = { ...entries[idx], value };
+      return { ...f, provider_entries: entries };
+    });
+  };
+
+  // 支給量内訳を表示用文字列に整形
+  const fmtShikyuryo = (
+    kind: "time" | "count" | "units",
+    v: { hours?: number; minutes?: number; count?: number; units?: number },
+  ): string => {
+    if (kind === "time") {
+      const h = v.hours ?? 0;
+      const m = v.minutes ?? 0;
+      if (!h && !m) return "";
+      return `${h}時間${m ? `${m}分` : ""}`;
+    }
+    if (kind === "count") return v.count ? `${v.count}回` : "";
+    return v.units ? `${v.units}単位` : "";
   };
 
   const fmtDate = (d: string | null): string =>
@@ -447,6 +630,119 @@ export function ShougaiCertContent({
               {form.contract_entry_number ? ` / 記入欄 ${form.contract_entry_number}` : ""}
             </span>
           </FieldRow>
+          {extAvailable && (
+            <>
+              <FieldRow label="交付年月日">
+                <span className="text-sm text-gray-900">
+                  {fmtDate(form.issue_date)}
+                  {form.is_applying ? (
+                    <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700 ring-1 ring-amber-200">
+                      申請中
+                    </span>
+                  ) : null}
+                </span>
+              </FieldRow>
+              <FieldRow label="所得区分">
+                <span className="text-sm text-gray-900">
+                  {form.income_category || "—"}
+                </span>
+              </FieldRow>
+              <FieldRow label="社福減免後上限月額">
+                <span className="text-sm text-gray-900">
+                  {form.shafuku_genmen ? "社福減免あり" : "—"}
+                  {form.reduced_payment_limit != null
+                    ? ` / ¥${form.reduced_payment_limit.toLocaleString()}`
+                    : ""}
+                </span>
+              </FieldRow>
+              <FieldRow label="市町村が定める額">
+                <span className="text-sm text-gray-900">
+                  {form.municipality_defined_amount != null
+                    ? `¥${form.municipality_defined_amount.toLocaleString()}`
+                    : "—"}
+                </span>
+              </FieldRow>
+              <div className="lg:col-span-2">
+                <FieldRow label="該当区分・フラグ">
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      form.household_multi_jogen && "同一世帯 複数上限管理",
+                      form.flag_rousha && "聾者",
+                      form.flag_h30_after && "H30.4以降支給決定",
+                      form.flag_severe && "著しく重度の者",
+                      form.flag_short_multi && "短時間複数訪問",
+                      form.flag_special_area && "特別地域加算",
+                    ]
+                      .filter(Boolean)
+                      .map((t) => (
+                        <span
+                          key={t as string}
+                          className="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 px-2.5 py-0.5 text-xs font-medium text-teal-700"
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    {![
+                      form.household_multi_jogen,
+                      form.flag_rousha,
+                      form.flag_h30_after,
+                      form.flag_severe,
+                      form.flag_short_multi,
+                      form.flag_special_area,
+                    ].some(Boolean) && (
+                      <span className="text-sm text-gray-500">—</span>
+                    )}
+                  </div>
+                </FieldRow>
+              </div>
+              <div className="lg:col-span-2">
+                <FieldRow label="支給量 (時間/回/単位)">
+                  <div className="flex flex-wrap gap-2 text-sm">
+                    {(() => {
+                      const shown = SHIKYURYO_ITEMS.map((it) => ({
+                        it,
+                        txt: fmtShikyuryo(
+                          it.kind,
+                          (form.shikyuryo_details ?? {})[it.key] ?? {},
+                        ),
+                      })).filter((x) => x.txt);
+                      if (shown.length === 0)
+                        return <span className="text-gray-500">—</span>;
+                      return shown.map(({ it, txt }) => (
+                        <span
+                          key={it.key}
+                          className="rounded bg-indigo-50 px-2 py-0.5 text-xs ring-1 ring-indigo-200"
+                        >
+                          {it.label}: {txt}
+                        </span>
+                      ));
+                    })()}
+                  </div>
+                </FieldRow>
+              </div>
+              <div className="lg:col-span-2">
+                <FieldRow label="事業者記入欄">
+                  <div className="flex flex-wrap gap-2 text-sm">
+                    {(() => {
+                      const filled = normalizeProviderEntries(
+                        form.provider_entries,
+                      ).filter((e) => (e.value ?? "").trim());
+                      if (filled.length === 0)
+                        return <span className="text-gray-500">—</span>;
+                      return filled.map((e) => (
+                        <span
+                          key={e.no}
+                          className="rounded bg-gray-50 px-2 py-0.5 text-xs ring-1 ring-gray-200"
+                        >
+                          {e.label}: {e.value}
+                        </span>
+                      ));
+                    })()}
+                  </div>
+                </FieldRow>
+              </div>
+            </>
+          )}
           <div className="lg:col-span-2">
             <FieldRow label="月間支給量 (単位数/月)">
               <div className="flex flex-wrap gap-2 text-sm">
@@ -701,6 +997,211 @@ export function ShougaiCertContent({
               </div>
             </div>
           </FieldRow>
+          {extAvailable && (
+            <>
+              <FieldRow label="交付年月日">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="date"
+                    value={form.issue_date ?? ""}
+                    onChange={(e) => upd("issue_date", e.target.value || null)}
+                    className={inputCls}
+                  />
+                  <label className="inline-flex items-center gap-1 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={form.is_applying}
+                      onChange={(e) => upd("is_applying", e.target.checked)}
+                      className="accent-violet-600"
+                    />
+                    申請中
+                  </label>
+                </div>
+              </FieldRow>
+              <FieldRow label="所得区分">
+                <select
+                  value={form.income_category ?? ""}
+                  onChange={(e) =>
+                    upd("income_category", e.target.value || null)
+                  }
+                  className={`${inputCls} w-40`}
+                >
+                  <option value="">未選択</option>
+                  {INCOME_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </FieldRow>
+              <FieldRow label="社福減免 / 軽減後上限月額 (円)">
+                <div className="space-y-1.5">
+                  <label className="inline-flex items-center gap-1 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={form.shafuku_genmen}
+                      onChange={(e) => upd("shafuku_genmen", e.target.checked)}
+                      className="accent-violet-600"
+                    />
+                    社会福祉法人減免
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={form.reduced_payment_limit ?? ""}
+                    onChange={(e) =>
+                      upd(
+                        "reduced_payment_limit",
+                        e.target.value === "" ? null : Number(e.target.value),
+                      )
+                    }
+                    placeholder="軽減後上限月額"
+                    className={`${inputCls} w-32 text-right`}
+                  />
+                </div>
+              </FieldRow>
+              <FieldRow label="市町村が定める額 (円)">
+                <input
+                  type="number"
+                  min={0}
+                  value={form.municipality_defined_amount ?? ""}
+                  onChange={(e) =>
+                    upd(
+                      "municipality_defined_amount",
+                      e.target.value === "" ? null : Number(e.target.value),
+                    )
+                  }
+                  className={`${inputCls} w-32 text-right`}
+                />
+              </FieldRow>
+              <div className="lg:col-span-2">
+                <FieldRow label="該当区分・フラグ">
+                  <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                    {(
+                      [
+                        ["household_multi_jogen", "同一世帯で複数上限管理"],
+                        ["flag_rousha", "聾者"],
+                        ["flag_h30_after", "H30.4以降支給決定"],
+                        ["flag_severe", "著しく重度の者"],
+                        ["flag_short_multi", "短時間複数訪問"],
+                        ["flag_special_area", "特別地域加算"],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <label
+                        key={key}
+                        className="flex cursor-pointer items-center gap-1.5 rounded border border-gray-200 px-2 py-1.5 text-xs hover:bg-gray-50"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={form[key]}
+                          onChange={(e) => upd(key, e.target.checked)}
+                          className="accent-violet-600"
+                        />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[10px] text-amber-600">
+                    ※ 特別地域加算 を ON にすると請求に加算が反映されます
+                  </p>
+                </FieldRow>
+              </div>
+              <div className="lg:col-span-2">
+                <FieldRow label="支給量 (時間/回/単位)">
+                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                    {SHIKYURYO_ITEMS.map((it) => {
+                      const v =
+                        (form.shikyuryo_details ?? {})[it.key] ?? {};
+                      return (
+                        <div
+                          key={it.key}
+                          className="flex items-center gap-1.5"
+                        >
+                          <span className="min-w-[150px] text-xs text-gray-600">
+                            {it.label}
+                          </span>
+                          {it.kind === "time" ? (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                min={0}
+                                value={v.hours ?? ""}
+                                onChange={(e) =>
+                                  updShikyuryo(it.key, "hours", e.target.value)
+                                }
+                                className={`${inputCls} w-16 text-right`}
+                              />
+                              <span className="text-xs text-gray-500">時間</span>
+                              <input
+                                type="number"
+                                min={0}
+                                max={59}
+                                value={v.minutes ?? ""}
+                                onChange={(e) =>
+                                  updShikyuryo(it.key, "minutes", e.target.value)
+                                }
+                                className={`${inputCls} w-16 text-right`}
+                              />
+                              <span className="text-xs text-gray-500">分</span>
+                            </div>
+                          ) : it.kind === "count" ? (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                min={0}
+                                value={v.count ?? ""}
+                                onChange={(e) =>
+                                  updShikyuryo(it.key, "count", e.target.value)
+                                }
+                                className={`${inputCls} w-16 text-right`}
+                              />
+                              <span className="text-xs text-gray-500">回</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                min={0}
+                                value={v.units ?? ""}
+                                onChange={(e) =>
+                                  updShikyuryo(it.key, "units", e.target.value)
+                                }
+                                className={`${inputCls} w-20 text-right`}
+                              />
+                              <span className="text-xs text-gray-500">単位</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </FieldRow>
+              </div>
+              <div className="lg:col-span-2">
+                <FieldRow label="事業者記入欄 (予備1〜6)">
+                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                    {normalizeProviderEntries(form.provider_entries).map(
+                      (e, idx) => (
+                        <div key={e.no} className="flex items-center gap-1.5">
+                          <span className="min-w-[52px] text-xs text-gray-600">
+                            {e.label}
+                          </span>
+                          <input
+                            type="text"
+                            value={e.value}
+                            onChange={(ev) =>
+                              updProviderEntry(idx, ev.target.value)
+                            }
+                            className={`${inputCls} w-full`}
+                          />
+                        </div>
+                      ),
+                    )}
+                  </div>
+                </FieldRow>
+              </div>
+            </>
+          )}
           <div className="lg:col-span-2">
             <FieldRow label="月間支給量 (サービス種別ごと、単位数)">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

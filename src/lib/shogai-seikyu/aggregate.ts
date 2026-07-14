@@ -131,13 +131,15 @@ export async function aggregateMonthlyShogaiSeikyu(
     unit_count: number | null;
     /** 重複排除用 (下流未使用)。shogai=service_date / schedule=visit_date */
     service_date?: string | null;
+    /** 提供時間 (分)。支給量超過警告の実績時間集計に使用。null は 0 扱い */
+    duration_minutes?: number | null;
   }
   const records: Rec[] = [];
   let offset = 0;
   while (true) {
     let q = supabase
       .from("shogai_service_records")
-      .select("client_id, service_type, service_category, service_code, unit_count, service_date")
+      .select("client_id, service_type, service_category, service_code, unit_count, service_date, duration_minutes")
       .eq("status", "confirmed")
       .gte("service_date", from)
       .lte("service_date", to);
@@ -165,14 +167,20 @@ export async function aggregateMonthlyShogaiSeikyu(
   //   スケジュール優先で重複排除 (二重計上防止)。
   {
     const keyOf = (r: Rec) => `${r.client_id}__${r.service_code ?? ""}__${r.service_date ?? ""}`;
-    interface SchedRow { user_id: string; service_type: string | null; visit_date: string }
+    interface SchedRow {
+      user_id: string;
+      service_type: string | null;
+      visit_date: string;
+      start_time: string | null;
+      end_time: string | null;
+    }
     const schedRows: SchedRow[] = [];
     let soff = 0;
     let schedOk = true;
     while (true) {
       let sq = supabase
         .from("kaigo_visit_schedule")
-        .select("user_id, service_type, visit_date")
+        .select("user_id, service_type, visit_date, start_time, end_time")
         .eq("status", "completed")
         .gte("visit_date", from)
         .lte("visit_date", to);
@@ -209,11 +217,22 @@ export async function aggregateMonthlyShogaiSeikyu(
           if (!nameMap.has(k)) nameMap.set(k, { code: c.service_code, units: c.units, category: c.service_category });
         }
       }
+      // "HH:MM(:SS)" → 分。終了 < 開始 は日跨ぎとして +1440 分
+      const toMinOfDay = (t: string | null): number | null => {
+        if (!t) return null;
+        const [h, mi] = t.split(":");
+        const n = Number(h) * 60 + Number(mi);
+        return Number.isFinite(n) ? n : null;
+      };
       const schedRecs: Rec[] = [];
       for (const s of schedRows) {
         const name = (s.service_type ?? "").trim();
         const m = nameMap.get(name);
         if (!m) continue; // 障害コードに解決できない = 介護/総合 → スキップ
+        const st = toMinOfDay(s.start_time);
+        const en = toMinOfDay(s.end_time);
+        const dur =
+          st != null && en != null ? (en >= st ? en - st : en + 1440 - st) : null;
         schedRecs.push({
           client_id: s.user_id,
           service_type: name,
@@ -221,6 +240,7 @@ export async function aggregateMonthlyShogaiSeikyu(
           service_code: m.code,
           unit_count: m.units,
           service_date: s.visit_date,
+          duration_minutes: dur,
         });
       }
       if (schedRecs.length > 0) {
@@ -266,21 +286,42 @@ export async function aggregateMonthlyShogaiSeikyu(
     jogen_kanri_office_name: string | null;
     certification_start_date: string | null;
     certification_end_date: string | null;
+    /** 特別地域加算 対象 (中山間地域等の居住者)。列未適用(42703)/未設定は undefined→false */
+    flag_special_area?: boolean | null;
+    /** 支給決定量の内訳 (時間/回/単位)。列未適用(42703)/未設定は undefined→null */
+    shikyuryo_details?: Record<
+      string,
+      { hours?: number; minutes?: number; count?: number; units?: number }
+    > | null;
   }
+  // 拡張列 (flag_special_area / shikyuryo_details) が未適用(42703)の環境では
+  // 列を落として再取得する (フォールバック必須 — 従来動作 = 加算・警告なし)。
+  const CERT_BASE_COLS =
+    "client_id, beneficiary_number, insurer_municipality, support_level, self_payment_limit, seiho_flag, jogen_kanri_kubun, jogen_kanri_office_number, jogen_kanri_office_name, certification_start_date, certification_end_date";
+  const CERT_EXT_COLS = `${CERT_BASE_COLS}, flag_special_area, shikyuryo_details`;
+  let certCols = CERT_EXT_COLS;
   const certByClient = new Map<string, Cert>();
   // 月途中の市町村変更検出用に全件も保持 (解決自体は従来どおり最新 1 件)
   const certsAllByClient = new Map<string, Cert[]>();
   for (let i = 0; i < userIds.length; i += 50) {
     const chunk = userIds.slice(i, i + 50);
-    const { data, error } = await supabase
+    let resp = await supabase
       .from("shougai_certifications")
-      .select(
-        "client_id, beneficiary_number, insurer_municipality, support_level, self_payment_limit, seiho_flag, jogen_kanri_kubun, jogen_kanri_office_number, jogen_kanri_office_name, certification_start_date, certification_end_date",
-      )
+      .select(certCols)
       .in("client_id", chunk)
       .order("certification_start_date", { ascending: false });
+    if (resp.error?.code === "42703" && certCols === CERT_EXT_COLS) {
+      // 拡張列未適用 → 基本列のみで再取得 (以降のチャンクも基本列)
+      certCols = CERT_BASE_COLS;
+      resp = await supabase
+        .from("shougai_certifications")
+        .select(certCols)
+        .in("client_id", chunk)
+        .order("certification_start_date", { ascending: false });
+    }
+    const { data, error } = resp;
     if (error) throw new Error(`受給者証取得失敗: ${error.message}`);
-    for (const r of (data ?? []) as Cert[]) {
+    for (const r of (data ?? []) as unknown as Cert[]) {
       if (!certByClient.has(r.client_id)) certByClient.set(r.client_id, r);
       const list = certsAllByClient.get(r.client_id);
       if (list) list.push(r);
@@ -376,6 +417,49 @@ export async function aggregateMonthlyShogaiSeikyu(
     }
   }
 
+  // 3.8) 特別地域加算 (障害福祉サービス) — 受給者証 flag_special_area=true の利用者に算定。
+  //   根拠: 障害者総合支援法「厚生労働大臣が定める一単位の単価及び…特別地域加算等」
+  //         (H18 厚労告示第539号 等) — 中山間地域等の「利用者の居住地」が厚労大臣が定める
+  //         特別地域に該当する訪問系サービス提供に、所定単位数の 100分の15 を加算する。
+  //   対象サービス: 居宅介護(11) / 重度訪問介護(12) / 行動援護(13) / 同行援護(14)。
+  //   加算単位数 = round(サービス種類ごとの所定単位数合計 × 15/100)。母数は所定単位のみ
+  //   (処遇改善等の加算は含めない)。逆に処遇改善加算の母数(総単位数)には本加算を算入する。
+  //   マスタ(system='障害')の特別地域加算コードを対象月で解決 (validInMonth)。
+  //   コードは 居宅=116015「居介特地加算」(0単位%加算) / 重訪=121921 / 行動=131921 / 同行=141921。
+  //   flag 未設定 / 列未適用(42703) の利用者は加算なし = 従来動作。
+  const SPECIAL_AREA_RATE_NUM = 15;
+  const SPECIAL_AREA_RATE_DEN = 100;
+  const SPECIAL_AREA_CANDIDATE_CODES: Record<string, string> = {
+    "11": "116015", // 居宅介護
+    "12": "121921", // 重度訪問介護
+    "13": "131921", // 行動援護
+    "14": "141921", // 同行援護
+  };
+  const specialAreaByTypeCode = new Map<string, { code: string; label: string }>();
+  const anySpecialArea = Array.from(certByClient.values()).some(
+    (c) => c.flag_special_area === true,
+  );
+  if (anySpecialArea) {
+    const { data, error } = await validInMonth(
+      supabase
+        .from("kaigo_service_codes")
+        .select("service_code, service_name")
+        .eq("system", "障害")
+        .in("service_code", Object.values(SPECIAL_AREA_CANDIDATE_CODES)),
+      opts.year,
+      opts.month,
+    );
+    if (error) throw new Error(`特別地域加算コード取得失敗: ${error.message}`);
+    const nameByCode = new Map<string, string>();
+    for (const c of (data ?? []) as { service_code: string; service_name: string }[]) {
+      if (!nameByCode.has(c.service_code)) nameByCode.set(c.service_code, c.service_name);
+    }
+    for (const [tc, code] of Object.entries(SPECIAL_AREA_CANDIDATE_CODES)) {
+      const label = nameByCode.get(code);
+      if (label) specialAreaByTypeCode.set(tc, { code, label });
+    }
+  }
+
   // 4) 利用者 × (service_type + code) 集計
   const byUser = new Map<string, Map<string, ShogaiSeikyuDetail>>();
   for (const r of records) {
@@ -416,7 +500,24 @@ export async function aggregateMonthlyShogaiSeikyu(
       unitsByType.set(tc, (unitsByType.get(tc) ?? 0) + d.units);
     }
     const addons: ShogaiAddonLine[] = [];
-    for (const [tc, units] of unitsByType) {
+
+    // 特別地域加算 (中山間地域等の居住者)。所定単位数 × 15% を加算行として追加。
+    // 処遇改善の母数 (総単位数) にも算入するため専用 map を持つ。
+    const isSpecialArea = cert?.flag_special_area === true;
+    const chuguzenUnitsByType = new Map<string, number>(unitsByType);
+    if (isSpecialArea) {
+      for (const [tc, units] of unitsByType) {
+        const sa = specialAreaByTypeCode.get(tc);
+        if (!sa || units <= 0) continue; // 訪問系以外 / マスタ未解決は対象外
+        const su = Math.round((units * SPECIAL_AREA_RATE_NUM) / SPECIAL_AREA_RATE_DEN);
+        if (su <= 0) continue;
+        addons.push({ service_code: sa.code, service_name: sa.label, units: su });
+        chuguzenUnitsByType.set(tc, (chuguzenUnitsByType.get(tc) ?? 0) + su);
+      }
+    }
+
+    // 処遇改善加算等 (母数 = 所定単位 + 特別地域加算)
+    for (const [tc, units] of chuguzenUnitsByType) {
       const rate = addonByTypeCode.get(tc);
       if (!rate || units <= 0) continue;
       const au = Math.round((units * rate.num) / rate.den);
@@ -512,6 +613,131 @@ export async function aggregateMonthlyShogaiSeikyu(
     warnings.push(
       `${r.user_name}さん: 月内に市町村変更があります (${munis.join("→")})。障害のレセプト分割は未対応 — 提出先を確認して手動対応してください`,
     );
+  }
+
+  // 5.5) 特別地域加算: flag は立っているが対象月マスタに加算コードが解決できなかった場合。
+  //   訪問系の所定単位がある利用者で加算が 0 行なら加算漏れの可能性を知らせる。
+  if (anySpecialArea && specialAreaByTypeCode.size === 0) {
+    warnings.push(
+      "特別地域加算の対象利用者がいますが、対象月のマスタに特別地域加算コード (116015/121921/131921/141921) が見つからないため加算していません — サービスコードマスタ (system=障害) を確認してください",
+    );
+  }
+
+  // 6) 支給量超過の警告 — 受給者証 shikyuryo_details (支給決定量=上限) に対し、
+  //    当月実績 (時間/回/単位) がサービス種別ごとに超過していれば知らせる。金額は変えない。
+  //    実績のサービス種別を支給量内訳キーへ粗く突合する (重訪の区分別等、厳密に紐付けられ
+  //    ないものは合算判定 or 対象外)。列未設定/未適用(42703) の利用者は shikyuryo_details が
+  //    無いため警告なし。
+  {
+    // 実績レコード → 支給量内訳バケットキーへのマッピング (居宅は category から細分)
+    const bucketOf = (r: Rec): string | null => {
+      const tc = r.service_code?.slice(0, 2) ?? SERVICE_TYPE_CODES[r.service_type] ?? null;
+      const name = `${r.service_type} ${r.service_category ?? ""}`;
+      if (tc === "11") {
+        if (/乗降/.test(name)) return "jouko";
+        if (/通院/.test(name)) return /身体/.test(name) ? "tsuuin_shintai" : "tsuuin";
+        if (/家事|生活/.test(name)) return "kaji";
+        return "shintai"; // 身体介護中心 (既定)
+      }
+      if (tc === "12") return "juudo_houmon"; // 重訪は区分別に突合不可 → 合算バケット
+      if (tc === "13") return "koudou";
+      if (tc === "14") return /身体/.test(name) ? "doukou_shintai" : "doukou";
+      return null; // 短期入所・生活介護等は訪問系でないため対象外
+    };
+    interface ActualAgg {
+      minutes: number;
+      count: number;
+      units: number;
+    }
+    const actualsByUser = new Map<string, Map<string, ActualAgg>>();
+    for (const r of records) {
+      const bucket = bucketOf(r);
+      if (!bucket) continue;
+      let m = actualsByUser.get(r.client_id);
+      if (!m) {
+        m = new Map();
+        actualsByUser.set(r.client_id, m);
+      }
+      const a = m.get(bucket) ?? { minutes: 0, count: 0, units: 0 };
+      a.minutes += r.duration_minutes ?? 0;
+      a.count += 1;
+      a.units += r.unit_count ?? 0;
+      m.set(bucket, a);
+    }
+    // 支給量内訳キー → {表示名, 単位種別}
+    const SHIKYURYO_DEFS: Record<string, { label: string; kind: "time" | "count" | "units" }> = {
+      shintai: { label: "身体介護", kind: "time" },
+      jouko: { label: "乗降介助", kind: "count" },
+      kaji: { label: "家事援助", kind: "time" },
+      tsuuin: { label: "通院介助", kind: "time" },
+      tsuuin_shintai: { label: "通院介助 (身体あり)", kind: "time" },
+      doukou: { label: "同行援護", kind: "time" },
+      doukou_shintai: { label: "同行援護 (身体あり)", kind: "time" },
+      koudou: { label: "行動援護", kind: "time" },
+      juudo_houkatsu: { label: "重度障害者等包括支援", kind: "units" },
+    };
+    type ShikyuVal = { hours?: number; minutes?: number; count?: number; units?: number };
+    const toMin = (v: ShikyuVal) => (v.hours ?? 0) * 60 + (v.minutes ?? 0);
+    const fmtMin = (min: number) => {
+      const h = Math.floor(min / 60);
+      const m = Math.round(min % 60);
+      return m ? `${h}時間${m}分` : `${h}時間`;
+    };
+    for (const r of rows) {
+      const sd = certByClient.get(r.user_id)?.shikyuryo_details;
+      if (!sd || Object.keys(sd).length === 0) continue;
+      const actuals = actualsByUser.get(r.user_id) ?? new Map<string, ActualAgg>();
+      for (const [key, def] of Object.entries(SHIKYURYO_DEFS)) {
+        const v = sd[key] as ShikyuVal | undefined;
+        if (!v) continue;
+        const act = actuals.get(key) ?? { minutes: 0, count: 0, units: 0 };
+        if (def.kind === "time") {
+          const lim = toMin(v);
+          if (lim > 0 && act.minutes > lim) {
+            warnings.push(
+              `${r.user_name}さん: ${def.label}が支給量${fmtMin(lim)}を超えています (実績${fmtMin(act.minutes)})`,
+            );
+          }
+        } else if (def.kind === "count") {
+          const lim = v.count ?? 0;
+          if (lim > 0 && act.count > lim) {
+            warnings.push(
+              `${r.user_name}さん: ${def.label}が支給量${lim}回を超えています (実績${act.count}回)`,
+            );
+          }
+        } else {
+          const lim = v.units ?? 0;
+          if (lim > 0 && act.units > lim) {
+            warnings.push(
+              `${r.user_name}さん: ${def.label}が支給量${lim}単位を超えています (実績${act.units}単位)`,
+            );
+          }
+        }
+      }
+      // 重度訪問介護: 支給量は区分別 (包括支援/区分6該当/その他) だが実績は区分判別不可のため
+      // 合算して判定する (紐付けられないため注記付き)。
+      const juhoKeys = [
+        "juudo_houmon_houkatsu",
+        "juudo_houmon_kubun6",
+        "juudo_houmon_sonota",
+      ];
+      const juhoLimit = juhoKeys.reduce(
+        (s, k) => s + (sd[k] ? toMin(sd[k] as ShikyuVal) : 0),
+        0,
+      );
+      if (juhoLimit > 0) {
+        const act = actuals.get("juudo_houmon") ?? { minutes: 0, count: 0, units: 0 };
+        if (act.minutes > juhoLimit) {
+          const note =
+            juhoKeys.filter((k) => sd[k]).length > 1
+              ? " ※重訪は区分別に突合できないため支給量を合算して判定"
+              : "";
+          warnings.push(
+            `${r.user_name}さん: 重度訪問介護が支給量${fmtMin(juhoLimit)}を超えています (実績${fmtMin(act.minutes)})${note}`,
+          );
+        }
+      }
+    }
   }
 
   return { rows, month: monthStr, recordCount: records.length, warnings };
