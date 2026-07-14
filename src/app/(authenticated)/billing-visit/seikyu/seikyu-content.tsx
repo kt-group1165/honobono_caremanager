@@ -52,6 +52,31 @@ const SHOGAI_TABS: { id: SeikyuTab; label: string }[] = [
   { id: "shogai-kokuho", label: "国保請求" },
 ];
 
+// 工程 (月次情報 / 請求 / 利用請求 / 国保請求)。制度切替時に同じ工程を維持するための軸。
+type Stage = "monthly" | "seikyu" | "riyou" | "kokuho";
+const STAGE_OF: Record<SeikyuTab, Stage> = {
+  monthly: "monthly",
+  kaigo: "seikyu",
+  riyou: "riyou",
+  kokuho: "kokuho",
+  "shogai-monthly": "monthly",
+  shogai: "seikyu",
+  "shogai-riyou": "riyou",
+  "shogai-kokuho": "kokuho",
+};
+const KAIGO_BY_STAGE: Record<Stage, SeikyuTab> = {
+  monthly: "monthly",
+  seikyu: "kaigo",
+  riyou: "riyou",
+  kokuho: "kokuho",
+};
+const SHOGAI_BY_STAGE: Record<Stage, SeikyuTab> = {
+  monthly: "shogai-monthly",
+  seikyu: "shogai",
+  riyou: "shogai-riyou",
+  kokuho: "shogai-kokuho",
+};
+
 // 制度トグル (介護 / 障害) — order-app のセグメント型トグルと同トーン
 function SeidoToggle({
   active,
@@ -136,10 +161,12 @@ function SeikyuInner() {
   const effectiveSeido: Seido = isBath ? "kaigo" : seido;
   const tabs = effectiveSeido === "shogai" ? SHOGAI_TABS : KAIGO_TABS;
 
-  // 制度切替時は工程タブを各制度の先頭 (月次情報) にリセット
+  // 制度切替時は現在の工程を維持する (介護請求↔障害請求、利用請求↔利用請求 …)。
+  // 例: 介護の利用請求を見ていて障害に切替 → 障害の利用請求へ (月次情報に戻さない)。
   const handleSeidoChange = (s: Seido) => {
     setSeido(s);
-    setTab(s === "shogai" ? "shogai-monthly" : "monthly");
+    const stage = STAGE_OF[tab];
+    setTab(s === "shogai" ? SHOGAI_BY_STAGE[stage] : KAIGO_BY_STAGE[stage]);
   };
 
   // 障害の 請求 / 利用請求 / 国保請求 は同一 ShogaiSeikyuContent を view 出し分け。
