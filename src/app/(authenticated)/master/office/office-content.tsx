@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useBusinessType } from "@/lib/business-type-context";
 import { AppliedFormulaSection } from "./_applied-formula";
 import { AddonRegistrySection } from "./_addon-registry";
+import { OfficeDesignations } from "./office-designations";
 import { GensanSection } from "./_gensan-settings";
 
 // 令和6年度改定 居宅介護支援 特定事業所加算
@@ -397,6 +398,9 @@ export function OfficeContent({
           <Field label="管理者名" value={form.manager_name} onChange={(v) => handleChange("manager_name", v)} />
         </div>
       </div>
+
+      {/* 追加の指定サービス (居宅が介護予防支援(46)等の指定も持つ場合 = 案②) */}
+      {form.service_type === "居宅介護支援" && <OfficeDesignations officeId={form.id} />}
 
       {/* 加算設定 (居宅介護支援の特定事業所加算 = 居宅のみ表示。
           訪問介護の特定事業所加算は%加算で別物のため、誤設定防止で非表示) */}
