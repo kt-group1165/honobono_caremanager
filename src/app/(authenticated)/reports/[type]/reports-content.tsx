@@ -1006,8 +1006,46 @@ function EditFormCarePlan1({ content, onChange, userId }: {
         onChange={(v) => set("review_opinion", v)} textarea rows={3} className="col-span-2" />
       <FI label="総合的な援助の方針" value={s("overall_policy")}
         onChange={(v) => set("overall_policy", v)} textarea rows={4} className="col-span-2" bunrei="計画1-方針" />
-      <FI label="生活援助中心型の算定理由" value={s("living_support_reason")}
-        onChange={(v) => set("living_support_reason", v)} className="col-span-2" />
+      {/* 算定理由: 1/2 は選択のみ、3 は選択 + その他理由の自由入力。
+          living_support_reason には「３．その他（…）」形式の正規化文字列で保存 (印刷側が番号と括弧内を解釈)。 */}
+      {(() => {
+        const v = s("living_support_reason");
+        const m = v.match(/[1-3１-３]/);
+        const num = m ? m[0].normalize("NFKC") : v ? "3" : "";
+        const sonota = v.match(/[（(]([^）)]*)[）)]/)?.[1] ?? (m ? "" : v);
+        const save = (n: string, text: string) => {
+          if (!n) return set("living_support_reason", "");
+          if (n === "1") return set("living_support_reason", "１．一人暮らし");
+          if (n === "2") return set("living_support_reason", "２．家族等が障害、疾病等");
+          set("living_support_reason", `３．その他（${text}）`);
+        };
+        return (
+          <div className="col-span-2 flex flex-col gap-0.5">
+            <label className="text-xs font-medium text-gray-500">生活援助中心型の算定理由</label>
+            <div className="flex items-center gap-2">
+              <select
+                value={num}
+                onChange={(e) => save(e.target.value, sonota)}
+                className="rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">（選択なし）</option>
+                <option value="1">１．一人暮らし</option>
+                <option value="2">２．家族等が障害、疾病等</option>
+                <option value="3">３．その他</option>
+              </select>
+              {num === "3" && (
+                <input
+                  type="text"
+                  value={sonota}
+                  onChange={(e) => save("3", e.target.value)}
+                  placeholder="その他の理由（印刷時に括弧内へ印字）"
+                  className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
