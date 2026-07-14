@@ -9,6 +9,7 @@ import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
 import {
   CalendarDays,
+  ChevronDown,
   Clock,
   Download,
   Link2,
@@ -971,45 +972,34 @@ export function ShiftManagementContent({
           <h1 className="text-lg font-bold text-gray-900">シフト管理</h1>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border overflow-hidden">
-            <button
-              onClick={() => confirmIfPending(() => setViewMode("calendar"))}
-              className={cn(
-                "flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition-colors",
-                viewMode === "calendar"
-                  ? "bg-blue-600 text-white"
-                  : "bg-white text-gray-600 hover:bg-gray-50"
-              )}
+          <div className="relative">
+            <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-blue-600">
+              {viewMode === "timeline"
+                ? <Clock size={15} />
+                : viewMode === "monthly-individual"
+                  ? <FileText size={15} />
+                  : <CalendarDays size={15} />}
+            </span>
+            <select
+              value={viewMode}
+              onChange={(e) => {
+                const next = e.target.value as typeof viewMode;
+                if (next === viewMode) return;
+                confirmIfPending(() => setViewMode(next));
+              }}
+              className="appearance-none rounded-lg border bg-white py-1.5 pl-8 pr-8 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              aria-label="表示切替"
             >
-              <CalendarDays size={14} />
-              カレンダー
-            </button>
-            <button
-              onClick={() => confirmIfPending(() => setViewMode("monthly-individual"))}
-              className={cn(
-                "flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition-colors",
-                viewMode === "monthly-individual"
-                  ? "bg-blue-600 text-white"
-                  : "bg-white text-gray-600 hover:bg-gray-50"
+              <option value="calendar">カレンダー</option>
+              <option value="monthly-individual">月間個別</option>
+              {(sidebarTab === "staff" || viewMode === "timeline") && (
+                <option value="timeline">タイムライン</option>
               )}
-            >
-              <FileText size={14} />
-              月間個別
-            </button>
-            {sidebarTab === "staff" && (
-              <button
-                onClick={() => confirmIfPending(() => setViewMode("timeline"))}
-                className={cn(
-                  "flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition-colors",
-                  viewMode === "timeline"
-                    ? "bg-blue-600 text-white"
-                    : "bg-white text-gray-600 hover:bg-gray-50"
-                )}
-              >
-                <Clock size={14} />
-                タイムライン
-              </button>
-            )}
+            </select>
+            <ChevronDown
+              size={15}
+              className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400"
+            />
           </div>
           <button
             onClick={() => confirmIfPending(() => router.push("/shift-management/patterns"))}
