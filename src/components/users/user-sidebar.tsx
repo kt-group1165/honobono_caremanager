@@ -56,20 +56,43 @@ interface UserSidebarProps {
 
 // ── 警告バッジ (ほのぼの準拠: 利用者管理編 p.19) ──────────────────────────
 // ほのぼのの利用者リストと同じ 3 種を名前の右に小バッジ表示:
-//   未 = 現在有効な介護保険情報が無い (未登録 / 認定切れ / 非該当 を包含)
-//   申 = 申請中 (新規: care_level='申請中' / 更新: certification_status='申請中')
-//   認 = 認定終了まで CERT_RENEWAL_WARN_DAYS 日未満
+//   未 = 利用制度の証憑 (介護保険の認定 / 障害の受給者証) が現在有効でない
+//   申 = 申請中 (介護: care_level or certification_status / 障害: is_applying)
+//   認 = 有効な証憑の終了まで CERT_RENEWAL_WARN_DAYS 日未満
 // 加えて独自の 院 (入院中)。
+// ほのぼのは NEXT (介護) と More (障害) で別システムだが本システムは統合のため、
+// 利用者が使う制度 (= 実レコードの有無で判定) 側だけをチェックし、両方利用者は
+// 同一文字を 1 バッジに統合して tooltip で内訳を示す。制度の識別は隣の
+// ServiceCategoryBadge が担う。
 // 「最新 1 件」ではなく全履歴で判定する。認定更新レコードは未来の開始日で
 // INSERT されるため、start 降順の先頭だけ見ると更新申請中に「未」が誤発火する。
 // 「未実績」「未記録」は負荷が読めないためスコープ外 (2026-07 総点検)。
 
-/** 認定レコードの要約 (1 利用者 = 履歴複数件) */
+/** 介護保険 認定レコードの要約 (1 利用者 = 履歴複数件) */
 interface CertRow {
   care_level: string | null;
   certification_status: string | null;
   certification_start_date: string | null;
   certification_end_date: string | null;
+}
+
+/** 障害福祉 受給者証レコードの要約 (1 利用者 = 履歴複数件) */
+interface ShougaiCertRow {
+  support_level: string | null;
+  is_applying: boolean | null;
+  certification_start_date: string | null;
+  certification_end_date: string | null;
+}
+
+/** 制度 1 つ分の証憑状態 */
+interface SeidoState {
+  /** レコードが 1 件でもある = その制度の利用者とみなす */
+  used: boolean;
+  pending: boolean;
+  valid: boolean;
+  /** valid 時の終了日と残日数 (終了日なしは null) */
+  end: string | null;
+  daysLeft: number | null;
 }
 
 /** バッジ用にまとめて fetch した参照データ。取得失敗時は null (= バッジ非表示で続行) */
@@ -99,22 +122,15 @@ function localToday(): string {
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
-function computeWarnBadges(
-  clientId: string,
-  data: BadgeData,
-  today: string,
-): WarnBadge[] {
-  const out: WarnBadge[] = [];
-  const certs = data.certs.get(clientId) ?? [];
-
+/** 介護保険: 全履歴から今日時点の証憑状態を求める */
+function evalKaigoCerts(certs: CertRow[], today: string): SeidoState {
   // 今日有効な認定 (要支援/要介護、有効期間が今日を含む)。複数あれば終了日が最も先のもの
   let valid: CertRow | null = null;
   // 申請中レコード (新規 or 更新)。終了日が過去のものは stale として無視
   let pending = false;
   for (const c of certs) {
     const { care_level: level, certification_start_date: start, certification_end_date: end } = c;
-    const isPending = level === "申請中" || c.certification_status === "申請中";
-    if (isPending) {
+    if (level === "申請中" || c.certification_status === "申請中") {
       if (!end || end >= today) pending = true;
       continue;
     }
@@ -129,39 +145,108 @@ function computeWarnBadges(
       }
     }
   }
+  const end = valid?.certification_end_date ?? null;
+  return {
+    used: certs.length > 0,
+    pending,
+    valid: !!valid,
+    end,
+    daysLeft: end ? Math.ceil((Date.parse(end) - Date.parse(today)) / 86_400_000) : null,
+  };
+}
 
-  if (pending) {
+/** 障害福祉: 受給者証の全履歴から今日時点の証憑状態を求める */
+function evalShougaiCerts(certs: ShougaiCertRow[], today: string): SeidoState {
+  let valid: ShougaiCertRow | null = null;
+  let pending = false;
+  for (const c of certs) {
+    const { certification_start_date: start, certification_end_date: end } = c;
+    if (c.is_applying) {
+      if (!end || end >= today) pending = true;
+      continue;
+    }
+    if (
+      c.support_level !== "非該当" &&
+      (!start || start <= today) &&
+      (!end || end >= today)
+    ) {
+      if (!valid || (valid.certification_end_date ?? "9999") < (end ?? "9999")) {
+        valid = c;
+      }
+    }
+  }
+  const end = valid?.certification_end_date ?? null;
+  return {
+    used: certs.length > 0,
+    pending,
+    valid: !!valid,
+    end,
+    daysLeft: end ? Math.ceil((Date.parse(end) - Date.parse(today)) / 86_400_000) : null,
+  };
+}
+
+function computeWarnBadges(
+  clientId: string,
+  data: BadgeData,
+  shougaiCerts: Map<string, ShougaiCertRow[]>,
+  today: string,
+): WarnBadge[] {
+  const out: WarnBadge[] = [];
+  const k = evalKaigoCerts(data.certs.get(clientId) ?? [], today);
+  const s = evalShougaiCerts(shougaiCerts.get(clientId) ?? [], today);
+
+  // 申 = いずれかの制度で申請中
+  if (k.pending || s.pending) {
+    const parts = [
+      ...(k.pending ? ["介護保険の認定"] : []),
+      ...(s.pending ? ["受給者証"] : []),
+    ];
     out.push({
       short: "申",
       label: "申請中",
       cls: "bg-blue-100 text-blue-800 border-blue-300",
-      title: "申請中: 要介護認定を申請中です",
+      title: `申請中: ${parts.join("・")}を申請中です`,
     });
   }
-  if (!valid) {
-    if (!pending) {
-      out.push({
-        short: "未",
-        label: "認定なし",
-        cls: "bg-yellow-100 text-yellow-800 border-yellow-300",
-        title: "認定なし: 現在有効な介護保険情報がありません",
-      });
-    }
-  } else {
-    const end = valid.certification_end_date;
-    if (end) {
-      const days = Math.ceil(
-        (Date.parse(end) - Date.parse(today)) / 86_400_000,
-      );
-      if (days <= CERT_RENEWAL_WARN_DAYS) {
-        out.push({
-          short: "認",
-          label: `認定終了${days}日前`,
-          cls: "bg-amber-100 text-amber-800 border-amber-300",
-          title: `認定終了間近: 認定有効期間の終了まで ${days} 日です (〜${end})`,
-        });
-      }
-    }
+
+  // 未 = 利用制度の証憑が現在有効でない (申請中はカバー済みなので除く)。
+  // どちらの制度のレコードも無い完全新規も 未
+  const kaigoMissing = k.used && !k.valid && !k.pending;
+  const shougaiMissing = s.used && !s.valid && !s.pending;
+  const nothing = !k.used && !s.used;
+  if (kaigoMissing || shougaiMissing || nothing) {
+    const title = nothing
+      ? "認定なし: 介護保険・受給者証とも未登録です"
+      : `認定なし: ${[
+          ...(kaigoMissing ? ["有効な介護保険の認定"] : []),
+          ...(shougaiMissing ? ["有効な受給者証"] : []),
+        ].join("・")}がありません`;
+    out.push({
+      short: "未",
+      label: "認定なし",
+      cls: "bg-yellow-100 text-yellow-800 border-yellow-300",
+      title,
+    });
+  }
+
+  // 認 = 有効な証憑の終了が近い (両制度あれば残日数が短い方をラベルに)
+  const nearParts: string[] = [];
+  let minDays: number | null = null;
+  if (k.valid && k.daysLeft !== null && k.daysLeft <= CERT_RENEWAL_WARN_DAYS) {
+    nearParts.push(`介護認定 〜${k.end} (残${k.daysLeft}日)`);
+    minDays = k.daysLeft;
+  }
+  if (s.valid && s.daysLeft !== null && s.daysLeft <= CERT_RENEWAL_WARN_DAYS) {
+    nearParts.push(`受給者証 〜${s.end} (残${s.daysLeft}日)`);
+    minDays = minDays === null ? s.daysLeft : Math.min(minDays, s.daysLeft);
+  }
+  if (nearParts.length > 0) {
+    out.push({
+      short: "認",
+      label: `認定終了${minDays}日前`,
+      cls: "bg-amber-100 text-amber-800 border-amber-300",
+      title: `認定終了間近: ${nearParts.join(" / ")}`,
+    });
   }
   if (isCurrentlyHospitalized(data.hospitalization.get(clientId), today)) {
     out.push({
@@ -398,54 +483,61 @@ function UserSidebarInner(props: UserSidebarProps) {
     return () => { cancelled = true; };
   }, [users, supabase]);
 
-  // ── 制度区分フィルタ (介護/障害) 用の「障害福祉利用者」判定 ──────────────
+  // ── 障害福祉 受給者証 (制度区分フィルタ + 警告バッジで共用) ──────────────
   // clients.service_category 列には依存しない (未作成環境で「障害」選択時に
   // 全員消える事故の元)。受給者証 (shougai_certifications) を持つ利用者を障害と判定。
-  // テーブル未作成 (42P01/PGRST205) や取得失敗は空 Set (= 障害該当なし) で続行。
-  const [shougaiIds, setShougaiIds] = useState<Set<string>>(new Set());
+  // テーブル未作成 (42P01/PGRST205) や取得失敗は空 Map (= 障害該当なし) で続行。
+  const [shougaiCerts, setShougaiCerts] = useState<Map<string, ShougaiCertRow[]>>(new Map());
   useEffect(() => {
     let cancelled = false;
     const ids = users.map((u) => u.id);
     if (ids.length === 0) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- 一覧が空なら障害判定もクリア (derived reset)
-      setShougaiIds(new Set());
+      setShougaiCerts(new Map());
       return;
     }
     (async () => {
       try {
         const IN_CHUNK = 50;
         const PAGE = 1000;
-        const found = new Set<string>();
+        const found = new Map<string, ShougaiCertRow[]>();
         for (let i = 0; i < ids.length; i += IN_CHUNK) {
           const chunk = ids.slice(i, i + IN_CHUNK);
           let offset = 0;
           while (true) {
             const { data, error } = await supabase
               .from("shougai_certifications")
-              .select("client_id")
+              .select("client_id, support_level, is_applying, certification_start_date, certification_end_date")
               .in("client_id", chunk)
               .range(offset, offset + PAGE - 1);
             if (error) {
-              // テーブル未作成は空 Set で続行 (それ以外も同様に握らず warn)
+              // テーブル未作成は空 Map で続行 (それ以外も同様に握らず warn)
               throw new Error(error.message);
             }
-            const rows = (data ?? []) as Array<{ client_id: string }>;
-            for (const r of rows) found.add(r.client_id);
+            const rows = (data ?? []) as Array<ShougaiCertRow & { client_id: string }>;
+            for (const r of rows) {
+              const list = found.get(r.client_id);
+              if (list) list.push(r);
+              else found.set(r.client_id, [r]);
+            }
             if (rows.length < PAGE) break;
             offset += PAGE;
           }
         }
-        if (!cancelled) setShougaiIds(found);
+        if (!cancelled) setShougaiCerts(found);
       } catch (err) {
         console.warn(
           "障害受給者証の取得に失敗 (制度区分フィルタは介護扱いで続行):",
           err instanceof Error ? err.message : err,
         );
-        if (!cancelled) setShougaiIds(new Set());
+        if (!cancelled) setShougaiCerts(new Map());
       }
     })();
     return () => { cancelled = true; };
   }, [users, supabase]);
+
+  // 受給者証を 1 件でも持つ利用者 = 障害福祉利用者
+  const shougaiIds = useMemo(() => new Set(shougaiCerts.keys()), [shougaiCerts]);
 
   const today = useMemo(() => localToday(), []);
 
@@ -571,7 +663,7 @@ function UserSidebarInner(props: UserSidebarProps) {
           <ul className="py-1">
             {filtered.map((user) => {
               const warnBadges = badgeData
-                ? computeWarnBadges(user.id, badgeData, today)
+                ? computeWarnBadges(user.id, badgeData, shougaiCerts, today)
                 : [];
               return (
                 <li key={user.id}>
