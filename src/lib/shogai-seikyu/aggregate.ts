@@ -466,6 +466,135 @@ export async function aggregateMonthlyShogaiSeikyu(
     }
   }
 
+  // 3.9) 提供表の加算エディタ (障害モード) 由来の回/月単位加算 — kaigo_visit_addon_lines
+  //   (system='障害') を対象月マスタ (system='障害') で解決し「単位×回数」の明細行として
+  //   利用者の details に足す。居介初回 116020 / 緊急時対応 116025 / 福祉専門職員等連携
+  //   116105 / 上限額管理 115010 / 喀痰吸引 116100、重訪 12 系 (126020 等) を想定。
+  //   - テーブル未作成 (42P01) / system 列未適用 (42703) は加算なし = 従来動作
+  //   - %加算 (formula) / 加算以外 / units<=0 / マスタ世代なし は集計に載せず警告
+  //   - 処遇改善の母数には算入する (基本+加算が算定基礎)。特別地域 (所定単位×15%) の
+  //     母数には入れない。行が空 (通常) はこの節は完全 no-op = 従来と同値。
+  interface ShogaiGenericLine {
+    code: string;
+    name: string;
+    unitPer: number;
+    count: number;
+    units: number;
+  }
+  const genericByClient = new Map<string, ShogaiGenericLine[]>();
+  const genericWarnings: string[] = [];
+  if (opts.officeId) {
+    interface GenericRow {
+      client_id: string;
+      addon_code: string;
+      count: number | null;
+    }
+    const lineRows: GenericRow[] = [];
+    let gOffset = 0;
+    for (;;) {
+      const { data, error } = await supabase
+        .from("kaigo_visit_addon_lines")
+        .select("client_id, addon_code, count")
+        .eq("office_id", opts.officeId)
+        .eq("target_month", monthStr)
+        .eq("system", "障害")
+        .order("id", { ascending: true })
+        .range(gOffset, gOffset + 999);
+      if (error) {
+        const featureOff =
+          error.code === "42P01" ||
+          error.code === "PGRST205" ||
+          error.code === "42703" ||
+          error.code === "PGRST204" ||
+          /column .* does not exist/i.test(error.message);
+        if (featureOff) break; // migration 未適用 = 障害の加算行なし (従来動作)
+        throw new Error(`障害 加算行の取得に失敗: ${error.message}`);
+      }
+      const page = (data ?? []) as unknown as GenericRow[];
+      lineRows.push(...page);
+      if (page.length < 1000) break;
+      gOffset += 1000;
+    }
+    if (lineRows.length > 0) {
+      type GenericMaster =
+        | { ok: true; name: string; units: number }
+        | { ok: false; name: string | null; reason: string };
+      const master = new Map<string, GenericMaster>();
+      const codes = Array.from(new Set(lineRows.map((r) => r.addon_code)));
+      for (let i = 0; i < codes.length; i += 50) {
+        const chunk = codes.slice(i, i + 50);
+        const { data, error } = await validInMonth(
+          supabase
+            .from("kaigo_service_codes")
+            .select("service_code, service_name, units, calculation_type, formula")
+            .eq("system", "障害")
+            .in("service_code", chunk),
+          opts.year,
+          opts.month,
+        );
+        if (error) throw new Error(`障害 加算行コード解決失敗: ${error.message}`);
+        for (const r of (data ?? []) as {
+          service_code: string;
+          service_name: string;
+          units: number;
+          calculation_type: string | null;
+          formula: unknown;
+        }[]) {
+          if (master.has(r.service_code)) continue; // 先勝ち (validInMonth 済)
+          if (r.formula != null) {
+            master.set(r.service_code, {
+              ok: false,
+              name: r.service_name,
+              reason:
+                "%加算 (処遇改善等) は事業所の適用加算側で自動計算するため、加算エディタからは集計しません",
+            });
+          } else if (r.calculation_type !== "加算") {
+            master.set(r.service_code, {
+              ok: false,
+              name: r.service_name,
+              reason: `加算コードではありません (${r.calculation_type ?? "区分不明"})`,
+            });
+          } else if (!(r.units > 0)) {
+            master.set(r.service_code, {
+              ok: false,
+              name: r.service_name,
+              reason: "率加算 (マスタ単位数 0) の自動計算は未対応のため集計しません",
+            });
+          } else {
+            master.set(r.service_code, {
+              ok: true,
+              name: r.service_name,
+              units: r.units,
+            });
+          }
+        }
+      }
+      for (const r of lineRows) {
+        const count = r.count ?? 0;
+        if (count <= 0) continue;
+        const m = master.get(r.addon_code);
+        if (!m) {
+          genericWarnings.push(
+            `加算行 ${r.addon_code}: 対象月に有効な障害マスタ世代が無いため集計しません — サービスコードマスタを確認してください`,
+          );
+          continue;
+        }
+        if (!m.ok) {
+          genericWarnings.push(`${m.name ?? r.addon_code}: ${m.reason}`);
+          continue;
+        }
+        if (!genericByClient.has(r.client_id)) genericByClient.set(r.client_id, []);
+        genericByClient.get(r.client_id)!.push({
+          code: r.addon_code,
+          name: m.name,
+          unitPer: m.units,
+          count,
+          units: m.units * count,
+        });
+      }
+    }
+  }
+
   // 4) 利用者 × (service_type + code) 集計
   const byUser = new Map<string, Map<string, ShogaiSeikyuDetail>>();
   for (const r of records) {
@@ -522,7 +651,25 @@ export async function aggregateMonthlyShogaiSeikyu(
       }
     }
 
-    // 処遇改善加算等 (母数 = 所定単位 + 特別地域加算)
+    // 提供表 (障害モード) の回/月単位加算 — 明細行に足し、処遇改善の母数にも算入する
+    // (特別地域の母数 unitsByType には入れない = 所定単位のみが正)
+    const generic = genericByClient.get(userId) ?? [];
+    let genericUnits = 0;
+    for (const g of generic) {
+      details.push({
+        service_type: g.name,
+        service_category: null,
+        service_code: g.code,
+        unit_per: g.unitPer,
+        count: g.count,
+        units: g.units,
+      });
+      genericUnits += g.units;
+      const tc = g.code.slice(0, 2);
+      chuguzenUnitsByType.set(tc, (chuguzenUnitsByType.get(tc) ?? 0) + g.units);
+    }
+
+    // 処遇改善加算等 (母数 = 所定単位 + 特別地域加算 + 回/月単位加算)
     for (const [tc, units] of chuguzenUnitsByType) {
       const rate = addonByTypeCode.get(tc);
       if (!rate || units <= 0) continue;
@@ -534,7 +681,7 @@ export async function aggregateMonthlyShogaiSeikyu(
     addons.sort((a, b) => a.service_code.localeCompare(b.service_code));
     const addonUnits = addons.reduce((s, a) => s + a.units, 0);
 
-    const totalUnits = baseUnits + addonUnits;
+    const totalUnits = baseUnits + genericUnits + addonUnits;
     // 整数演算: 総費用額 = floor(総単位数 × (単価×100) / 100) — float 誤差回避
     const totalAmount = Math.floor((totalUnits * unitPrice100) / 100);
     const seiho = !!cert?.seiho_flag;
@@ -598,6 +745,15 @@ export async function aggregateMonthlyShogaiSeikyu(
   //    複数あり市町村番号が異なる場合はレセプトの提出先が月内で変わる。
   //    現行の集計は最新 1 件の市町村に全実績を載せるので warning で知らせる。
   const warnings: string[] = [];
+  // 3.9) の加算行の解決警告 + 実績が無い利用者の加算行 (集計対象外) を知らせる
+  warnings.push(...genericWarnings);
+  for (const [cid, lines] of genericByClient) {
+    if (!byUser.has(cid)) {
+      warnings.push(
+        `当月の実績が無い利用者に障害の加算行が ${lines.length} 件あります (集計対象外) — 提供表 (障害モード) を確認してください`,
+      );
+    }
+  }
   for (const r of rows) {
     const certs = certsAllByClient.get(r.user_id);
     if (!certs || certs.length < 2) continue;

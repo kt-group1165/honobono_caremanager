@@ -561,26 +561,41 @@ export async function aggregateMonthlyVisitSeikyu(
         count: number | null;
         santei_date?: string | null;
       }
-      // santei_date 列未適用 (42703) は従来列のみで再取得。order 付き page-loop
+      // santei_date / system 列未適用 (42703) は従来形で再取得。order 付き page-loop。
+      // system='介護' フィルタ: 障害モードの加算行 (居介初回 116020 等) を介護請求に
+      // 混入させない (同一 6 桁コードが両制度に存在するため必須)。列未適用時は
+      // 障害行が存在し得ないので無フィルタ = 従来動作で安全。
       const lineRows: AddonLineDbRow[] = [];
       let sel = fullSel;
+      let sysFilter = true;
       let lineOffset = 0;
       while (true) {
-        const { data, error } = await supabase
+        let q = supabase
           .from("kaigo_visit_addon_lines")
           .select(sel)
           .eq("office_id", opts.officeId)
-          .eq("target_month", monthStr)
+          .eq("target_month", monthStr);
+        if (sysFilter) q = q.eq("system", "介護");
+        const { data, error } = await q
           .order("id", { ascending: true })
           .range(lineOffset, lineOffset + PAGE - 1);
         if (error) {
-          if (
-            sel === fullSel &&
+          const colMissing =
             error.code !== "42P01" &&
             error.code !== "PGRST205" &&
-            isColumnMissing(error)
-          ) {
+            isColumnMissing(error);
+          // どの列が無いかで落とすフィルタを選ぶ (両方無い場合も 2 回のリトライで収束)
+          if (colMissing && sysFilter && String(error.message).includes("system")) {
+            sysFilter = false;
+            continue;
+          }
+          if (colMissing && sel === fullSel) {
             sel = baseSel;
+            continue;
+          }
+          if (colMissing && sysFilter) {
+            // 列名がメッセージから特定できない場合の最終手段: system フィルタを外す
+            sysFilter = false;
             continue;
           }
           if (error.code === "42P01" || error.code === "PGRST205") break;

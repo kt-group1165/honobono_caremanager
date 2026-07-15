@@ -206,15 +206,56 @@ function toWareki(date: Date): string {
 //    は減算コード (負値) も解決できるが、書く側 (この画面) では加算のみ選択可能にする。
 const SHOKAI_ADDON_CODE = "114001"; // 訪問介護初回加算 (過去2ヶ月実績なし→候補ヒント)
 
-// 月1回限度の加算 (回数を1に固定し、当月算定済みなら再チェック不可):
-//   初回 114001 / 生活機能向上連携Ⅰ 114003・Ⅱ 114002 / 口腔連携強化 116192
-const MONTHLY_ONCE_CODES = new Set(["114001", "114003", "114002", "116192"]);
+// 月あたり回数上限のある加算 (回数入力を上限に固定し、当月上限まで算定済みなら
+// 再チェック不可)。介護・障害共通の map。未登録コード = 制限なし (緊急時訪問介護 等)
+const MAX_PER_MONTH: Record<string, number> = {
+  // 介護 (訪問介護): 初回 / 生活機能向上連携Ⅰ・Ⅱ / 口腔連携強化 = 月1回
+  "114001": 1,
+  "114003": 1,
+  "114002": 1,
+  "116192": 1,
+  // 障害 (居宅介護 11): 初回 / 上限額管理 = 月1、緊急時対応 = 月2、
+  // 福祉専門職員等連携 = 90日3回 (月上限としては 3 で運用ガード)
+  "116020": 1,
+  "115010": 1,
+  "116025": 2,
+  "116026": 2,
+  "116105": 3,
+  // 障害 (重度訪問介護 12): 同上 + 入院時支援連携 / 行動障害支援連携 = 月1
+  "126020": 1,
+  "125010": 1,
+  "126025": 2,
+  "126026": 2,
+  "125037": 1,
+  "126720": 1,
+};
 // 併算定不可ペア: 生活機能向上連携Ⅰ (114003) ⇔ Ⅱ (114002)。
 // チェック時は相手方を自動解除、既存加算行が相手方にあるときはチェック不可にする。
 const EXCLUSIVE_PAIRS: Record<string, string> = {
   "114003": "114002",
   "114002": "114003",
 };
+
+// 障害福祉 (居宅介護 11 / 重度訪問介護 12) の回/月単位加算 allowlist。
+// マスタの cat11/12 加算には複合コード (重訪移動介護加算 X.Y 等) が大量にあるため、
+// 提供表のチェックリストには単純な「単位×回数」加算だけを出す。
+// 集計は shogai-seikyu/aggregate.ts 3.9) (kaigo_visit_addon_lines system='障害')。
+const SHOGAI_ADDON_CODES = [
+  "116020", // 居介初回加算 (200)
+  "116025", // 居介緊急時対応加算 (100)
+  "116026", // 居介緊急時対応加算（地域生活拠点） (150)
+  "116105", // 居介福祉専門職員等連携加算 (564)
+  "116100", // 居介喀痰吸引等支援体制加算 (100/日)
+  "115010", // 居介上限額管理加算 (150)
+  "126020", // 重訪初回加算 (200)
+  "126025", // 重訪緊急時対応加算 (100)
+  "126026", // 重訪緊急時対応加算（地域生活拠点） (150)
+  "126720", // 重訪行動障害支援連携加算 (584)
+  "126725", // 重訪移動介護緊急時支援加算 (240)
+  "126100", // 重訪喀痰吸引等支援体制加算 (100/日)
+  "125037", // 重訪入院時支援連携加算 (300)
+  "125010", // 重訪上限額管理加算 (150)
+];
 
 // 加算コード1件の一覧行 (対象月 validInMonth で解決)
 interface AddonCodeOption {
@@ -325,6 +366,13 @@ export function ProvisionTicketsContent({
   const [addonLines, setAddonLines] = useState<Record<string, number>>({});
   // addonDates: 保存済みの算定日 { addon_code -> 'YYYY-MM-DD' } (santei_date。未指定は無し)
   const [addonDates, setAddonDates] = useState<Record<string, string>>({});
+  // 障害モードの加算行 (system='障害') — 介護と別 Record で持つ (同一コード衝突回避)
+  const [shogaiAddonLines, setShogaiAddonLines] = useState<Record<string, number>>({});
+  const [shogaiAddonDates, setShogaiAddonDates] = useState<Record<string, string>>({});
+  const [shogaiAddonOptions, setShogaiAddonOptions] = useState<AddonCodeOption[]>([]);
+  // kaigo_visit_addon_lines.system 列が適用済みか (migrations/visit_addon_lines_system.sql)。
+  // 未適用 = 障害モードの加算エディタは無効 (介護は従来どおり)
+  const [systemColSupported, setSystemColSupported] = useState(true);
   // santei_date 列が未適用 (migrations/month_addon_santei_date.sql 前) → 日付入力を出さない
   const [santeiDateSupported, setSanteiDateSupported] = useState(true);
   // 訪問介護の加算コード一覧 (対象月 validInMonth で解決。calculation_type='加算' のみ)
@@ -440,6 +488,43 @@ export function ProvisionTicketsContent({
         opts.push({ code: r.service_code, name: r.service_name, units: r.units });
       }
       setAddonOptions(opts);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, selectedMonth]);
+
+  // ── 障害福祉の「加算」コード一覧 (SHOGAI_ADDON_CODES allowlist を対象月世代で解決) ──
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await validInMonth(
+        supabase
+          .from("kaigo_service_codes")
+          .select("service_code, service_name, units")
+          .eq("system", "障害")
+          .eq("calculation_type", "加算")
+          .in("service_code", SHOGAI_ADDON_CODES),
+        selectedMonth.getFullYear(),
+        selectedMonth.getMonth() + 1,
+      ).order("service_code");
+      if (cancelled) return;
+      if (error) {
+        console.error("shogai addon options fetch failed:", error.message);
+        return;
+      }
+      const seen = new Set<string>();
+      const opts: AddonCodeOption[] = [];
+      for (const r of (data ?? []) as {
+        service_code: string;
+        service_name: string;
+        units: number;
+      }[]) {
+        if (seen.has(r.service_code)) continue;
+        seen.add(r.service_code);
+        opts.push({ code: r.service_code, name: r.service_name, units: r.units });
+      }
+      setShogaiAddonOptions(opts);
     })();
     return () => {
       cancelled = true;
@@ -566,15 +651,26 @@ export function ProvisionTicketsContent({
     if (!currentOfficeId) return;
     let cancelled = false;
     (async () => {
-      // ① 既存の加算明細行 (addon_code -> count + 算定日)。
-      //    santei_date 列未適用 (42703) は従来列のみで再取得し、日付入力を無効化
+      // ① 既存の加算明細行 (addon_code -> count + 算定日 + 制度区分)。
+      //    列未適用は段階フォールバック: system 無し → santei_date 無し (従来 UI)。
+      //    system 列が無い間は全行を介護扱い (障害行はまだ存在し得ない)。
       let santeiOk = true;
+      let sysOk = true;
       let { data, error } = await supabase
         .from("kaigo_visit_addon_lines")
-        .select("addon_code, count, santei_date")
+        .select("addon_code, count, santei_date, system")
         .eq("client_id", userId)
         .eq("target_month", monthStr)
         .eq("office_id", currentOfficeId);
+      if (error && (error.code === "42703" || error.code === "PGRST204")) {
+        sysOk = false;
+        ({ data, error } = await supabase
+          .from("kaigo_visit_addon_lines")
+          .select("addon_code, count, santei_date")
+          .eq("client_id", userId)
+          .eq("target_month", monthStr)
+          .eq("office_id", currentOfficeId));
+      }
       if (error && (error.code === "42703" || error.code === "PGRST204")) {
         santeiOk = false;
         ({ data, error } = await supabase
@@ -586,11 +682,14 @@ export function ProvisionTicketsContent({
       }
       if (cancelled) return;
       setSanteiDateSupported(santeiOk);
+      setSystemColSupported(sysOk);
       if (error) {
         if (error.code === "42P01" || error.code === "PGRST205") {
           setAddonTableMissing(true);
           setAddonLines({});
           setAddonDates({});
+          setShogaiAddonLines({});
+          setShogaiAddonDates({});
           return;
         }
         console.error("addon lines fetch failed:", error.message);
@@ -600,12 +699,26 @@ export function ProvisionTicketsContent({
       setAddonTableMissing(false);
       const next: Record<string, number> = {};
       const nextDates: Record<string, string> = {};
-      for (const r of (data ?? []) as { addon_code: string; count: number; santei_date?: string | null }[]) {
-        next[r.addon_code] = r.count;
-        if (r.santei_date) nextDates[r.addon_code] = r.santei_date;
+      const nextShogai: Record<string, number> = {};
+      const nextShogaiDates: Record<string, string> = {};
+      for (const r of (data ?? []) as {
+        addon_code: string;
+        count: number;
+        santei_date?: string | null;
+        system?: string | null;
+      }[]) {
+        if (r.system === "障害") {
+          nextShogai[r.addon_code] = r.count;
+          if (r.santei_date) nextShogaiDates[r.addon_code] = r.santei_date;
+        } else {
+          next[r.addon_code] = r.count;
+          if (r.santei_date) nextDates[r.addon_code] = r.santei_date;
+        }
       }
       setAddonLines(next);
       setAddonDates(nextDates);
+      setShogaiAddonLines(nextShogai);
+      setShogaiAddonDates(nextShogaiDates);
 
       // ② 初回加算候補: 過去2ヶ月間に completed 実績が無い利用者をサジェスト
       const [y, m] = monthStr.split("-").map(Number);
@@ -927,21 +1040,41 @@ export function ProvisionTicketsContent({
   // santeiDate: 算定日 (任意)。undefined = 既存値を保持 / null = 未指定 / 'YYYY-MM-DD' = 指定。
   // santei_date 列未適用 (migration 前) は payload に含めない = 従来動作。
   const upsertAddonLine = useCallback(
-    async (addonCode: string, count: number, santeiDate?: string | null): Promise<boolean> => {
+    async (
+      addonCode: string,
+      count: number,
+      santeiDate?: string | null,
+      sys: "介護" | "障害" = "介護",
+    ): Promise<boolean> => {
       if (!currentOfficeId) {
         toast.error("加算の保存には事業所の選択 (?office=) が必要です");
         return false;
       }
-      const c = Math.max(0, Math.round(count) || 0);
+      // 障害の加算行は system 列必須 (無いと介護請求に混入するため保存しない)
+      if (sys === "障害" && !systemColSupported) {
+        toast.warning(
+          "障害の加算には migrations/visit_addon_lines_system.sql の適用が必要です (system 列未適用)",
+        );
+        return false;
+      }
+      const setLines = sys === "障害" ? setShogaiAddonLines : setAddonLines;
+      const setDates = sys === "障害" ? setShogaiAddonDates : setAddonDates;
+      const curDates = sys === "障害" ? shogaiAddonDates : addonDates;
+      let c = Math.max(0, Math.round(count) || 0);
+      // 月上限のある加算は上限で clamp (行追加モーダルの回数合成で超えるのを防ぐ)
+      const cap = MAX_PER_MONTH[addonCode];
+      if (cap != null && c > cap) c = cap;
       // count=0 は削除扱い
       if (c === 0) {
-        const { error } = await supabase
+        let dq = supabase
           .from("kaigo_visit_addon_lines")
           .delete()
           .eq("client_id", userId)
           .eq("target_month", monthStr)
           .eq("office_id", currentOfficeId)
           .eq("addon_code", addonCode);
+        if (systemColSupported) dq = dq.eq("system", sys);
+        const { error } = await dq;
         if (error) {
           if (error.code === "42P01" || error.code === "PGRST205") {
             setAddonTableMissing(true);
@@ -952,12 +1085,12 @@ export function ProvisionTicketsContent({
           toast.error("加算の削除に失敗しました: " + error.message);
           return false;
         }
-        setAddonLines((prev) => {
+        setLines((prev) => {
           const next = { ...prev };
           delete next[addonCode];
           return next;
         });
-        setAddonDates((prev) => {
+        setDates((prev) => {
           const next = { ...prev };
           delete next[addonCode];
           return next;
@@ -966,7 +1099,7 @@ export function ProvisionTicketsContent({
       }
       // upsert は行全体を書き換えるため、算定日未指定 (undefined) は既存値を引き継ぐ
       const effectiveDate =
-        santeiDate !== undefined ? santeiDate : addonDates[addonCode] ?? null;
+        santeiDate !== undefined ? santeiDate : curDates[addonCode] ?? null;
       const payload: Record<string, unknown> = {
         client_id: userId,
         target_month: monthStr,
@@ -976,9 +1109,14 @@ export function ProvisionTicketsContent({
         updated_at: new Date().toISOString(),
       };
       if (santeiDateSupported) payload.santei_date = effectiveDate;
+      if (systemColSupported) payload.system = sys;
       const { error } = await supabase
         .from("kaigo_visit_addon_lines")
-        .upsert(payload, { onConflict: "client_id,target_month,office_id,addon_code" });
+        .upsert(payload, {
+          onConflict: systemColSupported
+            ? "client_id,target_month,office_id,addon_code,system"
+            : "client_id,target_month,office_id,addon_code",
+        });
       if (error) {
         if (error.code === "42P01" || error.code === "PGRST205") {
           setAddonTableMissing(true);
@@ -989,8 +1127,8 @@ export function ProvisionTicketsContent({
         toast.error("加算の保存に失敗しました: " + error.message);
         return false;
       }
-      setAddonLines((prev) => ({ ...prev, [addonCode]: c }));
-      setAddonDates((prev) => {
+      setLines((prev) => ({ ...prev, [addonCode]: c }));
+      setDates((prev) => {
         const next = { ...prev };
         if (santeiDateSupported && effectiveDate) next[addonCode] = effectiveDate;
         else if (santeiDateSupported) delete next[addonCode];
@@ -998,7 +1136,16 @@ export function ProvisionTicketsContent({
       });
       return true;
     },
-    [supabase, userId, monthStr, currentOfficeId, addonDates, santeiDateSupported],
+    [
+      supabase,
+      userId,
+      monthStr,
+      currentOfficeId,
+      addonDates,
+      shogaiAddonDates,
+      santeiDateSupported,
+      systemColSupported,
+    ],
   );
 
   // ── 同一建物減算区分 (client_office_assignments.same_building_tier) の読込 ──
@@ -1109,13 +1256,15 @@ export function ProvisionTicketsContent({
     if (warn) toast.warning(warn);
 
     // モーダルで指定した「この訪問につく加算」を kaigo_visit_addon_lines に反映。
-    // addRowAddons = { addon_code -> count }。既存 addonLines と加算合成 (回数加算) して upsert。
+    // addRowAddons = { addon_code -> count }。既存行と加算合成 (回数加算) して upsert。
     // 算定日 (任意入力) はモーダルで指定があればそれ、無ければ既存値を保持 (undefined)。
+    // 制度区分 (system) は表示中モード。月上限は upsertAddonLine 側で clamp。
     // (処遇改善は行を作らず集計のみ = ここでは扱わない)
+    const existingForMode = viewSystem === "障害" ? shogaiAddonLines : addonLines;
     for (const [code, cnt] of Object.entries(addRowAddons)) {
       if (cnt <= 0) continue;
-      const merged = (addonLines[code] ?? 0) + cnt;
-      await upsertAddonLine(code, merged, addRowAddonDates[code] || undefined);
+      const merged = (existingForMode[code] ?? 0) + cnt;
+      await upsertAddonLine(code, merged, addRowAddonDates[code] || undefined, viewSystem);
     }
 
     setShowAddRow(false);
@@ -1448,7 +1597,9 @@ export function ProvisionTicketsContent({
     (async () => {
       // 保存済み加算が無い / 事業所未選択なら空。resolveVisitAddonLines は
       // office 未指定・0件時に空 Map を返すのでそのまま流す。
-      if (!currentOfficeId || Object.keys(addonLines).length === 0) {
+      // 表示中の制度区分 (viewSystem) の加算行だけを解決・表示する。
+      const linesForMode = viewSystem === "障害" ? shogaiAddonLines : addonLines;
+      if (!currentOfficeId || Object.keys(linesForMode).length === 0) {
         if (!cancelled) setResolvedAddonLines([]);
         return;
       }
@@ -1459,6 +1610,7 @@ export function ProvisionTicketsContent({
           selectedMonth.getFullYear(),
           selectedMonth.getMonth() + 1,
           currentOfficeId,
+          viewSystem,
         );
         if (!cancelled) setResolvedAddonLines(map.get(userId) ?? []);
       } catch (err) {
@@ -1469,7 +1621,7 @@ export function ProvisionTicketsContent({
     return () => {
       cancelled = true;
     };
-  }, [supabase, userId, currentOfficeId, selectedMonth, addonLines]);
+  }, [supabase, userId, currentOfficeId, selectedMonth, addonLines, shogaiAddonLines, viewSystem]);
 
   // 初回加算の算定日サジェスト: 当月の初回訪問日 (実績があれば実績、無ければ予定の最小日)
   const firstVisitDate = useMemo(() => {
@@ -1508,23 +1660,31 @@ export function ProvisionTicketsContent({
     [addonRows],
   );
 
-  // 加算込みの最終合計 (処遇改善% + サービス加算 マスタ駆動一覧)
+  // 加算込みの最終合計 (処遇改善% + サービス加算 マスタ駆動一覧)。
+  // 処遇改善% (formulaAdjustments) は介護のみ (障害の処遇改善は請求集計側で自動)
   const grandPlannedUnits = useMemo(
-    () => totalPlannedUnits + formulaAdjustments.reduce((s, a) => s + a.plannedUnits, 0) + addonTotalUnits,
-    [totalPlannedUnits, formulaAdjustments, addonTotalUnits],
+    () =>
+      totalPlannedUnits +
+      (viewSystem === "介護" ? formulaAdjustments.reduce((s, a) => s + a.plannedUnits, 0) : 0) +
+      addonTotalUnits,
+    [totalPlannedUnits, formulaAdjustments, addonTotalUnits, viewSystem],
   );
   const grandActualUnits = useMemo(
-    () => totalActualUnits + formulaAdjustments.reduce((s, a) => s + a.actualUnits, 0) + addonTotalUnits,
-    [totalActualUnits, formulaAdjustments, addonTotalUnits],
+    () =>
+      totalActualUnits +
+      (viewSystem === "介護" ? formulaAdjustments.reduce((s, a) => s + a.actualUnits, 0) : 0) +
+      addonTotalUnits,
+    [totalActualUnits, formulaAdjustments, addonTotalUnits, viewSystem],
   );
 
-  // 加算行の × ボタン: 該当加算コードを 1回分減らす (0 で削除)
+  // 加算行の × ボタン: 該当加算コードを 1回分減らす (0 で削除)。制度区分は表示中モード
   const removeAddonRow = useCallback(
     (code: string) => {
-      const cur = addonLines[code] ?? 0;
-      void upsertAddonLine(code, Math.max(0, cur - 1));
+      const lines = viewSystem === "障害" ? shogaiAddonLines : addonLines;
+      const cur = lines[code] ?? 0;
+      void upsertAddonLine(code, Math.max(0, cur - 1), undefined, viewSystem);
     },
-    [addonLines, upsertAddonLine],
+    [addonLines, shogaiAddonLines, viewSystem, upsertAddonLine],
   );
 
   // appliedFormulaCodes は currentOffice 由来 (read-only)。
@@ -2157,8 +2317,8 @@ export function ProvisionTicketsContent({
                       })}
 
                       {/* ── 加算行 (kaigo_visit_addon_lines の投影。schedule 行には無い) ──
-                          介護 (訪問介護) 専用。障害モードでは非表示 (障害の加算は集計側で自動)。 */}
-                      {viewSystem === "介護" && addonRows.length > 0 && (
+                          resolvedAddonLines は表示中の制度区分 (viewSystem) で解決済み。 */}
+                      {addonRows.length > 0 && (
                         <tbody>
                           {addonRows.map((a) => (
                             <tr key={`addon-${a.code}`} className="bg-purple-50/60">
@@ -2175,7 +2335,9 @@ export function ProvisionTicketsContent({
                                 {a.unit > 0
                                   ? `月次加算 (${a.unit.toLocaleString()}単位${a.count > 1 ? ` × ${a.count}` : ""})`
                                   : "単位数マスタ未解決 (対象月世代を確認)"}
-                                {addonDates[a.code] ? `・算定日 ${addonDates[a.code]}` : ""}
+                                {(viewSystem === "障害" ? shogaiAddonDates : addonDates)[a.code]
+                                  ? `・算定日 ${(viewSystem === "障害" ? shogaiAddonDates : addonDates)[a.code]}`
+                                  : ""}
                               </td>
                               <td className="border border-gray-400 px-0 py-0 text-center font-bold text-purple-700">
                                 {a.count}
@@ -2184,7 +2346,7 @@ export function ProvisionTicketsContent({
                                 {a.units > 0 ? a.units.toLocaleString() : ""}
                               </td>
                               <td className="border border-gray-400 px-1 py-0 text-center text-[10px] text-purple-600">
-                                介護保険
+                                {viewSystem === "障害" ? "障害福祉" : "介護保険"}
                               </td>
                               <td className="border border-gray-400 px-0 py-0 text-center no-print">
                                 <button
@@ -2200,7 +2362,7 @@ export function ProvisionTicketsContent({
                         </tbody>
                       )}
 
-                      {serviceRows.length === 0 && (viewSystem === "障害" || addonRows.length === 0) && (
+                      {serviceRows.length === 0 && addonRows.length === 0 && (
                         <tbody>
                           <tr>
                             <td colSpan={3 + days.length + 4} className="border border-gray-400 px-4 py-8 text-center text-gray-400">
@@ -2311,8 +2473,8 @@ export function ProvisionTicketsContent({
                           <td className="border border-gray-200 px-2 py-1 text-right text-purple-700 tabular-nums">+{a.actualUnits.toLocaleString()}</td>
                         </tr>
                       ))}
-                      {/* サービス加算行 (初回/緊急時/生活機能向上。予定=実績とも同額) — 介護のみ */}
-                      {viewSystem === "介護" && addonRows.map((a) => (
+                      {/* サービス加算行 (回/月単位加算。予定=実績とも同額) — 表示中モードの加算行 */}
+                      {addonRows.map((a) => (
                         <tr key={`fa-${a.code}`} className="bg-purple-50/40 text-xs">
                           <td className="border border-gray-200 px-2 py-1 text-purple-700">{a.label}</td>
                           <td className="border border-gray-200 px-2 py-1 text-right text-[10px] text-gray-400">
@@ -2324,7 +2486,7 @@ export function ProvisionTicketsContent({
                           <td className="border border-gray-200 px-2 py-1 text-right text-purple-700 tabular-nums">+{a.units.toLocaleString()}</td>
                         </tr>
                       ))}
-                      {viewSystem === "介護" && (formulaAdjustments.length > 0 || addonRows.length > 0) && (
+                      {((viewSystem === "介護" && formulaAdjustments.length > 0) || addonRows.length > 0) && (
                         <tr className="bg-gray-100 font-bold text-xs">
                           <td className="border border-gray-200 px-2 py-1 text-right" colSpan={3}>加算込み 総合計</td>
                           <td className="border border-gray-200 px-2 py-1 text-right text-blue-700 tabular-nums">{grandPlannedUnits.toLocaleString()}</td>
@@ -2517,9 +2679,9 @@ export function ProvisionTicketsContent({
               />
 
               {/* ── この訪問につく加算 (kaigo_visit_addon_lines のマスタ駆動一覧) ──
-                  加算マスタ駆動チェックリストは介護 (訪問介護 cat=11) 専用。障害モードでは
-                  非表示 (障害の処遇改善は請求集計側で自動。per-client 加算はここでは扱わない)。 */}
-              {viewSystem === "介護" && (
+                  介護 = 訪問介護 cat=11 の加算 / 障害 = 居宅介護・重訪の回/月単位加算
+                  (SHOGAI_ADDON_CODES allowlist)。障害は system 列 (migration) 適用後のみ。 */}
+              {viewSystem === "介護" ? (
                 <ProvisionAddonChecklist
                   addonTableMissing={addonTableMissing}
                   currentOfficeId={currentOfficeId}
@@ -2543,6 +2705,35 @@ export function ProvisionTicketsContent({
                   dateMax={`${monthStr}-${String(daysCount).padStart(2, "0")}`}
                   showSanteiDate={santeiDateSupported}
                 />
+              ) : systemColSupported ? (
+                <ProvisionAddonChecklist
+                  addonTableMissing={addonTableMissing}
+                  currentOfficeId={currentOfficeId}
+                  addonOptions={shogaiAddonOptions}
+                  selected={addRowAddons}
+                  onChange={setAddRowAddons}
+                  existingLines={shogaiAddonLines}
+                  shokaiSuggest={null}
+                  dates={addRowAddonDates}
+                  onDateChange={(code, v) =>
+                    setAddRowAddonDates((prev) => {
+                      const next = { ...prev };
+                      if (v) next[code] = v;
+                      else delete next[code];
+                      return next;
+                    })
+                  }
+                  existingDates={shogaiAddonDates}
+                  shokaiDefaultDate={null}
+                  dateMin={`${monthStr}-01`}
+                  dateMax={`${monthStr}-${String(daysCount).padStart(2, "0")}`}
+                  showSanteiDate={santeiDateSupported}
+                />
+              ) : (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
+                  障害の加算 (初回・緊急時対応・福祉専門職員等連携など) を使うには
+                  migrations/visit_addon_lines_system.sql の適用が必要です (system 列未適用)。
+                </p>
               )}
             </div>
             <div className="flex justify-end gap-2 border-t px-5 py-4">
@@ -2730,8 +2921,9 @@ function ProvisionAddonChecklist({
 }) {
   const setCode = (code: string, count: number) => {
     const next = { ...selected };
-    // 月1回限度の加算は回数を 1 に固定 (2 回以上は誤請求)
-    if (MONTHLY_ONCE_CODES.has(code)) count = Math.min(count, 1);
+    // 月上限のある加算は回数を上限で clamp (超過は誤請求)
+    const cap = MAX_PER_MONTH[code];
+    if (cap != null) count = Math.min(count, cap);
     if (count <= 0) delete next[code];
     else next[code] = count;
     // 併算定不可ペア (生活機能向上連携Ⅰ⇔Ⅱ): チェック時に相手方の選択を自動解除
@@ -2758,9 +2950,10 @@ function ProvisionAddonChecklist({
             const checked = count > 0;
             const alreadyN = existingLines[opt.code] ?? 0;
             const isShokai = opt.code === SHOKAI_ADDON_CODE;
-            const isMonthlyOnce = MONTHLY_ONCE_CODES.has(opt.code);
-            // 月1回限度: 当月既に加算行がある場合は再チェック不可
-            const onceBlocked = isMonthlyOnce && alreadyN >= 1 && !checked;
+            const capN = MAX_PER_MONTH[opt.code];
+            const isMonthlyOnce = capN != null;
+            // 月上限: 当月既に上限まで加算行がある場合は再チェック不可
+            const onceBlocked = capN != null && alreadyN >= capN && !checked;
             // 併算定不可 (生活機能向上連携Ⅰ⇔Ⅱ): 相手方の既存加算行があるとチェック不可
             // (選択中の相手方は setCode 側で自動解除)
             const counterpart = EXCLUSIVE_PAIRS[opt.code];
@@ -2776,7 +2969,7 @@ function ProvisionAddonChecklist({
                     }`}
                     title={
                       onceBlocked
-                        ? "月1回限度の加算です (当月は既に算定済み)"
+                        ? `月${capN}回限度の加算です (当月は既に上限まで算定済み)`
                         : exclusiveBlocked
                         ? "生活機能向上連携Ⅰ/Ⅱは併算定できません (先に相手方の加算行を × で外してください)"
                         : undefined
@@ -2811,11 +3004,11 @@ function ProvisionAddonChecklist({
                     <input
                       type="number"
                       min={1}
-                      max={isMonthlyOnce ? 1 : undefined}
+                      max={capN ?? undefined}
                       value={count}
                       onChange={(e) => setCode(opt.code, Math.max(1, parseInt(e.target.value, 10) || 1))}
                       className="w-14 rounded border border-gray-300 px-1.5 py-0.5 text-right text-xs"
-                      title={isMonthlyOnce ? "月1回限度の加算のため回数は 1 固定です" : "回数"}
+                      title={isMonthlyOnce ? `月${capN}回限度の加算です` : "回数"}
                     />
                   )}
                   <span className="w-6 text-right text-[10px] text-gray-400">回</span>

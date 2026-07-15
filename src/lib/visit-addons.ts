@@ -42,29 +42,43 @@ export async function resolveVisitAddonLines(
   year: number,
   month: number,
   officeId: string | null,
+  /**
+   * 加算行の制度区分。既定 '介護' (従来動作)。system 列未適用 (42703) のときは
+   * 介護 = 全行 (従来どおり) / 障害 = 空 (障害行はまだ存在し得ないため安全) に倒す。
+   */
+  system: "介護" | "障害" = "介護",
 ): Promise<Map<string, VisitAddonLine[]>> {
   const out = new Map<string, VisitAddonLine[]>();
   const ids = Array.from(new Set(clientIds));
   if (ids.length === 0 || !officeId) return out;
   const monthStr = `${year}-${String(month).padStart(2, "0")}`;
 
-  // 1) 加算行を取得
+  // 1) 加算行を取得 (system 列でフィルタ。列未適用は上記 fallback)
   const rows: LineRow[] = [];
+  let sysFilter = true;
   for (let i = 0; i < ids.length; i += IN_CHUNK) {
     const chunk = ids.slice(i, i + IN_CHUNK);
     let offset = 0;
     while (true) {
-      const { data, error } = await supabase
+      let q = supabase
         .from("kaigo_visit_addon_lines")
         .select("client_id, addon_code, count")
         .eq("office_id", officeId)
         .eq("target_month", monthStr)
-        .in("client_id", chunk)
+        .in("client_id", chunk);
+      if (sysFilter) q = q.eq("system", system);
+      const { data, error } = await q
         .order("client_id", { ascending: true })
         .order("addon_code", { ascending: true })
         .range(offset, offset + PAGE - 1);
       if (error) {
         if (isMissingTable(error.code)) return out;
+        if (sysFilter && (error.code === "42703" || error.code === "PGRST204")) {
+          // system 列未適用: 障害は空 (行が存在し得ない)、介護は無フィルタで従来動作
+          if (system === "障害") return out;
+          sysFilter = false;
+          continue;
+        }
         throw new Error(`加算明細の取得に失敗: ${error.message}`);
       }
       const got = (data ?? []) as unknown as LineRow[];
@@ -84,9 +98,9 @@ export async function resolveVisitAddonLines(
       supabase
         .from("kaigo_service_codes")
         .select("service_code, service_name, units")
-        // 提供表の加算エディタは 介護 (cat=11) のコードのみ書く。障害 system に
-        // 同じ 6 桁コードが存在しうるため system で絞る (集計 aggregate.ts と同規則)
-        .eq("system", "介護")
+        // 同じ 6 桁コードが介護/障害の両 system に存在しうるため、行の制度区分で
+        // マスタを絞る (集計 aggregate.ts と同規則)
+        .eq("system", system)
         .in("service_code", chunk),
       year,
       month,
