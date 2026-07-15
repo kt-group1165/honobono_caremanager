@@ -1203,10 +1203,11 @@ export function MonthlyIndividualView({
                               {isCompleted ? "実" : "予"}
                             </span>
                             <span className={cn(
-                              "absolute top-0.5 h-[14px] w-[14px] rounded-full bg-white shadow transition-transform",
-                              // ON(実) の白丸がオレンジ枠から右にはみ出ないよう内側で止める
-                              // (track w-10=40px / knob 14px → 右余白 4px)
-                              isCompleted ? "translate-x-[22px]" : "translate-x-0.5"
+                              // 白丸は left を calc(100%-16px)=トラック幅追従 で右アンカー。translate の
+                              // 固定値だとトラック幅とズレて右にはみ出るため。left 遷移でスライドも維持
+                              // (knob14px + 右余白2px = 16px / 左は 2px)
+                              "absolute top-0.5 h-[14px] w-[14px] rounded-full bg-white shadow transition-all",
+                              isCompleted ? "left-[calc(100%_-_16px)]" : "left-0.5"
                             )} />
                           </span>
                         </button>
