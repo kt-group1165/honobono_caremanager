@@ -8,6 +8,8 @@
 //   - 号車 1号車/2号車 (既存があれば再利用)
 //   - 週間パターン 12 本 → 2026-07 の予定 92 コマ生成
 //   - 当日編成 (7月の稼働日、7/17 の 2号車のみ看護なし = 減算警告デモ)
+//   - 7/16 の 1号車は看護師が 09:00-12:00 のみ乗車 (staff_times、兼務デモ。
+//     午後のコマに「看護なし(減算)」バッジが出る。列未適用なら自動スキップ)
 //   - 7/1〜7/14 は実績反映済 (kaigo_bath_visit_records 40 件 + record_id リンク)
 //
 // クリーンアップ SQL:
@@ -205,14 +207,31 @@ const main = async () => {
   console.log(`[OK] 週間パターン ${insPat.length}件 INSERT`);
 
   // ── 当日編成 ──
+  // staff_times 列 (bath_shift_v2) の適用確認 (未適用なら兼務デモをスキップ)
+  let hasStaffTimes = true;
+  try {
+    await rest("kaigo_bath_team_days?select=staff_times&limit=1");
+  } catch {
+    hasStaffTimes = false;
+    console.log("[SKIP] staff_times 列が未適用のため兼務デモ (7/16) は入れません (bath_shift_v2_staff_times.sql)");
+  }
   const teamDayRows = [];
   for (const t of [1, 2]) {
     for (const dateStr of workDates[t]) {
       const noNurse = t === 2 && dateStr === `${MONTH}-17`;
+      // 兼務デモ: 7/16 の 1号車は看護師 (湯本) が午前のみ乗車 → 午後のコマは看護なし減算
+      const kenmuDemo = hasStaffTimes && t === 1 && dateStr === `${MONTH}-16`;
       teamDayRows.push({
         tenant_id: TENANT, team_id: teamIdOf[t], work_date: dateStr,
         staff_ids: noNurse ? noNurseTeam2 : teamStaffIds[t],
-        notes: noNurse ? `看護師欠勤のため介護 3 名 ${MARKER}` : MARKER,
+        ...(hasStaffTimes
+          ? { staff_times: kenmuDemo ? { [staffByName["湯本 さゆり"].id]: { start: "09:00", end: "12:00" } } : {} }
+          : {}),
+        notes: noNurse
+          ? `看護師欠勤のため介護 3 名 ${MARKER}`
+          : kenmuDemo
+          ? `湯本は午後 訪問介護へ (兼務デモ) ${MARKER}`
+          : MARKER,
       });
     }
   }

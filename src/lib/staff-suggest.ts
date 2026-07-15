@@ -256,6 +256,87 @@ export async function fetchDaySchedules(
 }
 
 /**
+ * 対象日の訪問入浴「号車拘束」を合成 busy 行 (SuggestScheduleRow 形) で返す。
+ *
+ * 兼務前提: 同一職員が同日内で訪問介護と訪問入浴 (号車) を掛け持ちするため、
+ * サジェストの重複判定に号車の拘束時間帯を混ぜる。行の形:
+ *   - staff_id = 乗車職員、start/end = その職員が拘束される時間帯
+ *   - 拘束 = その号車のその日のコマ (cancelled 除く) のうち、職員の乗車時間帯
+ *     (team_days.staff_times、無指定=終日) と重なるものの [最初の開始, 最後の終了]。
+ *     乗車時間帯が指定されていればその範囲にクリップ (移動中も拘束扱い)
+ *   - user_id = "" (担当実績の集計には影響しない)
+ * 入浴シフト未運用 (テーブル/列なし) は空配列で成功扱い。
+ */
+export async function fetchDayBathBusy(
+  supabase: SupabaseClient,
+  dateStr: string,
+): Promise<{ rows: SuggestScheduleRow[]; error: string | null }> {
+  const [tdRes, svRes] = await Promise.all([
+    supabase.from("kaigo_bath_team_days").select("*").eq("work_date", dateStr),
+    supabase
+      .from("kaigo_bath_schedule")
+      .select("team_id, start_time, end_time, status")
+      .eq("visit_date", dateStr)
+      .neq("status", "cancelled"),
+  ]);
+  const err = tdRes.error ?? svRes.error;
+  if (err) {
+    // migration 未適用 (テーブル/列なし) は「入浴シフトなし」として成功扱い
+    if (err.code === "42P01" || err.code === "PGRST205" || isMissingColumnError(err)) {
+      return { rows: [], error: null };
+    }
+    return { rows: [], error: err.message };
+  }
+  type TeamDayRow = {
+    team_id: string;
+    staff_ids: string[] | null;
+    staff_times?: Record<string, { start?: string | null; end?: string | null }> | null;
+  };
+  const visitsByTeam = new Map<string, Array<{ s: number; e: number }>>();
+  for (const v of (svRes.data ?? []) as Array<{ team_id: string | null; start_time: string | null; end_time: string | null }>) {
+    if (!v.team_id) continue;
+    const s = toMin(v.start_time);
+    if (s === null) continue;
+    const eRaw = toMin(v.end_time);
+    const e = eRaw !== null && eRaw > s ? eRaw : s + 50;
+    const list = visitsByTeam.get(v.team_id) ?? [];
+    list.push({ s, e });
+    visitsByTeam.set(v.team_id, list);
+  }
+  const mmToTime = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  const rows: SuggestScheduleRow[] = [];
+  for (const td of (tdRes.data ?? []) as TeamDayRow[]) {
+    const visits = visitsByTeam.get(td.team_id);
+    if (!visits || visits.length === 0) continue;
+    for (const staffId of td.staff_ids ?? []) {
+      const range = td.staff_times?.[staffId];
+      const rs = toMin(range?.start ?? null);
+      const re = toMin(range?.end ?? null);
+      const limited = rs !== null && re !== null && re > rs;
+      // 乗車時間帯と重なるコマのみ拘束対象
+      const covered = limited ? visits.filter((v) => v.s < re && v.e > rs) : visits;
+      if (covered.length === 0) continue;
+      let busyS = Math.min(...covered.map((v) => v.s));
+      let busyE = Math.max(...covered.map((v) => v.e));
+      if (limited) {
+        busyS = Math.max(busyS, rs);
+        busyE = Math.min(busyE, re);
+      }
+      if (busyE <= busyS) continue;
+      rows.push({
+        id: `bath-${td.team_id}-${staffId}`,
+        user_id: "",
+        staff_id: staffId,
+        visit_date: dateStr,
+        start_time: mmToTime(busyS),
+        end_time: mmToTime(busyE),
+      });
+    }
+  }
+  return { rows, error: null };
+}
+
+/**
  * 対象日の出勤可否を取得。
  * 注: 1 日分のみのため「当月データはあるが当日行なし = 休み」の判定は効かない
  * (isStaffUnavailableAtTime は staff の全 slot が空だと判定しない)。

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { resolveChiikiBathCode } from "@/lib/idou-shien-code";
+import { fetchDaySchedules, type SuggestScheduleRow } from "@/lib/staff-suggest";
 import {
   ChevronLeft, ChevronRight, Plus, Loader2, X, Pencil, Trash2, Truck,
   Users, ArrowUp, ArrowDown, Check, Undo2, Copy, Wand2,
@@ -25,11 +26,15 @@ type Team = {
   is_active: boolean;
 };
 
+/** 職員ごとの乗車時間帯 (キー無し = 終日)。訪問介護との日内兼務用 */
+type StaffTimes = Record<string, { start?: string | null; end?: string | null }>;
+
 type TeamDay = {
   id: string;
   team_id: string;
   work_date: string;
   staff_ids: string[];
+  staff_times: StaffTimes | null;
   notes: string | null;
 };
 
@@ -106,6 +111,40 @@ function daysInMonth(month: string): number {
 function sortVisits(a: ScheduleRow, b: ScheduleRow): number {
   if (a.visit_order !== b.visit_order) return a.visit_order - b.visit_order;
   return (a.start_time ?? "99:99").localeCompare(b.start_time ?? "99:99");
+}
+
+function timeToMin(t: string | null | undefined): number | null {
+  if (!t) return null;
+  const [h, m] = t.slice(0, 5).split(":").map(Number);
+  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null;
+}
+
+/** 職員の乗車時間帯が有効な範囲指定か */
+function limitedRange(times: StaffTimes | null | undefined, staffId: string): { s: number; e: number } | null {
+  const r = times?.[staffId];
+  const s = timeToMin(r?.start ?? null);
+  const e = timeToMin(r?.end ?? null);
+  return s !== null && e !== null && e > s ? { s, e } : null;
+}
+
+/**
+ * コマ時刻をカバーする (乗車時間帯と重なる) 職員のみ返す。
+ * 兼務対応: 「午前は号車・午後は訪問介護」の職員は午後のコマの従事職員に含めない。
+ * コマ時刻未設定は全員。
+ */
+function effectiveStaffForVisit(
+  td: TeamDay | null,
+  v: { start_time: string | null; end_time: string | null },
+): string[] {
+  if (!td) return [];
+  const vs = timeToMin(v.start_time);
+  if (vs === null) return td.staff_ids;
+  const veRaw = timeToMin(v.end_time);
+  const ve = veRaw !== null && veRaw > vs ? veRaw : vs + 50;
+  return td.staff_ids.filter((id) => {
+    const r = limitedRange(td.staff_times, id);
+    return !r || (r.s < ve && r.e > vs);
+  });
 }
 
 // ── メイン ─────────────────────────────────────────────────────────────────
@@ -193,7 +232,6 @@ export function BathShiftContent() {
   }, [supabase, currentOfficeId, month]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount/月変更時の async fetch
     load();
   }, [load]);
 
@@ -275,9 +313,11 @@ export function BathShiftContent() {
   const applyActual = async (v: ScheduleRow, opts?: { silent?: boolean }): Promise<boolean> => {
     if (v.record_id || v.status === "completed") return true;
     const td = teamDayFor(v.team_id, v.visit_date);
-    const staffIds = td?.staff_ids ?? [];
+    // 兼務対応: このコマの時間帯をカバーする職員のみ従事職員にする
+    const staffIds = effectiveStaffForVisit(td, v);
     if (staffIds.length === 0 && !opts?.silent) {
-      if (!window.confirm(`${clientName(v.client_id)} 様: 号車の当日編成が未設定です。従事職員なし (職員のみ減算扱い) で実績反映しますか？`)) return false;
+      const reason = td && td.staff_ids.length > 0 ? "この時間帯に乗車している職員がいません" : "号車の当日編成が未設定です";
+      if (!window.confirm(`${clientName(v.client_id)} 様: ${reason}。従事職員なし (職員のみ減算扱い) で実績反映しますか？`)) return false;
     }
     const staffOnly = !staffIds.some((id) => nurseIds.has(id));
     const serviceCode = v.scheme === "地域生活支援" ? resolveChiikiBathCode(staffOnly, false) : resolveBathCode(v.bath_type, staffOnly);
@@ -340,15 +380,27 @@ export function BathShiftContent() {
 
   // ── 当日編成 ─────────────────────────────────────────────────────────────
 
-  const saveTeamDay = async (teamId: string, staffIds: string[], notes: string) => {
-    const { data, error } = await supabase
+  const saveTeamDay = async (teamId: string, staffIds: string[], staffTimes: StaffTimes, notes: string) => {
+    const payload = {
+      tenant_id: tenantId, team_id: teamId, work_date: date,
+      staff_ids: staffIds, staff_times: staffTimes, notes: notes || null,
+    };
+    let { data, error } = await supabase
       .from("kaigo_bath_team_days")
-      .upsert(
-        { tenant_id: tenantId, team_id: teamId, work_date: date, staff_ids: staffIds, notes: notes || null },
-        { onConflict: "team_id,work_date" }
-      )
+      .upsert(payload, { onConflict: "team_id,work_date" })
       .select("*")
       .single();
+    if (error && (error.code === "PGRST204" || error.code === "42703")) {
+      // staff_times 列未適用 → 終日扱いで保存 (bath_shift_v2_staff_times.sql の適用を案内)
+      alert("乗車時間帯の保存には bath_shift_v2_staff_times.sql の適用が必要です。今回は終日扱いで保存します。");
+      const { staff_times: _st, ...withoutTimes } = payload;
+      void _st;
+      ({ data, error } = await supabase
+        .from("kaigo_bath_team_days")
+        .upsert(withoutTimes, { onConflict: "team_id,work_date" })
+        .select("*")
+        .single());
+    }
     if (error || !data) { alert("編成の保存に失敗しました: " + (error?.message ?? "不明なエラー")); return; }
     setTeamDays((prev) => {
       const rest = prev.filter((td) => !(td.team_id === teamId && td.work_date === date));
@@ -374,6 +426,7 @@ export function BathShiftContent() {
     if (latest.size === 0) { alert("直近 14 日以内に編成データがありません。"); return; }
     const hasExisting = activeTeams.some((t) => (teamDayFor(t.id, date)?.staff_ids ?? []).length > 0);
     if (hasExisting && !window.confirm("この日に既に編成があります。直近の編成で上書きしますか？")) return;
+    // 乗車時間帯 (staff_times) は日ごとの事情なのでコピーしない (終日扱いで複製)
     const payloads = Array.from(latest.values()).map((td) => ({
       tenant_id: tenantId, team_id: td.team_id, work_date: date, staff_ids: td.staff_ids, notes: td.notes,
     }));
@@ -634,12 +687,14 @@ export function BathShiftContent() {
       )}
       {editingTeamDay && (
         <TeamDayModal
+          supabase={supabase}
           team={editingTeamDay}
           date={date}
           initial={teamDayFor(editingTeamDay.id, date)}
+          teamVisits={visitsOf(editingTeamDay.id)}
           staffList={staffList}
           onClose={() => setEditingTeamDay(null)}
-          onSave={(staffIds, notes) => saveTeamDay(editingTeamDay.id, staffIds, notes)}
+          onSave={(staffIds, staffTimes, notes) => saveTeamDay(editingTeamDay.id, staffIds, staffTimes, notes)}
         />
       )}
     </div>
@@ -671,7 +726,17 @@ function RouteView({
 }) {
   const unassigned = visitsOf(null);
 
-  const visitCard = (v: ScheduleRow, idx: number, list: ScheduleRow[]) => (
+  const visitCard = (v: ScheduleRow, idx: number, list: ScheduleRow[]) => {
+    // 兼務対応: 乗車時間帯によってこのコマをカバーする職員が減る場合のみバッジ表示
+    const cardTd = teamDayFor(v.team_id, date);
+    let coverage: { eff: string[]; nurseOk: boolean } | null = null;
+    if (cardTd && cardTd.staff_ids.length > 0 && v.status !== "cancelled") {
+      const eff = effectiveStaffForVisit(cardTd, v);
+      if (eff.length !== cardTd.staff_ids.length) {
+        coverage = { eff, nurseOk: eff.some((id) => nurseIds.has(id)) };
+      }
+    }
+    return (
     <div
       key={v.id}
       className={`rounded-lg border p-2 text-xs ${
@@ -686,11 +751,21 @@ function RouteView({
           {hhmm(v.start_time)}{v.end_time ? `-${hhmm(v.end_time)}` : ""}
         </span>
       </div>
-      <div className="mt-1 flex items-center gap-1.5 text-[10px] text-gray-500">
+      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-gray-500">
         {v.scheme === "地域生活支援" && <span className="rounded bg-violet-50 px-1 py-0.5 text-violet-600">障害</span>}
         <span>{v.bath_type === "部分浴" ? "部分浴・清拭" : v.bath_type}</span>
         {v.status === "cancelled" && <span className="text-red-500">中止{v.cancel_reason ? `: ${v.cancel_reason}` : ""}</span>}
         {v.status === "completed" && <span className="font-medium text-emerald-600">実績済</span>}
+        {coverage && (
+          coverage.eff.length === 0 ? (
+            <span className="font-medium text-red-500">この時間帯 乗車職員なし</span>
+          ) : (
+            <>
+              <span className="text-amber-600">乗車{coverage.eff.length}名</span>
+              {!coverage.nurseOk && <span className="font-medium text-amber-600">看護なし(減算)</span>}
+            </>
+          )
+        )}
         {v.notes && <span className="truncate text-gray-400" title={v.notes}>{v.notes}</span>}
       </div>
       <div className="mt-1.5 flex items-center gap-0.5">
@@ -724,7 +799,8 @@ function RouteView({
         ) : null}
       </div>
     </div>
-  );
+    );
+  };
 
   const teamColumn = (team: Team) => {
     const td = teamDayFor(team.id, date);
@@ -747,11 +823,19 @@ function RouteView({
             {staffIds.length === 0 ? (
               <span className="text-[10px] text-gray-400">編成未設定</span>
             ) : (
-              staffIds.map((id) => (
-                <span key={id} className={`rounded-full px-1.5 py-0.5 text-[10px] ${nurseIds.has(id) ? "bg-rose-50 font-medium text-rose-600" : "bg-gray-100 text-gray-600"}`}>
-                  {nurseIds.has(id) && "看 "}{staffName(id)}
-                </span>
-              ))
+              staffIds.map((id) => {
+                const r = limitedRange(td?.staff_times ?? null, id);
+                return (
+                  <span key={id} className={`rounded-full px-1.5 py-0.5 text-[10px] ${nurseIds.has(id) ? "bg-rose-50 font-medium text-rose-600" : "bg-gray-100 text-gray-600"}`}>
+                    {nurseIds.has(id) && "看 "}{staffName(id)}
+                    {r && (
+                      <span className="ml-0.5 font-mono text-[9px] opacity-70">
+                        {hhmm(td?.staff_times?.[id]?.start ?? null)}-{hhmm(td?.staff_times?.[id]?.end ?? null)}
+                      </span>
+                    )}
+                  </span>
+                );
+              })
             )}
           </div>
           {staffIds.length > 0 && !hasNurse && (
@@ -1331,22 +1415,98 @@ function TeamModal({
 }
 
 // ── 当日編成 モーダル ────────────────────────────────────────────────────────
+// 兼務対応: 職員ごとに乗車時間帯 (終日 or 時間指定) を持ち、
+// 当日の訪問介護予定 (kaigo_visit_schedule) を並記して重複を警告する。
 
 function TeamDayModal({
-  team, date, initial, staffList, onClose, onSave,
+  supabase, team, date, initial, teamVisits, staffList, onClose, onSave,
 }: {
+  supabase: ReturnType<typeof createClient>;
   team: Team;
   date: string;
   initial: TeamDay | null;
+  teamVisits: ScheduleRow[];
   staffList: StaffMember[];
   onClose: () => void;
-  onSave: (staffIds: string[], notes: string) => void;
+  onSave: (staffIds: string[], staffTimes: StaffTimes, notes: string) => void;
 }) {
   const [staffIds, setStaffIds] = useState<string[]>(initial?.staff_ids ?? []);
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [staffTimes, setStaffTimes] = useState<Record<string, { start: string; end: string }>>(() => {
+    const out: Record<string, { start: string; end: string }> = {};
+    for (const [k, v] of Object.entries(initial?.staff_times ?? {})) {
+      if (v?.start && v?.end) out[k] = { start: v.start.slice(0, 5), end: v.end.slice(0, 5) };
+    }
+    return out;
+  });
+  // 当日の訪問介護予定 (全事業所分)。null = fetch 中
+  const [kaigoRows, setKaigoRows] = useState<SuggestScheduleRow[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const res = await fetchDaySchedules(supabase, date);
+      if (cancelled) return;
+      if (res.error) console.error("訪問介護予定の取得に失敗:", res.error);
+      setKaigoRows(res.rows);
+    })();
+    return () => { cancelled = true; };
+  }, [supabase, date]);
+
   const toggle = (id: string) =>
     setStaffIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const hasNurse = staffIds.some((id) => { const s = staffList.find((x) => x.id === id); return s ? isNurse(s) : false; });
+
+  // この号車の当日ルート帯 (最初のコマ開始〜最後のコマ終了)。終日職員の重複判定に使う
+  const routeSpan = useMemo(() => {
+    let s: number | null = null;
+    let e: number | null = null;
+    for (const v of teamVisits) {
+      if (v.status === "cancelled") continue;
+      const vs = timeToMin(v.start_time);
+      if (vs === null) continue;
+      const veRaw = timeToMin(v.end_time);
+      const ve = veRaw !== null && veRaw > vs ? veRaw : vs + 50;
+      s = s === null ? vs : Math.min(s, vs);
+      e = e === null ? ve : Math.max(e, ve);
+    }
+    return s !== null && e !== null ? { s, e } : null;
+  }, [teamVisits]);
+
+  // 職員ごとの当日の訪問介護予定 (staff_id / staff_id_2 / staff_id_3)
+  const kaigoBusyOf = useCallback((id: string): Array<{ s: number; e: number; label: string }> => {
+    if (!kaigoRows) return [];
+    const out: Array<{ s: number; e: number; label: string }> = [];
+    for (const r of kaigoRows) {
+      if (r.status === "cancelled") continue;
+      if (r.staff_id !== id && r.staff_id_2 !== id && r.staff_id_3 !== id) continue;
+      const s = timeToMin(r.start_time);
+      if (s === null) continue;
+      const eRaw = timeToMin(r.end_time);
+      const e = eRaw !== null && eRaw > s ? eRaw : s + 60;
+      out.push({ s, e, label: `${hhmm(r.start_time)}-${hhmm(r.end_time) || "?"}` });
+    }
+    return out.sort((a, b) => a.s - b.s);
+  }, [kaigoRows]);
+
+  const setTime = (id: string, k: "start" | "end", v: string) =>
+    setStaffTimes((prev) => ({ ...prev, [id]: { ...(prev[id] ?? { start: "09:00", end: "17:00" }), [k]: v } }));
+  const toggleAllDay = (id: string, allDay: boolean) =>
+    setStaffTimes((prev) => {
+      const next = { ...prev };
+      if (allDay) delete next[id];
+      else next[id] = next[id] ?? { start: "09:00", end: "13:00" };
+      return next;
+    });
+
+  const handleSave = () => {
+    const times: StaffTimes = {};
+    for (const id of staffIds) {
+      const t = staffTimes[id];
+      if (t?.start && t?.end) times[id] = { start: t.start, end: t.end };
+    }
+    onSave(staffIds, times, notes);
+  };
 
   return (
     <ModalShell
@@ -1355,13 +1515,13 @@ function TeamDayModal({
       footer={
         <>
           <button onClick={onClose} className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">キャンセル</button>
-          <button onClick={() => onSave(staffIds, notes)} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700">保存</button>
+          <button onClick={handleSave} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700">保存</button>
         </>
       }
     >
       <div>
         <label className={labelCls}>当日メンバー (看護職員 1 名 + 介護職員 2 名が基本) — {staffIds.length}名選択中</label>
-        <div className="flex max-h-52 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-gray-200 p-2">
+        <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-gray-200 p-2">
           {staffList.length === 0 ? <span className="text-xs text-gray-400">職員データがありません</span> : staffList.map((s) => (
             <button
               key={s.id}
@@ -1386,6 +1546,53 @@ function TeamDayModal({
           <p className="mt-1 text-[11px] text-amber-600">⚠ 標準は 3 名編成です (現在 {staffIds.length} 名)</p>
         )}
       </div>
+
+      {/* 乗車時間帯 + 訪問介護との重複 (兼務対応) */}
+      {staffIds.length > 0 && (
+        <div>
+          <label className={labelCls}>乗車時間帯 (訪問介護と日内兼務する職員は時間指定に)</label>
+          <div className="space-y-1.5">
+            {staffIds.map((id) => {
+              const s = staffList.find((x) => x.id === id);
+              if (!s) return null;
+              const lim = staffTimes[id];
+              const busy = kaigoBusyOf(id);
+              const win = lim
+                ? { s: timeToMin(lim.start) ?? 0, e: timeToMin(lim.end) ?? 0 }
+                : routeSpan;
+              const conflict = !!win && busy.some((b) => b.s < win.e && b.e > win.s);
+              return (
+                <div key={id} className={`rounded-lg border px-2.5 py-1.5 ${conflict ? "border-amber-300 bg-amber-50" : "border-gray-100"}`}>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className={`font-medium ${isNurse(s) ? "text-rose-600" : "text-gray-700"}`}>{isNurse(s) && "看 "}{s.name}</span>
+                    <label className="ml-auto flex items-center gap-1 text-[11px] text-gray-500">
+                      <input type="checkbox" checked={!lim} onChange={(e) => toggleAllDay(id, e.target.checked)} className="accent-cyan-600" />
+                      終日
+                    </label>
+                    {lim && (
+                      <span className="flex items-center gap-1">
+                        <input type="time" value={lim.start} onChange={(e) => setTime(id, "start", e.target.value)} className="rounded border border-gray-200 px-1 py-0.5 text-[11px]" />
+                        <span className="text-gray-400">〜</span>
+                        <input type="time" value={lim.end} onChange={(e) => setTime(id, "end", e.target.value)} className="rounded border border-gray-200 px-1 py-0.5 text-[11px]" />
+                      </span>
+                    )}
+                  </div>
+                  {kaigoRows === null ? null : busy.length > 0 && (
+                    <p className={`mt-1 text-[10px] ${conflict ? "font-medium text-amber-700" : "text-gray-400"}`}>
+                      訪問介護の予定: {busy.map((b) => b.label).join(" / ")}
+                      {conflict && " ⚠ 乗車時間と重複しています"}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-1 text-[10px] text-gray-400">
+            時間指定した職員は、その範囲外のコマの従事職員に含まれません (看護職員が抜ける時間帯は自動で減算判定)。
+          </p>
+        </div>
+      )}
+
       <div>
         <label className={labelCls}>メモ</label>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className={`${inputCls} resize-none`} />

@@ -16,6 +16,7 @@ import { Loader2, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   fetchDayAvailability,
+  fetchDayBathBusy,
   fetchDaySchedules,
   fetchPreferredStaffIds,
   suggestStaff,
@@ -75,6 +76,9 @@ export function StaffSuggestChips({
 
   const needsDayFetch = !monthSchedules;
 
+  // 訪問入浴の号車拘束 (兼務対応)。monthSchedules には入浴分が含まれないため常に対象日分を fetch
+  const [bathBusy, setBathBusy] = useState<{ date: string; rows: SuggestScheduleRow[] } | null>(null);
+
   // userId / office が変わったら優先ヘルパーを取り直す (開いたままの月間個別モーダル等)
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- key 変更に伴う derived reset
@@ -106,6 +110,20 @@ export function StaffSuggestChips({
     return () => { cancelled = true; };
   }, [open, needsDayFetch, visitDate, dayData, supabase]);
 
+  // 展開中は対象日の号車拘束も取り直す (エラー時は拘束なしで続行、握りつぶさず log)
+  useEffect(() => {
+    if (!open || !visitDate) return;
+    if (bathBusy?.date === visitDate) return;
+    let cancelled = false;
+    (async () => {
+      const res = await fetchDayBathBusy(supabase, visitDate);
+      if (cancelled) return;
+      if (res.error) console.error("bath busy fetch failed:", res.error);
+      setBathBusy({ date: visitDate, rows: res.rows });
+    })();
+    return () => { cancelled = true; };
+  }, [open, visitDate, bathBusy, supabase]);
+
   const handleOpen = async () => {
     if (!userId || !visitDate) return;
     setOpen(true);
@@ -131,13 +149,14 @@ export function StaffSuggestChips({
     const schedules = monthSchedules ?? (dayData?.date === visitDate ? dayData.schedules : null);
     const avail = availability ?? (dayData?.date === visitDate ? dayData.availability : null);
     if (!schedules || !avail) return null; // fetch 中
+    if (bathBusy?.date !== visitDate) return null; // 号車拘束 fetch 中
     return suggestStaff({
       staff,
       userId,
       visitDate,
       startTime,
       endTime,
-      schedules,
+      schedules: bathBusy.rows.length ? [...schedules, ...bathBusy.rows] : schedules,
       availability: avail,
       preferredIds,
       excludeScheduleId,
@@ -146,7 +165,7 @@ export function StaffSuggestChips({
     });
   }, [
     open, userId, visitDate, startTime, endTime, staff, preferredIds,
-    monthSchedules, availability, dayData, excludeScheduleId, excludeStaffIds,
+    monthSchedules, availability, dayData, bathBusy, excludeScheduleId, excludeStaffIds,
   ]);
 
   if (!userId || !visitDate) return null;
