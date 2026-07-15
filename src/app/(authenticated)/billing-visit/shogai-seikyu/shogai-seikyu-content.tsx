@@ -40,6 +40,11 @@ import {
   buildShogaiSeikyuCsv,
   type ShogaiSeikyuRow,
 } from "@/lib/shogai-seikyu/aggregate";
+import {
+  loadReSeikyuShogai,
+  type ShogaiReSeikyuRow,
+  type ShogaiReSeikyuReasons,
+} from "@/lib/shogai-seikyu/re-seikyu-shogai";
 import { validInMonth } from "@/lib/service-code-valid";
 import {
   buildShogaiDensou,
@@ -91,11 +96,25 @@ const shogaiToKana = (s: string) =>
   s.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
 
 // shogai_billing_status の 1 行 (利用者 × 月) — 状態: 未発行 / 発行済 / 伝送対象
+//   月遅れ/返戻/過誤フラグ (shogai_billing_status_flags.sql 適用後) で再請求に合流する
 interface ShogaiBillingStatusRow {
   client_id: string;
   issued_at: string | null;
   densou_target: boolean;
   notes: string | null;
+  tsukiokure?: boolean;
+  henrei?: boolean;
+  kago?: boolean;
+}
+
+// 一覧の 1 行 (当月通常行 or 過去月の再請求行)。再請求は元提供月で再集計済み
+interface DisplayRow {
+  key: string;
+  row: ShogaiSeikyuRow;
+  origMonthKey: string; // 'YYYY-MM' (再請求は元提供月、当月行は当月)
+  ym: string; // 'YYYYMM' (伝送の元提供年月)
+  isReSeikyu: boolean;
+  reasons: ShogaiReSeikyuReasons | null; // 再請求/当月フラグの理由
 }
 
 // shogai_seikyu_payments の 1 行 (利用者 × 月) — 利用料請求の入金管理
@@ -169,12 +188,13 @@ export function ShogaiSeikyuContent({
   const [error, setError] = useState<string | null>(null);
   // 集計時の注意事項 (月途中の市町村変更 等)。集計値には影響しない
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   // ── 上限管理の月次ワークフロー一覧 (対象者と未処理をまとめて確認するモーダル) ──
   //   対象 = 受給者証の上限管理区分が「なし」以外。未処理 = 管理結果 (kanri_result) 未登録
   //   (自事業所管理 = 調整計算→保存が未実施 / 他事業所管理 = 結果票の入力が未実施)。
   const [jogenListOpen, setJogenListOpen] = useState(false);
   const [officeNumber, setOfficeNumber] = useState<string | null>(null);
+  const [officeUnitPrice, setOfficeUnitPrice] = useState<number | undefined>(undefined);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   // かな行フィルタ (介護請求の左サイドバーと同じ。null = 全)
   const [kanaFilter, setKanaFilter] = useState<string | null>(null);
@@ -213,6 +233,7 @@ export function ShogaiSeikyuContent({
           business_number?: string | null;
         } | null;
         unitPrice = od?.unit_price;
+        setOfficeUnitPrice(od?.unit_price);
         setOfficeNumber(((od?.business_number ?? "") as string).trim() || null);
       }
       const result = await aggregateMonthlyShogaiSeikyu(supabase, {
@@ -237,12 +258,25 @@ export function ShogaiSeikyuContent({
     load();
   }, [btLoading, load]);
 
-  // ── shogai_billing_status (発行/伝送状態) を月で読み client_id で突合 ──
+  // ── shogai_billing_status (発行/伝送状態 + 月遅/返戻/過誤フラグ) を月で読み突合 ──
+  // フラグ列は shogai_billing_status_flags.sql 適用後のみ。未適用 (42703) は基本列で再取得。
+  const [flagColsMissing, setFlagColsMissing] = useState(false);
   const loadStatus = useCallback(async () => {
-    const { data, error: e } = await supabase
+    const BASE = "client_id, issued_at, densou_target, notes";
+    const EXT = `${BASE}, tsukiokure, henrei, kago`;
+    let { data, error: e } = await supabase
       .from("shogai_billing_status")
-      .select("client_id, issued_at, densou_target, notes")
+      .select(EXT)
       .eq("target_month", monthStr);
+    if (e && (e.code === "42703" || e.code === "PGRST204")) {
+      setFlagColsMissing(true);
+      ({ data, error: e } = await supabase
+        .from("shogai_billing_status")
+        .select(BASE)
+        .eq("target_month", monthStr));
+    } else if (!e) {
+      setFlagColsMissing(false);
+    }
     if (e) {
       // table 未作成 (migration 未適用) 時は状態なしとして続行
       if (!isMissingTable(e.code)) toast.error("請求状態の取得に失敗: " + e.message);
@@ -251,7 +285,7 @@ export function ShogaiSeikyuContent({
     }
     setStatusByClient(
       new Map(
-        ((data ?? []) as ShogaiBillingStatusRow[]).map((r) => [r.client_id, r]),
+        ((data ?? []) as unknown as ShogaiBillingStatusRow[]).map((r) => [r.client_id, r]),
       ),
     );
   }, [supabase, monthStr]);
@@ -295,7 +329,74 @@ export function ShogaiSeikyuContent({
     },
     [kanaFilter],
   );
-  const filteredRows = useMemo(() => rows.filter(kanaMatches), [rows, kanaMatches]);
+  // ── 月遅れ/返戻/過誤の再請求 (過去月フラグ) を元提供月で再集計して合流 ──
+  const [reRows, setReRows] = useState<ShogaiReSeikyuRow[]>([]);
+  const [reWarnings, setReWarnings] = useState<string[]>([]);
+  const loadReRows = useCallback(async () => {
+    if (!currentOffice?.id) {
+      setReRows([]);
+      setReWarnings([]);
+      return;
+    }
+    try {
+      const res = await loadReSeikyuShogai(supabase, {
+        officeId: currentOffice.id,
+        unitPrice: officeUnitPrice,
+        currentMonthKey: monthStr,
+      });
+      setReRows(res.rows);
+      setReWarnings(res.warnings);
+    } catch (e) {
+      toast.error("障害 再請求分の集計に失敗: " + (e instanceof Error ? e.message : String(e)));
+      setReRows([]);
+      setReWarnings([]);
+    }
+  }, [supabase, currentOffice, officeUnitPrice, monthStr]);
+  useEffect(() => {
+    if (loading) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 月/事業所変更時の fetch
+    loadReRows();
+  }, [loading, loadReRows]);
+
+  // 当月の通常行 (カナ絞込)。当月に月遅/返戻/過誤フラグが立った行は「今回は伝送しない
+  // (翌月へ繰越)」ので、伝送側 (displayRows) からは除外する — 介護 kokuho と同規則。
+  const currentRows = useMemo(() => rows.filter(kanaMatches), [rows, kanaMatches]);
+
+  // ── 表示行: 再請求 (過去分) を上、当月分 (全件) を下に。当月フラグ行も表示し
+  //    (フラグ解除できるように)、伝送からの除外は densou 側で行う ──
+  const curYm = `${year}${String(month).padStart(2, "0")}`;
+  const displayRows = useMemo<DisplayRow[]>(() => {
+    const re: DisplayRow[] = reRows.filter(kanaMatches).map((r) => ({
+      key: `re:${r.user_id}:${r.__origMonthKey}`,
+      row: r,
+      origMonthKey: r.__origMonthKey,
+      ym: r.ym,
+      isReSeikyu: true,
+      reasons: r.__reasons,
+    }));
+    const cur: DisplayRow[] = currentRows.map((r) => {
+      const st = statusByClient.get(r.user_id);
+      const flags =
+        st?.tsukiokure || st?.henrei || st?.kago
+          ? {
+              tsukiokure: !!st.tsukiokure,
+              henrei: !!st.henrei,
+              kago: !!st.kago,
+            }
+          : null;
+      return {
+        key: `cur:${r.user_id}`,
+        row: r,
+        origMonthKey: monthStr,
+        ym: curYm,
+        isReSeikyu: false,
+        reasons: flags,
+      };
+    });
+    return [...re, ...cur];
+  }, [reRows, currentRows, kanaMatches, statusByClient, monthStr, curYm]);
+
+  const filteredRows = currentRows;
 
   // 上限管理の対象 (区分 なし 以外) と未処理 (管理結果未登録)。カナ絞込に依らず全行から集計
   const jogenTargets = useMemo(
@@ -307,38 +408,77 @@ export function ShogaiSeikyuContent({
     [jogenTargets],
   );
 
-  const selected =
-    filteredRows.find((r) => r.user_id === selectedUserId) ?? filteredRows[0] ?? null;
+  // 選択行 (右ペイン明細)。key は displayRows のキー (再請求と当月で衝突しない)
+  const selectedDisplay =
+    displayRows.find((d) => d.key === selectedKey) ?? displayRows[0] ?? null;
+  const selected = selectedDisplay?.row ?? null;
   const totalUnits = filteredRows.reduce((s, r) => s + r.totalUnits, 0);
   const totalBenefit = filteredRows.reduce((s, r) => s + r.benefitAmount, 0);
   const totalUser = filteredRows.reduce((s, r) => s + r.userAmount, 0);
 
-  // ── 対象チェック (kaigo-seikyu と同じ: チェックあり → その行 / なし → 表示中全件) ──
-  const toggle = (id: string) =>
+  // ── 対象チェック (key 単位。チェックあり → その行 / なし → 表示中全件) ──
+  const toggle = (key: string) =>
     setChecked((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   const toggleAll = () =>
     setChecked((prev) =>
-      prev.size === filteredRows.length
+      prev.size === displayRows.length
         ? new Set()
-        : new Set(filteredRows.map((r) => r.user_id)),
+        : new Set(displayRows.map((d) => d.key)),
     );
-  const targets = useMemo(
+  // 発行/印刷用 (ShogaiSeikyuRow[])。当月フラグ行も含む (発行はできる。伝送は別除外)
+  const targetDisplays = useMemo(
     () =>
       checked.size > 0
-        ? filteredRows.filter((r) => checked.has(r.user_id))
-        : filteredRows,
-    [filteredRows, checked],
+        ? displayRows.filter((d) => checked.has(d.key))
+        : displayRows,
+    [displayRows, checked],
   );
+  const targets = useMemo(() => targetDisplays.map((d) => d.row), [targetDisplays]);
   const allChecked =
-    filteredRows.length > 0 && checked.size === filteredRows.length;
-  const densouCount = filteredRows.filter(
-    (r) => statusByClient.get(r.user_id)?.densou_target,
-  ).length;
+    displayRows.length > 0 && checked.size === displayRows.length;
+  // 伝送対象件数 (当月の densou_target 済 + 再請求行はすべて伝送候補)
+  const densouCount =
+    filteredRows.filter((r) => statusByClient.get(r.user_id)?.densou_target).length +
+    reRows.length;
+
+  // ── 月遅/返戻/過誤フラグの設定 (当月行のみ)。true にすると当月伝送から外れ、
+  //    翌月に再請求として合流する。既存フラグは保持し対象のみ更新 (介護と同規則) ──
+  const setFlag = async (
+    clientId: string,
+    field: "tsukiokure" | "henrei" | "kago",
+    value: boolean,
+  ) => {
+    if (flagColsMissing) {
+      toast.warning(
+        "再請求フラグには migrations/shogai_billing_status_flags.sql の適用が必要です",
+      );
+      return;
+    }
+    const cur = statusByClient.get(clientId);
+    const { error: e } = await supabase.from("shogai_billing_status").upsert(
+      {
+        client_id: clientId,
+        target_month: monthStr,
+        tenant_id: currentOffice?.tenant_id ?? "kt-group",
+        office_id: currentOffice?.id ?? null,
+        tsukiokure: cur?.tsukiokure ?? false,
+        henrei: cur?.henrei ?? false,
+        kago: cur?.kago ?? false,
+        [field]: value,
+      },
+      { onConflict: "client_id,target_month" },
+    );
+    if (e) {
+      toast.error("フラグの保存に失敗: " + e.message);
+      return;
+    }
+    loadStatus();
+  };
 
   // ── 明細書: 対象者の明細書を印刷 → 印刷実行時に issued_at=now() upsert (発行済化) ──
   const printMeisai = async () => {
@@ -518,10 +658,27 @@ export function ShogaiSeikyuContent({
   };
 
   // ── 伝送対象: 発行済の対象行を densou_target=true に (未発行はスキップ + 警告) ──
+  //   再請求行は元提供月 (origMonthKey) のレコードを対象化し、フラグは保持したまま
+  //   densou_target=true にして翌月一覧から落とす (二重伝送防止)。
   const markDensouTarget = async () => {
     const payload: Record<string, unknown>[] = [];
     let skipped = 0;
-    for (const r of targets) {
+    for (const d of targetDisplays) {
+      const r = d.row;
+      if (d.isReSeikyu) {
+        // 元提供月のフラグを保持しつつ densou_target 化 (未発行チェックはしない)
+        payload.push({
+          client_id: r.user_id,
+          target_month: d.origMonthKey,
+          tenant_id: currentOffice?.tenant_id ?? "kt-group",
+          office_id: currentOffice?.id ?? null,
+          densou_target: true,
+          tsukiokure: d.reasons?.tsukiokure ?? false,
+          henrei: d.reasons?.henrei ?? false,
+          kago: d.reasons?.kago ?? false,
+        });
+        continue;
+      }
       const cur = statusByClient.get(r.user_id);
       if (!cur?.issued_at) {
         skipped++;
@@ -552,6 +709,7 @@ export function ShogaiSeikyuContent({
       `${payload.length} 件を伝送対象にしました${skipped > 0 ? ` (未発行 ${skipped} 名はスキップ)` : ""}`,
     );
     loadStatus();
+    loadReRows(); // 元提供月を densou_target 化した再請求行を一覧から落とす
   };
 
   // 入金状態バッジ (riyou-seikyu の statusBadge と同じ)
@@ -586,12 +744,15 @@ export function ShogaiSeikyuContent({
   // 集計 (aggregate) と同じく shogai_service_records (confirmed) と
   // kaigo_visit_schedule (completed, 障害サービス名) の union。
   // 同一 client×code×date はスケジュール優先で重複排除 (二重計上防止)。
-  const loadMonthVisits = useCallback(async (): Promise<
-    Map<string, ShogaiDensouVisit[]>
-  > => {
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const from = `${monthStr}-01`;
-    const to = `${monthStr}-${String(daysInMonth).padStart(2, "0")}`;
+  // 引数省略時は当月。再請求の元提供月ぶんを取るときは (y, m) を渡す
+  const loadMonthVisits = useCallback(async (
+    y: number = year,
+    m: number = month,
+  ): Promise<Map<string, ShogaiDensouVisit[]>> => {
+    const mStr = `${y}-${String(m).padStart(2, "0")}`;
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const from = `${mStr}-01`;
+    const to = `${mStr}-${String(daysInMonth).padStart(2, "0")}`;
     interface RawVisit {
       client: string;
       visit: ShogaiDensouVisit;
@@ -698,8 +859,8 @@ export function ShogaiSeikyuContent({
               .select("service_code, service_name, service_category")
               .eq("system", "障害")
               .in("service_name", chunk),
-            year,
-            month,
+            y,
+            m,
           );
           if (error) {
             console.warn("[shogai] 障害コード解決に失敗 (一部スキップ):", error.message);
@@ -777,8 +938,8 @@ export function ShogaiSeikyuContent({
             .select("service_code, service_name")
             .eq("system", "障害")
             .in("service_code", chunk),
-          year,
-          month,
+          y,
+          m,
         );
         if (error) {
           console.warn("[shogai] 重訪コード名の逆引きに失敗 (一部スキップ):", error.message);
@@ -803,7 +964,7 @@ export function ShogaiSeikyuContent({
       visitsByClient.get(r.client)!.push(r.visit);
     }
     return visitsByClient;
-  }, [supabase, currentOffice, year, month, monthStr]);
+  }, [supabase, currentOffice, year, month]);
 
   // ─── サービス提供実績記録票 (様式1 居宅介護) — 対象者 1 名 = 1 枚 ────────────
   const printJisseki = async () => {
@@ -843,10 +1004,9 @@ export function ShogaiSeikyuContent({
   };
 
   const handleDensouExport = async () => {
-    if (rows.length === 0) return;
     setDensouLoading(true);
     try {
-      // 1) 事業所番号・単価・地域区分
+      // 1) 事業所番号・単価・地域区分 (月をまたいで共通)
       const { data: o, error: oe } = await supabase
         .from("offices")
         .select("business_number, unit_price, area_category")
@@ -857,93 +1017,137 @@ export function ShogaiSeikyuContent({
       const unitPrice = (o?.unit_price ?? 10) as number;
       const areaCategory = (o?.area_category ?? null) as string | null;
 
-      // 2) 月内の確定実績 (実績記録票 J611 用の明細) — 自事業所スコープ + 安定順序
-      const visitsByClient = await loadMonthVisits();
-
-      // 3) 受給者証の契約支給量 (契約情報レコード J121-05 用)
-      const ids = rows.map((r) => r.user_id);
-      const contractByClient = new Map<
-        string,
-        { text: string | null; start: string | null; entry: string | null }
-      >();
-      for (let i = 0; i < ids.length; i += 50) {
-        const chunk = ids.slice(i, i + 50);
-        const { data, error } = await supabase
-          .from("shougai_certifications")
-          .select(
-            "client_id, contract_amount_text, contract_start_date, contract_entry_number, certification_start_date",
-          )
-          .in("client_id", chunk)
-          .order("certification_start_date", { ascending: false });
-        if (error) throw new Error("受給者証取得失敗: " + error.message);
-        for (const c of (data ?? []) as {
-          client_id: string;
-          contract_amount_text: string | null;
-          contract_start_date: string | null;
-          contract_entry_number: string | null;
-        }[]) {
-          if (!contractByClient.has(c.client_id)) {
-            contractByClient.set(c.client_id, {
-              text: c.contract_amount_text,
-              start: c.contract_start_date,
-              entry: c.contract_entry_number,
-            });
+      // 対象月ぶんの users を組み立てて buildShogaiDensou を実行するヘルパ。
+      // 当月分と、再請求の元提供月ぶんを「別々の月」で呼ぶことで、伝送ファイルを
+      // 元提供月ごとに分けて出力する (介護 kokuho と同じ考え方)。
+      const buildForMonth = async (
+        monthRows: ShogaiSeikyuRow[],
+        y: number,
+        m: number,
+      ) => {
+        const mStr = `${y}-${String(m).padStart(2, "0")}`;
+        const visitsByClient = await loadMonthVisits(y, m);
+        // 契約支給量 (契約情報レコード J121-05)
+        const ids = monthRows.map((r) => r.user_id);
+        const contractByClient = new Map<
+          string,
+          { text: string | null; start: string | null; entry: string | null }
+        >();
+        for (let i = 0; i < ids.length; i += 50) {
+          const chunk = ids.slice(i, i + 50);
+          const { data, error } = await supabase
+            .from("shougai_certifications")
+            .select(
+              "client_id, contract_amount_text, contract_start_date, contract_entry_number, certification_start_date",
+            )
+            .in("client_id", chunk)
+            .order("certification_start_date", { ascending: false });
+          if (error) throw new Error("受給者証取得失敗: " + error.message);
+          for (const c of (data ?? []) as {
+            client_id: string;
+            contract_amount_text: string | null;
+            contract_start_date: string | null;
+            contract_entry_number: string | null;
+          }[]) {
+            if (!contractByClient.has(c.client_id)) {
+              contractByClient.set(c.client_id, {
+                text: c.contract_amount_text,
+                start: c.contract_start_date,
+                entry: c.contract_entry_number,
+              });
+            }
           }
         }
-      }
-
-      // 4) 自事業所上限管理の関係事業所一覧 (上限管理結果票 J411 用)
-      const selfIds = rows
-        .filter((r) => r.jogenKanriKubun === "自事業所")
-        .map((r) => r.user_id);
-      const linesByClient = new Map<string, ShogaiDensouKanriLine[]>();
-      if (selfIds.length > 0) {
-        const { data, error } = await supabase
-          .from("shogai_jogen_kanri_results")
-          .select("client_id, office_lines")
-          .eq("target_month", monthStr)
-          .in("client_id", selfIds);
-        if (error) throw new Error("上限管理結果取得失敗: " + error.message);
-        for (const k of (data ?? []) as {
-          client_id: string;
-          office_lines: ShogaiDensouKanriLine[];
-        }[]) {
-          if (Array.isArray(k.office_lines) && k.office_lines.length > 0) {
-            linesByClient.set(k.client_id, k.office_lines);
+        // 自事業所上限管理の関係事業所一覧 (J411)。その月の結果を引く
+        const selfIds = monthRows
+          .filter((r) => r.jogenKanriKubun === "自事業所")
+          .map((r) => r.user_id);
+        const linesByClient = new Map<string, ShogaiDensouKanriLine[]>();
+        if (selfIds.length > 0) {
+          const { data, error } = await supabase
+            .from("shogai_jogen_kanri_results")
+            .select("client_id, office_lines")
+            .eq("target_month", mStr)
+            .in("client_id", selfIds);
+          if (error) throw new Error("上限管理結果取得失敗: " + error.message);
+          for (const k of (data ?? []) as {
+            client_id: string;
+            office_lines: ShogaiDensouKanriLine[];
+          }[]) {
+            if (Array.isArray(k.office_lines) && k.office_lines.length > 0) {
+              linesByClient.set(k.client_id, k.office_lines);
+            }
           }
         }
+        const users: ShogaiDensouUser[] = monthRows.map((r) => {
+          const contract = contractByClient.get(r.user_id);
+          return {
+            row: r,
+            visits: visitsByClient.get(r.user_id) ?? [],
+            contractAmountText: contract?.text ?? null,
+            contractStartDate: contract?.start ?? null,
+            contractEntryNumber: contract?.entry ?? null,
+            jogenOfficeLines: linesByClient.get(r.user_id) ?? null,
+          };
+        });
+        return buildShogaiDensou(users, {
+          officeNumber,
+          year: y,
+          month: m,
+          unitPrice,
+          areaCategory,
+        });
+      };
+
+      // 当月分: 月遅/返戻/過誤フラグの立った行は今回の伝送から除外 (翌月に再請求繰越)
+      const currentEligible = rows.filter((r) => {
+        const st = statusByClient.get(r.user_id);
+        return !(st?.tsukiokure || st?.henrei || st?.kago);
+      });
+      // 再請求分: 元提供月ごとにグループ化
+      const reByMonth = new Map<string, ShogaiReSeikyuRow[]>();
+      for (const r of reRows) {
+        if (!reByMonth.has(r.__origMonthKey)) reByMonth.set(r.__origMonthKey, []);
+        reByMonth.get(r.__origMonthKey)!.push(r);
       }
 
-      // 5) 組み立て → 生成 → ダウンロード
-      const users: ShogaiDensouUser[] = rows.map((r) => {
-        const contract = contractByClient.get(r.user_id);
-        return {
-          row: r,
-          visits: visitsByClient.get(r.user_id) ?? [],
-          contractAmountText: contract?.text ?? null,
-          contractStartDate: contract?.start ?? null,
-          contractEntryNumber: contract?.entry ?? null,
-          jogenOfficeLines: linesByClient.get(r.user_id) ?? null,
-        };
-      });
-      const result = buildShogaiDensou(users, {
-        officeNumber,
-        year,
-        month,
-        unitPrice,
-        areaCategory,
-      });
-      if (result.warnings.length > 0) {
+      if (currentEligible.length === 0 && reByMonth.size === 0) {
+        alert("伝送対象の行がありません (当月分がフラグで繰越、再請求も無し)。");
+        return;
+      }
+
+      // 各月ぶんを生成
+      const results: {
+        label: string;
+        result: Awaited<ReturnType<typeof buildForMonth>>;
+      }[] = [];
+      if (currentEligible.length > 0) {
+        results.push({ label: `当月 (${year}年${month}月)`, result: await buildForMonth(currentEligible, year, month) });
+      }
+      for (const [mk, grp] of reByMonth) {
+        const [gy, gm] = mk.split("-").map((n) => Number(n));
+        results.push({ label: `再請求 (${gy}年${gm}月)`, result: await buildForMonth(grp, gy, gm) });
+      }
+
+      const allWarnings = results.flatMap((x) => x.result.warnings);
+      if (allWarnings.length > 0) {
         const ok = window.confirm(
           "以下の確認事項があります:\n\n・" +
-            result.warnings.join("\n・") +
+            allWarnings.join("\n・") +
             "\n\nこのまま出力しますか？",
         );
         if (!ok) return;
       }
-      downloadSjis(result.seikyuFile);
-      downloadSjis(result.jissekiFile);
-      if (result.jogenFile) downloadSjis(result.jogenFile);
+      for (const { result } of results) {
+        downloadSjis(result.seikyuFile);
+        downloadSjis(result.jissekiFile);
+        if (result.jogenFile) downloadSjis(result.jogenFile);
+      }
+      if (reByMonth.size > 0) {
+        toast.success(
+          `伝送ファイルを ${results.length} 月分 (当月 + 再請求 ${reByMonth.size} 月) 出力しました`,
+        );
+      }
     } catch (e) {
       alert(
         "伝送ファイルの生成に失敗しました: " +
@@ -1009,7 +1213,7 @@ export function ShogaiSeikyuContent({
                     <tr
                       key={r.user_id}
                       onClick={() => {
-                        setSelectedUserId(r.user_id);
+                        setSelectedKey(`cur:${r.user_id}`);
                         setJogenListOpen(false);
                       }}
                       className="cursor-pointer border-b border-gray-100 hover:bg-violet-50"
@@ -1242,11 +1446,21 @@ export function ShogaiSeikyuContent({
           </div>
         )}
 
-        {warnings.length > 0 && (
+        {reRows.length > 0 && (
+          <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
+            <AlertCircle size={14} className="mt-0.5 shrink-0" />
+            <span>
+              過去月の月遅れ・返戻・過誤 {reRows.length} 件を当月請求に合流しています
+              (元提供月のファイルとして伝送)。伝送対象化すると一覧から外れます。
+            </span>
+          </div>
+        )}
+
+        {(warnings.length > 0 || reWarnings.length > 0) && (
           <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
             <AlertCircle size={14} className="mt-0.5 shrink-0" />
             <div className="space-y-0.5">
-              {warnings.map((w, i) => (
+              {[...new Set([...warnings, ...reWarnings])].map((w, i) => (
                 <div key={i}>{w}</div>
               ))}
             </div>
@@ -1291,18 +1505,21 @@ export function ShogaiSeikyuContent({
                 {colFutan && <div className="px-1 py-0.5 border-l border-sky-300">利用者負担</div>}
               </div>
 
-              {filteredRows.length === 0 ? (
+              {displayRows.length === 0 ? (
                 <p className="text-gray-400 text-center py-10">
                   対象月の実績 (確定) がありません。障害福祉 → サービス提供実績 で記録を確定してください。
                 </p>
-              ) : filteredRows.map((r) => {
-                const st = statusByClient.get(r.user_id);
-                const isDetail = selectedUserId === r.user_id;
-                const isChecked = checked.has(r.user_id);
+              ) : displayRows.map((d) => {
+                const r = d.row;
+                const st = d.isReSeikyu ? undefined : statusByClient.get(r.user_id);
+                const isDetail = selectedKey === d.key;
+                const isChecked = checked.has(d.key);
+                // 元提供月 (再請求は過去月、当月行は当月)
+                const [oy, om] = d.origMonthKey.split("-").map((n) => Number(n));
                 return (
                   <div
-                    key={r.user_id}
-                    onClick={() => setSelectedUserId(isDetail ? null : r.user_id)}
+                    key={d.key}
+                    onClick={() => setSelectedKey(isDetail ? null : d.key)}
                     style={{ gridTemplateColumns: gridTemplate }}
                     className={`grid border-b border-gray-200 text-[11px] leading-4 cursor-pointer transition-colors ${
                       isDetail
@@ -1314,7 +1531,7 @@ export function ShogaiSeikyuContent({
                   >
                     <div className="px-1 py-0.5 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
                       <button
-                        onClick={() => toggle(r.user_id)}
+                        onClick={() => toggle(d.key)}
                         className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center transition-all ${
                           isChecked ? "border-violet-500 bg-violet-500" : "border-gray-400 bg-white"
                         }`}
@@ -1322,11 +1539,22 @@ export function ShogaiSeikyuContent({
                         {isChecked && <span className="text-white text-[8px] font-bold leading-none">✓</span>}
                       </button>
                     </div>
-                    {/* 状態: バッジ背景なしの素の色文字 (介護請求と同じ)。伝送対象 = 赤字 */}
+                    {/* 状態: 再請求=琥珀 / 伝送対象=赤 / 発行済=緑 / 未発行=灰。
+                        当月に月遅/返戻/過誤フラグが立つと「(繰越)」を添えて伝送保留を示す */}
                     {colState && (
                       <div className="px-1 py-0.5 border-l border-gray-200 text-center">
-                        {st?.densou_target ? (
+                        {d.isReSeikyu ? (
+                          <span className="text-amber-700">
+                            再請求
+                            {d.reasons &&
+                              (d.reasons.kago ? "(過誤)" : d.reasons.henrei ? "(返戻)" : "(月遅)")}
+                          </span>
+                        ) : st?.densou_target ? (
                           <span className="text-red-600">伝送対象</span>
+                        ) : d.reasons ? (
+                          <span className="text-amber-600">
+                            {d.reasons.kago ? "過誤" : d.reasons.henrei ? "返戻" : "月遅"}(繰越)
+                          </span>
                         ) : st?.issued_at ? (
                           <span className="text-emerald-700">発行済</span>
                         ) : (
@@ -1334,10 +1562,10 @@ export function ShogaiSeikyuContent({
                         )}
                       </div>
                     )}
-                    {/* 提供月 = 請求月 = 当月 (障害は月遅れ/返戻の再請求合流なし) */}
+                    {/* 提供月 (再請求は元提供月) / 請求月 = 当月 */}
                     {colMonths && (
-                      <div className="px-1 py-0.5 border-l border-gray-200 font-mono whitespace-pre text-gray-700">
-                        {reiwaMonth(year, month)}
+                      <div className={`px-1 py-0.5 border-l border-gray-200 font-mono whitespace-pre ${d.isReSeikyu ? "bg-yellow-100 text-gray-700" : "text-gray-700"}`}>
+                        {reiwaMonth(oy || year, om || month)}
                       </div>
                     )}
                     {colMonths && (
@@ -1517,6 +1745,51 @@ export function ShogaiSeikyuContent({
                   ¥{selected.benefitAmount.toLocaleString()}
                 </div>
               </div>
+
+              {/* ── 月遅れ/返戻/過誤フラグ (障害請求ビューの当月行のみ)。ON で当月伝送から
+                     外れ翌月に再請求合流。再請求行 (過去分) には出さない ── */}
+              {view === "seikyu" && !selectedDisplay?.isReSeikyu && (
+                <div className="mt-3 rounded border border-amber-200 bg-amber-50/50 p-2 text-xs">
+                  <div className="mb-1 font-bold text-amber-800">再請求フラグ (月遅れ / 返戻 / 過誤)</div>
+                  {flagColsMissing ? (
+                    <p className="text-[11px] text-amber-700">
+                      migrations/shogai_billing_status_flags.sql を適用すると使えます。
+                    </p>
+                  ) : (
+                    <>
+                      <div className="flex gap-1.5">
+                        {([
+                          { f: "tsukiokure" as const, label: "月遅れ" },
+                          { f: "henrei" as const, label: "返戻" },
+                          { f: "kago" as const, label: "過誤" },
+                        ]).map(({ f, label }) => {
+                          const st = statusByClient.get(selected.user_id);
+                          const on = !!st?.[f];
+                          return (
+                            <button
+                              key={f}
+                              type="button"
+                              onClick={() => setFlag(selected.user_id, f, !on)}
+                              className={`flex-1 rounded border px-1.5 py-1 font-medium transition-colors ${
+                                on
+                                  ? "border-red-400 bg-red-100 text-red-700"
+                                  : "border-gray-300 bg-white text-gray-500 hover:bg-gray-50"
+                              }`}
+                            >
+                              {label}
+                              {on ? " ✓" : ""}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="mt-1 text-[10px] leading-relaxed text-gray-500">
+                        いずれか ON = 今月は伝送せず、翌月の請求に「再請求」として自動合流します
+                        (伝送は元の提供月のファイルで出力)。返戻・過誤の原因を直してから翌月に伝送してください。
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* ── 障害固有: 利用者負担上限額管理 (このペインは国保請求では非表示なので常時表示) ── */}
               <JogenKanriSection
