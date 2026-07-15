@@ -169,7 +169,7 @@ const NAV_BATH_SECTIONED: SectionSpec[] = [
   {
     title: "管理",
     items: [
-      { name: "地域生活支援 受給者証", href: "/idou-certs", icon: ClipboardList },
+      // 地域生活支援 受給者証は 利用者管理 → 障害福祉 → 受給者証 (詳細) に統合 (2026-07-15)
       { name: "職員管理", href: "/staff", icon: UserCog },
       { name: "設定", href: "/settings", icon: UserCog },
       { name: "マニュアル", href: "/manual", icon: BookOpen },
@@ -202,7 +202,7 @@ const NAV_IDOU_SECTIONED: SectionSpec[] = [
   {
     title: "管理",
     items: [
-      { name: "受給者証", href: "/idou-certs", icon: ClipboardList },
+      // 受給者証は 利用者管理 → 障害福祉 → 受給者証 (詳細) に統合 (2026-07-15)
       { name: "職員管理", href: "/staff", icon: UserCog },
       { name: "設定", href: "/settings", icon: Settings },
       { name: "マニュアル", href: "/manual", icon: BookOpen },

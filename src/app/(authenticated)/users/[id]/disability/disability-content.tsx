@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { Plus, Copy, Trash2, Save, X } from "lucide-react";
+import { ChiikiCertSection } from "./chiiki-cert-section";
 
 // ─── 所得区分 ─────────────────────────────────────────────────────────────────
 
@@ -927,6 +928,9 @@ export function DisabilityContent({
           className={`${inputCls} w-full`}
         />
       </div>
+
+      {/* ─── 地域生活支援 (市町村事業) 受給者証 — 旧 /idou-certs から統合 ── */}
+      <ChiikiCertSection userId={userId} disabilityRecipientNumber={form.recipient_number} />
 
       {/* ─── 事業者記入欄モーダル ───────────────────────────────── */}
       {editingSlot !== null &&
