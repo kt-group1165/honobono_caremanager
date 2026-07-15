@@ -61,9 +61,12 @@ interface UserSidebarProps {
 //   認 = 有効な証憑の終了まで CERT_RENEWAL_WARN_DAYS 日未満
 // 加えて独自の 院 (入院中)。
 // ほのぼのは NEXT (介護) と More (障害) で別システムだが本システムは統合のため、
-// 利用者が使う制度 (= 実レコードの有無で判定) 側だけをチェックし、両方利用者は
-// 同一文字を 1 バッジに統合して tooltip で内訳を示す。制度の識別は隣の
-// ServiceCategoryBadge が担う。
+// 利用者が使う制度側だけをチェックし、両方利用者は同一文字を 1 バッジに統合して
+// tooltip で内訳を示す。制度の識別は隣の ServiceCategoryBadge が担う。
+// 「使う制度」の判定は、提供サービス種別 (client_office_assignments.
+// home_care_categories) の宣言を一次ソースにする。証憑 (認定/受給者証) の有無で
+// 判定すると「障害利用者なのに受給者証が 1 件も無い」が循環で検出不能になるため。
+// 実レコードの有無は補助判定 (union) として残す (期限切れ証憑だけ持つ人も監視)。
 // 「最新 1 件」ではなく全履歴で判定する。認定更新レコードは未来の開始日で
 // INSERT されるため、start 降順の先頭だけ見ると更新申請中に「未」が誤発火する。
 // 「未実績」「未記録」は負荷が読めないためスコープ外 (2026-07 総点検)。
@@ -86,7 +89,7 @@ interface ShougaiCertRow {
 
 /** 制度 1 つ分の証憑状態 */
 interface SeidoState {
-  /** レコードが 1 件でもある = その制度の利用者とみなす */
+  /** 証憑レコードが 1 件でもある (制度判定の補助シグナル) */
   used: boolean;
   pending: boolean;
   valid: boolean;
@@ -95,10 +98,22 @@ interface SeidoState {
   daysLeft: number | null;
 }
 
+/** 提供サービス種別 (home_care_categories) から導いた制度の宣言 */
+interface ServiceUse {
+  kaigo: boolean;
+  shougai: boolean;
+}
+
+/** 提供サービス種別 → 制度のマッピング (自費はどちらでもない) */
+const KAIGO_SERVICE_CATEGORIES = new Set(["介護", "総合事業"]);
+const SHOUGAI_SERVICE_CATEGORIES = new Set(["居宅介護", "重度訪問介護", "同行援護", "移動支援"]);
+
 /** バッジ用にまとめて fetch した参照データ。取得失敗時は null (= バッジ非表示で続行) */
 interface BadgeData {
   certs: Map<string, CertRow[]>;
   hasInsurance: Set<string>;
+  /** 提供サービス種別の宣言 (終了していないチェック ON のみ。未来開始も含む) */
+  serviceUse: Map<string, ServiceUse>;
   hospitalization: Map<string, HospitalizationPeriod[]>;
 }
 
@@ -194,6 +209,12 @@ function computeWarnBadges(
   const out: WarnBadge[] = [];
   const k = evalKaigoCerts(data.certs.get(clientId) ?? [], today);
   const s = evalShougaiCerts(shougaiCerts.get(clientId) ?? [], today);
+  const use = data.serviceUse.get(clientId);
+
+  // 制度判定 = 提供サービス種別の宣言 ∪ 証憑レコードの有無。
+  // 宣言があれば受給者証 0 件でも障害利用者として「未」を出せる (循環回避)
+  const usesKaigo = (use?.kaigo ?? false) || k.used;
+  const usesShougai = (use?.shougai ?? false) || s.used;
 
   // 申 = いずれかの制度で申請中
   if (k.pending || s.pending) {
@@ -210,10 +231,10 @@ function computeWarnBadges(
   }
 
   // 未 = 利用制度の証憑が現在有効でない (申請中はカバー済みなので除く)。
-  // どちらの制度のレコードも無い完全新規も 未
-  const kaigoMissing = k.used && !k.valid && !k.pending;
-  const shougaiMissing = s.used && !s.valid && !s.pending;
-  const nothing = !k.used && !s.used;
+  // どちらの制度にも該当しない完全新規も 未
+  const kaigoMissing = usesKaigo && !k.valid && !k.pending;
+  const shougaiMissing = usesShougai && !s.valid && !s.pending;
+  const nothing = !usesKaigo && !usesShougai;
   if (kaigoMissing || shougaiMissing || nothing) {
     const title = nothing
       ? "認定なし: 介護保険・受給者証とも未登録です"
@@ -469,9 +490,54 @@ function UserSidebarInner(props: UserSidebarProps) {
             offset += PAGE;
           }
         }
-        // 2) 入退院 (共有ヘルパー。テーブル未作成は空 Map で続行)
+        // 2) 提供サービス種別の宣言 (制度判定の一次ソース)。
+        //    終了していないチェック ON を制度にマッピング。未来開始も対象
+        //    (利用開始前こそ証憑チェックが必要なため)
+        const todayStr = localToday();
+        const serviceUse = new Map<string, ServiceUse>();
+        for (let i = 0; i < ids.length; i += IN_CHUNK) {
+          const chunk = ids.slice(i, i + IN_CHUNK);
+          let offset = 0;
+          while (true) {
+            const { data, error } = await supabase
+              .from("client_office_assignments")
+              .select("client_id, end_date, home_care_categories")
+              .in("client_id", chunk)
+              .range(offset, offset + PAGE - 1);
+            if (error) throw new Error(error.message);
+            const rows = (data ?? []) as Array<{
+              client_id: string;
+              end_date: string | null;
+              home_care_categories: unknown;
+            }>;
+            for (const r of rows) {
+              if (r.end_date && r.end_date < todayStr) continue; // 事業所利用が終了済
+              const cats = Array.isArray(r.home_care_categories)
+                ? (r.home_care_categories as Array<{
+                    category?: string;
+                    active?: boolean;
+                    end_date?: string | null;
+                  }>)
+                : [];
+              let entry = serviceUse.get(r.client_id);
+              for (const c of cats) {
+                if (!c?.active || !c.category) continue;
+                if (c.end_date && c.end_date < todayStr) continue; // 種別単位で終了済
+                if (!entry) {
+                  entry = { kaigo: false, shougai: false };
+                  serviceUse.set(r.client_id, entry);
+                }
+                if (KAIGO_SERVICE_CATEGORIES.has(c.category)) entry.kaigo = true;
+                else if (SHOUGAI_SERVICE_CATEGORIES.has(c.category)) entry.shougai = true;
+              }
+            }
+            if (rows.length < PAGE) break;
+            offset += PAGE;
+          }
+        }
+        // 3) 入退院 (共有ヘルパー。テーブル未作成は空 Map で続行)
         const hospitalization = await getHospitalizationMap(supabase, ids);
-        if (!cancelled) setBadgeData({ certs, hasInsurance, hospitalization });
+        if (!cancelled) setBadgeData({ certs, hasInsurance, serviceUse, hospitalization });
       } catch (err) {
         console.warn(
           "利用者バッジ情報の取得に失敗 (バッジ無しで続行):",
@@ -547,14 +613,16 @@ function UserSidebarInner(props: UserSidebarProps) {
       list = list.filter((u) => officeUserIds.has(u.id));
     }
     // 介護/障害/両方 絞り込み (実データ判定。clients.service_category には依存しない)
-    //   障害 = 受給者証あり (shougaiIds)
-    //   介護 = 介護保険あり (care_level あり or client_insurance_records あり)
+    //   障害 = 受給者証あり (shougaiIds) or 提供サービス種別で障害系を宣言
+    //   介護 = 介護保険あり (care_level あり or client_insurance_records あり) or 介護系を宣言
     //   both = 介護 かつ 障害
     if (categoryFilter !== "all") {
       const hasInsurance = badgeData?.hasInsurance;
       list = list.filter((u) => {
-        const isShougai = shougaiIds.has(u.id);
-        const isKaigo = !!u.care_level || (hasInsurance?.has(u.id) ?? false);
+        const use = badgeData?.serviceUse.get(u.id);
+        const isShougai = shougaiIds.has(u.id) || (use?.shougai ?? false);
+        const isKaigo =
+          !!u.care_level || (hasInsurance?.has(u.id) ?? false) || (use?.kaigo ?? false);
         if (categoryFilter === "kaigo") return isKaigo;
         if (categoryFilter === "shougai") return isShougai;
         return isKaigo && isShougai; // both
