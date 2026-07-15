@@ -30,6 +30,7 @@ import {
   X,
 } from "lucide-react";
 import Encoding from "encoding-japanese";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
@@ -2070,6 +2071,14 @@ function JogenKanriSection({
     return (
       <div className="mt-3 rounded border border-dashed bg-gray-50 px-3 py-2 text-[11px] text-gray-400">
         上限額管理: 対象外 (受給者証で管理事業所を設定すると月次の管理結果を入力できます)
+        <Link
+          href={`/users/${row.user_id}/shougai-cert`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-1 whitespace-nowrap font-medium text-indigo-600 underline decoration-dotted hover:text-indigo-700"
+        >
+          → 受給者証を設定
+        </Link>
       </div>
     );
   }
