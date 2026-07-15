@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   Bell,
   Loader2,
+  Building2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -114,6 +115,7 @@ const NAV_HOME_CARE_SECTIONED: SectionSpec[] = [
     items: [
       { name: "サービス提供表 (実績)", href: "/provision-tickets", icon: FileSpreadsheet },
       { name: "請求", href: "/billing-visit/seikyu", icon: Calculator },
+      { name: "本部請求（集計）", href: "/billing-visit/honbu", icon: Building2 },
       { name: "請求統計", href: "/billing-visit/stats", icon: FileSpreadsheet },
       { name: "実績管理", href: "/visit-billing", icon: Calculator },
       { name: "帳票作成", href: "/reports-visit", icon: FileText },
