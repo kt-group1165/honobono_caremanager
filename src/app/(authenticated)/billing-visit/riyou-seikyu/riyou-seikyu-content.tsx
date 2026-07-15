@@ -1255,21 +1255,85 @@ export function RiyouSeikyuContent() {
   );
 
   // ─── FB データ (全銀協 口座振替) ───────────────────────────────────────────
-  const exportFbData = () => {
-    // 対象: 発行対象のうち介護・総合のみ (障害は FB 除外)。金額 (負担額 − 軽減 + 実費) を引落額とする
-    const fbTargets: FbTransferTarget[] = kaigoTargets.map((row) => {
+  // 引き落としは常に「利用者単位で 1 明細」(介護+総合の行を畳む。請求書を制度別・
+  // 事業所別に発行していても引落は 1 件、という運用要件のため)。
+  // さらに事業所合算 ON のときは同一法人他事業所の請求分も金額に合算する
+  // = 法人全体で 1 ファイル・利用者 1 明細。移行期間 (請求書は事業所別のまま) は
+  // 「印刷は合算 OFF・FB 出力だけ合算 ON」で「請求書 2 枚 + 引落 1 件」にできる。
+  // ⚠ 合算 ON の FB は法人で 1 回だけ出すこと (各事業所の画面で各々出すと二重引落)。
+  const exportFbData = async () => {
+    // 対象: 発行対象のうち介護・総合のみ (障害は FB 除外)。金額 = 負担額 − 軽減 + 実費
+    type FbUserAgg = { userId: string; name: string; kana: string | null; insured: string | null; amount: number };
+    const byUser = new Map<string, FbUserAgg>();
+    const addAmount = (userId: string, name: string, kana: string | null, insured: string | null, amount: number) => {
+      const cur = byUser.get(userId);
+      if (cur) {
+        cur.amount += amount;
+        if (!cur.insured && insured) cur.insured = insured;
+      } else {
+        byUser.set(userId, { userId, name, kana, insured, amount });
+      }
+    };
+    for (const row of kaigoTargets) {
       const r = row.kaigo;
-      const bank = bankByUser.get(r.user_id);
+      addAmount(r.user_id, r.user_name, r.user_name_kana, r.insured_number, rowBilled(r));
+    }
+    // 事業所合算中: 他事業所分 (介護+総合、軽減適用後) を利用者単位で加算。
+    // 自事業所に居ない利用者 (他事業所のみ利用) も明細に含める。
+    if (mergeOffices && crossOffice.data && crossOffice.data.byOffice.length > 0) {
+      let siblingRows = 0;
+      for (const office of crossOffice.data.byOffice) {
+        for (const r of [...mergeSegmentRows(office.kaigoRows), ...office.sougouRows]) {
+          const base = userPlusSelf(r);
+          addAmount(r.user_id, r.user_name, r.user_name_kana, r.insured_number, base - keigenAmount(r.user_id, base));
+          siblingRows++;
+        }
+      }
+      if (siblingRows > 0) {
+        const ok = window.confirm(
+          `事業所合算中のため、同一法人 ${crossOffice.data.offices.length} 事業所の請求分も利用者単位で 1 明細に合算して出力します。\n` +
+            `⚠ この FB ファイルは法人で 1 回だけ出力してください (各事業所の画面で各々出力すると二重引落になります)。\n\n続行しますか？`,
+        );
+        if (!ok) return;
+      }
+    }
+    // 他事業所のみ利用の利用者は口座情報が未取得のことがある → 不足分を fetch
+    const missingBankIds = Array.from(byUser.keys()).filter((id) => !bankByUser.has(id));
+    const extraBank = new Map<string, ClientBank>();
+    for (let i = 0; i < missingBankIds.length; i += 100) {
+      const chunk = missingBankIds.slice(i, i + 100);
+      const { data, error: e } = await supabase
+        .from("clients")
+        .select("id, bank_name, bank_branch, bank_account_type, bank_account_number, bank_account_holder, postal_code, address")
+        .in("id", chunk);
+      if (e) {
+        toast.error("口座情報取得失敗: " + e.message);
+        return;
+      }
+      for (const c of (data ?? []) as ({ id: string } & ClientBank)[]) {
+        extraBank.set(c.id, {
+          bank_name: c.bank_name,
+          bank_branch: c.bank_branch,
+          bank_account_type: c.bank_account_type,
+          bank_account_number: c.bank_account_number,
+          bank_account_holder: c.bank_account_holder,
+          postal_code: c.postal_code,
+          address: c.address,
+        });
+      }
+    }
+    const fbTargets: FbTransferTarget[] = Array.from(byUser.values()).map((u) => {
+      const bank = bankByUser.get(u.userId) ?? extraBank.get(u.userId);
       return {
-        customerNumber: r.insured_number ?? r.user_id.slice(0, 20),
-        accountHolderKana: bank?.bank_account_holder ?? r.user_name_kana ?? r.user_name,
+        customerNumber: u.insured ?? u.userId.slice(0, 20),
+        accountHolderKana: bank?.bank_account_holder ?? u.kana ?? u.name,
         bankCode: null, // clients に銀行番号は未保持 → 空欄
         branchCode: null, // 支店番号も未保持 → 空欄
         bankName: bank?.bank_name ?? null,
         branchName: bank?.bank_branch ?? null,
         accountType: bank?.bank_account_type ?? null,
         accountNumber: bank?.bank_account_number ?? null,
-        amount: rowBilled(r), // 軽減後の当月請求額 (負担額 − 軽減 + 実費)
+        amount: u.amount, // 利用者合算後の当月請求額
       };
     });
 
@@ -1314,8 +1378,10 @@ export function RiyouSeikyuContent() {
   const [fbImport, setFbImport] = useState<FbImportState | null>(null);
   const [fbImporting, setFbImporting] = useState(false);
 
-  // 利用者ごとの当月請求額 (介護 + 総合 の合算。FB 依頼は制度別 2 レコードに
-  // なり得るが、入金行は client×月 で 1 行に共有されるため合算側で照合する)
+  // 利用者ごとの当月請求額 (介護 + 総合 の合算 = 自事業所分)。FB 依頼は利用者単位
+  // 1 明細で、事業所合算出力時は他事業所分も含むため、その場合は引落金額 >
+  // 自事業所請求額となり「金額差異」バッジが出ることがある (仕様。入金行は
+  // client×月 で 1 行に共有されるので消込自体は全額で成立する)
   const billedForClient = useCallback(
     (clientId: string) =>
       kaigoAllRows
@@ -1689,9 +1755,9 @@ export function RiyouSeikyuContent() {
             </button>
             <button
               type="button"
-              onClick={exportFbData}
+              onClick={() => void exportFbData()}
               disabled={kaigoTargets.length === 0}
-              title="全銀協 口座振替フォーマット (Shift_JIS) で FB データを出力 (介護・総合のみ / 障害は対象外)"
+              title="全銀協 口座振替フォーマット (Shift_JIS) で FB データを出力 (介護・総合のみ / 障害は対象外)。引落は利用者単位で 1 明細に合算 (請求書が制度別・事業所別でも引落は 1 件)。事業所合算 ON のときは同一法人他事業所分も合算します"
               className="border border-blue-500 rounded bg-blue-50 px-2.5 py-1 text-blue-700 hover:bg-blue-100 flex items-center gap-1.5 text-xs font-medium disabled:opacity-50"
             >
               <Banknote size={13} />
@@ -1755,7 +1821,7 @@ export function RiyouSeikyuContent() {
                     <div className="pb-0.5 text-[11px] text-slate-500">
                       {(crossOffice.data?.offices ?? []).map((s) => s.name).join(" / ")}
                       <span className="ml-1">
-                        ※ 発行記録・入金・FB は従来どおり事業所別・制度別 (合算入金管理はスコープ外)
+                        ※ 発行記録・入金は従来どおり事業所別・制度別。FB データは利用者単位 1 明細で、合算 ON 中は法人全体を含めて出力 (法人で 1 回だけ出力すること)
                       </span>
                     </div>
                   )}
