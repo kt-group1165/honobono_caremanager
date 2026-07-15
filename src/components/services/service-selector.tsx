@@ -320,6 +320,8 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
     setActiveCategory(CATEGORIES_BY_SYSTEM[activeSystem][0].code);
   }, [activeSystem]);
   const [query, setQuery] = React.useState("")
+  // 移動支援(地域生活支援)の「身体なしのみ」絞り込み
+  const [bodyNoneOnly, setBodyNoneOnly] = React.useState(false)
   // 「候補のみ」: 時間範囲が指定されたときだけ意味を持つ。デフォルトは ON にして
   // よくある使い方 (「この時間枠で取れるサービス何？」) を素直に満たす。
   const durationMinutes = React.useMemo(() => calcDurationMinutes(startTime, endTime), [startTime, endTime])
@@ -460,10 +462,14 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
   // ── Filtered list ────────────────────────────────────────────────────────────
   // services は activeCategory 単位で fetch されているので、ここでは
   // candidate filter (時間レンジ/時間帯) と検索文字列のみ適用する。
+  // 移動支援(02) の「身体なし」絞り込み (チェック時は移動2=身体なしのみ)
+  const bodyNoneFilterOn = system === "地域生活支援" && activeCategory === "02" && bodyNoneOnly
   const filtered = React.useMemo(() => {
     const lowerQuery = query.toLowerCase()
     const applyCandidate = candidateOnly && durationMinutes !== null && hasTimeConcept
     return services.filter((s) => {
+      // 身体なし絞り込み: 名称「移動2〜」= 身体介護なし のみ残す
+      if (bodyNoneFilterOn && !/^移動2/.test(s.name)) return false
       if (applyCandidate) {
         // 1) 所要時間レンジで絞る
         const range = parseServiceDurationMinutes(s.name, shogaiMode)
@@ -481,7 +487,7 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
         s.name.toLowerCase().includes(lowerQuery)
       )
     })
-  }, [services, hasTimeConcept, query, candidateOnly, durationMinutes, slotZone, system, shogaiMode])
+  }, [services, hasTimeConcept, query, candidateOnly, durationMinutes, slotZone, system, shogaiMode, bodyNoneFilterOn])
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
@@ -582,6 +588,18 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
           </div>
           {/* 候補のみ表示 + 告示準拠で判定 を 1 行に並べる (障害時のみ 2 個目が出る) */}
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+          {system === "地域生活支援" && activeCategory === "02" && (
+            <label className="flex items-center gap-2 text-sm text-gray-700 select-none cursor-pointer">
+              <input
+                type="checkbox"
+                checked={bodyNoneOnly}
+                onChange={(e) => setBodyNoneOnly(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+              />
+              身体なしのみ
+              <span className="text-xs text-gray-500">(チェックで移動2=身体介護なしのみ表示)</span>
+            </label>
+          )}
           {durationMinutes !== null && hasTimeConcept && (
             <label className="flex items-center gap-2 text-sm text-gray-700 select-none cursor-pointer">
               <input
