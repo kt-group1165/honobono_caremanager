@@ -301,23 +301,27 @@ export async function aggregateSougouSeikyu(
 
   // 4) 処遇改善: 事業所の適用処遇改善 (率) を総合事業 A2 の処遇改善コードにマッピングして採用。
   //    a. 事業所の applied formula codes (介護 116274 等 or 総合事業 CB_A26184 等) を対象月世代で解決し、
-  //       monthly_aggregate の率 (numerator/denominator) を得る。
-  //    b. その率 (numerator, 分母1000 前提) と一致する総合事業 A2 処遇改善コードを引き当てる。
-  //       ※ 総合事業処遇改善コードは units に ‰ (numerator) を持ち、SQL 適用後は formula も付く。
-  //         formula が未適用 (null) の場合は units を numerator とみなして突合する。
-  //    c. 一致コードが無ければ処遇改善 0 (warning)。
-  // 処遇改善: 率(%) は事業所共通、コードは市町村版 (CB_/K_/IH_) 別。
-  // 率を appliedNum/appliedDen に解決し、prefix ごとの一致コードを addonCandByPrefix に貯める。
-  // 実際の採用 (addonNum/addonCode 等) は利用者の保険者番号→prefix で per-user に行う。
+  //       monthly_aggregate の率 (numerator/denominator) と「コード下4桁 (suffix)」を得る。
+  //    b. 自治体prefix ごとに次の順で採用する (2026-07-15 hybrid 化 — user 確定):
+  //       1. コード番号対応 (suffix 一致。例: 介護 116184 ↔ 総合 CB_A26184/IH_A26184):
+  //          - マスタに率があれば照合し、食い違えばマスタの率で算定 + 警告 (自治体独自率の検出)
+  //          - マスタに率が無ければ事業所設定の率で算定 + 警告 (取込漏れでもゼロにしない)
+  //       2. suffix 不一致時の fallback: 率一致で探す (旧方式。旧世代の付番違いを救済)
+  //    c. どちらでも引けなければ処遇改善 0 (warning)。
+  //    ※ 旧実装 (率一致のみ) は市原市 import の formula 抜けで加算が silent に消えた。
+  // 率(%) は事業所共通、コードは市町村版 (CB_/K_/IH_) 別。実際の採用は per-user に
+  // 利用者の保険者番号→prefix で行う (addonCandByPrefix)。
   let appliedNum = 0;
   let appliedDen = 1000;
+  let appliedSuffix = ""; // 事業所処遇改善コードの下4桁 (数字のみ)。例 116184 → "6184"
   const addonCandByPrefix = new Map<
     string,
     { num: number; den: number; label: string; code: string }
   >();
 
   if (opts.effectiveFormulaCodes.length > 0) {
-    // a. 事業所適用コードの率を解決 (介護/総合事業どちらでも formula から率を取る)
+    // a. 事業所適用コードの率を解決 (介護/総合事業どちらでも formula から率を取る)。
+    //    障害の処遇改善コード (115175/125175 等) は率が別体系のため除外する。
     {
       const { data, error } = await validInMonth(
         supabase
@@ -335,19 +339,18 @@ export async function aggregateSougouSeikyu(
         units: number;
         system: string;
       }[]) {
+        if (r.system === "障害") continue; // 障害の率 (44.1% 等) で総合を算定しない
         const f = r.formula;
         if (f?.type === "monthly_aggregate" && f.numerator && f.denominator) {
           appliedNum = f.numerator;
           appliedDen = f.denominator;
+          appliedSuffix = r.service_code.replace(/[^0-9]/g, "").slice(-4);
           break; // 処遇改善Ⅰ〜Ⅳ は排他 (最初の 1 件)
         }
       }
     }
 
-    // b. 一致する総合事業 A2 処遇改善コードを prefix (自治体) ごとに引き当てる。
-    //    率(%) は事業所単位で共通だが、コードは市町村版 (CB_/K_/IH_) ごとに異なるため
-    //    prefix 別に保持し、利用者の保険者番号→prefix で per-user に採用する
-    //    (旧実装は CB_ 千葉市固定で、市原市等の利用者が千葉市コードで誤請求していた)。
+    // b. 総合事業 A2 処遇改善コードを prefix (自治体) ごとに引き当てる。
     if (appliedNum > 0) {
       const { data, error } = await validInMonth(
         supabase
@@ -366,19 +369,75 @@ export async function aggregateSougouSeikyu(
         units: number;
         formula: { type?: string; numerator?: number; denominator?: number } | null;
       }[];
-      // 率 = formula.numerator (あれば) or units。分母は 1000 前提。
+      // マスタの率 = formula (あれば) → units (‰ とみなす。0 は率情報なし = null)
       const rateOf = (c: (typeof cands)[number]) =>
         c.formula?.numerator && c.formula?.denominator
           ? { num: c.formula.numerator, den: c.formula.denominator }
-          : { num: c.units, den: 1000 };
+          : c.units > 0
+            ? { num: c.units, den: 1000 }
+            : null;
+      // 自治体 prefix ごとに候補を束ねる
+      const candsByPrefix = new Map<string, typeof cands>();
       for (const c of cands) {
-        const { num, den } = rateOf(c);
-        // 適用率 (appliedNum/appliedDen) と同率のみ (交差積で整数比較)
-        if (num * appliedDen !== appliedNum * den) continue;
         const cp = sougouPrefixFromCode(c.service_code);
-        // prefix ごとに先勝ち (同一自治体の同率コードは 1 本のはず)
-        if (!addonCandByPrefix.has(cp)) {
-          addonCandByPrefix.set(cp, { num, den, label: c.service_name, code: c.service_code });
+        if (!candsByPrefix.has(cp)) candsByPrefix.set(cp, []);
+        candsByPrefix.get(cp)!.push(c);
+      }
+      const pctLabel = (num: number, den: number) => `${(num * 100) / den}%`;
+      for (const [cp, list] of candsByPrefix) {
+        // 1) コード番号対応 (suffix): 事業所の処遇改善コード下4桁と一致する自治体版コード
+        const suffixHit = appliedSuffix
+          ? list.find(
+              (c) => c.service_code.replace(/[^0-9]/g, "").slice(-4) === appliedSuffix,
+            )
+          : undefined;
+        if (suffixHit) {
+          const r = rateOf(suffixHit);
+          if (r && r.num * appliedDen !== appliedNum * r.den) {
+            // 照合不一致 = 自治体独自率の可能性。告示が正 = マスタの率で算定して知らせる
+            warnings.push(
+              `総合事業 処遇改善 (${cp}${suffixHit.service_code}): マスタの率 ${pctLabel(r.num, r.den)} が事業所設定 ${pctLabel(appliedNum, appliedDen)} と異なります — 自治体独自率の可能性があるためマスタの率で算定します (要確認)`,
+            );
+            addonCandByPrefix.set(cp, {
+              num: r.num,
+              den: r.den,
+              label: suffixHit.service_name,
+              code: suffixHit.service_code,
+            });
+          } else if (r) {
+            // 照合一致 (通常)
+            addonCandByPrefix.set(cp, {
+              num: r.num,
+              den: r.den,
+              label: suffixHit.service_name,
+              code: suffixHit.service_code,
+            });
+          } else {
+            // マスタに率なし (取込漏れ等) → 事業所設定の率で算定 (ゼロにはしない)
+            warnings.push(
+              `総合事業 処遇改善 (${suffixHit.service_code}): マスタに率 (formula/単位数) が無いため、事業所設定の率 ${pctLabel(appliedNum, appliedDen)} で算定します — サービスコードの取込データを確認してください`,
+            );
+            addonCandByPrefix.set(cp, {
+              num: appliedNum,
+              den: appliedDen,
+              label: suffixHit.service_name,
+              code: suffixHit.service_code,
+            });
+          }
+          continue;
+        }
+        // 2) fallback: 率一致 (旧方式。旧世代のコード付番が suffix 対応でない場合の救済)
+        const rateHit = list.find((c) => {
+          const r = rateOf(c);
+          return r != null && r.num * appliedDen === appliedNum * r.den;
+        });
+        if (rateHit) {
+          addonCandByPrefix.set(cp, {
+            num: appliedNum,
+            den: appliedDen,
+            label: rateHit.service_name,
+            code: rateHit.service_code,
+          });
         }
       }
     }
