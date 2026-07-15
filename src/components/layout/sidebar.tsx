@@ -153,6 +153,7 @@ const NAV_BATH_SECTIONED: SectionSpec[] = [
   {
     title: "日常業務",
     items: [
+      { name: "シフト・ルート表", href: "/bath-shift", icon: CalendarDays },
       { name: "サービス提供表 (実績)", href: "/bath-provision", icon: FileSpreadsheet },
       { name: "入浴実施記録", href: "/bath-records", icon: ClipboardCheck },
     ],
