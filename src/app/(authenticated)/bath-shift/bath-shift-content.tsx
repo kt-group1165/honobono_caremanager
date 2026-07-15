@@ -254,12 +254,13 @@ export function BathShiftContent() {
   }, [load]);
 
   const activeTeams = useMemo(() => teams.filter((t) => t.is_active), [teams]);
-  // 職員カレンダー用: 当月どこかの号車に乗る職員だけをリスト (members 全件は多すぎる)
+  // 職員カレンダー用: 当月どこかの号車に乗る or 予定に指名されている職員だけをリスト (members 全件は多すぎる)
   const rideStaff = useMemo(() => {
     const ids = new Set<string>();
     for (const td of teamDays) for (const id of td.staff_ids) ids.add(id);
+    for (const s of schedules) if (Array.isArray(s.staff_ids)) for (const id of s.staff_ids) ids.add(id);
     return staffList.filter((s) => ids.has(s.id));
-  }, [teamDays, staffList]);
+  }, [teamDays, schedules, staffList]);
   const teamDayFor = useCallback(
     (teamId: string | null, d: string) => (teamId ? teamDays.find((td) => td.team_id === teamId && td.work_date === d) ?? null : null),
     [teamDays]
@@ -1304,44 +1305,53 @@ function BathCalendarView({
                                       {hhmm(v.start_time) || "--:--"} {teamName(v.team_id)} {v.bath_type === "部分浴" ? "部分" : "全身"}
                                     </button>
                                   ))
-                              : teamDays
-                                  .filter((td) => td.work_date === d && selectedStaffId !== null && td.staff_ids.includes(selectedStaffId))
-                                  .flatMap((td, tdi, tds) => {
-                                    // その職員が乗る (乗車時間帯がカバーする) コマを 1 件ずつ表示
-                                    const r = selectedStaffId ? limitedRange(td.staff_times, selectedStaffId) : null;
-                                    const visits = schedules
-                                      .filter((s) => s.visit_date === d && s.team_id === td.team_id)
-                                      .filter((s) => {
-                                        if (!r) return true;
-                                        const s0 = timeToMin(s.start_time);
-                                        if (s0 === null) return true;
-                                        const e0Raw = timeToMin(s.end_time);
-                                        const e0 = e0Raw !== null && e0Raw > s0 ? e0Raw : s0 + 50;
-                                        return r.s < e0 && r.e > s0;
-                                      })
-                                      .sort(sortVisits);
-                                    const header = tds.length > 1 || r ? (
+                              : (() => {
+                                  if (!selectedStaffId) return null;
+                                  const tds = teamDays.filter((td) => td.work_date === d && td.staff_ids.includes(selectedStaffId));
+                                  // 乗車時間帯指定がある日は号車名+時間帯の小見出し
+                                  const labels = tds
+                                    .filter((td) => limitedRange(td.staff_times, selectedStaffId))
+                                    .map((td) => (
                                       <div key={`${td.id}-h`} className="px-1 text-[9px] font-semibold text-gray-400">
-                                        {teamName(td.team_id)}
-                                        {r && selectedStaffId && (
-                                          <> {hhmm(td.staff_times?.[selectedStaffId]?.start ?? null)}-{hhmm(td.staff_times?.[selectedStaffId]?.end ?? null)}</>
-                                        )}
+                                        {teamName(td.team_id)} {hhmm(td.staff_times?.[selectedStaffId]?.start ?? null)}-{hhmm(td.staff_times?.[selectedStaffId]?.end ?? null)}
                                       </div>
-                                    ) : null;
-                                    return [
-                                      ...(header ? [header] : []),
-                                      ...visits.map((v) => (
-                                        <button
-                                          key={v.id}
-                                          onClick={() => onEditVisit(v)}
-                                          className={`block w-full truncate rounded px-1 py-0.5 text-left text-[10px] ${chipCls(v.status)}`}
-                                          title={`${teamName(v.team_id)} ${hhmm(v.start_time)}-${hhmm(v.end_time)} ${clientNameOf(v.client_id)} ${v.bath_type}`}
-                                        >
-                                          {hhmm(v.start_time) || "--:--"} {clientNameOf(v.client_id)} {v.bath_type === "部分浴" ? "部分" : "全身"}
-                                        </button>
-                                      )),
-                                    ];
-                                  })}
+                                    ));
+                                  // その職員が従事するコマ: 号車乗車分 (時間帯カバー + 指名で外れたコマは除く) + 指名分
+                                  const seen = new Map<string, ScheduleRow>();
+                                  for (const td of tds) {
+                                    const r = limitedRange(td.staff_times, selectedStaffId);
+                                    for (const s of schedules) {
+                                      if (s.visit_date !== d || s.team_id !== td.team_id) continue;
+                                      if (Array.isArray(s.staff_ids) && s.staff_ids.length > 0 && !s.staff_ids.includes(selectedStaffId)) continue;
+                                      if (r) {
+                                        const s0 = timeToMin(s.start_time);
+                                        if (s0 !== null) {
+                                          const e0Raw = timeToMin(s.end_time);
+                                          const e0 = e0Raw !== null && e0Raw > s0 ? e0Raw : s0 + 50;
+                                          if (!(r.s < e0 && r.e > s0)) continue;
+                                        }
+                                      }
+                                      seen.set(s.id, s);
+                                    }
+                                  }
+                                  for (const s of schedules) {
+                                    if (s.visit_date === d && Array.isArray(s.staff_ids) && s.staff_ids.includes(selectedStaffId)) seen.set(s.id, s);
+                                  }
+                                  const visits = Array.from(seen.values()).sort(sortVisits);
+                                  return [
+                                    ...labels,
+                                    ...visits.map((v) => (
+                                      <button
+                                        key={v.id}
+                                        onClick={() => onEditVisit(v)}
+                                        className={`block w-full truncate rounded px-1 py-0.5 text-left text-[10px] ${chipCls(v.status)}`}
+                                        title={`${teamName(v.team_id)} ${hhmm(v.start_time)}-${hhmm(v.end_time)} ${clientNameOf(v.client_id)} ${v.bath_type}${Array.isArray(v.staff_ids) && v.staff_ids.length > 0 ? " (指名)" : ""}`}
+                                      >
+                                        {hhmm(v.start_time) || "--:--"} {clientNameOf(v.client_id)} {v.bath_type === "部分浴" ? "部分" : "全身"}
+                                      </button>
+                                    )),
+                                  ];
+                                })()}
                           </div>
                         </>
                       )}
