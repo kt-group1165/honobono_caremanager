@@ -49,21 +49,32 @@ interface UserSidebarProps {
   // Both props provided → explicit mode (used by users/[id]/layout where id is in path)
   selectedUserId?: string | null;
   onSelectUser?: (userId: string) => void;
+  /** 明示モードでも未選択時に先頭の利用者を自動選択する (provision-tickets 等の
+   *  client shell 用。users/[id]/layout は path 側で id が決まるので指定しない) */
+  autoSelectFirst?: boolean;
 }
 
-// ── 警告バッジ (ほのぼの準拠) ──────────────────────────────────────────────
-// 未申請 / 認定切れ / 更新◯日 / 保険未登録 / 入院中 を名前の右に小バッジ表示。
+// ── 警告バッジ (ほのぼの準拠: 利用者管理編 p.19) ──────────────────────────
+// ほのぼのの利用者リストと同じ 3 種を名前の右に小バッジ表示:
+//   未 = 現在有効な介護保険情報が無い (未登録 / 認定切れ / 非該当 を包含)
+//   申 = 申請中 (新規: care_level='申請中' / 更新: certification_status='申請中')
+//   認 = 認定終了まで CERT_RENEWAL_WARN_DAYS 日未満
+// 加えて独自の 院 (入院中)。
+// 「最新 1 件」ではなく全履歴で判定する。認定更新レコードは未来の開始日で
+// INSERT されるため、start 降順の先頭だけ見ると更新申請中に「未」が誤発火する。
 // 「未実績」「未記録」は負荷が読めないためスコープ外 (2026-07 総点検)。
 
-/** 最新認定 (certification_start_date 降順の先頭) の要約 */
-interface LatestCert {
+/** 認定レコードの要約 (1 利用者 = 履歴複数件) */
+interface CertRow {
   care_level: string | null;
+  certification_status: string | null;
+  certification_start_date: string | null;
   certification_end_date: string | null;
 }
 
 /** バッジ用にまとめて fetch した参照データ。取得失敗時は null (= バッジ非表示で続行) */
 interface BadgeData {
-  latestCert: Map<string, LatestCert>;
+  certs: Map<string, CertRow[]>;
   hasInsurance: Set<string>;
   hospitalization: Map<string, HospitalizationPeriod[]>;
 }
@@ -77,7 +88,7 @@ interface WarnBadge {
   title: string;
 }
 
-/** 認定更新の警告を出す残日数しきい値 */
+/** 「認」を出す残日数しきい値 (ほのぼの初期値は 1 ヶ月。更新申請が可能になる 60 日前に設定) */
 const CERT_RENEWAL_WARN_DAYS = 60;
 
 /** ローカル TZ の今日 (YYYY-MM-DD) */
@@ -94,47 +105,63 @@ function computeWarnBadges(
   today: string,
 ): WarnBadge[] {
   const out: WarnBadge[] = [];
-  const cert = data.latestCert.get(clientId);
-  if (cert) {
-    if (cert.care_level === "申請中") {
-      out.push({
-        short: "未",
-        label: "未申請",
-        cls: "bg-yellow-100 text-yellow-800 border-yellow-300",
-        title: "未申請: 最新の認定が申請中です",
-      });
+  const certs = data.certs.get(clientId) ?? [];
+
+  // 今日有効な認定 (要支援/要介護、有効期間が今日を含む)。複数あれば終了日が最も先のもの
+  let valid: CertRow | null = null;
+  // 申請中レコード (新規 or 更新)。終了日が過去のものは stale として無視
+  let pending = false;
+  for (const c of certs) {
+    const { care_level: level, certification_start_date: start, certification_end_date: end } = c;
+    const isPending = level === "申請中" || c.certification_status === "申請中";
+    if (isPending) {
+      if (!end || end >= today) pending = true;
+      continue;
     }
-    const end = cert.certification_end_date;
-    if (end) {
-      if (end < today) {
-        out.push({
-          short: "切",
-          label: "認定切れ",
-          cls: "bg-red-100 text-red-700 border-red-300",
-          title: `認定切れ: 認定有効期間が終了しています (〜${end})`,
-        });
-      } else {
-        const days = Math.ceil(
-          (Date.parse(end) - Date.parse(today)) / 86_400_000,
-        );
-        if (days <= CERT_RENEWAL_WARN_DAYS) {
-          out.push({
-            short: "更",
-            label: `更新${days}日`,
-            cls: "bg-amber-100 text-amber-800 border-amber-300",
-            title: `更新間近: 認定有効期間の終了まで ${days} 日です (〜${end})`,
-          });
-        }
+    if (
+      !!level &&
+      level !== "非該当" &&
+      (!start || start <= today) &&
+      (!end || end >= today)
+    ) {
+      if (!valid || (valid.certification_end_date ?? "9999") < (end ?? "9999")) {
+        valid = c;
       }
     }
   }
-  if (!data.hasInsurance.has(clientId)) {
+
+  if (pending) {
     out.push({
-      short: "保",
-      label: "保険未登録",
-      cls: "bg-gray-100 text-gray-500 border-gray-300",
-      title: "保険未登録: 介護保険情報が未登録です",
+      short: "申",
+      label: "申請中",
+      cls: "bg-blue-100 text-blue-800 border-blue-300",
+      title: "申請中: 要介護認定を申請中です",
     });
+  }
+  if (!valid) {
+    if (!pending) {
+      out.push({
+        short: "未",
+        label: "認定なし",
+        cls: "bg-yellow-100 text-yellow-800 border-yellow-300",
+        title: "認定なし: 現在有効な介護保険情報がありません",
+      });
+    }
+  } else {
+    const end = valid.certification_end_date;
+    if (end) {
+      const days = Math.ceil(
+        (Date.parse(end) - Date.parse(today)) / 86_400_000,
+      );
+      if (days <= CERT_RENEWAL_WARN_DAYS) {
+        out.push({
+          short: "認",
+          label: `認定終了${days}日前`,
+          cls: "bg-amber-100 text-amber-800 border-amber-300",
+          title: `認定終了間近: 認定有効期間の終了まで ${days} 日です (〜${end})`,
+        });
+      }
+    }
   }
   if (isCurrentlyHospitalized(data.hospitalization.get(clientId), today)) {
     out.push({
@@ -332,7 +359,7 @@ function UserSidebarInner(props: UserSidebarProps) {
         // 1) 介護保険: 最新認定 (start 降順の先頭) + 登録有無。IN 50 件 chunk + page-loop
         const IN_CHUNK = 50;
         const PAGE = 1000;
-        const latestCert = new Map<string, LatestCert>();
+        const certs = new Map<string, CertRow[]>();
         const hasInsurance = new Set<string>();
         for (let i = 0; i < ids.length; i += IN_CHUNK) {
           const chunk = ids.slice(i, i + IN_CHUNK);
@@ -340,25 +367,18 @@ function UserSidebarInner(props: UserSidebarProps) {
           while (true) {
             const { data, error } = await supabase
               .from("client_insurance_records")
-              .select("client_id, care_level, certification_end_date")
+              .select("client_id, care_level, certification_status, certification_start_date, certification_end_date")
               .in("client_id", chunk)
               .order("client_id", { ascending: true })
               .order("certification_start_date", { ascending: false, nullsFirst: false })
               .range(offset, offset + PAGE - 1);
             if (error) throw new Error(error.message);
-            const rows = (data ?? []) as Array<{
-              client_id: string;
-              care_level: string | null;
-              certification_end_date: string | null;
-            }>;
+            const rows = (data ?? []) as Array<CertRow & { client_id: string }>;
             for (const r of rows) {
               hasInsurance.add(r.client_id);
-              if (!latestCert.has(r.client_id)) {
-                latestCert.set(r.client_id, {
-                  care_level: r.care_level,
-                  certification_end_date: r.certification_end_date,
-                });
-              }
+              const list = certs.get(r.client_id);
+              if (list) list.push(r);
+              else certs.set(r.client_id, [r]);
             }
             if (rows.length < PAGE) break;
             offset += PAGE;
@@ -366,7 +386,7 @@ function UserSidebarInner(props: UserSidebarProps) {
         }
         // 2) 入退院 (共有ヘルパー。テーブル未作成は空 Map で続行)
         const hospitalization = await getHospitalizationMap(supabase, ids);
-        if (!cancelled) setBadgeData({ latestCert, hasInsurance, hospitalization });
+        if (!cancelled) setBadgeData({ certs, hasInsurance, hospitalization });
       } catch (err) {
         console.warn(
           "利用者バッジ情報の取得に失敗 (バッジ無しで続行):",
@@ -457,15 +477,16 @@ function UserSidebarInner(props: UserSidebarProps) {
     return list;
   }, [users, search, filterMode, currentOfficeId, officeUserIds, categoryFilter, shougaiIds, badgeData]);
 
-  // Auto-select 1st visible user when nothing selected (URL mode のみ)
-  // 明示モード (users/[id]/layout) は URL の path 側で id が決まるので auto-select 不要
+  // Auto-select 1st visible user when nothing selected (URL mode + autoSelectFirst 指定時)
+  // 明示モード (users/[id]/layout) は URL の path 側で id が決まるので auto-select 不要だが、
+  // provision-tickets 等の client shell は autoSelectFirst で opt-in できる
   useEffect(() => {
-    if (explicit) return;
+    if (explicit && !props.autoSelectFirst) return;
     if (loading) return;
     if (selectedUserId) return;
     if (filtered.length === 0) return;
     handleSelectUser(filtered[0].id);
-  }, [explicit, loading, selectedUserId, filtered, handleSelectUser]);
+  }, [explicit, props.autoSelectFirst, loading, selectedUserId, filtered, handleSelectUser]);
 
   // setFilterMode が localStorage 書き込み込みなので setMode は alias
   const setMode = setFilterMode;
