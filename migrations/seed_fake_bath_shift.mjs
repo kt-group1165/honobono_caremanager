@@ -4,9 +4,9 @@
 //
 // 対象: Ｈａｎａ訪問入浴 (52a60486)。号車×日 ルート方式のイメージ確認用。
 //   - 架空職員 6 名 (看護師 2 + 介護 4、qualifications に marker)
-//   - 架空利用者 OY001-006 を追加割当 (既存 OY007/008 と合わせ 8 名)
+//   - 架空利用者 15 名を割当 (OY001-010 + 居宅サンプル A001-E001)
 //   - 号車 1号車/2号車 (既存があれば再利用)
-//   - 週間パターン 12 本 → 2026-07 の予定 92 コマ生成
+//   - 週間パターン 40 本 → 2026-07 の予定 186 コマ生成 (1台1日 6〜7 件のルート)
 //   - 当日編成 (7月の稼働日、7/17 の 2号車のみ看護なし = 減算警告デモ)
 //   - 7/16 の 1号車は看護師が 09:00-12:00 のみ乗車 (staff_times、兼務デモ。
 //     午後のコマに「看護なし(減算)」バッジが出る。列未適用なら自動スキップ)
@@ -62,29 +62,38 @@ const FAKE_STAFF = [
 ];
 
 // ── 週間パターン定義 (user_number ベース) ──────────────────────────────────
-// 1号車: 月木 4 件ルート + 水 2 件 / 2号車: 火金 4 件ルート + 水 2 件
+// 1台1日 6〜7 件 (実際の訪問入浴の標準ルート量)。1件 50 分 + 移動 10 分の時間割。
+// 1号車: 月木 7 件 + 水 6 件 / 2号車: 火金 7 件 + 水 6 件
+const SLOTS = ["09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00"];
+const endOf = (start) => {
+  const [h, m] = start.split(":").map(Number);
+  const t = h * 60 + m + 50;
+  return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+};
+const route = (team, dows, defs) =>
+  defs.map(([no, bath], i) => ({ no, team, dows, start: SLOTS[i], end: endOf(SLOTS[i]), bath: bath ?? "全身浴" }));
+
 const PATTERN_DEFS = [
-  { no: "OY001", team: 1, dows: [1, 4], start: "09:30", end: "10:20", bath: "全身浴" },
-  { no: "OY002", team: 1, dows: [1, 4], start: "10:40", end: "11:30", bath: "全身浴" },
-  { no: "OY003", team: 1, dows: [1, 4], start: "13:00", end: "13:50", bath: "部分浴" },
-  { no: "OY004", team: 1, dows: [1, 4], start: "14:10", end: "15:00", bath: "全身浴" },
-  { no: "OY001", team: 1, dows: [3],    start: "09:30", end: "10:20", bath: "全身浴" },
-  { no: "OY002", team: 1, dows: [3],    start: "10:40", end: "11:30", bath: "全身浴" },
-  { no: "OY005", team: 2, dows: [2, 5], start: "09:30", end: "10:20", bath: "全身浴" },
-  { no: "OY006", team: 2, dows: [2, 5], start: "10:40", end: "11:30", bath: "全身浴" },
-  { no: "OY007", team: 2, dows: [2, 5], start: "13:00", end: "13:50", bath: "全身浴" },
-  { no: "OY008", team: 2, dows: [2, 5], start: "14:10", end: "15:00", bath: "部分浴" },
-  { no: "OY007", team: 2, dows: [3],    start: "09:30", end: "10:20", bath: "全身浴" },
-  { no: "OY008", team: 2, dows: [3],    start: "10:40", end: "11:30", bath: "全身浴" },
+  // 1号車 月・木 (7件)
+  ...route(1, [1, 4], [["OY001"], ["OY002"], ["OY003", "部分浴"], ["OY004"], ["OY009"], ["A001"], ["B001"]]),
+  // 1号車 水 (6件)
+  ...route(1, [3], [["OY001"], ["OY002"], ["OY009"], ["A001"], ["B001"], ["C001", "部分浴"]]),
+  // 2号車 火・金 (7件)
+  ...route(2, [2, 5], [["OY005"], ["OY006"], ["OY007"], ["OY008", "部分浴"], ["OY010"], ["D001"], ["E001"]]),
+  // 2号車 水 (6件)
+  ...route(2, [3], [["OY005"], ["OY007"], ["OY008", "部分浴"], ["OY010"], ["D001"], ["E001"]]),
 ];
 
 const main = async () => {
-  // ── 利用者解決 ──
-  const wantNos = Array.from({ length: 8 }, (_, i) => `OY${String(i + 1).padStart(3, "0")}`);
+  // ── 利用者解決 (訪問介護サンプル OY001-010 + 居宅サンプル A001-E001) ──
+  const wantNos = [
+    ...Array.from({ length: 10 }, (_, i) => `OY${String(i + 1).padStart(3, "0")}`),
+    "A001", "B001", "C001", "D001", "E001",
+  ];
   const pool = await rest(`clients?tenant_id=eq.${TENANT}&user_number=in.(${wantNos.join(",")})&select=id,name,user_number`);
   const clientByNo = Object.fromEntries(pool.map((c) => [c.user_number, c]));
   const missing = wantNos.filter((no) => !clientByNo[no]);
-  if (missing.length) throw new Error(`架空利用者が不足: ${missing.join(",")} (先に seed_fake_houmonkaigo_clients.mjs)`);
+  if (missing.length) throw new Error(`架空利用者が不足: ${missing.join(",")} (先に seed_fake_houmonkaigo_clients.mjs / seed_fake_kyotaku_clients.mjs)`);
 
   // ── 既存割当確認 (無い利用者のみ追加) ──
   const existAssigns = await rest(`client_office_assignments?office_id=eq.${OFFICE.id}&select=client_id`);
@@ -126,7 +135,7 @@ const main = async () => {
   const actualPlans = visitPlans.filter((v) => Number(v.dateStr.slice(8)) <= ACTUAL_UNTIL);
 
   console.log(`事業所: ${OFFICE.name} (${OFFICE.id})`);
-  console.log(`利用者 8 名: ${wantNos.map((no) => clientByNo[no].name).join("、")}`);
+  console.log(`利用者 ${wantNos.length} 名: ${wantNos.map((no) => clientByNo[no].name).join("、")}`);
   console.log(`追加割当: ${newAssigns.length}件 (既存 ${assignedIds.size}件)`);
   console.log(`号車: ${teamPlans.map((t) => `${t.name}${t.id ? " (既存)" : " (新規)"}`).join(" / ")}`);
   console.log(`架空職員: ${FAKE_STAFF.length}名 (既存 marker 職員 ${existFakeStaff.length}名は再利用)`);

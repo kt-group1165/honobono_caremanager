@@ -70,7 +70,7 @@ type ScheduleRow = {
   notes: string | null;
 };
 
-type Tab = "route" | "month" | "patterns" | "teams";
+type Tab = "route" | "calendar" | "monthly" | "month" | "patterns" | "teams";
 
 // ── ヘルパー ────────────────────────────────────────────────────────────────
 
@@ -167,8 +167,18 @@ export function BathShiftContent() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
+  // カレンダー/月間個別の選択状態
+  const [calendarAxis, setCalendarAxis] = useState<"user" | "staff">("user");
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+
   // モーダル
-  const [editingVisit, setEditingVisit] = useState<{ visit: ScheduleRow | null; presetTeamId: string | null } | null>(null);
+  const [editingVisit, setEditingVisit] = useState<{
+    visit: ScheduleRow | null;
+    presetTeamId: string | null;
+    presetDate?: string;
+    presetClientId?: string | null;
+  } | null>(null);
   const [editingPattern, setEditingPattern] = useState<Pattern | "new" | null>(null);
   const [editingTeam, setEditingTeam] = useState<Team | "new" | null>(null);
   const [editingTeamDay, setEditingTeamDay] = useState<Team | null>(null);
@@ -236,6 +246,12 @@ export function BathShiftContent() {
   }, [load]);
 
   const activeTeams = useMemo(() => teams.filter((t) => t.is_active), [teams]);
+  // 職員カレンダー用: 当月どこかの号車に乗る職員だけをリスト (members 全件は多すぎる)
+  const rideStaff = useMemo(() => {
+    const ids = new Set<string>();
+    for (const td of teamDays) for (const id of td.staff_ids) ids.add(id);
+    return staffList.filter((s) => ids.has(s.id));
+  }, [teamDays, staffList]);
   const teamDayFor = useCallback(
     (teamId: string | null, d: string) => (teamId ? teamDays.find((td) => td.team_id === teamId && td.work_date === d) ?? null : null),
     [teamDays]
@@ -251,6 +267,15 @@ export function BathShiftContent() {
         .filter((s) => (teamId ? s.team_id === teamId : !s.team_id || !activeTeams.some((t) => t.id === s.team_id)))
         .sort(sortVisits),
     [daySchedules, activeTeams]
+  );
+
+  // 任意日の号車内 末尾の訪問順 (カレンダーからの追加は対象日で計算)
+  const nextOrderOf = useCallback(
+    (teamId: string | null, dateStr: string) => {
+      const list = schedules.filter((s) => s.visit_date === dateStr && (teamId ? s.team_id === teamId : !s.team_id));
+      return list.length ? Math.max(...list.map((x) => x.visit_order)) + 1 : 1;
+    },
+    [schedules]
   );
 
   // 号車内の並び替え (訪問順を index で正規化して隣と入替)
@@ -525,7 +550,9 @@ export function BathShiftContent() {
         <h1 className="text-sm font-semibold text-gray-800">シフト・ルート表</h1>
         <div className="flex items-center gap-1 rounded-lg bg-white p-0.5 ring-1 ring-gray-200">
           {tabBtn("route", "日次ルート表")}
-          {tabBtn("month", "月間")}
+          {tabBtn("calendar", "カレンダー")}
+          {tabBtn("monthly", "月間個別")}
+          {tabBtn("month", "月間 (号車)")}
           {tabBtn("patterns", "週間パターン")}
           {tabBtn("teams", "号車マスタ")}
         </div>
@@ -604,6 +631,39 @@ export function BathShiftContent() {
             onApply={(v) => applyActual(v)}
             onRevert={revertActual}
           />
+        ) : tab === "calendar" ? (
+          <BathCalendarView
+            month={month}
+            axis={calendarAxis}
+            setAxis={setCalendarAxis}
+            clients={clients}
+            selectedClientId={selectedClientId ?? clients[0]?.id ?? null}
+            onSelectClient={setSelectedClientId}
+            rideStaff={rideStaff}
+            selectedStaffId={selectedStaffId ?? rideStaff[0]?.id ?? null}
+            onSelectStaff={setSelectedStaffId}
+            schedules={schedules}
+            teamDays={teamDays}
+            teams={teams}
+            nurseIds={nurseIds}
+            onAddVisit={(d, clientId) => setEditingVisit({ visit: null, presetTeamId: null, presetDate: d, presetClientId: clientId })}
+            onEditVisit={(v) => setEditingVisit({ visit: v, presetTeamId: null })}
+            onOpenDay={(d) => { setDateSynced(d); setTab("route"); }}
+          />
+        ) : tab === "monthly" ? (
+          <BathMonthlyView
+            clients={clients}
+            selectedClientId={selectedClientId ?? clients[0]?.id ?? null}
+            onSelectClient={setSelectedClientId}
+            schedules={schedules}
+            teams={teams}
+            onAdd={(clientId) => setEditingVisit({ visit: null, presetTeamId: null, presetClientId: clientId })}
+            onEdit={(v) => setEditingVisit({ visit: v, presetTeamId: null })}
+            onApply={(v) => applyActual(v)}
+            onRevert={revertActual}
+            onCancel={toggleCancel}
+            onDelete={deleteVisit}
+          />
         ) : tab === "month" ? (
           <MonthView
             month={month}
@@ -641,15 +701,13 @@ export function BathShiftContent() {
           supabase={supabase}
           visit={editingVisit.visit}
           presetTeamId={editingVisit.presetTeamId}
-          date={date}
+          presetClientId={editingVisit.presetClientId ?? null}
+          date={editingVisit.presetDate ?? date}
           clients={clients}
           teams={activeTeams}
           officeId={currentOfficeId}
           tenantId={tenantId}
-          nextOrderOf={(teamId) => {
-            const list = visitsOf(teamId);
-            return list.length ? Math.max(...list.map((x) => x.visit_order)) + 1 : 1;
-          }}
+          nextOrderOf={nextOrderOf}
           onClose={() => setEditingVisit(null)}
           onSaved={(row, isNew) => {
             setEditingVisit(null);
@@ -1058,6 +1116,327 @@ function TeamsView({ teams, onEdit }: { teams: Team[]; onEdit: (t: Team) => void
   );
 }
 
+// ── サイドリスト (カレンダー/月間個別の左ペイン共通) ─────────────────────────
+
+function SideList({
+  items, selectedId, onSelect, unitLabel,
+}: {
+  items: Array<{ id: string; label: string; sub?: string | null }>;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  unitLabel: string;
+}) {
+  const [q, setQ] = useState("");
+  const filtered = q ? items.filter((i) => i.label.includes(q) || (i.sub ?? "").includes(q)) : items;
+  return (
+    <>
+      <div className="p-2">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="検索"
+          className="w-full rounded-lg border border-gray-200 px-2 py-1 text-xs outline-none focus:border-cyan-400"
+        />
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {filtered.map((i) => (
+          <button
+            key={i.id}
+            onClick={() => onSelect(i.id)}
+            className={`block w-full border-b border-gray-50 px-3 py-1.5 text-left text-xs ${
+              selectedId === i.id ? "bg-cyan-50 font-semibold text-cyan-700" : "text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <span className="block truncate">{i.label}</span>
+            {i.sub && <span className="block truncate text-[10px] font-normal text-gray-400">{i.sub}</span>}
+          </button>
+        ))}
+        {filtered.length === 0 && <p className="p-3 text-center text-[11px] text-gray-300">該当なし</p>}
+      </div>
+      <div className="border-t border-gray-100 px-3 py-1.5 text-[10px] text-gray-400">{items.length}{unitLabel}</div>
+    </>
+  );
+}
+
+// ── カレンダー (利用者軸/職員軸 の月間グリッド) ──────────────────────────────
+
+function BathCalendarView({
+  month, axis, setAxis, clients, selectedClientId, onSelectClient,
+  rideStaff, selectedStaffId, onSelectStaff,
+  schedules, teamDays, teams, nurseIds,
+  onAddVisit, onEditVisit, onOpenDay,
+}: {
+  month: string;
+  axis: "user" | "staff";
+  setAxis: (a: "user" | "staff") => void;
+  clients: Client[];
+  selectedClientId: string | null;
+  onSelectClient: (id: string) => void;
+  rideStaff: StaffMember[];
+  selectedStaffId: string | null;
+  onSelectStaff: (id: string) => void;
+  schedules: ScheduleRow[];
+  teamDays: TeamDay[];
+  teams: Team[];
+  nurseIds: Set<string>;
+  onAddVisit: (dateStr: string, clientId: string | null) => void;
+  onEditVisit: (v: ScheduleRow) => void;
+  onOpenDay: (dateStr: string) => void;
+}) {
+  const teamName = (id: string | null) => teams.find((t) => t.id === id)?.name ?? "未割当";
+  const days = daysInMonth(month);
+  const firstDow = dowOf(`${month}-01`);
+  const cells: (string | null)[] = [
+    ...Array.from({ length: firstDow }, () => null),
+    ...Array.from({ length: days }, (_, i) => `${month}-${pad2(i + 1)}`),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+  const weeks: (string | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+
+  const chipCls = (s: ScheduleRow["status"]) =>
+    s === "completed" ? "bg-emerald-50 text-emerald-700" :
+    s === "cancelled" ? "bg-gray-100 text-gray-400 line-through" : "bg-cyan-50 text-cyan-700";
+
+  const axisBtn = (a: "user" | "staff", label: string) => (
+    <button
+      onClick={() => setAxis(a)}
+      className={`flex-1 border-b-2 py-1.5 text-xs font-medium ${axis === a ? "border-cyan-600 text-cyan-700" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div className="flex h-full">
+      {/* 左ペイン */}
+      <div className="flex w-56 shrink-0 flex-col border-r border-gray-200">
+        <div className="flex border-b border-gray-100">
+          {axisBtn("user", "利用者")}
+          {axisBtn("staff", "職員")}
+        </div>
+        {axis === "user" ? (
+          <SideList
+            items={clients.map((c) => ({ id: c.id, label: c.name, sub: c.furigana }))}
+            selectedId={selectedClientId}
+            onSelect={onSelectClient}
+            unitLabel="名"
+          />
+        ) : (
+          <SideList
+            items={rideStaff.map((s) => ({ id: s.id, label: `${nurseIds.has(s.id) ? "看 " : ""}${s.name}`, sub: s.role }))}
+            selectedId={selectedStaffId}
+            onSelect={onSelectStaff}
+            unitLabel="名 (当月乗車)"
+          />
+        )}
+      </div>
+
+      {/* 月間グリッド */}
+      <div className="flex-1 overflow-auto p-3">
+        {(axis === "user" ? !selectedClientId : !selectedStaffId) ? (
+          <p className="py-16 text-center text-sm text-gray-400">{axis === "user" ? "利用者" : "職員"}を選択してください</p>
+        ) : (
+          <table className="w-full table-fixed border-collapse">
+            <thead>
+              <tr>
+                {DOW_LABELS.map((l, i) => (
+                  <th key={l} className={`border border-gray-200 bg-gray-50 py-1 text-xs font-semibold ${i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-gray-600"}`}>
+                    {l}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {weeks.map((week, wi) => (
+                <tr key={wi}>
+                  {week.map((d, di) => (
+                    <td key={di} className="h-24 border border-gray-200 align-top">
+                      {d && (
+                        <>
+                          <div className="flex items-center justify-between px-1 pt-0.5">
+                            <span className={`text-xs font-medium ${di === 0 ? "text-red-500" : di === 6 ? "text-blue-500" : "text-gray-700"}`}>
+                              {Number(d.slice(8))}
+                            </span>
+                            {axis === "user" && (
+                              <button onClick={() => onAddVisit(d, selectedClientId)} className="text-gray-300 hover:text-cyan-600">
+                                <Plus size={12} />
+                              </button>
+                            )}
+                          </div>
+                          <div className="space-y-0.5 px-0.5 pb-0.5">
+                            {axis === "user"
+                              ? schedules
+                                  .filter((s) => s.client_id === selectedClientId && s.visit_date === d)
+                                  .sort(sortVisits)
+                                  .map((v) => (
+                                    <button
+                                      key={v.id}
+                                      onClick={() => onEditVisit(v)}
+                                      className={`block w-full truncate rounded px-1 py-0.5 text-left text-[10px] ${chipCls(v.status)}`}
+                                      title={`${hhmm(v.start_time)}-${hhmm(v.end_time)} ${teamName(v.team_id)} ${v.bath_type}`}
+                                    >
+                                      {hhmm(v.start_time) || "--:--"} {teamName(v.team_id)} {v.bath_type === "部分浴" ? "部分" : "全身"}
+                                    </button>
+                                  ))
+                              : teamDays
+                                  .filter((td) => td.work_date === d && selectedStaffId !== null && td.staff_ids.includes(selectedStaffId))
+                                  .map((td) => {
+                                    const r = selectedStaffId ? limitedRange(td.staff_times, selectedStaffId) : null;
+                                    const cnt = schedules.filter((s) => s.visit_date === d && s.team_id === td.team_id && s.status !== "cancelled").length;
+                                    const rangeTxt = r && selectedStaffId
+                                      ? ` ${hhmm(td.staff_times?.[selectedStaffId]?.start ?? null)}-${hhmm(td.staff_times?.[selectedStaffId]?.end ?? null)}`
+                                      : "";
+                                    return (
+                                      <button
+                                        key={td.id}
+                                        onClick={() => onOpenDay(d)}
+                                        className="block w-full truncate rounded bg-cyan-50 px-1 py-0.5 text-left text-[10px] text-cyan-700 hover:bg-cyan-100"
+                                        title="クリックで日次ルート表へ"
+                                      >
+                                        {teamName(td.team_id)} {cnt}件{rangeTxt}
+                                      </button>
+                                    );
+                                  })}
+                          </div>
+                        </>
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {axis === "staff" && (
+          <p className="mt-2 text-[11px] text-gray-400">チップ = その日の乗車号車 (時間表示は乗車時間帯指定あり)。クリックで日次ルート表へ。</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── 月間個別 (利用者ごとの月間一覧 + 実績反映) ──────────────────────────────
+
+function BathMonthlyView({
+  clients, selectedClientId, onSelectClient, schedules, teams,
+  onAdd, onEdit, onApply, onRevert, onCancel, onDelete,
+}: {
+  clients: Client[];
+  selectedClientId: string | null;
+  onSelectClient: (id: string) => void;
+  schedules: ScheduleRow[];
+  teams: Team[];
+  onAdd: (clientId: string | null) => void;
+  onEdit: (v: ScheduleRow) => void;
+  onApply: (v: ScheduleRow) => void;
+  onRevert: (v: ScheduleRow) => void;
+  onCancel: (v: ScheduleRow) => void;
+  onDelete: (v: ScheduleRow) => void;
+}) {
+  const teamName = (id: string | null) => teams.find((t) => t.id === id)?.name ?? "未割当";
+  const rows = schedules
+    .filter((s) => s.client_id === selectedClientId)
+    .sort((a, b) => a.visit_date.localeCompare(b.visit_date) || sortVisits(a, b));
+  const counts = {
+    scheduled: rows.filter((r) => r.status === "scheduled").length,
+    completed: rows.filter((r) => r.status === "completed").length,
+    cancelled: rows.filter((r) => r.status === "cancelled").length,
+  };
+
+  return (
+    <div className="flex h-full">
+      <div className="flex w-56 shrink-0 flex-col border-r border-gray-200">
+        <div className="border-b border-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600">利用者</div>
+        <SideList
+          items={clients.map((c) => ({ id: c.id, label: c.name, sub: c.furigana }))}
+          selectedId={selectedClientId}
+          onSelect={onSelectClient}
+          unitLabel="名"
+        />
+      </div>
+      <div className="flex-1 overflow-auto">
+        {!selectedClientId ? (
+          <p className="py-16 text-center text-sm text-gray-400">利用者を選択してください</p>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50/60 px-4 py-2 text-xs text-gray-600">
+              <span>予定 <b className="text-cyan-700">{counts.scheduled}</b>件</span>
+              <span>実績 <b className="text-emerald-700">{counts.completed}</b>件</span>
+              <span>中止 <b className="text-gray-500">{counts.cancelled}</b>件</span>
+              <button
+                onClick={() => onAdd(selectedClientId)}
+                className="ml-auto flex items-center gap-1 rounded-lg bg-cyan-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-cyan-700"
+              >
+                <Plus size={12} />予定追加
+              </button>
+            </div>
+            {rows.length === 0 ? (
+              <p className="py-16 text-center text-sm text-gray-400">この月の予定はありません</p>
+            ) : (
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 z-10 bg-gray-100 text-gray-600">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold">日付</th>
+                    <th className="px-3 py-2 text-left font-semibold">時間</th>
+                    <th className="px-3 py-2 text-left font-semibold">号車</th>
+                    <th className="px-3 py-2 text-left font-semibold">種別</th>
+                    <th className="px-3 py-2 text-left font-semibold">状態</th>
+                    <th className="px-3 py-2 text-left font-semibold">メモ</th>
+                    <th className="px-3 py-2 text-right font-semibold"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {rows.map((v) => (
+                    <tr key={v.id} className={`hover:bg-gray-50 ${v.status === "cancelled" ? "opacity-60" : ""}`}>
+                      <td className="whitespace-nowrap px-3 py-1.5 font-medium text-gray-800">
+                        {Number(v.visit_date.slice(5, 7))}/{Number(v.visit_date.slice(8))} ({DOW_LABELS[dowOf(v.visit_date)]})
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-1.5 font-mono text-gray-600">
+                        {hhmm(v.start_time)}{v.end_time ? `-${hhmm(v.end_time)}` : ""}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-1.5 text-gray-600">{teamName(v.team_id)}</td>
+                      <td className="whitespace-nowrap px-3 py-1.5 text-gray-600">
+                        {v.scheme === "地域生活支援" && <span className="mr-1 rounded bg-violet-50 px-1 py-0.5 text-[10px] text-violet-600">障害</span>}
+                        {v.bath_type === "部分浴" ? "部分浴・清拭" : v.bath_type}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-1.5">
+                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                          v.status === "completed" ? "bg-emerald-100 text-emerald-700" :
+                          v.status === "cancelled" ? "bg-gray-100 text-gray-500" : "bg-cyan-50 text-cyan-700"
+                        }`}>
+                          {v.status === "completed" ? "実績済" : v.status === "cancelled" ? "中止" : "予定"}
+                        </span>
+                      </td>
+                      <td className="max-w-[160px] truncate px-3 py-1.5 text-gray-400" title={v.notes ?? undefined}>
+                        {v.status === "cancelled" && v.cancel_reason ? `中止: ${v.cancel_reason}` : v.notes || ""}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-1.5 text-right">
+                        {v.status === "scheduled" ? (
+                          <button onClick={() => onApply(v)} className="mr-1 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-medium text-white hover:bg-emerald-700">実績</button>
+                        ) : v.status === "completed" ? (
+                          <button onClick={() => onRevert(v)} className="mr-1 rounded border border-emerald-300 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 hover:bg-emerald-50">戻す</button>
+                        ) : null}
+                        <button onClick={() => onEdit(v)} className="p-1 text-gray-400 hover:text-cyan-600"><Pencil size={13} /></button>
+                        {v.status !== "completed" && (
+                          <button onClick={() => onCancel(v)} title={v.status === "cancelled" ? "中止を解除" : "中止"} className="p-1 text-gray-400 hover:text-amber-600">
+                            {v.status === "cancelled" ? <RotateCcw size={13} /> : <Ban size={13} />}
+                          </button>
+                        )}
+                        <button onClick={() => onDelete(v)} className="p-1 text-gray-400 hover:text-red-500"><Trash2 size={13} /></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── モーダル共通スタイル ─────────────────────────────────────────────────────
 
 const inputCls = "w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm outline-none focus:border-cyan-400";
@@ -1086,22 +1465,23 @@ function ModalShell({ title, onClose, children, footer }: {
 // ── 予定コマ モーダル ────────────────────────────────────────────────────────
 
 function VisitModal({
-  supabase, visit, presetTeamId, date, clients, teams, officeId, tenantId, nextOrderOf, onClose, onSaved,
+  supabase, visit, presetTeamId, presetClientId, date, clients, teams, officeId, tenantId, nextOrderOf, onClose, onSaved,
 }: {
   supabase: ReturnType<typeof createClient>;
   visit: ScheduleRow | null;
   presetTeamId: string | null;
+  presetClientId: string | null;
   date: string;
   clients: Client[];
   teams: Team[];
   officeId: string;
   tenantId: string;
-  nextOrderOf: (teamId: string | null) => number;
+  nextOrderOf: (teamId: string | null, dateStr: string) => number;
   onClose: () => void;
   onSaved: (row: ScheduleRow, isNew: boolean) => void;
 }) {
   const [f, setF] = useState(() => ({
-    client_id: visit?.client_id ?? "",
+    client_id: visit?.client_id ?? presetClientId ?? "",
     team_id: visit?.team_id ?? presetTeamId,
     visit_date: visit?.visit_date ?? date,
     start_time: visit?.start_time ? hhmm(visit.start_time) : "",
@@ -1135,7 +1515,7 @@ function VisitModal({
       if (error || !data) { setError("保存に失敗しました: " + (error?.message ?? "不明なエラー")); return; }
       onSaved(data as ScheduleRow, false);
     } else {
-      const payload = { ...base, tenant_id: tenantId, office_id: officeId, visit_order: nextOrderOf(f.team_id ?? null) };
+      const payload = { ...base, tenant_id: tenantId, office_id: officeId, visit_order: nextOrderOf(f.team_id ?? null, f.visit_date) };
       const { data, error } = await supabase.from("kaigo_bath_schedule").insert(payload).select("*").single();
       setSaving(false);
       if (error || !data) { setError("保存に失敗しました: " + (error?.message ?? "不明なエラー")); return; }
