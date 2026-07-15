@@ -34,6 +34,10 @@ export function UsersLayoutSidebar() {
   };
 
   return (
-    <UserSidebar selectedUserId={selectedUserId} onSelectUser={handleSelectUser} />
+    <UserSidebar
+      selectedUserId={selectedUserId}
+      onSelectUser={handleSelectUser}
+      showNewUserButton
+    />
   );
 }

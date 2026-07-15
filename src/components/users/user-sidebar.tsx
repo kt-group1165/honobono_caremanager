@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect, useMemo, useCallback } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Search, User } from "lucide-react";
+import { Plus, Search, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBusinessType } from "@/lib/business-type-context";
 import { useLocalStorage } from "@/lib/use-local-storage";
@@ -65,6 +65,9 @@ interface UserSidebarProps {
   /** 明示モードでも未選択時に先頭の利用者を自動選択する (provision-tickets 等の
    *  client shell 用。users/[id]/layout は path 側で id が決まるので指定しない) */
   autoSelectFirst?: boolean;
+  /** フッターに「＋新規」(利用者新規登録 /users/new) を出す。
+   *  利用者管理 (/users 配下) のみ true — 提供表等の選択用途では出さない */
+  showNewUserButton?: boolean;
 }
 
 // ── 警告バッジ (ほのぼの準拠: 利用者管理編 p.19) ──────────────────────────
@@ -141,6 +144,11 @@ interface WarnBadge {
 
 /** 「認」を出す残日数しきい値 (ほのぼの初期値は 1 ヶ月。更新申請が可能になる 60 日前に設定) */
 const CERT_RENEWAL_WARN_DAYS = 60;
+
+// 一覧のモジュールレベル キャッシュ (SWR 流: 即描画 → 裏で取り直し)。
+// key = `${filterMode}|${officeId}`。session 内で画面間を往復しても
+// サイドバーが毎回スピナーにならない。書込は fetchUsers の成功時のみ。
+const sidebarListCache = new Map<string, { users: ClientRow[]; officeIds: string[] }>();
 
 /** ローカル TZ の今日 (YYYY-MM-DD) */
 function localToday(): string {
@@ -368,7 +376,7 @@ function UserSidebarInner(props: UserSidebarProps) {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const supabase = useMemo(() => createClient(), []);
-  const { currentOfficeId, businessType } = useBusinessType();
+  const { currentOfficeId, businessType, loading: officeLoading } = useBusinessType();
 
   // 表示モード: all (全利用者) / office (自事業所の利用者のみ)
   // useLocalStorage で SSR-safe に hydrate (setState-in-effect 不要)
@@ -400,75 +408,86 @@ function UserSidebarInner(props: UserSidebarProps) {
   const effectiveYoboFilter: YoboFilter = isKyotaku ? yoboFilter : "all";
 
   const fetchUsers = useCallback(async () => {
-    setLoading(true);
-    // Supabase の db.max_rows（デフォルト 1000）対策で、
-    // 自事業所モードでは「先に assignments を取得 → .in('id', [...])」で
-    // 限定 fetch する。これにより 1000 件超のテナントでも漏れなく
-    // 自事業所に紐付く利用者が表示される。
-    // 全利用者モードは max_rows までで切れるが UX 上許容。
+    // office 解決前に走ると「全利用者を先に大量 fetch → 解決後に取り直し」の
+    // 二度手間になるため、context の解決を待つ (依存に officeLoading が入っており解決後に再実行される)
+    if (officeLoading) return;
+
+    // ── キャッシュ即描画 (SWR 流) ──
+    // 同一 key の前回結果があれば即表示してスピナーを出さず、裏で取り直して差し替える。
+    // 画面間の往復 (請求 → 利用者管理 等) でサイドバーが毎回「読込中...」になるのを防ぐ。
+    const cacheKey = `${filterMode}|${currentOfficeId ?? ""}`;
+    const cached = sidebarListCache.get(cacheKey);
+    if (cached) {
+      setUsers(cached.users);
+      setOfficeUserIds(new Set(cached.officeIds));
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
+    let nextUsers: ClientRow[] = [];
+    let nextOfficeIds: string[] = [];
+
     if (filterMode === "office" && currentOfficeId) {
-      // 1) 自事業所の現役 assignments から client_id を取得
-      //    PostgREST default 1000 行制限を超えるテナント向けに page-loop で全件取得
-      const PAGE = 1000;
-      const assignsAll: { client_id: string }[] = [];
-      let from = 0;
-      while (true) {
-        const { data: assigns } = await supabase
-          .from("client_office_assignments")
-          .select("client_id")
-          .eq("office_id", currentOfficeId)
-          .is("end_date", null)
-          .range(from, from + PAGE - 1);
-        if (!assigns || assigns.length === 0) break;
-        assignsAll.push(...(assigns as { client_id: string }[]));
-        if (assigns.length < PAGE) break;
-        from += PAGE;
-      }
-      const clientIds = Array.from(
-        new Set<string>(assignsAll.map((a) => a.client_id))
-      );
-
-      if (clientIds.length === 0) {
-        setUsers([]);
-        setOfficeUserIds(new Set());
-        setLoading(false);
-        return;
-      }
-
-      // 2) その client_id 群だけ clients を fetch
-      // is_facility = false: 法人/事業所エントリ（包括支援センター等）を除外
-      const { data } = await supabase
+      // 自事業所モード: !inner 埋め込みで assignments と JOIN し 1 往復で取得
+      // (従来は assignments → clients の直列 2 往復)。
+      // service_category 列は migration 未適用環境があるため "*" で取得。
+      const { data, error } = await supabase
         .from("clients")
-        // service_category 列は Phase Shougai-1 migration 適用後のみ存在。
-        // migration 未適用環境では select 失敗を防ぐため "*" で取得し、
-        // 未定義時は undefined のまま (フィルタ default 'all' で全件表示) として扱う。
-        .select("*")
-        .in("id", clientIds)
+        .select("*, client_office_assignments!inner(office_id)")
+        .eq("client_office_assignments.office_id", currentOfficeId)
+        .is("client_office_assignments.end_date", null)
         .eq("status", "active")
         .eq("is_facility", false)
         .is("deleted_at", null)
-        .order("furigana", { ascending: true, nullsFirst: false });
-      setUsers((data || []) as ClientRow[]);
-      setOfficeUserIds(new Set<string>(clientIds));
+        .order("furigana", { ascending: true, nullsFirst: false })
+        .range(0, 9999);
+      if (!error) {
+        nextUsers = (data || []) as ClientRow[];
+        nextOfficeIds = nextUsers.map((u) => u.id);
+      } else {
+        // 埋め込み JOIN が使えない環境 (RLS/スキーマ差) は従来の 2 段方式にフォールバック
+        const PAGE = 1000;
+        const assignsAll: { client_id: string }[] = [];
+        let from = 0;
+        while (true) {
+          const { data: assigns } = await supabase
+            .from("client_office_assignments")
+            .select("client_id")
+            .eq("office_id", currentOfficeId)
+            .is("end_date", null)
+            .range(from, from + PAGE - 1);
+          if (!assigns || assigns.length === 0) break;
+          assignsAll.push(...(assigns as { client_id: string }[]));
+          if (assigns.length < PAGE) break;
+          from += PAGE;
+        }
+        const clientIds = Array.from(new Set<string>(assignsAll.map((a) => a.client_id)));
+        if (clientIds.length > 0) {
+          const { data: cl } = await supabase
+            .from("clients")
+            .select("*")
+            .in("id", clientIds)
+            .eq("status", "active")
+            .eq("is_facility", false)
+            .is("deleted_at", null)
+            .order("furigana", { ascending: true, nullsFirst: false });
+          nextUsers = (cl || []) as ClientRow[];
+        }
+        nextOfficeIds = clientIds;
+      }
     } else {
-      // 全利用者モード: 通常の clients 取得（最大 db.max_rows まで）
-      // is_facility = false: 法人/事業所エントリを除外
-      const { data } = await supabase
+      // 全利用者モード: clients と officeUserIds (チラつき防止用) を並列で取得
+      const clientsPromise = supabase
         .from("clients")
-        // service_category 列は Phase Shougai-1 migration 適用後のみ存在。
-        // migration 未適用環境では select 失敗を防ぐため "*" で取得し、
-        // 未定義時は undefined のまま (フィルタ default 'all' で全件表示) として扱う。
         .select("*")
         .eq("status", "active")
         .eq("is_facility", false)
         .is("deleted_at", null)
         .order("furigana", { ascending: true, nullsFirst: false })
         .range(0, 9999);
-      setUsers((data || []) as ClientRow[]);
-
-      // モード切替時のチラつき防止に officeUserIds も並行取得
-      if (currentOfficeId) {
-        // PostgREST default 1000 行制限対策で page-loop
+      const officeIdsPromise = (async () => {
+        if (!currentOfficeId) return [] as string[];
         const PAGE2 = 1000;
         const svcAll: { client_id: string }[] = [];
         let from2 = 0;
@@ -484,14 +503,18 @@ function UserSidebarInner(props: UserSidebarProps) {
           if (svc.length < PAGE2) break;
           from2 += PAGE2;
         }
-        const set = new Set<string>(svcAll.map((s) => s.client_id));
-        setOfficeUserIds(set);
-      } else {
-        setOfficeUserIds(new Set());
-      }
+        return svcAll.map((s) => s.client_id);
+      })();
+      const [{ data }, officeIds] = await Promise.all([clientsPromise, officeIdsPromise]);
+      nextUsers = (data || []) as ClientRow[];
+      nextOfficeIds = officeIds;
     }
+
+    sidebarListCache.set(cacheKey, { users: nextUsers, officeIds: nextOfficeIds });
+    setUsers(nextUsers);
+    setOfficeUserIds(new Set(nextOfficeIds));
     setLoading(false);
-  }, [supabase, currentOfficeId, filterMode]);
+  }, [supabase, currentOfficeId, filterMode, officeLoading]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch / mount init)
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
@@ -510,81 +533,95 @@ function UserSidebarInner(props: UserSidebarProps) {
     }
     (async () => {
       try {
-        // 1) 介護保険: 最新認定 (start 降順の先頭) + 登録有無。IN 50 件 chunk + page-loop
         const IN_CHUNK = 50;
         const PAGE = 1000;
-        const certs = new Map<string, CertRow[]>();
-        const hasInsurance = new Set<string>();
-        for (let i = 0; i < ids.length; i += IN_CHUNK) {
-          const chunk = ids.slice(i, i + IN_CHUNK);
-          let offset = 0;
-          while (true) {
-            const { data, error } = await supabase
-              .from("client_insurance_records")
-              .select("client_id, care_level, certification_status, certification_start_date, certification_end_date")
-              .in("client_id", chunk)
-              .order("client_id", { ascending: true })
-              .order("certification_start_date", { ascending: false, nullsFirst: false })
-              .range(offset, offset + PAGE - 1);
-            if (error) throw new Error(error.message);
-            const rows = (data ?? []) as Array<CertRow & { client_id: string }>;
-            for (const r of rows) {
-              hasInsurance.add(r.client_id);
-              const list = certs.get(r.client_id);
-              if (list) list.push(r);
-              else certs.set(r.client_id, [r]);
+
+        // 1) 介護保険: 認定の全履歴 + 登録有無。IN 50 件 chunk + page-loop
+        const fetchCerts = async () => {
+          const certs = new Map<string, CertRow[]>();
+          const hasInsurance = new Set<string>();
+          for (let i = 0; i < ids.length; i += IN_CHUNK) {
+            const chunk = ids.slice(i, i + IN_CHUNK);
+            let offset = 0;
+            while (true) {
+              const { data, error } = await supabase
+                .from("client_insurance_records")
+                .select("client_id, care_level, certification_status, certification_start_date, certification_end_date")
+                .in("client_id", chunk)
+                .order("client_id", { ascending: true })
+                .order("certification_start_date", { ascending: false, nullsFirst: false })
+                .range(offset, offset + PAGE - 1);
+              if (error) throw new Error(error.message);
+              const rows = (data ?? []) as Array<CertRow & { client_id: string }>;
+              for (const r of rows) {
+                hasInsurance.add(r.client_id);
+                const list = certs.get(r.client_id);
+                if (list) list.push(r);
+                else certs.set(r.client_id, [r]);
+              }
+              if (rows.length < PAGE) break;
+              offset += PAGE;
             }
-            if (rows.length < PAGE) break;
-            offset += PAGE;
           }
-        }
+          return { certs, hasInsurance };
+        };
+
         // 2) 提供サービス種別の宣言 (制度判定の一次ソース)。
         //    終了していないチェック ON を制度にマッピング。未来開始も対象
         //    (利用開始前こそ証憑チェックが必要なため)
-        const todayStr = localToday();
-        const serviceUse = new Map<string, ServiceUse>();
-        for (let i = 0; i < ids.length; i += IN_CHUNK) {
-          const chunk = ids.slice(i, i + IN_CHUNK);
-          let offset = 0;
-          while (true) {
-            const { data, error } = await supabase
-              .from("client_office_assignments")
-              .select("client_id, end_date, home_care_categories")
-              .in("client_id", chunk)
-              .range(offset, offset + PAGE - 1);
-            if (error) throw new Error(error.message);
-            const rows = (data ?? []) as Array<{
-              client_id: string;
-              end_date: string | null;
-              home_care_categories: unknown;
-            }>;
-            for (const r of rows) {
-              if (r.end_date && r.end_date < todayStr) continue; // 事業所利用が終了済
-              const cats = Array.isArray(r.home_care_categories)
-                ? (r.home_care_categories as Array<{
-                    category?: string;
-                    active?: boolean;
-                    end_date?: string | null;
-                  }>)
-                : [];
-              let entry = serviceUse.get(r.client_id);
-              for (const c of cats) {
-                if (!c?.active || !c.category) continue;
-                if (c.end_date && c.end_date < todayStr) continue; // 種別単位で終了済
-                if (!entry) {
-                  entry = { kaigo: false, shougai: false };
-                  serviceUse.set(r.client_id, entry);
+        const fetchServiceUse = async () => {
+          const todayStr = localToday();
+          const serviceUse = new Map<string, ServiceUse>();
+          for (let i = 0; i < ids.length; i += IN_CHUNK) {
+            const chunk = ids.slice(i, i + IN_CHUNK);
+            let offset = 0;
+            while (true) {
+              const { data, error } = await supabase
+                .from("client_office_assignments")
+                .select("client_id, end_date, home_care_categories")
+                .in("client_id", chunk)
+                .range(offset, offset + PAGE - 1);
+              if (error) throw new Error(error.message);
+              const rows = (data ?? []) as Array<{
+                client_id: string;
+                end_date: string | null;
+                home_care_categories: unknown;
+              }>;
+              for (const r of rows) {
+                if (r.end_date && r.end_date < todayStr) continue; // 事業所利用が終了済
+                const cats = Array.isArray(r.home_care_categories)
+                  ? (r.home_care_categories as Array<{
+                      category?: string;
+                      active?: boolean;
+                      end_date?: string | null;
+                    }>)
+                  : [];
+                let entry = serviceUse.get(r.client_id);
+                for (const c of cats) {
+                  if (!c?.active || !c.category) continue;
+                  if (c.end_date && c.end_date < todayStr) continue; // 種別単位で終了済
+                  if (!entry) {
+                    entry = { kaigo: false, shougai: false };
+                    serviceUse.set(r.client_id, entry);
+                  }
+                  if (KAIGO_SERVICE_CATEGORIES.has(c.category)) entry.kaigo = true;
+                  else if (SHOUGAI_SERVICE_CATEGORIES.has(c.category)) entry.shougai = true;
                 }
-                if (KAIGO_SERVICE_CATEGORIES.has(c.category)) entry.kaigo = true;
-                else if (SHOUGAI_SERVICE_CATEGORIES.has(c.category)) entry.shougai = true;
               }
+              if (rows.length < PAGE) break;
+              offset += PAGE;
             }
-            if (rows.length < PAGE) break;
-            offset += PAGE;
           }
-        }
-        // 3) 入退院 (共有ヘルパー。テーブル未作成は空 Map で続行)
-        const hospitalization = await getHospitalizationMap(supabase, ids);
+          return serviceUse;
+        };
+
+        // 1〜3 は独立した参照データなので並列 fetch (従来は直列 3 往復で
+        // バッジ表示までの時間がその分遅れていた)
+        const [{ certs, hasInsurance }, serviceUse, hospitalization] = await Promise.all([
+          fetchCerts(),
+          fetchServiceUse(),
+          getHospitalizationMap(supabase, ids), // 3) 入退院 (テーブル未作成は空 Map で続行)
+        ]);
         if (!cancelled) setBadgeData({ certs, hasInsurance, serviceUse, hospitalization });
       } catch (err) {
         console.warn(
@@ -859,8 +896,23 @@ function UserSidebarInner(props: UserSidebarProps) {
           </ul>
         )}
       </div>
-      <div className="border-t px-3 py-1.5 text-[10px] text-gray-400">
-        {filtered.length}名
+      <div className="flex items-center justify-between border-t px-3 py-1.5 text-[10px] text-gray-400">
+        <span>{filtered.length}名</span>
+        {props.showNewUserButton && (
+          <button
+            onClick={() => {
+              if (!confirmNav()) return;
+              // ?office= 等の query を保持して新規登録へ (自事業所 context を失わない)
+              const qs = searchParams.toString();
+              router.push(`/users/new${qs ? `?${qs}` : ""}`);
+            }}
+            className="flex items-center gap-0.5 rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-100 transition-colors"
+            title="新規利用者を登録"
+          >
+            <Plus size={10} />
+            新規
+          </button>
+        )}
       </div>
     </div>
   );
