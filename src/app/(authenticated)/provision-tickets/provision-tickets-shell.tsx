@@ -61,7 +61,8 @@ export function ProvisionTicketsShell({
 
   return (
     <div className="flex h-full -m-6">
-      <UserSidebar selectedUserId={userId} onSelectUser={handleSelectUser} />
+      {/* autoSelectFirst: 初期表示で未選択なら一覧先頭の利用者を自動選択 */}
+      <UserSidebar selectedUserId={userId} onSelectUser={handleSelectUser} autoSelectFirst />
       {userId ? (
         <ProvisionTicketsContent
           key={userId}
