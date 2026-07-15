@@ -29,7 +29,14 @@ import {
 } from "@/lib/service-name-normalize";
 import { validInMonth } from "@/lib/service-code-valid";
 import { resolveKohiForMonth, kohiHobetsuLabel } from "@/lib/kohi";
-import { resolveCertForMonth } from "@/lib/cert-for-month";
+import {
+  resolveCertForMonth,
+  resolveCertsInMonth,
+  resolveCertSegmentsForMonth,
+  detectMidMonthChange,
+  monthRange,
+  type CertForMonth,
+} from "@/lib/cert-for-month";
 import type { UserSeikyuRow, SeikyuDetailLine } from "@/lib/visit-seikyu/aggregate";
 
 interface SougouScheduleRow {
@@ -87,6 +94,35 @@ const SOUGOU_CARE_LEVEL_LIMITS: Record<string, number> = {
 };
 
 /**
+ * 保険者番号 (証記載保険者番号6桁) → 総合事業サービスコードの自治体prefix。
+ *
+ * 総合事業はサービスコード・単位数が保険者(市町村)ごとに独自のため、利用者の保険者番号で
+ * その市町村版コードを選ぶ必要がある (1 事業所が千葉市と市原市の両方の総合事業をやり得る)。
+ * prefix 固定 (旧実装は CB_ 千葉市固定) だと、他市の利用者が千葉市の単位数で誤請求になる。
+ * 未登録の保険者番号は warning を出し、基本コードが引けず請求から漏れる (fail-loud で誤請求防止)。
+ */
+const SOUGOU_PREFIX_BY_INSURER: Record<string, string> = {
+  // 千葉市 6区 (中央/花見川/稲毛/若葉/緑/美浜。コード内容は 6 区共通・保険者番号のみ差)
+  "121012": "CB_",
+  "121020": "CB_",
+  "121038": "CB_",
+  "121046": "CB_",
+  "121053": "CB_",
+  "121061": "CB_",
+  // 木更津市
+  "122069": "K_",
+  // 市原市
+  "122192": "IH_",
+};
+
+/** service_code から自治体prefix (CB_/K_/IH_) を取り出す。prefix 無し (旧共通コード) は ""。 */
+function sougouPrefixFromCode(code: string | null): string {
+  if (!code) return "";
+  const i = code.indexOf("_");
+  return i > 0 ? code.slice(0, i + 1) : "";
+}
+
+/**
  * 総合事業ストリームの集計。既に aggregate.ts で取得済みの
  * 「総合事業に該当する実績シフト」を渡してもらい、それを集計する。
  *
@@ -115,10 +151,15 @@ export async function aggregateSougouSeikyu(
   //      (総合事業ストリームなので総合事業コードを使う)。
   const serviceTypes = Array.from(new Set(sougouSchedules.map((s) => s.service_type)));
   const variants = serviceNameVariantsAll(serviceTypes);
-  const masterByNorm = new Map<
-    string,
-    { units: number; unitType: string; short: string | null; code: string | null }
-  >();
+  type MasterEntry = {
+    units: number;
+    unitType: string;
+    short: string | null;
+    code: string | null;
+  };
+  // 自治体prefix (CB_/K_/IH_/"") ごとに (正規化サービス名 → マスタ) を保持し、
+  // 利用者の保険者番号 → prefix で正しい市町村版コードを引く (先勝ちの保険者混在を防ぐ)。
+  const masterByPrefixNorm = new Map<string, Map<string, MasterEntry>>();
   for (let i = 0; i < variants.length; i += 50) {
     const chunk = variants.slice(i, i + 50);
     const { data, error } = await validInMonth(
@@ -140,10 +181,16 @@ export async function aggregateSougouSeikyu(
       unit_type: string | null;
       service_code: string | null;
     }[]) {
+      const cp = sougouPrefixFromCode(r.service_code);
       const key = toHankakuDigits(r.service_name);
-      // 同名の複数世代/保険者版が validInMonth 後もヒットしうる。先勝ち (先頭 = 若い service_code)。
-      if (!masterByNorm.has(key)) {
-        masterByNorm.set(key, {
+      let bucket = masterByPrefixNorm.get(cp);
+      if (!bucket) {
+        bucket = new Map();
+        masterByPrefixNorm.set(cp, bucket);
+      }
+      // 同名の複数世代が validInMonth 後もヒットしうる。先勝ち (先頭 = 若い service_code)。
+      if (!bucket.has(key)) {
+        bucket.set(key, {
           units: r.units,
           unitType: r.unit_type ?? "1回につき",
           short: r.short_name,
@@ -152,7 +199,9 @@ export async function aggregateSougouSeikyu(
       }
     }
   }
-  const masterOf = (name: string) => masterByNorm.get(toHankakuDigits(name));
+  /** 利用者の自治体prefixで基本コードを引く。prefix 違いにはフォールバックしない (誤請求防止)。 */
+  const masterOf = (name: string, prefix: string): MasterEntry | undefined =>
+    masterByPrefixNorm.get(prefix)?.get(toHankakuDigits(name));
 
   // 2) 利用者情報 (clients + 対象月に有効な認定)
   //    住所地特例列 (jusho_tokurei / jusho_tokurei_insurer_number) は
@@ -224,6 +273,8 @@ export async function aggregateSougouSeikyu(
   }
 
   const certByClient = await resolveCertForMonth(supabase, userIds, opts.year, opts.month);
+  // 月途中の保険者変更 (転居) 検出・分割用に、対象月に有効な全認定を時系列で取得
+  const certsInMonthByClient = await resolveCertsInMonth(supabase, userIds, opts.year, opts.month);
   const kohiRes = await resolveKohiForMonth(supabase, userIds, opts.year, opts.month);
 
   // 3) 担当居宅介護支援事業所番号 (伝送の基本情報レコード用)
@@ -255,15 +306,18 @@ export async function aggregateSougouSeikyu(
   //       ※ 総合事業処遇改善コードは units に ‰ (numerator) を持ち、SQL 適用後は formula も付く。
   //         formula が未適用 (null) の場合は units を numerator とみなして突合する。
   //    c. 一致コードが無ければ処遇改善 0 (warning)。
-  let addonNum = 0;
-  let addonDen = 1;
-  let addonLabel: string | null = null;
-  let addonCode: string | null = null;
+  // 処遇改善: 率(%) は事業所共通、コードは市町村版 (CB_/K_/IH_) 別。
+  // 率を appliedNum/appliedDen に解決し、prefix ごとの一致コードを addonCandByPrefix に貯める。
+  // 実際の採用 (addonNum/addonCode 等) は利用者の保険者番号→prefix で per-user に行う。
+  let appliedNum = 0;
+  let appliedDen = 1000;
+  const addonCandByPrefix = new Map<
+    string,
+    { num: number; den: number; label: string; code: string }
+  >();
 
   if (opts.effectiveFormulaCodes.length > 0) {
     // a. 事業所適用コードの率を解決 (介護/総合事業どちらでも formula から率を取る)
-    let appliedNum = 0;
-    let appliedDen = 1000;
     {
       const { data, error } = await validInMonth(
         supabase
@@ -290,9 +344,10 @@ export async function aggregateSougouSeikyu(
       }
     }
 
-    // b. 一致する総合事業 A2 処遇改善コードを探す。
-    //    保険者に合わせて CB_ (千葉市) / K_ (木更津) を選ぶべきだが、当面は率一致で採用し、
-    //    複数保険者版が同率でヒットしたら CB_ (千葉市=現行相当) を優先する。
+    // b. 一致する総合事業 A2 処遇改善コードを prefix (自治体) ごとに引き当てる。
+    //    率(%) は事業所単位で共通だが、コードは市町村版 (CB_/K_/IH_) ごとに異なるため
+    //    prefix 別に保持し、利用者の保険者番号→prefix で per-user に採用する
+    //    (旧実装は CB_ 千葉市固定で、市原市等の利用者が千葉市コードで誤請求していた)。
     if (appliedNum > 0) {
       const { data, error } = await validInMonth(
         supabase
@@ -316,48 +371,52 @@ export async function aggregateSougouSeikyu(
         c.formula?.numerator && c.formula?.denominator
           ? { num: c.formula.numerator, den: c.formula.denominator }
           : { num: c.units, den: 1000 };
-      // 適用率 (appliedNum/appliedDen) と同率のコードを抽出
-      const matched = cands.filter((c) => {
+      for (const c of cands) {
         const { num, den } = rateOf(c);
-        // num/den === appliedNum/appliedDen を整数比較 (交差積)
-        return num * appliedDen === appliedNum * den;
-      });
-      // CB_ 優先 (千葉市)。無ければ先頭。
-      const pick =
-        matched.find((c) => c.service_code.startsWith("CB_")) ?? matched[0] ?? null;
-      if (pick) {
-        const { num, den } = rateOf(pick);
-        addonNum = num;
-        addonDen = den;
-        addonLabel = pick.service_name;
-        addonCode = pick.service_code;
-      } else {
-        warnings.push(
-          `総合事業: 事業所の処遇改善率 (${appliedNum}/${appliedDen}) に一致する総合事業の処遇改善コードが見つかりません — 処遇改善なしで集計しています (サービスコードマスタを確認してください)`,
-        );
+        // 適用率 (appliedNum/appliedDen) と同率のみ (交差積で整数比較)
+        if (num * appliedDen !== appliedNum * den) continue;
+        const cp = sougouPrefixFromCode(c.service_code);
+        // prefix ごとに先勝ち (同一自治体の同率コードは 1 本のはず)
+        if (!addonCandByPrefix.has(cp)) {
+          addonCandByPrefix.set(cp, { num, den, label: c.service_name, code: c.service_code });
+        }
       }
     }
   }
 
-  // 5) 利用者ごとに集計
-  //    user_id → (service_type → count)
-  const byUser = new Map<string, Map<string, number>>();
-  const daysByUser = new Map<string, Set<string>>();
+  // 5) 利用者ごとに集計 (service_type → 訪問日配列。保険者変更の分割で日付フィルタするため
+  //    回数ではなく日付で保持する)
+  const byUser = new Map<string, Map<string, string[]>>();
   for (const s of sougouSchedules) {
     if (!byUser.has(s.user_id)) byUser.set(s.user_id, new Map());
     const m = byUser.get(s.user_id)!;
-    m.set(s.service_type, (m.get(s.service_type) ?? 0) + 1);
-    if (!daysByUser.has(s.user_id)) daysByUser.set(s.user_id, new Set());
-    daysByUser.get(s.user_id)!.add(s.visit_date);
+    if (!m.has(s.service_type)) m.set(s.service_type, []);
+    m.get(s.service_type)!.push(s.visit_date);
   }
 
   const unitPrice = opts.unitPrice > 0 ? opts.unitPrice : 10.0;
   const unitPrice100 = Math.round(unitPrice * 100);
+  const { from: monthStartIso, to: monthEndIso } = monthRange(opts.year, opts.month);
 
-  const rows: SougouSeikyuRow[] = [];
-  for (const [userId, typeCounts] of byUser) {
+  /**
+   * 1 セグメント (= 1 明細書) 分の行を組む。cert / 限度額 / 期間はセグメント単位で受け取る。
+   * 月途中の保険者変更 (転居) 月は境界日で複数明細書に分割され、それ以外は月全体で 1 明細書。
+   */
+  const buildSougouRow = (
+    userId: string,
+    typeDates: Map<string, string[]>,
+    seg: {
+      cert: CertForMonth | null;
+      segIndex: number;
+      segCount: number;
+      segFrom: string;
+      segTo: string;
+      /** このセグメントの区分支給限度基準額 (認定由来)。null = 要介護度から標準補完 */
+      limitOverride: number | null;
+    },
+  ): SougouSeikyuRow => {
     const client = clientById.get(userId);
-    const cert = certByClient.get(userId) ?? null;
+    const cert = seg.cert;
     const userLabel = client?.name ?? userId;
     if (cert?.isFallback) {
       warnings.push(
@@ -371,14 +430,36 @@ export async function aggregateSougouSeikyu(
       : copayRaw >= 1 ? Math.min(copayRaw / 10, 1)
       : copayRaw;
 
+    // 利用者の保険者番号 → 自治体prefix (CB_/K_/IH_) で市町村版コードを引く。
+    const insurerNum = (cert?.insurer_number ?? "").trim();
+    const prefix = SOUGOU_PREFIX_BY_INSURER[insurerNum] ?? "";
+    if (insurerNum && !prefix) {
+      warnings.push(
+        `${userLabel}: 保険者番号 ${insurerNum} の総合事業サービスコード (自治体版) が未登録です — この市町村のコードを取込むまで総合事業は請求できません (他市の単価で誤請求しないよう保留)`,
+      );
+    }
+
+    // 処遇改善: 利用者の自治体版コードを採用 (率は事業所共通・コードは市町村別)
+    const addon = prefix ? addonCandByPrefix.get(prefix) ?? null : null;
+    const addonNum = addon?.num ?? 0;
+    const addonDen = addon?.den ?? 1;
+    const addonLabel = addon?.label ?? null;
+    const addonCode = addon?.code ?? null;
+    if (appliedNum > 0 && prefix && !addon) {
+      warnings.push(
+        `${userLabel}: 事業所の処遇改善率に一致する ${prefix} (保険者 ${insurerNum}) の総合事業処遇改善コードが見つかりません — 処遇改善なしで集計しています (サービスコードマスタを確認してください)`,
+      );
+    }
+
     // 基本コードの単位を積む。月額包括 (1月につき) は回数を掛けない (月1)。
     const details: SeikyuDetailLine[] = [];
     let grossBaseUnits = 0;
-    for (const [svcType, count] of typeCounts) {
-      const master = masterOf(svcType);
+    for (const [svcType, dates] of typeDates) {
+      const count = dates.length;
+      const master = masterOf(svcType, prefix);
       if (!master) {
         warnings.push(
-          `${userLabel}: 総合事業「${svcType}」がマスタ (system=総合事業/A2/対象月世代) から引けません — サービス名/有効期間を確認してください`,
+          `${userLabel}: 総合事業「${svcType}」がマスタ (system=総合事業/A2/${prefix || "自治体prefix無し"}/対象月世代) から引けません — サービス名/有効期間/保険者番号(${insurerNum || "未設定"})を確認してください`,
         );
         continue;
       }
@@ -404,11 +485,9 @@ export async function aggregateSougouSeikyu(
     //   介護給付ストリームが消費する利用者×月の 1 値のため、総合事業側では使わない
     //   (両ストリームに同一値を適用すると併用時に二重計上/二重控除になる)。
     const careLevelNorm = toHankakuDigits((cert?.care_level ?? "").trim());
-    const certLimit =
-      cert?.service_limit_amount != null && Number(cert.service_limit_amount) > 0
-        ? Number(cert.service_limit_amount)
-        : null;
-    const limitUnits = certLimit ?? SOUGOU_CARE_LEVEL_LIMITS[careLevelNorm] ?? null;
+    // 限度額 = セグメントの認定由来値 (分割時=期間に重なる全認定の max、非分割時=当月認定)
+    // を優先。無ければ要介護度から標準補完 (SOUGOU_CARE_LEVEL_LIMITS)。
+    const limitUnits = seg.limitOverride ?? SOUGOU_CARE_LEVEL_LIMITS[careLevelNorm] ?? null;
     if (limitUnits == null && grossBaseUnits > 0) {
       warnings.push(
         `${userLabel}: 総合事業の限度額を解決できません (要介護度「${cert?.care_level ?? "未設定"}」・認定の限度額なし) — 限度額管理なしで集計します。認定情報を確認してください`,
@@ -448,9 +527,6 @@ export async function aggregateSougouSeikyu(
     //   2. 本人負担上限月額 (honnin_futan) > 0 — 上限適用の按分計算が必要
     //   3. 公費適用期間が対象月の一部 — 期間内実績のみ公費対象とする按分が必要
     if (kohi) {
-      const monthStartIso = `${monthStr}-01`;
-      const daysInMonth = new Date(opts.year, opts.month, 0).getDate();
-      const monthEndIso = `${monthStr}-${String(daysInMonth).padStart(2, "0")}`;
       const partialPeriod =
         (kohi.start != null && kohi.start > monthStartIso) ||
         (kohi.end != null && kohi.end < monthEndIso);
@@ -479,7 +555,10 @@ export async function aggregateSougouSeikyu(
       : null;
     const userAmount = publicExpense ? 0 : totalAmount - insuranceAmount;
 
-    rows.push({
+    const segDays = new Set<string>();
+    for (const dates of typeDates.values()) for (const d of dates) segDays.add(d);
+
+    const row: SougouSeikyuRow = {
       system: "総合事業",
       user_id: userId,
       user_name: client?.name ?? "(利用者不明)",
@@ -528,11 +607,122 @@ export async function aggregateSougouSeikyu(
       careOfficeName:
         cert?.care_office_name?.trim() ||
         (cert?.care_office_id ? officeNameById.get(cert.care_office_id) ?? null : null),
-      serviceDays: daysByUser.get(userId)?.size ?? 0,
+      serviceDays: segDays.size,
       // 住所地特例 (種別14 レコード用)。列未適用 (42703 フォールバック) 時は false/null
       jushoTokurei: client?.jushoTokurei ?? false,
       jushoTokureiInsurerNumber: client?.jushoTokureiInsurerNumber ?? null,
-    });
+    };
+    // 分割時 (保険者変更) のみセグメント情報を付ける。build-sougou は行ごとに明細書を出すため
+    // 保険者ごとに別明細書になる。利用者請求書は mergeSegmentRows で利用者=1行に再合算される。
+    if (seg.segCount > 1) {
+      row.segmentIndex = seg.segIndex;
+      row.segmentCount = seg.segCount;
+      row.periodFrom = seg.segFrom;
+      row.periodTo = seg.segTo;
+    }
+    return row;
+  };
+
+  const rows: SougouSeikyuRow[] = [];
+  for (const [userId, typeDates] of byUser) {
+    const client = clientById.get(userId);
+    const userLabel = client?.name ?? userId;
+    const certsInMonth = certsInMonthByClient.get(userId) ?? [];
+    const midChange = detectMidMonthChange(certsInMonth);
+
+    // ── 月途中の保険者変更 (転居) → 境界日でセグメント分割し 1 明細書/セグメント ──
+    //    (介護給付 aggregate.ts Phase 2 と同方式。総合事業は基本コードのみなので簡素版)
+    let handled = false;
+    if (midChange?.insurerChange) {
+      const ic = midChange.insurerChange;
+      const insurerDiff =
+        (ic.fromInsurer ?? "").trim() !== (ic.toInsurer ?? "").trim() &&
+        !!ic.fromInsurer &&
+        !!ic.toInsurer;
+      const label = insurerDiff ? "保険者" : "被保険者番号";
+      const desc = insurerDiff
+        ? `${ic.fromInsurer}→${ic.toInsurer}`
+        : `${ic.fromInsured ?? "?"}→${ic.toInsured ?? "?"}`;
+      const segRes = resolveCertSegmentsForMonth(certsInMonth, opts.year, opts.month);
+      if (segRes.segments.length >= 2) {
+        // セグメントごとに訪問日をフィルタ。実績の無いセグメントは明細書を出さない
+        const perSeg = segRes.segments
+          .map((s) => {
+            const filtered = new Map<string, string[]>();
+            for (const [svcType, dates] of typeDates) {
+              const inSeg = dates.filter((d) => d >= s.from && d <= s.to);
+              if (inSeg.length > 0) filtered.set(svcType, inSeg);
+            }
+            return { s, filtered };
+          })
+          .filter((p) => p.filtered.size > 0);
+        if (perSeg.length >= 2) {
+          perSeg.forEach((p, i) => {
+            rows.push(
+              buildSougouRow(userId, p.filtered, {
+                cert: p.s.cert,
+                segIndex: i,
+                segCount: perSeg.length,
+                segFrom: p.s.from,
+                segTo: p.s.to,
+                limitOverride: p.s.limitAmount,
+              }),
+            );
+          });
+          const segDesc = perSeg
+            .map((p, i) => {
+              const part = perSeg.length === 2 ? (i === 0 ? "前半" : "後半") : `第${i + 1}区分`;
+              const num = (insurerDiff ? p.s.cert.insurer_number : p.s.cert.insured_number) ?? "?";
+              return `${part}: ${num}`;
+            })
+            .join(" / ");
+          warnings.push(
+            `${userLabel}さん: ${label}が月内で変わっています (${desc})。境界日 (${perSeg[1].s.from}) で総合事業の明細書を分割して出力しました (${segDesc})`,
+          );
+          handled = true;
+        } else if (perSeg.length === 1) {
+          // 実績が転居前後の片側期間のみ → 分割不要。その期間の認定 (旧/新保険者) で 1 行
+          const p = perSeg[0];
+          rows.push(
+            buildSougouRow(userId, p.filtered, {
+              cert: p.s.cert,
+              segIndex: 0,
+              segCount: 1,
+              segFrom: p.s.from,
+              segTo: p.s.to,
+              limitOverride: p.s.limitAmount,
+            }),
+          );
+          warnings.push(
+            `${userLabel}さん: ${label}が月内で変わっています (${desc}) が、総合事業の実績が ${p.s.from}〜${p.s.to} のみのため分割せず、その期間の資格情報 (${(insurerDiff ? p.s.cert.insurer_number : p.s.cert.insured_number) ?? "?"}) で出力します`,
+          );
+          handled = true;
+        }
+      } else {
+        warnings.push(
+          `${userLabel}さん: ${label}が月内で変わっています (${desc}) が、変更後認定の開始日から境界日を判定できないため総合事業の明細書を分割できません — 認定有効期間 (開始日) を確認するか手動対応してください`,
+        );
+      }
+    }
+
+    if (!handled) {
+      // 従来コードパス (分割なし = 全利用者の通常ケース)。当月認定 1 件で月全体を 1 明細書
+      const cert = certByClient.get(userId) ?? null;
+      const certLimit =
+        cert?.service_limit_amount != null && Number(cert.service_limit_amount) > 0
+          ? Number(cert.service_limit_amount)
+          : null;
+      rows.push(
+        buildSougouRow(userId, typeDates, {
+          cert,
+          segIndex: 0,
+          segCount: 1,
+          segFrom: monthStartIso,
+          segTo: monthEndIso,
+          limitOverride: certLimit,
+        }),
+      );
+    }
   }
 
   rows.sort((a, b) =>

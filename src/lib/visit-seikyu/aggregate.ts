@@ -2112,18 +2112,20 @@ const sumNullable = (
 export function mergeSegmentRows(rows: UserSeikyuRow[]): UserSeikyuRow[] {
   if (!rows.some((r) => (r.segmentCount ?? 1) > 1)) return rows;
   const out: UserSeikyuRow[] = [];
-  const idxByUser = new Map<string, number>(); // user_id → out の位置 (分割行のみ)
+  // key = user_id|system。制度をまたいで合算しない (介護 と 総合事業 は別明細・別行)
+  const idxByUser = new Map<string, number>();
   for (const r of rows) {
     if ((r.segmentCount ?? 1) <= 1) {
       out.push(r);
       continue;
     }
-    const idx = idxByUser.get(r.user_id);
+    const mergeKey = `${r.user_id}|${r.system}`;
+    const idx = idxByUser.get(mergeKey);
     if (idx == null) {
       // 元の行 (details 含む) を破壊しないよう copy して積む
       const copy: UserSeikyuRow = { ...r, details: r.details.map((d) => ({ ...d })) };
       out.push(copy);
-      idxByUser.set(r.user_id, out.length - 1);
+      idxByUser.set(mergeKey, out.length - 1);
       continue;
     }
     const base = out[idx];
