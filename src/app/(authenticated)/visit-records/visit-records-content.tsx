@@ -1603,39 +1603,47 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
                           rec ? "border-emerald-200" : cancelled ? "border-gray-200 opacity-60" : "border-amber-200"
                         }`}
                       >
-                        <div className="flex items-center gap-3 px-4 py-2.5">
-                          <div className="w-12 shrink-0 text-center">
-                            <div className="text-sm font-bold text-gray-800">{dateLabel}</div>
-                            <div className="text-[11px] text-gray-400">{dowLabel && `(${dowLabel})`}</div>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex flex-wrap items-center gap-2 text-sm text-gray-800">
-                              <span className="flex items-center gap-1 tabular-nums">
-                                <Clock size={12} className="text-gray-400" />
-                                {hhmm(s.start_time) || "--:--"} 〜 {hhmm(s.end_time) || "--:--"}
-                              </span>
-                              {s.service_type && (
-                                <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0 text-[11px] font-medium text-blue-700">
-                                  {s.service_type}
-                                </span>
-                              )}
-                              {cancelled && (
-                                <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0 text-[11px] font-medium text-red-600">
-                                  キャンセル
-                                </span>
-                              )}
-                            </div>
-                            <div className="mt-0.5 text-xs text-gray-500">
-                              担当: {staffNames.length > 0 ? staffNames.join("、") : "未定"}
-                            </div>
-                            {/* スマホ打刻 (参考表示のみ。編集経路なし) */}
-                            {(s.clock_in_at || s.clock_out_at) && (
-                              <div className="mt-0.5 text-[11px] text-gray-400 tabular-nums">
-                                打刻 {s.clock_in_at ? fmtClockHm(s.clock_in_at) : "--:--"} 〜{" "}
-                                {s.clock_out_at ? fmtClockHm(s.clock_out_at) : "--:--"}
-                              </div>
+                        {/* 1 行レイアウト: 日付/時間/種別/担当 を固定幅カラムで横一列
+                            (カード間で縦の項目位置が揃うように。2 行積みはしない) */}
+                        <div className="flex items-center gap-3 px-4 py-2">
+                          <div className="w-16 shrink-0 whitespace-nowrap text-sm font-bold text-gray-800 tabular-nums">
+                            {dateLabel}
+                            {dowLabel && (
+                              <span className="ml-0.5 text-[11px] font-normal text-gray-400">({dowLabel})</span>
                             )}
                           </div>
+                          <span className="flex w-[120px] shrink-0 items-center gap-1 whitespace-nowrap text-sm text-gray-800 tabular-nums">
+                            <Clock size={12} className="shrink-0 text-gray-400" />
+                            {hhmm(s.start_time) || "--:--"} 〜 {hhmm(s.end_time) || "--:--"}
+                          </span>
+                          <span className="w-28 shrink-0">
+                            {s.service_type && (
+                              <span
+                                className="inline-block max-w-full truncate rounded-full border border-blue-200 bg-blue-50 px-2 py-0 align-middle text-[11px] font-medium text-blue-700"
+                                title={s.service_type}
+                              >
+                                {s.service_type}
+                              </span>
+                            )}
+                          </span>
+                          {cancelled && (
+                            <span className="shrink-0 rounded-full border border-red-200 bg-red-50 px-2 py-0 text-[11px] font-medium text-red-600">
+                              キャンセル
+                            </span>
+                          )}
+                          <span
+                            className="flex-1 min-w-0 truncate text-xs text-gray-500"
+                            title={`担当: ${staffNames.length > 0 ? staffNames.join("、") : "未定"}`}
+                          >
+                            担当: {staffNames.length > 0 ? staffNames.join("、") : "未定"}
+                            {/* スマホ打刻 (参考表示のみ。編集経路なし) */}
+                            {(s.clock_in_at || s.clock_out_at) && (
+                              <span className="ml-2 text-[11px] text-gray-400 tabular-nums">
+                                打刻 {s.clock_in_at ? fmtClockHm(s.clock_in_at) : "--:--"} 〜{" "}
+                                {s.clock_out_at ? fmtClockHm(s.clock_out_at) : "--:--"}
+                              </span>
+                            )}
+                          </span>
                           {rec ? (
                             <button
                               onClick={() => setExpandedId(rec.id)}
