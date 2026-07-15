@@ -801,11 +801,13 @@ export function MeisaiPrintSheet({
           1 名 = 1 枚。各 sheet の直後で改ページするが、最後の 1 枚の後には
           空白ページを作らない (:last-child は改ページ抑止)。テーブルは途中で
           割れない (break-inside:avoid)。共有コンポーネントなので caller 側の
-          印刷ラッパに依存せず、この style を自前で持つ。 */}
+          印刷ラッパに依存せず、この style を自前で持つ。
+          zoom 0.96: 全高が A4 297mm をわずかに超え、末尾の「枚目」ボックスが
+          2 ページ目に落ちるため印刷時のみ全体を縮小して 1 枚に収める。 */}
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 0; }
-          .meisai-print-sheet { page-break-after: always; break-after: page; }
+          .meisai-print-sheet { page-break-after: always; break-after: page; zoom: 0.96; }
           .meisai-print-sheet:last-child { page-break-after: auto; break-after: auto; }
           .meisai-print-sheet table { page-break-inside: avoid; break-inside: avoid; }
         }
