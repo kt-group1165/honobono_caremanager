@@ -183,9 +183,14 @@ const main = async () => {
   // 7/17 の 2号車: 看護 (白石) を外して 1号車の介護 (田村) を入れる = 看護なし編成
   const noNurseTeam2 = [staffByName["三浦 健"].id, staffByName["上野 由紀"].id, staffByName["田村 大輔"].id];
 
-  // ── 割当 ──
-  if (newAssigns.length) {
-    const ins = await rest("client_office_assignments", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(newAssigns) });
+  // ── 割当 (marker 削除後に再取得して不足分を入れる。削除前の判定だと再実行時に抜ける) ──
+  const existAfterDelete = await rest(`client_office_assignments?office_id=eq.${OFFICE.id}&select=client_id`);
+  const haveIds = new Set(existAfterDelete.map((a) => a.client_id));
+  const assignRows = wantNos
+    .filter((no) => !haveIds.has(clientByNo[no].id))
+    .map((no) => ({ tenant_id: TENANT, client_id: clientByNo[no].id, office_id: OFFICE.id, start_date: `${MONTH}-01`, service_notes: ASSIGN_MARKER }));
+  if (assignRows.length) {
+    const ins = await rest("client_office_assignments", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(assignRows) });
     console.log(`[OK] 利用者割当 ${ins.length}件 INSERT`);
   }
 
