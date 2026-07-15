@@ -1184,14 +1184,16 @@ export function ShogaiSeikyuContent({
         </div>
         {selected ? (
           <div className="flex-1 overflow-auto">
+            {/* 明細テーブル: 列構成を介護請求ペインと統一
+                (サービス内容 / 単位数/単価 / 回数 / 単位数 / 摘要=コード) */}
             <table className="w-full text-[11px] leading-4 border-collapse">
               <thead className="bg-gradient-to-b from-sky-100 to-sky-200 border-b border-gray-400 sticky top-0">
                 <tr>
                   <th className="text-center px-1 py-0.5 font-medium text-gray-700 border-r border-sky-300">サービス内容</th>
-                  <th className="text-center px-1 py-0.5 font-medium text-gray-700 border-r border-sky-300 w-16 whitespace-nowrap">コード</th>
-                  <th className="text-center px-1 py-0.5 font-medium text-gray-700 border-r border-sky-300 w-12">単位数</th>
+                  <th className="text-center px-1 py-0.5 font-medium text-gray-700 border-r border-sky-300 w-14 whitespace-nowrap">単位数/単価</th>
                   <th className="text-center px-1 py-0.5 font-medium text-gray-700 border-r border-sky-300 w-8">回数</th>
-                  <th className="text-center px-1 py-0.5 font-medium text-gray-700 w-12">小計</th>
+                  <th className="text-center px-1 py-0.5 font-medium text-gray-700 border-r border-sky-300 w-12">単位数</th>
+                  <th className="text-center px-1 py-0.5 font-medium text-gray-700 w-16">摘要</th>
                 </tr>
               </thead>
               <tbody>
@@ -1203,17 +1205,17 @@ export function ShogaiSeikyuContent({
                         <span className="ml-1 text-[9px] text-gray-400">{d.service_category}</span>
                       )}
                     </td>
-                    <td className="px-1 py-0.5 text-gray-500 text-[10px] font-mono border-r border-gray-200 truncate" title={d.service_code ?? ""}>
-                      {d.service_code ?? "—"}
-                    </td>
                     <td className="px-1 py-0.5 text-right font-mono text-gray-700 border-r border-gray-200 tabular-nums">
                       {d.unit_per.toLocaleString()}
                     </td>
                     <td className="px-1 py-0.5 text-right font-mono text-gray-700 border-r border-gray-200 tabular-nums">
                       {d.count}
                     </td>
-                    <td className="px-1 py-0.5 text-right font-mono font-semibold text-gray-800 tabular-nums">
+                    <td className="px-1 py-0.5 text-right font-mono text-gray-800 border-r border-gray-200 tabular-nums">
                       {d.units.toLocaleString()}
+                    </td>
+                    <td className="px-1 py-0.5 text-gray-500 text-[10px] font-mono truncate" title={d.service_code ?? ""}>
+                      {d.service_code ?? ""}
                     </td>
                   </tr>
                 ))}
@@ -1223,38 +1225,41 @@ export function ShogaiSeikyuContent({
                     <td className="px-1 py-0.5 text-violet-700 leading-tight border-r border-gray-200">
                       {a.service_name}
                     </td>
-                    <td className="px-1 py-0.5 text-gray-500 text-[10px] font-mono border-r border-gray-200 truncate">
-                      {a.service_code}
-                    </td>
                     <td className="px-1 py-0.5 text-right font-mono text-gray-700 border-r border-gray-200 tabular-nums">
                       {a.units.toLocaleString()}
                     </td>
                     <td className="px-1 py-0.5 text-right font-mono text-gray-700 border-r border-gray-200 tabular-nums">1</td>
-                    <td className="px-1 py-0.5 text-right font-mono font-semibold text-gray-800 tabular-nums">
+                    <td className="px-1 py-0.5 text-right font-mono text-gray-800 border-r border-gray-200 tabular-nums">
                       {a.units.toLocaleString()}
+                    </td>
+                    <td className="px-1 py-0.5 text-gray-500 text-[10px] font-mono truncate" title={a.service_code}>
+                      {a.service_code}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
 
-            {/* ── 金額サマリ (介護請求 右下の ラベル箱/値箱 grid と同じ様式) ── */}
+            {/* ── 金額サマリ (介護請求 右下と同じ ラベル箱/値箱 4 列 grid) ── */}
             <div className="border-t border-gray-400 bg-gray-100 shrink-0 p-1.5">
-              <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-px bg-gray-400 border border-gray-400 text-[11px] leading-4">
+              <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)] gap-px bg-gray-400 border border-gray-400 text-[11px] leading-4">
                 <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">合計単位数</div>
                 <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">{selected.totalUnits.toLocaleString()}</div>
-                {selected.addonUnits > 0 && (
-                  <>
-                    <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">うち{selected.addonLabel ?? "処遇改善加算"}</div>
-                    <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">{selected.addonUnits.toLocaleString()}</div>
-                  </>
-                )}
+                <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap" title={selected.addonLabel ?? "処遇改善加算"}>
+                  うち処遇改善
+                </div>
+                <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">
+                  {selected.addonUnits > 0 ? selected.addonUnits.toLocaleString() : ""}
+                </div>
                 <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">地域単価</div>
                 <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">{selected.unitPrice.toFixed(2)} 円/単位</div>
                 <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">総費用額</div>
                 <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">¥{selected.totalAmount.toLocaleString()}</div>
-                <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">
-                  負担上限月額{selected.seiho ? " (生保=負担なし)" : ""}
+                <div
+                  className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap"
+                  title={selected.seiho ? "生保のため負担なし (0 円に正規化)" : "受給者証の負担上限月額"}
+                >
+                  負担上限月額{selected.seiho ? " (生保)" : ""}
                 </div>
                 <div className="bg-white px-1.5 py-0.5 text-right font-mono text-gray-800">
                   {selected.self_payment_limit != null ? (
@@ -1266,7 +1271,9 @@ export function ShogaiSeikyuContent({
                 <div className="bg-sky-100 px-1.5 py-0.5 whitespace-nowrap">利用者負担額</div>
                 <div className="bg-white px-1.5 py-0.5 text-right font-mono font-bold text-gray-800">¥{selected.userAmount.toLocaleString()}</div>
                 <div className="bg-violet-100 px-1.5 py-0.5 whitespace-nowrap font-bold text-violet-800">介護給付費請求額</div>
-                <div className="bg-white px-1.5 py-0.5 text-right font-mono font-bold text-violet-700">¥{selected.benefitAmount.toLocaleString()}</div>
+                <div className="bg-white px-1.5 py-0.5 text-right font-mono font-bold text-violet-700" style={{ gridColumn: "2 / -1" }}>
+                  ¥{selected.benefitAmount.toLocaleString()}
+                </div>
               </div>
 
               {/* ── 障害固有: 利用者負担上限額管理 (このペインは国保請求では非表示なので常時表示) ── */}
