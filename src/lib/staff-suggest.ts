@@ -273,11 +273,8 @@ export async function fetchDayBathBusy(
 ): Promise<{ rows: SuggestScheduleRow[]; error: string | null }> {
   const [tdRes, svRes] = await Promise.all([
     supabase.from("kaigo_bath_team_days").select("*").eq("work_date", dateStr),
-    supabase
-      .from("kaigo_bath_schedule")
-      .select("team_id, start_time, end_time, status")
-      .eq("visit_date", dateStr)
-      .neq("status", "cancelled"),
+    // select * : staff_ids (予定単位のスタッフ指名、v2 列) が未適用でも動くように
+    supabase.from("kaigo_bath_schedule").select("*").eq("visit_date", dateStr).neq("status", "cancelled"),
   ]);
   const err = tdRes.error ?? svRes.error;
   if (err) {
@@ -292,19 +289,40 @@ export async function fetchDayBathBusy(
     staff_ids: string[] | null;
     staff_times?: Record<string, { start?: string | null; end?: string | null }> | null;
   };
+  type BathVisitRow = {
+    team_id: string | null;
+    start_time: string | null;
+    end_time: string | null;
+    staff_ids?: string[] | null;
+  };
+  const mmToTime = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
   const visitsByTeam = new Map<string, Array<{ s: number; e: number }>>();
-  for (const v of (svRes.data ?? []) as Array<{ team_id: string | null; start_time: string | null; end_time: string | null }>) {
-    if (!v.team_id) continue;
+  const rows: SuggestScheduleRow[] = [];
+  let overrideIdx = 0;
+  for (const v of (svRes.data ?? []) as BathVisitRow[]) {
     const s = toMin(v.start_time);
     if (s === null) continue;
     const eRaw = toMin(v.end_time);
     const e = eRaw !== null && eRaw > s ? eRaw : s + 50;
-    const list = visitsByTeam.get(v.team_id) ?? [];
-    list.push({ s, e });
-    visitsByTeam.set(v.team_id, list);
+    if (v.team_id) {
+      const list = visitsByTeam.get(v.team_id) ?? [];
+      list.push({ s, e });
+      visitsByTeam.set(v.team_id, list);
+    }
+    // 予定単位のスタッフ指名 → 指名メンバーはそのコマの時間帯が拘束
+    if (Array.isArray(v.staff_ids)) {
+      for (const staffId of v.staff_ids) {
+        rows.push({
+          id: `bath-visit-${overrideIdx++}-${staffId}`,
+          user_id: "",
+          staff_id: staffId,
+          visit_date: dateStr,
+          start_time: mmToTime(s),
+          end_time: mmToTime(e),
+        });
+      }
+    }
   }
-  const mmToTime = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-  const rows: SuggestScheduleRow[] = [];
   for (const td of (tdRes.data ?? []) as TeamDayRow[]) {
     const visits = visitsByTeam.get(td.team_id);
     if (!visits || visits.length === 0) continue;

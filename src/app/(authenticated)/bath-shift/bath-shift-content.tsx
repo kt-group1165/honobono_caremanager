@@ -68,6 +68,8 @@ type ScheduleRow = {
   record_id: string | null;
   cancel_reason: string | null;
   notes: string | null;
+  /** 予定単位のスタッフ指名。空/未定義 = 号車の当日編成から自動 (v2 列、未適用環境では undefined) */
+  staff_ids?: string[] | null;
 };
 
 type Tab = "route" | "calendar" | "monthly" | "month" | "patterns" | "teams";
@@ -125,6 +127,12 @@ function limitedRange(times: StaffTimes | null | undefined, staffId: string): { 
   const s = timeToMin(r?.start ?? null);
   const e = timeToMin(r?.end ?? null);
   return s !== null && e !== null && e > s ? { s, e } : null;
+}
+
+/** 予定の従事職員: スタッフ指名があればそれ、無ければ当日編成のコマ時刻カバー分 */
+function visitStaff(td: TeamDay | null, v: ScheduleRow): string[] {
+  if (Array.isArray(v.staff_ids) && v.staff_ids.length > 0) return v.staff_ids;
+  return effectiveStaffForVisit(td, v);
 }
 
 /**
@@ -338,8 +346,8 @@ export function BathShiftContent() {
   const applyActual = async (v: ScheduleRow, opts?: { silent?: boolean }): Promise<boolean> => {
     if (v.record_id || v.status === "completed") return true;
     const td = teamDayFor(v.team_id, v.visit_date);
-    // 兼務対応: このコマの時間帯をカバーする職員のみ従事職員にする
-    const staffIds = effectiveStaffForVisit(td, v);
+    // スタッフ指名があればそれ、無ければ当日編成のコマ時刻カバー分 (兼務対応)
+    const staffIds = visitStaff(td, v);
     if (staffIds.length === 0 && !opts?.silent) {
       const reason = td && td.staff_ids.length > 0 ? "この時間帯に乗車している職員がいません" : "号車の当日編成が未設定です";
       if (!window.confirm(`${clientName(v.client_id)} 様: ${reason}。従事職員なし (職員のみ減算扱い) で実績反映しますか？`)) return false;
@@ -388,7 +396,7 @@ export function BathShiftContent() {
   const applyDayActuals = async () => {
     const targets = daySchedules.filter((s) => s.status === "scheduled");
     if (targets.length === 0) { alert("この日に実績反映できる予定がありません。"); return; }
-    const noStaffing = targets.filter((s) => (teamDayFor(s.team_id, s.visit_date)?.staff_ids ?? []).length === 0);
+    const noStaffing = targets.filter((s) => visitStaff(teamDayFor(s.team_id, s.visit_date), s).length === 0);
     const msg =
       `${date} の予定 ${targets.length} 件を実績反映します。` +
       (noStaffing.length ? `\n⚠ うち ${noStaffing.length} 件は当日編成が未設定 (従事職員なしで記録されます)。` : "") +
@@ -705,6 +713,8 @@ export function BathShiftContent() {
           date={editingVisit.presetDate ?? date}
           clients={clients}
           teams={activeTeams}
+          staffList={staffList}
+          nurseIds={nurseIds}
           officeId={currentOfficeId}
           tenantId={tenantId}
           nextOrderOf={nextOrderOf}
@@ -785,10 +795,12 @@ function RouteView({
   const unassigned = visitsOf(null);
 
   const visitCard = (v: ScheduleRow, idx: number, list: ScheduleRow[]) => {
+    // 予定単位のスタッフ指名 (空 = 当日編成から自動)
+    const override = Array.isArray(v.staff_ids) && v.staff_ids.length > 0 ? v.staff_ids : null;
     // 兼務対応: 乗車時間帯によってこのコマをカバーする職員が減る場合のみバッジ表示
     const cardTd = teamDayFor(v.team_id, date);
     let coverage: { eff: string[]; nurseOk: boolean } | null = null;
-    if (cardTd && cardTd.staff_ids.length > 0 && v.status !== "cancelled") {
+    if (!override && cardTd && cardTd.staff_ids.length > 0 && v.status !== "cancelled") {
       const eff = effectiveStaffForVisit(cardTd, v);
       if (eff.length !== cardTd.staff_ids.length) {
         coverage = { eff, nurseOk: eff.some((id) => nurseIds.has(id)) };
@@ -814,6 +826,14 @@ function RouteView({
         <span>{v.bath_type === "部分浴" ? "部分浴・清拭" : v.bath_type}</span>
         {v.status === "cancelled" && <span className="text-red-500">中止{v.cancel_reason ? `: ${v.cancel_reason}` : ""}</span>}
         {v.status === "completed" && <span className="font-medium text-emerald-600">実績済</span>}
+        {override && (
+          <span className="rounded bg-indigo-50 px-1 py-0.5 text-indigo-600" title={override.map(staffName).join("、")}>
+            指名{override.length}名
+          </span>
+        )}
+        {override && v.status !== "cancelled" && !override.some((id) => nurseIds.has(id)) && (
+          <span className="font-medium text-amber-600">看護なし(減算)</span>
+        )}
         {coverage && (
           coverage.eff.length === 0 ? (
             <span className="font-medium text-red-500">この時間帯 乗車職員なし</span>
@@ -1489,7 +1509,7 @@ function ModalShell({ title, onClose, children, footer }: {
 // ── 予定コマ モーダル ────────────────────────────────────────────────────────
 
 function VisitModal({
-  supabase, visit, presetTeamId, presetClientId, date, clients, teams, officeId, tenantId, nextOrderOf, onClose, onSaved,
+  supabase, visit, presetTeamId, presetClientId, date, clients, teams, staffList, nurseIds, officeId, tenantId, nextOrderOf, onClose, onSaved,
 }: {
   supabase: ReturnType<typeof createClient>;
   visit: ScheduleRow | null;
@@ -1498,6 +1518,8 @@ function VisitModal({
   date: string;
   clients: Client[];
   teams: Team[];
+  staffList: StaffMember[];
+  nurseIds: Set<string>;
   officeId: string;
   tenantId: string;
   nextOrderOf: (teamId: string | null, dateStr: string) => number;
@@ -1512,18 +1534,21 @@ function VisitModal({
     end_time: visit?.end_time ? hhmm(visit.end_time) : "",
     bath_type: visit?.bath_type ?? ("全身浴" as const),
     scheme: visit?.scheme ?? ("介護保険" as const),
+    staff_ids: (visit?.staff_ids ?? []) as string[],
     notes: visit?.notes ?? "",
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((p) => ({ ...p, [k]: v }));
+  const toggleStaff = (id: string) =>
+    setF((p) => ({ ...p, staff_ids: p.staff_ids.includes(id) ? p.staff_ids.filter((x) => x !== id) : [...p.staff_ids, id] }));
 
   const handleSave = async () => {
     if (!f.client_id) { setError("利用者を選択してください"); return; }
     if (!f.visit_date) { setError("日付を入力してください"); return; }
     setSaving(true);
     setError("");
-    const base = {
+    const base: Record<string, unknown> = {
       client_id: f.client_id,
       team_id: f.team_id || null,
       visit_date: f.visit_date,
@@ -1531,20 +1556,30 @@ function VisitModal({
       end_time: f.end_time || null,
       bath_type: f.bath_type,
       scheme: f.scheme,
+      staff_ids: f.staff_ids,
       notes: f.notes || null,
     };
-    if (visit) {
-      const { data, error } = await supabase.from("kaigo_bath_schedule").update(base).eq("id", visit.id).select("*").single();
-      setSaving(false);
-      if (error || !data) { setError("保存に失敗しました: " + (error?.message ?? "不明なエラー")); return; }
-      onSaved(data as ScheduleRow, false);
-    } else {
-      const payload = { ...base, tenant_id: tenantId, office_id: officeId, visit_order: nextOrderOf(f.team_id ?? null, f.visit_date) };
-      const { data, error } = await supabase.from("kaigo_bath_schedule").insert(payload).select("*").single();
-      setSaving(false);
-      if (error || !data) { setError("保存に失敗しました: " + (error?.message ?? "不明なエラー")); return; }
-      onSaved(data as ScheduleRow, true);
+    const save = (b: Record<string, unknown>) =>
+      visit
+        ? supabase.from("kaigo_bath_schedule").update(b).eq("id", visit.id).select("*").single()
+        : supabase
+            .from("kaigo_bath_schedule")
+            .insert({ ...b, tenant_id: tenantId, office_id: officeId, visit_order: nextOrderOf(f.team_id ?? null, f.visit_date) })
+            .select("*")
+            .single();
+    let res = await save(base);
+    if (res.error && (res.error.code === "PGRST204" || res.error.code === "42703")) {
+      // staff_ids 列未適用 → 指名なしで保存 (bath_shift_v2_staff_times.sql の適用を案内)
+      if (f.staff_ids.length > 0) {
+        alert("スタッフ指名の保存には bath_shift_v2_staff_times.sql の適用が必要です。今回は指名なしで保存します。");
+      }
+      const { staff_ids: _si, ...withoutStaff } = base;
+      void _si;
+      res = await save(withoutStaff);
     }
+    setSaving(false);
+    if (res.error || !res.data) { setError("保存に失敗しました: " + (res.error?.message ?? "不明なエラー")); return; }
+    onSaved(res.data as ScheduleRow, !visit);
   };
 
   return (
@@ -1611,7 +1646,34 @@ function VisitModal({
             ))}
           </div>
         )}
-        <p className="mt-1.5 text-[11px] text-gray-500">職員のみ (看護職員なし) 減算は実績反映時に当日編成から自動判定されます。</p>
+        <p className="mt-1.5 text-[11px] text-gray-500">職員のみ (看護職員なし) 減算は実績反映時に従事職員から自動判定されます。</p>
+      </div>
+      {/* スタッフ指名 (未選択 = 号車の当日編成から自動) */}
+      <div>
+        <label className={labelCls}>
+          スタッフ指名 — {f.staff_ids.length === 0 ? "未選択 (号車の当日編成から自動)" : `${f.staff_ids.length}名 (この予定だけ指名メンバーで実績反映)`}
+        </label>
+        <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-gray-200 p-2">
+          {staffList.length === 0 ? <span className="text-xs text-gray-400">職員データがありません</span> : staffList.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => toggleStaff(s.id)}
+              className={`rounded-full px-2.5 py-1 text-xs ${
+                f.staff_ids.includes(s.id)
+                  ? nurseIds.has(s.id) ? "bg-rose-500 text-white" : "bg-cyan-600 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {nurseIds.has(s.id) && "看 "}{s.name}
+            </button>
+          ))}
+        </div>
+        {f.staff_ids.length > 0 && !f.staff_ids.some((id) => nurseIds.has(id)) && (
+          <p className="mt-1.5 flex items-center gap-1 text-[11px] font-medium text-amber-600">
+            <AlertTriangle size={11} />看護職員が含まれていません。この予定は「職員のみ (減算)」で算定されます。
+          </p>
+        )}
       </div>
       <div>
         <label className={labelCls}>メモ</label>
