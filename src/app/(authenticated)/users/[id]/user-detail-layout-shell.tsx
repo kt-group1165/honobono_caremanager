@@ -11,7 +11,6 @@ import type { Client } from "@/types/database";
 import { useBusinessType } from "@/lib/business-type-context";
 import {
   ServiceCategoryBadge,
-  isShougaiClient,
   isKaigoClient,
 } from "@/components/shared/service-category-badge";
 
@@ -66,7 +65,7 @@ interface UserDetailLayoutShellProps {
 export function UserDetailLayoutShell({
   id,
   initialUser,
-  initialHasDisabilityService,
+  // initialHasDisabilityService: 障害福祉タブは常に表示するため未使用 (props は互換のため残置)
   initialAssignedOfficeIds,
   children,
 }: UserDetailLayoutShellProps) {
@@ -475,10 +474,9 @@ export function UserDetailLayoutShell({
           <div className="flex gap-1 border-b border-gray-200">
             {(() => {
               const showKaigo = !initialUser || isKaigoClient(initialUser);
-              const showShougai =
-                !!initialUser && isShougaiClient(initialUser)
-                || initialHasDisabilityService
-                || activeMainTab === "disability";
+              // 分類 (介護/障害) はリストの絞り込み用。1人が両方使うこともあるため、
+              // 詳細では障害福祉タブを常に表示し、介護分類の利用者でも障害情報を入力可にする。
+              const showShougai = true;
               return [
                 { id: "basic" as const, label: "基本情報", defaultHref: "" },
                 ...(showKaigo
