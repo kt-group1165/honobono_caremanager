@@ -334,7 +334,7 @@ function UserSidebarInner(props: UserSidebarProps) {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const supabase = useMemo(() => createClient(), []);
-  const { currentOfficeId } = useBusinessType();
+  const { currentOfficeId, businessType } = useBusinessType();
 
   // 表示モード: all (全利用者) / office (自事業所の利用者のみ)
   // useLocalStorage で SSR-safe に hydrate (setState-in-effect 不要)
@@ -350,6 +350,11 @@ function UserSidebarInner(props: UserSidebarProps) {
     "all",
     parseCategoryFilter,
   );
+
+  // 居宅介護支援 (ケアマネ版) は介護保険のみの業務なので制度区分フィルタ自体を出さない。
+  // localStorage に他業務種別で選んだ値が残っていても全件扱いにする。
+  const showCategoryFilter = businessType !== "居宅介護支援";
+  const effectiveCategoryFilter: CategoryFilter = showCategoryFilter ? categoryFilter : "all";
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -616,15 +621,15 @@ function UserSidebarInner(props: UserSidebarProps) {
     //   障害 = 受給者証あり (shougaiIds) or 提供サービス種別で障害系を宣言
     //   介護 = 介護保険あり (care_level あり or client_insurance_records あり) or 介護系を宣言
     //   both = 介護 かつ 障害
-    if (categoryFilter !== "all") {
+    if (effectiveCategoryFilter !== "all") {
       const hasInsurance = badgeData?.hasInsurance;
       list = list.filter((u) => {
         const use = badgeData?.serviceUse.get(u.id);
         const isShougai = shougaiIds.has(u.id) || (use?.shougai ?? false);
         const isKaigo =
           !!u.care_level || (hasInsurance?.has(u.id) ?? false) || (use?.kaigo ?? false);
-        if (categoryFilter === "kaigo") return isKaigo;
-        if (categoryFilter === "shougai") return isShougai;
+        if (effectiveCategoryFilter === "kaigo") return isKaigo;
+        if (effectiveCategoryFilter === "shougai") return isShougai;
         return isKaigo && isShougai; // both
       });
     }
@@ -635,7 +640,7 @@ function UserSidebarInner(props: UserSidebarProps) {
       );
     }
     return list;
-  }, [users, search, filterMode, currentOfficeId, officeUserIds, categoryFilter, shougaiIds, badgeData]);
+  }, [users, search, filterMode, currentOfficeId, officeUserIds, effectiveCategoryFilter, shougaiIds, badgeData]);
 
   // Auto-select 1st visible user when nothing selected (URL mode + autoSelectFirst 指定時)
   // 明示モード (users/[id]/layout) は URL の path 側で id が決まるので auto-select 不要だが、
@@ -685,7 +690,8 @@ function UserSidebarInner(props: UserSidebarProps) {
             全利用者
           </button>
         </div>
-        {/* 制度区分フィルタ (Phase Shougai-1) */}
+        {/* 制度区分フィルタ (Phase Shougai-1)。居宅介護支援は介護保険のみのため非表示 */}
+        {showCategoryFilter && (
         <div className="flex rounded-md border overflow-hidden text-[10px] font-medium">
           {([
             { key: "all" as const, label: "全種別" },
@@ -713,15 +719,16 @@ function UserSidebarInner(props: UserSidebarProps) {
             </button>
           ))}
         </div>
+        )}
       </div>
       <div className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="p-3 text-center text-xs text-gray-400">読込中...</div>
         ) : filtered.length === 0 ? (
           <div className="p-3 text-center text-xs text-gray-400">
-            {categoryFilter === "shougai"
+            {effectiveCategoryFilter === "shougai"
               ? "障害福祉の利用者なし"
-              : categoryFilter === "both"
+              : effectiveCategoryFilter === "both"
               ? "介護・障害を両方利用する利用者なし"
               : filterMode === "office"
               ? "自事業所の利用者なし"
