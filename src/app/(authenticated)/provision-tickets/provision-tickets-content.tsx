@@ -206,6 +206,16 @@ function toWareki(date: Date): string {
 //    は減算コード (負値) も解決できるが、書く側 (この画面) では加算のみ選択可能にする。
 const SHOKAI_ADDON_CODE = "114001"; // 訪問介護初回加算 (過去2ヶ月実績なし→候補ヒント)
 
+// 月1回限度の加算 (回数を1に固定し、当月算定済みなら再チェック不可):
+//   初回 114001 / 生活機能向上連携Ⅰ 114003・Ⅱ 114002 / 口腔連携強化 116192
+const MONTHLY_ONCE_CODES = new Set(["114001", "114003", "114002", "116192"]);
+// 併算定不可ペア: 生活機能向上連携Ⅰ (114003) ⇔ Ⅱ (114002)。
+// チェック時は相手方を自動解除、既存加算行が相手方にあるときはチェック不可にする。
+const EXCLUSIVE_PAIRS: Record<string, string> = {
+  "114003": "114002",
+  "114002": "114003",
+};
+
 // 加算コード1件の一覧行 (対象月 validInMonth で解決)
 interface AddonCodeOption {
   code: string;
@@ -2720,8 +2730,13 @@ function ProvisionAddonChecklist({
 }) {
   const setCode = (code: string, count: number) => {
     const next = { ...selected };
+    // 月1回限度の加算は回数を 1 に固定 (2 回以上は誤請求)
+    if (MONTHLY_ONCE_CODES.has(code)) count = Math.min(count, 1);
     if (count <= 0) delete next[code];
     else next[code] = count;
+    // 併算定不可ペア (生活機能向上連携Ⅰ⇔Ⅱ): チェック時に相手方の選択を自動解除
+    const counterpart = EXCLUSIVE_PAIRS[code];
+    if (count > 0 && counterpart) delete next[counterpart];
     onChange(next);
   };
   return (
@@ -2743,13 +2758,34 @@ function ProvisionAddonChecklist({
             const checked = count > 0;
             const alreadyN = existingLines[opt.code] ?? 0;
             const isShokai = opt.code === SHOKAI_ADDON_CODE;
+            const isMonthlyOnce = MONTHLY_ONCE_CODES.has(opt.code);
+            // 月1回限度: 当月既に加算行がある場合は再チェック不可
+            const onceBlocked = isMonthlyOnce && alreadyN >= 1 && !checked;
+            // 併算定不可 (生活機能向上連携Ⅰ⇔Ⅱ): 相手方の既存加算行があるとチェック不可
+            // (選択中の相手方は setCode 側で自動解除)
+            const counterpart = EXCLUSIVE_PAIRS[opt.code];
+            const exclusiveBlocked =
+              !!counterpart && (existingLines[counterpart] ?? 0) > 0 && !checked;
+            const blocked = onceBlocked || exclusiveBlocked;
             return (
               <div key={opt.code}>
                 <div className="flex items-center gap-2">
-                  <label className="flex flex-1 cursor-pointer items-center gap-1.5 text-gray-700">
+                  <label
+                    className={`flex flex-1 items-center gap-1.5 ${
+                      blocked ? "cursor-not-allowed text-gray-400" : "cursor-pointer text-gray-700"
+                    }`}
+                    title={
+                      onceBlocked
+                        ? "月1回限度の加算です (当月は既に算定済み)"
+                        : exclusiveBlocked
+                        ? "生活機能向上連携Ⅰ/Ⅱは併算定できません (先に相手方の加算行を × で外してください)"
+                        : undefined
+                    }
+                  >
                     <input
                       type="checkbox"
                       checked={checked}
+                      disabled={blocked}
                       onChange={(e) => {
                         setCode(opt.code, e.target.checked ? Math.max(1, count) : 0);
                         // 初回加算はチェック時に「当月の初回訪問日」を算定日の既定値としてサジェスト
@@ -2775,10 +2811,11 @@ function ProvisionAddonChecklist({
                     <input
                       type="number"
                       min={1}
+                      max={isMonthlyOnce ? 1 : undefined}
                       value={count}
                       onChange={(e) => setCode(opt.code, Math.max(1, parseInt(e.target.value, 10) || 1))}
                       className="w-14 rounded border border-gray-300 px-1.5 py-0.5 text-right text-xs"
-                      title="回数"
+                      title={isMonthlyOnce ? "月1回限度の加算のため回数は 1 固定です" : "回数"}
                     />
                   )}
                   <span className="w-6 text-right text-[10px] text-gray-400">回</span>

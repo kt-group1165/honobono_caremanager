@@ -670,6 +670,13 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
               />
               <span>緊急時訪問 (緊急時訪問介護加算)</span>
             </label>
+            {/* 訪問単位で選ぶ加算は緊急時のみ (夜間/早朝/深夜=時間帯・2人=コードで自動)。
+                月次加算・事業所加算の設定場所への案内 (発見性のため) */}
+            <p className="mt-1.5 text-[11px] leading-relaxed text-gray-400">
+              その他の加算 — 初回・生活機能向上連携・口腔連携強化などの月次加算は
+              「サービス提供表（実績）」の加算エディタで設定します (請求へ自動反映)。
+              処遇改善・特定事業所などの事業所加算と同一建物減算は設定から自動適用されます。
+            </p>
           </div>
         )}
 
