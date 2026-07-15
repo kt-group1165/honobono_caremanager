@@ -505,10 +505,10 @@ function IdouRecordForm({
 
   // 最終確定コード: 手動 > 単一帯自動 > 複合自動
   const finalCode: { code: string; name: string; units: number } | null =
-    noCert
-      ? null // 受給者証未登録は市町村不明 → コード確定不可
-      : manualPick
-      ? manualPick
+    manualPick
+      ? manualPick // 手動(暫定市町村含む)選択は受給者証未登録でも優先採用
+      : noCert
+      ? null // 受給者証未登録 = 市町村不明 → 自動解決は不可 (手動選択で暫定指定)
       : singleOk
       ? { code: (resolved as IdouCodeResult).code, name: (resolved as IdouCodeResult).label, units: (resolved as IdouCodeResult).units }
       : autoComposite && autoComposite !== "none"
@@ -517,7 +517,7 @@ function IdouRecordForm({
 
   const handleSave = async () => {
     if (!f.client_id) { setError("利用者を選択してください"); return; }
-    if (noCert) { setError("この利用者は地域生活支援受給者証が未登録です。先に受給者証を登録してください"); return; }
+    if (noCert && !finalCode) { setError("受給者証未登録です。「コードを手動選択」で暫定的に市町村を選んでコードを指定すると保存できます"); return; }
     if (!f.service_date) { setError("日付を入力してください"); return; }
     setSaving(true);
     setError("");
@@ -570,9 +570,12 @@ function IdouRecordForm({
           </div>
 
           {noCert && (
-            <div className="flex items-center gap-1.5 rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
-              <AlertTriangle size={14} />
-              この利用者は地域生活支援受給者証が未登録です。先に「管理 &gt; 地域生活支援 受給者証」で登録してください (登録するとコードを算定できます)。
+            <div className="flex items-start gap-1.5 rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              <span>
+                地域生活支援受給者証が未登録です。「管理 &gt; 地域生活支援 受給者証」で登録すると自動でコードが付きます。
+                暫定で追加する場合は「コードを手動選択」で市町村を選んでコードを指定してください。
+              </span>
             </div>
           )}
 
@@ -638,9 +641,8 @@ function IdouRecordForm({
               )}
               <button
                 type="button"
-                disabled={noCert}
                 onClick={() => setShowPicker(true)}
-                className="ml-auto rounded border border-violet-200 bg-white px-2 py-0.5 text-violet-600 hover:bg-violet-50 disabled:opacity-40"
+                className="ml-auto rounded border border-violet-200 bg-white px-2 py-0.5 text-violet-600 hover:bg-violet-50"
               >
                 コードを手動選択
               </button>
@@ -704,7 +706,7 @@ function IdouRecordForm({
           </select>
           <div className="flex gap-2">
             <button onClick={onClose} className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">キャンセル</button>
-            <button onClick={handleSave} disabled={saving || noCert} title={noCert ? "受給者証未登録のため保存できません" : undefined} className="flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50">
+            <button onClick={handleSave} disabled={saving || (noCert && !finalCode)} title={noCert && !finalCode ? "受給者証未登録。コードを手動選択すると保存できます" : undefined} className="flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50">
               {saving && <Loader2 size={14} className="animate-spin" />}保存
             </button>
           </div>

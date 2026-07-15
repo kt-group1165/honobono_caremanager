@@ -302,9 +302,14 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
   const [activeSystem, setActiveSystem] = React.useState<"介護" | "障害" | "総合事業" | "独自" | "地域生活支援">(initialSystem);
   const CATEGORIES = CATEGORIES_BY_SYSTEM[activeSystem];
   const system = activeSystem;
-  // 地域生活支援の実効市町村。undefined=既定(千葉市) / null=受給者証未登録でブロック
+  // 地域生活支援の市町村。undefined=既定(千葉市) / string=受給者証の市町村 / null=受給者証未登録
   const chiikiMuni = chiikiMunicipality === undefined ? DEFAULT_CHIIKI_MUNICIPALITY : chiikiMunicipality;
-  const chiikiBlocked = system === "地域生活支援" && chiikiMuni == null;
+  // 受給者証が無い(null)ときの暫定市町村。ユーザーが「はい」で登録済み市町村から選ぶ
+  const [provisionalMuni, setProvisionalMuni] = React.useState<string | null>(null);
+  const [muniOptions, setMuniOptions] = React.useState<string[] | null>(null); // null=未取得
+  // 実効市町村 = 受給者証の市町村 ?? 暫定選択
+  const effectiveChiikiMuni = chiikiMuni ?? provisionalMuni;
+  const chiikiBlocked = system === "地域生活支援" && effectiveChiikiMuni == null;
   const [services, setServices] = React.useState<ServiceCode[]>([])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -375,8 +380,8 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
             .eq("service_category", activeCategory)
           // 地域生活支援は市町村ごとにコード体系が別 → 市町村で絞る。市町村不明はブロック
           if (system === "地域生活支援") {
-            if (chiikiMuni == null) { setServices([]); return } // finally で loading 解除
-            query = query.eq("municipality", chiikiMuni)
+            if (effectiveChiikiMuni == null) { setServices([]); return } // finally で loading 解除
+            query = query.eq("municipality", effectiveChiikiMuni)
           }
           if (tmYear !== undefined && tmMonth !== undefined) {
             query = validInMonth(query, tmYear, tmMonth)
@@ -412,7 +417,23 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
 
     fetchServices()
     return () => { cancelled = true }
-  }, [system, activeCategory, tmYear, tmMonth, chiikiMuni])
+  }, [system, activeCategory, tmYear, tmMonth, effectiveChiikiMuni])
+
+  // 「暫定的に市町村を選ぶ」= 登録済み地域生活支援コードの市町村一覧を取得
+  const loadMuniOptions = React.useCallback(async () => {
+    const supabase = createClient()
+    const { data } = await supabase
+      .from("kaigo_service_codes")
+      .select("municipality")
+      .eq("system", "地域生活支援")
+      .not("municipality", "is", null)
+      .limit(2000)
+    const set = new Set<string>()
+    for (const r of (data ?? []) as { municipality: string | null }[]) {
+      if (r.municipality) set.add(r.municipality)
+    }
+    setMuniOptions([...set].sort())
+  }, [])
 
   // ── Escape key ───────────────────────────────────────────────────────────────
   React.useEffect(() => {
@@ -628,9 +649,43 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
         {/* Service list */}
         <div className="flex-1 overflow-y-auto" style={{ maxHeight: "400px" }}>
           {chiikiBlocked && (
-            <div className="flex flex-col items-center justify-center gap-1 py-12 px-6 text-center text-sm text-amber-600">
-              <span className="font-medium">地域生活支援受給者証が未登録です</span>
-              <span className="text-xs text-gray-500">利用者の受給者証を登録すると、その市町村のサービスコードを選択できます (管理 &gt; 地域生活支援 受給者証)</span>
+            <div className="flex flex-col items-center justify-center gap-2 py-10 px-6 text-center text-sm">
+              <span className="font-medium text-amber-600">地域生活支援受給者証が未登録です</span>
+              <span className="text-xs text-gray-500">
+                受給者証を登録すると市町村が確定します (管理 &gt; 地域生活支援 受給者証)。<br />
+                暫定的に市町村を選択してサービスを追加しますか？
+              </span>
+              {muniOptions == null ? (
+                <button
+                  type="button"
+                  onClick={loadMuniOptions}
+                  className="mt-1 rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-violet-700"
+                >
+                  はい (暫定的に市町村を選ぶ)
+                </button>
+              ) : muniOptions.length === 0 ? (
+                <span className="text-xs text-gray-400">登録済みの地域生活支援コードがありません</span>
+              ) : (
+                <div className="mt-1 flex flex-col items-center gap-1">
+                  <select
+                    value={provisionalMuni ?? ""}
+                    onChange={(e) => setProvisionalMuni(e.target.value || null)}
+                    className="rounded-lg border border-violet-300 px-3 py-1.5 text-sm"
+                  >
+                    <option value="">市町村を選択</option>
+                    {muniOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <span className="text-[11px] text-amber-500">※ 暫定選択です。後で受給者証を登録してください</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 暫定市町村が有効なとき (受給者証なしで市町村を選んだ) の表示 */}
+          {system === "地域生活支援" && chiikiMuni == null && provisionalMuni && (
+            <div className="flex items-center justify-center gap-2 border-b border-amber-100 bg-amber-50 py-1.5 text-[11px] text-amber-700">
+              暫定市町村: <span className="font-medium">{provisionalMuni}</span> (受給者証未登録)
+              <button type="button" onClick={() => setProvisionalMuni(null)} className="rounded px-1 text-amber-500 underline hover:text-amber-700">変更</button>
             </div>
           )}
 
