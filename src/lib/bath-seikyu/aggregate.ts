@@ -195,6 +195,36 @@ export async function aggregateBathVisitSeikyu(
     for (const c of (data ?? []) as Cl[]) clientMap.set(c.id, c);
   }
 
+  // 3.5) 担当居宅介護支援事業所のマスタ解決 (visit-seikyu 4.5 と同流儀)。
+  // 介護認定タブは 2way (マスタ選択 care_office_id ⇔ 直接入力 care_office_number) で、
+  // マスタ選択時は number が空になる。number 直列だけ見ると「担当居宅未設定」に
+  // 誤判定され様式第二 項20 も空になるため、care_office_id → care_offices を解決する。
+  // (care_offices = ケアマネ事業所マスタ。自社 offices ではないので注意)
+  const careNumberById = new Map<string, string | null>();
+  const careNameById = new Map<string, string | null>();
+  {
+    const careOfficeIds = Array.from(
+      new Set(
+        Array.from(certByClient.values())
+          .map((v) => v?.care_office_id)
+          .filter(Boolean) as string[],
+      ),
+    );
+    for (let i = 0; i < careOfficeIds.length; i += 50) {
+      const chunk = careOfficeIds.slice(i, i + 50);
+      const { data, error } = await supabase
+        .from("care_offices")
+        .select("id, office_number, name")
+        .in("id", chunk)
+        .order("id", { ascending: true });
+      if (error) throw new Error(`居宅事業所取得失敗: ${error.message}`);
+      for (const o of (data ?? []) as { id: string; office_number: string | null; name: string | null }[]) {
+        careNumberById.set(o.id, o.office_number);
+        careNameById.set(o.id, o.name);
+      }
+    }
+  }
+
   // 4) 処遇改善加算 formula (月次%)
   let addonNum = 0;
   let addonDen = 1;
@@ -410,8 +440,13 @@ export async function aggregateBathVisitSeikyu(
       gender: cl?.gender ?? null,
       certStart: cert?.certification_start_date ?? null,
       certEnd: cert?.certification_end_date ?? null,
-      careOfficeNumber: cert?.care_office_number ?? null,
-      careOfficeName: cert?.care_office_name ?? null,
+      // 直接入力 (care_office_number) 優先。無ければ care_office_id → care_offices 解決
+      careOfficeNumber:
+        cert?.care_office_number?.trim() ||
+        (cert?.care_office_id ? careNumberById.get(cert.care_office_id) ?? null : null),
+      careOfficeName:
+        cert?.care_office_name?.trim() ||
+        (cert?.care_office_id ? careNameById.get(cert.care_office_id) ?? null : null),
       serviceDays: new Set(recs.map((r) => r.visit_date)).size,
     });
   }
