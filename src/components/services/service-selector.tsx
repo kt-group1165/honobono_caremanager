@@ -586,30 +586,36 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
               className="w-full rounded-md border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
-          {/* 候補のみ表示 + 告示準拠で判定 を 1 行に並べる (障害時のみ 2 個目が出る) */}
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+          {/* 候補のみ表示 + 告示準拠で判定 を常に 1 行に並べる (障害時のみ 2 個目が出る)。
+              折返し禁止 — 幅が足りない時は説明 (text-xs) を truncate + title で逃がす */}
+          <div className="flex items-center gap-x-5 overflow-hidden">
           {system === "地域生活支援" && activeCategory === "02" && (
-            <label className="flex items-center gap-2 text-sm text-gray-700 select-none cursor-pointer">
+            <label className="flex min-w-0 items-center gap-2 text-sm text-gray-700 select-none cursor-pointer">
               <input
                 type="checkbox"
                 checked={bodyNoneOnly}
                 onChange={(e) => setBodyNoneOnly(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                className="h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
               />
-              身体なしのみ
-              <span className="text-xs text-gray-500">(チェックで移動2=身体介護なしのみ表示)</span>
+              <span className="whitespace-nowrap">身体なしのみ</span>
+              <span className="min-w-0 truncate text-xs text-gray-500" title="チェックで移動2=身体介護なしのみ表示">
+                (チェックで移動2=身体介護なしのみ表示)
+              </span>
             </label>
           )}
           {durationMinutes !== null && hasTimeConcept && (
-            <label className="flex items-center gap-2 text-sm text-gray-700 select-none cursor-pointer">
+            <label className="flex min-w-0 items-center gap-2 text-sm text-gray-700 select-none cursor-pointer">
               <input
                 type="checkbox"
                 checked={candidateOnly}
                 onChange={(e) => setCandidateOnly(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                className="h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
               />
-              候補のみ表示
-              <span className="text-xs text-gray-500">
+              <span className="whitespace-nowrap">候補のみ表示</span>
+              <span
+                className="min-w-0 truncate text-xs text-gray-500"
+                title={`${startTime}〜${endTime} = ${durationMinutes}分${slotZone ? ` / ${slotZone}帯` : ""}`}
+              >
                 ({startTime}〜{endTime} = {durationMinutes}分
                 {slotZone && (
                   <>
@@ -630,18 +636,21 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
           )}
           {/* 障害のみ: 時間区分の境界判定をその場で切替 (60分ちょうど問題) */}
           {durationMinutes !== null && hasTimeConcept && activeSystem === "障害" && (
-            <label className="flex items-center gap-2 text-sm text-gray-700 select-none cursor-pointer">
+            <label
+              className="flex min-w-0 items-center gap-2 text-sm text-gray-700 select-none cursor-pointer"
+              title="ON = 告示準拠: 60分ちょうどは 1.5 と判定 / OFF = ほのぼの互換: 60分ちょうどは 1.0 と判定"
+            >
               <input
                 type="checkbox"
                 checked={shogaiMode === "kokuji"}
                 onChange={(e) => changeShogaiMode(e.target.checked ? "kokuji" : "honobono")}
-                className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                className="h-4 w-4 shrink-0 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
               />
-              告示準拠で判定
-              <span className="text-xs text-gray-500">
+              <span className="whitespace-nowrap">告示準拠で判定</span>
+              <span className="min-w-0 truncate text-xs text-gray-500">
                 {shogaiMode === "kokuji"
                   ? "(60分ちょうど → 1.5)"
-                  : "(OFF = ほのぼの互換: 60分ちょうど → 1.0)"}
+                  : "(ほのぼの互換: 60分ちょうど → 1.0)"}
               </span>
             </label>
           )}
