@@ -1184,6 +1184,7 @@ function BathCalendarView({
   onOpenDay: (dateStr: string) => void;
 }) {
   const teamName = (id: string | null) => teams.find((t) => t.id === id)?.name ?? "未割当";
+  const clientNameOf = (id: string) => clients.find((c) => c.id === id)?.name ?? "(不明)";
   const days = daysInMonth(month);
   const firstDow = dowOf(`${month}-01`);
   const cells: (string | null)[] = [
@@ -1255,9 +1256,13 @@ function BathCalendarView({
                       {d && (
                         <>
                           <div className="flex items-center justify-between px-1 pt-0.5">
-                            <span className={`text-xs font-medium ${di === 0 ? "text-red-500" : di === 6 ? "text-blue-500" : "text-gray-700"}`}>
+                            <button
+                              onClick={() => onOpenDay(d)}
+                              title="日次ルート表へ"
+                              className={`text-xs font-medium hover:underline ${di === 0 ? "text-red-500" : di === 6 ? "text-blue-500" : "text-gray-700"}`}
+                            >
                               {Number(d.slice(8))}
-                            </span>
+                            </button>
                             {axis === "user" && (
                               <button onClick={() => onAddVisit(d, selectedClientId)} className="text-gray-300 hover:text-cyan-600">
                                 <Plus size={12} />
@@ -1281,22 +1286,41 @@ function BathCalendarView({
                                   ))
                               : teamDays
                                   .filter((td) => td.work_date === d && selectedStaffId !== null && td.staff_ids.includes(selectedStaffId))
-                                  .map((td) => {
+                                  .flatMap((td, tdi, tds) => {
+                                    // その職員が乗る (乗車時間帯がカバーする) コマを 1 件ずつ表示
                                     const r = selectedStaffId ? limitedRange(td.staff_times, selectedStaffId) : null;
-                                    const cnt = schedules.filter((s) => s.visit_date === d && s.team_id === td.team_id && s.status !== "cancelled").length;
-                                    const rangeTxt = r && selectedStaffId
-                                      ? ` ${hhmm(td.staff_times?.[selectedStaffId]?.start ?? null)}-${hhmm(td.staff_times?.[selectedStaffId]?.end ?? null)}`
-                                      : "";
-                                    return (
-                                      <button
-                                        key={td.id}
-                                        onClick={() => onOpenDay(d)}
-                                        className="block w-full truncate rounded bg-cyan-50 px-1 py-0.5 text-left text-[10px] text-cyan-700 hover:bg-cyan-100"
-                                        title="クリックで日次ルート表へ"
-                                      >
-                                        {teamName(td.team_id)} {cnt}件{rangeTxt}
-                                      </button>
-                                    );
+                                    const visits = schedules
+                                      .filter((s) => s.visit_date === d && s.team_id === td.team_id)
+                                      .filter((s) => {
+                                        if (!r) return true;
+                                        const s0 = timeToMin(s.start_time);
+                                        if (s0 === null) return true;
+                                        const e0Raw = timeToMin(s.end_time);
+                                        const e0 = e0Raw !== null && e0Raw > s0 ? e0Raw : s0 + 50;
+                                        return r.s < e0 && r.e > s0;
+                                      })
+                                      .sort(sortVisits);
+                                    const header = tds.length > 1 || r ? (
+                                      <div key={`${td.id}-h`} className="px-1 text-[9px] font-semibold text-gray-400">
+                                        {teamName(td.team_id)}
+                                        {r && selectedStaffId && (
+                                          <> {hhmm(td.staff_times?.[selectedStaffId]?.start ?? null)}-{hhmm(td.staff_times?.[selectedStaffId]?.end ?? null)}</>
+                                        )}
+                                      </div>
+                                    ) : null;
+                                    return [
+                                      ...(header ? [header] : []),
+                                      ...visits.map((v) => (
+                                        <button
+                                          key={v.id}
+                                          onClick={() => onEditVisit(v)}
+                                          className={`block w-full truncate rounded px-1 py-0.5 text-left text-[10px] ${chipCls(v.status)}`}
+                                          title={`${teamName(v.team_id)} ${hhmm(v.start_time)}-${hhmm(v.end_time)} ${clientNameOf(v.client_id)} ${v.bath_type}`}
+                                        >
+                                          {hhmm(v.start_time) || "--:--"} {clientNameOf(v.client_id)} {v.bath_type === "部分浴" ? "部分" : "全身"}
+                                        </button>
+                                      )),
+                                    ];
                                   })}
                           </div>
                         </>
@@ -1309,7 +1333,7 @@ function BathCalendarView({
           </table>
         )}
         {axis === "staff" && (
-          <p className="mt-2 text-[11px] text-gray-400">チップ = その日の乗車号車 (時間表示は乗車時間帯指定あり)。クリックで日次ルート表へ。</p>
+          <p className="mt-2 text-[11px] text-gray-400">チップ = その職員が乗るコマ (乗車時間帯指定がある日は号車名と時間を表示)。チップで編集、日付クリックで日次ルート表へ。</p>
         )}
       </div>
     </div>
