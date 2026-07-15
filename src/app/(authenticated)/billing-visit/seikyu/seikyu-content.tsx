@@ -11,7 +11,8 @@
  * カナ索引サイドバー + グレーツールバー + 格子テーブル) を踏襲。
  * SeikyuProvider で月 state / 集計結果 (介護・障害とも) / カナフィルタを
  * 全タブ横断で共有し、fetch は 1 回。
- * 訪問入浴事業所は障害の対象外なので制度トグルを出さず介護のみ。
+ * 訪問入浴事業所は 制度トグル = 介護保険 / 地域生活支援 (千葉市直接請求)。
+ * 地域生活支援側は idou-billing の画面をそのまま埋め込む (1 画面 2 制度)。
  */
 
 import { useState } from "react";
@@ -26,8 +27,9 @@ import {
   ShogaiSeikyuContent,
   type ShogaiSeikyuView,
 } from "../shogai-seikyu/shogai-seikyu-content";
+import { IdouBillingContent } from "../../idou-billing/idou-billing-content";
 
-type Seido = "kaigo" | "shogai";
+type Seido = "kaigo" | "shogai" | "chiiki";
 type SeikyuTab =
   | "monthly"
   | "kaigo"
@@ -36,7 +38,8 @@ type SeikyuTab =
   | "shogai-monthly"
   | "shogai"
   | "shogai-riyou"
-  | "shogai-kokuho";
+  | "shogai-kokuho"
+  | "chiiki";
 
 // 制度ごとの工程タブ定義
 const KAIGO_TABS: { id: SeikyuTab; label: string }[] = [
@@ -51,6 +54,10 @@ const SHOGAI_TABS: { id: SeikyuTab; label: string }[] = [
   { id: "shogai-riyou", label: "利用請求" },
   { id: "shogai-kokuho", label: "国保請求" },
 ];
+// 地域生活支援 (千葉市直接請求) は idou-billing 1 画面に集約済みなので工程タブは 1 つ
+const CHIIKI_TABS: { id: SeikyuTab; label: string }[] = [
+  { id: "chiiki", label: "地域生活支援 請求" },
+];
 
 // 工程 (月次情報 / 請求 / 利用請求 / 国保請求)。制度切替時に同じ工程を維持するための軸。
 type Stage = "monthly" | "seikyu" | "riyou" | "kokuho";
@@ -63,6 +70,7 @@ const STAGE_OF: Record<SeikyuTab, Stage> = {
   shogai: "seikyu",
   "shogai-riyou": "riyou",
   "shogai-kokuho": "kokuho",
+  chiiki: "seikyu",
 };
 const KAIGO_BY_STAGE: Record<Stage, SeikyuTab> = {
   monthly: "monthly",
@@ -77,18 +85,17 @@ const SHOGAI_BY_STAGE: Record<Stage, SeikyuTab> = {
   kokuho: "shogai-kokuho",
 };
 
-// 制度トグル (介護 / 障害) — order-app のセグメント型トグルと同トーン
+// 制度トグル — order-app のセグメント型トグルと同トーン。
+// 通常: 介護 / 障害、訪問入浴: 介護保険 / 地域生活支援 (千葉市直接請求)
 function SeidoToggle({
   active,
   onChange,
+  items,
 }: {
   active: Seido;
   onChange: (s: Seido) => void;
+  items: { id: Seido; label: string }[];
 }) {
-  const items: { id: Seido; label: string }[] = [
-    { id: "kaigo", label: "介護" },
-    { id: "shogai", label: "障害" },
-  ];
   return (
     <div className="inline-flex rounded-lg bg-gray-100 p-0.5">
       {items.map((it) => (
@@ -116,23 +123,19 @@ function SeikyuTabNav({
   tabs,
   seido,
   onSeidoChange,
-  showSeido,
+  seidoItems,
 }: {
   active: SeikyuTab;
   onChange: (id: SeikyuTab) => void;
   tabs: { id: SeikyuTab; label: string }[];
   seido: Seido;
   onSeidoChange: (s: Seido) => void;
-  showSeido: boolean;
+  seidoItems: { id: Seido; label: string }[];
 }) {
   return (
     <div className="border-b border-gray-200 bg-white px-3 py-2 shrink-0 flex items-center gap-2 print:hidden">
-      {showSeido && (
-        <>
-          <SeidoToggle active={seido} onChange={onSeidoChange} />
-          <span className="mx-1 h-5 w-px bg-gray-200" />
-        </>
-      )}
+      <SeidoToggle active={seido} onChange={onSeidoChange} items={seidoItems} />
+      <span className="mx-1 h-5 w-px bg-gray-200" />
       {tabs.map((t) => (
         <button
           key={t.id}
@@ -157,16 +160,29 @@ function SeikyuInner() {
   const [seido, setSeido] = useState<Seido>("kaigo");
   const [tab, setTab] = useState<SeikyuTab>("monthly");
 
-  // 訪問入浴は障害対象外 → 常に介護、制度トグル非表示
-  const effectiveSeido: Seido = isBath ? "kaigo" : seido;
-  const tabs = effectiveSeido === "shogai" ? SHOGAI_TABS : KAIGO_TABS;
+  // 訪問入浴は 介護保険 / 地域生活支援、それ以外は 介護 / 障害 (相互に無効な値は介護へ丸める)
+  const effectiveSeido: Seido = isBath
+    ? seido === "shogai" ? "kaigo" : seido
+    : seido === "chiiki" ? "kaigo" : seido;
+  const seidoItems: { id: Seido; label: string }[] = isBath
+    ? [
+        { id: "kaigo", label: "介護保険" },
+        { id: "chiiki", label: "地域生活支援" },
+      ]
+    : [
+        { id: "kaigo", label: "介護" },
+        { id: "shogai", label: "障害" },
+      ];
+  const tabs =
+    effectiveSeido === "shogai" ? SHOGAI_TABS : effectiveSeido === "chiiki" ? CHIIKI_TABS : KAIGO_TABS;
 
   // 制度切替時は現在の工程を維持する (介護請求↔障害請求、利用請求↔利用請求 …)。
   // 例: 介護の利用請求を見ていて障害に切替 → 障害の利用請求へ (月次情報に戻さない)。
+  // 地域生活支援は 1 画面なので常に chiiki タブへ。
   const handleSeidoChange = (s: Seido) => {
     setSeido(s);
     const stage = STAGE_OF[tab];
-    setTab(s === "shogai" ? SHOGAI_BY_STAGE[stage] : KAIGO_BY_STAGE[stage]);
+    setTab(s === "shogai" ? SHOGAI_BY_STAGE[stage] : s === "chiiki" ? "chiiki" : KAIGO_BY_STAGE[stage]);
   };
 
   // 障害の 請求 / 利用請求 / 国保請求 は同一 ShogaiSeikyuContent を view 出し分け。
@@ -187,7 +203,7 @@ function SeikyuInner() {
         tabs={tabs}
         seido={effectiveSeido}
         onSeidoChange={handleSeidoChange}
-        showSeido={!isBath}
+        seidoItems={seidoItems}
       />
       {tab === "monthly" && <MonthlyInfoContent />}
       {tab === "kaigo" && <KaigoSeikyuContent />}
@@ -195,6 +211,11 @@ function SeikyuInner() {
       {tab === "kokuho" && <KokuhoSeikyuContent />}
       {tab === "shogai-monthly" && !isBath && <ShogaiMonthlyInfoContent />}
       {showShogaiSeikyu && !isBath && <ShogaiSeikyuContent view={shogaiView} />}
+      {tab === "chiiki" && isBath && (
+        <div className="flex-1 overflow-y-auto print:overflow-visible">
+          <IdouBillingContent />
+        </div>
+      )}
     </div>
   );
 }

@@ -162,8 +162,8 @@ const NAV_BATH_SECTIONED: SectionSpec[] = [
     title: "請求業務",
     items: [
       { name: "サービス提供表 (実績)", href: "/bath-provision", icon: FileSpreadsheet },
+      // 介護保険 / 地域生活支援 は請求画面内の制度トグルで切替 (1 画面 2 制度)
       { name: "請求", href: "/billing-visit/seikyu", icon: Calculator },
-      { name: "地域生活支援 請求 (障害)", href: "/idou-billing", icon: Calculator },
     ],
   },
   {
