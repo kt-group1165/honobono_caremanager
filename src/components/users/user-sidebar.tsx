@@ -44,6 +44,19 @@ function parseCategoryFilter(raw: string | null): CategoryFilter {
   return "all";
 }
 
+// 居宅介護支援 (ケアマネ版) 専用の絞り込み: 介護 (要介護) / 予防 (要支援・事業対象者)
+// 居宅は介護保険のみの業務なので障害の区分は出さず、帳票様式が分かれる
+// 要介護↔要支援の軸で絞る (アセスメント↔予防アセスメント 等)。
+// 判定は「今日有効な認定」の care_level (isYoboKubun と同じ /要支援|事業対象者/ 基準)。
+// 有効な認定がない場合は clients.care_level で補完、それも無ければ「全て」のみに表示。
+type YoboFilter = "all" | "kaigo" | "yobo";
+const YOBO_FILTER_KEY = "kaigo.user_yobo_filter";
+function parseYoboFilter(raw: string | null): YoboFilter {
+  if (raw === "kaigo" || raw === "yobo" || raw === "all") return raw;
+  return "all";
+}
+const isYoboLevel = (level: string) => /要支援|事業対象者/.test(level);
+
 interface UserSidebarProps {
   // Both props omitted → URL mode (?user=<id> driven via search params)
   // Both props provided → explicit mode (used by users/[id]/layout where id is in path)
@@ -168,6 +181,27 @@ function evalKaigoCerts(certs: CertRow[], today: string): SeidoState {
     end,
     daysLeft: end ? Math.ceil((Date.parse(end) - Date.parse(today)) / 86_400_000) : null,
   };
+}
+
+/** 今日有効な認定の care_level (無ければ null)。介護/予防 絞り込み用。
+ *  有効レコードの選び方は evalKaigoCerts と同一 (終了日が最も先のもの) */
+function todayValidCareLevel(certs: CertRow[], today: string): string | null {
+  let valid: CertRow | null = null;
+  for (const c of certs) {
+    const { care_level: level, certification_start_date: start, certification_end_date: end } = c;
+    if (level === "申請中" || c.certification_status === "申請中") continue;
+    if (
+      !!level &&
+      level !== "非該当" &&
+      (!start || start <= today) &&
+      (!end || end >= today)
+    ) {
+      if (!valid || (valid.certification_end_date ?? "9999") < (end ?? "9999")) {
+        valid = c;
+      }
+    }
+  }
+  return valid?.care_level ?? null;
 }
 
 /** 障害福祉: 受給者証の全履歴から今日時点の証憑状態を求める */
@@ -351,10 +385,19 @@ function UserSidebarInner(props: UserSidebarProps) {
     parseCategoryFilter,
   );
 
-  // 居宅介護支援 (ケアマネ版) は介護保険のみの業務なので制度区分フィルタ自体を出さない。
-  // localStorage に他業務種別で選んだ値が残っていても全件扱いにする。
-  const showCategoryFilter = businessType !== "居宅介護支援";
-  const effectiveCategoryFilter: CategoryFilter = showCategoryFilter ? categoryFilter : "all";
+  // 居宅介護支援 (ケアマネ版) は介護保険のみの業務なので制度区分フィルタは出さず、
+  // 代わりに 介護 (要介護) / 予防 (要支援・事業対象者) の絞り込みを出す。
+  // localStorage に他業務種別で選んだ値が残っていても互いに全件扱いにする。
+  const isKyotaku = businessType === "居宅介護支援";
+  const effectiveCategoryFilter: CategoryFilter = isKyotaku ? "all" : categoryFilter;
+
+  // 介護/予防 絞り込み (居宅のみ)
+  const [yoboFilter, setYoboFilter] = useLocalStorage<YoboFilter>(
+    YOBO_FILTER_KEY,
+    "all",
+    parseYoboFilter,
+  );
+  const effectiveYoboFilter: YoboFilter = isKyotaku ? yoboFilter : "all";
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -633,6 +676,17 @@ function UserSidebarInner(props: UserSidebarProps) {
         return isKaigo && isShougai; // both
       });
     }
+    // 介護/予防 絞り込み (居宅のみ)。今日有効な認定 → clients.care_level の順で判定し、
+    // どちらも無い利用者 (認定なし・申請中) は「全て」のみに表示
+    if (effectiveYoboFilter !== "all") {
+      list = list.filter((u) => {
+        const level =
+          (badgeData ? todayValidCareLevel(badgeData.certs.get(u.id) ?? [], today) : null) ??
+          u.care_level;
+        if (!level) return false;
+        return effectiveYoboFilter === "yobo" ? isYoboLevel(level) : level.startsWith("要介護");
+      });
+    }
     if (search) {
       const q = search.toLowerCase();
       list = list.filter((u) =>
@@ -640,7 +694,7 @@ function UserSidebarInner(props: UserSidebarProps) {
       );
     }
     return list;
-  }, [users, search, filterMode, currentOfficeId, officeUserIds, effectiveCategoryFilter, shougaiIds, badgeData]);
+  }, [users, search, filterMode, currentOfficeId, officeUserIds, effectiveCategoryFilter, effectiveYoboFilter, shougaiIds, badgeData, today]);
 
   // Auto-select 1st visible user when nothing selected (URL mode + autoSelectFirst 指定時)
   // 明示モード (users/[id]/layout) は URL の path 側で id が決まるので auto-select 不要だが、
@@ -690,8 +744,31 @@ function UserSidebarInner(props: UserSidebarProps) {
             全利用者
           </button>
         </div>
-        {/* 制度区分フィルタ (Phase Shougai-1)。居宅介護支援は介護保険のみのため非表示 */}
-        {showCategoryFilter && (
+        {/* 制度区分フィルタ (Phase Shougai-1)。居宅介護支援は介護保険のみのため
+            介護 (要介護) / 予防 (要支援・事業対象者) の絞り込みに差し替え */}
+        {isKyotaku ? (
+        <div className="flex rounded-md border overflow-hidden text-[10px] font-medium">
+          {([
+            { key: "all" as const, label: "全て", title: "すべての利用者 (認定なし・申請中を含む)" },
+            { key: "kaigo" as const, label: "介護", title: "要介護1〜5 の利用者 (今日有効な認定で判定)" },
+            { key: "yobo" as const, label: "予防", title: "要支援1・2 / 事業対象者 の利用者 (今日有効な認定で判定)" },
+          ]).map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => setYoboFilter(opt.key)}
+              className={cn(
+                "flex-1 py-1 transition-colors",
+                yoboFilter === opt.key
+                  ? "bg-emerald-600 text-white"
+                  : "bg-gray-50 text-gray-500 hover:bg-gray-100"
+              )}
+              title={opt.title}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        ) : (
         <div className="flex rounded-md border overflow-hidden text-[10px] font-medium">
           {([
             { key: "all" as const, label: "全種別" },
@@ -730,6 +807,10 @@ function UserSidebarInner(props: UserSidebarProps) {
               ? "障害福祉の利用者なし"
               : effectiveCategoryFilter === "both"
               ? "介護・障害を両方利用する利用者なし"
+              : effectiveYoboFilter === "yobo"
+              ? "予防 (要支援・事業対象者) の利用者なし"
+              : effectiveYoboFilter === "kaigo"
+              ? "要介護の利用者なし"
               : filterMode === "office"
               ? "自事業所の利用者なし"
               : "該当なし"}
