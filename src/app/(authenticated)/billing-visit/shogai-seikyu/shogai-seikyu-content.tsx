@@ -20,12 +20,14 @@ import { useMemo, useState, useEffect, useCallback } from "react";
 import {
   Loader2,
   AlertCircle,
+  ClipboardList,
   Download,
   FileDown,
   FileText,
   Printer,
   Receipt,
   Send,
+  X,
 } from "lucide-react";
 import Encoding from "encoding-japanese";
 import { createClient } from "@/lib/supabase/client";
@@ -165,6 +167,10 @@ export function ShogaiSeikyuContent({
   // 集計時の注意事項 (月途中の市町村変更 等)。集計値には影響しない
   const [warnings, setWarnings] = useState<string[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  // ── 上限管理の月次ワークフロー一覧 (対象者と未処理をまとめて確認するモーダル) ──
+  //   対象 = 受給者証の上限管理区分が「なし」以外。未処理 = 管理結果 (kanri_result) 未登録
+  //   (自事業所管理 = 調整計算→保存が未実施 / 他事業所管理 = 結果票の入力が未実施)。
+  const [jogenListOpen, setJogenListOpen] = useState(false);
   const [officeNumber, setOfficeNumber] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   // かな行フィルタ (介護請求の左サイドバーと同じ。null = 全)
@@ -284,6 +290,16 @@ export function ShogaiSeikyuContent({
     [kanaFilter],
   );
   const filteredRows = useMemo(() => rows.filter(kanaMatches), [rows, kanaMatches]);
+
+  // 上限管理の対象 (区分 なし 以外) と未処理 (管理結果未登録)。カナ絞込に依らず全行から集計
+  const jogenTargets = useMemo(
+    () => rows.filter((r) => r.jogenKanriKubun !== "なし"),
+    [rows],
+  );
+  const jogenPending = useMemo(
+    () => jogenTargets.filter((r) => r.kanriResult == null),
+    [jogenTargets],
+  );
 
   const selected =
     filteredRows.find((r) => r.user_id === selectedUserId) ?? filteredRows[0] ?? null;
@@ -862,6 +878,110 @@ export function ShogaiSeikyuContent({
 
   return (
     <>
+    {/* ── 上限管理の月次ワークフロー一覧 (対象者・未処理の確認 → 行クリックで移動) ── */}
+    {jogenListOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6 print:hidden">
+        <div className="flex max-h-full w-full max-w-2xl flex-col rounded-lg bg-white shadow-xl">
+          <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+              <ClipboardList size={15} className="text-violet-600" />
+              利用者負担上限額管理 — {year}年{month}月
+              <span className="text-xs font-normal text-gray-500">
+                対象 {jogenTargets.length} 名
+                {jogenPending.length > 0 && (
+                  <span className="ml-1 font-bold text-amber-700">/ 未処理 {jogenPending.length} 名</span>
+                )}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setJogenListOpen(false)}
+              className="text-gray-400 hover:text-gray-600"
+              title="閉じる"
+            >
+              <X size={18} />
+            </button>
+          </div>
+          <div className="flex-1 overflow-auto px-4 py-3">
+            <table className="w-full border-collapse text-xs">
+              <thead className="bg-gray-50 text-[11px] text-gray-500">
+                <tr>
+                  <th className="border-b border-gray-200 px-2 py-1.5 text-left">利用者名</th>
+                  <th className="border-b border-gray-200 px-2 py-1.5 text-center">管理区分</th>
+                  <th className="border-b border-gray-200 px-2 py-1.5 text-right">上限月額</th>
+                  <th className="border-b border-gray-200 px-2 py-1.5 text-right">利用者負担</th>
+                  <th className="border-b border-gray-200 px-2 py-1.5 text-center">管理結果</th>
+                  <th className="border-b border-gray-200 px-2 py-1.5 text-right">結果額</th>
+                  <th className="border-b border-gray-200 px-2 py-1.5 text-center">状態</th>
+                </tr>
+              </thead>
+              <tbody>
+                {jogenTargets.map((r) => {
+                  const pending = r.kanriResult == null;
+                  return (
+                    <tr
+                      key={r.user_id}
+                      onClick={() => {
+                        setSelectedUserId(r.user_id);
+                        setJogenListOpen(false);
+                      }}
+                      className="cursor-pointer border-b border-gray-100 hover:bg-violet-50"
+                      title="クリックで該当利用者の上限管理ブロックへ移動"
+                    >
+                      <td className="px-2 py-1.5 font-medium text-gray-800">{r.user_name}</td>
+                      <td className="px-2 py-1.5 text-center">
+                        <span
+                          className={`inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                            r.jogenKanriKubun === "自事業所"
+                              ? "bg-violet-100 text-violet-700"
+                              : "bg-sky-100 text-sky-700"
+                          }`}
+                        >
+                          {r.jogenKanriKubun === "自事業所" ? "自事業所が管理" : "他事業所が管理"}
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">
+                        {r.self_payment_limit != null
+                          ? `¥${r.self_payment_limit.toLocaleString()}`
+                          : "未設定"}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">
+                        ¥{r.userAmount.toLocaleString()}
+                      </td>
+                      <td className="px-2 py-1.5 text-center">
+                        {r.kanriResult != null ? `区分${r.kanriResult}` : "—"}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">
+                        {r.kanriResultAmount != null
+                          ? `¥${r.kanriResultAmount.toLocaleString()}`
+                          : "—"}
+                      </td>
+                      <td className="px-2 py-1.5 text-center">
+                        {pending ? (
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                            未処理
+                          </span>
+                        ) : (
+                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                            登録済
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p className="mt-2 text-[11px] leading-relaxed text-gray-500">
+              未処理 = 管理結果が未登録 (自事業所が管理者 → 調整計算して保存 / 他事業所が管理者 →
+              届いた結果票の区分・金額を入力)。行をクリックすると該当利用者の上限管理ブロックに移動します。
+              上限月額が「未設定」の場合は受給者証ページで負担上限月額を入力してください。
+            </p>
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* printMode 中は画面を隠す (上限管理結果票の印刷は printMode=null のまま
         overlay で出すため、常時 print:hidden にはしない)。
         レイアウトは介護請求 (kaigo-seikyu) と統一:
@@ -932,6 +1052,21 @@ export function ShogaiSeikyuContent({
                 title="事業所単位の総括請求書 (市町村別 J111 相当) を印刷"
               >
                 <Printer size={13} />請求書
+              </button>
+              <button
+                type="button"
+                disabled={jogenTargets.length === 0}
+                onClick={() => setJogenListOpen(true)}
+                className="border border-violet-500 rounded bg-violet-50 px-2.5 py-1 text-violet-700 hover:bg-violet-100 flex items-center gap-1.5 disabled:opacity-50"
+                title="上限額管理の対象者一覧。未処理 (管理結果の未登録) をまとめて確認し、行クリックで該当利用者の管理ブロックへ移動します"
+              >
+                <ClipboardList size={13} />
+                上限管理 ({jogenTargets.length})
+                {jogenPending.length > 0 && (
+                  <span className="rounded bg-amber-200 px-1 text-[10px] font-bold text-amber-800">
+                    未 {jogenPending.length}
+                  </span>
+                )}
               </button>
             </>
           )}
@@ -1622,6 +1757,15 @@ interface KanriOfficeLine {
   is_self: boolean;
 }
 
+// 関係事業所の入力候補 (自社 offices + 他社 kaigo_service_providers)。
+// 毎月同じ事業所を手打ちしなくて済むよう datalist で提示し、名称一致で番号を自動補完。
+// module レベル cache で session 内 1 回だけ fetch (利用者・月をまたいで共有)。
+interface KanriOfficeOption {
+  number: string;
+  name: string;
+}
+let kanriOfficeOptionsCache: KanriOfficeOption[] | null = null;
+
 function JogenKanriSelfSection({
   row,
   year,
@@ -1650,6 +1794,86 @@ function JogenKanriSelfSection({
   const [newName, setNewName] = useState("");
   const [newAmount, setNewAmount] = useState("");
   const [newTotal, setNewTotal] = useState("");
+
+  // 関係事業所の候補 (自社 offices + 他社 providers)。cache 済みなら fetch しない
+  const [officeOptions, setOfficeOptions] = useState<KanriOfficeOption[]>(
+    kanriOfficeOptionsCache ?? [],
+  );
+  useEffect(() => {
+    if (kanriOfficeOptionsCache) return;
+    let cancelled = false;
+    (async () => {
+      const [own, providers] = await Promise.all([
+        supabase
+          .from("offices")
+          .select("business_number, name")
+          .eq("app_type", "kaigo-app")
+          .order("name"),
+        supabase
+          .from("kaigo_service_providers")
+          .select("provider_number, name")
+          .order("name"),
+      ]);
+      const opts: KanriOfficeOption[] = [];
+      for (const o of (own.data ?? []) as { business_number: string | null; name: string }[]) {
+        if (o.name) opts.push({ number: o.business_number ?? "", name: o.name });
+      }
+      for (const p of (providers.data ?? []) as { provider_number: string | null; name: string }[]) {
+        if (p.name) opts.push({ number: p.provider_number ?? "", name: p.name });
+      }
+      kanriOfficeOptionsCache = opts;
+      if (!cancelled) setOfficeOptions(opts);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase]);
+
+  // 前月の関係事業所を複写 (金額は月ごとに違うため 0 で複写 → 当月分を入力)
+  const copyPrevMonth = async () => {
+    const [py, pm] = month === 1 ? [year - 1, 12] : [year, month - 1];
+    const prevKey = `${py}-${String(pm).padStart(2, "0")}`;
+    const { data, error } = await supabase
+      .from("shogai_jogen_kanri_results")
+      .select("office_lines")
+      .eq("client_id", row.user_id)
+      .eq("target_month", prevKey)
+      .maybeSingle();
+    if (error) {
+      toast.error("前月の上限管理データの取得に失敗: " + error.message);
+      return;
+    }
+    const prev = (((data?.office_lines ?? []) as KanriOfficeLine[]) ?? []).filter(
+      (l) => !l.is_self,
+    );
+    if (prev.length === 0) {
+      toast.info(`前月 (${prevKey}) の関係事業所データがありません`);
+      return;
+    }
+    setLines((cur) => {
+      const existing = new Set(
+        cur.filter((l) => !l.is_self).map((l) => `${l.office_number}|${l.office_name}`),
+      );
+      const added = prev
+        .filter((l) => !existing.has(`${l.office_number}|${l.office_name}`))
+        .map((l) => ({
+          office_number: l.office_number,
+          office_name: l.office_name,
+          total_amount: 0,
+          user_amount: 0,
+          adjusted_amount: 0,
+          is_self: false,
+        }));
+      if (added.length === 0) {
+        toast.info("前月の関係事業所は全て追加済みです");
+        return cur;
+      }
+      toast.success(
+        `前月から関係事業所 ${added.length} 件を複写しました — 当月の金額を入力して調整計算してください`,
+      );
+      return [...cur, ...added];
+    });
+  };
 
   // 保存済みの関係事業所一覧を読み込み (無ければ自事業所行のみで初期化)
   useEffect(() => {
@@ -1812,8 +2036,18 @@ function JogenKanriSelfSection({
     <div className="mt-3 rounded border border-violet-200 bg-violet-50/50 p-3 text-xs space-y-2">
       <div className="flex items-center justify-between">
         <span className="font-bold text-violet-800">利用者負担上限額管理 (当事業所が管理者)</span>
-        <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">
-          上限月額 {limit != null ? `¥${limit.toLocaleString()}` : "未設定"}
+        <span className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={copyPrevMonth}
+            className="rounded border border-violet-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-violet-700 hover:bg-violet-100"
+            title="前月の関係事業所 (他事業所の行) を複写します。金額は月ごとに違うため 0 で複写されるので、当月の金額を入力してください"
+          >
+            前月複写
+          </button>
+          <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">
+            上限月額 {limit != null ? `¥${limit.toLocaleString()}` : "未設定"}
+          </span>
         </span>
       </div>
       {limit == null && (
@@ -1892,10 +2126,24 @@ function JogenKanriSelfSection({
         />
         <input
           value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          placeholder="関係事業所名"
+          onChange={(e) => {
+            const v = e.target.value;
+            setNewName(v);
+            // 候補と名称が完全一致したら事業所番号を自動補完 (マスタ選択の手間削減)
+            const hit = officeOptions.find((o) => o.name === v);
+            if (hit?.number) setNewNo(hit.number);
+          }}
+          placeholder="関係事業所名 (候補から選択可)"
+          list="jogen-kanri-office-options"
           className="rounded border px-2 py-1.5 focus:border-violet-500 focus:outline-none"
         />
+        <datalist id="jogen-kanri-office-options">
+          {officeOptions.map((o) => (
+            <option key={`${o.number}|${o.name}`} value={o.name}>
+              {o.number}
+            </option>
+          ))}
+        </datalist>
         <input
           type="number"
           value={newTotal}
@@ -1920,10 +2168,13 @@ function JogenKanriSelfSection({
       </div>
 
       <div className="flex items-center justify-between pt-1">
-        <span className="text-[10px] text-gray-500">
+        <span
+          className="text-[10px] text-gray-500"
+          title="調整計算の充当順: 管理事業所 (自事業所) を優先して上限まで充当 → 残りを他事業所の負担額が大きい順に充当します"
+        >
           {result != null
             ? `管理結果区分: ${result} (${result === 1 ? "管理事業所で充当" : result === 2 ? "調整なし" : "結果票のとおり調整"})`
-            : "未計算"}
+            : "未計算 (充当順: 自事業所優先 → 負担額の大きい順)"}
         </span>
         <div className="flex gap-1.5">
           <button
