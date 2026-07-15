@@ -44,6 +44,7 @@ const CARE_PLAN_TABS: SubTab[] = [
 const DISABILITY_TABS: SubTab[] = [
   { label: "受給者証 (詳細)", href: "/disability" },
   { label: "障害支援区分", href: "/shougai-cert" },
+  { label: "地域生活支援", href: "/chiiki-cert" },
 ];
 
 type MainTab = "basic" | "insurance" | "carePlan" | "disability";
