@@ -934,17 +934,18 @@ export function KaigoSeikyuContent() {
 
         {/* ── メインテーブル ── */}
         <div className="flex flex-col flex-1 min-w-0 border-r border-gray-200">
-          {/* ── ツールバー (ボタンが多いので余白・間隔・冗長ラベルを詰めて1行に収める) ── */}
-          <div className="border-b border-gray-300 bg-gray-100 px-3 py-2 shrink-0 flex items-center gap-1.5 flex-wrap">
+          {/* ── ツールバー (ボタンが多いタブなので text-xs + 余白詰めで 1 行に固定。
+                 flex-nowrap + overflow-x-auto: 幅不足でも折り返さず横スクロール) ── */}
+          <div className="border-b border-gray-300 bg-gray-100 px-3 py-2 shrink-0 flex items-center gap-1 flex-nowrap overflow-x-auto text-xs whitespace-nowrap">
             <SeikyuMonthNav />
             <span className="border border-gray-400 rounded bg-white px-2 py-1 text-gray-700 font-medium">請求分</span>
             <span className="text-xs text-gray-500">{displayRows.length} 件</span>
-            <div className="w-px h-5 bg-gray-300 mx-1" />
+            <div className="w-px h-5 bg-gray-300 mx-0.5 shrink-0" />
             <button
               onClick={printMeisai}
               disabled={displayRows.length === 0}
               title="対象者の介護給付費明細書 (様式第二) を印刷。印刷で発行済になります"
-              className="border border-gray-400 rounded bg-white px-2 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
+              className="border border-gray-400 rounded bg-white px-1.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1 disabled:opacity-50"
             >
               <FileText size={13} />明細書 ({targets.length}件)
             </button>
@@ -952,7 +953,7 @@ export function KaigoSeikyuContent() {
               onClick={printSeikyu}
               disabled={displayRows.length === 0}
               title="事業所単位の総括請求書 (様式第一) を印刷"
-              className="border border-gray-400 rounded bg-white px-2 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
+              className="border border-gray-400 rounded bg-white px-1.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1 disabled:opacity-50"
             >
               <Printer size={13} />請求書
             </button>
@@ -960,14 +961,14 @@ export function KaigoSeikyuContent() {
               onClick={markKokuhoTarget}
               disabled={displayRows.length === 0}
               title="発行済の利用者を国保連請求の対象にする"
-              className="border border-blue-500 rounded bg-blue-100 px-2 py-1 text-blue-800 font-semibold hover:bg-blue-200 flex items-center gap-1 disabled:opacity-50"
+              className="border border-blue-500 rounded bg-blue-100 px-1.5 py-1 text-blue-800 font-semibold hover:bg-blue-200 flex items-center gap-1 disabled:opacity-50"
             >
               <Landmark size={13} />国保対象
             </button>
             <button
               onClick={selectUnissued}
               disabled={displayRows.length === 0}
-              className="border border-gray-400 rounded bg-white px-2 py-1 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="border border-gray-400 rounded bg-white px-1.5 py-1 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
               未発行
             </button>
@@ -976,31 +977,27 @@ export function KaigoSeikyuContent() {
                 onClick={() => setSameBuildingOpen(true)}
                 disabled={loading || !officeId || sameBuildingUserIds.length === 0}
                 title="住所グルーピングで同一建物らしき集団を推定し、同一建物減算 (10%/15%/12%) の設定と突合します (提案のみ。設定変更はしません)"
-                className="border border-gray-400 rounded bg-white px-2 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
+                className="border border-gray-400 rounded bg-white px-1.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1 disabled:opacity-50"
               >
                 <Building2 size={13} />同一建物
               </button>
             )}
-            {/* 過誤申立CSV / 確認用CSV は ml-auto で右寄せせず他ボタンと同列に流す
-                (右寄せ+flex-wrap だと幅不足時に2段目へ折り返して「行ずれ」して見えるため) */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={exportKagoCsv}
-                disabled={!officeId}
-                title="過誤申立中 (取下げ済・再請求未実施) の一覧を保険者提出の下書き用に CSV 出力します (申立様式は保険者ごとのため一覧まで)"
-                className="border border-red-400 rounded bg-white px-2 py-1 text-red-700 hover:bg-red-50 flex items-center gap-1 disabled:opacity-50"
-              >
-                <Download size={13} />過誤申立CSV
-              </button>
-              <button
-                onClick={exportCsv}
-                disabled={displayRows.length === 0}
-                title="明細一覧を Excel 閲覧用 CSV で出力"
-                className="border border-indigo-500 rounded bg-indigo-500 px-2 py-1 text-white font-semibold hover:bg-indigo-600 flex items-center gap-1 disabled:opacity-50"
-              >
-                <Download size={13} />確認用CSV
-              </button>
-            </div>
+            <button
+              onClick={exportKagoCsv}
+              disabled={!officeId}
+              title="過誤申立中 (取下げ済・再請求未実施) の一覧を保険者提出の下書き用に CSV 出力します (申立様式は保険者ごとのため一覧まで)"
+              className="border border-red-400 rounded bg-white px-1.5 py-1 text-red-700 hover:bg-red-50 flex items-center gap-1 disabled:opacity-50"
+            >
+              <Download size={13} />過誤CSV
+            </button>
+            <button
+              onClick={exportCsv}
+              disabled={displayRows.length === 0}
+              title="明細一覧を Excel 閲覧用 CSV で出力"
+              className="border border-indigo-500 rounded bg-indigo-500 px-1.5 py-1 text-white font-semibold hover:bg-indigo-600 flex items-center gap-1 disabled:opacity-50"
+            >
+              <Download size={13} />確認用CSV
+            </button>
           </div>
 
           {/* SQL 未適用 (kaigo_visit_addon_lines / kaigo_visit_month_addons とも未作成) 案内 */}
