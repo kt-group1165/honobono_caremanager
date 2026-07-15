@@ -383,15 +383,37 @@ export function BathShiftContent() {
     return true;
   };
 
-  const revertActual = async (v: ScheduleRow) => {
-    if (!window.confirm(`${clientName(v.client_id)} 様 ${v.visit_date} の実績記録を取り消して予定に戻します。よろしいですか？`)) return;
+  const revertActual = async (v: ScheduleRow, opts?: { silent?: boolean }): Promise<boolean> => {
+    if (v.status !== "completed") return true;
+    if (!opts?.silent) {
+      if (!window.confirm(`${clientName(v.client_id)} 様 ${v.visit_date} の実績記録を取り消して予定に戻します。よろしいですか？`)) return false;
+    }
     if (v.record_id) {
       const { error } = await supabase.from("kaigo_bath_visit_records").delete().eq("id", v.record_id);
-      if (error) { alert("実績記録の削除に失敗しました: " + error.message); return; }
+      if (error) { alert("実績記録の削除に失敗しました: " + error.message); return false; }
     }
     const { error: e2 } = await supabase.from("kaigo_bath_schedule").update({ status: "scheduled", record_id: null }).eq("id", v.id);
-    if (e2) { alert("予定の更新に失敗しました: " + e2.message); return; }
+    if (e2) { alert("予定の更新に失敗しました: " + e2.message); return false; }
     setSchedules((prev) => prev.map((s) => (s.id === v.id ? { ...s, status: "scheduled", record_id: null } : s)));
+    return true;
+  };
+
+  // 月間個別のレバー (予⇔実) 一括保存。訪問介護の monthly-individual と同じ「保存で確定」方式
+  const commitMonthlyChanges = async (changes: Array<{ v: ScheduleRow; toCompleted: boolean }>): Promise<boolean> => {
+    if (changes.length === 0) return true;
+    const toC = changes.filter((c) => c.toCompleted).length;
+    const toS = changes.length - toC;
+    const parts = [toC > 0 && `実績化 ${toC} 件`, toS > 0 && `予定へ戻す ${toS} 件`].filter(Boolean).join(" / ");
+    if (!window.confirm(`実績反映の変更を保存します (${parts})。よろしいですか？`)) return false;
+    setBusy(true);
+    let ok = 0;
+    for (const c of changes) {
+      const done = c.toCompleted ? await applyActual(c.v, { silent: true }) : await revertActual(c.v, { silent: true });
+      if (done) ok++;
+    }
+    setBusy(false);
+    alert(`${ok}/${changes.length} 件を保存しました (実績記録・提供表にも反映)`);
+    return true;
   };
 
   const applyDayActuals = async () => {
@@ -666,10 +688,10 @@ export function BathShiftContent() {
             onSelectClient={setSelectedClientId}
             schedules={schedules}
             teams={teams}
+            busy={busy}
             onAdd={(clientId) => setEditingVisit({ visit: null, presetTeamId: null, presetClientId: clientId })}
             onEdit={(v) => setEditingVisit({ visit: v, presetTeamId: null })}
-            onApply={(v) => applyActual(v)}
-            onRevert={revertActual}
+            onCommit={commitMonthlyChanges}
             onCancel={toggleCancel}
             onDelete={deleteVisit}
           />
@@ -1373,22 +1395,24 @@ function BathCalendarView({
 // ── 月間個別 (利用者ごとの月間一覧 + 実績反映) ──────────────────────────────
 
 function BathMonthlyView({
-  clients, selectedClientId, onSelectClient, schedules, teams,
-  onAdd, onEdit, onApply, onRevert, onCancel, onDelete,
+  clients, selectedClientId, onSelectClient, schedules, teams, busy,
+  onAdd, onEdit, onCommit, onCancel, onDelete,
 }: {
   clients: Client[];
   selectedClientId: string | null;
   onSelectClient: (id: string) => void;
   schedules: ScheduleRow[];
   teams: Team[];
+  busy: boolean;
   onAdd: (clientId: string | null) => void;
   onEdit: (v: ScheduleRow) => void;
-  onApply: (v: ScheduleRow) => void;
-  onRevert: (v: ScheduleRow) => void;
+  onCommit: (changes: Array<{ v: ScheduleRow; toCompleted: boolean }>) => Promise<boolean>;
   onCancel: (v: ScheduleRow) => void;
   onDelete: (v: ScheduleRow) => void;
 }) {
   const teamName = (id: string | null) => teams.find((t) => t.id === id)?.name ?? "未割当";
+  // レバーの未保存変更 (visit id → 希望 status が completed か)。保存ボタンで一括コミット
+  const [pending, setPending] = useState<Map<string, boolean>>(new Map());
   const rows = schedules
     .filter((s) => s.client_id === selectedClientId)
     .sort((a, b) => a.visit_date.localeCompare(b.visit_date) || sortVisits(a, b));
@@ -1398,6 +1422,32 @@ function BathMonthlyView({
     cancelled: rows.filter((r) => r.status === "cancelled").length,
   };
 
+  const toggleLever = (v: ScheduleRow) => {
+    if (v.status === "cancelled" || busy) return;
+    setPending((prev) => {
+      const next = new Map(prev);
+      const current = next.get(v.id) ?? v.status === "completed";
+      const desired = !current;
+      if (desired === (v.status === "completed")) next.delete(v.id);
+      else next.set(v.id, desired);
+      return next;
+    });
+  };
+
+  const handleSelectClient = (id: string) => {
+    if (pending.size > 0 && !window.confirm("未保存の実績反映があります。破棄して利用者を切り替えますか？")) return;
+    setPending(new Map());
+    onSelectClient(id);
+  };
+
+  const handleSave = async () => {
+    const changes = Array.from(pending.entries())
+      .map(([id, toCompleted]) => ({ v: rows.find((r) => r.id === id), toCompleted }))
+      .filter((c): c is { v: ScheduleRow; toCompleted: boolean } => !!c.v);
+    const ok = await onCommit(changes);
+    if (ok) setPending(new Map());
+  };
+
   return (
     <div className="flex h-full">
       <div className="flex w-56 shrink-0 flex-col border-r border-gray-200">
@@ -1405,7 +1455,7 @@ function BathMonthlyView({
         <SideList
           items={clients.map((c) => ({ id: c.id, label: c.name, sub: c.furigana }))}
           selectedId={selectedClientId}
-          onSelect={onSelectClient}
+          onSelect={handleSelectClient}
           unitLabel="名"
         />
       </div>
@@ -1418,6 +1468,25 @@ function BathMonthlyView({
               <span>予定 <b className="text-cyan-700">{counts.scheduled}</b>件</span>
               <span>実績 <b className="text-emerald-700">{counts.completed}</b>件</span>
               <span>中止 <b className="text-gray-500">{counts.cancelled}</b>件</span>
+              {pending.size > 0 && (
+                <span className="flex items-center gap-2 rounded-lg bg-amber-50 px-2 py-1 font-medium text-amber-700 ring-1 ring-amber-200">
+                  {pending.size}件の未保存の実績反映
+                  <button
+                    onClick={handleSave}
+                    disabled={busy}
+                    className="flex items-center gap-1 rounded bg-emerald-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {busy ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}保存
+                  </button>
+                  <button
+                    onClick={() => setPending(new Map())}
+                    disabled={busy}
+                    className="text-[11px] text-amber-600 underline hover:text-amber-800"
+                  >
+                    破棄
+                  </button>
+                </span>
+              )}
               <button
                 onClick={() => onAdd(selectedClientId)}
                 className="ml-auto flex items-center gap-1 rounded-lg bg-cyan-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-cyan-700"
@@ -1441,8 +1510,11 @@ function BathMonthlyView({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {rows.map((v) => (
-                    <tr key={v.id} className={`hover:bg-gray-50 ${v.status === "cancelled" ? "opacity-60" : ""}`}>
+                  {rows.map((v) => {
+                    const isPending = pending.has(v.id);
+                    const leverOn = pending.get(v.id) ?? v.status === "completed";
+                    return (
+                    <tr key={v.id} className={`hover:bg-gray-50 ${v.status === "cancelled" ? "opacity-60" : ""} ${isPending ? "bg-amber-50/60" : ""}`}>
                       <td className="whitespace-nowrap px-3 py-1.5 font-medium text-gray-800">
                         {Number(v.visit_date.slice(5, 7))}/{Number(v.visit_date.slice(8))} ({DOW_LABELS[dowOf(v.visit_date)]})
                       </td>
@@ -1455,22 +1527,33 @@ function BathMonthlyView({
                         {v.bath_type === "部分浴" ? "部分浴・清拭" : v.bath_type}
                       </td>
                       <td className="whitespace-nowrap px-3 py-1.5">
-                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                          v.status === "completed" ? "bg-emerald-100 text-emerald-700" :
-                          v.status === "cancelled" ? "bg-gray-100 text-gray-500" : "bg-cyan-50 text-cyan-700"
-                        }`}>
-                          {v.status === "completed" ? "実績済" : v.status === "cancelled" ? "中止" : "予定"}
-                        </span>
+                        {v.status === "cancelled" ? (
+                          <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-gray-100 text-gray-500">中止</span>
+                        ) : (
+                          <button
+                            onClick={() => toggleLever(v)}
+                            disabled={busy}
+                            title={(leverOn ? "実績 → 予定に戻す" : "予定 → 実績に変更") + (isPending ? " (未保存 — 保存ボタンで確定)" : "")}
+                          >
+                            <span className={`relative inline-block h-[18px] w-10 shrink-0 rounded-full align-middle transition-colors ${
+                              leverOn ? "bg-emerald-500" : "bg-gray-300"
+                            } ${isPending ? "ring-2 ring-amber-400 ring-offset-1" : ""} ${busy ? "opacity-50" : ""}`}>
+                              <span className={`absolute top-1/2 -translate-y-1/2 text-[10px] font-bold leading-none ${
+                                leverOn ? "left-1.5 text-white" : "right-1.5 text-gray-600"
+                              }`}>
+                                {leverOn ? "実" : "予"}
+                              </span>
+                              <span className={`absolute top-0.5 h-[14px] w-[14px] rounded-full bg-white shadow transition-all ${
+                                leverOn ? "left-[calc(100%_-_16px)]" : "left-0.5"
+                              }`} />
+                            </span>
+                          </button>
+                        )}
                       </td>
                       <td className="max-w-[160px] truncate px-3 py-1.5 text-gray-400" title={v.notes ?? undefined}>
                         {v.status === "cancelled" && v.cancel_reason ? `中止: ${v.cancel_reason}` : v.notes || ""}
                       </td>
                       <td className="whitespace-nowrap px-3 py-1.5 text-right">
-                        {v.status === "scheduled" ? (
-                          <button onClick={() => onApply(v)} className="mr-1 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-medium text-white hover:bg-emerald-700">実績</button>
-                        ) : v.status === "completed" ? (
-                          <button onClick={() => onRevert(v)} className="mr-1 rounded border border-emerald-300 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 hover:bg-emerald-50">戻す</button>
-                        ) : null}
                         <button onClick={() => onEdit(v)} className="p-1 text-gray-400 hover:text-cyan-600"><Pencil size={13} /></button>
                         {v.status !== "completed" && (
                           <button onClick={() => onCancel(v)} title={v.status === "cancelled" ? "中止を解除" : "中止"} className="p-1 text-gray-400 hover:text-amber-600">
@@ -1480,7 +1563,8 @@ function BathMonthlyView({
                         <button onClick={() => onDelete(v)} className="p-1 text-gray-400 hover:text-red-500"><Trash2 size={13} /></button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             )}
