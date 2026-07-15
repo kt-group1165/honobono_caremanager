@@ -52,7 +52,10 @@ import {
   ShogaiSeikyushoPrintSheet,
   ShogaiRiyouSeikyuPrintSheet,
   ShogaiJissekiKirokuhyoPrintSheet,
+  ShogaiFutanIchiranPrintSheet,
+  ShogaiKeiyakuHoukokuPrintSheet,
   type ShogaiSeikyuSummaryGroup,
+  type ShogaiKeiyakuEntry,
 } from "../../billing/forms/_shogai-meisai";
 
 // table 未作成 (migration 未適用): 42P01 = SQL / PGRST205 = PostgREST schema cache
@@ -180,13 +183,16 @@ export function ShogaiSeikyuContent({
   >(new Map());
   const [payments, setPayments] = useState<Map<string, ShogaiPaymentRow>>(new Map());
   const [printMode, setPrintMode] = useState<
-    "meisai" | "seikyu" | "riyou" | "jisseki" | null
+    "meisai" | "seikyu" | "riyou" | "jisseki" | "futan" | "keiyaku" | null
   >(null);
   // 実績記録票 印刷用の月内提供実績 (client_id → visits)
   const [jissekiVisits, setJissekiVisits] = useState<
     Map<string, ShogaiDensouVisit[]>
   >(new Map());
   const [jissekiLoading, setJissekiLoading] = useState(false);
+  // 契約内容報告書 印刷用の契約情報 (client_id → 受給者証の契約支給量)
+  const [keiyakuEntries, setKeiyakuEntries] = useState<ShogaiKeiyakuEntry[]>([]);
+  const [keiyakuLoading, setKeiyakuLoading] = useState(false);
 
   const monthStr = `${year}-${String(month).padStart(2, "0")}`;
 
@@ -397,6 +403,87 @@ export function ShogaiSeikyuContent({
   const printSeikyusho = () => {
     if (targets.length === 0) return;
     setPrintMode("seikyu");
+    setTimeout(() => {
+      window.print();
+      setPrintMode(null);
+    }, 100);
+  };
+
+  // ── 利用者負担額一覧表: 自事業所が「非」管理者の対象者を上限管理事業所へ提出 ──
+  const futanIchiranRows = useMemo(
+    () => targets.filter((r) => r.jogenKanriKubun === "他事業所"),
+    [targets],
+  );
+  const printFutanIchiran = () => {
+    if (futanIchiranRows.length === 0) {
+      toast.info("上限管理を他事業所に依頼する対象者がいません (負担額一覧表は不要です)");
+      return;
+    }
+    setPrintMode("futan");
+    setTimeout(() => {
+      window.print();
+      setPrintMode(null);
+    }, 100);
+  };
+
+  // ── 契約内容報告書: 受給者証の契約支給量を市町村へ報告 (対象者ぶん 1 名 1 枚) ──
+  const printKeiyakuHoukoku = async () => {
+    if (targets.length === 0) return;
+    setKeiyakuLoading(true);
+    try {
+      const ids = targets.map((r) => r.user_id);
+      const byClient = new Map<
+        string,
+        { text: string | null; start: string | null; entry: string | null }
+      >();
+      for (let i = 0; i < ids.length; i += 50) {
+        const chunk = ids.slice(i, i + 50);
+        const { data, error } = await supabase
+          .from("shougai_certifications")
+          .select(
+            "client_id, contract_amount_text, contract_start_date, contract_entry_number, certification_start_date",
+          )
+          .in("client_id", chunk)
+          .order("certification_start_date", { ascending: false });
+        if (error) throw new Error(error.message);
+        for (const c of (data ?? []) as {
+          client_id: string;
+          contract_amount_text: string | null;
+          contract_start_date: string | null;
+          contract_entry_number: string | null;
+        }[]) {
+          if (!byClient.has(c.client_id)) {
+            byClient.set(c.client_id, {
+              text: c.contract_amount_text,
+              start: c.contract_start_date,
+              entry: c.contract_entry_number,
+            });
+          }
+        }
+      }
+      const entries: ShogaiKeiyakuEntry[] = targets.map((r) => {
+        const c = byClient.get(r.user_id);
+        return {
+          row: r,
+          contractAmountText: c?.text ?? null,
+          contractStartDate: c?.start ?? null,
+          contractEntryNumber: c?.entry ?? null,
+        };
+      });
+      setKeiyakuEntries(entries);
+      const missing = entries.filter((e) => !e.contractAmountText).length;
+      if (missing > 0) {
+        toast.warning(
+          `契約支給量が未入力の利用者が ${missing} 名います (受給者証ページで入力してください)`,
+        );
+      }
+    } catch (e) {
+      toast.error("契約情報の取得に失敗: " + (e instanceof Error ? e.message : String(e)));
+      setKeiyakuLoading(false);
+      return;
+    }
+    setKeiyakuLoading(false);
+    setPrintMode("keiyaku");
     setTimeout(() => {
       window.print();
       setPrintMode(null);
@@ -1055,6 +1142,26 @@ export function ShogaiSeikyuContent({
               </button>
               <button
                 type="button"
+                disabled={keiyakuLoading}
+                onClick={printKeiyakuHoukoku}
+                className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
+                title="受給者証の契約支給量を市町村へ報告する「契約内容報告書」を印刷 (対象者 1 名 = 1 枚)"
+              >
+                {keiyakuLoading ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+                契約報告書
+              </button>
+              <button
+                type="button"
+                disabled={futanIchiranRows.length === 0}
+                onClick={printFutanIchiran}
+                className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
+                title="上限管理を他事業所に依頼する対象者について、当事業所の総費用額・利用者負担額を記載した「利用者負担額一覧表」を印刷 (上限管理事業所へ提出)"
+              >
+                <Printer size={13} />負担額一覧表
+                {futanIchiranRows.length > 0 && ` (${futanIchiranRows.length})`}
+              </button>
+              <button
+                type="button"
                 disabled={jogenTargets.length === 0}
                 onClick={() => setJogenListOpen(true)}
                 className="border border-violet-500 rounded bg-violet-50 px-2.5 py-1 text-violet-700 hover:bg-violet-100 flex items-center gap-1.5 disabled:opacity-50"
@@ -1502,6 +1609,35 @@ export function ShogaiSeikyuContent({
             key={r.user_id}
             row={r}
             officeName={currentOffice?.name ?? null}
+            reiwa={year - 2018}
+            month={month}
+          />
+        ))}
+      </div>
+    )}
+
+    {/* ===== 印刷 view: 利用者負担額一覧表 (上限管理事業所へ提出。1 枚) ===== */}
+    {printMode === "futan" && (
+      <div className="hidden print:block">
+        <ShogaiFutanIchiranPrintSheet
+          rows={futanIchiranRows}
+          officeName={currentOffice?.name ?? null}
+          officeNumber={officeNumber}
+          reiwa={year - 2018}
+          month={month}
+        />
+      </div>
+    )}
+
+    {/* ===== 印刷 view: 契約内容報告書 (市町村へ。利用者 1 名 = 1 枚) ===== */}
+    {printMode === "keiyaku" && (
+      <div className="hidden print:block">
+        {keiyakuEntries.map((e) => (
+          <ShogaiKeiyakuHoukokuPrintSheet
+            key={e.row.user_id}
+            entry={e}
+            officeName={currentOffice?.name ?? null}
+            officeNumber={officeNumber}
             reiwa={year - 2018}
             month={month}
           />

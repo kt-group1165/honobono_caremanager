@@ -1167,3 +1167,213 @@ export function ShogaiJissekiKirokuhyoPrintSheet({
     </div>
   );
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4. ShogaiFutanIchiranPrintSheet — 利用者負担額一覧表
+   ──────────────────────────────────────────────────────────────────────────
+   自事業所が「非」上限管理事業所のとき、上限管理事業所へ提出する一覧表
+   (MORE の請求統合「負担一覧」相当)。上限管理区分が「他事業所」の利用者について、
+   当事業所の 総費用額・利用者負担額 を記載する。1 提出先ぶんを 1 枚にまとめる。
+   ═══════════════════════════════════════════════════════════════════════ */
+export function ShogaiFutanIchiranPrintSheet({
+  rows,
+  officeName,
+  officeNumber,
+  reiwa,
+  month,
+}: {
+  rows: ShogaiSeikyuRow[];
+  officeName: string | null;
+  officeNumber: string | null;
+  reiwa: number;
+  month: number;
+}) {
+  const th: React.CSSProperties = {
+    border: "0.5pt solid #000",
+    padding: "1.2mm 1.5mm",
+    fontSize: "8pt",
+    fontWeight: "normal",
+    textAlign: "center",
+    background: "#f5f5f5",
+  };
+  const td: React.CSSProperties = {
+    border: "0.5pt solid #000",
+    padding: "1.2mm 2mm",
+    fontSize: "9pt",
+    fontFamily: '"MS Gothic","ＭＳ ゴシック",monospace',
+    textAlign: "right",
+  };
+  const tdc: React.CSSProperties = { ...td, textAlign: "center" };
+  const tdl: React.CSSProperties = { ...td, textAlign: "left", fontFamily: '"MS Mincho","ＭＳ 明朝",serif' };
+  const total = rows.reduce(
+    (a, r) => ({ cost: a.cost + r.totalAmount, user: a.user + r.userAmount }),
+    { cost: 0, user: 0 },
+  );
+  return (
+    <div
+      style={{
+        pageBreakAfter: "always",
+        padding: "12mm",
+        fontFamily: '"MS Mincho","ＭＳ 明朝","游明朝",serif',
+        color: "#000",
+        fontSize: "9pt",
+        lineHeight: 1.4,
+        width: "210mm",
+        boxSizing: "border-box",
+      }}
+    >
+      <div style={{ textAlign: "center", fontSize: "13pt", fontWeight: "bold", letterSpacing: "2pt", marginBottom: "3mm" }}>
+        利用者負担額一覧表
+      </div>
+      <div style={{ textAlign: "right", fontSize: "10pt", marginBottom: "1mm" }}>
+        令和{reiwa}年{month}月分
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3mm", fontSize: "9pt" }}>
+        <div style={{ paddingTop: "2mm" }}>（提出先）上限額管理事業所　御中</div>
+        <table style={{ borderCollapse: "collapse", width: "80mm" }}>
+          <tbody>
+            <tr>
+              <td style={{ ...th, width: "24mm", textAlign: "left" }}>事業所番号</td>
+              <td style={{ ...tdc, fontWeight: "bold" }}>{officeNumber ?? ""}</td>
+            </tr>
+            <tr>
+              <td style={{ ...th, textAlign: "left" }}>事業所名称</td>
+              <td style={tdl}>{officeName ?? ""}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <thead>
+          <tr>
+            <th style={{ ...th, width: "10mm" }}>No.</th>
+            <th style={{ ...th, width: "34mm" }}>受給者証番号</th>
+            <th style={th}>支給決定障害者等氏名</th>
+            <th style={{ ...th, width: "40mm" }}>総費用額</th>
+            <th style={{ ...th, width: "40mm" }}>利用者負担額</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={r.user_id}>
+              <td style={tdc}>{i + 1}</td>
+              <td style={tdc}>{r.beneficiary_number ?? ""}</td>
+              <td style={tdl}>{r.user_name}</td>
+              <td style={td}>{r.totalAmount.toLocaleString()}</td>
+              <td style={td}>{r.userAmount.toLocaleString()}</td>
+            </tr>
+          ))}
+          <tr>
+            <td style={{ ...th, textAlign: "center" }} colSpan={3}>合計</td>
+            <td style={{ ...td, fontWeight: "bold" }}>{total.cost.toLocaleString()}</td>
+            <td style={{ ...td, fontWeight: "bold" }}>{total.user.toLocaleString()}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style={{ marginTop: "3mm", fontSize: "7.5pt", color: "#000" }}>
+        ※ 本表は当事業所ぶんの総費用額・利用者負担額です。上限額管理事業所にて合算・調整のうえ、
+        上限額管理結果票を作成してください。
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   5. ShogaiKeiyakuHoukokuPrintSheet — 契約内容(サービス提供)報告書
+   ──────────────────────────────────────────────────────────────────────────
+   受給者証の契約支給量を市町村へ報告する書類 (MORE 請求管理「契約内容報告書」相当)。
+   利用者 1 名 = 1 枚。契約情報は受給者証 (contract_amount_text 等) から呼出側が渡す。
+   ═══════════════════════════════════════════════════════════════════════ */
+export interface ShogaiKeiyakuEntry {
+  row: ShogaiSeikyuRow;
+  contractAmountText: string | null;
+  contractStartDate: string | null;
+  contractEntryNumber: string | null;
+}
+export function ShogaiKeiyakuHoukokuPrintSheet({
+  entry,
+  officeName,
+  officeNumber,
+  reiwa,
+  month,
+}: {
+  entry: ShogaiKeiyakuEntry;
+  officeName: string | null;
+  officeNumber: string | null;
+  reiwa: number;
+  month: number;
+}) {
+  const { row: r } = entry;
+  const th: React.CSSProperties = {
+    border: "0.5pt solid #000",
+    padding: "1.5mm 2mm",
+    fontSize: "9pt",
+    fontWeight: "normal",
+    textAlign: "left",
+    background: "#f5f5f5",
+    width: "40mm",
+    whiteSpace: "nowrap",
+  };
+  const td: React.CSSProperties = {
+    border: "0.5pt solid #000",
+    padding: "1.5mm 2.5mm",
+    fontSize: "9.5pt",
+  };
+  return (
+    <div
+      style={{
+        pageBreakAfter: "always",
+        padding: "14mm",
+        fontFamily: '"MS Mincho","ＭＳ 明朝","游明朝",serif',
+        color: "#000",
+        fontSize: "9.5pt",
+        lineHeight: 1.5,
+        width: "210mm",
+        boxSizing: "border-box",
+      }}
+    >
+      <div style={{ textAlign: "center", fontSize: "13pt", fontWeight: "bold", letterSpacing: "2pt", marginBottom: "5mm" }}>
+        契約内容（サービス提供）報告書
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5mm" }}>
+        <div style={{ paddingTop: "3mm", fontSize: "10pt" }}>
+          （提出先）支給決定市町村長　殿
+        </div>
+        <div style={{ fontSize: "9pt", textAlign: "right" }}>
+          令和{reiwa}年{month}月<br />
+          事業所番号：<span style={{ fontFamily: '"MS Gothic",monospace' }}>{officeNumber ?? ""}</span><br />
+          事業所名称：{officeName ?? ""}
+        </div>
+      </div>
+      <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <tbody>
+          <tr>
+            <td style={th}>受給者証番号</td>
+            <td style={{ ...td, fontFamily: '"MS Gothic",monospace' }}>{r.beneficiary_number ?? ""}</td>
+          </tr>
+          <tr>
+            <td style={th}>支給決定障害者等氏名</td>
+            <td style={td}>{r.user_name}</td>
+          </tr>
+          <tr>
+            <td style={th}>契約日</td>
+            <td style={td}>{entry.contractStartDate ?? ""}</td>
+          </tr>
+          <tr>
+            <td style={th}>契約支給量</td>
+            <td style={{ ...td, whiteSpace: "pre-wrap", minHeight: "20mm" }}>
+              {entry.contractAmountText ?? ""}
+            </td>
+          </tr>
+          <tr>
+            <td style={th}>事業者記入欄（整理番号）</td>
+            <td style={{ ...td, fontFamily: '"MS Gothic",monospace' }}>{entry.contractEntryNumber ?? ""}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style={{ marginTop: "6mm", fontSize: "8pt", color: "#000" }}>
+        上記のとおり、指定障害福祉サービスの提供に係る契約内容を報告します。
+      </div>
+    </div>
+  );
+}
