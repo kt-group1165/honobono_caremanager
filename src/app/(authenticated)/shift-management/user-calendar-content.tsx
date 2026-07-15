@@ -59,6 +59,7 @@ import {
 } from "./additional-staff-section";
 import { StaffSuggestChips } from "./staff-suggest-chips";
 import { PreferredStaffModal } from "./preferred-staff-modal";
+import { isServiceStarted, startService, ServiceStartModal } from "./service-start-gate";
 import {
   getHospitalizationMap,
   isHospitalizedOn,
@@ -204,6 +205,9 @@ export function UserCalendar({
   const [addDoukou, setAddDoukou] = useState(false);
   const [addSaving, setAddSaving] = useState(false);
   const [showAddServiceSelector, setShowAddServiceSelector] = useState(false);
+  // サービス開始ゲート (未開始の利用者に予定を足すとき開始日入力を挟む)
+  const [svcStartOpen, setSvcStartOpen] = useState(false);
+  const [svcStartSaving, setSvcStartSaving] = useState(false);
   // drag & drop: ドロップ先セルのハイライト用
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
   // 優先ヘルパー設定モーダル (割当サジェスト用)
@@ -468,6 +472,23 @@ export function UserCalendar({
       toast.error("サービスを選択してください");
       return;
     }
+    // サービス開始ゲート: 自事業所で未開始なら confirm → 開始日モーダル経由で保存
+    if (currentOfficeId) {
+      const started = await isServiceStarted(supabase, userId, currentOfficeId);
+      if (started === false) {
+        const ok = window.confirm(
+          "この利用者は自事業所でサービスが開始になっていません。サービスを開始しますか？\n(キャンセルすると予定は登録されません)",
+        );
+        if (!ok) return;
+        setSvcStartOpen(true); // モーダルの OK 後に performAddSave を続行
+        return;
+      }
+    }
+    await performAddSave();
+  };
+
+  const performAddSave = async () => {
+    if (!addModal) return;
     setAddSaving(true);
     // 熟練同行: 障害の重訪で 2 人以上 + チェック ON のとき、同行コードへ差し替え
     const addBaseService = addForm.service_name || addForm.service_type;
@@ -916,6 +937,25 @@ export function UserCalendar({
       )}
 
       {/* Add Schedule Modal */}
+      <ServiceStartModal
+        open={svcStartOpen}
+        defaultDate={addModal ?? ""}
+        saving={svcStartSaving}
+        onOk={async (d) => {
+          if (!currentOfficeId) return;
+          setSvcStartSaving(true);
+          const err = await startService(supabase, userId, currentOfficeId, d);
+          setSvcStartSaving(false);
+          if (err) {
+            toast.error("サービス開始の登録に失敗: " + err);
+            return;
+          }
+          toast.success("サービスを開始しました");
+          setSvcStartOpen(false);
+          await performAddSave();
+        }}
+        onCancel={() => setSvcStartOpen(false)}
+      />
       {addModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-xl bg-white shadow-xl">

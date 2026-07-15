@@ -55,6 +55,7 @@ import {
   type AdditionalStaffRow,
 } from "./additional-staff-section";
 import { StaffSuggestChips } from "./staff-suggest-chips";
+import { isServiceStarted, startService, ServiceStartModal } from "./service-start-gate";
 import {
   useKaigoVisitSchedulesByUser,
   useKaigoVisitSchedulesByStaff,
@@ -197,6 +198,9 @@ export function MonthlyIndividualView({
   const [addServiceSystem, setAddServiceSystem] = useState<string | null>(null);
   const [addSaving, setAddSaving] = useState(false);
   const [showAddServiceSelector, setShowAddServiceSelector] = useState(false);
+  // サービス開始ゲート (未開始の利用者に予定を足すとき開始日入力を挟む)
+  const [svcStartOpen, setSvcStartOpen] = useState(false);
+  const [svcStartSaving, setSvcStartSaving] = useState(false);
 
   const monthFrom = useMemo(() => format(startOfMonth(currentMonth), "yyyy-MM-dd"), [currentMonth]);
   const monthTo = useMemo(() => format(endOfMonth(currentMonth), "yyyy-MM-dd"), [currentMonth]);
@@ -748,6 +752,22 @@ export function MonthlyIndividualView({
   const handleAddSave = async () => {
     if (!addForm.visit_date) { toast.error("利用日を選択してください"); return; }
     if (!addForm.service_name) { toast.error("サービスを選択してください"); return; }
+    // サービス開始ゲート: 自事業所で未開始なら confirm → 開始日モーダル経由で保存
+    if (entityType === "user" && currentOfficeId) {
+      const started = await isServiceStarted(supabase, entityId, currentOfficeId);
+      if (started === false) {
+        const ok = window.confirm(
+          "この利用者は自事業所でサービスが開始になっていません。サービスを開始しますか？\n(キャンセルすると予定は登録されません)",
+        );
+        if (!ok) return;
+        setSvcStartOpen(true); // モーダルの OK 後に performAddSave を続行
+        return;
+      }
+    }
+    await performAddSave();
+  };
+
+  const performAddSave = async () => {
     setAddSaving(true);
     // 熟練同行: 障害の重訪で 2 人以上 + チェック ON のとき、同行コードへ差し替え
     const addBaseService = addForm.service_name || addForm.service_type;
@@ -1410,6 +1430,25 @@ export function MonthlyIndividualView({
       </div>
 
       {/* サービス追加モーダル (新規予定。介護・障害 両対応) */}
+      <ServiceStartModal
+        open={svcStartOpen}
+        defaultDate={addForm.visit_date}
+        saving={svcStartSaving}
+        onOk={async (d) => {
+          if (!currentOfficeId) return;
+          setSvcStartSaving(true);
+          const err = await startService(supabase, entityId, currentOfficeId, d);
+          setSvcStartSaving(false);
+          if (err) {
+            toast.error("サービス開始の登録に失敗: " + err);
+            return;
+          }
+          toast.success("サービスを開始しました");
+          setSvcStartOpen(false);
+          await performAddSave();
+        }}
+        onCancel={() => setSvcStartOpen(false)}
+      />
       {addOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-xl bg-white shadow-xl max-h-[90vh] overflow-y-auto">
