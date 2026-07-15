@@ -1039,7 +1039,10 @@ export function CareCertContent({
             </div>
 
             {/* 担当居宅介護支援事業所 (様式第二⑦ / 7131 居宅サービス計画欄) */}
-            {/* 2way: マスタから選択 (care_office_id) ⇔ 直接入力 (number/name)。相互排他 */}
+            {/* マスタ選択 (care_office_id) に一本化 (2026-07-15)。直接入力 (number/name) は
+                旧方式のデータ表示のみ残す — 名前表示 (care_offices JOIN) や集中減算の
+                法人名寄せから漏れるため新規入力は不可。マスタに無い事業所は
+                マスタ管理 → ケアマネ事業所 (opendata 検索) で登録してから選択する */}
             <div className="rounded border border-sky-200 bg-sky-50/40 p-2 space-y-2">
               <p className="text-xs font-bold text-sky-800">担当居宅介護支援事業所</p>
 
@@ -1092,37 +1095,29 @@ export function CareCertContent({
                 )}
               </div>
 
-              {/* ── 直接入力 (マスタに無い場合) ── */}
-              <div>
-                <label className={labelCls}>事業所番号（10桁）— マスタに無い場合の直接入力</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={form.care_office_number}
-                  onChange={(e) => {
-                    const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 10);
-                    // 直接入力を始めたらマスタ選択は解除 (排他)
-                    setForm((prev) => ({ ...prev, care_office_number: v, care_office_id: "" }));
-                  }}
-                  className={inp}
-                  placeholder="0000000000"
-                />
-              </div>
-              <div>
-                <label className={labelCls}>事業所名（任意）</label>
-                <input
-                  type="text"
-                  value={form.care_office_name}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setForm((prev) => ({ ...prev, care_office_name: v, care_office_id: "" }));
-                  }}
-                  className={inp}
-                  placeholder="〇〇居宅介護支援事業所"
-                />
-              </div>
+              {/* ── 旧方式 (直接入力) のデータが残っている場合のみ表示 ── */}
+              {!form.care_office_id && (form.care_office_number || form.care_office_name) && (
+                <div className="flex items-center justify-between gap-2 rounded border border-amber-300 bg-amber-50 px-2 py-1">
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-bold text-amber-700">旧方式 (番号直接入力) のデータ</div>
+                    <div className="truncate text-xs text-gray-800">
+                      <span className="font-mono">{form.care_office_number || "番号なし"}</span>
+                      {form.care_office_name && <span className="ml-1">{form.care_office_name}</span>}
+                    </div>
+                    <div className="text-[10px] text-amber-700">上のマスタ選択に置き換えてください (選択すると自動でクリアされます)</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForm((prev) => ({ ...prev, care_office_number: "", care_office_name: "" }))}
+                    className="shrink-0 rounded p-0.5 text-amber-500 hover:bg-amber-100 hover:text-amber-700 transition-colors"
+                    title="直接入力データをクリア"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
               <p className="text-[10px] text-gray-500">
-                通常はマスタ（マスタ管理 → ケアマネ事業所）から選択します。マスタに無い事業所のみ番号を直接入力してください（直接入力すると選択は解除されます）。様式第二⑦・7131（居宅サービス計画）に反映されます。
+                マスタ（マスタ管理 → ケアマネ事業所）から選択してください。マスタに無い事業所は、マスタ管理 → ケアマネ事業所 で登録（事業所番号検索）してから選択します。様式第二⑦・7131（居宅サービス計画）・利用者請求書の事業者名・集中減算の集計に反映されます。
               </p>
             </div>
 
