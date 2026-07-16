@@ -78,15 +78,16 @@ const genderCode = (g: string | null) =>
   g == null ? "" : g.includes("女") ? "2" : g.includes("男") ? "1" : "";
 
 /**
- * 総合事業のサービスコード (CB_A21111 / K_A26184 等) から、
+ * 総合事業のサービスコード (CB_A21111 / MB_A21111 / IC_A31031 等) から、
  * 伝送用の サービス種類コード (2桁) + サービス項目コード (4桁) を取り出す。
- * 保険者プレフィックス (CB_ / K_) を除去し、残り 6 桁 (A2 + 4桁) を分解する。
+ * 自治体プレフィックス (CB_/K_/IH_/MB_/IC_/CS_ 等、英大文字+_) を除去し、
+ * 残り 6 桁 (A2 + 4桁) を分解する (伝送はprefix無しの公式コードで出す)。
  */
 function splitSougouCode(
   code: string,
 ): { kind: string; item: string } | null {
-  // "CB_A21111" → "A21111" / "K_A26184" → "A26184"
-  const stripped = code.replace(/^(CB_|K_)/, "");
+  // "MB_A21111" → "A21111" / "IC_A31031" → "A31031" (任意の自治体prefixを除去)
+  const stripped = code.replace(/^[A-Z]+_/, "");
   // 英字1 + 数字1 + 数字4 = 6 桁 (A2 + 1111)
   if (!/^[A-Z]\d{5}$/.test(stripped)) return null;
   return { kind: stripped.slice(0, 2), item: stripped.slice(2, 6) };
