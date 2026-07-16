@@ -34,6 +34,13 @@ export function WageSettingsContent() {
   const [mappings, setMappings] = useState<Map<string, string | null>>(new Map());
   const [serviceTypes, setServiceTypes] = useState<string[]>([]);
 
+  // 手当設定
+  const [cancelUnitPrice, setCancelUnitPrice] = useState<string>("0");
+  const [allowanceMissing, setAllowanceMissing] = useState(false);
+  const [partStaff, setPartStaff] = useState<
+    { id: string; name: string; socialInsurance: boolean }[]
+  >([]);
+
   // 新規類型フォーム
   const [newName, setNewName] = useState("");
   const [newRate, setNewRate] = useState("");
@@ -84,6 +91,51 @@ export function WageSettingsContent() {
       }
       for (const k of mm.keys()) set.add(k);
       setServiceTypes([...set].sort((a, b) => a.localeCompare(b, "ja")));
+
+      // ── 手当設定 (v2) ──
+      const { data: os, error: oe } = await supabase
+        .from("kaigo_payroll_office_settings")
+        .select("cancel_unit_price")
+        .eq("office_id", officeId)
+        .maybeSingle();
+      if (oe && isMissing(oe.code)) {
+        setAllowanceMissing(true);
+      } else {
+        setAllowanceMissing(false);
+        setCancelUnitPrice(String((os as { cancel_unit_price?: number } | null)?.cancel_unit_price ?? 0));
+
+        // 自事業所のパート職員
+        const { data: mem } = await supabase
+          .from("members")
+          .select("id, name, furigana, employment_type, member_offices!inner(office_id)")
+          .eq("employment_type", "パート")
+          .eq("member_offices.office_id", officeId)
+          .eq("status", "active");
+        const members = (mem ?? []) as { id: string; name: string }[];
+        const ids = members.map((m) => m.id);
+        const siMap = new Map<string, boolean>();
+        if (ids.length > 0) {
+          const { data: ss } = await supabase
+            .from("kaigo_payroll_staff_settings")
+            .select("member_id, social_insurance")
+            .in("member_id", ids);
+          for (const s of (ss ?? []) as {
+            member_id: string;
+            social_insurance: boolean;
+          }[]) {
+            siMap.set(s.member_id, s.social_insurance);
+          }
+        }
+        setPartStaff(
+          members
+            .map((m) => ({
+              id: m.id,
+              name: m.name,
+              socialInsurance: siMap.get(m.id) ?? false,
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name, "ja")),
+        );
+      }
     } catch (e) {
       toast.error("設定の取得に失敗: " + (e instanceof Error ? e.message : String(e)));
     } finally {
@@ -168,6 +220,42 @@ export function WageSettingsContent() {
       return;
     }
     setMappings((prev) => new Map(prev).set(serviceType, categoryId));
+  };
+
+  const saveCancelUnitPrice = async () => {
+    if (!officeId) return;
+    const price = Math.round(Number(cancelUnitPrice));
+    if (!Number.isFinite(price) || price < 0) {
+      toast.warning("キャンセル単価は 0 以上の数値で入力してください");
+      return;
+    }
+    const { error } = await supabase
+      .from("kaigo_payroll_office_settings")
+      .upsert(
+        { office_id: officeId, cancel_unit_price: price },
+        { onConflict: "office_id" },
+      );
+    if (error) {
+      toast.error("キャンセル単価の保存に失敗: " + error.message);
+      return;
+    }
+    toast.success("キャンセル単価を保存しました");
+  };
+
+  const toggleSocialInsurance = async (memberId: string, value: boolean) => {
+    const { error } = await supabase
+      .from("kaigo_payroll_staff_settings")
+      .upsert(
+        { member_id: memberId, social_insurance: value },
+        { onConflict: "member_id" },
+      );
+    if (error) {
+      toast.error("社会保険の保存に失敗: " + error.message);
+      return;
+    }
+    setPartStaff((prev) =>
+      prev.map((p) => (p.id === memberId ? { ...p, socialInsurance: value } : p)),
+    );
   };
 
   if (!officeId) {
@@ -375,6 +463,84 @@ export function WageSettingsContent() {
                 </tbody>
               </table>
             </div>
+          </section>
+
+          {/* ③ 手当設定 (キャンセル・通信) */}
+          <section>
+            <h2 className="mb-2 text-sm font-bold text-gray-800">③ 手当設定</h2>
+            {allowanceMissing ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                手当設定テーブルが未作成です。
+                <code className="mx-1 rounded bg-amber-100 px-1">
+                  migrations/kaigo_part_time_wage_v2_allowances.sql
+                </code>
+                を適用してください。
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* キャンセル単価 */}
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm">
+                  <span className="font-medium text-gray-700">キャンセル手当 単価</span>
+                  <input
+                    type="number"
+                    value={cancelUnitPrice}
+                    onChange={(e) => setCancelUnitPrice(e.target.value)}
+                    className="w-28 rounded border px-2 py-1 text-right font-mono"
+                  />
+                  <span className="text-gray-500">円 / 件</span>
+                  <button
+                    type="button"
+                    onClick={saveCancelUnitPrice}
+                    className="ml-1 rounded bg-indigo-600 px-2 py-1 text-xs font-semibold text-white hover:bg-indigo-700"
+                  >
+                    保存
+                  </button>
+                  <span className="text-xs text-gray-400">
+                    キャンセル手当 = キャンセル件数 × 単価
+                  </span>
+                </div>
+
+                {/* 社会保険 (通信手当) */}
+                <div>
+                  <div className="mb-1 text-xs text-gray-500">
+                    通信手当は社保<span className="font-semibold">未加入</span>の職員のみ支給（実働50h超=1000円 / 0h超=500円）。加入者はチェックを入れてください。
+                  </div>
+                  <div className="overflow-x-auto rounded-lg border">
+                    <table className="w-full min-w-[360px] text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 text-gray-600">
+                          <th className="px-3 py-1.5 text-left">パート職員</th>
+                          <th className="px-3 py-1.5 text-center">社会保険 加入</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {partStaff.map((p) => (
+                          <tr key={p.id} className="border-t">
+                            <td className="px-3 py-1.5 text-gray-800">{p.name}</td>
+                            <td className="px-3 py-1.5 text-center">
+                              <input
+                                type="checkbox"
+                                checked={p.socialInsurance}
+                                onChange={(e) =>
+                                  toggleSocialInsurance(p.id, e.target.checked)
+                                }
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                        {partStaff.length === 0 && (
+                          <tr className="border-t">
+                            <td colSpan={2} className="px-3 py-4 text-center text-gray-400">
+                              この事業所のパート職員がいません。
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
         </div>
       )}

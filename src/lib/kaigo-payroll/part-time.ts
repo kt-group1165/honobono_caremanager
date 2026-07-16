@@ -50,14 +50,48 @@ export interface PartTimeStaffResult {
   totalPay: number; // 時給×実働の合計 (未マッピングは除外)
   unmappedCount: number;
   unmappedMinutes: number;
+  // ── 手当 (第2弾) ──
+  cancelCount: number; // キャンセル件数
+  cancelAllowance: number; // キャンセル手当 = 件数 × 単価
+  socialInsurance: boolean; // 社保 加入/未加入
+  commAllowance: number; // 通信手当 (社保未加入者のみ)
+  allowanceTotal: number; // 手当合計 (cancel + comm)
+  grossTotal: number; // 総支給 = totalPay + allowanceTotal
+}
+
+/** 手当計算の入力 (第2弾)。省略時は手当 0 で第1弾と同じ結果になる */
+export interface PartTimeAllowanceOpts {
+  /** キャンセル件数 (staffId → 件数) */
+  cancelCountByStaff?: Map<string, number>;
+  /** キャンセル単価 (円/件、事業所別) */
+  cancelUnitPrice?: number;
+  /** 社会保険 加入 (staffId → true=加入)。未指定は「未加入」扱い (= 通信手当あり) */
+  socialInsuranceByStaff?: Map<string, boolean>;
+  /** 職員名簿 (staffId → 名前/かな)。キャンセルのみで訪問実績が無い職員も行に出すため */
+  staffRoster?: Map<string, { name: string; kana?: string }>;
 }
 
 export interface PartTimePayrollResult {
   byStaff: PartTimeStaffResult[];
   /** マッピング未設定で pay 計算できなかった service_type の生値一覧 */
   unmappedServiceTypes: string[];
-  grandTotalPay: number;
+  grandTotalPay: number; // 時給分
   grandTotalMinutes: number;
+  grandCancelAllowance: number;
+  grandCommAllowance: number;
+  grandAllowance: number; // 手当合計
+  grandGross: number; // 総支給
+}
+
+/** 通信手当: 社保未加入者のみ、実働 50h超=1000 / 0h超=500 / 0=0 (payroll と同じ) */
+export function commAllowanceFor(
+  socialInsurance: boolean,
+  workedMinutes: number,
+): number {
+  if (socialInsurance) return 0;
+  if (workedMinutes > 50 * 60) return 1000;
+  if (workedMinutes > 0) return 500;
+  return 0;
 }
 
 const toMinutes = (n: number): number =>
@@ -70,6 +104,7 @@ export function calcPartTimePayroll(
   visits: PartTimeVisit[],
   mappings: { serviceType: string; categoryId: string | null }[],
   categories: WageCategory[],
+  allowanceOpts: PartTimeAllowanceOpts = {},
 ): PartTimePayrollResult {
   const catById = new Map(categories.map((c) => [c.id, c]));
   const catByServiceType = new Map<string, WageCategory | null>();
@@ -106,6 +141,12 @@ export function calcPartTimePayroll(
         totalPay: 0,
         unmappedCount: 0,
         unmappedMinutes: 0,
+        cancelCount: 0,
+        cancelAllowance: 0,
+        socialInsurance: false,
+        commAllowance: 0,
+        allowanceTotal: 0,
+        grossTotal: 0,
       };
       byStaffMap.set(v.staffId, s);
     }
@@ -130,6 +171,50 @@ export function calcPartTimePayroll(
     }
   }
 
+  // ── 手当 (第2弾): キャンセル・通信 ──
+  const cancelMap = allowanceOpts.cancelCountByStaff ?? new Map();
+  const cancelUnitPrice = allowanceOpts.cancelUnitPrice ?? 0;
+  const siMap = allowanceOpts.socialInsuranceByStaff ?? new Map();
+  const roster = allowanceOpts.staffRoster ?? new Map();
+
+  // キャンセルのみで訪問実績が無い職員も行に出す
+  for (const [staffId, count] of cancelMap) {
+    if (count > 0 && !byStaffMap.has(staffId)) {
+      const meta = roster.get(staffId);
+      byStaffMap.set(staffId, {
+        staffId,
+        staffName: meta?.name ?? "",
+        staffNameKana: meta?.kana ?? "",
+        visits: [],
+        totalMinutes: 0,
+        paidMinutes: 0,
+        totalPay: 0,
+        unmappedCount: 0,
+        unmappedMinutes: 0,
+        cancelCount: 0,
+        cancelAllowance: 0,
+        socialInsurance: false,
+        commAllowance: 0,
+        allowanceTotal: 0,
+        grossTotal: 0,
+      });
+    }
+  }
+
+  // 通信手当は socialInsuranceByStaff が渡された時のみ計算 (= 機能ON)。
+  // 未指定 (第1弾/手当なし) では 0 のままにして gross = totalPay を保つ。
+  const commEnabled = allowanceOpts.socialInsuranceByStaff !== undefined;
+  for (const s of byStaffMap.values()) {
+    s.cancelCount = cancelMap.get(s.staffId) ?? 0;
+    s.cancelAllowance = s.cancelCount * cancelUnitPrice;
+    s.socialInsurance = siMap.get(s.staffId) ?? false;
+    s.commAllowance = commEnabled
+      ? commAllowanceFor(s.socialInsurance, s.totalMinutes)
+      : 0;
+    s.allowanceTotal = s.cancelAllowance + s.commAllowance;
+    s.grossTotal = s.totalPay + s.allowanceTotal;
+  }
+
   const byStaff = [...byStaffMap.values()].sort((a, b) =>
     (a.staffNameKana || a.staffName).localeCompare(
       b.staffNameKana || b.staffName,
@@ -146,6 +231,8 @@ export function calcPartTimePayroll(
     );
   }
 
+  const grandCancelAllowance = byStaff.reduce((s, x) => s + x.cancelAllowance, 0);
+  const grandCommAllowance = byStaff.reduce((s, x) => s + x.commAllowance, 0);
   return {
     byStaff,
     unmappedServiceTypes: [...unmappedSet].sort((a, b) =>
@@ -153,6 +240,10 @@ export function calcPartTimePayroll(
     ),
     grandTotalPay: byStaff.reduce((s, x) => s + x.totalPay, 0),
     grandTotalMinutes: byStaff.reduce((s, x) => s + x.totalMinutes, 0),
+    grandCancelAllowance,
+    grandCommAllowance,
+    grandAllowance: grandCancelAllowance + grandCommAllowance,
+    grandGross: byStaff.reduce((s, x) => s + x.grossTotal, 0),
   };
 }
 

@@ -68,9 +68,28 @@ export async function loadPartTimePayroll(
   if (se) throw new Error("実績の取得に失敗: " + se.message);
   const schedules = (sch ?? []) as ScheduleRow[];
 
-  // 2) 関与職員 → members でパート判定
+  // 1b) 当月のキャンセル (キャンセル手当用)。担当職員ごとに件数を数える
+  const { data: canc } = await supabase
+    .from("kaigo_visit_schedule")
+    .select("staff_id, staff_id_2, staff_id_3")
+    .eq("office_id", officeId)
+    .eq("status", "cancelled")
+    .gte("visit_date", start)
+    .lt("visit_date", end);
+  const cancelled = (canc ?? []) as {
+    staff_id: string | null;
+    staff_id_2: string | null;
+    staff_id_3: string | null;
+  }[];
+
+  // 2) 関与職員 (実績 + キャンセル) → members でパート判定
   const staffIds = new Set<string>();
   for (const r of schedules) {
+    if (r.staff_id) staffIds.add(r.staff_id);
+    if (r.staff_id_2) staffIds.add(r.staff_id_2);
+    if (r.staff_id_3) staffIds.add(r.staff_id_3);
+  }
+  for (const r of cancelled) {
     if (r.staff_id) staffIds.add(r.staff_id);
     if (r.staff_id_2) staffIds.add(r.staff_id_2);
     if (r.staff_id_3) staffIds.add(r.staff_id_3);
@@ -173,12 +192,61 @@ export async function loadPartTimePayroll(
     }
   }
 
+  // 5) キャンセル件数 (パート職員のみ、主+2/3人目)
+  const cancelCountByStaff = new Map<string, number>();
+  const staffRoster = new Map<string, { name: string; kana?: string }>();
+  const addCancel = (id: string | null) => {
+    if (!isPart(id) || !id) return;
+    cancelCountByStaff.set(id, (cancelCountByStaff.get(id) ?? 0) + 1);
+    const m = memberById.get(id)!;
+    if (!staffRoster.has(id))
+      staffRoster.set(id, { name: m.name, kana: m.furigana ?? undefined });
+  };
+  for (const r of cancelled) {
+    addCancel(r.staff_id);
+    addCancel(r.staff_id_2);
+    addCancel(r.staff_id_3);
+  }
+
+  // 6) 事業所のキャンセル単価 + 職員の社会保険 (v2 未適用でも第1弾どおり動く)
+  let cancelUnitPrice = 0;
+  const { data: os } = await supabase
+    .from("kaigo_payroll_office_settings")
+    .select("cancel_unit_price")
+    .eq("office_id", officeId)
+    .maybeSingle();
+  if (os) cancelUnitPrice = (os as { cancel_unit_price: number }).cancel_unit_price ?? 0;
+
+  let socialInsuranceByStaff: Map<string, boolean> | undefined;
+  const partIds = [...partSet, ...cancelCountByStaff.keys()];
+  if (partIds.length > 0) {
+    const { data: ss, error: sse } = await supabase
+      .from("kaigo_payroll_staff_settings")
+      .select("member_id, social_insurance")
+      .in("member_id", [...new Set(partIds)]);
+    if (!sse || !isMissing(sse.code)) {
+      // テーブルが在る (未適用でなければ) → 通信手当を有効化 (行が無い職員は既定=未加入)
+      socialInsuranceByStaff = new Map();
+      for (const s of (ss ?? []) as {
+        member_id: string;
+        social_insurance: boolean;
+      }[]) {
+        socialInsuranceByStaff.set(s.member_id, s.social_insurance);
+      }
+    }
+  }
+
   const serviceTypesInData = [
     ...new Set(schedules.map((r) => r.service_type ?? "(未設定)")),
   ].sort((a, b) => a.localeCompare(b, "ja"));
 
   return {
-    result: calcPartTimePayroll(visits, mappings, categories),
+    result: calcPartTimePayroll(visits, mappings, categories, {
+      cancelCountByStaff,
+      cancelUnitPrice,
+      socialInsuranceByStaff,
+      staffRoster,
+    }),
     categories,
     serviceTypesInData,
     settingsMissing,

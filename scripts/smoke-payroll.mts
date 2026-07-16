@@ -5,6 +5,7 @@
  */
 import {
   calcPartTimePayroll,
+  commAllowanceFor,
   minutesBetween,
   type PartTimeVisit,
   type WageCategory,
@@ -57,6 +58,48 @@ eq("grandTotalPay = 3150+2250 = 5400", r.grandTotalPay, 5400);
 eq("grandTotalMinutes = 135+150 = 285", r.grandTotalMinutes, 285);
 eq("unmappedServiceTypes = [謎サービス]", r.unmappedServiceTypes, ["謎サービス"]);
 eq("並び順 五十音 (板垣→太田)", r.byStaff.map((x) => x.staffName), ["板垣", "太田"]);
+
+// 手当なし (opts 省略) は grossTotal = totalPay
+eq("手当省略時 s1 grossTotal = totalPay", r.byStaff.find((x) => x.staffId === "s1")?.grossTotal, 3150);
+eq("手当省略時 grandGross = grandTotalPay", r.grandGross, 5400);
+
+// ── 手当あり ──
+// s1: 実働135分(<50h) 社保未加入 → 通信500。キャンセル2件×1000=2000。gross=3150+2500=5650
+// s2: 実働150分 社保加入 → 通信0。キャンセル0。gross=2250
+// s3: 訪問実績なし・キャンセル1件のみ (社保未加入) → cancel1000 + 通信0(実働0) = gross1000
+const ra = calcPartTimePayroll(visits, mappings, categories, {
+  cancelUnitPrice: 1000,
+  cancelCountByStaff: new Map([
+    ["s1", 2],
+    ["s3", 1],
+  ]),
+  socialInsuranceByStaff: new Map([
+    ["s1", false],
+    ["s2", true],
+  ]),
+  staffRoster: new Map([["s3", { name: "新人", kana: "しんじん" }]]),
+});
+const a1 = ra.byStaff.find((x) => x.staffId === "s1");
+const a2 = ra.byStaff.find((x) => x.staffId === "s2");
+const a3 = ra.byStaff.find((x) => x.staffId === "s3");
+eq("s1 commAllowance = 500 (未加入/135分)", a1?.commAllowance, 500);
+eq("s1 cancelAllowance = 2*1000 = 2000", a1?.cancelAllowance, 2000);
+eq("s1 grossTotal = 3150+2000+500 = 5650", a1?.grossTotal, 5650);
+eq("s2 commAllowance = 0 (社保加入)", a2?.commAllowance, 0);
+eq("s2 grossTotal = 2250", a2?.grossTotal, 2250);
+eq("s3 訪問無しでもキャンセルで行に出る", a3?.staffName, "新人");
+eq("s3 cancelAllowance = 1000", a3?.cancelAllowance, 1000);
+eq("s3 commAllowance = 0 (実働0)", a3?.commAllowance, 0);
+eq("s3 grossTotal = 1000", a3?.grossTotal, 1000);
+eq("grandCancelAllowance = 2000+1000 = 3000", ra.grandCancelAllowance, 3000);
+eq("grandCommAllowance = 500", ra.grandCommAllowance, 500);
+eq("grandGross = 5650+2250+1000 = 8900", ra.grandGross, 8900);
+
+// 通信手当 50h境界 (ちょうど50h=3000分 は 500、50h超 は 1000)
+eq("通信 50h ちょうど = 500", commAllowanceFor(false, 50 * 60), 500);
+eq("通信 50h超 = 1000", commAllowanceFor(false, 50 * 60 + 1), 1000);
+eq("通信 0分 = 0", commAllowanceFor(false, 0), 0);
+eq("通信 社保加入 = 0", commAllowanceFor(true, 9999), 0);
 
 if (fail === 0) {
   console.log("\nPASS — パート給与 計算スモーク 全一致");
