@@ -23,6 +23,7 @@ import {
   Bell,
   Loader2,
   Building2,
+  Wallet,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -136,6 +137,7 @@ const NAV_HOME_CARE_SECTIONED: SectionSpec[] = [
     title: "管理",
     items: [
       { name: "職員管理", href: "/staff", icon: UserCog },
+      { name: "パート給与", href: "/staff-payroll", icon: Wallet },
       { name: "マスタ管理", href: "/master", icon: Settings },
       { name: "設定", href: "/settings", icon: UserCog },
       { name: "マニュアル", href: "/manual", icon: BookOpen },

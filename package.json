@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "smoke": "tsx scripts/smoke.mts"
+    "smoke": "tsx scripts/smoke.mts",
+    "smoke:payroll": "tsx scripts/smoke-payroll.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
