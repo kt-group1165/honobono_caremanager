@@ -163,7 +163,7 @@ export function buildSougouDensou(
       String(hRows.length),
       String(hRows.reduce((s, r) => s + r.totalUnits, 0)),
       String(hRows.reduce((s, r) => s + r.totalAmount, 0)),
-      String(hRows.reduce((s, r) => s + r.insuranceAmount, 0)), // 事業費請求額
+      "0", // 事業費請求額: 公費請求分では 0 (保険請求分レコードで計上済。二重計上防止・ほのぼの準拠)
       String(hRows.reduce((s, r) => s + (r.kohiAmount ?? 0), 0)),
       "0", // 利用者負担 (公費振替後は 0)
     ]);

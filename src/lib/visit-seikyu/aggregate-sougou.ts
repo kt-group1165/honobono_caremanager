@@ -9,7 +9,9 @@
  *   - 基本コード (system='総合事業', service_category='A2') の units を対象月世代 (validInMonth) で解決
  *   - unit_type='1月につき' (月額包括) は「実績が 1 件でもあれば月 1 回」= 回数を掛けない
  *     unit_type='1回につき'                = 実績回数 × units
- *   - 単価 = opts.unitPrice (事業所の地域区分単価。介護と同じ値。総合事業専用単価ではない)
+ *   - 単価 = 利用者の保険者(市町村)の地域区分単価 (SOUGOU_UNITPRICE_BY_INSURER)。
+ *     総合は保険者=市町村の級地で決まり、介護 (事業所所在地=opts.unitPrice) とは別。
+ *     マップ未登録の保険者は opts.unitPrice にフォールバック。
  *   - 処遇改善 = 総合事業の処遇改善コード (CB_A26184 等) の formula (monthly_aggregate) で率計算。
  *     事業所の適用処遇改善 (kaigo_office_addon_periods / offices.applied_formula_codes) が
  *     介護コード (116274 等) の場合、同率の総合事業 A2 処遇改善コードにマッピングして採用する。
@@ -119,6 +121,19 @@ const SOUGOU_PREFIX_BY_INSURER: Record<string, string> = {
   "124214": "IC_",
   // 長生村 (長生郡)
   "124230": "CS_",
+};
+
+/**
+ * 保険者番号 (証記載保険者番号6桁) → 総合事業の単位単価 (円/単位)。
+ * 総合事業の単価は「利用者の保険者(市町村)の地域区分(級地) × サービスの人件費割合」で決まり、
+ * 介護保険 (事業所所在地の級地 = office.unit_price) とは別 (総合は保険者=市町村の級地を使う)。
+ * 未登録の保険者番号は office.unit_price にフォールバック (自事業所と同一市町村の利用者なら妥当。
+ * 他市の利用者は誤単価になり得るので、判明次第このマップに追加すること)。
+ */
+const SOUGOU_UNITPRICE_BY_INSURER: Record<string, number> = {
+  "122101": 10.42, // 茂原市 (6級地・訪問系人件費70%)
+  "124214": 10.0, // 一宮町 (その他地域)
+  "124230": 10.0, // 長生村 (その他地域)
 };
 
 /** service_code から自治体prefix (CB_/K_/IH_) を取り出す。prefix 無し (旧共通コード) は ""。 */
@@ -462,8 +477,6 @@ export async function aggregateSougouSeikyu(
     m.get(s.service_type)!.push(s.visit_date);
   }
 
-  const unitPrice = opts.unitPrice > 0 ? opts.unitPrice : 10.0;
-  const unitPrice100 = Math.round(unitPrice * 100);
   const { from: monthStartIso, to: monthEndIso } = monthRange(opts.year, opts.month);
 
   /**
@@ -506,6 +519,13 @@ export async function aggregateSougouSeikyu(
         `${userLabel}: 保険者番号 ${insurerNum} の総合事業サービスコード (自治体版) が未登録です — この市町村のコードを取込むまで総合事業は請求できません (他市の単価で誤請求しないよう保留)`,
       );
     }
+
+    // 単価は利用者の保険者(市町村)の地域区分で決まる (総合事業。介護=事業所所在地とは別)。
+    // マップ未登録の保険者は office.unit_price にフォールバック (自事業所と同一市町村なら妥当)。
+    const rowUnitPrice =
+      SOUGOU_UNITPRICE_BY_INSURER[insurerNum] ??
+      (opts.unitPrice > 0 ? opts.unitPrice : 10.0);
+    const rowUnitPrice100 = Math.round(rowUnitPrice * 100);
 
     // 処遇改善: 利用者の自治体版コードを採用 (率は事業所共通・コードは市町村別)
     const addon = prefix ? addonCandByPrefix.get(prefix) ?? null : null;
@@ -583,9 +603,9 @@ export async function aggregateSougouSeikyu(
     const addonBaseUnits = Math.max(0, baseUnits - grossA3Units);
     const addonUnits = addonNum > 0 ? Math.round((addonBaseUnits * addonNum) / addonDen) : 0;
     const totalUnits = baseUnits + addonUnits;
-    const totalAmount = Math.floor((totalUnits * unitPrice100) / 100);
+    const totalAmount = Math.floor((totalUnits * rowUnitPrice100) / 100);
     // 超過分の全額自費額 (円) = floor(超過単位 × 単価 × 10割)。介護給付と同じ整数演算
-    const overAmount = Math.floor((overUnits * unitPrice100) / 100);
+    const overAmount = Math.floor((overUnits * rowUnitPrice100) / 100);
 
     // 公費単独 (H番号) — 介護と同じ扱い
     const kohiTandoku = /^[Hh]/.test((cert?.insured_number ?? "").trim());
@@ -657,7 +677,7 @@ export async function aggregateSougouSeikyu(
       kanriTaishougaiUnits: addonUnits,
       addonLabel,
       totalUnits,
-      unitPrice,
+      unitPrice: rowUnitPrice,
       totalAmount,
       insuranceAmount,
       userAmount,
