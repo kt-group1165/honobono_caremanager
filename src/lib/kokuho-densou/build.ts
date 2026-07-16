@@ -173,8 +173,10 @@ export function buildKokuhoDensou(
     byHobetsu.get(e.hobetsu)!.push(e);
   }
   for (const [hobetsu, es] of byHobetsu) {
-    // 公費請求分は「公費対象分」の再掲: 単位数・費用・保険請求額は公費対象分
-    // (kohiUnits/kohiTargetCost/kohiTargetInsurance。生保等の全量公費は総量と同値)。
+    // 公費請求分: 単位数・費用は公費対象分の再掲 (kohiUnits/kohiTargetCost)。
+    // 保険請求額(項番10)は 0 とする — 保険給付は「保険請求分レコード」で計上済みで、
+    // 公費請求分レコードに再掲すると国保連取込で保険請求が二重計上になるため
+    // (ほのぼの伝送準拠。様式第一の公費請求欄には保険請求額を記載しない)。
     // 利用者負担 = 公費分本人負担 (本人負担上限月額の適用分。上限 0 なら従来どおり 0)。
     dataParts.push([
       "7111",
@@ -186,7 +188,7 @@ export function buildKokuhoDensou(
       String(es.length),
       String(es.reduce((s, e) => s + e.units, 0)),
       String(es.reduce((s, e) => s + e.cost, 0)),
-      String(es.reduce((s, e) => s + e.insurance, 0)),
+      "0", // 保険請求額: 公費請求分では 0 (保険請求分レコードで計上済。二重計上防止)
       String(es.reduce((s, e) => s + e.kohi, 0)),
       String(es.reduce((s, e) => s + e.honnin, 0)), // 利用者負担 (公費分本人負担)
       "", "", "", "", "", "",
