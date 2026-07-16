@@ -1057,7 +1057,10 @@ export function KaigoSeikyuContent() {
             </div>
           ) : (
             <>
-              <div className="flex-1 overflow-y-auto">
+              {/* 介護一覧(主) と 総合事業ブロック(副) を縦に比例配分 (2:1) して共有スクロール。
+                  総合が多くても介護一覧が潰れないようにする (balance)。 */}
+              <div className="flex flex-col flex-1 min-h-0">
+              <div className="flex-[2] min-h-0 overflow-y-auto">
                 {/* ヘッダー行: 対象 / 申請中 / 状態 / 提供月 / 請求月 / サービス事業所 / 被保険者番号 / 利用者名 / 月遅 / 返戻 / 過誤 */}
                 <div className={`${GRID_COLS} border-b border-gray-400 bg-gradient-to-b from-sky-100 to-sky-200 text-[11px] leading-4 font-medium text-gray-700 text-center sticky top-0 z-10`}>
                   <div className="px-1 py-0.5 flex items-center justify-center">
@@ -1251,6 +1254,7 @@ export function KaigoSeikyuContent() {
 
               {/* ── 総合事業ブロック (71R1/様式第二の三)。介護給付と混ぜず別枠で表示 ── */}
               <SougouBlock rows={filteredSougouRows} />
+              </div>
 
               {/* ── 注意書き (集計 warning / 月遅れ合流): 一覧の下・合計フッターの「上」に
                   配置する。一覧 (flex-1) より下なので警告の増減で一覧ヘッダーはずれない ── */}
@@ -1669,11 +1673,11 @@ function SougouBlock({ rows }: { rows: UserSeikyuRow[] }) {
   // 限度額超過の全額自費 (aggregate-sougou.ts で保険請求から分離済。利用請求に加算)
   const totalSelfPay = rows.reduce((s, r) => s + r.selfPayAmount, 0);
   return (
-    <div className="border-t-2 border-emerald-300 shrink-0">
+    <div className={`border-t-2 border-emerald-300 flex flex-col ${open ? "flex-1 min-h-0" : "shrink-0"}`}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100"
+        className="w-full shrink-0 flex items-center gap-2 bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100"
       >
         <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-white">総合事業</span>
         <span>訪問型サービス (A2) {rows.length} 件</span>
@@ -1683,7 +1687,7 @@ function SougouBlock({ rows }: { rows: UserSeikyuRow[] }) {
         <span className="ml-auto text-emerald-500">{open ? "▲" : "▼"}</span>
       </button>
       {open && (
-        <div className="max-h-56 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <table className="w-full text-[11px] leading-4 border-collapse">
             <thead className="bg-emerald-100/70 border-b border-emerald-200 sticky top-0">
               <tr className="text-gray-600">
@@ -1746,7 +1750,7 @@ function SougouBlock({ rows }: { rows: UserSeikyuRow[] }) {
           </table>
         </div>
       )}
-      <div className="bg-emerald-50 px-3 py-1 text-[11px] text-emerald-800 flex flex-wrap gap-x-4 gap-y-0.5">
+      <div className="shrink-0 bg-emerald-50 px-3 py-1 text-[11px] text-emerald-800 flex flex-wrap gap-x-4 gap-y-0.5">
         <span>合計 <strong className="font-mono">{rows.length}</strong> 件</span>
         <span>総単位数 <strong className="font-mono">{totalUnits.toLocaleString()}</strong></span>
         <span>保険請求額 <strong className="font-mono">¥{totalInsurance.toLocaleString()}</strong></span>
