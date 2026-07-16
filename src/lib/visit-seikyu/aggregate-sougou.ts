@@ -113,6 +113,12 @@ const SOUGOU_PREFIX_BY_INSURER: Record<string, string> = {
   "122069": "K_",
   // 市原市
   "122192": "IH_",
+  // 茂原市
+  "122101": "MB_",
+  // 一宮町 (長生郡)
+  "124214": "IC_",
+  // 長生村 (長生郡)
+  "124230": "CS_",
 };
 
 /** service_code から自治体prefix (CB_/K_/IH_) を取り出す。prefix 無し (旧共通コード) は ""。 */
