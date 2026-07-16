@@ -288,7 +288,7 @@ export function buildSougouDensou(
     // 明細情報レコード (02 / 住所地特例は 14) — サービスコードごと。
     // 総合事業のサービスコードは CB_ / K_ プレフィックス付きなので、
     // splitSougouCode で サービス種類 (A2) + 項目 (4桁) に分解する。
-    const detailLines: { kind: string; item: string; unitPer: number; count: number; units: number }[] = [];
+    const detailLines: { kind: string; item: string; unitPer: number; count: number; units: number; isMonthly: boolean }[] = [];
     for (const d of r.details) {
       if (!d.service_code) {
         warnings.push(`${r.user_name}: "${d.service_type}" のサービスコードがマスタから引けません`);
@@ -301,9 +301,9 @@ export function buildSougouDensou(
         );
         continue;
       }
-      detailLines.push({ kind: parts.kind, item: parts.item, unitPer: d.unit_per, count: d.count, units: d.units });
+      detailLines.push({ kind: parts.kind, item: parts.item, unitPer: d.unit_per, count: d.count, units: d.units, isMonthly: d.is_monthly === true });
     }
-    // 処遇改善等の%加算 (addonCode) を 1 行追加
+    // 処遇改善等の%加算 (addonCode) を 1 行追加。処遇改善は月額扱い (項9 単位数=0)。
     if (r.addonUnits > 0) {
       if (r.addonCode) {
         const parts = splitSougouCode(r.addonCode);
@@ -314,6 +314,7 @@ export function buildSougouDensou(
             unitPer: r.addonUnits,
             count: 1,
             units: r.addonUnits,
+            isMonthly: true,
           });
         } else {
           warnings.push(
@@ -342,10 +343,10 @@ export function buildSougouDensou(
         insured, // 6 被保険者番号
         d.kind, // 7 サービス種類コード (A2 等)
         d.item, // 8 サービス項目コード (4桁)
-        // 9 単位数: ほのぼの正解伝送は 定率(A3=訪問型サービスA, 263×回) のみ単位数を出し、
-        //   月額独自(A2)・処遇改善(A26184) は 0 (単価はサービス単位数=項14 で表現)。
-        //   A2=月額/A3=定率 はマスタ設計の不変条件 (aggregate-sougou の service_category)。
-        d.kind === "A3" ? String(d.unitPer) : "0", // 9 単位数
+        // 9 単位数: ほのぼの正解伝送は 定率(1回/1日につき) は単位数、月額包括(1月につき)と
+        //   処遇改善は 0 で出す (単価はサービス単位数=項14 で表現)。判定は unit_type ベース。
+        //   ※ kind(A2/A3)基準は誤り: 千葉市の A22511/A22621 は A2 だが定率(179×回)で単位数を出す。
+        d.isMonthly ? "0" : String(d.unitPer), // 9 単位数
         String(d.count), // 10 日数・回数
         hasKohi ? String(d.count) : "", // 11 公費1対象日数・回数
         "", // 12 公費2対象日数・回数
