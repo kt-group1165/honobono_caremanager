@@ -231,6 +231,7 @@ function PatternImportModal({ onClose }: { onClose: () => void }) {
           .select("id, name, name_kana:furigana, status")
           .eq("status", "active")
           .eq("is_facility", false)
+          .is("deleted_at", null)
           .range(fromU, fromU + PAGE - 1);
         if (!data || data.length === 0) break;
         usersAll.push(...data);
@@ -516,6 +517,7 @@ function UrlManagementModal({ onClose }: { onClose: () => void }) {
           .from("members")
           .select("id, name, name_kana:furigana, status, member_offices!inner(office_id)")
           .eq("status", "active")
+          .is("deleted_at", null)
           .eq("member_offices.office_id", currentOfficeId)
           .order("furigana", { nullsFirst: false }),
         supabase.from("kaigo_staff_tokens").select("id, staff_id, token"),
@@ -1091,8 +1093,11 @@ export function ShiftManagementContent({
               )
             ) : (
               selectedStaffId && selectedStaffMember ? (
+                // ★ カレンダー branch と同一 key。職員タブでは 月間個別 も StaffCalendar に
+                //   フォールバックするため、key を揃えると view 切替時に unmount/remount せず
+                //   その場で再利用 → 再フェッチ・effect 再実行なしで即時切替になる。
                 <StaffCalendar
-                  key={`staffcal-fallback-${selectedStaffId}-${monthKey}`}
+                  key={`staffcal-${selectedStaffId}-${monthKey}`}
                   staffId={selectedStaffId}
                   staffName={selectedStaffMember.name}
                   currentMonth={currentMonth}
