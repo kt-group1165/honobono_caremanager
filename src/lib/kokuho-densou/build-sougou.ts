@@ -384,7 +384,7 @@ export function buildSougouDensou(
       "", // 12 短期入所計画日数
       "", // 13 短期入所実日数
       String(r.totalUnits), // 14 保険 単位数合計
-      String(Math.round(opts.unitPrice * 100)), // 15 単位数単価
+      String(Math.round(r.unitPrice * 100)), // 15 単位数単価 (利用者の保険者=市町村別。aggregate-sougouで解決)
       String(r.insuranceAmount), // 16 保険 請求額
       String(r.userAmount), // 17 利用者負担額
       // 18-20 公費1
