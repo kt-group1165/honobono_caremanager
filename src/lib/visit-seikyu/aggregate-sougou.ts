@@ -744,6 +744,13 @@ export async function aggregateSougouSeikyu(
   for (const [userId, typeDates] of byUser) {
     const client = clientById.get(userId);
     const userLabel = client?.name ?? userId;
+    // 認定申請中の利用者は当月の総合事業請求も保留 (ほのぼの準拠。介護給付側と同方針)。
+    if ((certByClient.get(userId) ?? null)?.certification_status === "申請中") {
+      warnings.push(
+        `${userLabel}: 認定申請中のため当月の総合事業請求を保留しました (認定確定後に月遅れ請求してください)`,
+      );
+      continue;
+    }
     const certsInMonth = certsInMonthByClient.get(userId) ?? [];
     const midChange = detectMidMonthChange(certsInMonth);
 

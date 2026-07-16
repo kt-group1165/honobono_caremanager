@@ -1844,6 +1844,14 @@ export async function aggregateMonthlyVisitSeikyu(
     const client = clientById.get(userId);
     const cert = certByClient.get(userId) ?? null;
     const userLabel = client?.name ?? userId;
+    // 認定申請中の利用者は当月の国保連請求を保留する (ほのぼの準拠)。
+    // 認定が確定してから、その月の実績を月遅れ請求する運用。当月伝送には載せない。
+    if (cert?.certification_status === "申請中") {
+      warnings.push(
+        `${userLabel}: 認定申請中のため当月の国保連請求を保留しました (認定確定後に月遅れ請求してください)`,
+      );
+      continue;
+    }
     if (cert?.isFallback) {
       warnings.push(
         `${userLabel}: 対象月 (${monthStr}) に有効な認定が見つからないため最新の認定情報で集計しています — 認定有効期間を確認してください`,
