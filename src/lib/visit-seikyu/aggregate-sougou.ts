@@ -162,6 +162,7 @@ export async function aggregateSougouSeikyu(
     unitType: string;
     short: string | null;
     code: string | null;
+    category: string; // A2(独自/月額) or A3(訪問型サービスA/定率)。処遇改善はA2のみ対象
   };
   // 自治体prefix (CB_/K_/IH_/"") ごとに (正規化サービス名 → マスタ) を保持し、
   // 利用者の保険者番号 → prefix で正しい市町村版コードを引く (先勝ちの保険者混在を防ぐ)。
@@ -171,9 +172,9 @@ export async function aggregateSougouSeikyu(
     const { data, error } = await validInMonth(
       supabase
         .from("kaigo_service_codes")
-        .select("service_name, short_name, units, unit_type, service_code")
+        .select("service_name, short_name, units, unit_type, service_code, service_category")
         .eq("system", "総合事業")
-        .eq("service_category", "A2")
+        .in("service_category", ["A2", "A3"]) // A2=独自(月額) / A3=訪問型サービスA(定率/回)
         .eq("calculation_type", "基本")
         .in("service_name", chunk),
       opts.year,
@@ -186,6 +187,7 @@ export async function aggregateSougouSeikyu(
       units: number;
       unit_type: string | null;
       service_code: string | null;
+      service_category: string;
     }[]) {
       const cp = sougouPrefixFromCode(r.service_code);
       const key = toHankakuDigits(r.service_name);
@@ -201,6 +203,7 @@ export async function aggregateSougouSeikyu(
           unitType: r.unit_type ?? "1回につき",
           short: r.short_name,
           code: r.service_code,
+          category: r.service_category,
         });
       }
     }
@@ -519,12 +522,13 @@ export async function aggregateSougouSeikyu(
     // 基本コードの単位を積む。月額包括 (1月につき) は回数を掛けない (月1)。
     const details: SeikyuDetailLine[] = [];
     let grossBaseUnits = 0;
+    let grossA3Units = 0; // 訪問型サービスA(定率)分。処遇改善の基礎からは除外する
     for (const [svcType, dates] of typeDates) {
       const count = dates.length;
       const master = masterOf(svcType, prefix);
       if (!master) {
         warnings.push(
-          `${userLabel}: 総合事業「${svcType}」がマスタ (system=総合事業/A2/${prefix || "自治体prefix無し"}/対象月世代) から引けません — サービス名/有効期間/保険者番号(${insurerNum || "未設定"})を確認してください`,
+          `${userLabel}: 総合事業「${svcType}」がマスタ (system=総合事業/A2・A3/${prefix || "自治体prefix無し"}/対象月世代) から引けません — サービス名/有効期間/保険者番号(${insurerNum || "未設定"})を確認してください`,
         );
         continue;
       }
@@ -532,6 +536,7 @@ export async function aggregateSougouSeikyu(
       const billCount = isMonthly ? 1 : count;
       const units = master.units * billCount;
       grossBaseUnits += units;
+      if (master.category === "A3") grossA3Units += units;
       details.push({
         service_type: svcType,
         short_name: master.short ?? null,
@@ -574,7 +579,9 @@ export async function aggregateSougouSeikyu(
     const baseUnits = grossBaseUnits - overUnits;
     // 処遇改善 (%加算) は保険給付対象の基準内単位に対して計算 (介護と同方式。
     // 超過自費分には掛けない = 自費請求は素の単位×単価×10割)。
-    const addonUnits = addonNum > 0 ? Math.round((baseUnits * addonNum) / addonDen) : 0;
+    // A3(訪問型サービスA/定率)は処遇改善対象外のため基礎から除外する (ほのぼの準拠)。
+    const addonBaseUnits = Math.max(0, baseUnits - grossA3Units);
+    const addonUnits = addonNum > 0 ? Math.round((addonBaseUnits * addonNum) / addonDen) : 0;
     const totalUnits = baseUnits + addonUnits;
     const totalAmount = Math.floor((totalUnits * unitPrice100) / 100);
     // 超過分の全額自費額 (円) = floor(超過単位 × 単価 × 10割)。介護給付と同じ整数演算
