@@ -190,7 +190,7 @@ export function buildKokuhoDensou(
       String(es.reduce((s, e) => s + e.cost, 0)),
       "0", // 保険請求額: 公費請求分では 0 (保険請求分レコードで計上済。二重計上防止)
       String(es.reduce((s, e) => s + e.kohi, 0)),
-      String(es.reduce((s, e) => s + e.honnin, 0)), // 利用者負担 (公費分本人負担)
+      "0", // 利用者負担: 公費請求分では 0 (利用者負担は保険請求分レコードで計上済。ほのぼの準拠)
       "", "", "", "", "", "",
     ]);
   }
