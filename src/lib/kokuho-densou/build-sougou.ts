@@ -69,9 +69,9 @@ const CARE_LEVEL_CODE: Record<string, string> = {
 };
 
 const HOKEN_KOHI_KUBUN_HOKEN = "1"; // 保険・公費等区分コード: 保険請求分
-// 総合事業の請求情報区分コード。"01" (居宅サービス系) を踏襲。
-// ⚠ 要取込チェック: 総合事業専用の区分値がある場合は差し替える。
-const SEIKYU_JOHO_KUBUN = "01";
+// 総合事業の請求情報区分コード = "05" (総合事業。ほのぼの正解伝送 KK260702 と一致。
+// 介護給付の居宅サービス系 "01" とは別値。2026-07-16 是正)。
+const SEIKYU_JOHO_KUBUN = "05";
 
 const dateNum = (iso: string | null) => (iso ? iso.replaceAll("-", "") : "");
 const genderCode = (g: string | null) =>
@@ -342,7 +342,10 @@ export function buildSougouDensou(
         insured, // 6 被保険者番号
         d.kind, // 7 サービス種類コード (A2 等)
         d.item, // 8 サービス項目コード (4桁)
-        String(d.unitPer), // 9 単位数
+        // 9 単位数: ほのぼの正解伝送は 定率(A3=訪問型サービスA, 263×回) のみ単位数を出し、
+        //   月額独自(A2)・処遇改善(A26184) は 0 (単価はサービス単位数=項14 で表現)。
+        //   A2=月額/A3=定率 はマスタ設計の不変条件 (aggregate-sougou の service_category)。
+        d.kind === "A3" ? String(d.unitPer) : "0", // 9 単位数
         String(d.count), // 10 日数・回数
         hasKohi ? String(d.count) : "", // 11 公費1対象日数・回数
         "", // 12 公費2対象日数・回数
@@ -377,8 +380,10 @@ export function buildSougouDensou(
       insured, // 6
       svcKindCode, // 7 サービス種類コード (A2)
       String(r.serviceDays), // 8 サービス実日数
-      // 9 計画単位数: 計画 (総合事業は未運用 = null) > 認定/標準の限度額 > 基準内
-      String(r.planUnits ?? r.limitUnits ?? kanriInUnits),
+      // 9 計画単位数: ほのぼの正解伝送は「限度額管理対象単位数(基準内)」と同値を出す
+      //   (区分支給限度額そのものではない)。計画(給付管理)がある場合のみそれを優先。
+      //   限度額(limitUnits)へのフォールバックは誤り(要支援1=5032等が出てしまう)なので外す。
+      String(r.planUnits ?? kanriInUnits),
       String(kanriInUnits), // 10 限度額管理対象単位数 (基準内)
       String(kanriGaiUnits), // 11 限度額管理対象外単位数 (処遇改善%加算)
       "", // 12 短期入所計画日数
@@ -407,10 +412,10 @@ export function buildSougouDensou(
   const sm = opts.seikyuMonth ?? opts.month;
   const shinsaYm =
     sm === 12 ? `${sy + 1}01` : `${sy}${String(sm + 1).padStart(2, "0")}`;
-  // コントロールレコード: build.ts (7131) と同構成。データ種別は "711" を踏襲。
-  // ⚠ 要取込チェック: 総合事業のデータ種別コードが介護給付と別値なら差し替える。
+  // コントロールレコード: build.ts (7131) と同構成。データ種別は総合事業=「71R」
+  // (ほのぼの正解伝送 KK260702 と一致。介護給付の "711" とは別値。2026-07-16 是正)。
   lines.push(
-    ["1", String(recNo++), "0", String(dataParts.length), "711", "0", "0", office, "0", "1", shinsaYm, "1"].join(","),
+    ["1", String(recNo++), "0", String(dataParts.length), "71R", "0", "0", office, "0", "1", shinsaYm, "1"].join(","),
   );
   for (const parts of dataParts) {
     lines.push(["2", String(recNo++), ...parts].join(","));
