@@ -1259,11 +1259,15 @@ export function KaigoSeikyuContent() {
                 return (
                   <div className="border-t border-amber-200 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
                     <AlertCircle size={14} className="mt-0.5 shrink-0" />
-                    <div>
-                      {allWarnings.slice(0, 8).map((w) => (
-                        <p key={w}>{w}</p>
-                      ))}
-                      {allWarnings.length > 8 && <p>…他 {allWarnings.length - 8} 件</p>}
+                    <div className="min-w-0 flex-1">
+                      {allWarnings.length > 4 && (
+                        <p className="mb-0.5 font-medium text-amber-700">警告 {allWarnings.length} 件（スクロールで全件表示）</p>
+                      )}
+                      <div className="max-h-24 overflow-y-auto pr-1">
+                        {allWarnings.map((w) => (
+                          <p key={w}>{w}</p>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 );
