@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSWRConfig } from "swr";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { resolvePreferredTenantId } from "@/lib/tenant-resolver";
 import { useBusinessType } from "@/lib/business-type-context";
@@ -687,7 +687,6 @@ export function ShiftManagementContent({
     globalMutate((key) => typeof key === "string" && key.startsWith("kaigo-schedules:"));
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const { currentOfficeId } = useBusinessType();
 
   // 自事業所が context 起動後に確定する: SSR で渡ってきた initialUsers/initialStaff を
@@ -745,21 +744,28 @@ export function ShiftManagementContent({
     return () => { cancelled = true; };
   }, [supabase]);
 
-  // Sync filters to URL (replace, no scroll). Skip on initial mount since URL already matches.
+  // Sync filters to URL. Skip on initial mount since URL already matches.
+  //
+  // ★ 反応速度: router.replace は同一ルートでも Server Component (page.tsx) を再実行させ、
+  //   利用者/職員/初期データを毎回サーバー取得し直すため、ビュー/月/対象の切替が待たされる。
+  //   切替後のデータはクライアント SWR が取得しており RSC 再取得は不要なので、URL は
+  //   history.replaceState で「見た目だけ」更新する (RSC 往復なし = 即時切替)。共有 URL や
+  //   リロード時は page.tsx が searchParams から正しく初期描画する。
   const isInitialMount = useRef(true);
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
       return;
     }
-    const params = new URLSearchParams(searchParams?.toString() ?? "");
+    // 既存 URL の他パラメータ (office 等) を維持する
+    const params = new URLSearchParams(window.location.search);
     params.set("tab", sidebarTab);
     params.set("view", viewMode);
     if (selectedUserId) params.set("user", selectedUserId); else params.delete("user");
     if (selectedStaffId) params.set("staff", selectedStaffId); else params.delete("staff");
     params.set("month", format(currentMonth, "yyyy-MM"));
     params.set("date", format(selectedDate, "yyyy-MM-dd"));
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- only sync on filter change
   }, [sidebarTab, viewMode, selectedUserId, selectedStaffId, currentMonth, selectedDate]);
 
