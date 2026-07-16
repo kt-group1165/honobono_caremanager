@@ -21,20 +21,33 @@ const inputCls =
 type FormState = {
   municipality: string;
   beneficiary_number: string;
+  issue_date: string;   // 交付年月日
+  valid_from: string;   // 支給決定期間 開始
+  valid_until: string;  // 支給決定期間 終了
   shikyu_amount_text: string;
   shikyu_hours: string; // 入力用 (時間)。保存時に分へ変換
   self_payment_limit: string;
   seiho_flag: boolean;
+  notes: string;        // 備考
 };
 
 const EMPTY: FormState = {
   municipality: "千葉市",
   beneficiary_number: "",
+  issue_date: "",
+  valid_from: "",
+  valid_until: "",
   shikyu_amount_text: "",
   shikyu_hours: "",
   self_payment_limit: "0",
   seiho_flag: false,
+  notes: "",
 };
+
+// 拡張列 (issue_date/valid_until) が未適用(42703) の環境ではこれらを落として動く
+const BASE_CERT_COLS =
+  "municipality, beneficiary_number, shikyu_amount_text, shikyu_minutes, self_payment_limit, seiho_flag";
+const EXT_CERT_COLS = `${BASE_CERT_COLS}, issue_date, valid_from, valid_until, notes`;
 
 export function ChiikiCertSection({
   userId,
@@ -46,6 +59,8 @@ export function ChiikiCertSection({
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [available, setAvailable] = useState(true); // chiiki_recipient_certs 未適用環境では非表示
+  // 拡張列 (交付日/支給決定期間終了/備考) が DB 未適用なら false → 保存対象から除外
+  const [extCols, setExtCols] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [muniOptions, setMuniOptions] = useState<string[]>(["千葉市"]);
@@ -53,19 +68,27 @@ export function ChiikiCertSection({
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [certRes, muniRes] = await Promise.all([
-      supabase
+    // 拡張列込みで取得。未適用(42703)なら基本列のみで再取得し extCols=false に
+    let hasExt = true;
+    let certRes = await supabase
+      .from("chiiki_recipient_certs")
+      .select(EXT_CERT_COLS)
+      .eq("client_id", userId)
+      .limit(1);
+    if (certRes.error?.code === "42703") {
+      hasExt = false;
+      certRes = await supabase
         .from("chiiki_recipient_certs")
-        .select("municipality, beneficiary_number, shikyu_amount_text, shikyu_minutes, self_payment_limit, seiho_flag")
+        .select(BASE_CERT_COLS)
         .eq("client_id", userId)
-        .limit(1),
-      supabase
-        .from("kaigo_service_codes")
-        .select("municipality")
-        .eq("system", "地域生活支援")
-        .not("municipality", "is", null)
-        .limit(2000),
-    ]);
+        .limit(1);
+    }
+    const muniRes = await supabase
+      .from("kaigo_service_codes")
+      .select("municipality")
+      .eq("system", "地域生活支援")
+      .not("municipality", "is", null)
+      .limit(2000);
     if (certRes.error) {
       // テーブル未適用 (migration 前) はセクションごと非表示
       if (certRes.error.code === "42P01" || certRes.error.code === "PGRST205") {
@@ -76,6 +99,7 @@ export function ChiikiCertSection({
       setLoading(false);
       return;
     }
+    setExtCols(hasExt);
     const muniSet = new Set<string>(["千葉市"]);
     for (const r of (muniRes.data ?? []) as { municipality: string | null }[]) {
       if (r.municipality) muniSet.add(r.municipality);
@@ -89,16 +113,24 @@ export function ChiikiCertSection({
           shikyu_minutes: number | null;
           self_payment_limit: number | null;
           seiho_flag: boolean | null;
+          issue_date?: string | null;
+          valid_from?: string | null;
+          valid_until?: string | null;
+          notes?: string | null;
         }
       | undefined;
     if (row) {
       setF({
         municipality: row.municipality ?? "千葉市",
         beneficiary_number: row.beneficiary_number ?? "",
+        issue_date: row.issue_date ?? "",
+        valid_from: row.valid_from ?? "",
+        valid_until: row.valid_until ?? "",
         shikyu_amount_text: row.shikyu_amount_text ?? "",
         shikyu_hours: row.shikyu_minutes != null ? String(row.shikyu_minutes / 60) : "",
         self_payment_limit: String(row.self_payment_limit ?? 0),
         seiho_flag: row.seiho_flag ?? false,
+        notes: row.notes ?? "",
       });
     }
     setLoading(false);
@@ -153,6 +185,15 @@ export function ChiikiCertSection({
         shikyu_minutes: hours,
         self_payment_limit: Number(f.self_payment_limit) || 0,
         seiho_flag: f.seiho_flag,
+        // 拡張列 (交付日/支給決定期間/備考) は DB 適用済のときだけ含める
+        ...(extCols
+          ? {
+              issue_date: f.issue_date || null,
+              valid_from: f.valid_from || null,
+              valid_until: f.valid_until || null,
+              notes: f.notes || null,
+            }
+          : {}),
       },
       { onConflict: "client_id,municipality" },
     );
@@ -180,6 +221,14 @@ export function ChiikiCertSection({
       <h3 className="mb-1 flex items-center gap-1.5 border-b pb-2 text-sm font-bold text-gray-800">
         <IdCard size={15} className="text-violet-600" />
         地域生活支援 受給者証 (市町村事業)
+        {!loading && !extCols && (
+          <span
+            className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700"
+            title="migrations/chiiki_recipient_certs_v2_period.sql を適用すると 交付日・支給決定期間・備考 を保存できます"
+          >
+            期間・交付日は SQL未適用
+          </span>
+        )}
       </h3>
       <p className="mb-3 text-[11px] text-gray-500">
         移動支援・訪問入浴 (地域生活支援給付) の請求帳票と支給量超過警告に反映されます。番号・支給量は
@@ -221,6 +270,36 @@ export function ChiikiCertSection({
             </div>
           </div>
           <div>
+            <label className="mb-0.5 block text-[11px] text-gray-500">交付年月日</label>
+            <input
+              type="date"
+              value={f.issue_date}
+              onChange={(e) => set("issue_date", e.target.value)}
+              disabled={!extCols}
+              className={`${inputCls} disabled:opacity-50`}
+            />
+          </div>
+          <div>
+            <label className="mb-0.5 block text-[11px] text-gray-500">支給決定期間</label>
+            <div className="flex items-center gap-1">
+              <input
+                type="date"
+                value={f.valid_from}
+                onChange={(e) => set("valid_from", e.target.value)}
+                disabled={!extCols}
+                className={`${inputCls} disabled:opacity-50`}
+              />
+              <span className="text-xs text-gray-500">〜</span>
+              <input
+                type="date"
+                value={f.valid_until}
+                onChange={(e) => set("valid_until", e.target.value)}
+                disabled={!extCols}
+                className={`${inputCls} disabled:opacity-50`}
+              />
+            </div>
+          </div>
+          <div>
             <label className="mb-0.5 block text-[11px] text-gray-500">契約支給量 (帳票印字文)</label>
             <input
               value={f.shikyu_amount_text}
@@ -258,6 +337,15 @@ export function ChiikiCertSection({
             />
             生活保護
           </label>
+          <div className="min-w-[200px] flex-1">
+            <label className="mb-0.5 block text-[11px] text-gray-500">備考</label>
+            <input
+              value={f.notes}
+              onChange={(e) => set("notes", e.target.value)}
+              disabled={!extCols}
+              className={`${inputCls} w-full disabled:opacity-50`}
+            />
+          </div>
           <button
             onClick={save}
             disabled={saving}
