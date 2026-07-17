@@ -331,6 +331,13 @@ function buildClaimLines(c: ClaimDbRow): {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PAGE = 1000;
+// .in() の URI Too Long 回避用チャンク (claims-content 等と同値)
+const IN_CHUNK_SIZE = 50;
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
 
 /**
  * 指定月のレセプト (kaigo_care_support_claims) を利用者・認定情報付きで取得する。
@@ -339,24 +346,52 @@ const PAGE = 1000;
 export async function fetchKyotakuClaimRows(
   supabase: SupabaseClient,
   monthKey: string, // 'YYYY-MM'
+  officeId?: string | null, // 指定時は当事業所に割り当てられた利用者のみ (多事業所で他事業所が混ざるのを防ぐ)
 ): Promise<KyotakuSeikyuRow[]> {
+  // 0) 当事業所の利用者 (client_office_assignments)。officeId 未指定時は全件 (後方互換)。
+  //    これが無いと請求・伝送に他事業所の居宅レセプトが混ざる (claims 画面と同種の事故)。
+  let officeClientIds: string[] | null = null;
+  if (officeId) {
+    officeClientIds = [];
+    let fromA = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("client_office_assignments")
+        .select("client_id")
+        .eq("office_id", officeId)
+        .order("client_id", { ascending: true })
+        .range(fromA, fromA + PAGE - 1);
+      if (error) throw new Error(`事業所割当の取得に失敗: ${error.message}`);
+      if (!data || data.length === 0) break;
+      officeClientIds.push(...data.map((a: { client_id: string }) => a.client_id));
+      if (data.length < PAGE) break;
+      fromA += PAGE;
+    }
+    if (officeClientIds.length === 0) return [];
+  }
+
   // 1) 当月レセプト (page-loop で 1000 行制限回避)。
   //    select は "*" (unei_kijun_gensan 列は migration 適用前でも壊れないよう明示列挙しない)
   const claims: ClaimDbRow[] = [];
-  let from = 0;
-  while (true) {
-    const { data, error } = await supabase
-      .from("kaigo_care_support_claims")
-      .select("*, clients(name, furigana, gender, birth_date, phone)")
-      .eq("billing_month", monthKey)
-      .order("created_at", { ascending: true })
-      .order("id", { ascending: true })
-      .range(from, from + PAGE - 1);
-    if (error) throw new Error(`レセプトの取得に失敗: ${error.message}`);
-    if (!data || data.length === 0) break;
-    claims.push(...(data as unknown as ClaimDbRow[]));
-    if (data.length < PAGE) break;
-    from += PAGE;
+  const idChunks = officeClientIds ? chunkArray(officeClientIds, IN_CHUNK_SIZE) : [null];
+  for (const idChunk of idChunks) {
+    let from = 0;
+    while (true) {
+      let q = supabase
+        .from("kaigo_care_support_claims")
+        .select("*, clients(name, furigana, gender, birth_date, phone)")
+        .eq("billing_month", monthKey);
+      if (idChunk) q = q.in("user_id", idChunk);
+      const { data, error } = await q
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) throw new Error(`レセプトの取得に失敗: ${error.message}`);
+      if (!data || data.length === 0) break;
+      claims.push(...(data as unknown as ClaimDbRow[]));
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
   }
   if (claims.length === 0) return [];
 
@@ -516,7 +551,7 @@ export async function loadKyotakuReSeikyuRows(
   for (const [monthKey, clientReasons] of byMonth) {
     // 元提供月のレセプトを読み、フラグの立っている利用者のみ合流
     // (居宅レセプトが無い client = 訪問介護側のフラグ等 は自然に除外される)
-    const rows = await fetchKyotakuClaimRows(supabase, monthKey);
+    const rows = await fetchKyotakuClaimRows(supabase, monthKey, officeId);
     for (const r of rows) {
       const reasons = clientReasons.get(r.user_id);
       if (!reasons) continue;
@@ -645,7 +680,7 @@ export function KyotakuSeikyuProvider({ children }: { children: ReactNode }) {
           : Number(or?.unit_price ?? 10),
       );
 
-      const list = await fetchKyotakuClaimRows(supabase, monthKey);
+      const list = await fetchKyotakuClaimRows(supabase, monthKey, currentOffice.id);
       setRows(list);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
