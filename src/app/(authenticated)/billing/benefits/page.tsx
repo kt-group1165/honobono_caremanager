@@ -12,46 +12,54 @@ export default async function BenefitsPage() {
   const supabase = await createClient();
   const month = getCurrentMonth();
 
-  // PostgREST default 1000 行制限対策で page-loop で全件取得
-  type UsersRow = { id: string; name: string };
+  // 給付管理は「当月の給付管理行がある利用者」しか表示しない (benefits-content の
+  // aggregateUserGroups が rows を持つ利用者に filter)。全利用者を取得して全員分の
+  // 認定を解決するのは遅い (全クライアント数に比例) ので、まず当月行を取り、
+  // そこに出てくる利用者だけ 名前 + 認定 を解決する。
   const PAGE = 1000;
-  const usersAll: UsersRow[] = [];
+  const rowsAll: BenefitManagementRow[] = [];
   {
     let from = 0;
     while (true) {
       const { data, error } = await supabase
-        .from("clients")
-        .select("id, name")
-        .eq("status", "active")
-        .eq("is_facility", false)
-        .is("deleted_at", null)
-        .order("name")
-        .order("id", { ascending: true })
+        .from("kaigo_benefit_management")
+        .select("*")
+        .eq("billing_month", month)
+        .order("user_id")
+        .order("service_type")
         .range(from, from + PAGE - 1);
       if (error) break;
       if (!data || data.length === 0) break;
-      usersAll.push(...(data as UsersRow[]));
+      rowsAll.push(...(data as BenefitManagementRow[]));
       if (data.length < PAGE) break;
       from += PAGE;
     }
   }
-  const rowsRes = await supabase
-    .from("kaigo_benefit_management")
-    .select("*")
-    .eq("billing_month", month)
-    .order("user_id")
-    .order("service_type");
 
-  // 認定は「対象月に有効な 1 件」で解決 (旧: embed [0] = 任意の 1 件)
+  const userIds = Array.from(new Set(rowsAll.map((r) => r.user_id)));
+
+  // 当月行の利用者の 名前 だけ取得 (active/非施設/未削除は従来どおり)
+  type UsersRow = { id: string; name: string };
+  const usersAll: UsersRow[] = [];
+  for (let i = 0; i < userIds.length; i += 500) {
+    const chunk = userIds.slice(i, i + 500);
+    const { data, error } = await supabase
+      .from("clients")
+      .select("id, name")
+      .in("id", chunk)
+      .eq("status", "active")
+      .eq("is_facility", false)
+      .is("deleted_at", null)
+      .order("name");
+    if (error) break;
+    usersAll.push(...((data ?? []) as UsersRow[]));
+  }
+
+  // 認定は「対象月に有効な 1 件」で解決 (対象は当月行の利用者のみ)
   const [cy, cm] = month.split("-").map(Number);
   let certRes = new Map<string, CertForMonth>();
   try {
-    certRes = await resolveCertForMonth(
-      supabase,
-      usersAll.map((u) => u.id),
-      cy,
-      cm,
-    );
+    certRes = await resolveCertForMonth(supabase, userIds, cy, cm);
   } catch (e) {
     console.error("認定情報の取得に失敗:", e instanceof Error ? e.message : String(e));
   }
@@ -75,7 +83,7 @@ export default async function BenefitsPage() {
     <BenefitsContent
       initialMonth={month}
       initialUsers={initialUsers}
-      initialRows={(rowsRes.data ?? []) as BenefitManagementRow[]}
+      initialRows={rowsAll}
     />
   );
 }

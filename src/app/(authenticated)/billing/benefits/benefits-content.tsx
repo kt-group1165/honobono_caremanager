@@ -213,54 +213,10 @@ export function BenefitsContent({
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch all active users (認定は resolveCertForMonth で「対象月に有効な 1 件」を解決。
-      // 旧: embed の [0] = 任意の 1 件で認定更新跨ぎに弱かった)
-      type UsersRow = { id: string; name: string };
       const PAGE = 1000;
-      const usersAll: UsersRow[] = [];
-      let from = 0;
-      while (true) {
-        const { data: usersData, error: usersError } = await supabase
-          .from("clients")
-          .select("id, name")
-          .eq("status", "active")
-          .eq("is_facility", false)
-          .is("deleted_at", null)
-          .order("name")
-          .order("id", { ascending: true })
-          .range(from, from + PAGE - 1);
-        if (usersError) throw usersError;
-        if (!usersData || usersData.length === 0) break;
-        usersAll.push(...(usersData as UsersRow[]));
-        if (usersData.length < PAGE) break;
-        from += PAGE;
-      }
 
-      const [cy, cm] = billingMonth.split("-").map(Number);
-      const certRes = await resolveCertForMonth(
-        supabase,
-        usersAll.map((u) => u.id),
-        cy,
-        cm,
-      );
-      const mappedUsers: UserWithCert[] = usersAll.map((u) => {
-        const cert = certRes.get(u.id);
-        const certification: CareCertification | null = cert
-          ? {
-              id: "",
-              client_id: u.id,
-              insured_number: cert.insured_number ?? "",
-              care_level: cert.care_level ?? "",
-              service_limit_amount: cert.service_limit_amount ?? 0,
-              insurer_number: cert.insurer_number ?? undefined,
-            }
-          : null;
-        return { id: u.id, name: u.name, certification };
-      });
-
-      setUsers(mappedUsers);
-
-      // Fetch benefit management rows for selected month (page-loop 1000 行制限対策)
+      // まず当月の給付管理行を取得。表示対象は「行がある利用者」だけなので、
+      // 全利用者を取って全員分の認定を解決する必要はない (遅さの原因だった)。
       const rowsAll: BenefitManagementRow[] = [];
       {
         let fromR = 0;
@@ -279,6 +235,43 @@ export function BenefitsContent({
           fromR += PAGE;
         }
       }
+
+      // 当月行の利用者だけ 名前 + 認定 を解決
+      type UsersRow = { id: string; name: string };
+      const userIds = Array.from(new Set(rowsAll.map((r) => r.user_id)));
+      const usersAll: UsersRow[] = [];
+      for (let i = 0; i < userIds.length; i += 500) {
+        const chunk = userIds.slice(i, i + 500);
+        const { data: usersData, error: usersError } = await supabase
+          .from("clients")
+          .select("id, name")
+          .in("id", chunk)
+          .eq("status", "active")
+          .eq("is_facility", false)
+          .is("deleted_at", null)
+          .order("name");
+        if (usersError) throw usersError;
+        usersAll.push(...((usersData ?? []) as UsersRow[]));
+      }
+
+      const [cy, cm] = billingMonth.split("-").map(Number);
+      const certRes = await resolveCertForMonth(supabase, userIds, cy, cm);
+      const mappedUsers: UserWithCert[] = usersAll.map((u) => {
+        const cert = certRes.get(u.id);
+        const certification: CareCertification | null = cert
+          ? {
+              id: "",
+              client_id: u.id,
+              insured_number: cert.insured_number ?? "",
+              care_level: cert.care_level ?? "",
+              service_limit_amount: cert.service_limit_amount ?? 0,
+              insurer_number: cert.insurer_number ?? undefined,
+            }
+          : null;
+        return { id: u.id, name: u.name, certification };
+      });
+
+      setUsers(mappedUsers);
       setRows(rowsAll);
     } catch (err: unknown) {
       console.error("benefits fetchData err:", err);
