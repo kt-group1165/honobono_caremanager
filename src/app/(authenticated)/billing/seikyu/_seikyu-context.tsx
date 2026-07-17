@@ -183,6 +183,8 @@ interface ClaimDbRow {
   tokutei_kassan_units: number | null;
   medical_coop_kassan: boolean | null;
   medical_coop_kassan_units: number | null;
+  shoguu_kaizen_units: number | null;
+  shoguu_kaizen_code: string | null;
   terminal_care: boolean | null;
   terminal_care_units: number | null;
   emergency_conference: boolean | null;
@@ -305,6 +307,15 @@ function buildClaimLines(c: ClaimDbRow): {
       name: "運営基準減算",
       code: "",
       units: -(c.unei_kijun_gensan_units ?? reductionUnitsOf(c.units, 50)),
+      count: 1,
+    });
+  // 処遇改善加算 (居宅介護支援・令和6〜)。base+各加算−減算 の総単位 × 率 で算定済 (claims 生成時)。
+  //   最後の行として算入 (国保連伝送・請求の総単位に反映)。
+  if ((c.shoguu_kaizen_units ?? 0) > 0)
+    lines.push({
+      name: "処遇改善加算",
+      code: c.shoguu_kaizen_code ?? "436191",
+      units: c.shoguu_kaizen_units ?? 0,
       count: 1,
     });
   const totalUnits = lines.reduce((s, l) => s + l.units * l.count, 0);
