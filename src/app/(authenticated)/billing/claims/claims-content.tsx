@@ -340,6 +340,8 @@ interface EditModalProps {
   claim: ClaimRow;
   certEntry: { care_level: string; insurer_number: string | null; insured_number: string | null } | undefined;
   onClose: () => void;
+  /** 居宅介護支援 処遇改善加算 率 (‰)。事業所設定由来。居宅(43始まり)のみ適用 */
+  shoguuPermil?: number;
   onSave: (
     id: string,
     addings: Addings,
@@ -347,7 +349,7 @@ interface EditModalProps {
   ) => Promise<void>;
 }
 
-function EditModal({ claim, certEntry, onClose, onSave }: EditModalProps) {
+function EditModal({ claim, certEntry, onClose, shoguuPermil = 0, onSave }: EditModalProps) {
   const [addings, setAddings] = useState<Addings>({
     initial: claim.initial_addition,
     tokutei_kassan: normalizeTokuteiKassan(claim.tokutei_kassan_type as string | null),
@@ -375,11 +377,14 @@ function EditModal({ claim, certEntry, onClose, onSave }: EditModalProps) {
     ? (claim.unei_kijun_gensan_units ?? reductionUnitsOf(claim.units, 50))
     : 0;
   const reductionUnits = calcReductionUnits(claim.units, addings) + uneiRedPreview;
-  const { total_units, total_amount } = calcTotals(
+  // 処遇改善加算は居宅介護支援 (43始まり) のみ。区分支給/予防等は 0。
+  const shoPermilPreview = String(claim.care_support_code ?? "").startsWith("43") ? shoguuPermil : 0;
+  const { total_units, total_amount, shoguu_units } = calcTotals(
     claim.units,
     addUnits,
     reductionUnits,
-    unitPrice
+    unitPrice,
+    shoPermilPreview,
   );
 
   const toggleBool = (key: keyof Addings) =>
@@ -606,6 +611,12 @@ function EditModal({ claim, certEntry, onClose, onSave }: EditModalProps) {
             <div className="flex justify-between text-gray-600">
               <span>減算単位合計</span>
               <span className="text-red-500">−{reductionUnits.toLocaleString("ja-JP")} 単位</span>
+            </div>
+          )}
+          {shoguu_units > 0 && (
+            <div className="flex justify-between text-gray-600">
+              <span>処遇改善加算 <span className="text-[11px] text-gray-400">(事業所 {(shoPermilPreview / 10).toFixed(1)}% 自動)</span></span>
+              <span className="text-emerald-600">+{shoguu_units.toLocaleString("ja-JP")} 単位</span>
             </div>
           )}
           <div className="flex justify-between font-medium text-gray-900">
@@ -1638,6 +1649,7 @@ export function ClaimsContent({
           claim={editTarget}
           certEntry={certMap.get(editTarget.user_id)}
           onClose={() => setEditTarget(null)}
+          shoguuPermil={Number(officeInfo?.care_support_shoguu_permil ?? 0) || 0}
           onSave={handleEditSave}
         />
       )}
