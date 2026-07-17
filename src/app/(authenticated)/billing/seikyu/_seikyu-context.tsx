@@ -67,6 +67,8 @@ export interface KyotakuSeikyuRow {
   care_level: string | null;
   certStart: string | null;
   certEnd: string | null;
+  /** 居宅サービス計画作成依頼(変更)届出年月日 (kaigo_care_plans)。無ければ null (認定開始日で代用) */
+  requestDate: string | null;
   /** 区分支給限度基準額 (単位) — 給付管理票 (8221) 用 */
   limitUnits: number;
   claimId: string;
@@ -396,6 +398,18 @@ export async function fetchKyotakuClaimRows(
     if (mc?.insurerChange) insurerChangeByUser.set(clientId, mc.insurerChange);
   }
 
+  // 2.7) 計画作成依頼届出年月日 (kaigo_care_plans.plan_request_date) — 居宅明細書 8121 項15 用
+  const planReqByUser = new Map<string, string | null>();
+  for (let i = 0; i < userIds.length; i += 300) {
+    const { data } = await supabase
+      .from("kaigo_care_plans")
+      .select("user_id, plan_request_date")
+      .in("user_id", userIds.slice(i, i + 300))
+      .eq("status", "active");
+    for (const p of (data ?? []) as { user_id: string; plan_request_date: string | null }[])
+      if (!planReqByUser.has(p.user_id)) planReqByUser.set(p.user_id, p.plan_request_date);
+  }
+
   // 3) 行の組み立て (ふりがな順)
   const rows: KyotakuSeikyuRow[] = billable.map((c) => {
     const cert = certMap.get(c.user_id);
@@ -416,6 +430,7 @@ export async function fetchKyotakuClaimRows(
       care_level: cert?.care_level ?? null,
       certStart: cert?.certification_start_date ?? null,
       certEnd: cert?.certification_end_date ?? null,
+      requestDate: planReqByUser.get(c.user_id) ?? null,
       limitUnits: cert?.service_limit_amount ?? 0,
       claimId: c.id,
       claimStatus: c.status,

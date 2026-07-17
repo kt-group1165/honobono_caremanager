@@ -319,7 +319,7 @@ export function KyotakuKokuhoSeikyuContent() {
           careLevel: u.care_level,
           certStart: u.certStart,
           certEnd: u.certEnd,
-          requestDate: null, // 届出年月日は未管理 → 認定開始日で代用 (警告表示)
+          requestDate: u.requestDate ?? null, // 計画作成依頼届出年月日 (kaigo_care_plans)。無ければ builder が認定開始日で代用
           serviceCode: u.serviceCode,
           units: u.totalUnits,
           // 公費 (生活保護等)。公費単独 (H番号) は保険分 7111 から除外され公費分へ
