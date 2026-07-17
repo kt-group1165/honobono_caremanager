@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
 import {
   FileText,
@@ -59,38 +60,57 @@ export function ProvisionConfirmContent({
   initialUsers: ProvisionUser[];
 }) {
   const supabase = useMemo(() => createClient(), []);
+  const { currentOfficeId, loading: btLoading } = useBusinessType();
 
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<ProvisionUser[]>(initialUsers);
 
   const fetchData = useCallback(async () => {
+    if (!currentOfficeId) return; // 事業所未確定 (context 初期化中) は SSR 結果のまま待つ
     setLoading(true);
 
-    // Fetch active users with provision sheet data
-    // We join kaigo_users -> kaigo_report_documents (type = service-usage) for the latest
-    // PostgREST default 1000 行制限対策で page-loop で全件取得
+    // 自事業所 (currentOfficeId) の利用者だけ取得 (SSR page.tsx と同 pattern)。
+    // client_office_assignments → clients の 2 段。旧: 全事業所の全 active 利用者。
     type UserRow = { id: string; name: string; name_kana: string | null; care_level: string | null; status: string | null };
     const PAGE = 1000;
     const userData: UserRow[] = [];
     {
-      let from = 0;
+      const clientIdsAll: string[] = [];
+      let fromA = 0;
       while (true) {
+        const { data: assigns, error: aErr } = await supabase
+          .from("client_office_assignments")
+          .select("client_id")
+          .eq("office_id", currentOfficeId)
+          .is("end_date", null)
+          .range(fromA, fromA + PAGE - 1);
+        if (aErr) {
+          toast.error("利用者情報の取得に失敗しました");
+          setLoading(false);
+          return;
+        }
+        if (!assigns || assigns.length === 0) break;
+        clientIdsAll.push(...(assigns as { client_id: string }[]).map((a) => a.client_id));
+        if (assigns.length < PAGE) break;
+        fromA += PAGE;
+      }
+      const uniqueIds = Array.from(new Set(clientIdsAll));
+      for (let i = 0; i < uniqueIds.length; i += 500) {
+        const chunk = uniqueIds.slice(i, i + 500);
         const { data, error: userError } = await supabase
           .from("clients")
           .select("id, name, name_kana:furigana, care_level, status")
+          .in("id", chunk)
           .eq("status", "active")
           .eq("is_facility", false)
-          .order("furigana")
-          .range(from, from + PAGE - 1);
+          .is("deleted_at", null)
+          .order("furigana");
         if (userError) {
           toast.error("利用者情報の取得に失敗しました");
           setLoading(false);
           return;
         }
-        if (!data || data.length === 0) break;
-        userData.push(...(data as UserRow[]));
-        if (data.length < PAGE) break;
-        from += PAGE;
+        userData.push(...((data ?? []) as UserRow[]));
       }
     }
 
@@ -134,7 +154,19 @@ export function ProvisionConfirmContent({
 
     setUsers(mapped);
     setLoading(false);
-  }, [supabase]);
+  }, [supabase, currentOfficeId]);
+
+  // SSR で ?office= が無く initialUsers が空だった場合、事業所確定後に自力取得。
+  // (?office= 付きで来た場合は SSR がスコープ済みなので再取得しない)
+  const autoFetchedRef = useRef(false);
+  useEffect(() => {
+    if (autoFetchedRef.current) return;
+    if (btLoading || !currentOfficeId) return;
+    if (initialUsers.length > 0) return;
+    autoFetchedRef.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 事業所確定後の初回 async fetch
+    fetchData();
+  }, [btLoading, currentOfficeId, initialUsers.length, fetchData]);
 
   const withDoc = users.filter((u) => u.document_id);
   const withoutDoc = users.filter((u) => !u.document_id);
