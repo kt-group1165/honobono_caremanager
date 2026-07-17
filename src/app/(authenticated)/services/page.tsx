@@ -17,27 +17,35 @@ export default async function ServicesPage({
         .from("members")
         .select("id, name, member_offices!inner(office_id)")
         .eq("status", "active")
+        .is("deleted_at", null)
         .eq("member_offices.office_id", officeId)
         .order("furigana", { nullsFirst: false })
     : null;
 
-  // PostgREST default 1000 行制限対策で clients は page-loop
+  // PostgREST default 1000 行制限対策で clients は page-loop。
+  // 必要なのは id / name / service_category の 3 列のみ (旧: select("*") で
+  // 全カラム × 全利用者を取得していて遅かった)。service_category 列が未適用の
+  // 環境では 42703 になるので、その時だけ id/name に落として続行する。
   const PAGE = 1000;
   const usersAll: KaigoUser[] = [];
   {
+    let cols = "id, name, service_category";
     let from = 0;
     while (true) {
-      // Phase Shougai-1: service_category も取得 (form の制度区分 radio デフォルト用)
-      // migration 未適用環境では列が無い → "*" 経由で取得して未定義は undefined のまま
-      const { data } = await supabase
+      const res = await supabase
         .from("clients")
-        .select("*")
+        .select(cols)
         .eq("is_facility", false)
         .is("deleted_at", null)
         .order("name")
         .range(from, from + PAGE - 1);
+      if (res.error?.code === "42703" && cols !== "id, name") {
+        cols = "id, name"; // service_category 未適用 → 基本列で再取得 (from 据置)
+        continue;
+      }
+      const data = res.data;
       if (!data || data.length === 0) break;
-      usersAll.push(...(data as KaigoUser[]));
+      usersAll.push(...(data as unknown as KaigoUser[]));
       if (data.length < PAGE) break;
       from += PAGE;
     }

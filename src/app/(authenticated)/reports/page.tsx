@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -70,35 +70,42 @@ export default function ReportsPage() {
   const [exporting, setExporting] = useState(false);
   const [officeInfo, setOfficeInfo] = useState<OfficeData | null>(null);
 
-  useEffect(() => {
-    const load = async () => {
-      // PostgREST default 1000 行制限対策で clients は page-loop
-      const PAGE = 1000;
-      const usersAll: KaigoUser[] = [];
-      let from = 0;
-      while (true) {
-        const { data, error } = await supabase
-          .from("clients")
-          .select("id, name, name_kana:furigana, birth_date, gender, address, phone")
-          .eq("status", "active")
-          .eq("is_facility", false)
-          .is("deleted_at", null)
-          .order("furigana", { nullsFirst: false })
-          .range(from, from + PAGE - 1);
-        if (error) break;
-        if (!data || data.length === 0) break;
-        usersAll.push(...(data as KaigoUser[]));
-        if (data.length < PAGE) break;
-        from += PAGE;
-      }
-      // 共通マスタ offices, kaigo-app の自事業所だけ。PostgREST 列エイリアスで旧フィールド名維持
-      const officeRes = await supabase.from("offices").select("provider_number:business_number, office_name:name").eq("app_type", "kaigo-app").limit(1).single();
-      setUsers(usersAll);
-      if (officeRes.data) setOfficeInfo(officeRes.data as OfficeData);
-    };
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // 利用者一覧 + 事業所情報は CSV 一括出力モーダルでしか使わないので、
+  // ページ表示時ではなくモーダルを開いた初回だけ遅延ロードする (旧: mount で
+  // 全 active 利用者を毎回 page-loop していて画面表示が重かった)。
+  const dataLoadedRef = useRef(false);
+  const openCsvModal = useCallback(async () => {
+    setShowCsvModal(true);
+    if (dataLoadedRef.current) return;
+    dataLoadedRef.current = true;
+    const PAGE = 1000;
+    const usersAll: KaigoUser[] = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, name, name_kana:furigana, birth_date, gender, address, phone")
+        .eq("status", "active")
+        .eq("is_facility", false)
+        .is("deleted_at", null)
+        .order("furigana", { nullsFirst: false })
+        .range(from, from + PAGE - 1);
+      if (error) break;
+      if (!data || data.length === 0) break;
+      usersAll.push(...(data as KaigoUser[]));
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    // 共通マスタ offices, kaigo-app の自事業所だけ。PostgREST 列エイリアスで旧フィールド名維持
+    const officeRes = await supabase
+      .from("offices")
+      .select("provider_number:business_number, office_name:name")
+      .eq("app_type", "kaigo-app")
+      .limit(1)
+      .single();
+    setUsers(usersAll);
+    if (officeRes.data) setOfficeInfo(officeRes.data as OfficeData);
+  }, [supabase]);
 
   const handleCsvExportAll = async () => {
     if (!selectedUserId) {
@@ -197,7 +204,7 @@ export default function ReportsPage() {
           </p>
         </div>
         <button
-          onClick={() => setShowCsvModal(true)}
+          onClick={openCsvModal}
           className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-700 transition-colors"
         >
           <Download size={16} />
