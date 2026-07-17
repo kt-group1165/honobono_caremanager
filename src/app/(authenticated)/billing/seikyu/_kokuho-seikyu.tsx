@@ -345,14 +345,16 @@ export function KyotakuKokuhoSeikyuContent() {
         type BenefitRow = {
           user_id: string;
           service_type: string;
+          service_kind_code: string | null;
           provider_name: string | null;
+          provider_number: string | null;
           planned_units: number | null;
         };
         const benefitRows: BenefitRow[] = [];
         for (const idChunk of chunkArray(userIds, IN_CHUNK_SIZE)) {
           const { data, error: be } = await supabase
             .from("kaigo_benefit_management")
-            .select("user_id, service_type, provider_name, planned_units")
+            .select("user_id, service_type, service_kind_code, provider_name, provider_number, planned_units")
             .eq("billing_month", mKey)
             .in("user_id", idChunk);
           if (be) throw new Error(`給付管理データの取得に失敗 (${mKey}): ${be.message}`);
@@ -382,12 +384,18 @@ export function KyotakuKokuhoSeikyuContent() {
             }
           }
 
-          // SERVICE_KIND_CODE 未登録の service_type を warning (8221 項19 が空になる)
+          // サービス種類コードが解決できない行を warning (8221 項19 が空になる)。
+          // service_kind_code (CSV 実コード) があればそれで解決済みなので対象外。
           const unknownServiceTypes = [
             ...new Set(
               benefitRows
-                .map((r) => r.service_type)
-                .filter((t) => t && !SERVICE_KIND_CODE[t]),
+                .filter(
+                  (r) =>
+                    !(r.service_kind_code ?? "").trim() &&
+                    r.service_type &&
+                    !SERVICE_KIND_CODE[r.service_type],
+                )
+                .map((r) => r.service_type),
             ),
           ];
           if (unknownServiceTypes.length > 0) {
@@ -571,10 +579,18 @@ export function KyotakuKokuhoSeikyuContent() {
               splitSegments: splitSegmentsByUser.get(u.user_id) ?? null,
               dailyActuals: dailyActualsByUser.get(u.user_id) ?? [],
               lines: (rowsByUser.get(u.user_id) ?? []).map((r) => ({
-                officeNumber: r.provider_name
-                  ? officeNoByName.get(r.provider_name) ?? ""
-                  : "",
-                serviceKindCode: SERVICE_KIND_CODE[r.service_type] ?? "",
+                // 提供事業所番号: 居宅の給付管理票は提供事業所が他社 (訪問介護/通所/
+                // 福祉用具 等) なので offices (自社) には無い。provider_number を直接持てば
+                // それを最優先。無い場合のみ自社 name 解決にフォールバック。
+                officeNumber:
+                  (r.provider_number ?? "").trim() ||
+                  (r.provider_name ? officeNoByName.get(r.provider_name) ?? "" : ""),
+                // サービス種類コードは CSV 由来の実コード (72=認知症通所, 78=地域密着通所
+                // 等 マップに無い/旧コードと異なる種別あり) を最優先。無ければ名称から解決。
+                serviceKindCode:
+                  (r.service_kind_code ?? "").trim() ||
+                  SERVICE_KIND_CODE[r.service_type] ||
+                  "",
                 plannedUnits: r.planned_units ?? 0,
                 label: `${r.service_type}${r.provider_name ? ` (${r.provider_name})` : ""}`,
               })),

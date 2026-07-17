@@ -357,6 +357,7 @@ export function BenefitsContent({
         user_id: entry.user_id,
         billing_month: billingMonth,
         service_type: entry.service_type,
+        provider_number: "", // この簡易生成は提供事業所を持たない (複合キー用に空文字)
         planned_units: entry.total_units,
         actual_units: entry.total_units,
         over_limit_units: 0,
@@ -368,7 +369,7 @@ export function BenefitsContent({
         const { error: upsertError } = await supabase
           .from("kaigo_benefit_management")
           .upsert(chunk, {
-            onConflict: "user_id,billing_month,service_type",
+            onConflict: "user_id,billing_month,service_type,provider_number",
             ignoreDuplicates: false,
           });
         if (upsertError) throw upsertError;
