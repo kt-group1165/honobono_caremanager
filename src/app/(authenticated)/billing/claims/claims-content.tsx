@@ -727,23 +727,36 @@ export function ClaimsContent({
       // PostgREST 列エイリアスで kaigo_users 旧フィールド名を維持しつつ clients を埋め込む
       // kaigo_care_support_claims.user_id → clients.id (FK redirect 済)
       // 1000 行制限対策の page-loop 付き
-      const PAGE = 1000;
+      // 当事業所 (currentOffice) に割り当てられた利用者のレセプトのみ表示・操作対象。
+      //   billing_month だけで取ると他事業所のレセプトが混ざり、全件確定/CSV出力も
+      //   他事業所に及んでしまう (多事業所)。
       const rows: ClaimRow[] = [];
-      {
-        let from = 0;
+      if (currentOffice?.id) {
+        const officeClientIds: string[] = [];
+        let fromA = 0;
         while (true) {
+          const { data, error } = await supabase
+            .from("client_office_assignments")
+            .select("client_id")
+            .eq("office_id", currentOffice.id)
+            .order("client_id", { ascending: true })
+            .range(fromA, fromA + 999);
+          if (error) throw error;
+          if (!data || data.length === 0) break;
+          officeClientIds.push(...data.map((a: { client_id: string }) => a.client_id));
+          if (data.length < 1000) break;
+          fromA += 1000;
+        }
+        for (const idChunk of chunkArray(officeClientIds, IN_CHUNK_SIZE)) {
           const { data, error } = await supabase
             .from("kaigo_care_support_claims")
             .select("*, clients(name, name_kana:furigana, gender, phone, mobile_phone:mobile)")
             .eq("billing_month", billingMonth)
+            .in("user_id", idChunk)
             .order("created_at", { ascending: true })
-            .order("id", { ascending: true })
-            .range(from, from + PAGE - 1);
+            .order("id", { ascending: true });
           if (error) throw error;
-          if (!data || data.length === 0) break;
-          rows.push(...(data as ClaimRow[]));
-          if (data.length < PAGE) break;
-          from += PAGE;
+          if (data) rows.push(...(data as ClaimRow[]));
         }
       }
       setClaims(rows);
@@ -776,7 +789,7 @@ export function ClaimsContent({
     } finally {
       setLoading(false);
     }
-  }, [supabase, billingMonth]);
+  }, [supabase, billingMonth, currentOffice?.id]);
 
   // initial render は server からの initialClaims を使用、月切替時のみ refetch
   const isInitialMount = useRef(true);
@@ -858,24 +871,37 @@ export function ClaimsContent({
       //    PostgREST default 1000 行制限対策で page-loop で全件取得
       const PAGE_USERS = 1000;
       type GenUser = { id: string; name: string; user_number: string | null };
-      const users: GenUser[] = [];
+      // 自事業所 (currentOffice) に割り当てられた利用者のみを対象にする。
+      //   これが無いと全事業所の active 利用者を巻き込んで再生成し、他事業所の
+      //   レセプトを現事業所の単価・加算で上書きする事故になる (多事業所)。
+      const officeClientIds: string[] = [];
       {
-        let fromU = 0;
+        let fromA = 0;
         while (true) {
-          const { data, error: usersErr } = await supabase
-            .from("clients")
-            .select("id, name, user_number")
-            .eq("status", "active")
-            .eq("is_facility", false)
-            .is("deleted_at", null)
-            .order("id", { ascending: true })
-            .range(fromU, fromU + PAGE_USERS - 1);
-          if (usersErr) throw usersErr;
+          const { data, error: aErr } = await supabase
+            .from("client_office_assignments")
+            .select("client_id")
+            .eq("office_id", currentOffice.id)
+            .order("client_id", { ascending: true })
+            .range(fromA, fromA + PAGE_USERS - 1);
+          if (aErr) throw aErr;
           if (!data || data.length === 0) break;
-          users.push(...(data as GenUser[]));
+          officeClientIds.push(...data.map((a: { client_id: string }) => a.client_id));
           if (data.length < PAGE_USERS) break;
-          fromU += PAGE_USERS;
+          fromA += PAGE_USERS;
         }
+      }
+      const users: GenUser[] = [];
+      for (const idChunk of chunkArray(officeClientIds, IN_CHUNK_SIZE)) {
+        const { data, error: usersErr } = await supabase
+          .from("clients")
+          .select("id, name, user_number")
+          .eq("status", "active")
+          .eq("is_facility", false)
+          .is("deleted_at", null)
+          .in("id", idChunk);
+        if (usersErr) throw usersErr;
+        if (data) users.push(...(data as GenUser[]));
       }
       if (users.length === 0) {
         toast.error("在籍中の利用者が見つかりません");
@@ -1152,12 +1178,17 @@ export function ClaimsContent({
         };
       }
 
-      // 6. Delete existing claims for this month
-      const { error: delErr } = await supabase
-        .from("kaigo_care_support_claims")
-        .delete()
-        .eq("billing_month", billingMonth);
-      if (delErr) throw delErr;
+      // 6. Delete existing claims for this month (当事業所の利用者のみ)
+      //    billing_month だけで消すと他事業所のレセプトも削除してしまうため
+      //    officeClientIds に限定する (多事業所での事故防止)。
+      for (const idChunk of chunkArray(officeClientIds, IN_CHUNK_SIZE)) {
+        const { error: delErr } = await supabase
+          .from("kaigo_care_support_claims")
+          .delete()
+          .eq("billing_month", billingMonth)
+          .in("user_id", idChunk);
+        if (delErr) throw delErr;
+      }
 
       // 7. Build insert rows
       const now = new Date().toISOString();
