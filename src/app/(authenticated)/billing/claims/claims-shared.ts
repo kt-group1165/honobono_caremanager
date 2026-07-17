@@ -522,6 +522,8 @@ export interface ClaimRow {
   tokutei_kassan_units: number;
   medical_coop_kassan: boolean;
   medical_coop_kassan_units: number;
+  shoguu_kaizen_units?: number;
+  shoguu_kaizen_code?: string | null;
   discharge_type: DischargeType | null;
   terminal_care: boolean;
   terminal_care_units: number;
@@ -560,6 +562,8 @@ export type ClaimsOfficeInfo = {
   area_category: string | null;
   unit_price: number;
   provider_number: string | null;
+  care_support_shoguu_code?: string | null;
+  care_support_shoguu_permil?: number | null;
 } | null;
 
 export function getCurrentMonth(): string {

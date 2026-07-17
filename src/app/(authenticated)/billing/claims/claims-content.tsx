@@ -213,11 +213,16 @@ function calcTotals(
   baseUnits: number,
   addUnits: number,
   reductionUnits: number,
-  unitPrice: number
-): { total_units: number; total_amount: number; insurance_amount: number } {
-  const total_units = baseUnits + addUnits - reductionUnits;
+  unitPrice: number,
+  shoguuPermil = 0, // 居宅介護支援 処遇改善加算 率 (‰。21 = 2.1%)。0 = 無し
+): { total_units: number; total_amount: number; insurance_amount: number; shoguu_units: number } {
+  // 処遇改善加算 = (居宅介護支援費 + 各種加算 − 減算) の総単位数 × 率 (round)。
+  //   ほのぼの実伝送(436191)で round(subtotal × 0.021) と一致確認済。
+  const subtotal = baseUnits + addUnits - reductionUnits;
+  const shoguu_units = shoguuPermil > 0 ? Math.round((subtotal * shoguuPermil) / 1000) : 0;
+  const total_units = subtotal + shoguu_units;
   const total_amount = Math.floor(total_units * unitPrice);
-  return { total_units, total_amount, insurance_amount: total_amount };
+  return { total_units, total_amount, insurance_amount: total_amount, shoguu_units };
 }
 
 // 月途中の保険者変更 (転居) の表示用文言 ("保険者 1234→5678" / "被保険者番号 …→…")
@@ -681,7 +686,7 @@ export function ClaimsContent({
     (async () => {
       const { data, error } = await supabase
         .from("offices")
-        .select("tokutei_kassan_type, medical_cooperation_kassan, area_category, unit_price, provider_number:business_number")
+        .select("tokutei_kassan_type, medical_cooperation_kassan, area_category, unit_price, provider_number:business_number, care_support_shoguu_code, care_support_shoguu_permil")
         .eq("id", currentOffice.id)
         .maybeSingle();
       if (error) {
@@ -948,10 +953,13 @@ export function ClaimsContent({
       // 4. Fetch office settings for auto-apply（共通マスタ offices — 現在の自事業所を id で参照）
       const { data: officeSettings, error: officeErr } = await supabase
         .from("offices")
-        .select("tokutei_kassan_type, medical_cooperation_kassan, unit_price, area_category")
+        .select("tokutei_kassan_type, medical_cooperation_kassan, unit_price, area_category, care_support_shoguu_code, care_support_shoguu_permil")
         .eq("id", currentOffice.id)
         .maybeSingle();
       if (officeErr) throw officeErr;
+      // 居宅介護支援 処遇改善加算 (令和6〜)。事業所設定の code(436191等) + 率(‰)。
+      const officeShoguuCode = (officeSettings?.care_support_shoguu_code as string | null) ?? null;
+      const officeShoguuPermil = Number(officeSettings?.care_support_shoguu_permil ?? 0) || 0;
 
       // 4-a. 単位数単価: 地域区分を最優先で算出。
       //   - offices.area_category (= "1級地"〜"7級地"/"その他") → 法令単価表 で引く
@@ -1228,7 +1236,9 @@ export function ClaimsContent({
         const uMedicalCoopUnits = isYobo ? 0 : officeMedicalCoopUnits;
 
         const autoAddUnits = uTokuteiUnits + uMedicalCoopUnits;
-        const { total_amount } = calcTotals(levelInfo.units, autoAddUnits, 0, officeUnitPrice);
+        // 処遇改善加算は 介護予防支援 には算定不可。居宅介護支援 (要介護) のみ。
+        const uShoguuPermil = isYobo ? 0 : officeShoguuPermil;
+        const { total_amount, shoguu_units } = calcTotals(levelInfo.units, autoAddUnits, 0, officeUnitPrice, uShoguuPermil);
 
         // 自動算定の根拠を notes に印で残す
         const noteParts: string[] = [];
@@ -1279,6 +1289,8 @@ export function ClaimsContent({
           tokutei_kassan_units: uTokuteiUnits,
           medical_coop_kassan: uMedicalCoop,
           medical_coop_kassan_units: uMedicalCoopUnits,
+          shoguu_kaizen_units: shoguu_units,
+          shoguu_kaizen_code: shoguu_units > 0 ? officeShoguuCode : null,
           discharge_type: null,
           terminal_care: false,
           terminal_care_units: 0,
@@ -1423,11 +1435,16 @@ export function ClaimsContent({
       ? (claim.unei_kijun_gensan_units ?? reductionUnitsOf(claim.units, 50))
       : 0;
     const reductionUnits = calcReductionUnits(claim.units, addings) + uneiRed;
-    const { total_amount, insurance_amount } = calcTotals(
+    // 居宅介護支援 (43始まり) のみ処遇改善加算を再計算 (初回/入院等の変更に追従)
+    const shoPermil = String(claim.care_support_code ?? "").startsWith("43")
+      ? (officeInfo?.care_support_shoguu_permil ?? 0)
+      : 0;
+    const { total_amount, insurance_amount, shoguu_units } = calcTotals(
       claim.units,
       addUnits,
       reductionUnits,
-      unitPrice
+      unitPrice,
+      shoPermil,
     );
 
     try {
@@ -1451,6 +1468,8 @@ export function ClaimsContent({
           tokutei_kassan_units: TOKUTEI_KASSAN_UNITS[addings.tokutei_kassan],
           medical_coop_kassan: addings.medical_coop_kassan,
           medical_coop_kassan_units: addings.medical_coop_kassan ? 125 : 0,
+          shoguu_kaizen_units: shoguu_units,
+          shoguu_kaizen_code: shoguu_units > 0 ? (officeInfo?.care_support_shoguu_code ?? claim.shoguu_kaizen_code ?? null) : null,
           discharge_type: addings.discharge === "none" ? null : addings.discharge,
           terminal_care: addings.terminal_care,
           terminal_care_units: addings.terminal_care ? 400 : 0,
