@@ -607,7 +607,7 @@ export function buildKeikakuhiFile(
     String(totalAmount), // 保険請求額 (10 割)
     "0", // 公費請求額 (公費併用でも本人負担 0 円のため振替 0)
     "0", // 利用者負担
-    "", "", "", "", "", "", // 特定入所者 (対象外)
+    "0", "0", "0", "0", "0", "0", // 特定入所者関連 (対象外だが ほのぼの実出力は 0)
   ]);
 
   // 7111 請求書情報 (公費請求分 — 法別番号ごと)
@@ -636,7 +636,7 @@ export function buildKeikakuhiFile(
       "0", // 保険請求額 (公費単独は保険給付なし)
       String(hUsers.reduce((s, u) => s + amountOf(u), 0)), // 公費請求額 (10 割)
       "0", // 利用者負担
-      "", "", "", "", "", "",
+      "0", "0", "0", "0", "0", "0", // 特定入所者関連 (ほのぼの実出力は 0)
     ]);
   }
 
@@ -679,8 +679,10 @@ export function buildKeikakuhiFile(
       insurerRaw.length > 6 ? insurerRaw.slice(-6)
       : insurerRaw ? insurerRaw.padStart(6, "0")
       : "";
-    const kohiFutan = hasKohi ? u.kohiFutanshaNumber?.trim() ?? "" : ""; // 8 公費負担者番号
-    const kohiJukyu = hasKohi ? u.kohiJukyushaNumber?.trim() ?? "" : ""; // 9 公費受給者番号
+    // 8124 の公費番号は公費単独 (H番号=10割公費) のみ記載。公費併用は居宅介護支援費が
+    // 10割保険給付で公費の給付が無いため空 (ほのぼの実出力 KK260702 準拠)。
+    const kohiFutan = u.kohiTandoku ? u.kohiFutanshaNumber?.trim() ?? "" : ""; // 8 公費負担者番号
+    const kohiJukyu = u.kohiTandoku ? u.kohiJukyushaNumber?.trim() ?? "" : ""; // 9 公費受給者番号
     const careMgr = u.careManagerNumber ?? "";
     // 8124 共通ヘッダ (項1-15)。ほのぼの現行様式は明細をサービスコードごとに1行出す。
     const head = (lineNo: string, code: string) => [
