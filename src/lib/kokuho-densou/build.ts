@@ -493,9 +493,10 @@ export function buildKokuhoDensou(
   const shinsaYm =
     sm === 12 ? `${sy + 1}01` : `${sy}${String(sm + 1).padStart(2, "0")}`;
   // コントロールレコード: 種別1, 連番, ボリューム通番0, データ件数, データ種別711,
-  //   福祉事務所0, 保険者番号0, 事業所番号, 都道府県番号0, 媒体区分1(伝送), 処理対象年月(審査月), 管理番号1
+  //   福祉事務所0, 保険者番号0, 事業所番号, 都道府県番号0, 媒体区分7(インターネット伝送), 処理対象年月(審査月), 管理番号1
+  //   (共通編: 1=伝送(ISDN) / 2=MO / 4=FD・CD-R / 7=伝送(インターネット)。現行はインターネット請求=7)
   lines.push(
-    ["1", String(recNo++), "0", String(dataParts.length), "711", "0", "0", office, "0", "1", shinsaYm, "1"].join(","),
+    ["1", String(recNo++), "0", String(dataParts.length), "711", "0", "0", office, "0", "7", shinsaYm, "1"].join(","),
   );
   for (const parts of dataParts) {
     lines.push(["2", String(recNo++), ...parts].join(","));

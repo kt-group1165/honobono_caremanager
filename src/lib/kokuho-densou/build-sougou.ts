@@ -416,7 +416,7 @@ export function buildSougouDensou(
   // コントロールレコード: build.ts (7131) と同構成。データ種別は総合事業=「71R」
   // (ほのぼの正解伝送 KK260702 と一致。介護給付の "711" とは別値。2026-07-16 是正)。
   lines.push(
-    ["1", String(recNo++), "0", String(dataParts.length), "71R", "0", "0", office, "0", "1", shinsaYm, "1"].join(","),
+    ["1", String(recNo++), "0", String(dataParts.length), "71R", "0", "0", office, "0", "7", shinsaYm, "1"].join(","),
   );
   for (const parts of dataParts) {
     lines.push(["2", String(recNo++), ...parts].join(","));

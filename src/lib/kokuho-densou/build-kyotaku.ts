@@ -232,7 +232,9 @@ function assemble(dataParts: string[][], dataKind: string, office: string, shori
   const lines: string[] = [];
   let recNo = 1;
   lines.push(
-    ["1", String(recNo++), "0", String(dataParts.length), dataKind, "0", "0", office, "0", "1", shoriYm, "1"].join(","),
+    // 媒体区分 (項10) = 7 (インターネット伝送)。旧仕様書の "1" は伝送(ISDN)で現在は使わない
+    // (共通編: 1=伝送(ISDN) / 2=MO / 4=FD・CD-R / 7=伝送(インターネット))。ほのぼの実出力も 7。
+    ["1", String(recNo++), "0", String(dataParts.length), dataKind, "0", "0", office, "0", "7", shoriYm, "1"].join(","),
   );
   for (const parts of dataParts) lines.push(["2", String(recNo++), ...parts].join(","));
   lines.push(["3", String(recNo++)].join(","));
