@@ -753,17 +753,17 @@ export function KyotakuKaigoSeikyuContent() {
 
         {/* ── メインテーブル ── */}
         <div className="flex flex-col flex-1 min-w-0 border-r border-gray-200">
-          {/* ── ツールバー ── */}
-          <div className="border-b border-gray-300 bg-gray-100 px-3 py-2 shrink-0 flex items-center gap-2 flex-wrap">
+          {/* ── ツールバー (折返し禁止で1行固定。幅不足時は横スクロール) ── */}
+          <div className="border-b border-gray-300 bg-gray-100 px-3 py-2 shrink-0 flex items-center gap-1 flex-nowrap overflow-x-auto text-xs whitespace-nowrap">
             <SeikyuMonthNav />
-            <span className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 font-medium">請求分</span>
+            <span className="border border-gray-400 rounded bg-white px-2 py-1 text-gray-700 font-medium">請求分</span>
             <span className="text-xs text-gray-500">{displayRows.length} 件</span>
-            <div className="w-px h-5 bg-gray-300 mx-1" />
+            <div className="w-px h-5 bg-gray-300 mx-0.5 shrink-0" />
             <button
               onClick={printMeisai}
               disabled={displayRows.length === 0}
               title="対象者の介護給付費明細書 (様式第七) を印刷。印刷で発行済になります"
-              className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
+              className="border border-gray-400 rounded bg-white px-1.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1 disabled:opacity-50"
             >
               <FileText size={13} />明細書 ({targetDisplayRows.length}件)
             </button>
@@ -771,7 +771,7 @@ export function KyotakuKaigoSeikyuContent() {
               onClick={printSeikyu}
               disabled={seikyuTargets.length === 0}
               title="事業所単位の総括請求書 (様式第一) を印刷"
-              className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
+              className="border border-gray-400 rounded bg-white px-1.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1 disabled:opacity-50"
             >
               <Printer size={13} />請求書
             </button>
@@ -779,34 +779,32 @@ export function KyotakuKaigoSeikyuContent() {
               onClick={markKokuhoTarget}
               disabled={displayRows.length === 0}
               title="発行済の利用者を国保連請求の対象にする"
-              className="border border-blue-500 rounded bg-blue-100 px-2.5 py-1 text-blue-800 font-semibold hover:bg-blue-200 flex items-center gap-1.5 disabled:opacity-50"
+              className="border border-blue-500 rounded bg-blue-100 px-1.5 py-1 text-blue-800 font-semibold hover:bg-blue-200 flex items-center gap-1 disabled:opacity-50"
             >
               <Landmark size={13} />国保対象
             </button>
             <button
               onClick={selectUnissued}
               disabled={displayRows.length === 0}
-              className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="border border-gray-400 rounded bg-white px-1.5 py-1 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
               未発行のみ
             </button>
-            <div className="ml-auto flex items-center gap-2">
-              <Link
-                href="/billing/claims"
-                title="レセプトの一括生成・加算編集・確定 (既存のレセプト管理画面)"
-                className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5"
-              >
-                <SquarePen size={13} />レセプト編集
-              </Link>
-              <button
-                onClick={exportCsv}
-                disabled={displayRows.length === 0}
-                title="明細一覧を Excel 閲覧用 CSV で出力"
-                className="border border-indigo-500 rounded bg-indigo-500 px-3 py-1 text-white font-semibold hover:bg-indigo-600 flex items-center gap-1.5 disabled:opacity-50"
-              >
-                <Download size={13} />確認用CSV
-              </button>
-            </div>
+            <Link
+              href="/billing/claims"
+              title="レセプトの一括生成・加算編集・確定 (既存のレセプト管理画面)"
+              className="ml-auto border border-gray-400 rounded bg-white px-1.5 py-1 text-gray-700 hover:bg-gray-50 flex items-center gap-1 shrink-0"
+            >
+              <SquarePen size={13} />レセプト編集
+            </Link>
+            <button
+              onClick={exportCsv}
+              disabled={displayRows.length === 0}
+              title="明細一覧を Excel 閲覧用 CSV で出力"
+              className="border border-indigo-500 rounded bg-indigo-500 px-2 py-1 text-white font-semibold hover:bg-indigo-600 flex items-center gap-1 shrink-0 disabled:opacity-50"
+            >
+              <Download size={13} />確認用CSV
+            </button>
           </div>
 
           {/* 月遅れ/返戻の再請求 案内 */}
