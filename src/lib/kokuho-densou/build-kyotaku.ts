@@ -651,7 +651,7 @@ export function buildKeikakuhiFile(
     if (!u.birthDate) warnings.push(`${u.userName}: 生年月日が未登録です (計画費明細書 8121 項10 必須)`);
     if (!careCode) warnings.push(`${u.userName}: 要介護度 ("${u.careLevel ?? "未設定"}") をコードに変換できません`);
     if (!u.serviceCode) warnings.push(`${u.userName}: 居宅介護支援費のサービスコードが年度別単位数マスタにありません`);
-    if (!u.requestDate) warnings.push(`${u.userName}: 計画作成依頼届出年月日が無いため認定開始日で代用しました`);
+    if (!u.requestDate) warnings.push(`${u.userName}: 計画作成依頼届出年月日が未登録のため空欄で出力します (H番号みなし2号等は空欄が正。要介護者で本来届出がある場合は登録してください)`);
     if (u.midMonthInsurerChange) {
       const mc = u.midMonthInsurerChange;
       warnings.push(
@@ -702,7 +702,7 @@ export function buildKeikakuhiFile(
       careCode, // 12 要介護状態区分コード
       dateNum(u.certStart), // 13 認定有効期間 (開始)
       dateNum(u.certEnd), // 14 認定有効期間 (終了)
-      dateNum(u.requestDate ?? u.certStart), // 15 計画作成依頼届出年月日
+      dateNum(u.requestDate), // 15 計画作成依頼届出年月日 (無ければ空。ほのぼのも届出日が無い利用者(H番号みなし2号等)は空にする。認定開始日での代用はしない)
       lineNo, // 16 明細行番号 (1..n-1、最後の明細=99=合計行兼用)
       code, // 17 サービスコード
     ];
