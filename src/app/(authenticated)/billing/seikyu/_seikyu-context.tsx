@@ -69,6 +69,8 @@ export interface KyotakuSeikyuRow {
   certEnd: string | null;
   /** 居宅サービス計画作成依頼(変更)届出年月日 (kaigo_care_plans)。無ければ null (認定開始日で代用) */
   requestDate: string | null;
+  /** 介護支援専門員番号 (ケアマネ番号。kaigo_care_plans)。8124/8222 用。無ければ null */
+  careManagerNumber: string | null;
   /** 区分支給限度基準額 (単位) — 給付管理票 (8221) 用 */
   limitUnits: number;
   claimId: string;
@@ -398,16 +400,20 @@ export async function fetchKyotakuClaimRows(
     if (mc?.insurerChange) insurerChangeByUser.set(clientId, mc.insurerChange);
   }
 
-  // 2.7) 計画作成依頼届出年月日 (kaigo_care_plans.plan_request_date) — 居宅明細書 8121 項15 用
+  // 2.7) 計画作成依頼届出年月日 (plan_request_date) と 介護支援専門員番号 (care_manager_number)
+  //      — kaigo_care_plans から。居宅明細書 8124 項15 / 給付管理票 8222 終端 項25 用。
   const planReqByUser = new Map<string, string | null>();
+  const careMgrByUser = new Map<string, string | null>();
   for (let i = 0; i < userIds.length; i += 300) {
     const { data } = await supabase
       .from("kaigo_care_plans")
-      .select("user_id, plan_request_date")
+      .select("user_id, plan_request_date, care_manager_number")
       .in("user_id", userIds.slice(i, i + 300))
       .eq("status", "active");
-    for (const p of (data ?? []) as { user_id: string; plan_request_date: string | null }[])
+    for (const p of (data ?? []) as { user_id: string; plan_request_date: string | null; care_manager_number: string | null }[]) {
       if (!planReqByUser.has(p.user_id)) planReqByUser.set(p.user_id, p.plan_request_date);
+      if (!careMgrByUser.has(p.user_id)) careMgrByUser.set(p.user_id, p.care_manager_number ?? null);
+    }
   }
 
   // 3) 行の組み立て (ふりがな順)
@@ -431,6 +437,7 @@ export async function fetchKyotakuClaimRows(
       certStart: cert?.certification_start_date ?? null,
       certEnd: cert?.certification_end_date ?? null,
       requestDate: planReqByUser.get(c.user_id) ?? null,
+      careManagerNumber: careMgrByUser.get(c.user_id) ?? null,
       limitUnits: cert?.service_limit_amount ?? 0,
       claimId: c.id,
       claimStatus: c.status,

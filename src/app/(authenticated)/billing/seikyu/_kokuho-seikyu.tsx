@@ -322,6 +322,9 @@ export function KyotakuKokuhoSeikyuContent() {
           requestDate: u.requestDate ?? null, // 計画作成依頼届出年月日 (kaigo_care_plans)。無ければ builder が認定開始日で代用
           serviceCode: u.serviceCode,
           units: u.totalUnits,
+          // 8124 明細行 (基本+各加算+処遇改善)。最後の行が行番号99 (合計行) になる
+          lines: u.lines.map((l) => ({ code: l.code, units: l.units, count: l.count })),
+          careManagerNumber: u.careManagerNumber, // 介護支援専門員番号 (8124 各行)
           // 公費 (生活保護等)。公費単独 (H番号) は保険分 7111 から除外され公費分へ
           kohiTandoku: u.kohiTandoku,
           kohiHobetsu: u.kohiHobetsu,
@@ -576,6 +579,7 @@ export function KyotakuKokuhoSeikyuContent() {
               // 月途中の保険者変更 (転居)。分割材料 (splitSegments + 日別実績) が
               // 揃っていれば builder 側で保険者別に票を分割、無ければ従来 warning。
               midMonthInsurerChange: u.midMonthInsurerChange,
+              careManagerNumber: u.careManagerNumber, // 介護支援専門員番号 (8222 終端行)
               splitSegments: splitSegmentsByUser.get(u.user_id) ?? null,
               dailyActuals: dailyActualsByUser.get(u.user_id) ?? [],
               lines: (rowsByUser.get(u.user_id) ?? []).map((r) => ({

@@ -192,6 +192,8 @@ export interface KyufuKanriUser {
   splitSegments?: KyufuKanriSegment[] | null;
   /** 自事業所の訪問介護実績 (日別) — 分割時の按分根拠。分割なしは不要 */
   dailyActuals?: KyufuKanriDailyActual[];
+  /** 介護支援専門員番号 (ケアマネ番号) — 8222 終端行 用。無ければ空 */
+  careManagerNumber?: string | null;
 }
 
 export interface KyotakuDensouOptions {
@@ -436,25 +438,8 @@ export function buildKyufuKanriFile(
   // が揃っている利用者は保険者別に複数票へ分割する。
   const userTickets = users.map((u) => ({ u, tickets: ticketsOf(u, warnings) }));
 
-  // 8211 総括票 — 作成区分 (新規/修正/取消) ごとの件数を「票数」で集計
-  // (保険者別に分割した利用者は票数分カウント = 8221 の票数と整合)。
-  // 項12-14 の欄名は「自県分 訪問通所サービス・居宅サービス給付管理票」
-  // (_if_kyotaku.txt 8211 レイアウト 項12-17)。種別3 (居宅サービス給付管理票) は
-  // ここに計上し、項15-17 (短期入所サービス給付管理票の件数) は種別2 の票
-  // (平成13年12月以前の対象年月のみ) 専用のため、平成14年1月以降は 0 が正。
-  const kubunCount: Record<KyufuKanriSakuseiKubun, number> = { "1": 0, "2": 0, "3": 0 };
-  for (const { u, tickets } of userTickets) kubunCount[u.sakuseiKubun ?? "1"] += tickets.length;
-  dataParts.push([
-    "8211", // 1 交換情報識別番号
-    submitYm, // 2 提出年月
-    "0", // 3 保険者番号 ("0" 固定)
-    office, // 4 事業所番号 (居宅介護支援事業所)
-    "1", // 5 居宅サービス計画作成区分コード (1=居宅介護支援事業所作成)
-    "0", "0", "0", "0", "0", "0", // 6-11 他県分 (訪問通所・居宅/短期入所 × 新規/修正/取消)
-    String(kubunCount["1"]), String(kubunCount["2"]), String(kubunCount["3"]), // 12-14 自県分 訪問通所・居宅サービス給付管理票 新規/修正/取消 (種別3 はここ)
-    "0", "0", "0", // 15-17 自県分 短期入所サービス給付管理票 新規/修正/取消 (種別2 = H13.12 以前のみ → 0)
-  ]);
-
+  // 給付管理票明細 (8222)。ほのぼの (認定 国保連ソフト) の実出力 (KY260701) は
+  // 総括票 8211 を持たず 8222 のみで構成する。旧仕様の 8211 総括票は出力しない。
   for (const { u, tickets } of userTickets) {
     const kubun: KyufuKanriSakuseiKubun = u.sakuseiKubun ?? "1";
     if (!u.birthDate) warnings.push(`${u.userName}: 生年月日が未登録です`);
@@ -464,7 +449,7 @@ export function buildKyufuKanriFile(
       if (!l.serviceKindCode) warnings.push(`${u.userName}: サービス種類コード未設定の行があります (SERVICE_KIND_CODE 未登録のサービス種別の可能性)`);
     }
 
-    // 票ごと (通常 1 票 / 保険者別分割時は N 票) に 8221 明細 01〜98 + 終端 99 を出力
+    // 票ごと (通常 1 票 / 保険者別分割時は N 票) に 8222 明細 01〜98 + 終端 99 を出力
     for (const t of tickets) {
       const careCode = CARE_LEVEL_CODE[(t.careLevel ?? "").trim()] ?? "";
       const seg = t.period ? ` (${t.period.from}〜${t.period.to} の分割票)` : "";
@@ -473,16 +458,15 @@ export function buildKyufuKanriFile(
       if (!careCode) warnings.push(`${u.userName}: 要介護度 ("${t.careLevel ?? "未設定"}") をコードに変換できません${seg}`);
       if (t.limitUnits <= 0) warnings.push(`${u.userName}: 区分支給限度基準額が未登録です${seg}`);
 
+      // 8222 共通ヘッダ (項1-14)
       const head = (lineNo: string) => [
-        "8221", // 1
+        "8222", // 1 交換情報識別番号 (ほのぼの現行様式)
         ym, // 2 対象年月 (分割票も同一の対象年月 — 票の別は項3/9 の保険者×被保険者)
         t.insurerNumber ? t.insurerNumber.trim().padStart(8, "0") : "", // 3 証記載保険者番号 (数字8桁・前0埋め)
         office, // 4 事業所番号 (居宅介護支援事業所)
         kubun, // 5 給付管理票情報作成区分コード (1=新規 / 2=修正 / 3=取消)
         todayNum, // 6 給付管理票作成年月日
-        // 7 給付管理票種別区分コード。H14.01 以降の対象年月は短期入所も含め
-        //   常に 3 (居宅サービス給付管理票) — ※6 (1/2 は H13.12 以前のみ)
-        "3",
+        "3", // 7 給付管理票種別区分コード (3=居宅サービス給付管理票)
         lineNo, // 8 給付管理票明細行番号
         t.insuredNumber, // 9 被保険者番号
         dateNum(u.birthDate), // 10 被保険者生年月日
@@ -492,8 +476,8 @@ export function buildKyufuKanriFile(
         ymNum(t.limitEnd), // 14 限度額適用期間 (終了)
       ];
 
-      // 明細行 (01〜98)。99 行目は終端行のため明細は最大 98 行
-      let ticketLines = t.lines;
+      // 明細行 (01〜98)。提供事業所番号の昇順 (ほのぼのと同順)。99 は終端行のため最大98行
+      let ticketLines = [...t.lines].sort((a, b) => a.officeNumber.localeCompare(b.officeNumber));
       if (ticketLines.length > 98) {
         warnings.push(
           `${u.userName}: 給付管理票の明細が ${ticketLines.length} 行あり上限 98 行を超えるため 99 行目以降を出力できません (行番号 99 は終端行のため)`,
@@ -505,30 +489,28 @@ export function buildKyufuKanriFile(
         total += l.plannedUnits;
         dataParts.push([
           ...head(String(i + 1).padStart(2, "0")),
-          "", // 15 訪問通所/短期入所支給限度額 (明細行は未設定 — ※4)
+          "", // 15 限度額 (明細行は空)
           "1", // 16 居宅サービス計画作成区分コード
           l.officeNumber, // 17 事業所番号 (サービス事業所)
           "1", // 18 指定/基準該当等事業所区分コード (1=指定)
-          l.serviceKindCode, // 19 サービス種類コード (短期入所 21/22/23/2A も同一票に記載)
-          String(l.plannedUnits), // 20 給付計画単位数 (種別3 は短期入所も単位数 — ※6。日数記載は種別2=H13.12以前のみ)
-          "", // 21 限度額管理期間における前月までの給付計画日数 (種別3 は設定不要 — ※6。種別2=短期入所票のみ必須)
-          "", "", "", // 22-24 (明細行は未設定 — ※4)
+          l.serviceKindCode, // 19 サービス種類コード
+          String(l.plannedUnits), // 20 給付計画単位数
+          "", "", "", "", "", "", "", // 21-27 (明細行は空)
         ]);
       });
 
-      // 終端行 (99)
+      // 終端行 (99): 限度額・給付計画合計単位数・介護支援専門員番号
       dataParts.push([
         ...head("99"),
-        String(t.limitUnits), // 15 居宅サービス区分支給限度基準額 (単位数 — ※6。分割票は各セグメントの認定の限度額を満額)
+        String(t.limitUnits), // 15 居宅サービス区分支給限度基準額 (単位数)
         "1", // 16 居宅サービス計画作成区分コード
-        "", // 17 事業所番号 (終端行は未設定)
-        "", // 18
-        "", // 19
-        "", // 20
-        "", // 21 (種別3 は設定不要 — ※6)
-        String(total), // 22 指定サービス分小計 (単位数)
-        "0", // 23 基準該当サービス分小計
+        "0", // 17 事業所番号 (終端行は 0)
+        "0", // 18 事業所区分 (終端行は 0)
+        "0", // 19 サービス種類 (終端行は 0)
+        "", "", "", "", // 20-23 空
         String(total), // 24 給付計画合計単位数
+        u.careManagerNumber ?? "", // 25 介護支援専門員番号 (ケアマネ番号)
+        "", "", // 26-27 空
       ]);
     }
   }
@@ -536,6 +518,16 @@ export function buildKyufuKanriFile(
   // ⚠ コントロールレコード項11 (処理対象年月) は「審査を実行する年月」=提出月
   //   (_if_kyotaku.txt 注1)。サービス提供月 (ym) ではない。
   return { ...assemble(dataParts, "821", office, submitYm, `K${ym}.CSV`), warnings };
+}
+
+/** 居宅介護支援費明細書 (8124) の明細1行 */
+export interface KeikakuhiMeisaiLine {
+  /** サービスコード (6桁)。減算等でコード無しなら空 */
+  code: string;
+  /** 単位数 (1回あたり)。減算はマイナス */
+  units: number;
+  /** 回数 */
+  count: number;
 }
 
 export interface KeikakuhiUser {
@@ -552,6 +544,14 @@ export interface KeikakuhiUser {
   /** 居宅介護支援費のサービスコード (6 桁) と単位数 (年度別マスタから) */
   serviceCode: string;
   units: number;
+  /**
+   * 明細内訳 (基本 + 各加算 + 処遇改善)。8124 の明細行として1行ずつ出力する。
+   * 省略時は serviceCode+units の1行に縮退 (後方互換)。処遇改善など最後の行が
+   * 行番号99 (合計行兼用) になる。
+   */
+  lines?: KeikakuhiMeisaiLine[];
+  /** 介護支援専門員番号 (ケアマネ番号) — 8124 各行 用。無ければ空 */
+  careManagerNumber?: string | null;
   // ── 公費 (生活保護等)。省略時は公費なし (既存呼出互換) ──
   /**
    * 公費単独 (10割公費)。被保険者番号が 'H' 始まり (= 介護保険未加入の
@@ -679,34 +679,48 @@ export function buildKeikakuhiFile(
       insurerRaw.length > 6 ? insurerRaw.slice(-6)
       : insurerRaw ? insurerRaw.padStart(6, "0")
       : "";
-    dataParts.push([
-      "8121", // 1
+    const kohiFutan = hasKohi ? u.kohiFutanshaNumber?.trim() ?? "" : ""; // 8 公費負担者番号
+    const kohiJukyu = hasKohi ? u.kohiJukyushaNumber?.trim() ?? "" : ""; // 9 公費受給者番号
+    const careMgr = u.careManagerNumber ?? "";
+    // 8124 共通ヘッダ (項1-15)。ほのぼの現行様式は明細をサービスコードごとに1行出す。
+    const head = (lineNo: string, code: string) => [
+      "8124", // 1 交換情報識別番号 (ほのぼの現行様式)
       office, // 2 事業所番号
       "1", // 3 指定/基準該当等事業所区分コード
       ym, // 4 サービス提供年月
-      insurer6, // 5 証記載保険者番号 (数字6桁 — 8桁ではない)
+      insurer6, // 5 証記載保険者番号 (数字6桁)
       String(unitPrice100), // 6 単位数単価
       u.insuredNumber, // 7 被保険者番号 (英数10 — H番号可)
-      // 8-9 公費負担者番号/受給者番号 — 仕様書: 生活保護単独の場合必須。
-      //   併用 (振替 0 円) 時も記載する (様式第七の記載例準拠)。
-      //   ※ 8121 には 7131 のような公費分単位数の独立項目は無い (全18項目、仕様書確認済)。
-      hasKohi ? u.kohiFutanshaNumber?.trim() ?? "" : "", // 8 公費負担者番号
-      hasKohi ? u.kohiJukyushaNumber?.trim() ?? "" : "", // 9 公費受給者番号
+      kohiFutan, // 8 公費負担者番号 (生活保護単独は必須。併用も記載)
+      kohiJukyu, // 9 公費受給者番号
       dateNum(u.birthDate), // 10 被保険者生年月日
       genderCode(u.gender), // 11 性別コード
-      // ⚠ 要取込チェック: 仕様書の ※5「被保険者でない生活保護受給者の場合は設定不要」が
-      //    どの項目 (要介護状態区分/認定有効期間) に掛かるかレイアウト上不明確。
-      //    ここでは H番号者も福祉事務所の要介護認定情報をそのまま設定する。
       careCode, // 12 要介護状態区分コード
       dateNum(u.certStart), // 13 認定有効期間 (開始)
       dateNum(u.certEnd), // 14 認定有効期間 (終了)
       dateNum(u.requestDate ?? u.certStart), // 15 計画作成依頼届出年月日
-      u.serviceCode, // 16 サービスコード
-      String(u.units), // 17 単位数
-      // 18 請求金額 — 公費単独は全額が公費請求となるが、金額自体は同じ 10 割額。
-      //    (保険/公費の別は 7111 側の区分コードで表現される)
-      String(amountOf(u)), // 18 請求金額
-    ]);
+      lineNo, // 16 明細行番号 (1..n-1、最後の明細=99=合計行兼用)
+      code, // 17 サービスコード
+    ];
+    // 明細内訳。省略時は serviceCode+units の1行に縮退 (後方互換)。
+    const meisai = u.lines && u.lines.length > 0 ? u.lines : [{ code: u.serviceCode, units: u.units, count: 1 }];
+    const totalUnits = meisai.reduce((s, l) => s + l.units * l.count, 0);
+    const amount = amountOf(u);
+    meisai.forEach((l, i) => {
+      const isLast = i === meisai.length - 1;
+      // ほのぼの様式: 最後の明細行は行番号99 (合計行を兼ねる) で 合計単位数・請求金額 を持つ
+      const lineNo = isLast ? "99" : String(i + 1);
+      dataParts.push([
+        ...head(lineNo, l.code),
+        String(l.units), // 18 単位数
+        String(l.count), // 19 回数
+        String(l.units * l.count), // 20 サービス単位数
+        isLast ? String(totalUnits) : "", // 21 合計単位数 (行99のみ)
+        isLast ? String(amount) : "", // 22 請求金額 (行99のみ)
+        careMgr, // 23 介護支援専門員番号 (ケアマネ番号)
+        "", // 24
+      ]);
+    });
   }
 
   // ⚠ コントロールレコード項11 (処理対象年月) は「審査を実行する年月」=提出月
