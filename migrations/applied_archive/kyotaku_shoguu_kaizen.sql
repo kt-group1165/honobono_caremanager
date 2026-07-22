@@ -12,4 +12,9 @@ ALTER TABLE offices
   ADD COLUMN IF NOT EXISTS care_support_shoguu_code text,
   ADD COLUMN IF NOT EXISTS care_support_shoguu_permil integer NOT NULL DEFAULT 0;
 
+-- 大網白里の居宅事業所: 居宅支援処遇改善加算 436191 = 2.1% (permil 21)
+UPDATE offices
+   SET care_support_shoguu_code = '436191', care_support_shoguu_permil = 21
+ WHERE id = '755e64de-1289-473f-9423-150a9a9268d4';
+
 COMMIT;
