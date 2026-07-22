@@ -509,16 +509,19 @@ export function MonthlyInfoContent() {
                       )}
                     </td>
                     {/* 実績単位数 (計画超過チェック) */}
-                    <td className="px-2 py-1 border border-gray-200 text-right font-mono whitespace-nowrap">
-                      {r.totalUnits.toLocaleString()}
-                      {overrun && (
-                        <span
-                          title={`計画単位数を ${(r.totalUnits - plan.planned_units).toLocaleString()} 単位超過しています。超過分は保険請求できません (自費)。`}
-                          className="ml-1 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700"
-                        >
-                          計画超過
-                        </span>
-                      )}
+                    <td className="px-2 py-1 border border-gray-200 font-mono whitespace-nowrap align-middle">
+                      {/* flex + items-center で、バッジ有無に依らず数字の縦位置を一定にする */}
+                      <div className="flex items-center justify-end gap-1">
+                        <span>{r.totalUnits.toLocaleString()}</span>
+                        {overrun && (
+                          <span
+                            title={`計画単位数を ${(r.totalUnits - plan.planned_units).toLocaleString()} 単位超過しています。超過分は保険請求できません (自費)。`}
+                            className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-red-700"
+                          >
+                            計画超過
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
