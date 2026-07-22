@@ -429,7 +429,7 @@ export function MonthlyInfoContent() {
                 const planSet = !!plan && plan.planned_units > 0;
                 const overrun = planSet && r.totalUnits > plan.planned_units;
                 return (
-                  <tr key={r.user_id} className="hover:bg-blue-50">
+                  <tr key={r.user_id} className="hover:bg-blue-50 whitespace-nowrap">
                     <td className="px-2 py-1 border border-gray-200 text-center text-gray-400">
                       {certOk ? (
                         "-"
