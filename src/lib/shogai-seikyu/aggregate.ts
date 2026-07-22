@@ -292,6 +292,9 @@ export async function aggregateMonthlyShogaiSeikyu(
     jogen_kanri_office_name: string | null;
     certification_start_date: string | null;
     certification_end_date: string | null;
+    /** 居宅介護等サービスの契約 (提供開始) 日。初回加算の初回月判定に使う。
+     *  受給者証有効期間 (certification_start_date) は更新のたびに動くため初回判定には使わない。 */
+    contract_start_date: string | null;
     /** 特別地域加算 対象 (中山間地域等の居住者)。列未適用(42703)/未設定は undefined→false */
     flag_special_area?: boolean | null;
     /** 支給決定量の内訳 (時間/回/単位)。列未適用(42703)/未設定は undefined→null */
@@ -303,7 +306,7 @@ export async function aggregateMonthlyShogaiSeikyu(
   // 拡張列 (flag_special_area / shikyuryo_details) が未適用(42703)の環境では
   // 列を落として再取得する (フォールバック必須 — 従来動作 = 加算・警告なし)。
   const CERT_BASE_COLS =
-    "client_id, beneficiary_number, insurer_municipality, support_level, self_payment_limit, seiho_flag, jogen_kanri_kubun, jogen_kanri_office_number, jogen_kanri_office_name, certification_start_date, certification_end_date";
+    "client_id, beneficiary_number, insurer_municipality, support_level, self_payment_limit, seiho_flag, jogen_kanri_kubun, jogen_kanri_office_number, jogen_kanri_office_name, certification_start_date, certification_end_date, contract_start_date";
   const CERT_EXT_COLS = `${CERT_BASE_COLS}, flag_special_area, shikyuryo_details`;
   let certCols = CERT_EXT_COLS;
   const certByClient = new Map<string, Cert>();
@@ -463,6 +466,57 @@ export async function aggregateMonthlyShogaiSeikyu(
     for (const [tc, code] of Object.entries(SPECIAL_AREA_CANDIDATE_CODES)) {
       const label = nameByCode.get(code);
       if (label) specialAreaByTypeCode.set(tc, { code, label });
+    }
+  }
+
+  // 3.85) 初回加算 (居介初回 116020 等) — 制度ルール: 当該訪問系サービスの提供開始月
+  //   (= 受給者証 contract_start_date の月) に 200単位/月 を算定する。
+  //   ここで initial 月を判定する signal に certification_start_date (受給者証更新日) や
+  //   「過去月の実績有無」を使わないのは、前者は更新月に、後者は本システム稼働初月
+  //   (履歴が無い) に false-positive するため。契約 (提供開始) 日を持つ contract_start_date が
+  //   制度上の初回月と一致する唯一の列。
+  //   加算コードは master (system='障害') を service_category (=種類コード) で解決する。
+  //   対象種類は master の service_category と初回加算コードが 1:1 で一致する
+  //   居宅介護(11=116020)/重度訪問介護(12=126020)/行動援護(13=136020) に限定する。
+  //   同行援護 は master の category 割当 (14=重包/15=同援) が本ファイルの SERVICE_TYPE_CODES
+  //   (14=同行援護) と食い違うため自動算定せず、必要時は加算エディタから入力する。
+  //   計画相談・自立生活援助等の初回加算は算定条件・単位が異なるため対象外。
+  //   contract_start_date が未入力/列未適用 の利用者は算定なし = 従来動作。
+  const SHOKAI_TYPE_CODES = ["11", "12", "13"];
+  const shokaiByTypeCode = new Map<
+    string,
+    { code: string; units: number; label: string }
+  >();
+  const anyShokaiMonth = Array.from(certByClient.values()).some(
+    (c) => (c.contract_start_date ?? "").slice(0, 7) === monthStr,
+  );
+  if (anyShokaiMonth) {
+    const { data, error } = await validInMonth(
+      supabase
+        .from("kaigo_service_codes")
+        .select("service_code, service_name, units, service_category")
+        .eq("system", "障害")
+        .in("service_category", SHOKAI_TYPE_CODES)
+        .like("service_name", "%初回%"),
+      opts.year,
+      opts.month,
+    );
+    if (error) throw new Error(`初回加算コード取得失敗: ${error.message}`);
+    for (const c of (data ?? []) as {
+      service_code: string;
+      service_name: string;
+      units: number;
+      service_category: string | null;
+    }[]) {
+      const tc = c.service_category ?? c.service_code.slice(0, 2);
+      // 種類ごと 1 コード (validInMonth 済のため先勝ち)。率もの(units<=0)は対象外
+      if (tc && c.units > 0 && !shokaiByTypeCode.has(tc)) {
+        shokaiByTypeCode.set(tc, {
+          code: c.service_code,
+          units: c.units,
+          label: c.service_name,
+        });
+      }
     }
   }
 
@@ -669,7 +723,34 @@ export async function aggregateMonthlyShogaiSeikyu(
       chuguzenUnitsByType.set(tc, (chuguzenUnitsByType.get(tc) ?? 0) + g.units);
     }
 
-    // 処遇改善加算等 (母数 = 所定単位 + 特別地域加算 + 回/月単位加算)
+    // 初回加算 (提供開始月) — contract_start_date の月が提供月と一致する利用者に、
+    // 所定単位のある訪問系サービス種類ごと 200単位/月 を明細行として 1 行追加。
+    // 処遇改善の母数 (chuguzenUnitsByType) にも算入する (ほのぼの KJ と同様、初回加算は
+    // 処遇改善の算定基礎に含まれる)。手入力の加算行 (generic) に同コードが既にある場合は
+    // 二重計上を避けてスキップ。
+    if (
+      shokaiByTypeCode.size > 0 &&
+      (cert?.contract_start_date ?? "").slice(0, 7) === monthStr
+    ) {
+      const alreadyGeneric = new Set(generic.map((g) => g.code));
+      for (const [tc, units] of unitsByType) {
+        if (units <= 0) continue; // 当月に当該種類の提供実績がある場合のみ
+        const sk = shokaiByTypeCode.get(tc);
+        if (!sk || alreadyGeneric.has(sk.code)) continue;
+        details.push({
+          service_type: sk.label,
+          service_category: null,
+          service_code: sk.code,
+          unit_per: sk.units,
+          count: 1,
+          units: sk.units,
+        });
+        genericUnits += sk.units;
+        chuguzenUnitsByType.set(tc, (chuguzenUnitsByType.get(tc) ?? 0) + sk.units);
+      }
+    }
+
+    // 処遇改善加算等 (母数 = 所定単位 + 特別地域加算 + 回/月単位加算 + 初回加算)
     for (const [tc, units] of chuguzenUnitsByType) {
       const rate = addonByTypeCode.get(tc);
       if (!rate || units <= 0) continue;

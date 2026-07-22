@@ -909,14 +909,14 @@ export function ShogaiJissekiKirokuhyoPrintSheet({
   // 合計 (J611 基本情報 合計1〜5): 乗降 = 回数、それ以外 = 算定時間数計
   const totals = new Map<string, { mins: number; count: number }>();
   for (const v of sorted) {
-    const code = decisionCode(v.category);
+    const code = decisionCode(v.category, v.serviceName, v.serviceCode);
     const t = totals.get(code) ?? { mins: 0, count: 0 };
     t.mins += v.durationMinutes ?? 0;
     t.count += 1;
     totals.set(code, t);
   }
   const totalMins = sorted
-    .filter((v) => decisionCode(v.category) !== "115000")
+    .filter((v) => decisionCode(v.category, v.serviceName, v.serviceCode) !== "115000")
     .reduce((s, v) => s + (v.durationMinutes ?? 0), 0);
 
   const thc: React.CSSProperties = {
@@ -1067,7 +1067,7 @@ export function ShogaiJissekiKirokuhyoPrintSheet({
         </thead>
         <tbody>
           {sorted.map((v, i) => {
-            const code = decisionCode(v.category);
+            const code = decisionCode(v.category, v.serviceName, v.serviceCode);
             const isRide = code === "115000";
             return (
               <tr key={i} style={{ height: "5mm" }}>

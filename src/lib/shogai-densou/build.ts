@@ -94,15 +94,25 @@ export interface ShogaiDensouResult {
 
 // ─── コード値・整形 ──────────────────────────────────────────────────────────
 
-/** 決定サービスコード (契約情報レコード / 実績記録票のサービス内容)。印刷様式 (_shogai-meisai.tsx) からも参照 */
-export function decisionCode(category: string | null): string {
-  const c = category ?? "";
+/** 決定サービスコード (契約情報レコード / 実績記録票のサービス内容)。印刷様式 (_shogai-meisai.tsx) からも参照。
+ *  category は「種類コード」("11" 居宅介護 等) が入り身体/家事の内容を持たない場合があるため、
+ *  マスタ名 (serviceName)・コード先頭 (serviceCode) も併用して判定する (2026-07-17 照合で家事誤判定を修正)。 */
+export function decisionCode(
+  category: string | null,
+  serviceName?: string | null,
+  serviceCode?: string | null,
+): string {
+  const c = `${category ?? ""} ${serviceName ?? ""}`;
   if (c.includes("乗降")) return "115000";
   if (c.includes("通院")) {
     return c.includes("伴わ") || c.includes("伴ず") ? "114000" : "113000";
   }
   if (c.includes("家事") || c.includes("生活")) return "112000";
-  return "111000"; // 身体介護
+  if (c.includes("身体")) return "111000";
+  // フォールバック: コード先頭で家事を補完 (居宅介護 家事援助=1161/1162 日夜・1176 0.25刻み)。
+  // 身体は既定なので補完不要。通院/乗降はコード帯が確定していないため名称依存。
+  if (/^(116[1-9]|1176)/.test(serviceCode ?? "")) return "112000";
+  return "111000"; // 身体介護 (既定)
 }
 
 /** 実績記録票 基本情報レコードの合計欄スロット (合計1〜5) */
@@ -573,7 +583,7 @@ export function buildShogaiDensou(
       new Set(
         r.details
           .filter((d) => serviceTypeCode(d.service_code) === "11")
-          .map((d) => decisionCode(d.service_category)),
+          .map((d) => decisionCode(d.service_category, null, d.service_code)),
       ),
     );
     if (aggs.some((a) => a.typeCode === "12")) {
@@ -680,8 +690,24 @@ export function buildShogaiDensou(
       let prevEndMs = 0;
       const goukei = new Map<number, { hours: number; count: number }>();
       const rows: string[][] = [];
+      // 同時2人派遣まとめ: 同一 (日×開始×終了×決定コード) の複数 visit = 同時複数ヘルパー。
+      //   MEISAI importer は 1 人目=基本コード / 2 人目=・2人コード の別行で取込む (KJ明細は2行=2倍請求)
+      //   が、実績記録票 (様式1) は 1 訪問=1行+派遣人数n (ほのぼの TJ 準拠。算定時間数は1人分)。
+      //   → ここで同一時間ブロックを 1 行に合算し派遣人数を数える。
+      const jissekiGrpKey = (v: ShogaiDensouVisit) =>
+        `${v.date}|${hhmm(v.startTime)}|${hhmm(v.endTime)}|${decisionCode(v.category, v.serviceName, v.serviceCode)}`;
+      const jissekiNinzu = new Map<string, number>();
       for (const v of visits) {
-        const code = decisionCode(v.category);
+        const k = jissekiGrpKey(v);
+        jissekiNinzu.set(k, (jissekiNinzu.get(k) ?? 0) + 1);
+      }
+      const jissekiSeen = new Set<string>();
+      for (const v of visits) {
+        const gk = jissekiGrpKey(v);
+        if (jissekiSeen.has(gk)) continue; // 2人ペアの2行目以降はスキップ (1行に合算)
+        jissekiSeen.add(gk);
+        const ninzu = jissekiNinzu.get(gk) ?? 1;
+        const code = decisionCode(v.category, v.serviceName, v.serviceCode);
         const startMs = v.startTime ? Date.parse(`${v.date}T${v.startTime}`) : 0;
         const endMs = v.endTime ? Date.parse(`${v.date}T${v.endTime}`) : startMs;
         const chain =
@@ -716,7 +742,10 @@ export function buildShogaiDensou(
         } else if (hours > 0) {
           f[15] = fmtHours4(hours); // 16 算定時間数
         }
-        f[18] = "1"; // 19 派遣人数
+        // 19 派遣人数: マスタ名の「・２人」表記で 2 (同時2人派遣は 1 行 + 派遣人数 2)。
+        //   居宅介護の同時2人派遣は「身体日0.5・2人」等の合成コードで取込まれる (MEISAI importer)。
+        //   算定時間数 (項16) は 1 人分の実サービス時間のまま (ほのぼの TJ と一致 — 重訪の延べ倍計とは異なる)。
+        f[18] = String(ninzu); // 19 派遣人数 (同時ヘルパー数=グループ内 visit 数)
         rows.push(f);
       }
 

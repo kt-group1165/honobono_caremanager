@@ -1410,16 +1410,20 @@ export async function aggregateMonthlyVisitSeikyu(
         details.push(line);
         monthAddonPushed = true;
       };
-      // 初回・緊急時 = 限度額管理対象外 (告示)。生活機能向上連携は管理対象。
+      // ★ 初回加算・緊急時訪問介護加算 = 区分支給限度基準額の【管理対象】(2026-07-17 ほのぼのKK
+      //   突合で確定: 大網5名の初回加算200単位を ほのぼのは限度額管理対象=項9 に計上)。
+      //   従来 対象外(告示)としていたのは誤り。対象外は処遇改善等%加算・特別地域・中山間のみ。
+      //   → kanriTaishougai=false にして超過判定にも算入し、様式第二 集計「⑥対象外」から外す。
+      //   生活機能向上連携も従来どおり管理対象。
       // 緊急時: シフト実績 (kinkyu_houmon) 由来は訪問日を算定日として公費期間の
       // 内外を日ごとに判定する (kinkyuSegDates はセグメント期間で絞り込み済み =
       // セグメント帰属も訪問日基準)。エディタ回数フォールバック分は日付なし → null = 従来。
       if (shokaiOn)
         pushMonthAddon(
-          MONTH_ADDON_NAMES.shokai, 1, "初回加算", true,
+          MONTH_ADDON_NAMES.shokai, 1, "初回加算", false,
           flags?.shokaiDate ? [flags.shokaiDate] : null,
         );
-      pushMonthAddon(MONTH_ADDON_NAMES.kinkyu, kinkyuCount, "緊急時訪問介護加算", true, kinkyuSegDates);
+      pushMonthAddon(MONTH_ADDON_NAMES.kinkyu, kinkyuCount, "緊急時訪問介護加算", false, kinkyuSegDates);
       if (seikatsuKino === "Ⅰ")
         pushMonthAddon(
           MONTH_ADDON_NAMES.seikatsuI, 1, "生活機能向上連携加算Ⅰ", false,

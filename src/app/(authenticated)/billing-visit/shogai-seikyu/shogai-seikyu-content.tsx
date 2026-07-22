@@ -225,17 +225,22 @@ export function ShogaiSeikyuContent({
       if (currentOffice) {
         const { data: o, error: oe } = await supabase
           .from("offices")
-          .select("unit_price, business_number")
+          .select("unit_price, business_number, shogai_business_number")
           .eq("id", currentOffice.id)
           .maybeSingle();
         if (oe) throw new Error("事業所情報の取得に失敗: " + oe.message);
         const od = o as {
           unit_price?: number;
           business_number?: string | null;
+          shogai_business_number?: string | null;
         } | null;
         unitPrice = od?.unit_price;
         setOfficeUnitPrice(od?.unit_price);
-        setOfficeNumber(((od?.business_number ?? "") as string).trim() || null);
+        // 障害伝送は障害事業所番号を優先。未設定 (NULL) は介護 business_number にフォールバック。
+        setOfficeNumber(
+          ((od?.shogai_business_number ?? od?.business_number ?? "") as string).trim() ||
+            null,
+        );
       }
       const result = await aggregateMonthlyShogaiSeikyu(supabase, {
         year,
@@ -1010,11 +1015,16 @@ export function ShogaiSeikyuContent({
       // 1) 事業所番号・単価・地域区分 (月をまたいで共通)
       const { data: o, error: oe } = await supabase
         .from("offices")
-        .select("business_number, unit_price, area_category")
+        .select(
+          "business_number, shogai_business_number, unit_price, area_category",
+        )
         .eq("id", currentOffice?.id ?? "")
         .maybeSingle();
       if (oe) throw new Error("事業所情報取得失敗: " + oe.message);
-      const officeNumber = ((o?.business_number ?? "") as string).trim();
+      // 障害伝送は障害事業所番号を優先。未設定 (NULL) は介護 business_number にフォールバック。
+      const officeNumber = ((o?.shogai_business_number ??
+        o?.business_number ??
+        "") as string).trim();
       const unitPrice = (o?.unit_price ?? 10) as number;
       const areaCategory = (o?.area_category ?? null) as string | null;
 
