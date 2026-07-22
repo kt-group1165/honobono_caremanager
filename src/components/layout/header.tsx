@@ -1,13 +1,15 @@
 "use client";
 
-import { LogOut, User } from "lucide-react";
+import { Building2, LogOut, User } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { NotificationBadge } from "@/components/layout/notification-badge";
+import { useBusinessType } from "@/lib/business-type-context";
 
 export function Header() {
   const router = useRouter();
   const supabase = createClient();
+  const { currentOffice } = useBusinessType();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -17,7 +19,16 @@ export function Header() {
 
   return (
     <header className="flex h-10 items-center justify-between border-b bg-white px-6 print:hidden">
-      <div />
+      <div className="flex items-center gap-2 text-sm font-semibold text-gray-800 min-w-0">
+        {currentOffice?.name && (
+          <>
+            <Building2 size={16} className="shrink-0 text-gray-400" />
+            <span className="truncate" title={currentOffice.name}>
+              {currentOffice.name}
+            </span>
+          </>
+        )}
+      </div>
       <div className="flex items-center gap-4">
         <NotificationBadge />
         <div className="flex items-center gap-2 text-sm text-gray-600">

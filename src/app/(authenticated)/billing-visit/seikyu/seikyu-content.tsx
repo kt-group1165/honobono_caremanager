@@ -124,7 +124,6 @@ function SeikyuTabNav({
   seido,
   onSeidoChange,
   seidoItems,
-  officeName,
 }: {
   active: SeikyuTab;
   onChange: (id: SeikyuTab) => void;
@@ -132,42 +131,31 @@ function SeikyuTabNav({
   seido: Seido;
   onSeidoChange: (s: Seido) => void;
   seidoItems: { id: Seido; label: string }[];
-  officeName?: string | null;
 }) {
   return (
-    <div className="border-b border-gray-200 bg-white px-3 py-2 shrink-0 flex flex-col gap-2 print:hidden">
-      {officeName && (
-        <span
-          className="truncate text-sm font-semibold text-gray-800"
-          title={officeName}
+    <div className="border-b border-gray-200 bg-white px-3 py-2 shrink-0 flex items-center gap-2 print:hidden">
+      <SeidoToggle active={seido} onChange={onSeidoChange} items={seidoItems} />
+      <span className="mx-1 h-5 w-px bg-gray-200" />
+      {tabs.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          onClick={() => onChange(t.id)}
+          className={`px-3 py-1 rounded-lg text-xs font-medium ${
+            active === t.id
+              ? "bg-indigo-500 text-white"
+              : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+          }`}
         >
-          {officeName}
-        </span>
-      )}
-      <div className="flex items-center gap-2">
-        <SeidoToggle active={seido} onChange={onSeidoChange} items={seidoItems} />
-        <span className="mx-1 h-5 w-px bg-gray-200" />
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => onChange(t.id)}
-            className={`px-3 py-1 rounded-lg text-xs font-medium ${
-              active === t.id
-                ? "bg-indigo-500 text-white"
-                : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+          {t.label}
+        </button>
+      ))}
     </div>
   );
 }
 
 function SeikyuInner() {
-  const { businessType, currentOffice } = useBusinessType();
+  const { businessType } = useBusinessType();
   const isBath = businessType === "訪問入浴";
   const [seido, setSeido] = useState<Seido>("kaigo");
   const [tab, setTab] = useState<SeikyuTab>("monthly");
@@ -216,7 +204,6 @@ function SeikyuInner() {
         seido={effectiveSeido}
         onSeidoChange={handleSeidoChange}
         seidoItems={seidoItems}
-        officeName={currentOffice?.name}
       />
       {tab === "monthly" && <MonthlyInfoContent />}
       {tab === "kaigo" && <KaigoSeikyuContent />}
