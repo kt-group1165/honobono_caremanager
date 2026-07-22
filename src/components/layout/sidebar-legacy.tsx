@@ -55,7 +55,7 @@ const NAV_CARE_MANAGER: NavEntry[] = [
       { name: "会議録", href: "/meeting-minutes", icon: MessagesSquare },
       { name: "利用・提供票", href: "/reports/service-usage", icon: CalendarDays },
       { name: "利用票別表", href: "/reports/service-usage-detail", icon: FileSpreadsheet },
-      { name: "給付管理", href: "/billing/benefits", icon: Calculator },
+      { name: "レセプト・給付管理", href: "/billing/benefits", icon: Calculator },
       { name: "モニタリング", href: "/monitoring", icon: Activity },
       { name: "支援経過", href: "/support-records", icon: NotebookPen },
     ],
@@ -64,7 +64,7 @@ const NAV_CARE_MANAGER: NavEntry[] = [
   { name: "入退院管理", href: "/hospitalizations", icon: CalendarDays },
   { name: "緊急時シート", href: "/emergency-sheets", icon: AlertTriangle },
   { name: "重要事項・契約書", href: "/user-contracts", icon: FileText },
-  { name: "レセプト", href: "/billing/claims", icon: FileSpreadsheet },
+  // レセプトは「レセプト・給付管理」に統合済 (/billing/benefits?tab=claims)。redirect でも受ける。
   { name: "明細書・請求書", href: "/billing/forms", icon: FileText },
   // 帳票作成: 全帳票がケアマネ業務メニューに移動したため非表示
   { name: "マスタ管理", href: "/master", icon: Settings },

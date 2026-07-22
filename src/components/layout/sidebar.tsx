@@ -69,11 +69,12 @@ const NAV_CARE_MANAGER_SECTIONED: SectionSpec[] = [
   {
     title: "請求業務",
     items: [
-      { name: "給付管理", href: "/billing/benefits", icon: Calculator },
+      { name: "レセプト・給付管理", href: "/billing/benefits", icon: Calculator },
       { name: "請求", href: "/billing/seikyu", icon: Calculator },
       { name: "請求統計", href: "/billing/stats", icon: FileSpreadsheet },
-      // レセプト (/billing/claims) / 明細書・請求書 (/billing/forms) は
-      // /billing/seikyu の介護請求タブからリンク (画面自体は残置)
+      // レセプト (/billing/claims) は 給付管理 と統合し「レセプト・給付管理」
+      // (/billing/benefits のレセプトタブ) に。旧 URL は redirect で受ける。
+      // 明細書・請求書 (/billing/forms) は /billing/seikyu の介護請求タブからリンク。
     ],
   },
   // 障害福祉 (サービス提供実績/実績月間管理/障害請求) は訪問介護版のみに表示

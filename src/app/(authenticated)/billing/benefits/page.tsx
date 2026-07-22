@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { resolveCertForMonth, type CertForMonth } from "@/lib/cert-for-month";
-import { BenefitsContent } from "./benefits-content";
+import { BenefitClaimsTabs } from "./_tabs";
+import { loadClaimsData } from "../claims/claims-loader";
 import {
   getCurrentMonth,
   type BenefitManagementRow,
@@ -8,7 +9,13 @@ import {
   type UserWithCert,
 } from "./benefits-shared";
 
-export default async function BenefitsPage() {
+export default async function BenefitsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const sp = await searchParams;
+  const initialTab = sp.tab === "claims" ? "claims" : "benefits";
   const supabase = await createClient();
   const month = getCurrentMonth();
 
@@ -79,11 +86,23 @@ export default async function BenefitsPage() {
     return { id: u.id, name: u.name, certification };
   });
 
+  // レセプトタブ用データ (同じ月・同じ居宅介護支援 対象者)
+  const claimsData = await loadClaimsData(supabase, month);
+
   return (
-    <BenefitsContent
-      initialMonth={month}
-      initialUsers={initialUsers}
-      initialRows={rowsAll}
+    <BenefitClaimsTabs
+      initialTab={initialTab}
+      benefitsProps={{
+        initialMonth: month,
+        initialUsers,
+        initialRows: rowsAll,
+      }}
+      claimsProps={{
+        initialBillingMonth: month,
+        initialClaims: claimsData.initialClaims,
+        initialCertEntries: claimsData.initialCertEntries,
+        initialOfficeInfo: claimsData.initialOfficeInfo,
+      }}
     />
   );
 }
