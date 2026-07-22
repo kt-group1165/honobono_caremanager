@@ -216,7 +216,7 @@ export function BathShiftContent() {
       const [teamsRes, assignsRes, staffRes, patternsRes, schedRes] = await Promise.all([
         supabase.from("kaigo_bath_teams").select("*").eq("office_id", currentOfficeId).order("sort_order").order("name"),
         supabase.from("client_office_assignments").select("client_id").eq("office_id", currentOfficeId),
-        supabase.from("members").select("id, name, role, qualifications").eq("status", "active").order("name"),
+        supabase.from("members").select("id, name, role, qualifications").eq("status", "active").is("deleted_at", null).order("name"),
         supabase.from("kaigo_bath_patterns").select("*").eq("office_id", currentOfficeId).order("day_of_week").order("start_time"),
         supabase.from("kaigo_bath_schedule").select("*").eq("office_id", currentOfficeId).gte("visit_date", monthStart).lte("visit_date", monthEnd).order("visit_date"),
       ]);

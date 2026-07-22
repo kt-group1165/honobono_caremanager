@@ -24,6 +24,7 @@ export default async function PatternsPage({
     .from("members")
     .select("id, name, furigana, member_offices!inner(office_id)")
     .eq("status", "active")
+    .is("deleted_at", null)
     .order("furigana", { nullsFirst: false });
   if (officeId) staffQuery = staffQuery.eq("member_offices.office_id", officeId);
   const staffRes = await staffQuery;

@@ -110,7 +110,8 @@ export function WageSettingsContent() {
           .select("id, name, furigana, employment_type, member_offices!inner(office_id)")
           .eq("employment_type", "パート")
           .eq("member_offices.office_id", officeId)
-          .eq("status", "active");
+          .eq("status", "active")
+          .is("deleted_at", null);
         const members = (mem ?? []) as { id: string; name: string }[];
         const ids = members.map((m) => m.id);
         const siMap = new Map<string, boolean>();

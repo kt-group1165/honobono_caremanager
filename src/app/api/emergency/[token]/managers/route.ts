@@ -20,6 +20,7 @@ export async function GET(
     .from("members")
     .select("id, name")
     .eq("status", "active")
+    .is("deleted_at", null)
     .eq("tenant_id", ctx.tenant_id)
     .order("name");
 

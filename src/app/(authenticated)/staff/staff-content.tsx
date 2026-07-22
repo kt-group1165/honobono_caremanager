@@ -137,7 +137,8 @@ export function StaffContent({
     let q = supabase
       .from("members")
       .select("id, tenant_id, name, furigana, role, qualifications, email, phone, employment_type, salary_type, hire_date, status, created_at, member_offices!inner(office_id)")
-      .eq("member_offices.office_id", currentOfficeId);
+      .eq("member_offices.office_id", currentOfficeId)
+      .is("deleted_at", null);
     if (!includeInactive) q = q.eq("status", "active");
     const { data, error } = await q.order("furigana", { nullsFirst: false });
     if (error) {
@@ -236,6 +237,7 @@ export function StaffContent({
         .select("id, name, furigana, role, status, member_offices(office_id)")
         .eq("tenant_id", currentOffice.tenant_id)
         .eq("status", "active")
+        .is("deleted_at", null)
         .order("furigana", { nullsFirst: false });
       if (error) throw error;
 
@@ -382,9 +384,10 @@ export function StaffContent({
     if (!deleteTarget) return;
     setSaving(true);
     try {
+      // ソフト削除: 物理削除せず deleted_at を立てる (過去の実績・シフト・帳票は残す)。
       const { error } = await supabase
         .from("members")
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq("id", deleteTarget.id);
       if (error) throw error;
       toast.success("職員を削除しました");

@@ -21,6 +21,7 @@ export default async function ShiftsPage({
     .from("members")
     .select("id, name, furigana, member_offices!inner(office_id)")
     .eq("status", "active")
+    .is("deleted_at", null)
     .order("furigana", { nullsFirst: false });
   if (officeId) staffQ = staffQ.eq("member_offices.office_id", officeId);
 

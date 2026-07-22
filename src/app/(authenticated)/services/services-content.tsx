@@ -151,6 +151,7 @@ export function ServicesContent({
       .from("members")
       .select("id, name, member_offices!inner(office_id)")
       .eq("status", "active")
+      .is("deleted_at", null)
       .eq("member_offices.office_id", currentOfficeId)
       .order("furigana", { nullsFirst: false });
     if (error) {

@@ -30,6 +30,7 @@ async function fetchOfficeStaff(officeId: string): Promise<KaigoStaff[]> {
     .from("members")
     .select("id, name, name_kana:furigana, status, member_offices!inner(office_id)")
     .eq("status", "active")
+    .is("deleted_at", null)
     .eq("member_offices.office_id", officeId)
     .order("furigana", { nullsFirst: false });
   if (error) throw error;

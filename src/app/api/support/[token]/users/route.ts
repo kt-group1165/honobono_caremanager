@@ -26,6 +26,7 @@ export async function GET(
       .select("id, name, name_kana:furigana")
       .eq("status", "active")
       .eq("is_facility", false)
+      .is("deleted_at", null)
       .eq("tenant_id", ctx.tenant_id)
       .order("furigana")
       .range(from, from + PAGE - 1);

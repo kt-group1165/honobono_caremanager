@@ -30,6 +30,7 @@ export async function GET(
       .select("id, name, name_kana:furigana, care_manager_id")
       .eq("status", "active")
       .eq("is_facility", false)
+      .is("deleted_at", null)
       .eq("tenant_id", ctx.tenant_id)
       .eq("care_manager_id", managerId)
       .order("furigana"),

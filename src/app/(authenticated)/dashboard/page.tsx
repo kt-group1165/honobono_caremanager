@@ -161,7 +161,8 @@ export default function DashboardPage() {
           .from("clients")
           .select("*", { count: "exact", head: true })
           .eq("status", "active")
-          .eq("is_facility", false);
+          .eq("is_facility", false)
+          .is("deleted_at", null);
         if (e1) throw e1;
 
         // 2. This month's billing total
@@ -207,6 +208,7 @@ export default function DashboardPage() {
             "id, name, birth_date, status, created_at"
           )
           .eq("is_facility", false)
+          .is("deleted_at", null)
           .order("created_at", { ascending: false })
           .limit(8);
         if (e5) throw e5;

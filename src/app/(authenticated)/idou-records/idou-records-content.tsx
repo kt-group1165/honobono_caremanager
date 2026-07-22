@@ -152,7 +152,7 @@ export function IdouRecordsContent() {
         ids.length
           ? supabase.from("clients").select("id, name, furigana, user_number").in("id", ids).is("deleted_at", null).order("furigana")
           : Promise.resolve({ data: [], error: null }),
-        supabase.from("members").select("id, name").eq("status", "active").order("name"),
+        supabase.from("members").select("id, name").eq("status", "active").is("deleted_at", null).order("name"),
         supabase
           .from("kaigo_idou_shien_records")
           .select("*")

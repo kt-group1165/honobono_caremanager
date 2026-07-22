@@ -10,6 +10,7 @@ export default async function NewShogaiRecordPage() {
     supabase
       .from("clients")
       .select("id, name, furigana, tenant_id")
+      .is("deleted_at", null)
       .order("name")
       .limit(1000),
     supabase

@@ -23,6 +23,7 @@ export default async function VisitRecordsPage({
     .from("members")
     .select("id, name")
     .eq("status", "active")
+    .is("deleted_at", null)
     .order("name");
   const initialStaff = (staffData ?? []) as KaigoStaff[];
 

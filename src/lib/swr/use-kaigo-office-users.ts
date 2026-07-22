@@ -58,6 +58,7 @@ async function fetchOfficeUsers(officeId: string): Promise<KaigoUser[]> {
         .in("id", chunk)
         .eq("status", "active")
         .eq("is_facility", false)
+        .is("deleted_at", null)
         .order("furigana", { nullsFirst: false });
       if (data && data.length > 0) users.push(...(data as KaigoUser[]));
       fromU += 500;

@@ -94,6 +94,7 @@ export default async function ShiftManagementPage({
     .from("members")
     .select("id, name, name_kana:furigana, status, member_offices!inner(office_id)")
     .eq("status", "active")
+    .is("deleted_at", null)
     .order("furigana", { nullsFirst: false });
   if (officeId) staffQuery = staffQuery.eq("member_offices.office_id", officeId);
 
@@ -141,6 +142,7 @@ export default async function ShiftManagementPage({
           .in("id", chunk)
           .eq("status", "active")
           .eq("is_facility", false)
+          .is("deleted_at", null)
           .order("furigana", { nullsFirst: false });
         if (clientsErr) {
           console.error("[shift-management] clients fetch failed:", clientsErr.message);
@@ -161,6 +163,7 @@ export default async function ShiftManagementPage({
         .select("id, name, name_kana:furigana, status")
         .eq("status", "active")
         .eq("is_facility", false)
+        .is("deleted_at", null)
         .order("furigana", { nullsFirst: false })
         .range(from, from + PAGE - 1);
       if (clientsErr) {
@@ -227,6 +230,7 @@ export default async function ShiftManagementPage({
             .from("members")
             .select("id, name, name_kana:furigana, status, member_offices!inner(office_id)")
             .eq("status", "active")
+            .is("deleted_at", null)
             .eq("member_offices.office_id", officeId)
         : Promise.resolve({ data: [] as KaigoStaff[], error: null }),
       fetchAllRows<VisitSchedule>((from, to) =>
