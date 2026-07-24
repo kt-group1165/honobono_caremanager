@@ -510,9 +510,10 @@ export function MonthlyInfoContent() {
                     </td>
                     {/* 実績単位数 (計画超過チェック) */}
                     <td className="px-2 py-1 border border-gray-200 font-mono whitespace-nowrap align-middle">
-                      {/* バッジを左・数字を右端に。flex items-center で縦揃え、
-                          数字を末尾に置くことでバッジ有無に依らず数字の右端が一直線に並ぶ */}
-                      <div className="flex items-center justify-end gap-1">
+                      {/* バッジはセル左端に固定、数字は ml-auto で右端に固定。
+                          こうすると桁数が違っても「バッジ列＝左」「数字列＝右」で各々縦に揃う
+                          (バッジ無しの行でも数字は右端に残る) */}
+                      <div className="flex items-center gap-1">
                         {overrun && (
                           <span
                             title={`計画単位数を ${(r.totalUnits - plan.planned_units).toLocaleString()} 単位超過しています。超過分は保険請求できません (自費)。`}
@@ -521,7 +522,7 @@ export function MonthlyInfoContent() {
                             計画超過
                           </span>
                         )}
-                        <span>{r.totalUnits.toLocaleString()}</span>
+                        <span className="ml-auto">{r.totalUnits.toLocaleString()}</span>
                       </div>
                     </td>
                   </tr>
