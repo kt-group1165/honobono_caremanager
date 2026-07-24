@@ -41,6 +41,7 @@ import {
   Download,
   ExternalLink,
   Building2,
+  X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
@@ -150,6 +151,9 @@ export function KaigoSeikyuContent() {
   const [gensanPeriods, setGensanPeriods] = useState<GensanPeriod[]>([]);
   // 同一建物減算チェック パネル (提案・警告のみ。設定書換なし)
   const [sameBuildingOpen, setSameBuildingOpen] = useState(false);
+  // 警告 UI: 「⚠のみ表示」フィルタ / 行内⚠クリックで詳細ポップ
+  const [warnOnly, setWarnOnly] = useState(false);
+  const [warnDetail, setWarnDetail] = useState<{ name: string; items: string[] } | null>(null);
   // チェック対象 = 当月の全実利用者 (カナ絞込前。介護給付 + 総合事業)
   const sameBuildingUserIds = useMemo(
     () =>
@@ -205,6 +209,33 @@ export function KaigoSeikyuContent() {
     // 再請求 (過去分) を上、当月を下に並べる
     return [...re, ...cur];
   }, [filteredRows, reRows, kanaMatches, monthKey]);
+
+  // ── 集計 warning を利用者名で行に紐付け (aggregate は文字列配列なので表示層で照合)。
+  //    "○○さん: …" / "○○: …" の接頭辞が既知の利用者名なら行マークに、それ以外は
+  //    全体警告 (generalWarnings) として下部に小さく残す ──
+  const { warnByUser, generalWarnings } = useMemo(() => {
+    const all = [...new Set([...warnings, ...reWarnings])];
+    const names = new Set([...filteredRows, ...reRows].map((r) => r.user_name));
+    const byUser = new Map<string, string[]>();
+    const general: string[] = [];
+    for (const w of all) {
+      const m = /^(.+?)さん[:：]/.exec(w) ?? /^(.+?)[:：]/.exec(w);
+      const name = m?.[1]?.trim();
+      if (name && names.has(name)) {
+        if (!byUser.has(name)) byUser.set(name, []);
+        byUser.get(name)!.push(w);
+      } else {
+        general.push(w);
+      }
+    }
+    return { warnByUser: byUser, generalWarnings: general };
+  }, [warnings, reWarnings, filteredRows, reRows]);
+
+  // 「⚠のみ表示」時は警告のある利用者の行だけに絞る (かな順は保持)
+  const visibleRows = useMemo(
+    () => (warnOnly ? displayRows.filter((d) => warnByUser.has(d.row.user_name)) : displayRows),
+    [warnOnly, displayRows, warnByUser],
+  );
 
   // 未選択時は先頭行にフォールバック (障害請求と同じく明細ペインを既定で開く)
   const selectedDisplay =
@@ -940,6 +971,20 @@ export function KaigoSeikyuContent() {
             <SeikyuMonthNav />
             <span className="border border-gray-400 rounded bg-white px-2 py-1 text-gray-700 font-medium">請求分</span>
             <span className="text-xs text-gray-500">{displayRows.length} 件</span>
+            {warnByUser.size > 0 && (
+              <button
+                onClick={() => setWarnOnly((v) => !v)}
+                title="警告のある利用者だけ表示 (かな順は保持)"
+                className={`shrink-0 rounded border px-1.5 py-1 flex items-center gap-1 ${
+                  warnOnly
+                    ? "border-amber-500 bg-amber-100 text-amber-800 font-semibold"
+                    : "border-amber-400 bg-white text-amber-700 hover:bg-amber-50"
+                }`}
+              >
+                <AlertCircle size={13} />
+                {warnOnly ? "全件表示" : `⚠のみ ${warnByUser.size}`}
+              </button>
+            )}
             <div className="w-px h-5 bg-gray-300 mx-0.5 shrink-0" />
             <button
               onClick={printMeisai}
@@ -1087,11 +1132,13 @@ export function KaigoSeikyuContent() {
                   <div className="px-1 py-0.5 border-l border-sky-300">過誤</div>
                 </div>
 
-                {displayRows.length === 0 ? (
+                {visibleRows.length === 0 ? (
                   <p className="text-gray-400 text-center py-10">
-                    対象月の実績 (完了) がありません。サービス提供表で実績を確定してください。
+                    {warnOnly
+                      ? "警告のある利用者はいません。"
+                      : "対象月の実績 (完了) がありません。サービス提供表で実績を確定してください。"}
                   </p>
-                ) : displayRows.map((d) => {
+                ) : visibleRows.map((d) => {
                   const r = d.row;
                   // 当月行のみ status を突合 (再請求行は過去月レコードなので理由表示で代替)
                   const st = d.isReSeikyu ? undefined : statusByClient.get(r.user_id);
@@ -1165,6 +1212,18 @@ export function KaigoSeikyuContent() {
                       </div>
                       <div className="px-1 py-0.5 border-l border-gray-200 text-gray-800 flex items-center gap-1 min-w-0">
                         <span className="flex-1 truncate">{r.user_name}</span>
+                        {warnByUser.has(r.user_name) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setWarnDetail({ name: r.user_name, items: warnByUser.get(r.user_name)! });
+                            }}
+                            title={warnByUser.get(r.user_name)!.join("\n")}
+                            className="shrink-0 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-bold text-amber-700 hover:bg-amber-200 whitespace-nowrap"
+                          >
+                            ⚠{warnByUser.get(r.user_name)!.length}
+                          </button>
+                        )}
                         {(r.segmentCount ?? 1) > 1 && (
                           <span
                             title={`保険者変更 (転居) によりレセプトを分割しています。この行は ${r.periodFrom ?? "?"}〜${r.periodTo ?? "?"} (保険者 ${r.insurer_number ?? "?"}) の明細書です`}
@@ -1258,24 +1317,18 @@ export function KaigoSeikyuContent() {
 
               {/* ── 注意書き (集計 warning / 月遅れ合流): 一覧の下・合計フッターの「上」に
                   配置する。一覧 (flex-1) より下なので警告の増減で一覧ヘッダーはずれない ── */}
-              {(warnings.length > 0 || reWarnings.length > 0) && (() => {
-                const allWarnings = [...new Set([...warnings, ...reWarnings])];
-                return (
-                  <div className="border-t border-amber-200 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
-                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      {allWarnings.length > 4 && (
-                        <p className="mb-0.5 font-medium text-amber-700">警告 {allWarnings.length} 件（スクロールで全件表示）</p>
-                      )}
-                      <div className="max-h-24 overflow-y-auto pr-1">
-                        {allWarnings.map((w) => (
-                          <p key={w}>{w}</p>
-                        ))}
-                      </div>
-                    </div>
+              {/* 利用者ごとの警告は行内の⚠マークへ移動。ここには利用者に紐付かない
+                  全体警告 (generalWarnings) だけを小さく残す */}
+              {generalWarnings.length > 0 && (
+                <div className="border-t border-amber-200 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
+                  <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                  <div className="min-w-0 flex-1 max-h-16 overflow-y-auto pr-1">
+                    {generalWarnings.map((w) => (
+                      <p key={w}>{w}</p>
+                    ))}
                   </div>
-                );
-              })()}
+                </div>
+              )}
 
               {reRows.length > 0 && (() => {
                 const kagoCount = reRows.filter((r) => r.__reasons.kago).length;
@@ -1596,6 +1649,37 @@ export function KaigoSeikyuContent() {
           monthUserIds={sameBuildingUserIds}
           onClose={() => setSameBuildingOpen(false)}
         />
+      )}
+
+      {/* 行内⚠クリックの詳細ポップ (警告全文) */}
+      {warnDetail && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 print:hidden"
+          onClick={() => setWarnDetail(null)}
+        >
+          <div
+            className="mx-4 max-w-md rounded-lg border bg-white p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <h3 className="flex items-center gap-1.5 font-bold text-gray-800">
+                <AlertCircle size={16} className="text-amber-600" />
+                {warnDetail.name} さんの警告 ({warnDetail.items.length})
+              </h3>
+              <button
+                onClick={() => setWarnDetail(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <ul className="list-disc space-y-1 pl-5 text-sm text-gray-700">
+              {warnDetail.items.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
       )}
 
       {/* ===== 印刷 view: 明細書 (様式第二) — 利用者 1 名 = 1 枚 ===== */}
