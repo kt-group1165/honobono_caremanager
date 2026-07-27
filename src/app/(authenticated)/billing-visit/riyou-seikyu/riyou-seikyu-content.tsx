@@ -1868,9 +1868,9 @@ export function RiyouSeikyuContent() {
                       <th className="px-1 py-0.5 border-b border-l border-gray-300 text-left whitespace-nowrap">利用者名</th>
                       <th className="px-1 py-0.5 border-b border-l border-gray-300 text-left">事業所名</th>
                       <th className="px-1 py-0.5 border-b border-l border-gray-300 text-left w-24">番号</th>
-                      <th className="px-1 py-0.5 border-b border-l border-gray-300 text-left w-24">支払方法</th>
+                      <th className="px-1 py-0.5 border-b border-l border-gray-300 text-left w-28">支払方法</th>
                       <th className="px-1 py-0.5 border-b border-l border-gray-300 text-right w-24">請求額</th>
-                      <th className="px-1 py-0.5 border-b border-l border-gray-300 text-left w-44 whitespace-nowrap">請求書発行日</th>
+                      <th className="px-1 py-0.5 border-b border-l border-gray-300 text-left w-32 whitespace-nowrap">請求書発行日</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1973,15 +1973,15 @@ export function RiyouSeikyuContent() {
                           >
                             {/* 発行日 (西暦入力) + 令和表記を同一行に置き、請求済でも
                                 行が2行分に太らないようにする (令和は input の右にインライン) */}
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-0.5">
                               <input
                                 type="date"
                                 value={p?.issued_date ?? ""}
                                 onChange={(e) => setIssuedDate(row, e.target.value)}
-                                className="w-[112px] shrink-0 bg-transparent border-0 text-xs focus:bg-white focus:border focus:border-indigo-300 focus:outline-none rounded px-1 py-0.5"
+                                className="w-[104px] shrink-0 bg-transparent border-0 text-xs focus:bg-white focus:border focus:border-indigo-300 focus:outline-none rounded px-0.5 py-0.5"
                               />
                               {p?.issued_date && (
-                                <span className="shrink-0 text-[10px] text-gray-400">
+                                <span className="shrink-0 text-[9px] text-gray-400">
                                   {fmtReiwaDate(p.issued_date)}
                                 </span>
                               )}
