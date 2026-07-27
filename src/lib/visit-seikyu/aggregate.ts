@@ -282,6 +282,12 @@ export interface MonthlySeikyuResult {
    * 入院期間と重なる実績、対象月に有効な認定が無い 等。
    */
   warnings: string[];
+  /**
+   * warnings のうち利用者に紐付くものを client_id で引けるようにした索引 (同一メッセージが
+   * warnings にも重複して入る)。表示側 (行内⚠バッジ) は氏名の文字列パースではなく
+   * これで引き当てる。利用者に紐付かない warning (制度・事業所単位の案内) はここに入らない。
+   */
+  warningsByClient: Record<string, string[]>;
 }
 
 // 処遇改善加算等 (= 月次総単位数に % を掛ける加算) は
@@ -378,10 +384,17 @@ export async function aggregateMonthlyVisitSeikyu(
   }
 
   if (schedules.length === 0) {
-    return { rows: [], sougouRows: [], month: monthStr, recordCount: 0, warnings: [] };
+    return { rows: [], sougouRows: [], month: monthStr, recordCount: 0, warnings: [], warningsByClient: {} };
   }
 
   const warnings: string[] = [];
+  const warningsByClient = new Map<string, string[]>();
+  /** 利用者に紐付く warning を積む (行内⚠バッジ用の索引も同時に作る) */
+  const pushClientWarning = (clientId: string, msg: string) => {
+    warnings.push(msg);
+    if (!warningsByClient.has(clientId)) warningsByClient.set(clientId, []);
+    warningsByClient.get(clientId)!.push(msg);
+  };
 
   // 2) service_name → units / short_name のマスタ
   // マスタは全角数字 (身体介護３) / schedule は半角混在のため
@@ -1071,7 +1084,7 @@ export async function aggregateMonthlyVisitSeikyu(
   // (effectiveFormulaCodes は上の 4) で kaigo_office_addon_periods / applied_formula_codes を反映済)。
   let sougouRows: UserSeikyuRow[] = [];
   {
-    const { rows: sr, warnings: sw } = await aggregateSougouSeikyu(
+    const { rows: sr, warnings: sw, warningsByClient: swByClient } = await aggregateSougouSeikyu(
       supabase,
       sougouSchedules,
       {
@@ -1084,6 +1097,10 @@ export async function aggregateMonthlyVisitSeikyu(
     );
     sougouRows = sr;
     warnings.push(...sw);
+    for (const [cid, msgs] of Object.entries(swByClient)) {
+      if (!warningsByClient.has(cid)) warningsByClient.set(cid, []);
+      warningsByClient.get(cid)!.push(...msgs);
+    }
   }
 
   // 5.2) 入退院との重なり検出 (client_hospitalizations。テーブル未作成は空 Map)
@@ -1098,7 +1115,8 @@ export async function aggregateMonthlyVisitSeikyu(
           (d) => d >= p.admission_date && (p.discharge_date === null || d < p.discharge_date),
         ).length;
         if (n > 0) {
-          warnings.push(
+          pushClientWarning(
+            userId,
             `${nameOf(userId)}さん: 入院期間中 (${fmtMD(p.admission_date)}〜${p.discharge_date ? fmtMD(p.discharge_date) : "入院中"}) の実績が${n}件あります — 実績を確認してください`,
           );
         }
@@ -1111,10 +1129,10 @@ export async function aggregateMonthlyVisitSeikyu(
   // 利用者単位で 1 回だけ出す warning (レセ分割時に buildRowForSegment が
   // セグメントごとに呼ばれても同じ注意を重複出力しないためのガード)
   const warnedOnceKeys = new Set<string>();
-  const warnOncePerUser = (key: string, msg: string) => {
+  const warnOncePerUser = (key: string, clientId: string, msg: string) => {
     if (warnedOnceKeys.has(key)) return;
     warnedOnceKeys.add(key);
-    warnings.push(msg);
+    pushClientWarning(clientId, msg);
   };
 
   // ── 1 セグメント (通常 = 月全体で 1 利用者 1 行) 分の請求行を組み立てる ──
@@ -1213,6 +1231,7 @@ export async function aggregateMonthlyVisitSeikyu(
       // レセ分割時はセグメントごとに評価されるため利用者単位で 1 回だけ出す
       warnOncePerUser(
         `kohi3plus:${userId}`,
+        userId,
         `${userLabel}: 対象月に有効な公費が ${kohisInSeg.length} 件あります — 適用優先順の上位 2 件 (${kohisInSeg
           .slice(0, 2)
           .map((k) => kohiHobetsuLabel(k.hobetsu))
@@ -1227,7 +1246,8 @@ export async function aggregateMonthlyVisitSeikyu(
     if (kohi2 && kohiTandoku) {
       // 公費単独 (H番号 = 保険給付なし 10割公費) と複数公費の組合せは自動対応外。
       // 従来どおり第1公費のみ (全量振替) で計算する。
-      warnings.push(
+      pushClientWarning(
+        userId,
         `${userLabel}: 公費単独 (被保険者番号 H) で公費が複数登録されています — 第1公費 (${kohiHobetsuLabel(kohi!.hobetsu)}) のみで計算します (公費単独の複数公費併用は自動対応外)。${kohiHobetsuLabel(kohi2.hobetsu)} は手動対応してください`,
       );
       kohi2 = null;
@@ -1235,7 +1255,8 @@ export async function aggregateMonthlyVisitSeikyu(
     if (kohi2 && kohi!.hobetsu === "12") {
       // 生保 (法別12) は他法優先の原則 (生活保護法4条) で常に最劣後のはず。
       // priority 手入力で生保が先に来ている場合は計算順が制度と逆になる。
-      warnings.push(
+      pushClientWarning(
+        userId,
         `${userLabel}: 生活保護 (法別12) が第1公費になっています (公費タブの優先順位を確認してください) — 生保は他法優先の原則により通常は最後に適用します`,
       );
     }
@@ -1279,7 +1300,8 @@ export async function aggregateMonthlyVisitSeikyu(
       // 身体介護9系 (units=0 の増分コード) は単独では請求単位にならない。
       // 実績に紛れていたら合成後の正しいサービスへ修正が必要なので warning。
       if (master && unitPer === 0) {
-        warnings.push(
+        pushClientWarning(
+          userId,
           `${userLabel}: 「${svcType}」は単位数 0 の増分コード (身体介護9系等) です — 実績のサービス内容を確認してください`,
         );
       }
@@ -1366,7 +1388,8 @@ export async function aggregateMonthlyVisitSeikyu(
         if (count <= 0) return;
         const m = monthAddonMaster.get(name);
         if (!m) {
-          warnings.push(
+          pushClientWarning(
+            userId,
             `${userLabel}: 加算「${name}」の単位数がマスタから引けません (対象月に有効な世代なし)`,
           );
           return;
@@ -1508,7 +1531,8 @@ export async function aggregateMonthlyVisitSeikyu(
       if (reduction < 0) {
         const resolvedName = sameBuildingCodeMaster.get(code);
         if (!resolvedName) {
-          warnings.push(
+          pushClientWarning(
+            userId,
             `${userLabel}: 同一建物減算コード (${code}) が対象月 (${monthStr}) のマスタから引けません — コードのみで出力します`,
           );
         }
@@ -1602,7 +1626,8 @@ export async function aggregateMonthlyVisitSeikyu(
         kohiLabel ??
         (kohiTandoku ? "公費単独 (生活保護 10割)" : null);
       if (!kohi && !kohiTandoku && peText) {
-        warnings.push(
+        pushClientWarning(
+          userId,
           `${userLabel}: 保険情報に公費テキスト「${peText}」がありますが、公費レコード (利用者詳細の公費タブ) が未登録のため公費請求には含めません — 公費タブで登録してください`,
         );
       }
@@ -1687,12 +1712,14 @@ export async function aggregateMonthlyVisitSeikyu(
       if (kohi2PartialMonth) {
         // 公費2 が月の一部のみ: 公費1充当分の控除が範囲の重なりを個別に見ない
         // 近似 (控除過大 = 公費2請求が過少側) のためレセプト確認を促す
-        warnings.push(
+        pushClientWarning(
+          userId,
           `${userLabel}: 公費2 (${kohiHobetsuLabel(kohi2.hobetsu)}) の適用期間 (${kohi2.start ?? "制限なし"}〜${kohi2.end ?? "制限なし"}) が月の一部です — 公費1との適用範囲の重なりは概算 (公費1請求額を一律控除) のため、併用レセプトを確認してください`,
         );
       }
       if (kohiPartialMonth) {
-        warnings.push(
+        pushClientWarning(
+          userId,
           `${userLabel}: 公費 (${kohiHobetsuLabel(kohi.hobetsu)}) の適用期間 (${kohi.start ?? "制限なし"}〜${kohi.end ?? "制限なし"}) が月の一部のため、公費対象単位数を期間内の実績 (${kohiUnits}/${totalUnits} 単位) に按分しました — ${monthAddonKohiNote}。レセプトを確認してください`,
         );
       }
@@ -1700,13 +1727,15 @@ export async function aggregateMonthlyVisitSeikyu(
         // レセ分割時はセグメントごとに評価されるため利用者単位で 1 回だけ出す
         warnOncePerUser(
           `honnin0:${userId}:${kohi.hobetsu}`,
+          userId,
           `${userLabel}: 公費 (${kohiHobetsuLabel(kohi.hobetsu)}) の本人負担上限月額が 0 円のため保険給付後の負担分を全額公費請求します — 介護券・受給者証の本人支払額を公費タブで確認してください`,
         );
       }
       if (kohiAmount === 0 && kohi2Amount > 0) {
         // 公費1の請求が 0 円 (本人負担上限が高く全額本人負担側に落ちた等) の場合、
         // 伝送・様式では公費1欄が空になり公費2欄のみ埋まる形は不正になり得る
-        warnings.push(
+        pushClientWarning(
+          userId,
           `${userLabel}: 公費1 (${kohiHobetsuLabel(kohi.hobetsu)}) の請求額が 0 円で公費2 (${kohiHobetsuLabel(kohi2.hobetsu)}) のみ請求が発生しています — 公費欄の繰上げは自動対応外のため、伝送前にレセプトを確認してください`,
         );
       }
@@ -1754,11 +1783,13 @@ export async function aggregateMonthlyVisitSeikyu(
         // レセ分割時はセグメントごとに評価されるため利用者単位で 1 回だけ出す
         warnOncePerUser(
           `honnin0:${userId}:${kohi.hobetsu}`,
+          userId,
           `${userLabel}: 公費 (${kohiHobetsuLabel(kohi.hobetsu)}) の本人負担上限月額が 0 円のため保険給付後の負担分を全額公費請求します — 介護券・受給者証の本人支払額を公費タブで確認してください`,
         );
       }
       if (kohiPartialMonth) {
-        warnings.push(
+        pushClientWarning(
+          userId,
           `${userLabel}: 公費 (${kohiHobetsuLabel(kohi.hobetsu)}) の適用期間 (${kohi.start ?? "制限なし"}〜${kohi.end ?? "制限なし"}) が月の一部のため、公費対象単位数を期間内の実績 (${kohiUnits}/${totalUnits} 単位) に按分しました — ${monthAddonKohiNote}。レセプトを確認してください`,
         );
       }
@@ -1851,13 +1882,15 @@ export async function aggregateMonthlyVisitSeikyu(
     // 認定申請中の利用者は当月の国保連請求を保留する (ほのぼの準拠)。
     // 認定が確定してから、その月の実績を月遅れ請求する運用。当月伝送には載せない。
     if (cert?.certification_status === "申請中") {
-      warnings.push(
+      pushClientWarning(
+        userId,
         `${userLabel}: 認定申請中のため当月の国保連請求を保留しました (認定確定後に月遅れ請求してください)`,
       );
       continue;
     }
     if (cert?.isFallback) {
-      warnings.push(
+      pushClientWarning(
+        userId,
         `${userLabel}: 対象月 (${monthStr}) に有効な認定が見つからないため最新の認定情報で集計しています — 認定有効期間を確認してください`,
       );
     }
@@ -1865,7 +1898,8 @@ export async function aggregateMonthlyVisitSeikyu(
     for (const g of genericAddonsByClient.get(userId) ?? []) {
       const m = genericAddonMaster.get(g.code);
       if (m && !m.ok) {
-        warnings.push(
+        pushClientWarning(
+          userId,
           `${userLabel}: 提供表の加算${m.name ? `「${m.name}」` : ""} (${g.code}) は集計に含めません — ${m.reason}`,
         );
       }
@@ -1886,7 +1920,8 @@ export async function aggregateMonthlyVisitSeikyu(
           if (isSeikatsuEnjoChushin(svcType)) seCount += dates.length;
         }
         if (seCount >= seKijun.limit) {
-          warnings.push(
+          pushClientWarning(
+            userId,
             `${userLabel}さん: 生活援助中心型が月${seCount}回で基準回数 (${seKijun.limit}回/要介護${seKijun.level}) 以上です — ケアプランの市町村届出が必要です (平成30年厚生労働省告示第218号)`,
           );
         }
@@ -1917,11 +1952,13 @@ export async function aggregateMonthlyVisitSeikyu(
       const when = c.boundaryDate ? `, ${fmtMD(c.boundaryDate)}` : "";
       if (c.crossesSystem) {
         // 要支援↔要介護の制度跨ぎは請求様式自体が変わるため自動対応外 (Phase 1)
-        warnings.push(
+        pushClientWarning(
+          userId,
           `${userLabel}さん: 月内に要支援↔要介護の区分変更 (${c.from}→${c.to}${when}) があります — 制度を跨ぐためレセプトの自動対応外です。手動対応してください`,
         );
       } else {
-        warnings.push(
+        pushClientWarning(
+          userId,
           `${userLabel}さん: 月内に区分変更 (${c.from}→${c.to}${when})。限度額は重い方 (${(limitAmount ?? 0).toLocaleString()}単位) を適用。レセプトの要介護度は月末時点で出力`,
         );
       }
@@ -2033,7 +2070,8 @@ export async function aggregateMonthlyVisitSeikyu(
               return `${part}: ${num}`;
             })
             .join(" / ");
-          warnings.push(
+          pushClientWarning(
+            userId,
             `${userLabel}さん: ${label}が月内で変わっています (${desc})。境界日 (${fmtMD(perSeg[1].s.from)}) で明細書を分割して出力しました (${segDesc})`,
           );
         } else if (perSeg.length === 1) {
@@ -2055,13 +2093,15 @@ export async function aggregateMonthlyVisitSeikyu(
               },
             },
           ];
-          warnings.push(
+          pushClientWarning(
+            userId,
             `${userLabel}さん: ${label}が月内で変わっています (${desc}) が、実績が ${fmtMD(p.s.from)}〜${fmtMD(p.s.to)} のみのため分割せず、その期間の資格情報 (${(insurerDiff ? p.s.cert.insurer_number : p.s.cert.insured_number) ?? "?"}) で出力します`,
           );
         }
       } else {
         // 境界日が判定できない (変更後認定の開始日が月内に無い等) → 分割せず従来行
-        warnings.push(
+        pushClientWarning(
+          userId,
           `${userLabel}さん: ${label}が月内で変わっています (${desc}) が、変更後認定の開始日から境界日を判定できないため分割できません — 認定有効期間 (開始日) を確認するか手動対応してください`,
         );
       }
@@ -2092,7 +2132,8 @@ export async function aggregateMonthlyVisitSeikyu(
     // 計上済みのため warning を出さない (算定日なしのみ従来どおり月末側 + warning)。
     if (split.length > 1) {
       if (monthAddonFallbackLabels.length > 0) {
-        warnings.push(
+        pushClientWarning(
+          userId,
           `${userLabel}さん: 算定日を特定できない加算 (${monthAddonFallbackLabels.join("・")}) は月末側の明細書に計上しました — 算定先の保険者が正しいか確認してください (提供表の加算で算定日を設定すると自動判定されます)`,
         );
       }
@@ -2101,7 +2142,8 @@ export async function aggregateMonthlyVisitSeikyu(
         !!opts.officeId &&
         resolveManualOverUnits(gendoMap.get(userId), opts.officeId) != null;
       if (hasPlan || hasManual) {
-        warnings.push(
+        pushClientWarning(
+          userId,
           `${userLabel}さん: ${[hasPlan ? "計画単位数" : null, hasManual ? "限度額の手割振り" : null].filter(Boolean).join("・")}は分割明細書に配分できないため適用せず、各期間の認定限度額で超過を機械判定しています — 転居月の限度額適用を保険者に確認してください`,
         );
       }
@@ -2118,7 +2160,14 @@ export async function aggregateMonthlyVisitSeikyu(
     return (a.segmentIndex ?? 0) - (b.segmentIndex ?? 0);
   });
 
-  return { rows, sougouRows, month: monthStr, recordCount: schedules.length, warnings };
+  return {
+    rows,
+    sougouRows,
+    month: monthStr,
+    recordCount: schedules.length,
+    warnings,
+    warningsByClient: Object.fromEntries(warningsByClient),
+  };
 }
 
 // ─── 分割セグメント行の利用者単位合算 (Phase 2) ──────────────────────────────

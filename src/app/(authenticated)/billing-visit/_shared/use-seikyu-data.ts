@@ -33,6 +33,8 @@ export function useSeikyuData() {
   const [recordCount, setRecordCount] = useState(0);
   // 集計時の注意事項 (身体介護9系=単位数0の増分コード混入 等)
   const [warnings, setWarnings] = useState<string[]>([]);
+  // warnings のうち利用者に紐付くものを client_id で引ける索引 (行内⚠バッジ用)
+  const [warningsByClient, setWarningsByClient] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [officeNumber, setOfficeNumber] = useState<string | null>(null);
@@ -127,6 +129,7 @@ export function useSeikyuData() {
       setShogaiRows(shogaiResult.rows);
       setRecordCount(result.recordCount);
       setWarnings(result.warnings);
+      setWarningsByClient(result.warningsByClient ?? {});
     } catch (e) {
       if (gen !== genRef.current) return;
       setError(e instanceof Error ? e.message : String(e));
@@ -155,6 +158,7 @@ export function useSeikyuData() {
     shogaiRows,
     recordCount,
     warnings,
+    warningsByClient,
     loading: loading || btLoading,
     error,
     officeName: currentOffice?.name ?? null,

@@ -98,7 +98,8 @@ export async function aggregateBathVisitSeikyu(
       offset += PAGE;
     }
   }
-  if (records.length === 0) return { rows: [], month: monthKey, recordCount: 0, warnings };
+  if (records.length === 0)
+    return { rows: [], month: monthKey, recordCount: 0, warnings, warningsByClient: {} };
 
   const clientIds = Array.from(new Set(records.map((r) => r.client_id)));
 
@@ -452,5 +453,11 @@ export async function aggregateBathVisitSeikyu(
   }
   rows.sort((a, b) => (a.user_name_kana ?? a.user_name).localeCompare(b.user_name_kana ?? b.user_name, "ja"));
 
-  return { rows, month: monthKey, recordCount: records.length, warnings: Array.from(new Set(warnings)) };
+  return {
+    rows,
+    month: monthKey,
+    recordCount: records.length,
+    warnings: Array.from(new Set(warnings)),
+    warningsByClient: {},
+  };
 }

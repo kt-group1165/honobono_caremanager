@@ -184,9 +184,21 @@ export async function aggregateSougouSeikyu(
     /** 事業所の適用処遇改善コード (介護 116274 等 or 総合事業 CB_A26184 等) — 対象月世代解決済でなくてよい */
     effectiveFormulaCodes: string[];
   },
-): Promise<{ rows: SougouSeikyuRow[]; warnings: string[] }> {
+): Promise<{
+  rows: SougouSeikyuRow[];
+  warnings: string[];
+  warningsByClient: Record<string, string[]>;
+}> {
   const warnings: string[] = [];
-  if (sougouSchedules.length === 0) return { rows: [], warnings };
+  const warningsByClient = new Map<string, string[]>();
+  /** 利用者に紐付く warning を積む (行内⚠バッジ用の索引も同時に作る) */
+  const pushClientWarning = (clientId: string, msg: string) => {
+    warnings.push(msg);
+    if (!warningsByClient.has(clientId)) warningsByClient.set(clientId, []);
+    warningsByClient.get(clientId)!.push(msg);
+  };
+  if (sougouSchedules.length === 0)
+    return { rows: [], warnings, warningsByClient: {} };
 
   const monthStr = `${opts.year}-${String(opts.month).padStart(2, "0")}`;
 
@@ -524,7 +536,8 @@ export async function aggregateSougouSeikyu(
     const cert = seg.cert;
     const userLabel = client?.name ?? userId;
     if (cert?.isFallback) {
-      warnings.push(
+      pushClientWarning(
+        userId,
         `${userLabel}: 対象月 (${monthStr}) に有効な認定が見つからないため最新の認定情報で総合事業を集計しています`,
       );
     }
@@ -539,7 +552,8 @@ export async function aggregateSougouSeikyu(
     const insurerNum = (cert?.insurer_number ?? "").trim();
     const prefix = SOUGOU_PREFIX_BY_INSURER[insurerNum] ?? "";
     if (insurerNum && !prefix) {
-      warnings.push(
+      pushClientWarning(
+        userId,
         `${userLabel}: 保険者番号 ${insurerNum} の総合事業サービスコード (自治体版) が未登録です — この市町村のコードを取込むまで総合事業は請求できません (他市の単価で誤請求しないよう保留)`,
       );
     }
@@ -558,7 +572,8 @@ export async function aggregateSougouSeikyu(
     const addonLabel = addon?.label ?? null;
     const addonCode = addon?.code ?? null;
     if (appliedNum > 0 && prefix && !addon) {
-      warnings.push(
+      pushClientWarning(
+        userId,
         `${userLabel}: 事業所の処遇改善率に一致する ${prefix} (保険者 ${insurerNum}) の総合事業処遇改善コードが見つかりません — 処遇改善なしで集計しています (サービスコードマスタを確認してください)`,
       );
     }
@@ -571,7 +586,8 @@ export async function aggregateSougouSeikyu(
       const count = dates.length;
       const master = masterOf(svcType, prefix);
       if (!master) {
-        warnings.push(
+        pushClientWarning(
+          userId,
           `${userLabel}: 総合事業「${svcType}」がマスタ (system=総合事業/A2・A3/${prefix || "自治体prefix無し"}/対象月世代) から引けません — サービス名/有効期間/保険者番号(${insurerNum || "未設定"})を確認してください`,
         );
         continue;
@@ -604,12 +620,14 @@ export async function aggregateSougouSeikyu(
     // を優先。無ければ要介護度から標準補完 (SOUGOU_CARE_LEVEL_LIMITS)。
     const limitUnits = seg.limitOverride ?? SOUGOU_CARE_LEVEL_LIMITS[careLevelNorm] ?? null;
     if (limitUnits == null && grossBaseUnits > 0) {
-      warnings.push(
+      pushClientWarning(
+        userId,
         `${userLabel}: 総合事業の限度額を解決できません (要介護度「${cert?.care_level ?? "未設定"}」・認定の限度額なし) — 限度額管理なしで集計します。認定情報を確認してください`,
       );
     }
     if (/^要介護/.test(careLevelNorm)) {
-      warnings.push(
+      pushClientWarning(
+        userId,
         `${userLabel}: 要介護度「${cert?.care_level}」で総合事業の実績があります — 区分変更月または継続利用要介護者の可能性があります。要介護者の限度額は介護給付と合算管理のため、機械判定 (総合事業分のみ) の超過を請求前に確認してください`,
       );
     }
@@ -654,7 +672,8 @@ export async function aggregateSougouSeikyu(
       if (partialPeriod)
         partialReasons.push(`公費適用期間が月の一部 (${kohi.start ?? "制限なし"}〜${kohi.end ?? "制限なし"})`);
       if (partialReasons.length > 0) {
-        warnings.push(
+        pushClientWarning(
+          userId,
           `${userLabel}: 総合事業の公費按分 (期間按分・本人負担上限・法別12以外の給付率) は未対応です (${partialReasons.join("、")}) — 公費対象分を全量振替で集計するため、請求前に手動確認してください`,
         );
       }
@@ -746,7 +765,8 @@ export async function aggregateSougouSeikyu(
     const userLabel = client?.name ?? userId;
     // 認定申請中の利用者は当月の総合事業請求も保留 (ほのぼの準拠。介護給付側と同方針)。
     if ((certByClient.get(userId) ?? null)?.certification_status === "申請中") {
-      warnings.push(
+      pushClientWarning(
+        userId,
         `${userLabel}: 認定申請中のため当月の総合事業請求を保留しました (認定確定後に月遅れ請求してください)`,
       );
       continue;
@@ -800,7 +820,8 @@ export async function aggregateSougouSeikyu(
               return `${part}: ${num}`;
             })
             .join(" / ");
-          warnings.push(
+          pushClientWarning(
+            userId,
             `${userLabel}さん: ${label}が月内で変わっています (${desc})。境界日 (${perSeg[1].s.from}) で総合事業の明細書を分割して出力しました (${segDesc})`,
           );
           handled = true;
@@ -817,13 +838,15 @@ export async function aggregateSougouSeikyu(
               limitOverride: p.s.limitAmount,
             }),
           );
-          warnings.push(
+          pushClientWarning(
+            userId,
             `${userLabel}さん: ${label}が月内で変わっています (${desc}) が、総合事業の実績が ${p.s.from}〜${p.s.to} のみのため分割せず、その期間の資格情報 (${(insurerDiff ? p.s.cert.insurer_number : p.s.cert.insured_number) ?? "?"}) で出力します`,
           );
           handled = true;
         }
       } else {
-        warnings.push(
+        pushClientWarning(
+          userId,
           `${userLabel}さん: ${label}が月内で変わっています (${desc}) が、変更後認定の開始日から境界日を判定できないため総合事業の明細書を分割できません — 認定有効期間 (開始日) を確認するか手動対応してください`,
         );
       }
@@ -856,5 +879,5 @@ export async function aggregateSougouSeikyu(
     ),
   );
 
-  return { rows, warnings };
+  return { rows, warnings, warningsByClient: Object.fromEntries(warningsByClient) };
 }

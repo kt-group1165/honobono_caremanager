@@ -78,6 +78,8 @@ export interface ReSeikyuResult {
   sougouRows: ReSeikyuSougouRow[];
   /** 元提供月ごとの aggregate warnings (「[再請求 R8/5] …」形式) */
   warnings: string[];
+  /** warnings のうち利用者に紐付くものを client_id で引ける索引 (行内⚠バッジ用) */
+  warningsByClient: Record<string, string[]>;
 }
 
 /**
@@ -117,13 +119,14 @@ export async function loadReSeikyuRows(
     // table 未作成 (直 SQL=42P01 / PostgREST schema cache=PGRST205) は
     // 再請求なしで続行 (呼出側で握る)
     if (res.error.code === "42P01" || res.error.code === "PGRST205") {
-      return { rows: [], sougouRows: [], warnings: [] };
+      return { rows: [], sougouRows: [], warnings: [], warningsByClient: {} };
     }
     throw new Error(`再請求対象の取得に失敗: ${res.error.message}`);
   }
 
   const flagged = (res.data ?? []) as unknown as FlaggedRow[];
-  if (flagged.length === 0) return { rows: [], sougouRows: [], warnings: [] };
+  if (flagged.length === 0)
+    return { rows: [], sougouRows: [], warnings: [], warningsByClient: {} };
 
   // 2) 月ごとにまとめ、client_id → reasons / 過誤付帯情報 を引けるようにする
   const byMonth = new Map<
@@ -152,6 +155,7 @@ export async function loadReSeikyuRows(
   const out: ReSeikyuRow[] = [];
   const outSougou: ReSeikyuSougouRow[] = [];
   const warnings: string[] = [];
+  const warningsByClient: Record<string, string[]> = {};
   for (const [monthKey, clientFlags] of byMonth) {
     const [y, m] = monthKey.split("-").map((n) => Number(n));
     if (!y || !m) continue;
@@ -168,19 +172,15 @@ export async function loadReSeikyuRows(
     // 総合事業ストリーム (aggregate.ts が rows と独立に返す。実体は SougouSeikyuRow)
     const sougou = (result.sougouRows ?? []) as SougouSeikyuRow[];
     // 再集計時の warnings (認定フォールバック・入院重なり等) も表示側へ伝播する。
-    // ただし対象は再請求フラグの立っている利用者分のみに絞る (他利用者分はノイズ)
-    const flaggedNames = new Set<string>();
-    for (const r of result.rows) {
-      if (clientFlags.has(r.user_id)) flaggedNames.add(r.user_name);
+    // ただし対象は再請求フラグの立っている利用者分のみに絞る (他利用者分はノイズ)。
+    // client_id で直接引く (氏名の文字列一致だと同姓や接頭辞ズレで誤爆/漏れが起きるため)。
+    for (const [clientId, msgs] of Object.entries(result.warningsByClient ?? {})) {
+      if (!clientFlags.has(clientId)) continue;
+      const prefixed = msgs.map((w) => `[再請求 R${y - 2018}/${m}] ${w}`);
+      warnings.push(...prefixed);
+      if (!warningsByClient[clientId]) warningsByClient[clientId] = [];
+      warningsByClient[clientId].push(...prefixed);
     }
-    for (const r of sougou) {
-      if (clientFlags.has(r.user_id)) flaggedNames.add(r.user_name);
-    }
-    warnings.push(
-      ...result.warnings
-        .filter((w) => [...flaggedNames].some((n) => w.includes(n)))
-        .map((w) => `[再請求 R${y - 2018}/${m}] ${w}`),
-    );
 
     for (const r of result.rows) {
       const flags = clientFlags.get(r.user_id);
@@ -222,5 +222,5 @@ export async function loadReSeikyuRows(
   out.sort(byMonthThenKana);
   outSougou.sort(byMonthThenKana);
 
-  return { rows: out, sougouRows: outSougou, warnings };
+  return { rows: out, sougouRows: outSougou, warnings, warningsByClient };
 }

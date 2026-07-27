@@ -125,7 +125,7 @@ const isTableMissingError = (code: string | null | undefined) =>
 
 export function KaigoSeikyuContent() {
   const {
-    year, month, rows, sougouRows, filteredRows, filteredSougouRows, kanaMatches, recordCount, loading, error, warnings,
+    year, month, rows, sougouRows, filteredRows, filteredSougouRows, kanaMatches, recordCount, loading, error, warningsByClient,
     officeName, officeNumber, officeAddress, officePhone, officePostal,
     officeId, tenantId, unitPrice, appliedFormulaCodes,
   } = useSeikyuContext();
@@ -145,8 +145,8 @@ export function KaigoSeikyuContent() {
   const [meisaiPrintRows, setMeisaiPrintRows] = useState<DisplayRow[] | null>(null);
   // 月遅れ/返戻の再請求行 (過去月を元提供月で再集計したもの)
   const [reRows, setReRows] = useState<ReSeikyuRow[]>([]);
-  // 再請求の再集計時 warnings (認定フォールバック・入院重なり等)
-  const [reWarnings, setReWarnings] = useState<string[]>([]);
+  // 再請求の再集計時 warnings (認定フォールバック・入院重なり等。client_id で引ける索引のみ保持)
+  const [reWarningsByClient, setReWarningsByClient] = useState<Record<string, string[]>>({});
   // 対象月に適用中の 虐防/業未 減算 (kaigo_office_gensan_periods。バナー表示用)
   const [gensanPeriods, setGensanPeriods] = useState<GensanPeriod[]>([]);
   // 同一建物減算チェック パネル (提案・警告のみ。設定書換なし)
@@ -210,30 +210,40 @@ export function KaigoSeikyuContent() {
     return [...re, ...cur];
   }, [filteredRows, reRows, kanaMatches, monthKey]);
 
-  // ── 集計 warning を利用者名で行に紐付け (aggregate は文字列配列なので表示層で照合)。
-  //    "○○さん: …" / "○○: …" の接頭辞が既知の利用者名なら行マークに、それ以外は
-  //    全体警告 (generalWarnings) として下部に小さく残す ──
+  // ── 集計 warning を client_id で行に紐付ける (aggregate 側が warningsByClient として
+  //    利用者ID索引を返すため、表示層は氏名の文字列パースをしない — 総合事業ユーザーの
+  //    警告が氏名接頭辞にマッチせず下部バナーに落ちる/月遅れ再請求の "[再請求 …]" 接頭辞で
+  //    正規表現が壊れる、といった旧実装の不具合を構造的に無くすため)。
+  //    当月に「行」が無い利用者 (認定申請中で請求保留された等) の警告は、行内バッジを
+  //    出しようがないので generalWarnings に残す ──
   const { warnByUser, generalWarnings } = useMemo(() => {
-    const all = [...new Set([...warnings, ...reWarnings])];
-    const names = new Set([...filteredRows, ...reRows].map((r) => r.user_name));
+    const merged = new Map<string, string[]>();
+    const addAll = (rec: Record<string, string[]>) => {
+      for (const [clientId, msgs] of Object.entries(rec)) {
+        if (!merged.has(clientId)) merged.set(clientId, []);
+        merged.get(clientId)!.push(...msgs);
+      }
+    };
+    addAll(warningsByClient);
+    addAll(reWarningsByClient);
+    const knownIds = new Set(
+      [...filteredRows, ...filteredSougouRows, ...reRows].map((r) => r.user_id),
+    );
     const byUser = new Map<string, string[]>();
     const general: string[] = [];
-    for (const w of all) {
-      const m = /^(.+?)さん[:：]/.exec(w) ?? /^(.+?)[:：]/.exec(w);
-      const name = m?.[1]?.trim();
-      if (name && names.has(name)) {
-        if (!byUser.has(name)) byUser.set(name, []);
-        byUser.get(name)!.push(w);
+    for (const [clientId, msgs] of merged) {
+      if (knownIds.has(clientId)) {
+        byUser.set(clientId, msgs);
       } else {
-        general.push(w);
+        general.push(...msgs);
       }
     }
     return { warnByUser: byUser, generalWarnings: general };
-  }, [warnings, reWarnings, filteredRows, reRows]);
+  }, [warningsByClient, reWarningsByClient, filteredRows, filteredSougouRows, reRows]);
 
   // 「⚠のみ表示」時は警告のある利用者の行だけに絞る (かな順は保持)
   const visibleRows = useMemo(
-    () => (warnOnly ? displayRows.filter((d) => warnByUser.has(d.row.user_name)) : displayRows),
+    () => (warnOnly ? displayRows.filter((d) => warnByUser.has(d.row.user_id)) : displayRows),
     [warnOnly, displayRows, warnByUser],
   );
 
@@ -257,7 +267,7 @@ export function KaigoSeikyuContent() {
   const loadReRows = useCallback(async () => {
     if (!officeId || !tenantId) {
       setReRows([]);
-      setReWarnings([]);
+      setReWarningsByClient({});
       return;
     }
     try {
@@ -269,13 +279,13 @@ export function KaigoSeikyuContent() {
         currentMonthKey: monthKey,
       });
       setReRows(result.rows);
-      setReWarnings(result.warnings);
+      setReWarningsByClient(result.warningsByClient ?? {});
     } catch (e) {
       toast.error(
         "再請求分の集計に失敗: " + (e instanceof Error ? e.message : String(e)),
       );
       setReRows([]);
-      setReWarnings([]);
+      setReWarningsByClient({});
     }
   }, [supabase, officeId, tenantId, unitPrice, appliedFormulaCodes, monthKey]);
 
@@ -1212,16 +1222,16 @@ export function KaigoSeikyuContent() {
                       </div>
                       <div className="px-1 py-0.5 border-l border-gray-200 text-gray-800 flex items-center gap-1 min-w-0">
                         <span className="flex-1 truncate">{r.user_name}</span>
-                        {warnByUser.has(r.user_name) && (
+                        {warnByUser.has(r.user_id) && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              setWarnDetail({ name: r.user_name, items: warnByUser.get(r.user_name)! });
+                              setWarnDetail({ name: r.user_name, items: warnByUser.get(r.user_id)! });
                             }}
-                            title={warnByUser.get(r.user_name)!.join("\n")}
+                            title={warnByUser.get(r.user_id)!.join("\n")}
                             className="shrink-0 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-bold text-amber-700 hover:bg-amber-200 whitespace-nowrap"
                           >
-                            ⚠{warnByUser.get(r.user_name)!.length}
+                            ⚠{warnByUser.get(r.user_id)!.length}
                           </button>
                         )}
                         {(r.segmentCount ?? 1) > 1 && (
@@ -1312,7 +1322,11 @@ export function KaigoSeikyuContent() {
               </div>
 
               {/* ── 総合事業ブロック (71R1/様式第二の三)。介護給付と混ぜず別枠で表示 ── */}
-              <SougouBlock rows={filteredSougouRows} />
+              <SougouBlock
+                rows={filteredSougouRows}
+                warnByUser={warnByUser}
+                onWarnClick={(name, items) => setWarnDetail({ name, items })}
+              />
               </div>
 
               {/* ── 注意書き (集計 warning / 月遅れ合流): 一覧の下・合計フッターの「上」に
@@ -1748,7 +1762,15 @@ export function KaigoSeikyuContent() {
 // ── 総合事業 (介護予防・日常生活支援総合事業) 訪問型サービス (A2) の請求ブロック ──
 //    介護給付 (7131) とは別様式 (明細書 71R1/様式第二の三、請求書 7113) なので、介護保険分と混ぜず別枠で表示する。
 //    折りたたみトグル。行なしのときは何も出さない。
-function SougouBlock({ rows }: { rows: UserSeikyuRow[] }) {
+function SougouBlock({
+  rows,
+  warnByUser,
+  onWarnClick,
+}: {
+  rows: UserSeikyuRow[];
+  warnByUser: Map<string, string[]>;
+  onWarnClick: (name: string, items: string[]) => void;
+}) {
   const [open, setOpen] = useState(true);
   if (rows.length === 0) return null;
   const totalUnits = rows.reduce((s, r) => s + r.totalUnits, 0);
@@ -1794,7 +1816,23 @@ function SougouBlock({ rows }: { rows: UserSeikyuRow[] }) {
                     <td className="px-2 py-1 font-mono text-gray-700 border-r border-emerald-100">
                       {r.insured_number ?? "—"}
                     </td>
-                    <td className="px-2 py-1 text-gray-800 border-r border-emerald-100">{r.user_name}</td>
+                    <td className="px-2 py-1 text-gray-800 border-r border-emerald-100">
+                      <span className="flex items-center gap-1">
+                        <span className="truncate">{r.user_name}</span>
+                        {warnByUser.has(r.user_id) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onWarnClick(r.user_name, warnByUser.get(r.user_id)!);
+                            }}
+                            title={warnByUser.get(r.user_id)!.join("\n")}
+                            className="shrink-0 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-bold text-amber-700 hover:bg-amber-200 whitespace-nowrap"
+                          >
+                            ⚠{warnByUser.get(r.user_id)!.length}
+                          </button>
+                        )}
+                      </span>
+                    </td>
                     <td className="px-2 py-1 text-gray-700 border-r border-emerald-100">{r.care_level ?? "—"}</td>
                     <td className="px-2 py-1 text-gray-600 border-r border-emerald-100 truncate max-w-[220px]" title={svc}>
                       {svc}
