@@ -42,6 +42,8 @@ function pl(l){const o=[];let c="",q=false;for(let i=0;i<l.length;i++){const ch=
 const careNorm = (s) => (s || "").normalize("NFKC").replace(/\s/g, "");
 const iso = (s) => { const m = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec((s || "").trim()); return m ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` : null; };
 const genderNorm = (s) => (s || "").includes("女") ? "女" : (s || "").includes("男") ? "男" : null;
+// 氏名の突合キー (全角/半角スペース差を吸収)
+const nameKey = (s) => (s || "").normalize("NFKC").replace(/\s/g, "");
 const num = (s) => (s || "").trim();
 const rd = (p) => sjis.decode(readFileSync(p)).split(/\r?\n/).filter((l) => l).map(pl);
 const copayFromRate = (r) => { const n = Number((r || "").replace(/[^\d]/g, "")); return n === 80 ? "2" : n === 70 ? "3" : "1"; };
@@ -88,16 +90,22 @@ async function main() {
   //    利用者番号+生年月日キー の両方を作る。利用者番号が複数人共有(リナンバー)でも
   //    生年月日で曖昧性を解消して性別/住所を拾える (今川滿=利35共有 でも 生年月日で特定)。
   const base = rd(CSV_BASE); const Hb = base[0]; const gb = (n) => Hb.indexOf(n);
-  const baseByNum = new Map(), baseCount = new Map(), baseByNumBirth = new Map();
+  const baseByNum = new Map(), baseCount = new Map(), baseByNumBirth = new Map(), baseByNameBirth = new Map();
   for (const c of base.slice(1)) {
-    const u = num(c[gb("利用者番号")]); if (!u) continue;
-    baseCount.set(u, (baseCount.get(u) || 0) + 1);
     const rec = {
       name: (c[gb("利用者名")] || "").trim(), furigana: (c[gb("フリガナ")] || "").trim(),
       gender: genderNorm(c[gb("性別")]), birth: iso(c[gb("生年月日")]),
       postal: (c[gb("郵便番号")] || "").trim(), address: (c[gb("住所")] || "").trim(),
       phone: (c[gb("電話番号")] || "").trim(), mobile: (c[gb("携帯番号")] || "").trim(),
     };
+    // 氏名+生年月日 索引。**利用者番号が空の行も拾う** (ほのぼの実データに番号空が存在し、
+    // 番号キーだけだと性別等が欠落する。袖ヶ浦「小嶋 つる」で 8222 項11 が空になった)
+    if (rec.name && rec.birth) {
+      const nk = `${nameKey(rec.name)}|${rec.birth}`;
+      if (!baseByNameBirth.has(nk)) baseByNameBirth.set(nk, rec);
+    }
+    const u = num(c[gb("利用者番号")]); if (!u) continue;
+    baseCount.set(u, (baseCount.get(u) || 0) + 1);
     if (!baseByNum.has(u)) baseByNum.set(u, rec);
     if (rec.birth) baseByNumBirth.set(`${u}|${rec.birth}`, rec);
   }
@@ -112,10 +120,12 @@ async function main() {
 
   const reuse = [], toCreate = [];
   for (const [key, u] of users) {
-    // demographics: まず利用者番号+生年月日で特定 (共有番号でも安全)、無ければ番号ユニーク時のみ
-    const b = (u.birth && baseByNumBirth.get(`${u.userNo}|${u.birth}`))
-      || ((!numShared.has(u.userNo) && baseCount.get(u.userNo) === 1) ? baseByNum.get(u.userNo) : null);
     const h = hokenByKey.get(key) || {};
+    // demographics: ①利用者番号+生年月日 (共有番号でも安全) ②番号ユニーク時のみ番号
+    // ③氏名(介護保険CSV由来)+生年月日 ← 利用者番号が空の利用者の救済
+    const b = (u.birth && baseByNumBirth.get(`${u.userNo}|${u.birth}`))
+      || ((!numShared.has(u.userNo) && baseCount.get(u.userNo) === 1) ? baseByNum.get(u.userNo) : null)
+      || ((u.birth && h.name) ? baseByNameBirth.get(`${nameKey(h.name)}|${u.birth}`) : null);
     const rec = { ...u, name: (b?.name) || h.name || `(氏名不明 ${u.insured})`, furigana: b?.furigana || null,
       gender: u.gender || b?.gender || null, birth: u.birth || b?.birth || null,
       postal: b?.postal || null, address: b?.address || null, phone: b?.phone || null, mobile: b?.mobile || null,

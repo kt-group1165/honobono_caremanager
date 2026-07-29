@@ -84,9 +84,21 @@ async function main() {
     claims.push(...((data ?? []) as unknown as Claim[]));
   }
   const billable = claims.filter((c) => parseYoboShienKubun(c.notes) !== "itaku");
-  const userIds = [...new Set(billable.map((c) => c.user_id))];
+  let userIds = [...new Set(billable.map((c) => c.user_id))];
   const nameByUser = new Map(billable.map((c) => [c.user_id, c.clients?.name ?? "(名前未取得)"]));
-  console.log(`claims 利用者: ${userIds.length}名`);
+  if (userIds.length > 0) {
+    console.log(`claims 利用者: ${userIds.length}名`);
+  } else {
+    // 一括生成 前でも給付管理票の検証はできる (8222 はレセプトに依存せず
+    // 給付管理データ + 認定 + ケアマネ番号 だけで決まる)。利用者は割当から取る。
+    userIds = clientIds;
+    for (const ids of chunk(clientIds, CHUNK)) {
+      const { data } = await sb.from("clients").select("id, name").in("id", ids);
+      for (const c of (data ?? []) as { id: string; name: string | null }[])
+        nameByUser.set(c.id, c.name ?? "(名前未取得)");
+    }
+    console.log(`⚠ 当月レセプトが 0 件 → 事業所割当の ${userIds.length}名 で給付管理票のみ検証 (一括生成 前)`);
+  }
 
   // 3) 認定 (対象月有効) — 実アプリと同じ共有リゾルバ
   const certRes = await resolveCertForMonth(sb, userIds, YEAR, MONTH);
