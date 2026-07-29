@@ -158,19 +158,26 @@ async function main() {
   }
   if (yobo) console.log(`要支援 (Yファイル側): ${yobo}名 を除外`);
 
-  // 生年月日/性別を clients から補完 (_kokuho-seikyu は claims join の clients を使う)
+  // 生年月日/性別/ふりがな を clients から補完 (_kokuho-seikyu は claims join の clients を使う)
   const uids = users.map((u) => (u as unknown as { _uid: string })._uid);
-  const demo = new Map<string, { birth_date: string | null; gender: string | null }>();
+  type Demo = { birth_date: string | null; gender: string | null; furigana: string | null; name: string | null };
+  const demo = new Map<string, Demo>();
   for (const ids of chunk(uids, CHUNK)) {
-    const { data } = await sb.from("clients").select("id, birth_date, gender").in("id", ids);
-    for (const c of (data ?? []) as { id: string; birth_date: string | null; gender: string | null }[])
-      demo.set(c.id, c);
+    const { data } = await sb.from("clients").select("id, birth_date, gender, furigana, name").in("id", ids);
+    for (const c of (data ?? []) as ({ id: string } & Demo)[]) demo.set(c.id, c);
   }
   for (const u of users) {
     const d = demo.get((u as unknown as { _uid: string })._uid);
     u.birthDate = d?.birth_date ?? null;
     u.gender = d?.gender ?? null;
   }
+  // 票の並びを実アプリに合わせる (fetchKyotakuClaimRows がふりがな順で返すため)。
+  // 揃えておくとアプリ出力と byte 比較できる
+  users.sort((a, b) => {
+    const da = demo.get((a as unknown as { _uid: string })._uid);
+    const db = demo.get((b as unknown as { _uid: string })._uid);
+    return (da?.furigana ?? da?.name ?? "").localeCompare(db?.furigana ?? db?.name ?? "", "ja");
+  });
 
   // 7) build + 出力
   const f = buildKyufuKanriFile(users, {
