@@ -68,6 +68,9 @@ export type UseKyotakuOfficesResult = {
   mutate: () => void;
 };
 
+// 参照安定化用 (毎 render 新 [] を返すと consumer の effect/memo が毎回発火する)
+const EMPTY_OFFICES: KyotakuOffice[] = [];
+
 export function useKyotakuOffices(): UseKyotakuOfficesResult {
   const { data, error, isLoading, mutate } = useSWR<KyotakuOffice[]>(
     "attendance-offices",
@@ -79,7 +82,7 @@ export function useKyotakuOffices(): UseKyotakuOfficesResult {
     },
   );
   return {
-    offices: data ?? [],
+    offices: data ?? EMPTY_OFFICES,
     isLoading,
     error: error ?? null,
     mutate: () => {
