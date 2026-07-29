@@ -83,6 +83,7 @@ const NAV_CARE_MANAGER_SECTIONED: SectionSpec[] = [
     title: "管理",
     items: [
       { name: "職員管理", href: "/staff", icon: UserCog },
+      { name: "出勤簿", href: "/attendance", icon: CalendarDays },
       { name: "マスタ管理", href: "/master", icon: Settings },
       { name: "設定", href: "/settings", icon: UserCog },
       { name: "マニュアル", href: "/manual", icon: BookOpen },
@@ -138,6 +139,7 @@ const NAV_HOME_CARE_SECTIONED: SectionSpec[] = [
     title: "管理",
     items: [
       { name: "職員管理", href: "/staff", icon: UserCog },
+      { name: "出勤簿", href: "/attendance", icon: CalendarDays },
       { name: "パート給与", href: "/staff-payroll", icon: Wallet },
       { name: "マスタ管理", href: "/master", icon: Settings },
       { name: "設定", href: "/settings", icon: UserCog },
@@ -176,6 +178,7 @@ const NAV_BATH_SECTIONED: SectionSpec[] = [
     items: [
       // 地域生活支援 受給者証は 利用者管理 → 障害福祉 → 受給者証 (詳細) に統合 (2026-07-15)
       { name: "職員管理", href: "/staff", icon: UserCog },
+      { name: "出勤簿", href: "/attendance", icon: CalendarDays },
       { name: "設定", href: "/settings", icon: UserCog },
       { name: "マニュアル", href: "/manual", icon: BookOpen },
     ],
