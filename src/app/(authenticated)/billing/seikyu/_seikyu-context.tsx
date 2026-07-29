@@ -351,11 +351,28 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
  * 指定月のレセプト (kaigo_care_support_claims) を利用者・認定情報付きで取得する。
  * ふりがな順にソート済み。
  */
+/**
+ * 各段階の所要時間を Console に出す (prefix `[居宅請求]`)。
+ * 画面が読み込み中のまま止まった時に、どの問い合わせで待っているかを
+ * DevTools の Console だけで特定できるようにするための計測。
+ */
+function stageLogger(label: string) {
+  const t0 = Date.now();
+  let prev = t0;
+  return (stage: string, extra = "") => {
+    const now = Date.now();
+    console.info(`[居宅請求] ${label} ${stage} ${now - prev}ms (累計 ${now - t0}ms) ${extra}`);
+    prev = now;
+  };
+}
+
 export async function fetchKyotakuClaimRows(
   supabase: SupabaseClient,
   monthKey: string, // 'YYYY-MM'
   officeId?: string | null, // 指定時は当事業所に割り当てられた利用者のみ (多事業所で他事業所が混ざるのを防ぐ)
 ): Promise<KyotakuSeikyuRow[]> {
+  const log = stageLogger(monthKey);
+  log("開始");
   // 0) 当事業所の利用者 (client_office_assignments)。officeId 未指定時は全件 (後方互換)。
   //    これが無いと請求・伝送に他事業所の居宅レセプトが混ざる (claims 画面と同種の事故)。
   let officeClientIds: string[] | null = null;
@@ -377,6 +394,8 @@ export async function fetchKyotakuClaimRows(
     }
     if (officeClientIds.length === 0) return [];
   }
+
+  log("事業所割当", `${officeClientIds ? officeClientIds.length + "名" : "全件"}`);
 
   // 1) 当月レセプト (page-loop で 1000 行制限回避)。
   //    select は "*" (unei_kijun_gensan 列は migration 適用前でも壊れないよう明示列挙しない)
@@ -401,6 +420,7 @@ export async function fetchKyotakuClaimRows(
       from += PAGE;
     }
   }
+  log("レセプト取得", `${claims.length}件`);
   if (claims.length === 0) return [];
 
   // 介護予防支援「委託」(包括が請求) は請求対象外 (0 単位の区分永続化行のため除外)
@@ -412,6 +432,7 @@ export async function fetchKyotakuClaimRows(
   const userIds = [...new Set(billable.map((c) => c.user_id))];
   const [cy, cm] = monthKey.split("-").map(Number);
   const certRes = await resolveCertForMonth(supabase, userIds, cy, cm);
+  log("認定解決", `${userIds.length}名`);
   const certMap = new Map<string, CertDbRow>();
   for (const [clientId, cert] of certRes) {
     certMap.set(clientId, {
@@ -432,10 +453,12 @@ export async function fetchKyotakuClaimRows(
   //      (テーブル未作成時は旧 kohi_* 列にフォールバック → lib/kohi.ts)
   const [kohiYear, kohiMonth] = monthKey.split("-").map(Number);
   const kohiRes = await resolveKohiForMonth(supabase, userIds, kohiYear, kohiMonth);
+  log("公費解決");
 
   // 2.6) 月途中の保険者変更 (転居) の検出 — 給付管理票・明細書の提出先確認の警告用。
   //      検出しても出力自体は 2) の月末時点の認定 (resolveCertForMonth の採用行) で行う。
   const certsInMonthRes = await resolveCertsInMonth(supabase, userIds, cy, cm);
+  log("月内認定解決");
   const insurerChangeByUser = new Map<
     string,
     NonNullable<MidMonthCertChange["insurerChange"]>
@@ -460,6 +483,8 @@ export async function fetchKyotakuClaimRows(
       if (!careMgrByUser.has(p.user_id)) careMgrByUser.set(p.user_id, p.care_manager_number ?? null);
     }
   }
+
+  log("ケアプラン取得");
 
   // 3) 行の組み立て (ふりがな順)
   const rows: KyotakuSeikyuRow[] = billable.map((c) => {
