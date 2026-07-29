@@ -663,7 +663,14 @@ export function KyotakuSeikyuProvider({ children }: { children: ReactNode }) {
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
 
   const load = useCallback(async () => {
-    if (!currentOffice) return;
+    // 事業所が解決できない場合に return するだけだと loading=true のまま
+    // スピナーが永久に回る (原因が画面に出ない)。明示的に終了させる。
+    if (!currentOffice) {
+      setRows([]);
+      setError("事業所を特定できませんでした (URL の ?office= を確認してください)");
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
