@@ -213,6 +213,12 @@ export interface KyufuKanriUser {
   dailyActuals?: KyufuKanriDailyActual[];
   /** 介護支援専門員番号 (ケアマネ番号) — 8222 終端行 用。無ければ空 */
   careManagerNumber?: string | null;
+  /**
+   * 対象年月 (YYYYMM)。省略時は opts.year/month。
+   * 給付管理票は各レコードが対象年月を持つため、月遅れ・返戻の再請求分を
+   * 当月分と 1 ファイルにまとめて出せる (ほのぼの KY と同じ構成)。
+   */
+  ym?: string;
 }
 
 export interface KyotakuDensouOptions {
@@ -463,6 +469,8 @@ export function buildKyufuKanriFile(
   // 総括票 8211 を持たず 8222 のみで構成する。旧仕様の 8211 総括票は出力しない。
   for (const { u, tickets } of userTickets) {
     const kubun: KyufuKanriSakuseiKubun = u.sakuseiKubun ?? "1";
+    // 対象年月は利用者ごと (月遅れ・返戻の再請求分を当月分と同一ファイルに混在させる)
+    const userYm = (u.ym ?? "").trim() || ym;
     if (!u.birthDate) warnings.push(`${u.userName}: 生年月日が未登録です`);
     // 明細行の共通項目チェック (分割しても行内容は同じなので利用者単位で 1 回)
     for (const l of u.lines) {
@@ -482,7 +490,7 @@ export function buildKyufuKanriFile(
       // 8222 共通ヘッダ (項1-14)
       const head = (lineNo: string) => [
         "8222", // 1 交換情報識別番号 (ほのぼの現行様式)
-        ym, // 2 対象年月 (分割票も同一の対象年月 — 票の別は項3/9 の保険者×被保険者)
+        userYm, // 2 対象年月 (分割票も同一の対象年月 — 票の別は項3/9 の保険者×被保険者)
         t.insurerNumber ? t.insurerNumber.trim().padStart(8, "0") : "", // 3 証記載保険者番号 (数字8桁・前0埋め)
         office, // 4 事業所番号 (居宅介護支援事業所)
         kubun, // 5 給付管理票情報作成区分コード (1=新規 / 2=修正 / 3=取消)

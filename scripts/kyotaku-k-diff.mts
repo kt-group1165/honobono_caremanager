@@ -181,14 +181,15 @@ async function main() {
       if (filterYm && r[3] !== filterYm) continue;
       r[1] = "*"; r[7] = "*";
       if (r[9] !== "99") r[9] = "*";
-      const k = `${r[4]}|${r[10]}`;
+      // 対象年月をキーに含める (月遅れを同一ファイルに混在させるため同じ被保番が複数月ありうる)
+      const k = `${r[3]}|${r[4]}|${r[10]}`;
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k)!.push(r.join(","));
     }
     for (const v of groups.values()) v.sort();
     return groups;
   };
-  const N = norm(join(outDir, f.fileName), null);
+  const N = norm(join(outDir, f.fileName), YM);
   const H = norm(join(BASE, "ほのぼのから", KY_FILE), YM);
   let match = 0; const diffs: string[] = [];
   for (const [k, nv] of N) {

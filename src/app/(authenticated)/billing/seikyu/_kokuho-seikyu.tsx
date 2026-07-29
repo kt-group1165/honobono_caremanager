@@ -252,8 +252,11 @@ export function KyotakuKokuhoSeikyuContent() {
   const totalUnits = targets.reduce((s, d) => s + d.row.totalUnits, 0);
   const totalInsurance = targets.reduce((s, d) => s + d.row.insuranceAmount, 0);
 
-  // ── 国保連伝送ファイル (給付管理票 8211/8221 + 計画費請求 7111/8121 / Shift_JIS) ──
-  //    提供月ごとに 1 ファイルセット。再請求分は元提供月のファイルとして出す。
+  // ── 国保連伝送ファイル (給付管理票 8222 + 計画費請求 7111/8124 / Shift_JIS) ──
+  //    ほのぼの (KK/KY) と同じ構成で出す:
+  //      計画費 (S) = 請求書 7111 が対象年月ごとの集計なので **提供月ごとに 1 ファイル**
+  //      給付管理票 (K) = 各 8222 が対象年月を持つので **全月まとめて 1 ファイル**
+  //    再請求 (月遅れ・返戻) 分は元提供月で出す。
   const exportDensou = async () => {
     if (targets.length === 0) return;
     setExporting(true);
@@ -281,6 +284,12 @@ export function KyotakuKokuhoSeikyuContent() {
 
       const files: { content: string; fileName: string; label: string; count: number }[] = [];
       const warnings: string[] = [];
+      // 給付管理票 (8222) は事業所番号 (43=要介護 / 46=要支援) ごとに全月ぶんを蓄積し、
+      // 月ループの後で 1 ファイルにまとめて出す (ほのぼの KY と同じ)。key = labelSuffix
+      const kyufuByOffice = new Map<
+        string,
+        { officeNum: string; users: KyufuKanriUser[] }
+      >();
 
       // 処理対象年月 (コントロールレコード項11) = 審査実行月 = 今回提出分の翌月
       // (_if_kyotaku.txt 注1)。再請求 (過去提供月) のファイルも提出は今なので同じ値。
@@ -581,6 +590,8 @@ export function KyotakuKokuhoSeikyuContent() {
           const kyufuUsers: KyufuKanriUser[] = users
             .filter((u) => rowsByUser.has(u.user_id))
             .map((u) => ({
+              // 対象年月 (8222 項2)。全月を 1 ファイルに混在させるので利用者ごとに持つ
+              ym: mKey.replace("-", ""),
               userName: u.user_name,
               insurerNumber: u.insurer_number ?? "",
               insuredNumber: u.insured_number ?? "",
@@ -626,14 +637,10 @@ export function KyotakuKokuhoSeikyuContent() {
             );
           }
           if (kyufuUsers.length > 0) {
-            const f1 = buildKyufuKanriFile(kyufuUsers, opts);
-            warnings.push(...f1.warnings.map((w) => `[給付管理票 R${oy - 2018}/${om}${labelSuffix}] ${w}`));
-            files.push({
-              content: f1.content,
-              fileName: fname(f1.fileName),
-              label: `給付管理票 R${oy - 2018}/${om}${labelSuffix}`,
-              count: f1.dataRecordCount,
-            });
+            // ここでは出力せず蓄積 (全提供月ぶんを 1 ファイルにまとめるため)
+            const acc = kyufuByOffice.get(labelSuffix) ?? { officeNum, users: [] };
+            acc.users.push(...kyufuUsers);
+            kyufuByOffice.set(labelSuffix, acc);
           }
         }
       };
@@ -654,6 +661,26 @@ export function KyotakuKokuhoSeikyuContent() {
             );
           }
         }
+      }
+
+      // 給付管理票 (8222) を全提供月まとめて 1 ファイル出力 (ほのぼの KY と同じ)。
+      // ファイル名は提出バッチ = 表示中の請求月 (K{YYYYMM}.CSV / 予防は Y 接頭辞)。
+      for (const [labelSuffix, acc] of kyufuByOffice) {
+        const f1 = buildKyufuKanriFile(acc.users, {
+          officeNumber: acc.officeNum,
+          year,
+          month,
+          unitPrice,
+          shoriYear,
+          shoriMonth,
+        });
+        warnings.push(...f1.warnings.map((w) => `[給付管理票${labelSuffix}] ${w}`));
+        files.push({
+          content: f1.content,
+          fileName: labelSuffix ? "Y" + f1.fileName : f1.fileName,
+          label: `給付管理票 R${year - 2018}/${month}${labelSuffix}`,
+          count: f1.dataRecordCount,
+        });
       }
 
       if (draftRows.length > 0) {
