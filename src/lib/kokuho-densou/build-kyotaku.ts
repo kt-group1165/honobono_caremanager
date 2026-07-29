@@ -67,6 +67,20 @@ const SHORT_STAY_KIND_CODES = new Set(["21", "22", "23", "2A"]);
 /** 平成14年1月 (200201) = 給付管理票が種別3 (居宅サービス) に一本化された対象年月 */
 const UNIFIED_KYUFU_KANRI_YM = 200201;
 
+/**
+ * 地域密着型サービスのサービス種類コード (71〜78)。
+ * 8222 項18「指定/基準該当/地域密着型サービス識別コード」(共通編 1.4 項26:
+ * 1=指定 / 2=基準該当 / 5=地域密着型 / 6・7=混在型 / 8・9=総合事業) の既定値導出用。
+ * 基準該当 (2) 等は種類コードから判定できないため、KY取込で保持した実値
+ * (shiteiKubun) があればそちらを優先する。
+ */
+const CHIIKI_MITCHAKU_KINDS = new Set(["71", "72", "73", "74", "75", "76", "77", "78"]);
+
+/** 項18 の既定値: 地域密着型 (71〜78) は 5、それ以外は 1 (指定) */
+const shiteiKubunOf = (line: KyufuKanriLine): string =>
+  (line.shiteiKubun ?? "").trim() ||
+  (CHIIKI_MITCHAKU_KINDS.has(line.serviceKindCode) ? "5" : "1");
+
 const genderCode = (g: string | null | undefined) =>
   g == null ? "" : g.includes("女") ? "2" : g.includes("男") ? "1" : "";
 const dateNum = (iso: string | null | undefined) => (iso ? iso.replaceAll("-", "") : "");
@@ -120,6 +134,11 @@ export interface KyufuKanriLine {
   officeNumber: string;
   /** サービス種類コード (2 桁) */
   serviceKindCode: string;
+  /**
+   * 指定/基準該当/地域密着型サービス識別コード (8222 項18)。
+   * KY取込で保持した実値。無ければ種類コードから導出 (71〜78=5 / 他=1)。
+   */
+  shiteiKubun?: string | null;
   /** 給付計画単位数 */
   plannedUnits: number;
   /** warning 表示用ラベル (例: "訪問介護(○○事業所)")。伝送内容には使わない */
@@ -494,7 +513,7 @@ export function buildKyufuKanriFile(
           "", // 15 限度額 (明細行は空)
           "1", // 16 居宅サービス計画作成区分コード
           l.officeNumber, // 17 事業所番号 (サービス事業所)
-          "1", // 18 指定/基準該当等事業所区分コード (1=指定)
+          shiteiKubunOf(l), // 18 指定/基準該当/地域密着型サービス識別コード (地域密着型=5)
           l.serviceKindCode, // 19 サービス種類コード
           String(l.plannedUnits), // 20 給付計画単位数
           "", "", "", "", "", "", "", // 21-27 (明細行は空)

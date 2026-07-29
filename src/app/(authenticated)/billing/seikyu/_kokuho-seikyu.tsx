@@ -352,16 +352,31 @@ export function KyotakuKokuhoSeikyuContent() {
           provider_name: string | null;
           provider_number: string | null;
           planned_units: number | null;
+          shitei_kubun?: string | null;
         };
         const benefitRows: BenefitRow[] = [];
+        // shitei_kubun (8222 項18) は列未適用の環境でも動くよう 42703 は列なしで再試行
+        let withShiteiKubun = true;
         for (const idChunk of chunkArray(userIds, IN_CHUNK_SIZE)) {
-          const { data, error: be } = await supabase
-            .from("kaigo_benefit_management")
-            .select("user_id, service_type, service_kind_code, provider_name, provider_number, planned_units")
-            .eq("billing_month", mKey)
-            .in("user_id", idChunk);
-          if (be) throw new Error(`給付管理データの取得に失敗 (${mKey}): ${be.message}`);
-          benefitRows.push(...((data ?? []) as BenefitRow[]));
+          while (true) {
+            const cols = withShiteiKubun
+              ? "user_id, service_type, service_kind_code, provider_name, provider_number, planned_units, shitei_kubun"
+              : "user_id, service_type, service_kind_code, provider_name, provider_number, planned_units";
+            const { data, error: be } = await supabase
+              .from("kaigo_benefit_management")
+              .select(cols)
+              .eq("billing_month", mKey)
+              .in("user_id", idChunk);
+            if (be) {
+              if (withShiteiKubun && (be.code === "42703" || /does not exist/i.test(be.message ?? ""))) {
+                withShiteiKubun = false;
+                continue;
+              }
+              throw new Error(`給付管理データの取得に失敗 (${mKey}): ${be.message}`);
+            }
+            benefitRows.push(...((data ?? []) as unknown as BenefitRow[]));
+            break;
+          }
         }
 
         if (benefitRows.length === 0) {
@@ -572,8 +587,10 @@ export function KyotakuKokuhoSeikyuContent() {
               birthDate: u.birth_date,
               gender: u.gender,
               careLevel: u.care_level,
-              limitStart: u.certStart,
-              limitEnd: u.certEnd,
+              // 8222 項13/14 = 限度額適用期間。区分変更等で認定有効期間とズレるため
+              // limit_period_* (ほのぼの「適用期間（居宅ｻｰﾋﾞｽ区分）」) を優先、無ければ認定期間で代用
+              limitStart: u.limitPeriodStart ?? u.certStart,
+              limitEnd: u.limitPeriodEnd ?? u.certEnd,
               limitUnits: u.limitUnits,
               sakuseiKubun: kubunByUser.get(u.user_id) ?? "1",
               // 月途中の保険者変更 (転居)。分割材料 (splitSegments + 日別実績) が
@@ -595,6 +612,9 @@ export function KyotakuKokuhoSeikyuContent() {
                   (r.service_kind_code ?? "").trim() ||
                   SERVICE_KIND_CODE[r.service_type] ||
                   "",
+                // 項18 (指定/基準該当/地域密着型)。KY取込の実値。無ければ builder が
+                // 種類コードから導出 (71〜78=5 / 他=1)
+                shiteiKubun: r.shitei_kubun ?? null,
                 plannedUnits: r.planned_units ?? 0,
                 label: `${r.service_type}${r.provider_name ? ` (${r.provider_name})` : ""}`,
               })),

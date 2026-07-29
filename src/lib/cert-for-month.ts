@@ -26,6 +26,13 @@ export interface CertForMonth {
   certification_end_date: string | null;
   certification_status: string | null;
   service_limit_amount: number | null;
+  /**
+   * 限度額適用期間 (開始/終了)。区分変更等で認定有効期間と異なることがある
+   * (ほのぼの「適用期間（居宅ｻｰﾋﾞｽ区分）」由来。給付管理票 8222 項13/14 はこちらが正)。
+   * 列未適用 (kyotaku_limit_period.sql) の環境では null。
+   */
+  limit_period_start: string | null;
+  limit_period_end: string | null;
   care_office_id: string | null;
   care_office_number: string | null;
   care_office_name: string | null;
@@ -45,16 +52,20 @@ interface DbRow {
   certification_end_date: string | null;
   certification_status: string | null;
   service_limit_amount: number | null;
+  limit_period_start?: string | null;
+  limit_period_end?: string | null;
   care_office_id: string | null;
   care_office_number: string | null;
   care_office_name: string | null;
   effective_date: string | null;
 }
 
-const SELECT_COLS =
+const SELECT_COLS_BASE =
   "client_id, insurer_number, insurer_name, insured_number, care_level, copay_rate, " +
   "certification_start_date, certification_end_date, certification_status, service_limit_amount, " +
   "care_office_id, care_office_number, care_office_name, effective_date";
+// 限度額適用期間 (kyotaku_limit_period.sql)。列未適用の環境は 42703 → BASE で再試行
+const SELECT_COLS = SELECT_COLS_BASE + ", limit_period_start, limit_period_end";
 
 const PAGE = 1000;
 const IN_CHUNK = 50;
@@ -79,19 +90,27 @@ async function fetchCertRowsByClient(
   ids: string[],
 ): Promise<Map<string, DbRow[]>> {
   const byClient = new Map<string, DbRow[]>();
+  // limit_period_* 列未適用の環境は 42703 → 列なしで再試行 (モジュール内で1度だけ落とす)
+  let selectCols = SELECT_COLS;
   for (let i = 0; i < ids.length; i += IN_CHUNK) {
     const chunk = ids.slice(i, i + IN_CHUNK);
     let offset = 0;
     while (true) {
       const { data, error } = await supabase
         .from("client_insurance_records")
-        .select(SELECT_COLS)
+        .select(selectCols)
         .in("client_id", chunk)
         .order("client_id", { ascending: true })
         .order("certification_start_date", { ascending: false, nullsFirst: false })
         .order("effective_date", { ascending: false, nullsFirst: false })
         .range(offset, offset + PAGE - 1);
-      if (error) throw new Error(`認定情報の取得に失敗: ${error.message}`);
+      if (error) {
+        if (selectCols !== SELECT_COLS_BASE && (error.code === "42703" || /does not exist/i.test(error.message ?? ""))) {
+          selectCols = SELECT_COLS_BASE;
+          continue;
+        }
+        throw new Error(`認定情報の取得に失敗: ${error.message}`);
+      }
       const rows = (data ?? []) as unknown as DbRow[];
       for (const r of rows) {
         if (!byClient.has(r.client_id)) byClient.set(r.client_id, []);
@@ -115,6 +134,8 @@ function toCertForMonth(r: DbRow, isFallback: boolean): CertForMonth {
     certification_end_date: r.certification_end_date,
     certification_status: r.certification_status,
     service_limit_amount: r.service_limit_amount,
+    limit_period_start: r.limit_period_start ?? null,
+    limit_period_end: r.limit_period_end ?? null,
     care_office_id: r.care_office_id,
     care_office_number: r.care_office_number,
     care_office_name: r.care_office_name,

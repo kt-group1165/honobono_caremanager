@@ -67,6 +67,12 @@ export interface KyotakuSeikyuRow {
   care_level: string | null;
   certStart: string | null;
   certEnd: string | null;
+  /**
+   * 限度額適用期間 (給付管理票 8222 項13/14)。区分変更等で認定有効期間と異なる
+   * ことがある。null なら認定有効期間で代用 (両者一致のケース)。
+   */
+  limitPeriodStart: string | null;
+  limitPeriodEnd: string | null;
   /** 居宅サービス計画作成依頼(変更)届出年月日 (kaigo_care_plans)。無ければ null (認定開始日で代用) */
   requestDate: string | null;
   /** 介護支援専門員番号 (ケアマネ番号。kaigo_care_plans)。8124/8222 用。無ければ null */
@@ -220,6 +226,8 @@ interface CertDbRow {
   certification_start_date: string | null;
   certification_end_date: string | null;
   service_limit_amount: number | null;
+  limit_period_start: string | null;
+  limit_period_end: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -415,6 +423,8 @@ export async function fetchKyotakuClaimRows(
       certification_start_date: cert.certification_start_date,
       certification_end_date: cert.certification_end_date,
       service_limit_amount: cert.service_limit_amount,
+      limit_period_start: cert.limit_period_start,
+      limit_period_end: cert.limit_period_end,
     });
   }
 
@@ -471,6 +481,8 @@ export async function fetchKyotakuClaimRows(
       care_level: cert?.care_level ?? null,
       certStart: cert?.certification_start_date ?? null,
       certEnd: cert?.certification_end_date ?? null,
+      limitPeriodStart: cert?.limit_period_start ?? null,
+      limitPeriodEnd: cert?.limit_period_end ?? null,
       requestDate: planReqByUser.get(c.user_id) ?? null,
       careManagerNumber: careMgrByUser.get(c.user_id) ?? null,
       limitUnits: cert?.service_limit_amount ?? 0,
