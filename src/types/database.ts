@@ -205,6 +205,9 @@ export type Member = {
   email: string | null;
   phone: string | null;
   employment_type: "常勤" | "非常勤" | "パート" | null;
+  // パート区分 (employment_type=パート のみ意味を持つ)。migrations/applied_archive/members_part_category.sql
+  part_category: "社保" | "通常" | "扶養" | null;
+  fuyou_annual_limit: number | null; // 扶養パートの年収上限 (円/年)。NULL=既定 130 万
   hire_date: string | null;
   status: "active" | "inactive";
   // order-app 専用 UI 設定（kaigo-app からは参照不要）

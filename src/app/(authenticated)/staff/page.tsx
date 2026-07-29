@@ -21,6 +21,12 @@ export default async function StaffPage({
     .order("furigana", { nullsFirst: false });
   if (officeId) q = q.eq("member_offices.office_id", officeId);
   const { data } = await q;
-  const initialStaff: Staff[] = (officeId ? (data ?? []) : []) as Staff[];
+  // part_category / fuyou_annual_limit は migration 未適用でも SSR が壊れないよう
+  // ここでは取得せず null 埋め (mount 後の client 再フェッチが実値を持ってくる)
+  const initialStaff: Staff[] = (officeId ? (data ?? []) : []).map((s) => ({
+    ...(s as unknown as Omit<Staff, "part_category" | "fuyou_annual_limit">),
+    part_category: null,
+    fuyou_annual_limit: null,
+  }));
   return <StaffContent initialStaff={initialStaff} />;
 }

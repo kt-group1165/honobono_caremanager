@@ -22,6 +22,7 @@ import { MonthNav } from "../billing-visit/_shared/month-nav";
 import {
   loadPartTimePayroll,
   type LoadPartTimeResult,
+  type PartCategory,
 } from "@/lib/kaigo-payroll/load-part-time";
 
 const yen = (n: number) => "¥" + Math.round(n).toLocaleString("ja-JP");
@@ -30,6 +31,18 @@ const hm = (min: number) => {
   const m = min % 60;
   return m === 0 ? `${h}時間` : `${h}時間${m}分`;
 };
+
+type CategoryKey = PartCategory | "未設定";
+
+const CATEGORY_BADGE: Record<CategoryKey, string> = {
+  社保: "bg-purple-100 text-purple-700",
+  通常: "bg-violet-100 text-violet-700",
+  扶養: "bg-pink-100 text-pink-700",
+  未設定: "bg-gray-100 text-gray-500",
+};
+
+/** 通常パートの社保加入ライン (週 20h)。月実働を週平均に換算して判定 */
+const WEEKLY_HOURS_THRESHOLD = 20;
 
 export function StaffPayrollContent() {
   const supabase = useMemo(() => createClient(), []);
@@ -81,6 +94,49 @@ export function StaffPayrollContent() {
   }
 
   const reiwa = year - 2018;
+  const catOf = (staffId: string): CategoryKey =>
+    data?.partCategoryByStaff?.get(staffId) ?? "未設定";
+  // 区分別サマリ (人数/実働/総支給)。part_category 列未適用なら非表示
+  const categorySummary = data?.partCategoryByStaff
+    ? (["社保", "通常", "扶養", "未設定"] as CategoryKey[])
+        .map((cat) => {
+          const rows = data.result.byStaff.filter((s) => catOf(s.staffId) === cat);
+          return {
+            cat,
+            count: rows.length,
+            minutes: rows.reduce((a, s) => a + s.totalMinutes, 0),
+            gross: rows.reduce((a, s) => a + s.grossTotal, 0),
+          };
+        })
+        .filter((g) => g.count > 0)
+    : null;
+  // 通常パート: 週平均実働が社保加入ライン (20h) を超えていないか
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const week20Warnings = data?.partCategoryByStaff
+    ? data.result.byStaff
+        .filter((s) => catOf(s.staffId) === "通常")
+        .map((s) => ({
+          name: s.staffName,
+          weeklyHours: s.totalMinutes / 60 / (daysInMonth / 7),
+        }))
+        .filter((w) => w.weeklyHours >= WEEKLY_HOURS_THRESHOLD)
+    : [];
+  // 区分と給与設定 (社会保険) の不一致
+  const siMismatches =
+    data && data.socialInsuranceEnabled && data.partCategoryByStaff
+      ? data.result.byStaff
+          .map((s) => ({ s, cat: catOf(s.staffId) }))
+          .filter(
+            ({ s, cat }) =>
+              (cat === "社保" && !s.socialInsurance) ||
+              ((cat === "通常" || cat === "扶養") && s.socialInsurance),
+          )
+          .map(({ s, cat }) =>
+            cat === "社保"
+              ? `${s.staffName}: 区分=社保 だが給与設定は未加入 (通信手当が付いています)`
+              : `${s.staffName}: 区分=${cat} だが給与設定は社保加入`,
+          )
+      : [];
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-4">
@@ -174,6 +230,94 @@ export function StaffPayrollContent() {
             </div>
           </div>
 
+          {/* 区分別サマリ (社保/通常/扶養パート) */}
+          {categorySummary && categorySummary.length > 0 && (
+            <div className="mb-4 flex flex-wrap gap-2 text-sm">
+              {categorySummary.map((g) => (
+                <div key={g.cat} className="rounded-lg border bg-white px-3 py-2">
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${CATEGORY_BADGE[g.cat]}`}
+                  >
+                    {g.cat === "未設定" ? "区分未設定" : `${g.cat}パート`}
+                  </span>
+                  <div className="mt-1 flex items-baseline gap-2">
+                    <span className="font-bold text-gray-800">{g.count}名</span>
+                    <span className="font-mono text-xs text-gray-500">{hm(g.minutes)}</span>
+                    <span className="font-mono text-xs text-gray-500">{yen(g.gross)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 不一致・週20h 警告 */}
+          {(siMismatches.length > 0 || week20Warnings.length > 0) && (
+            <div className="mb-3 space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              {week20Warnings.map((w) => (
+                <div key={w.name} className="flex items-start gap-1.5">
+                  <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                  <span>
+                    <span className="font-semibold">{w.name}</span>: 通常パートで週平均{" "}
+                    {w.weeklyHours.toFixed(1)}h — 社保加入ライン (週20h) 超の稼働です
+                  </span>
+                </div>
+              ))}
+              {siMismatches.map((msg) => (
+                <div key={msg} className="flex items-start gap-1.5">
+                  <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                  <span>設定不一致 — {msg}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 扶養パート 年収着地予測 */}
+          {data.fuyou && data.fuyou.length > 0 && (
+            <div className="mb-4 rounded-lg border bg-white p-3">
+              <div className="mb-2 flex items-baseline justify-between">
+                <h2 className="text-sm font-bold text-gray-800">扶養パート 年収の壁</h2>
+                <span className="text-[10px] text-gray-400">
+                  参考値: この事業所の時給支給分のみ (手当・兼務先を含まず)
+                </span>
+              </div>
+              <div className="space-y-2">
+                {data.fuyou.map((f) => {
+                  const ratio = f.limit > 0 ? f.ytdPay / f.limit : 0;
+                  const projRatio = f.limit > 0 ? f.projection / f.limit : 0;
+                  const status =
+                    ratio >= 1
+                      ? { label: "上限超過", cls: "bg-red-100 text-red-700", bar: "bg-red-500" }
+                      : projRatio >= 1
+                        ? { label: "着地予測 超過", cls: "bg-amber-100 text-amber-700", bar: "bg-amber-500" }
+                        : ratio >= 0.8
+                          ? { label: "上限接近", cls: "bg-amber-50 text-amber-700", bar: "bg-amber-400" }
+                          : { label: "余裕あり", cls: "bg-green-100 text-green-700", bar: "bg-green-500" };
+                  return (
+                    <div key={f.staffId} className="flex items-center gap-3 text-sm">
+                      <span className="w-28 shrink-0 truncate font-medium text-gray-800">
+                        {f.staffName || "(名称未取得)"}
+                      </span>
+                      <span
+                        className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${status.cls}`}
+                      >
+                        {status.label}
+                      </span>
+                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
+                        <div
+                          className={`h-full ${status.bar}`}
+                          style={{ width: `${Math.min(100, Math.round(ratio * 100))}%` }}
+                        />
+                      </div>
+                      <span className="w-56 shrink-0 whitespace-nowrap text-right font-mono text-xs text-gray-600">
+                        累計 {yen(f.ytdPay)} / {yen(f.limit)}（着地予測 {yen(f.projection)}）
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* 職員別 */}
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full min-w-[720px] text-sm">
@@ -198,6 +342,7 @@ export function StaffPayrollContent() {
                       open={open}
                       onToggle={() => toggle(s.staffId)}
                       s={s}
+                      category={data.partCategoryByStaff ? catOf(s.staffId) : null}
                     />
                   );
                 })}
@@ -221,10 +366,12 @@ function FragmentRow({
   s,
   open,
   onToggle,
+  category,
 }: {
   s: LoadPartTimeResult["result"]["byStaff"][number];
   open: boolean;
   onToggle: () => void;
+  category: CategoryKey | null;
 }) {
   const yen = (n: number) => "¥" + Math.round(n).toLocaleString("ja-JP");
   return (
@@ -239,6 +386,13 @@ function FragmentRow({
             {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             {s.staffName || "(名称未取得)"}
           </button>
+          {category && category !== "未設定" && (
+            <span
+              className={`ml-2 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${CATEGORY_BADGE[category]}`}
+            >
+              {category}
+            </span>
+          )}
           {s.unmappedCount > 0 && (
             <span className="ml-2 rounded bg-amber-100 px-1 py-0.5 text-[10px] text-amber-700">
               未割当 {s.unmappedCount} 件

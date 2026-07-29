@@ -17,6 +17,24 @@ import {
   type WageCategory,
 } from "./part-time";
 
+export type PartCategory = "社保" | "通常" | "扶養";
+
+/** 扶養パートの年収上限 既定値 (円/年)。members.fuyou_annual_limit で人別上書き可 */
+export const DEFAULT_FUYOU_ANNUAL_LIMIT = 1_300_000;
+
+/** 扶養パート 1 名の年収着地予測 (この事業所の時給支給分のみの参考値) */
+export interface FuyouProjection {
+  staffId: string;
+  staffName: string;
+  /** 1月〜選択月の時給支給累計 (手当除く) */
+  ytdPay: number;
+  /** 年収上限 (人別上書き or 既定 130 万) */
+  limit: number;
+  /** 単純按分の年間着地予測 = ytd / 経過月 × 12 */
+  projection: number;
+  monthsElapsed: number;
+}
+
 export interface LoadPartTimeResult {
   result: PartTimePayrollResult;
   categories: WageCategory[];
@@ -26,6 +44,12 @@ export interface LoadPartTimeResult {
   settingsMissing: boolean;
   /** 対象パート職員数 */
   partStaffCount: number;
+  /** パート区分 (members.part_category)。列未適用なら undefined (= 区分 UI 非表示) */
+  partCategoryByStaff?: Map<string, PartCategory | null>;
+  /** 扶養パートの年収着地予測 (区分=扶養 の職員のみ) */
+  fuyou?: FuyouProjection[];
+  /** kaigo_payroll_staff_settings (社保加入) が読めた = 区分との不一致警告が可能 */
+  socialInsuranceEnabled: boolean;
 }
 
 interface ScheduleRow {
@@ -218,12 +242,12 @@ export async function loadPartTimePayroll(
   if (os) cancelUnitPrice = (os as { cancel_unit_price: number }).cancel_unit_price ?? 0;
 
   let socialInsuranceByStaff: Map<string, boolean> | undefined;
-  const partIds = [...partSet, ...cancelCountByStaff.keys()];
+  const partIds = [...new Set([...partSet, ...cancelCountByStaff.keys()])];
   if (partIds.length > 0) {
     const { data: ss, error: sse } = await supabase
       .from("kaigo_payroll_staff_settings")
       .select("member_id, social_insurance")
-      .in("member_id", [...new Set(partIds)]);
+      .in("member_id", partIds);
     if (!sse || !isMissing(sse.code)) {
       // テーブルが在る (未適用でなければ) → 通信手当を有効化 (行が無い職員は既定=未加入)
       socialInsuranceByStaff = new Map();
@@ -234,6 +258,101 @@ export async function loadPartTimePayroll(
         socialInsuranceByStaff.set(s.member_id, s.social_insurance);
       }
     }
+  }
+
+  // 7) パート区分 (members.part_category)。列未適用 (42703) なら区分機能ごと OFF
+  let partCategoryByStaff: Map<string, PartCategory | null> | undefined;
+  const fuyouLimitByStaff = new Map<string, number | null>();
+  if (partIds.length > 0) {
+    const { data: pc, error: pce } = await supabase
+      .from("members")
+      .select("id, part_category, fuyou_annual_limit")
+      .in("id", partIds);
+    if (pce && isMissing(pce.code)) {
+      partCategoryByStaff = undefined;
+    } else if (pce) {
+      throw new Error("パート区分の取得に失敗: " + pce.message);
+    } else {
+      partCategoryByStaff = new Map();
+      for (const m of (pc ?? []) as {
+        id: string;
+        part_category: PartCategory | null;
+        fuyou_annual_limit: number | null;
+      }[]) {
+        partCategoryByStaff.set(m.id, m.part_category);
+        fuyouLimitByStaff.set(m.id, m.fuyou_annual_limit);
+      }
+    }
+  }
+
+  // 8) 扶養パートの年収着地予測 — 1月〜選択月の確定実績を同じ計算式で累計。
+  //    自事業所の時給支給分のみ (兼務先・手当は含まない) の参考値。
+  let fuyou: FuyouProjection[] | undefined;
+  const fuyouIds = partCategoryByStaff
+    ? [...partCategoryByStaff.entries()]
+        .filter(([, c]) => c === "扶養")
+        .map(([id]) => id)
+    : [];
+  if (fuyouIds.length > 0) {
+    const fuyouSet = new Set(fuyouIds);
+    const ytdStart = `${year}-01-01`;
+    // PostgREST は 1000 行 cap なので range でページング
+    const ytdRows: ScheduleRow[] = [];
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const { data: page, error: pe } = await supabase
+        .from("kaigo_visit_schedule")
+        .select(
+          "visit_date, service_type, staff_id, staff_id_2, staff_id_3, start_time, end_time, staff2_start_time, staff2_end_time, staff3_start_time, staff3_end_time",
+        )
+        .eq("office_id", officeId)
+        .eq("status", "completed")
+        .gte("visit_date", ytdStart)
+        .lt("visit_date", end)
+        .order("visit_date")
+        .range(from, from + PAGE - 1);
+      if (pe) throw new Error("扶養累計の実績取得に失敗: " + pe.message);
+      const rows = (page ?? []) as ScheduleRow[];
+      ytdRows.push(...rows);
+      if (rows.length < PAGE) break;
+    }
+    const ytdVisits: PartTimeVisit[] = [];
+    const pushYtd = (
+      staffId: string | null,
+      st: string | null,
+      et: string | null,
+      r: ScheduleRow,
+    ) => {
+      if (!staffId || !fuyouSet.has(staffId)) return;
+      ytdVisits.push({
+        staffId,
+        serviceType: r.service_type ?? "(未設定)",
+        minutes: minutesBetween(st, et),
+        date: r.visit_date,
+      });
+    };
+    for (const r of ytdRows) {
+      pushYtd(r.staff_id, r.start_time, r.end_time, r);
+      pushYtd(r.staff_id_2, r.staff2_start_time ?? r.start_time, r.staff2_end_time ?? r.end_time, r);
+      pushYtd(r.staff_id_3, r.staff3_start_time ?? r.start_time, r.staff3_end_time ?? r.end_time, r);
+    }
+    const ytdResult = calcPartTimePayroll(ytdVisits, mappings, categories);
+    const ytdPayByStaff = new Map(
+      ytdResult.byStaff.map((s) => [s.staffId, s.totalPay]),
+    );
+    fuyou = fuyouIds.map((id) => {
+      const ytdPay = ytdPayByStaff.get(id) ?? 0;
+      const limit = fuyouLimitByStaff.get(id) ?? DEFAULT_FUYOU_ANNUAL_LIMIT;
+      return {
+        staffId: id,
+        staffName: memberById.get(id)?.name ?? "",
+        ytdPay,
+        limit,
+        projection: Math.round((ytdPay / month) * 12),
+        monthsElapsed: month,
+      };
+    });
+    fuyou.sort((a, b) => b.projection / b.limit - a.projection / a.limit);
   }
 
   const serviceTypesInData = [
@@ -251,5 +370,8 @@ export async function loadPartTimePayroll(
     serviceTypesInData,
     settingsMissing,
     partStaffCount: partSet.size,
+    partCategoryByStaff,
+    fuyou,
+    socialInsuranceEnabled: socialInsuranceByStaff !== undefined,
   };
 }

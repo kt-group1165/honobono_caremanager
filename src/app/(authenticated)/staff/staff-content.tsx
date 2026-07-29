@@ -18,6 +18,8 @@ import {
 import { useBusinessType } from "@/lib/business-type-context";
 
 type EmploymentType = "常勤" | "非常勤" | "パート";
+// パート区分 (employment_type=パート のみ)。社保=稼働アップ対象 / 通常=週20h監視 / 扶養=年収の壁管理
+type PartCategory = "社保" | "通常" | "扶養";
 type StaffStatus = "active" | "inactive";
 // 給与形態は payroll_employees.salary_type からの反映値。値域は固定せず NULL 許容。
 type SalaryType = string | null;
@@ -34,6 +36,8 @@ export interface Staff {
   email: string;
   phone: string;
   employment_type: EmploymentType;
+  part_category: PartCategory | null;
+  fuyou_annual_limit: number | null;
   salary_type: SalaryType;
   hire_date: string;
   status: StaffStatus;
@@ -52,6 +56,8 @@ const ROLES = [
 ];
 
 const EMPLOYMENT_TYPES: EmploymentType[] = ["常勤", "非常勤", "パート"];
+
+const PART_CATEGORIES: PartCategory[] = ["社保", "通常", "扶養"];
 
 type StaffForm = Omit<Staff, "id" | "tenant_id" | "created_at">;
 
@@ -85,6 +91,8 @@ const EMPTY_FORM: StaffForm = {
   email: "",
   phone: "",
   employment_type: "常勤",
+  part_category: null,
+  fuyou_annual_limit: null,
   salary_type: null,
   hire_date: "",
   status: "active",
@@ -108,6 +116,8 @@ export function StaffContent({
   const [form, setForm] = useState<StaffForm>(EMPTY_FORM);
   // Phase 9-6: 既定は active のみ表示。toggle ON で退職者も含めて再フェッチ。
   const [includeInactive, setIncludeInactive] = useState(false);
+  // members_part_category.sql 未適用でも画面が壊れないように、列欠損 (42703) を検知して退避
+  const [partColumnMissing, setPartColumnMissing] = useState(false);
   // 招待発行 modal: form / 結果 / 進行状態
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [inviting, setInviting] = useState(false);
@@ -134,17 +144,36 @@ export function StaffContent({
     // 自事業所 (currentOfficeId) に primary office として紐付く職員のみ取得
     // (multi-office 兼務職員は user_offices を経由して見せたい場合に拡張する)
     // Phase 9 close: members.office_id DROP 済 → member_offices junction 経由で絞り込み
-    let q = supabase
-      .from("members")
-      .select("id, tenant_id, name, furigana, role, qualifications, email, phone, employment_type, salary_type, hire_date, status, created_at, member_offices!inner(office_id)")
-      .eq("member_offices.office_id", currentOfficeId)
-      .is("deleted_at", null);
-    if (!includeInactive) q = q.eq("status", "active");
-    const { data, error } = await q.order("furigana", { nullsFirst: false });
+    const buildQuery = (withPartCols: boolean) => {
+      const cols = withPartCols
+        ? "id, tenant_id, name, furigana, role, qualifications, email, phone, employment_type, part_category, fuyou_annual_limit, salary_type, hire_date, status, created_at, member_offices!inner(office_id)"
+        : "id, tenant_id, name, furigana, role, qualifications, email, phone, employment_type, salary_type, hire_date, status, created_at, member_offices!inner(office_id)";
+      let q = supabase
+        .from("members")
+        .select(cols)
+        .eq("member_offices.office_id", currentOfficeId)
+        .is("deleted_at", null);
+      if (!includeInactive) q = q.eq("status", "active");
+      return q.order("furigana", { nullsFirst: false });
+    };
+    let { data, error } = await buildQuery(true);
+    if (error?.code === "42703") {
+      // part_category 列が未適用 (migration 前) → 旧列のみで再取得
+      setPartColumnMissing(true);
+      ({ data, error } = await buildQuery(false));
+    } else if (!error) {
+      setPartColumnMissing(false);
+    }
     if (error) {
-      toast.error("職員データの取得に失敗しました");
+      toast.error("職員データの取得に失敗しました: " + error.message);
     } else {
-      setStaffList((data || []) as Staff[]);
+      setStaffList(
+        ((data || []) as unknown as Staff[]).map((s) => ({
+          ...s,
+          part_category: s.part_category ?? null,
+          fuyou_annual_limit: s.fuyou_annual_limit ?? null,
+        })),
+      );
     }
     setLoading(false);
   }, [supabase, currentOfficeId, includeInactive]);
@@ -351,6 +380,8 @@ export function StaffContent({
       email: staff.email,
       phone: staff.phone,
       employment_type: staff.employment_type,
+      part_category: staff.part_category,
+      fuyou_annual_limit: staff.fuyou_annual_limit,
       salary_type: staff.salary_type,
       hire_date: staff.hire_date,
       status: staff.status,
@@ -363,9 +394,21 @@ export function StaffContent({
     if (!editingStaff) return;
     setSaving(true);
     try {
+      // パート以外に区分が残らないように保存時に浄化。列未適用時は新列を送らない
+      const payload: Partial<StaffForm> = { ...form };
+      if (payload.employment_type !== "パート") {
+        payload.part_category = null;
+        payload.fuyou_annual_limit = null;
+      } else if (payload.part_category !== "扶養") {
+        payload.fuyou_annual_limit = null;
+      }
+      if (partColumnMissing) {
+        delete payload.part_category;
+        delete payload.fuyou_annual_limit;
+      }
       const { error } = await supabase
         .from("members")
-        .update(form)
+        .update(payload)
         .eq("id", editingStaff.id);
       if (error) throw error;
       toast.success("職員情報を更新しました");
@@ -420,15 +463,23 @@ export function StaffContent({
     [tenantStaff, searchQuery]
   );
 
-  const employmentBadge = (type: EmploymentType) => {
+  const employmentBadge = (type: EmploymentType, partCategory: PartCategory | null) => {
     const map: Record<EmploymentType, string> = {
       常勤: "bg-blue-100 text-blue-700",
       非常勤: "bg-yellow-100 text-yellow-700",
       パート: "bg-purple-100 text-purple-700",
     };
+    // パートは区分を併記 (社保=紫 / 通常=すみれ / 扶養=桃)。未設定は無印パート
+    const partMap: Record<PartCategory, string> = {
+      社保: "bg-purple-100 text-purple-700",
+      通常: "bg-violet-100 text-violet-700",
+      扶養: "bg-pink-100 text-pink-700",
+    };
+    const cls = type === "パート" && partCategory ? partMap[partCategory] : map[type];
+    const label = type === "パート" && partCategory ? `パート・${partCategory}` : type;
     return (
-      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${map[type]}`}>
-        {type}
+      <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
+        {label}
       </span>
     );
   };
@@ -548,7 +599,7 @@ export function StaffContent({
                     <td className="px-4 py-3 text-gray-500 max-w-[140px] truncate" title={staff.qualifications}>
                       {staff.qualifications || "—"}
                     </td>
-                    <td className="px-4 py-3">{employmentBadge(staff.employment_type)}</td>
+                    <td className="px-4 py-3">{employmentBadge(staff.employment_type, staff.part_category)}</td>
                     <td className="px-4 py-3">{salaryBadge(staff.salary_type)}</td>
                     <td className="px-4 py-3 text-gray-600">{staff.hire_date || "—"}</td>
                     <td className="px-4 py-3 text-gray-500">
@@ -687,9 +738,16 @@ export function StaffContent({
                   <select
                     required
                     value={form.employment_type}
-                    onChange={(e) =>
-                      setForm({ ...form, employment_type: e.target.value as EmploymentType })
-                    }
+                    onChange={(e) => {
+                      const t = e.target.value as EmploymentType;
+                      setForm({
+                        ...form,
+                        employment_type: t,
+                        // パート以外に区分を残さない
+                        part_category: t === "パート" ? form.part_category : null,
+                        fuyou_annual_limit: t === "パート" ? form.fuyou_annual_limit : null,
+                      });
+                    }}
                     className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     {EMPLOYMENT_TYPES.map((t) => (
@@ -697,6 +755,56 @@ export function StaffContent({
                     ))}
                   </select>
                 </div>
+                {form.employment_type === "パート" && !partColumnMissing && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      パート区分
+                    </label>
+                    <select
+                      value={form.part_category ?? ""}
+                      onChange={(e) => {
+                        const c = (e.target.value || null) as PartCategory | null;
+                        setForm({
+                          ...form,
+                          part_category: c,
+                          fuyou_annual_limit: c === "扶養" ? form.fuyou_annual_limit : null,
+                        });
+                      }}
+                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="">未設定</option>
+                      {PART_CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c === "社保" ? "社保 (社会保険加入)" : c === "通常" ? "通常 (未加入・扶養外)" : "扶養 (年収の壁あり)"}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {form.employment_type === "パート" &&
+                  form.part_category === "扶養" &&
+                  !partColumnMissing && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      扶養 年収上限 (円/年)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={10000}
+                      value={form.fuyou_annual_limit ?? ""}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          fuyou_annual_limit:
+                            e.target.value === "" ? null : Number(e.target.value),
+                        })
+                      }
+                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="未入力なら既定 1,300,000"
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     入職日
