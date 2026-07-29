@@ -203,21 +203,50 @@ async function main() {
   // 公費 (生活保護 法別12): 公費全居宅 の当月有効行を client_kohi_records へ。
   //   公費単独(H番号)利用者の伝送警告(公費番号未登録)を防ぐ。負担者=法別12+実施機関6桁。
   const kohi = rd(CSV_KOHI); const Hko = kohi[0]; const gko = (n) => Hko.indexOf(n);
-  const kByUser = new Map();
+  const kByUser = new Map(), kByName = new Map(), kohiNumsByName = new Map();
   for (const c of kohi.slice(1)) {
     const cs = iso(c[gko("有効期限－開始日")]), ce = iso(c[gko("有効期限－終了日")]);
     if (!(cs && ce && cs <= MONTH_END && ce >= MONTH_START)) continue;
-    const un = num(c[gko("利用者番号")]); if (!un || kByUser.has(un)) continue;
     const futan6 = (c[gko("負担者番号")] || "").trim().replace(/\D/g, "");
-    kByUser.set(un, { futansha: futan6.length === 6 ? "12" + futan6 : futan6.padStart(8, "0"), jukyusha: (c[gko("受給者番号")] || "").trim(), start: cs, end: ce, honnin: Number((c[gko("本人支払額")] || "0").replace(/\D/g, "")) || 0 });
+    const rec = { futansha: futan6.length === 6 ? "12" + futan6 : futan6.padStart(8, "0"), jukyusha: (c[gko("受給者番号")] || "").trim(), start: cs, end: ce, honnin: Number((c[gko("本人支払額")] || "0").replace(/\D/g, "")) || 0 };
+    // 公費CSV の利用者番号は サービス計 と体系が違うことがある (袖ヶ浦 吉岡みち子=5957 vs
+    // サービス計の9桁)。氏名索引も持ち、番号で引けない利用者を救済する。
+    // ただし公費番号は請求内容そのものなので、**同姓同名がいる氏名では使わない**
+    const nm = nameKey(c[gko("利用者名")]);
+    const un = num(c[gko("利用者番号")]);
+    if (nm) {
+      if (!kohiNumsByName.has(nm)) kohiNumsByName.set(nm, new Set());
+      kohiNumsByName.get(nm).add(un);
+      if (!kByName.has(nm)) kByName.set(nm, rec);
+    }
+    if (!un || kByUser.has(un)) continue;
+    kByUser.set(un, rec);
   }
-  // 当事業所 client の user_number → id (実番号。リナンバー分は一致しないが公費単独は通常素番号)
-  const cidByNum = new Map();
+  // 当事業所 client の user_number / 氏名 → id (氏名は当事業所内で一意な場合のみ)
+  const cidByNum = new Map(), cidByName = new Map(), cidNameDup = new Set();
   const allCids = [...new Set(Object.values(mapping))];
-  for (let i = 0; i < allCids.length; i += 200) { const { data } = await sb.from("clients").select("id, user_number").in("id", allCids.slice(i, i + 200)); for (const c of data) cidByNum.set(String(c.user_number), c.id); }
+  for (let i = 0; i < allCids.length; i += 200) {
+    const { data } = await sb.from("clients").select("id, user_number, name").in("id", allCids.slice(i, i + 200));
+    for (const c of data) {
+      cidByNum.set(String(c.user_number), c.id);
+      const nk = nameKey(c.name);
+      if (!nk) continue;
+      if (cidByName.has(nk)) cidNameDup.add(nk); else cidByName.set(nk, c.id);
+    }
+  }
+  // 番号で引けた分 + 氏名でしか引けない分 をマージ (番号優先)
+  const kohiTargets = new Map(); // cid → rec
+  for (const [un, k] of kByUser) { const cid = cidByNum.get(un); if (cid) kohiTargets.set(cid, k); }
+  let kohiNameAmbig = 0;
+  for (const [nm, k] of kByName) {
+    const cid = cidByName.get(nm);
+    if (!cid || kohiTargets.has(cid)) continue;
+    if (cidNameDup.has(nm) || (kohiNumsByName.get(nm)?.size ?? 0) > 1) { kohiNameAmbig++; continue; }
+    kohiTargets.set(cid, k);
+  }
+  if (kohiNameAmbig) console.log(`  ⚠ 公費 氏名突合を見送り: ${kohiNameAmbig}件 (同姓同名のため。利用者番号での登録が必要)`);
   let kohiIns = 0;
-  for (const [un, k] of kByUser) {
-    const cid = cidByNum.get(un); if (!cid) continue;
+  for (const [cid, k] of kohiTargets) {
     await sb.from("client_kohi_records").delete().eq("client_id", cid).eq("kohi_hobetsu", "12").eq("notes", MARK);
     const { error } = await sb.from("client_kohi_records").insert({ tenant_id: TENANT, client_id: cid, kohi_hobetsu: "12", futansha_number: k.futansha, jukyusha_number: k.jukyusha, start_date: k.start, end_date: k.end, priority: 1, honnin_futan: k.honnin, notes: MARK });
     if (!error) kohiIns++;
