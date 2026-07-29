@@ -694,7 +694,6 @@ async function main() {
     }
     if (diffs.length === 0) matchCount += 1;
     else {
-      const nm2 = nJ121.get(jukyu);
       mismatches.push(`  受給者 ${jukyu} (muni ${(n ?? h)?.muni}): \n      - ${diffs.join("\n      - ")}`);
     }
   }

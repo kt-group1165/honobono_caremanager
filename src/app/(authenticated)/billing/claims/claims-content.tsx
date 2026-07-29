@@ -713,6 +713,7 @@ export function ClaimsContent({
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
 
+  const currentOfficeId = currentOffice?.id;
   const fetchClaims = useCallback(async () => {
     setLoading(true);
     try {
@@ -731,14 +732,14 @@ export function ClaimsContent({
       //   billing_month だけで取ると他事業所のレセプトが混ざり、全件確定/CSV出力も
       //   他事業所に及んでしまう (多事業所)。
       const rows: ClaimRow[] = [];
-      if (currentOffice?.id) {
+      if (currentOfficeId) {
         const officeClientIds: string[] = [];
         let fromA = 0;
         while (true) {
           const { data, error } = await supabase
             .from("client_office_assignments")
             .select("client_id")
-            .eq("office_id", currentOffice.id)
+            .eq("office_id", currentOfficeId)
             .order("client_id", { ascending: true })
             .range(fromA, fromA + 999);
           if (error) throw error;
@@ -789,7 +790,7 @@ export function ClaimsContent({
     } finally {
       setLoading(false);
     }
-  }, [supabase, billingMonth, currentOffice?.id]);
+  }, [supabase, billingMonth, currentOfficeId]);
 
   // initial render は server からの initialClaims を使用、月切替時のみ refetch
   const isInitialMount = useRef(true);
