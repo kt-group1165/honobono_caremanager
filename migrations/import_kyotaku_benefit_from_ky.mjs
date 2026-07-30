@@ -41,6 +41,7 @@ async function main() {
   // KY 8222 (対象年月=YM・明細行のみ) を per (被保番|保険者, 提供番号, 種類) → planned_units
   const ky = sjis.decode(readFileSync(path.isAbsolute(KY) ? KY : path.join(KAIGO, KY))).split(/\r?\n/).filter((l) => l).map(pl).filter((r) => r[2] === "8222" && r[3] === YM && r[9] !== "99");
   const agg = new Map();
+  const limitPeriod = new Map(); // 被保番|保険者 → { start, end } (YYYYMM)
   for (const r of ky) {
     const ins = padIns(r[10]), insurer = padInsurer(r[4].replace(/^0+/, ""));
     const prov = (r[18] || "").trim(), kind = (r[20] || "").trim(), units = Number(r[21] || 0) || 0;
@@ -50,6 +51,12 @@ async function main() {
     const k = `${ins}|${insurer}|${prov}|${kind}`;
     if (!agg.has(k)) agg.set(k, { ins, insurer, prov, kind, kubun, units: 0 });
     agg.get(k).units += units;
+    // ⚠ 限度額適用期間 (項13/14) は **KY から取り込まない**。
+    //   伝送を取込元にすると、その伝送と突き合わせても循環で検証にならない
+    //   ([[feedback]] 「伝送は取込元にせず検証の正解に使う」)。適用期間はマスタCSVの
+    //   「適用期間（居宅ｻｰﾋﾞｽ区分）」が正本 (STEP1 で取込済)。
+    //   マスタが対象月の請求後に更新された利用者は一致しないが、それは
+    //   データの取得時点の問題として残す (システムの誤りではない)。
   }
   console.log(`KY 8222 明細: ${agg.size} 行`);
 
@@ -83,5 +90,32 @@ async function main() {
     ins += chunk.length;
   }
   console.log(`既存削除 ${del} / 挿入 ${ins} 完了${dropShiteiKubun ? " (shitei_kubun なし)" : ""}`);
+
+  // 限度額適用期間 (8222 項13/14) を KY の値で上書き。YYYYMM なので開始=月初/終了=月末。
+  //   8222 の出力は YYYYMM に丸めるため日の精度は不要 (build-kyotaku ymNum)。
+  const lastDay = (y, m) => new Date(y, m, 0).getDate();
+  const toStart = (ym) => (/^\d{6}$/.test(ym) ? `${ym.slice(0, 4)}-${ym.slice(4)}-01` : null);
+  const toEnd = (ym) => {
+    if (!/^\d{6}$/.test(ym)) return null;
+    const y = Number(ym.slice(0, 4)), m = Number(ym.slice(4));
+    return `${ym.slice(0, 4)}-${ym.slice(4)}-${String(lastDay(y, m)).padStart(2, "0")}`;
+  };
+  let lpUpd = 0, lpSkip = 0;
+  for (const [key, v] of limitPeriod) {
+    const cid = map[key];
+    if (!cid) { lpSkip++; continue; }
+    const s = toStart(v.start), e = toEnd(v.end);
+    if (!s || !e) { lpSkip++; continue; }
+    const [insNum, insurerNum] = key.split("|");
+    const { error, count } = await sb.from("client_insurance_records")
+      .update({ limit_period_start: s, limit_period_end: e }, { count: "exact" })
+      .eq("client_id", cid).eq("insured_number", insNum).eq("insurer_number", insurerNum);
+    if (error) {
+      if (/limit_period/.test(error.message)) { console.warn("⚠ limit_period 列が未適用のためスキップ"); break; }
+      console.error("限度額適用期間の更新失敗:", error.message); process.exit(1);
+    }
+    lpUpd += count || 0;
+  }
+  console.log(`限度額適用期間 (KY項13/14) 更新 ${lpUpd} 件${lpSkip ? ` / スキップ ${lpSkip}` : ""}`);
 }
 main().catch((e) => { console.error("ERROR:", e.message); process.exit(1); });

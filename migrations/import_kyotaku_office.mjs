@@ -82,7 +82,10 @@ async function main() {
     const cur = hokenByKey.get(key);
     // 限度額適用期間 (8222 項13/14)。区分変更等で認定有効期間と異なることがある → 別列で保持
     const rec = { limit: Number((c[hLimit] || "").replace(/[^\d]/g, "")) || 0, copay: copayFromRate(c[hRate]), name: (c[hName] || "").trim(),
-      limitStart: iso(c[hLs]), limitEnd: iso(c[hLe]), covers };
+      limitStart: iso(c[hLs]), limitEnd: iso(c[hLe]),
+      // マスタ側の認定終了。サービス計 (対象月の実績データ) と一致しなければ
+      // 「対象月の請求後にマスタが更新された」と判断する材料になる
+      mCertEnd: ce, covers };
     if (!cur || (covers && !cur.covers)) hokenByKey.set(key, rec);
   }
 
@@ -112,7 +115,11 @@ async function main() {
 
   // 4) 既存clients (被保番+保険者 / 利用者番号)
   const byIns = new Map(), byNum = new Map();
-  for (let f = 0; ; f += 1000) { const { data, error } = await sb.from("clients").select("id,user_number,insured_number,insurer_number").range(f, f + 999); if (error) throw error; for (const c of data) { if (c.insured_number) byIns.set(`${c.insured_number}|${c.insurer_number || ""}`, c); byNum.set(String(c.user_number), c); } if (data.length < 1000) break; }
+  // ⚠ order 無しの range ページングは行の取りこぼし/重複が起きる (PostgREST/Postgres は
+  //   ORDER BY が無いと順序を保証しない)。実行ごとに別 client にマッチして重複割当が
+  //   できた実例あり (姉ム 角文枝)。必ず order を付ける。
+  //   さらに同一被保番の client が複数ある場合は **古い方を優先** して安定させる。
+  for (let f = 0; ; f += 1000) { const { data, error } = await sb.from("clients").select("id,user_number,insured_number,insurer_number,created_at").order("created_at", { ascending: true }).order("id", { ascending: true }).range(f, f + 999); if (error) throw error; for (const c of data) { if (c.insured_number) { const k = `${c.insured_number}|${c.insurer_number || ""}`; if (!byIns.has(k)) byIns.set(k, c); } if (!byNum.has(String(c.user_number))) byNum.set(String(c.user_number), c); } if (data.length < 1000) break; }
 
   // 利用者番号が複数被保番で共有 (ゴミ番号) 検出
   const numShared = new Set();
@@ -129,7 +136,14 @@ async function main() {
     const rec = { ...u, name: (b?.name) || h.name || `(氏名不明 ${u.insured})`, furigana: b?.furigana || null,
       gender: u.gender || b?.gender || null, birth: u.birth || b?.birth || null,
       postal: b?.postal || null, address: b?.address || null, phone: b?.phone || null, mobile: b?.mobile || null,
-      limit: h.limit || 0, copay: h.copay || "1", limitStart: h.limitStart || null, limitEnd: h.limitEnd || null };
+      limit: h.limit || 0, copay: h.copay || "1",
+      // 限度額適用期間 (8222 項13/14) はマスタCSVの「適用期間（居宅ｻｰﾋﾞｽ区分）」を初期値に。
+      //   認定期間とは別物で、認定より短い場合 (区分変更) も長い場合 (K姉 1000042631:
+      //   認定2026/10/31 に対し適用2028/10/31) もある。
+      //   ただしマスタは出力時点のスナップショットで、対象月の請求後に認定更新が入ると
+      //   値がずれる (姉ム 1000064668)。CSV だけでは対象月時点の値を復元できないため、
+      //   **正確な値は import_kyotaku_benefit_from_ky.mjs が KY伝送(項13/14)から上書きする**。
+      limitStart: h.limitStart || null, limitEnd: h.limitEnd || null };
     const ex = byIns.get(key);
     if (ex) { reuse.push({ ...rec, id: ex.id }); continue; }
     let un = u.userNo;
