@@ -6,7 +6,8 @@
  * 上段: 事業所単位の加減算 (特定事業所加算区分・医療介護連携・地域区分/単価・
  *       所属スタッフ数) の表示のみ (加算管理 /addons と 自事業所管理 /master/office から読む)
  * 本体: 利用者 × 加算マトリクス
- *   - 行 = 対象月の全利用者 (claims 有無問わず。claims 未生成者はグレーで編集不可)
+ *   - 行 = 当事業所 (client_office_assignments) の全利用者
+ *          (claims 有無問わず。claims 未生成者はグレーで編集不可)
  *   - 列 = フリガナ・性別・電話 | 初回加算 | 退院・退所加算 | 入院時情報連携 |
  *          緊急時等カンファ | 運営基準減算 | ターミナル | 通院時情報連携 | メッセージ(notes)
  *   - セル変更で該当 claim を即 UPDATE (単位・金額の再計算含む)
@@ -41,6 +42,7 @@ import {
   type DischargeType,
 } from "../claims/claims-shared";
 import { resolveCertForMonth, monthRange } from "@/lib/cert-for-month";
+import { mapChunksParallel } from "@/lib/chunk-parallel";
 import {
   getHospitalizationMap,
   hospitalizationsInRange,
@@ -48,6 +50,8 @@ import {
 } from "@/lib/hospitalization";
 
 const PAGE = 1000;
+// .in() の URI Too Long 回避用チャンク (_seikyu-context と同値)
+const IN_CHUNK = 50;
 
 // 状態 / フリガナ・利用者名 / 性別 / 電話 / 初回 / 退院退所 / 入院時 / 緊急時 / 運営基準 / ターミナル / 通院時 / メッセージ
 const GRID_COLS =
@@ -121,17 +125,32 @@ export function KyotakuKojinSetteiContent() {
   } | null>(null);
 
   const load = useCallback(async () => {
+    // 事業所が解決できるまでは読み込まない (解決中は Provider 側の ctxLoading で spinner)
+    if (!officeId) {
+      setClients([]);
+      setClaims([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      // 1) 対象月の全利用者 (active。法人エントリ除外)
+      // 1) 当事業所の利用者 (active。法人エントリ除外)
+      //    「自事業所」は client_office_assignments 経由 (clients.office_id は使わない)。
+      //    以前は全法人の利用者 4500 名超を引いていたため、下の 認定/入退院 の chunk 往復が
+      //    90 回超の直列となり読み込みが数十秒 = 事実上フリーズしていた。加えて他事業所
+      //    (訪問介護等) の利用者が居宅の請求個人設定に並んでいた。
+      //    母集団は介護請求タブ (fetchKyotakuClaimRows) と揃える (end_date は同様に見ない)。
       const cls: ClientRow[] = [];
       {
         let from = 0;
         while (true) {
           const { data, error: e } = await supabase
             .from("clients")
-            .select("id, name, furigana, gender, phone, mobile")
+            .select(
+              "id, name, furigana, gender, phone, mobile, client_office_assignments!inner(office_id)",
+            )
+            .eq("client_office_assignments.office_id", officeId)
             .eq("status", "active")
             .eq("is_facility", false)
             .is("deleted_at", null)
@@ -140,48 +159,52 @@ export function KyotakuKojinSetteiContent() {
             .range(from, from + PAGE - 1);
           if (e) throw new Error(`利用者の取得に失敗: ${e.message}`);
           if (!data || data.length === 0) break;
-          cls.push(...(data as ClientRow[]));
+          cls.push(...(data as unknown as ClientRow[]));
           if (data.length < PAGE) break;
           from += PAGE;
         }
       }
       setClients(cls);
+      if (cls.length === 0) {
+        setClaims([]);
+        setCareLevelByClient(new Map());
+        setHospMap(new Map());
+        return;
+      }
+      const clientIds = cls.map((c) => c.id);
 
-      // 2) 対象月の claims (select * — unei_kijun_gensan 列は migration 適用前でも壊れない)
-      const cl: ClaimRow[] = [];
-      {
+      // 2) 対象月の claims (当事業所の利用者分のみ)
+      //    select * — unei_kijun_gensan 列は migration 適用前でも壊れない
+      const claimChunks = await mapChunksParallel(clientIds, IN_CHUNK, async (chunk) => {
+        const acc: ClaimRow[] = [];
         let from = 0;
         while (true) {
           const { data, error: e } = await supabase
             .from("kaigo_care_support_claims")
             .select("*")
             .eq("billing_month", monthKey)
+            .in("user_id", chunk)
             .order("id", { ascending: true })
             .range(from, from + PAGE - 1);
           if (e) throw new Error(`レセプトの取得に失敗: ${e.message}`);
           if (!data || data.length === 0) break;
-          cl.push(...(data as ClaimRow[]));
+          acc.push(...(data as ClaimRow[]));
           if (data.length < PAGE) break;
           from += PAGE;
         }
-      }
-      setClaims(cl);
+        return acc;
+      });
+      setClaims(claimChunks.flat());
 
       // 3) 対象月に有効な認定 (要介護度 — 要支援は個別加算 対象外の判定に使用)
-      const certRes = await resolveCertForMonth(
-        supabase,
-        cls.map((c) => c.id),
-        year,
-        month,
-      );
+      // 4) 入退院 (対象月ヒント + 加算矛盾注意用)
+      //    互いに独立なので並列 (直列だと chunk 往復が積み上がる)
+      const [certRes, hm] = await Promise.all([
+        resolveCertForMonth(supabase, clientIds, year, month),
+        getHospitalizationMap(supabase, clientIds),
+      ]);
       setCareLevelByClient(
         new Map(cls.map((c) => [c.id, certRes.get(c.id)?.care_level ?? null])),
-      );
-
-      // 4) 入退院 (対象月ヒント + 加算矛盾注意用)
-      const hm = await getHospitalizationMap(
-        supabase,
-        cls.map((c) => c.id),
       );
       setHospMap(hm);
     } catch (e) {
@@ -191,7 +214,7 @@ export function KyotakuKojinSetteiContent() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, monthKey, year, month]);
+  }, [supabase, monthKey, year, month, officeId]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更時の fetch

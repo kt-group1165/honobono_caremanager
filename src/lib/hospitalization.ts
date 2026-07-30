@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { mapChunksParallel } from "./chunk-parallel";
 
 /**
  * 入退院 (client_hospitalizations) の共有ヘルパー。
@@ -30,10 +31,19 @@ export async function getHospitalizationMap(
   const ids = Array.from(new Set(clientIds));
   if (ids.length === 0) return out;
 
-  for (let i = 0; i < ids.length; i += IN_CHUNK) {
-    const chunk = ids.slice(i, i + IN_CHUNK);
+  type Row = {
+    client_id: string;
+    hospital_name: string | null;
+    admission_date: string;
+    discharge_date: string | null;
+  };
+  // table 未作成 (42P01/PGRST205) は「入院情報なし」で続行 (並列なので flag で共有)
+  let tableMissing = false;
+  // chunk は並列 (直列だと 1000 名規模で chunk 数 × 往復時間 = 数十秒待ちになる)
+  const perChunk = await mapChunksParallel(ids, IN_CHUNK, async (chunk) => {
+    const acc: Row[] = [];
     let offset = 0;
-    while (true) {
+    while (!tableMissing) {
       const { data, error } = await supabase
         .from("client_hospitalizations")
         .select("client_id, hospital_name, admission_date, discharge_date")
@@ -42,25 +52,28 @@ export async function getHospitalizationMap(
         .order("admission_date", { ascending: false })
         .range(offset, offset + PAGE - 1);
       if (error) {
-        if (error.code === "42P01" || error.code === "PGRST205") return out;
+        if (error.code === "42P01" || error.code === "PGRST205") {
+          tableMissing = true;
+          break;
+        }
         throw new Error(`入退院情報の取得に失敗: ${error.message}`);
       }
-      const rows = (data ?? []) as Array<{
-        client_id: string;
-        hospital_name: string | null;
-        admission_date: string;
-        discharge_date: string | null;
-      }>;
-      for (const r of rows) {
-        if (!out.has(r.client_id)) out.set(r.client_id, []);
-        out.get(r.client_id)!.push({
-          admission_date: r.admission_date,
-          discharge_date: r.discharge_date,
-          hospital_name: r.hospital_name,
-        });
-      }
+      const rows = (data ?? []) as Row[];
+      acc.push(...rows);
       if (rows.length < PAGE) break;
       offset += PAGE;
+    }
+    return acc;
+  });
+  if (tableMissing) return out;
+  for (const rows of perChunk) {
+    for (const r of rows) {
+      if (!out.has(r.client_id)) out.set(r.client_id, []);
+      out.get(r.client_id)!.push({
+        admission_date: r.admission_date,
+        discharge_date: r.discharge_date,
+        hospital_name: r.hospital_name,
+      });
     }
   }
   return out;

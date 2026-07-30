@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { mapChunksParallel } from "./chunk-parallel";
 
 /**
  * 認定情報 (client_insurance_records) を「対象月に有効な認定」で解決する共有リゾルバ。
@@ -89,11 +90,11 @@ async function fetchCertRowsByClient(
   supabase: SupabaseClient,
   ids: string[],
 ): Promise<Map<string, DbRow[]>> {
-  const byClient = new Map<string, DbRow[]>();
   // limit_period_* 列未適用の環境は 42703 → 列なしで再試行 (モジュール内で1度だけ落とす)
   let selectCols = SELECT_COLS;
-  for (let i = 0; i < ids.length; i += IN_CHUNK) {
-    const chunk = ids.slice(i, i + IN_CHUNK);
+  // chunk は並列 (直列だと 1000 名規模で chunk 数 × 往復時間 = 数十秒待ちになる)
+  const perChunk = await mapChunksParallel(ids, IN_CHUNK, async (chunk) => {
+    const acc: DbRow[] = [];
     let offset = 0;
     while (true) {
       const { data, error } = await supabase
@@ -112,12 +113,18 @@ async function fetchCertRowsByClient(
         throw new Error(`認定情報の取得に失敗: ${error.message}`);
       }
       const rows = (data ?? []) as unknown as DbRow[];
-      for (const r of rows) {
-        if (!byClient.has(r.client_id)) byClient.set(r.client_id, []);
-        byClient.get(r.client_id)!.push(r);
-      }
+      acc.push(...rows);
       if (rows.length < PAGE) break;
       offset += PAGE;
+    }
+    return acc;
+  });
+  // chunk 順・chunk 内の DB order のまま連結 (per-client の並びは start_date DESC を保つ)
+  const byClient = new Map<string, DbRow[]>();
+  for (const rows of perChunk) {
+    for (const r of rows) {
+      if (!byClient.has(r.client_id)) byClient.set(r.client_id, []);
+      byClient.get(r.client_id)!.push(r);
     }
   }
   return byClient;
