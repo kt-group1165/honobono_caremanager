@@ -28,11 +28,11 @@ import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { resolveKohiForMonth } from "@/lib/kohi";
 import {
-  resolveCertForMonth,
-  resolveCertsInMonth,
+  resolveCertsForMonthBoth,
   detectMidMonthChange,
   type MidMonthCertChange,
 } from "@/lib/cert-for-month";
+import { mapChunksParallel, ID_IN_CHUNK } from "@/lib/chunk-parallel";
 import {
   getUnitPriceByArea,
   parseYoboShienKubun,
@@ -339,8 +339,8 @@ function buildClaimLines(c: ClaimDbRow): {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PAGE = 1000;
-// .in() の URI Too Long 回避用チャンク (claims-content 等と同値)
-const IN_CHUNK_SIZE = 50;
+// .in() の URI Too Long 回避用チャンク (lib/chunk-parallel の URL 予算に合わせる)
+const IN_CHUNK_SIZE = ID_IN_CHUNK;
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
@@ -397,29 +397,35 @@ export async function fetchKyotakuClaimRows(
 
   log("事業所割当", `${officeClientIds ? officeClientIds.length + "名" : "全件"}`);
 
-  // 1) 当月レセプト (page-loop で 1000 行制限回避)。
+  // 1) 当月レセプト (page-loop で 1000 行制限回避。chunk は並列)。
   //    select は "*" (unei_kijun_gensan 列は migration 適用前でも壊れないよう明示列挙しない)
-  const claims: ClaimDbRow[] = [];
-  const idChunks = officeClientIds ? chunkArray(officeClientIds, IN_CHUNK_SIZE) : [null];
-  for (const idChunk of idChunks) {
-    let from = 0;
-    while (true) {
-      let q = supabase
-        .from("kaigo_care_support_claims")
-        .select("*, clients(name, furigana, gender, birth_date, phone)")
-        .eq("billing_month", monthKey);
-      if (idChunk) q = q.in("user_id", idChunk);
-      const { data, error } = await q
-        .order("created_at", { ascending: true })
-        .order("id", { ascending: true })
-        .range(from, from + PAGE - 1);
-      if (error) throw new Error(`レセプトの取得に失敗: ${error.message}`);
-      if (!data || data.length === 0) break;
-      claims.push(...(data as unknown as ClaimDbRow[]));
-      if (data.length < PAGE) break;
-      from += PAGE;
-    }
-  }
+  const idChunks: (string[] | null)[] = officeClientIds
+    ? chunkArray(officeClientIds, IN_CHUNK_SIZE)
+    : [null];
+  const claimChunks = await Promise.all(
+    idChunks.map(async (idChunk) => {
+      const acc: ClaimDbRow[] = [];
+      let from = 0;
+      while (true) {
+        let q = supabase
+          .from("kaigo_care_support_claims")
+          .select("*, clients(name, furigana, gender, birth_date, phone)")
+          .eq("billing_month", monthKey);
+        if (idChunk) q = q.in("user_id", idChunk);
+        const { data, error } = await q
+          .order("created_at", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error) throw new Error(`レセプトの取得に失敗: ${error.message}`);
+        if (!data || data.length === 0) break;
+        acc.push(...(data as unknown as ClaimDbRow[]));
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      return acc;
+    }),
+  );
+  const claims: ClaimDbRow[] = claimChunks.flat();
   log("レセプト取得", `${claims.length}件`);
   if (claims.length === 0) return [];
 
@@ -427,12 +433,39 @@ export async function fetchKyotakuClaimRows(
   const billable = claims.filter((c) => parseYoboShienKubun(c.notes) !== "itaku");
   if (billable.length === 0) return [];
 
-  // 2) 認定情報 — 「対象月に有効な認定」で解決 (resolveCertForMonth)。
-  //    月遅れ再請求で認定更新を跨いでも元提供月時点の要介護度・被保険者番号が載る。
+  // 2) 認定 / 公費 / 月内認定 / ケアプラン — 互いに独立なので 1 波で並列取得。
+  //    認定情報は「対象月に有効な認定」で解決 (resolveCertForMonth)。月遅れ再請求で
+  //    認定更新を跨いでも元提供月時点の要介護度・被保険者番号が載る。
+  //    月内認定 (保険者変更の検出) は同じ行を使うので resolveCertsForMonthBoth で 1 往復に束ねる。
   const userIds = [...new Set(billable.map((c) => c.user_id))];
   const [cy, cm] = monthKey.split("-").map(Number);
-  const certRes = await resolveCertForMonth(supabase, userIds, cy, cm);
-  log("認定解決", `${userIds.length}名`);
+  const [certBoth, kohiRes, planRows] = await Promise.all([
+    resolveCertsForMonthBoth(supabase, userIds, cy, cm),
+    // 公費 (生活保護等) — client_kohi_records から対象月に有効な 1 件を解決
+    // (テーブル未作成時は旧 kohi_* 列にフォールバック → lib/kohi.ts)
+    resolveKohiForMonth(supabase, userIds, cy, cm),
+    // 計画作成依頼届出年月日 (plan_request_date) と 介護支援専門員番号 (care_manager_number)
+    // — kaigo_care_plans から。居宅明細書 8124 項15 / 給付管理票 8222 終端 項25 用。
+    (async () => {
+      const chunks = await mapChunksParallel(userIds, ID_IN_CHUNK, async (chunk) => {
+        const { data, error } = await supabase
+          .from("kaigo_care_plans")
+          .select("user_id, plan_request_date, care_manager_number")
+          .in("user_id", chunk)
+          .eq("status", "active");
+        if (error) throw new Error(`ケアプランの取得に失敗: ${error.message}`);
+        return (data ?? []) as {
+          user_id: string;
+          plan_request_date: string | null;
+          care_manager_number: string | null;
+        }[];
+      });
+      return chunks.flat();
+    })(),
+  ]);
+  log("認定/公費/ケアプラン解決", `${userIds.length}名`);
+  const certRes = certBoth.forMonth;
+  const certsInMonthRes = certBoth.inMonth;
   const certMap = new Map<string, CertDbRow>();
   for (const [clientId, cert] of certRes) {
     certMap.set(clientId, {
@@ -449,16 +482,8 @@ export async function fetchKyotakuClaimRows(
     });
   }
 
-  // 2.5) 公費 (生活保護等) — client_kohi_records から対象月に有効な 1 件を解決
-  //      (テーブル未作成時は旧 kohi_* 列にフォールバック → lib/kohi.ts)
-  const [kohiYear, kohiMonth] = monthKey.split("-").map(Number);
-  const kohiRes = await resolveKohiForMonth(supabase, userIds, kohiYear, kohiMonth);
-  log("公費解決");
-
-  // 2.6) 月途中の保険者変更 (転居) の検出 — 給付管理票・明細書の提出先確認の警告用。
+  // 2.5) 月途中の保険者変更 (転居) の検出 — 給付管理票・明細書の提出先確認の警告用。
   //      検出しても出力自体は 2) の月末時点の認定 (resolveCertForMonth の採用行) で行う。
-  const certsInMonthRes = await resolveCertsInMonth(supabase, userIds, cy, cm);
-  log("月内認定解決");
   const insurerChangeByUser = new Map<
     string,
     NonNullable<MidMonthCertChange["insurerChange"]>
@@ -468,23 +493,13 @@ export async function fetchKyotakuClaimRows(
     if (mc?.insurerChange) insurerChangeByUser.set(clientId, mc.insurerChange);
   }
 
-  // 2.7) 計画作成依頼届出年月日 (plan_request_date) と 介護支援専門員番号 (care_manager_number)
-  //      — kaigo_care_plans から。居宅明細書 8124 項15 / 給付管理票 8222 終端 項25 用。
+  // 2.6) ケアプラン (2 で取得済み) を user_id → 値 に畳む
   const planReqByUser = new Map<string, string | null>();
   const careMgrByUser = new Map<string, string | null>();
-  for (let i = 0; i < userIds.length; i += 300) {
-    const { data } = await supabase
-      .from("kaigo_care_plans")
-      .select("user_id, plan_request_date, care_manager_number")
-      .in("user_id", userIds.slice(i, i + 300))
-      .eq("status", "active");
-    for (const p of (data ?? []) as { user_id: string; plan_request_date: string | null; care_manager_number: string | null }[]) {
-      if (!planReqByUser.has(p.user_id)) planReqByUser.set(p.user_id, p.plan_request_date);
-      if (!careMgrByUser.has(p.user_id)) careMgrByUser.set(p.user_id, p.care_manager_number ?? null);
-    }
+  for (const p of planRows) {
+    if (!planReqByUser.has(p.user_id)) planReqByUser.set(p.user_id, p.plan_request_date);
+    if (!careMgrByUser.has(p.user_id)) careMgrByUser.set(p.user_id, p.care_manager_number ?? null);
   }
-
-  log("ケアプラン取得");
 
   // 3) 行の組み立て (ふりがな順)
   const rows: KyotakuSeikyuRow[] = billable.map((c) => {
@@ -700,11 +715,18 @@ export function KyotakuSeikyuProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       // 事業所情報 (事業所番号 / 住所 / 単価)。単価は地域区分を優先 (claims-content と同じ)
-      const { data: officeRow, error: officeErr } = await supabase
-        .from("offices")
-        .select("business_number, address, phone, postal_code, unit_price, area_category")
-        .eq("id", currentOffice.id)
-        .maybeSingle();
+      // レセプト取得とは独立なので並列 (直列にすると 1 往復ぶん待たされる)
+      const [
+        { data: officeRow, error: officeErr },
+        list,
+      ] = await Promise.all([
+        supabase
+          .from("offices")
+          .select("business_number, address, phone, postal_code, unit_price, area_category")
+          .eq("id", currentOffice.id)
+          .maybeSingle(),
+        fetchKyotakuClaimRows(supabase, monthKey, currentOffice.id),
+      ]);
       if (officeErr) throw new Error(`事業所情報の取得に失敗: ${officeErr.message}`);
       const or = officeRow as {
         business_number?: string | null;
@@ -724,7 +746,6 @@ export function KyotakuSeikyuProvider({ children }: { children: ReactNode }) {
           : Number(or?.unit_price ?? 10),
       );
 
-      const list = await fetchKyotakuClaimRows(supabase, monthKey, currentOffice.id);
       setRows(list);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

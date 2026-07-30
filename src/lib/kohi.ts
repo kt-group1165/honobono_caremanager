@@ -27,6 +27,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { mapChunksParallel, ID_IN_CHUNK } from "./chunk-parallel";
 
 /** 対象月に有効な公費 (優先 1 件) */
 export interface ResolvedKohi {
@@ -65,7 +66,7 @@ export interface ResolveKohisResult {
   fallback: boolean;
 }
 
-const IN_CHUNK = 50;
+const IN_CHUNK = ID_IN_CHUNK;
 const PAGE = 1000;
 
 /**
@@ -134,12 +135,13 @@ async function fetchKohiRowsByClient(
   supabase: SupabaseClient,
   ids: string[],
 ): Promise<Map<string, KohiRow[]> | "table-missing"> {
-  const rowsByClient = new Map<string, KohiRow[]>();
-  for (let i = 0; i < ids.length; i += IN_CHUNK) {
-    const chunk = ids.slice(i, i + IN_CHUNK);
+  let tableMissing = false;
+  // chunk は並列 (chunk 順で返るので per-client の並びは保たれる)
+  const perChunk = await mapChunksParallel(ids, IN_CHUNK, async (chunk) => {
+    const acc: KohiRow[] = [];
     // chunk 内でも PostgREST の 1000 行上限に掛かり得るため order 付き page-loop
     let offset = 0;
-    while (true) {
+    while (!tableMissing) {
       const { data, error } = await supabase
         .from("client_kohi_records")
         .select(
@@ -157,18 +159,25 @@ async function fetchKohiRowsByClient(
           console.warn(
             "[kohi] client_kohi_records 未作成 — 旧 client_insurance_records.kohi_* にフォールバックします (migrations/client_kohi_records.sql を適用してください)",
           );
-          return "table-missing";
+          tableMissing = true;
+          break;
         }
         throw new Error(`公費情報の取得に失敗: ${error.message}`);
       }
       const rows = (data ?? []) as KohiRow[];
-      for (const r of rows) {
-        const list = rowsByClient.get(r.client_id) ?? [];
-        list.push(r);
-        rowsByClient.set(r.client_id, list);
-      }
+      acc.push(...rows);
       if (rows.length < PAGE) break;
       offset += PAGE;
+    }
+    return acc;
+  });
+  if (tableMissing) return "table-missing";
+  const rowsByClient = new Map<string, KohiRow[]>();
+  for (const rows of perChunk) {
+    for (const r of rows) {
+      const list = rowsByClient.get(r.client_id) ?? [];
+      list.push(r);
+      rowsByClient.set(r.client_id, list);
     }
   }
   return rowsByClient;
@@ -304,9 +313,15 @@ async function resolveKohiLegacy(
   supabase: SupabaseClient,
   ids: string[],
 ): Promise<Map<string, ResolvedKohi | null>> {
-  const byClient = new Map<string, ResolvedKohi | null>();
-  for (let i = 0; i < ids.length; i += IN_CHUNK) {
-    const chunk = ids.slice(i, i + IN_CHUNK);
+  type LegacyRow = {
+    client_id: string;
+    kohi_hobetsu: string | null;
+    kohi_futansha_number: string | null;
+    kohi_jukyusha_number: string | null;
+  };
+  // chunk は並列 (chunk 順で返るので per-client の先頭 = 最新 effective_date は保たれる)
+  const perChunk = await mapChunksParallel(ids, IN_CHUNK, async (chunk) => {
+    const acc: LegacyRow[] = [];
     // client_id 順に固定して page-loop (per-client の先頭 = 最新 effective_date を保証)
     let offset = 0;
     while (true) {
@@ -320,31 +335,31 @@ async function resolveKohiLegacy(
         .order("effective_date", { ascending: false, nullsFirst: false })
         .range(offset, offset + PAGE - 1);
       if (error) throw new Error(`公費情報 (旧方式) の取得に失敗: ${error.message}`);
-      const rows = (data ?? []) as {
-        client_id: string;
-        kohi_hobetsu: string | null;
-        kohi_futansha_number: string | null;
-        kohi_jukyusha_number: string | null;
-      }[];
-      for (const r of rows) {
-        if (byClient.has(r.client_id)) continue; // 最新 (effective_date DESC) のみ
-        const hobetsu = r.kohi_hobetsu?.trim() || null;
-        byClient.set(
-          r.client_id,
-          hobetsu
-            ? {
-                hobetsu,
-                futansha: r.kohi_futansha_number?.trim() || null,
-                jukyusha: r.kohi_jukyusha_number?.trim() || null,
-                honninFutan: 0,
-                start: null,
-                end: null,
-              }
-            : null,
-        );
-      }
+      const rows = (data ?? []) as LegacyRow[];
+      acc.push(...rows);
       if (rows.length < PAGE) break;
       offset += PAGE;
+    }
+    return acc;
+  });
+  const byClient = new Map<string, ResolvedKohi | null>();
+  for (const rows of perChunk) {
+    for (const r of rows) {
+      if (byClient.has(r.client_id)) continue; // 最新 (effective_date DESC) のみ
+      const hobetsu = r.kohi_hobetsu?.trim() || null;
+      byClient.set(
+        r.client_id,
+        hobetsu
+          ? {
+              hobetsu,
+              futansha: r.kohi_futansha_number?.trim() || null,
+              jukyusha: r.kohi_jukyusha_number?.trim() || null,
+              honninFutan: 0,
+              start: null,
+              end: null,
+            }
+          : null,
+      );
     }
   }
   return byClient;

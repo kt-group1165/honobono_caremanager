@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { mapChunksParallel } from "./chunk-parallel";
+import { mapChunksParallel, ID_IN_CHUNK } from "./chunk-parallel";
+import { isYoboLevel } from "./yobo-kubun";
 
 /**
  * 認定情報 (client_insurance_records) を「対象月に有効な認定」で解決する共有リゾルバ。
@@ -69,7 +70,7 @@ const SELECT_COLS_BASE =
 const SELECT_COLS = SELECT_COLS_BASE + ", limit_period_start, limit_period_end";
 
 const PAGE = 1000;
-const IN_CHUNK = 50;
+const IN_CHUNK = ID_IN_CHUNK;
 
 /** 対象月の月初/月末 ('YYYY-MM-DD')。ローカル演算のみで TZ 安全 */
 export function monthRange(year: number, month: number): { from: string; to: string } {
@@ -175,7 +176,16 @@ export async function resolveCertForMonth(
   const { from: monthStart, to: monthEnd } = monthRange(year, month);
 
   const byClient = await fetchCertRowsByClient(supabase, ids);
+  return pickCertForMonth(byClient, monthStart, monthEnd);
+}
 
+/** 取得済みの認定行から「対象月の 1 件」を選ぶ (fetch なし) */
+function pickCertForMonth(
+  byClient: Map<string, DbRow[]>,
+  monthStart: string,
+  monthEnd: string,
+): Map<string, CertForMonth> {
+  const out = new Map<string, CertForMonth>();
   for (const [clientId, rows] of byClient) {
     // 1) 対象月に有効な認定 (start <= 月末 AND (end IS NULL OR end >= 月初))
     const inMonth = rows.filter((r) => isValidInMonth(r, monthStart, monthEnd));
@@ -207,7 +217,16 @@ export async function resolveCertsInMonth(
   const { from: monthStart, to: monthEnd } = monthRange(year, month);
 
   const byClient = await fetchCertRowsByClient(supabase, ids);
+  return pickCertsInMonth(byClient, monthStart, monthEnd);
+}
 
+/** 取得済みの認定行から「対象月に有効な全件 (start 昇順)」を選ぶ (fetch なし) */
+function pickCertsInMonth(
+  byClient: Map<string, DbRow[]>,
+  monthStart: string,
+  monthEnd: string,
+): Map<string, CertForMonth[]> {
+  const out = new Map<string, CertForMonth[]>();
   for (const [clientId, rows] of byClient) {
     // rows は start DESC, effective DESC — 同一 start は先頭 (= 最新 effective) を採用
     const seenStart = new Set<string>();
@@ -227,6 +246,31 @@ export async function resolveCertsInMonth(
     );
   }
   return out;
+}
+
+/**
+ * resolveCertForMonth と resolveCertsInMonth を **1 回の fetch** で両方返す。
+ *
+ * 請求画面はこの 2 つ (採用 1 件 + 月内全件 = 保険者変更の検出) を必ず対で使うが、
+ * 個別に呼ぶと同じ client_insurance_records を 2 度引くことになる。往復を半分にする。
+ */
+export async function resolveCertsForMonthBoth(
+  supabase: SupabaseClient,
+  clientIds: string[],
+  year: number,
+  month: number,
+): Promise<{
+  forMonth: Map<string, CertForMonth>;
+  inMonth: Map<string, CertForMonth[]>;
+}> {
+  const ids = Array.from(new Set(clientIds));
+  if (ids.length === 0) return { forMonth: new Map(), inMonth: new Map() };
+  const { from: monthStart, to: monthEnd } = monthRange(year, month);
+  const byClient = await fetchCertRowsByClient(supabase, ids);
+  return {
+    forMonth: pickCertForMonth(byClient, monthStart, monthEnd),
+    inMonth: pickCertsInMonth(byClient, monthStart, monthEnd),
+  };
 }
 
 // ─── 月途中の資格変更 検出 (Phase 1: 検出のみ。レセプト行の分割は Phase 2) ──────
@@ -255,7 +299,8 @@ export interface MidMonthCertChange {
   } | null;
 }
 
-const isYoboKubun = (level: string) => /要支援|事業対象者/.test(level);
+// 予防区分判定は @/lib/yobo-kubun に集約 (帳票様式の分岐と同じ基準を使う)
+const isYoboKubun = isYoboLevel;
 const trimOrEmpty = (v: string | null | undefined) => (v ?? "").trim();
 
 // ─── 保険者変更 (転居) のセグメント分割 (Phase 2: レセプト行の複製・分割) ─────

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { mapChunksParallel } from "./chunk-parallel";
+import { mapChunksParallel, ID_IN_CHUNK } from "./chunk-parallel";
 
 /**
  * 入退院 (client_hospitalizations) の共有ヘルパー。
@@ -17,7 +17,7 @@ export interface HospitalizationPeriod {
 }
 
 const PAGE = 1000;
-const IN_CHUNK = 50;
+const IN_CHUNK = ID_IN_CHUNK;
 
 /**
  * clientIds の入退院期間を全件取得して client_id → 期間リストで返す。

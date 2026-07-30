@@ -9,6 +9,16 @@
  * 戻り値は **chunk 順** に並べて返すので、「chunk 内の DB order を保ったまま連結する」
  * 呼出側の前提 (per-client の並び順など) を壊さない。
  */
+/**
+ * UUID 列を `.in()` で渡す時の chunk サイズ。
+ *
+ * 従来 50 だったが、UUID 1 件 ≒ 38 byte (36 + カンマ + URL encode) なので
+ * 150 件でも URL は 6KB 弱 = PostgREST/Kong のヘッダ上限 (8KB) に収まる
+ * (実測: 本番 Supabase に 250 件の `.in()` を投げて 126ms で成功)。
+ * 事業所規模 (250 名) なら 2 chunk = 1 往復波で終わる。
+ */
+export const ID_IN_CHUNK = 150;
+
 export async function mapChunksParallel<T, R>(
   items: T[],
   chunkSize: number,

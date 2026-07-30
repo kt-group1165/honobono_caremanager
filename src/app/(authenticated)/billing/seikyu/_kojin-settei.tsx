@@ -42,7 +42,7 @@ import {
   type DischargeType,
 } from "../claims/claims-shared";
 import { resolveCertForMonth, monthRange } from "@/lib/cert-for-month";
-import { mapChunksParallel } from "@/lib/chunk-parallel";
+import { mapChunksParallel, ID_IN_CHUNK } from "@/lib/chunk-parallel";
 import {
   getHospitalizationMap,
   hospitalizationsInRange,
@@ -51,7 +51,7 @@ import {
 
 const PAGE = 1000;
 // .in() の URI Too Long 回避用チャンク (_seikyu-context と同値)
-const IN_CHUNK = 50;
+const IN_CHUNK = ID_IN_CHUNK;
 
 // 状態 / フリガナ・利用者名 / 性別 / 電話 / 初回 / 退院退所 / 入院時 / 緊急時 / 運営基準 / ターミナル / 通院時 / メッセージ
 const GRID_COLS =
