@@ -15,6 +15,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import Encoding from "encoding-japanese";
+import { getShogaiHomonUnitPrice } from "@/lib/shogai-seikyu/unit-price";
 import {
   aggregateMonthlyShogaiSeikyu,
   type ShogaiSeikyuRow,
@@ -32,10 +33,18 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // ─── 対象 ─────────────────────────────────────────────────────────────────────
 const YEAR = 2026;
 const MONTH = 6;
-const OFFICE_ID = "e08c3706-ad59-4913-b4e2-67f2675422e9"; // リンクスヘルパーステーション(茂原)
-const FALLBACK_OFFICE_NUMBER = "1213100017";
+// 事業所は env で切替 (既定 = リンクスヘルパーステーション(茂原))。
+//   OFFICE_ID       … offices.id
+//   SHOGAI_BN       … 障害の事業所番号 (介護とは別番号。伝送の制御レコードに出る)
+//   DENSOU_DIR      … 伝送データ/<この値>/障害 を見る (既定 リンクス茂原/202606)
+const OFFICE_ID = process.env.OFFICE_ID || "e08c3706-ad59-4913-b4e2-67f2675422e9";
+const FALLBACK_OFFICE_NUMBER = process.env.SHOGAI_BN || "1213100017";
 // 伝送データ は apps/kaigo-app 直下 (= __dirname の 1 つ上)
-const DENSOU_BASE = join(__dirname, "..", "伝送データ", "リンクス茂原", "202606", "障害");
+//   DENSOU_DIR は 伝送データ/ 以下の相対パス (例 大網/障害/202606)。
+//   事業所ごとにフォルダ構成が揃っていないため、丸ごと指定できるようにしている。
+const DENSOU_BASE = process.env.DENSOU_DIR
+  ? join(__dirname, "..", "伝送データ", ...process.env.DENSOU_DIR.split("/"))
+  : join(__dirname, "..", "伝送データ", "リンクス茂原", "202606", "障害");
 const HONOBONO_DIR = join(DENSOU_BASE, "ほのぼのから");
 const OUT_DIR = join(DENSOU_BASE, "新システム");
 
@@ -486,15 +495,10 @@ async function main() {
   // ★ #1: offices.business_number は介護の事業所番号(1271500942)。障害伝送は別の障害事業所番号
   //   (1213100017) を使う。本番は offices.shogai_business_number を参照する予定。
   const officeNumber = FALLBACK_OFFICE_NUMBER;
-  // ★ 単価: offices.unit_price は介護の地域区分単価 (6級地 訪問介護=10.42)。障害は別テーブル。
-  //   障害福祉 訪問系 (居宅介護/重訪/同行/行動) の地域区分単価 (茂原6級地=10.36 を中村和代の
-  //   KJ 4258単位→44112円で検証確定)。本番は build.ts / app で級地→障害単価を引く必要あり。
-  const SHOGAI_HOMON_UNIT_PRICE: Record<string, number> = {
-    "1級地": 11.40, "2級地": 11.12, "3級地": 11.05, "4級地": 10.84,
-    "5級地": 10.70, "6級地": 10.36, "7級地": 10.21, "その他": 10.00,
-  };
+  // 単価: offices.unit_price は介護の地域区分単価。障害は人件費割合が違うので別計算
+  //   (lib/shogai-seikyu/unit-price.ts。実伝送3事業所で検証済)
   const areaCategory = (o?.area_category ?? null) as string | null;
-  const unitPrice = SHOGAI_HOMON_UNIT_PRICE[areaCategory ?? "その他"] ?? (o?.unit_price ?? 10) as number;
+  const unitPrice = getShogaiHomonUnitPrice(areaCategory);
   console.log("=== office ===");
   console.log("name:", o?.name);
   console.log("business_number(DB):", JSON.stringify(dbOfficeNumber), "→ 使用:", officeNumber);
@@ -609,7 +613,11 @@ async function main() {
 
   const hbJ11 = parseDensou(join(HONOBONO_DIR, "KJ260701.CSV"));
   const hbJ61 = parseDensou(join(HONOBONO_DIR, "TJ260701.CSV"));
-  const hbJ41 = parseDensou(join(HONOBONO_DIR, "JJ260701.CSV"));
+  // JJ (上限管理結果票) は該当者がいない事業所では出力されない → 無ければ空扱い
+  const j41Path = join(HONOBONO_DIR, "JJ260701.CSV");
+  const hbJ41 = existsSync(j41Path)
+    ? parseDensou(j41Path)
+    : { control: [] as string[], end: [] as string[], rows: [] as DensouRow[] };
 
   console.log("\n\n########## 突合レポート ##########");
 

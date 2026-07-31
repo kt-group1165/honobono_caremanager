@@ -48,6 +48,7 @@ import {
   type ShogaiReSeikyuReasons,
 } from "@/lib/shogai-seikyu/re-seikyu-shogai";
 import { validInMonth } from "@/lib/service-code-valid";
+import { getShogaiHomonUnitPrice } from "@/lib/shogai-seikyu/unit-price";
 import {
   buildShogaiDensou,
   type ShogaiDensouUser,
@@ -226,17 +227,20 @@ export function ShogaiSeikyuContent({
       if (currentOffice) {
         const { data: o, error: oe } = await supabase
           .from("offices")
-          .select("unit_price, business_number, shogai_business_number")
+          .select("unit_price, area_category, business_number, shogai_business_number")
           .eq("id", currentOffice.id)
           .maybeSingle();
         if (oe) throw new Error("事業所情報の取得に失敗: " + oe.message);
         const od = o as {
           unit_price?: number;
+          area_category?: string | null;
           business_number?: string | null;
           shogai_business_number?: string | null;
         } | null;
-        unitPrice = od?.unit_price;
-        setOfficeUnitPrice(od?.unit_price);
+        // ⚠ offices.unit_price は介護の地域区分単価。障害は人件費割合が違うため
+        //   級地から障害用の単価を引く (7級地: 介護10.21 / 障害10.18)
+        unitPrice = getShogaiHomonUnitPrice(od?.area_category ?? null);
+        setOfficeUnitPrice(unitPrice);
         // 障害伝送は障害事業所番号を優先。未設定 (NULL) は介護 business_number にフォールバック。
         setOfficeNumber(
           ((od?.shogai_business_number ?? od?.business_number ?? "") as string).trim() ||
@@ -1026,8 +1030,9 @@ export function ShogaiSeikyuContent({
       const officeNumber = ((o?.shogai_business_number ??
         o?.business_number ??
         "") as string).trim();
-      const unitPrice = (o?.unit_price ?? 10) as number;
       const areaCategory = (o?.area_category ?? null) as string | null;
+      // ⚠ 介護の unit_price ではなく障害用の地域区分単価を使う
+      const unitPrice = getShogaiHomonUnitPrice(areaCategory);
 
       // 対象月ぶんの users を組み立てて buildShogaiDensou を実行するヘルパ。
       // 当月分と、再請求の元提供月ぶんを「別々の月」で呼ぶことで、伝送ファイルを
