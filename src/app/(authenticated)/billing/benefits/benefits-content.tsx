@@ -31,6 +31,7 @@ import type {
   BenefitManagementRow,
   UserWithCert,
 } from "./benefits-shared";
+import { suggestOverLimitCuts } from "./benefits-shared";
 
 interface UserGroup {
   user: UserWithCert;
@@ -408,6 +409,58 @@ export function BenefitsContent({
   // Status actions
   // ---------------------------------------------------------------------------
 
+  /**
+   * 限度額超過分の一括割当。
+   *   suggest = 優先順 (福祉用具→通所→短期入所…) で自動的に自己負担へ回す
+   *   reset   = 給付管理単位数を実績どおりに戻す (割当をやり直したいとき)
+   * planned_units (給付管理する単位) と over_limit_units (自己負担) を同時に保存する。
+   * どのサービスを自己負担にするかは本来ケアマネの判断なので、これは「たたき台」であり
+   * 保存後に各行の数字を個別に直せる。
+   */
+  const handleApplyCuts = async (group: UserGroup, mode: "suggest" | "reset") => {
+    const limit = group.user.certification?.service_limit_amount ?? 0;
+    const over = Math.max(0, group.totalActual - limit);
+    const cuts =
+      mode === "reset"
+        ? {}
+        : suggestOverLimitCuts(
+            group.rows.map((r) => ({
+              id: r.id,
+              service_kind_code: r.service_kind_code,
+              actual_units: r.actual_units ?? 0,
+            })),
+            over,
+          );
+    try {
+      const now = new Date().toISOString();
+      for (const r of group.rows) {
+        const cut = cuts[r.id] ?? 0;
+        const planned = Math.max(0, (r.actual_units ?? 0) - cut);
+        if (planned === r.planned_units && cut === (r.over_limit_units ?? 0)) continue;
+        const { error } = await supabase
+          .from("kaigo_benefit_management")
+          .update({ planned_units: planned, over_limit_units: cut, updated_at: now })
+          .eq("id", r.id);
+        if (error) throw error;
+      }
+      setRows((prev) =>
+        prev.map((r) => {
+          if (r.user_id !== group.user.id) return r;
+          const cut = cuts[r.id] ?? 0;
+          return { ...r, planned_units: Math.max(0, (r.actual_units ?? 0) - cut), over_limit_units: cut };
+        }),
+      );
+      toast.success(
+        mode === "reset"
+          ? "給付管理単位数を実績どおりに戻しました"
+          : `超過 ${over.toLocaleString("ja-JP")} 単位を自己負担へ割り当てました (個別に調整できます)`,
+      );
+    } catch (err: unknown) {
+      console.error("benefits handleApplyCuts err:", err);
+      toast.error("割当の保存に失敗しました: " + formatSupabaseErr(err));
+    }
+  };
+
   const handleConfirm = async (userId: string) => {
     try {
       const { error } = await supabase
@@ -670,6 +723,7 @@ export function BenefitsContent({
               editValues={editValues}
               onUnitChange={handleUnitChange}
               onUnitBlur={handleUnitBlur}
+              onApplyCuts={(mode) => handleApplyCuts(group, mode)}
             />
           ))}
         </div>
@@ -709,6 +763,8 @@ interface UserGroupCardProps {
     row: BenefitManagementRow,
     field: "planned_units" | "actual_units"
   ) => void;
+  /** 限度額超過分の一括割当 ("suggest"=優先順で自動 / "reset"=実績どおりに戻す) */
+  onApplyCuts?: (mode: "suggest" | "reset") => void;
 }
 
 function UserGroupCard({
@@ -720,6 +776,7 @@ function UserGroupCard({
   editValues,
   onUnitChange,
   onUnitBlur,
+  onApplyCuts,
 }: UserGroupCardProps) {
   const { user, rows, totalPlanned, totalActual, remaining, isOverLimit, status } =
     group;
@@ -833,6 +890,46 @@ function UserGroupCard({
       {/* Expanded detail rows */}
       {expanded && (
         <div className="border-t">
+          {/* 限度額超過の配分パネル: 超過分をどのサービスの自己負担にするかを決める */}
+          {isOverLimit && onApplyCuts && (
+            <div className="border-b bg-red-50/60 px-4 py-3">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-700">
+                  <AlertTriangle size={12} />
+                  限度額を {Math.abs(remaining).toLocaleString("ja-JP")} 単位 超過
+                </span>
+                <span className="text-[11px] text-gray-600">
+                  超過分は全額自己負担になります。どのサービスを自己負担にするか決めてください
+                </span>
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onApplyCuts("suggest"); }}
+                    className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 transition-colors"
+                    title="福祉用具→通所→短期入所… の順に自動で割り当てます (後から個別に直せます)"
+                  >
+                    超過分を自動割当
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onApplyCuts("reset"); }}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                    title="給付管理単位数を実績どおりに戻します"
+                  >
+                    実績どおりに戻す
+                  </button>
+                </div>
+              </div>
+              <div className="mt-1.5 text-[11px] text-gray-600">
+                実績 {totalActual.toLocaleString("ja-JP")} / 給付管理{" "}
+                <span className={totalPlanned > limit ? "font-semibold text-red-600" : "font-semibold text-emerald-700"}>
+                  {totalPlanned.toLocaleString("ja-JP")}
+                </span>{" "}
+                / 限度額 {limit.toLocaleString("ja-JP")} 単位
+                {totalPlanned > limit
+                  ? ` — あと ${(totalPlanned - limit).toLocaleString("ja-JP")} 単位ぶん自己負担にする必要があります`
+                  : " — 限度額内に収まっています"}
+              </div>
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="border-b bg-gray-50">

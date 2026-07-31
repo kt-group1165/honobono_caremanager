@@ -49,7 +49,8 @@ async function main() {
   const iSup = g("事業所番号（支援事業所）"), iProv = g("事業所番号（提供事業所）"),
     iKind = g("サービス種類コード（提供事業所）"), iProvName = g("事業所名（提供事業所）"),
     iKindName = g("事業種別名（提供事業所）"), iCode = g("サービスコード"), iUnits = g("サービス単位／金額"),
-    iCnt = g("回数"), iIns = g("被保険者番号"), iHoken = g("保険者番号"), iKubun = g("サービス区分");
+    iCnt = g("回数"), iIns = g("被保険者番号"), iHoken = g("保険者番号"), iKubun = g("サービス区分"),
+    iRate = g("給付率");
   if ([iSup, iProv, iKind, iUnits, iIns, iHoken, iKubun].some((i) => i < 0)) { console.error("ヘッダー不一致"); process.exit(1); }
 
   const mine = rows.slice(1).filter((r) => (r[iSup] || "").trim() === OFFICE_BN);
@@ -62,11 +63,28 @@ async function main() {
     hasMeisai.add([padIns(r[iIns]), padInsurer(r[iHoken]), (r[iProv] || "").trim(), (r[iKind] || "").trim(), (r[iCode] || "").trim()].join("|"));
   }
 
+  // 給付率0 の扱い: 利用者内で給付率が混在する場合のみ「保険給付されない行」とみなす。
+  //   生活保護単独 (H番号みなし2号) は全行が給付率0 で公費10割。給付管理票には載るので
+  //   一律除外してはいけない (誤って除外すると当該利用者が丸ごと消える)。
+  const ratesByUser = new Map();
+  for (const r of mine) {
+    const u = `${padIns(r[iIns])}|${padInsurer(r[iHoken])}`;
+    if (!ratesByUser.has(u)) ratesByUser.set(u, new Set());
+    ratesByUser.get(u).add(num(r[iRate]));
+  }
+  const rateMixed = new Set();
+  for (const [u, s] of ratesByUser) if (s.has(0) && s.size > 1) rateMixed.add(u);
+
   const agg = new Map(); // 被保|保険|提供|種類 → { units, provName, kindName }
-  let skipGentaigai = 0, skipShoukei = 0;
+  let skipGentaigai = 0, skipShoukei = 0, skipRate0 = 0;
   for (const r of mine) {
     const kubun = (r[iKubun] || "").trim();
     if (kubun === "支給限度額対象外") { skipGentaigai++; continue; }
+    // 給付率0 = 保険給付されない行 (短期入所の30日超過分等)。同じサービスコードが
+    //   「給付率90 ×29日」と「給付率0 ×1日」に分かれて出るため区分では見分けられない
+    //   (茂原 0000383976: 実績22460 のうち給付率0の782を除くと KY の 21678 に一致)。
+    //   ただし全行が給付率0 の利用者 = 生保単独なので除外しない。
+    if (iRate >= 0 && num(r[iRate]) === 0 && rateMixed.has(`${padIns(r[iIns])}|${padInsurer(r[iHoken])}`)) { skipRate0++; continue; }
     const detailKey = [padIns(r[iIns]), padInsurer(r[iHoken]), (r[iProv] || "").trim(), (r[iKind] || "").trim(), (r[iCode] || "").trim()].join("|");
     if (kubun === "明細・小計" && hasMeisai.has(detailKey)) { skipShoukei++; continue; }
     const k = [padIns(r[iIns]), padInsurer(r[iHoken]), (r[iProv] || "").trim(), (r[iKind] || "").trim()].join("|");
@@ -78,7 +96,7 @@ async function main() {
   // 0単位グループは除外 (未実施予定)
   let skipZero = 0;
   for (const [k, v] of [...agg]) if (v.units <= 0) { agg.delete(k); skipZero++; }
-  console.log(`除外: 支給限度額対象外 ${skipGentaigai} / 明細・小計の重複 ${skipShoukei} / 0単位 ${skipZero}`);
+  console.log(`除外: 支給限度額対象外 ${skipGentaigai} / 給付率0 ${skipRate0} / 明細・小計の重複 ${skipShoukei} / 0単位 ${skipZero}`);
   console.log(`生成した給付管理明細: ${agg.size} 行 / ${new Set([...agg.keys()].map((k) => k.split("|").slice(0, 2).join("|"))).size} 名`);
 
   // ── KY と突合 (--compare) ──
