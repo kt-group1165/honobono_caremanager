@@ -35,7 +35,7 @@ async function main() {
   const byUser = new Map();
   for (const r of rows) {
     const k = `${padIns(r[8])}|${padInsurer(r[6])}`;
-    if (!byUser.has(k)) byUser.set(k, { init: 0, hosp: 0, disc: 0, discType: null, medco: 0, term: 0, emg: 0, total: 0, req: 0 });
+    if (!byUser.has(k)) byUser.set(k, { init: 0, hosp: 0, disc: 0, discType: null, medco: 0, medco2: 0, term: 0, emg: 0, total: 0, req: 0 });
     const e = byUser.get(k);
     const code = r[18], units = Number(r[19] || 0) || 0;
     if (r[17] === "99") { e.total = Number(r[22] || 0) || 0; e.req = Number(r[23] || 0) || 0; } // 行99: 項21合計単位(idx22)/項22請求(idx23)
@@ -47,7 +47,7 @@ async function main() {
     else if (code === "436133") e.emg = units;
     else if (DISCHARGE_TYPE[code]) { e.disc = units; e.discType = DISCHARGE_TYPE[code]; }
   }
-  const withAddon = [...byUser.values()].filter((v) => v.init || v.hosp || v.disc || v.medco || v.term || v.emg);
+  const withAddon = [...byUser.values()].filter((v) => v.init || v.hosp || v.disc || v.medco || v.medco2 || v.term || v.emg);
   console.log(`KK加算あり利用者: ${withAddon.length}名`);
 
   // 当事業所の利用者を DB から取得し 被保番|保険者 → client_id
@@ -63,9 +63,9 @@ async function main() {
 
   let upd = 0, diffTotal = 0; const mism = [];
   for (const c of claims) {
-    const a = byClient.get(c.user_id) || { init: 0, hosp: 0, disc: 0, medco: 0, term: 0, emg: 0, discType: null };
+    const a = byClient.get(c.user_id) || { init: 0, hosp: 0, disc: 0, medco: 0, medco2: 0, term: 0, emg: 0, discType: null };
     const base = c.units || 0; // units 列 = 居宅介護支援費本体 (要介護度別・逓減反映済)。特定/処遇は別列
-    const addonSum = a.init + a.hosp + a.disc + a.medco + a.term + a.emg;
+    const addonSum = a.init + a.hosp + a.disc + a.medco + a.medco2 + a.term + a.emg;
     const subtotal = base + (c.tokutei_kassan_units || 0) + addonSum;
     const shoguu = Math.round((subtotal * permil) / 1000);
     const newUnits = subtotal + shoguu;
@@ -79,6 +79,8 @@ async function main() {
       hospital_coordination: a.hosp > 0, hospital_coordination_units: a.hosp || 0,
       discharge_addition: a.disc > 0, discharge_addition_units: a.disc || 0, discharge_type: a.discType,
       medical_coop_kassan: a.medco > 0, medical_coop_kassan_units: a.medco || 0,
+      // 通院時情報連携加算 (436135)。合計に入れ忘れて2名の請求額が 556円 不足していた
+      medical_coordination: a.medco2 > 0, medical_coordination_units: a.medco2 || 0,
       terminal_care: a.term > 0, terminal_care_units: a.term || 0,
       emergency_conference: a.emg > 0, emergency_conference_units: a.emg || 0,
       shoguu_kaizen_units: shoguu, shoguu_kaizen_code: shoguuCode, total_amount: newTotal, insurance_amount: newTotal,
