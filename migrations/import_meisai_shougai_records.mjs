@@ -54,6 +54,10 @@ const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_
 // ---- 正規化 ----
 const normBase = (s) => (s || "").normalize("NFKC").replace(/[\s　]/g, "");
 const normStaff = (s) => normBase(s).replace(/様$/, "");
+// 利用者名の照合用。稼働データは氏名の末尾に制度の目印を付けることがある
+//   (大網 「神田　祐介（支）」= 支援 の意。clients 側は「神田 祐介」)。
+//   末尾の (…) を落として突合する。中黒や敬称の揺れも吸収。
+const normClientName = (s) => normBase(s).replace(/[（(][^）)]*[）)]\s*$/, "").replace(/様$/, "");
 
 // ---- SJIS CSV ----
 const sjis = new TextDecoder("shift_jis");
@@ -595,14 +599,14 @@ async function main() {
   // 氏名逆引き (mapping に無い分)
   const clients = await fetchAll("clients", "id,name");
   const clientByName = new Map();
-  for (const c of clients) { const k = normBase(c.name); if (!clientByName.has(k)) clientByName.set(k, []); clientByName.get(k).push(c.id); }
+  for (const c of clients) { const k = normClientName(c.name); if (!clientByName.has(k)) clientByName.set(k, []); clientByName.get(k).push(c.id); }
   const nameByNum = {}; for (const r of target) nameByNum[r.clientNum] = r.clientName;
 
   const resolvedClient = new Map(); // clientNum -> client_id
   const unresolvedClients = [];
   for (const num of uniqNums) {
     if (numToClient[num]) { resolvedClient.set(num, numToClient[num]); continue; }
-    const hits = clientByName.get(normBase(nameByNum[num])) || [];
+    const hits = clientByName.get(normClientName(nameByNum[num])) || [];
     if (hits.length === 1) { resolvedClient.set(num, hits[0]); continue; }
     unresolvedClients.push(`${num} ${nameByNum[num]} (氏名一致=${hits.length})`);
   }
