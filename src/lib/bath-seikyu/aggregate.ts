@@ -2,7 +2,8 @@
  * 訪問入浴介護 請求集計 (v2: visit-seikyu と同等の制度対応)
  *
  * データフロー:
- *   kaigo_bath_visit_records (actual=true, confirmed/submitted)
+ *   kaigo_bath_visit_records (actual=true, confirmed/submitted。opts.includeScheduled 時は
+ *     予定行 (planned=true) + kaigo_bath_schedule の未記録予定も含む = 売上見込)
  *     × kaigo_service_codes (service_code → units, 対象月世代)
  *     × client_insurance_records (認定=保険者/被保険者番号/要介護度/負担割合/限度額/居宅事業所, 月次解決)
  *     × client_kohi_records (公費)
@@ -66,7 +67,19 @@ const CODE_CHUUSANKAN = "128110"; // 中山間地域等提供加算 = 所定単�
 
 export async function aggregateBathVisitSeikyu(
   supabase: SupabaseClient,
-  opts: { officeId: string | null; tenantId: string; year: number; month: number; unitPrice?: number; appliedFormulaCodes?: string[] },
+  opts: {
+    officeId: string | null;
+    tenantId: string;
+    year: number;
+    month: number;
+    unitPrice?: number;
+    appliedFormulaCodes?: string[];
+    /**
+     * 売上 (見込) 集計モード。true = 予定行 (actual=false) と未確定 (draft/scheduled/completed)
+     * も集計対象に含める。未指定/false = 確定実績のみ = 従来どおりの請求集計 (完全後方互換)。
+     */
+    includeScheduled?: boolean;
+  },
 ): Promise<MonthlySeikyuResult> {
   const { year, month } = opts;
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
@@ -76,6 +89,8 @@ export async function aggregateBathVisitSeikyu(
   const warnings: string[] = [];
 
   // 1) 入浴実績 (実績=actual, 確定/請求済) — order 付き page-loop (PostgREST 1000 行キャップ対策)
+  //    売上モード (includeScheduled) では 提供表の予定行 (planned=true, actual=false) と
+  //    未確定 (status='draft') も含める。
   const PAGE = 1000;
   const records: BathRec[] = [];
   {
@@ -85,9 +100,10 @@ export async function aggregateBathVisitSeikyu(
         .from("kaigo_bath_visit_records")
         .select("client_id, visit_date, service_code, addon_shokai, addon_ninchi, addon_chuusankan")
         .gte("visit_date", monthStart)
-        .lte("visit_date", monthEnd)
-        .eq("actual", true)
-        .in("status", ["confirmed", "submitted"]);
+        .lte("visit_date", monthEnd);
+      q = opts.includeScheduled
+        ? q.or("planned.eq.true,actual.eq.true")
+        : q.eq("actual", true).in("status", ["confirmed", "submitted"]);
       if (opts.officeId) q = q.eq("office_id", opts.officeId);
       const { data: recData, error: recErr } = await q
         .order("id", { ascending: true })
@@ -95,6 +111,46 @@ export async function aggregateBathVisitSeikyu(
       if (recErr) throw recErr;
       const page = (recData ?? []) as BathRec[];
       records.push(...page);
+      if (page.length < PAGE) break;
+      offset += PAGE;
+    }
+  }
+
+  // 1.5) 売上モード: まだ実績記録に落ちていないシフト予定 (kaigo_bath_schedule status='scheduled')
+  //      も 1 件 = 1 訪問として積む。record_id が付いた行は 1) で拾っているので除外
+  //      (二重計上防止)。算定コードは 入浴種別 × 通常体制 (職員のみでない) で仮置きする
+  //      — 職員のみ (staff_only) は実績記録時に確定する情報なので予定段階では解決できない。
+  if (opts.includeScheduled) {
+    const SCHED_CODE = { 全身浴: "121111", 部分浴: "121112" } as const;
+    let offset = 0;
+    while (true) {
+      let sq = supabase
+        .from("kaigo_bath_schedule")
+        .select("client_id, visit_date, bath_type, scheme")
+        .eq("status", "scheduled")
+        .is("record_id", null)
+        .gte("visit_date", monthStart)
+        .lte("visit_date", monthEnd);
+      if (opts.officeId) sq = sq.eq("office_id", opts.officeId);
+      const { data, error } = await sq.order("id", { ascending: true }).range(offset, offset + PAGE - 1);
+      if (error) {
+        // table 未作成 (シフト機能未適用) は予定 0 件として続行 (握らず warning)
+        warnings.push(`入浴シフト予定の取得に失敗したため予定分は売上に含まれていません: ${error.message}`);
+        break;
+      }
+      const page = (data ?? []) as { client_id: string; visit_date: string; bath_type: "全身浴" | "部分浴"; scheme: string | null }[];
+      for (const s of page) {
+        // 地域生活支援 (千葉市移動支援等) は介護保険請求の対象外
+        if (s.scheme && s.scheme !== "介護保険") continue;
+        records.push({
+          client_id: s.client_id,
+          visit_date: s.visit_date,
+          service_code: SCHED_CODE[s.bath_type] ?? SCHED_CODE.全身浴,
+          addon_shokai: false,
+          addon_ninchi: null,
+          addon_chuusankan: false,
+        });
+      }
       if (page.length < PAGE) break;
       offset += PAGE;
     }

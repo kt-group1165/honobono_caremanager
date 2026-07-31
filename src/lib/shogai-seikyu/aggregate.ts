@@ -118,6 +118,12 @@ export async function aggregateMonthlyShogaiSeikyu(
     /** 自事業所 office_id — 実績のスコープ (office_id = 自 or NULL) と
      *  処遇改善加算の区分 (kaigo_office_addon_periods) 解決に使用 */
     officeId?: string | null;
+    /**
+     * 売上 (見込) 集計モード。true = 未確定の記録 (shogai_service_records status='draft')
+     * と 予定シフト (kaigo_visit_schedule status='scheduled') も集計対象に含める。
+     * 未指定/false = 確定実績のみ = 従来どおりの請求集計 (完全後方互換)。
+     */
+    includeScheduled?: boolean;
   },
 ): Promise<ShogaiSeikyuResult> {
   const monthStr = `${opts.year}-${String(opts.month).padStart(2, "0")}`;
@@ -128,7 +134,9 @@ export async function aggregateMonthlyShogaiSeikyu(
   // 単価は整数 (×100) で持ち回り float 誤差を避ける (訪問介護側と同じパターン)
   const unitPrice100 = Math.round(unitPrice * 100);
 
-  // 1) 実績 (confirmed) を月範囲で取得 (page-loop)
+  // 1) 実績 (confirmed。売上モードは未確定 draft も) を月範囲で取得 (page-loop)
+  const recStatuses = opts.includeScheduled ? ["draft", "confirmed"] : ["confirmed"];
+  const schedStatuses = opts.includeScheduled ? ["scheduled", "completed"] : ["completed"];
   const PAGE = 1000;
   interface Rec {
     client_id: string;
@@ -147,7 +155,7 @@ export async function aggregateMonthlyShogaiSeikyu(
     let q = supabase
       .from("shogai_service_records")
       .select("client_id, service_type, service_category, service_code, unit_count, service_date, duration_minutes")
-      .eq("status", "confirmed")
+      .in("status", recStatuses)
       .gte("service_date", from)
       .lte("service_date", to);
     // 自事業所スコープ (office_id 未設定の旧データは含める)
@@ -188,7 +196,7 @@ export async function aggregateMonthlyShogaiSeikyu(
       let sq = supabase
         .from("kaigo_visit_schedule")
         .select("user_id, service_type, visit_date, start_time, end_time")
-        .eq("status", "completed")
+        .in("status", schedStatuses)
         .gte("visit_date", from)
         .lte("visit_date", to);
       if (opts.officeId) sq = sq.or(`office_id.eq.${opts.officeId},office_id.is.null`);

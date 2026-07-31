@@ -2,7 +2,7 @@
  * 訪問介護 請求集計 (介護請求 / 利用請求 / 国保請求 の共通ロジック)
  *
  * データフロー:
- *   kaigo_visit_schedule (status='completed' = 実績)
+ *   kaigo_visit_schedule (status='completed' = 実績。opts.includeScheduled 時は 'scheduled' = 予定 も含む)
  *     × kaigo_service_codes (service_name → units)
  *     × clients + client_insurance_records (氏名 / 保険者番号 / 被保険者番号 / 要介護度 / 負担割合)
  *       ※ 認定は resolveCertForMonth で「対象月に有効な認定」を解決する (月遅れ再請求対応)
@@ -321,6 +321,12 @@ export async function aggregateMonthlyVisitSeikyu(
      * kaigo_office_addon_periods に対象月が期間内の行がある場合はそちらを優先。
      */
     appliedFormulaCodes?: string[];
+    /**
+     * 売上 (見込) 集計モード。true = 予定 (status='scheduled') も集計対象に含める。
+     * 未指定/false = 実績 (completed) のみ = 従来どおりの請求集計 (完全後方互換)。
+     * キャンセル (cancelled) はどちらのモードでも対象外。
+     */
+    includeScheduled?: boolean;
   },
 ): Promise<MonthlySeikyuResult> {
   const monthStr = `${opts.year}-${String(opts.month).padStart(2, "0")}`;
@@ -351,7 +357,8 @@ export async function aggregateMonthlyVisitSeikyu(
     );
   }
 
-  // 1) 実績 (completed) を月範囲で取得 (order 付き page-loop)
+  // 1) 実績 (completed。売上モードは予定 scheduled も) を月範囲で取得 (order 付き page-loop)
+  const targetStatuses = opts.includeScheduled ? ["scheduled", "completed"] : ["completed"];
   interface ScheduleRow {
     user_id: string;
     service_type: string;
@@ -367,7 +374,7 @@ export async function aggregateMonthlyVisitSeikyu(
     let q = supabase
       .from("kaigo_visit_schedule")
       .select(selectCols)
-      .eq("status", "completed")
+      .in("status", targetStatuses)
       .gte("visit_date", from)
       .lte("visit_date", to);
     if (opts.officeId && hasOfficeCol) {

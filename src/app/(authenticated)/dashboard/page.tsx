@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import {
   Users,
-  Receipt,
+  Wallet,
   ClipboardList,
   AlertTriangle,
   TrendingUp,
@@ -16,12 +16,12 @@ import { format, differenceInYears, parseISO, startOfMonth, endOfMonth } from "d
 import { ja } from "date-fns/locale";
 import { useBusinessType } from "@/lib/business-type-context";
 import { runCertExpiryScan, type CertExpiryAlert } from "@/lib/cert-expiry-alert";
+import { aggregateMonthlyUriage, type UriageBreakdown } from "@/lib/uriage/aggregate-uriage";
 
 // ---- Types ----
 
 type SummaryStats = {
   activeUsers: number;
-  monthlyBilling: number;
   monthlyServiceCount: number;
   expiringCarePlans: number;
 };
@@ -121,7 +121,6 @@ function CertStageBadge({
 export default function DashboardPage() {
   const [stats, setStats] = useState<SummaryStats>({
     activeUsers: 0,
-    monthlyBilling: 0,
     monthlyServiceCount: 0,
     expiringCarePlans: 0,
   });
@@ -137,6 +136,12 @@ export default function DashboardPage() {
   const [certAlerts, setCertAlerts] = useState<CertExpiryAlert[]>([]);
   const [certLoading, setCertLoading] = useState(true);
   const [certError, setCertError] = useState<string | null>(null);
+
+  // 売上 (予定+実績) と 請求額 (実績のみ) — 同じ集計エンジンを status 条件だけ変えて 2 本流す
+  const [uriage, setUriage] = useState<UriageBreakdown | null>(null);
+  const [jisseki, setJisseki] = useState<UriageBreakdown | null>(null);
+  const [uriageLoading, setUriageLoading] = useState(true);
+  const [uriageError, setUriageError] = useState<string | null>(null);
 
   const today = new Date();
   const todayStr = format(today, "yyyy-MM-dd");
@@ -165,19 +170,7 @@ export default function DashboardPage() {
           .is("deleted_at", null);
         if (e1) throw e1;
 
-        // 2. This month's billing total
-        const { data: billingData, error: e2 } = await supabase
-          .from("kaigo_billing_records")
-          .select("total_amount")
-          .gte("billing_month", monthStart)
-          .lte("billing_month", monthEnd);
-        if (e2) throw e2;
-        const monthlyBilling = (billingData ?? []).reduce(
-          (sum: number, r: Record<string, number>) => sum + (r.total_amount ?? 0),
-          0
-        );
-
-        // 3. This month's service record count
+        // 2. This month's service record count
         const { count: monthlyServiceCount, error: e3 } = await supabase
           .from("kaigo_service_records")
           .select("*", { count: "exact", head: true })
@@ -185,7 +178,7 @@ export default function DashboardPage() {
           .lte("service_date", monthEnd);
         if (e3) throw e3;
 
-        // 4. Expiring care certifications within 30 days（client_insurance_records、新カラム名）
+        // 3. Expiring care certifications within 30 days（client_insurance_records、新カラム名）
         const { count: expiringCarePlans, error: e4 } = await supabase
           .from("client_insurance_records")
           .select("*", { count: "exact", head: true })
@@ -196,12 +189,11 @@ export default function DashboardPage() {
 
         setStats({
           activeUsers: activeUsers ?? 0,
-          monthlyBilling,
           monthlyServiceCount: monthlyServiceCount ?? 0,
           expiringCarePlans: expiringCarePlans ?? 0,
         });
 
-        // 5. Recently registered users (latest 8)（法人/事業所エントリを除外）
+        // 4. Recently registered users (latest 8)（法人/事業所エントリを除外）
         const { data: usersData, error: e5 } = await supabase
           .from("clients")
           .select(
@@ -241,7 +233,7 @@ export default function DashboardPage() {
           }))
         );
 
-        // 6. Recent service records with user names (latest 10)
+        // 5. Recent service records with user names (latest 10)
         const { data: serviceData, error: e6 } = await supabase
           .from("kaigo_service_records")
           .select("id, service_date, service_type, content, user_id")
@@ -323,7 +315,66 @@ export default function DashboardPage() {
     };
   }, [bizLoading, currentOfficeId, tenantId, isCareManagement]);
 
+  // 売上 (予定+実績) / 請求額 (実績のみ) の月次集計。
+  // 請求集計エンジンをそのまま回すので重い → サマリーカードとは独立に遅延ロードする。
+  useEffect(() => {
+    if (bizLoading) return;
+    let cancelled = false;
+    const run = async () => {
+      if (!currentOfficeId || !tenantId) {
+        setUriage(null);
+        setJisseki(null);
+        setUriageLoading(false);
+        return;
+      }
+      setUriageLoading(true);
+      setUriageError(null);
+      try {
+        const supabase = createClient();
+        const base = {
+          officeId: currentOfficeId,
+          tenantId,
+          businessType,
+          year: today.getFullYear(),
+          month: today.getMonth() + 1,
+        };
+        const [u, j] = await Promise.all([
+          aggregateMonthlyUriage(supabase, { ...base, includeScheduled: true }),
+          aggregateMonthlyUriage(supabase, { ...base, includeScheduled: false }),
+        ]);
+        if (cancelled) return;
+        setUriage(u);
+        setJisseki(j);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "売上の集計に失敗しました";
+        console.error("uriage aggregation failed:", msg);
+        if (!cancelled) setUriageError(msg);
+      } finally {
+        if (!cancelled) setUriageLoading(false);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- today は毎レンダー新しい Date になるため依存に含めない (月替りはリロードで反映)
+  }, [bizLoading, currentOfficeId, tenantId, businessType]);
+
   const dateLabel = format(today, "yyyy年M月d日（EEE）", { locale: ja });
+
+  // 売上内訳の表示行 (0 円の制度は畳む。全部 0 のときは介護保険だけ残す)
+  const uriageLines = (() => {
+    if (!uriage) return [];
+    const all = [
+      { key: "kaigo", label: "介護保険", value: uriage.kaigo, cls: "bg-emerald-400" },
+      { key: "sougou", label: "総合事業", value: uriage.sougou, cls: "bg-teal-400" },
+      { key: "shogai", label: "障害福祉", value: uriage.shogai, cls: "bg-indigo-400" },
+      { key: "kyotaku", label: "居宅介護支援費", value: uriage.kyotaku, cls: "bg-sky-400" },
+      { key: "jihi", label: "自費", value: uriage.jihi, cls: "bg-amber-400" },
+    ];
+    const nonZero = all.filter((l) => l.value !== 0);
+    return nonZero.length > 0 ? nonZero : [all[0]];
+  })();
 
   return (
     <div className="space-y-6">
@@ -361,11 +412,17 @@ export default function DashboardPage() {
             sub="現在の在籍者"
           />
           <SummaryCard
-            title="今月の請求額"
-            value={formatCurrency(stats.monthlyBilling)}
-            icon={<Receipt size={22} className="text-emerald-600" />}
+            title="今月の売上"
+            value={
+              uriageLoading
+                ? "集計中…"
+                : uriageError
+                  ? "—"
+                  : formatCurrency(uriage?.total ?? 0)
+            }
+            icon={<Wallet size={22} className="text-emerald-600" />}
             iconBg="bg-emerald-50"
-            sub={format(today, "yyyy年M月", { locale: ja })}
+            sub={`${format(today, "yyyy年M月", { locale: ja })} 予定+実績`}
           />
           <SummaryCard
             title="今月のサービス件数"
@@ -383,6 +440,99 @@ export default function DashboardPage() {
           />
         </div>
       )}
+
+      {/* 今月の売上 内訳 (予定+実績で算定。請求のタイミングとは無関係) */}
+      <section className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <Wallet size={18} className="text-emerald-500" />
+            <h2 className="font-semibold text-gray-700">
+              今月の売上内訳
+              <span className="ml-2 text-xs font-normal text-gray-400">
+                {format(today, "yyyy年M月", { locale: ja })} 予定+実績
+              </span>
+            </h2>
+          </div>
+          <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-600">
+            キャンセル除く
+          </span>
+        </div>
+
+        {uriageLoading ? (
+          <div className="space-y-3 p-5">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-6 animate-pulse rounded-lg bg-gray-100" />
+            ))}
+          </div>
+        ) : uriageError ? (
+          <div className="flex items-center gap-2 px-5 py-6 text-sm text-red-600">
+            <AlertTriangle size={16} />
+            <span>売上の集計に失敗しました: {uriageError}</span>
+          </div>
+        ) : !currentOfficeId || !uriage ? (
+          <p className="px-5 py-8 text-center text-sm text-gray-400">
+            事業所を選択してください
+          </p>
+        ) : (
+          <div className="px-5 py-4">
+            {/* 合計 */}
+            <div className="flex items-baseline justify-between border-b border-gray-100 pb-3">
+              <span className="text-sm font-medium text-gray-600">売上合計</span>
+              <span className="text-2xl font-bold text-gray-800 tabular-nums">
+                {formatCurrency(uriage.total)}
+              </span>
+            </div>
+
+            {/* 制度別内訳 */}
+            <dl className="mt-3 space-y-2">
+              {uriageLines.map((l) => {
+                const pct = uriage.total > 0 ? (l.value / uriage.total) * 100 : 0;
+                return (
+                  <div key={l.key} className="flex items-center gap-3">
+                    <dt className="flex w-32 shrink-0 items-center gap-2 text-sm text-gray-600">
+                      <span className={`size-2.5 shrink-0 rounded-full ${l.cls}`} />
+                      <span className="truncate">{l.label}</span>
+                    </dt>
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+                      <div className={`h-full rounded-full ${l.cls}`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <dd className="w-28 shrink-0 text-right text-sm font-medium text-gray-700 tabular-nums">
+                      {formatCurrency(l.value)}
+                    </dd>
+                    <span className="w-12 shrink-0 text-right text-xs text-gray-400 tabular-nums">
+                      {pct.toFixed(0)}%
+                    </span>
+                  </div>
+                );
+              })}
+            </dl>
+
+            {/* 実績確定分 = 今そのまま請求できる額 */}
+            <div className="mt-4 flex items-baseline justify-between border-t border-gray-100 pt-3">
+              <span className="text-sm text-gray-500">
+                うち実績確定分（請求額）
+                <span className="ml-2 text-xs text-gray-400">
+                  残り予定 {formatCurrency(Math.max(0, uriage.total - (jisseki?.total ?? 0)))}
+                </span>
+              </span>
+              <span className="text-base font-semibold text-gray-700 tabular-nums">
+                {formatCurrency(jisseki?.total ?? 0)}
+              </span>
+            </div>
+
+            {uriage.warnings.length > 0 && (
+              <ul className="mt-3 space-y-1 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                {[...new Set(uriage.warnings)].slice(0, 5).map((w, i) => (
+                  <li key={i} className="flex items-start gap-1.5">
+                    <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                    <span>{w}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </section>
 
       {/* 認定更新が近い利用者 (60日以内 / 30日以内 / 期限切れ) */}
       <section className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
