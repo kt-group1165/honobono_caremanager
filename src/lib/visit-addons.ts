@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { validInMonth } from "@/lib/service-code-valid";
+import { ID_IN_CHUNK } from "@/lib/chunk-parallel";
 
 /**
  * 訪問介護の可変加算明細 (kaigo_visit_addon_lines) を、対象月のマスタ単位で解決する
@@ -31,7 +32,7 @@ interface LineRow {
   count: number;
 }
 
-const IN_CHUNK = 50;
+const IN_CHUNK = ID_IN_CHUNK;
 const PAGE = 1000;
 const isMissingTable = (code: string | null | undefined) =>
   code === "42P01" || code === "PGRST205";

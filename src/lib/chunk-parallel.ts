@@ -19,6 +19,14 @@
  */
 export const ID_IN_CHUNK = 150;
 
+/**
+ * サービス名など**日本語文字列**を `.in()` に渡す時の chunk サイズ。
+ *
+ * 日本語 1 文字は URL encode で 9 byte (%XX × 3) に膨らむため UUID と同じ感覚で
+ * 増やすと URL 上限に当たる。従来どおり 50 に据え置く。
+ */
+export const NAME_IN_CHUNK = 50;
+
 export async function mapChunksParallel<T, R>(
   items: T[],
   chunkSize: number,

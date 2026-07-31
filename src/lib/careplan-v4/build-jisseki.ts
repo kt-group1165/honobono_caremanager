@@ -47,6 +47,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { NAME_IN_CHUNK } from "@/lib/chunk-parallel";
 import {
   serviceNameVariantsAll,
   toHankakuDigits,
@@ -213,8 +214,8 @@ async function resolveServiceMasters(
   };
   const byNorm = new Map<string, ServiceMaster>();
   const variants = serviceNameVariantsAll(serviceTypes);
-  for (let i = 0; i < variants.length; i += 50) {
-    const chunk = variants.slice(i, i + 50);
+  for (let i = 0; i < variants.length; i += NAME_IN_CHUNK) {
+    const chunk = variants.slice(i, i + NAME_IN_CHUNK);
     const { data, error } = await validInMonth(
       supabase
         .from("kaigo_service_codes")

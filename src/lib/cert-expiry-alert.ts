@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ID_IN_CHUNK } from "./chunk-parallel";
 
 /**
  * 認定更新の能動アラート (cert expiry alert)。
@@ -97,7 +98,7 @@ function isoToMd(iso: string): string {
 // ─── scan: 自事業所の期限接近認定を判定 ────────────────────────────────
 
 const PAGE = 1000;
-const IN_CHUNK = 50;
+const IN_CHUNK = ID_IN_CHUNK;
 
 interface CertRow {
   id: string;

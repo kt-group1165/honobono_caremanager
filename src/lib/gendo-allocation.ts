@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { mapChunksParallel, ID_IN_CHUNK } from "./chunk-parallel";
 
 /**
  * 区分支給限度基準額 超過の割振り (kaigo_gendo_allocation) の共有ヘルパー。
@@ -31,7 +32,7 @@ const SELECT_COLS =
   "client_id, target_month, line_key, office_id, provider_name, service_category, " +
   "service_label, total_units, over_units, source";
 
-const IN_CHUNK = 50;
+const IN_CHUNK = ID_IN_CHUNK;
 const PAGE = 1000;
 
 const isMissingTable = (code: string | null | undefined) =>
@@ -50,10 +51,12 @@ export async function getGendoAllocationMap(
   const ids = Array.from(new Set(clientIds));
   if (ids.length === 0) return out;
 
-  for (let i = 0; i < ids.length; i += IN_CHUNK) {
-    const chunk = ids.slice(i, i + IN_CHUNK);
+  let tableMissing = false;
+  // chunk は並列 (chunk 順で返るので per-client の line_key 順は保たれる)
+  const perChunk = await mapChunksParallel(ids, IN_CHUNK, async (chunk) => {
+    const acc: DbRow[] = [];
     let offset = 0;
-    while (true) {
+    while (!tableMissing) {
       const { data, error } = await supabase
         .from("kaigo_gendo_allocation")
         .select(SELECT_COLS)
@@ -63,25 +66,33 @@ export async function getGendoAllocationMap(
         .order("line_key", { ascending: true })
         .range(offset, offset + PAGE - 1);
       if (error) {
-        if (isMissingTable(error.code)) return out;
+        if (isMissingTable(error.code)) {
+          tableMissing = true;
+          break;
+        }
         throw new Error(`限度額割振りの取得に失敗: ${error.message}`);
       }
       const rows = (data ?? []) as unknown as DbRow[];
-      for (const r of rows) {
-        if (!out.has(r.client_id)) out.set(r.client_id, []);
-        out.get(r.client_id)!.push({
-          line_key: r.line_key,
-          office_id: r.office_id,
-          provider_name: r.provider_name,
-          service_category: r.service_category,
-          service_label: r.service_label,
-          total_units: r.total_units,
-          over_units: r.over_units,
-          source: r.source,
-        });
-      }
+      acc.push(...rows);
       if (rows.length < PAGE) break;
       offset += PAGE;
+    }
+    return acc;
+  });
+  if (tableMissing) return out;
+  for (const rows of perChunk) {
+    for (const r of rows) {
+      if (!out.has(r.client_id)) out.set(r.client_id, []);
+      out.get(r.client_id)!.push({
+        line_key: r.line_key,
+        office_id: r.office_id,
+        provider_name: r.provider_name,
+        service_category: r.service_category,
+        service_label: r.service_label,
+        total_units: r.total_units,
+        over_units: r.over_units,
+        source: r.source,
+      });
     }
   }
   return out;

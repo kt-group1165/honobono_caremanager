@@ -14,6 +14,7 @@
  */
 
 import type { CSSProperties } from "react";
+import { ID_IN_CHUNK, NAME_IN_CHUNK } from "@/lib/chunk-parallel";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { serviceNameVariantsAll, toHankakuDigits } from "@/lib/service-name-normalize";
 import { isValidInMonth } from "@/lib/service-code-valid";
@@ -161,8 +162,8 @@ export async function fetchServiceMaster(
   const master: ServiceMaster = new Map();
   const uniq = Array.from(new Set(names.map((n) => n.trim()).filter(Boolean)));
   let firstError: string | null = null;
-  for (let i = 0; i < uniq.length; i += 50) {
-    const chunk = uniq.slice(i, i + 50);
+  for (let i = 0; i < uniq.length; i += NAME_IN_CHUNK) {
+    const chunk = uniq.slice(i, i + NAME_IN_CHUNK);
     const { data, error } = await supabase
       .from("kaigo_service_codes")
       .select("service_name, units, system, valid_from, valid_until")
@@ -498,8 +499,8 @@ export async function fetchMemberNames(
   const names = new Map<string, string>();
   const uniq = Array.from(new Set(ids));
   let firstError: string | null = null;
-  for (let i = 0; i < uniq.length; i += 100) {
-    const chunk = uniq.slice(i, i + 100);
+  for (let i = 0; i < uniq.length; i += ID_IN_CHUNK) {
+    const chunk = uniq.slice(i, i + ID_IN_CHUNK);
     const { data, error } = await supabase.from("members").select("id, name").in("id", chunk);
     if (error) {
       if (!firstError) firstError = error.message;

@@ -7,6 +7,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { NAME_IN_CHUNK } from "@/lib/chunk-parallel";
 import {
   serviceNameVariantsAll,
   toHankakuDigits,
@@ -34,11 +35,11 @@ export async function getServiceSystemMap(
   const types = Array.from(new Set(serviceTypes.filter(Boolean)));
   if (types.length === 0) return map;
   const variants = serviceNameVariantsAll(types);
-  for (let i = 0; i < variants.length; i += 50) {
+  for (let i = 0; i < variants.length; i += NAME_IN_CHUNK) {
     const base = supabase
       .from("kaigo_service_codes")
       .select("service_name, system")
-      .in("service_name", variants.slice(i, i + 50))
+      .in("service_name", variants.slice(i, i + NAME_IN_CHUNK))
       .eq("calculation_type", "基本");
     const { data, error } = await (targetMonth
       ? validInMonth(base, targetMonth.year, targetMonth.month)

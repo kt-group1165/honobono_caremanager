@@ -16,6 +16,7 @@
  *   shogai_seikyu_payments (client_id × target_month UNIQUE) に upsert
  */
 
+import { ID_IN_CHUNK, NAME_IN_CHUNK } from "@/lib/chunk-parallel";
 import { useMemo, useState, useEffect, useCallback } from "react";
 import {
   Loader2,
@@ -582,8 +583,8 @@ export function ShogaiSeikyuContent({
         string,
         { text: string | null; start: string | null; entry: string | null }
       >();
-      for (let i = 0; i < ids.length; i += 50) {
-        const chunk = ids.slice(i, i + 50);
+      for (let i = 0; i < ids.length; i += ID_IN_CHUNK) {
+        const chunk = ids.slice(i, i + ID_IN_CHUNK);
         const { data, error } = await supabase
           .from("shougai_certifications")
           .select(
@@ -857,8 +858,8 @@ export function ShogaiSeikyuContent({
           ),
         );
         const nameMap = new Map<string, { code: string; category: string | null }>();
-        for (let i = 0; i < names.length; i += 50) {
-          const chunk = names.slice(i, i + 50);
+        for (let i = 0; i < names.length; i += NAME_IN_CHUNK) {
+          const chunk = names.slice(i, i + NAME_IN_CHUNK);
           const { data, error } = await validInMonth(
             supabase
               .from("kaigo_service_codes")
@@ -936,8 +937,8 @@ export function ShogaiSeikyuContent({
     );
     if (juhoCodes.length > 0) {
       const codeNameMap = new Map<string, string>();
-      for (let i = 0; i < juhoCodes.length; i += 50) {
-        const chunk = juhoCodes.slice(i, i + 50);
+      for (let i = 0; i < juhoCodes.length; i += ID_IN_CHUNK) {
+        const chunk = juhoCodes.slice(i, i + ID_IN_CHUNK);
         const { data, error } = await validInMonth(
           supabase
             .from("kaigo_service_codes")
@@ -1044,8 +1045,8 @@ export function ShogaiSeikyuContent({
           string,
           { text: string | null; start: string | null; entry: string | null }
         >();
-        for (let i = 0; i < ids.length; i += 50) {
-          const chunk = ids.slice(i, i + 50);
+        for (let i = 0; i < ids.length; i += ID_IN_CHUNK) {
+          const chunk = ids.slice(i, i + ID_IN_CHUNK);
           const { data, error } = await supabase
             .from("shougai_certifications")
             .select(

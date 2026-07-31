@@ -25,6 +25,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ID_IN_CHUNK, NAME_IN_CHUNK } from "@/lib/chunk-parallel";
 import {
   serviceNameVariantsAll,
   toHankakuDigits,
@@ -218,8 +219,8 @@ export async function aggregateSougouSeikyu(
   // 自治体prefix (CB_/K_/IH_/"") ごとに (正規化サービス名 → マスタ) を保持し、
   // 利用者の保険者番号 → prefix で正しい市町村版コードを引く (先勝ちの保険者混在を防ぐ)。
   const masterByPrefixNorm = new Map<string, Map<string, MasterEntry>>();
-  for (let i = 0; i < variants.length; i += 50) {
-    const chunk = variants.slice(i, i + 50);
+  for (let i = 0; i < variants.length; i += NAME_IN_CHUNK) {
+    const chunk = variants.slice(i, i + NAME_IN_CHUNK);
     const { data, error } = await validInMonth(
       supabase
         .from("kaigo_service_codes")
@@ -282,8 +283,8 @@ export async function aggregateSougouSeikyu(
   const CLIENT_COLS_BASE = "id, name, furigana, birth_date, gender, user_number";
   const CLIENT_COLS_JUSHO = `${CLIENT_COLS_BASE}, jusho_tokurei, jusho_tokurei_insurer_number`;
   let jushoColsAvailable = true;
-  for (let i = 0; i < userIds.length; i += 50) {
-    const chunk = userIds.slice(i, i + 50);
+  for (let i = 0; i < userIds.length; i += ID_IN_CHUNK) {
+    const chunk = userIds.slice(i, i + ID_IN_CHUNK);
     type ClientRow = {
       id: string;
       name: string;

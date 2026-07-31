@@ -19,6 +19,7 @@
  * table 未作成 (42P01 / PGRST205) は空として続行、他エラーは toast。
  */
 
+import { ID_IN_CHUNK } from "@/lib/chunk-parallel";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BarChart3, Download, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -225,8 +226,8 @@ export function StatsContent() {
     // ── 4) 利用者名 (clients を client_id in で取得) ──
     const ids = [...new Set(flags.map((f) => f.client_id))];
     const names = new Map<string, string>();
-    for (let i = 0; i < ids.length; i += 100) {
-      const chunk = ids.slice(i, i + 100);
+    for (let i = 0; i < ids.length; i += ID_IN_CHUNK) {
+      const chunk = ids.slice(i, i + ID_IN_CHUNK);
       const { data, error } = await supabase
         .from("clients")
         .select("id, name")

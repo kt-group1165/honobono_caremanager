@@ -27,6 +27,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ID_IN_CHUNK } from "@/lib/chunk-parallel";
 import { validInMonth, monthRange } from "@/lib/service-code-valid";
 import {
   getGensanPeriodsForMonth,
@@ -211,8 +212,8 @@ export async function aggregateBathVisitSeikyu(
           .filter(Boolean) as string[],
       ),
     );
-    for (let i = 0; i < careOfficeIds.length; i += 50) {
-      const chunk = careOfficeIds.slice(i, i + 50);
+    for (let i = 0; i < careOfficeIds.length; i += ID_IN_CHUNK) {
+      const chunk = careOfficeIds.slice(i, i + ID_IN_CHUNK);
       const { data, error } = await supabase
         .from("care_offices")
         .select("id, office_number, name")

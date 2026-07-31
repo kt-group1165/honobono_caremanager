@@ -42,6 +42,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ID_IN_CHUNK } from "@/lib/chunk-parallel";
 import type { SameBuildingTier } from "./same-building";
 
 // ─── 型 ───────────────────────────────────────────────────────────────────────
@@ -171,8 +172,8 @@ async function fetchClients(
   ids: string[],
 ): Promise<Map<string, { name: string; address: string | null }>> {
   const map = new Map<string, { name: string; address: string | null }>();
-  for (let i = 0; i < ids.length; i += 50) {
-    const chunk = ids.slice(i, i + 50);
+  for (let i = 0; i < ids.length; i += ID_IN_CHUNK) {
+    const chunk = ids.slice(i, i + ID_IN_CHUNK);
     const { data, error } = await supabase
       .from("clients")
       .select("id, name, address")
@@ -199,8 +200,8 @@ async function fetchTiers(
   ids: string[],
 ): Promise<{ map: Map<string, SameBuildingTier>; columnMissing: boolean }> {
   const map = new Map<string, SameBuildingTier>();
-  for (let i = 0; i < ids.length; i += 50) {
-    const chunk = ids.slice(i, i + 50);
+  for (let i = 0; i < ids.length; i += ID_IN_CHUNK) {
+    const chunk = ids.slice(i, i + ID_IN_CHUNK);
     const { data, error } = await supabase
       .from("client_office_assignments")
       .select("client_id, same_building_tier")

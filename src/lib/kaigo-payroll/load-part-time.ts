@@ -9,6 +9,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ID_IN_CHUNK } from "@/lib/chunk-parallel";
 import {
   calcPartTimePayroll,
   minutesBetween,
@@ -124,8 +125,8 @@ export async function loadPartTimePayroll(
   >();
   if (staffIds.size > 0) {
     const ids = [...staffIds];
-    for (let i = 0; i < ids.length; i += 100) {
-      const chunk = ids.slice(i, i + 100);
+    for (let i = 0; i < ids.length; i += ID_IN_CHUNK) {
+      const chunk = ids.slice(i, i + ID_IN_CHUNK);
       const { data, error } = await supabase
         .from("members")
         .select("id, name, furigana, employment_type")

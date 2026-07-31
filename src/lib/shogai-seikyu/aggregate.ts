@@ -22,6 +22,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ID_IN_CHUNK, NAME_IN_CHUNK } from "@/lib/chunk-parallel";
 import { validInMonth } from "@/lib/service-code-valid";
 
 export interface ShogaiSeikyuDetail {
@@ -206,8 +207,8 @@ export async function aggregateMonthlyShogaiSeikyu(
     if (schedOk && schedRows.length > 0) {
       const names = Array.from(new Set(schedRows.map((s) => (s.service_type ?? "").trim()).filter(Boolean)));
       const nameMap = new Map<string, { code: string; units: number; category: string | null }>();
-      for (let i = 0; i < names.length; i += 50) {
-        const chunk = names.slice(i, i + 50);
+      for (let i = 0; i < names.length; i += NAME_IN_CHUNK) {
+        const chunk = names.slice(i, i + NAME_IN_CHUNK);
         const { data, error } = await validInMonth(
           supabase
             .from("kaigo_service_codes")
@@ -267,8 +268,8 @@ export async function aggregateMonthlyShogaiSeikyu(
   // 2) 利用者情報
   const userIds = Array.from(new Set(records.map((r) => r.client_id)));
   const clientById = new Map<string, { name: string; furigana: string | null }>();
-  for (let i = 0; i < userIds.length; i += 50) {
-    const chunk = userIds.slice(i, i + 50);
+  for (let i = 0; i < userIds.length; i += ID_IN_CHUNK) {
+    const chunk = userIds.slice(i, i + ID_IN_CHUNK);
     const { data, error } = await supabase
       .from("clients")
       .select("id, name, furigana")
@@ -312,8 +313,8 @@ export async function aggregateMonthlyShogaiSeikyu(
   const certByClient = new Map<string, Cert>();
   // 月途中の市町村変更検出用に全件も保持 (解決自体は従来どおり最新 1 件)
   const certsAllByClient = new Map<string, Cert[]>();
-  for (let i = 0; i < userIds.length; i += 50) {
-    const chunk = userIds.slice(i, i + 50);
+  for (let i = 0; i < userIds.length; i += ID_IN_CHUNK) {
+    const chunk = userIds.slice(i, i + ID_IN_CHUNK);
     let resp = await supabase
       .from("shougai_certifications")
       .select(certCols)
@@ -345,8 +346,8 @@ export async function aggregateMonthlyShogaiSeikyu(
     kanri_result_amount: number | null;
   }
   const kanriByClient = new Map<string, KanriResult>();
-  for (let i = 0; i < userIds.length; i += 50) {
-    const chunk = userIds.slice(i, i + 50);
+  for (let i = 0; i < userIds.length; i += ID_IN_CHUNK) {
+    const chunk = userIds.slice(i, i + ID_IN_CHUNK);
     const { data, error } = await supabase
       .from("shogai_jogen_kanri_results")
       .select("client_id, kanri_result, kanri_result_amount")
@@ -575,8 +576,8 @@ export async function aggregateMonthlyShogaiSeikyu(
         | { ok: false; name: string | null; reason: string };
       const master = new Map<string, GenericMaster>();
       const codes = Array.from(new Set(lineRows.map((r) => r.addon_code)));
-      for (let i = 0; i < codes.length; i += 50) {
-        const chunk = codes.slice(i, i + 50);
+      for (let i = 0; i < codes.length; i += ID_IN_CHUNK) {
+        const chunk = codes.slice(i, i + ID_IN_CHUNK);
         const { data, error } = await validInMonth(
           supabase
             .from("kaigo_service_codes")

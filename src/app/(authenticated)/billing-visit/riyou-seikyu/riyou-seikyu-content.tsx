@@ -19,6 +19,7 @@
  *   - 医療費控除対象額: iryohi_taisho の利用者のみ、生活援助を除く単位比率で按分
  */
 
+import { ID_IN_CHUNK } from "@/lib/chunk-parallel";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Loader2,
@@ -565,8 +566,8 @@ export function RiyouSeikyuContent() {
       return;
     }
     const m = new Map<string, RiyouSettingRow>();
-    for (let i = 0; i < ids.length; i += 100) {
-      const chunk = ids.slice(i, i + 100);
+    for (let i = 0; i < ids.length; i += ID_IN_CHUNK) {
+      const chunk = ids.slice(i, i + ID_IN_CHUNK);
       const { data, error: e } = await supabase
         .from("kaigo_riyou_settings")
         .select("client_id, keigen_rate, keigen_start_date, keigen_end_date, iryohi_taisho, notes")
@@ -655,8 +656,8 @@ export function RiyouSeikyuContent() {
     }
     const ids = Array.from(new Set(kaigoAllRows.map((r) => r.user_id)));
     const m = new Map<string, ClientBank>();
-    for (let i = 0; i < ids.length; i += 100) {
-      const chunk = ids.slice(i, i + 100);
+    for (let i = 0; i < ids.length; i += ID_IN_CHUNK) {
+      const chunk = ids.slice(i, i + ID_IN_CHUNK);
       const { data, error: e } = await supabase
         .from("clients")
         .select("id, bank_name, bank_branch, bank_account_type, bank_account_number, bank_account_holder, postal_code, address")
@@ -762,8 +763,8 @@ export function RiyouSeikyuContent() {
     }
     // 1) client → care_office_id (最新の非 null)
     const careOfficeIdByClient = new Map<string, string>();
-    for (let i = 0; i < ids.length; i += 100) {
-      const chunk = ids.slice(i, i + 100);
+    for (let i = 0; i < ids.length; i += ID_IN_CHUNK) {
+      const chunk = ids.slice(i, i + ID_IN_CHUNK);
       const { data, error: e } = await supabase
         .from("client_insurance_records")
         .select("client_id, care_office_id, effective_date")
@@ -786,8 +787,8 @@ export function RiyouSeikyuContent() {
     // 2) care_office_id → name
     const officeIds = Array.from(new Set(careOfficeIdByClient.values()));
     const nameById = new Map<string, string>();
-    for (let i = 0; i < officeIds.length; i += 100) {
-      const chunk = officeIds.slice(i, i + 100);
+    for (let i = 0; i < officeIds.length; i += ID_IN_CHUNK) {
+      const chunk = officeIds.slice(i, i + ID_IN_CHUNK);
       const { data, error: e } = await supabase
         .from("care_offices")
         .select("id, name")
@@ -1300,8 +1301,8 @@ export function RiyouSeikyuContent() {
     // 他事業所のみ利用の利用者は口座情報が未取得のことがある → 不足分を fetch
     const missingBankIds = Array.from(byUser.keys()).filter((id) => !bankByUser.has(id));
     const extraBank = new Map<string, ClientBank>();
-    for (let i = 0; i < missingBankIds.length; i += 100) {
-      const chunk = missingBankIds.slice(i, i + 100);
+    for (let i = 0; i < missingBankIds.length; i += ID_IN_CHUNK) {
+      const chunk = missingBankIds.slice(i, i + ID_IN_CHUNK);
       const { data, error: e } = await supabase
         .from("clients")
         .select("id, bank_name, bank_branch, bank_account_type, bank_account_number, bank_account_holder, postal_code, address")
@@ -1437,8 +1438,8 @@ export function RiyouSeikyuContent() {
       ),
     );
     const payByClient = new Map<string, FbPayRow>();
-    for (let i = 0; i < clientIds.length; i += 100) {
-      const chunk = clientIds.slice(i, i + 100);
+    for (let i = 0; i < clientIds.length; i += ID_IN_CHUNK) {
+      const chunk = clientIds.slice(i, i + ID_IN_CHUNK);
       const { data, error: e } = await supabase
         .from("riyou_seikyu_payments")
         .select(

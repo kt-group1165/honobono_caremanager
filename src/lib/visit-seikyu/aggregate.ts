@@ -32,6 +32,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ID_IN_CHUNK, NAME_IN_CHUNK } from "@/lib/chunk-parallel";
 import {
   serviceNameVariantsAll,
   toHankakuDigits,
@@ -406,8 +407,8 @@ export async function aggregateMonthlyVisitSeikyu(
   const SYSTEM_PRIORITY: Record<string, number> = { 介護: 0, 総合事業: 1, 独自: 2, 障害: 3 };
   // .in() の URL 長対策で 50 件ずつ chunk
   // 有効期間: 改定跨ぎで同名の世代が複数あるため、対象月に有効な世代のみ採用する
-  for (let i = 0; i < variants.length; i += 50) {
-    const chunk = variants.slice(i, i + 50);
+  for (let i = 0; i < variants.length; i += NAME_IN_CHUNK) {
+    const chunk = variants.slice(i, i + NAME_IN_CHUNK);
     const { data, error } = await validInMonth(
       supabase
         .from("kaigo_service_codes")
@@ -681,8 +682,8 @@ export async function aggregateMonthlyVisitSeikyu(
         ),
       ),
     );
-    for (let i = 0; i < codes.length; i += 50) {
-      const chunk = codes.slice(i, i + 50);
+    for (let i = 0; i < codes.length; i += ID_IN_CHUNK) {
+      const chunk = codes.slice(i, i + ID_IN_CHUNK);
       const { data, error } = await validInMonth(
         supabase
           .from("kaigo_service_codes")
@@ -801,8 +802,8 @@ export async function aggregateMonthlyVisitSeikyu(
     string,
     { name: string; furigana: string | null; birth: string | null; gender: string | null; userNumber: string | null }
   >();
-  for (let i = 0; i < userIds.length; i += 50) {
-    const chunk = userIds.slice(i, i + 50);
+  for (let i = 0; i < userIds.length; i += ID_IN_CHUNK) {
+    const chunk = userIds.slice(i, i + ID_IN_CHUNK);
     const { data, error } = await supabase
       .from("clients")
       .select("id, name, furigana, birth_date, gender, user_number")
@@ -820,8 +821,8 @@ export async function aggregateMonthlyVisitSeikyu(
   const sameBuildingTierByClient = new Map<string, SameBuildingTier>();
   if (opts.officeId) {
     // .in() の URL 長対策で他の fetch と同じく 50 件ずつ chunk
-    for (let i = 0; i < userIds.length; i += 50) {
-      const chunk = userIds.slice(i, i + 50);
+    for (let i = 0; i < userIds.length; i += ID_IN_CHUNK) {
+      const chunk = userIds.slice(i, i + ID_IN_CHUNK);
       const { data, error } = await supabase
         .from("client_office_assignments")
         .select("client_id, same_building_tier")
@@ -888,8 +889,8 @@ export async function aggregateMonthlyVisitSeikyu(
   //   - client_kohi_records あり環境: 「テキストあり・公費レコード未登録」warning のみ
   //   - client_kohi_records 未作成環境: 従来どおり公費扱いのフォールバック
   const publicExpenseTextByClient = new Map<string, string>();
-  for (let i = 0; i < userIds.length; i += 50) {
-    const chunk = userIds.slice(i, i + 50);
+  for (let i = 0; i < userIds.length; i += ID_IN_CHUNK) {
+    const chunk = userIds.slice(i, i + ID_IN_CHUNK);
     const { data, error } = await supabase
       .from("client_insurance_records")
       .select("client_id, public_expense, effective_date")
@@ -994,8 +995,8 @@ export async function aggregateMonthlyVisitSeikyu(
   if (careOfficeIds.length > 0) {
     // .in() の URL 長・PostgREST 1000 行キャップ対策で 50 件ずつ chunk
     // (id は PK のため 1 chunk の結果は最大 50 行 = page-loop 不要)
-    for (let i = 0; i < careOfficeIds.length; i += 50) {
-      const chunk = careOfficeIds.slice(i, i + 50);
+    for (let i = 0; i < careOfficeIds.length; i += ID_IN_CHUNK) {
+      const chunk = careOfficeIds.slice(i, i + ID_IN_CHUNK);
       const { data, error } = await supabase
         .from("care_offices")
         .select("id, office_number, name")
@@ -1016,8 +1017,8 @@ export async function aggregateMonthlyVisitSeikyu(
   const planUnitsByClient = new Map<string, number>();
   {
     let planTableMissing = false;
-    for (let i = 0; i < userIds.length && !planTableMissing; i += 50) {
-      const chunk = userIds.slice(i, i + 50);
+    for (let i = 0; i < userIds.length && !planTableMissing; i += ID_IN_CHUNK) {
+      const chunk = userIds.slice(i, i + ID_IN_CHUNK);
       const { data, error } = await supabase
         .from("kaigo_monthly_plan_units")
         .select("client_id, planned_units")
