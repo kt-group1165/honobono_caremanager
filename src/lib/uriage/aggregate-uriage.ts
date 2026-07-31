@@ -216,6 +216,134 @@ export async function aggregateMonthlyUriage(
   };
 }
 
+// ─── 全事業所 (法人横断) の売上 ────────────────────────────────────────────
+
+/** 1 事業所分の売上 */
+export interface OfficeUriage {
+  officeId: string;
+  officeName: string;
+  /** offices.service_type (訪問介護 / 訪問看護 / 訪問入浴 / 居宅介護支援) */
+  serviceType: string;
+  uriage: UriageBreakdown;
+}
+
+export interface AllOfficesUriage {
+  month: string;
+  /** 事業所別 (売上の降順) */
+  offices: OfficeUriage[];
+  /** 全事業所の合算 */
+  total: UriageBreakdown;
+  /** 事業所単位の集計失敗 (金額を握り潰さず可視化する)。失敗した事業所は total に入らない */
+  errors: string[];
+}
+
+/** UriageBreakdown の単純加算 (制度別・財源別ともに整数加算) */
+export function sumUriage(month: string, list: UriageBreakdown[]): UriageBreakdown {
+  const out: UriageBreakdown = { ...EMPTY_URIAGE, month, warnings: [] };
+  for (const u of list) {
+    out.total += u.total;
+    out.kaigo += u.kaigo;
+    out.sougou += u.sougou;
+    out.shogai += u.shogai;
+    out.kyotaku += u.kyotaku;
+    out.jihi += u.jihi;
+    out.insurance += u.insurance;
+    out.kohi += u.kohi;
+    out.userBurden += u.userBurden;
+    out.warnings.push(...u.warnings);
+  }
+  return out;
+}
+
+/** offices.service_type → BusinessType (business-type-context の mapBusinessType と同じ寄せ方) */
+function businessTypeOf(serviceType: string): string {
+  if (serviceType === "訪問入浴") return "訪問入浴";
+  if (serviceType === "訪問介護" || serviceType === "訪問看護") return "訪問介護";
+  return "居宅介護支援";
+}
+
+/**
+ * kaigo-app の全 (有効) 事業所の売上を集計する。
+ *
+ * ★ money-safety: 各事業所の値は aggregateMonthlyUriage を officeId だけ差し替えて
+ *   得たものなので、その事業所を単独で開いた時の売上と 1 円も違わない。
+ *   合算は整数加算のみ (use-cross-office-seikyu.ts と同じ方針)。
+ *
+ * 事業所数 × 請求エンジンなので重い。呼出側は明示操作 (ボタン) で起動し、
+ * onProgress で進捗を出すこと。1 事業所の失敗は errors に集約して他を続行する。
+ */
+export async function aggregateAllOfficesUriage(
+  supabase: SupabaseClient,
+  opts: {
+    year: number;
+    month: number;
+    includeScheduled?: boolean;
+    /** 同時実行数 (既定 4)。上げすぎると PostgREST 側が詰まる */
+    concurrency?: number;
+    onProgress?: (done: number, total: number) => void;
+  },
+): Promise<AllOfficesUriage> {
+  const monthStr = `${opts.year}-${String(opts.month).padStart(2, "0")}`;
+  const { data, error } = await supabase
+    .from("offices")
+    .select("id, name, service_type, tenant_id")
+    .eq("app_type", "kaigo-app")
+    .eq("is_active", true)
+    .order("service_type")
+    .order("name");
+  if (error) throw new Error(`事業所一覧の取得に失敗しました: ${error.message}`);
+  const offices = (data ?? []) as {
+    id: string;
+    name: string;
+    service_type: string;
+    tenant_id: string;
+  }[];
+
+  const errors: string[] = [];
+  const results: OfficeUriage[] = [];
+  const concurrency = Math.max(1, opts.concurrency ?? 4);
+  let next = 0;
+  let done = 0;
+  opts.onProgress?.(0, offices.length);
+
+  const runners = Array.from({ length: Math.min(concurrency, offices.length) }, async () => {
+    while (true) {
+      const i = next++;
+      if (i >= offices.length) return;
+      const o = offices[i];
+      try {
+        const uriage = await aggregateMonthlyUriage(supabase, {
+          officeId: o.id,
+          tenantId: o.tenant_id,
+          businessType: businessTypeOf(o.service_type),
+          year: opts.year,
+          month: opts.month,
+          includeScheduled: opts.includeScheduled,
+        });
+        results.push({
+          officeId: o.id,
+          officeName: o.name,
+          serviceType: o.service_type,
+          uriage,
+        });
+      } catch (e: unknown) {
+        errors.push(`${o.name} の集計に失敗: ${e instanceof Error ? e.message : String(e)}`);
+      } finally {
+        opts.onProgress?.(++done, offices.length);
+      }
+    }
+  });
+  await Promise.all(runners);
+
+  results.sort((a, b) => b.uriage.total - a.uriage.total || a.officeName.localeCompare(b.officeName, "ja"));
+  return {
+    month: monthStr,
+    offices: results,
+    total: sumUriage(monthStr, results.map((r) => r.uriage)),
+    errors,
+  };
+}
+
 /**
  * 居宅介護支援費の月次売上 = kaigo_care_support_claims の費用合計。
  * claims に office_id が無いため 自事業所の担当利用者 (client_office_assignments) で絞る。

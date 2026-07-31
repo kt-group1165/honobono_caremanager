@@ -2,15 +2,21 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-/** 請求画面 共通の月ナビ (R8/6 形式表示) */
+/**
+ * 請求画面 共通の月ナビ (既定は R8/6 請求分 形式)。
+ * 請求以外の画面 (ダッシュボードの売上等) は label で表記を差し替える。
+ */
 export function MonthNav({
   year,
   month,
   onChange,
+  label,
 }: {
   year: number;
   month: number;
   onChange: (y: number, m: number) => void;
+  /** 中央の表記。未指定は「R8/6 請求分」 */
+  label?: (year: number, month: number) => string;
 }) {
   const prev = () => {
     if (month === 1) onChange(year - 1, 12);
@@ -31,8 +37,8 @@ export function MonthNav({
       >
         <ChevronLeft size={16} />
       </button>
-      <span className="min-w-[90px] text-center text-sm font-bold text-gray-800">
-        R{reiwa}/{month} 請求分
+      <span className="min-w-[90px] text-center text-sm font-bold text-gray-800 whitespace-nowrap">
+        {label ? label(year, month) : `R${reiwa}/${month} 請求分`}
       </span>
       <button
         type="button"
