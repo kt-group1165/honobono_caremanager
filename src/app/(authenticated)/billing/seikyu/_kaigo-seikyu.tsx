@@ -222,29 +222,59 @@ export function KyotakuKaigoSeikyuContent() {
   const [benefitChecked, setBenefitChecked] = useState<Set<string>>(new Set());
   const loadBenefits = useCallback(async () => {
     const PAGE = 1000;
-    const acc: BenefitDbRow[] = [];
-    let from = 0;
-    while (true) {
-      const { data, error: e } = await supabase
-        .from("kaigo_benefit_management")
-        .select("user_id, service_type, provider_name, planned_units")
-        .eq("billing_month", monthKey)
-        .order("user_id", { ascending: true })
-        .order("service_type", { ascending: true })
-        .range(from, from + PAGE - 1);
-      if (e) {
-        toast.error("給付管理データの取得に失敗: " + e.message);
-        setBenefitRows([]);
-        return;
+    if (!officeId) { setBenefitRows([]); return; }
+    // ⚠ 自事業所で必ず絞る。絞らないと他事業所の給付管理まで一覧に出て、
+    //   「国保対象」ボタンが他事業所の利用者にも状態行を作ってしまう
+    //   (2026-07-31 に袖ヶ浦で他事業所 2,394 件を巻き込む事故が発生)。
+    const clientIds: string[] = [];
+    {
+      let fromA = 0;
+      while (true) {
+        const { data, error: ae } = await supabase
+          .from("client_office_assignments")
+          .select("client_id")
+          .eq("office_id", officeId)
+          .order("client_id", { ascending: true })
+          .range(fromA, fromA + PAGE - 1);
+        if (ae) {
+          toast.error("事業所割当の取得に失敗: " + ae.message);
+          setBenefitRows([]);
+          return;
+        }
+        if (!data || data.length === 0) break;
+        clientIds.push(...data.map((a: { client_id: string }) => a.client_id));
+        if (data.length < PAGE) break;
+        fromA += PAGE;
       }
-      if (!data || data.length === 0) break;
-      acc.push(...(data as BenefitDbRow[]));
-      if (data.length < PAGE) break;
-      from += PAGE;
+    }
+    if (clientIds.length === 0) { setBenefitRows([]); setBenefitChecked(new Set()); return; }
+    const acc: BenefitDbRow[] = [];
+    for (let i = 0; i < clientIds.length; i += 50) {
+      const chunk = clientIds.slice(i, i + 50);
+      let from = 0;
+      while (true) {
+        const { data, error: e } = await supabase
+          .from("kaigo_benefit_management")
+          .select("user_id, service_type, provider_name, planned_units")
+          .eq("billing_month", monthKey)
+          .in("user_id", chunk)
+          .order("user_id", { ascending: true })
+          .order("service_type", { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (e) {
+          toast.error("給付管理データの取得に失敗: " + e.message);
+          setBenefitRows([]);
+          return;
+        }
+        if (!data || data.length === 0) break;
+        acc.push(...(data as BenefitDbRow[]));
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
     }
     setBenefitRows(acc);
     setBenefitChecked(new Set());
-  }, [supabase, monthKey]);
+  }, [supabase, monthKey, officeId]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更時の fetch

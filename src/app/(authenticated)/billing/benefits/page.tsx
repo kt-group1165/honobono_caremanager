@@ -12,34 +12,70 @@ import {
 export default async function BenefitsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; office?: string }>;
 }) {
   const sp = await searchParams;
   const initialTab = sp.tab === "claims" ? "claims" : "benefits";
   const supabase = await createClient();
   const month = getCurrentMonth();
+  // 自事業所 (?office=)。給付管理は事業所ごとに独立なので必ず絞る。
+  // 絞らないと全事業所分 (4事業所で 2000 行超) を読んで初期表示が重くなり、
+  // 他事業所の利用者まで一覧に出てしまう。
+  const officeId = typeof sp.office === "string" ? sp.office : null;
 
   // 給付管理は「当月の給付管理行がある利用者」しか表示しない (benefits-content の
   // aggregateUserGroups が rows を持つ利用者に filter)。全利用者を取得して全員分の
   // 認定を解決するのは遅い (全クライアント数に比例) ので、まず当月行を取り、
   // そこに出てくる利用者だけ 名前 + 認定 を解決する。
   const PAGE = 1000;
-  const rowsAll: BenefitManagementRow[] = [];
-  {
-    let from = 0;
+
+  // 自事業所の利用者
+  const officeClientIds: string[] = [];
+  if (officeId) {
+    let fromA = 0;
     while (true) {
       const { data, error } = await supabase
-        .from("kaigo_benefit_management")
-        .select("*")
-        .eq("billing_month", month)
-        .order("user_id")
-        .order("service_type")
-        .range(from, from + PAGE - 1);
+        .from("client_office_assignments")
+        .select("client_id")
+        .eq("office_id", officeId)
+        .order("client_id", { ascending: true })
+        .range(fromA, fromA + PAGE - 1);
       if (error) break;
       if (!data || data.length === 0) break;
-      rowsAll.push(...(data as BenefitManagementRow[]));
+      officeClientIds.push(...data.map((a: { client_id: string }) => a.client_id));
       if (data.length < PAGE) break;
-      from += PAGE;
+      fromA += PAGE;
+    }
+  }
+
+  const rowsAll: BenefitManagementRow[] = [];
+  if (!officeId || officeClientIds.length > 0) {
+    // .in() の URI Too Long 回避のため chunk 化
+    const CHUNK = 50;
+    const idChunks: (string[] | null)[] = [];
+    if (officeId) {
+      for (let i = 0; i < officeClientIds.length; i += CHUNK) idChunks.push(officeClientIds.slice(i, i + CHUNK));
+    } else {
+      idChunks.push(null);
+    }
+    for (const idChunk of idChunks) {
+      let from = 0;
+      while (true) {
+        let q = supabase
+          .from("kaigo_benefit_management")
+          .select("*")
+          .eq("billing_month", month);
+        if (idChunk) q = q.in("user_id", idChunk);
+        const { data, error } = await q
+          .order("user_id")
+          .order("service_type")
+          .range(from, from + PAGE - 1);
+        if (error) break;
+        if (!data || data.length === 0) break;
+        rowsAll.push(...(data as BenefitManagementRow[]));
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
     }
   }
 

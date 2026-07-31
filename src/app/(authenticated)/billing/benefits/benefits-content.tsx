@@ -9,7 +9,6 @@ import {
   RefreshCw,
   Loader2,
   Download,
-  Zap,
   CheckCircle,
   XCircle,
   ChevronDown,
@@ -21,6 +20,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { resolveCertForMonth } from "@/lib/cert-for-month";
+import { useBusinessType } from "@/lib/business-type-context";
 
 // ---------------------------------------------------------------------------
 // Types (= benefits-shared.ts から re-import、page.tsx は shared を直接 import)
@@ -46,21 +46,6 @@ interface UserGroup {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const SERVICE_TYPE_BASE_UNITS: Record<string, number> = {
-  訪問介護: 247,
-  訪問入浴介護: 830,
-  訪問看護: 821,
-  訪問リハビリテーション: 290,
-  居宅療養管理指導: 295,
-  通所介護: 656,
-  通所リハビリテーション: 596,
-  短期入所生活介護: 620,
-  短期入所療養介護: 758,
-  特定施設入居者生活介護: 535,
-  福祉用具貸与: 100,
-  居宅介護支援: 1053,
-};
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "下書き",
@@ -193,12 +178,15 @@ export function BenefitsContent({
   initialRows: BenefitManagementRow[];
 }) {
   const supabase = useMemo(() => createClient(), []);
+  // 自事業所。給付管理は事業所ごとに独立しているので、これで必ず絞る
+  // (絞らないと全事業所分 2000 行超を読んで重く、他事業所の利用者まで見えてしまう)
+  const { currentOffice } = useBusinessType();
+  const officeId = currentOffice?.id ?? null;
 
   const [billingMonth, setBillingMonth] = useState(initialMonth);
   const [users, setUsers] = useState<UserWithCert[]>(initialUsers);
   const [rows, setRows] = useState<BenefitManagementRow[]>(initialRows);
   const [loading, setLoading] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(
     () => new Set(aggregateUserGroups(initialUsers, initialRows).map((g) => g.user.id))
   );
@@ -215,24 +203,49 @@ export function BenefitsContent({
     try {
       const PAGE = 1000;
 
-      // まず当月の給付管理行を取得。表示対象は「行がある利用者」だけなので、
+      // 自事業所の利用者 (client_office_assignments)。給付管理は事業所ごとに独立なので
+      // これで必ず絞る。絞らないと全事業所分を読み込んでしまう。
+      const officeClientIds: string[] = [];
+      if (officeId) {
+        let fromA = 0;
+        while (true) {
+          const { data, error } = await supabase
+            .from("client_office_assignments")
+            .select("client_id")
+            .eq("office_id", officeId)
+            .order("client_id", { ascending: true })
+            .range(fromA, fromA + PAGE - 1);
+          if (error) throw error;
+          if (!data || data.length === 0) break;
+          officeClientIds.push(...data.map((a: { client_id: string }) => a.client_id));
+          if (data.length < PAGE) break;
+          fromA += PAGE;
+        }
+      }
+
+      // 当月の給付管理行 (自事業所の利用者のみ)。表示対象は「行がある利用者」だけなので、
       // 全利用者を取って全員分の認定を解決する必要はない (遅さの原因だった)。
       const rowsAll: BenefitManagementRow[] = [];
-      {
-        let fromR = 0;
-        while (true) {
-          const { data: rowsData, error: rowsError } = await supabase
-            .from("kaigo_benefit_management")
-            .select("*")
-            .eq("billing_month", billingMonth)
-            .order("user_id")
-            .order("service_type")
-            .range(fromR, fromR + PAGE - 1);
-          if (rowsError) throw rowsError;
-          if (!rowsData || rowsData.length === 0) break;
-          rowsAll.push(...(rowsData as BenefitManagementRow[]));
-          if (rowsData.length < PAGE) break;
-          fromR += PAGE;
+      if (!officeId || officeClientIds.length > 0) {
+        const idChunks = officeId ? chunkArray(officeClientIds, IN_CHUNK_SIZE) : [null];
+        for (const idChunk of idChunks) {
+          let fromR = 0;
+          while (true) {
+            let q = supabase
+              .from("kaigo_benefit_management")
+              .select("*")
+              .eq("billing_month", billingMonth);
+            if (idChunk) q = q.in("user_id", idChunk);
+            const { data: rowsData, error: rowsError } = await q
+              .order("user_id")
+              .order("service_type")
+              .range(fromR, fromR + PAGE - 1);
+            if (rowsError) throw rowsError;
+            if (!rowsData || rowsData.length === 0) break;
+            rowsAll.push(...(rowsData as BenefitManagementRow[]));
+            if (rowsData.length < PAGE) break;
+            fromR += PAGE;
+          }
         }
       }
 
@@ -279,7 +292,7 @@ export function BenefitsContent({
     } finally {
       setLoading(false);
     }
-  }, [supabase, billingMonth]);
+  }, [supabase, billingMonth, officeId]);
 
   // 初回 render は server からの initial データ。月変更時のみ refetch + expanded 再計算。
   const isInitialMount = useRef(true);
@@ -297,95 +310,6 @@ export function BenefitsContent({
     const groups = aggregateUserGroups(users, rows);
     setExpandedUsers(new Set(groups.map((g) => g.user.id)));
   }, [users, rows]);
-
-  // ---------------------------------------------------------------------------
-  // Auto-generation
-  // ---------------------------------------------------------------------------
-
-  const handleBulkGenerate = async () => {
-    setGenerating(true);
-    try {
-      // Fetch service records for the month
-      const startDate = `${billingMonth}-01`;
-      const [y, m] = billingMonth.split("-").map(Number);
-      const lastDay = new Date(y, m, 0).getDate();
-      const endDate = `${billingMonth}-${String(lastDay).padStart(2, "0")}`;
-
-      const { data: serviceRecords, error: srError } = await supabase
-        .from("kaigo_service_records")
-        .select("id, user_id, service_type, service_date, content")
-        .gte("service_date", startDate)
-        .lte("service_date", endDate);
-
-      if (srError) throw srError;
-
-      if (!serviceRecords || serviceRecords.length === 0) {
-        toast.info("対象月のサービス実績がありません");
-        setGenerating(false);
-        return;
-      }
-
-      // Group by user_id + service_type
-      type AggKey = string;
-      const grouped = new Map<
-        AggKey,
-        {
-          user_id: string;
-          service_type: string;
-          record_count: number;
-          total_units: number;
-        }
-      >();
-
-      for (const sr of serviceRecords) {
-        const key: AggKey = `${sr.user_id}__${sr.service_type}`;
-        if (!grouped.has(key)) {
-          grouped.set(key, {
-            user_id: sr.user_id,
-            service_type: sr.service_type,
-            record_count: 0,
-            total_units: 0,
-          });
-        }
-        const entry = grouped.get(key)!;
-        entry.record_count += 1;
-        entry.total_units += SERVICE_TYPE_BASE_UNITS[sr.service_type] ?? 100;
-      }
-
-      // Upsert into kaigo_benefit_management
-      const upsertRows = Array.from(grouped.values()).map((entry) => ({
-        user_id: entry.user_id,
-        billing_month: billingMonth,
-        service_type: entry.service_type,
-        provider_number: "", // この簡易生成は提供事業所を持たない (複合キー用に空文字)
-        planned_units: entry.total_units,
-        actual_units: entry.total_units,
-        over_limit_units: 0,
-        status: "draft" as const,
-      }));
-
-      // 大量 row の upsert は payload / URL が膨らみ HTTP 414/413 で失敗するため chunk 化
-      for (const chunk of chunkArray(upsertRows, IN_CHUNK_SIZE)) {
-        const { error: upsertError } = await supabase
-          .from("kaigo_benefit_management")
-          .upsert(chunk, {
-            onConflict: "user_id,billing_month,service_type,provider_number",
-            ignoreDuplicates: false,
-          });
-        if (upsertError) throw upsertError;
-      }
-
-      toast.success(
-        `${upsertRows.length}件の給付管理票を生成しました（${formatMonth(billingMonth)}）`
-      );
-      await fetchData();
-    } catch (err: unknown) {
-      console.error("benefits handleBulkGenerate err:", err);
-      toast.error("一括生成に失敗しました: " + formatSupabaseErr(err));
-    } finally {
-      setGenerating(false);
-    }
-  };
 
   // ---------------------------------------------------------------------------
   // Inline editing
@@ -642,18 +566,6 @@ export function BenefitsContent({
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
             更新
           </button>
-          <button
-            onClick={handleBulkGenerate}
-            disabled={generating || loading}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50"
-          >
-            {generating ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <Zap size={14} />
-            )}
-            一括生成
-          </button>
           <Link
             href="/billing/seikyu"
             className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors"
@@ -742,7 +654,7 @@ export function BenefitsContent({
             {formatMonth(billingMonth)}の給付管理データがありません
           </p>
           <p className="mt-1 text-xs text-gray-400">
-            「一括生成」でサービス実績から自動作成できます
+            給付管理データは提供事業所の実績から取り込みます (migrations の取込スクリプト)
           </p>
         </div>
       ) : (
