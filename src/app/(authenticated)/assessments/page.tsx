@@ -1,13 +1,13 @@
 import { ClipboardCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { UserSidebar } from "@/components/users/user-sidebar";
-import {
-  AssessmentsContent,
-  type Assessment,
-  type Certification,
-  type KaigoUser,
-} from "./assessments-content";
+import { formKindForCareLevel } from "@/lib/yobo-kubun";
+import { AssessmentsShell } from "./_shell";
+import type { Assessment, Certification, KaigoUser } from "./assessments-content";
 
+// アセスメントは介護版 / 予防版で入口を分けない。
+// 認定期間 (care_level) から様式を導出するので、server 側でも最新認定の区分で
+// prefetch する assessment_type を決める。切替は _shell.tsx が担当。
 export default async function AssessmentsPage({
   searchParams,
 }: {
@@ -18,6 +18,8 @@ export default async function AssessmentsPage({
   let initialUser: KaigoUser | null = null;
   let initialCertifications: Certification[] = [];
   let initialAssessments: Assessment[] = [];
+  let serverKind = formKindForCareLevel(null);
+  let serverCertId: string | null = null;
 
   if (userId) {
     const supabase = await createClient();
@@ -36,14 +38,17 @@ export default async function AssessmentsPage({
     initialUser = (userRes.data ?? null) as KaigoUser | null;
     initialCertifications = (certRes.data ?? []) as Certification[];
 
-    const initialCertId = initialCertifications[0]?.id ?? null;
+    serverCertId = initialCertifications[0]?.id ?? null;
+    serverKind = formKindForCareLevel(initialCertifications[0]?.care_level);
+
     let q = supabase
       .from("kaigo_assessments")
       .select("*")
       .eq("user_id", userId)
-      .eq("assessment_type", "kaigo");
-    if (initialCertId) q = q.eq("certification_id", initialCertId);
-    const { data: assessRes } = await q.order("assessment_date", { ascending: false });
+      .eq("assessment_type", serverKind);
+    if (serverCertId) q = q.eq("certification_id", serverCertId);
+    const { data: assessRes, error: assessError } = await q.order("assessment_date", { ascending: false });
+    if (assessError) console.error("kaigo_assessments initial fetch failed:", assessError.message);
     initialAssessments = (assessRes ?? []) as Assessment[];
   }
 
@@ -51,11 +56,13 @@ export default async function AssessmentsPage({
     <div className="flex h-full -m-6">
       <UserSidebar />
       {userId ? (
-        <AssessmentsContent
+        <AssessmentsShell
           key={userId}
           userId={userId}
           initialUser={initialUser}
           initialCertifications={initialCertifications}
+          serverKind={serverKind}
+          serverCertId={serverCertId}
           initialAssessments={initialAssessments}
         />
       ) : (

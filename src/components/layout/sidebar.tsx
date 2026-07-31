@@ -35,7 +35,16 @@ import { SidebarLegacy } from "./sidebar-legacy";
 
 const APP_VERSION = pkg.version;
 
-type NavItem = { name: string; href: string; icon: React.ComponentType<{ size?: number }> };
+type NavItem = {
+  name: string;
+  href: string;
+  icon: React.ComponentType<{ size?: number }>;
+  /**
+   * active 判定に使う追加 prefix。href だけでは拾えない別 URL に飛ぶ項目用
+   * (例: 計画書は認定区分で /reports/yobo-care-plan に振り替わる)。
+   */
+  activePrefixes?: string[];
+};
 type SectionSpec = { title?: string; items: NavItem[] };
 
 // ── ケアマネ版 (居宅介護支援) — セクション分割
@@ -50,10 +59,17 @@ const NAV_CARE_MANAGER_SECTIONED: SectionSpec[] = [
   {
     title: "日常業務",
     items: [
+      // 介護版 / 予防版 は入口を分けない。認定期間の care_level から様式を導出する
+      // (アセスメント: assessments/_shell.tsx / 計画書: reports/[type]/page.tsx の redirect)。
+      // 操作者が区分を覚えて選ぶ必要がなくなり、区分違いの様式で作る事故も防げる。
       { name: "アセスメント", href: "/assessments", icon: ClipboardCheck },
-      { name: "予防アセスメント", href: "/assessments/yobo", icon: ClipboardCheck },
-      { name: "居宅サービス計画書", href: "/reports/care-plan-1", icon: ClipboardList },
-      { name: "介護予防サービス・支援計画書", href: "/reports/yobo-care-plan", icon: ClipboardList },
+      {
+        name: "居宅サービス計画書",
+        href: "/reports/care-plan-1",
+        icon: ClipboardList,
+        // 要支援・事業対象者は /reports/yobo-care-plan に振り替わるので active 判定に含める
+        activePrefixes: ["/reports/care-plan", "/reports/yobo-care-plan"],
+      },
       { name: "課題整理総括表", href: "/care-reports/kadai-seiri", icon: FileSpreadsheet },
       { name: "評価表", href: "/care-reports/hyouka", icon: ClipboardCheck },
       { name: "担当者会議録", href: "/meeting-minutes", icon: MessagesSquare },
@@ -296,7 +312,9 @@ function SidebarV2({ onSwitchLayout }: { onSwitchLayout: () => void }) {
       ? clickedHref === item.href
       : item.href === "/dashboard"
         ? pathname === "/dashboard"
-        : pathname.startsWith(item.href);
+        : item.activePrefixes
+          ? item.activePrefixes.some((p) => pathname.startsWith(p))
+          : pathname.startsWith(item.href);
     const isNotifications = item.href === "/notifications";
     const showBadge = isNotifications && unread > 0;
     const Icon = item.icon;

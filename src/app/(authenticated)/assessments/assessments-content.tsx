@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -93,25 +93,29 @@ const TABS: { key: TabKey; label: string }[] = [
 export interface AssessmentsContentProps {
   userId: string;
   initialUser: KaigoUser | null;
-  initialCertifications: Certification[];
-  initialAssessments: Assessment[];
+  /** 認定期間タブは親 (AssessmentsShell) が持つ。ここでは選択結果だけ受け取る */
+  selectedCertId: string | null;
+  /** 親が描く「認定期間タブ + 様式インジケータ」。旧・自前タブの位置に差し込む */
+  certTabs: ReactNode;
+  /**
+   * server prefetch 済みの (様式, 認定期間) の組合せなら配列、
+   * それ以外 (= 様式を切り替えた直後など) は null → mount 時に自前で fetch する。
+   */
+  initialAssessments: Assessment[] | null;
 }
 
 export function AssessmentsContent({
   userId,
   initialUser,
-  initialCertifications,
+  selectedCertId,
+  certTabs,
   initialAssessments,
 }: AssessmentsContentProps) {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
 
   const [selectedUser] = useState<KaigoUser | null>(initialUser);
-  const [certifications] = useState<Certification[]>(initialCertifications);
-  const [selectedCertId, setSelectedCertId] = useState<string | null>(
-    initialCertifications[0]?.id ?? null
-  );
-  const [assessments, setAssessments] = useState<Assessment[]>(initialAssessments);
+  const [assessments, setAssessments] = useState<Assessment[]>(initialAssessments ?? []);
   const [loadingList, setLoadingList] = useState(false);
 
   const [mode, setMode] = useState<"list" | "edit" | "view">("list");
@@ -167,8 +171,10 @@ export function AssessmentsContent({
     setLoadingList(false);
   }, [userId, selectedCertId, supabase]);
 
-  // initial render は server からの initialAssessments を使用、cert 切替時のみ refetch
-  const isInitialMount = useRef(true);
+  // initialAssessments が渡されている (= server prefetch と同じ 様式×認定期間) なら
+  // 初回 render は fetch を省き、認定期間の切替時のみ refetch する。
+  // null で渡された = 別の組合せを表示中 → mount 直後に fetch させる。
+  const isInitialMount = useRef(initialAssessments !== null);
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
@@ -223,12 +229,15 @@ export function AssessmentsContent({
   const handleSave = async () => {
     setSaving(true);
     try {
+      // assessment_type は DB default 依存にしない (様式が 1 入口に統合されたので
+      // 「どちらの様式で保存したか」を明示しないと取り違えが起きる)
       const payload = {
         user_id: userId,
         certification_id: editingCertId,
         assessment_date: assessmentDate,
         assessor_name: assessorName || null,
         status,
+        assessment_type: "kaigo",
         form_data: formData,
       };
       if (editingId) {
@@ -433,36 +442,8 @@ export function AssessmentsContent({
               </button>
             </div>
 
-            {/* 認定期間タブ */}
-            {certifications.length > 0 ? (
-              <div className="border-b overflow-x-auto">
-                <div className="flex gap-1 min-w-max">
-                  {certifications.map((cert) => {
-                    const fmt = (d: string) => format(parseISO(d), "yyyy/M/d");
-                    const isActive = selectedCertId === cert.id;
-                    return (
-                      <button
-                        key={cert.id}
-                        onClick={() => setSelectedCertId(cert.id)}
-                        className={cn(
-                          "flex flex-col px-4 py-2 text-xs border-b-2 whitespace-nowrap transition-colors",
-                          isActive
-                            ? "border-blue-600 text-blue-700 bg-blue-50 font-semibold"
-                            : "border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                        )}
-                      >
-                        <span className="font-bold">{cert.care_level}</span>
-                        <span className="text-[10px] text-gray-500">{fmt(cert.start_date)} 〜 {fmt(cert.end_date)}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                介護認定情報が登録されていません。先に利用者情報で認定情報を登録してください。
-              </div>
-            )}
+            {/* 認定期間タブ + 様式インジケータ (親 AssessmentsShell が描く) */}
+            {certTabs}
 
             {loadingList ? (
               <div className="flex items-center justify-center py-16"><Loader2 size={24} className="animate-spin text-blue-500" /></div>

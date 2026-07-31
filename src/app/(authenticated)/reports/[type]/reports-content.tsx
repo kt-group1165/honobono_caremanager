@@ -15,6 +15,7 @@ import { ja } from "date-fns/locale";
 import { toast } from "sonner";
 import { validInMonth } from "@/lib/service-code-valid";
 import { resolveCertForMonth } from "@/lib/cert-for-month";
+import { formKindForCareLevel, type KaigoFormKind } from "@/lib/yobo-kubun";
 import {
   computeAutoAllocation,
   getGendoAllocationMap,
@@ -5424,9 +5425,15 @@ const __clientNameCache = new Map<string, string | null>();
 const __docsCache = new Map<string, ReportDoc[]>();
 const __certsCache = new Map<string, Certification[]>();
 
-// 居宅サービス計画書 第1〜3表: この 3 つの相互切替のみクライアント完結
-// (window.history.pushState + localType) で行う。他帳票への遷移は router.push。
+// 居宅サービス計画書 第1〜3表: この 3 つは「第1表/第2表/第3表」タブで並べる
 const CARE_PLAN_TAB_TYPES = ["care-plan-1", "care-plan-2", "care-plan-3"];
+// 計画書ファミリ = 第1〜3表 + 介護予防サービス・支援計画書。
+// この 4 種の相互切替はクライアント完結 (window.history.pushState + localType) で行う。
+// 予防版を含めるのは、認定期間タブが要支援↔要介護を跨ぐときに server を経由せず
+// 様式を切り替えるため (page.tsx の区分 redirect と competing しない)。
+// 4 種すべて cert-linked なので __docsCache の key 前提 (localType と reportTypeProp が
+// cert-linked 性で一致する) は保たれる。他帳票への遷移は従来どおり router.push。
+const CARE_PLAN_FAMILY = [...CARE_PLAN_TAB_TYPES, "yobo-care-plan"];
 
 function docsCacheKey(userId: string, reportType: string, certId: string | null): string {
   return `${userId}|${reportType}|${certId ?? "_"}`;
@@ -5464,15 +5471,14 @@ export function ReportsContent({ userId, reportType: reportTypeProp, initialDocs
   // ブラウザ戻る/進む (popstate) で URL の type が変わったとき localType を同期する。
   // pushState した履歴 entry は Next router が同一 tree のまま restore する
   // (サーバー往復なし) ため、URL 変化はこの effect でしか拾えない。
-  // care-plan-1/2/3 以外への遷移は従来どおり router のソフトナビに任せる
-  // (pathname が第1〜3表以外なら何もしない)。
+  // 計画書ファミリ以外への遷移は従来どおり router のソフトナビに任せる。
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- 外部システム (browser history/URL) の変化を state に同期する正当な用途。type 不一致時のみ set (通常のタブクリック時は no-op) */
-    const m = pathname.match(/\/reports\/(care-plan-[123])$/);
+    const m = pathname.match(/\/reports\/(care-plan-[123]|yobo-care-plan)$/);
     if (!m) return;
     const urlType = m[1];
     setLocalType((cur) =>
-      urlType !== cur && CARE_PLAN_TAB_TYPES.includes(cur) ? urlType : cur
+      urlType !== cur && CARE_PLAN_FAMILY.includes(cur) ? urlType : cur
     );
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [pathname]);
@@ -5547,6 +5553,7 @@ export function ReportsContent({ userId, reportType: reportTypeProp, initialDocs
   useEffect(() => {
      
     if (prevUserRef.current === userId && prevReportRef.current === reportType) return;
+    const userChanged = prevUserRef.current !== userId;
     prevUserRef.current = userId;
     prevReportRef.current = reportType;
 
@@ -5554,7 +5561,15 @@ export function ReportsContent({ userId, reportType: reportTypeProp, initialDocs
     const cachedCerts = __certsCache.get(userId);
     const certsNext = cachedCerts ?? initialCertifications;
     setCertifications(certsNext);
-    const certIdNext = certsNext[0]?.id ?? null;
+    // 帳票種別だけが変わった場合 (計画書ファミリ内の様式切替 = 要支援↔要介護の
+    // 認定期間を跨いだとき) は同じ利用者なので選択中の認定期間を維持する。
+    // 先頭に戻すと、予防様式へ切り替えた瞬間に最新 (要介護) の認定期間が選ばれて
+    // 様式のズレが再発し、注意バナーが行ったり来たりする。
+    const keepCertId =
+      !userChanged && selectedCertId && certsNext.some((c) => c.id === selectedCertId)
+        ? selectedCertId
+        : null;
+    const certIdNext = keepCertId ?? certsNext[0]?.id ?? null;
     setSelectedCertId(certIdNext);
 
     // docs 再 seed (cache hit → instant、miss → server から来た initialDocs か空)
@@ -5774,9 +5789,51 @@ export function ReportsContent({ userId, reportType: reportTypeProp, initialDocs
     });
   }, [selectedDoc, supabase, userId, reportType, isCertLinked, selectedCertId]);
 
+  // 帳票種別の切替。計画書ファミリ (第1〜3表 + 予防版) の相互切替だけ
+  // pushState + localType でクライアント完結させ、他はソフトナビに任せる。
+  // ヘッダーのタブと「認定区分と様式が食い違う」注意バナーの双方から呼ぶため
+  // コンポーネントスコープに置く。
+  const navigateTo = useCallback(
+    (type: string) => {
+      if (hasUnsavedChanges) {
+        if (!window.confirm("保存されていない変更があります。破棄して移動しますか？")) return;
+      }
+      const sp = new URLSearchParams();
+      sp.set("user", userId);
+      // メインサイドバーの開閉状態を引き継ぎ
+      const currentSp = new URLSearchParams(window.location.search);
+      if (currentSp.has("nav")) sp.set("nav", currentSp.get("nav")!);
+      if (CARE_PLAN_FAMILY.includes(type) && CARE_PLAN_FAMILY.includes(reportType)) {
+        // 計画書ファミリ内の切替はクライアント完結 (RSC 再実行のサーバー往復なし)。
+        // Next.js は native pushState を router に統合し usePathname /
+        // useSearchParams も同期される (履歴に entry も積まれるので戻る/進むは
+        // 上の pathname 同期 effect が拾う)。
+        // ここで router を経由しないことが重要: page.tsx は「最新認定の区分」で
+        // 様式を redirect するため、server を通すと予防↔介護の手動切替が
+        // 即座に戻されてしまう。
+        window.history.pushState(null, "", `/reports/${type}?${sp.toString()}`);
+        setLocalType(type);
+        return;
+      }
+      // soft navigation: client-side router で /reports/[type] 切替
+      // (= hard reload + bundle 再評価を避ける)
+      router.push(`/reports/${type}?${sp.toString()}`);
+    },
+    [hasUnsavedChanges, userId, reportType, router],
+  );
+
   if (!config) return null; // Guarded by parent page.tsx
 
   const printStyle = config.landscape ? PRINT_STYLE_LANDSCAPE : PRINT_STYLE_PORTRAIT;
+
+  // 選択中の認定期間の区分 (要支援/要介護) と、表示中の様式のズレ。
+  // 認定期間タブが要支援↔要介護を跨ぐ利用者で発生する。docs は認定期間で絞られる
+  // ので、ズレたままだと「一覧が空」の理由が分からず事故になる。
+  const selectedCert = certifications.find((c) => c.id === selectedCertId) ?? null;
+  const formKind: KaigoFormKind = reportType === "yobo-care-plan" ? "yobo" : "kaigo";
+  const certKind = formKindForCareLevel(selectedCert?.care_level);
+  const kindMismatch = isCertLinked && selectedCert !== null && certKind !== formKind;
+  const matchingFormType = certKind === "yobo" ? "yobo-care-plan" : "care-plan-1";
 
   return (
     <>
@@ -5788,28 +5845,6 @@ export function ReportsContent({ userId, reportType: reportTypeProp, initialDocs
             const currentIdx = reportOrder.indexOf(reportType);
             const prevType = currentIdx > 0 ? reportOrder[currentIdx - 1] : null;
             const nextType = currentIdx < reportOrder.length - 1 ? reportOrder[currentIdx + 1] : null;
-            const navigateTo = (type: string) => {
-              if (hasUnsavedChanges) {
-                if (!window.confirm("保存されていない変更があります。破棄して移動しますか？")) return;
-              }
-              const sp = new URLSearchParams();
-              sp.set("user", userId);
-              // メインサイドバーの開閉状態を引き継ぎ
-              const currentSp = new URLSearchParams(window.location.search);
-              if (currentSp.has("nav")) sp.set("nav", currentSp.get("nav")!);
-              if (CARE_PLAN_TAB_TYPES.includes(type) && CARE_PLAN_TAB_TYPES.includes(reportType)) {
-                // 第1〜3表の相互切替はクライアント完結 (RSC 再実行のサーバー往復なし)。
-                // Next.js は native pushState を router に統合し
-                // usePathname / useSearchParams も同期される (履歴に entry も積まれる
-                // ので戻る/進むは上の pathname 同期 effect が拾う)。
-                window.history.pushState(null, "", `/reports/${type}?${sp.toString()}`);
-                setLocalType(type);
-                return;
-              }
-              // soft navigation: client-side router で /reports/[type] 切替
-              // (= hard reload + bundle 再評価を避ける)
-              router.push(`/reports/${type}?${sp.toString()}`);
-            };
             return (
               <div className="no-print mb-4 flex items-center gap-2">
                 {/* 左右ボタンは等幅 (flex-1 basis-0) にして中央タイトルの位置を
@@ -5919,6 +5954,25 @@ export function ReportsContent({ userId, reportType: reportTypeProp, initialDocs
               {isCertLinked && certifications.length === 0 && (
                 <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 no-print">
                   介護認定情報が登録されていません。先に利用者情報で認定情報を登録してください。
+                </div>
+              )}
+
+              {/* 選択した認定期間の区分と表示中の様式が食い違う場合の誘導。
+                  帳票は認定期間で絞られるため、放置すると「一覧が空」の原因が
+                  分からないまま誤った様式で新規作成される。 */}
+              {kindMismatch && (
+                <div className="no-print mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  <span>
+                    この認定期間 ({selectedCert?.care_level}) は
+                    {certKind === "yobo" ? "「介護予防サービス・支援計画書」" : "「居宅サービス計画書（第1〜3表）」"}
+                    の様式です。
+                  </span>
+                  <button
+                    onClick={() => navigateTo(matchingFormType)}
+                    className="rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100 transition-colors"
+                  >
+                    {REPORT_CONFIG[matchingFormType]?.titleJa ?? ""} を開く
+                  </button>
                 </div>
               )}
 

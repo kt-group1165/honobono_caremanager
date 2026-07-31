@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AlertTriangle, FileText } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { UserSidebar } from "@/components/users/user-sidebar";
+import { formKindForCareLevel } from "@/lib/yobo-kubun";
 import { REPORT_CONFIG } from "./report-config";
 import {
   ReportsContent,
@@ -9,14 +11,25 @@ import {
   type ReportDoc,
 } from "./reports-content";
 
+/** ?user= を差し替えても他の query (office / nav 等) を落とさないための再構築 */
+function toQueryString(sp: Record<string, string | string[] | undefined>): string {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(sp)) {
+    if (typeof v === "string") qs.set(k, v);
+    else if (Array.isArray(v)) for (const x of v) qs.append(k, x);
+  }
+  return qs.toString();
+}
+
 export default async function ReportTypePage({
   params,
   searchParams,
 }: {
   params: Promise<{ type: string }>;
-  searchParams: Promise<{ user?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const [{ type: reportType }, { user: userId }] = await Promise.all([params, searchParams]);
+  const [{ type: reportType }, sp] = await Promise.all([params, searchParams]);
+  const userId = typeof sp.user === "string" ? sp.user : undefined;
   const config = REPORT_CONFIG[reportType];
 
   if (!config) {
@@ -65,6 +78,25 @@ export default async function ReportTypePage({
       if (docsError) console.error("report documents fetch failed:", docsError.message);
 
       initialCertifications = (certData ?? []) as Certification[];
+
+      // ── 認定区分と様式の自動整合 ────────────────────────────────
+      // 居宅サービス計画書 (第1〜3表) は要介護、介護予防サービス・支援計画書は
+      // 要支援・事業対象者の様式で、区分によって排他的に決まる。
+      // 利用者の切替は UserSidebar が同一 pathname のまま ?user= を replace する
+      // ので、ここで振り替えないと「要支援の人を第1表で開く」状態が作れてしまう。
+      // ※ 画面内での様式切替 (認定期間タブが区分を跨ぐ場合) は reports-content が
+      //   pushState で行い server を経由しないため、この redirect と競合しない。
+      if (initialCertifications.length > 0) {
+        const kind = formKindForCareLevel(initialCertifications[0].care_level);
+        const isYoboForm = reportType === "yobo-care-plan";
+        if (kind === "yobo" && !isYoboForm) {
+          redirect(`/reports/yobo-care-plan?${toQueryString(sp)}`);
+        }
+        if (kind === "kaigo" && isYoboForm) {
+          redirect(`/reports/care-plan-1?${toQueryString(sp)}`);
+        }
+      }
+
       const initialCertId = initialCertifications[0]?.id ?? null;
       const allDocs = (docData ?? []) as ReportDoc[];
       initialDocs = initialCertId
