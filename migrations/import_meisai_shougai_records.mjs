@@ -128,15 +128,25 @@ function zoneSegments(startHM, endHM) {
   return segs;
 }
 
-// master から single / single2 / composite / composite2 の 4 map を構築 (居宅介護 身体/家事 基本)
+// master から single / single2 / composite / composite2 / increment / increment2 の
+// 6 map を構築 (居宅介護 身体/家事 基本)
 //   single      : 単一時間帯      key `${種別}|${日夜深早}|${時間.toFixed(2)}`
 //   composite   : 時間帯またぎ合成 key `${種別}|${z1}${h1}・${z2}${h2}…` (clock順)
-//   single2/composite2 : 各 ・2人 版 (単位は1人版と同一)
-//   ・基(減額) と 跨/増(日跨増深 等の特殊増分形) は茂原未使用のため除外。
+//   increment   : 時間帯単独の「増」区分 (例 家事夜増２．０) key `${種別}|${日夜深早}|${時間.toFixed(2)}`
+//     ─ 2026-07-27 追加。単一 composite に無い長時間の時間帯またぎ (例: 家事 3 時間で
+//       日 1.0h + 夜 2.0h にまたがるが、家事の合成コードは概ね 1.5h 総量までしか存在しない)
+//       は、ほのぼの実データ突合の結果 「開始時間帯の通常コード(合算総時間) + 後続時間帯の
+//       増コード(その時間帯だけの時間)」の 2 行立てで請求されることが判明 (茂原
+//       1221008558 116131家事日3.0 + 116499家事夜増2.0)。increment/increment2 はその
+//       「増」コード側のテーブル。
+//   single2/composite2/increment2 : 各 ・2人 版 (単位は1人版と同一)
+//   ・基(減額) と 跨増(日跨増深 等の特殊複合増分形) は茂原未使用のため除外。
 async function loadCodeMaps() {
   const single = new Map(), single2 = new Map(), composite = new Map(), composite2 = new Map();
+  const increment = new Map(), increment2 = new Map();
   const inMonth = (r) => (!r.valid_from || r.valid_from <= MONTH_FIRST) && (!r.valid_until || r.valid_until >= MONTH_FIRST);
   const segRe = /^(日|夜|深|早)(\d+\.\d+)$/;
+  const incRe = /^(日|夜|深|早)増(\d+\.\d+)$/;
   const rows = [];
   // service_name の LIKE で取得 (身体/家事 基本のみ = 数百行、ページング安全)。
   // 旧 loadOfficialMap の code prefix OR + 大 range は statement timeout を踏むため name 起点にする。
@@ -155,18 +165,30 @@ async function loadCodeMaps() {
     if (!km) continue;
     const kind = km[1];
     const parts = nm.slice(kind.length).split("・");
-    let two = false, skip = false;
+    let two = false, skip = false, isIncrement = false;
     const segs = [];
     for (const p of parts) {
       if (p === "2人") { two = true; continue; }
       if (p === "基") { skip = true; break; } // 基準該当(減額) は茂原未使用
+      const im = incRe.exec(p);
+      if (im && segs.length === 0 && !isIncrement) {
+        // 「${zone}増${hours}」単独 (例 夜増２．０)。日跨増深 等の複合増分形は
+        // この時点で im===null になり下の segRe 同様 skip される (対象外のまま)。
+        isIncrement = true;
+        segs.push({ zone: im[1], hours: Number(im[2]) });
+        continue;
+      }
       const sm = segRe.exec(p);
       if (!sm) { skip = true; break; } // 日跨増深 等の特殊増分形は対象外
       segs.push({ zone: sm[1], hours: Number(sm[2]) });
     }
     if (skip || segs.length === 0) continue;
     const val = { code: r.service_code, name: raw, units: r.units }; // name は raw(全角) — service_type 完全一致用
-    if (segs.length === 1) {
+    if (isIncrement && segs.length === 1) {
+      const key = `${kind}|${segs[0].zone}|${segs[0].hours.toFixed(2)}`;
+      const map = two ? increment2 : increment;
+      if (!map.has(key)) map.set(key, val);
+    } else if (segs.length === 1) {
       const key = `${kind}|${segs[0].zone}|${segs[0].hours.toFixed(2)}`;
       const map = two ? single2 : single;
       if (!map.has(key)) map.set(key, val);
@@ -176,7 +198,7 @@ async function loadCodeMaps() {
       if (!map.has(key)) map.set(key, val);
     }
   }
-  return { single, single2, composite, composite2 };
+  return { single, single2, composite, composite2, increment, increment2 };
 }
 
 // 021 稼働1行 → 障害6桁コード。twoPerson=true なら ・2人 コードへ。
@@ -200,6 +222,13 @@ function convertRow(code021, minutes, startHM, endHM, mode, maps, twoPerson) {
   };
   const segs = zoneSegments(startHM, endHM);
   if (!segs || segs.length <= 1) return pickSingle(startZoneK, totalHours);
+  // 生の滞在分数が最大の時間帯 (同着は開始時間帯優先)。単一コードへ倒す際の fallback で使う。
+  //   ★ 量子化(floor+残余配分)ではなく生分数で決めるのが重要 (詳細は下のコメント参照)。
+  let majorityZone = segs[0].zone;
+  let majorityMin = segs[0].min;
+  for (let i = 1; i < segs.length; i++) {
+    if (segs[i].min > majorityMin) { majorityMin = segs[i].min; majorityZone = segs[i].zone; }
+  }
   // またぎ: 量子化配分 (先頭 floor, 末尾 = 総量 - 先頭群)
   const alloc = [];
   let sum = 0;
@@ -212,12 +241,129 @@ function convertRow(code021, minutes, startHM, endHM, mode, maps, twoPerson) {
     const key = `${kind}|` + nz.map((a) => `${a.zone}${a.hours.toFixed(2)}`).join("・");
     const hit = compMap.get(key);
     if (hit) return { base: hit.code, name: hit.name, units: hit.units, kind: "composite", zone: nz.map((a) => a.zone).join("・"), hours: totalHours, key, twoPerson };
-    // 合成コード不在 → 算定開始時間帯の単一へ fallback (家事0.25セグ / 夜増 等)
-    const s = pickSingle(startZoneK, totalHours);
+    // 合成コード不在 (2026-07-27 是正: 家事は総量1.5h程度までしか合成コードが無く、
+    //   それを超える時間帯またぎは「開始時間帯の通常コード(その時間帯の生分数) +
+    //   後続時間帯の増コード(その時間帯の生分数)」の2行立てで請求される — 茂原
+    //   1221008558 の実例 (116131家事日3.0 + 116499家事夜増2.0) で確認 (詳細は
+    //   resolveBaseAddon 参照)。ここでは行内の各セグメントの「生の滞在分数」を
+    //   そのまま使う (alloc の floor+残余配分ではなく zoneSegments の実分数)。
+    const zoneMinutesOrdered = segs.map((s) => ({ zone: s.zone, minutes: s.min }));
+    const resolved = resolveBaseAddon(kind, zoneMinutesOrdered, step, mode, maps, twoPerson);
+    if (resolved && !resolved.missing) {
+      return { ...resolved.base, addons: resolved.addons, fellBack: true, wantedKey: key };
+    }
+    // base/addon 側も解決できない場合は生の滞在分数が最大の時間帯の単一へ fallback
+    //   (2026-07-27 是正: 従来は常に開始時間帯(startZoneK)固定だった。startZoneK は
+    //   同着のときは majorityZone と一致するため、この行の変更で新たな退行は生じない)
+    const s = pickSingle(majorityZone, totalHours);
     return { ...s, fellBack: true, wantedKey: key };
   }
-  // 実質単一 (先頭 floor=0 等)
-  return pickSingle(startZoneK, totalHours);
+  // 実質単一 (先頭 floor=0 等) — majorityZone (生の滞在分数が最大の時間帯) で引く。
+  //   2026-07-27 fix: 従来は常に開始時間帯(startZoneK)で引いていたため、開始側の
+  //   セグメントの方が短いケース (例: 家事 10分+20分。開始=日10分/後続=夜20分) で、
+  //   実際は滞在時間の長い後続時間帯 (夜) に属するべき所要時間を誤って開始時間帯
+  //   (日) のコードで解決してしまっていた (茂原 1221014788 家事夜0.5 が漏れて
+  //   家事日0.5 が1件多く出ていた不具合)。
+  //   ★ 「nz[0] (量子化後に残った方)」ではなく「生分数の最大」で判定するのが重要:
+  //   量子化(floor+残余配分)は常に最終セグメントに残余を寄せるため、生分数が同着
+  //   (例: 身体 早15分+日15分) のケースで nz[0] 判定だと常に後続側に倒れてしまい、
+  //   林美紀(1221022690)の 身体早０．５ (実データで開始側=早朝が正解、KJ 111195×9
+  //   で確認) を誤って身体日０．５に倒す regression を起こす。生分数比較+同着は
+  //   開始時間帯優先とすることで、この 2 例を両立して正しく解決できる。
+  return pickSingle(majorityZone, totalHours);
+}
+
+// 時間帯ごとの「生の分数」(alloc の floor/残余配分ではなく実際の滞在分数、または
+// 同日合算セッションで複数訪問を合算した分数) から base(通常コード) + addon(増コード*)
+// を解決する。zoneMinutesOrdered は時系列で先頭の時間帯が [0] に来るよう並べること
+// (先頭 = base、以降 = 各々 addon)。
+//   ★ 要確認: 単独行 (時間帯またぎだが同日合算セッションではない単発行) がこの経路に
+//   落ちるケースは、実データでの直接検証ができていない (茂原の実例は常に同日複数回
+//   提供の合算セッション経由だった)。合算セッションでの base/addon 値は実データ
+//   (KJ) と単位まで一致確認済み。
+function resolveBaseAddon(kind, zoneMinutesOrdered, step, mode, maps, twoPerson) {
+  const singleMap = twoPerson ? maps.single2 : maps.single;
+  const incMap = twoPerson ? maps.increment2 : maps.increment;
+  const entries = zoneMinutesOrdered.filter((e) => e.minutes > 1e-9);
+  if (entries.length === 0) return { missing: true, key: `${kind}|(no-minutes)` };
+  const [baseEntry, ...restEntries] = entries;
+  const baseHours = quantizeHours(baseEntry.minutes, step, mode);
+  const baseKey = `${kind}|${baseEntry.zone}|${baseHours.toFixed(2)}`;
+  const baseHit = singleMap.get(baseKey);
+  if (!baseHit) return { missing: true, key: baseKey };
+  const base = {
+    base: baseHit.code, name: baseHit.name, units: baseHit.units,
+    kind: "base", zone: baseEntry.zone, hours: baseHours, key: baseKey, twoPerson,
+  };
+  const addons = [];
+  for (const e of restEntries) {
+    const hours = quantizeHours(e.minutes, step, mode);
+    if (hours <= 1e-9) continue;
+    const key = `${kind}|${e.zone}|${hours.toFixed(2)}`;
+    const hit = incMap.get(key);
+    if (!hit) { addons.push({ missing: true, key, twoPerson }); continue; }
+    addons.push({ base: hit.code, name: hit.name, units: hit.units, kind: "addon", zone: e.zone, hours, key, twoPerson });
+  }
+  return { base, addons };
+}
+
+// "HH:MM" → 当日分 (0時またぎは非対応。障害の訪問は同日内前提)
+function toMinOfDay(hm) {
+  const m = /^(\d{1,2}):(\d{2})/.exec((hm || "").trim());
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+// ---- 同日合算セッション (概ね2時間未満の間隔ルール) ----
+//   障害福祉サービス(居宅介護)の報酬告示上、同一日に同一区分(身体/家事)のサービスを
+//   複数回提供し、その間隔が概ね2時間未満のときは1回の提供とみなして所要時間を
+//   合算する (介護保険 訪問介護の「2時間ルール」と同趣旨)。
+//   ★ 要確認: 閾値(120分)と「概ね」の運用、3セッション以上・2人体制との同時発生、
+//   単独行での時間帯またぎ増分(resolveBaseAddon 単独経路)との相互作用は
+//   実データ1件 (茂原 1221008558) からの類推であり未検証。2人体制の行
+//   (_twoPerson=true) は合算対象から除外し安全側でスキップする。
+const MERGE_GAP_MINUTES = 120;
+function buildDailySessions(rows) {
+  // rows: 同一 clientNum×date×kind (021001/021002) の候補行 (_twoPerson=false のみ渡すこと)
+  const withTimes = rows
+    .map((r) => ({ r, s: toMinOfDay(r.santeiStart), e: toMinOfDay(r.santeiEnd) }))
+    .filter((it) => it.s != null && it.e != null && it.e > it.s)
+    .sort((a, b) => a.s - b.s || a.e - b.e);
+  const sessions = [];
+  let cur = null;
+  for (const it of withTimes) {
+    if (cur && it.s - cur.lastEnd < MERGE_GAP_MINUTES) {
+      cur.members.push(it.r);
+      cur.lastEnd = Math.max(cur.lastEnd, it.e);
+    } else {
+      cur = { members: [it.r], lastEnd: it.e };
+      sessions.push(cur);
+    }
+  }
+  return sessions.map((s) => s.members);
+}
+
+// 合算セッション(2件以上)を base+addon に変換する。各メンバーの zoneSegments (または
+// 単一時間帯ならその時間帯まるごと) の生分数を時系列順に積み上げてから resolveBaseAddon へ。
+function convertSession(members, mode, maps) {
+  const kind = members[0].code === "021001" ? "身体" : members[0].code === "021002" ? "家事" : null;
+  if (!kind) return null;
+  const step = kind === "身体" ? 30 : 15;
+  const zoneOrder = []; // 時系列で初出順の zone
+  const zoneMinutes = new Map();
+  for (const r of members) {
+    const minutes = santeiToMinutes(r.santei);
+    if (minutes == null) continue;
+    const segs = zoneSegments(r.santeiStart, r.santeiEnd);
+    const parts = segs && segs.length > 0
+      ? segs
+      : [{ zone: ZONE_KANJI[zoneDigit(r.santeiStart).zone] || "日", min: minutes }];
+    for (const p of parts) {
+      if (!zoneMinutes.has(p.zone)) { zoneMinutes.set(p.zone, 0); zoneOrder.push(p.zone); }
+      zoneMinutes.set(p.zone, zoneMinutes.get(p.zone) + p.min);
+    }
+  }
+  const zoneMinutesOrdered = zoneOrder.map((zone) => ({ zone, minutes: zoneMinutes.get(zone) }));
+  return resolveBaseAddon(kind, zoneMinutesOrdered, step, mode, maps, false);
 }
 
 // ---- ページング ----
@@ -285,44 +431,117 @@ async function main() {
   const mode = await getTimeBracketMode();
   console.log(`時間区分モード: ${mode} (${mode === "honobono" ? "境界=下位区分" : "境界=上位区分"})\n`);
 
-  // 4a) 2人派遣の検出 (同一 利用者×日×派遣開始×派遣終了×code の異職員複数行 = 同時2人派遣)
+  // 4a) 2人派遣の検出 (同一 利用者×日×code の複数行のうち「時間帯が重複する」もの = 同時2人派遣)
   //   ★ ほのぼの請求ルール (KJ 実データで確認): 2人派遣は KJ(明細) に
   //     「基本コード(111111 等) 1行 + ・2人コード(111112 等) 1行」= 両ヘルパー分を2行で請求 (合計2倍)。
   //     (宮田 1242211371: 111111×48 + 111112×48 = 2倍)。
-  //   → 稼働の2行は畳まず両方残し、1人目=基本コード / 2人目以降=・2人コード に割当てる。
-  //     (旧B実装は代表1行だけ・2人にして2人目を落とし半額になっていた不具合を是正)
-  //   実績記録票 TJ は 1 訪問=1行+派遣人数2 なので、J611 側 (build.ts) で同一訪問の
-  //     基本+・2人 を派遣人数2の1行にまとめる (別担当)。
-  //   ★ 同一開始で終了が違う組 (片方だけ延長の部分重複) は同時2人と断定できないため各々別行のまま。
-  const blockGroups = new Map();
+  //   → 稼働の2行は畳まず両方残し、「長い方」=基本コード(自身の所要時間) /
+  //     「短い方」=・2人コード(自身の所要時間) に割当てる。
+  //   ★ 2026-07-27 是正 (要件 #3「部分重複2人=終了時刻違い」): 旧実装は
+  //     client+date+start+end+code の完全一致キーでグループ化しており、開始時刻は
+  //     同じでも終了時刻が異なる部分重複ペア (例 16:00-17:30 と 16:00-18:00) や、
+  //     一方が他方に内包されるペア (例 07:20-09:30 と 09:10-09:30) を検出できず
+  //     両方とも solo 扱いになっていた (茂原 1221019043 で15件確認)。
+  //     → 完全一致ではなく「時間区間が重なるか (start1<end2 && start2<end1)」で判定する
+  //     sweep 方式に変更。区間が重ならない (例: 朝07:20-09:30 と 夕16:00-18:00) 組は
+  //     従来どおり別々の solo として扱われ、動作は変わらない (回帰リスクなし)。
+  //     重複ペアが「所要時間が同着(引き分け)」の場合は出現順 1件目=基本 (従来どおり)。
+  //   ★ 2026-07-31 是正: グループ化キーに code が入っており、**コードが違う重なりを
+  //     検出できなかった**。2人派遣は「同じサービスを2人で」とは限らず、
+  //     一方が合成コード・他方が単独コードになるのが普通 (茂原 1221019043 樋口:
+  //     07:20-09:30「身体早0.5・日2.0」に 09:10-09:30「身体日0.5」が内包される)。
+  //     前回 sweep 方式にした際、この利用者で確認したと書かれているのにキーは
+  //     code 込みのままで、sweep が同一コード内でしか働いていなかった。
+  //     → キーを 利用者×日 にして、コードをまたいで時間重複を判定する。
+  const byClientDay = new Map();
   for (const r of target) {
-    const k = `${r.clientNum}|${r.date}|${r.start}|${r.end}|${r.code}`;
-    if (!blockGroups.has(k)) blockGroups.set(k, []);
-    blockGroups.get(k).push(r);
+    const k = `${r.clientNum}|${r.date}`;
+    if (!byClientDay.has(k)) byClientDay.set(k, []);
+    byClientDay.get(k).push(r);
   }
+  const byClientDayCode = byClientDay;
   let twoPersonVisits = 0, threePlus = 0, secondRows = 0;
-  for (const grp of blockGroups.values()) {
-    if (grp.length >= 2) {
-      twoPersonVisits++;
-      if (grp.length >= 3) threePlus++;
-      // 1人目 = 基本コード(_twoPerson=false) / 2人目以降 = ・2人コード(_twoPerson=true)。全行残す。
-      grp.forEach((r, i) => { r._blockFirst = i === 0; r._twoPerson = i > 0; });
-      secondRows += grp.length - 1;
-    } else {
-      grp[0]._twoPerson = false; grp[0]._blockFirst = true;
+  for (const grp of byClientDayCode.values()) {
+    const withTimes = grp
+      .map((r, i) => ({ r, i, s: toMinOfDay(r.santeiStart), e: toMinOfDay(r.santeiEnd) }))
+      .sort((a, b) => (a.s ?? 0) - (b.s ?? 0) || (a.e ?? 0) - (b.e ?? 0));
+    // 区間重複 sweep: 現在の重複ブロックの最大終了時刻より前に開始する行は同ブロック
+    const blocks = [];
+    let cur = null;
+    for (const it of withTimes) {
+      if (it.s == null || it.e == null) { blocks.push([it]); cur = null; continue; } // 時刻不明は単独
+      if (cur && it.s < cur.maxEnd) { cur.members.push(it); cur.maxEnd = Math.max(cur.maxEnd, it.e); }
+      else { cur = { members: [it], maxEnd: it.e }; blocks.push(cur.members); }
+    }
+    for (const members of blocks) {
+      if (members.length >= 2) {
+        twoPersonVisits++;
+        if (members.length >= 3) threePlus++;
+        // 所要時間 降順 (長い方=基本/短い方以降=・2人)。同着は出現順 (旧仕様どおり)。
+        const ordered = [...members].sort((a, b) => (b.e - b.s) - (a.e - a.s) || a.i - b.i);
+        ordered.forEach((it, idx) => { it.r._blockFirst = idx === 0; it.r._twoPerson = idx > 0; });
+        secondRows += members.length - 1;
+      } else {
+        members[0].r._twoPerson = false; members[0].r._blockFirst = true;
+      }
     }
   }
-  if (threePlus) console.warn(`⚠ 3人以上の同時ブロックが ${threePlus} 件 — 2人目以降を全て ・2人 で計上 (・3人 コードは未対応。要確認)`);
+  if (threePlus) console.warn(`⚠ 3人以上の同時重複ブロックが ${threePlus} 件 — 2番目以降を全て ・2人 で計上 (・3人 コードは未対応。要確認)`);
+
+  // 4a.5) 同日合算セッション (概ね2時間未満の間隔ルール。要件 #1「家事夜増2.0」是正)
+  //   2人派遣行 (_twoPerson=true) は合算対象から除外 (安全側。相互作用未検証のため)。
+  const sessionByClientDayKind = new Map();
+  for (const r of target) {
+    if (r._twoPerson) continue;
+    const kind = r.code === "021001" ? "身体" : r.code === "021002" ? "家事" : null;
+    if (!kind) continue;
+    const k = `${r.clientNum}|${r.date}|${kind}`;
+    if (!sessionByClientDayKind.has(k)) sessionByClientDayKind.set(k, []);
+    sessionByClientDayKind.get(k).push(r);
+  }
+  const sessionOf = new Map(); // row -> members[] (2件以上のときのみ設定)
+  let mergedSessionCount = 0, mergedRowCount = 0;
+  for (const rows of sessionByClientDayKind.values()) {
+    const sessions = buildDailySessions(rows);
+    for (const members of sessions) {
+      if (members.length < 2) continue;
+      mergedSessionCount++; mergedRowCount += members.length;
+      for (const r of members) sessionOf.set(r, members);
+    }
+  }
+  if (mergedSessionCount) console.log(`同日合算セッション: ${mergedSessionCount} 件 (対象 ${mergedRowCount} 行 → 2時間未満間隔の同区分提供を合算)\n`);
 
   // 4b) map をロードして変換
   const maps = await loadCodeMaps();
-  console.log(`コード map: single=${maps.single.size} single2=${maps.single2.size} composite=${maps.composite.size} composite2=${maps.composite2.size} (居宅介護 身体/家事 基本)`);
+  console.log(`コード map: single=${maps.single.size} single2=${maps.single2.size} composite=${maps.composite.size} composite2=${maps.composite2.size} increment=${maps.increment.size} increment2=${maps.increment2.size} (居宅介護 身体/家事 基本)`);
   console.log(`2人派遣ブロック: ${twoPersonVisits} 件 (・2人 行 ${secondRows} = 2人目以降を全て請求計上)\n`);
-  const rowConv = [];
+  const rowConv = []; // target と同じ index。各要素: null | { minutes, convs:[conv,...] } | { skip: true } (合算セッションの2件目以降)
   const convWarn = [];
   const missKeys = new Set();
-  let blockedNoDur = 0, blocked6 = 0, compositeCount = 0, twoPersonCount = 0, fellBackCount = 0;
+  let blockedNoDur = 0, blocked6 = 0, compositeCount = 0, twoPersonCount = 0, fellBackCount = 0, addonCount = 0;
+  const sessionResultCache = new Map(); // members(配列参照) -> {conv結果 or null}
   for (const r of target) {
+    const session = sessionOf.get(r);
+    if (session) {
+      // 合算セッションの代表行 = session[0] (buildDailySessions で開始時刻昇順に格納済)。
+      // 代表行以外は payload を出さない (二重計上防止。base+addon は代表行の1回だけ生成)。
+      if (r !== session[0]) { rowConv.push({ skip: true }); continue; }
+      if (!sessionResultCache.has(session)) sessionResultCache.set(session, convertSession(session, mode, maps));
+      const resolved = sessionResultCache.get(session);
+      if (!resolved || resolved.missing) {
+        convWarn.push(`合算セッション 6桁未解決 key=${resolved?.key ?? "?"} (${r.clientName} ${r.date} 合算${session.length}件)`);
+        if (resolved?.key) missKeys.add(resolved.key);
+        rowConv.push(null); blocked6++; continue;
+      }
+      const convs = [resolved.base];
+      for (const a of resolved.addons) {
+        if (a.missing) { convWarn.push(`合算セッション 増コード未解決 key=${a.key} (${r.clientName} ${r.date})`); missKeys.add(a.key); continue; }
+        convs.push(a); addonCount++;
+      }
+      const totalMinutes = session.reduce((s, m) => s + (santeiToMinutes(m.santei) ?? 0), 0);
+      rowConv.push({ minutes: totalMinutes, convs, sessionMembers: session });
+      continue;
+    }
     const minutes = santeiToMinutes(r.santei);
     if (minutes == null) { convWarn.push(`算定時間が解釈不能: "${r.santei}" (${r.clientName} ${r.date})`); rowConv.push(null); blockedNoDur++; continue; }
     const conv = convertRow(r.code, minutes, r.santeiStart, r.santeiEnd, mode, maps, r._twoPerson);
@@ -333,22 +552,35 @@ async function main() {
     }
     if (conv.kind === "composite") compositeCount++;
     if (conv.twoPerson) twoPersonCount++;
-    if (conv.fellBack) { fellBackCount++; convWarn.push(`合成コード不在→単一fallback wanted=${conv.wantedKey} → ${conv.base}${conv.name} (${r.clientName} ${r.date} ${r.santeiStart}-${r.santeiEnd})`); }
-    rowConv.push({ minutes, conv });
+    if (conv.fellBack) {
+      fellBackCount++;
+      const addonNote = conv.addons ? ` + addon×${conv.addons.length}` : " (単一fallback)";
+      convWarn.push(`合成コード不在→base+addon wanted=${conv.wantedKey} → ${conv.base}${conv.name}${addonNote} (${r.clientName} ${r.date} ${r.santeiStart}-${r.santeiEnd})`);
+    }
+    const convs = [conv];
+    if (conv.addons) {
+      for (const a of conv.addons) {
+        if (a.missing) { convWarn.push(`増コード未解決 key=${a.key} (${r.clientName} ${r.date})`); missKeys.add(a.key); continue; }
+        convs.push(a); addonCount++;
+      }
+    }
+    rowConv.push({ minutes, convs });
   }
 
-  // 変換後コード別 件数
+  // 変換後コード別 件数 (base/addon 両方をカウント)
   const convCount = {};
   for (let i = 0; i < target.length; i++) {
     const rc = rowConv[i];
-    if (!rc) continue;
-    const tag = rc.conv.kind === "composite" ? "[またぎ]" : rc.conv.twoPerson ? "[2人]" : rc.conv.fellBack ? "[fallback]" : "";
-    const key = `${target[i].code} ${rc.minutes}分 ${target[i].santeiStart}-${target[i].santeiEnd} ${tag}\t→ ${rc.conv.base} ${rc.conv.name} (${rc.conv.units}単位)`;
-    convCount[key] = (convCount[key] || 0) + 1;
+    if (!rc || rc.skip || !rc.convs) continue;
+    for (const c of rc.convs) {
+      const tag = c.kind === "composite" ? "[またぎ]" : c.kind === "addon" ? "[増addon]" : c.twoPerson ? "[2人]" : rc.sessionMembers ? "[合算base]" : "";
+      const key = `${target[i].code} ${rc.minutes}分 ${tag}\t→ ${c.base} ${c.name} (${c.units}単位)`;
+      convCount[key] = (convCount[key] || 0) + 1;
+    }
   }
-  console.log("=== 021 → 公式6桁コード 変換件数 (合成/2人/fallback タグ付き) ===");
+  console.log("=== 021 → 公式6桁コード 変換件数 (合成/2人/合算/増addon タグ付き) ===");
   for (const [k, v] of Object.entries(convCount).sort()) console.log(`  ${k}\t×${v}`);
-  console.log(`\n変換内訳: 時間帯またぎ合成=${compositeCount} / ・2人=${twoPersonCount} / 合成不在fallback=${fellBackCount}`);
+  console.log(`\n変換内訳: 時間帯またぎ合成=${compositeCount} / ・2人=${twoPersonCount} / 合成不在fallback=${fellBackCount} / 増addon=${addonCount} / 合算セッション=${mergedSessionCount}`);
   if (missKeys.size) console.log(`\n⚠ 6桁未解決キー ${missKeys.size}種: ${[...missKeys].join(" / ")}\n   (該当行は取込skip → 再diffで確認)`);
   if (convWarn.length) { console.log(`\n変換警告 ${convWarn.length}件 (先頭20):`); for (const w of convWarn.slice(0, 20)) console.log("  - " + w); }
   console.log("");
@@ -392,33 +624,64 @@ async function main() {
   console.log("");
 
   // 7) payload 構築
-  let blockedNoClient = 0;
+  //   rc.convs が複数件のとき (時間帯またぎ増addon / 合算セッション) は同一訪問枠に対し
+  //   base 行 + addon 行を別々の kaigo_visit_schedule 行として INSERT する
+  //   (aggregate.ts は service_type 名の一致でしか集計しないため、コードごとに
+  //   1 occurrence = 1 行が必要)。
+  let blockedNoClient = 0, sessionSkipped = 0;
   const payloads = [];
   for (let i = 0; i < target.length; i++) {
     const r = target[i]; const rc = rowConv[i];
     if (!rc) continue; // 変換不可(算定時間/6桁未解決)は 4) で計上済み
+    if (rc.skip) { sessionSkipped++; continue; } // 合算セッションの代表行以外
     const cid = resolvedClient.get(r.clientNum);
     if (!cid) { blockedNoClient++; continue; }
-    const sids = memberByName.get(normStaff(r.staffName)) || [];
-    payloads.push({
-      user_id: cid,
-      staff_id: sids.length === 1 ? sids[0] : null,
-      visit_date: r.date,
-      start_time: r.start || null,
-      end_time: r.end || null,
-      service_type: rc.conv.name, // 障害マスタ名(公式6桁) 完全一致 (aggregate が名前で拾う)
-      status: "completed",
-      office_id: office.id,
-      tenant_id: TENANT_ID,
-      notes: `[MEISAI障害取込 ${TARGET_MONTH} ${MAP_TAG} code=${rc.conv.base}]`,
-    });
+
+    // 合算セッションの代表行は複数メンバーにまたがるため、開始/終了は
+    // メンバー全体のスパン、staff は全メンバーが同一スタッフに解決できた場合のみ設定
+    // (異なる場合は null。★ 要確認: 誰の稼働として計上すべきかの厳密なルールは未検証)。
+    let startTime = r.start || null;
+    let endTime = r.end || null;
+    let staffId = (memberByName.get(normStaff(r.staffName)) || []).length === 1
+      ? memberByName.get(normStaff(r.staffName))[0]
+      : null;
+    if (rc.sessionMembers) {
+      const members = rc.sessionMembers;
+      startTime = members[0].start || members[0].santeiStart || startTime;
+      const last = members[members.length - 1];
+      endTime = last.end || last.santeiEnd || endTime;
+      const staffIds = new Set(
+        members.map((m) => {
+          const ids = memberByName.get(normStaff(m.staffName)) || [];
+          return ids.length === 1 ? ids[0] : null;
+        }),
+      );
+      staffId = staffIds.size === 1 ? [...staffIds][0] : null;
+    }
+
+    for (const c of rc.convs) {
+      payloads.push({
+        user_id: cid,
+        staff_id: staffId,
+        visit_date: r.date,
+        start_time: startTime,
+        end_time: endTime,
+        service_type: c.name, // 障害マスタ名(公式6桁) 完全一致 (aggregate が名前で拾う)
+        status: "completed",
+        office_id: office.id,
+        tenant_id: TENANT_ID,
+        notes: `[MEISAI障害取込 ${TARGET_MONTH} ${MAP_TAG} code=${c.base}]`,
+      });
+    }
   }
-  // 2人派遣は 4a で 1人目=基本 / 2人目以降=・2人 として全行残す (畳まない)。ここでの再 dedup は不要。
+  // 2人派遣は 4a で 長い方=基本 / 短い方=・2人 として全行残す (畳まない)。ここでの再 dedup は不要。
   const deduped = payloads;
 
   console.log(`=== 取込可否サマリ (障害021 ${target.length}行) ===`);
   console.log(`  取込可能(=INSERT行): ${deduped.length}`);
   console.log(`  2人派遣: ${twoPersonVisits}件 (・2人 行 ${twoPersonCount} を基本行と別に計上=2倍請求)`);
+  console.log(`  合算セッション: ${mergedSessionCount}件 (対象${mergedRowCount}行 → 代表行1件に集約、2件目以降 ${sessionSkipped}行はskip)`);
+  console.log(`  増addon行: ${addonCount}`);
   console.log(`  ブロック(利用者未解決): ${blockedNoClient}`);
   console.log(`  ブロック(6桁コード未解決): ${blocked6}`);
   console.log(`  ブロック(算定時間不正): ${blockedNoDur}`);
