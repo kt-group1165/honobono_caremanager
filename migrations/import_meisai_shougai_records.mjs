@@ -114,6 +114,25 @@ async function getTimeBracketMode() {
 //   時間帯またぎ = 合成コード (身体早0.5・日1.5 等)、同時2人派遣 = ・2人 コードに対応。
 const ZONE_KANJI = { "日中": "日", "早朝": "早", "夜間": "夜", "深夜": "深" };
 
+// ほのぼの内部コード(021xxx) → マスタ名の種別。マスタ名の先頭がこの文字列になっている。
+//   021003 重度介護 は「重訪Ⅱ日中８．０」のような**積み上げ型**で請求モデルが違うため
+//   ここでは扱わない (別実装)。021005 行動援護 も同様に未対応。
+const KIND_OF_021 = {
+  "021001": "身体", // 身体介護 → 111xxx
+  "021002": "家事", // 家事援助 → 116xxx / 117xxx
+  "021008": "同援", // 同行援護 → 157xxx
+};
+
+// 同行援護は障害支援区分でコードが変わる。
+//   ⚠ **「区4」は区分4以上**の意味 (実データ: 稲生大輝=区分6 に 157703「同援日０．５・区４」)。
+//   区分1-2 = 修飾子なし / 区分3 = 区3 / 区分4以上 = 区4。
+function doukouKubunMod(supportLevel) {
+  const m = /区分\s*([1-6１-６])/.exec((supportLevel || "").normalize("NFKC"));
+  if (!m) return null;
+  const n = Number(m[1].normalize("NFKC"));
+  return n >= 4 ? "区4" : n === 3 ? "区3" : null;
+}
+
 // 算定時間(分) → 官報時間(数値, 身体=0.5刻み/家事=0.25刻み)
 //   honobono: 境界は下位区分に含める (60分→1.0=「1時間まで」)。ceil で表現。
 //   kokuji  : 境界は上位区分 (60分→1.5)。ちょうど境界のとき +1 単位。
@@ -162,7 +181,7 @@ async function loadCodeMaps() {
   const rows = [];
   // service_name の LIKE で取得 (身体/家事 基本のみ = 数百行、ページング安全)。
   // 旧 loadOfficialMap の code prefix OR + 大 range は statement timeout を踏むため name 起点にする。
-  for (const pat of ["身体%", "家事%"]) {
+  for (const pat of ["身体%", "家事%", "同援%"]) {
     const part = await fetchAll(
       "kaigo_service_codes",
       "service_code,service_name,units,valid_from,valid_until",
@@ -173,15 +192,20 @@ async function loadCodeMaps() {
   for (const r of rows.filter(inMonth)) {
     const raw = r.service_name || "";
     const nm = raw.normalize("NFKC");
-    const km = /^(身体|家事)/.exec(nm);
+    const km = /^(身体|家事|同援)/.exec(nm);
     if (!km) continue;
     const kind = km[1];
     const parts = nm.slice(kind.length).split("・");
     let two = false, skip = false, isIncrement = false;
+    const mods = []; // 同援の 区3/区4 等。身体/家事 では常に空
     const segs = [];
     for (const p of parts) {
       if (p === "2人") { two = true; continue; }
       if (p === "基") { skip = true; break; } // 基準該当(減額) は茂原未使用
+      // 同援の修飾子。KT Group が算定しているのは区分のみ (基礎/盲ろう/通訳/補正 は
+      //   実データに無い) なので、それらが付くコードは対象外にして誤ヒットを防ぐ
+      if (kind === "同援" && /^区[0-9]$/.test(p)) { mods.push(p); continue; }
+      if (kind === "同援" && (p === "基礎" || p === "盲ろう" || p === "通訳" || p.includes("補正"))) { skip = true; break; }
       const im = incRe.exec(p);
       if (im && segs.length === 0 && !isIncrement) {
         // 「${zone}増${hours}」単独 (例 夜増２．０)。日跨増深 等の複合増分形は
@@ -196,16 +220,17 @@ async function loadCodeMaps() {
     }
     if (skip || segs.length === 0) continue;
     const val = { code: r.service_code, name: raw, units: r.units }; // name は raw(全角) — service_type 完全一致用
+    const mk = mods.sort().join("・");
     if (isIncrement && segs.length === 1) {
-      const key = `${kind}|${segs[0].zone}|${segs[0].hours.toFixed(2)}`;
+      const key = `${kind}|${segs[0].zone}|${segs[0].hours.toFixed(2)}|${mk}`;
       const map = two ? increment2 : increment;
       if (!map.has(key)) map.set(key, val);
     } else if (segs.length === 1) {
-      const key = `${kind}|${segs[0].zone}|${segs[0].hours.toFixed(2)}`;
+      const key = `${kind}|${segs[0].zone}|${segs[0].hours.toFixed(2)}|${mk}`;
       const map = two ? single2 : single;
       if (!map.has(key)) map.set(key, val);
     } else {
-      const key = `${kind}|` + segs.map((s) => `${s.zone}${s.hours.toFixed(2)}`).join("・");
+      const key = `${kind}|` + segs.map((s) => `${s.zone}${s.hours.toFixed(2)}`).join("・") + `|${mk}`;
       const map = two ? composite2 : composite;
       if (!map.has(key)) map.set(key, val);
     }
@@ -218,16 +243,19 @@ async function loadCodeMaps() {
 //   またぎ    : 各区分に量子化配分 (先頭=floor(滞在/step)、末尾=残り) → composite(2) を引く。
 //               ほのぼの照合: 身体またぎ(早日/日夜)は KJ の 111371/111375/111423/111427/111431
 //               に回数まで一致。合成コード不在 (家事0.25セグ / 夜増 等) は算定開始時間帯の単一へ fallback。
-function convertRow(code021, minutes, startHM, endHM, mode, maps, twoPerson) {
-  const kind = code021 === "021001" ? "身体" : code021 === "021002" ? "家事" : null;
+// mods = 修飾子 (同援の 区3/区4 等)。身体/家事 では常に空配列
+function convertRow(code021, minutes, startHM, endHM, mode, maps, twoPerson, mods = []) {
+  const kind = KIND_OF_021[code021] ?? null;
   if (!kind) return null;
-  const step = kind === "身体" ? 30 : 15;
+  // 量子化の刻み: 身体/同援 = 0.5h (30分) / 家事 = 0.25h (15分)
+  const step = kind === "家事" ? 15 : 30;
+  const mk = [...mods].sort().join("・");
   const totalHours = quantizeHours(minutes, step, mode);
   const singleMap = twoPerson ? maps.single2 : maps.single;
   const compMap = twoPerson ? maps.composite2 : maps.composite;
   const startZoneK = ZONE_KANJI[zoneDigit(startHM).zone] || "日";
   const pickSingle = (zoneK, hours) => {
-    const key = `${kind}|${zoneK}|${hours.toFixed(2)}`;
+    const key = `${kind}|${zoneK}|${hours.toFixed(2)}|${mk}`;
     const hit = singleMap.get(key);
     if (!hit) return { missing: true, key, twoPerson };
     return { base: hit.code, name: hit.name, units: hit.units, kind: "single", zone: zoneK, hours, key, twoPerson };
@@ -250,7 +278,7 @@ function convertRow(code021, minutes, startHM, endHM, mode, maps, twoPerson) {
   }
   const nz = alloc.filter((a) => a.hours > 1e-9);
   if (nz.length >= 2) {
-    const key = `${kind}|` + nz.map((a) => `${a.zone}${a.hours.toFixed(2)}`).join("・");
+    const key = `${kind}|` + nz.map((a) => `${a.zone}${a.hours.toFixed(2)}`).join("・") + `|${mk}`;
     const hit = compMap.get(key);
     if (hit) return { base: hit.code, name: hit.name, units: hit.units, kind: "composite", zone: nz.map((a) => a.zone).join("・"), hours: totalHours, key, twoPerson };
     // 合成コード不在 (2026-07-27 是正: 家事は総量1.5h程度までしか合成コードが無く、
@@ -260,7 +288,7 @@ function convertRow(code021, minutes, startHM, endHM, mode, maps, twoPerson) {
     //   resolveBaseAddon 参照)。ここでは行内の各セグメントの「生の滞在分数」を
     //   そのまま使う (alloc の floor+残余配分ではなく zoneSegments の実分数)。
     const zoneMinutesOrdered = segs.map((s) => ({ zone: s.zone, minutes: s.min }));
-    const resolved = resolveBaseAddon(kind, zoneMinutesOrdered, step, mode, maps, twoPerson);
+    const resolved = resolveBaseAddon(kind, zoneMinutesOrdered, step, mode, maps, twoPerson, mk);
     if (resolved && !resolved.missing) {
       return { ...resolved.base, addons: resolved.addons, fellBack: true, wantedKey: key };
     }
@@ -293,14 +321,14 @@ function convertRow(code021, minutes, startHM, endHM, mode, maps, twoPerson) {
 //   落ちるケースは、実データでの直接検証ができていない (茂原の実例は常に同日複数回
 //   提供の合算セッション経由だった)。合算セッションでの base/addon 値は実データ
 //   (KJ) と単位まで一致確認済み。
-function resolveBaseAddon(kind, zoneMinutesOrdered, step, mode, maps, twoPerson) {
+function resolveBaseAddon(kind, zoneMinutesOrdered, step, mode, maps, twoPerson, mk = "") {
   const singleMap = twoPerson ? maps.single2 : maps.single;
   const incMap = twoPerson ? maps.increment2 : maps.increment;
   const entries = zoneMinutesOrdered.filter((e) => e.minutes > 1e-9);
   if (entries.length === 0) return { missing: true, key: `${kind}|(no-minutes)` };
   const [baseEntry, ...restEntries] = entries;
   const baseHours = quantizeHours(baseEntry.minutes, step, mode);
-  const baseKey = `${kind}|${baseEntry.zone}|${baseHours.toFixed(2)}`;
+  const baseKey = `${kind}|${baseEntry.zone}|${baseHours.toFixed(2)}|${mk}`;
   const baseHit = singleMap.get(baseKey);
   if (!baseHit) return { missing: true, key: baseKey };
   const base = {
@@ -311,7 +339,7 @@ function resolveBaseAddon(kind, zoneMinutesOrdered, step, mode, maps, twoPerson)
   for (const e of restEntries) {
     const hours = quantizeHours(e.minutes, step, mode);
     if (hours <= 1e-9) continue;
-    const key = `${kind}|${e.zone}|${hours.toFixed(2)}`;
+    const key = `${kind}|${e.zone}|${hours.toFixed(2)}|${mk}`;
     const hit = incMap.get(key);
     if (!hit) { addons.push({ missing: true, key, twoPerson }); continue; }
     addons.push({ base: hit.code, name: hit.name, units: hit.units, kind: "addon", zone: e.zone, hours, key, twoPerson });
@@ -356,10 +384,12 @@ function buildDailySessions(rows) {
 
 // 合算セッション(2件以上)を base+addon に変換する。各メンバーの zoneSegments (または
 // 単一時間帯ならその時間帯まるごと) の生分数を時系列順に積み上げてから resolveBaseAddon へ。
-function convertSession(members, mode, maps) {
-  const kind = members[0].code === "021001" ? "身体" : members[0].code === "021002" ? "家事" : null;
+// mods = 修飾子 (同援の 区3/区4 等)。身体/家事 では空
+function convertSession(members, mode, maps, mods = []) {
+  const kind = KIND_OF_021[members[0].code] ?? null;
   if (!kind) return null;
-  const step = kind === "身体" ? 30 : 15;
+  const step = kind === "家事" ? 15 : 30;
+  const mk = [...mods].sort().join("・");
   const zoneOrder = []; // 時系列で初出順の zone
   const zoneMinutes = new Map();
   for (const r of members) {
@@ -375,7 +405,7 @@ function convertSession(members, mode, maps) {
     }
   }
   const zoneMinutesOrdered = zoneOrder.map((zone) => ({ zone, minutes: zoneMinutes.get(zone) }));
-  return resolveBaseAddon(kind, zoneMinutesOrdered, step, mode, maps, false);
+  return resolveBaseAddon(kind, zoneMinutesOrdered, step, mode, maps, false, mk);
 }
 
 // ---- ページング ----
@@ -523,9 +553,36 @@ async function main() {
   }
   if (mergedSessionCount) console.log(`同日合算セッション: ${mergedSessionCount} 件 (対象 ${mergedRowCount} 行 → 2時間未満間隔の同区分提供を合算)\n`);
 
+  // 4b-0) 同行援護は障害支援区分でコードが変わるので、氏名 → 区分 の対応を先に作る。
+  //   ⚠ 利用者番号は事業者エントリごとに別番号なので**氏名で引く** (受給者証PDFの番号と
+  //     MEISAI の番号は一致しない。五井 水越圭彦 = 1000058004 / 2113003002)。
+  const kubunByName = new Map();
+  {
+    const asg = await fetchAll("client_office_assignments", "client_id",
+      (q) => q.eq("office_id", OFFICE_ID).order("client_id"));
+    const ids = [...new Set(asg.map((a) => a.client_id))];
+    for (let i = 0; i < ids.length; i += 200) {
+      const chunk = ids.slice(i, i + 200);
+      const { data: cls } = await sb.from("clients").select("id,name").in("id", chunk);
+      const { data: certs } = await sb.from("shougai_certifications")
+        .select("client_id,support_level,certification_start_date,certification_end_date")
+        .in("client_id", chunk);
+      const nameById = new Map((cls ?? []).map((c) => [c.id, c.name]));
+      for (const ce of certs ?? []) {
+        // 対象月に有効な証を優先
+        const valid = (!ce.certification_start_date || ce.certification_start_date <= `${TARGET_MONTH}-30`)
+          && (!ce.certification_end_date || ce.certification_end_date >= `${TARGET_MONTH}-01`);
+        const nm = normClientName(nameById.get(ce.client_id) || "");
+        if (!nm) continue;
+        if (valid || !kubunByName.has(nm)) kubunByName.set(nm, ce.support_level);
+      }
+    }
+    console.log(`障害支援区分マップ: ${kubunByName.size}名`);
+  }
+
   // 4b) map をロードして変換
   const maps = await loadCodeMaps();
-  console.log(`コード map: single=${maps.single.size} single2=${maps.single2.size} composite=${maps.composite.size} composite2=${maps.composite2.size} increment=${maps.increment.size} increment2=${maps.increment2.size} (居宅介護 身体/家事 基本)`);
+  console.log(`コード map: single=${maps.single.size} single2=${maps.single2.size} composite=${maps.composite.size} composite2=${maps.composite2.size} increment=${maps.increment.size} increment2=${maps.increment2.size} (居宅介護 身体/家事 + 同行援護 基本)`);
   console.log(`2人派遣ブロック: ${twoPersonVisits} 件 (・2人 行 ${secondRows} = 2人目以降を全て請求計上)\n`);
   const rowConv = []; // target と同じ index。各要素: null | { minutes, convs:[conv,...] } | { skip: true } (合算セッションの2件目以降)
   const convWarn = [];
@@ -538,7 +595,10 @@ async function main() {
       // 合算セッションの代表行 = session[0] (buildDailySessions で開始時刻昇順に格納済)。
       // 代表行以外は payload を出さない (二重計上防止。base+addon は代表行の1回だけ生成)。
       if (r !== session[0]) { rowConv.push({ skip: true }); continue; }
-      if (!sessionResultCache.has(session)) sessionResultCache.set(session, convertSession(session, mode, maps));
+      if (!sessionResultCache.has(session)) sessionResultCache.set(session, convertSession(session, mode, maps,
+        (() => { const k = session[0].code === "021008"
+          ? doukouKubunMod(kubunByName.get(normClientName(session[0].clientName))) : null;
+          return k ? [k] : []; })()));
       const resolved = sessionResultCache.get(session);
       if (!resolved || resolved.missing) {
         convWarn.push(`合算セッション 6桁未解決 key=${resolved?.key ?? "?"} (${r.clientName} ${r.date} 合算${session.length}件)`);
@@ -556,7 +616,10 @@ async function main() {
     }
     const minutes = santeiToMinutes(r.santei);
     if (minutes == null) { convWarn.push(`算定時間が解釈不能: "${r.santei}" (${r.clientName} ${r.date})`); rowConv.push(null); blockedNoDur++; continue; }
-    const conv = convertRow(r.code, minutes, r.santeiStart, r.santeiEnd, mode, maps, r._twoPerson);
+    const kubun = r.code === "021008"
+      ? doukouKubunMod(kubunByName.get(normClientName(r.clientName)))
+      : null;
+    const conv = convertRow(r.code, minutes, r.santeiStart, r.santeiEnd, mode, maps, r._twoPerson, kubun ? [kubun] : []);
     if (!conv || conv.missing) {
       convWarn.push(`6桁未解決 code=${r.code} ${minutes}分 ${r.santeiStart}-${r.santeiEnd}${r._twoPerson ? " [2人]" : ""} key=${conv?.key ?? "?"} (${r.clientName} ${r.date})`);
       if (conv?.key) missKeys.add(conv.key);
