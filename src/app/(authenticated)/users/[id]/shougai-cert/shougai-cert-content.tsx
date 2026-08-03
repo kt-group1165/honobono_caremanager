@@ -995,6 +995,13 @@ export function ShougaiCertContent({
                   className={`${inputCls} w-full`}
                 />
               </div>
+              <p className="text-xs text-amber-700">
+                受給者証の「事業者記入欄」= <b>当事業所との契約内容</b>を転記します。
+                上の支給量 (市町村の支給決定量) とは別で、他事業所と分け合う場合は
+                その一部になります。国保連伝送の契約情報レコード (契約支給量・契約開始日・
+                事業者記入欄番号) に出るため、<b>契約開始日が空だと受給者証の値で代替</b>され、
+                伝送時に警告が出ます。
+              </p>
             </div>
           </FieldRow>
           {extAvailable && (
