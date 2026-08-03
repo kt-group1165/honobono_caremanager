@@ -24,6 +24,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ID_IN_CHUNK, NAME_IN_CHUNK } from "@/lib/chunk-parallel";
 import { validInMonth } from "@/lib/service-code-valid";
+import { isBillableRecord } from "@/lib/shogai-seikyu/record-markers";
 
 export interface ShogaiSeikyuDetail {
   /** サービス種別 (居宅介護 等) */
@@ -188,6 +189,7 @@ export async function aggregateMonthlyShogaiSeikyu(
       visit_date: string;
       start_time: string | null;
       end_time: string | null;
+      notes: string | null;
     }
     const schedRows: SchedRow[] = [];
     let soff = 0;
@@ -195,7 +197,7 @@ export async function aggregateMonthlyShogaiSeikyu(
     while (true) {
       let sq = supabase
         .from("kaigo_visit_schedule")
-        .select("user_id, service_type, visit_date, start_time, end_time")
+        .select("user_id, service_type, visit_date, start_time, end_time, notes")
         .in("status", schedStatuses)
         .gte("visit_date", from)
         .lte("visit_date", to);
@@ -208,7 +210,9 @@ export async function aggregateMonthlyShogaiSeikyu(
         break;
       }
       const rows = (data ?? []) as SchedRow[];
-      schedRows.push(...rows);
+      // 合算セッションの従属行は請求が代表行に集約済 (実績記録票用の記録専用行) →
+      //   ここで拾うと同一 code×日 が二重計上になるので除外する
+      schedRows.push(...rows.filter((s) => isBillableRecord(s.notes)));
       if (rows.length < PAGE) break;
       soff += PAGE;
     }

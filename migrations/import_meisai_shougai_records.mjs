@@ -36,6 +36,14 @@ const TENANT_ID = "kt-group";
 const MAP_TAG = process.env.MAP_TAG || "大網"; // _meisai_num_to_client_大網.json
 const CSV_DIR = fileURLToPath(new URL(`../サービス実績データ/${AREA_DIR}/202606/`, import.meta.url));
 
+// notes に埋め込む行種マーカー。**src/lib/shogai-seikyu/record-markers.ts と同一文字列**
+//   (TS 側から .mjs を import できないため二重定義。変更時は両方直すこと)
+//   - MARK_ADDON      : 増(加算)コードの行。請求には要るが実際の訪問ではないので実績記録票に出さない
+//   - MARK_SESSION_SUB: 合算セッションの2件目以降。請求は代表行に集約済なので集計から除外し、
+//                       実績記録票にだけ提供時刻の行として出す
+const MARK_ADDON = "加算行";
+const MARK_SESSION_SUB = "合算従属";
+
 // ---- env ----
 function loadEnv() {
   const txt = readFileSync(new URL("../.env.local", import.meta.url), "utf8");
@@ -632,38 +640,54 @@ async function main() {
   //   base 行 + addon 行を別々の kaigo_visit_schedule 行として INSERT する
   //   (aggregate.ts は service_type 名の一致でしか集計しないため、コードごとに
   //   1 occurrence = 1 行が必要)。
-  let blockedNoClient = 0, sessionSkipped = 0;
+  let blockedNoClient = 0, sessionSkipped = 0, recordOnlyRows = 0;
   const payloads = [];
   for (let i = 0; i < target.length; i++) {
     const r = target[i]; const rc = rowConv[i];
     if (!rc) continue; // 変換不可(算定時間/6桁未解決)は 4) で計上済み
-    if (rc.skip) { sessionSkipped++; continue; } // 合算セッションの代表行以外
+    if (rc.skip) {
+      // 合算セッションの2件目以降。請求は代表行に合算済みだが、実績記録票 (J611) には
+      //   ほのぼの同様「提供時刻ごとの行」を出す必要があるので、**記録専用行**として残す。
+      //   notes に [合算従属] を付け、aggregate 側で集計から除外する
+      //   (service_type は代表と同じ = 記録票の内容コードが引けるようにするため)。
+      sessionSkipped++;
+      const cid0 = resolvedClient.get(r.clientNum);
+      const repIdx = target.indexOf(sessionOf.get(r)?.[0]);
+      const repName = repIdx >= 0 ? rowConv[repIdx]?.convs?.[0]?.name : null;
+      if (cid0 && repName) {
+        const sid = (memberByName.get(normStaff(r.staffName)) || []).length === 1
+          ? memberByName.get(normStaff(r.staffName))[0] : null;
+        payloads.push({
+          user_id: cid0, staff_id: sid, visit_date: r.date,
+          start_time: r.start || r.santeiStart || null,
+          end_time: r.end || r.santeiEnd || null,
+          service_type: repName,
+          status: "completed", office_id: office.id, tenant_id: TENANT_ID,
+          notes: `[MEISAI障害取込 ${TARGET_MONTH} ${MAP_TAG} ${MARK_SESSION_SUB} code=${r.code}]`,
+        });
+        recordOnlyRows++;
+      }
+      continue;
+    }
     const cid = resolvedClient.get(r.clientNum);
     if (!cid) { blockedNoClient++; continue; }
 
-    // 合算セッションの代表行は複数メンバーにまたがるため、開始/終了は
-    // メンバー全体のスパン、staff は全メンバーが同一スタッフに解決できた場合のみ設定
-    // (異なる場合は null。★ 要確認: 誰の稼働として計上すべきかの厳密なルールは未検証)。
-    let startTime = r.start || null;
-    let endTime = r.end || null;
-    let staffId = (memberByName.get(normStaff(r.staffName)) || []).length === 1
+    // 合算セッションの代表行も **自分の実提供時刻のまま** 残す。
+    //   請求 (単位数) はセッション合計で解決した代表行の convs が持ち、2件目以降は
+    //   上の記録専用行として実時刻で出す。以前はここでメンバー全体のスパン
+    //   (例 14:00-20:00) に潰していたが、中断 (間に別区分の提供が挟まる) が消えて
+    //   実績記録票の提供時刻・算定時間合計がほのぼのと食い違っていた。
+    const startTime = r.start || null;
+    const endTime = r.end || null;
+    const staffId = (memberByName.get(normStaff(r.staffName)) || []).length === 1
       ? memberByName.get(normStaff(r.staffName))[0]
       : null;
-    if (rc.sessionMembers) {
-      const members = rc.sessionMembers;
-      startTime = members[0].start || members[0].santeiStart || startTime;
-      const last = members[members.length - 1];
-      endTime = last.end || last.santeiEnd || endTime;
-      const staffIds = new Set(
-        members.map((m) => {
-          const ids = memberByName.get(normStaff(m.staffName)) || [];
-          return ids.length === 1 ? ids[0] : null;
-        }),
-      );
-      staffId = staffIds.size === 1 ? [...staffIds][0] : null;
-    }
 
-    for (const c of rc.convs) {
+    // convs[0] = 基本コード / convs[1..] = 増(加算)コード。
+    //   増は請求上の単位でしかなく実際の訪問ではないため、実績記録票 (J611) には出さない。
+    //   → notes に MARK_ADDON を付け、記録票側のローダーで除外する (集計側は含める)。
+    for (let ci = 0; ci < rc.convs.length; ci++) {
+      const c = rc.convs[ci];
       payloads.push({
         user_id: cid,
         staff_id: staffId,
@@ -674,7 +698,7 @@ async function main() {
         status: "completed",
         office_id: office.id,
         tenant_id: TENANT_ID,
-        notes: `[MEISAI障害取込 ${TARGET_MONTH} ${MAP_TAG} code=${c.base}]`,
+        notes: `[MEISAI障害取込 ${TARGET_MONTH} ${MAP_TAG}${ci > 0 ? ` ${MARK_ADDON}` : ""} code=${c.base}]`,
       });
     }
   }
@@ -684,7 +708,7 @@ async function main() {
   console.log(`=== 取込可否サマリ (障害021 ${target.length}行) ===`);
   console.log(`  取込可能(=INSERT行): ${deduped.length}`);
   console.log(`  2人派遣: ${twoPersonVisits}件 (・2人 行 ${twoPersonCount} を基本行と別に計上=2倍請求)`);
-  console.log(`  合算セッション: ${mergedSessionCount}件 (対象${mergedRowCount}行 → 代表行1件に集約、2件目以降 ${sessionSkipped}行はskip)`);
+  console.log(`  合算セッション: ${mergedSessionCount}件 (対象${mergedRowCount}行 → 請求は代表行に集約。2件目以降 ${sessionSkipped}行は記録専用行として ${recordOnlyRows} 行 INSERT)`);
   console.log(`  増addon行: ${addonCount}`);
   console.log(`  ブロック(利用者未解決): ${blockedNoClient}`);
   console.log(`  ブロック(6桁コード未解決): ${blocked6}`);

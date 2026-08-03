@@ -49,6 +49,7 @@ import {
 } from "@/lib/shogai-seikyu/re-seikyu-shogai";
 import { validInMonth } from "@/lib/service-code-valid";
 import { getShogaiHomonUnitPrice } from "@/lib/shogai-seikyu/unit-price";
+import { isAddonRecord, isSessionSubRecord } from "@/lib/shogai-seikyu/record-markers";
 import {
   buildShogaiDensou,
   type ShogaiDensouUser,
@@ -826,6 +827,7 @@ export function ShogaiSeikyuContent({
         visit_date: string;
         start_time: string | null;
         end_time: string | null;
+        notes: string | null;
       }
       const schedRows: SchedRow[] = [];
       let soff = 0;
@@ -833,7 +835,7 @@ export function ShogaiSeikyuContent({
       while (true) {
         let sq = supabase
           .from("kaigo_visit_schedule")
-          .select("user_id, service_type, visit_date, start_time, end_time")
+          .select("user_id, service_type, visit_date, start_time, end_time, notes")
           .eq("status", "completed")
           .gte("visit_date", from)
           .lte("visit_date", to);
@@ -911,6 +913,8 @@ export function ShogaiSeikyuContent({
               category: m.category,
               serviceCode: m.code,
               serviceName: name,
+              isAddon: isAddonRecord(s.notes),
+              isSessionSub: isSessionSubRecord(s.notes),
             },
           });
         }

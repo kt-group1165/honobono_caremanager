@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import Encoding from "encoding-japanese";
 import { getShogaiHomonUnitPrice } from "@/lib/shogai-seikyu/unit-price";
+import { isAddonRecord, isSessionSubRecord } from "@/lib/shogai-seikyu/record-markers";
 import {
   aggregateMonthlyShogaiSeikyu,
   type ShogaiSeikyuRow,
@@ -139,6 +140,7 @@ async function loadMonthVisits(
       visit_date: string;
       start_time: string | null;
       end_time: string | null;
+      notes: string | null;
     }
     const schedRows: SchedRow[] = [];
     let soff = 0;
@@ -146,7 +148,7 @@ async function loadMonthVisits(
     while (true) {
       const { data, error } = await sb
         .from("kaigo_visit_schedule")
-        .select("user_id, service_type, visit_date, start_time, end_time")
+        .select("user_id, service_type, visit_date, start_time, end_time, notes")
         .eq("status", "completed")
         .gte("visit_date", from)
         .lte("visit_date", to)
@@ -213,6 +215,8 @@ async function loadMonthVisits(
             category: mm.category,
             serviceCode: mm.code,
             serviceName: name,
+            isAddon: isAddonRecord(s.notes),
+            isSessionSub: isSessionSubRecord(s.notes),
           },
         });
       }

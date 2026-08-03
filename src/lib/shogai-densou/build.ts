@@ -30,6 +30,7 @@
  */
 
 import type { ShogaiSeikyuRow } from "@/lib/shogai-seikyu/aggregate";
+import { toDensouKana } from "@/lib/densou-kana";
 
 // ─── 入力型 ──────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,16 @@ export interface ShogaiDensouVisit {
   serviceCode: string | null;
   /** マスタのサービス名 (重訪の「・２人」「・同行ｎ」判定に使用。不明は null) */
   serviceName?: string | null;
+  /**
+   * 増(加算)行 = 請求上の算定時間ではあるが実際の訪問ではない (例「家事夜増２．０」)。
+   * 実績記録票の明細行にはせず、同一時間ブロックの基本行の算定時間に足し込む。
+   */
+  isAddon?: boolean;
+  /**
+   * 合算セッションの従属行 = 請求は代表行に集約済で、提供時刻の記録だけを残す行。
+   * 明細行としては出すが算定時間は 0 (通番合計は代表行が持つ)。
+   */
+  isSessionSub?: boolean;
 }
 
 /** 上限管理結果票の関係事業所行 (shogai_jogen_kanri_results.office_lines) */
@@ -149,6 +160,42 @@ const SERVICE_TYPE_LABELS: Record<string, string> = {
   "14": "同行援護", // 旧コード系
   "15": "同行援護",
 };
+
+/** マスタ名に「・２人」表記を持つ = 2 人派遣の 2 人目として取込まれた行 */
+const isTwoPersonName = (name: string | null | undefined): boolean =>
+  /[2２]人/.test(name ?? "");
+
+/**
+ * サービス名に埋め込まれた **算定時間** の合計 (時間)。
+ *
+ * 障害の居宅介護は「算定時間」が報酬上の時間であって実経過時間ではない
+ * (例: 17:30-18:15 の 45 分が 1.0h のことも 0.75h のこともある — 事業所が
+ * 稼働データにどう入力したかで決まる)。その算定時間は決定した 6 桁コードの名称に
+ * 時間帯記号つきで埋まっているので、そこから読む。
+ *
+ *   「身体日０．５・夜０．５」→ 0.5 + 0.5 = 1.0
+ *   「家事日２．２５」        → 2.25
+ *   「身体早０．５・日２．０」→ 0.5 + 2.0 = 2.5
+ *   「身体日０．５・２人」    → 0.5 (「・２人」は人数なので拾わない)
+ *
+ * 時間帯記号 (日/夜/深/早) を伴わない名称 (手入力の実績等) は 0 を返すので、
+ * 呼び出し側で実経過時間にフォールバックする。
+ */
+function serviceNameHours(name: string | null | undefined): number {
+  if (!name) return 0;
+  let total = 0;
+  const re = /([日夜深早])増?([０-９0-9．.]+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(name)) !== null) {
+    const v = Number(
+      m[2]
+        .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+        .replace(/．/g, "."),
+    );
+    if (Number.isFinite(v)) total += v;
+  }
+  return total;
+}
 
 /** 重訪 明細 19 派遣人数: マスタ名の「・２人」表記 (同一時間の 2 人派遣は 1 行 + 派遣人数 2) */
 function juhoNinzu(name: string | null | undefined): number {
@@ -476,7 +523,9 @@ export function buildShogaiDensou(
     seikyuParts.push([
       "J121", "01", ym, muni, office, jukyu,
       "", // 7 助成自治体番号
-      "", "", // 8-9 氏名カナ (任意)
+      // 8 支給決定者氏名カナ (任意)。ほのぼの KJ も設定しているので合わせる (半角カナ)
+      toDensouKana(r.user_name_kana).replace(/[\s　]+/g, ""),
+      "", // 9 支給決定児童氏名カナ
       areaCode, // 10 地域区分コード
       "1", // 11 就労継続支援A型事業者負担減免措置実施 (1:無し)
       r.self_payment_limit != null ? String(r.self_payment_limit) : "", // 12 利用者負担上限月額① (未設定は空 + 警告済)
@@ -615,9 +664,11 @@ export function buildShogaiDensou(
             "J121", "05", ym, muni, office, jukyu,
             code, // 7 決定サービスコード
             String(Math.round(amt * 100)).padStart(5, "0"), // 8 契約支給量 (整数3+小数2)
-            dateNum(u.contractStartDate ?? firstDate), // 9 契約開始年月日
-            "", // 10 契約終了年月日
-            (u.contractEntryNumber ?? "1").padStart(2, "0"), // 11 事業者記入欄番号
+            // 9-10 契約期間。契約データ (契約内容報告書) 未入力のときは受給者証の
+            //   有効期間で代替する (ほのぼの KJ の 47 件中 40 件が受給者証期間と一致)。
+            dateNum(u.contractStartDate ?? r.certStart ?? firstDate), // 9 契約開始年月日
+            u.contractStartDate ? "" : dateNum(r.certEnd ?? ""), // 10 契約終了年月日
+            u.contractEntryNumber ?? "1", // 11 事業者記入欄番号 (ほのぼの同様 前ゼロなし)
           ]);
         }
       }
@@ -685,22 +736,50 @@ export function buildShogaiDensou(
       kyotakuVisits.length > 0 ||
       (juhoVisits.length === 0 && !detailTypes.has("12"))
     ) {
-      // 明細情報レコード (02) × 提供日時
-      const visits = [...kyotakuVisits].sort((a, b) =>
-        (a.date + (a.startTime ?? "")).localeCompare(b.date + (b.startTime ?? "")),
+      // 明細情報レコード (02) × 提供日時。
+      //   同時刻に 1 人目と 2 人目が並ぶときは **1 人目を先** にする (ほのぼの TJ の通番順)。
+      const sorted = [...kyotakuVisits].sort(
+        (a, b) =>
+          (a.date + (a.startTime ?? "")).localeCompare(
+            b.date + (b.startTime ?? ""),
+          ) ||
+          Number(isTwoPersonName(a.serviceName)) -
+            Number(isTwoPersonName(b.serviceName)),
       );
-      // 提供通番: 同一決定コードで間隔 2 時間未満の連続提供は同一番号 (乗降は常に新番号)
+      // 提供通番: 同一決定コードで間隔 2 時間未満の連続提供は同一番号 (乗降は常に新番号)。
+      //   ★ 直前の行ではなく **同一 (日×決定コード) の直近の終了時刻** と比較する。
+      //   同区分の提供が別区分の提供を挟んで中断・再開するケース (例 14-16家事 / 16-17身体 /
+      //   17-20家事) で、ほのぼのは家事2行を同じ提供通番にまとめる。直前行と比較すると
+      //   間に挟まった身体で連鎖が切れて別番号になってしまう。
       let tsuban = 0;
-      let prevKey = "";
-      let prevEndMs = 0;
+      const lastByCode = new Map<string, { tsuban: number; endMs: number }>();
       const goukei = new Map<number, { hours: number; count: number }>();
       const rows: string[][] = [];
+      const meisaiHours: number[] = []; // rows と同 index。通番まとめ (下の後処理) に使う
+      const meisaiMeta: {
+        code: string;
+        startMs: number;
+        endMs: number;
+        isSecondPerson: boolean;
+      }[] = []; // rows と同 index。サービス提供回数のペア確定に使う
       // 同時2人派遣まとめ: 同一 (日×開始×終了×決定コード) の複数 visit = 同時複数ヘルパー。
       //   MEISAI importer は 1 人目=基本コード / 2 人目=・2人コード の別行で取込む (KJ明細は2行=2倍請求)
       //   が、実績記録票 (様式1) は 1 訪問=1行+派遣人数n (ほのぼの TJ 準拠。算定時間数は1人分)。
       //   → ここで同一時間ブロックを 1 行に合算し派遣人数を数える。
       const jissekiGrpKey = (v: ShogaiDensouVisit) =>
         `${v.date}|${hhmm(v.startTime)}|${hhmm(v.endTime)}|${decisionCode(v.category, v.serviceName, v.serviceCode)}`;
+      // 増(加算)行は明細行にせず、同一時間ブロックの基本行の算定時間に足し込む
+      //   (例「家事日３．０」+「家事夜増２．０」= 算定 5.0h を 1 行で表す)
+      const addonHours = new Map<string, number>();
+      const visits: ShogaiDensouVisit[] = [];
+      for (const v of sorted) {
+        if (v.isAddon) {
+          const k = jissekiGrpKey(v);
+          addonHours.set(k, (addonHours.get(k) ?? 0) + serviceNameHours(v.serviceName));
+        } else {
+          visits.push(v);
+        }
+      }
       const jissekiNinzu = new Map<string, number>();
       for (const v of visits) {
         const k = jissekiGrpKey(v);
@@ -715,27 +794,52 @@ export function buildShogaiDensou(
         const code = decisionCode(v.category, v.serviceName, v.serviceCode);
         const startMs = v.startTime ? Date.parse(`${v.date}T${v.startTime}`) : 0;
         const endMs = v.endTime ? Date.parse(`${v.date}T${v.endTime}`) : startMs;
+        // 時間がずれた 2 人派遣の「2 人目」行 (・２人 コードで畳まれなかったもの)。
+        //   _if_shogai.txt: 「時間がずれた場合は 2 行 (別通番) + サービス提供回数 1人目'1'/
+        //   2人目'2' + 各行 派遣人数 1」→ 連鎖させず必ず新番号にし、後続の連鎖判定にも使わない
+        //   (1 人目と時間が重なるので、そのままだと同一通番に潰れてしまう)。
+        const isSecondPerson = ninzu === 1 && isTwoPersonName(v.serviceName);
+        const prevSame = isSecondPerson ? undefined : lastByCode.get(`${v.date}_${code}`);
         const chain =
           code !== "115000" &&
-          prevKey === `${v.date}_${code}` &&
+          prevSame != null &&
           startMs > 0 &&
-          prevEndMs > 0 &&
-          startMs - prevEndMs < 2 * 60 * 60 * 1000;
-        if (!chain) tsuban += 1;
-        prevKey = `${v.date}_${code}`;
-        prevEndMs = endMs;
+          prevSame.endMs > 0 &&
+          startMs - prevSame.endMs < 2 * 60 * 60 * 1000;
+        let tsubanOfRow: number;
+        if (chain && prevSame) {
+          tsubanOfRow = prevSame.tsuban;
+        } else {
+          tsuban += 1;
+          tsubanOfRow = tsuban;
+        }
+        if (!isSecondPerson) {
+          lastByCode.set(`${v.date}_${code}`, { tsuban: tsubanOfRow, endMs });
+        }
 
-        const hours = (v.durationMinutes ?? 0) / 60;
+        // 算定時間数は **実経過時間ではなく決定コード名に埋まった算定時間**。
+        //   読めない名称 (手入力の実績等) のみ実経過時間にフォールバックする。
+        //   合算セッションの従属行は 0 (通番合計は代表行が持つ)。
+        const nameHours = serviceNameHours(v.serviceName);
+        const hours = v.isSessionSub
+          ? 0
+          : (nameHours > 0 ? nameHours : (v.durationMinutes ?? 0) / 60) +
+            (addonHours.get(gk) ?? 0);
         const slot = goukeiSlot(code);
         const g = goukei.get(slot) ?? { hours: 0, count: 0 };
-        g.hours += hours;
+        // 基本情報の算定時間数計は **延べ時間** = Σ(明細の算定時間 × 派遣人数)。
+        //   明細 項16 は 1 人分のままなので、同時 2 人派遣は合計側だけ 2 倍になる
+        //   (ほのぼの TJ 全19名で検算一致)。
+        g.hours += hours * ninzu;
         g.count += 1;
         goukei.set(slot, g);
 
         const f = baseMeisai("0101");
-        f[7] = String(tsuban); // 8 提供通番
-        f[8] = String(Number(v.date.slice(8, 10))).padStart(2, "0"); // 9 日付
-        f[9] = "1"; // 10 サービス提供回数
+        f[7] = String(tsubanOfRow); // 8 提供通番
+        f[8] = String(Number(v.date.slice(8, 10))); // 9 日付 (ほのぼの TJ 同様 前ゼロなし)
+        // 10 サービス提供回数: 通常は空。時間がずれた 2 人派遣のみ 1人目'1'/2人目'2'
+        //    (_if_shogai.txt 明細 項10)。ペア確定は後段で行う
+        f[9] = "";
         f[10] = code; // 11 サービス内容 (決定コード)
         // 12 ヘルパー資格 (11:初任者等 12:基礎等 13:重訪 — _if_shogai.txt L103)。
         //    担当ヘルパーの実資格データを保持していないため "11" 固定 (下の warning で通知)
@@ -745,14 +849,70 @@ export function buildShogaiDensou(
         if (code === "115000") {
           f[16] = "1"; // 17 乗降 (回数)
         } else if (hours > 0) {
-          f[15] = fmtHours4(hours); // 16 算定時間数
+          f[15] = fmtHours4(hours); // 16 算定時間数 (同一通番が複数行のときは後段でまとめ直す)
         }
         // 19 派遣人数: マスタ名の「・２人」表記で 2 (同時2人派遣は 1 行 + 派遣人数 2)。
         //   居宅介護の同時2人派遣は「身体日0.5・2人」等の合成コードで取込まれる (MEISAI importer)。
         //   算定時間数 (項16) は 1 人分の実サービス時間のまま (ほのぼの TJ と一致 — 重訪の延べ倍計とは異なる)。
         f[18] = String(ninzu); // 19 派遣人数 (同時ヘルパー数=グループ内 visit 数)
+        meisaiHours.push(hours);
+        meisaiMeta.push({ code, startMs, endMs, isSecondPerson });
         rows.push(f);
       }
+
+      // 10 サービス提供回数: 時間がずれた 2 人派遣のペアにのみ 1人目'1'/2人目'2' を振る。
+      //   2 人目 (・２人 コードで畳まれなかった行) と時間が重なる同日同コードの通常行を
+      //   1 人目とみなす (ほのぼの TJ と同じ付け方)。
+      {
+        const pairedFirst = new Set<number>();
+        for (let i = 0; i < rows.length; i++) {
+          if (!meisaiMeta[i].isSecondPerson) continue;
+          const s = meisaiMeta[i];
+          const firstIdx = rows.findIndex(
+            (_, j) =>
+              j !== i &&
+              !meisaiMeta[j].isSecondPerson &&
+              !pairedFirst.has(j) &&
+              meisaiMeta[j].code === s.code &&
+              rows[j][8] === rows[i][8] &&
+              meisaiMeta[j].startMs < s.endMs &&
+              s.startMs < meisaiMeta[j].endMs,
+          );
+          if (firstIdx < 0) continue; // 相手が見つからない = 単独行として空のまま
+          pairedFirst.add(firstIdx);
+          rows[firstIdx][9] = "1";
+          rows[i][9] = "2";
+        }
+      }
+
+      // 算定時間数 (項16) は **提供通番ごとに1つ**。中断を挟んで同区分が再開したケースで
+      //   ほのぼのは途中行を空にし最後の行に通番合計を出す (例 14-16 空 / 17-20 に 5.00)。
+      //   乗降 (115000) は回数欄なので対象外。
+      {
+        const lastIdxOfTsuban = new Map<string, number>();
+        const sumOfTsuban = new Map<string, number>();
+        for (let i = 0; i < rows.length; i++) {
+          if (rows[i][10] === "115000") continue;
+          const k = rows[i][7];
+          lastIdxOfTsuban.set(k, i);
+          sumOfTsuban.set(k, (sumOfTsuban.get(k) ?? 0) + meisaiHours[i]);
+        }
+        for (let i = 0; i < rows.length; i++) {
+          if (rows[i][10] === "115000") continue;
+          const k = rows[i][7];
+          if (lastIdxOfTsuban.get(k) !== i) {
+            rows[i][15] = ""; // 通番の途中行は算定時間空
+          } else {
+            const total = sumOfTsuban.get(k) ?? 0;
+            rows[i][15] = total > 0 ? fmtHours4(total) : "";
+          }
+        }
+      }
+
+      // 明細の並びは **提供通番順** (ほのぼの TJ 準拠)。中断を挟んで再開した提供は
+      //   時刻順だと間に別区分が入るが、記録票は通番でまとめて並べる。
+      //   Array#sort は安定なので通番内は挿入順 (=提供時刻順) が保たれる。
+      rows.sort((a, b) => Number(a[7]) - Number(b[7]));
 
       // 基本情報レコード (01) — 合計1〜5 (項番16〜32): 内訳100% と 算定時間数計 のみ設定 (減算ヘルパーなし前提)
       const b = baseKihon("0101");
@@ -773,6 +933,27 @@ export function buildShogaiDensou(
           b[idx.kei] = fmtHours5(g.hours);
         }
       }
+
+      // 加算欄 (基本 112 緊急時対応 / 113 初回 / 114 福祉専門職員等連携 = 回数、
+      //   明細 69/70/71 = その回のフラグ)。請求明細に加算コードが立っている月に設定する。
+      //   算定日は保持していないため **その月の最初の提供行** に付ける (ほのぼの KJ と同じ位置)。
+      const KYOTAKU_KASAN: { re: RegExp; kihon: number; meisai: number }[] = [
+        { re: /緊急時対応加算/, kihon: 111, meisai: 68 }, // 項112 / 項69
+        { re: /初回加算/, kihon: 112, meisai: 69 }, // 項113 / 項70
+        { re: /福祉専門職員等連携加算/, kihon: 113, meisai: 70 }, // 項114 / 項71
+      ];
+      for (const k of KYOTAKU_KASAN) {
+        const hit = r.details.filter(
+          (d) =>
+            serviceTypeCode(d.service_code) === "11" &&
+            k.re.test(`${d.service_type} ${d.service_category ?? ""}`),
+        );
+        if (hit.length === 0) continue;
+        const count = hit.reduce((s, d) => s + (d.count ?? 1), 0);
+        b[k.kihon] = String(count);
+        if (rows.length > 0) rows[0][k.meisai] = "1";
+      }
+
       jissekiParts.push(b, ...rows);
 
       // ⚠ ヘルパー資格 (明細 項12) はヘルパーの実資格データを保持していないため
