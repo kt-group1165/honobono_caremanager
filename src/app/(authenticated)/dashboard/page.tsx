@@ -419,6 +419,7 @@ export default function DashboardPage() {
       { key: "kaigo", label: "介護保険", value: shownUriage.kaigo, cls: "bg-emerald-400" },
       { key: "sougou", label: "総合事業", value: shownUriage.sougou, cls: "bg-teal-400" },
       { key: "shogai", label: "障害福祉", value: shownUriage.shogai, cls: "bg-indigo-400" },
+      { key: "chiiki", label: "地域生活支援", value: shownUriage.chiiki, cls: "bg-violet-400" },
       { key: "kyotaku", label: "居宅介護支援費", value: shownUriage.kyotaku, cls: "bg-sky-400" },
       { key: "jihi", label: "自費", value: shownUriage.jihi, cls: "bg-amber-400" },
     ];
@@ -652,6 +653,7 @@ export default function DashboardPage() {
                         <th className="px-3 py-2 text-right">介護保険</th>
                         <th className="px-3 py-2 text-right">総合事業</th>
                         <th className="px-3 py-2 text-right">障害福祉</th>
+                        <th className="px-3 py-2 text-right">地域生活支援</th>
                         <th className="px-3 py-2 text-right">居宅支援費</th>
                         <th className="px-3 py-2 text-right">自費</th>
                         <th className="px-3 py-2 text-right">売上</th>
@@ -674,6 +676,9 @@ export default function DashboardPage() {
                           </td>
                           <td className="px-3 py-2 text-right text-gray-600 tabular-nums">
                             {o.uriage.shogai ? o.uriage.shogai.toLocaleString() : "—"}
+                          </td>
+                          <td className="px-3 py-2 text-right text-gray-600 tabular-nums">
+                            {o.uriage.chiiki ? o.uriage.chiiki.toLocaleString() : "—"}
                           </td>
                           <td className="px-3 py-2 text-right text-gray-600 tabular-nums">
                             {o.uriage.kyotaku ? o.uriage.kyotaku.toLocaleString() : "—"}

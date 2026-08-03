@@ -26,10 +26,13 @@ import { aggregateMonthlyShogaiSeikyu } from "@/lib/shogai-seikyu/aggregate";
 const isMissingSchema = (code: string | null | undefined) =>
   code === "42P01" || code === "PGRST205" || code === "42703" || code === "PGRST204";
 
+/** 地域生活支援事業の単価 (1 単位 = 10 円。千葉市の移動支援コード表に準拠) */
+const CHIIKI_UNIT_YEN = 10;
+
 export interface UriageBreakdown {
   /** 対象月 (YYYY-MM) */
   month: string;
-  /** 売上合計 (円) = kaigo + sougou + shogai + kyotaku + jihi */
+  /** 売上合計 (円) = kaigo + sougou + shogai + chiiki + kyotaku + jihi */
   total: number;
   // ── 制度別内訳 (いずれも費用額 = 10割) ──
   /** 介護保険 (訪問介護 / 訪問入浴) */
@@ -38,6 +41,13 @@ export interface UriageBreakdown {
   sougou: number;
   /** 障害福祉サービス */
   shogai: number;
+  /**
+   * 地域生活支援事業 (移動支援・養育支援等)。国保連を通さず市町村へ直接請求する。
+   * ⚠ 単価表が市町村ごとに違い、現状 千葉市分しか無い (`src/lib/idou-shien-code.ts`)。
+   *   実績が `kaigo_idou_shien_records` に入っていない事業所では 0 のままになるので、
+   *   「対象実績があるのに 0」を warning で通知する。
+   */
+  chiiki: number;
   /** 居宅介護支援費 (居宅事業所のみ。全額保険給付) */
   kyotaku: number;
   /** 自費 = 限度額超過の全額自費 + 利用実費 (交通費・キャンセル料等) */
@@ -59,6 +69,7 @@ export const EMPTY_URIAGE: UriageBreakdown = {
   kaigo: 0,
   sougou: 0,
   shogai: 0,
+  chiiki: 0,
   kyotaku: 0,
   jihi: 0,
   insurance: 0,
@@ -122,6 +133,7 @@ export async function aggregateMonthlyUriage(
   let kaigo = 0;
   let sougou = 0;
   let shogai = 0;
+  let chiiki = 0;
   let kyotaku = 0;
   let jihi = 0;
   let insurance = 0;
@@ -196,6 +208,18 @@ export async function aggregateMonthlyUriage(
     }
   }
 
+  // 地域生活支援事業 (移動支援・養育支援) — 国保連を通さず市町村へ直接請求する分。
+  //   ⚠ 2026-08 時点で `kaigo_idou_shien_records` は全社 0 件 = **実績が取り込まれていない**。
+  //     茂原だけで 6 月に 117 行 (移動支援 109 / 養育支援 8) あり、売上に乗っていなかった
+  //     (実測差額 121,479 円)。ここで 0 のまま黙らせず必ず通知する。
+  if (!isKyotaku) {
+    const chi = await sumChiiki(supabase, opts.officeId, monthStr);
+    chiiki = chi.total;
+    userBurden += chi.userBurden;
+    for (const id of chi.clientIds) clientIds.add(id);
+    warnings.push(...chi.warnings);
+  }
+
   // 利用実費 (交通費・キャンセル料等の保険外費用) — 当月に当事業所でサービスがあった利用者分
   const jippi = await sumJippi(supabase, [...clientIds], monthStr);
   jihi += jippi.total;
@@ -203,10 +227,11 @@ export async function aggregateMonthlyUriage(
 
   return {
     month: monthStr,
-    total: kaigo + sougou + shogai + kyotaku + jihi,
+    total: kaigo + sougou + shogai + chiiki + kyotaku + jihi,
     kaigo,
     sougou,
     shogai,
+    chiiki,
     kyotaku,
     jihi,
     insurance,
@@ -423,4 +448,68 @@ async function sumJippi(
   let total = 0;
   for (const rows of chunks) for (const r of rows) total += r.amount ?? 0;
   return { total, warnings };
+}
+
+/**
+ * 地域生活支援事業 (移動支援・養育支援) の月次合計。
+ *
+ * 国保連を通さず市町村へ直接請求する制度で、`kaigo_idou_shien_records` に実績を持つ。
+ * 1 単位 = 10 円 (千葉市)。利用者負担は 生保/非課税=0円・課税世帯=10% だが、
+ * 既定は 0 円 (非課税前提) — idou-billing 画面と同じ扱い。
+ *
+ * ⚠ **売上に乗らない事故が実際に起きた**ので黙って 0 を返さない。
+ *   茂原 2026-06 は稼働データに移動支援 109 行 + 養育支援 8 行あるのに
+ *   `kaigo_idou_shien_records` が 0 件で、売上が 121,479 円少なかった。
+ *   実績が 1 件も無いのにシフト側 (kaigo_visit_schedule) に移動支援の予定がある場合は
+ *   「取り込まれていない」ことを warning で通知する。
+ */
+async function sumChiiki(
+  supabase: SupabaseClient,
+  officeId: string,
+  monthStr: string,
+): Promise<{ total: number; userBurden: number; clientIds: string[]; warnings: string[] }> {
+  const warnings: string[] = [];
+  const clientIds: string[] = [];
+  const from = `${monthStr}-01`;
+  const to = `${monthStr}-31`;
+
+  const { data, error } = await supabase
+    .from("kaigo_idou_shien_records")
+    .select("client_id, units, user_burden")
+    .eq("office_id", officeId)
+    .gte("service_date", from)
+    .lte("service_date", to);
+  if (error) {
+    if (!isMissingSchema(error.code)) {
+      warnings.push(`地域生活支援事業 (移動支援等) の取得に失敗したため売上に含まれていません: ${error.message}`);
+    }
+    return { total: 0, userBurden: 0, clientIds, warnings };
+  }
+
+  const rows = (data ?? []) as { client_id: string; units: number | null; user_burden: number | null }[];
+  let total = 0;
+  let userBurden = 0;
+  for (const r of rows) {
+    total += (r.units ?? 0) * CHIIKI_UNIT_YEN;
+    userBurden += r.user_burden ?? 0;
+    clientIds.push(r.client_id);
+  }
+
+  // 実績ゼロなのにシフトに移動支援の予定がある = 取り込み漏れ。売上が黙って欠ける
+  if (rows.length === 0) {
+    const { data: sched } = await supabase
+      .from("kaigo_visit_schedule")
+      .select("id", { count: "exact", head: false })
+      .eq("office_id", officeId)
+      .gte("visit_date", from)
+      .lte("visit_date", to)
+      .ilike("service_type", "%移動支援%")
+      .limit(1);
+    if ((sched ?? []).length > 0) {
+      warnings.push(
+        "移動支援の予定はあるのに実績 (kaigo_idou_shien_records) が 0 件です — 地域生活支援事業分が売上に計上されていません",
+      );
+    }
+  }
+  return { total, userBurden, clientIds, warnings };
 }
