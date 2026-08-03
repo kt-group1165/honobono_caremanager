@@ -289,8 +289,9 @@ async function loadCodeMaps() {
 //               に回数まで一致。合成コード不在 (家事0.25セグ / 夜増 等) は算定開始時間帯の単一へ fallback。
 // mods = 修飾子 (同援の 区3/区4 等)。身体/家事 では常に空配列
 function convertRow(code021, minutes, startHM, endHM, mode, maps, twoPerson, mods = []) {
-  // 重度訪問介護は請求モデルが違う (積み上げ型) ので専用関数へ
-  if (code021 === "021003") return convertJuho(minutes, startHM, mode, maps, twoPerson);
+  // 重度訪問介護 (021003) は日次通算なので、この行単位の変換器では扱わない
+  //   (main の juhoByDay で日ごとにまとめて解決する)
+  if (code021 === "021003") return null;
   const kind = KIND_OF_021[code021] ?? null;
   if (!kind) return null;
   // 量子化の刻み: 身体/同援 = 0.5h (30分) / 家事 = 0.25h (15分)
@@ -394,35 +395,41 @@ function resolveBaseAddon(kind, zoneMinutesOrdered, step, mode, maps, twoPerson,
 }
 
 // ---- 重度訪問介護 (021003) の変換 ----
-// **積み上げ型**: 1 訪問 = 所要時間までの段を全部出す。単位は各段の増分。
-//   例 1.5h → 1.0h(202単位) + 1.5h(99単位) の 2 行 = 301単位
-//   (五井 粥米利之 1.5h×8 + 2.0h×2 → 301×8 + 401×2 = 3,210 が伝送と完全一致)
+// **日次通算 + 積み上げ型**。制度上「1日 (0時〜24時) の所要時間を通算して算定」するため、
+// 訪問1回ごとではなく **その日の合計時間** で段を積む。
+//   段: 1.0h(202) 1.5h(99) 2.0h(100) 2.5h(100) 3.0h(100) 3.5h(99) 4.0h(100)
+//       **4h超は 0.5h ごとに 8.0h のコード(92単位)を繰り返す** (12h/16h/20h/24h の段は
+//       マスタ上の刻み境界であって、実際は 4h 超過分を 1 コードで回数計上する)
 //
-// ⚠ 時間帯: 重訪は 1 日の所要時間を通算して算定する制度だが、ここでは
-//   **算定開始時刻の時間帯**でコード系列を選ぶ。五井の実データは全訪問が単一時間帯に
-//   収まっており、時間帯またぎの実例が無いため検証できていない (要確認)。
-// ⚠ 区分: マスタは 重訪Ⅰ/Ⅱ/Ⅲ に分かれる。五井は全員 Ⅱ (区分6)。
-//   受給者証の障害支援区分から選ぶのが本来だが、対応表が未確定なので既定 Ⅱ。
-function convertJuho(minutes, startHM, mode, maps, twoPerson, kubunRoman = "II") {
-  const steps = maps.juhoSteps.get(`${kubunRoman}|${zoneDigit(startHM).zone}|${twoPerson ? 1 : 0}`);
-  if (!steps || steps.length === 0) {
-    return { missing: true, key: `重訪${kubunRoman}|${zoneDigit(startHM).zone}|${twoPerson ? "2人" : "1人"}` };
+// 2人派遣: 同一日に**時間帯が重なる**訪問がある場合、重なり分が2人目。
+//   1人目 = その日の和集合(union)の時間 / 2人目 = 重なった時間。それぞれ別に段を積む。
+//
+// 検算 (五井 水越圭彦 1221916057 / 12日分):
+//   1人目 union 通算 → 121271×12 121281×12 121441×12 121451×12 121461×12 121471×12
+//                      121481×9 121221×32  ← **伝送と回数まで完全一致**
+//   (訪問ごとに積む旧実装では 121271×16 になり長時間の段が出なかった)
+//
+// ⚠ 時間帯: 算定開始時刻の時間帯でコード系列を選ぶ。五井は全訪問が日中に収まっており
+//   時間帯またぎの実例が無いため未検証。
+// ⚠ 区分: マスタは 重訪Ⅰ/Ⅱ/Ⅲ。五井は全員 Ⅱ (区分6)。対応表未確定のため既定 Ⅱ。
+function juhoStepsFor(maps, zoneLabel, twoPerson, kubunRoman = "II") {
+  return maps.juhoSteps.get(`${kubunRoman}|${zoneLabel}|${twoPerson ? 1 : 0}`) ?? null;
+}
+
+// 通算分数 → 使う段の配列 (4h 超は 8.0h コードを繰り返す)
+function juhoStepsForMinutes(steps, minutes, mode) {
+  const hours = quantizeHours(minutes, 30, mode);
+  const base = steps.filter((st) => st.hours <= 4 + 1e-9 && st.hours <= hours + 1e-9);
+  const out = [...base];
+  if (hours > 4) {
+    // 4h 超過分を 0.5h ごとに「8.0h」の段で計上する
+    const over = steps.find((st) => Math.abs(st.hours - 8) < 1e-9);
+    if (over) {
+      const times = Math.round((hours - 4) / 0.5);
+      for (let i = 0; i < times; i++) out.push(over);
+    }
   }
-  const hours = quantizeHours(minutes, 30, mode); // 重訪は 0.5h 刻み
-  const used = steps.filter((st) => st.hours <= hours + 1e-9);
-  if (used.length === 0) {
-    return { missing: true, key: `重訪${kubunRoman}|${zoneDigit(startHM).zone}|${hours.toFixed(2)}h(段なし)` };
-  }
-  // 先頭段を base、以降を addon 扱いにして既存の payload 生成 (convs 配列) に載せる
-  const [first, ...rest] = used;
-  return {
-    base: first.code, name: first.name, units: first.units,
-    kind: "juho", zone: zoneDigit(startHM).zone, hours, twoPerson,
-    addons: rest.map((st) => ({
-      base: st.code, name: st.name, units: st.units,
-      kind: "juho-step", zone: zoneDigit(startHM).zone, hours: st.hours, twoPerson,
-    })),
-  };
+  return out;
 }
 
 // "HH:MM" → 当日分 (0時またぎは非対応。障害の訪問は同日内前提)
@@ -667,7 +674,70 @@ async function main() {
   const missKeys = new Set();
   let blockedNoDur = 0, blocked6 = 0, compositeCount = 0, twoPersonCount = 0, fellBackCount = 0, addonCount = 0;
   const sessionResultCache = new Map(); // members(配列参照) -> {conv結果 or null}
+
+  // ── 重度訪問介護 (021003) は日次通算 ──
+  //   制度上「1日の所要時間を通算して算定」するため、行ごとではなく **利用者×日** で
+  //   まとめて段を解決する。同一日に時間帯が重なる訪問は 2 人派遣なので、
+  //   1人目 = 和集合(union)の時間 / 2人目 = 重なった時間 として別々に積む。
+  //   結果はその日の**先頭行**にだけ載せ、残りの行は skip する (二重計上防止)。
+  const juhoConvByRow = new Map(); // target の row 参照 -> { convs:[...] }
+  const juhoSkip = new Set();
+  {
+    const byUserDay = new Map();
+    for (const r of target) {
+      if (r.code !== "021003") continue;
+      const k = `${r.clientNum}|${r.date}`;
+      if (!byUserDay.has(k)) byUserDay.set(k, []);
+      byUserDay.get(k).push(r);
+    }
+    for (const rows of byUserDay.values()) {
+      const withTime = rows
+        .map((r) => ({ r, s: parseHM(r.santeiStart), e: parseHM(r.santeiEnd) }))
+        .filter((x) => x.s != null && x.e != null && x.e > x.s)
+        .sort((a, b) => a.s - b.s);
+      // 時間が取れない行は従来どおり算定時間の単純合計に倒す
+      const totalMin = rows.reduce((sum, r) => sum + (santeiToMinutes(r.santei) ?? 0), 0);
+      let unionMin = 0, overlapMin = 0;
+      if (withTime.length === rows.length && withTime.length > 0) {
+        const merged = [];
+        for (const x of withTime) {
+          const last = merged[merged.length - 1];
+          if (last && x.s <= last.e) last.e = Math.max(last.e, x.e);
+          else merged.push({ s: x.s, e: x.e });
+        }
+        unionMin = merged.reduce((sum, m) => sum + (m.e - m.s), 0);
+        overlapMin = withTime.reduce((sum, x) => sum + (x.e - x.s), 0) - unionMin;
+      } else {
+        unionMin = totalMin;
+      }
+      const zoneLabel = zoneDigit(rows[0].santeiStart).zone;
+      const convs = [];
+      for (const [mins, two] of [[unionMin, false], [overlapMin, true]]) {
+        if (mins <= 0) continue;
+        const steps = juhoStepsFor(maps, zoneLabel, two);
+        if (!steps) {
+          convWarn.push(`重訪 段テーブル無し zone=${zoneLabel} ${two ? "2人" : "1人"} (${rows[0].clientName} ${rows[0].date})`);
+          missKeys.add(`重訪II|${zoneLabel}|${two ? "2人" : "1人"}`);
+          continue;
+        }
+        for (const st of juhoStepsForMinutes(steps, mins, mode)) {
+          convs.push({ base: st.code, name: st.name, units: st.units, kind: "juho", zone: zoneLabel, twoPerson: two });
+        }
+      }
+      if (convs.length === 0) continue;
+      juhoConvByRow.set(rows[0], { minutes: unionMin + overlapMin, convs });
+      for (const r of rows.slice(1)) juhoSkip.add(r);
+    }
+    if (byUserDay.size) console.log(`重訪 日次通算: ${byUserDay.size} (利用者×日) → ${juhoConvByRow.size} 日分に集約`);
+  }
+
   for (const r of target) {
+    if (r.code === "021003") {
+      if (juhoSkip.has(r)) { rowConv.push({ skip: true }); continue; }
+      rowConv.push(juhoConvByRow.get(r) ?? null);
+      if (!juhoConvByRow.has(r)) blocked6++;
+      continue;
+    }
     const session = sessionOf.get(r);
     if (session) {
       // 合算セッションの代表行 = session[0] (buildDailySessions で開始時刻昇順に格納済)。
