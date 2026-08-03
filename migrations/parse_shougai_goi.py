@@ -34,7 +34,15 @@ REF_DATE = "2026-06-30"  # この日を含む証を「現在有効」とする (
 PDFS = [
     "利用者データ/五井/五井受給者証１.pdf",
     "利用者データ/五井/五井受給者証2重度.pdf",
-    "利用者データ/五井/五井受給者証3同公園後.pdf",
+    "利用者データ/五井/五井受給者証3同行援護.pdf",
+]
+# 基本情報一覧表 (氏名・性別・生年月日・住所)。**受給者証と同じく事業者エントリごと**に出る。
+#   氏名+生年月日 が既存 clients との突合キーなので 3 つとも要る
+#   (居宅介護の分だけだと 重度/同行 のみの利用者 5 名が落ちる)。
+KIHON_PDFS = [
+    "利用者データ/五井/五井障害基本情報.pdf",
+    "利用者データ/五井/五井基本情報重度訪問介護.pdf",
+    "利用者データ/五井/五井基本情報重度同行援護.pdf",
 ]
 
 
@@ -124,6 +132,43 @@ def parse_shikyuryo(raw):
     return out
 
 
+# ---------------- 基本情報一覧表 (氏名 → 生年月日ほか) ----------------
+KIHON_ROW = re.compile(r"^(\d+)\s+(\S+?)\s+([男女])\s+([SHRTM]\s*\d+/\s*\d+/\s*\d+)")
+ERA_FULL = {"M": 1867, "T": 1911, "S": 1925, "H": 1988, "R": 2018}
+
+
+def wareki_any(s):
+    m = re.match(r"^([SHRTM])\s*(\d+)/\s*(\d+)/\s*(\d+)$", (s or "").strip())
+    if not m:
+        return None
+    return f"{ERA_FULL[m.group(1)]+int(m.group(2)):04d}-{int(m.group(3)):02d}-{int(m.group(4)):02d}"
+
+
+kihon = {}  # norm(氏名) -> {user_number, gender, birth_date, postal_code, address}
+# ⚠ 基本情報一覧表は **pdfplumber** で読む。fitz.get_text() は 1 フィールド 1 行に分解して
+#   しまい「利用者番号 氏名 性別 生年月日」の行パターンが取れない
+#   (受給者証一覧表は 1 フィールド 1 行の方が扱いやすいので fitz のまま)。
+import pdfplumber
+
+for kp in KIHON_PDFS:
+    with pdfplumber.open(kp) as _pdf:
+        lines = []
+        for _pg in _pdf.pages:
+            lines += (_pg.extract_text() or "").split(chr(10))
+    for idx, line in enumerate(lines):
+        m = KIHON_ROW.match(line.strip())
+        if not m:
+            continue
+        addr = lines[idx + 1].strip() if idx + 1 < len(lines) else ""
+        am = re.match(r"^(\d{3}-\d{4}|-)\s*(.*)$", addr)
+        kihon[norm(m.group(2))] = {
+            "user_number_kihon": m.group(1),
+            "gender": m.group(3),
+            "birth_date": wareki_any(m.group(4)),
+            "postal_code": (am.group(1) if am and am.group(1) != "-" else None),
+            "address": (am.group(2).strip() if am else None) or None,
+        }
+
 warnings = []
 clients = {}  # user_number -> client dict
 order = []
@@ -131,7 +176,15 @@ order = []
 
 def get_client(uno, name):
     if uno not in clients:
-        clients[uno] = {"user_number": uno, "name": name, "certs": []}
+        k = kihon.get(norm(name), {})
+        if not k:
+            warnings.append(f"基本情報一覧表に氏名なし (生年月日が取れない): {name} ({uno})")
+        clients[uno] = {
+            "user_number": uno, "name": name,
+            "gender": k.get("gender"), "birth_date": k.get("birth_date"),
+            "postal_code": k.get("postal_code"), "address": k.get("address"),
+            "certs": [],
+        }
         order.append(uno)
     elif clients[uno]["name"] != name:
         warnings.append(f"同一利用者番号 {uno} に別氏名: {clients[uno]['name']} / {name}")
@@ -252,6 +305,8 @@ result = {
     "clients": client_list,
     "stats": {
         "pdf_files": len(PDFS),
+        "kihon_rows": len(kihon),
+        "birth_date_missing": sum(1 for c in client_list if not c.get("birth_date")),
         "clients": len(client_list),
         "certs_total": sum(len(c["certs"]) for c in client_list),
         "current_certs": sum(len(c["current_certs"]) for c in client_list),

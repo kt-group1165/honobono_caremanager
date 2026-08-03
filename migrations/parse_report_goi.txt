@@ -1,5 +1,7 @@
 === 五井 障害受給者証 パース結果 ===
   pdf_files: 3
+  kihon_rows: 31
+  birth_date_missing: 0
   clients: 31
   certs_total: 229
   current_certs: 34
