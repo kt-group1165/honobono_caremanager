@@ -75,6 +75,11 @@ export interface ShogaiDensouUser {
   contractEntryNumber: string | null;
   /** 支給決定者(保護者)氏名カナ。障害児のみ。成人は null (= 項8 に本人カナ / 項9 空) */
   holderNameKana?: string | null;
+  /** 受給者証の支給量内訳。契約支給量が未入力のときの代替に使う (要 warning) */
+  shikyuryoDetails?: Record<
+    string,
+    { hours?: number; minutes?: number; count?: number; units?: number }
+  > | null;
   /** 自事業所が上限管理者のときの関係事業所一覧 (それ以外は null) */
   jogenOfficeLines: ShogaiDensouKanriLine[] | null;
 }
@@ -259,6 +264,54 @@ function parseContractAmounts(
   if (!single) return null;
   for (const c of codes) out.set(c, parseFloat(single[1]));
   return out;
+}
+
+/**
+ * 支給量内訳キー → 決定サービスコード (受給者証の支給量を契約支給量の代替に使うとき用)。
+ *
+ * ⚠ キーは 2 系統ある。受給者証ページの入力 UI は slug (shintai/kaji…) で書くが、
+ *   ほのぼの受給者証PDFの取込は**日本語ラベル**で書いている (実データは日本語が大半:
+ *   家事援助83 / 身体介護86 / 通院身体19 / 通院介助2 …)。両方受ける。
+ */
+const SHIKYURYO_KEY_TO_CODE: Record<string, string> = {
+  // slug (UI 入力)
+  shintai: "111000",
+  kaji: "112000",
+  tsuuin_shintai: "113000",
+  tsuuin: "114000",
+  jouko: "115000",
+  // 日本語ラベル (PDF 取込)
+  身体介護: "111000",
+  家事援助: "112000",
+  通院身体: "113000", // 通院介助 (身体を伴う)
+  通院介助: "114000", // 通院介助 (身体を伴わない)
+  乗降介助: "115000",
+};
+
+/**
+ * 受給者証の支給量内訳 (shikyuryo_details) から契約支給量を代替生成する。
+ *
+ * ⚠ **契約支給量 ≠ 受給者証の支給量**。他事業所と分け合えば当事業所の契約はその一部。
+ *   それでも代替する理由は、契約情報レコードを **1 行も出さない方が有害** だから
+ *   (支給決定があるのに契約情報が無い = 返戻要因)。呼出側で必ず警告を出すこと。
+ */
+function contractAmountsFromShikyuryo(
+  details: Record<string, { hours?: number; minutes?: number; count?: number; units?: number }> | null | undefined,
+  /** 対象の決定コード。null = 絞り込まず読めるもの全部 (契約コードの洗い出し用) */
+  codes: string[] | null,
+): Map<string, number> | null {
+  if (!details) return null;
+  const out = new Map<string, number>();
+  for (const [key, v] of Object.entries(details)) {
+    const code = SHIKYURYO_KEY_TO_CODE[key];
+    if (!code || (codes !== null && !codes.includes(code))) continue;
+    const amount =
+      code === "115000"
+        ? (v.count ?? 0) // 乗降は回数
+        : (v.hours ?? 0) + (v.minutes ?? 0) / 60;
+    if (amount > 0) out.set(code, amount);
+  }
+  return out.size > 0 ? out : null;
 }
 
 /** 利用者 1 名のサービス種類別集計 (J111 明細 / J121 日数・集計レコードの種類分割用) */
@@ -637,13 +690,26 @@ export function buildShogaiDensou(
     // 決定コードは居宅介護 (111000〜115000) のみ対応。重度訪問介護の決定コード
     // (121000 重度包括対象者 / 122000 区分6該当者 / 123000 その他 / 120901 加算移動介護) は
     // 受給者証の支給決定内容 (どの決定区分か) を構造化して保持していないため出力しない。
-    const codes = Array.from(
+    // 契約情報レコードは **契約したサービス全部**を出す。当月に実績が無くても契約は
+    //   存在するので、実績のある決定コードだけに絞ると不足する (ほのぼの KJ と照合して確認:
+    //   大網で 家事の契約はあるが当月利用なし の 4 件が欠けていた)。
+    //   → 実績由来のコード ∪ 契約支給量が読めるコード
+    const billedCodes = Array.from(
       new Set(
         r.details
           .filter((d) => serviceTypeCode(d.service_code) === "11")
           .map((d) => decisionCode(d.service_category, null, d.service_code)),
       ),
     );
+    //   ただし受給者証に支給量があっても当事業所と契約しているとは限らない。
+    //   通院介助・乗降は単発的で、ほのぼの実伝送でも 113000 は各事業所 1 件しか無いのに
+    //   受給者証には多数入っている → **代替で足すのは身体(111000)・家事(112000)だけ**にする。
+    //   それ以外は実績があった場合のみ出す。完全一致には契約データの入力が要る。
+    const CONTRACT_FALLBACK_CODES = ["111000", "112000"];
+    const contractedCodes = Array.from(
+      contractAmountsFromShikyuryo(u.shikyuryoDetails, CONTRACT_FALLBACK_CODES)?.keys() ?? [],
+    );
+    const codes = Array.from(new Set([...billedCodes, ...contractedCodes])).sort();
     if (aggs.some((a) => a.typeCode === "12")) {
       warnings.push(
         `${r.user_name}: 重度訪問介護の契約情報レコード (決定コード 121000/122000/123000) は未対応のため出力しません — 契約支給量審査は取込チェックで確認してください`,
@@ -661,10 +727,15 @@ export function buildShogaiDensou(
       );
     }
     if (codes.length > 0) {
-      const amounts = parseContractAmounts(u.contractAmountText, codes);
+      // 契約支給量が未入力なら受給者証の支給量内訳で代替する。
+      //   契約情報レコードを 1 行も出さない方が有害 (支給決定があるのに契約情報が無い =
+      //   返戻要因)。大網は 18 名全員 contract_amount_text が空で 0 行しか出ていなかった。
+      const fromText = parseContractAmounts(u.contractAmountText, codes);
+      const amounts =
+        fromText ?? contractAmountsFromShikyuryo(u.shikyuryoDetails, codes);
       if (!amounts) {
         warnings.push(
-          `${r.user_name}: 契約支給量が未入力のため契約情報レコードを出力しません (受給者証ページで入力してください)`,
+          `${r.user_name}: 契約支給量が未入力で受給者証の支給量内訳も無いため契約情報レコードを出力しません — このままでは返戻になります。受給者証ページで入力してください`,
         );
       } else {
         for (const code of codes) {

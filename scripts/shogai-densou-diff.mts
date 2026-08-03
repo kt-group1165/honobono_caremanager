@@ -526,20 +526,20 @@ async function main() {
 
   // 契約支給量
   const ids = rows.map((r) => r.user_id);
-  const contractByClient = new Map<string, { text: string | null; start: string | null; entry: string | null; holder: string | null }>();
+  const contractByClient = new Map<string, { text: string | null; start: string | null; entry: string | null; holder: string | null; shikyuryo: Record<string, { hours?: number; minutes?: number; count?: number; units?: number }> | null }>();
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50);
     // holder_name_kana は shougai_cert_holder_kana.sql 未適用の環境があるので
     //   42703 (undefined_column) のときは列を落として再取得する
     let { data, error } = await supabase
       .from("shougai_certifications")
-      .select("client_id, contract_amount_text, contract_start_date, contract_entry_number, holder_name_kana, certification_start_date")
+      .select("client_id, contract_amount_text, contract_start_date, contract_entry_number, holder_name_kana, shikyuryo_details, certification_start_date")
       .in("client_id", chunk)
       .order("certification_start_date", { ascending: false });
     if (error?.code === "42703") {
       const fb = await supabase
         .from("shougai_certifications")
-        .select("client_id, contract_amount_text, contract_start_date, contract_entry_number, certification_start_date")
+        .select("client_id, contract_amount_text, contract_start_date, contract_entry_number, shikyuryo_details, certification_start_date")
         .in("client_id", chunk)
         .order("certification_start_date", { ascending: false });
       data = (fb.data ?? []) as unknown as typeof data;
@@ -550,12 +550,14 @@ async function main() {
       client_id: string;
       contract_amount_text: string | null;
       holder_name_kana?: string | null;
+      shikyuryo_details?: Record<string, { hours?: number; minutes?: number; count?: number; units?: number }> | null;
       contract_start_date: string | null;
       contract_entry_number: string | null;
     }[]) {
       if (!contractByClient.has(c.client_id))
         contractByClient.set(c.client_id, {
           holder: c.holder_name_kana ?? null,
+          shikyuryo: c.shikyuryo_details ?? null,
           text: c.contract_amount_text,
           start: c.contract_start_date,
           entry: c.contract_entry_number,
@@ -588,6 +590,7 @@ async function main() {
       contractStartDate: contract?.start ?? null,
       contractEntryNumber: contract?.entry ?? null,
       holderNameKana: contract?.holder ?? null,
+      shikyuryoDetails: contract?.shikyuryo ?? null,
       jogenOfficeLines: linesByClient.get(r.user_id) ?? null,
     };
   });
