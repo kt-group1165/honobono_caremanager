@@ -137,6 +137,7 @@ const EMPTY_FORM: FormData = {
   contract_amount_text: null,
   contract_start_date: null,
   contract_entry_number: null,
+  holder_name_kana: null,
   issue_date: null,
   is_applying: false,
   income_category: null,
@@ -202,6 +203,11 @@ export function ShougaiCertContent({
   const [extAvailable, setExtAvailable] = useState<boolean>(
     initialRecords.length > 0 ? "issue_date" in initialRecords[0] : true,
   );
+  // holder_name_kana は shougai_cert_holder_kana.sql で後から足した列。
+  //   未適用の環境では payload から外す (= 従来どおり保存できる)。
+  const [holderAvailable, setHolderAvailable] = useState<boolean>(
+    initialRecords.length > 0 ? "holder_name_kana" in initialRecords[0] : true,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -223,6 +229,12 @@ export function ShougaiCertContent({
       } else {
         setExtAvailable(true);
       }
+      const { error: e2 } = await supabase
+        .from("shougai_certifications")
+        .select("holder_name_kana")
+        .limit(1);
+      if (cancelled) return;
+      setHolderAvailable(!e2);
     })();
     return () => {
       cancelled = true;
@@ -250,6 +262,7 @@ export function ShougaiCertContent({
       contract_amount_text: r.contract_amount_text ?? null,
       contract_start_date: r.contract_start_date ?? null,
       contract_entry_number: r.contract_entry_number ?? null,
+      holder_name_kana: r.holder_name_kana ?? null,
       issue_date: r.issue_date ?? null,
       is_applying: r.is_applying ?? false,
       income_category: r.income_category ?? null,
@@ -364,6 +377,7 @@ export function ShougaiCertContent({
         contract_amount_text: form.contract_amount_text || null,
         contract_start_date: form.contract_start_date || null,
         contract_entry_number: form.contract_entry_number || null,
+        holder_name_kana: form.holder_name_kana || null,
         issue_date: form.issue_date || null,
         income_category: form.income_category || null,
         reduced_payment_limit: form.reduced_payment_limit ?? null,
@@ -373,6 +387,7 @@ export function ShougaiCertContent({
         notes: form.notes || null,
       };
       // SQL 未適用環境では拡張列を除外 (= 従来通り保存できる)
+      if (!holderAvailable) delete payload.holder_name_kana;
       if (!extAvailable) {
         for (const k of EXT_KEYS) delete payload[k];
       }
@@ -995,6 +1010,22 @@ export function ShougaiCertContent({
                   className={`${inputCls} w-full`}
                 />
               </div>
+              {holderAvailable && (
+                <div className="space-y-1 border-t border-gray-200 pt-1.5">
+                  <input
+                    type="text"
+                    value={form.holder_name_kana ?? ""}
+                    onChange={(e) => upd("holder_name_kana", e.target.value || null)}
+                    placeholder="支給決定者(保護者)カナ — 障害児のみ"
+                    className={`${inputCls} w-full`}
+                  />
+                  <p className="text-xs text-gray-500">
+                    <b>障害児のときだけ</b>保護者のカナを入れます。入れると明細書の
+                    支給決定者氏名カナが保護者・支給決定児童氏名カナが本人になります
+                    (成人は空のままで本人が出ます)。
+                  </p>
+                </div>
+              )}
               <p className="text-xs text-amber-700">
                 受給者証の「事業者記入欄」= <b>当事業所との契約内容</b>を転記します。
                 上の支給量 (市町村の支給決定量) とは別で、他事業所と分け合う場合は

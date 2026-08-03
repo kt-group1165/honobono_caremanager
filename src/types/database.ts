@@ -351,6 +351,10 @@ export type ShougaiCertification = {
   contract_amount_text: string | null;      // 契約支給量 (例: 身体介護 10時間/月)
   contract_start_date: string | null;       // 契約開始日
   contract_entry_number: string | null;     // 受給者証 事業者記入欄番号
+  /** 支給決定者(保護者)氏名カナ。障害児のみ設定し成人は null。
+   *  J121 明細書 項8 に出力し、設定時は 項9 に本人カナを出す。
+   *  migrations/shougai_cert_holder_kana.sql で追加 (未適用環境では保存時に除外) */
+  holder_name_kana?: string | null;
   // 2026-07-14: shougai_cert_more_fields.sql で追加 (ほのぼのMORE 相当まで拡張)
   issue_date: string | null;                 // 交付年月日
   is_applying: boolean;                      // 申請中

@@ -73,6 +73,8 @@ export interface ShogaiDensouUser {
   contractAmountText: string | null;
   contractStartDate: string | null; // YYYY-MM-DD
   contractEntryNumber: string | null;
+  /** 支給決定者(保護者)氏名カナ。障害児のみ。成人は null (= 項8 に本人カナ / 項9 空) */
+  holderNameKana?: string | null;
   /** 自事業所が上限管理者のときの関係事業所一覧 (それ以外は null) */
   jogenOfficeLines: ShogaiDensouKanriLine[] | null;
 }
@@ -523,9 +525,11 @@ export function buildShogaiDensou(
     seikyuParts.push([
       "J121", "01", ym, muni, office, jukyu,
       "", // 7 助成自治体番号
-      // 8 支給決定者氏名カナ (任意)。ほのぼの KJ も設定しているので合わせる (半角カナ)
-      toDensouKana(r.user_name_kana).replace(/[\s　]+/g, ""),
-      "", // 9 支給決定児童氏名カナ
+      // 8 支給決定者氏名カナ / 9 支給決定児童氏名カナ (ほのぼの KJ も設定しているので合わせる)。
+      //   成人は 項8=本人・項9=空。**障害児は 項8=保護者(支給決定者)・項9=児童**なので、
+      //   受給者証に保護者カナ (holderNameKana) があればそちらを 項8 に出し本人を 項9 に送る。
+      toDensouKana(u.holderNameKana ?? r.user_name_kana).replace(/[\s　]+/g, ""),
+      u.holderNameKana ? toDensouKana(r.user_name_kana).replace(/[\s　]+/g, "") : "",
       areaCode, // 10 地域区分コード
       "1", // 11 就労継続支援A型事業者負担減免措置実施 (1:無し)
       r.self_payment_limit != null ? String(r.self_payment_limit) : "", // 12 利用者負担上限月額① (未設定は空 + 警告済)
