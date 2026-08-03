@@ -17,7 +17,17 @@
 //   --compare で KY と突合し「完全一致N名 / 調整あり M名」を出す。
 //
 //   OFFICE_BN=<事業所番号> OFFICE_ID=<uuid> TAG=<略称> [KY=<KYパス>] \
-//     node migrations/import_kyotaku_benefit_from_jisseki.mjs [--execute] [--compare]
+//     node migrations/import_kyotaku_benefit_from_jisseki.mjs [--execute] [--compare] [--backfill-actual]
+//
+//   ── モード ──
+//   --compare         : KY と突合するだけ (DB を触らない)
+//   --execute         : 実績起点で **丸ごと入れ替える**。ケアマネの限度額調整が消えるので
+//                       既に KY 由来の正しい planned_units が入っている月には使わないこと
+//   --backfill-actual : **planned_units は温存**したまま actual_units (=生の実績) と
+//                       over_limit_units (= 実績 - 給付管理) だけを埋める。
+//                       取込時に planned=actual=調整後 で入っていて「どのサービスを
+//                       いくら自己負担に回したか」が記録されていない状態を解消する。
+//                       給付管理票 (8222) は planned_units しか使わないので出力は不変。
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -25,6 +35,7 @@ import path from "node:path";
 
 const EXECUTE = process.argv.includes("--execute");
 const COMPARE = process.argv.includes("--compare");
+const BACKFILL_ACTUAL = process.argv.includes("--backfill-actual");
 const KAIGO = fileURLToPath(new URL("../", import.meta.url));
 const OFFICE_BN = process.env.OFFICE_BN, OFFICE_ID = process.env.OFFICE_ID, TAG = process.env.TAG;
 const KY = process.env.KY;
@@ -124,9 +135,65 @@ async function main() {
     if (diffUsers.length > 12) console.log(`   …他 ${diffUsers.length - 12}名`);
   }
 
+  const map = JSON.parse(readFileSync(path.join(KAIGO, `migrations/_kyotaku_office_map_${TAG}.json`), "utf8"));
+
+  // ── actual_units / over_limit_units の補完 (--backfill-actual) ──
+  //   取込時に planned=actual=ケアマネ調整後 で入っており、限度額超過分をどのサービスに
+  //   寄せたかが記録されていない。生の実績を actual に、差を over_limit に入れて
+  //   「給付管理する単位 = 実績 - 自己負担」の関係をデータ上で成立させる。
+  if (BACKFILL_ACTUAL) {
+    const byUser = new Map(); // client_id → Map(provider|kind → units)
+    for (const [k, v] of agg) {
+      const [ins, insurer, prov, kind] = k.split("|");
+      const cid = map[`${ins}|${insurer}`];
+      if (!cid) continue;
+      if (!byUser.has(cid)) byUser.set(cid, new Map());
+      byUser.get(cid).set(`${prov}|${kind}`, v.units);
+    }
+    const ids = [...byUser.keys()];
+    const rows2 = [];
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data, error } = await sb
+        .from("kaigo_benefit_management")
+        .select("id, user_id, provider_number, service_kind_code, planned_units, actual_units, over_limit_units")
+        .eq("billing_month", BILLING_MONTH)
+        .in("user_id", ids.slice(i, i + 200));
+      if (error) { console.error("既存行の取得に失敗:", error.message); process.exit(1); }
+      rows2.push(...data);
+    }
+    const updates = [];
+    let noMatch = 0, already = 0;
+    for (const r of rows2) {
+      const raw = byUser.get(r.user_id)?.get(`${(r.provider_number || "").trim()}|${(r.service_kind_code || "").trim()}`);
+      if (raw == null) { noMatch++; continue; }
+      const planned = r.planned_units ?? 0;
+      const cut = Math.max(0, raw - planned);
+      if (r.actual_units === raw && (r.over_limit_units ?? 0) === cut) { already++; continue; }
+      updates.push({ id: r.id, actual_units: raw, over_limit_units: cut, cut, planned, raw });
+    }
+    const withCut = updates.filter((u) => u.cut > 0);
+    console.log(`\n── actual/over_limit 補完 ──`);
+    console.log(`  対象行 ${rows2.length} / 実績と突合できた ${rows2.length - noMatch} / 既に整合 ${already}`);
+    console.log(`  更新対象 ${updates.length} 行 (うち超過ありは ${withCut.length} 行 / ${new Set(withCut.map((u) => u.id)).size ? new Set(rows2.filter((r) => withCut.some((u) => u.id === r.id)).map((r) => r.user_id)).size : 0} 名)`);
+    for (const u of withCut.slice(0, 10)) console.log(`   実績${u.raw} → 給付管理${u.planned} (自己負担 ${u.cut})`);
+    if (withCut.length > 10) console.log(`   …他 ${withCut.length - 10} 行`);
+    if (noMatch) console.log(`  ⚠ 実績CSVに対応が無い行 ${noMatch} (他事業所が給付管理している分などは対象外)`);
+
+    if (!EXECUTE) { console.log("\n※ DRY RUN。--execute で UPDATE します (planned_units は変更しません)。"); return; }
+    let n = 0;
+    for (const u of updates) {
+      const { error } = await sb.from("kaigo_benefit_management")
+        .update({ actual_units: u.actual_units, over_limit_units: u.over_limit_units, updated_at: new Date().toISOString() })
+        .eq("id", u.id);
+      if (error) { console.error(`UPDATE 失敗 (${n}件済): ${error.message}`); process.exit(1); }
+      n++;
+    }
+    console.log(`\n✓ 完了: ${n} 行を更新 (planned_units は不変 = 給付管理票の出力も不変)`);
+    return;
+  }
+
   if (!EXECUTE) { console.log("\n※ DRY RUN。--execute で投入 (対象月の当事業所分を入替)。"); return; }
 
-  const map = JSON.parse(readFileSync(path.join(KAIGO, `migrations/_kyotaku_office_map_${TAG}.json`), "utf8"));
   const out = []; const unmatched = new Set();
   for (const [k, v] of agg) {
     const [ins, insurer, prov, kind] = k.split("|");
