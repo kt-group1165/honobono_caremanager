@@ -803,7 +803,7 @@ export function buildShogaiDensou(
       visitsByType.get(tc)!.push(v);
     }
     for (const tc of Array.from(visitsByType.keys()).sort()) {
-      if (tc !== "11" && tc !== "12") {
+      if (tc !== "11" && tc !== "12" && tc !== "15") {
         warnings.push(
           `${r.user_name}: ${SERVICE_TYPE_LABELS[tc] ?? `サービス種類 ${tc}`} の実績記録票様式は未対応のため出力しません (KT Group 未提供サービス)`,
         );
@@ -811,20 +811,35 @@ export function buildShogaiDensou(
     }
     const kyotakuVisits = visitsByType.get("11") ?? [];
     const juhoVisits = visitsByType.get("12") ?? [];
+    // 同行援護 (様式1901)。レイアウトは 様式1 (0101) と同一で、違うのは
+    //   ① 様式種別番号 1901  ② 決定サービスコード 153000 固定  ③ 合計欄が 項24/26
+    //   (五井 TJ260701 の 1901 レコード 64 行で確認)
+    const doukouVisits = visitsByType.get("15") ?? [];
     const detailTypes = new Set(
       (aggsByUser.get(r.user_id) ?? []).map((a) => a.typeCode),
     );
 
-    // ── 様式1 (0101 居宅介護) ──────────────────────────────────────────────
-    // 居宅の実績がある利用者に加え、従来どおり実績ゼロの利用者 (重訪等も無い) も
-    // 空の基本情報レコードを出力する (出力対象の取りこぼしに気づけるように)
-    if (
-      kyotakuVisits.length > 0 ||
-      (juhoVisits.length === 0 && !detailTypes.has("12"))
-    ) {
+    // ── 様式1 (0101 居宅介護) / 様式19 (1901 同行援護) ────────────────────
+    // 両者はレイアウトが同一で、違うのは次の 3 点だけ (五井 TJ260701 の 1901 64行で確認):
+    //   ① 様式種別番号  0101 / 1901
+    //   ② 決定サービスコード  居宅介護は 111000〜115000 を提供内容から判定 /
+    //      同行援護は **153000 固定**
+    //   ③ 合計欄の位置  居宅介護は身体=項20/23 等の 5 スロット / 同行援護は 項24/26
+    // なので 1 つの関数にまとめて様式ごとに呼ぶ。
+    const buildYoshiki1 = (
+      yoshiki: "0101" | "1901",
+      targetVisits: ShogaiDensouVisit[],
+      kasanTypeCode: string,
+    ) => {
+      // 同行援護 (1901) は決定サービスコードが **153000 固定**、合計欄も 1 スロット
+      //   (項24/26 = 居宅介護でいう slot 3 の位置)。居宅介護 (0101) は提供内容から判定する。
+      const codeOf = (v: ShogaiDensouVisit) =>
+        yoshiki === "1901" ? "153000" : decisionCode(v.category, v.serviceName, v.serviceCode);
+      const slotOf = (code: string) => (yoshiki === "1901" ? 3 : goukeiSlot(code));
+
       // 明細情報レコード (02) × 提供日時。
       //   同時刻に 1 人目と 2 人目が並ぶときは **1 人目を先** にする (ほのぼの TJ の通番順)。
-      const sorted = [...kyotakuVisits].sort(
+      const sorted = [...targetVisits].sort(
         (a, b) =>
           (a.date + (a.startTime ?? "")).localeCompare(
             b.date + (b.startTime ?? ""),
@@ -853,7 +868,7 @@ export function buildShogaiDensou(
       //   が、実績記録票 (様式1) は 1 訪問=1行+派遣人数n (ほのぼの TJ 準拠。算定時間数は1人分)。
       //   → ここで同一時間ブロックを 1 行に合算し派遣人数を数える。
       const jissekiGrpKey = (v: ShogaiDensouVisit) =>
-        `${v.date}|${hhmm(v.startTime)}|${hhmm(v.endTime)}|${decisionCode(v.category, v.serviceName, v.serviceCode)}`;
+        `${v.date}|${hhmm(v.startTime)}|${hhmm(v.endTime)}|${codeOf(v)}`;
       // 増(加算)行は明細行にせず、同一時間ブロックの基本行の算定時間に足し込む
       //   (例「家事日３．０」+「家事夜増２．０」= 算定 5.0h を 1 行で表す)
       const addonHours = new Map<string, number>();
@@ -877,7 +892,7 @@ export function buildShogaiDensou(
         if (jissekiSeen.has(gk)) continue; // 2人ペアの2行目以降はスキップ (1行に合算)
         jissekiSeen.add(gk);
         const ninzu = jissekiNinzu.get(gk) ?? 1;
-        const code = decisionCode(v.category, v.serviceName, v.serviceCode);
+        const code = codeOf(v);
         const startMs = v.startTime ? Date.parse(`${v.date}T${v.startTime}`) : 0;
         const endMs = v.endTime ? Date.parse(`${v.date}T${v.endTime}`) : startMs;
         // 時間がずれた 2 人派遣の「2 人目」行 (・２人 コードで畳まれなかったもの)。
@@ -911,7 +926,7 @@ export function buildShogaiDensou(
           ? 0
           : (nameHours > 0 ? nameHours : (v.durationMinutes ?? 0) / 60) +
             (addonHours.get(gk) ?? 0);
-        const slot = goukeiSlot(code);
+        const slot = slotOf(code);
         const g = goukei.get(slot) ?? { hours: 0, count: 0 };
         // 基本情報の算定時間数計は **延べ時間** = Σ(明細の算定時間 × 派遣人数)。
         //   明細 項16 は 1 人分のままなので、同時 2 人派遣は合計側だけ 2 倍になる
@@ -920,7 +935,7 @@ export function buildShogaiDensou(
         g.count += 1;
         goukei.set(slot, g);
 
-        const f = baseMeisai("0101");
+        const f = baseMeisai(yoshiki);
         f[7] = String(tsubanOfRow); // 8 提供通番
         f[8] = String(Number(v.date.slice(8, 10))); // 9 日付 (ほのぼの TJ 同様 前ゼロなし)
         // 10 サービス提供回数: 通常は空。時間がずれた 2 人派遣のみ 1人目'1'/2人目'2'
@@ -1001,7 +1016,7 @@ export function buildShogaiDensou(
       rows.sort((a, b) => Number(a[7]) - Number(b[7]));
 
       // 基本情報レコード (01) — 合計1〜5 (項番16〜32): 内訳100% と 算定時間数計 のみ設定 (減算ヘルパーなし前提)
-      const b = baseKihon("0101");
+      const b = baseKihon(yoshiki);
       const slotIdx: Record<number, { uchiwake: number; kei: number }> = {
         1: { uchiwake: 15, kei: 18 }, // 項番16 / 19 (身体)
         2: { uchiwake: 19, kei: 22 }, // 項番20 / 23 (通院伴う)
@@ -1031,7 +1046,7 @@ export function buildShogaiDensou(
       for (const k of KYOTAKU_KASAN) {
         const hit = r.details.filter(
           (d) =>
-            serviceTypeCode(d.service_code) === "11" &&
+            serviceTypeCode(d.service_code) === kasanTypeCode &&
             k.re.test(`${d.service_type} ${d.service_category ?? ""}`),
         );
         if (hit.length === 0) continue;
@@ -1046,9 +1061,26 @@ export function buildShogaiDensou(
       //   "11" (初任者等) 固定で出力している — 重訪側 (0301) の未保持項目 warning と同流儀で通知
       if (rows.length > 0) {
         warnings.push(
-          `${r.user_name}: 実績記録票 (様式1) のヘルパー資格 (明細 項12) は実資格データ未保持のため「11 (介護福祉士・初任者等)」固定で出力します — 実態と異なる場合 (基礎研修等 12 / 重訪研修 13) は伝送前に手修正してください`,
+          `${r.user_name}: 実績記録票 (様式${yoshiki === "1901" ? "19" : "1"}) のヘルパー資格 (明細 項12) は実資格データ未保持のため「11 (介護福祉士・初任者等)」固定で出力します — 実態と異なる場合 (基礎研修等 12 / 重訪研修 13) は伝送前に手修正してください`,
         );
       }
+    };
+
+    // 様式1 (0101 居宅介護)。居宅の実績がある利用者に加え、従来どおり実績ゼロの利用者
+    //   (重訪・同行も無い) にも空の基本情報レコードを出す (出力対象の取りこぼしに気づけるように)
+    if (
+      kyotakuVisits.length > 0 ||
+      (juhoVisits.length === 0 &&
+        doukouVisits.length === 0 &&
+        !detailTypes.has("12") &&
+        !detailTypes.has("15"))
+    ) {
+      buildYoshiki1("0101", kyotakuVisits, "11");
+    }
+
+    // 様式19 (1901 同行援護)
+    if (doukouVisits.length > 0) {
+      buildYoshiki1("1901", doukouVisits, "15");
     }
 
     // ── 様式3-1 (0301 重度訪問介護) ────────────────────────────────────────
