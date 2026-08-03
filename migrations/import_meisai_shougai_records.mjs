@@ -120,6 +120,10 @@ const ZONE_KANJI = { "日中": "日", "早朝": "早", "夜間": "夜", "深夜"
 const KIND_OF_021 = {
   "021001": "身体", // 身体介護 → 111xxx
   "021002": "家事", // 家事援助 → 116xxx / 117xxx
+  "021007": "通院1", // 通院介助 (身体を伴う)   → 113xxx  例「通院１日２．０」
+  //   ⚠ 値は **NFKC 後**の文字列 (半角数字)。マスタ名の raw は全角「通院１」だが
+  //     parse は normalize("NFKC") してから種別判定するので "通院1" で持つ
+  "021006": "通院2", // 通院介助 (身体を伴わない) → 117xxx  例「通院２早０．５・日１．０」
   "021008": "同援", // 同行援護 → 157xxx
 };
 
@@ -181,7 +185,7 @@ async function loadCodeMaps() {
   const rows = [];
   // service_name の LIKE で取得 (身体/家事 基本のみ = 数百行、ページング安全)。
   // 旧 loadOfficialMap の code prefix OR + 大 range は statement timeout を踏むため name 起点にする。
-  for (const pat of ["身体%", "家事%", "同援%"]) {
+  for (const pat of ["身体%", "家事%", "同援%", "通院１%", "通院２%"]) {
     const part = await fetchAll(
       "kaigo_service_codes",
       "service_code,service_name,units,valid_from,valid_until",
@@ -192,7 +196,8 @@ async function loadCodeMaps() {
   for (const r of rows.filter(inMonth)) {
     const raw = r.service_name || "";
     const nm = raw.normalize("NFKC");
-    const km = /^(身体|家事|同援)/.exec(nm);
+    // ⚠ 「通院１」「通院２」は先に判定する (「通院」だけだと数字が時間と誤認される)
+    const km = /^(身体|家事|同援|通院[12])/.exec(nm);
     if (!km) continue;
     const kind = km[1];
     const parts = nm.slice(kind.length).split("・");
