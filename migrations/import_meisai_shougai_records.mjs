@@ -235,7 +235,46 @@ async function loadCodeMaps() {
       if (!map.has(key)) map.set(key, val);
     }
   }
-  return { single, single2, composite, composite2, increment, increment2 };
+  // ── 重度訪問介護 (021003) の段テーブル ──
+  //   居宅介護・同行援護と請求モデルが違う。**所要時間までの段を全部出す積み上げ型**で、
+  //   単位は各段の増分。1.5h の訪問なら 1.0h(202単位) + 1.5h(99単位) の 2 行を出す。
+  //   (五井 粥米利之 1.5h×8 + 2.0h×2 → 301×8 + 401×2 = 3,210 が伝送と完全一致)
+  //
+  //   ⚠ マスタ名の文法が居宅介護と違う:
+  //     - 時間帯が **2 文字** (日中/夜間/深夜/早朝)。居宅介護は 1 文字 (日/夜/深/早)
+  //     - **NFKC が「Ⅱ」を「II」に分解する**ので正規表現は `重訪(I{1,3})?` で書く
+  //       (`重訪(Ⅰ|Ⅱ|Ⅲ)?` は NFKC 後の文字列にマッチせず解析成功 0 件になる)
+  //   入院等/90日減/同行 付きの派生 (1,792件) は KT Group 未算定のため対象外。
+  const juhoSteps = new Map(); // `${区分}|${時間帯}|${2人?1:0}` -> [{hours, code, units}] (時間昇順)
+  {
+    const rows2 = await fetchAll(
+      "kaigo_service_codes",
+      "service_code,service_name,units,valid_from,valid_until",
+      (q) => q.eq("system", "障害").eq("calculation_type", "基本").like("service_name", "重訪%").order("service_code"),
+    );
+    const seenCode = new Set();
+    for (const r of rows2.filter(inMonth)) {
+      if (seenCode.has(r.service_code)) continue;
+      seenCode.add(r.service_code);
+      const n = (r.service_name || "").normalize("NFKC");
+      const m = /^重訪(I{1,3})?(日中|夜間|深夜|早朝)([0-9]+\.[0-9]+)(.*)$/.exec(n);
+      if (!m) continue;
+      const rest = m[4];
+      // 修飾子は ・2人 のみ許可 (入院等・90日減・同行 等は対象外)
+      let two = false, skip = false;
+      for (const p of rest.split("・").filter(Boolean)) {
+        if (p === "2人") { two = true; continue; }
+        skip = true; break;
+      }
+      if (skip) continue;
+      const key = `${m[1] || ""}|${m[2]}|${two ? 1 : 0}`;
+      if (!juhoSteps.has(key)) juhoSteps.set(key, []);
+      juhoSteps.get(key).push({ hours: Number(m[3]), code: r.service_code, name: r.service_name, units: r.units });
+    }
+    for (const arr of juhoSteps.values()) arr.sort((a, b) => a.hours - b.hours);
+  }
+
+  return { single, single2, composite, composite2, increment, increment2, juhoSteps };
 }
 
 // 021 稼働1行 → 障害6桁コード。twoPerson=true なら ・2人 コードへ。
@@ -245,6 +284,8 @@ async function loadCodeMaps() {
 //               に回数まで一致。合成コード不在 (家事0.25セグ / 夜増 等) は算定開始時間帯の単一へ fallback。
 // mods = 修飾子 (同援の 区3/区4 等)。身体/家事 では常に空配列
 function convertRow(code021, minutes, startHM, endHM, mode, maps, twoPerson, mods = []) {
+  // 重度訪問介護は請求モデルが違う (積み上げ型) ので専用関数へ
+  if (code021 === "021003") return convertJuho(minutes, startHM, mode, maps, twoPerson);
   const kind = KIND_OF_021[code021] ?? null;
   if (!kind) return null;
   // 量子化の刻み: 身体/同援 = 0.5h (30分) / 家事 = 0.25h (15分)
@@ -345,6 +386,38 @@ function resolveBaseAddon(kind, zoneMinutesOrdered, step, mode, maps, twoPerson,
     addons.push({ base: hit.code, name: hit.name, units: hit.units, kind: "addon", zone: e.zone, hours, key, twoPerson });
   }
   return { base, addons };
+}
+
+// ---- 重度訪問介護 (021003) の変換 ----
+// **積み上げ型**: 1 訪問 = 所要時間までの段を全部出す。単位は各段の増分。
+//   例 1.5h → 1.0h(202単位) + 1.5h(99単位) の 2 行 = 301単位
+//   (五井 粥米利之 1.5h×8 + 2.0h×2 → 301×8 + 401×2 = 3,210 が伝送と完全一致)
+//
+// ⚠ 時間帯: 重訪は 1 日の所要時間を通算して算定する制度だが、ここでは
+//   **算定開始時刻の時間帯**でコード系列を選ぶ。五井の実データは全訪問が単一時間帯に
+//   収まっており、時間帯またぎの実例が無いため検証できていない (要確認)。
+// ⚠ 区分: マスタは 重訪Ⅰ/Ⅱ/Ⅲ に分かれる。五井は全員 Ⅱ (区分6)。
+//   受給者証の障害支援区分から選ぶのが本来だが、対応表が未確定なので既定 Ⅱ。
+function convertJuho(minutes, startHM, mode, maps, twoPerson, kubunRoman = "II") {
+  const steps = maps.juhoSteps.get(`${kubunRoman}|${zoneDigit(startHM).zone}|${twoPerson ? 1 : 0}`);
+  if (!steps || steps.length === 0) {
+    return { missing: true, key: `重訪${kubunRoman}|${zoneDigit(startHM).zone}|${twoPerson ? "2人" : "1人"}` };
+  }
+  const hours = quantizeHours(minutes, 30, mode); // 重訪は 0.5h 刻み
+  const used = steps.filter((st) => st.hours <= hours + 1e-9);
+  if (used.length === 0) {
+    return { missing: true, key: `重訪${kubunRoman}|${zoneDigit(startHM).zone}|${hours.toFixed(2)}h(段なし)` };
+  }
+  // 先頭段を base、以降を addon 扱いにして既存の payload 生成 (convs 配列) に載せる
+  const [first, ...rest] = used;
+  return {
+    base: first.code, name: first.name, units: first.units,
+    kind: "juho", zone: zoneDigit(startHM).zone, hours, twoPerson,
+    addons: rest.map((st) => ({
+      base: st.code, name: st.name, units: st.units,
+      kind: "juho-step", zone: zoneDigit(startHM).zone, hours: st.hours, twoPerson,
+    })),
+  };
 }
 
 // "HH:MM" → 当日分 (0時またぎは非対応。障害の訪問は同日内前提)
