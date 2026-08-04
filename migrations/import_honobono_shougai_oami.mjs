@@ -107,6 +107,7 @@ const VERIFIED_CITY_CODE = {
   長生村: "124230",
   長柄町: "124263",
   長南町: "124271",
+  袖ケ浦市: "122291", // 2026-08-04 姉ム取込時に算出 → 伝送 (J121/J611) と一致して実証
 };
 
 /** JIS 市区町村コード (5 桁)。VERIFIED に無い市町村を算出するために持つ */
@@ -209,6 +210,7 @@ async function main() {
   // ── 既存 client の重複チェック (氏名正規化 + 生年月日) ──
   const existingByNameBirth = new Map();
   const existingByName = new Map();
+  const existingByNumBirth = new Map();
   {
     const PAGE = 1000;
     let from = 0;
@@ -222,6 +224,9 @@ async function main() {
       if (error) { console.error(`❌ 既存チェック失敗: ${error.message}`); process.exit(1); }
       for (const r of rows ?? []) {
         if (r.birth_date) existingByNameBirth.set(`${norm(r.name)}|${r.birth_date}`, r);
+        // **利用者番号 + 生年月日**。異体字 (斎/齋・髙/高・﨑/崎) で氏名一致が外れても拾える。
+        //   番号だけでは事業所エントリ番号と衝突するが、生年月日と併せれば安全。
+        if (r.birth_date && r.user_number) existingByNumBirth.set(`${r.user_number}|${r.birth_date}`, r);
         // 基本情報一覧表が無い事業所 (木更津など) 向けの氏名のみ索引。
         //   **一意なときだけ**流用する (同姓同名は誤結合になるので使わない)
         const k = norm(r.name);
@@ -256,6 +261,13 @@ async function main() {
   for (const c of data.clients) {
     let existing = existingByNameBirth.get(`${norm(c.name)}|${c.birth_date}`) ?? null;
     let reuseReason = existing ? "氏名+生年月日" : null;
+    if (!existing && c.birth_date && c.user_number) {
+      const byNum = existingByNumBirth.get(`${c.user_number}|${c.birth_date}`);
+      if (byNum) {
+        existing = byNum;
+        reuseReason = `利用者番号+生年月日 (氏名: ${byNum.name})`;
+      }
+    }
     // 受給者証一覧表しか無い事業所は生年月日が取れない。
     //   その場合に限り**氏名が一意に一致するとき**だけ既存 client を流用する。
     //   複数一致は誤結合の危険があるので中断させる (新規作成もしない)。

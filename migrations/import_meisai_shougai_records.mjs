@@ -316,12 +316,25 @@ function convertRow(code021, minutes, startHM, endHM, mode, maps, twoPerson, mod
   for (let i = 1; i < segs.length; i++) {
     if (segs[i].min > majorityMin) { majorityMin = segs[i].min; majorityZone = segs[i].zone; }
   }
-  // またぎ: 量子化配分 (先頭 floor, 末尾 = 総量 - 先頭群)
+  // またぎ: 先行する時間帯は **四捨五入 (0.5 は切り上げ)**、末尾に残りを寄せる。
+  //   2026-08-04 是正: 従来は先行を floor していたため step 未満の先頭区分が消えていた。
+  //   ほのぼの実データで確定した配分規則 (3 例が同時に成立するのはこの規則だけ):
+  //     姉ム 森田汐音 07:40-08:40 早20/日40 総2step → 早 round(0.67)=1, 日 1
+  //         → 身体早０．５・日０．５ (111363)   ※旧 floor だと早が消え 身体日１．０
+  //     茂原 樋口颯太 07:20-09:30 早40/日90 総5step → 早 round(1.33)=1, 日 4
+  //         → 身体早０．５・日２．０ (111375)   ※最大剰余法だと早に余りが行き 111391 で誤り
+  //     茂原 林美紀   07:45-08:15 早15/日15 総1step → 早 round(0.5)=1, 日 0
+  //         → 身体早０．５ (111195・単一)
+  //   末尾が 0 step になったら単一時間帯として扱われる (nz の filter で落ちる)。
+  const stepsTotal = Math.round((totalHours * 60) / step);
   const alloc = [];
-  let sum = 0;
+  let used = 0;
   for (let i = 0; i < segs.length; i++) {
-    if (i < segs.length - 1) { const h = Math.floor(segs[i].min / step) * (step / 60); alloc.push({ zone: segs[i].zone, hours: h }); sum += h; }
-    else alloc.push({ zone: segs[i].zone, hours: totalHours - sum });
+    const n = i < segs.length - 1
+      ? Math.min(Math.round(segs[i].min / step), Math.max(0, stepsTotal - used))
+      : Math.max(0, stepsTotal - used);
+    used += n;
+    alloc.push({ zone: segs[i].zone, hours: n * (step / 60) });
   }
   const nz = alloc.filter((a) => a.hours > 1e-9);
   if (nz.length >= 2) {

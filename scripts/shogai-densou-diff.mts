@@ -10,7 +10,7 @@
  *         + 標準出力に diff レポート
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -632,13 +632,32 @@ async function main() {
   const newJ61 = parseContent(result.jissekiFile.content);
   const newJ41 = result.jogenFile ? parseContent(result.jogenFile.content) : { control: [], rows: [], end: [] };
 
-  const hbJ11 = parseDensou(join(HONOBONO_DIR, "KJ260701.CSV"));
-  const hbJ61 = parseDensou(join(HONOBONO_DIR, "TJ260701.CSV"));
+  // ほのぼの側のファイル名は**処理年月**なので事業所ごとに違う (姉ムは月遅れで KJ260802)。
+  //   接頭辞で拾う。同じ接頭辞が複数あるときは提供年月が揃っていない置き方なので中断する。
+  const EMPTY_DENSOU = { control: [] as string[], end: [] as string[], rows: [] as DensouRow[] };
+  const pickDensou = (prefix: string, required: boolean) => {
+    const hits = existsSync(HONOBONO_DIR)
+      ? readdirSync(HONOBONO_DIR).filter((f) => f.toUpperCase().startsWith(prefix) && /\.CSV$/i.test(f)).sort()
+      : [];
+    if (hits.length > 1) {
+      console.error(`FATAL: ${HONOBONO_DIR} に ${prefix}*.CSV が ${hits.length} 個あります (${hits.join(", ")})。`);
+      console.error(`  提供年月ごとにフォルダを分けてください (月遅れ請求を混ぜると突合が壊れます)`);
+      process.exit(1);
+    }
+    if (hits.length === 0) {
+      if (required) {
+        console.error(`FATAL: ${HONOBONO_DIR} に ${prefix}*.CSV がありません`);
+        process.exit(1);
+      }
+      return EMPTY_DENSOU;
+    }
+    console.log(`  ほのぼの ${prefix}: ${hits[0]}`);
+    return parseDensou(join(HONOBONO_DIR, hits[0]));
+  };
+  const hbJ11 = pickDensou("KJ", true);
+  const hbJ61 = pickDensou("TJ", true);
   // JJ (上限管理結果票) は該当者がいない事業所では出力されない → 無ければ空扱い
-  const j41Path = join(HONOBONO_DIR, "JJ260701.CSV");
-  const hbJ41 = existsSync(j41Path)
-    ? parseDensou(j41Path)
-    : { control: [] as string[], end: [] as string[], rows: [] as DensouRow[] };
+  const hbJ41 = pickDensou("JJ", false);
 
   console.log("\n\n########## 突合レポート ##########");
 
