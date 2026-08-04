@@ -10,6 +10,18 @@
 //     node migrations/import_meisai_step1_clients.mjs            # DRY RUN (書込なし)
 //     node migrations/import_meisai_step1_clients.mjs --execute  # 本番
 //
+//   ⚠ 実行順序: この script は**認定レコードを入れ直す** (再利用の利用者も含む) ため、
+//     link_caremanager_office.mjs / import_meisai_kohi.mjs / import_meisai_plan_units.mjs は
+//     **必ずこの後**に流すこと。先に流すと care_office_id や公費が消える。
+//
+//       1. import_meisai_step1_clients.mjs     利用者・認定
+//       2. import_meisai_kohi.mjs              公費
+//       3. link_caremanager_office.mjs         担当居宅介護支援事業所 (伝送 項19/20)
+//       4. import_meisai_visit_records.mjs     介護実績     ※OFFICE_BN で事業所を指定
+//       5. import_meisai_sougou_records.mjs    総合事業実績
+//       6. import_meisai_addon_lines.mjs       加算行
+//       7. import_meisai_plan_units.mjs        計画単位数
+//
 //   ロールバック用に、--execute 時は作成した client_id を
 //     migrations/_meisai_step1_created_ids.json に記録する。
 // ============================================================================
@@ -78,13 +90,29 @@ async function main(){
   const base=readCsv(path.join(USER_DIR,"基本情報_______.CSV"));
   const kaigo=readCsv(path.join(USER_DIR,"介護保険1.CSV"));
   const baseByNum=new Map(); for(const r of base.rows) baseByNum.set((r[base.idx["利用者番号"]]||"").trim(), r);
-  // 介護保険は1利用者に複数行(履歴)の可能性 → 利用者番号ごとに最新(認定開始日 max)を採用
+  // 介護保険は1利用者に複数行(履歴)。**対象月に有効な認定**を採る。
+  //   ⚠ 「最新1件」で採ってはいけない。更新申請のレコードは開始日が未来なので、
+  //     全履歴を出力してもらうと 2026-07 開始の証を拾って 6 月請求がズレる
+  //     (高品で 認定期間 20260701-20290630 を出してしまい伝送と不一致になった)。
+  //   対象月にかかる行が複数あれば開始日が新しい方。1 つも無ければ最新で代替し警告する。
+  const MONTH_START="2026-06-01", MONTH_END="2026-06-30";
   const kaigoByNum=new Map();
-  for(const r of kaigo.rows){
-    const n=(r[kaigo.idx["利用者番号"]]||"").trim();
-    const cur=kaigoByNum.get(n);
-    const start=isoDate(r[kaigo.idx["認定有効期間－開始日"]])||"";
-    if(!cur || start> (cur._start||"")) { r._start=start; kaigoByNum.set(n,r); }
+  const certFallback=[];
+  {
+    const rowsByNum=new Map();
+    for(const r of kaigo.rows){
+      const n=(r[kaigo.idx["利用者番号"]]||"").trim();
+      if(!rowsByNum.has(n)) rowsByNum.set(n,[]);
+      r._start=isoDate(r[kaigo.idx["認定有効期間－開始日"]])||"";
+      r._end=isoDate(r[kaigo.idx["認定有効期間－終了日"]])||"";
+      rowsByNum.get(n).push(r);
+    }
+    for(const [n,rows] of rowsByNum){
+      const covering=rows.filter(r=>(!r._start||r._start<=MONTH_END)&&(!r._end||r._end>=MONTH_START));
+      const pick=(covering.length?covering:rows).sort((a,b)=>(b._start||"").localeCompare(a._start||""))[0];
+      if(!covering.length && rows.length) certFallback.push(`${n}: 対象月に有効な認定なし → ${pick._start}〜${pick._end} で代替`);
+      kaigoByNum.set(n,pick);
+    }
   }
 
   // 3) office
@@ -120,9 +148,12 @@ async function main(){
     const name=(b[base.idx["利用者名"]]||"").trim();
     const ex=existing.get(n);
     let unOverride=null; // user_number 衝突時のリナンバー値 (マッピングは元番号nで繋ぐ)
+    let reuseId=null, renumberFrom=null;
     if(ex){
-      if(normNm(ex.name)===normNm(name)){ reuse.push({num:n,name,id:ex.id}); continue; } // 同一人物→再利用
-      const refs=await refCount(ex.id);
+      if(normNm(ex.name)===normNm(name)){ reuseId=ex.id; } // 同一人物→再利用 (認定は下で作って更新する)
+      const refs=reuseId?0:await refCount(ex.id);
+      if(reuseId){ /* 再利用: ゴミ判定も衝突判定も不要 */ }
+      else
       if(refs===0){ toDeleteJunk.push({num:n,id:ex.id,name:ex.name}); } // ゴミ行→削除して作成
       // 別人衝突 (2147483647等のゴミ番号を複数人が共有): user_numberをリナンバーして新規作成
       else { unOverride=`${n}-${TAG||OFFICE_BUSINESS_NUMBER}`; conflicts.push(`${n}: 既存"${ex.name}"(参照${refs})と別人"${name}"衝突 → user_number=${unOverride} で新規作成`); }
@@ -133,9 +164,9 @@ async function main(){
     //   (障害の受給者証取込でリナンバーされた同一人物。作り直すと二重登録になる)
     if(bd){
       const hit=byNameBirth.get(`${normNm(name)}|${bd}`);
-      if(hit && (!ex || ex.id!==hit.id)){
-        reuse.push({num:n,name,id:hit.id,renumberFrom:String(hit.user_number)!==n?String(hit.user_number):null});
-        continue;
+      if(hit && (!ex || ex.id!==hit.id) && !reuseId){
+        reuseId=hit.id;
+        renumberFrom=String(hit.user_number)!==n?String(hit.user_number):null;
       }
     }
     const client={
@@ -178,7 +209,8 @@ async function main(){
     } else {
       issues.push(`${n} ${name}: 介護保険1に無い(保険情報なし→請求不可)`);
     }
-    toCreate.push({num:n,name,client,ins});
+    if(reuseId) reuse.push({num:n,name,id:reuseId,renumberFrom,client,ins});
+    else toCreate.push({num:n,name,client,ins});
   }
 
   console.log(`― 投入計画 ―`);
@@ -186,6 +218,11 @@ async function main(){
   console.log(`  衝突ゴミ行 削除→作成: ${toDeleteJunk.length}件`);
   toDeleteJunk.forEach(d=>console.log(`   🗑 user_number=${d.num} "${d.name}" (参照0) を削除して実在者を作成`));
   if(conflicts.length){ console.log(`  ⛔ 別人衝突(手動要): ${conflicts.length}件`); conflicts.forEach(s=>console.log(`   ${s}`)); }
+  if(certFallback.length){
+    console.log(`  ⚠ 対象月に有効な認定が無い利用者 ${certFallback.length}名 (最新で代替):`);
+    for(const c of certFallback.slice(0,10)) console.log(`   ${c}`);
+    if(certFallback.length>10) console.log(`   … 他 ${certFallback.length-10}件`);
+  }
   console.log(`  データ品質フラグ: ${issues.length}件`);
   issues.slice(0,25).forEach(s=>console.log(`   ⚠ ${s}`));
   if(issues.length>25) console.log(`   … 他 ${issues.length-25}件`);
@@ -223,6 +260,19 @@ async function main(){
   // 5c) 再利用(同一人物): assignment が無ければ追加
   for(const r of reuse){
     mapping[r.num]=r.id; log.reused.push(r.id);
+    // 再利用でも**認定情報は入れ直す** (対象月の認定に更新するため)。
+    //   同じ取込マーカーの行だけ消して入れ直すので、手入力の認定は壊さない。
+    if(r.client){
+      const { user_number, ...attrs } = r.client;
+      const upd = r.renumberFrom ? { ...attrs, user_number: r.num } : attrs;
+      const { error:uErr } = await sb.from("clients").update(upd).eq("id", r.id);
+      if(uErr) console.error(`✗ clients update ${r.num}: ${uErr.message}`);
+    }
+    if(r.ins){
+      await sb.from("client_insurance_records").delete().eq("client_id", r.id).eq("notes", IMPORT_MARK);
+      const { error:iErr } = await sb.from("client_insurance_records").insert({ ...r.ins, client_id: r.id });
+      if(iErr) console.error(`✗ insurance(reuse) ${r.num}: ${iErr.message}`);
+    }
     // 障害取込でリナンバーされていた分は本来の利用者番号に戻す
     //   (同じ番号のゴミ行は 5a で削除済なので衝突しない)
     if(r.renumberFrom){
