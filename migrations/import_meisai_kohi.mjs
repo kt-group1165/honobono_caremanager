@@ -9,9 +9,11 @@
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
+import { findDataFile } from "./_meisai_files.mjs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 const EXECUTE=process.argv.includes("--execute");
+const AREA_DIR=process.env.AREA_DIR||"茂原";
 const TENANT="kt-group", MARK="[MEISAI公費 2026-06]";
 const KAIGO=fileURLToPath(new URL("../",import.meta.url));
 function loadEnv(){ const t=readFileSync(path.join(KAIGO,".env.local"),"utf8"); const e={}; for(const l of t.split(/\r?\n/)){const m=/^([A-Z0-9_]+)=(.*)$/.exec(l.trim()); if(m)e[m[1]]=m[2].replace(/^["']|["']$/g,"");} return e; }
@@ -23,7 +25,10 @@ const numOr0=(s)=>{const v=parseInt((s||"").replace(/\..*$/,""),10);return Numbe
 
 async function main(){
   console.log(`=== 公費取込 ${EXECUTE?"【EXECUTE】":"【DRY RUN】"} ===\n`);
-  const csv=path.join(KAIGO,"サービス実績データ/茂原/202606/介護請求(明細付)_一覧.CSV");
+  // フォルダ構成が事業所ごとに違うので対象月配下を再帰で探す
+  const csv=findDataFile(path.join(KAIGO,"サービス実績データ",AREA_DIR,"202606"),"介護請求(明細付)_一覧.CSV");
+  if(!csv){ console.error(`✗ サービス実績データ/${AREA_DIR}/202606 配下に 介護請求(明細付)_一覧.CSV がありません`); process.exit(1); }
+  console.log(`  取込元: ${path.relative(KAIGO,csv)}`);
   const lines=sjis.decode(readFileSync(csv)).split(/\r?\n/).filter(l=>l);
   const H=parseLine(lines[0]).map(h=>h.replace(/^"|"$/g,"")); const gi=(n)=>H.indexOf(n);
   const iNum=gi("利用者番号"),iName=gi("利用者名"),iF1=gi("公費1負担者番号"),iJ1=gi("公費1受給者番号"),iHon=gi("公費分本人負担"),iMei=gi("明細書番号");

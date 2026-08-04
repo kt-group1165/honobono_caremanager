@@ -94,7 +94,15 @@ async function main(){
 
   // 4) 既存 clients.user_number
   const existing=new Map();
-  for(let from=0;;from+=1000){ const {data,error}=await sb.from("clients").select("id,user_number,name").range(from,from+999); if(error)throw new Error(error.message); for(const c of data) if(c.user_number!=null) existing.set(String(c.user_number),c); if(data.length<1000)break; }
+  // **氏名+生年月日** の索引。障害の受給者証取込が先に走っていると、その利用者は
+  //   user_number 衝突でリナンバーされている (211 山田圭子 → 100211) ため、
+  //   番号だけで探すと見つからず**同じ人をもう 1 件作ってしまう**。
+  //   氏名+生年月日 で拾って再利用し、番号を本来の番号に戻す。
+  const byNameBirth=new Map();
+  for(let from=0;;from+=1000){ const {data,error}=await sb.from("clients").select("id,user_number,name,birth_date").range(from,from+999); if(error)throw new Error(error.message);
+    for(const c of data){ if(c.user_number!=null) existing.set(String(c.user_number),c);
+      if(c.birth_date) byNameBirth.set(`${(c.name||"").normalize("NFKC").replace(/[\s　]/g,"")}|${c.birth_date}`,c); }
+    if(data.length<1000)break; }
   const normNm=(s)=>(s||"").normalize("NFKC").replace(/[\s　]/g,"");
 
   // 衝突判定: 同一user_numberの既存clientの参照数を調べる
@@ -121,6 +129,15 @@ async function main(){
     }
     const bd=isoDate(b[base.idx["生年月日"]]);
     if(!bd) issues.push(`${n} ${name}: 生年月日欠落`);
+    // 番号では見つからなかったが**氏名+生年月日が一致する既存 client** があれば再利用する
+    //   (障害の受給者証取込でリナンバーされた同一人物。作り直すと二重登録になる)
+    if(bd){
+      const hit=byNameBirth.get(`${normNm(name)}|${bd}`);
+      if(hit && (!ex || ex.id!==hit.id)){
+        reuse.push({num:n,name,id:hit.id,renumberFrom:String(hit.user_number)!==n?String(hit.user_number):null});
+        continue;
+      }
+    }
     const client={
       user_number:unOverride??n, name, tenant_id:TENANT, status:"active", is_provisional:false,
       furigana:num(b[base.idx["フリガナ"]]), gender:num(b[base.idx["性別"]]), birth_date:bd,
@@ -206,6 +223,13 @@ async function main(){
   // 5c) 再利用(同一人物): assignment が無ければ追加
   for(const r of reuse){
     mapping[r.num]=r.id; log.reused.push(r.id);
+    // 障害取込でリナンバーされていた分は本来の利用者番号に戻す
+    //   (同じ番号のゴミ行は 5a で削除済なので衝突しない)
+    if(r.renumberFrom){
+      const {error}=await sb.from("clients").update({user_number:r.num}).eq("id",r.id);
+      if(error) console.error(`x renumber ${r.renumberFrom}->${r.num} ${r.name}: ${error.message}`);
+      else console.log(`  ${r.name}: user_number ${r.renumberFrom} -> ${r.num} に戻しました`);
+    }
     const {count}=await sb.from("client_office_assignments").select("client_id",{count:"exact",head:true}).eq("client_id",r.id).eq("office_id",office.id);
     if(!count){ const {error}=await sb.from("client_office_assignments").insert({tenant_id:TENANT,client_id:r.id,office_id:office.id,start_date:"2026-06-01",home_care_categories:[]}); if(error) console.error(`✗ assignment(reuse) ${r.num}: ${error.message}`); }
   }

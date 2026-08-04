@@ -44,7 +44,10 @@ const KIND_ALIAS = {
   訪問介護: "訪問介護",
   居宅: "居宅",
   障害: "障害",
+  訪問入浴: "訪問入浴",
 };
+/** 構成維持用の置きファイル。データではないので触らない */
+const SKIP_FILES = new Set([".gitkeep", "README.md"]);
 /** ほのぼの/新システム の揺れ */
 const SIDE_ALIAS = {
   ほのぼの: "ほのぼのから",
