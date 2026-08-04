@@ -1,0 +1,1054 @@
+{
+ "office": "Hanaヘルパーステーション四街道",
+ "area": "四街道",
+ "clients": [
+  {
+   "user_number": "@赤池晴子",
+   "name": "赤池 晴子",
+   "gender": "女",
+   "birth_date": "1964-05-27",
+   "postal_code": "263-0051",
+   "address": "千葉県千葉市稲毛区園生町63番地7",
+   "certs": [
+    {
+     "cert_number": "2000166641",
+     "issue_date": "2025-04-18",
+     "period_start": "2025-04-11",
+     "period_end": "2025-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】19時間00分【家事援助】19時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 19,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 19,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000166641",
+     "issue_date": "2025-04-18",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】19時間00分【家事援助】19時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 19,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 19,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000166641",
+     "issue_date": "2025-04-18",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】19時間00分【家事援助】19時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 19,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 19,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "@秋山久子",
+   "name": "秋山 久子",
+   "gender": "女",
+   "birth_date": "1938-11-28",
+   "postal_code": "263-0003",
+   "address": "千葉県千葉市稲毛区小深町582番地21",
+   "certs": [
+    {
+     "cert_number": "2000122404",
+     "issue_date": "2025-01-20",
+     "period_start": "2023-02-01",
+     "period_end": "2026-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】40時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000122404",
+     "issue_date": "2026-01-27",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】40時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000122404",
+     "issue_date": "2026-01-27",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】40時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "@井岡淑江",
+   "name": "井岡 淑江",
+   "gender": "女",
+   "birth_date": "1932-10-12",
+   "postal_code": "284-0003",
+   "address": "千葉県四街道市鹿渡1038番地",
+   "certs": [
+    {
+     "cert_number": "1222873806",
+     "issue_date": "2026-06-08",
+     "period_start": "2026-05-12",
+     "period_end": "2026-12-31",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【家事援助】20時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1222873806",
+     "issue_date": "2026-06-08",
+     "period_start": "2026-05-12",
+     "period_end": "2026-12-31",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【家事援助】20時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "@伊藤紀子",
+   "name": "伊藤 紀子",
+   "gender": "女",
+   "birth_date": "1955-06-22",
+   "postal_code": "284-0034",
+   "address": "千葉県四街道市南波佐間374番地5",
+   "certs": [
+    {
+     "cert_number": "1222810248",
+     "issue_date": "2025-02-20",
+     "period_start": "2025-03-01",
+     "period_end": "2025-08-31",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】23時間00分【家事援助】25時間00分【通院身体】15時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 23,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222810248",
+     "issue_date": "2025-09-30",
+     "period_start": "2025-09-01",
+     "period_end": "2026-02-28",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】23時間00分【家事援助】25時間00分【通院身体】15時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 23,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222810248",
+     "issue_date": "2025-09-30",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】23時間00分【家事援助】25時間00分【通院身体】15時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 23,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1222810248",
+     "issue_date": "2025-09-30",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】23時間00分【家事援助】25時間00分【通院身体】15時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 23,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "@伊藤優樹",
+   "name": "伊藤 優樹",
+   "gender": "男",
+   "birth_date": "1986-09-25",
+   "postal_code": "284-0034",
+   "address": "千葉県四街道市南波佐間374番地5",
+   "certs": [
+    {
+     "cert_number": "1222800521",
+     "issue_date": "2025-01-27",
+     "period_start": "2025-02-01",
+     "period_end": "2026-01-31",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】60時間00分【通院介助】30時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222800521",
+     "issue_date": "2026-01-30",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】60時間00分【通院介助】30時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1222800521",
+     "issue_date": "2026-01-30",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】60時間00分【通院介助】30時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "@今井康敦",
+   "name": "今井 康敦",
+   "gender": "男",
+   "birth_date": "1981-02-24",
+   "postal_code": "264-0006",
+   "address": "千葉県千葉市若葉区小倉台4丁目20番12号エステートピアアキバ302号",
+   "certs": [
+    {
+     "cert_number": "2000162970",
+     "issue_date": "2025-09-26",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】15時間00分【家事援助】15時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000162970",
+     "issue_date": "2025-09-26",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】15時間00分【家事援助】15時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "@大山佳毅",
+   "name": "大山 佳毅",
+   "gender": "男",
+   "birth_date": "2003-06-12",
+   "postal_code": "285-0928",
+   "address": "千葉県印旛郡酒々井町ふじき野二丁目12番地1",
+   "certs": [
+    {
+     "cert_number": "1232203644",
+     "issue_date": "2026-02-25",
+     "period_start": "2026-03-01",
+     "period_end": "2026-03-31",
+     "city": "酒々井町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】10時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1232203644",
+     "issue_date": "2026-03-26",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "酒々井町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】10時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1232203644",
+     "issue_date": "2026-03-26",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "酒々井町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】10時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "@千原昌子",
+   "name": "千原 昌子",
+   "gender": "女",
+   "birth_date": "1956-11-27",
+   "postal_code": "284-0045",
+   "address": "千葉県四街道市美しが丘1丁目3番7号ヴェルデ四街道7号棟201号",
+   "certs": [
+    {
+     "cert_number": "1222874563",
+     "issue_date": "2024-11-29",
+     "period_start": "2024-12-01",
+     "period_end": "2025-11-30",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】31時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 31,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222874563",
+     "issue_date": "2025-11-21",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】31時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 31,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1222874563",
+     "issue_date": "2025-11-21",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】31時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 31,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113006301",
+   "name": "鳥前 隆",
+   "gender": "男",
+   "birth_date": "1971-08-14",
+   "postal_code": "264-0028",
+   "address": "千葉県千葉市若葉区桜木6丁目17番22号 やすらぎの会",
+   "certs": [
+    {
+     "cert_number": "2000080800",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2024-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】10時間00分【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000080800",
+     "issue_date": "2024-09-27",
+     "period_start": "2024-08-01",
+     "period_end": "2025-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】20時間00分【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000080800",
+     "issue_date": "2025-09-25",
+     "period_start": "2025-08-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】20時間00分【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000080800",
+     "issue_date": "2025-09-25",
+     "period_start": "2025-08-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】20時間00分【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "@永野温子",
+   "name": "永野 温子",
+   "gender": "女",
+   "birth_date": "1951-10-03",
+   "postal_code": "284-0026",
+   "address": "千葉県四街道市つくし座２丁目６番１号",
+   "certs": [
+    {
+     "cert_number": "1222874792",
+     "issue_date": "2025-02-05",
+     "period_start": "2025-01-23",
+     "period_end": "2025-03-14",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】10時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "四街道受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222874792",
+     "issue_date": "2025-03-24",
+     "period_start": "2025-03-15",
+     "period_end": "2026-01-31",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】36時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】Hanaヘルパ",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 36,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "Hanaヘルパ"
+    },
+    {
+     "cert_number": "1222874792",
+     "issue_date": "2026-01-09",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】36時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】Hanaヘルパ",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 36,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "Hanaヘルパ"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1222874792",
+     "issue_date": "2026-01-09",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】36時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】Hanaヘルパ",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 36,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "Hanaヘルパ"
+    }
+   ]
+  },
+  {
+   "user_number": "232",
+   "name": "松戸 孝雄",
+   "gender": "男",
+   "birth_date": "1953-01-02",
+   "postal_code": "262-0002",
+   "address": "千葉県千葉市花見川区内山町217",
+   "certs": [
+    {
+     "cert_number": "2000008397",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2021-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】133時間30分【家事援助】73時間30分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 133,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 73,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000008397",
+     "issue_date": "2021-06-04",
+     "period_start": "2021-07-01",
+     "period_end": "2022-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】133時間30分【家事援助】83時間30分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 133,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 83,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000008397",
+     "issue_date": "2022-06-10",
+     "period_start": "2022-07-01",
+     "period_end": "2024-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】133時間30分【家事援助】83時間30分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 133,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 83,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000008397",
+     "issue_date": "2024-06-12",
+     "period_start": "2024-07-01",
+     "period_end": "2025-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】133時間30分【家事援助】83時間30分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 133,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 83,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000008397",
+     "issue_date": "2024-06-12",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】139時間30分【家事援助】67時間30分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 139,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 67,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000008397",
+     "issue_date": "2026-07-01",
+     "period_start": "2026-07-01",
+     "period_end": "2027-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】139時間30分【家事援助】67時間30分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 139,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 67,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000008397",
+     "issue_date": "2024-06-12",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】139時間30分【家事援助】67時間30分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "四街道受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 139,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 67,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  }
+ ],
+ "stats": {
+  "pdf_files": 1,
+  "kihon_rows": 11,
+  "birth_date_missing": 0,
+  "clients": 11,
+  "certs_total": 27,
+  "current_certs": 11,
+  "multi_current": 0
+ },
+ "warnings": []
+}

@@ -47,7 +47,11 @@ NUMERIC = re.compile(r"^[\d\s/]+$")
 CITY_PAT = re.compile(r"^[^\s【】0-9]+[市町村区]$")
 JIGYOU_PAT = re.compile(r"^(.+?事業)【(.+?)】\s*$")
 SERVICE_ONLY = {"重度訪問介護", "同行援護", "行動援護", "居宅介護", "重度障害者等包括支援"}
+# 基本情報一覧表の行。**利用者番号が空欄の事業所がある** (四街道) ので 2 パターン持つ。
+#   A: "232 松戸 孝雄 男 S20/ 1/ 2 …"   利用者番号あり
+#   B: "赤池晴子 女 S39/ 5/27 …"        利用者番号なし (氏名から始まる)
 KIHON_ROW = re.compile(r"^(\d+)\s+(\S+?)\s+([男女])\s+([SHRTM]\s*\d+/\s*\d+/\s*\d+)")
+KIHON_ROW_NONUM = re.compile(r"^(\S+?)\s+([男女])\s+([SHRTM]\s*\d+/\s*\d+/\s*\d+)")
 
 
 def wareki(s, era=ERA):
@@ -61,10 +65,21 @@ def norm(s):
     return unicodedata.normalize("NFKC", s or "").replace(" ", "").replace("　", "")
 
 
+# 事業所名 (ページヘッダ)。改ページで途中から切れて「ーステーション四街道」のような
+#   断片になり氏名と誤認されるので、事業所名の**部分文字列なら捨てる**。
+OFFICE_NAME_NORM = ""
+
+
+def is_office_fragment(t):
+    n = norm(t)
+    return bool(OFFICE_NAME_NORM) and len(n) >= 4 and n in OFFICE_NAME_NORM
+
+
 def is_header(s):
     t = (s or "").strip()
     return (
-        (not t)
+        is_office_fragment(t)
+        or (not t)
         or (t in HEADER)
         or t.startswith("令和")
         or bool(re.match(r"^\d+ / \d+$", t))
@@ -96,21 +111,30 @@ def is_user_number(s):
 
 
 def is_person_start(lines, i):
-    """**氏名行 → 利用者番号** の並びでのみ人ブロックの開始とみなす。
+    """人ブロックの開始判定。**利用者番号が空欄の事業所がある**ので 2 形を許す。
+
+      A: 氏名 → 利用者番号 → 受給者証番号(10桁)   … 五井・木更津・姉ム・さつきが丘
+      B: 氏名 → 受給者証番号(10桁) → 交付年月日   … 四街道 (利用者番号が空)
 
     事業所名 (木更津は ※ が付かない) や支給量の折り返しが氏名に見えてしまうので、
-    「直後に利用者番号が来るか」を唯一の判定根拠にする。
+    後続の並びまで見て判定する。B で 3 行目の日付まで見るのは、
+    【上限額管理事業所】の事業所名が折り返した直後に次の証の 10 桁番号が来る形を
+    弾くため (木更津の「まくさ太陽介護センター」で誤検出した)。
     """
-    return (
-        i + 2 < len(lines)
-        and is_name_line(lines[i].strip())
-        and is_user_number(lines[i + 1])
-        # 3 行目が受給者証番号 (10 桁) であることまで見る。
-        #   【上限額管理事業所】の事業所名が折り返して独立行になると
-        #   「事業所名 → 次の証の 10 桁番号」が 氏名 → 利用者番号 に見えてしまうため
-        #   (木更津の「まくさ太陽介護センター」「ミヘルパーステーション」で誤検出した)。
-        and TEN_DIGIT.match(lines[i + 2].strip())
-    )
+    if i + 2 >= len(lines) or not is_name_line(lines[i].strip()):
+        return False
+    a, b = lines[i + 1].strip(), lines[i + 2].strip()
+    if is_user_number(a) and TEN_DIGIT.match(b):
+        return True  # A
+    return bool(TEN_DIGIT.match(a) and DATE_ONLY.match(b))  # B
+
+
+def person_number(lines, i):
+    """is_person_start の位置から (利用者番号, 次に読む行index) を返す"""
+    a, b = lines[i + 1].strip(), lines[i + 2].strip()
+    if is_user_number(a) and TEN_DIGIT.match(b):
+        return a, i + 2          # A: 利用者番号を消費
+    return None, i + 1           # B: 利用者番号は無い。次は受給者証番号
 
 
 def parse_shikyuryo(raw):
@@ -157,16 +181,22 @@ def load_kihon(paths, warnings):
                 lines += (pg.extract_text() or "").split("\n")
         hit = 0
         for idx, line in enumerate(lines):
-            m = KIHON_ROW.match(line.strip())
-            if not m:
-                continue
+            t = line.strip()
+            m = KIHON_ROW.match(t)
+            if m:
+                uno, nm, gender, bd = m.group(1), m.group(2), m.group(3), m.group(4)
+            else:
+                m2 = KIHON_ROW_NONUM.match(t)
+                if not m2:
+                    continue
+                uno, nm, gender, bd = None, m2.group(1), m2.group(2), m2.group(3)
             hit += 1
             addr = lines[idx + 1].strip() if idx + 1 < len(lines) else ""
             am = re.match(r"^(\d{3}-\d{4}|-)\s*(.*)$", addr)
-            kihon[norm(m.group(2))] = {
-                "user_number_kihon": m.group(1),
-                "gender": m.group(3),
-                "birth_date": wareki(m.group(4), ERA_FULL),
+            kihon[norm(nm)] = {
+                "user_number_kihon": uno,
+                "gender": gender,
+                "birth_date": wareki(bd, ERA_FULL),
                 "postal_code": (am.group(1) if am and am.group(1) != "-" else None),
                 "address": (am.group(2).strip() if am else None) or None,
             }
@@ -209,8 +239,11 @@ def parse(pdf_paths, kihon, warnings):
                 i += 1
                 continue
             if is_person_start(lines, i):
-                cur = get_client(lines[i + 1].strip(), re.sub(r"\s+", " ", s).strip())
-                i += 2
+                uno, nxt = person_number(lines, i)
+                nm = re.sub(r"\s+", " ", s).strip()
+                # 利用者番号が無い事業所は氏名をキーにする (基本情報側も番号が空なので突合できる)
+                cur = get_client(uno if uno else f"@{norm(nm)}", nm)
+                i = nxt
                 continue
             if cur is None:
                 i += 1
@@ -284,6 +317,8 @@ def main():
     ap.add_argument("--kihon", action="append", default=[], help="基本情報一覧表 PDF (任意・複数可)")
     args = ap.parse_args()
 
+    global OFFICE_NAME_NORM
+    OFFICE_NAME_NORM = norm(args.office)
     warnings = []
     kihon = load_kihon(args.kihon, warnings)
     clients, order = parse(args.pdf, kihon, warnings)
