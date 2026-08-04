@@ -215,7 +215,8 @@ export async function aggregateMonthlyUriage(
   if (!isKyotaku) {
     const chi = await sumChiiki(supabase, opts.officeId, monthStr);
     chiiki = chi.total;
-    userBurden += chi.userBurden;
+    // 利用者負担: 生保・非課税世帯 0円 / 課税世帯 10%。世帯区分を保持していないため
+    //   既定 0 円として扱う (idou-billing 画面と同じ)。
     for (const id of chi.clientIds) clientIds.add(id);
     warnings.push(...chi.warnings);
   }
@@ -467,15 +468,19 @@ async function sumChiiki(
   supabase: SupabaseClient,
   officeId: string,
   monthStr: string,
-): Promise<{ total: number; userBurden: number; clientIds: string[]; warnings: string[] }> {
+): Promise<{ total: number; clientIds: string[]; warnings: string[] }> {
   const warnings: string[] = [];
   const clientIds: string[] = [];
   const from = `${monthStr}-01`;
-  const to = `${monthStr}-31`;
+  // ⚠ 月末は "-31" 固定にしない。6月に投げると Postgres が
+  //   `date/time field value out of range: "2026-06-31"` で落ち、
+  //   catch されて**黙って 0 円**になる (2026-08-03 に踏んだ)。
+  const [yy, mm] = monthStr.split("-").map(Number);
+  const to = `${monthStr}-${String(new Date(yy, mm, 0).getDate()).padStart(2, "0")}`;
 
   const { data, error } = await supabase
     .from("kaigo_idou_shien_records")
-    .select("client_id, units, user_burden")
+    .select("client_id, units, notes")
     .eq("office_id", officeId)
     .gte("service_date", from)
     .lte("service_date", to);
@@ -483,16 +488,29 @@ async function sumChiiki(
     if (!isMissingSchema(error.code)) {
       warnings.push(`地域生活支援事業 (移動支援等) の取得に失敗したため売上に含まれていません: ${error.message}`);
     }
-    return { total: 0, userBurden: 0, clientIds, warnings };
+    return { total: 0, clientIds, warnings };
   }
 
-  const rows = (data ?? []) as { client_id: string; units: number | null; user_burden: number | null }[];
+  const rows = (data ?? []) as {
+    client_id: string; units: number | null; notes: string | null;
+  }[];
   let total = 0;
-  let userBurden = 0;
+  let noAmount = 0;
   for (const r of rows) {
-    total += (r.units ?? 0) * CHIIKI_UNIT_YEN;
-    userBurden += r.user_burden ?? 0;
+    // 単位建ての市町村 (千葉市・大多喜町) は units×10円。
+    //   **円建ての市町村 (茂原市・睦沢町) は units が無い**ので、取込時に notes へ書いた
+    //   「NNNN円」から読む。単価表を持たない市町村は金額が入らないので件数だけ数える。
+    //   (src/lib/idou-shien-rates.ts が市町村ごとの体系差を吸収している)
+    const yenInNotes = /(\d+)円/.exec(r.notes ?? "");
+    const yen = r.units != null ? r.units * CHIIKI_UNIT_YEN : yenInNotes ? Number(yenInNotes[1]) : 0;
+    if (yen === 0) noAmount++;
+    total += yen;
     clientIds.push(r.client_id);
+  }
+  if (noAmount > 0) {
+    warnings.push(
+      `地域生活支援事業 ${noAmount} 件に金額が入っていません — 市町村の単価表が未登録の可能性があります (src/lib/idou-shien-rates.ts)`,
+    );
   }
 
   // 実績ゼロなのにシフトに移動支援の予定がある = 取り込み漏れ。売上が黙って欠ける
@@ -511,5 +529,5 @@ async function sumChiiki(
       );
     }
   }
-  return { total, userBurden, clientIds, warnings };
+  return { total, clientIds, warnings };
 }
