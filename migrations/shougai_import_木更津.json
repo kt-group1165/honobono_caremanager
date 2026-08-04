@@ -1,0 +1,3163 @@
+{
+ "office": "木更津ムツミヘルパーステーション",
+ "area": "木更津",
+ "clients": [
+  {
+   "user_number": "616000021",
+   "name": "岩﨑 修身",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "1220628026",
+     "issue_date": "2023-01-13",
+     "period_start": "2023-01-05",
+     "period_end": "2023-12-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【通院身体】6時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 6,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220628026",
+     "issue_date": "2023-01-13",
+     "period_start": "2024-01-01",
+     "period_end": "2024-04-14",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220628026",
+     "issue_date": "2023-01-13",
+     "period_start": "2024-04-15",
+     "period_end": "2024-12-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】5時間00分【家事援助】15時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220628026",
+     "issue_date": "2023-01-13",
+     "period_start": "2025-01-01",
+     "period_end": "2025-12-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】5時間00分【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220628026",
+     "issue_date": "2023-01-13",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】5時間00分【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1220628026",
+     "issue_date": "2023-01-13",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】5時間00分【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "1359",
+   "name": "太田 結衣",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "1220610594",
+     "issue_date": "2017-09-29",
+     "period_start": "2019-04-01",
+     "period_end": "2019-08-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】80時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 80,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220610594",
+     "issue_date": "2017-09-29",
+     "period_start": "2019-09-01",
+     "period_end": "2020-08-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】80時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 80,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220610594",
+     "issue_date": "2017-09-29",
+     "period_start": "2020-09-01",
+     "period_end": "2021-08-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】80時間00分【所得区分】低所得１【利用者負担上限月額】0木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 80,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220610594",
+     "issue_date": "2017-09-29",
+     "period_start": "2021-09-01",
+     "period_end": "2022-08-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】80時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 80,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220610594",
+     "issue_date": "2017-09-29",
+     "period_start": "2022-09-01",
+     "period_end": "2023-08-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220610594",
+     "issue_date": "2017-09-29",
+     "period_start": "2023-09-01",
+     "period_end": "2024-08-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220610594",
+     "issue_date": "2017-09-29",
+     "period_start": "2024-09-01",
+     "period_end": "2025-08-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220610594",
+     "issue_date": "2017-09-29",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1220610594",
+     "issue_date": "2017-09-29",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "1899",
+   "name": "大御 由美子",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "1220617060",
+     "issue_date": "2017-07-24",
+     "period_start": "2019-07-01",
+     "period_end": "2020-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220617060",
+     "issue_date": "2017-07-24",
+     "period_start": "2020-07-01",
+     "period_end": "2021-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220617060",
+     "issue_date": "2021-08-05",
+     "period_start": "2021-07-01",
+     "period_end": "2022-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220617060",
+     "issue_date": "2021-08-05",
+     "period_start": "2022-07-01",
+     "period_end": "2023-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220617060",
+     "issue_date": "2023-07-01",
+     "period_start": "2023-07-01",
+     "period_end": "2024-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220617060",
+     "issue_date": "2023-07-01",
+     "period_start": "2024-07-01",
+     "period_end": "2025-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220617060",
+     "issue_date": "2025-07-01",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220617060",
+     "issue_date": "2017-07-24",
+     "period_start": "2018-07-01",
+     "period_end": "2019-06-30",
+     "city": "木更津市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1220617060",
+     "issue_date": "2025-07-01",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "616000115",
+   "name": "小林 響希",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "1220618837",
+     "issue_date": "2026-03-06",
+     "period_start": "2026-03-13",
+     "period_end": "2027-02-28",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "木更津ムツミヘルパーステーション"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1220618837",
+     "issue_date": "2026-03-06",
+     "period_start": "2026-03-13",
+     "period_end": "2027-02-28",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "木更津ムツミヘルパーステーション"
+    }
+   ]
+  },
+  {
+   "user_number": "2573",
+   "name": "齋藤 健琉",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "1220620981",
+     "issue_date": "2020-05-01",
+     "period_start": "2022-10-01",
+     "period_end": "2023-04-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】20時間00分【通院身体】30時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220620981",
+     "issue_date": "2020-05-01",
+     "period_start": "2023-05-01",
+     "period_end": "2023-09-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【通院身体】30時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】(有)あまくさ　太陽介護センター木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "(有)あまくさ　太陽介護センター木更津ムツミヘルパーステーション"
+    },
+    {
+     "cert_number": "1220620981",
+     "issue_date": "2020-05-01",
+     "period_start": "2023-10-01",
+     "period_end": "2024-05-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【通院身体】45時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】(有)あまくさ　太陽介護センター",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 45,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "(有)あまくさ　太陽介護センター"
+    },
+    {
+     "cert_number": "1220620981",
+     "issue_date": "2020-05-01",
+     "period_start": "2024-06-01",
+     "period_end": "2024-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【通院身体】45時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220620981",
+     "issue_date": "2020-05-01",
+     "period_start": "2024-07-01",
+     "period_end": "2024-09-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【通院身体】45時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】(有)あまくさ　太陽介護センター",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 45,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "(有)あまくさ　太陽介護センター"
+    },
+    {
+     "cert_number": "1220620981",
+     "issue_date": "2020-05-01",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【通院身体】30時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】(有)あまくさ　太陽介護センター",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "(有)あまくさ　太陽介護センター"
+    },
+    {
+     "cert_number": "1220620981",
+     "issue_date": "2020-05-01",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【通院身体】30時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】(有)あまくさ　太陽介護センター",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "(有)あまくさ　太陽介護センター"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1220620981",
+     "issue_date": "2020-05-01",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【通院身体】30時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】(有)あまくさ　太陽介護センター",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "(有)あまくさ　太陽介護センター"
+    }
+   ]
+  },
+  {
+   "user_number": "2574",
+   "name": "齋藤 遥真",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "1220620999",
+     "issue_date": "2020-05-01",
+     "period_start": "2022-10-01",
+     "period_end": "2023-04-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】20時間00分【通院身体】30時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220620999",
+     "issue_date": "2020-05-01",
+     "period_start": "2023-05-01",
+     "period_end": "2023-09-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【通院身体】30時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】(有)あまくさ　太陽介護センター",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "(有)あまくさ　太陽介護センター"
+    },
+    {
+     "cert_number": "1220620999",
+     "issue_date": "2020-05-01",
+     "period_start": "2023-10-01",
+     "period_end": "2024-05-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【通院身体】45時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】(有)あまくさ　太陽介護センター木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 45,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "(有)あまくさ　太陽介護センター木更津ムツミヘルパーステーション"
+    },
+    {
+     "cert_number": "1220620999",
+     "issue_date": "2020-05-01",
+     "period_start": "2024-06-01",
+     "period_end": "2024-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【通院身体】45時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220620999",
+     "issue_date": "2020-05-01",
+     "period_start": "2024-07-01",
+     "period_end": "2024-09-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【通院身体】45時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】(有)あまくさ　太陽介護センター",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 45,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "(有)あまくさ　太陽介護センター"
+    },
+    {
+     "cert_number": "1220620999",
+     "issue_date": "2020-05-01",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【通院身体】30時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】(有)あまくさ　太陽介護センター",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "(有)あまくさ　太陽介護センター"
+    },
+    {
+     "cert_number": "1220620999",
+     "issue_date": "2020-05-01",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【通院身体】30時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】(有)あまくさ　太陽介護センター",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "(有)あまくさ　太陽介護センター"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1220620999",
+     "issue_date": "2020-05-01",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【通院身体】30時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】(有)あまくさ　太陽介護センター",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "(有)あまくさ　太陽介護センター"
+    }
+   ]
+  },
+  {
+   "user_number": "2478",
+   "name": "齊藤 優希",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "1220611725",
+     "issue_date": "2013-08-01",
+     "period_start": "2021-08-01",
+     "period_end": "2022-07-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】60時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220611725",
+     "issue_date": "2013-08-01",
+     "period_start": "2022-08-01",
+     "period_end": "2023-07-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】60時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220611725",
+     "issue_date": "2013-08-01",
+     "period_start": "2023-08-01",
+     "period_end": "2024-05-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】60時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220611725",
+     "issue_date": "2013-08-01",
+     "period_start": "2024-06-01",
+     "period_end": "2024-07-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】75時間00分【家事援助】38時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 75,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 38,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220611725",
+     "issue_date": "2013-08-01",
+     "period_start": "2024-08-01",
+     "period_end": "2025-07-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】75時間00分【家事援助】38時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 75,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 38,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220611725",
+     "issue_date": "2013-08-01",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】75時間00分【家事援助】38時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 75,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 38,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1220611725",
+     "issue_date": "2013-08-01",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】75時間00分【家事援助】38時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 75,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 38,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "616000071",
+   "name": "須田 文雄",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "1220627408",
+     "issue_date": "2022-10-01",
+     "period_start": "2025-03-19",
+     "period_end": "2026-02-28",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】22時間30分【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1220627408",
+     "issue_date": "2022-10-01",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】22時間30分【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1220627408",
+     "issue_date": "2022-10-01",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】22時間30分【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "616000066",
+   "name": "髙浦 末次",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "1220635138",
+     "issue_date": "2025-06-26",
+     "period_start": "2025-07-01",
+     "period_end": "2026-01-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】40時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220635138",
+     "issue_date": "2025-06-26",
+     "period_start": "2026-02-01",
+     "period_end": "2026-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】80時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 80,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220635138",
+     "issue_date": "2025-06-26",
+     "period_start": "2026-07-01",
+     "period_end": "2027-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】92時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 92,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1220635138",
+     "issue_date": "2025-06-26",
+     "period_start": "2026-02-01",
+     "period_end": "2026-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】80時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 80,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2570",
+   "name": "髙橋 年枝",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "1220628836",
+     "issue_date": "2023-05-01",
+     "period_start": "2023-05-01",
+     "period_end": "2023-05-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】105時間00分【家事援助】40時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】ヘルパーステーションアドバンス木更津ムツミヘルパーステーション上限管理事業所　R5.5.1～R5.12.31ヘルパーステーションアドバンス　R6.1.1～木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 105,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 40,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "ヘルパーステーションアドバンス木更津ムツミヘルパーステーション上限管理事業所　R5.5.1～R5.12.31ヘルパーステーションアドバンス　R6.1.1～木更津ムツミヘルパーステーション"
+    },
+    {
+     "cert_number": "1220628836",
+     "issue_date": "2023-05-01",
+     "period_start": "2023-06-01",
+     "period_end": "2024-04-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】120時間30分【家事援助】40時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 120,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 40,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "木更津ムツミヘルパーステーション"
+    },
+    {
+     "cert_number": "1220628836",
+     "issue_date": "2023-05-01",
+     "period_start": "2024-05-01",
+     "period_end": "2025-04-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】120時間30分【家事援助】40時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 120,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 40,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "木更津ムツミヘルパーステーション"
+    },
+    {
+     "cert_number": "1220628836",
+     "issue_date": "2023-05-01",
+     "period_start": "2025-05-01",
+     "period_end": "2025-10-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】120時間30分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 120,
+       "minutes": 30
+      }
+     },
+     "jogen_kanri_office": "木更津ムツミヘルパーステーション"
+    },
+    {
+     "cert_number": "1220628836",
+     "issue_date": "2023-05-01",
+     "period_start": "2025-10-31",
+     "period_end": "2026-04-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】120時間30分【通院身体】12時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 120,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 12,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "木更津ムツミヘルパーステーション"
+    },
+    {
+     "cert_number": "1220628836",
+     "issue_date": "2023-05-01",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】110時間00分【通院身体】12時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 110,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 12,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "木更津ムツミヘルパーステーション"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1220628836",
+     "issue_date": "2023-05-01",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】110時間00分【通院身体】12時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 110,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 12,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "木更津ムツミヘルパーステーション"
+    }
+   ]
+  },
+  {
+   "user_number": "1531",
+   "name": "髙橋 祐二",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "1220611378",
+     "issue_date": "2014-03-31",
+     "period_start": "2019-05-01",
+     "period_end": "2020-04-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】31時間00分【通院身体】18時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 31,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220611378",
+     "issue_date": "2017-05-01",
+     "period_start": "2020-05-01",
+     "period_end": "2021-04-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】31時間00分【通院身体】18時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 31,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220611378",
+     "issue_date": "2017-05-01",
+     "period_start": "2021-05-01",
+     "period_end": "2022-04-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】31時間00分【通院身体】18時間00分【所得区分】生活保護【利用者負担上限月額】0木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 31,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220611378",
+     "issue_date": "2017-05-01",
+     "period_start": "2022-05-01",
+     "period_end": "2023-04-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】31時間00分【通院身体】18時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 31,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220611378",
+     "issue_date": "2017-05-01",
+     "period_start": "2023-05-01",
+     "period_end": "2024-04-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】31時間00分【通院身体】18時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 31,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220611378",
+     "issue_date": "2017-05-01",
+     "period_start": "2024-05-01",
+     "period_end": "2025-04-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】31時間00分【通院身体】18時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 31,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220611378",
+     "issue_date": "2017-05-01",
+     "period_start": "2025-05-01",
+     "period_end": "2026-04-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】31時間00分【通院身体】18時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 31,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220611378",
+     "issue_date": "2017-05-01",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】31時間00分【通院身体】18時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 31,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1220611378",
+     "issue_date": "2017-05-01",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】31時間00分【通院身体】18時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 31,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "1841",
+   "name": "宮崎 初江",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "1220616096",
+     "issue_date": "2016-11-28",
+     "period_start": "2018-11-01",
+     "period_end": "2019-10-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】22時間30分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616096",
+     "issue_date": "2016-11-28",
+     "period_start": "2019-11-01",
+     "period_end": "2020-10-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】22時間30分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616096",
+     "issue_date": "2016-11-28",
+     "period_start": "2020-11-01",
+     "period_end": "2021-10-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】22時間30分【通院介助】5時間00分【所得区分】低所得１【利用者負担上限月額】0木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院介助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616096",
+     "issue_date": "2016-11-28",
+     "period_start": "2021-11-01",
+     "period_end": "2022-10-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】23時間30分【通院介助】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 23,
+       "minutes": 30
+      },
+      "通院介助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616096",
+     "issue_date": "2016-11-28",
+     "period_start": "2022-11-01",
+     "period_end": "2023-10-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】19時間00分【通院介助】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 19,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616096",
+     "issue_date": "2016-11-28",
+     "period_start": "2023-11-01",
+     "period_end": "2024-10-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】19時間00分【通院介助】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 19,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616096",
+     "issue_date": "2016-11-28",
+     "period_start": "2024-11-01",
+     "period_end": "2025-10-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】19時間00分【通院介助】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 19,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616096",
+     "issue_date": "2016-11-28",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】19時間00分【通院介助】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 19,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616096",
+     "issue_date": "2016-11-28",
+     "period_start": "2018-11-01",
+     "period_end": "2019-10-31",
+     "city": "木更津市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】22時間30分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1220616096",
+     "issue_date": "2016-11-28",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】19時間00分【通院介助】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 19,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "616000002",
+   "name": "安田 梨紗",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "1220608226",
+     "issue_date": "2011-04-01",
+     "period_start": "2023-08-01",
+     "period_end": "2024-07-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】25時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220608226",
+     "issue_date": "2011-04-01",
+     "period_start": "2024-08-01",
+     "period_end": "2025-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】25時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220635260",
+     "issue_date": "2025-09-05",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】25時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220635260",
+     "issue_date": "2025-09-05",
+     "period_start": "2026-07-01",
+     "period_end": "2027-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1220635260",
+     "issue_date": "2025-09-05",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】25時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "616000017",
+   "name": "山口 友子",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "1220603946",
+     "issue_date": "2009-07-01",
+     "period_start": "2024-02-01",
+     "period_end": "2024-03-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】25時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220603946",
+     "issue_date": "2009-07-01",
+     "period_start": "2024-04-01",
+     "period_end": "2025-03-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】25時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220603946",
+     "issue_date": "2009-07-01",
+     "period_start": "2025-04-01",
+     "period_end": "2026-03-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】25時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220603946",
+     "issue_date": "2009-07-01",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】25時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1220603946",
+     "issue_date": "2009-07-01",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】25時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2579",
+   "name": "山田 章夫",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "1220603003",
+     "issue_date": "2022-09-30",
+     "period_start": "2022-10-01",
+     "period_end": "2023-09-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】55時間00分【家事援助】45時間00分【通院身体】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 55,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220603003",
+     "issue_date": "2022-09-30",
+     "period_start": "2023-10-01",
+     "period_end": "2024-09-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】55時間00分【家事援助】45時間00分【通院身体】30時間00分【所得区分】低所得１【利用者負担上限月額】0木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 55,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220603003",
+     "issue_date": "2022-09-30",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】55時間00分【家事援助】45時間00分【通院身体】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 55,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220603003",
+     "issue_date": "2022-09-30",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】55時間00分【家事援助】45時間00分【通院身体】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 55,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1220603003",
+     "issue_date": "2022-09-30",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】55時間00分【家事援助】45時間00分【通院身体】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 55,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2000",
+   "name": "吉田 江美",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "1220612574",
+     "issue_date": "2017-08-01",
+     "period_start": "2019-03-01",
+     "period_end": "2020-02-29",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】36時間00分【家事援助】8時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 36,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 8,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220612574",
+     "issue_date": "2017-08-01",
+     "period_start": "2020-03-01",
+     "period_end": "2021-02-28",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】36時間00分【家事援助】8時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 36,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 8,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220612574",
+     "issue_date": "2018-10-25",
+     "period_start": "2021-03-01",
+     "period_end": "2022-02-28",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】39時間00分【家事援助】8時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 39,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 8,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220612574",
+     "issue_date": "2018-10-25",
+     "period_start": "2022-03-01",
+     "period_end": "2023-02-28",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】39時間00分【家事援助】8時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 39,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 8,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220612574",
+     "issue_date": "2018-10-25",
+     "period_start": "2023-03-01",
+     "period_end": "2024-02-29",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】39時間00分【家事援助】8時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 39,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 8,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220612574",
+     "issue_date": "2023-03-01",
+     "period_start": "2024-03-01",
+     "period_end": "2025-02-28",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】39時間00分【家事援助】8時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 39,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 8,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220612574",
+     "issue_date": "2024-11-28",
+     "period_start": "2025-03-01",
+     "period_end": "2026-02-28",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】39時間00分【家事援助】8時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 39,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 8,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220612574",
+     "issue_date": "2024-11-28",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】39時間00分【家事援助】8時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 39,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 8,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1220612574",
+     "issue_date": "2024-11-28",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】39時間00分【家事援助】8時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 39,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 8,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "1847",
+   "name": "吉田 作太郎",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "1220616138",
+     "issue_date": "2016-12-19",
+     "period_start": "2018-12-01",
+     "period_end": "2019-11-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616138",
+     "issue_date": "2016-12-19",
+     "period_start": "2019-12-01",
+     "period_end": "2020-11-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616138",
+     "issue_date": "2016-12-19",
+     "period_start": "2020-12-01",
+     "period_end": "2021-11-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616138",
+     "issue_date": "2016-12-19",
+     "period_start": "2021-12-01",
+     "period_end": "2022-11-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616138",
+     "issue_date": "2016-12-19",
+     "period_start": "2022-12-01",
+     "period_end": "2023-11-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616138",
+     "issue_date": "2016-12-19",
+     "period_start": "2023-12-01",
+     "period_end": "2024-11-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616138",
+     "issue_date": "2016-12-19",
+     "period_start": "2024-12-01",
+     "period_end": "2025-11-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616138",
+     "issue_date": "2025-11-10",
+     "period_start": "2025-12-01",
+     "period_end": "2026-03-15",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616138",
+     "issue_date": "2025-11-10",
+     "period_start": "2026-03-16",
+     "period_end": "2026-11-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】6時間00分【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 6,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616138",
+     "issue_date": "2016-12-19",
+     "period_start": "2018-12-01",
+     "period_end": "2019-11-30",
+     "city": "木更津市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1220616138",
+     "issue_date": "2025-11-10",
+     "period_start": "2026-03-16",
+     "period_end": "2026-11-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】6時間00分【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 6,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "1890",
+   "name": "吉長 由美子",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "1220616997",
+     "issue_date": "2017-07-01",
+     "period_start": "2019-07-01",
+     "period_end": "2020-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616997",
+     "issue_date": "2019-07-01",
+     "period_start": "2020-07-01",
+     "period_end": "2021-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616997",
+     "issue_date": "2019-07-01",
+     "period_start": "2021-07-01",
+     "period_end": "2022-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616997",
+     "issue_date": "2019-07-01",
+     "period_start": "2022-07-01",
+     "period_end": "2023-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0木更津ムツミヘルパーステーション",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616997",
+     "issue_date": "2019-07-01",
+     "period_start": "2023-07-01",
+     "period_end": "2024-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616997",
+     "issue_date": "2019-07-01",
+     "period_start": "2024-07-01",
+     "period_end": "2025-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616997",
+     "issue_date": "2019-07-01",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616997",
+     "issue_date": "2019-07-01",
+     "period_start": "2026-07-01",
+     "period_end": "2027-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616997",
+     "issue_date": "2017-07-01",
+     "period_start": "2018-07-01",
+     "period_end": "2019-06-30",
+     "city": "木更津市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1220616997",
+     "issue_date": "2017-07-01",
+     "period_start": "2019-07-01",
+     "period_end": "2020-06-30",
+     "city": "木更津市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1220616997",
+     "issue_date": "2019-07-01",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "木更津市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "木更津受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  }
+ ],
+ "stats": {
+  "pdf_files": 2,
+  "kihon_rows": 0,
+  "birth_date_missing": 18,
+  "clients": 18,
+  "certs_total": 110,
+  "current_certs": 18,
+  "multi_current": 0
+ },
+ "warnings": [
+  "このファイルから新しい利用者が 1 人も増えなかった: 利用者データ/木更津/障害/木更津受給者証同行援護.pdf"
+ ]
+}

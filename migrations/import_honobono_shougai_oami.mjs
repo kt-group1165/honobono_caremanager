@@ -77,9 +77,81 @@ const EXECUTE = process.argv.includes("--execute");
 // 東金市 / 大網白里市 / 八街市 / 山武市 / 市原市 / 九十九里町 は未確認 → 推測で捏造せず warning。
 //   → 市町村名がそのまま insurer_municipality に入り、伝送 build.ts が warning を出す。
 //     ほのぼの受給者証画面で 6 桁を確認したらここに追記する。
-const CITY_CODE = {
+// 全国地方公共団体コード (千葉県分)。migrations/fix_shogai_municipality_code.mjs と同じ出典。
+//   ⚠ 伝送ファイルから逆引きして埋めない (循環)。公的コード表を根拠にすること。
+/**
+ * 障害福祉の市町村番号 = **JIS 市区町村コード 5 桁 + 検証数字 1 桁**。
+ * 検証数字は保険者番号と同じ modulus 10 (重み 2,1,2,1,2 / 積が 2 桁なら各位を足す)。
+ *
+ * ⚠ 地方公共団体コード (総務省・modulus 11) とは**別物**。混同すると 1 桁ずれる。
+ *   実際 2026-08-04 まで CITY_CODE には mod 11 由来の誤値が 8 件入っていた
+ *   (東金 122131 / 大網白里 122394 / 八街 122301 / 山武 122343 /
+ *    九十九里 124036 / 長生村 124231 / 長柄 124265 / 長南 124273)。
+ *   DB 側は別途是正済みだったので実害は無かったが、新規事業所の取込で再発する状態だった。
+ *
+ * VERIFIED = ほのぼのの伝送ファイル (KJ/TJ の J121・J611 レコード) と
+ *   parse 済 JSON の市町村名を受給者証番号で突合して**実証した**値。13 件すべて上の
+ *   アルゴリズムと一致したので、未実証の市町村は算出して使う (算出値は warning を出す)。
+ */
+const VERIFIED_CITY_CODE = {
   千葉市: "121004",
+  市原市: "122192",
+  茂原市: "122101",
+  東金市: "122135",
+  大網白里市: "122390",
+  八街市: "122309",
+  山武市: "122374",
+  九十九里町: "124032",
+  一宮町: "124214",
+  睦沢町: "124222",
+  長生村: "124230",
+  長柄町: "124263",
+  長南町: "124271",
 };
+
+/** JIS 市区町村コード (5 桁)。VERIFIED に無い市町村を算出するために持つ */
+const JIS_CODE = {
+  木更津市: "12206",
+  白子町: "12424",
+  いすみ市: "12238",
+  大多喜町: "12441",
+  御宿町: "12443",
+  勝浦市: "12218",
+  袖ケ浦市: "12229",
+  君津市: "12225",
+  富津市: "12226",
+  四街道市: "12228",
+  船橋市: "12204",
+  八千代市: "12221",
+};
+
+/** 保険者番号と同じ modulus 10 の検証数字 */
+function checkDigit(jis5) {
+  const weights = [2, 1, 2, 1, 2];
+  let sum = 0;
+  for (let i = 0; i < 5; i++) {
+    const p = Number(jis5[i]) * weights[i];
+    sum += p >= 10 ? Math.floor(p / 10) + (p % 10) : p;
+  }
+  return String((10 - (sum % 10)) % 10);
+}
+
+/** 算出で埋めた市町村 (warning 表示用) */
+const computedCities = new Set();
+
+const CITY_CODE = new Proxy(
+  {},
+  {
+    get(_t, city) {
+      if (typeof city !== "string") return undefined;
+      if (VERIFIED_CITY_CODE[city]) return VERIFIED_CITY_CODE[city];
+      const jis = JIS_CODE[city];
+      if (!jis) return undefined;
+      computedCities.add(city);
+      return jis + checkDigit(jis);
+    },
+  },
+);
 
 const JSON_PATH = join(__dirname, process.env.SH_JSON || "shougai_import_oami.json");
 const data = JSON.parse(readFileSync(JSON_PATH, "utf8"));
@@ -136,6 +208,7 @@ async function main() {
 
   // ── 既存 client の重複チェック (氏名正規化 + 生年月日) ──
   const existingByNameBirth = new Map();
+  const existingByName = new Map();
   {
     const PAGE = 1000;
     let from = 0;
@@ -149,6 +222,11 @@ async function main() {
       if (error) { console.error(`❌ 既存チェック失敗: ${error.message}`); process.exit(1); }
       for (const r of rows ?? []) {
         if (r.birth_date) existingByNameBirth.set(`${norm(r.name)}|${r.birth_date}`, r);
+        // 基本情報一覧表が無い事業所 (木更津など) 向けの氏名のみ索引。
+        //   **一意なときだけ**流用する (同姓同名は誤結合になるので使わない)
+        const k = norm(r.name);
+        if (!existingByName.has(k)) existingByName.set(k, []);
+        existingByName.get(k).push(r);
       }
       if (!rows || rows.length < PAGE) break;
       from += PAGE;
@@ -174,8 +252,22 @@ async function main() {
   // ── plan 構築 ──
   const plan = [];
   const cityWarn = new Set();
+  const ambiguous = [];
   for (const c of data.clients) {
-    const existing = existingByNameBirth.get(`${norm(c.name)}|${c.birth_date}`) ?? null;
+    let existing = existingByNameBirth.get(`${norm(c.name)}|${c.birth_date}`) ?? null;
+    let reuseReason = existing ? "氏名+生年月日" : null;
+    // 受給者証一覧表しか無い事業所は生年月日が取れない。
+    //   その場合に限り**氏名が一意に一致するとき**だけ既存 client を流用する。
+    //   複数一致は誤結合の危険があるので中断させる (新規作成もしない)。
+    if (!existing && !c.birth_date) {
+      const cands = existingByName.get(norm(c.name)) ?? [];
+      if (cands.length === 1) {
+        existing = cands[0];
+        reuseReason = "氏名のみ(生年月日なし)";
+      } else if (cands.length > 1) {
+        ambiguous.push(`${c.name} (${c.user_number}) → 既存 ${cands.map((x) => x.user_number).join(" / ")}`);
+      }
+    }
     const clientId = existing ? existing.id : randomUUID();
     const certs = (c.current_certs ?? []).filter(
       (e) => !certKeys.has(`${clientId}|${e.cert_number}|${e.period_start}`),
@@ -186,7 +278,7 @@ async function main() {
     plan.push({
       c, clientId,
       insertClient: !existing,
-      reuseReason: existing ? "氏名+生年月日" : null,
+      reuseReason,
       insertAssignment: !assignedClientIds.has(clientId),
       certs,
     });
@@ -211,8 +303,19 @@ async function main() {
     console.log(`  ${(p.c.user_number ?? "(番号なし)").padEnd(12)} ${p.c.name.padEnd(9)} ${certStr} ${tags.join(" ")}`);
   }
   if (cityWarn.size) {
-    console.log(`\n⚠️  市町村番号 未解決 ${cityWarn.size} 件 (推測せず。伝送前に受給者証で確認して CITY_CODE に追記):`);
+    console.log(`\n⚠️  市町村番号 未解決 ${cityWarn.size} 件 (JIS_CODE に無い。受給者証で確認して追記):`);
     console.log(`   ${[...cityWarn].join(" / ")}`);
+  }
+  if (ambiguous.length) {
+    console.error(`\n❌ 氏名が複数の既存利用者と一致 ${ambiguous.length} 件 (生年月日が無く一意に決められない):`);
+    for (const a of ambiguous) console.error(`   ${a}`);
+    console.error(`   → 基本情報一覧表を出して生年月日を入れるか、手で紐付けを決めてください。中断します。`);
+    process.exit(2);
+  }
+  if (computedCities.size) {
+    console.log(`\n⚠️  市町村番号 が**算出値** ${computedCities.size} 件 (伝送で実証されていない):`);
+    for (const c of computedCities) console.log(`   ${c} → ${CITY_CODE[c]}  ← 初回伝送前に受給者証の実物と照合すること`);
+    console.log(`   照合できたら VERIFIED_CITY_CODE に移すこと (アルゴリズムは実証 13/13 だが実物確認が原則)`);
   }
   if (data.warnings?.length) {
     console.log(`\n⚠️  parse 時警告 ${data.warnings.length} 件:`);
