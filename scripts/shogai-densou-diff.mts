@@ -37,7 +37,7 @@ const MONTH = 6;
 // 事業所は env で切替 (既定 = リンクスヘルパーステーション(茂原))。
 //   OFFICE_ID       … offices.id
 //   SHOGAI_BN       … 障害の事業所番号 (介護とは別番号。伝送の制御レコードに出る)
-//   DENSOU_DIR      … 伝送データ/ 以下の相対パス。正規形は <拠点>/障害/<YYYYMM> (既定 茂原/障害/202606)
+//   DENSOU_DIR      … 伝送データ/ 以下の相対パス。正規形は <拠点>/訪問介護/障害/<YYYYMM> (既定 茂原/訪問介護/障害/202606)
 const OFFICE_ID = process.env.OFFICE_ID || "e08c3706-ad59-4913-b4e2-67f2675422e9";
 const FALLBACK_OFFICE_NUMBER = process.env.SHOGAI_BN || "1213100017";
 // 伝送データ は apps/kaigo-app 直下 (= __dirname の 1 つ上)
@@ -45,7 +45,7 @@ const FALLBACK_OFFICE_NUMBER = process.env.SHOGAI_BN || "1213100017";
 //   事業所ごとにフォルダ構成が揃っていないため、丸ごと指定できるようにしている。
 const DENSOU_BASE = process.env.DENSOU_DIR
   ? join(__dirname, "..", "伝送データ", ...process.env.DENSOU_DIR.split("/"))
-  : join(__dirname, "..", "伝送データ", "茂原", "障害", "202606");
+  : join(__dirname, "..", "伝送データ", "茂原", "訪問介護", "障害", "202606");
 const HONOBONO_DIR = join(DENSOU_BASE, "ほのぼのから");
 const OUT_DIR = join(DENSOU_BASE, "新システム");
 

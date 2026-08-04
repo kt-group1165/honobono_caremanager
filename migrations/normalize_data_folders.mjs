@@ -38,16 +38,27 @@ const SITE_ALIAS = {
 /** 中身が要らないフォルダ (丸ごと退避) */
 const JUNK_SITES = new Set(["コピー元", "コピー元 - コピー"]);
 
-/** 事業種別の判定に使うパス片 */
-const KIND_ALIAS = {
-  介護: "訪問介護",
-  訪問介護: "訪問介護",
-  居宅: "居宅",
-  障害: "障害",
-  訪問入浴: "訪問入浴",
+/**
+ * 事業所の種別 (フォルダ第1階層) と、その下の制度。
+ *
+ *   訪問介護事業所は**同じ事業所で介護保険と障害福祉の両方を請求する**ので、
+ *   訪問介護/ の下に 介護 / 障害 を置く。居宅・訪問入浴は制度が1つなので直下に月。
+ *
+ *     伝送データ/<拠点>/訪問介護/介護/<月>/ほのぼのから|新システム/
+ *     伝送データ/<拠点>/訪問介護/障害/<月>/…
+ *     伝送データ/<拠点>/居宅/<月>/…
+ *     伝送データ/<拠点>/訪問入浴/<月>/…
+ */
+const GROUP_ALIAS = {
+  介護: ["訪問介護", "介護"],
+  訪問介護: ["訪問介護", "介護"],
+  障害: ["訪問介護", "障害"],
+  居宅: ["居宅", null],
+  訪問入浴: ["訪問入浴", null],
 };
 /** 構成維持用の置きファイル。データではないので触らない */
 const SKIP_FILES = new Set([".gitkeep", "README.md"]);
+
 /** ほのぼの/新システム の揺れ */
 const SIDE_ALIAS = {
   ほのぼの: "ほのぼのから",
@@ -76,12 +87,12 @@ function walk(dir, out = []) {
   return out;
 }
 
-/** 伝送ファイル名から事業種別を推定 (パスに手掛かりが無いとき用) */
-function kindFromFileName(base) {
+/** 伝送ファイル名から [事業所種別, 制度] を推定 (パスに手掛かりが無いとき用) */
+function groupFromFileName(base) {
   const u = base.toUpperCase();
-  if (/^(KJ|TJ|JJ)\d/.test(u) || /^J\d{2}\d{4}\.CSV$/.test(u)) return "障害";
-  if (/^KY\d/.test(u) || /^[KS]20\d{4}\.CSV$/.test(u)) return "居宅";
-  if (/^KK\d/.test(u) || /^(J|SG)20\d{4}\.CSV$/.test(u)) return "訪問介護";
+  if (/^(KJ|TJ|JJ)\d/.test(u) || /^J\d{2}\d{4}\.CSV$/.test(u)) return ["訪問介護", "障害"];
+  if (/^KY\d/.test(u) || /^[KS]20\d{4}\.CSV$/.test(u)) return ["居宅", null];
+  if (/^KK\d/.test(u) || /^(J|SG)20\d{4}\.CSV$/.test(u)) return ["訪問介護", "介護"];
   return null;
 }
 
@@ -96,10 +107,12 @@ function destOf(rel) {
   const base = segs[segs.length - 1];
   const mid = segs.slice(2, -1);
 
-  // 事業種別: パスの**最も深い**手掛かりを優先 (…/ほのぼのから/障害/ のような入れ子があるため)
-  let kind = null;
-  for (const s of mid) if (KIND_ALIAS[s]) kind = KIND_ALIAS[s];
-  if (!kind) kind = kindFromFileName(base);
+  // 事業所種別・制度: パスの**最も深い**手掛かりを優先
+  //   (…/ほのぼのから/障害/ のような入れ子や、訪問介護/障害/ の 2 段どちらも拾える)
+  let group = null;
+  for (const s of mid) if (GROUP_ALIAS[s]) group = GROUP_ALIAS[s];
+  if (!group) group = groupFromFileName(base);
+  const [kind, scheme] = group ?? [null, null];
 
   // 対象月
   let month = null;
@@ -118,7 +131,9 @@ function destOf(rel) {
     if (!month) return null;
     // MEISAI は制度混在なので「出力元の事業所エントリ」単位でしか分けられない。
     //   手掛かりが無ければ 訪問介護 とみなす (居宅の稼働データは 居宅 配下に置かれている)
-    return { dest: path.join(root, site, month, kind ?? "訪問介護", base) };
+    const g = kind ?? "訪問介護";
+    const sch = g === "訪問介護" ? (scheme ?? "介護") : null;
+    return { dest: path.join(root, site, month, g, ...(sch ? [sch] : []), base) };
   }
   if (root === "伝送データ") {
     // 対象月は**ファイルの中身の提供年月**で決める。
@@ -131,7 +146,8 @@ function destOf(rel) {
     for (const s of mid) if (SIDE_ALIAS[s]) side = SIDE_ALIAS[s];
     // ほのぼのから/新システム の階層が無い置き方はファイル名で判別する
     if (!side) side = /^(KK|KY|KJ|TJ|JJ)\d{6}\.CSV$/i.test(base) ? "ほのぼのから" : "新システム";
-    return { dest: path.join(root, site, kind, month, side, base) };
+    const sch = kind === "訪問介護" ? (scheme ?? "介護") : null;
+    return { dest: path.join(root, site, kind, ...(sch ? [sch] : []), month, side, base) };
   }
   return null;
 }

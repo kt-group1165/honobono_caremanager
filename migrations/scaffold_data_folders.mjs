@@ -6,12 +6,14 @@
 //
 //   作る形 (伝送データ/README.md と同じ):
 //     利用者データ/<拠点>/
-//     サービス実績データ/<拠点>/<YYYYMM>/<事業種別>/
-//     伝送データ/<拠点>/<事業種別>/<YYYYMM>/ほのぼのから/
-//                                        /新システム/
+//     サービス実績データ/<拠点>/<YYYYMM>/訪問介護/{介護,障害}/
+//     サービス実績データ/<拠点>/<YYYYMM>/{居宅,訪問入浴}/
+//     伝送データ/<拠点>/訪問介護/{介護,障害}/<YYYYMM>/ほのぼのから|新システム/
+//     伝送データ/<拠点>/{居宅,訪問入浴}/<YYYYMM>/ほのぼのから|新システム/
 //
-//   <事業種別> はその拠点に実在する事業所から決める (訪問介護 / 居宅 / 障害 / 訪問入浴)。
-//     ⚠ 障害は訪問介護事業所が別の事業所番号で持つので、訪問介護がある拠点には必ず作る。
+//   **訪問介護事業所は同じ事業所で介護保険と障害福祉の両方を請求する**ので、
+//   訪問介護/ の下に 介護 / 障害 を置く (障害は別の事業所番号を持つ)。
+//   居宅・訪問入浴は制度が 1 つなので直下に月。
 //
 //   空フォルダは git に残らないので各末端に .gitkeep を置く
 //   (normalize_data_folders.mjs の空フォルダ掃除に消されないためでもある)。
@@ -122,7 +124,7 @@ async function main() {
     if (!sites.has(site)) sites.set(site, new Set());
     sites.get(site).add(kind);
     // 障害は訪問介護事業所が別の事業所番号で持つ (MEISAI では 9999999999 のことも)
-    if (kind === "訪問介護") sites.get(site).add("障害");
+    // 障害は 訪問介護/障害 として作るので事業種別としては足さない
   }
 
   if (unmapped.length) {
@@ -135,9 +137,14 @@ async function main() {
   for (const [site, kinds] of [...sites].sort()) {
     dirs.push(path.join("利用者データ", site));
     for (const kind of [...kinds].sort()) {
-      dirs.push(path.join("サービス実績データ", site, MONTH, kind));
-      dirs.push(path.join("伝送データ", site, kind, MONTH, "ほのぼのから"));
-      dirs.push(path.join("伝送データ", site, kind, MONTH, "新システム"));
+      // 訪問介護だけ 介護 / 障害 の 2 制度に分ける
+      const schemes = kind === "訪問介護" ? ["介護", "障害"] : [null];
+      for (const sch of schemes) {
+        const seg = sch ? [kind, sch] : [kind];
+        dirs.push(path.join("サービス実績データ", site, MONTH, ...seg));
+        dirs.push(path.join("伝送データ", site, ...seg, MONTH, "ほのぼのから"));
+        dirs.push(path.join("伝送データ", site, ...seg, MONTH, "新システム"));
+      }
     }
   }
 

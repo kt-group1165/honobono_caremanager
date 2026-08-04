@@ -25,11 +25,11 @@ const YEAR = 2026;
 const MONTH = 6;
 const OFFICE_ID = process.env.OFFICE_ID || "269d77bc-5b61-4114-a2ea-e8dc2f220823"; // 大網
 const AREA_DIR = process.env.AREA_DIR || "大網";
-// DENSOU_DIR … 伝送データ/ 以下の相対パス。正規形は <拠点>/訪問介護/<YYYYMM>。事業所ごとに
+// DENSOU_DIR … 伝送データ/ 以下の相対パス。正規形は <拠点>/訪問介護/介護/<YYYYMM>。事業所ごとに
 //   フォルダ構成が揃っていないため、丸ごと指定できるようにしている (shogai 側と同じ)。
 const DENSOU_BASE = process.env.DENSOU_DIR
   ? join(__dirname, "..", "伝送データ", ...process.env.DENSOU_DIR.split("/"))
-  : join(__dirname, "..", "伝送データ", AREA_DIR, "訪問介護", "202606");
+  : join(__dirname, "..", "伝送データ", AREA_DIR, "訪問介護", "介護", "202606");
 // ほのぼの実伝送の置き場も揃っていない (ほのぼのから / ほのぼの)
 const HONOBONO_DIR = join(DENSOU_BASE, process.env.HONOBONO_SUBDIR || "ほのぼのから");
 const OUT_DIR = join(DENSOU_BASE, "新システム");
