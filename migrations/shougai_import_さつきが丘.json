@@ -1,0 +1,5517 @@
+{
+ "office": "Ｈａｎａヘルパーステーションさつきが丘",
+ "area": "さつきが丘",
+ "clients": [
+  {
+   "user_number": "2113007557",
+   "name": "阿部 和子",
+   "gender": "女",
+   "birth_date": "1965-06-14",
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "2000081881",
+     "issue_date": "2020-10-30",
+     "period_start": "2020-11-01",
+     "period_end": "2021-10-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】5時間00分【家事援助】22時間30分【通院身体】5時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000081881",
+     "issue_date": "2020-10-30",
+     "period_start": "2021-11-01",
+     "period_end": "2022-10-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】5時間00分【家事援助】22時間30分【通院身体】5時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000081881",
+     "issue_date": "2020-10-30",
+     "period_start": "2022-11-01",
+     "period_end": "2023-10-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】5時間00分【家事援助】22時間30分【通院身体】5時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000081881",
+     "issue_date": "2020-10-30",
+     "period_start": "2023-11-01",
+     "period_end": "2024-10-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】5時間00分【家事援助】22時間30分【通院身体】5時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000081881",
+     "issue_date": "2020-10-30",
+     "period_start": "2024-11-01",
+     "period_end": "2025-10-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】5時間00分【家事援助】22時間30分【通院身体】5時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000081881",
+     "issue_date": "2020-10-30",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】5時間00分【家事援助】22時間30分【通院身体】5時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000081881",
+     "issue_date": "2020-10-30",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】5時間00分【家事援助】22時間30分【通院身体】5時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "69",
+   "name": "安藤 武男",
+   "gender": "男",
+   "birth_date": "1968-10-18",
+   "postal_code": "263-0014",
+   "address": "千葉市稲毛区作草部町600番地5",
+   "certs": [
+    {
+     "cert_number": "2000039467",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2021-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【通院身体】15時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "通院身体": {
+       "hours": 15,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000039467",
+     "issue_date": "2021-05-31",
+     "period_start": "2021-06-01",
+     "period_end": "2022-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【通院身体】30時間00分【所得区分】低所得１【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000039467",
+     "issue_date": "2022-05-27",
+     "period_start": "2022-06-01",
+     "period_end": "2023-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【通院身体】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000039467",
+     "issue_date": "2023-05-12",
+     "period_start": "2023-06-01",
+     "period_end": "2025-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【通院身体】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000039467",
+     "issue_date": "2025-06-16",
+     "period_start": "2025-06-01",
+     "period_end": "2026-05-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【通院身体】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000039467",
+     "issue_date": "2026-05-26",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【通院身体】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000039467",
+     "issue_date": "2026-05-26",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【通院身体】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113114801",
+   "name": "石田 康",
+   "gender": "男",
+   "birth_date": "1968-06-11",
+   "postal_code": "263-0016",
+   "address": "千葉県千葉市稲毛区天台3-9-4",
+   "certs": [
+    {
+     "cert_number": "2000100806",
+     "issue_date": "2023-02-15",
+     "period_start": "2023-03-01",
+     "period_end": "2024-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】22時間30分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000100806",
+     "issue_date": "2024-05-17",
+     "period_start": "2024-02-09",
+     "period_end": "2025-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】22時間30分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000100806",
+     "issue_date": "2024-05-17",
+     "period_start": "2025-03-01",
+     "period_end": "2026-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】22時間30分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000100806",
+     "issue_date": "2024-05-17",
+     "period_start": "2025-03-01",
+     "period_end": "2026-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】22時間30分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "423000051",
+   "name": "磯部 宏太",
+   "gender": "男",
+   "birth_date": "2015-04-03",
+   "postal_code": "262-0012",
+   "address": "千葉県千葉市花見川区千種町157番地19",
+   "certs": [
+    {
+     "cert_number": "2000091351",
+     "issue_date": "2025-03-07",
+     "period_start": "2025-04-01",
+     "period_end": "2026-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】120時間00分【通院身体】32時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】Ｈanaヘルパーステーションさつきが丘（身障）Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 120,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 32,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "Ｈanaヘルパーステーションさつきが丘（身障）Ｈanaヘルパーステーションさつきが丘（身障）"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000091351",
+     "issue_date": "2025-03-07",
+     "period_start": "2025-04-01",
+     "period_end": "2026-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】120時間00分【通院身体】32時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】Ｈanaヘルパーステーションさつきが丘（身障）Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 120,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 32,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "Ｈanaヘルパーステーションさつきが丘（身障）Ｈanaヘルパーステーションさつきが丘（身障）"
+    }
+   ]
+  },
+  {
+   "user_number": "423000043",
+   "name": "稲垣 文彦",
+   "gender": "女",
+   "birth_date": "1984-09-16",
+   "postal_code": "262-0014",
+   "address": "千葉県千葉市花見川区さつきが丘1丁目34番2棟503号",
+   "certs": [
+    {
+     "cert_number": "2000139499",
+     "issue_date": "2025-04-14",
+     "period_start": "2025-04-14",
+     "period_end": "2026-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】8時間00分【家事援助】5時間00分【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 8,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000139499",
+     "issue_date": "2025-04-14",
+     "period_start": "2025-04-14",
+     "period_end": "2026-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】8時間00分【家事援助】5時間00分【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 8,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "39",
+   "name": "鵜澤 あや子",
+   "gender": "女",
+   "birth_date": "1949-10-23",
+   "postal_code": "261-0003",
+   "address": "千葉県千葉市美浜区高浜1-9-4-105",
+   "certs": [
+    {
+     "cert_number": "2000118584",
+     "issue_date": "2019-09-04",
+     "period_start": "2019-06-14",
+     "period_end": "2020-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【通院身体】8時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "通院身体": {
+       "hours": 8,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000118584",
+     "issue_date": "2020-07-31",
+     "period_start": "2020-07-01",
+     "period_end": "2021-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】18時間00分【通院身体】8時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 18,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 8,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000118584",
+     "issue_date": "2021-07-13",
+     "period_start": "2021-07-01",
+     "period_end": "2022-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】18時間00分【通院身体】8時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 18,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 8,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000118584",
+     "issue_date": "2022-06-20",
+     "period_start": "2022-07-01",
+     "period_end": "2023-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】18時間00分【通院身体】8時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 18,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 8,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000118584",
+     "issue_date": "2023-08-16",
+     "period_start": "2023-07-01",
+     "period_end": "2024-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】28時間30分【通院身体】8時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】Hanaﾍﾙﾊﾟｰｽﾃｰｼｮﾝ花見川(身障)",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 28,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 8,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "Hanaﾍﾙﾊﾟｰｽﾃｰｼｮﾝ花見川(身障)"
+    },
+    {
+     "cert_number": "2000118584",
+     "issue_date": "2024-05-28",
+     "period_start": "2024-07-01",
+     "period_end": "2025-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】32時間30分【通院身体】3時間00分【所得区分】低所得１【利用者負担上限月額】0【上限額管理事業所】Hanaﾍﾙﾊﾟｰｽﾃｰｼｮﾝ花見川(身障)",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 32,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 3,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "Hanaﾍﾙﾊﾟｰｽﾃｰｼｮﾝ花見川(身障)"
+    },
+    {
+     "cert_number": "2000118584",
+     "issue_date": "2025-06-27",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】32時間30分【通院身体】3時間00分【所得区分】低所得１【利用者負担上限月額】0【上限額管理事業所】Hanaﾍﾙﾊﾟｰｽﾃｰｼｮﾝ花見川(身障)Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 32,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 3,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "Hanaﾍﾙﾊﾟｰｽﾃｰｼｮﾝ花見川(身障)Ｈanaヘルパーステーションさつきが丘（身障）"
+    },
+    {
+     "cert_number": "2000118584",
+     "issue_date": "2025-06-27",
+     "period_start": "2026-07-01",
+     "period_end": "2027-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】32時間30分【通院身体】3時間00分【所得区分】低所得１【利用者負担上限月額】0【上限額管理事業所】Hanaﾍﾙﾊﾟｰｽﾃｰｼｮﾝ花見川(身障)",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 32,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 3,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "Hanaﾍﾙﾊﾟｰｽﾃｰｼｮﾝ花見川(身障)"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000118584",
+     "issue_date": "2025-06-27",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】32時間30分【通院身体】3時間00分【所得区分】低所得１【利用者負担上限月額】0【上限額管理事業所】Hanaﾍﾙﾊﾟｰｽﾃｰｼｮﾝ花見川(身障)Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 32,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 3,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "Hanaﾍﾙﾊﾟｰｽﾃｰｼｮﾝ花見川(身障)Ｈanaヘルパーステーションさつきが丘（身障）"
+    }
+   ]
+  },
+  {
+   "user_number": "423000050",
+   "name": "川合 朝子",
+   "gender": "女",
+   "birth_date": "1993-09-28",
+   "postal_code": "262-0035",
+   "address": "千葉県千葉市稲毛区稲毛町5-340-1エクセルD101",
+   "certs": [
+    {
+     "cert_number": "2000193066",
+     "issue_date": "2025-09-04",
+     "period_start": "2025-04-01",
+     "period_end": "2026-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】19時間30分【家事援助】19時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 19,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 19,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000193066",
+     "issue_date": "2026-03-19",
+     "period_start": "2026-04-01",
+     "period_end": "2026-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】19時間00分【家事援助】19時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 19,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 19,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000193066",
+     "issue_date": "2026-05-20",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】24時間00分【家事援助】12時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 24,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 12,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000193066",
+     "issue_date": "2026-05-20",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】24時間00分【家事援助】12時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 24,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 12,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113114342",
+   "name": "川北 千夏",
+   "gender": "女",
+   "birth_date": "1992-09-07",
+   "postal_code": "263-0054",
+   "address": "千葉県千葉市稲毛区宮野木町1730番地43",
+   "certs": [
+    {
+     "cert_number": "2000156824",
+     "issue_date": "2022-12-12",
+     "period_start": "2022-11-29",
+     "period_end": "2023-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】22時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000156824",
+     "issue_date": "2022-12-12",
+     "period_start": "2023-08-01",
+     "period_end": "2024-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】22時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000156824",
+     "issue_date": "2024-07-26",
+     "period_start": "2024-08-01",
+     "period_end": "2025-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】22時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000156824",
+     "issue_date": "2025-07-11",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】22時間30分【所得区分】低所得１【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000156824",
+     "issue_date": "2025-07-11",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】22時間30分【所得区分】低所得１【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "423000014",
+   "name": "川野 直美",
+   "gender": "女",
+   "birth_date": "1966-01-14",
+   "postal_code": "262-0014",
+   "address": "千葉県千葉市花見川区さつきが丘1-29-6-102",
+   "certs": [
+    {
+     "cert_number": "2000178182",
+     "issue_date": "2024-05-08",
+     "period_start": "2024-05-08",
+     "period_end": "2025-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】10時間00分【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000178182",
+     "issue_date": "2025-02-20",
+     "period_start": "2025-03-01",
+     "period_end": "2026-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】10時間00分【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000178182",
+     "issue_date": "2026-02-17",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】10時間00分【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000178182",
+     "issue_date": "2026-02-17",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】10時間00分【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "423000078",
+   "name": "喜多見 憲子",
+   "gender": "女",
+   "birth_date": "1959-10-09",
+   "postal_code": "262-0014",
+   "address": "千葉県千葉市花見川区さつきが丘2丁目27番地10ﾄﾞｯﾄﾎｰﾑさつきが丘1",
+   "certs": [
+    {
+     "cert_number": "2000144143",
+     "issue_date": "2026-06-02",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】12時間00分【通院身体】12時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 12,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 12,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000144143",
+     "issue_date": "2026-06-02",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】12時間00分【通院身体】12時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 12,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 12,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "220",
+   "name": "兒玉 淳子",
+   "gender": "女",
+   "birth_date": "1958-09-27",
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "2000045688",
+     "issue_date": "2022-04-28",
+     "period_start": "2023-05-01",
+     "period_end": "2023-09-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】12時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 12,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000045688",
+     "issue_date": "2023-12-31",
+     "period_start": "2023-10-01",
+     "period_end": "2024-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】12時間00分【家事援助】12時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 12,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 12,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000045688",
+     "issue_date": "2024-04-24",
+     "period_start": "2024-05-01",
+     "period_end": "2025-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】12時間00分【家事援助】12時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 12,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 12,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000045688",
+     "issue_date": "2025-04-17",
+     "period_start": "2025-05-01",
+     "period_end": "2026-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】12時間00分【家事援助】12時間00分【所得区分】生活保護【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 12,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 12,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000045688",
+     "issue_date": "2025-04-17",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】12時間00分【家事援助】12時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 12,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 12,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000045688",
+     "issue_date": "2026-03-27",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】12時間00分【家事援助】12時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 12,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 12,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000045688",
+     "issue_date": "2019-07-11",
+     "period_start": "2019-07-01",
+     "period_end": "2020-04-30",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000045688",
+     "issue_date": "2019-07-11",
+     "period_start": "2020-07-01",
+     "period_end": "2021-06-30",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000045688",
+     "issue_date": "2021-04-30",
+     "period_start": "2021-05-01",
+     "period_end": "2022-04-30",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】12時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 12,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000045688",
+     "issue_date": "2022-04-28",
+     "period_start": "2022-05-01",
+     "period_end": "2023-04-30",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】12時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 12,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000045688",
+     "issue_date": "2022-04-28",
+     "period_start": "2023-05-01",
+     "period_end": "2023-09-30",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】12時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 12,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000045688",
+     "issue_date": "2025-04-17",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】12時間00分【家事援助】12時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 12,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 12,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "209",
+   "name": "相樂 和代",
+   "gender": "女",
+   "birth_date": "1972-11-20",
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "2000070009",
+     "issue_date": "2023-02-14",
+     "period_start": "2023-03-01",
+     "period_end": "2024-02-29",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000070009",
+     "issue_date": "2024-02-21",
+     "period_start": "2024-03-01",
+     "period_end": "2025-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000070009",
+     "issue_date": "2025-03-03",
+     "period_start": "2025-03-01",
+     "period_end": "2026-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000070009",
+     "issue_date": "2026-02-25",
+     "period_start": "2026-03-01",
+     "period_end": "2026-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000070009",
+     "issue_date": "2026-04-13",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】20時間00分【家事援助】15時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000070009",
+     "issue_date": "2020-02-07",
+     "period_start": "2020-03-01",
+     "period_end": "2021-02-28",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000070009",
+     "issue_date": "2021-03-03",
+     "period_start": "2021-03-01",
+     "period_end": "2022-02-28",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000070009",
+     "issue_date": "2021-03-03",
+     "period_start": "2022-03-01",
+     "period_end": "2023-02-28",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000070009",
+     "issue_date": "2023-02-14",
+     "period_start": "2023-03-01",
+     "period_end": "2024-02-29",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000070009",
+     "issue_date": "2026-04-13",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】20時間00分【家事援助】15時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2000215661",
+   "name": "白井 伶佳",
+   "gender": "女",
+   "birth_date": "2025-03-17",
+   "postal_code": "262-0021",
+   "address": "千葉県千葉市花見川区花園町1526番地14",
+   "certs": [
+    {
+     "cert_number": "2000215661",
+     "issue_date": "2026-04-24",
+     "period_start": "2026-04-24",
+     "period_end": "2027-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】54時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600",
+     "src": "さつき受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 54,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000215661",
+     "issue_date": "2026-04-24",
+     "period_start": "2026-04-24",
+     "period_end": "2027-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】54時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600",
+     "src": "さつき受給者証居宅介護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 54,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "172",
+   "name": "須合 伸裕",
+   "gender": "男",
+   "birth_date": "1976-08-14",
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "2000076261",
+     "issue_date": "2019-11-18",
+     "period_start": "2019-12-01",
+     "period_end": "2020-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】5時間00分【家事援助】36時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 36,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000076261",
+     "issue_date": "2020-11-30",
+     "period_start": "2020-12-01",
+     "period_end": "2021-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】5時間00分【家事援助】36時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 36,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000076261",
+     "issue_date": "2020-11-30",
+     "period_start": "2021-12-01",
+     "period_end": "2022-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】5時間00分【家事援助】36時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 36,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000076261",
+     "issue_date": "2022-11-22",
+     "period_start": "2022-12-01",
+     "period_end": "2023-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】5時間00分【家事援助】36時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 36,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000076261",
+     "issue_date": "2023-11-10",
+     "period_start": "2023-12-01",
+     "period_end": "2024-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】16時間00分【家事援助】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 16,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000076261",
+     "issue_date": "2024-11-18",
+     "period_start": "2024-12-01",
+     "period_end": "2025-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】16時間00分【家事援助】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 16,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000076261",
+     "issue_date": "2024-11-18",
+     "period_start": "2024-12-01",
+     "period_end": "2025-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】16時間00分【家事援助】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 16,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "423000028",
+   "name": "鈴木 榮子",
+   "gender": "女",
+   "birth_date": "1948-08-23",
+   "postal_code": "262-0014",
+   "address": "千葉県千葉市花見川区さつきが丘1丁目35番10棟501号",
+   "certs": [
+    {
+     "cert_number": "2000191938",
+     "issue_date": "2025-02-07",
+     "period_start": "2025-02-07",
+     "period_end": "2026-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】54時間00分【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 54,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000191938",
+     "issue_date": "2025-02-07",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】63時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 63,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "Ｈanaヘルパーステーションさつきが丘（身障）"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000191938",
+     "issue_date": "2025-02-07",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】63時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 63,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "Ｈanaヘルパーステーションさつきが丘（身障）"
+    }
+   ]
+  },
+  {
+   "user_number": "423000088",
+   "name": "髙橋 尚子",
+   "gender": "女",
+   "birth_date": "1973-10-30",
+   "postal_code": "263-0052",
+   "address": "千葉県千葉市稲毛区あやめ台1番14棟307号",
+   "certs": [
+    {
+     "cert_number": "2000064085",
+     "issue_date": "2025-09-16",
+     "period_start": "2024-09-01",
+     "period_end": "2027-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】27時間00分【家事援助】27時間00分【通院身体】14時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 27,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 27,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000064085",
+     "issue_date": "2025-09-16",
+     "period_start": "2024-09-01",
+     "period_end": "2027-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】27時間00分【家事援助】27時間00分【通院身体】14時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 27,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 27,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "423000037",
+   "name": "髙谷 博",
+   "gender": "男",
+   "birth_date": "1963-02-17",
+   "postal_code": "263-0051",
+   "address": "千葉県千葉市稲毛区園生町1399-50",
+   "certs": [
+    {
+     "cert_number": "2000014908",
+     "issue_date": "2024-12-19",
+     "period_start": "2024-08-01",
+     "period_end": "2025-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】20時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000014908",
+     "issue_date": "2025-08-08",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】20時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000014908",
+     "issue_date": "2024-12-19",
+     "period_start": "2024-08-01",
+     "period_end": "2025-07-31",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】３【同行援護】60時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 60,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "2000014908",
+     "issue_date": "2025-08-08",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】３【同行援護】60時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 60,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "2000014908",
+     "issue_date": "2024-12-19",
+     "period_start": "2024-08-01",
+     "period_end": "2025-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】20時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証同行援護.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000014908",
+     "issue_date": "2025-08-08",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】20時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証同行援護.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000014908",
+     "issue_date": "2024-12-19",
+     "period_start": "2024-08-01",
+     "period_end": "2025-07-31",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】３【同行援護】60時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証同行援護.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 60,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "2000014908",
+     "issue_date": "2025-08-08",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】３【同行援護】60時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証同行援護.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 60,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000014908",
+     "issue_date": "2025-08-08",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】20時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000014908",
+     "issue_date": "2025-08-08",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】３【同行援護】60時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 60,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ]
+  },
+  {
+   "user_number": "2113114925",
+   "name": "竹中 萌絵子",
+   "gender": "女",
+   "birth_date": "1995-04-04",
+   "postal_code": "262-0019",
+   "address": "千葉県千葉市花見川区朝日ケ丘3-19-29",
+   "certs": [
+    {
+     "cert_number": "2000014171",
+     "issue_date": "2023-04-28",
+     "period_start": "2023-05-01",
+     "period_end": "2024-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000014171",
+     "issue_date": "2024-04-08",
+     "period_start": "2024-05-01",
+     "period_end": "2025-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000014171",
+     "issue_date": "2026-04-22",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000014171",
+     "issue_date": "2026-04-22",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "189",
+   "name": "田中 希",
+   "gender": "女",
+   "birth_date": "2002-10-02",
+   "postal_code": "262-0013",
+   "address": "千葉県千葉市花見川区犢橋町61-76",
+   "certs": [
+    {
+     "cert_number": "2000128633",
+     "issue_date": "2020-09-04",
+     "period_start": "2020-11-01",
+     "period_end": "2021-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】75時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 75,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000128633",
+     "issue_date": "2021-03-22",
+     "period_start": "2021-04-01",
+     "period_end": "2022-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】75時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 75,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000128633",
+     "issue_date": "2022-03-08",
+     "period_start": "2022-04-01",
+     "period_end": "2023-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】75時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 75,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000128633",
+     "issue_date": "2022-03-08",
+     "period_start": "2023-04-01",
+     "period_end": "2023-09-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】75時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 75,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000128633",
+     "issue_date": "2023-09-21",
+     "period_start": "2023-10-01",
+     "period_end": "2024-09-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】75時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 75,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000128633",
+     "issue_date": "2023-09-21",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】75時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 75,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000128633",
+     "issue_date": "2024-11-25",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】75時間00分【所得区分】低所得１【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 75,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000128633",
+     "issue_date": "2024-11-25",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】75時間00分【所得区分】低所得１【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 75,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113111460",
+   "name": "多門 美穂",
+   "gender": "女",
+   "birth_date": "1985-10-01",
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "2000138244",
+     "issue_date": "2021-07-05",
+     "period_start": "2021-06-25",
+     "period_end": "2022-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】54時間00分【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 54,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000138244",
+     "issue_date": "2022-06-10",
+     "period_start": "2022-07-01",
+     "period_end": "2023-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】4時間00分【家事援助】50時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 4,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 50,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000138244",
+     "issue_date": "2023-06-09",
+     "period_start": "2023-07-01",
+     "period_end": "2024-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】4時間00分【家事援助】50時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 4,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 50,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000138244",
+     "issue_date": "2024-06-20",
+     "period_start": "2024-07-01",
+     "period_end": "2025-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】4時間00分【家事援助】50時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】ヘルパーステーションなのはな幕張事業所",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 4,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "ヘルパーステーションなのはな幕張事業所"
+    },
+    {
+     "cert_number": "2000138244",
+     "issue_date": "2025-07-21",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】4時間00分【家事援助】50時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】ヘルパーステーションなのはな幕張事業所",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 4,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "ヘルパーステーションなのはな幕張事業所"
+    },
+    {
+     "cert_number": "2000138244",
+     "issue_date": "2026-06-17",
+     "period_start": "2026-07-01",
+     "period_end": "2027-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】4時間00分【家事援助】50時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】ヘルパーステーションなのはな幕張事業所",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 4,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "ヘルパーステーションなのはな幕張事業所"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000138244",
+     "issue_date": "2025-07-21",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】4時間00分【家事援助】50時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】ヘルパーステーションなのはな幕張事業所",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 4,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "ヘルパーステーションなのはな幕張事業所"
+    }
+   ]
+  },
+  {
+   "user_number": "2113112253",
+   "name": "多門 良",
+   "gender": "男",
+   "birth_date": "1986-02-20",
+   "postal_code": "261-0011",
+   "address": "千葉県千葉市美浜区真砂2丁目2番13号",
+   "certs": [
+    {
+     "cert_number": "2000140810",
+     "issue_date": "2022-06-28",
+     "period_start": "2022-08-01",
+     "period_end": "2023-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】4時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 4,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000140810",
+     "issue_date": "2024-08-28",
+     "period_start": "2024-08-01",
+     "period_end": "2025-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】4時間00分【家事援助】28時間00分【通院身体】4時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 4,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 28,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 4,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000140810",
+     "issue_date": "2025-07-16",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】4時間00分【家事援助】28時間00分【通院身体】4時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 4,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 28,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 4,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000140810",
+     "issue_date": "2021-09-24",
+     "period_start": "2021-09-21",
+     "period_end": "2022-08-31",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】36時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 36,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000140810",
+     "issue_date": "2022-06-28",
+     "period_start": "2022-08-01",
+     "period_end": "2023-07-31",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】4時間00分【家事援助】31時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 4,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 31,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000140810",
+     "issue_date": "2025-07-16",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】4時間00分【家事援助】28時間00分【通院身体】4時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 4,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 28,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 4,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "195",
+   "name": "津田 昌浩",
+   "gender": "男",
+   "birth_date": "1979-06-30",
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "2000105201",
+     "issue_date": "2023-02-20",
+     "period_start": "2023-03-01",
+     "period_end": "2024-02-29",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000105201",
+     "issue_date": "2023-02-20",
+     "period_start": "2024-03-01",
+     "period_end": "2025-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000105201",
+     "issue_date": "2025-11-07",
+     "period_start": "2025-03-01",
+     "period_end": "2026-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】30時間00分【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000105201",
+     "issue_date": "2026-02-27",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】30時間00分【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000105201",
+     "issue_date": "2020-05-29",
+     "period_start": "2020-06-01",
+     "period_end": "2021-02-28",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000105201",
+     "issue_date": "2021-02-18",
+     "period_start": "2021-03-01",
+     "period_end": "2022-02-28",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000105201",
+     "issue_date": "2022-02-10",
+     "period_start": "2022-03-01",
+     "period_end": "2023-02-28",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000105201",
+     "issue_date": "2023-02-20",
+     "period_start": "2023-03-01",
+     "period_end": "2024-02-29",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000105201",
+     "issue_date": "2026-02-27",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】30時間00分【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113113954",
+   "name": "戸島 照子",
+   "gender": "女",
+   "birth_date": "1941-07-17",
+   "postal_code": null,
+   "address": "千葉市花見川区畑町2149番地8",
+   "certs": [
+    {
+     "cert_number": "2000141784",
+     "issue_date": "2021-10-01",
+     "period_start": "2022-10-01",
+     "period_end": "2023-09-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】53時間30分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 53,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000141784",
+     "issue_date": "2023-09-26",
+     "period_start": "2023-10-01",
+     "period_end": "2024-09-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】33時間30分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 33,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000141784",
+     "issue_date": "2023-09-26",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】33時間30分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 33,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000141784",
+     "issue_date": "2023-09-26",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】33時間30分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 33,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "423000060",
+   "name": "友利 淳子",
+   "gender": "女",
+   "birth_date": "1979-04-30",
+   "postal_code": "262-0012",
+   "address": "千葉県千葉市花見川区千種町83番地5ﾒｿﾞﾝｴｺｰ203号",
+   "certs": [
+    {
+     "cert_number": "2000197927",
+     "issue_date": "2024-12-05",
+     "period_start": "2025-12-05",
+     "period_end": "2026-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】20時間00分【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000197927",
+     "issue_date": "2026-07-01",
+     "period_start": "2026-07-01",
+     "period_end": "2027-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】20時間00分【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000197927",
+     "issue_date": "2024-12-05",
+     "period_start": "2025-12-05",
+     "period_end": "2026-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】20時間00分【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113004227",
+   "name": "中嶋 正彦",
+   "gender": "男",
+   "birth_date": "1969-08-07",
+   "postal_code": "262-0013",
+   "address": "千葉県千葉市花見川区犢橋町489-5",
+   "certs": [
+    {
+     "cert_number": "2000070116",
+     "issue_date": "2020-08-14",
+     "period_start": "2020-09-01",
+     "period_end": "2021-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000070116",
+     "issue_date": "2021-08-30",
+     "period_start": "2021-09-01",
+     "period_end": "2022-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000070116",
+     "issue_date": "2022-09-01",
+     "period_start": "2022-09-01",
+     "period_end": "2023-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000070116",
+     "issue_date": "2022-09-01",
+     "period_start": "2023-09-01",
+     "period_end": "2024-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000070116",
+     "issue_date": "2024-09-02",
+     "period_start": "2024-09-01",
+     "period_end": "2025-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000070116",
+     "issue_date": "2025-08-15",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000070116",
+     "issue_date": "2025-08-15",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "423000072",
+   "name": "仲村 瞳",
+   "gender": "女",
+   "birth_date": "1987-07-11",
+   "postal_code": "262-0019",
+   "address": "千葉県千葉市花見川区朝日ケ丘5丁目23番13-1号",
+   "certs": [
+    {
+     "cert_number": "2000211454",
+     "issue_date": "2026-04-01",
+     "period_start": "2026-03-04",
+     "period_end": "2027-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】20時間00分【家事援助】8時間00分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 8,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000211454",
+     "issue_date": "2026-04-01",
+     "period_start": "2026-03-04",
+     "period_end": "2027-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】20時間00分【家事援助】8時間00分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 8,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "423000007",
+   "name": "中村 由",
+   "gender": "女",
+   "birth_date": "1987-07-11",
+   "postal_code": "262-0014",
+   "address": "千葉県千葉市花見川区さつきが丘1-29-2-508",
+   "certs": [
+    {
+     "cert_number": "2000108270",
+     "issue_date": "2024-03-04",
+     "period_start": "2024-03-04",
+     "period_end": "2025-03-01",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】18時間00分【家事援助】18時間00分【所得区分】低所得１【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 18,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000108270",
+     "issue_date": "2024-03-04",
+     "period_start": "2024-03-04",
+     "period_end": "2025-03-01",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】18時間00分【家事援助】18時間00分【所得区分】低所得１【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 18,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "423000036",
+   "name": "福島 強",
+   "gender": "男",
+   "birth_date": "1967-10-01",
+   "postal_code": "260-0044",
+   "address": "千葉県千葉市中央区松波2丁目24番3号松波県営住宅1棟314号",
+   "certs": [
+    {
+     "cert_number": "2000065900",
+     "issue_date": "2024-09-03",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】9時間00分【家事援助】15時間00分【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 9,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000065900",
+     "issue_date": "2024-09-03",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】72時間00分【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 72,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "2000065900",
+     "issue_date": "2024-09-03",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】9時間00分【家事援助】15時間00分【利用者負担上限月額】0",
+     "src": "さつき受給者証同行援護.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 9,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000065900",
+     "issue_date": "2024-09-03",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】72時間00分【利用者負担上限月額】0",
+     "src": "さつき受給者証同行援護.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 72,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000065900",
+     "issue_date": "2024-09-03",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】9時間00分【家事援助】15時間00分【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 9,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113004444",
+   "name": "藤宮 陽子",
+   "gender": "女",
+   "birth_date": "1972-08-01",
+   "postal_code": "262-0015",
+   "address": "千葉県千葉市花見川区宮野木台1-22-29-303",
+   "certs": [
+    {
+     "cert_number": "2000099107",
+     "issue_date": "2018-10-31",
+     "period_start": "2019-11-01",
+     "period_end": "2025-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】10時間00分【家事援助】25時間00分【通院身体】15時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000099107",
+     "issue_date": "2025-09-01",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】42時間00分【家事援助】25時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 42,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000099107",
+     "issue_date": "2018-10-31",
+     "period_start": "2018-11-01",
+     "period_end": "2019-10-31",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】5時間00分【家事援助】25時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000099107",
+     "issue_date": "2018-10-31",
+     "period_start": "2019-11-01",
+     "period_end": "2020-08-31",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】10時間00分【家事援助】25時間00分【通院身体】15時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000099107",
+     "issue_date": "2025-09-01",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】42時間00分【家事援助】25時間00分【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 42,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "423000017",
+   "name": "古川 沙帆",
+   "gender": "女",
+   "birth_date": "2000-03-10",
+   "postal_code": "262-0026",
+   "address": "千葉県千葉市花見川区瑞穂3丁目12番地1",
+   "certs": [
+    {
+     "cert_number": "2000102596",
+     "issue_date": "2024-04-01",
+     "period_start": "2024-04-01",
+     "period_end": "2025-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】20時間00分【家事援助】20時間00分【通院介助】6時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 6,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000102596",
+     "issue_date": "2025-03-18",
+     "period_start": "2025-04-01",
+     "period_end": "2026-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】20時間00分【家事援助】20時間00分【通院介助】6時間00分【所得区分】低所得１【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 6,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000102596",
+     "issue_date": "2026-03-03",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】20時間00分【家事援助】20時間00分【通院介助】6時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 6,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000102596",
+     "issue_date": "2026-03-03",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】20時間00分【家事援助】20時間00分【通院介助】6時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 6,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113006321",
+   "name": "星野 麻衣子",
+   "gender": "女",
+   "birth_date": "1978-09-20",
+   "postal_code": "263-0043",
+   "address": "千葉県千葉市稲毛区小仲台７丁目3番1号 ｱｸｱﾌｫﾚｽﾀ･ﾙﾈ稲毛 ﾌｫﾚｽﾀ棟613号",
+   "certs": [
+    {
+     "cert_number": "2000080461",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2022-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】22時間30分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000080461",
+     "issue_date": "2022-07-14",
+     "period_start": "2022-08-01",
+     "period_end": "2023-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】30時間30分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "家事援助": {
+       "hours": 30,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000080461",
+     "issue_date": "2022-07-14",
+     "period_start": "2023-08-01",
+     "period_end": "2024-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】30時間30分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "家事援助": {
+       "hours": 30,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000080461",
+     "issue_date": "2024-07-24",
+     "period_start": "2024-08-01",
+     "period_end": "2024-10-23",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】30時間30分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "家事援助": {
+       "hours": 30,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000080461",
+     "issue_date": "2024-07-24",
+     "period_start": "2024-08-01",
+     "period_end": "2025-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【家事援助】22時間30分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000080461",
+     "issue_date": "2025-08-18",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【家事援助】7時間30分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000080461",
+     "issue_date": "2025-08-18",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【家事援助】7時間30分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "243",
+   "name": "堀越 政美",
+   "gender": "男",
+   "birth_date": "1964-02-22",
+   "postal_code": "262-0014",
+   "address": "千葉県千葉市花見川区さつきが丘2-10-14-505",
+   "certs": [
+    {
+     "cert_number": "2000124541",
+     "issue_date": "2023-01-20",
+     "period_start": "2023-02-01",
+     "period_end": "2024-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】22時間00分【通院介助】13時間00分【所得区分】低所得１【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 13,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000124541",
+     "issue_date": "2020-03-24",
+     "period_start": "2020-03-24",
+     "period_end": "2021-01-31",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】22時間00分【通院介助】13時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 13,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000124541",
+     "issue_date": "2021-01-21",
+     "period_start": "2021-02-01",
+     "period_end": "2022-02-28",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】22時間00分【通院介助】13時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 13,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000124541",
+     "issue_date": "2021-01-11",
+     "period_start": "2022-02-01",
+     "period_end": "2023-01-31",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】22時間00分【通院介助】13時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 13,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000124541",
+     "issue_date": "2023-01-20",
+     "period_start": "2023-02-01",
+     "period_end": "2024-01-31",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】22時間00分【通院介助】13時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 13,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000124541",
+     "issue_date": "2023-01-20",
+     "period_start": "2023-02-01",
+     "period_end": "2024-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】22時間00分【通院介助】13時間00分【所得区分】低所得１【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 13,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "190",
+   "name": "眞弓 正嗣",
+   "gender": "男",
+   "birth_date": "1958-08-28",
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "2000148664",
+     "issue_date": "2022-05-06",
+     "period_start": "2022-05-06",
+     "period_end": "2023-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】67時間30分【家事援助】15時間30分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 67,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000148664",
+     "issue_date": "2022-05-06",
+     "period_start": "2023-06-01",
+     "period_end": "2023-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】57時間30分【家事援助】15時間30分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 57,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000148664",
+     "issue_date": "2023-09-15",
+     "period_start": "2023-09-01",
+     "period_end": "2024-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】57時間30分【家事援助】15時間30分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 57,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000148664",
+     "issue_date": "2024-05-14",
+     "period_start": "2024-06-01",
+     "period_end": "2025-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】57時間30分【家事援助】15時間30分【所得区分】低所得２【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 57,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000148664",
+     "issue_date": "2025-05-11",
+     "period_start": "2025-06-01",
+     "period_end": "2026-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】57時間30分【家事援助】15時間30分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 57,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000148664",
+     "issue_date": "2025-05-11",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】57時間30分【家事援助】15時間30分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 57,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000148664",
+     "issue_date": "2025-05-11",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】57時間30分【家事援助】15時間30分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 57,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "235",
+   "name": "森尾 敦",
+   "gender": "男",
+   "birth_date": "1968-11-27",
+   "postal_code": "263-0054",
+   "address": "千葉県千葉市稲毛区宮野木町1793番地30",
+   "certs": [
+    {
+     "cert_number": "2000002952",
+     "issue_date": "2019-01-31",
+     "period_start": "2019-02-01",
+     "period_end": "2020-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】25時間00分【家事援助】52時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 52,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000002952",
+     "issue_date": "2020-01-29",
+     "period_start": "2020-02-01",
+     "period_end": "2021-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】25時間00分【家事援助】52時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 52,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000002952",
+     "issue_date": "2021-01-28",
+     "period_start": "2021-02-01",
+     "period_end": "2022-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】25時間00分【家事援助】52時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 52,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000002952",
+     "issue_date": "2022-01-24",
+     "period_start": "2022-02-01",
+     "period_end": "2023-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】25時間00分【家事援助】52時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 52,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000002952",
+     "issue_date": "2023-01-26",
+     "period_start": "2023-02-01",
+     "period_end": "2024-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】35時間00分【家事援助】52時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 35,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 52,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000002952",
+     "issue_date": "2024-01-29",
+     "period_start": "2024-02-01",
+     "period_end": "2025-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】60時間00分【家事援助】48時間30分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 48,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000002952",
+     "issue_date": "2024-01-29",
+     "period_start": "2024-02-01",
+     "period_end": "2025-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】60時間00分【家事援助】48時間30分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（身障）",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 48,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "211",
+   "name": "山田 圭子",
+   "gender": "女",
+   "birth_date": "1936-09-02",
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "2000161824",
+     "issue_date": "2023-04-07",
+     "period_start": "2023-04-07",
+     "period_end": "2024-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000161824",
+     "issue_date": "2023-04-07",
+     "period_start": "2024-05-01",
+     "period_end": "2025-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000161824",
+     "issue_date": "2023-04-07",
+     "period_start": "2025-05-01",
+     "period_end": "2026-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000161824",
+     "issue_date": "2026-05-01",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000161824",
+     "issue_date": "2026-05-01",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "70",
+   "name": "高梨 智",
+   "gender": "男",
+   "birth_date": "1976-10-08",
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2018-05-28",
+     "period_start": "2018-06-01",
+     "period_end": "2019-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】173時間00分【利用者負担上限月額】0",
+     "src": "さつき受給者証重度.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 173,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2018-05-28",
+     "period_start": "2019-06-01",
+     "period_end": "2020-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】173時間00分【利用者負担上限月額】0",
+     "src": "さつき受給者証重度.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 173,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2018-05-28",
+     "period_start": "2020-06-01",
+     "period_end": "2021-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】173時間00分【利用者負担上限月額】0",
+     "src": "さつき受給者証重度.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 173,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2021-05-26",
+     "period_start": "2021-06-01",
+     "period_end": "2022-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】173時間00分【利用者負担上限月額】0",
+     "src": "さつき受給者証重度.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 173,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2021-05-26",
+     "period_start": "2022-06-01",
+     "period_end": "2023-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】173時間00分【利用者負担上限月額】0",
+     "src": "さつき受給者証重度.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 173,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2023-05-29",
+     "period_start": "2023-06-01",
+     "period_end": "2024-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】173時間00分【利用者負担上限月額】0",
+     "src": "さつき受給者証重度.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 173,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2023-05-29",
+     "period_start": "2024-06-01",
+     "period_end": "2025-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】173時間00分【利用者負担上限月額】0",
+     "src": "さつき受給者証重度.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 173,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2025-05-19",
+     "period_start": "2025-06-01",
+     "period_end": "2026-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】173時間00分【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（重度）",
+     "src": "さつき受給者証重度.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 173,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2026-05-22",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】250時間30分【利用者負担上限月額】0",
+     "src": "さつき受給者証重度.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 250,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": null,
+     "period_start": "2020-06-01",
+     "period_end": "2021-05-31",
+     "city": "千葉市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "【障害支援区分】６【移動介護】76時間00分【重度訪問介護区分６該当】246時間00分【利用者負担上限月額】0",
+     "src": "さつき受給者証重度.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "移動介護": {
+       "hours": 76,
+       "minutes": 0
+      },
+      "重度訪問介護区分６該当": {
+       "hours": 246,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": null,
+     "period_start": "2021-06-01",
+     "period_end": "2022-05-31",
+     "city": "千葉市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "【障害支援区分】６【移動介護】76時間00分【重度訪問介護区分６該当】246時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "さつき受給者証重度.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "移動介護": {
+       "hours": 76,
+       "minutes": 0
+      },
+      "重度訪問介護区分６該当": {
+       "hours": 246,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2022-05-31",
+     "period_start": "2022-06-01",
+     "period_end": "2023-05-31",
+     "city": "千葉市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "【障害支援区分】６【移動介護】76時間00分【重度訪問介護区分６該当】246時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "さつき受給者証重度.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "移動介護": {
+       "hours": 76,
+       "minutes": 0
+      },
+      "重度訪問介護区分６該当": {
+       "hours": 246,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2022-05-31",
+     "period_start": "2023-06-01",
+     "period_end": "2025-05-31",
+     "city": "千葉市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "【障害支援区分】６【移動介護】76時間00分【重度訪問介護区分６該当】516時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "さつき受給者証重度.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "移動介護": {
+       "hours": 76,
+       "minutes": 0
+      },
+      "重度訪問介護区分６該当": {
+       "hours": 516,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2025-12-03",
+     "period_start": "2025-06-01",
+     "period_end": "2026-05-31",
+     "city": "千葉市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "【障害支援区分】６【移動介護】70時間00分【重度訪問介護区分６該当】425時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "さつき受給者証重度.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "移動介護": {
+       "hours": 70,
+       "minutes": 0
+      },
+      "重度訪問介護区分６該当": {
+       "hours": 425,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2026-05-22",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】250時間30分【利用者負担上限月額】0",
+     "src": "さつき受給者証重度.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 250,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113113734",
+   "name": "甲山 幸子",
+   "gender": "女",
+   "birth_date": "1944-04-05",
+   "postal_code": "262-0014",
+   "address": "千葉県千葉市花見川区さつきが丘1-35-5-104",
+   "certs": [
+    {
+     "cert_number": "2000081121",
+     "issue_date": "2022-08-31",
+     "period_start": "2022-09-01",
+     "period_end": "2023-08-31",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】38時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証同行援護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "同行援護": {
+       "hours": 38,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "2000081121",
+     "issue_date": "2022-08-31",
+     "period_start": "2023-09-01",
+     "period_end": "2024-08-31",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】38時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証同行援護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "同行援護": {
+       "hours": 38,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "2000081121",
+     "issue_date": "2022-08-31",
+     "period_start": "2024-09-01",
+     "period_end": "2025-08-31",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】38時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証同行援護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "同行援護": {
+       "hours": 38,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "2000081121",
+     "issue_date": "2025-08-29",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】38時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証同行援護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "同行援護": {
+       "hours": 38,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000081121",
+     "issue_date": "2025-08-29",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】38時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証同行援護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "同行援護": {
+       "hours": 38,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ]
+  },
+  {
+   "user_number": "55",
+   "name": "佐藤 哈都子",
+   "gender": "女",
+   "birth_date": "1939-07-30",
+   "postal_code": "262-0014",
+   "address": "千葉市花見川区さつきが丘1-35-12-506",
+   "certs": [
+    {
+     "cert_number": "2000058111",
+     "issue_date": "2020-09-30",
+     "period_start": "2020-10-01",
+     "period_end": "2021-09-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】57時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証同行援護.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 57,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "2000058111",
+     "issue_date": "2020-09-30",
+     "period_start": "2021-10-01",
+     "period_end": "2022-09-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】57時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証同行援護.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 57,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "2000058111",
+     "issue_date": "2022-09-30",
+     "period_start": "2022-10-01",
+     "period_end": "2023-09-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】57時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証同行援護.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 57,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "2000058111",
+     "issue_date": "2023-10-20",
+     "period_start": "2023-10-01",
+     "period_end": "2024-09-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】57時間00分【所得区分】低所得１【利用者負担上限月額】0Ｈanaヘルパーステーションさつきが丘（同行）",
+     "src": "さつき受給者証同行援護.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 57,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "2000058111",
+     "issue_date": "2023-10-20",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】57時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証同行援護.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 57,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "2000058111",
+     "issue_date": "2025-10-16",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】60時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証同行援護.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 60,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000058111",
+     "issue_date": "2025-10-16",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】60時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "さつき受給者証同行援護.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 60,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ]
+  },
+  {
+   "user_number": "200",
+   "name": "田中 庸子",
+   "gender": "女",
+   "birth_date": "1940-12-02",
+   "postal_code": "263-0051",
+   "address": "千葉県千葉市稲毛区園生町444-173",
+   "certs": [
+    {
+     "cert_number": "2000057816",
+     "issue_date": "2020-09-04",
+     "period_start": "2020-10-01",
+     "period_end": "2021-09-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】57時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証同行援護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "同行援護": {
+       "hours": 57,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "2000057816",
+     "issue_date": "2020-09-04",
+     "period_start": "2021-10-01",
+     "period_end": "2022-09-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】57時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300Ｈanaヘルパーステーションさつきが丘（同行）",
+     "src": "さつき受給者証同行援護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "同行援護": {
+       "hours": 57,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "2000057816",
+     "issue_date": "2022-10-03",
+     "period_start": "2022-10-01",
+     "period_end": "2023-09-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】57時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証同行援護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "同行援護": {
+       "hours": 57,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "2000057816",
+     "issue_date": "2022-10-03",
+     "period_start": "2023-10-01",
+     "period_end": "2024-09-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】57時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証同行援護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "同行援護": {
+       "hours": 57,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "2000057816",
+     "issue_date": "2022-10-03",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】57時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証同行援護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "同行援護": {
+       "hours": 57,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "2000057816",
+     "issue_date": "2025-10-29",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】57時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証同行援護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "同行援護": {
+       "hours": 57,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000057816",
+     "issue_date": "2025-10-29",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】57時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "さつき受給者証同行援護.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "同行援護": {
+       "hours": 57,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ]
+  }
+ ],
+ "stats": {
+  "pdf_files": 3,
+  "kihon_rows": 39,
+  "birth_date_missing": 0,
+  "clients": 39,
+  "certs_total": 184,
+  "current_certs": 40,
+  "multi_current": 1
+ },
+ "warnings": [
+  "現在有効な受給者証なし: 石田 康 (2113114801) → 最新 2026-02-28 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 磯部 宏太 (423000051) → 最新 2026-03-31 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 稲垣 文彦 (423000043) → 最新 2026-04-30 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 須合 伸裕 (172) → 最新 2025-11-30 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 戸島 照子 (2113113954) → 最新 2025-09-30 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 中村 由 (423000007) → 最新 2025-03-01 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 福島 強 (423000036) → 最新 2025-09-30 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 堀越 政美 (243) → 最新 2024-01-31 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 森尾 敦 (235) → 最新 2025-01-31 を採用 (期限切れ)"
+ ]
+}
