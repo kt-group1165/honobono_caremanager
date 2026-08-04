@@ -8,6 +8,7 @@
 //   node migrations/import_meisai_plan_units.mjs --execute
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
+import { findDataFile } from "./_meisai_files.mjs";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -24,7 +25,7 @@ const sjis=new TextDecoder("shift_jis");
 
 async function main(){
   console.log(`=== 計画単位数(給付管理)投入 ${EXECUTE?"【EXECUTE】":"【DRY RUN】"} ===\n`);
-  const csv=path.join(KAIGO,`サービス実績データ/${AREA_DIR}/202606/介護請求(明細付)_一覧.CSV`);
+  const csv=findBillingCsv(path.join(KAIGO,"サービス実績データ",AREA_DIR,"202606"));
   const lines=sjis.decode(readFileSync(csv)).split(/\r?\n/).filter(l=>l);
   const H=parseLine(lines[0]).map(h=>h.replace(/^"|"$/g,"")); const gi=(n)=>H.indexOf(n);
   const iMei=gi("明細書番号"),iNum=gi("利用者番号"),iType=gi("サービス種類コード"),iPlan=gi("計画単位数"),iKanri=gi("限度額管理対象単位数");
@@ -51,3 +52,10 @@ async function main(){
   console.log(`✓ 完了: ${payloads.length}名`);
 }
 main().catch(e=>{console.error("ERROR:",e.message);process.exit(1);});
+
+// フォルダ構成が事業所ごとに違うので対象月配下を再帰で探す (_meisai_files.mjs)
+function findBillingCsv(dir){
+  const p=findDataFile(dir,"介護請求(明細付)_一覧.CSV");
+  if(!p){ console.error(`✗ ${dir} 配下に 介護請求(明細付)_一覧.CSV がありません`); process.exit(1); }
+  return p;
+}

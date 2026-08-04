@@ -54,3 +54,37 @@ export function findMeisaiFiles(dir) {
   }
   return out;
 }
+
+/**
+ * dir 配下 (再帰) から basename が一致するファイルを 1 つ返す。無ければ null。
+ *   「介護請求(明細付)_一覧.CSV」のように 1 事業所 1 ファイルのものを探すのに使う。
+ *   複数見つかったら中断する (どれを使うべきか決められないため)。
+ */
+export function findDataFile(dir, basename) {
+  const out = [];
+  const walk = (d) => {
+    let entries;
+    try {
+      entries = readdirSync(d);
+    } catch {
+      return;
+    }
+    for (const name of entries) {
+      const p = path.join(d, name);
+      let st;
+      try {
+        st = statSync(p);
+      } catch {
+        continue;
+      }
+      if (st.isDirectory()) walk(p);
+      else if (name === basename) out.push(p);
+    }
+  };
+  walk(dir);
+  if (out.length > 1) {
+    console.error(`✗ ${basename} が ${out.length} 個あります: ${out.join(" / ")}`);
+    process.exit(1);
+  }
+  return out[0] ?? null;
+}

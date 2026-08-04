@@ -9,6 +9,7 @@
 //   node migrations/link_caremanager_office.mjs --execute
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
+import { findDataFile } from "./_meisai_files.mjs";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -30,7 +31,7 @@ const norm=(s)=>(s||"").normalize("NFKC").replace(/[\s　＊*]/g,"");
 async function main(){
   console.log(`=== ケアマネ番号リンク ${EXECUTE?"【EXECUTE】":"【DRY RUN】"} ===\n`);
   // ① 明細CSV: 利用者番号→ケアマネ番号/名称
-  const mei=readCsv(path.join(KAIGO,`サービス実績データ/${AREA_DIR}/202606/介護請求(明細付)_一覧.CSV`));
+  const mei=readCsv(findBillingCsv(path.join(KAIGO,"サービス実績データ",AREA_DIR,"202606")));
   const gm=(n)=>mei.H.indexOf(n);
   const iNum=gm("利用者番号"),iCoNum=gm("居宅サービス計画事業所番号"),iCoName=gm("居宅サービス計画事業所名称");
   const byNum={};
@@ -92,3 +93,10 @@ async function main(){
   console.log(`✓ 完了: care_office新規${toCreate.size} / care_office_id設定 ${ok}名`);
 }
 main().catch(e=>{console.error("ERROR:",e.message);process.exit(1);});
+
+// フォルダ構成が事業所ごとに違うので対象月配下を再帰で探す (_meisai_files.mjs)
+function findBillingCsv(dir){
+  const p=findDataFile(dir,"介護請求(明細付)_一覧.CSV");
+  if(!p){ console.error(`✗ ${dir} 配下に 介護請求(明細付)_一覧.CSV がありません`); process.exit(1); }
+  return p;
+}

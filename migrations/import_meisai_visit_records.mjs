@@ -133,6 +133,23 @@ async function main() {
   const office = offRows[0];
   console.log(`事業所: ${office.name} (${office.id}) service_type=${office.service_type}\n`);
 
+  // ⚠ 取込先は **OFFICE_BN (事業所番号)** で決まる。OFFICE_ID を渡しても効かない。
+  //   2026-08-04 の事故: 高品を OFFICE_ID で指定したため既定の茂原に入り、
+  //   冪等削除で**茂原の介護実績 927 行を高品のデータで置き換えて**しまった。
+  //   稼働データ側の事業所番号と突き合わせて食い違ったら中断する。
+  {
+    const bns = [...new Set(target.map((r) => r.jigyoNum).filter(Boolean))];
+    const wrong = bns.filter((b) => b !== OFFICE_BUSINESS_NUMBER);
+    if (wrong.length) {
+      console.error(`✗ 稼働データの事業所番号が OFFICE_BN と食い違っています`);
+      console.error(`   OFFICE_BN   = ${OFFICE_BUSINESS_NUMBER} (${office.name})`);
+      console.error(`   稼働データ  = ${bns.join(", ")}  (${AREA_DIR})`);
+      console.error(`   → OFFICE_BN を稼働データの事業所番号に合わせてください`);
+      console.error(`     (OFFICE_ID では切り替わりません。既定のままだと別事業所を上書きします)`);
+      process.exit(1);
+    }
+  }
+
   // 3) サービスコード → 公式サービス名 (system=介護, 種類11, 対象月世代)
   const distinctCodes = [...new Set(target.map((r) => r.code))];
   const { data: scRows, error: scErr } = await sb

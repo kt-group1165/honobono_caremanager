@@ -10,7 +10,7 @@
  *   出力: 伝送データ/{AREA}/訪問介護/202606/新システム/ (SJIS) + 標準出力に diff レポート
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
@@ -33,7 +33,11 @@ const DENSOU_BASE = process.env.DENSOU_DIR
 // ほのぼの実伝送の置き場も揃っていない (ほのぼのから / ほのぼの)
 const HONOBONO_DIR = join(DENSOU_BASE, process.env.HONOBONO_SUBDIR || "ほのぼのから");
 const OUT_DIR = join(DENSOU_BASE, "新システム");
-const HONOBONO_KK = process.env.KK_FILE || "KK260701.CSV";
+// ほのぼの側のファイル名は**処理年月**なので事業所ごとに違う (高品は KK260702)。
+//   KK_FILE 指定が無ければ接頭辞 KK で自動検出する。介護給付の 7111 を含むものだけを対象にし、
+//   総合事業だけのファイル (7113/71R1) は除く。複数あれば中断 (月が混ざった置き方)。
+const SPLIT_RE = new RegExp("\r?\n");
+const HONOBONO_KK = process.env.KK_FILE || "";
 
 // ─── env ──────────────────────────────────────────────────────────────────────
 function loadEnvLocal(): Record<string, string> {
@@ -148,7 +152,26 @@ async function main() {
   for (const w of res.warnings.slice(0, 8)) console.log("  ⚠", w);
 
   const nw = parseContent(res.content);
-  const hb = parseDensou(join(HONOBONO_DIR, HONOBONO_KK));
+  let kkFile = HONOBONO_KK;
+  if (!kkFile) {
+    const cands = readdirSync(HONOBONO_DIR)
+      .filter((f) => /^KK.*\.CSV$/i.test(f))
+      .filter((f) => {
+        const txt = Encoding.convert(new Uint8Array(readFileSync(join(HONOBONO_DIR, f))), {
+          to: "UNICODE", from: "SJIS", type: "string",
+        }) as string;
+        return txt.split(SPLIT_RE).some((ln) => /^\d+,\d+,"?7111"?,/.test(ln));
+      })
+      .sort();
+    if (cands.length !== 1) {
+      console.error(`FATAL: ${HONOBONO_DIR} の介護給付 KK ファイルが ${cands.length} 個です (${cands.join(", ") || "なし"})`);
+      console.error(`  KK_FILE=... で明示するか、提供年月ごとにフォルダを分けてください`);
+      process.exit(1);
+    }
+    kkFile = cands[0];
+  }
+  console.log(`ほのぼの KK: ${kkFile}`);
+  const hb = parseDensou(join(HONOBONO_DIR, kkFile));
 
   // ── エンベロープ ──
   console.log("\n===== エンベロープ =====");
