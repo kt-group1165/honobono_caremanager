@@ -14,7 +14,10 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 const EXECUTE=process.argv.includes("--execute");
 const AREA_DIR=process.env.AREA_DIR||"茂原";
-const TENANT="kt-group", MARK="[MEISAI公費 2026-06]";
+const TAG=process.env.TAG||"";
+// ⚠ マーカーに拠点を入れる。入れないと冪等削除が**全事業所の公費を消す**
+//   (2026-08-04: 四街道→さつきが丘→高品 と流すたびに前の事業所の公費が消えていた)
+const TENANT="kt-group", MARK=`[MEISAI公費 2026-06${TAG?" "+TAG:""}]`;
 const KAIGO=fileURLToPath(new URL("../",import.meta.url));
 function loadEnv(){ const t=readFileSync(path.join(KAIGO,".env.local"),"utf8"); const e={}; for(const l of t.split(/\r?\n/)){const m=/^([A-Z0-9_]+)=(.*)$/.exec(l.trim()); if(m)e[m[1]]=m[2].replace(/^["']|["']$/g,"");} return e; }
 const env=loadEnv();

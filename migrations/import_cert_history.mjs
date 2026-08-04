@@ -239,8 +239,26 @@ if (conflicts.length > 25) console.log(`  … 他 ${conflicts.length - 25} 件`)
 console.log(`\n被保険者番号が複数 clients に紐づく (skip): ${dupClient.size} 件`);
 console.log(`clients に居ない被保険者番号 (skip): ${noClient.size} 件`);
 
+// 差分の内訳 (null 埋めなのか、値の食い違いなのか)
+const kinds = {};
+for (const c of conflicts) for (const d of c.diffs) {
+  const k = `${d.split(" ")[0]} ${/DB=null/.test(d) ? "【DBがnull】" : "【DBに別の値】"}`;
+  kinds[k] = (kinds[k] ?? 0) + 1;
+}
+console.log("\n差分の内訳:", JSON.stringify(kinds, null, 1));
+const realConflicts = conflicts.filter((c) => c.diffs.some((d) => !/DB=null/.test(d)));
+if (realConflicts.length) {
+  console.log(`\n★ DB に別の値が入っている ${realConflicts.length} 件 (要確認):`);
+  for (const c of realConflicts.slice(0, 30))
+    console.log(`  ${c.area} ${c.insured} ${c.name} (${c.start}): ${c.diffs.filter((d) => !/DB=null/.test(d)).join(" / ")}`);
+  if (realConflicts.length > 30) console.log(`  … 他 ${realConflicts.length - 30} 件`);
+}
+
 if (!EXECUTE) {
-  console.log("\nDRY RUN — 何も書き込んでいません。--execute で INSERT します。");
+  const p = join(__dirname, "_import_cert_history_dryrun.json");
+  writeFileSync(p, JSON.stringify({ inserts: inserts.length, conflicts, realConflicts }, null, 1));
+  console.log(`\nDRY RUN — 何も書き込んでいません。--execute で INSERT します。`);
+  console.log(`差分の全量: ${p}`);
   process.exit(0);
 }
 

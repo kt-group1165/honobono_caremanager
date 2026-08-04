@@ -30,7 +30,7 @@ const OFFICE_ID = process.env.OFFICE_ID || "269d77bc-5b61-4114-a2ea-e8dc2f220823
 const AREA_DIR = process.env.AREA_DIR || "大網";
 const DENSOU_BASE = process.env.DENSOU_DIR
   ? join(__dirname, "..", "伝送データ", ...process.env.DENSOU_DIR.split("/"))
-  : join(__dirname, "..", "伝送データ", AREA_DIR, "訪問介護", "202606");
+  : join(__dirname, "..", "伝送データ", AREA_DIR, "訪問介護", "介護", "202606");
 const HONOBONO_DIR = join(DENSOU_BASE, "ほのぼのから");
 const OUT_DIR = join(DENSOU_BASE, "新システム");
 const HONOBONO_KK = process.env.KK_FILE || "KK260702.CSV";

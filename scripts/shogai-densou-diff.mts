@@ -491,14 +491,18 @@ async function main() {
   // office 情報
   const { data: o, error: oe } = await supabase
     .from("offices")
-    .select("business_number, unit_price, area_category, name")
+    .select("business_number, shogai_business_number, unit_price, area_category, name")
     .eq("id", OFFICE_ID)
     .maybeSingle();
   if (oe) throw new Error("事業所情報取得失敗: " + oe.message);
   const dbOfficeNumber = ((o?.business_number ?? "") as string).trim();
-  // ★ #1: offices.business_number は介護の事業所番号(1271500942)。障害伝送は別の障害事業所番号
-  //   (1213100017) を使う。本番は offices.shogai_business_number を参照する予定。
-  const officeNumber = FALLBACK_OFFICE_NUMBER;
+  // offices.business_number は介護の事業所番号。障害伝送は別番号を使う。
+  // 障害の事業所番号は offices.shogai_business_number が正 (2026-08-04 に 五井/大網/姉ム を登録)。
+  // env SHOGAI_BN は未登録の事業所を検証するための逃げ道として残す。
+  const officeNumber =
+    process.env.SHOGAI_BN ||
+    ((o?.shogai_business_number ?? "") as string).trim() ||
+    FALLBACK_OFFICE_NUMBER;
   // 単価: offices.unit_price は介護の地域区分単価。障害は人件費割合が違うので別計算
   //   (lib/shogai-seikyu/unit-price.ts。実伝送3事業所で検証済)
   const areaCategory = (o?.area_category ?? null) as string | null;

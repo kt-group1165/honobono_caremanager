@@ -4,6 +4,7 @@
 //   node migrations/fix_copay_rate.mjs [--execute]
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
+import { findDataFile } from "./_meisai_files.mjs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 const EXECUTE=process.argv.includes("--execute");
@@ -18,7 +19,11 @@ const sjis=new TextDecoder("shift_jis");
 function parseLine(line){const o=[];let c="",q=false;for(let i=0;i<line.length;i++){const ch=line[i];if(q){if(ch==='"'){if(line[i+1]==='"'){c+='"';i++;}else q=false;}else c+=ch;}else{if(ch==='"')q=true;else if(ch===","){o.push(c);c="";}else c+=ch;}}o.push(c);return o;}
 async function main(){
   console.log(`=== copay_rate設定 ${EXECUTE?"【EXECUTE】":"【DRY RUN】"} ===\n`);
-  const lines=sjis.decode(readFileSync(path.join(KAIGO,`サービス実績データ/${AREA_DIR}/202606/介護請求(明細付)_一覧.CSV`))).split(/\r?\n/).filter(l=>l);
+  // フォルダ構成が事業所ごとに違うので対象月配下を再帰で探す
+  const csv=findDataFile(path.join(KAIGO,"サービス実績データ",AREA_DIR,"202606"),"介護請求(明細付)_一覧.CSV");
+  if(!csv){ console.error(`✗ サービス実績データ/${AREA_DIR}/202606 配下に 介護請求(明細付)_一覧.CSV がありません`); process.exit(1); }
+  console.log(`  取込元: ${path.relative(KAIGO,csv)}`);
+  const lines=sjis.decode(readFileSync(csv)).split(/\r?\n/).filter(l=>l);
   const H=parseLine(lines[0]).map(x=>x.replace(/^"|"$/g,""));const iIns=H.indexOf("被保険者番号"),iType=H.indexOf("サービス種類コード"),iKyu=H.indexOf("給付率(保険分)");
   const kyuBy={};
   // 種類11(介護) と A2/A3(総合) 両方から給付率を拾う (総合のみ利用者=3割等が漏れていた)。
