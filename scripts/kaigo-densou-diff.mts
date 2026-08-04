@@ -7,7 +7,7 @@
  *
  * 実行:  npx tsx scripts/kaigo-densou-diff.mts
  *   env: OFFICE_ID / AREA_DIR で事業所切替 (既定=大網)
- *   出力: 伝送データ/{AREA}/介護/202606/新システム/ (SJIS) + 標準出力に diff レポート
+ *   出力: 伝送データ/{AREA}/訪問介護/202606/新システム/ (SJIS) + 標準出力に diff レポート
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
@@ -25,8 +25,13 @@ const YEAR = 2026;
 const MONTH = 6;
 const OFFICE_ID = process.env.OFFICE_ID || "269d77bc-5b61-4114-a2ea-e8dc2f220823"; // 大網
 const AREA_DIR = process.env.AREA_DIR || "大網";
-const DENSOU_BASE = join(__dirname, "..", "伝送データ", AREA_DIR, "介護", "202606");
-const HONOBONO_DIR = join(DENSOU_BASE, "ほのぼのから");
+// DENSOU_DIR … 伝送データ/ 以下の相対パス。正規形は <拠点>/訪問介護/<YYYYMM>。事業所ごとに
+//   フォルダ構成が揃っていないため、丸ごと指定できるようにしている (shogai 側と同じ)。
+const DENSOU_BASE = process.env.DENSOU_DIR
+  ? join(__dirname, "..", "伝送データ", ...process.env.DENSOU_DIR.split("/"))
+  : join(__dirname, "..", "伝送データ", AREA_DIR, "訪問介護", "202606");
+// ほのぼの実伝送の置き場も揃っていない (ほのぼのから / ほのぼの)
+const HONOBONO_DIR = join(DENSOU_BASE, process.env.HONOBONO_SUBDIR || "ほのぼのから");
 const OUT_DIR = join(DENSOU_BASE, "新システム");
 const HONOBONO_KK = process.env.KK_FILE || "KK260701.CSV";
 
@@ -229,6 +234,50 @@ async function main() {
   if (onlyHb.length) console.log("  ★ほのみ(=新で欠落):", onlyHb.join(", "));
   for (const s of mism.slice(0, 40)) console.log(s);
   if (mism.length > 40) console.log(`  … 他 ${mism.length - 40} 名`);
+
+  // ── 全項目比較 (行単位) ────────────────────────────────────────────────────
+  // 上のサマリ比較は抜き出した項目しか見ていないため、公費 (法別・負担者番号) や
+  // 日付系の差を取り逃す。kyotaku-*-diff と同じく行を丸ごと突き合わせる。
+  // 正規化: 連番 (レコード内 2 列目) のみ * に落とす。
+  console.log("\n===== 全項目比較 (行単位) =====");
+  // ほのぼのは未使用の数値欄を "0" で、当システムは空欄で埋める家風差がある。
+  // ZERO_BLANK=strict で無効化すれば byte 相当の厳密比較になる。
+  const zeroBlank = (process.env.ZERO_BLANK ?? "loose") !== "strict";
+  const lineGroups = (p: ParsedFile) => {
+    const g = new Map<string, string[]>();
+    for (const r of p.rows) {
+      const c = r.cols.map(unq).map((x, i) => (zeroBlank && i > 5 && x === "0" ? "" : x));
+      const id = c[0];
+      const key =
+        id === "7111"
+          ? `7111|区分${c[3]}|法別${c[4]}`
+          : `${id}|種別${c[1]}|${c[4]}|${c[5]}`;
+      if (!g.has(key)) g.set(key, []);
+      // 末尾の空欄は桁数の家風差になるだけなので落とす
+      const trimmed = [...c];
+      while (trimmed.length > 0 && trimmed[trimmed.length - 1] === "") trimmed.pop();
+      g.get(key)!.push(trimmed.join(","));
+    }
+    for (const v of g.values()) v.sort();
+    return g;
+  };
+  const NG = lineGroups(nw), HG = lineGroups(hb);
+  let lmatch = 0;
+  const ldiff: string[] = [];
+  for (const [k, nv] of NG) {
+    const hv = HG.get(k);
+    if (!hv) { ldiff.push(`ONLY-NEW ${k} (${nv.length}行)`); continue; }
+    if (nv.join("\n") === hv.join("\n")) { lmatch++; continue; }
+    ldiff.push(`DIFF ${k}`);
+    for (let i = 0; i < Math.max(nv.length, hv.length); i++)
+      if (nv[i] !== hv[i]) ldiff.push(`  新 : ${nv[i] ?? "(なし)"}\n  ほ : ${hv[i] ?? "(なし)"}`);
+  }
+  for (const k of HG.keys()) if (!NG.has(k)) ldiff.push(`ONLY-HONO ${k} (${HG.get(k)!.length}行)`);
+  const ldiffHeads = ldiff.filter((d) => !d.startsWith("  ")).length;
+  console.log(`グループ 新 ${NG.size} / ほ ${HG.size} → 完全一致 ${lmatch} / 差 ${ldiffHeads}`);
+  for (const d of ldiff.slice(0, 120)) console.log(d);
+  if (ldiff.length > 120) console.log(`  … 他 ${ldiff.length - 120} 行`);
+  if (ldiff.length === 0) console.log("✅ 全項目一致");
 
   console.log("\n########## 突合レポート end ##########");
 }

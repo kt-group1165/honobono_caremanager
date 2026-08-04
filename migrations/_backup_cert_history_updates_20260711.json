@@ -1,0 +1,233 @@
+[
+  {
+    "id": "a15dd31e-6d64-4726-ba10-96b383b0a06b",
+    "label": "A001 青木 一郎",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-kyotaku-enrich] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "1f97cffb-0123-4908-8684-ad0579873853",
+    "label": "A004 江口 静子",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-kyotaku-enrich] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "7216f732-71b8-445b-8b77-2776953bcf7b",
+    "label": "A007 木下 七郎",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-kyotaku-enrich] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "c2e47b1f-6c59-4553-9b32-1626d22b74c0",
+    "label": "B001 鈴木 京子",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-kyotaku-enrich] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "a9a4176f-eb74-49aa-a39f-394110dda984",
+    "label": "B004 中村 隆",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-kyotaku-enrich] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "ddea6fe8-c9e0-4c8a-991b-d587e5b25f92",
+    "label": "B007 橋本 美智子",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-kyotaku-enrich] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "35765043-0a86-4f05-ab6a-64fc34ae7e6e",
+    "label": "B010 松本 太郎",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-kyotaku-enrich] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "6e8aa303-5bcc-40d0-8bac-ab7ead2e0a23",
+    "label": "B013 山本 久美子",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-kyotaku-enrich] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "95f7631e-928e-42f3-ac36-0d4835c6c5d3",
+    "label": "C002 酒井 治男",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-kyotaku-enrich] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "4888daae-64c3-48c0-8381-7292ea3ce0ef",
+    "label": "C005 篠原 智子",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-kyotaku-enrich] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "a782bd31-d5fb-44f6-b0e1-7a909e514642",
+    "label": "C008 曽根 一夫",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-kyotaku-enrich] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "43f9d3e8-9c6e-47ec-89da-ba62de24c53a",
+    "label": "D003 竹内 正夫",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-kyotaku-enrich] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "18076fb0-e3ff-4be8-b0dd-61ce9c48bd5b",
+    "label": "D006 塚本 トキ",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-kyotaku-enrich] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "757a8d33-68f2-4a5f-9bd4-607f3d34d7f2",
+    "label": "D009 戸田 五郎",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-kyotaku-enrich] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "41baefde-f4c1-4980-bc3b-b533f17d030e",
+    "label": "E003 長島 茂",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-kyotaku-enrich] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "afb7b555-4b3d-4f6c-bb3a-2094162c1dcb",
+    "label": "E006 畑中 あや",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-kyotaku-enrich] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "cdde321b-29d9-4c26-9e69-4f746efd7bec",
+    "label": "E009 平岡 進",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-kyotaku-enrich] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "51b7098b-5075-4861-9f02-3edc7d31abc2",
+    "label": "OY002 木村 弘一",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-houmon] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "bec3611a-20b2-4ca8-bde7-b5859a7915aa",
+    "label": "OY005 山下 静枝",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "生活保護サンプル パターン1 (保険優先) [fake テスト用-seiho]"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "d92a30d6-9528-4280-9ed0-0bc8a1781a4d",
+    "label": "OY008 阿部 正一",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-houmon] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  },
+  {
+    "id": "8034d33f-4b03-4b5f-8873-5b9cc1bee1f0",
+    "label": "X001 佐藤 月遅",
+    "before": {
+      "certification_start_date": "2025-04-01",
+      "notes": "[fake テスト用-kyotaku-enrich] 認定情報"
+    },
+    "after": {
+      "certification_start_date": "2025-10-01"
+    }
+  }
+]

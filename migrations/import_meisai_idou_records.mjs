@@ -9,18 +9,19 @@
 //     単価表が未登録の市町村は金額を入れずに warning を出す (推測で入れない)。
 //
 //   使い方:
-//     AREA_DIR=リンクス茂原 OFFICE_ID=<uuid> MAP_TAG=茂原 \
+//     AREA_DIR=茂原 OFFICE_ID=<uuid> MAP_TAG=茂原 \
 //       node migrations/import_meisai_idou_records.mjs            # DRY RUN
 //     … --execute                                                # 本番 INSERT
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { findMeisaiFiles } from "./_meisai_files.mjs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const EXECUTE = process.argv.includes("--execute");
 const TARGET_MONTH = "2026-06";
-const AREA_DIR = process.env.AREA_DIR || "リンクス茂原";
+const AREA_DIR = process.env.AREA_DIR || "茂原";
 const OFFICE_ID = process.env.OFFICE_ID || "e08c3706-ad59-4913-b4e2-67f2675422e9";
 const TENANT_ID = "kt-group";
 const MAP_TAG = process.env.MAP_TAG || "茂原";
@@ -75,10 +76,10 @@ async function main() {
   console.log(`=== MEISAI 移動支援取込 ${EXECUTE ? "【EXECUTE】" : "【DRY RUN】"} 対象月=${TARGET_MONTH} 事業所=${AREA_DIR} ===\n`);
 
   // 1) CSV から 011001/011002 を集める
-  const files = readdirSync(CSV_DIR).filter((f) => /^MEISAI_.*\.csv$/i.test(f));
+  const files = findMeisaiFiles(CSV_DIR);
   const rows = [];
   for (const f of files) {
-    const { idx, rows: rs } = readCsv(path.join(CSV_DIR, f));
+    const { idx, rows: rs } = readCsv(f);
     const g = (c, name) => (idx[name] != null ? (c[idx[name]] || "").trim() : "");
     for (const c of rs) {
       const code = g(c, "サービスコード");

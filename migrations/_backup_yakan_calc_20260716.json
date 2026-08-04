@@ -1,0 +1,74 @@
+[
+ {
+  "id": "3c796c74-9e0d-4523-980a-3a9c87cdb982",
+  "service_code": "111112",
+  "service_name": "身体介護１・夜",
+  "units": 305,
+  "calculation_type": "加算",
+  "valid_from": "2024-06-01",
+  "valid_until": "2026-05-31"
+ },
+ {
+  "id": "18ef0dc7-0f6d-4e1f-b129-70a2b27f4a6c",
+  "service_code": "111112",
+  "service_name": "身体介護１・夜",
+  "units": 305,
+  "calculation_type": "加算",
+  "valid_from": "2026-06-01",
+  "valid_until": null
+ },
+ {
+  "id": "703aa91d-734e-43d9-838c-27644cc28a94",
+  "service_code": "111212",
+  "service_name": "身体介護２・夜",
+  "units": 484,
+  "calculation_type": "加算",
+  "valid_from": "2024-06-01",
+  "valid_until": "2026-05-31"
+ },
+ {
+  "id": "2841c60b-2335-4a03-bd21-ccd12069dc83",
+  "service_code": "111212",
+  "service_name": "身体介護２・夜",
+  "units": 484,
+  "calculation_type": "加算",
+  "valid_from": "2026-06-01",
+  "valid_until": null
+ },
+ {
+  "id": "0309e18f-7028-4ec1-8644-f8d51d1198e6",
+  "service_code": "111412",
+  "service_name": "身体介護４・夜",
+  "units": 811,
+  "calculation_type": "加算",
+  "valid_from": "2024-06-01",
+  "valid_until": "2026-05-31"
+ },
+ {
+  "id": "ff4cc78a-c6c4-4168-acc3-ca98d0860e9e",
+  "service_code": "111412",
+  "service_name": "身体介護４・夜",
+  "units": 811,
+  "calculation_type": "加算",
+  "valid_from": "2026-06-01",
+  "valid_until": null
+ },
+ {
+  "id": "1419bb63-3862-4e40-ac44-4b24e88c406c",
+  "service_code": "117212",
+  "service_name": "生活援助２・夜",
+  "units": 224,
+  "calculation_type": "加算",
+  "valid_from": "2024-06-01",
+  "valid_until": "2026-05-31"
+ },
+ {
+  "id": "7f784a4d-7392-43e2-b14e-4268aa0e01f6",
+  "service_code": "117212",
+  "service_name": "生活援助２・夜",
+  "units": 224,
+  "calculation_type": "加算",
+  "valid_from": "2026-06-01",
+  "valid_until": null
+ }
+]

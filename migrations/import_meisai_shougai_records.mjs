@@ -1,6 +1,6 @@
 // ============================================================================
 // ほのぼの「稼働データ」MEISAI CSV → kaigo_visit_schedule 障害実績取込
-//   取込元: apps/kaigo-app/サービス実績データ/大網/介護/202606/MEISAI_*.csv
+//   取込元: apps/kaigo-app/サービス実績データ/大網/202606/MEISAI_*.csv
 //   取込先: kaigo_visit_schedule (status='completed' = 実績)。障害は system 列でなく
 //           service_type(=障害マスタの service_name 完全一致) で shogai-seikyu/aggregate.ts
 //           が拾う (kaigo_visit_schedule に system 列は無い)。
@@ -22,14 +22,15 @@
 //     src/components/services/service-selector.tsx の parseServiceDurationMinutes と同一規約)
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { findMeisaiFiles } from "./_meisai_files.mjs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const EXECUTE = process.argv.includes("--execute");
 const TARGET_MONTH = "2026-06";
 const MONTH_FIRST = "2026-06-01";
-const AREA_DIR = process.env.AREA_DIR || "大網/介護"; // 大網 稼働データは 介護 配下に同居
+const AREA_DIR = process.env.AREA_DIR || "大網"; // 大網 稼働データは 介護 配下に同居
 const OFFICE_ID = process.env.OFFICE_ID || "269d77bc-5b61-4114-a2ea-e8dc2f220823"; // リンクスヘルパーステーション大網白里
 const OFFICE_BN = process.env.OFFICE_BN || "1275800892";
 const TENANT_ID = "kt-group";
@@ -525,10 +526,10 @@ async function main() {
   console.log(`=== MEISAI 障害取込 ${EXECUTE ? "【本番 EXECUTE】" : "【DRY RUN】"} 対象月=${TARGET_MONTH} 事業所=${AREA_DIR} ===\n`);
 
   // 1) CSV
-  const files = readdirSync(CSV_DIR).filter((f) => /^MEISAI_.*\.csv$/i.test(f));
+  const files = findMeisaiFiles(CSV_DIR);
   const all = [];
   for (const f of files) {
-    const { idx, rows } = readCsv(path.join(CSV_DIR, f));
+    const { idx, rows } = readCsv(f);
     for (const c of rows) {
       const g = (name) => (idx[name] != null ? (c[idx[name]] || "").trim() : "");
       all.push({
