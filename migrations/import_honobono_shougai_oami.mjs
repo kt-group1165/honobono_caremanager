@@ -248,12 +248,22 @@ async function main() {
   if (e3) { console.error(`❌ 既存 assignment 取得失敗: ${e3.message}`); process.exit(1); }
   const assignedClientIds = new Set((exAsg ?? []).map((r) => r.client_id));
 
-  const { data: exCerts, error: e4 } = await sb
-    .from("shougai_certifications")
-    .select("client_id, beneficiary_number, certification_start_date");
-  if (e4) { console.error(`❌ 既存 cert 取得失敗: ${e4.message}`); process.exit(1); }
+  // ⚠ MARKER 付き (= 前回の自分の取込) は下で消して入れ直すので **既存に数えない**。
+  //   数えると「既存だから plan から除外」→「削除」で消えたまま復活しない。
+  const exCerts = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error: e4 } = await sb
+      .from("shougai_certifications")
+      .select("client_id, beneficiary_number, certification_start_date, notes")
+      .range(from, from + 999);
+    if (e4) { console.error(`❌ 既存 cert 取得失敗: ${e4.message}`); process.exit(1); }
+    exCerts.push(...data);
+    if (data.length < 1000) break;
+  }
   const certKeys = new Set(
-    (exCerts ?? []).map((r) => `${r.client_id}|${r.beneficiary_number}|${r.certification_start_date}`),
+    exCerts
+      .filter((r) => !(r.notes ?? "").startsWith(MARKER))
+      .map((r) => `${r.client_id}|${r.beneficiary_number}|${r.certification_start_date}`),
   );
 
   // ── plan 構築 ──
@@ -342,6 +352,23 @@ async function main() {
   }
 
   // ── 実行 ──
+  // 受給者証は毎回入れ直す (再パース → 再取込 を何度も回すため)。
+  // MARKER 付きだけを消すので手入力・他事業所の証は残る。
+  {
+    const ids = plan.map((p) => p.clientId);
+    let removed = 0;
+    for (let i = 0; i < ids.length; i += 100) {
+      const { error, count } = await sb
+        .from("shougai_certifications")
+        .delete({ count: "exact" })
+        .in("client_id", ids.slice(i, i + 100))
+        .like("notes", `${MARKER}%`);
+      if (error) { console.error(`✗ 既存 cert 削除: ${error.message}`); process.exit(1); }
+      removed += count ?? 0;
+    }
+    console.log(`既存 cert (${MARKER}) 削除: ${removed} 件\n`);
+  }
+
   let okC = 0, okA = 0, okS = 0, ng = 0;
   let blankSeq = 999901; // 番号なし利用者の採番 (999901〜)
   for (const p of plan) {
@@ -387,7 +414,19 @@ async function main() {
       if (error) { console.error(`  ✗ ${c.name} assignment: ${error.message}`); ng++; }
       else okA++;
     }
+    // 同じ受給者証が事業種別ごとに複数回印字される
+    // (身体障害者居宅介護事業 / 知的障害者居宅介護事業 で 1 枚の証が 2 行)。
+    // 番号と期間が同じものは 1 枚に畳む。支給量が最も多い行を残す (他は部分集合)。
+    const certs = [];
     for (const e of p.certs) {
+      const key = `${e.cert_number}|${e.period_start}|${e.period_end}`;
+      const prev = certs.findIndex((x) => `${x.cert_number}|${x.period_start}|${x.period_end}` === key);
+      if (prev < 0) { certs.push(e); continue; }
+      const n = (x) => Object.keys(x.quantities ?? {}).length;
+      console.warn(`  ⚠️ ${c.name}: 受給者証 ${e.cert_number} が事業種別違いで重複 → 1 枚に畳む`);
+      if (n(e) > n(certs[prev])) certs[prev] = e;
+    }
+    for (const e of certs) {
       const cityCode = CITY_CODE[e.city] ?? null;
       const noteLines = [
         MARKER,

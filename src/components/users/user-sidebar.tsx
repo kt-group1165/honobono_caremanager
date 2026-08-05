@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { useBusinessType } from "@/lib/business-type-context";
 import { useLocalStorage } from "@/lib/use-local-storage";
 import { confirmNav } from "@/lib/nav-guard";
+import { isYoboLevel } from "@/lib/yobo-kubun";
+import { mapChunksParallel, ID_IN_CHUNK } from "@/lib/chunk-parallel";
 import {
   ServiceCategoryBadge,
   type ServiceCategoryValue,
@@ -46,16 +48,17 @@ function parseCategoryFilter(raw: string | null): CategoryFilter {
 
 // 居宅介護支援 (ケアマネ版) 専用の絞り込み: 介護 (要介護) / 予防 (要支援・事業対象者)
 // 居宅は介護保険のみの業務なので障害の区分は出さず、帳票様式が分かれる
-// 要介護↔要支援の軸で絞る (アセスメント↔予防アセスメント 等)。
-// 判定は「今日有効な認定」の care_level (isYoboKubun と同じ /要支援|事業対象者/ 基準)。
+// 要介護↔要支援の軸で絞る。
+// 判定は「今日有効な認定」の care_level (@/lib/yobo-kubun の isYoboLevel が唯一の基準)。
 // 有効な認定がない場合は clients.care_level で補完、それも無ければ「全て」のみに表示。
+// ※ 様式そのものは認定区分から導出するので (アセスメント/計画書はメニュー 1 本)、
+//   このフィルタは「予防の人だけ一覧したい」ための絞り込み専用。
 type YoboFilter = "all" | "kaigo" | "yobo";
 const YOBO_FILTER_KEY = "kaigo.user_yobo_filter";
 function parseYoboFilter(raw: string | null): YoboFilter {
   if (raw === "kaigo" || raw === "yobo" || raw === "all") return raw;
   return "all";
 }
-const isYoboLevel = (level: string) => /要支援|事業対象者/.test(level);
 
 interface UserSidebarProps {
   // Both props omitted → URL mode (?user=<id> driven via search params)
@@ -533,15 +536,13 @@ function UserSidebarInner(props: UserSidebarProps) {
     }
     (async () => {
       try {
-        const IN_CHUNK = 50;
         const PAGE = 1000;
 
-        // 1) 介護保険: 認定の全履歴 + 登録有無。IN 50 件 chunk + page-loop
+        // 1) 介護保険: 認定の全履歴 + 登録有無。chunk 並列 + page-loop
+        //    (全法人モードでは ids が 4500 件超になるので直列だと数十秒かかる)
         const fetchCerts = async () => {
-          const certs = new Map<string, CertRow[]>();
-          const hasInsurance = new Set<string>();
-          for (let i = 0; i < ids.length; i += IN_CHUNK) {
-            const chunk = ids.slice(i, i + IN_CHUNK);
+          const perChunk = await mapChunksParallel(ids, ID_IN_CHUNK, async (chunk) => {
+            const acc: Array<CertRow & { client_id: string }> = [];
             let offset = 0;
             while (true) {
               const { data, error } = await supabase
@@ -553,14 +554,20 @@ function UserSidebarInner(props: UserSidebarProps) {
                 .range(offset, offset + PAGE - 1);
               if (error) throw new Error(error.message);
               const rows = (data ?? []) as Array<CertRow & { client_id: string }>;
-              for (const r of rows) {
-                hasInsurance.add(r.client_id);
-                const list = certs.get(r.client_id);
-                if (list) list.push(r);
-                else certs.set(r.client_id, [r]);
-              }
+              acc.push(...rows);
               if (rows.length < PAGE) break;
               offset += PAGE;
+            }
+            return acc;
+          });
+          const certs = new Map<string, CertRow[]>();
+          const hasInsurance = new Set<string>();
+          for (const rows of perChunk) {
+            for (const r of rows) {
+              hasInsurance.add(r.client_id);
+              const list = certs.get(r.client_id);
+              if (list) list.push(r);
+              else certs.set(r.client_id, [r]);
             }
           }
           return { certs, hasInsurance };
@@ -571,9 +578,12 @@ function UserSidebarInner(props: UserSidebarProps) {
         //    (利用開始前こそ証憑チェックが必要なため)
         const fetchServiceUse = async () => {
           const todayStr = localToday();
-          const serviceUse = new Map<string, ServiceUse>();
-          for (let i = 0; i < ids.length; i += IN_CHUNK) {
-            const chunk = ids.slice(i, i + IN_CHUNK);
+          const perChunk = await mapChunksParallel(ids, ID_IN_CHUNK, async (chunk) => {
+            const acc: Array<{
+              client_id: string;
+              end_date: string | null;
+              home_care_categories: unknown;
+            }> = [];
             let offset = 0;
             while (true) {
               const { data, error } = await supabase
@@ -582,34 +592,35 @@ function UserSidebarInner(props: UserSidebarProps) {
                 .in("client_id", chunk)
                 .range(offset, offset + PAGE - 1);
               if (error) throw new Error(error.message);
-              const rows = (data ?? []) as Array<{
-                client_id: string;
-                end_date: string | null;
-                home_care_categories: unknown;
-              }>;
-              for (const r of rows) {
-                if (r.end_date && r.end_date < todayStr) continue; // 事業所利用が終了済
-                const cats = Array.isArray(r.home_care_categories)
-                  ? (r.home_care_categories as Array<{
-                      category?: string;
-                      active?: boolean;
-                      end_date?: string | null;
-                    }>)
-                  : [];
-                let entry = serviceUse.get(r.client_id);
-                for (const c of cats) {
-                  if (!c?.active || !c.category) continue;
-                  if (c.end_date && c.end_date < todayStr) continue; // 種別単位で終了済
-                  if (!entry) {
-                    entry = { kaigo: false, shougai: false };
-                    serviceUse.set(r.client_id, entry);
-                  }
-                  if (KAIGO_SERVICE_CATEGORIES.has(c.category)) entry.kaigo = true;
-                  else if (SHOUGAI_SERVICE_CATEGORIES.has(c.category)) entry.shougai = true;
-                }
-              }
+              const rows = (data ?? []) as typeof acc;
+              acc.push(...rows);
               if (rows.length < PAGE) break;
               offset += PAGE;
+            }
+            return acc;
+          });
+          const serviceUse = new Map<string, ServiceUse>();
+          for (const rows of perChunk) {
+            for (const r of rows) {
+              if (r.end_date && r.end_date < todayStr) continue; // 事業所利用が終了済
+              const cats = Array.isArray(r.home_care_categories)
+                ? (r.home_care_categories as Array<{
+                    category?: string;
+                    active?: boolean;
+                    end_date?: string | null;
+                  }>)
+                : [];
+              let entry = serviceUse.get(r.client_id);
+              for (const c of cats) {
+                if (!c?.active || !c.category) continue;
+                if (c.end_date && c.end_date < todayStr) continue; // 種別単位で終了済
+                if (!entry) {
+                  entry = { kaigo: false, shougai: false };
+                  serviceUse.set(r.client_id, entry);
+                }
+                if (KAIGO_SERVICE_CATEGORIES.has(c.category)) entry.kaigo = true;
+                else if (SHOUGAI_SERVICE_CATEGORIES.has(c.category)) entry.shougai = true;
+              }
             }
           }
           return serviceUse;
@@ -649,11 +660,9 @@ function UserSidebarInner(props: UserSidebarProps) {
     }
     (async () => {
       try {
-        const IN_CHUNK = 50;
         const PAGE = 1000;
-        const found = new Map<string, ShougaiCertRow[]>();
-        for (let i = 0; i < ids.length; i += IN_CHUNK) {
-          const chunk = ids.slice(i, i + IN_CHUNK);
+        const perChunk = await mapChunksParallel(ids, ID_IN_CHUNK, async (chunk) => {
+          const acc: Array<ShougaiCertRow & { client_id: string }> = [];
           let offset = 0;
           while (true) {
             const { data, error } = await supabase
@@ -666,13 +675,18 @@ function UserSidebarInner(props: UserSidebarProps) {
               throw new Error(error.message);
             }
             const rows = (data ?? []) as Array<ShougaiCertRow & { client_id: string }>;
-            for (const r of rows) {
-              const list = found.get(r.client_id);
-              if (list) list.push(r);
-              else found.set(r.client_id, [r]);
-            }
+            acc.push(...rows);
             if (rows.length < PAGE) break;
             offset += PAGE;
+          }
+          return acc;
+        });
+        const found = new Map<string, ShougaiCertRow[]>();
+        for (const rows of perChunk) {
+          for (const r of rows) {
+            const list = found.get(r.client_id);
+            if (list) list.push(r);
+            else found.set(r.client_id, [r]);
           }
         }
         if (!cancelled) setShougaiCerts(found);

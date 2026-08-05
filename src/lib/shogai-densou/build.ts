@@ -469,6 +469,14 @@ export function buildShogaiDensou(
         `${u.row.user_name}: 負担上限月額が未設定です — 受給者証で入力してください (負担 0 円の場合も 0 を入力)`,
       );
     }
+    // 他事業所が上限管理者なのに管理結果が未入力 → 自事業所で 1 割/上限額を
+    // そのまま請求してしまい **過大請求**になる。管理事業所から受け取った
+    // 上限額管理結果票のとおり入力すれば決定額 (0 円のこともある) に置き換わる。
+    if (u.row.jogenKanriKubun === "他事業所" && u.row.kanriResult == null) {
+      warnings.push(
+        `${u.row.user_name}: 上限管理が他事業所 (${u.row.jogenKanriOfficeName ?? u.row.jogenKanriOfficeNumber ?? "番号未設定"}) ですが管理結果が未入力です — 利用者負担額 ${u.row.userAmount.toLocaleString()} 円を自事業所で算定しています。上限額管理結果票のとおり入力してください`,
+      );
+    }
     // J41↔J121 乖離: 上限管理結果の保存後に実績 (総費用額) が変わっていないか
     const selfLine = u.jogenOfficeLines?.find((l) => l.is_self);
     if (selfLine && selfLine.total_amount !== u.row.totalAmount) {

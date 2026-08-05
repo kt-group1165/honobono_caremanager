@@ -3519,15 +3519,299 @@
      }
     }
    ]
+  },
+  {
+   "user_number": "1000113798",
+   "name": "金澤 三郎",
+   "gender": "男",
+   "birth_date": "1950-10-26",
+   "postal_code": null,
+   "address": "市原市青葉台3-2-3 コスモ市原青葉台103",
+   "certs": [
+    {
+     "cert_number": "1221933003",
+     "issue_date": "2018-06-26",
+     "period_start": "2018-07-01",
+     "period_end": "2019-06-30",
+     "city": "市原市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】40時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "KT姉崎同行援護受給者証.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1221933003",
+     "issue_date": "2019-06-26",
+     "period_start": "2019-07-01",
+     "period_end": "2020-06-30",
+     "city": "市原市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】40時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "KT姉崎同行援護受給者証.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1221933003",
+     "issue_date": "2020-06-29",
+     "period_start": "2020-07-01",
+     "period_end": "2021-06-30",
+     "city": "市原市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】40時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "KT姉崎同行援護受給者証.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1221933003",
+     "issue_date": "2021-06-28",
+     "period_start": "2021-07-01",
+     "period_end": "2022-06-30",
+     "city": "市原市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】40時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "KT姉崎同行援護受給者証.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1221933003",
+     "issue_date": "2022-06-28",
+     "period_start": "2022-07-01",
+     "period_end": "2023-06-30",
+     "city": "市原市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】40時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "KT姉崎同行援護受給者証.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1221933003",
+     "issue_date": "2023-06-26",
+     "period_start": "2023-07-01",
+     "period_end": "2024-06-30",
+     "city": "市原市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】40時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "KT姉崎同行援護受給者証.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1221933003",
+     "issue_date": "2024-06-26",
+     "period_start": "2024-07-01",
+     "period_end": "2025-06-30",
+     "city": "市原市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】40時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "KT姉崎同行援護受給者証.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1221933003",
+     "issue_date": "2025-06-26",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "市原市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】40時間00分【所得区分】低所得１【利用者負担上限月額】0株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "KT姉崎同行援護受給者証.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1221933003",
+     "issue_date": "2026-06-26",
+     "period_start": "2026-07-01",
+     "period_end": "2027-06-30",
+     "city": "市原市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】40時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "KT姉崎同行援護受給者証.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221933003",
+     "issue_date": "2025-06-26",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "市原市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】40時間00分【所得区分】低所得１【利用者負担上限月額】0株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "KT姉崎同行援護受給者証.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ]
+  },
+  {
+   "user_number": "@松本純子",
+   "name": "松本 純子",
+   "gender": "女",
+   "birth_date": "1949-07-20",
+   "postal_code": "290-0255",
+   "address": "千葉県市原市光風台2丁目255番地",
+   "certs": [
+    {
+     "cert_number": "1221919549",
+     "issue_date": "2025-01-27",
+     "period_start": "2025-02-01",
+     "period_end": "2026-01-31",
+     "city": "市原市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】39時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "KT姉崎同行援護受給者証.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 39,
+       "minutes": 30
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1221919549",
+     "issue_date": "2026-01-26",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "市原市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】39時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "KT姉崎同行援護受給者証.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 39,
+       "minutes": 30
+      }
+     },
+     "flag_h30_after": true
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221919549",
+     "issue_date": "2026-01-26",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "市原市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【同行援護】39時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "KT姉崎同行援護受給者証.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 39,
+       "minutes": 30
+      }
+     },
+     "flag_h30_after": true
+    }
+   ]
   }
  ],
  "stats": {
-  "pdf_files": 2,
-  "kihon_rows": 17,
+  "pdf_files": 3,
+  "kihon_rows": 19,
   "birth_date_missing": 0,
-  "clients": 17,
-  "certs_total": 128,
-  "current_certs": 18,
+  "clients": 19,
+  "certs_total": 139,
+  "current_certs": 20,
   "multi_current": 1
  },
  "warnings": [
