@@ -1,0 +1,3797 @@
+{
+ "office": "ケイ・ティ・グループヘルパーステーションＨａｎａちはら台",
+ "area": "ちはら台",
+ "clients": [
+  {
+   "user_number": "1001454160",
+   "name": "饗庭 將公",
+   "gender": "男",
+   "birth_date": "1961-06-24",
+   "postal_code": "290-0141",
+   "address": "千葉県市原市ちはら台東9-16-13",
+   "certs": [
+    {
+     "cert_number": "1221937426",
+     "issue_date": "2020-06-29",
+     "period_start": "2021-07-01",
+     "period_end": "2022-06-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】17時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 17,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221937426",
+     "issue_date": "2022-07-01",
+     "period_start": "2022-07-01",
+     "period_end": "2023-06-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】17時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 17,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221937426",
+     "issue_date": "2022-07-01",
+     "period_start": "2023-07-01",
+     "period_end": "2024-06-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】17時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 17,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221937426",
+     "issue_date": "2022-07-01",
+     "period_start": "2024-07-01",
+     "period_end": "2025-06-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】17時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 17,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221937426",
+     "issue_date": "2025-06-12",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】17時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 17,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221937426",
+     "issue_date": "2025-06-12",
+     "period_start": "2026-07-01",
+     "period_end": "2027-06-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】17時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 17,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221937426",
+     "issue_date": "2025-06-12",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】17時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 17,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "620000051",
+   "name": "新井 健讓",
+   "gender": "男",
+   "birth_date": "1972-02-24",
+   "postal_code": "266-0026",
+   "address": "千葉県千葉市緑区古市場町474-195 古市場団地2棟303号",
+   "certs": [
+    {
+     "cert_number": "2000087532",
+     "issue_date": "2023-08-17",
+     "period_start": "2023-09-01",
+     "period_end": "2024-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】10時間00分【家事援助】22時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000087532",
+     "issue_date": "2024-08-20",
+     "period_start": "2024-09-01",
+     "period_end": "2025-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】10時間00分【家事援助】22時間30分【利用者負担上限月額】0ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000087532",
+     "issue_date": "2024-08-20",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】10時間00分【家事援助】22時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000087532",
+     "issue_date": "2024-08-20",
+     "period_start": "2024-09-01",
+     "period_end": "2025-08-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】5時間00分【家事援助】5時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000087532",
+     "issue_date": "2024-08-20",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】5時間00分【家事援助】5時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000087532",
+     "issue_date": "2024-08-20",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】10時間00分【家事援助】22時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000087532",
+     "issue_date": "2024-08-20",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】5時間00分【家事援助】5時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "620000003",
+   "name": "石井 咲妃",
+   "gender": "女",
+   "birth_date": "2008-08-15",
+   "postal_code": "266-0005",
+   "address": "千葉県千葉市緑区誉田町2-21-1432",
+   "certs": [
+    {
+     "cert_number": "2000075503",
+     "issue_date": "2024-08-19",
+     "period_start": "2024-09-01",
+     "period_end": "2025-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】50時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】株式会社　コネクト　ドット３６５誉",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "株式会社　コネクト　ドット３６５誉"
+    },
+    {
+     "cert_number": "2000075503",
+     "issue_date": "2023-08-15",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】10時間00分【所得区分】低所得１【利用者負担上限月額】4,600【上限額管理事業所】株式会社　コネクト　ドット３６５誉田",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "株式会社　コネクト　ドット３６５誉田"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000075503",
+     "issue_date": "2023-08-15",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】10時間00分【所得区分】低所得１【利用者負担上限月額】4,600【上限額管理事業所】株式会社　コネクト　ドット３６５誉田",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "株式会社　コネクト　ドット３６５誉田"
+    }
+   ]
+  },
+  {
+   "user_number": "@田",
+   "name": "田",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "2000075503",
+     "issue_date": "2025-08-14",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】50時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】株式会社　コネクト　ドット３",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "株式会社　コネクト　ドット３"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000075503",
+     "issue_date": "2025-08-14",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】50時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】株式会社　コネクト　ドット３",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "株式会社　コネクト　ドット３"
+    }
+   ]
+  },
+  {
+   "user_number": "@65誉田",
+   "name": "６５誉田",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "2000075503",
+     "issue_date": "2023-08-15",
+     "period_start": "2023-09-01",
+     "period_end": "2023-09-30",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】5時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000075503",
+     "issue_date": "2023-08-15",
+     "period_start": "2023-09-01",
+     "period_end": "2024-08-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】5時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】株式会社　コネクト　ドット３６",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "株式会社　コネクト　ドット３６"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000075503",
+     "issue_date": "2023-08-15",
+     "period_start": "2023-09-01",
+     "period_end": "2024-08-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】5時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】株式会社　コネクト　ドット３６",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "株式会社　コネクト　ドット３６"
+    }
+   ]
+  },
+  {
+   "user_number": "@5誉田",
+   "name": "５誉田",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "2000075503",
+     "issue_date": "2023-08-15",
+     "period_start": "2024-09-01",
+     "period_end": "2025-08-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】6時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】株式会社　コネクト　ドット３６５誉田ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 6,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "株式会社　コネクト　ドット３６５誉田ヘルパーステーションHanaちはら台（居宅介護）"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000075503",
+     "issue_date": "2023-08-15",
+     "period_start": "2024-09-01",
+     "period_end": "2025-08-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】6時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】株式会社　コネクト　ドット３６５誉田ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 6,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "株式会社　コネクト　ドット３６５誉田ヘルパーステーションHanaちはら台（居宅介護）"
+    }
+   ]
+  },
+  {
+   "user_number": "620000137",
+   "name": "今関 研一",
+   "gender": "男",
+   "birth_date": "1972-02-04",
+   "postal_code": "290-0064",
+   "address": "千葉県市原市東五所33-1 第2弘岡ハイツ102",
+   "certs": [
+    {
+     "cert_number": "1221955394",
+     "issue_date": "2026-04-23",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】92時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 92,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221955394",
+     "issue_date": "2026-04-23",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】92時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 92,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113113621",
+   "name": "鵜沢 莉杜",
+   "gender": "女",
+   "birth_date": "2001-08-08",
+   "postal_code": "290-0170",
+   "address": "千葉県市原市うるいど南7-13-21",
+   "certs": [
+    {
+     "cert_number": "1221943820",
+     "issue_date": "2022-07-15",
+     "period_start": "2022-07-29",
+     "period_end": "2023-07-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】150時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 150,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221943820",
+     "issue_date": "2023-07-26",
+     "period_start": "2023-08-01",
+     "period_end": "2023-09-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】150時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 150,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221943820",
+     "issue_date": "2023-09-28",
+     "period_start": "2023-10-01",
+     "period_end": "2024-09-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】150時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 150,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221943820",
+     "issue_date": "2024-09-24",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】150時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 150,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221943820",
+     "issue_date": "2025-09-12",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】150時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 150,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221943820",
+     "issue_date": "2022-07-15",
+     "period_start": "2022-07-29",
+     "period_end": "2023-07-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【利用者負担上限月額】0ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221943820",
+     "issue_date": "2022-07-15",
+     "period_start": "2022-07-29",
+     "period_end": "2023-07-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221943820",
+     "issue_date": "2022-07-15",
+     "period_start": "2022-07-29",
+     "period_end": "2023-07-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221943820",
+     "issue_date": "2023-07-26",
+     "period_start": "2023-08-01",
+     "period_end": "2023-09-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221943820",
+     "issue_date": "2023-07-26",
+     "period_start": "2023-10-01",
+     "period_end": "2024-09-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221943820",
+     "issue_date": "2023-07-26",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221943820",
+     "issue_date": "2023-07-26",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221943820",
+     "issue_date": "2025-09-12",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】150時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 150,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221943820",
+     "issue_date": "2023-07-26",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "620000164",
+   "name": "ＵＲＡＢＥ ＮＡＲ",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "2000073110",
+     "issue_date": "2025-05-07",
+     "period_start": "2025-05-01",
+     "period_end": "2026-04-06",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】45時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221955378",
+     "issue_date": "2026-04-07",
+     "period_start": "2026-04-07",
+     "period_end": "2027-04-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】7時間30分【家事援助】22時間30分【利用者負担上限月額】0ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 7,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221955378",
+     "issue_date": "2026-04-07",
+     "period_start": "2026-04-07",
+     "period_end": "2027-04-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】7時間30分【家事援助】22時間30分【利用者負担上限月額】0ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 7,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113111945",
+   "name": "小澤 晃",
+   "gender": "男",
+   "birth_date": "1962-10-28",
+   "postal_code": "290-0015",
+   "address": "千葉県市原市市原202-26",
+   "certs": [
+    {
+     "cert_number": "1221934431",
+     "issue_date": "2021-04-30",
+     "period_start": "2021-05-01",
+     "period_end": "2022-04-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】15時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221934431",
+     "issue_date": "2021-04-30",
+     "period_start": "2021-05-01",
+     "period_end": "2022-04-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】15時間00分【通院介助】8時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 8,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221934431",
+     "issue_date": "2022-04-21",
+     "period_start": "2022-05-01",
+     "period_end": "2023-04-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】15時間00分【通院介助】8時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 8,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221934431",
+     "issue_date": "2022-04-21",
+     "period_start": "2023-05-01",
+     "period_end": "2024-04-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】15時間00分【通院身体】8時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 8,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221934431",
+     "issue_date": "2022-04-21",
+     "period_start": "2024-05-01",
+     "period_end": "2025-04-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】15時間00分【通院身体】8時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 8,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221934431",
+     "issue_date": "2022-04-21",
+     "period_start": "2025-05-01",
+     "period_end": "2026-04-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】15時間00分【通院身体】8時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 8,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221934431",
+     "issue_date": "2028-04-24",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】15時間00分【通院身体】8時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 8,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221934431",
+     "issue_date": "2028-04-24",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】15時間00分【通院身体】8時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 8,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "620000125",
+   "name": "郡司 桜",
+   "gender": "女",
+   "birth_date": "2004-12-21",
+   "postal_code": "290-0062",
+   "address": "千葉県市原市八幡1638-3",
+   "certs": [
+    {
+     "cert_number": "1221944737",
+     "issue_date": "2025-06-16",
+     "period_start": "2025-06-18",
+     "period_end": "2025-11-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【利用者負担上限月額】0ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221944737",
+     "issue_date": "2025-11-20",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221944737",
+     "issue_date": "2025-06-16",
+     "period_start": "2025-06-18",
+     "period_end": "2025-11-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221944737",
+     "issue_date": "2025-11-20",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221944737",
+     "issue_date": "2025-11-20",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "620000076",
+   "name": "酒井 雫",
+   "gender": "女",
+   "birth_date": "2022-02-17",
+   "postal_code": "266-0033",
+   "address": "千葉県千葉市緑区おゆみ野南2-94-5",
+   "certs": [
+    {
+     "cert_number": "2000160727",
+     "issue_date": "2024-03-15",
+     "period_start": "2024-04-01",
+     "period_end": "2024-12-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【通院身体】10時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000160727",
+     "issue_date": "2024-03-15",
+     "period_start": "2025-01-01",
+     "period_end": "2025-03-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【通院身体】10時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "ヘルパーステーションHanaちはら台（居宅介護）"
+    },
+    {
+     "cert_number": "2000160727",
+     "issue_date": "2024-03-15",
+     "period_start": "2025-04-01",
+     "period_end": "2026-03-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【通院身体】10時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "ヘルパーステーションHanaちはら台（居宅介護）"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000160727",
+     "issue_date": "2024-03-15",
+     "period_start": "2025-04-01",
+     "period_end": "2026-03-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【通院身体】10時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "ヘルパーステーションHanaちはら台（居宅介護）"
+    }
+   ]
+  },
+  {
+   "user_number": "2113002999",
+   "name": "下田 剛志",
+   "gender": "男",
+   "birth_date": "1967-11-26",
+   "postal_code": "290-0038",
+   "address": "市原市五井西2丁目19番地1 ｱﾝﾋﾞｼｮﾝ六番館101号",
+   "certs": [
+    {
+     "cert_number": "1221923400",
+     "issue_date": "2018-10-01",
+     "period_start": "2018-11-01",
+     "period_end": "2019-10-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】95時間00分【家事援助】115時間00分【通院身体】3時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 95,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 115,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 3,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221923400",
+     "issue_date": "2019-10-30",
+     "period_start": "2019-11-01",
+     "period_end": "2020-10-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】95時間00分【家事援助】115時間00分【通院身体】3時間00分【利用者負担上限月額】0ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 95,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 115,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 3,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221923400",
+     "issue_date": "2020-10-29",
+     "period_start": "2020-11-01",
+     "period_end": "2021-10-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】95時間00分【家事援助】115時間00分【通院身体】3時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 95,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 115,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 3,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221923400",
+     "issue_date": "2021-10-15",
+     "period_start": "2021-11-01",
+     "period_end": "2022-10-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】95時間00分【家事援助】115時間00分【通院身体】3時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 95,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 115,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 3,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221923400",
+     "issue_date": "2022-10-24",
+     "period_start": "2022-11-01",
+     "period_end": "2023-10-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】95時間00分【家事援助】115時間00分【通院身体】30時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 95,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 115,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221923400",
+     "issue_date": "2023-10-25",
+     "period_start": "2023-11-01",
+     "period_end": "2024-10-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】95時間00分【家事援助】115時間00分【通院身体】3時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 95,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 115,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 3,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221923400",
+     "issue_date": "2024-10-23",
+     "period_start": "2024-11-01",
+     "period_end": "2025-10-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】95時間00分【家事援助】115時間00分【通院身体】3時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 95,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 115,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 3,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221923400",
+     "issue_date": "2025-10-27",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】95時間00分【家事援助】115時間00分【通院身体】3時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 95,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 115,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 3,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221923400",
+     "issue_date": "2024-10-23",
+     "period_start": "2024-11-01",
+     "period_end": "2025-10-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】95時間00分【家事援助】115時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 95,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 115,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221923400",
+     "issue_date": "2024-10-23",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】95時間00分【家事援助】115時間00分【利用者負担上限月額】0ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 95,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 115,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221923400",
+     "issue_date": "2025-10-27",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】95時間00分【家事援助】115時間00分【通院身体】3時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 95,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 115,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 3,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221923400",
+     "issue_date": "2024-10-23",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】95時間00分【家事援助】115時間00分【利用者負担上限月額】0ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 95,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 115,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113113190",
+   "name": "関口 風実",
+   "gender": "女",
+   "birth_date": "2011-10-08",
+   "postal_code": "290-0143",
+   "address": "千葉県市原市ちはら台西3-14-1",
+   "certs": [
+    {
+     "cert_number": "1221937004",
+     "issue_date": "2022-04-15",
+     "period_start": "2022-05-01",
+     "period_end": "2022-10-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】32時間30分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 32,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221937004",
+     "issue_date": "2022-10-14",
+     "period_start": "2022-11-01",
+     "period_end": "2023-10-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】32時間30分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 32,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221937004",
+     "issue_date": "2022-10-14",
+     "period_start": "2023-11-01",
+     "period_end": "2024-10-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】32時間30分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 32,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221937004",
+     "issue_date": "2022-10-14",
+     "period_start": "2024-11-01",
+     "period_end": "2025-10-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】32時間30分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 32,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221937004",
+     "issue_date": "2022-10-14",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】32時間30分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 32,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221937004",
+     "issue_date": "2022-10-14",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】32時間30分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 32,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "511000018",
+   "name": "髙木 健太",
+   "gender": "男",
+   "birth_date": "1979-09-30",
+   "postal_code": "290-0062",
+   "address": "千葉県市原市八幡394-6",
+   "certs": [
+    {
+     "cert_number": "1221919853",
+     "issue_date": "2024-05-24",
+     "period_start": "2024-06-01",
+     "period_end": "2025-03-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】20時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221919853",
+     "issue_date": "2025-03-31",
+     "period_start": "2025-04-01",
+     "period_end": "2026-03-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】20時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221919853",
+     "issue_date": "2026-04-01",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】40時間00分【利用者負担上限月額】0ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221919853",
+     "issue_date": "2025-10-16",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】40時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221919853",
+     "issue_date": "2026-04-01",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】40時間00分【利用者負担上限月額】0ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221919853",
+     "issue_date": "2025-10-16",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】40時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "620000115",
+   "name": "高橋 蒼生",
+   "gender": "男",
+   "birth_date": "2019-01-22",
+   "postal_code": "266-0031",
+   "address": "千葉県千葉市緑区おゆみ野3丁目10番地1 801号",
+   "certs": [
+    {
+     "cert_number": "2000129631",
+     "issue_date": "2025-03-17",
+     "period_start": "2025-04-01",
+     "period_end": "2026-01-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】25時間00分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000129631",
+     "issue_date": "2025-03-17",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】25時間00分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000129631",
+     "issue_date": "2025-03-17",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】25時間00分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "620000149",
+   "name": "竹下 誠",
+   "gender": "男",
+   "birth_date": "1965-04-25",
+   "postal_code": "290-0141",
+   "address": "千葉県市原市ちはら台東7-12-15",
+   "certs": [
+    {
+     "cert_number": "1221945759",
+     "issue_date": "2026-03-09",
+     "period_start": "2026-04-01",
+     "period_end": "2027-04-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】15時間00分【家事援助】10時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221945759",
+     "issue_date": "2026-03-09",
+     "period_start": "2026-04-01",
+     "period_end": "2027-04-30",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】15時間00分【家事援助】10時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113112005",
+   "name": "田中 圭祐",
+   "gender": "男",
+   "birth_date": "1997-09-24",
+   "postal_code": "266-0055",
+   "address": "千葉市緑区越智町737-52",
+   "certs": [
+    {
+     "cert_number": "2000028106",
+     "issue_date": "2021-09-14",
+     "period_start": "2021-10-01",
+     "period_end": "2022-09-30",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】32時間00分【家事援助】9時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 32,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 9,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000028106",
+     "issue_date": "2021-09-14",
+     "period_start": "2022-10-01",
+     "period_end": "2023-09-30",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】32時間00分【家事援助】9時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 32,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 9,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000028106",
+     "issue_date": "2021-09-14",
+     "period_start": "2023-10-01",
+     "period_end": "2024-09-30",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】32時間00分【家事援助】9時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 32,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 9,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000028106",
+     "issue_date": "2021-09-14",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】32時間00分【家事援助】9時間00分【利用者負担上限月額】0ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 32,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 9,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000028106",
+     "issue_date": "2025-09-10",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】65時間00分【家事援助】9時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 65,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 9,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000028106",
+     "issue_date": "2025-09-10",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】65時間00分【家事援助】9時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 65,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 9,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "620000105",
+   "name": "千葉 真規子",
+   "gender": "女",
+   "birth_date": "1983-02-24",
+   "postal_code": "290-0004",
+   "address": "千葉県市原市辰巳台西2-2-2 エステ・スクエア市原たつみ台弐番館301",
+   "certs": [
+    {
+     "cert_number": "1221928847",
+     "issue_date": "2024-06-27",
+     "period_start": "2025-02-01",
+     "period_end": "2026-01-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221928847",
+     "issue_date": "2024-06-27",
+     "period_start": "2025-02-01",
+     "period_end": "2026-01-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113112188",
+   "name": "手塚 麻紀子",
+   "gender": "女",
+   "birth_date": "1972-02-12",
+   "postal_code": "290-0006",
+   "address": "千葉県市原市若宮4-3-12",
+   "certs": [
+    {
+     "cert_number": "1221940388",
+     "issue_date": "2021-12-28",
+     "period_start": "2022-01-01",
+     "period_end": "2022-12-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221940388",
+     "issue_date": "2021-12-28",
+     "period_start": "2023-01-01",
+     "period_end": "2023-12-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221940388",
+     "issue_date": "2021-12-28",
+     "period_start": "2024-01-01",
+     "period_end": "2024-12-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221940388",
+     "issue_date": "2021-12-28",
+     "period_start": "2025-01-01",
+     "period_end": "2025-12-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221940388",
+     "issue_date": "2021-12-28",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221940388",
+     "issue_date": "2021-12-28",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113006493",
+   "name": "遠山 千絵",
+   "gender": "女",
+   "birth_date": "1976-10-21",
+   "postal_code": "266-0033",
+   "address": "千葉県千葉市緑区おゆみ野南2-13-2 レジデンスおゆみ野405号",
+   "certs": [
+    {
+     "cert_number": "2000122750",
+     "issue_date": "2021-11-29",
+     "period_start": "2021-12-01",
+     "period_end": "2022-11-30",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【利用者負担上限月額】0ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000122750",
+     "issue_date": "2021-11-29",
+     "period_start": "2022-12-01",
+     "period_end": "2023-11-30",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000122750",
+     "issue_date": "2021-11-29",
+     "period_start": "2023-12-01",
+     "period_end": "2024-11-30",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000122750",
+     "issue_date": "2021-11-29",
+     "period_start": "2024-12-01",
+     "period_end": "2025-11-30",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000122750",
+     "issue_date": "2025-12-01",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000122750",
+     "issue_date": "2025-12-01",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "511000016",
+   "name": "永嶌 未來",
+   "gender": "女",
+   "birth_date": "1996-11-09",
+   "postal_code": "266-0033",
+   "address": "千葉県千葉市緑区おゆみ野南6-16-6",
+   "certs": [
+    {
+     "cert_number": "2000026597",
+     "issue_date": "2024-05-08",
+     "period_start": "2024-05-20",
+     "period_end": "2024-12-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】25時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000026597",
+     "issue_date": "2024-12-27",
+     "period_start": "2025-01-01",
+     "period_end": "2025-12-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】25時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000026597",
+     "issue_date": "2025-12-16",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】25時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000026597",
+     "issue_date": "2024-05-08",
+     "period_start": "2024-01-01",
+     "period_end": "2024-12-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】25時間00分【利用者負担上限月額】0ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000026597",
+     "issue_date": "2024-05-08",
+     "period_start": "2025-01-01",
+     "period_end": "2025-12-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】25時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000026597",
+     "issue_date": "2025-12-16",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】25時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000026597",
+     "issue_date": "2025-12-16",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】25時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "620000039",
+   "name": "西村 彩音",
+   "gender": "女",
+   "birth_date": "2007-10-18",
+   "postal_code": "290-0171",
+   "address": "千葉県市原市潤井戸1954-43",
+   "certs": [
+    {
+     "cert_number": "1221935842",
+     "issue_date": "2024-02-19",
+     "period_start": "2024-03-01",
+     "period_end": "2024-10-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】22時間30分【所得区分】一般１(一般)【利用者負担上限月額】4,600",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221935842",
+     "issue_date": "2024-02-19",
+     "period_start": "2024-11-01",
+     "period_end": "2025-10-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】22時間30分【所得区分】一般１(一般)【利用者負担上限月額】4,600",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221953555",
+     "issue_date": "2024-02-19",
+     "period_start": "2025-11-01",
+     "period_end": "2026-03-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】22時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221953555",
+     "issue_date": "2024-02-19",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】22時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221953555",
+     "issue_date": "2024-02-19",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】22時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "620000059",
+   "name": "新田 有美",
+   "gender": "女",
+   "birth_date": "1990-07-31",
+   "postal_code": "266-0005",
+   "address": "千葉県千葉市緑区誉田町1-369-4 ヒルサイドB105",
+   "certs": [
+    {
+     "cert_number": "2000036182",
+     "issue_date": "2024-03-15",
+     "period_start": "2024-04-01",
+     "period_end": "2025-03-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】14時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 14,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000036182",
+     "issue_date": "2024-03-15",
+     "period_start": "2025-04-01",
+     "period_end": "2026-03-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】37時間30分【利用者負担上限月額】0ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 37,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "2000036182",
+     "issue_date": "2024-03-15",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】37時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 37,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000036182",
+     "issue_date": "2024-03-15",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】37時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 37,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113111944",
+   "name": "舩越 英伸",
+   "gender": "男",
+   "birth_date": "1962-08-01",
+   "postal_code": "290-0055",
+   "address": "千葉県市原市五井東1-4-7 サンハイツ101",
+   "certs": [
+    {
+     "cert_number": "1221934340",
+     "issue_date": "2021-03-31",
+     "period_start": "2021-04-01",
+     "period_end": "2022-03-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221934340",
+     "issue_date": "2022-04-01",
+     "period_start": "2022-04-01",
+     "period_end": "2023-03-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221934340",
+     "issue_date": "2023-03-24",
+     "period_start": "2023-04-01",
+     "period_end": "2024-03-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221934340",
+     "issue_date": "2023-03-24",
+     "period_start": "2024-04-01",
+     "period_end": "2025-03-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221934340",
+     "issue_date": "2023-03-24",
+     "period_start": "2025-04-01",
+     "period_end": "2026-03-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221934340",
+     "issue_date": "2023-03-24",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221934340",
+     "issue_date": "2023-03-24",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113111949",
+   "name": "星野 快夫",
+   "gender": "男",
+   "birth_date": "1971-05-23",
+   "postal_code": "290-0021",
+   "address": "千葉県市原市山田橋1-15-2波SA208",
+   "certs": [
+    {
+     "cert_number": "1221923814",
+     "issue_date": "2021-12-18",
+     "period_start": "2021-01-01",
+     "period_end": "2022-01-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【利用者負担上限月額】0ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221923814",
+     "issue_date": "2022-01-25",
+     "period_start": "2022-02-01",
+     "period_end": "2023-01-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221923814",
+     "issue_date": "2022-01-25",
+     "period_start": "2023-02-01",
+     "period_end": "2024-01-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221923814",
+     "issue_date": "2024-01-25",
+     "period_start": "2024-02-01",
+     "period_end": "2025-01-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221923814",
+     "issue_date": "2025-01-29",
+     "period_start": "2025-02-01",
+     "period_end": "2026-01-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】18時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221923814",
+     "issue_date": "2025-01-29",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】18時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221923814",
+     "issue_date": "2025-01-29",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】18時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "1114",
+   "name": "前田 健司",
+   "gender": "男",
+   "birth_date": "1973-03-20",
+   "postal_code": null,
+   "address": "市原市五井中央東2-18-22 ｲｰｽﾄｺｰﾄ2号館307",
+   "certs": [
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2018-05-29",
+     "period_start": "2018-06-01",
+     "period_end": "2019-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】227時間00分【家事援助】45時間00分【通院身体】14時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】太陽の丘ホーム",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 227,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2019-05-31",
+     "period_start": "2019-06-01",
+     "period_end": "2020-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】227時間00分【家事援助】45時間00分【通院身体】14時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 227,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2020-05-27",
+     "period_start": "2020-06-01",
+     "period_end": "2021-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】227時間30分【家事援助】45時間00分【通院身体】14時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホームヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 227,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホームヘルパーステーションHanaちはら台（居宅介護）"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2021-05-27",
+     "period_start": "2021-06-01",
+     "period_end": "2022-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】227時間30分【家事援助】45時間00分【通院身体】14時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 227,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2022-05-31",
+     "period_start": "2022-06-01",
+     "period_end": "2023-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】227時間30分【家事援助】45時間00分【通院身体】14時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 227,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2023-05-25",
+     "period_start": "2023-06-01",
+     "period_end": "2024-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】227時間30分【家事援助】45時間00分【通院身体】14時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 227,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2024-05-27",
+     "period_start": "2024-06-01",
+     "period_end": "2025-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】227時間30分【家事援助】45時間00分【通院身体】14時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 227,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2025-05-02",
+     "period_start": "2025-06-01",
+     "period_end": "2026-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】210時間00分【家事援助】45時間00分【通院身体】14時間00分【短時間複数訪問】対象【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 210,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2026-05-27",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】180時間00分【家事援助】45時間00分【通院身体】14時間00分【短時間複数訪問】対象【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 180,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2025-05-02",
+     "period_start": "2025-06-01",
+     "period_end": "2026-05-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】210時間00分【家事援助】45時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 210,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2025-05-02",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】180時間00分【家事援助】45時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホームヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 180,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホームヘルパーステーションHanaちはら台（居宅介護）"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2026-05-27",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】180時間00分【家事援助】45時間00分【通院身体】14時間00分【短時間複数訪問】対象【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 180,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2025-05-02",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】180時間00分【家事援助】45時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホームヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 180,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホームヘルパーステーションHanaちはら台（居宅介護）"
+    }
+   ]
+  },
+  {
+   "user_number": "620000097",
+   "name": "森川 祐暉",
+   "gender": "男",
+   "birth_date": "2001-08-28",
+   "postal_code": "266-0032",
+   "address": "千葉県千葉市緑区おゆみ野中央1-25-14 プラザ学園前1棟202号",
+   "certs": [
+    {
+     "cert_number": "2000117917",
+     "issue_date": "2024-11-28",
+     "period_start": "2024-12-01",
+     "period_end": "2025-08-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】20時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000117917",
+     "issue_date": "2024-11-28",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】20時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000117917",
+     "issue_date": "2024-11-28",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】20時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113112130",
+   "name": "森永 織太",
+   "gender": "男",
+   "birth_date": "1957-05-17",
+   "postal_code": "290-0151",
+   "address": "千葉県市原市瀬又1005-78",
+   "certs": [
+    {
+     "cert_number": "1221938762",
+     "issue_date": "2020-02-27",
+     "period_start": "2021-12-01",
+     "period_end": "2022-02-28",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】25時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221938762",
+     "issue_date": "2022-03-01",
+     "period_start": "2022-03-01",
+     "period_end": "2022-05-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】25時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221938762",
+     "issue_date": "2022-05-23",
+     "period_start": "2022-06-01",
+     "period_end": "2023-01-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】25時間00分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221938762",
+     "issue_date": "2023-01-12",
+     "period_start": "2023-02-01",
+     "period_end": "2024-01-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221938762",
+     "issue_date": "2023-01-12",
+     "period_start": "2024-02-01",
+     "period_end": "2025-01-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221938762",
+     "issue_date": "2023-01-12",
+     "period_start": "2025-02-01",
+     "period_end": "2026-01-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【利用者負担上限月額】0ヘルパーステーションHanaちはら台（居宅介護）",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221938762",
+     "issue_date": "2023-01-12",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221938762",
+     "issue_date": "2023-01-12",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【利用者負担上限月額】0",
+     "src": "ちはら居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  }
+ ],
+ "stats": {
+  "pdf_files": 1,
+  "kihon_rows": 26,
+  "birth_date_missing": 4,
+  "clients": 29,
+  "certs_total": 129,
+  "current_certs": 34,
+  "multi_current": 5
+ },
+ "warnings": [
+  "基本情報一覧表に氏名なし (生年月日が取れない): 田 (@田)",
+  "基本情報一覧表に氏名なし (生年月日が取れない): ６５誉田 (@65誉田)",
+  "基本情報一覧表に氏名なし (生年月日が取れない): ５誉田 (@5誉田)",
+  "基本情報一覧表に氏名なし (生年月日が取れない): ＵＲＡＢＥ ＮＡＲ (620000164)",
+  "現在有効な受給者証なし: ６５誉田 (@65誉田) → 最新 2024-08-31 を採用 (期限切れ)",
+  "現在有効な受給者証なし: ５誉田 (@5誉田) → 最新 2025-08-31 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 酒井 雫 (620000076) → 最新 2026-03-31 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 千葉 真規子 (620000105) → 最新 2026-01-31 を採用 (期限切れ)"
+ ]
+}
