@@ -270,6 +270,7 @@ async function main() {
   const plan = [];
   const cityWarn = new Set();
   const ambiguous = [];
+  const backfillBirth = []; // 既存 client の birth_date が空 → 受給者証側の値で埋める
   for (const c of data.clients) {
     let existing = existingByNameBirth.get(`${norm(c.name)}|${c.birth_date}`) ?? null;
     let reuseReason = existing ? "氏名+生年月日" : null;
@@ -290,6 +291,25 @@ async function main() {
         reuseReason = "氏名のみ(生年月日なし)";
       } else if (cands.length > 1) {
         ambiguous.push(`${c.name} (${c.user_number}) → 既存 ${cands.map((x) => x.user_number).join(" / ")}`);
+      }
+    }
+    // 逆パターン: **既存側**が生年月日なし。
+    //   基本情報一覧表を後から受け取って再取込すると、先に受給者証だけで作った
+    //   client (birth_date = null) と 氏名+生年月日 で一致せず、同じ人を
+    //   100000+n にリナンバーして二重作成してしまう。
+    //   実証: 木更津 — 8/4 に受給者証だけで 20 名作成 → 8/5 に基本情報付きで
+    //   再取込したら 11 名が別 client として作られた。
+    //   生年月日なしの同名が **一意** のときだけ流用し、生年月日を埋める。
+    if (!existing && c.birth_date) {
+      const cands = (existingByName.get(norm(c.name)) ?? []).filter((x) => !x.birth_date);
+      if (cands.length === 1) {
+        existing = cands[0];
+        reuseReason = `氏名一致 (既存の生年月日が空 → ${c.birth_date} を補完)`;
+        backfillBirth.push({ id: existing.id, name: c.name, birth_date: c.birth_date });
+      } else if (cands.length > 1) {
+        ambiguous.push(
+          `${c.name} (${c.user_number}) → 生年月日が空の既存が複数: ${cands.map((x) => x.user_number).join(" / ")}`,
+        );
       }
     }
     const clientId = existing ? existing.id : randomUUID();
@@ -367,6 +387,17 @@ async function main() {
       removed += count ?? 0;
     }
     console.log(`既存 cert (${MARKER}) 削除: ${removed} 件\n`);
+  }
+
+  if (backfillBirth.length) {
+    let bf = 0;
+    for (const b of backfillBirth) {
+      const { error } = await sb.from("clients").update({ birth_date: b.birth_date }).eq("id", b.id);
+      if (error) { console.error(`✗ ${b.name} 生年月日 補完: ${error.message}`); process.exit(1); }
+      bf++;
+    }
+    console.log(`既存 client の生年月日を補完: ${bf} 名
+`);
   }
 
   let okC = 0, okA = 0, okS = 0, ng = 0;

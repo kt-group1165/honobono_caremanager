@@ -1,0 +1,90 @@
+[
+ {
+  "id": "ab282f22-4511-4e15-a848-56ae5eccffdf",
+  "name": "髙橋 祐二",
+  "user_number": "101531",
+  "birth_date": "1971-02-18",
+  "insured_number": null,
+  "created_at": "2026-08-05T14:31:57.797633+00:00"
+ },
+ {
+  "id": "d6828504-e17a-48a7-8623-95cf0e234038",
+  "name": "太田 結衣",
+  "user_number": "101359",
+  "birth_date": "1994-09-23",
+  "insured_number": null,
+  "created_at": "2026-08-05T14:31:56.698688+00:00"
+ },
+ {
+  "id": "6fce0ef5-9517-493f-ba7f-989620a564bc",
+  "name": "大御 由美子",
+  "user_number": "101899",
+  "birth_date": "1968-12-14",
+  "insured_number": null,
+  "created_at": "2026-08-05T14:31:57.264709+00:00"
+ },
+ {
+  "id": "4c32492f-02c6-4c26-9ab3-239443420b56",
+  "name": "齋藤 健琉",
+  "user_number": "102573",
+  "birth_date": "2019-07-16",
+  "insured_number": null,
+  "created_at": "2026-08-05T14:31:57.412944+00:00"
+ },
+ {
+  "id": "4a65f487-dfe3-43b9-8437-8bc65cdc0b3e",
+  "name": "齊藤 優希",
+  "user_number": "102478",
+  "birth_date": "1985-02-12",
+  "insured_number": null,
+  "created_at": "2026-08-05T14:31:57.651427+00:00"
+ },
+ {
+  "id": "ab2e0812-ef7c-4722-afc2-58cba4288f5e",
+  "name": "齋藤 遥真",
+  "user_number": "102574",
+  "birth_date": "2019-07-16",
+  "insured_number": null,
+  "created_at": "2026-08-05T14:31:57.525323+00:00"
+ },
+ {
+  "id": "0f99cbdf-8fb8-4269-9182-eb6e157a2bf1",
+  "name": "宮崎 初江",
+  "user_number": "101841",
+  "birth_date": "1965-01-30",
+  "insured_number": null,
+  "created_at": "2026-08-05T14:31:58.287512+00:00"
+ },
+ {
+  "id": "ee399931-b629-4951-913d-807be6f35db4",
+  "name": "山田 章夫",
+  "user_number": "102579",
+  "birth_date": "1964-09-10",
+  "insured_number": null,
+  "created_at": "2026-08-05T14:31:58.449833+00:00"
+ },
+ {
+  "id": "93614d43-7e7e-4c49-89e8-8813b409324b",
+  "name": "吉田 作太郎",
+  "user_number": "101847",
+  "birth_date": "1959-07-14",
+  "insured_number": null,
+  "created_at": "2026-08-05T14:31:58.6556+00:00"
+ },
+ {
+  "id": "06e75aab-0784-4996-9cec-e93ddc9a9042",
+  "name": "吉田 江美",
+  "user_number": "102000",
+  "birth_date": "1981-07-21",
+  "insured_number": null,
+  "created_at": "2026-08-05T14:31:58.541226+00:00"
+ },
+ {
+  "id": "0610ea9c-472b-4a15-9c23-6c1950f3aaaf",
+  "name": "吉長 由美子",
+  "user_number": "101890",
+  "birth_date": "1965-02-23",
+  "insured_number": null,
+  "created_at": "2026-08-05T14:31:58.991564+00:00"
+ }
+]

@@ -830,7 +830,14 @@ async function main() {
   } catch { console.warn(`⚠ マッピング ./_meisai_num_to_client_${MAP_TAG}.json 読込不可 — 氏名一致のみで解決`); }
 
   // 氏名逆引き (mapping に無い分)
-  const clients = await fetchAll("clients", "id,name");
+  const clients = await fetchAll("clients", "id,name,user_number");
+  const clientByUserNumber = new Map();
+  for (const c of clients) {
+    const k = String(c.user_number ?? "");
+    if (!k) continue;
+    if (!clientByUserNumber.has(k)) clientByUserNumber.set(k, []);
+    clientByUserNumber.get(k).push(c.id);
+  }
   const clientByName = new Map();
   for (const c of clients) { const k = normClientName(c.name); if (!clientByName.has(k)) clientByName.set(k, []); clientByName.get(k).push(c.id); }
   const nameByNum = {}; for (const r of target) nameByNum[r.clientNum] = r.clientName;
@@ -853,6 +860,17 @@ async function main() {
       if (pre.length === 1) {
         console.log(`  ↔ ${num} ${nameByNum[num]}: 氏名が途中で切れた受給者証と一致 "${pre[0][0]}"`);
         resolvedClient.set(num, pre[0][1][0]);
+        continue;
+      }
+    }
+    // 稼働データ側の氏名が **カナ**のことがある (MEISAI「齊藤　ﾕｳｷ」/ 受給者証「齊藤 優希」)。
+    //   氏名では引けないので **利用者番号** で引き直す。番号は事業者エントリ単位で
+    //   一意なので、DB 側に同じ user_number が 1 件だけならそれで確定してよい。
+    if (hits.length === 0) {
+      const byNum = clientByUserNumber.get(String(num)) || [];
+      if (byNum.length === 1) {
+        console.log(`  ↔ ${num} ${nameByNum[num]}: 氏名で引けず利用者番号で解決 (カナ表記等)`);
+        resolvedClient.set(num, byNum[0]);
         continue;
       }
     }
