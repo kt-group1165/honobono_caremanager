@@ -4,8 +4,13 @@
 //   target: kaigo_monthly_plan_units (planned_units)。aggregate.ts が限度cap に使用。
 //   実績 > 計画 の利用者(他事業所で限度消費)を正しく頭打ちにするために必須。
 //
-//   node migrations/import_meisai_plan_units.mjs            # DRY RUN
-//   node migrations/import_meisai_plan_units.mjs --execute
+//   ⚠ 計画単位数は **事業所ごと** の値。1 人が複数事業所を使えば別々の値になる。
+//     office_id 無しで upsert していた頃は後から取り込んだ事業所に上書きされ、
+//     先に取り込んだ事業所の明細書が壊れた (齋藤祥江 K姉6,100 → 市原1,952)。
+//     migrations/monthly_plan_units_office.sql を適用してから使うこと。
+//
+//   OFFICE_ID=<uuid> AREA_DIR=<拠点> TAG=<拠点> node migrations/import_meisai_plan_units.mjs
+//   … --execute で upsert
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
 import { findDataFile } from "./_meisai_files.mjs";
@@ -16,6 +21,7 @@ const EXECUTE=process.argv.includes("--execute");
 const TENANT="kt-group", MONTH="2026-06-01";
 const AREA_DIR=process.env.AREA_DIR||"茂原";
 const TAG=process.env.TAG||"";
+const OFFICE_ID=process.env.OFFICE_ID||"";
 const KAIGO=fileURLToPath(new URL("../",import.meta.url));
 function loadEnv(){ const t=readFileSync(path.join(KAIGO,".env.local"),"utf8"); const e={}; for(const l of t.split(/\r?\n/)){const m=/^([A-Z0-9_]+)=(.*)$/.exec(l.trim()); if(m)e[m[1]]=m[2].replace(/^["']|["']$/g,"");} return e; }
 const env=loadEnv();
@@ -37,17 +43,31 @@ async function main(){
   const clients=[]; for(let f=0;;f+=1000){const {data,error}=await sb.from("clients").select("id,user_number").range(f,f+999);if(error)throw error;clients.push(...data);if(data.length<1000)break;}
   const idByNum={}; for(const c of clients) idByNum[String(c.user_number)]=c.id;
   if(TAG){ const mp=JSON.parse(readFileSync(path.join(KAIGO,`migrations/_meisai_num_to_client_${TAG}.json`),"utf8")); for(const[k,v]of Object.entries(mp)) idByNum[String(k)]=v; }
+  if(!OFFICE_ID){ console.error("✗ OFFICE_ID が未指定です (計画単位数は事業所ごとの値)"); process.exit(1); }
+  // office_id 列が未適用なら従来どおり (client, month) で upsert して警告する
+  const { error:probe }=await sb.from("kaigo_monthly_plan_units").select("office_id").limit(1);
+  const hasOffice=!probe;
+  if(!hasOffice) console.warn(`⚠ office_id 列が未適用 (${probe.code}) — 他事業所の値を上書きします。migrations/monthly_plan_units_office.sql を適用してください`);
   const payloads=[]; let capped=0, noClient=0;
   for(const num of Object.keys(plan)){
     const cid=idByNum[num]; if(!cid){noClient++;continue;}
     const p=plan[num];
     if(p.planned<p.kanri) capped++;
-    payloads.push({ tenant_id:TENANT, client_id:cid, target_month:MONTH, planned_units:p.planned, source:"honobono", notes:"[MEISAI計画単位数 2026-06]" });
+    const row={ tenant_id:TENANT, client_id:cid, target_month:MONTH, planned_units:p.planned, source:"honobono", notes:`[MEISAI計画単位数 2026-06${TAG?" "+TAG:""}]` };
+    if(hasOffice) row.office_id=OFFICE_ID;
+    payloads.push(row);
   }
   console.log(`投入対象: ${payloads.length}名 (client未登録skip ${noClient})`);
   console.log(`うち 計画<実績(頭打ち発生): ${capped}名`);
   if(!EXECUTE){ console.log("※ DRY RUN。--execute で upsert。"); return; }
-  const { error }=await sb.from("kaigo_monthly_plan_units").upsert(payloads,{onConflict:"client_id,target_month"});
+  if(hasOffice){
+    // 自事業所の当月分を入れ直す (旧 office_id NULL 行は残す = 復元不能なため)
+    const { error:delErr }=await sb.from("kaigo_monthly_plan_units").delete().eq("office_id",OFFICE_ID).eq("target_month",MONTH);
+    if(delErr){ console.error(`✗ 既存削除失敗: ${delErr.message}`); process.exit(1); }
+  }
+  const { error }=hasOffice
+    ? await sb.from("kaigo_monthly_plan_units").insert(payloads)
+    : await sb.from("kaigo_monthly_plan_units").upsert(payloads,{onConflict:"client_id,target_month"});
   if(error){ console.error(`✗ 投入失敗: ${error.message}`); process.exit(1); }
   console.log(`✓ 完了: ${payloads.length}名`);
 }
