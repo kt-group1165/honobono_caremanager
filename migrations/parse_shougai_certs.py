@@ -69,10 +69,26 @@ def norm(s):
 #   断片になり氏名と誤認されるので、事業所名の**部分文字列なら捨てる**。
 OFFICE_NAME_NORM = ""
 
+# 氏名に見えるが人ではない語。上限額管理事業所名が折り返すと氏名行に化ける
+#   (高品「事業団 千葉ﾘﾊ 愛育園（短期入所」「業団 愛育園」)。
+ORG_WORDS = re.compile(
+    r"事業(所|団)|センター|ステーション|施設|法人|協会|会社|支援|ヘルパー|ケア|訪問|居宅|"
+    r"[（(]|園$|荘$|苑$|会$"
+)
+
 
 def is_office_fragment(t):
+    """事業所名の断片・組織名なら氏名として扱わない。
+
+    --office は「Hanaヘルパーステーション高品（身障）」のようにサービス種類が
+    付く。3 ファイル分を渡せないので、括弧より前の部分だけで部分一致を見る。
+    """
     n = norm(t)
-    return bool(OFFICE_NAME_NORM) and len(n) >= 4 and n in OFFICE_NAME_NORM
+    if not n:
+        return False
+    if OFFICE_NAME_NORM and len(n) >= 4 and n in OFFICE_NAME_NORM:
+        return True
+    return bool(ORG_WORDS.search(n))
 
 
 def is_header(s):
@@ -318,7 +334,8 @@ def main():
     args = ap.parse_args()
 
     global OFFICE_NAME_NORM
-    OFFICE_NAME_NORM = norm(args.office)
+    # 括弧以降 (（身障）等のサービス種類) を落として比較する
+    OFFICE_NAME_NORM = re.sub(r"[（(].*$", "", norm(args.office))
     warnings = []
     kihon = load_kihon(args.kihon, warnings)
     clients, order = parse(args.pdf, kihon, warnings)

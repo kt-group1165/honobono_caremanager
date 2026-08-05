@@ -1,0 +1,3026 @@
+{
+ "office": "Hanaヘルパーステーション高品",
+ "area": "高品",
+ "clients": [
+  {
+   "user_number": "2000119729",
+   "name": "朝野 宏",
+   "gender": "男",
+   "birth_date": "1976-08-05",
+   "postal_code": "284-0043",
+   "address": "千葉県四街道市めいわ4丁目20-11",
+   "certs": [
+    {
+     "cert_number": "1222810149",
+     "issue_date": "2018-04-26",
+     "period_start": "2019-05-01",
+     "period_end": "2020-04-30",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "1222810149",
+     "issue_date": null,
+     "period_start": "2020-05-01",
+     "period_end": "2021-04-30",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "1222810149",
+     "issue_date": "2021-04-26",
+     "period_start": "2021-05-01",
+     "period_end": "2022-04-30",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "1222810149",
+     "issue_date": "2022-04-26",
+     "period_start": "2022-05-01",
+     "period_end": "2023-04-30",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "1222810149",
+     "issue_date": "2023-04-25",
+     "period_start": "2023-05-01",
+     "period_end": "2024-04-30",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "1222810149",
+     "issue_date": "2024-05-13",
+     "period_start": "2024-05-01",
+     "period_end": "2025-04-30",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "1222810149",
+     "issue_date": "2024-05-13",
+     "period_start": "2025-05-01",
+     "period_end": "2026-04-30",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "1222810149",
+     "issue_date": "2026-04-30",
+     "period_start": "2026-05-01",
+     "period_end": "2027-05-31",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1222810149",
+     "issue_date": "2026-04-30",
+     "period_start": "2026-05-01",
+     "period_end": "2027-05-31",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "2113006166",
+   "name": "安生 美紀子",
+   "gender": "女",
+   "birth_date": "1970-08-25",
+   "postal_code": "263-0015",
+   "address": "千葉県千葉市稲毛区作草部1-23-4-506",
+   "certs": [
+    {
+     "cert_number": "2000051553",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2026-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000051553",
+     "issue_date": "2026-04-08",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "利用者負担上限月額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000051553",
+     "issue_date": "2026-04-08",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "利用者負担上限月額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "69",
+   "name": "安藤 武男",
+   "gender": "男",
+   "birth_date": "1968-10-18",
+   "postal_code": "263-0014",
+   "address": "千葉市稲毛区作草部町600番地5",
+   "certs": [
+    {
+     "cert_number": "2000039467",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2021-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000039467",
+     "issue_date": "2021-05-31",
+     "period_start": "2021-06-01",
+     "period_end": "2022-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000039467",
+     "issue_date": "2022-05-27",
+     "period_start": "2022-06-01",
+     "period_end": "2023-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000039467",
+     "issue_date": "2023-05-12",
+     "period_start": "2023-06-01",
+     "period_end": "2025-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000039467",
+     "issue_date": "2025-06-16",
+     "period_start": "2025-06-01",
+     "period_end": "2026-05-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000039467",
+     "issue_date": "2026-05-26",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000039467",
+     "issue_date": "2026-05-26",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "2113006172",
+   "name": "池田 稔",
+   "gender": "男",
+   "birth_date": "1976-03-14",
+   "postal_code": "260-0844",
+   "address": "千葉県千葉市中央区千葉寺町876番地 千葉寺県営住宅1棟421号",
+   "certs": [
+    {
+     "cert_number": "2000071049",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2020-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000071049",
+     "issue_date": "2020-11-26",
+     "period_start": "2020-12-01",
+     "period_end": "2021-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000071049",
+     "issue_date": "2020-11-26",
+     "period_start": "2021-03-01",
+     "period_end": "2022-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000071049",
+     "issue_date": "2022-11-08",
+     "period_start": "2022-12-01",
+     "period_end": "2025-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000071049",
+     "issue_date": "2025-10-31",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000071049",
+     "issue_date": "2025-10-31",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "@猪野一則",
+   "name": "猪野 一則",
+   "gender": "男",
+   "birth_date": "1960-05-29",
+   "postal_code": "260-0005",
+   "address": "千葉県千葉市中央区道場南2丁目10番9号",
+   "certs": [
+    {
+     "cert_number": "2000210969",
+     "issue_date": "2026-02-25",
+     "period_start": "2026-03-01",
+     "period_end": "2027-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "月額】9,300",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000210969",
+     "issue_date": "2026-02-25",
+     "period_start": "2026-03-01",
+     "period_end": "2027-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "月額】9,300",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "2113006157",
+   "name": "岩澤 麻祐子",
+   "gender": "女",
+   "birth_date": "1987-07-31",
+   "postal_code": "260-0844",
+   "address": "千葉県千葉市中央区千葉寺町437番地プラムハウス107号",
+   "certs": [
+    {
+     "cert_number": "2000128674",
+     "issue_date": "2020-09-17",
+     "period_start": "2020-08-25",
+     "period_end": "2020-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000128674",
+     "issue_date": "2020-09-17",
+     "period_start": "2020-12-01",
+     "period_end": "2021-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000128674",
+     "issue_date": "2021-11-24",
+     "period_start": "2021-12-01",
+     "period_end": "2022-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000128674",
+     "issue_date": "2022-11-18",
+     "period_start": "2022-12-01",
+     "period_end": "2023-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000128674",
+     "issue_date": "2023-11-20",
+     "period_start": "2023-12-01",
+     "period_end": "2024-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000128674",
+     "issue_date": "2025-08-26",
+     "period_start": "2024-12-01",
+     "period_end": "2025-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000128674",
+     "issue_date": "2025-11-21",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000128674",
+     "issue_date": "2025-11-21",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "2000119745",
+   "name": "王 茜",
+   "gender": "女",
+   "birth_date": "1988-06-25",
+   "postal_code": "264-0035",
+   "address": "千葉県千葉市若葉区東寺山町755番地県住4棟40205号",
+   "certs": [
+    {
+     "cert_number": "2000074530",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2022-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000074530",
+     "issue_date": null,
+     "period_start": "2022-06-01",
+     "period_end": "2023-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000074530",
+     "issue_date": "2023-06-02",
+     "period_start": "2023-06-01",
+     "period_end": "2026-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000074530",
+     "issue_date": "2026-06-03",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000074530",
+     "issue_date": "2026-06-03",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "1221910707",
+   "name": "大下 祐樹",
+   "gender": "男",
+   "birth_date": "1993-11-19",
+   "postal_code": "263-0031",
+   "address": "千葉県千葉市稲毛区稲毛東6-6-12 コスモ稲毛ロイヤルステージ510号",
+   "certs": [
+    {
+     "cert_number": "2000010369",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2020-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000010369",
+     "issue_date": "2020-11-30",
+     "period_start": "2020-12-01",
+     "period_end": "2021-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000010369",
+     "issue_date": null,
+     "period_start": "2021-12-01",
+     "period_end": "2022-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000010369",
+     "issue_date": "2023-03-10",
+     "period_start": "2022-12-01",
+     "period_end": "2025-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000010369",
+     "issue_date": "2025-12-05",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000010369",
+     "issue_date": "2025-12-05",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "420000039",
+   "name": "大竹 礼子",
+   "gender": "女",
+   "birth_date": "1965-12-07",
+   "postal_code": "263-0015",
+   "address": "千葉県千葉市稲毛区作草部1丁目20番2棟201号",
+   "certs": [
+    {
+     "cert_number": "2000116364",
+     "issue_date": "2024-05-17",
+     "period_start": "2024-05-01",
+     "period_end": "2025-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "利用者負担上限月額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000116364",
+     "issue_date": "2025-04-11",
+     "period_start": "2025-05-01",
+     "period_end": "2026-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "利用者負担上限月額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000116364",
+     "issue_date": "2026-04-20",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "利用者負担上限月額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000116364",
+     "issue_date": "2026-04-20",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "利用者負担上限月額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "2113113370",
+   "name": "小川 雅美",
+   "gender": "女",
+   "birth_date": "1979-10-13",
+   "postal_code": "264-0023",
+   "address": "千葉県千葉市若葉区貝塚町372番地1 生活支援集合住宅ふるさと",
+   "certs": [
+    {
+     "cert_number": "2000148672",
+     "issue_date": "2025-12-11",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000148672",
+     "issue_date": "2023-02-28",
+     "period_start": "2022-05-06",
+     "period_end": "2023-03-31",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000148672",
+     "issue_date": "2025-12-11",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "2113114619",
+   "name": "落合 真奈美",
+   "gender": "女",
+   "birth_date": "1964-08-20",
+   "postal_code": "263-0014",
+   "address": "千葉県千葉市稲毛区作草部町1260番地1 ドメイン西千葉605号",
+   "certs": [
+    {
+     "cert_number": "2000009932",
+     "issue_date": "2022-11-17",
+     "period_start": "2022-12-01",
+     "period_end": "2025-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000009932",
+     "issue_date": "2025-11-11",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000009932",
+     "issue_date": "2025-11-11",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "@加瀬弐葉",
+   "name": "加瀬 弐葉",
+   "gender": "女",
+   "birth_date": "2024-07-29",
+   "postal_code": "263-0021",
+   "address": "千葉県千葉市稲毛区轟町４丁目4番30号 テレパレス西千葉210号",
+   "certs": [
+    {
+     "cert_number": "2000205688",
+     "issue_date": "2026-04-17",
+     "period_start": "2026-04-30",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000205688",
+     "issue_date": "2026-04-17",
+     "period_start": "2026-04-30",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "93",
+   "name": "加茂 照子",
+   "gender": "女",
+   "birth_date": "1941-01-01",
+   "postal_code": "260-0042",
+   "address": "千葉県千葉市中央区椿森２丁目１８番１号",
+   "certs": [
+    {
+     "cert_number": "2000097820",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2021-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000097820",
+     "issue_date": "2021-08-17",
+     "period_start": "2021-09-01",
+     "period_end": "2022-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000097820",
+     "issue_date": "2022-08-29",
+     "period_start": "2022-09-01",
+     "period_end": "2023-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000097820",
+     "issue_date": "2023-08-25",
+     "period_start": "2023-09-01",
+     "period_end": "2024-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000097820",
+     "issue_date": "2024-08-02",
+     "period_start": "2024-09-01",
+     "period_end": "2025-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000097820",
+     "issue_date": "2025-08-08",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000097820",
+     "issue_date": "2025-08-08",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "2113006232",
+   "name": "木戸 順子",
+   "gender": "女",
+   "birth_date": "1967-12-08",
+   "postal_code": "265-0077",
+   "address": "千葉県千葉市若葉区御成台2丁目1番地 市営住宅西下田団地2棟208号",
+   "certs": [
+    {
+     "cert_number": "2000036455",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2021-10-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000036455",
+     "issue_date": null,
+     "period_start": "2021-11-01",
+     "period_end": "2022-10-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000036455",
+     "issue_date": "2022-10-19",
+     "period_start": "2022-11-01",
+     "period_end": "2024-10-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000036455",
+     "issue_date": "2024-11-21",
+     "period_start": "2024-11-01",
+     "period_end": "2025-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000036455",
+     "issue_date": "2025-02-14",
+     "period_start": "2025-02-01",
+     "period_end": "2025-10-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "月額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000036455",
+     "issue_date": "2025-11-27",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "月額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000036455",
+     "issue_date": "2025-11-27",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "月額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "1221930308",
+   "name": "木原 優希",
+   "gender": "男",
+   "birth_date": "2000-11-28",
+   "postal_code": "264-0006",
+   "address": "千葉県千葉市若葉区小倉台５丁目３番９棟１０８号",
+   "certs": [
+    {
+     "cert_number": "2000110342",
+     "issue_date": "2022-11-14",
+     "period_start": "2022-12-01",
+     "period_end": "2024-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000110342",
+     "issue_date": "2024-11-27",
+     "period_start": "2024-12-01",
+     "period_end": "2025-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000110342",
+     "issue_date": "2025-12-03",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000110342",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2023-03-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000110342",
+     "issue_date": "2025-12-03",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "2113006235",
+   "name": "桐谷 真澄",
+   "gender": "女",
+   "birth_date": "1988-01-28",
+   "postal_code": "264-0028",
+   "address": "千葉県千葉市若葉区桜木2-9-10",
+   "certs": [
+    {
+     "cert_number": "2000026159",
+     "issue_date": "2022-10-19",
+     "period_start": "2022-11-01",
+     "period_end": "2025-10-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000026159",
+     "issue_date": "2025-12-06",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000026159",
+     "issue_date": "2025-12-06",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "@河野律夫",
+   "name": "河野 律夫",
+   "gender": "男",
+   "birth_date": "1950-05-06",
+   "postal_code": "260-0855",
+   "address": "千葉県千葉市中央区市場町2番9号 ダイヤパレス千葉県庁前805号",
+   "certs": [
+    {
+     "cert_number": "2000116208",
+     "issue_date": "2025-06-23",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000116208",
+     "issue_date": "2026-06-03",
+     "period_start": "2026-07-01",
+     "period_end": "2027-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000116208",
+     "issue_date": "2025-06-23",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "@齋藤由赳",
+   "name": "齋藤 由赳",
+   "gender": "男",
+   "birth_date": "2002-01-23",
+   "postal_code": "263-0012",
+   "address": "千葉県千葉市稲毛区萩台町15番地",
+   "certs": [
+    {
+     "cert_number": "2000122412",
+     "issue_date": "2025-07-09",
+     "period_start": "2025-06-28",
+     "period_end": "2026-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000122412",
+     "issue_date": "2026-01-20",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000122412",
+     "issue_date": "2026-01-20",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "131",
+   "name": "佐藤 枝梨子",
+   "gender": "女",
+   "birth_date": "1952-04-20",
+   "postal_code": "260-0004",
+   "address": "千葉県千葉市中央区東本町9-2",
+   "certs": [
+    {
+     "cert_number": "2000095790",
+     "issue_date": null,
+     "period_start": "2021-07-01",
+     "period_end": "2025-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000095790",
+     "issue_date": "2025-06-05",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000095790",
+     "issue_date": "2026-06-19",
+     "period_start": "2026-07-01",
+     "period_end": "2027-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000095790",
+     "issue_date": "2025-06-05",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "2113006262",
+   "name": "宍倉 亮",
+   "gender": "男",
+   "birth_date": "1990-06-20",
+   "postal_code": "263-0015",
+   "address": "千葉県千葉市稲毛区作草部1-26-1 レーベンハウム西千葉513",
+   "certs": [
+    {
+     "cert_number": "2000050811",
+     "issue_date": null,
+     "period_start": "2023-02-01",
+     "period_end": "2026-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000050811",
+     "issue_date": "2026-01-26",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000050811",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2021-01-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000050811",
+     "issue_date": null,
+     "period_start": "2021-02-01",
+     "period_end": "2022-01-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000050811",
+     "issue_date": null,
+     "period_start": "2022-02-01",
+     "period_end": "2023-01-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000050811",
+     "issue_date": "2023-01-13",
+     "period_start": "2023-02-01",
+     "period_end": "2024-01-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000050811",
+     "issue_date": "2026-01-26",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "2113114543",
+   "name": "新谷 倫代",
+   "gender": "女",
+   "birth_date": "1972-11-01",
+   "postal_code": "284-0006",
+   "address": "千葉県四街道市下志津新田2526番地28",
+   "certs": [
+    {
+     "cert_number": "1222810943",
+     "issue_date": "2022-07-26",
+     "period_start": "2022-08-01",
+     "period_end": "2025-07-31",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "1222810943",
+     "issue_date": "2025-07-31",
+     "period_start": "2025-08-01",
+     "period_end": "2026-08-31",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1222810943",
+     "issue_date": "2025-07-31",
+     "period_start": "2025-08-01",
+     "period_end": "2026-08-31",
+     "city": "四街道市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "@鈴鹿紀子",
+   "name": "鈴鹿 紀子",
+   "gender": "女",
+   "birth_date": "1968-02-23",
+   "postal_code": "260-0032",
+   "address": "千葉県千葉市中央区登戸２丁目１３番７号 藤和シティホームズ千葉登戸２０４号",
+   "certs": [
+    {
+     "cert_number": "2000071817",
+     "issue_date": "2026-03-05",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000071817",
+     "issue_date": "2026-03-05",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "2113006274",
+   "name": "鈴木 あい子",
+   "gender": "女",
+   "birth_date": "1970-07-18",
+   "postal_code": "260-0007",
+   "address": "千葉県千葉市中央区祐光１丁目３３番８－１０５号",
+   "certs": [
+    {
+     "cert_number": "2000092391",
+     "issue_date": null,
+     "period_start": "2023-01-01",
+     "period_end": "2025-12-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000092391",
+     "issue_date": "2025-12-24",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000092391",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2020-12-31",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000092391",
+     "issue_date": null,
+     "period_start": "2021-01-01",
+     "period_end": "2021-12-31",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000092391",
+     "issue_date": null,
+     "period_start": "2022-01-01",
+     "period_end": "2022-12-31",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000092391",
+     "issue_date": "2022-12-20",
+     "period_start": "2023-01-01",
+     "period_end": "2023-12-31",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000092391",
+     "issue_date": "2025-12-24",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "2113004067",
+   "name": "高橋 理子",
+   "gender": "女",
+   "birth_date": "1975-09-29",
+   "postal_code": "263-0051",
+   "address": "千葉県千葉市稲毛区園生町196番地",
+   "certs": [
+    {
+     "cert_number": "2000070132",
+     "issue_date": "2020-08-31",
+     "period_start": "2020-08-01",
+     "period_end": "2021-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000070132",
+     "issue_date": "2021-07-30",
+     "period_start": "2021-08-01",
+     "period_end": "2022-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000070132",
+     "issue_date": "2022-08-01",
+     "period_start": "2022-08-01",
+     "period_end": "2024-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000070132",
+     "issue_date": "2024-07-29",
+     "period_start": "2024-08-01",
+     "period_end": "2025-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000070132",
+     "issue_date": "2025-07-23",
+     "period_start": "2025-08-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000070132",
+     "issue_date": "2025-07-23",
+     "period_start": "2025-08-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "@田中紀子",
+   "name": "田中 紀子",
+   "gender": "女",
+   "birth_date": "1970-08-12",
+   "postal_code": "260-0844",
+   "address": "千葉県千葉市中央区千葉寺町886番地1 ダイヤパレスヒルトップ・エフ千葉寺駅前413号",
+   "certs": [
+    {
+     "cert_number": "2000069704",
+     "issue_date": "2024-10-31",
+     "period_start": "2024-11-01",
+     "period_end": "2025-10-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000069704",
+     "issue_date": "2025-11-06",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000069704",
+     "issue_date": "2025-11-06",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "185",
+   "name": "谷口 陽亮",
+   "gender": null,
+   "birth_date": null,
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "2000149787",
+     "issue_date": "2022-06-10",
+     "period_start": "2022-06-01",
+     "period_end": "2023-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000149787",
+     "issue_date": "2023-03-01",
+     "period_start": "2023-04-01",
+     "period_end": "2023-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000149787",
+     "issue_date": "2023-04-28",
+     "period_start": "2023-06-01",
+     "period_end": "2024-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000149787",
+     "issue_date": "2023-04-28",
+     "period_start": "2024-06-01",
+     "period_end": "2025-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000149787",
+     "issue_date": "2025-05-26",
+     "period_start": "2025-06-01",
+     "period_end": "2026-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000149787",
+     "issue_date": "2026-05-26",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000053310",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2021-05-31",
+     "city": "千葉市",
+     "jigyou": "児童居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000053310",
+     "issue_date": "2021-05-24",
+     "period_start": "2021-06-01",
+     "period_end": "2022-05-31",
+     "city": "千葉市",
+     "jigyou": "児童居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000149787",
+     "issue_date": "2026-05-26",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "@田村ムラエ",
+   "name": "田村 ムラエ",
+   "gender": "女",
+   "birth_date": "1937-10-13",
+   "postal_code": "263-0043",
+   "address": "千葉県千葉市稲毛区小仲台９丁目１７番１１号",
+   "certs": [
+    {
+     "cert_number": "2000212908",
+     "issue_date": "2026-05-26",
+     "period_start": "2026-05-21",
+     "period_end": "2027-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000212908",
+     "issue_date": "2026-03-24",
+     "period_start": "2026-03-13",
+     "period_end": "2026-05-07",
+     "city": "千葉市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000212908",
+     "issue_date": "2026-05-26",
+     "period_start": "2026-05-21",
+     "period_end": "2027-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証重度.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000212908",
+     "issue_date": "2026-03-24",
+     "period_start": "2026-03-13",
+     "period_end": "2026-05-07",
+     "city": "千葉市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証重度.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000212908",
+     "issue_date": "2026-05-26",
+     "period_start": "2026-05-21",
+     "period_end": "2027-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "2113006299",
+   "name": "千葉 麗子",
+   "gender": "女",
+   "birth_date": "1977-01-09",
+   "postal_code": "264-0005",
+   "address": "千葉県千葉市若葉区千城台北2丁目4番4号",
+   "certs": [
+    {
+     "cert_number": "2000052874",
+     "issue_date": null,
+     "period_start": "2023-01-01",
+     "period_end": "2025-12-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000052874",
+     "issue_date": "2025-12-26",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000052874",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2020-12-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000052874",
+     "issue_date": null,
+     "period_start": "2021-01-01",
+     "period_end": "2021-12-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000052874",
+     "issue_date": null,
+     "period_start": "2022-01-01",
+     "period_end": "2022-12-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000052874",
+     "issue_date": "2023-01-18",
+     "period_start": "2023-01-01",
+     "period_end": "2023-12-31",
+     "city": "千葉市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000052874",
+     "issue_date": "2025-12-26",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "2113006301",
+   "name": "鳥前 隆",
+   "gender": "男",
+   "birth_date": "1971-08-14",
+   "postal_code": "264-0028",
+   "address": "千葉県千葉市若葉区桜木6丁目17番22号 やすらぎの会",
+   "certs": [
+    {
+     "cert_number": "2000080800",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2024-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000080800",
+     "issue_date": "2024-09-27",
+     "period_start": "2024-08-01",
+     "period_end": "2025-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000080800",
+     "issue_date": "2025-09-25",
+     "period_start": "2025-08-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000080800",
+     "issue_date": "2025-09-25",
+     "period_start": "2025-08-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "2113006304",
+   "name": "中澤 晴斗",
+   "gender": "男",
+   "birth_date": "2011-12-05",
+   "postal_code": "264-0004",
+   "address": "千葉県千葉市若葉区千城台西1-19-14",
+   "certs": [
+    {
+     "cert_number": "2000066163",
+     "issue_date": null,
+     "period_start": "2023-01-01",
+     "period_end": "2025-12-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000066163",
+     "issue_date": "2026-02-05",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000066163",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2020-12-31",
+     "city": "千葉市",
+     "jigyou": "児童居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000066163",
+     "issue_date": null,
+     "period_start": "2021-01-01",
+     "period_end": "2021-12-31",
+     "city": "千葉市",
+     "jigyou": "児童居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000066163",
+     "issue_date": null,
+     "period_start": "2022-01-01",
+     "period_end": "2022-12-31",
+     "city": "千葉市",
+     "jigyou": "児童居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000066163",
+     "issue_date": "2023-01-05",
+     "period_start": "2023-01-01",
+     "period_end": "2023-12-31",
+     "city": "千葉市",
+     "jigyou": "児童居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000066163",
+     "issue_date": "2026-02-05",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "42000016",
+   "name": "中山 翔太",
+   "gender": "男",
+   "birth_date": "2008-01-25",
+   "postal_code": "261-0003",
+   "address": "千葉県千葉市美浜区高浜3丁目1番2-710号",
+   "certs": [
+    {
+     "cert_number": "2000044988",
+     "issue_date": "2024-01-17",
+     "period_start": "2024-02-01",
+     "period_end": "2025-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】60時間00分【所得区分】低所得２【利用者負担上限月額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2000044988",
+     "issue_date": "2024-01-17",
+     "period_start": "2025-02-01",
+     "period_end": "2026-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000210191",
+     "issue_date": "2026-02-18",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000210191",
+     "issue_date": "2026-02-18",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "@西浦良和",
+   "name": "西浦 良和",
+   "gender": "男",
+   "birth_date": "1976-04-21",
+   "postal_code": "263-0013",
+   "address": "千葉県千葉市稲毛区千草台１丁目1番13棟105号",
+   "certs": [
+    {
+     "cert_number": "2000156972",
+     "issue_date": "2025-12-16",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000156972",
+     "issue_date": "2025-12-16",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "205",
+   "name": "橋目 美津岐",
+   "gender": "女",
+   "birth_date": "1980-09-14",
+   "postal_code": "263-0015",
+   "address": "千葉県千葉市稲毛区作草部１丁目２３番４棟１０１号",
+   "certs": [
+    {
+     "cert_number": "2000046520",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2020-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "月額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000046520",
+     "issue_date": "2020-12-11",
+     "period_start": "2020-12-01",
+     "period_end": "2021-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000046520",
+     "issue_date": "2021-04-30",
+     "period_start": "2021-05-01",
+     "period_end": "2021-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000046520",
+     "issue_date": "2021-04-30",
+     "period_start": "2021-12-01",
+     "period_end": "2022-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000046520",
+     "issue_date": "2021-04-30",
+     "period_start": "2022-12-01",
+     "period_end": "2023-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000046520",
+     "issue_date": "2021-04-30",
+     "period_start": "2023-12-01",
+     "period_end": "2024-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000046520",
+     "issue_date": "2024-11-15",
+     "period_start": "2024-12-01",
+     "period_end": "2025-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000046520",
+     "issue_date": "2025-11-20",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000046520",
+     "issue_date": "2025-11-20",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "@原田昌通",
+   "name": "原田 昌通",
+   "gender": "男",
+   "birth_date": "1964-02-19",
+   "postal_code": "265-0077",
+   "address": "千葉県千葉市若葉区御成台2丁目１番地 市営住宅西下田団地1棟307号",
+   "certs": [
+    {
+     "cert_number": "2000034484",
+     "issue_date": "2026-06-12",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000034484",
+     "issue_date": "2026-06-12",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "額】0",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "621000028",
+   "name": "福田 秦山",
+   "gender": "男",
+   "birth_date": "1999-11-11",
+   "postal_code": "264-0017",
+   "address": "千葉県千葉市若葉区加曽利町947番地12",
+   "certs": [
+    {
+     "cert_number": "2000099933",
+     "issue_date": "2024-04-30",
+     "period_start": "2023-12-01",
+     "period_end": "2024-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000099933",
+     "issue_date": "2025-04-09",
+     "period_start": "2024-12-01",
+     "period_end": "2025-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000099933",
+     "issue_date": "2026-02-04",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000099933",
+     "issue_date": "2026-02-04",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "2113006319",
+   "name": "文田 弘子",
+   "gender": "女",
+   "birth_date": "1970-11-16",
+   "postal_code": "264-0021",
+   "address": "千葉県千葉市若葉区若松町2090番地65",
+   "certs": [
+    {
+     "cert_number": "2000060612",
+     "issue_date": "2023-01-27",
+     "period_start": "2023-03-01",
+     "period_end": "2023-03-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000060612",
+     "issue_date": "2023-08-31",
+     "period_start": "2023-04-01",
+     "period_end": "2026-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000060612",
+     "issue_date": "2026-01-23",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000060612",
+     "issue_date": null,
+     "period_start": "2020-10-01",
+     "period_end": "2023-03-31",
+     "city": "千葉市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000060612",
+     "issue_date": "2026-01-23",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "@吉田千里",
+   "name": "吉田 千里",
+   "gender": "女",
+   "birth_date": "1984-02-20",
+   "postal_code": "264-0023",
+   "address": "千葉県千葉市若葉区貝塚町３７４番地１８",
+   "certs": [
+    {
+     "cert_number": "2000216289",
+     "issue_date": "2026-06-03",
+     "period_start": "2026-05-18",
+     "period_end": "2027-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000216289",
+     "issue_date": "2026-06-03",
+     "period_start": "2026-05-18",
+     "period_end": "2027-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "@渡邉泰司",
+   "name": "渡邉 泰司",
+   "gender": "男",
+   "birth_date": "1971-12-10",
+   "postal_code": "266-0005",
+   "address": "千葉県千葉市緑区誉田町1丁目791番地26",
+   "certs": [
+    {
+     "cert_number": "2000054029",
+     "issue_date": "2025-01-07",
+     "period_start": "2025-02-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000054029",
+     "issue_date": "2025-01-07",
+     "period_start": "2025-02-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "@渡部洋子",
+   "name": "渡部 洋子",
+   "gender": "女",
+   "birth_date": "1978-09-21",
+   "postal_code": "260-0001",
+   "address": "千葉県千葉市中央区都町5丁目36番25号 ダイヤパレス千葉都町312号",
+   "certs": [
+    {
+     "cert_number": "2000009551",
+     "issue_date": "2024-09-05",
+     "period_start": "2024-08-01",
+     "period_end": "2025-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000009551",
+     "issue_date": "2025-07-02",
+     "period_start": "2025-08-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000009551",
+     "issue_date": "2025-07-02",
+     "period_start": "2025-08-01",
+     "period_end": "2026-08-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証身体障碍.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "70",
+   "name": "高梨 智",
+   "gender": "男",
+   "birth_date": "1976-10-08",
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2018-05-28",
+     "period_start": "2018-06-01",
+     "period_end": "2019-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証重度.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2018-05-28",
+     "period_start": "2019-06-01",
+     "period_end": "2020-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証重度.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2018-05-28",
+     "period_start": "2020-06-01",
+     "period_end": "2021-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証重度.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2021-05-26",
+     "period_start": "2021-06-01",
+     "period_end": "2022-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証重度.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2021-05-26",
+     "period_start": "2022-06-01",
+     "period_end": "2023-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証重度.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2023-05-29",
+     "period_start": "2023-06-01",
+     "period_end": "2024-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証重度.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2023-05-29",
+     "period_start": "2024-06-01",
+     "period_end": "2025-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証重度.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2025-05-19",
+     "period_start": "2025-06-01",
+     "period_end": "2026-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証重度.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2026-05-22",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証重度.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": null,
+     "period_start": "2020-06-01",
+     "period_end": "2021-05-31",
+     "city": "千葉市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証重度.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": null,
+     "period_start": "2021-06-01",
+     "period_end": "2022-05-31",
+     "city": "千葉市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証重度.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2022-05-31",
+     "period_start": "2022-06-01",
+     "period_end": "2023-05-31",
+     "city": "千葉市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証重度.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2022-05-31",
+     "period_start": "2023-06-01",
+     "period_end": "2025-05-31",
+     "city": "千葉市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証重度.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2025-12-03",
+     "period_start": "2025-06-01",
+     "period_end": "2026-05-31",
+     "city": "千葉市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証重度.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000022364",
+     "issue_date": "2026-05-22",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証重度.pdf",
+     "quantities": {}
+    }
+   ]
+  },
+  {
+   "user_number": "2113006191",
+   "name": "植草 志津江",
+   "gender": "女",
+   "birth_date": "1960-03-20",
+   "postal_code": null,
+   "address": "中央区松ヶ丘町148市営松ヶ丘町団地106号",
+   "certs": [
+    {
+     "cert_number": "2000022349",
+     "issue_date": "2018-04-01",
+     "period_start": "2018-05-01",
+     "period_end": "2019-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証同行援護.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022349",
+     "issue_date": "2018-04-01",
+     "period_start": "2019-05-01",
+     "period_end": "2020-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証同行援護.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022349",
+     "issue_date": "2020-04-24",
+     "period_start": "2020-05-01",
+     "period_end": "2021-04-30",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証同行援護.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022349",
+     "issue_date": "2021-04-22",
+     "period_start": "2021-05-01",
+     "period_end": "2022-07-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証同行援護.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022349",
+     "issue_date": "2021-04-22",
+     "period_start": "2022-08-01",
+     "period_end": "2025-12-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証同行援護.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022349",
+     "issue_date": "2018-04-01",
+     "period_start": "2018-05-01",
+     "period_end": "2019-04-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証同行援護.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022349",
+     "issue_date": "2018-04-01",
+     "period_start": "2019-05-01",
+     "period_end": "2020-04-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証同行援護.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022349",
+     "issue_date": "2020-04-24",
+     "period_start": "2020-05-01",
+     "period_end": "2021-04-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証同行援護.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022349",
+     "issue_date": "2021-04-22",
+     "period_start": "2021-05-01",
+     "period_end": "2022-04-30",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証同行援護.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "2000022349",
+     "issue_date": "2021-04-22",
+     "period_start": "2022-05-01",
+     "period_end": "2025-12-31",
+     "city": "千葉市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証同行援護.pdf",
+     "quantities": {}
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2000022349",
+     "issue_date": "2021-04-22",
+     "period_start": "2022-08-01",
+     "period_end": "2025-12-31",
+     "city": "千葉市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "",
+     "src": "高品受給者証同行援護.pdf",
+     "quantities": {}
+    }
+   ]
+  }
+ ],
+ "stats": {
+  "pdf_files": 3,
+  "kihon_rows": 40,
+  "birth_date_missing": 1,
+  "clients": 41,
+  "certs_total": 168,
+  "current_certs": 41,
+  "multi_current": 0
+ },
+ "warnings": [
+  "基本情報一覧表に氏名なし (生年月日が取れない): 谷口 陽亮 (185)",
+  "現在有効な受給者証なし: 植草 志津江 (2113006191) → 最新 2025-12-31 を採用 (期限切れ)"
+ ]
+}
