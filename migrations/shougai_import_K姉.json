@@ -1,0 +1,3537 @@
+{
+ "office": "ＫＴ姉崎ヘルパーステーション",
+ "area": "K姉",
+ "clients": [
+  {
+   "user_number": "1299",
+   "name": "今関 政晃",
+   "gender": "男",
+   "birth_date": "1966-11-05",
+   "postal_code": "299-0243",
+   "address": "袖ヶ浦市蔵波3003-27",
+   "certs": [
+    {
+     "cert_number": "0000000010",
+     "issue_date": null,
+     "period_start": "2004-09-01",
+     "period_end": "2005-05-31",
+     "city": "袖ケ浦市",
+     "jigyou": null,
+     "service": null,
+     "shikyuryo_raw": "",
+     "src": "K姉受給者証居宅介護.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "0000000010",
+     "issue_date": null,
+     "period_start": "2005-06-01",
+     "period_end": "2005-08-31",
+     "city": "袖ケ浦市",
+     "jigyou": null,
+     "service": null,
+     "shikyuryo_raw": "",
+     "src": "K姉受給者証居宅介護.pdf",
+     "quantities": {}
+    },
+    {
+     "cert_number": "1222900571",
+     "issue_date": "2011-12-12",
+     "period_start": "2012-01-01",
+     "period_end": "2012-12-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】195時間00分【家事援助】55時間00分【通院身体】15時間00分【利用者負担上限月額】0【負担率(%)】10",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 195,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 55,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222900571",
+     "issue_date": "2013-01-24",
+     "period_start": "2013-01-01",
+     "period_end": "2013-12-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】188時間00分【家事援助】45時間00分【通院身体】15時間00分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 188,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222900571",
+     "issue_date": "2013-12-06",
+     "period_start": "2014-01-01",
+     "period_end": "2014-12-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】188時間00分【家事援助】45時間00分【通院身体】15時間00分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 188,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222900571",
+     "issue_date": "2014-12-11",
+     "period_start": "2015-01-01",
+     "period_end": "2015-12-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】188時間00分【家事援助】45時間00分【通院身体】15時間00分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 188,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222900571",
+     "issue_date": "2016-02-25",
+     "period_start": "2016-01-01",
+     "period_end": "2016-12-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】188時間00分【家事援助】45時間00分【通院身体】15時間00分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 188,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222900571",
+     "issue_date": "2017-12-12",
+     "period_start": "2018-01-01",
+     "period_end": "2018-12-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】188時間00分【家事援助】45時間00分【通院身体】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】0株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 188,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222900571",
+     "issue_date": "2019-01-22",
+     "period_start": "2019-01-01",
+     "period_end": "2019-12-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】188時間00分【家事援助】45時間00分【通院身体】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 188,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222900571",
+     "issue_date": "2019-12-27",
+     "period_start": "2020-01-01",
+     "period_end": "2020-12-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】188時間00分【家事援助】45時間00分【通院身体】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 188,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222900571",
+     "issue_date": "2020-12-24",
+     "period_start": "2021-01-01",
+     "period_end": "2021-12-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】188時間00分【家事援助】45時間00分【通院身体】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 188,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222900571",
+     "issue_date": "2022-01-18",
+     "period_start": "2022-01-01",
+     "period_end": "2022-12-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】188時間00分【家事援助】45時間00分【通院身体】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 188,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222900571",
+     "issue_date": "2023-01-12",
+     "period_start": "2023-01-01",
+     "period_end": "2023-12-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】188時間00分【家事援助】45時間00分【通院身体】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 188,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222900571",
+     "issue_date": "2024-01-15",
+     "period_start": "2024-01-01",
+     "period_end": "2024-12-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】188時間00分【家事援助】45時間00分【通院身体】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 188,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222900571",
+     "issue_date": "2024-01-15",
+     "period_start": "2025-01-01",
+     "period_end": "2025-12-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】188時間00分【家事援助】45時間00分【通院身体】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 188,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222900571",
+     "issue_date": "2024-01-15",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】188時間00分【家事援助】45時間00分【通院身体】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】0株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 188,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1222900571",
+     "issue_date": "2024-01-15",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】188時間00分【家事援助】45時間00分【通院身体】15時間00分【所得区分】一般１(一般)【利用者負担上限月額】0株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 188,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "1005555669",
+   "name": "榎本 翔",
+   "gender": "男",
+   "birth_date": "1998-10-01",
+   "postal_code": "292-0455",
+   "address": "市原市君塚1-2-1ニューハイツソフィーマルソーA102",
+   "certs": [
+    {
+     "cert_number": "1221931627",
+     "issue_date": "2022-03-04",
+     "period_start": "2022-04-01",
+     "period_end": "2023-03-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】10時間00分【家事援助】5時間00分【通院介助】5時間00分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221931627",
+     "issue_date": "2023-03-16",
+     "period_start": "2023-04-01",
+     "period_end": "2023-12-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】9時間00分【家事援助】4時間30分【通院介助】4時間30分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 9,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 4,
+       "minutes": 30
+      },
+      "通院介助": {
+       "hours": 4,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221931627",
+     "issue_date": "2023-12-20",
+     "period_start": "2024-01-01",
+     "period_end": "2024-03-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】10時間00分【家事援助】10時間00分【通院介助】4時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 4,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221931627",
+     "issue_date": "2024-03-19",
+     "period_start": "2024-04-01",
+     "period_end": "2025-03-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】10時間00分【家事援助】10時間00分【通院介助】4時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 4,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221931627",
+     "issue_date": "2025-03-31",
+     "period_start": "2025-04-01",
+     "period_end": "2026-03-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】10時間00分【家事援助】10時間00分【通院介助】4時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 4,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221931627",
+     "issue_date": "2026-03-26",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】10時間00分【家事援助】10時間00分【通院介助】4時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 4,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221931627",
+     "issue_date": "2019-03-27",
+     "period_start": "2019-04-01",
+     "period_end": "2020-03-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】30時間00分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221931627",
+     "issue_date": "2020-03-12",
+     "period_start": "2020-04-01",
+     "period_end": "2021-03-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】30時間00分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221931627",
+     "issue_date": "2021-04-01",
+     "period_start": "2021-04-01",
+     "period_end": "2022-03-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】30時間00分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221931627",
+     "issue_date": "2022-03-04",
+     "period_start": "2022-04-01",
+     "period_end": "2023-03-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】10時間00分【家事援助】5時間00分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221931627",
+     "issue_date": "2026-03-26",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】10時間00分【家事援助】10時間00分【通院介助】4時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 4,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "747435",
+   "name": "上町 陽介",
+   "gender": "男",
+   "birth_date": "2012-09-11",
+   "postal_code": "299-0117",
+   "address": "千葉県市原市青葉台2-5メゾン青葉台4-505",
+   "certs": [
+    {
+     "cert_number": "1221923046",
+     "issue_date": "2022-08-29",
+     "period_start": "2022-09-01",
+     "period_end": "2023-08-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221923046",
+     "issue_date": "2023-08-25",
+     "period_start": "2023-09-01",
+     "period_end": "2024-08-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221923046",
+     "issue_date": "2024-08-08",
+     "period_start": "2024-09-01",
+     "period_end": "2025-08-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221923046",
+     "issue_date": "2025-08-27",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221923046",
+     "issue_date": "2018-07-12",
+     "period_start": "2018-09-01",
+     "period_end": "2019-08-31",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【通院介助】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      },
+      "通院介助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221923046",
+     "issue_date": "2019-08-28",
+     "period_start": "2019-09-01",
+     "period_end": "2020-08-31",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【通院介助】5時間00分【所得区分】低所得１【利用者負担上限月額】0株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      },
+      "通院介助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221923046",
+     "issue_date": "2020-08-27",
+     "period_start": "2020-09-01",
+     "period_end": "2021-08-31",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221923046",
+     "issue_date": "2021-09-01",
+     "period_start": "2021-09-01",
+     "period_end": "2022-08-31",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221923046",
+     "issue_date": "2022-08-29",
+     "period_start": "2022-09-01",
+     "period_end": "2023-08-31",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221923046",
+     "issue_date": "2025-08-27",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "1107",
+   "name": "境 和也",
+   "gender": "男",
+   "birth_date": "1990-05-04",
+   "postal_code": null,
+   "address": "市原市中高根６８１番地の18",
+   "certs": [
+    {
+     "cert_number": "1221914557",
+     "issue_date": "2023-01-24",
+     "period_start": "2023-02-01",
+     "period_end": "2024-01-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】１【身体介護】30時間00分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分1",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221914557",
+     "issue_date": "2024-01-25",
+     "period_start": "2024-02-01",
+     "period_end": "2025-01-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】１【身体介護】30時間00分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分1",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221914557",
+     "issue_date": "2025-01-29",
+     "period_start": "2025-02-01",
+     "period_end": "2026-01-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】１【身体介護】30時間00分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分1",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221914557",
+     "issue_date": "2026-01-26",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】１【身体介護】30時間00分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分1",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221914557",
+     "issue_date": "2019-01-28",
+     "period_start": "2019-02-01",
+     "period_end": "2020-01-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】１【身体介護】30時間00分【所得区分】低所得１【利用者負担上限月額】0株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分1",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221914557",
+     "issue_date": "2020-01-29",
+     "period_start": "2020-02-01",
+     "period_end": "2021-01-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】１【身体介護】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分1",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221914557",
+     "issue_date": "2021-01-28",
+     "period_start": "2021-02-01",
+     "period_end": "2022-01-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】１【身体介護】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分1",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221914557",
+     "issue_date": "2022-01-25",
+     "period_start": "2022-02-01",
+     "period_end": "2023-01-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】１【身体介護】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分1",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221914557",
+     "issue_date": "2026-01-26",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】１【身体介護】30時間00分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分1",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "412000111",
+   "name": "佐久間 昭平",
+   "gender": "男",
+   "birth_date": "1992-11-14",
+   "postal_code": "299-0111",
+   "address": "千葉県市原市姉崎1902番地4",
+   "certs": [
+    {
+     "cert_number": "1221919267",
+     "issue_date": "2025-12-25",
+     "period_start": "2026-01-01",
+     "period_end": "2026-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【家事援助】10時間00分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221919267",
+     "issue_date": "2026-05-25",
+     "period_start": "2026-06-01",
+     "period_end": "2026-12-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【家事援助】28時間45分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 28,
+       "minutes": 45
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221919267",
+     "issue_date": "2026-05-25",
+     "period_start": "2026-06-01",
+     "period_end": "2026-12-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【家事援助】28時間45分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 28,
+       "minutes": 45
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "419000109",
+   "name": "佐藤 あゆみ",
+   "gender": "女",
+   "birth_date": "1970-12-01",
+   "postal_code": "290-0056",
+   "address": "千葉県市原市五井1715-38",
+   "certs": [
+    {
+     "cert_number": "1221926049",
+     "issue_date": "2026-03-30",
+     "period_start": "2026-04-01",
+     "period_end": "2026-09-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【家事援助】25時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221926049",
+     "issue_date": "2026-03-30",
+     "period_start": "2026-04-01",
+     "period_end": "2026-09-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【家事援助】25時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "1087",
+   "name": "竹内 由紀",
+   "gender": "女",
+   "birth_date": "1977-12-27",
+   "postal_code": null,
+   "address": "市原市馬立７０８番地5",
+   "certs": [
+    {
+     "cert_number": "1221906470",
+     "issue_date": "2019-04-26",
+     "period_start": "2019-05-01",
+     "period_end": "2020-04-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221906470",
+     "issue_date": "2020-05-01",
+     "period_start": "2020-05-01",
+     "period_end": "2021-04-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】5時間00分【所得区分】低所得１【利用者負担上限月額】0株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221906470",
+     "issue_date": "2021-04-12",
+     "period_start": "2021-05-01",
+     "period_end": "2022-04-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221906470",
+     "issue_date": "2022-04-28",
+     "period_start": "2022-05-01",
+     "period_end": "2023-04-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221906470",
+     "issue_date": "2023-05-01",
+     "period_start": "2023-05-01",
+     "period_end": "2023-12-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221906470",
+     "issue_date": "2023-12-28",
+     "period_start": "2024-01-01",
+     "period_end": "2024-04-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221906470",
+     "issue_date": "2024-05-09",
+     "period_start": "2024-05-01",
+     "period_end": "2025-04-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221906470",
+     "issue_date": "2025-05-01",
+     "period_start": "2025-05-01",
+     "period_end": "2026-04-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】32時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 32,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221906470",
+     "issue_date": "2026-04-20",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】32時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 32,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221906470",
+     "issue_date": "2026-04-20",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】32時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 32,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113111195",
+   "name": "徳山 司",
+   "gender": "男",
+   "birth_date": "2002-07-08",
+   "postal_code": "299-0114",
+   "address": "千葉県市原市泉台5丁目20番地2",
+   "certs": [
+    {
+     "cert_number": "1221936105",
+     "issue_date": "2021-04-30",
+     "period_start": "2021-05-01",
+     "period_end": "2021-07-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】54時間00分【所得区分】一般１(一般)【利用者負担上限月額】0株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 54,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221936105",
+     "issue_date": "2021-07-21",
+     "period_start": "2021-08-01",
+     "period_end": "2021-09-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】54時間00分【所得区分】一般１(一般)【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 54,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221936105",
+     "issue_date": "2021-10-01",
+     "period_start": "2021-10-01",
+     "period_end": "2022-09-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】54時間00分【所得区分】一般１(一般)【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 54,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221936105",
+     "issue_date": "2022-09-21",
+     "period_start": "2022-10-01",
+     "period_end": "2022-11-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】54時間00分【所得区分】一般１(一般)【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 54,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221936105",
+     "issue_date": "2022-12-01",
+     "period_start": "2022-12-01",
+     "period_end": "2023-09-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】54時間00分【所得区分】一般１(一般)【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 54,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221936105",
+     "issue_date": "2023-09-22",
+     "period_start": "2023-10-01",
+     "period_end": "2024-09-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】54時間00分【所得区分】一般１(一般)【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 54,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221936105",
+     "issue_date": "2024-09-26",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】54時間00分【所得区分】一般１(一般)【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 54,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221936105",
+     "issue_date": "2025-10-01",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】54時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 54,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221936105",
+     "issue_date": "2025-10-01",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】54時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 54,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "1425",
+   "name": "鍋嶋 省二",
+   "gender": "男",
+   "birth_date": "1973-11-15",
+   "postal_code": "299-0251",
+   "address": "袖ヶ浦市のぞみ野96-15",
+   "certs": [
+    {
+     "cert_number": "1221926155",
+     "issue_date": "2019-02-28",
+     "period_start": "2019-03-01",
+     "period_end": "2020-02-29",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】96時間00分【利用者負担上限月額】0株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 96,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221926155",
+     "issue_date": "2020-02-19",
+     "period_start": "2020-03-01",
+     "period_end": "2021-02-28",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】96時間00分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 96,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221926155",
+     "issue_date": "2021-02-25",
+     "period_start": "2021-03-01",
+     "period_end": "2021-05-05",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】96時間00分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 96,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222912634",
+     "issue_date": "2021-06-10",
+     "period_start": "2021-05-06",
+     "period_end": "2022-02-28",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222912634",
+     "issue_date": "2021-02-24",
+     "period_start": "2022-03-01",
+     "period_end": "2023-02-28",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222912634",
+     "issue_date": "2023-02-27",
+     "period_start": "2023-03-01",
+     "period_end": "2024-02-29",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222912634",
+     "issue_date": "2024-02-20",
+     "period_start": "2024-03-01",
+     "period_end": "2025-02-28",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222912634",
+     "issue_date": "2025-03-12",
+     "period_start": "2025-03-01",
+     "period_end": "2026-02-28",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222912634",
+     "issue_date": "2026-03-09",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【所得区分】低所得１【利用者負担上限月額】0株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1222912634",
+     "issue_date": "2026-03-09",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【所得区分】低所得１【利用者負担上限月額】0株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "412000094",
+   "name": "早川 遼",
+   "gender": "男",
+   "birth_date": "1990-06-01",
+   "postal_code": "290-0071",
+   "address": "千葉県市原市北国分寺台5丁目12番地4",
+   "certs": [
+    {
+     "cert_number": "1221914854",
+     "issue_date": "2025-10-27",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】15時間00分【家事援助】15時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221914854",
+     "issue_date": "2025-10-27",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】15時間00分【家事援助】15時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "1000113805",
+   "name": "本田 良恵",
+   "gender": "女",
+   "birth_date": "1980-11-20",
+   "postal_code": null,
+   "address": "市原市泉台3-40-2",
+   "certs": [
+    {
+     "cert_number": "1221926999",
+     "issue_date": "2024-06-20",
+     "period_start": "2024-07-01",
+     "period_end": "2025-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】13時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 13,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221926999",
+     "issue_date": "2025-05-29",
+     "period_start": "2025-06-01",
+     "period_end": "2025-06-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】35時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 35,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221926999",
+     "issue_date": "2025-07-01",
+     "period_start": "2025-07-01",
+     "period_end": "2026-03-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】35時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 35,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221926999",
+     "issue_date": "2026-03-26",
+     "period_start": "2026-04-01",
+     "period_end": "2026-06-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】43時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 43,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221926999",
+     "issue_date": "2026-06-26",
+     "period_start": "2026-07-01",
+     "period_end": "2027-06-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】43時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 43,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221926999",
+     "issue_date": "2018-06-26",
+     "period_start": "2018-07-01",
+     "period_end": "2019-06-30",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】65時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 65,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221926999",
+     "issue_date": "2019-06-26",
+     "period_start": "2019-07-01",
+     "period_end": "2020-06-30",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】65時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 65,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221926999",
+     "issue_date": "2020-06-11",
+     "period_start": "2020-07-01",
+     "period_end": "2021-06-30",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】65時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 65,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221926999",
+     "issue_date": "2021-06-28",
+     "period_start": "2021-07-01",
+     "period_end": "2022-06-30",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】65時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 65,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221926999",
+     "issue_date": "2026-03-26",
+     "period_start": "2026-04-01",
+     "period_end": "2026-06-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】43時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 43,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "1114",
+   "name": "前田 健司",
+   "gender": "男",
+   "birth_date": "1973-03-20",
+   "postal_code": null,
+   "address": "市原市五井中央東2-18-22 ｲｰｽﾄｺｰﾄ2号館307",
+   "certs": [
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2018-05-29",
+     "period_start": "2018-06-01",
+     "period_end": "2019-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】227時間00分【家事援助】45時間00分【通院身体】14時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】太陽の丘ホーム",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 227,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2019-05-31",
+     "period_start": "2019-06-01",
+     "period_end": "2020-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】227時間00分【家事援助】45時間00分【通院身体】14時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 227,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2020-05-27",
+     "period_start": "2020-06-01",
+     "period_end": "2021-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】227時間30分【家事援助】45時間00分【通院身体】14時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 227,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2021-05-27",
+     "period_start": "2021-06-01",
+     "period_end": "2022-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】227時間30分【家事援助】45時間00分【通院身体】14時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 227,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2022-05-31",
+     "period_start": "2022-06-01",
+     "period_end": "2023-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】227時間30分【家事援助】45時間00分【通院身体】14時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 227,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2023-05-25",
+     "period_start": "2023-06-01",
+     "period_end": "2024-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】227時間30分【家事援助】45時間00分【通院身体】14時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 227,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2024-05-27",
+     "period_start": "2024-06-01",
+     "period_end": "2025-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】227時間30分【家事援助】45時間00分【通院身体】14時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 227,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2025-05-02",
+     "period_start": "2025-06-01",
+     "period_end": "2026-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】210時間00分【家事援助】45時間00分【通院身体】14時間00分【短時間複数訪問】対象【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 210,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2026-05-27",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】180時間00分【家事援助】45時間00分【通院身体】14時間00分【短時間複数訪問】対象【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 180,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2025-05-02",
+     "period_start": "2025-06-01",
+     "period_end": "2026-05-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】210時間00分【家事援助】45時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 210,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2025-05-02",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】180時間00分【家事援助】45時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 180,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2026-05-27",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】180時間00分【家事援助】45時間00分【通院身体】14時間00分【短時間複数訪問】対象【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 180,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    },
+    {
+     "cert_number": "1221918178",
+     "issue_date": "2025-05-02",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "市原市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】180時間00分【家事援助】45時間00分【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】太陽の丘ホーム",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分6",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 180,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "太陽の丘ホーム"
+    }
+   ]
+  },
+  {
+   "user_number": "@宮原久佳",
+   "name": "宮原 久佳",
+   "gender": "男",
+   "birth_date": "1964-06-03",
+   "postal_code": "290-0243",
+   "address": "千葉県市原市上高根５８４番地33",
+   "certs": [
+    {
+     "cert_number": "1221932039",
+     "issue_date": "2022-02-24",
+     "period_start": "2022-03-01",
+     "period_end": "2023-02-28",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】10時間00分【家事援助】7時間30分【通院身体】20時間00分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221932039",
+     "issue_date": "2023-02-09",
+     "period_start": "2023-03-01",
+     "period_end": "2024-02-29",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】10時間00分【家事援助】7時間30分【通院身体】20時間00分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221932039",
+     "issue_date": "2024-02-06",
+     "period_start": "2024-03-01",
+     "period_end": "2024-06-30",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】10時間00分【家事援助】15時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221932039",
+     "issue_date": "2024-06-20",
+     "period_start": "2024-07-01",
+     "period_end": "2024-12-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】15時間00分【家事援助】22時間30分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221932039",
+     "issue_date": "2024-12-23",
+     "period_start": "2025-01-01",
+     "period_end": "2025-02-28",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】35時間00分【家事援助】22時間30分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 35,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221932039",
+     "issue_date": "2025-02-20",
+     "period_start": "2025-03-01",
+     "period_end": "2026-02-28",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】35時間00分【家事援助】22時間30分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 35,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221932039",
+     "issue_date": "2026-03-05",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】35時間00分【家事援助】22時間30分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 35,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221932039",
+     "issue_date": "2026-03-05",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】35時間00分【家事援助】22時間30分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 35,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "6205",
+   "name": "女鹿 香奈子",
+   "gender": "女",
+   "birth_date": "1975-05-18",
+   "postal_code": "299-0111",
+   "address": "千葉県市原市姉崎812番地7",
+   "certs": [
+    {
+     "cert_number": "1221919374",
+     "issue_date": "2023-01-27",
+     "period_start": "2023-04-01",
+     "period_end": "2024-01-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221919374",
+     "issue_date": "2024-01-25",
+     "period_start": "2024-02-01",
+     "period_end": "2025-01-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221919374",
+     "issue_date": "2025-01-29",
+     "period_start": "2025-02-01",
+     "period_end": "2026-01-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221919374",
+     "issue_date": "2026-01-29",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【所得区分】一般２【利用者負担上限月額】37,200株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221919374",
+     "issue_date": "2026-01-29",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【所得区分】一般２【利用者負担上限月額】37,200株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "1036",
+   "name": "山本 心介",
+   "gender": "男",
+   "birth_date": "1971-01-12",
+   "postal_code": null,
+   "address": "袖ケ浦市蔵波3309-2-2",
+   "certs": [
+    {
+     "cert_number": "1222901637",
+     "issue_date": "2022-11-15",
+     "period_start": "2022-11-01",
+     "period_end": "2023-10-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222901637",
+     "issue_date": "2023-11-24",
+     "period_start": "2023-11-01",
+     "period_end": "2024-10-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222901637",
+     "issue_date": "2024-12-02",
+     "period_start": "2024-11-01",
+     "period_end": "2025-10-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222901637",
+     "issue_date": "2025-10-30",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222901637",
+     "issue_date": "2018-12-05",
+     "period_start": "2018-11-01",
+     "period_end": "2019-10-31",
+     "city": "袖ケ浦市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222901637",
+     "issue_date": "2019-11-14",
+     "period_start": "2019-11-01",
+     "period_end": "2020-10-31",
+     "city": "袖ケ浦市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222901637",
+     "issue_date": "2020-10-23",
+     "period_start": "2020-11-01",
+     "period_end": "2021-10-31",
+     "city": "袖ケ浦市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222901637",
+     "issue_date": "2021-12-13",
+     "period_start": "2021-11-01",
+     "period_end": "2022-10-31",
+     "city": "袖ケ浦市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1222901637",
+     "issue_date": "2022-11-15",
+     "period_start": "2022-11-01",
+     "period_end": "2023-10-31",
+     "city": "袖ケ浦市",
+     "jigyou": "知的障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1222901637",
+     "issue_date": "2025-10-30",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "袖ケ浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証居宅介護.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "1221910753",
+   "name": "高橋 純一郎",
+   "gender": "男",
+   "birth_date": "1969-09-14",
+   "postal_code": null,
+   "address": "市原市桜台４丁目１０番地の１２",
+   "certs": [
+    {
+     "cert_number": "1221920968",
+     "issue_date": "2022-07-27",
+     "period_start": "2022-08-01",
+     "period_end": "2023-07-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】37時間30分【利用者負担上限月額】0",
+     "src": "K姉受給者証精神障害.pdf",
+     "support_level": "区分3",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 37,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221920968",
+     "issue_date": "2018-07-27",
+     "period_start": "2018-08-01",
+     "period_end": "2019-07-31",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】37時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証精神障害.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 37,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221920968",
+     "issue_date": "2019-07-29",
+     "period_start": "2019-08-01",
+     "period_end": "2020-07-31",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】37時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証精神障害.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 37,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221920968",
+     "issue_date": "2020-07-29",
+     "period_start": "2020-08-01",
+     "period_end": "2021-07-31",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】37時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証精神障害.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 37,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221920968",
+     "issue_date": "2021-07-30",
+     "period_start": "2021-08-01",
+     "period_end": "2022-07-31",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】37時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証精神障害.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 37,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221920968",
+     "issue_date": "2022-07-27",
+     "period_start": "2022-08-01",
+     "period_end": "2023-07-31",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】37時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証精神障害.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 37,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221920968",
+     "issue_date": "2022-07-27",
+     "period_start": "2022-08-01",
+     "period_end": "2023-07-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】37時間30分【利用者負担上限月額】0",
+     "src": "K姉受給者証精神障害.pdf",
+     "support_level": "区分3",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 37,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "1221910777",
+   "name": "服部 洋子",
+   "gender": "女",
+   "birth_date": "1952-07-30",
+   "postal_code": null,
+   "address": "市原市青葉台2-5 ﾒｿﾞﾝ青葉台5棟203号",
+   "certs": [
+    {
+     "cert_number": "1221926809",
+     "issue_date": "2022-08-19",
+     "period_start": "2022-09-01",
+     "period_end": "2023-08-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】45時間00分【通院身体】20時間00分【利用者負担上限月額】0",
+     "src": "K姉受給者証精神障害.pdf",
+     "support_level": "区分4",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221926809",
+     "issue_date": "2023-08-10",
+     "period_start": "2023-09-01",
+     "period_end": "2024-08-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】45時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "K姉受給者証精神障害.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221926809",
+     "issue_date": "2018-12-01",
+     "period_start": "2018-12-01",
+     "period_end": "2019-07-31",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】14時間30分【家事援助】24時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証精神障害.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 14,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 24,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221926809",
+     "issue_date": "2019-07-23",
+     "period_start": "2019-08-01",
+     "period_end": "2019-10-31",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】14時間30分【家事援助】24時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証精神障害.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 14,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 24,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221926809",
+     "issue_date": "2019-10-24",
+     "period_start": "2019-11-01",
+     "period_end": "2020-07-31",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】45時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証精神障害.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221926809",
+     "issue_date": "2020-07-29",
+     "period_start": "2020-08-01",
+     "period_end": "2020-08-31",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】45時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証精神障害.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221926809",
+     "issue_date": "2020-08-26",
+     "period_start": "2020-09-01",
+     "period_end": "2021-08-31",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】45時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証精神障害.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221926809",
+     "issue_date": "2021-08-27",
+     "period_start": "2021-09-01",
+     "period_end": "2022-08-31",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】45時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証精神障害.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221926809",
+     "issue_date": "2022-08-19",
+     "period_start": "2022-09-01",
+     "period_end": "2023-08-31",
+     "city": "市原市",
+     "jigyou": "精神障害者居宅介護等事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】45時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "K姉受給者証精神障害.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221926809",
+     "issue_date": "2023-08-10",
+     "period_start": "2023-09-01",
+     "period_end": "2024-08-31",
+     "city": "市原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】45時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0株式会社ケィ・ティ・サービス　ＫＴ姉崎ヘルパーステーション",
+     "src": "K姉受給者証精神障害.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  }
+ ],
+ "stats": {
+  "pdf_files": 2,
+  "kihon_rows": 17,
+  "birth_date_missing": 0,
+  "clients": 17,
+  "certs_total": 128,
+  "current_certs": 18,
+  "multi_current": 1
+ },
+ "warnings": [
+  "現在有効な受給者証なし: 高橋 純一郎 (1221910753) → 最新 2023-07-31 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 服部 洋子 (1221910777) → 最新 2024-08-31 を採用 (期限切れ)"
+ ]
+}
