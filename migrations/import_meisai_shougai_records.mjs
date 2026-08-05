@@ -839,8 +839,23 @@ async function main() {
   const unresolvedClients = [];
   for (const num of uniqNums) {
     if (numToClient[num]) { resolvedClient.set(num, numToClient[num]); continue; }
-    const hits = clientByName.get(normClientName(nameByNum[num])) || [];
+    const nm = normClientName(nameByNum[num]);
+    const hits = clientByName.get(nm) || [];
     if (hits.length === 1) { resolvedClient.set(num, hits[0]); continue; }
+    // 受給者証一覧表 (PDF) は**氏名を 17 文字程度で切る**ので、長い氏名は完全一致しない
+    //   (中央 「BAT ERDENE BATBAYAR」→ PDF は「BAT ERDENE BATBAY」)。
+    //   一方が他方の先頭部分になっていて、かつ 10 文字以上 (日本人名は正規化後 4〜6 文字
+    //   なので誤結合しない長さ) なら同一人物とみなす。
+    if (hits.length === 0 && nm.length >= 10) {
+      const pre = [...clientByName.entries()].filter(
+        ([k, v]) => v.length === 1 && k.length >= 10 && (nm.startsWith(k) || k.startsWith(nm)),
+      );
+      if (pre.length === 1) {
+        console.log(`  ↔ ${num} ${nameByNum[num]}: 氏名が途中で切れた受給者証と一致 "${pre[0][0]}"`);
+        resolvedClient.set(num, pre[0][1][0]);
+        continue;
+      }
+    }
     unresolvedClients.push(`${num} ${nameByNum[num]} (氏名一致=${hits.length})`);
   }
   console.log(`=== 利用者 client_id 解決: ${resolvedClient.size}/${uniqNums.length}名 ===`);
