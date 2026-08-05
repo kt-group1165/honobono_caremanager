@@ -271,7 +271,7 @@ async function main(){
   console.log(`  データ品質フラグ: ${issues.length}件`);
   issues.slice(0,25).forEach(s=>console.log(`   ⚠ ${s}`));
   if(issues.length>25) console.log(`   … 他 ${issues.length-25}件`);
-  console.log(`  合計 紐付け対象(assignment作成): ${toCreate.length+reuse.length}名 / 期待116名`);
+  console.log(`  合計 紐付け対象(assignment作成): ${toCreate.length+reuse.length}名 / MEISAI の利用者 ${targetNums.size}名`);
   console.log("");
   if(toCreate[0]){
     console.log("clients payload サンプル:\n",JSON.stringify(toCreate[0].client,null,1));
@@ -331,6 +331,6 @@ async function main(){
   writeFileSync(path.join(KAIGO,CREATED_FILE),JSON.stringify(log.created,null,1));
   writeFileSync(path.join(KAIGO,MAP_FILE),JSON.stringify(mapping,null,1));
   console.log(`✓ 完了: 作成${log.created.length} / 再利用${log.reused.length} / 削除${log.deleted.length}`);
-  console.log(`  マッピング → migrations/_meisai_num_to_client.json (${Object.keys(mapping).length}名)`);
+  console.log(`  マッピング → ${MAP_FILE} (${Object.keys(mapping).length}名)`);
 }
 main().catch(e=>{console.error("ERROR:",e.message);process.exit(1);});
