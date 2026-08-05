@@ -71,6 +71,8 @@ function readCsv(p){
 // ---- normalize ----
 const zen2han=(s)=>(s||"").replace(/[０-９]/g,(c)=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
 const isoDate=(s)=>{ s=(s||"").trim(); const m=/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec(s); return m?`${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`:null; };
+// 氏名の正規化 (末尾の (中央)(支) 等と敬称を落とす)。基本情報/稼働データの突合用
+const normNmBase=(s)=>(s||"").normalize("NFKC").replace(/[\s　]/g,"").replace(/[（(][^）)]*[）)]\s*$/,"").replace(/様$/,"");
 const careLevel=(s)=>zen2han((s||"").trim()); // 要介護１→要介護1
 const num=(s)=>{ const v=(s||"").trim(); return v===""?null:v; };
 
@@ -79,10 +81,16 @@ async function main(){
 
   // 1) 対象利用者番号 = MEISAI①介護
   const targetNums=new Set();
+  const meisaiNameByNum=new Map(); // 稼働データ側の氏名 (基本情報の番号違い救済用)
   for(const f of findMeisaiFiles(MEISAI_DIR)){
     const {idx,rows}=readCsv(f);
     // ①介護(11xxxx) + ②総合事業(A2/A3) を対象 (③障害以降は別途)
-    for(const c of rows){ const code=(c[idx["サービスコード"]]||"").trim(); if(/^11[1-7]/.test(code)||/^A[23]/.test(code)) targetNums.add((c[idx["利用者番号"]]||"").trim()); }
+    for(const c of rows){ const code=(c[idx["サービスコード"]]||"").trim();
+      if(/^11[1-7]/.test(code)||/^A[23]/.test(code)){
+        const num=(c[idx["利用者番号"]]||"").trim();
+        targetNums.add(num);
+        if(!meisaiNameByNum.has(num)) meisaiNameByNum.set(num,(c[idx["利用者名"]]||"").trim());
+      } }
   }
   console.log(`対象利用者(MEISAI①介護): ${targetNums.size}名\n`);
 
@@ -90,6 +98,17 @@ async function main(){
   const base=readCsv(path.join(USER_DIR,"基本情報_______.CSV"));
   const kaigo=readCsv(path.join(USER_DIR,"介護保険1.CSV"));
   const baseByNum=new Map(); for(const r of base.rows) baseByNum.set((r[base.idx["利用者番号"]]||"").trim(), r);
+  // ⚠ **同じ人が事業者エントリごとに違う利用者番号を持つ**。稼働データと基本情報一覧表で
+  //   番号が食い違うことがあるので氏名でも引けるようにする
+  //   (中央 西協子 = 稼働 621000094 / 基本情報 621000095、太田綏枝 = 2113114166 / 621000099)。
+  //   氏名は末尾の (中央) 等を落として比較し、**一意なときだけ**使う (同姓同名は誤結合になる)。
+  const baseByName=new Map();
+  for(const r of base.rows){
+    const k=normNmBase((r[base.idx["利用者名"]]||""));
+    if(!k) continue;
+    if(!baseByName.has(k)) baseByName.set(k,[]);
+    baseByName.get(k).push(r);
+  }
   // 介護保険は1利用者に複数行(履歴)。**対象月に有効な認定**を採る。
   //   ⚠ 「最新1件」で採ってはいけない。更新申請のレコードは開始日が未来なので、
   //     全履歴を出力してもらうと 2026-07 開始の証を拾って 6 月請求がズレる
@@ -97,6 +116,7 @@ async function main(){
   //   対象月にかかる行が複数あれば開始日が新しい方。1 つも無ければ最新で代替し警告する。
   const MONTH_START="2026-06-01", MONTH_END="2026-06-30";
   const kaigoByNum=new Map();
+  const kaigoByName=new Map(); // 番号違い救済 (基本情報と同じ理由)
   const certFallback=[];
   {
     const rowsByNum=new Map();
@@ -112,6 +132,8 @@ async function main(){
       const pick=(covering.length?covering:rows).sort((a,b)=>(b._start||"").localeCompare(a._start||""))[0];
       if(!covering.length && rows.length) certFallback.push(`${n}: 対象月に有効な認定なし → ${pick._start}〜${pick._end} で代替`);
       kaigoByNum.set(n,pick);
+      const nk=normNmBase(pick[kaigo.idx["利用者名"]]||"");
+      if(nk){ if(!kaigoByName.has(nk)) kaigoByName.set(nk,[]); kaigoByName.get(nk).push(pick); }
     }
   }
 
@@ -143,7 +165,23 @@ async function main(){
   // 5) build payloads
   const toCreate=[]; const issues=[]; const reuse=[]; const toDeleteJunk=[]; const conflicts=[];
   for(const n of targetNums){
-    const b=baseByNum.get(n), k=kaigoByNum.get(n);
+    let b=baseByNum.get(n);
+    if(!b){
+      // 番号違い救済: 稼働データの氏名で基本情報を引く (一意一致のみ)
+      const cands=baseByName.get(normNmBase(meisaiNameByNum.get(n)))||[];
+      if(cands.length===1){
+        b=cands[0];
+        console.log(`  ↔ ${n}: 番号違いを氏名で解決 "${(b[base.idx["利用者名"]]||"").trim()}" (基本情報の番号 ${(b[base.idx["利用者番号"]]||"").trim()})`);
+      }
+    }
+    let k=kaigoByNum.get(n);
+    if(!k){
+      const cands=kaigoByName.get(normNmBase(meisaiNameByNum.get(n)))||[];
+      if(cands.length===1){
+        k=cands[0];
+        console.log(`  ↔ ${n}: 介護保険も番号違いを氏名で解決 (CSVの番号 ${(k[kaigo.idx["利用者番号"]]||"").trim()})`);
+      }
+    }
     if(!b){ issues.push(`${n}: 基本情報に無い`); continue; }
     const name=(b[base.idx["利用者名"]]||"").trim();
     const ex=existing.get(n);
