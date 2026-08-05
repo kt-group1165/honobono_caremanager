@@ -86,9 +86,14 @@ async function main(){
   if(!EXECUTE){ console.log("※ DRY RUN。--execute で 旧公費(明細CSV分含む)削除→再投入。"); return; }
   // 旧公費(明細CSVマーカー and このマーカー)を削除して入れ直す。
   // ※ 他事業所分を消さないよう、今回の対象 client_id にスコープする
+  // ⚠ マーカーは拠点サフィックス付き ([MEISAI公費 2026-06 姉ム] 等) もあるので前方一致で消す。
+  //   完全一致だけにしていたため重複が 39組87行たまっていた (2026-08-04 是正)。
+  //   公費は「利用者の属性」なので、当該利用者について 1 本だけ残すのが正。
   const cids=[...new Set(payloads.map(p=>p.client_id))];
-  await sb.from("client_kohi_records").delete().eq("notes","[MEISAI公費 2026-06]").in("client_id",cids);
-  await sb.from("client_kohi_records").delete().like("notes",`${MARK}%`).in("client_id",cids);
+  for(const pat of ["[MEISAI公費 2026-06%", "[居宅STEP1 2026-06%", `${MARK}%`]){
+    const { error }=await sb.from("client_kohi_records").delete().like("notes",pat).in("client_id",cids);
+    if(error){ console.error(`✗ 旧公費削除に失敗 (${pat}): ${error.message}`); process.exit(1); }
+  }
   const { error }=await sb.from("client_kohi_records").insert(payloads);
   if(error){ console.error(`✗ 投入失敗: ${error.message}`); process.exit(1); }
   console.log(`✓ 完了: ${payloads.length}名`);
