@@ -149,8 +149,15 @@ async function main(){
     const ex=existing.get(n);
     let unOverride=null; // user_number 衝突時のリナンバー値 (マッピングは元番号nで繋ぐ)
     let reuseId=null, renumberFrom=null;
+    const bdEarly=isoDate(b[base.idx["生年月日"]]);
     if(ex){
-      if(normNm(ex.name)===normNm(name)){ reuseId=ex.id; } // 同一人物→再利用 (認定は下で作って更新する)
+      // 氏名一致 or **利用者番号+生年月日が一致**なら同一人物。
+      //   後者は異体字 (青/靑・高/髙・崎/﨑・斎/齋) で氏名照合が外れるケースを拾う
+      //   (花見川 2113003314「青木敬子」vs「靑木 敬子」で別人扱いになっていた)。
+      if(normNm(ex.name)===normNm(name) || (bdEarly && ex.birth_date===bdEarly)){
+        if(normNm(ex.name)!==normNm(name)) console.log(`  ↔ ${n}: 異体字とみなして再利用 "${ex.name}" ← "${name}"`);
+        reuseId=ex.id;
+      }
       const refs=reuseId?0:await refCount(ex.id);
       if(reuseId){ /* 再利用: ゴミ判定も衝突判定も不要 */ }
       else
