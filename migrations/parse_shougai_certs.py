@@ -78,17 +78,20 @@ ORG_WORDS = re.compile(
 
 
 def is_office_fragment(t):
-    """事業所名の断片・組織名なら氏名として扱わない。
+    """ページヘッダの事業所名 (改頁で途中から切れた断片も含む) か。
 
     --office は「Hanaヘルパーステーション高品（身障）」のようにサービス種類が
-    付く。3 ファイル分を渡せないので、括弧より前の部分だけで部分一致を見る。
+    付くので、括弧より前の部分で部分一致を見る。
+
+    ⚠ ここで ORG_WORDS を見てはいけない。is_header から呼ばれるため、
+      「支援」を含む **【障害支援区分】…の支給量行までヘッダ扱いで捨てて**しまう
+      (2026-08-05 に高品で発生。全員の支給量・利用者負担上限月額が空になった)。
+      組織名の除外は氏名判定 (is_name_line) 側だけで行う。
     """
     n = norm(t)
     if not n:
         return False
-    if OFFICE_NAME_NORM and len(n) >= 4 and n in OFFICE_NAME_NORM:
-        return True
-    return bool(ORG_WORDS.search(n))
+    return bool(OFFICE_NAME_NORM) and len(n) >= 4 and n in OFFICE_NAME_NORM
 
 
 def is_header(s):
@@ -117,6 +120,8 @@ def is_name_line(s):
         and s != "～"
         and not CITY_PAT.match(s)
         and s not in SERVICE_ONLY
+        # 上限額管理事業所名が折り返して氏名行に化けるのを弾く
+        and not ORG_WORDS.search(norm(s))
     )
 
 

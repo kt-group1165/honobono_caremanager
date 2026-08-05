@@ -18,9 +18,17 @@
      "city": "四街道市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】40時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "1222810149",
@@ -30,9 +38,17 @@
      "city": "四街道市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】40時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "1222810149",
@@ -42,9 +58,17 @@
      "city": "四街道市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】40時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "1222810149",
@@ -54,9 +78,17 @@
      "city": "四街道市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】60時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "1222810149",
@@ -66,9 +98,17 @@
      "city": "四街道市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】60時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "1222810149",
@@ -78,9 +118,17 @@
      "city": "四街道市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】60時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "1222810149",
@@ -90,9 +138,17 @@
      "city": "四街道市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】60時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "1222810149",
@@ -102,9 +158,17 @@
      "city": "四街道市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】60時間00分【所得区分】低所得１【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -116,9 +180,17 @@
      "city": "四街道市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】60時間00分【所得区分】低所得１【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -138,9 +210,24 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】7時間30分【乗降介助】40回【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 7,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "乗降介助": {
+       "count": 40
+      }
+     }
     },
     {
      "cert_number": "2000051553",
@@ -150,9 +237,28 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "利用者負担上限月額】0",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】7時間30分【乗降介助】40回【家事援助】35時間00分【通院身体】28時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 7,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 35,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 28,
+       "minutes": 0
+      },
+      "乗降介助": {
+       "count": 40
+      }
+     }
     }
    ],
    "current_certs": [
@@ -164,9 +270,28 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "利用者負担上限月額】0",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】7時間30分【乗降介助】40回【家事援助】35時間00分【通院身体】28時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 7,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 35,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 28,
+       "minutes": 0
+      },
+      "乗降介助": {
+       "count": 40
+      }
+     }
     }
    ]
   },
@@ -186,9 +311,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【通院身体】15時間30分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "通院身体": {
+       "hours": 15,
+       "minutes": 30
+      }
+     }
     },
     {
      "cert_number": "2000039467",
@@ -198,9 +331,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【通院身体】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000039467",
@@ -210,9 +351,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【通院身体】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000039467",
@@ -222,9 +371,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【通院身体】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000039467",
@@ -234,9 +391,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【通院身体】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000039467",
@@ -246,9 +411,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【通院身体】30時間00分【所得区分】低所得１【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -260,9 +433,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【通院身体】30時間00分【所得区分】低所得１【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -282,9 +463,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】13時間00分【家事援助】33時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 13,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 33,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000071049",
@@ -294,9 +487,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】13時間00分【家事援助】33時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 13,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 33,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000071049",
@@ -306,9 +511,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】13時間00分【家事援助】33時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 13,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 33,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000071049",
@@ -318,9 +535,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】25時間30分【家事援助】42時間30分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 42,
+       "minutes": 30
+      }
+     }
     },
     {
      "cert_number": "2000071049",
@@ -330,9 +559,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】25時間30分【家事援助】42時間30分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 42,
+       "minutes": 30
+      }
+     }
     }
    ],
    "current_certs": [
@@ -344,9 +585,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】25時間30分【家事援助】42時間30分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 42,
+       "minutes": 30
+      }
+     }
     }
    ]
   },
@@ -366,9 +619,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "月額】9,300",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】10時間00分【家事援助】5時間00分【通院身体】3時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 3,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -380,9 +649,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "月額】9,300",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】10時間00分【家事援助】5時間00分【通院身体】3時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 3,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -402,9 +687,20 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】188時間00分【家事援助】75時間00分【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 188,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 75,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000128674",
@@ -414,9 +710,20 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】188時間00分【家事援助】75時間00分【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 188,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 75,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000128674",
@@ -426,9 +733,20 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】187時間30分【家事援助】75時間00分【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 187,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 75,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000128674",
@@ -438,9 +756,24 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】210時間00分【家事援助】75時間00分【通院身体】30時間00分【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 210,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 75,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000128674",
@@ -450,9 +783,24 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】234時間00分【家事援助】59時間00分【通院身体】22時間00分【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 234,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 59,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 22,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000128674",
@@ -462,9 +810,24 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】225時間00分【家事援助】45時間15分【通院身体】15時間00分【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 225,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 15
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000128674",
@@ -474,9 +837,24 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】225時間00分【家事援助】45時間00分【通院身体】15時間00分【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 225,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -488,9 +866,24 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】225時間00分【家事援助】45時間00分【通院身体】15時間00分【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 225,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -510,9 +903,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】81時間30分【家事援助】7時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 81,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000074530",
@@ -522,9 +927,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】81時間30分【家事援助】7時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 81,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000074530",
@@ -534,9 +951,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】75時間30分【家事援助】7時間00分【所得区分】低所得１【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 75,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000074530",
@@ -546,9 +975,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】68時間00分【家事援助】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 68,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -560,9 +1001,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】68時間00分【家事援助】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 68,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -582,9 +1035,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000010369",
@@ -594,9 +1055,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000010369",
@@ -606,9 +1075,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000010369",
@@ -618,9 +1095,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】40時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000010369",
@@ -630,9 +1115,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】76時間00分【通院身体】9時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 76,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 9,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -644,9 +1141,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】76時間00分【通院身体】9時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 76,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 9,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -666,9 +1175,28 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "利用者負担上限月額】0",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】15時間00分【乗降介助】16回【家事援助】15時間00分【通院身体】15時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "乗降介助": {
+       "count": 16
+      }
+     }
     },
     {
      "cert_number": "2000116364",
@@ -678,9 +1206,28 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "利用者負担上限月額】0",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】15時間00分【乗降介助】16回【家事援助】15時間00分【通院身体】15時間00分【所得区分】低所得２【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "乗降介助": {
+       "count": 16
+      }
+     }
     },
     {
      "cert_number": "2000116364",
@@ -690,9 +1237,28 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "利用者負担上限月額】0",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】15時間00分【乗降介助】16回【家事援助】15時間00分【通院身体】15時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "乗降介助": {
+       "count": 16
+      }
+     }
     }
    ],
    "current_certs": [
@@ -704,9 +1270,28 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "利用者負担上限月額】0",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】15時間00分【乗降介助】16回【家事援助】15時間00分【通院身体】15時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "乗降介助": {
+       "count": 16
+      }
+     }
     }
    ]
   },
@@ -726,9 +1311,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000148672",
@@ -738,9 +1331,17 @@
      "city": "千葉市",
      "jigyou": "精神障害者居宅介護等事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】5時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -752,9 +1353,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -774,9 +1383,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】18時間00分【通院身体】14時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分3",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000009932",
@@ -786,9 +1407,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】18時間00分【通院身体】14時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -800,9 +1433,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】18時間00分【通院身体】14時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 14,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -822,9 +1467,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【身体介護】31時間00分【家事援助】31時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】介護サービスえいと　千葉中央事業所",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 31,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 31,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "介護サービスえいと　千葉中央事業所"
     }
    ],
    "current_certs": [
@@ -836,9 +1493,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【身体介護】31時間00分【家事援助】31時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】介護サービスえいと　千葉中央事業所",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 31,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 31,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "介護サービスえいと　千葉中央事業所"
     }
    ]
   },
@@ -858,9 +1527,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000097820",
@@ -870,9 +1547,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】52時間00分【所得区分】低所得１【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 52,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000097820",
@@ -882,9 +1567,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】57時間30分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 57,
+       "minutes": 30
+      }
+     }
     },
     {
      "cert_number": "2000097820",
@@ -894,9 +1587,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】58時間30分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 58,
+       "minutes": 30
+      }
+     }
     },
     {
      "cert_number": "2000097820",
@@ -906,9 +1607,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】60時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000097820",
@@ -918,9 +1627,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】60時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -932,9 +1649,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】60時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -954,9 +1679,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】105時間00分【家事援助】60時間00分【通院身体】8時間30分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 105,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 8,
+       "minutes": 30
+      }
+     }
     },
     {
      "cert_number": "2000036455",
@@ -966,9 +1707,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】105時間00分【家事援助】60時間00分【通院身体】8時間30分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 105,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 8,
+       "minutes": 30
+      }
+     }
     },
     {
      "cert_number": "2000036455",
@@ -978,9 +1735,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】105時間00分【家事援助】60時間00分【通院身体】8時間30分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 105,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 8,
+       "minutes": 30
+      }
+     }
     },
     {
      "cert_number": "2000036455",
@@ -990,9 +1763,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】105時間00分【家事援助】60時間00分【通院身体】8時間30分【所得区分】低所得１【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 105,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 8,
+       "minutes": 30
+      }
+     }
     },
     {
      "cert_number": "2000036455",
@@ -1002,9 +1791,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "月額】0",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】105時間00分【家事援助】60時間00分【通院身体】13時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 105,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 13,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000036455",
@@ -1014,9 +1819,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "月額】0",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】105時間00分【家事援助】60時間00分【通院身体】13時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 105,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 13,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -1028,9 +1849,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "月額】0",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】105時間00分【家事援助】60時間00分【通院身体】13時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 105,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 13,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -1050,9 +1887,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】45時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000110342",
@@ -1062,9 +1907,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】45時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000110342",
@@ -1074,9 +1927,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】45時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000110342",
@@ -1086,9 +1947,17 @@
      "city": "千葉市",
      "jigyou": "知的障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】47時間30分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 47,
+       "minutes": 30
+      }
+     }
     }
    ],
    "current_certs": [
@@ -1100,9 +1969,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】45時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -1122,9 +1999,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】20時間00分【通院身体】10時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000026159",
@@ -1134,9 +2023,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】20時間00分【通院身体】10時間00分【所得区分】低所得２【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -1148,9 +2049,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】20時間00分【通院身体】10時間00分【所得区分】低所得２【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -1170,9 +2083,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】45時間00分【家事援助】14時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 14,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000116208",
@@ -1182,9 +2107,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】45時間00分【家事援助】14時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 14,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -1196,9 +2133,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】45時間00分【家事援助】14時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 14,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -1218,9 +2167,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】20時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000122412",
@@ -1230,9 +2187,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】20時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -1244,9 +2209,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】20時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -1266,9 +2239,18 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】27時間30分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 27,
+       "minutes": 30
+      }
+     },
+     "jogen_kanri_office": "Hanaヘルパーステーション高品（身障）"
     },
     {
      "cert_number": "2000095790",
@@ -1278,9 +2260,18 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】22時間30分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 22,
+       "minutes": 30
+      }
+     },
+     "jogen_kanri_office": "Hanaヘルパーステーション高品（身障）"
     },
     {
      "cert_number": "2000095790",
@@ -1290,9 +2281,18 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】20時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "Hanaヘルパーステーション高品（身障）"
     }
    ],
    "current_certs": [
@@ -1304,9 +2304,18 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】22時間30分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 22,
+       "minutes": 30
+      }
+     },
+     "jogen_kanri_office": "Hanaヘルパーステーション高品（身障）"
     }
    ]
   },
@@ -1326,9 +2335,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】55時間00分【所得区分】低所得１【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 55,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000050811",
@@ -1338,9 +2355,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】55時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 55,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000050811",
@@ -1350,9 +2375,17 @@
      "city": "千葉市",
      "jigyou": "知的障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】55時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 55,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000050811",
@@ -1362,9 +2395,17 @@
      "city": "千葉市",
      "jigyou": "知的障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】55時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 55,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000050811",
@@ -1374,9 +2415,17 @@
      "city": "千葉市",
      "jigyou": "知的障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】55時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 55,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000050811",
@@ -1386,9 +2435,17 @@
      "city": "千葉市",
      "jigyou": "知的障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】55時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 55,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -1400,9 +2457,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】55時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 55,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -1422,9 +2487,25 @@
      "city": "四街道市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】60時間00分【家事援助】2時間00分【通院身体】10時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 2,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "1222810943",
@@ -1434,9 +2515,25 @@
      "city": "四街道市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】60時間00分【家事援助】2時間00分【通院身体】10時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 2,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -1448,9 +2545,25 @@
      "city": "四街道市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】60時間00分【家事援助】2時間00分【通院身体】10時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 2,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -1470,9 +2583,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】45時間00分【家事援助】1時間00分【所得区分】低所得１【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 1,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -1484,9 +2609,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】45時間00分【家事援助】1時間00分【所得区分】低所得１【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 1,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -1506,9 +2643,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】25時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000092391",
@@ -1518,9 +2667,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】25時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000092391",
@@ -1530,9 +2691,21 @@
      "city": "千葉市",
      "jigyou": "精神障害者居宅介護等事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】25時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000092391",
@@ -1542,9 +2715,21 @@
      "city": "千葉市",
      "jigyou": "精神障害者居宅介護等事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】25時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000092391",
@@ -1554,9 +2739,21 @@
      "city": "千葉市",
      "jigyou": "精神障害者居宅介護等事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】25時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000092391",
@@ -1566,9 +2763,21 @@
      "city": "千葉市",
      "jigyou": "精神障害者居宅介護等事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】25時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -1580,9 +2789,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】25時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -1602,9 +2823,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】124時間00分【家事援助】14時間30分【通院身体】6時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 124,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 14,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 6,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000070132",
@@ -1614,9 +2851,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】124時間00分【家事援助】14時間30分【通院身体】6時間00分【所得区分】低所得２【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 124,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 14,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 6,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000070132",
@@ -1626,9 +2879,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】124時間00分【家事援助】14時間30分【通院身体】6時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 124,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 14,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 6,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000070132",
@@ -1638,9 +2907,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】124時間00分【家事援助】14時間30分【通院身体】6時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 124,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 14,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 6,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000070132",
@@ -1650,9 +2935,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】124時間00分【家事援助】14時間30分【通院身体】6時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 124,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 14,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 6,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -1664,9 +2965,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】124時間00分【家事援助】14時間30分【通院身体】6時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 124,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 14,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 6,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -1686,9 +3003,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】7時間30分【家事援助】22時間30分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分3",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 7,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
     },
     {
      "cert_number": "2000069704",
@@ -1698,9 +3027,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】7時間30分【家事援助】22時間30分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 7,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
     }
    ],
    "current_certs": [
@@ -1712,9 +3053,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】7時間30分【家事援助】22時間30分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 7,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
     }
    ]
   },
@@ -1734,9 +3087,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】68時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 68,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000149787",
@@ -1746,9 +3107,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】68時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 68,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000149787",
@@ -1758,9 +3127,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】68時間00分【所得区分】低所得１【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 68,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000149787",
@@ -1770,9 +3147,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】68時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 68,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000149787",
@@ -1782,9 +3167,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】68時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 68,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000149787",
@@ -1794,9 +3187,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】68時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 68,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000053310",
@@ -1806,9 +3207,17 @@
      "city": "千葉市",
      "jigyou": "児童居宅介護等事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【身体介護】63時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 63,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "Hanaヘルパーステーション高品（身障）"
     },
     {
      "cert_number": "2000053310",
@@ -1818,9 +3227,17 @@
      "city": "千葉市",
      "jigyou": "児童居宅介護等事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【身体介護】68時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 68,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "Hanaヘルパーステーション高品（身障）"
     }
    ],
    "current_certs": [
@@ -1832,9 +3249,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】68時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 68,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -1854,9 +3279,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000212908",
@@ -1866,9 +3299,17 @@
      "city": "千葉市",
      "jigyou": "重度訪問介護",
      "service": "重度訪問介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【重度訪問介護区分６該当】372時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "重度訪問介護区分６該当": {
+       "hours": 372,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000212908",
@@ -1878,9 +3319,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
      "src": "高品受給者証重度.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000212908",
@@ -1890,9 +3339,17 @@
      "city": "千葉市",
      "jigyou": "重度訪問介護",
      "service": "重度訪問介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【重度訪問介護区分６該当】372時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
      "src": "高品受給者証重度.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "重度訪問介護区分６該当": {
+       "hours": 372,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -1904,9 +3361,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -1926,9 +3391,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】6時間00分【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 6,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000052874",
@@ -1938,9 +3415,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】6時間00分【家事援助】20時間00分【通院身体】1時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 6,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 1,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000052874",
@@ -1950,9 +3443,21 @@
      "city": "千葉市",
      "jigyou": "知的障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】6時間00分【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 6,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000052874",
@@ -1962,9 +3467,21 @@
      "city": "千葉市",
      "jigyou": "知的障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】6時間00分【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 6,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000052874",
@@ -1974,9 +3491,21 @@
      "city": "千葉市",
      "jigyou": "知的障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】6時間00分【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 6,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000052874",
@@ -1986,9 +3515,21 @@
      "city": "千葉市",
      "jigyou": "知的障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】6時間00分【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 6,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -2000,9 +3541,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】6時間00分【家事援助】20時間00分【通院身体】1時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 6,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 1,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -2022,9 +3579,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】10時間00分【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
     },
     {
      "cert_number": "2000080800",
@@ -2034,9 +3603,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】20時間00分【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
     },
     {
      "cert_number": "2000080800",
@@ -2046,9 +3627,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】20時間00分【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
     }
    ],
    "current_certs": [
@@ -2060,9 +3653,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】20時間00分【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
     }
    ]
   },
@@ -2082,9 +3687,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【身体介護】50時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】（社福）千葉県身体障害者福祉事業団　千葉ﾘﾊ　愛育園（短期入所",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "（社福）千葉県身体障害者福祉事業団　千葉ﾘﾊ　愛育園（短期入所"
     },
     {
      "cert_number": "2000066163",
@@ -2094,9 +3707,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【身体介護】50時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】（社福）千葉県身体障害者福祉事業団　千葉ﾘﾊ　愛育園（短期入所",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "（社福）千葉県身体障害者福祉事業団　千葉ﾘﾊ　愛育園（短期入所"
     },
     {
      "cert_number": "2000066163",
@@ -2106,9 +3727,17 @@
      "city": "千葉市",
      "jigyou": "児童居宅介護等事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【身体介護】50時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】社福）千葉県身体障害者福祉事業団　愛育園",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "社福）千葉県身体障害者福祉事業団　愛育園"
     },
     {
      "cert_number": "2000066163",
@@ -2118,9 +3747,17 @@
      "city": "千葉市",
      "jigyou": "児童居宅介護等事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【身体介護】50時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】社福）千葉県身体障害者福祉事業団　愛育園",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "社福）千葉県身体障害者福祉事業団　愛育園"
     },
     {
      "cert_number": "2000066163",
@@ -2130,9 +3767,17 @@
      "city": "千葉市",
      "jigyou": "児童居宅介護等事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【身体介護】50時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】社福）千葉県身体障害者福祉事業団　愛育園",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "社福）千葉県身体障害者福祉事業団　愛育園"
     },
     {
      "cert_number": "2000066163",
@@ -2142,9 +3787,17 @@
      "city": "千葉市",
      "jigyou": "児童居宅介護等事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【身体介護】50時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】社福）千葉県身体障害者福祉事業団　愛育園",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "社福）千葉県身体障害者福祉事業団　愛育園"
     }
    ],
    "current_certs": [
@@ -2156,9 +3809,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【身体介護】50時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】（社福）千葉県身体障害者福祉事業団　千葉ﾘﾊ　愛育園（短期入所",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "（社福）千葉県身体障害者福祉事業団　千葉ﾘﾊ　愛育園（短期入所"
     }
    ]
   },
@@ -2197,9 +3858,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【身体介護】80時間00分【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】ソフトケア新検見川店Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 80,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "ソフトケア新検見川店Hanaヘルパーステーション高品（身障）"
     },
     {
      "cert_number": "2000210191",
@@ -2209,9 +3878,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】67時間30分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 67,
+       "minutes": 30
+      }
+     }
     }
    ],
    "current_certs": [
@@ -2223,9 +3900,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】67時間30分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 67,
+       "minutes": 30
+      }
+     }
     }
    ]
   },
@@ -2245,9 +3930,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】7時間30分【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 7,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
     }
    ],
    "current_certs": [
@@ -2259,9 +3956,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】7時間30分【家事援助】7時間30分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 7,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
     }
    ]
   },
@@ -2281,9 +3990,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "月額】0",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】100時間30分【家事援助】60時間00分【通院身体】40時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 100,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000046520",
@@ -2293,9 +4018,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】90時間00分【家事援助】95時間00分【通院身体】25時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 95,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000046520",
@@ -2305,9 +4046,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】90時間00分【家事援助】90時間00分【通院介助】95時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 95,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000046520",
@@ -2317,9 +4074,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】90時間00分【家事援助】90時間00分【通院介助】95時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 95,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000046520",
@@ -2329,9 +4102,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】90時間00分【家事援助】90時間00分【通院介助】95時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 95,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000046520",
@@ -2341,9 +4130,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】90時間00分【家事援助】90時間00分【通院介助】95時間00分【所得区分】低所得１【利用者負担上限月額】0Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 95,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000046520",
@@ -2353,9 +4158,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】90時間00分【家事援助】7時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000046520",
@@ -2365,9 +4182,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】90時間00分【家事援助】7時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -2379,9 +4208,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】90時間00分【家事援助】7時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 7,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -2401,9 +4242,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】27時間30分【家事援助】20時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 27,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -2415,9 +4272,25 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "額】0",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】27時間30分【家事援助】20時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 27,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -2437,9 +4310,16 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000099933",
@@ -2449,9 +4329,16 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000099933",
@@ -2461,9 +4348,16 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -2475,9 +4369,16 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -2497,9 +4398,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】22時間30分【通院介助】7時間30分【所得区分】一般２【利用者負担上限月額】37,200",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分2",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院介助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
     },
     {
      "cert_number": "2000060612",
@@ -2509,9 +4422,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】22時間30分【通院介助】7時間30分【所得区分】一般２【利用者負担上限月額】37,200Hanaヘルパーステーション高品（身障）",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分2",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院介助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
     },
     {
      "cert_number": "2000060612",
@@ -2521,9 +4446,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】22時間30分【通院介助】7時間30分【所得区分】一般２【利用者負担上限月額】37,200",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分2",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院介助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
     },
     {
      "cert_number": "2000060612",
@@ -2533,9 +4470,21 @@
      "city": "千葉市",
      "jigyou": "精神障害者居宅介護等事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】22時間30分【通院介助】7時間30分【所得区分】一般２【利用者負担上限月額】37,200",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分2",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院介助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
     }
    ],
    "current_certs": [
@@ -2547,9 +4496,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】22時間30分【通院介助】7時間30分【所得区分】一般２【利用者負担上限月額】37,200",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分2",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院介助": {
+       "hours": 7,
+       "minutes": 30
+      }
+     }
     }
    ]
   },
@@ -2569,9 +4530,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】73時間00分【所得区分】一般２【利用者負担上限月額】37,200",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 73,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -2583,9 +4552,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】73時間00分【所得区分】一般２【利用者負担上限月額】37,200",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分5",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 73,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -2605,9 +4582,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】10時間00分【家事援助】15時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分2",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -2619,9 +4608,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】10時間00分【家事援助】15時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分2",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -2641,9 +4642,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】60時間00分【通院身体】6時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 6,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000009551",
@@ -2653,9 +4666,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】75時間00分【通院身体】6時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 75,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 6,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -2667,9 +4692,21 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】75時間00分【通院身体】6時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証身体障碍.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 75,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 6,
+       "minutes": 0
+      }
+     }
     }
    ]
   },
@@ -2689,9 +4726,16 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】173時間00分【利用者負担上限月額】0",
      "src": "高品受給者証重度.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 173,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000022364",
@@ -2701,9 +4745,16 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】173時間00分【利用者負担上限月額】0",
      "src": "高品受給者証重度.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 173,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000022364",
@@ -2713,9 +4764,16 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】173時間00分【利用者負担上限月額】0",
      "src": "高品受給者証重度.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 173,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000022364",
@@ -2725,9 +4783,16 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】173時間00分【利用者負担上限月額】0",
      "src": "高品受給者証重度.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 173,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000022364",
@@ -2737,9 +4802,16 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】173時間00分【利用者負担上限月額】0",
      "src": "高品受給者証重度.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 173,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000022364",
@@ -2749,9 +4821,16 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】173時間00分【利用者負担上限月額】0",
      "src": "高品受給者証重度.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 173,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000022364",
@@ -2761,9 +4840,16 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】173時間00分【利用者負担上限月額】0",
      "src": "高品受給者証重度.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 173,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000022364",
@@ -2773,9 +4859,16 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】173時間00分【利用者負担上限月額】0Hanaヘルパーステーション高品（重度）",
      "src": "高品受給者証重度.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 173,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000022364",
@@ -2785,9 +4878,16 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】250時間30分【利用者負担上限月額】0",
      "src": "高品受給者証重度.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 250,
+       "minutes": 30
+      }
+     }
     },
     {
      "cert_number": "2000022364",
@@ -2797,9 +4897,20 @@
      "city": "千葉市",
      "jigyou": "重度訪問介護",
      "service": "重度訪問介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【移動介護】76時間00分【重度訪問介護区分６該当】246時間00分【利用者負担上限月額】0",
      "src": "高品受給者証重度.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "移動介護": {
+       "hours": 76,
+       "minutes": 0
+      },
+      "重度訪問介護区分６該当": {
+       "hours": 246,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000022364",
@@ -2809,9 +4920,21 @@
      "city": "千葉市",
      "jigyou": "重度訪問介護",
      "service": "重度訪問介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【移動介護】76時間00分【重度訪問介護区分６該当】246時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証重度.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "移動介護": {
+       "hours": 76,
+       "minutes": 0
+      },
+      "重度訪問介護区分６該当": {
+       "hours": 246,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000022364",
@@ -2821,9 +4944,21 @@
      "city": "千葉市",
      "jigyou": "重度訪問介護",
      "service": "重度訪問介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【移動介護】76時間00分【重度訪問介護区分６該当】246時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証重度.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "移動介護": {
+       "hours": 76,
+       "minutes": 0
+      },
+      "重度訪問介護区分６該当": {
+       "hours": 246,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000022364",
@@ -2833,9 +4968,21 @@
      "city": "千葉市",
      "jigyou": "重度訪問介護",
      "service": "重度訪問介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【移動介護】76時間00分【重度訪問介護区分６該当】516時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証重度.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "移動介護": {
+       "hours": 76,
+       "minutes": 0
+      },
+      "重度訪問介護区分６該当": {
+       "hours": 516,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000022364",
@@ -2845,9 +4992,21 @@
      "city": "千葉市",
      "jigyou": "重度訪問介護",
      "service": "重度訪問介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【移動介護】70時間00分【重度訪問介護区分６該当】425時間00分【所得区分】低所得２【利用者負担上限月額】0",
      "src": "高品受給者証重度.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "income_category": "低所得２",
+     "payment_limit": 0,
+     "quantities": {
+      "移動介護": {
+       "hours": 70,
+       "minutes": 0
+      },
+      "重度訪問介護区分６該当": {
+       "hours": 425,
+       "minutes": 0
+      }
+     }
     }
    ],
    "current_certs": [
@@ -2859,9 +5018,16 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】250時間30分【利用者負担上限月額】0",
      "src": "高品受給者証重度.pdf",
-     "quantities": {}
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 250,
+       "minutes": 30
+      }
+     }
     }
    ]
   },
@@ -2881,9 +5047,16 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】38時間00分【利用者負担上限月額】0",
      "src": "高品受給者証同行援護.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 38,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000022349",
@@ -2893,9 +5066,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】38時間00分【所得区分】生活保護【利用者負担上限月額】0",
      "src": "高品受給者証同行援護.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 38,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000022349",
@@ -2905,9 +5086,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】38時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証同行援護.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 38,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000022349",
@@ -2917,9 +5106,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】38時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証同行援護.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 38,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000022349",
@@ -2929,9 +5126,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】38時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証同行援護.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 38,
+       "minutes": 0
+      }
+     }
     },
     {
      "cert_number": "2000022349",
@@ -2941,9 +5146,17 @@
      "city": "千葉市",
      "jigyou": "同行援護",
      "service": "同行援護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】112時間00分【利用者負担上限月額】0",
      "src": "高品受給者証同行援護.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 112,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
     },
     {
      "cert_number": "2000022349",
@@ -2953,9 +5166,17 @@
      "city": "千葉市",
      "jigyou": "同行援護",
      "service": "同行援護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】112時間00分【利用者負担上限月額】0",
      "src": "高品受給者証同行援護.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 112,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
     },
     {
      "cert_number": "2000022349",
@@ -2965,9 +5186,17 @@
      "city": "千葉市",
      "jigyou": "同行援護",
      "service": "同行援護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】112時間00分【利用者負担上限月額】0Hanaヘルパーステーション高品（同行）",
      "src": "高品受給者証同行援護.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 112,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
     },
     {
      "cert_number": "2000022349",
@@ -2977,9 +5206,17 @@
      "city": "千葉市",
      "jigyou": "同行援護",
      "service": "同行援護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】112時間00分【利用者負担上限月額】0",
      "src": "高品受給者証同行援護.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 112,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
     },
     {
      "cert_number": "2000022349",
@@ -2989,9 +5226,17 @@
      "city": "千葉市",
      "jigyou": "同行援護",
      "service": "同行援護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】112時間00分【利用者負担上限月額】0",
      "src": "高品受給者証同行援護.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 112,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
     }
    ],
    "current_certs": [
@@ -3003,9 +5248,17 @@
      "city": "千葉市",
      "jigyou": "身体障害者居宅介護事業",
      "service": "居宅介護",
-     "shikyuryo_raw": "",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】38時間00分【所得区分】低所得１【利用者負担上限月額】0",
      "src": "高品受給者証同行援護.pdf",
-     "quantities": {}
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 38,
+       "minutes": 0
+      }
+     }
     }
    ]
   }
