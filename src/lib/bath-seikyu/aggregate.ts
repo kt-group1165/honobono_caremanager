@@ -506,6 +506,8 @@ export async function aggregateBathVisitSeikyu(
         cert?.care_office_name?.trim() ||
         (cert?.care_office_id ? careNameById.get(cert.care_office_id) ?? null : null),
       serviceDays: new Set(recs.map((r) => r.visit_date)).size,
+      // 提供開始年月日は訪問介護の明細書だけが持つ項目 (総合事業・訪問入浴は対象外)
+      serviceStartDate: null,
     });
   }
   rows.sort((a, b) => (a.user_name_kana ?? a.user_name).localeCompare(b.user_name_kana ?? b.user_name, "ja"));

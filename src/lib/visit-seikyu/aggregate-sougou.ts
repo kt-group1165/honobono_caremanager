@@ -697,6 +697,8 @@ export async function aggregateSougouSeikyu(
 
     const row: SougouSeikyuRow = {
       system: "総合事業",
+      // 提供開始年月日は訪問介護の明細書だけが持つ項目 (総合事業は対象外)
+      serviceStartDate: null,
       user_id: userId,
       user_name: client?.name ?? "(利用者不明)",
       user_name_kana: client?.furigana ?? null,

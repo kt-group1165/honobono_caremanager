@@ -250,6 +250,12 @@ export interface UserSeikyuRow {
   careOfficeNumber: string | null;
   /** 担当居宅介護支援事業所名 (client_insurance_records.care_office_name) */
   careOfficeName: string | null;
+  /**
+   * 当該事業所のサービス提供開始年月日 (明細書 基本情報 項21)。
+   * 月途中に利用を開始した人だけ設定される。**初回訪問日ではなく契約日**なので
+   * 実績からは導けず、ほのぼのの「介護請求(明細付)_一覧」から取り込んだ値を使う。
+   */
+  serviceStartDate: string | null;
   /** サービス実日数 (訪問した日の数) */
   serviceDays: number;
   // ─── 月途中の保険者変更 (転居) による分割レセプト (Phase 2) ───
@@ -1861,6 +1867,11 @@ export async function aggregateMonthlyVisitSeikyu(
       careOfficeName:
         cert?.care_office_name?.trim() ||
         (cert?.care_office_id ? officeNameById.get(cert.care_office_id) ?? null : null),
+      // 対象月に開始した人だけ出す (前月以前からの継続利用者は空欄が正)
+      serviceStartDate:
+        cert?.service_start_date && cert.service_start_date.slice(0, 7) === monthStr
+          ? cert.service_start_date
+          : null,
       serviceDays: segDays.size,
     };
     if (kohi2) {

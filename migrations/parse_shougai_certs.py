@@ -71,6 +71,24 @@ OFFICE_NAME_NORM = ""
 
 # 氏名に見えるが人ではない語。上限額管理事業所名が折り返すと氏名行に化ける
 #   (高品「事業団 千葉ﾘﾊ 愛育園（短期入所」「業団 愛育園」)。
+# 【上限額管理事業所】に出てくる事業所名を集めたもの。折り返して独立行になると
+#   氏名に見えるので、語句リストではなく**実データから集めて**除外する
+#   (花見川「ネクト ドットステイ蘇我」のように一般的な組織語を含まない名前があるため)。
+JOGEN_OFFICE_NAMES = set()
+
+
+def is_jogen_office_fragment(t):
+    """【上限額管理事業所】の事業所名 (の折り返し断片) か。
+
+    ⚠ 短い断片で判定してはいけない。氏名は正規化後 4〜6 文字が普通で、
+      事業所名の一部と偶然一致して**実在の利用者を落とす**
+      (閾値 3 にしたら 高品 41→37 / 木更津 18→14 名に減った)。
+      折り返し断片は「ネクトドットステイ蘇我」のように長いので 8 文字以上に限る。
+    """
+    n = norm(t)
+    return len(n) >= 8 and any(n in o for o in JOGEN_OFFICE_NAMES)
+
+
 ORG_WORDS = re.compile(
     r"事業(所|団)|センター|ステーション|施設|法人|協会|会社|支援|ヘルパー|ケア|訪問|居宅|"
     r"[（(]|園$|荘$|苑$|会$"
@@ -122,6 +140,7 @@ def is_name_line(s):
         and s not in SERVICE_ONLY
         # 上限額管理事業所名が折り返して氏名行に化けるのを弾く
         and not ORG_WORDS.search(norm(s))
+        and not is_jogen_office_fragment(s)
     )
 
 
@@ -244,6 +263,17 @@ def parse(pdf_paths, kihon, warnings):
         elif clients[uno]["name"] != name:
             warnings.append(f"同一利用者番号 {uno} に別氏名: {clients[uno]['name']} / {name}")
         return clients[uno]
+
+    # 先に全ファイルを走査して【上限額管理事業所】の事業所名を集める (氏名誤検出の除外用)。
+    #   fitz は 1 フィールド 1 行に分解するので、ページ全体を連結してから拾う。
+    for _p in pdf_paths:
+        _d = fitz.open(_p)
+        for _i in range(_d.page_count):
+            _flat = "".join(l.strip() for l in _d[_i].get_text().splitlines())
+            for _m in re.finditer(r"【上限額?管理事業所】(.+?)(?=【|\d{10}|[SHRT]\s*\d+/|$)", _flat):
+                _v = norm(_m.group(1))
+                if len(_v) >= 3:
+                    JOGEN_OFFICE_NAMES.add(_v)
 
     for pdf_path in pdf_paths:
         doc = fitz.open(pdf_path)

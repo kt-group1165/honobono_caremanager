@@ -98,10 +98,23 @@ function splitSougouCode(
  * rows は system='総合事業' の SougouSeikyuRow (aggregateSougouSeikyu の出力)。
  */
 export function buildSougouDensou(
-  rows: SougouDensouRow[],
+  inputRows: SougouDensouRow[],
   opts: DensouBuildOptions,
 ): DensouBuildResult {
   const warnings: string[] = [];
+  // 保険者番号・被保険者番号が空の行は伝送に載せない (build.ts の 7131 と同じ理由)
+  const rows = inputRows.filter((r) => {
+    const hasInsurer = !!(r.insurer_number ?? "").trim();
+    const hasInsured = !!(r.insured_number ?? "").trim();
+    if (hasInsurer && hasInsured) return true;
+    const miss = [!hasInsurer && "保険者番号", !hasInsured && "被保険者番号"]
+      .filter(Boolean)
+      .join("・");
+    warnings.push(
+      `${r.user_name}: ${miss}が未登録のため伝送から除外しました (${r.totalAmount.toLocaleString()}円) — 介護保険の資格が無い利用者の実績が混入していないか確認してください`,
+    );
+    return false;
+  });
   const ym = `${opts.year}${String(opts.month).padStart(2, "0")}`;
   const office = (opts.officeNumber ?? "").trim();
   if (!/^\d{10}$/.test(office)) {
@@ -127,6 +140,7 @@ export function buildSougouDensou(
   const totalCost = hokenRows.reduce((s, r) => s + r.totalAmount, 0);
   const totalInsurance = hokenRows.reduce((s, r) => s + r.insuranceAmount, 0);
   const totalKohi = hokenRows.reduce((s, r) => s + (r.kohiAmount ?? 0), 0);
+  // 請求書 (7113) の利用者負担合計は公費分の本人負担も含む総額 (明細書 項35/17 とは別物)
   const totalUser = hokenRows.reduce((s, r) => s + r.userAmount, 0);
   dataParts.push([
     KOKAN_ID_SEIKYUSHO, // 1 交換情報識別番号 ("7113" 固定)
@@ -218,7 +232,14 @@ export function buildSougouDensou(
     const benefitRate = r.kohiTandoku
       ? ""
       : String((10 - Math.round(r.copay_rate * 10)) * 10); // 90 等
-    const hasKohi = r.kohiTandoku || !!(r.kohiHobetsu && (r.kohiAmount ?? 0) > 0);
+    // 公費欄は「対象月に有効な公費があるか」で判定する (公費請求額 0 でも出す)。
+    // 介護給付側 build.ts と同じ是正 (2026-08-04)。
+    const hasKohi = r.kohiTandoku || !!r.kohiHobetsu;
+    // 利用者負担額 (項35/17) は保険分のみ。公費分の本人負担は公費欄に出す。
+    const hokenUserAmount = Math.max(
+      0,
+      r.userAmount - ((r.kohiHonninFutan ?? 0) + (r.kohi2HonninFutan ?? 0)),
+    );
     if (r.kohiTandoku && !r.kohiHobetsu) {
       warnings.push(
         `${r.user_name}: 公費単独 (被保険者番号 H) なのに公費情報 (法別番号) が未登録です`,
@@ -258,7 +279,7 @@ export function buildSougouDensou(
       //    番号が無ければ "2" (自己作成) で出す (build.ts:269-273 の 7131 と同ロジック)。
       r.careOfficeNumber ? "3" : "2", // 19
       r.careOfficeNumber ?? "", // 20 事業所番号 (居宅介護支援事業所。区分2のときは空)
-      "", // 21 開始年月日
+      "", // 21 開始年月日 (7131 と同じ理由で未実装 — build.ts の項21 コメント参照)
       "", // 22 中止年月日
       "", // 23 中止理由・入所前状況
       "", // 24 入所年月日
@@ -272,7 +293,7 @@ export function buildSougouDensou(
       "", // 32 公費3給付率
       String(r.totalUnits), // 33 合計 保険 サービス単位数
       String(r.insuranceAmount), // 34 同 請求額
-      String(r.userAmount), // 35 同 利用者負担額
+      String(hokenUserAmount), // 35 同 利用者負担額 (保険分のみ)
       "", // 36 緊急時施設療養費請求額
       "", // 37 特定診療費請求額
       "", // 38 特定入所者介護サービス費等請求額
@@ -392,7 +413,7 @@ export function buildSougouDensou(
       String(r.totalUnits), // 14 保険 単位数合計
       String(Math.round(r.unitPrice * 100)), // 15 単位数単価 (利用者の保険者=市町村別。aggregate-sougouで解決)
       String(r.insuranceAmount), // 16 保険 請求額
-      String(r.userAmount), // 17 利用者負担額
+      String(hokenUserAmount), // 17 利用者負担額 (保険分のみ。公費分本人負担は項20)
       // 18-20 公費1
       hasKohi ? String(r.totalUnits) : "",
       hasKohi ? String(r.kohiAmount ?? 0) : "",

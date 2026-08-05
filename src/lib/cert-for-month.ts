@@ -35,6 +35,8 @@ export interface CertForMonth {
    */
   limit_period_start: string | null;
   limit_period_end: string | null;
+  /** 当該事業所のサービス提供開始年月日 (明細書 項21)。add_service_start_date.sql 未適用なら undefined */
+  service_start_date?: string | null;
   care_office_id: string | null;
   care_office_number: string | null;
   care_office_name: string | null;
@@ -55,6 +57,7 @@ interface DbRow {
   certification_status: string | null;
   service_limit_amount: number | null;
   limit_period_start?: string | null;
+  service_start_date?: string | null;
   limit_period_end?: string | null;
   care_office_id: string | null;
   care_office_number: string | null;
@@ -66,8 +69,10 @@ const SELECT_COLS_BASE =
   "client_id, insurer_number, insurer_name, insured_number, care_level, copay_rate, " +
   "certification_start_date, certification_end_date, certification_status, service_limit_amount, " +
   "care_office_id, care_office_number, care_office_name, effective_date";
-// 限度額適用期間 (kyotaku_limit_period.sql)。列未適用の環境は 42703 → BASE で再試行
-const SELECT_COLS = SELECT_COLS_BASE + ", limit_period_start, limit_period_end";
+// 限度額適用期間 (kyotaku_limit_period.sql) / サービス提供開始日 (add_service_start_date.sql)。
+//   列未適用の環境は 42703 → BASE で再試行するので、未適用でも動く
+const SELECT_COLS =
+  SELECT_COLS_BASE + ", limit_period_start, limit_period_end, service_start_date";
 
 const PAGE = 1000;
 const IN_CHUNK = ID_IN_CHUNK;
@@ -144,6 +149,7 @@ function toCertForMonth(r: DbRow, isFallback: boolean): CertForMonth {
     service_limit_amount: r.service_limit_amount,
     limit_period_start: r.limit_period_start ?? null,
     limit_period_end: r.limit_period_end ?? null,
+    service_start_date: r.service_start_date ?? null,
     care_office_id: r.care_office_id,
     care_office_number: r.care_office_number,
     care_office_name: r.care_office_name,

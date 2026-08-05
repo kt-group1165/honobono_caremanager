@@ -76,14 +76,41 @@ export interface DensouBuildResult {
 
 const dateNum = (iso: string | null) => (iso ? iso.replaceAll("-", "") : "");
 
+/**
+ * 明細書 項35 / 集計 項17「利用者負担額」= **保険分の法定負担のみ**。
+ * 公費分の本人負担は公費欄 (項41/20) に出すため、ここから除く。
+ * 生保の全量公費では aggregate が `userAmount = kohiHonninFutan` としているので、
+ * 引かないと同じ額を 2 か所に計上してしまう (2026-08-04 是正)。
+ * 本人負担上限額が 0 円の従来ケースは差引 0 = 挙動不変。
+ */
+const hokenUserAmountOf = (r: DensouRow): number =>
+  Math.max(0, r.userAmount - ((r.kohiHonninFutan ?? 0) + (r.kohi2HonninFutan ?? 0)));
+
 const genderCode = (g: string | null) =>
   g == null ? "" : g.includes("女") ? "2" : g.includes("男") ? "1" : "";
 
 export function buildKokuhoDensou(
-  rows: DensouRow[],
+  inputRows: DensouRow[],
   opts: DensouBuildOptions,
 ): DensouBuildResult {
   const warnings: string[] = [];
+  // 保険者番号・被保険者番号のどちらかが空の行は **伝送に載せない**。
+  // 国保連で確実に返戻になるうえ、請求書 (7111) の件数・金額まで水増しされるため。
+  // 該当するのは「勤務実績はあるが介護保険の資格 (認定) が DB に無い利用者」で、
+  // ほのぼの側も請求していないケース (2026-08-04: 姉ム 工藤 孝子 = 81,999円が
+  // 被保番なしで載っていた。MEISAI はヘルパー勤務実績であって請求実績ではない)。
+  const rows = inputRows.filter((r) => {
+    const hasInsurer = !!(r.insurer_number ?? "").trim();
+    const hasInsured = !!(r.insured_number ?? "").trim();
+    if (hasInsurer && hasInsured) return true;
+    const miss = [!hasInsurer && "保険者番号", !hasInsured && "被保険者番号"]
+      .filter(Boolean)
+      .join("・");
+    warnings.push(
+      `${r.user_name}: ${miss}が未登録のため伝送から除外しました (${r.totalAmount.toLocaleString()}円) — 介護保険の資格が無い利用者の実績が混入していないか確認してください`,
+    );
+    return false;
+  });
   // opts の年月 (= 処理対象年月 / 通常請求の提供年月)。
   // 行に ym があればそれを優先し、無ければこの opts 年月にフォールバック。
   const ym = `${opts.year}${String(opts.month).padStart(2, "0")}`;
@@ -110,6 +137,9 @@ export function buildKokuhoDensou(
     (s, r) => s + (r.kohiAmount ?? 0) + (r.kohi2Amount ?? 0),
     0,
   );
+  // 請求書 (7111) の利用者負担合計は **公費分の本人負担も含む** 総額。
+  // 明細書の項35/17 が「保険分のみ」なのとは別物 (ほのぼの実伝送で確認 2026-08-04:
+  // 茂原 齊藤 一夫の公費本人負担 4,000円は明細書 項17 では空だが請求書には乗る)。
   const totalUser = hokenRows.reduce((s, r) => s + r.userAmount, 0);
   dataParts.push([
     "7111", // 1 交換情報識別番号
@@ -203,8 +233,7 @@ export function buildKokuhoDensou(
     const insurerRaw = (r.insurer_number ?? "").trim();
     const insurer = insurerRaw ? insurerRaw.padStart(8, "0") : "";
     const insured = (r.insured_number ?? "").trim();
-    if (!insurer) warnings.push(`${r.user_name}: 保険者番号が未登録です`);
-    if (!insured) warnings.push(`${r.user_name}: 被保険者番号が未登録です`);
+    // 保険者・被保険者番号が空の行は冒頭で除外済み (ここには来ない)
     const careLevelCode = CARE_LEVEL_CODE[(r.care_level ?? "").trim()] ?? "";
     if (!careLevelCode) warnings.push(`${r.user_name}: 要介護度 ("${r.care_level ?? "未設定"}") をコードに変換できません`);
     if (!r.birthDate) warnings.push(`${r.user_name}: 生年月日が未登録です`);
@@ -230,7 +259,19 @@ export function buildKokuhoDensou(
     // 公費単独 (H番号 10割公費): 保険給付率は空欄、公費1給付率 100。
     // 給付率は整数演算: copay 0.1/0.2/0.3 → 1/2/3 → 90/80/70 (float 1円ズレ防止と同方針)
     const benefitRate = r.kohiTandoku ? "" : String((10 - Math.round(r.copay_rate * 10)) * 10); // 90 等
-    const hasKohi = r.kohiTandoku || !!(r.kohiHobetsu && (r.kohiAmount ?? 0) > 0);
+    // 公費欄 (負担者番号・受給者番号・対象単位数・請求額・本人負担) を出すかどうかは
+    // 「対象月に有効な公費があるか」で決める。**公費請求額 0 でも出す**。
+    // 生保併用で本人負担上限額が保険給付後負担と同額のとき kohiAmount=0 になり、
+    // 以前の `kohiAmount > 0` 条件だと公費欄が丸ごと落ちていた
+    // (2026-08-04: 姉ム 鈴木 渉 = ほのぼのは 公費対象1,114単位・請求0円・本人1,192円を出力)。
+    // ※ 請求書 (7111) 側の公費請求分レコードは「公費請求額 > 0」で判定する (:166) —
+    //   請求が発生しない公費は請求書に載せないため、そちらの条件は変えない。
+    const hasKohi = r.kohiTandoku || !!r.kohiHobetsu;
+    // 本人負担のうち公費分 (項41/20 に出す分) は保険側の利用者負担から除く。
+    // 生保全量公費では aggregate が userAmount = kohiHonninFutan としているため、
+    // 引かないと同じ額を項35/17 と項41/20 に二重計上する。
+    // 部分公費では userAmount = 公費対象外分 + 公費分本人負担 なので、引いた残りが正。
+    const hokenUserAmount = hokenUserAmountOf(r);
     // 公費2 (複数公費の併用)。公費1と同じく請求額 > 0 の場合のみ公費2欄を出力する
     // (公費2なしの行は全欄空 = 従来出力とバイト一致)
     const hasKohi2 = !!(r.kohi2Hobetsu && (r.kohi2Amount ?? 0) > 0);
@@ -273,11 +314,16 @@ export function buildKokuhoDensou(
       // (該当利用者にケアマネがいる場合は warning(:171) が出るので、care_office_number を登録すれば "1" に戻る)。
       r.careOfficeNumber ? "1" : "2", // 19
       r.careOfficeNumber ?? "", // 20 事業所番号 (居宅介護支援事業所。区分2のときは空)
-      // 21 開始年月日: 保険者変更 (転居) の分割明細書 (segmentCount>1) でも空欄のまま。
-      // ⚠ 要取込チェック: 転居分割の後半明細書にセグメント開始日 (periodFrom) を
-      //    設定すべきかは IF 仕様書 (_if_svc.txt) に明文が見つからず未確認 —
-      //    伝送ソフトの取込テストで確認のうえ必要なら dateNum(r.periodFrom) を設定する。
-      "", // 21 開始年月日
+      // 21 開始年月日: 当該月に当事業所の提供を開始した利用者のみ設定する。
+      //    ⚠ **初回訪問日ではなく契約日**。実証で 33 名中 初回訪問日と一致したのは
+      //      4 名だけで、残りは訪問日より前だった (花見川 尾崎脩二 伝送 20260615 /
+      //      初回訪問 20260626)。実績からは導けないので ほのぼのの
+      //      「介護請求(明細付)_一覧」の「サービス開始年月日」を取り込んで使う
+      //      (client_insurance_records.service_start_date)。
+      //    client_office_assignments.start_date は一括取込の既定値が全員に入っており使えない。
+      // ⚠ 要取込チェック: 保険者変更 (転居) の分割明細書 (segmentCount>1) に
+      //    セグメント開始日 (periodFrom) を設定すべきかは IF 仕様書に明文が無く未確認。
+      r.serviceStartDate ? r.serviceStartDate.replace(/-/g, "") : "", // 21 開始年月日
       "", // 22 中止年月日
       "", // 23 中止理由・入所前状況
       "", // 24 入所年月日
@@ -295,9 +341,9 @@ export function buildKokuhoDensou(
       "", // 32 公費3給付率
       String(r.totalUnits), // 33 合計 保険 サービス単位数
       String(r.insuranceAmount), // 34 同 請求額 (公費単独は 0)
-      // 35 利用者負担額 = 実際の本人負担 (部分公費は 本人負担上限月額 適用後。
-      //    公費対象外分の法定負担 + 公費分本人負担 (項41) の合算)
-      String(r.userAmount),
+      // 35 利用者負担額 = 保険分の法定負担のみ。公費分の本人負担は項41 に出すため
+      //    ここには含めない (含めると二重計上になる)
+      String(hokenUserAmount),
       "", // 36 緊急時施設療養費請求額
       "", // 37 特定診療費請求額
       "", // 38 特定入所者介護サービス費等請求額
@@ -459,7 +505,7 @@ export function buildKokuhoDensou(
       String(r.totalUnits), // 14 保険 単位数合計
       String(Math.round(opts.unitPrice * 100)), // 15 単位数単価 (10.00円 → 1000)
       String(r.insuranceAmount), // 16 保険 請求額
-      String(r.userAmount), // 17 利用者負担額 (部分公費は本人負担上限月額 適用後)
+      String(hokenUserAmount), // 17 利用者負担額 (保険分のみ。公費分本人負担は項20)
       // 18-20 公費1 (単位数合計 / 請求額 / 本人負担額)
       hasKohi ? String(r.kohiUnits ?? r.totalUnits) : "", // 18 公費対象単位数
       hasKohi ? String(r.kohiAmount ?? 0) : "", // 19 公費請求額
