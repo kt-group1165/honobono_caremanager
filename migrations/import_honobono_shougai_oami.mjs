@@ -213,6 +213,7 @@ async function main() {
   const existingByNameBirth = new Map();
   const existingByName = new Map();
   const existingByNumBirth = new Map();
+  const existingByNumName = new Map(); // 利用者番号 + 氏名 (10桁番号の衝突救済)
   {
     const PAGE = 1000;
     let from = 0;
@@ -229,6 +230,7 @@ async function main() {
         // **利用者番号 + 生年月日**。異体字 (斎/齋・髙/高・﨑/崎) で氏名一致が外れても拾える。
         //   番号だけでは事業所エントリ番号と衝突するが、生年月日と併せれば安全。
         if (r.birth_date && r.user_number) existingByNumBirth.set(`${r.user_number}|${r.birth_date}`, r);
+        if (r.user_number) existingByNumName.set(`${r.user_number}|${norm(r.name)}`, r);
         // 基本情報一覧表が無い事業所 (木更津など) 向けの氏名のみ索引。
         //   **一意なときだけ**流用する (同姓同名は誤結合になるので使わない)
         const k = norm(r.name);
@@ -300,6 +302,16 @@ async function main() {
     //   実証: 木更津 — 8/4 に受給者証だけで 20 名作成 → 8/5 に基本情報付きで
     //   再取込したら 11 名が別 client として作られた。
     //   生年月日なしの同名が **一意** のときだけ流用し、生年月日を埋める。
+    // 利用者番号 + 氏名 が一致するなら同一人物。
+    //   受給者証側に生年月日が無い / 既存側と表記ゆれがある場合の最後の砦。
+    //   ⚠ 番号だけでは流用しない (短番号が事業所エントリ番号と衝突するため)。
+    if (!existing && c.user_number) {
+      const byNumName = existingByNumName.get(`${c.user_number}|${norm(c.name)}`);
+      if (byNumName) {
+        existing = byNumName;
+        reuseReason = "利用者番号+氏名";
+      }
+    }
     if (!existing && c.birth_date) {
       const cands = (existingByName.get(norm(c.name)) ?? []).filter((x) => !x.birth_date);
       if (cands.length === 1) {

@@ -125,7 +125,23 @@ def is_header(s):
     )
 
 
+# 「氏名(カナ)」形式。重度訪問介護のエントリはカナ読みが括弧で付く
+#   (ちはら台 重度: 「ウ 沃沃(ｳｵｳｵ)」)。ORG_WORDS が [（(] を持つため
+#   これを先に通さないと**カナ読み付きの氏名が全部弾かれる**。
+NAME_WITH_KANA = re.compile(r"^([^（(]{1,20}?)[（(]([ｦ-ﾟァ-ヶー\s　]+)[）)]$")
+
+
+def strip_name_kana(s):
+    """氏名行から (カナ) を落として (氏名, カナ) を返す。カナが無ければ (元, None)"""
+    m = NAME_WITH_KANA.match((s or "").strip())
+    return (m.group(1).strip(), m.group(2).strip()) if m else ((s or "").strip(), None)
+
+
 def is_name_line(s):
+    # 氏名(カナ) は括弧を含むが氏名。ORG_WORDS より先に通す
+    m = NAME_WITH_KANA.match((s or "").strip())
+    if m and not is_header(m.group(1)) and not ORG_WORDS.search(norm(m.group(1))):
+        return True
     return (
         s
         and not is_header(s)
@@ -291,6 +307,8 @@ def parse(pdf_paths, kihon, warnings):
                 continue
             if is_person_start(lines, i):
                 uno, nxt = person_number(lines, i)
+                # ⚠ カナは**落とさない**。稼働データ (MEISAI) も clients も
+                #   「ウ 沃沃(ｳｵｳｵ)」の形で持っているので、落とすと既存と一致しなくなる。
                 nm = re.sub(r"\s+", " ", s).strip()
                 # 利用者番号が無い事業所は氏名をキーにする (基本情報側も番号が空なので突合できる)
                 cur = get_client(uno if uno else f"@{norm(nm)}", nm)

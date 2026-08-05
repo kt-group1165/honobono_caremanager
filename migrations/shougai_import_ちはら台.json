@@ -3773,15 +3773,181 @@
      }
     }
    ]
+  },
+  {
+   "user_number": "2113005867",
+   "name": "ウ 沃沃(ｳｵｳｵ)",
+   "gender": "女",
+   "birth_date": "1959-08-04",
+   "postal_code": "290-0005",
+   "address": "千葉県市原市山木892-8",
+   "certs": [
+    {
+     "cert_number": "1221940396",
+     "issue_date": "2021-02-15",
+     "period_start": "2021-02-15",
+     "period_end": "2022-02-28",
+     "city": "市原市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "【障害支援区分】６【重度訪問介護区分６該当】181時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【社会福祉法人減免】あり【上限額管理事業所】介護サービス友乃家白金事業所",
+     "src": "ちはら重度受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "重度訪問介護区分６該当": {
+       "hours": 181,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "介護サービス友乃家白金事業所"
+    },
+    {
+     "cert_number": "1221940396",
+     "issue_date": "2022-02-16",
+     "period_start": "2022-03-01",
+     "period_end": "2023-02-28",
+     "city": "市原市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "【障害支援区分】６【重度訪問介護区分６該当】181時間00分【利用者負担上限月額】0",
+     "src": "ちはら重度受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "重度訪問介護区分６該当": {
+       "hours": 181,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221940396",
+     "issue_date": "2023-02-24",
+     "period_start": "2023-03-01",
+     "period_end": "2023-12-31",
+     "city": "市原市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "【障害支援区分】６【重度訪問介護区分６該当】181時間00分【利用者負担上限月額】0",
+     "src": "ちはら重度受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "重度訪問介護区分６該当": {
+       "hours": 181,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221940396",
+     "issue_date": "2023-02-24",
+     "period_start": "2024-01-01",
+     "period_end": "2024-01-31",
+     "city": "市原市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "【障害支援区分】６【重度訪問介護区分６該当】181時間00分【利用者負担上限月額】0",
+     "src": "ちはら重度受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "重度訪問介護区分６該当": {
+       "hours": 181,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221940396",
+     "issue_date": "2024-01-19",
+     "period_start": "2024-02-01",
+     "period_end": "2024-08-31",
+     "city": "市原市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "【障害支援区分】６【重度訪問介護区分６該当】219時間30分【利用者負担上限月額】0",
+     "src": "ちはら重度受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "重度訪問介護区分６該当": {
+       "hours": 219,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221940396",
+     "issue_date": "2024-08-27",
+     "period_start": "2024-09-01",
+     "period_end": "2025-08-31",
+     "city": "市原市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "【障害支援区分】６【重度訪問介護区分６該当】219時間30分【利用者負担上限月額】0",
+     "src": "ちはら重度受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "重度訪問介護区分６該当": {
+       "hours": 219,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221940396",
+     "issue_date": "2025-08-28",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "市原市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "【障害支援区分】６【重度訪問介護区分６該当】219時間30分【利用者負担上限月額】0",
+     "src": "ちはら重度受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "重度訪問介護区分６該当": {
+       "hours": 219,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221940396",
+     "issue_date": "2025-08-28",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "市原市",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "【障害支援区分】６【重度訪問介護区分６該当】219時間30分【利用者負担上限月額】0",
+     "src": "ちはら重度受給者証.pdf",
+     "support_level": "区分6",
+     "payment_limit": 0,
+     "quantities": {
+      "重度訪問介護区分６該当": {
+       "hours": 219,
+       "minutes": 30
+      }
+     }
+    }
+   ]
   }
  ],
  "stats": {
-  "pdf_files": 1,
-  "kihon_rows": 26,
+  "pdf_files": 2,
+  "kihon_rows": 27,
   "birth_date_missing": 4,
-  "clients": 29,
-  "certs_total": 129,
-  "current_certs": 34,
+  "clients": 30,
+  "certs_total": 136,
+  "current_certs": 35,
   "multi_current": 5
  },
  "warnings": [
