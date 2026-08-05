@@ -1027,27 +1027,57 @@ export async function aggregateMonthlyVisitSeikyu(
   //     月次情報タブで設定する「自事業所分の区分支給限度基準内単位数」。
   //     あればこれが基準値、無ければ認定の限度額 (service_limit_amount) にフォールバック。
   //     テーブル未作成 (42P01/PGRST205) は計画なしとして続行。
+  //
+  //     ⚠ **事業所ごとの値**。1 人が複数事業所を使えば事業所ごとに別の計画単位数を持つ。
+  //       自事業所の行を優先し、無ければ office_id NULL の旧行 (事業所を持たなかった頃の
+  //       データ) にフォールバックする。office_id 列が無い DB (42703) では全行を使う。
   const planUnitsByClient = new Map<string, number>();
   {
     let planTableMissing = false;
+    let officeColMissing = false;
     for (let i = 0; i < userIds.length && !planTableMissing; i += ID_IN_CHUNK) {
       const chunk = userIds.slice(i, i + ID_IN_CHUNK);
-      const { data, error } = await supabase
-        .from("kaigo_monthly_plan_units")
-        .select("client_id, planned_units")
-        .eq("target_month", `${monthStr}-01`)
-        .in("client_id", chunk);
+      // select は型解決のため文字列リテラルで分岐する (変数だと ParserError になる)
+      const { data, error } = officeColMissing
+        ? await supabase
+            .from("kaigo_monthly_plan_units")
+            .select("client_id, planned_units")
+            .eq("target_month", `${monthStr}-01`)
+            .in("client_id", chunk)
+        : await supabase
+            .from("kaigo_monthly_plan_units")
+            .select("client_id, planned_units, office_id")
+            .eq("target_month", `${monthStr}-01`)
+            .in("client_id", chunk);
       if (error) {
         if (error.code === "42P01" || error.code === "PGRST205") {
           planTableMissing = true;
           break;
         }
+        if (error.code === "42703" && !officeColMissing) {
+          // monthly_plan_units_office.sql 未適用 — 事業所を区別せず従来どおり読む
+          officeColMissing = true;
+          i -= ID_IN_CHUNK; // 同じ chunk をやり直す
+          continue;
+        }
         throw new Error(`計画単位数取得失敗: ${error.message}`);
       }
-      for (const r of (data ?? []) as { client_id: string; planned_units: number | null }[]) {
+      const rows = (data ?? []) as {
+        client_id: string;
+        planned_units: number | null;
+        office_id?: string | null;
+      }[];
+      for (const r of rows) {
         // 0 は「未設定」扱い (認定限度額フォールバックへ)
-        if (r.planned_units != null && r.planned_units > 0) {
+        if (r.planned_units == null || r.planned_units <= 0) continue;
+        if (officeColMissing || !opts.officeId) {
           planUnitsByClient.set(r.client_id, r.planned_units);
+          continue;
+        }
+        if (r.office_id === opts.officeId) {
+          planUnitsByClient.set(r.client_id, r.planned_units); // 自事業所が最優先
+        } else if (r.office_id == null && !planUnitsByClient.has(r.client_id)) {
+          planUnitsByClient.set(r.client_id, r.planned_units); // 旧データのフォールバック
         }
       }
     }

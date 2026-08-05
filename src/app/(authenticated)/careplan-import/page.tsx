@@ -1333,24 +1333,34 @@ function RiyouhyouImportSection() {
         }
       }
 
-      // 2) 第7表 → kaigo_monthly_plan_units upsert (client_id, target_month) 一意
+      // 2) 第7表 → kaigo_monthly_plan_units upsert
+      //    計画単位数は**事業所ごと**の値なので (client_id, target_month, office_id) 一意。
+      //    office_id 列が未適用 (42703) の DB では従来の (client_id, target_month) に落とす。
       if (resolvedPlanUnits.length > 0) {
-        const rows = resolvedPlanUnits.map((p) => ({
+        const base = resolvedPlanUnits.map((p) => ({
           tenant_id: currentOffice.tenant_id,
           client_id: p.clientId,
           target_month: p.targetMonth,
           planned_units: p.plannedUnits,
           source: "careplan",
         }));
-        const { error } = await supabase
+        let { error } = await supabase
           .from("kaigo_monthly_plan_units")
-          .upsert(rows, { onConflict: "client_id,target_month" });
+          .upsert(
+            base.map((r) => ({ ...r, office_id: currentOffice.id })),
+            { onConflict: "client_id,target_month,office_id" },
+          );
+        if (error?.code === "42703" || error?.code === "PGRST204") {
+          ({ error } = await supabase
+            .from("kaigo_monthly_plan_units")
+            .upsert(base, { onConflict: "client_id,target_month" }));
+        }
         if (error) {
           toast.error("計画単位数の登録に失敗: " + error.message);
           setApplying(false);
           return;
         }
-        planCount = rows.length;
+        planCount = base.length;
       }
 
       toast.success(`反映完了: 予定 ${scheduleCount} 件 / 計画単位 ${planCount} 件`);

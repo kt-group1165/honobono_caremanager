@@ -89,6 +89,7 @@ export function MonthlyInfoContent() {
     error,
     officeNumber,
     officeName,
+    officeId,
     tenantId,
   } = useSeikyuContext();
   // 保険者変更 (転居) の分割セグメント行 (Phase 2) は利用者単位に合算して表示する
@@ -101,6 +102,10 @@ export function MonthlyInfoContent() {
   const { businessType } = useBusinessType();
   // 訪問入浴は計画単位数を bath_monthly_plan_units に持つ (schema 同型)
   const planTable = businessType === "訪問入浴" ? "bath_monthly_plan_units" : "kaigo_monthly_plan_units";
+  // 計画単位数は**事業所ごと**の値 (monthly_plan_units_office.sql)。
+  // 自事業所の行を優先し、無ければ office_id NULL の旧行にフォールバックする。
+  // 列が無い DB (42703) では従来どおり利用者×月で 1 値として扱う。
+  const [planOfficeColMissing, setPlanOfficeColMissing] = useState(false);
 
   const targetMonth = `${year}-${String(month).padStart(2, "0")}-01`;
 
@@ -119,33 +124,51 @@ export function MonthlyInfoContent() {
     const PAGE = 1000;
     let from = 0;
     let missing = false;
+    let officeColMissing = planOfficeColMissing;
     while (true) {
       const { data, error: qErr } = await supabase
         .from(planTable)
-        .select("client_id, planned_units, source")
+        .select(
+          officeColMissing
+            ? "client_id, planned_units, source"
+            : "client_id, planned_units, source, office_id",
+        )
         .eq("target_month", targetMonth)
         .range(from, from + PAGE - 1);
       if (qErr) {
         if (isTableMissing(qErr.code, qErr.message)) {
           missing = true;
+        } else if (qErr.code === "42703" && !officeColMissing) {
+          officeColMissing = true; // office_id 未適用 — 従来動作で読み直す
+          continue;
         } else {
           toast.error(`計画単位数の取得に失敗: ${qErr.message}`);
         }
         break;
       }
-      for (const r of (data ?? []) as { client_id: string; planned_units: number | null; source: string | null }[]) {
-        map[r.client_id] = {
-          planned_units: r.planned_units ?? 0,
-          source: r.source ?? "manual",
-        };
+      for (const r of (data ?? []) as {
+        client_id: string;
+        planned_units: number | null;
+        source: string | null;
+        office_id?: string | null;
+      }[]) {
+        const entry = { planned_units: r.planned_units ?? 0, source: r.source ?? "manual" };
+        if (officeColMissing || !officeId) {
+          map[r.client_id] = entry;
+        } else if (r.office_id === officeId) {
+          map[r.client_id] = entry; // 自事業所が最優先
+        } else if (r.office_id == null && !(r.client_id in map)) {
+          map[r.client_id] = entry; // 旧データのフォールバック
+        }
       }
       if (!data || data.length < PAGE) break;
       from += PAGE;
     }
     setPlanTableMissing(missing);
+    setPlanOfficeColMissing(officeColMissing);
     setPlanMap(map);
     setPlanLoading(false);
-  }, [supabase, targetMonth, planTable]);
+  }, [supabase, targetMonth, planTable, officeId, planOfficeColMissing]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- mount/月変更時の fetch
@@ -160,8 +183,9 @@ export function MonthlyInfoContent() {
       planned_units: units,
       source,
       ...(tenantId ? { tenant_id: tenantId } : {}),
+      ...(planOfficeColMissing || !officeId ? {} : { office_id: officeId }),
     }),
-    [targetMonth, tenantId],
+    [targetMonth, tenantId, officeId, planOfficeColMissing],
   );
 
   // ── 手入力保存 ──────────────────────────────────────────────────────────
@@ -170,7 +194,7 @@ export function MonthlyInfoContent() {
       const { error: upErr } = await supabase
         .from(planTable)
         .upsert(buildPayload(clientId, units, "manual"), {
-          onConflict: "client_id,target_month",
+          onConflict: planOfficeColMissing || !officeId ? "client_id,target_month" : "client_id,target_month,office_id",
         });
       if (upErr) {
         toast.error(`計画単位数の保存に失敗: ${upErr.message}`);
@@ -181,7 +205,7 @@ export function MonthlyInfoContent() {
         [clientId]: { planned_units: units, source: "manual" },
       }));
     },
-    [supabase, buildPayload, planTable],
+    [supabase, buildPayload, planTable, planOfficeColMissing, officeId],
   );
 
   const startEdit = (clientId: string, current: PlanEntry | undefined) => {
@@ -260,7 +284,12 @@ export function MonthlyInfoContent() {
       );
       const { error: upErr } = await supabase
         .from(planTable)
-        .upsert(payload, { onConflict: "client_id,target_month" });
+        .upsert(payload, {
+          onConflict:
+            planOfficeColMissing || !officeId
+              ? "client_id,target_month"
+              : "client_id,target_month,office_id",
+        });
       if (upErr) {
         toast.error(`計画単位数の取込に失敗: ${upErr.message}`);
         return;
@@ -312,7 +341,7 @@ export function MonthlyInfoContent() {
       const { error: upErr } = await supabase
         .from(planTable)
         .upsert(payload, {
-          onConflict: "client_id,target_month",
+          onConflict: planOfficeColMissing || !officeId ? "client_id,target_month" : "client_id,target_month,office_id",
           ignoreDuplicates: true,
         });
       if (upErr) {

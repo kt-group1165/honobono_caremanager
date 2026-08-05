@@ -26,10 +26,42 @@ BEGIN;
 ALTER TABLE kaigo_monthly_plan_units
   ADD COLUMN IF NOT EXISTS office_id uuid REFERENCES offices(id) ON DELETE CASCADE;
 
--- 旧: client_id + target_month の UNIQUE を外す
-ALTER TABLE kaigo_monthly_plan_units
-  DROP CONSTRAINT IF EXISTS kaigo_monthly_plan_units_client_id_target_month_key;
-DROP INDEX IF EXISTS kaigo_monthly_plan_units_client_id_target_month_key;
+-- 旧: client_id + target_month だけの UNIQUE を外す (制約名に依存せず探して落とす)
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT c.conname
+    FROM pg_constraint c
+    WHERE c.conrelid = 'kaigo_monthly_plan_units'::regclass
+      AND c.contype = 'u'
+      AND (
+        SELECT array_agg(a.attname::text ORDER BY a.attname::text)
+        FROM unnest(c.conkey) k
+        JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k
+      ) = ARRAY['client_id', 'target_month']
+  LOOP
+    EXECUTE format('ALTER TABLE kaigo_monthly_plan_units DROP CONSTRAINT %I', r.conname);
+    RAISE NOTICE '旧 UNIQUE 制約を削除: %', r.conname;
+  END LOOP;
+
+  -- 制約ではなく素の UNIQUE INDEX で張られている場合も落とす
+  FOR r IN
+    SELECT i.indexrelid::regclass::text AS iname
+    FROM pg_index i
+    WHERE i.indrelid = 'kaigo_monthly_plan_units'::regclass
+      AND i.indisunique
+      AND NOT EXISTS (SELECT 1 FROM pg_constraint c WHERE c.conindid = i.indexrelid)
+      AND (
+        SELECT array_agg(a.attname::text ORDER BY a.attname::text)
+        FROM unnest(i.indkey) k
+        JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k
+      ) = ARRAY['client_id', 'target_month']
+  LOOP
+    EXECUTE format('DROP INDEX %s', r.iname);
+    RAISE NOTICE '旧 UNIQUE INDEX を削除: %', r.iname;
+  END LOOP;
+END $$;
 
 -- 新: 事業所ごとに 1 行。office_id NULL の旧行は対象外
 CREATE UNIQUE INDEX IF NOT EXISTS kaigo_monthly_plan_units_client_month_office_key
