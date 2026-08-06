@@ -271,6 +271,9 @@ export function sumUriage(month: string, list: UriageBreakdown[]): UriageBreakdo
     out.kaigo += u.kaigo;
     out.sougou += u.sougou;
     out.shogai += u.shogai;
+    // ⚠ chiiki (地域生活支援) を足し忘れると total にだけ乗って内訳が 0 になり、
+    //   内訳の合計 ≠ 売上合計 になる (2026-08-06 修正)
+    out.chiiki += u.chiiki;
     out.kyotaku += u.kyotaku;
     out.jihi += u.jihi;
     out.insurance += u.insurance;
@@ -304,7 +307,10 @@ export async function aggregateAllOfficesUriage(
     year: number;
     month: number;
     includeScheduled?: boolean;
-    /** 同時実行数 (既定 4)。上げすぎると PostgREST 側が詰まる */
+    /**
+     * 同時実行数 (既定 10)。ボトルネックは Postgres ではなく **往復レイテンシ**なので、
+     * HTTP/2 の多重化が効く範囲で並べた方が速い。上げすぎると PostgREST 側が詰まる。
+     */
     concurrency?: number;
     onProgress?: (done: number, total: number) => void;
   },
@@ -327,7 +333,7 @@ export async function aggregateAllOfficesUriage(
 
   const errors: string[] = [];
   const results: OfficeUriage[] = [];
-  const concurrency = Math.max(1, opts.concurrency ?? 4);
+  const concurrency = Math.max(1, opts.concurrency ?? 10);
   let next = 0;
   let done = 0;
   opts.onProgress?.(0, offices.length);

@@ -1,0 +1,74 @@
+[
+ {
+  "id": "0528190d-5206-4c0c-bf07-c9264c7c8bdc",
+  "service_code": "116015",
+  "service_name": "居介特地加算",
+  "units": 0,
+  "formula": null,
+  "valid_from": "2024-04-01",
+  "valid_until": "2026-05-31"
+ },
+ {
+  "id": "9b36a496-a92f-4737-b7a5-328f99952197",
+  "service_code": "116015",
+  "service_name": "居介特地加算",
+  "units": 0,
+  "formula": null,
+  "valid_from": "2026-06-01",
+  "valid_until": null
+ },
+ {
+  "id": "f6d6e764-afd6-4447-876c-c0dbb6580b59",
+  "service_code": "126015",
+  "service_name": "重訪特地加算",
+  "units": 0,
+  "formula": null,
+  "valid_from": "2024-04-01",
+  "valid_until": "2026-05-31"
+ },
+ {
+  "id": "42ed380d-8a35-4f34-8f67-c6da5f4bd820",
+  "service_code": "126015",
+  "service_name": "重訪特地加算",
+  "units": 0,
+  "formula": null,
+  "valid_from": "2026-06-01",
+  "valid_until": null
+ },
+ {
+  "id": "6a8d6148-daf4-42e6-ad0b-948a29368b68",
+  "service_code": "136015",
+  "service_name": "行援特地加算",
+  "units": 0,
+  "formula": null,
+  "valid_from": "2024-04-01",
+  "valid_until": "2026-05-31"
+ },
+ {
+  "id": "e42a551d-8a2e-43e0-ae05-faed8221e93c",
+  "service_code": "136015",
+  "service_name": "行援特地加算",
+  "units": 0,
+  "formula": null,
+  "valid_from": "2026-06-01",
+  "valid_until": null
+ },
+ {
+  "id": "266bb55e-4997-4ae8-ae86-5b7cc4866f0d",
+  "service_code": "156015",
+  "service_name": "同援特地加算",
+  "units": 0,
+  "formula": null,
+  "valid_from": "2024-04-01",
+  "valid_until": "2026-05-31"
+ },
+ {
+  "id": "84bafef0-e9f4-4e82-8e8a-b87b19a00c7e",
+  "service_code": "156015",
+  "service_name": "同援特地加算",
+  "units": 0,
+  "formula": null,
+  "valid_from": "2026-06-01",
+  "valid_until": null
+ }
+]

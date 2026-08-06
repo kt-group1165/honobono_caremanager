@@ -305,6 +305,12 @@ export interface MonthlySeikyuResult {
 const isColumnMissing = (e: { code?: string | null; message?: string | null }) =>
   e.code === "42703" || /does not exist/i.test(e.message ?? "");
 
+/**
+ * kaigo_visit_schedule の列有無 probe の memo (列は session 中に変わらない)。
+ * migration を適用したら画面をリロードすれば作り直される。
+ */
+const schedColumnProbeCache = new Map<string, Promise<boolean>>();
+
 // 'YYYY-MM-DD' → 'M/D' (入院警告の表示用)
 const fmtMD = (iso: string) => {
   const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(iso);
@@ -344,14 +350,23 @@ export async function aggregateMonthlyVisitSeikyu(
   //    - office_id (C5): あれば「自事業所 + 未設定 (移行期)」に絞る
   //    - kinkyu_houmon (C3): あれば緊急時訪問介護加算の回数をシフト実績から数える
   //    列未適用 (42703) は従来動作にフォールバック。
-  const probeColumn = async (col: string): Promise<boolean> => {
-    const { error } = await supabase
-      .from("kaigo_visit_schedule")
-      .select(col)
-      .limit(1);
-    if (!error) return true;
-    if (isColumnMissing(error)) return false;
-    throw new Error(`実績列の確認に失敗 (${col}): ${error.message}`);
+  //    列の有無は session 中に変わらないので memo する (全事業所集計で
+  //    事業所数 × 2 往復まるごと無駄になっていた)。失敗は残さない。
+  const probeColumn = (col: string): Promise<boolean> => {
+    const hit = schedColumnProbeCache.get(col);
+    if (hit) return hit;
+    const p = (async () => {
+      const { error } = await supabase
+        .from("kaigo_visit_schedule")
+        .select(col)
+        .limit(1);
+      if (!error) return true;
+      if (isColumnMissing(error)) return false;
+      throw new Error(`実績列の確認に失敗 (${col}): ${error.message}`);
+    })();
+    schedColumnProbeCache.set(col, p);
+    p.catch(() => schedColumnProbeCache.delete(col));
+    return p;
   };
   const [hasOfficeCol, hasKinkyuCol] = await Promise.all([
     opts.officeId ? probeColumn("office_id") : Promise.resolve(false),

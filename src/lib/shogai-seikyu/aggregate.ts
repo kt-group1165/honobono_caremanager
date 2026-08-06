@@ -447,15 +447,19 @@ export async function aggregateMonthlyShogaiSeikyu(
   //   加算単位数 = round(サービス種類ごとの所定単位数合計 × 15/100)。母数は所定単位のみ
   //   (処遇改善等の加算は含めない)。逆に処遇改善加算の母数(総単位数)には本加算を算入する。
   //   マスタ(system='障害')の特別地域加算コードを対象月で解決 (validInMonth)。
-  //   コードは 居宅=116015「居介特地加算」(0単位%加算) / 重訪=121921 / 行動=131921 / 同行=141921。
   //   flag 未設定 / 列未適用(42703) の利用者は加算なし = 従来動作。
+  //
+  //   ⚠ サービス種類コードは **同行援護 = 15** (14 は重度障害者等包括支援)。
+  //     旧実装は "14": "141921" としていたため、同行援護に特地加算が付かなかった。
+  //   ⚠ コードは 1x6015 系を使う。1x1921 系も同名でマスタに存在するが、
+  //     ほのぼのの伝送 (いすみ KJ260802) に出るのは **116015 / 156015** のほう。
   const SPECIAL_AREA_RATE_NUM = 15;
   const SPECIAL_AREA_RATE_DEN = 100;
   const SPECIAL_AREA_CANDIDATE_CODES: Record<string, string> = {
     "11": "116015", // 居宅介護
-    "12": "121921", // 重度訪問介護
-    "13": "131921", // 行動援護
-    "14": "141921", // 同行援護
+    "12": "126015", // 重度訪問介護
+    "13": "136015", // 行動援護
+    "15": "156015", // 同行援護
   };
   const specialAreaByTypeCode = new Map<string, { code: string; label: string }>();
   const anySpecialArea = Array.from(certByClient.values()).some(

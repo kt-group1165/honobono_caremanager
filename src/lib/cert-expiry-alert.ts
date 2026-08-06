@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ID_IN_CHUNK } from "./chunk-parallel";
+import { ID_IN_CHUNK, mapChunksParallel } from "./chunk-parallel";
 
 /**
  * 認定更新の能動アラート (cert expiry alert)。
@@ -144,9 +144,9 @@ export async function scanCertExpiry(
   if (uniqueClientIds.length === 0) return [];
 
   // 2) active な利用者 (法人/事業所エントリ除外) の名前 map
+  //    chunk を直列 await していると chunk 数 × 往復時間ぶん待たされるので並列で回す
   const nameById = new Map<string, string>();
-  for (let i = 0; i < uniqueClientIds.length; i += 500) {
-    const chunk = uniqueClientIds.slice(i, i + 500);
+  const nameChunks = await mapChunksParallel(uniqueClientIds, IN_CHUNK, async (chunk) => {
     const { data, error } = await supabase
       .from("clients")
       .select("id, name")
@@ -154,17 +154,18 @@ export async function scanCertExpiry(
       .eq("status", "active")
       .eq("is_facility", false);
     if (error) throw new Error(`利用者の取得に失敗: ${error.message}`);
-    for (const r of (data ?? []) as { id: string; name: string }[]) {
-      nameById.set(r.id, r.name);
-    }
+    return (data ?? []) as { id: string; name: string }[];
+  });
+  for (const rows of nameChunks) {
+    for (const r of rows) nameById.set(r.id, r.name);
   }
   const activeIds = Array.from(nameById.keys());
   if (activeIds.length === 0) return [];
 
-  // 3) 認定行を client ごとに収集 (chunk + page-loop)
+  // 3) 認定行を client ごとに収集 (chunk 並列 + chunk 内は page-loop)
   const certsByClient = new Map<string, CertRow[]>();
-  for (let i = 0; i < activeIds.length; i += IN_CHUNK) {
-    const chunk = activeIds.slice(i, i + IN_CHUNK);
+  const certChunks = await mapChunksParallel(activeIds, IN_CHUNK, async (chunk) => {
+    const out: CertRow[] = [];
     let offset = 0;
     while (true) {
       const { data, error } = await supabase
@@ -178,12 +179,16 @@ export async function scanCertExpiry(
         .range(offset, offset + PAGE - 1);
       if (error) throw new Error(`認定情報の取得に失敗: ${error.message}`);
       const rows = (data ?? []) as unknown as CertRow[];
-      for (const r of rows) {
-        if (!certsByClient.has(r.client_id)) certsByClient.set(r.client_id, []);
-        certsByClient.get(r.client_id)!.push(r);
-      }
+      out.push(...rows);
       if (rows.length < PAGE) break;
       offset += PAGE;
+    }
+    return out;
+  });
+  for (const rows of certChunks) {
+    for (const r of rows) {
+      if (!certsByClient.has(r.client_id)) certsByClient.set(r.client_id, []);
+      certsByClient.get(r.client_id)!.push(r);
     }
   }
 

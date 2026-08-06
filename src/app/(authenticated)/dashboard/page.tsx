@@ -11,6 +11,7 @@ import {
   TrendingUp,
   FileText,
   CalendarClock,
+  RefreshCw,
 } from "lucide-react";
 import { format, differenceInYears, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -23,6 +24,15 @@ import {
   type AllOfficesUriage,
 } from "@/lib/uriage/aggregate-uriage";
 import { MonthNav } from "@/app/(authenticated)/billing-visit/_shared/month-nav";
+import {
+  readUriageCache,
+  writeUriageCache,
+  selfUriageKey,
+  allUriageKey,
+  cachedAtLabel,
+  type SelfUriageCache,
+  type AllUriageCache,
+} from "@/lib/uriage/uriage-cache";
 
 // ---- Types ----
 
@@ -132,7 +142,10 @@ export default function DashboardPage() {
   });
   const [recentUsers, setRecentUsers] = useState<RecentUser[]>([]);
   const [recentServiceRecords, setRecentServiceRecords] = useState<RecentServiceRecord[]>([]);
+  /** サマリーカード (件数だけ。第 1 波が返った時点で出す) */
   const [loading, setLoading] = useState(true);
+  /** 一覧テーブル (氏名解決の第 2 波が要るのでカードより遅い) */
+  const [listLoading, setListLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // 認定更新の能動アラート (段階判定 + 未通知分の notifications INSERT + カード表示)
@@ -148,6 +161,8 @@ export default function DashboardPage() {
   const [jisseki, setJisseki] = useState<UriageBreakdown | null>(null);
   const [uriageLoading, setUriageLoading] = useState(true);
   const [uriageError, setUriageError] = useState<string | null>(null);
+  /** 表示中の自事業所売上がキャッシュ由来のときの集計時刻 (null = 今この場で集計した値) */
+  const [uriageCachedAt, setUriageCachedAt] = useState<number | null>(null);
 
   // 売上の対象月 (サマリーカードや認定アラートは常に当月なので、月切替は売上セクションのみ)
   const nowForInit = new Date();
@@ -156,10 +171,14 @@ export default function DashboardPage() {
 
   // 集計スコープ: 自事業所 (自動) / 全事業所 (重いのでボタンで明示起動)
   const [scope, setScope] = useState<"self" | "all">("self");
+  /** 自事業所の売上を手動で集計し直すためのトリガ (キャッシュ表示中の「更新」ボタン) */
+  const [uriageReload, setUriageReload] = useState(0);
   const [allUriage, setAllUriage] = useState<AllOfficesUriage | null>(null);
   const [allLoading, setAllLoading] = useState(false);
   const [allProgress, setAllProgress] = useState<{ done: number; total: number } | null>(null);
   const [allError, setAllError] = useState<string | null>(null);
+  /** 表示中の全事業所売上がキャッシュ由来のときの集計時刻 */
+  const [allCachedAt, setAllCachedAt] = useState<number | null>(null);
 
   const today = new Date();
   const todayStr = format(today, "yyyy-MM-dd");
@@ -176,73 +195,94 @@ export default function DashboardPage() {
 
     async function fetchDashboard() {
       setLoading(true);
+      setListLoading(true);
       setError(null);
 
       try {
-        // 1. Active user count（is_facility=false で法人/事業所エントリを除外）
-        const { count: activeUsers, error: e1 } = await supabase
-          .from("clients")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "active")
-          .eq("is_facility", false)
-          .is("deleted_at", null);
-        if (e1) throw e1;
+        // ── 第 1 波: 互いに依存しない 5 本を並列に投げる ──
+        //   直列 await にしていたため往復回数ぶんそのまま待ち時間になっていた (2026-08-06)
+        const [
+          { count: activeUsers, error: e1 },
+          { count: monthlyServiceCount, error: e3 },
+          { count: expiringCarePlans, error: e4 },
+          { data: usersData, error: e5 },
+          { data: serviceData, error: e6 },
+        ] = await Promise.all([
+          // 1. Active user count（is_facility=false で法人/事業所エントリを除外）
+          supabase
+            .from("clients")
+            .select("*", { count: "exact", head: true })
+            .eq("status", "active")
+            .eq("is_facility", false)
+            .is("deleted_at", null),
+          // 2. This month's service record count
+          supabase
+            .from("kaigo_service_records")
+            .select("*", { count: "exact", head: true })
+            .gte("service_date", monthStart)
+            .lte("service_date", monthEnd),
+          // 3. Expiring care certifications within 30 days（client_insurance_records、新カラム名）
+          supabase
+            .from("client_insurance_records")
+            .select("*", { count: "exact", head: true })
+            .eq("certification_status", "認定済み")
+            .lte("certification_end_date", warnEnd)
+            .gte("certification_end_date", todayStr),
+          // 4. Recently registered users (latest 8)（法人/事業所エントリを除外）
+          supabase
+            .from("clients")
+            .select("id, name, birth_date, status, created_at")
+            .eq("is_facility", false)
+            .is("deleted_at", null)
+            .order("created_at", { ascending: false })
+            .limit(8),
+          // 5. Recent service records (latest 10)
+          supabase
+            .from("kaigo_service_records")
+            .select("id, service_date, service_type, content, user_id")
+            .order("service_date", { ascending: false })
+            .limit(10),
+        ]);
+        const firstError = e1 ?? e3 ?? e4 ?? e5 ?? e6;
+        if (firstError) throw firstError;
 
-        // 2. This month's service record count
-        const { count: monthlyServiceCount, error: e3 } = await supabase
-          .from("kaigo_service_records")
-          .select("*", { count: "exact", head: true })
-          .gte("service_date", monthStart)
-          .lte("service_date", monthEnd);
-        if (e3) throw e3;
-
-        // 3. Expiring care certifications within 30 days（client_insurance_records、新カラム名）
-        const { count: expiringCarePlans, error: e4 } = await supabase
-          .from("client_insurance_records")
-          .select("*", { count: "exact", head: true })
-          .eq("certification_status", "認定済み")
-          .lte("certification_end_date", warnEnd)
-          .gte("certification_end_date", todayStr);
-        if (e4) throw e4;
-
+        // カードは第 1 波で確定するので、氏名解決を待たずに先に出す
         setStats({
           activeUsers: activeUsers ?? 0,
           monthlyServiceCount: monthlyServiceCount ?? 0,
           expiringCarePlans: expiringCarePlans ?? 0,
         });
+        setLoading(false);
 
-        // 4. Recently registered users (latest 8)（法人/事業所エントリを除外）
-        const { data: usersData, error: e5 } = await supabase
-          .from("clients")
-          .select(
-            "id, name, birth_date, status, created_at"
-          )
-          .eq("is_facility", false)
-          .is("deleted_at", null)
-          .order("created_at", { ascending: false })
-          .limit(8);
-        if (e5) throw e5;
-
-        // Fetch latest active care certifications for those users
+        // ── 第 2 波: 第 1 波の id が要る参照 (介護度 / 利用者名) を並列に ──
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
         const userIds = (usersData ?? []).map((u: any) => u.id);
-        const certMap: Record<string, string> = {};
-        if (userIds.length > 0) {
+        const serviceUserIds = [
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
+          ...new Set((serviceData ?? []).map((s: any) => s.user_id).filter(Boolean)),
+        ];
+        const [certRes, serviceUsersRes] = await Promise.all([
           // client_insurance_records、新カラム名（user_id → client_id, status → certification_status, start_date → certification_start_date）
-          const { data: certData } = await supabase
-            .from("client_insurance_records")
-            .select("client_id, care_level")
-            .in("client_id", userIds)
-            .eq("certification_status", "認定済み")
-            .order("certification_start_date", { ascending: false, nullsFirst: false });
-          if (certData) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-            certData.forEach((c: any) => {
-              if (!certMap[c.client_id]) certMap[c.client_id] = c.care_level;
-            });
-          }
-        }
+          userIds.length > 0
+            ? supabase
+                .from("client_insurance_records")
+                .select("client_id, care_level")
+                .in("client_id", userIds)
+                .eq("certification_status", "認定済み")
+                .order("certification_start_date", { ascending: false, nullsFirst: false })
+            : Promise.resolve({ data: null }),
+          serviceUserIds.length > 0
+            ? supabase.from("clients").select("id, name").in("id", serviceUserIds)
+            : Promise.resolve({ data: null }),
+        ]);
 
+        const certMap: Record<string, string> = {};
+        if (certRes.data) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
+          certRes.data.forEach((c: any) => {
+            if (!certMap[c.client_id]) certMap[c.client_id] = c.care_level;
+          });
+        }
         setRecentUsers(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
           (usersData ?? []).map((u: any) => ({
@@ -251,32 +291,13 @@ export default function DashboardPage() {
           }))
         );
 
-        // 5. Recent service records with user names (latest 10)
-        const { data: serviceData, error: e6 } = await supabase
-          .from("kaigo_service_records")
-          .select("id, service_date, service_type, content, user_id")
-          .order("service_date", { ascending: false })
-          .limit(10);
-        if (e6) throw e6;
-
-        const serviceUserIds = [
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-          ...new Set((serviceData ?? []).map((s: any) => s.user_id).filter(Boolean)),
-        ];
         const userNameMap: Record<string, string> = {};
-        if (serviceUserIds.length > 0) {
-          const { data: serviceUsersData } = await supabase
-            .from("clients")
-            .select("id, name")
-            .in("id", serviceUserIds);
-          if (serviceUsersData) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-            serviceUsersData.forEach((u: any) => {
-              userNameMap[u.id] = u.name;
-            });
-          }
+        if (serviceUsersRes.data) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
+          serviceUsersRes.data.forEach((u: any) => {
+            userNameMap[u.id] = u.name;
+          });
         }
-
         setRecentServiceRecords(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
           (serviceData ?? []).map((s: any) => ({
@@ -292,6 +313,7 @@ export default function DashboardPage() {
         setError(msg);
       } finally {
         setLoading(false);
+        setListLoading(false);
       }
     }
 
@@ -342,8 +364,22 @@ export default function DashboardPage() {
       if (!currentOfficeId || !tenantId) {
         setUriage(null);
         setJisseki(null);
+        setUriageCachedAt(null);
         setUriageLoading(false);
         return;
+      }
+      // 前回の集計があれば先に描画する (stale-while-revalidate)。
+      // 金額なので「いつ時点か」は UI に必ず出す。
+      const cacheKey = selfUriageKey(currentOfficeId, uriageYear, uriageMonth);
+      const cached = readUriageCache<SelfUriageCache>(cacheKey);
+      if (cached) {
+        setUriage(cached.data.uriage);
+        setJisseki(cached.data.jisseki);
+        setUriageCachedAt(cached.at);
+      } else {
+        setUriage(null);
+        setJisseki(null);
+        setUriageCachedAt(null);
       }
       setUriageLoading(true);
       setUriageError(null);
@@ -363,6 +399,8 @@ export default function DashboardPage() {
         if (cancelled) return;
         setUriage(u);
         setJisseki(j);
+        setUriageCachedAt(null);
+        writeUriageCache<SelfUriageCache>(cacheKey, { uriage: u, jisseki: j });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "売上の集計に失敗しました";
         console.error("uriage aggregation failed:", msg);
@@ -375,7 +413,28 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [bizLoading, currentOfficeId, tenantId, businessType, uriageYear, uriageMonth]);
+  }, [bizLoading, currentOfficeId, tenantId, businessType, uriageYear, uriageMonth, uriageReload]);
+
+  // 全事業所の集計は重いので、前回結果 (端末キャッシュ) があれば月切替と同時に即描画する。
+  // 再集計は「再集計」ボタンで明示的に行う。
+  useEffect(() => {
+    let cancelled = false;
+    // localStorage (= 外部ストア) の読取。SSR と食い違わないよう描画後に反映する
+    const load = async () => {
+      const cached = readUriageCache<AllUriageCache>(allUriageKey(uriageYear, uriageMonth));
+      if (cancelled) return;
+      if (cached) {
+        setAllUriage(cached.data);
+        setAllCachedAt(cached.at);
+      } else {
+        setAllCachedAt(null);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [uriageYear, uriageMonth]);
 
   // 全事業所の売上集計 (明示操作で起動)。事業所数 × 請求エンジンなので自動では走らせない
   const runAllOffices = async () => {
@@ -388,10 +447,11 @@ export default function DashboardPage() {
         year: uriageYear,
         month: uriageMonth,
         includeScheduled: true,
-        concurrency: 4,
         onProgress: (done, total) => setAllProgress({ done, total }),
       });
       setAllUriage(res);
+      setAllCachedAt(null);
+      writeUriageCache<AllUriageCache>(allUriageKey(uriageYear, uriageMonth), res);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "全事業所の集計に失敗しました";
       console.error("all-offices uriage failed:", msg);
@@ -411,6 +471,12 @@ export default function DashboardPage() {
   const shownUriage = scope === "all" ? (allForMonth?.total ?? null) : uriage;
   const shownLoading = scope === "all" ? allLoading : uriageLoading;
   const shownError = scope === "all" ? allError : uriageError;
+  /** 表示中の値がキャッシュ由来なら その集計時刻 (null = 今この場で集計した最新値) */
+  const shownCachedAt = scope === "all" ? allCachedAt : uriageCachedAt;
+  /** 前回値を出したまま裏で再集計中 (スケルトンに戻さない) */
+  const shownRefreshing = shownLoading && !!shownUriage;
+  /** 出せる値がまだ無い = スケルトン */
+  const shownSkeleton = shownLoading && !shownUriage;
 
   // 売上内訳の表示行 (0 円の制度は畳む。全部 0 のときは介護保険だけ残す)
   const uriageLines = (() => {
@@ -465,15 +531,18 @@ export default function DashboardPage() {
           <SummaryCard
             title={scope === "all" ? "売上（全事業所）" : "売上"}
             value={
-              shownLoading
-                ? "集計中…"
-                : shownError || !shownUriage
-                  ? "—"
-                  : formatCurrency(shownUriage.total)
+              shownUriage
+                ? formatCurrency(shownUriage.total)
+                : shownLoading
+                  ? "集計中…"
+                  : "—"
             }
             icon={<Wallet size={22} className="text-emerald-600" />}
             iconBg="bg-emerald-50"
-            sub={`${uriageYear}年${uriageMonth}月 予定+実績`}
+            sub={
+              `${uriageYear}年${uriageMonth}月 予定+実績` +
+              (shownRefreshing ? "（再集計中…）" : shownCachedAt ? `（${cachedAtLabel(shownCachedAt)}）` : "")
+            }
           />
           <SummaryCard
             title="今月のサービス件数"
@@ -501,6 +570,25 @@ export default function DashboardPage() {
             <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-600">
               予定+実績 / キャンセル除く
             </span>
+            {/* 金額なので「いつ時点の集計か」を必ず明示する */}
+            {shownRefreshing ? (
+              <span className="flex items-center gap-1 text-xs text-gray-400">
+                <RefreshCw size={12} className="animate-spin" />
+                {scope === "all" && allProgress && allProgress.total > 0
+                  ? `再集計中 ${allProgress.done}/${allProgress.total} 事業所`
+                  : "再集計中…"}
+              </span>
+            ) : shownCachedAt ? (
+              <button
+                type="button"
+                onClick={scope === "all" ? runAllOffices : () => setUriageReload((n) => n + 1)}
+                className="flex items-center gap-1 rounded-full bg-gray-50 px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-100"
+                title="この場で集計し直す"
+              >
+                <RefreshCw size={11} />
+                {cachedAtLabel(shownCachedAt)}
+              </button>
+            ) : null}
           </div>
           <div className="flex items-center gap-2">
             {/* 集計スコープ */}
@@ -555,7 +643,7 @@ export default function DashboardPage() {
               全事業所を集計
             </button>
           </div>
-        ) : shownLoading ? (
+        ) : shownSkeleton ? (
           <div className="space-y-3 p-5">
             {scope === "all" && allProgress && allProgress.total > 0 && (
               <p className="text-center text-sm text-gray-500">
@@ -566,7 +654,7 @@ export default function DashboardPage() {
               <div key={i} className="h-6 animate-pulse rounded-lg bg-gray-100" />
             ))}
           </div>
-        ) : shownError ? (
+        ) : shownError && !shownUriage ? (
           <div className="flex items-center gap-2 px-5 py-6 text-sm text-red-600">
             <AlertTriangle size={16} />
             <span>売上の集計に失敗しました: {shownError}</span>
@@ -577,6 +665,13 @@ export default function DashboardPage() {
           </p>
         ) : (
           <div className="px-5 py-4">
+            {/* 再集計に失敗したが前回値は出せている場合 (古い値だと分かるように出す) */}
+            {shownError && (
+              <div className="mb-3 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                <AlertTriangle size={14} className="shrink-0" />
+                <span>再集計に失敗しました（表示は前回の集計値です）: {shownError}</span>
+              </div>
+            )}
             {/* 合計 */}
             <div className="flex items-baseline justify-between border-b border-gray-100 pb-3">
               <span className="text-sm font-medium text-gray-600">
@@ -815,7 +910,7 @@ export default function DashboardPage() {
             </span>
           </div>
 
-          {loading ? (
+          {listLoading ? (
             <div className="space-y-3 p-5">
               {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="h-8 animate-pulse rounded-lg bg-gray-100" />
@@ -876,7 +971,7 @@ export default function DashboardPage() {
             </span>
           </div>
 
-          {loading ? (
+          {listLoading ? (
             <div className="space-y-3 p-5">
               {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="h-8 animate-pulse rounded-lg bg-gray-100" />
