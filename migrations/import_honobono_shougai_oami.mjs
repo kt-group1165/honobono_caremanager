@@ -458,9 +458,14 @@ async function main() {
         const renum = `${clientRow.user_number}-${OFFICE_LABEL}-${blankSeq++}`;
         console.warn(`  ⚠️ ${c.name}: user_number=${clientRow.user_number} は採番漏れのゴミ値で衝突 → ${renum} にリナンバー`);
         ({ error } = await sb.from("clients").insert({ ...clientRow, user_number: renum }));
-      } else if (error && error.code === "23505" && /^\d{1,5}$/.test(clientRow.user_number)) {
-        const renum = String(100000 + Number(clientRow.user_number));
-        console.warn(`  ⚠️ ${c.name}: user_number=${clientRow.user_number} が unique 衝突 → ${renum} にリナンバー`);
+      } else if (error && error.code === "23505" && /^\d+$/.test(clientRow.user_number)) {
+        // 利用者番号は**事業者エントリごとの採番**なので別人が同じ番号を持つ
+        //   (東郷 大多和優衣 711000107 が既存の早坂忠夫と衝突)。
+        //   1〜5 桁は +100000、それ以外は事業所ラベルを付けて一意化する
+        //   (6 桁以上に +100000 すると別の実在番号とぶつかりうるため)。
+        const n = clientRow.user_number;
+        const renum = n.length <= 5 ? String(100000 + Number(n)) : `${n}-${OFFICE_LABEL}`;
+        console.warn(`  ⚠️ ${c.name}: user_number=${n} が unique 衝突 (既存は別人) → ${renum} にリナンバー`);
         ({ error } = await sb.from("clients").insert({ ...clientRow, user_number: renum }));
       }
       if (error) { console.error(`  ✗ ${c.name} clients: ${error.message}`); ng++; continue; }
