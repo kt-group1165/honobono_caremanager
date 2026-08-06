@@ -567,7 +567,10 @@ export async function aggregateMonthlyShogaiSeikyu(
         .from("kaigo_visit_addon_lines")
         .select("client_id, addon_code, count")
         .eq("office_id", opts.officeId)
-        .eq("target_month", monthStr)
+        // ⚠ target_month は **date 型**なので `2026-06` では 0 件になる。
+        //   `${monthStr}-01` で渡すこと (kaigo_monthly_plan_units 等と同じ)。
+        //   これに気づかず「加算行を入れたのに反映されない」で 1 往復した。
+        .eq("target_month", `${monthStr}-01`)
         .eq("system", "障害")
         .order("id", { ascending: true })
         .range(gOffset, gOffset + 999);
