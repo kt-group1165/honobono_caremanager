@@ -12,7 +12,7 @@
 //   DRY RUN は read-only。利用者/職員/サービスコードの名寄せギャップを実数で出す。
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { findMeisaiFiles } from "./_meisai_files.mjs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -72,6 +72,21 @@ function bucketOf(code) {
   return "他";
 }
 
+// 介護請求(明細付)_一覧.CSV を対象月フォルダ配下から再帰で探す
+function findBillingList(dir) {
+  const stack = [dir];
+  while (stack.length) {
+    const d = stack.pop();
+    let ents; try { ents = readdirSync(d, { withFileTypes: true }); } catch { continue; }
+    for (const e of ents) {
+      const p2 = path.join(d, e.name);
+      if (e.isDirectory()) stack.push(p2);
+      else if (e.name === "介護請求(明細付)_一覧.CSV") return p2;
+    }
+  }
+  return null;
+}
+
 // ---- ページング fetch ----
 async function fetchAll(table, cols) {
   const out = [];
@@ -124,6 +139,49 @@ async function main() {
   let target = all.filter((r) => bucketOf(r.code) === "①介護");
   console.log(`今回取込対象 = ①介護 のみ: ${target.length}行\n`);
 
+  // 1b) **介護請求(明細付)_一覧.CSV と突合して、介護保険の請求に載っている実績だけ残す**
+  //
+  //   ── なぜ要るか ────────────────────────────────────────────────────
+  //   MEISAI は**給与・シフト用**なので 介護 / 障害 / 総合 / 同行 / 移動支援 が同居する。
+  //   障害の居宅介護は **介護保険とサービスコード体系が同じ (111111 等)** で、
+  //   しかも稼働データ上の事業所番号は介護の番号が入っているため、
+  //   コードでも事業所番号でも切り分けられない。
+  //   実証: 高品 加茂照子 — 障害受給者証を持つ利用者の 24 件が
+  //   「介護保険の実績」として取り込まれ、介護明細書に載っていた
+  //   (ほのぼのは介護で 1 円も請求していない)。
+  //   同型が 高品6名 / 木更津2名 / 姉ム1名 / K姉1名。
+  //
+  //   一覧CSV は**請求側の帳票**で、介護 + 総合事業しか含まない (障害・同行・移動支援は
+  //   1 行も出ない)。ここに (利用者番号 × サービスコード) が有るものだけを介護とみなす。
+  //   ⚠ 請求年月が空 = 未発行/月遅 で 6 月伝送に載らない分なので、それも除く。
+  const billedKeys = new Set();
+  {
+    const listPath = findBillingList(CSV_DIR);
+    if (!listPath) {
+      console.warn(`⚠ 介護請求(明細付)_一覧.CSV が無いため制度の突合をしません (障害の行が混ざる可能性)
+`);
+    } else {
+      // ⚠ 一覧CSV は **全項目が引用符付き**。readCsv() は引用符を外さない
+      //   (MEISAI は引用符無しなのでそちらでは問題にならない) ので、ここで自前で外す。
+      //   外さないとヘッダ名が `"提供年月"` になり列が 1 つも引けず、
+      //   billedKeys が 0 組 = **全行が除外対象**になってしまう。
+      const uq = (v) => (v || "").replace(/^"|"$/g, "").trim();
+      const raw = readCsv(listPath);
+      const idx2 = {};
+      Object.keys(raw.idx).forEach((h) => (idx2[uq(h)] = raw.idx[h]));
+      const gi = (n) => idx2[n];
+      let held = 0;
+      for (const c of raw.rows) {
+        if (uq(c[gi("提供年月")]) !== TARGET_MONTH.replace("-", "/")) continue;
+        const code = uq(c[gi("サービスコード")]);
+        if (!uq(c[gi("請求年月")])) { held++; continue; }
+        billedKeys.add(`${uq(c[gi("利用者番号")])}|${code}`);
+      }
+      console.log(`請求一覧: ${billedKeys.size} 組 (利用者×コード)${held ? ` / 未発行・月遅 ${held} 行は対象外` : ""}
+`);
+    }
+  }
+
   // 2) 事業所解決
   const { data: offRows, error: offErr } = await sb
     .from("offices").select("id,name,service_type,business_number")
@@ -158,6 +216,29 @@ async function main() {
       console.error(`   稼働データにある事業所番号: ${[...others.keys()].join(", ") || "(なし)"}`);
       console.error(`   → OFFICE_BN を合わせてください (OFFICE_ID では切り替わりません)`);
       process.exit(1);
+    }
+  }
+
+  // 制度フィルタ: 請求一覧に無い (利用者×コード) は介護保険ではない
+  if (billedKeys.size) {
+    const before = target.length;
+    const dropped = new Map();
+    target = target.filter((r) => {
+      if (billedKeys.has(`${r.clientNum}|${r.code}`)) return true;
+      const k = `${r.clientNum} ${r.clientName}`;
+      if (!dropped.has(k)) dropped.set(k, new Map());
+      const m = dropped.get(k);
+      m.set(r.code, (m.get(r.code) ?? 0) + 1);
+      return false;
+    });
+    if (dropped.size) {
+      console.log(`― 請求一覧に無いため除外 ${before - target.length}行 / ${dropped.size}名 ―`);
+      console.log(`  (障害の居宅介護・自費・未発行/月遅 のいずれか。**請求漏れならここに出る**)`);
+      for (const [who, codes] of [...dropped].sort((a, b) =>
+        [...b[1].values()].reduce((x, y) => x + y, 0) - [...a[1].values()].reduce((x, y) => x + y, 0))) {
+        console.log(`   ${who}  ${[...codes].map(([c, n]) => `${c}×${n}`).join(" ")}`);
+      }
+      console.log("");
     }
   }
 
