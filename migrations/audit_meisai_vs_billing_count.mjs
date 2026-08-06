@@ -77,14 +77,21 @@ for (const site of SITES.sort()) {
   //     明細書番号 + サービスコード + 回数 で重複を落としてから数える。
   const billed = new Map();
   const seenRow = new Set();
+  const held = new Map(); // 未発行・月遅で 6 月請求に載せていない分
   for (const c of L.rows) {
     if ((c[g("提供年月")] || "") !== MONTH) continue;
     // 同じ実績が複数の明細書に載る。**請求年月が空 = まだ国保連に出していない控え**
     // (東郷 髙橋邦子: 明細書603 状態=国保対象/請求2026-06 と 明細書839 状態=発行済/請求年月空 の 2 本)。
     // 伝送に出るのは請求年月が入っている方だけなので、空の行は数えない。
-    if (!(c[g("請求年月")] || "").trim()) continue;
     const code = (c[g("サービスコード")] || "").trim();
     if (!/^11[0-5]/.test(code)) continue; // 基本サービスのみ (加算は別集計)
+    if (!(c[g("請求年月")] || "").trim()) {
+      // 状態「未発行 / 発行済」+ 月遅 = ほのぼの側が意図的に 6 月請求から外している分。
+      // 差分としては出すが「請求漏れ」ではないので別扱いにする。
+      held.set(`${norm(c[g("事業所名")])}|${(c[g("利用者番号")] || "").trim()}|${code}`,
+        `${(c[g("状態")] || "").trim()}${(c[g("月遅")] || "").trim() ? "/月遅" : ""}`);
+      continue;
+    }
     const dedup = `${(c[g("明細書番号")] || "").trim()}|${code}|${(c[g("回数")] || "").trim()}|${(c[g("単位数")] || "").trim()}`;
     if (seenRow.has(dedup)) continue;
     seenRow.add(dedup);
@@ -99,14 +106,22 @@ for (const site of SITES.sort()) {
 
   // 稼働側
   const acted = new Map();
+  const seenVisit = new Set();
   for (const mp of meisaiPaths) {
     const M = readCsv(mp);
-    const iu = M.idx["利用者番号"], iC = M.idx["サービスコード"], iS = M.idx["職員名"], iN = M.idx["利用者名"], iD = M.idx["日付"], iB = M.idx["事業所番号"];
+    const iu = M.idx["利用者番号"], iC = M.idx["サービスコード"], iS = M.idx["職員名"], iN = M.idx["利用者名"], iD = M.idx["日付"], iB = M.idx["事業所番号"], iT = M.idx["算定開始時刻"];
     if (iu == null || iC == null) continue;
     for (const c of M.rows) {
       const code = (c[iC] || "").trim();
       if (!/^11[0-5]/.test(code)) continue;
       if (iB != null && (c[iB] || "") === "9999999999") continue; // 障害エントリ
+      // ⚠ 2 人体制は稼働データに**ヘルパーごと 2 行**出る (サービス名が「身12人」等)。
+      //   請求は 1 訪問 = 1 回なので、同一 (利用者×日×開始時刻×コード) は 1 回に畳む。
+      //   import_meisai_visit_records.mjs も同じ dedup をしている。
+      //   ここで畳まないと「稼働18/請求9」のような**誤検知**になる。
+      const vkey = `${(c[iu] || "").trim()}|${(c[iD] || "").trim()}|${(c[iT] || "").trim()}|${code}`;
+      if (seenVisit.has(vkey)) continue;
+      seenVisit.add(vkey);
       const k = `${norm(c[0])}|${(c[iu] || "").trim()}|${code}`;
       const prev = acted.get(k) ?? { n: 0, name: (c[iN] || "").trim(), staff: {}, dates: [] };
       prev.n++;
@@ -123,22 +138,25 @@ for (const site of SITES.sort()) {
     const bn = b?.n ?? 0;
     if (a.n === bn) continue;
     const unit = b?.unit ?? 0;
-    diffs.push({ k, name: a.name, meisai: a.n, billed: bn, unit, staff: a.staff, unmatched: !b });
+    diffs.push({ k, name: a.name, meisai: a.n, billed: bn, unit, staff: a.staff, unmatched: !b, held: held.get(k) ?? null });
   }
   if (!diffs.length) continue;
 
   console.log(`\n=== ${site} — 稼働と請求で回数が違う ${diffs.length} 件 ===`);
   for (const d of diffs.sort((x, y) => Math.abs(y.meisai - y.billed) - Math.abs(x.meisai - x.billed))) {
     const gap = (d.meisai - d.billed) * d.unit;
-    totalUnitsGap += gap;
+    if (!d.held) totalUnitsGap += gap;
     console.log(
       `  ${(d.name + "            ").slice(0, 12)} ${d.k.split("|")[2]} 稼働${d.meisai} 請求${d.billed}` +
         ` 差${d.meisai - d.billed}` +
-        (d.unmatched ? "  ← 請求側に無し" : ` (${d.unit}単位/回 → ${gap > 0 ? "+" : ""}${gap}単位)`),
+        (d.held ? `  ← ほのぼの側で保留 (${d.held})` : d.unmatched ? "  ← 請求側に無し (要調査)" : ` (${d.unit}単位/回 → ${gap > 0 ? "+" : ""}${gap}単位)`),
     );
   }
   totalDiff += diffs.length;
 }
 console.log(`\n────────────────────────────────────`);
-console.log(`対象 ${totalSites} 拠点 / 回数違い ${totalDiff} 件 / 単位差 合計 ${totalUnitsGap.toLocaleString()} 単位`);
+console.log(`対象 ${totalSites} 拠点 / 回数違い ${totalDiff} 件 / 単位差 合計 ${totalUnitsGap.toLocaleString()} 単位 (保留分を除く)`);
+console.log(`  ・「ほのぼの側で保留」= 未発行/月遅。6 月伝送に載らないのが正しい`);
+console.log(`  ・「請求側に無し (要調査)」= 一覧CSV に行が無い。請求漏れの疑い`);
+console.log(`  ・数値の差 = 同じコードで回数が違う。1 件ずつ理由が要る`);
 if (!totalDiff) console.log("すべて一致。");
