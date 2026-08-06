@@ -1,0 +1,4254 @@
+{
+ "office": "リンクスヘルパーステーション東郷",
+ "area": "東郷",
+ "clients": [
+  {
+   "user_number": "10001217",
+   "name": "市原 洋子",
+   "gender": "女",
+   "birth_date": "1963-11-20",
+   "postal_code": null,
+   "address": null,
+   "certs": [
+    {
+     "cert_number": "1221011974",
+     "issue_date": "2018-06-01",
+     "period_start": "2018-05-01",
+     "period_end": "2019-04-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】12時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 12,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221011974",
+     "issue_date": "2019-05-09",
+     "period_start": "2019-05-01",
+     "period_end": "2020-04-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221011974",
+     "issue_date": "2020-05-20",
+     "period_start": "2020-05-01",
+     "period_end": "2021-04-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221011974",
+     "issue_date": "2021-05-06",
+     "period_start": "2021-05-01",
+     "period_end": "2022-04-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221011974",
+     "issue_date": "2022-04-25",
+     "period_start": "2022-05-01",
+     "period_end": "2023-04-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221011974",
+     "issue_date": "2022-05-08",
+     "period_start": "2023-05-01",
+     "period_end": "2024-04-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221011974",
+     "issue_date": "2024-04-16",
+     "period_start": "2024-05-01",
+     "period_end": "2025-04-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221011974",
+     "issue_date": "2025-04-15",
+     "period_start": "2025-05-01",
+     "period_end": "2026-04-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221011974",
+     "issue_date": "2026-05-08",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221011974",
+     "issue_date": "2026-05-08",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113006095",
+   "name": "右手 君枝",
+   "gender": "女",
+   "birth_date": "1974-08-04",
+   "postal_code": "297-0024",
+   "address": "千葉県茂原市八千代2丁目12番地7 丸山マンション201号",
+   "certs": [
+    {
+     "cert_number": "1221009978",
+     "issue_date": "2020-06-29",
+     "period_start": "2020-08-01",
+     "period_end": "2021-07-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221009978",
+     "issue_date": "2021-07-16",
+     "period_start": "2021-08-01",
+     "period_end": "2022-07-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221009978",
+     "issue_date": "2022-07-19",
+     "period_start": "2022-08-01",
+     "period_end": "2023-07-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221009978",
+     "issue_date": "2023-08-02",
+     "period_start": "2023-08-01",
+     "period_end": "2024-07-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221009978",
+     "issue_date": "2024-07-19",
+     "period_start": "2024-08-01",
+     "period_end": "2025-07-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221009978",
+     "issue_date": "2025-07-22",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【通院介助】12時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 12,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221009978",
+     "issue_date": null,
+     "period_start": "2026-08-01",
+     "period_end": "2027-07-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【通院介助】12時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 12,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221009978",
+     "issue_date": "2025-07-22",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【通院介助】12時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "通院介助": {
+       "hours": 12,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "711000103",
+   "name": "江澤 さやか",
+   "gender": "女",
+   "birth_date": "1982-02-13",
+   "postal_code": "297-0029",
+   "address": "千葉県茂原市高師573番地 市営新町保住宅103号",
+   "certs": [
+    {
+     "cert_number": "1221022492",
+     "issue_date": "2025-07-01",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221022492",
+     "issue_date": "2024-06-23",
+     "period_start": "2026-07-01",
+     "period_end": "2027-06-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221022492",
+     "issue_date": "2025-07-01",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "428000102",
+   "name": "遠藤 研",
+   "gender": "男",
+   "birth_date": "1970-08-30",
+   "postal_code": "297-0233",
+   "address": "千葉県長生郡長柄町六地蔵 335-1",
+   "certs": [
+    {
+     "cert_number": "1242601797",
+     "issue_date": "2025-03-31",
+     "period_start": "2025-04-01",
+     "period_end": "2026-03-31",
+     "city": "長柄町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242601797",
+     "issue_date": "2026-04-01",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "長柄町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1242601797",
+     "issue_date": "2026-04-01",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "長柄町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113005507",
+   "name": "大川 朋美",
+   "gender": "女",
+   "birth_date": "1976-04-28",
+   "postal_code": "299-4113",
+   "address": "千葉県茂原市法目1655番地2",
+   "certs": [
+    {
+     "cert_number": "1221013228",
+     "issue_date": null,
+     "period_start": "2019-07-01",
+     "period_end": "2020-03-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】30時間00分【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221013228",
+     "issue_date": "2019-10-09",
+     "period_start": "2020-04-01",
+     "period_end": "2020-06-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】40時間00分【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221013228",
+     "issue_date": "2019-10-09",
+     "period_start": "2020-07-01",
+     "period_end": "2020-08-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】40時間00分【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221013228",
+     "issue_date": "2019-10-09",
+     "period_start": "2020-09-01",
+     "period_end": "2021-06-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】50時間00分【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221013228",
+     "issue_date": "2021-06-22",
+     "period_start": "2021-07-01",
+     "period_end": "2022-03-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】50時間00分【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221013228",
+     "issue_date": "2022-04-18",
+     "period_start": "2022-04-01",
+     "period_end": "2022-06-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】60時間00分【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 60,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221013228",
+     "issue_date": "2022-06-06",
+     "period_start": "2022-07-01",
+     "period_end": "2023-06-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】70時間00分【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 70,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221013228",
+     "issue_date": "2023-05-17",
+     "period_start": "2023-07-01",
+     "period_end": "2024-03-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】70時間00分【家事援助】20時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 70,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221013228",
+     "issue_date": "2024-02-07",
+     "period_start": "2024-04-01",
+     "period_end": "2025-01-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】70時間00分【家事援助】20時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 70,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221013228",
+     "issue_date": "2024-12-25",
+     "period_start": "2025-02-01",
+     "period_end": "2026-01-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】70時間00分【家事援助】20時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 70,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221013228",
+     "issue_date": "2026-02-26",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】70時間00分【家事援助】20時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 70,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221013228",
+     "issue_date": "2026-02-26",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】70時間00分【家事援助】20時間00分【通院身体】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 70,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "428000105",
+   "name": "小野尾 美佐子",
+   "gender": "女",
+   "birth_date": "1968-04-30",
+   "postal_code": "299-4113",
+   "address": "千葉県茂原市法目 1287番地17",
+   "certs": [
+    {
+     "cert_number": "1221021528",
+     "issue_date": "2025-04-04",
+     "period_start": "2025-06-01",
+     "period_end": "2026-02-28",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】15時間30分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221021528",
+     "issue_date": "2026-01-22",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】15時間30分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221021528",
+     "issue_date": "2026-01-22",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】15時間30分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "10000387",
+   "name": "國吉 克浩",
+   "gender": "男",
+   "birth_date": "1973-10-03",
+   "postal_code": "297-0042",
+   "address": "千葉県茂原市三ケ谷1850番地2",
+   "certs": [
+    {
+     "cert_number": "1221006024",
+     "issue_date": "2014-09-22",
+     "period_start": "2012-10-01",
+     "period_end": "2015-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】65時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 65,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221006024",
+     "issue_date": "2015-10-27",
+     "period_start": "2015-10-01",
+     "period_end": "2016-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】65時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 65,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221006024",
+     "issue_date": "2016-10-11",
+     "period_start": "2016-10-01",
+     "period_end": "2017-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】65時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 65,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221006024",
+     "issue_date": "2017-09-27",
+     "period_start": "2017-10-01",
+     "period_end": "2018-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】65時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 65,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221006024",
+     "issue_date": "2018-10-09",
+     "period_start": "2018-10-01",
+     "period_end": "2019-06-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】70時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 70,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221006024",
+     "issue_date": "2019-06-19",
+     "period_start": "2019-07-01",
+     "period_end": "2019-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】93時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 93,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221006024",
+     "issue_date": "2019-09-13",
+     "period_start": "2019-10-01",
+     "period_end": "2020-06-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】93時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 93,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221006024",
+     "issue_date": "2019-09-13",
+     "period_start": "2020-07-01",
+     "period_end": "2020-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】120時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 120,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221006024",
+     "issue_date": "2019-09-13",
+     "period_start": "2020-10-01",
+     "period_end": "2021-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】120時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 120,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221006024",
+     "issue_date": "2021-10-06",
+     "period_start": "2021-10-01",
+     "period_end": "2022-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】124時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 124,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221006024",
+     "issue_date": "2022-09-05",
+     "period_start": "2022-10-01",
+     "period_end": "2023-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】124時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 124,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221006024",
+     "issue_date": "2022-09-08",
+     "period_start": "2023-10-01",
+     "period_end": "2024-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】124時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 124,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221006024",
+     "issue_date": "2024-10-02",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】124時間00分【通院身体】10時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】訪問介護エクザ茂原",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 124,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "訪問介護エクザ茂原"
+    },
+    {
+     "cert_number": "1221006024",
+     "issue_date": "2024-09-05",
+     "period_start": "2025-10-01",
+     "period_end": "2025-12-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】124時間00分【通院身体】10時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】訪問介護エクザ茂原",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 124,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "訪問介護エクザ茂原"
+    },
+    {
+     "cert_number": "1221006024",
+     "issue_date": "2024-09-05",
+     "period_start": "2026-01-01",
+     "period_end": "2026-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】124時間00分【通院身体】10時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】リンクスヘルパーステーション東郷",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 124,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "リンクスヘルパーステーション東郷"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221006024",
+     "issue_date": "2024-09-05",
+     "period_start": "2026-01-01",
+     "period_end": "2026-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】124時間00分【通院身体】10時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】リンクスヘルパーステーション東郷",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 124,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "リンクスヘルパーステーション東郷"
+    }
+   ]
+  },
+  {
+   "user_number": "10000232",
+   "name": "齋藤 美加",
+   "gender": "女",
+   "birth_date": "1987-02-04",
+   "postal_code": "297-0078",
+   "address": "千葉県茂原市高師台1丁目8番地15",
+   "certs": [
+    {
+     "cert_number": "1221004334",
+     "issue_date": "2014-03-28",
+     "period_start": "2012-04-01",
+     "period_end": "2015-03-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】44時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 44,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221004334",
+     "issue_date": "2015-04-10",
+     "period_start": "2015-04-01",
+     "period_end": "2015-12-23",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】44時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 44,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221004334",
+     "issue_date": "2016-01-19",
+     "period_start": "2015-12-24",
+     "period_end": "2016-12-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】80時間00分【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 80,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221004334",
+     "issue_date": "2016-12-26",
+     "period_start": "2017-01-01",
+     "period_end": "2017-12-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】62時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 62,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221004334",
+     "issue_date": "2017-12-22",
+     "period_start": "2018-01-01",
+     "period_end": "2018-03-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】62時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 62,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221004334",
+     "issue_date": "2018-05-16",
+     "period_start": "2018-04-01",
+     "period_end": "2019-03-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】62時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 62,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221004334",
+     "issue_date": "2019-03-05",
+     "period_start": "2019-04-01",
+     "period_end": "2020-03-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】62時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 62,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221004334",
+     "issue_date": "2019-03-15",
+     "period_start": "2020-04-01",
+     "period_end": "2021-03-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】62時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 62,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221004334",
+     "issue_date": "2021-04-02",
+     "period_start": "2021-04-01",
+     "period_end": "2022-03-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】62時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 62,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221004334",
+     "issue_date": "2022-02-16",
+     "period_start": "2022-04-01",
+     "period_end": "2023-03-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】62時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 62,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221004334",
+     "issue_date": "2023-04-07",
+     "period_start": "2023-04-01",
+     "period_end": "2024-03-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】62時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 62,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221004334",
+     "issue_date": "2024-04-04",
+     "period_start": "2024-04-01",
+     "period_end": "2025-03-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】62時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 62,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221004334",
+     "issue_date": "2025-02-19",
+     "period_start": "2025-04-01",
+     "period_end": "2026-03-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】62時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 62,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221004334",
+     "issue_date": "2026-02-18",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】62時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 62,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221004334",
+     "issue_date": "2026-02-18",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】62時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 62,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "428000043",
+   "name": "鈴木 淳史",
+   "gender": "男",
+   "birth_date": "1973-07-31",
+   "postal_code": "297-0019",
+   "address": "千葉県茂原市上林 204番地15",
+   "certs": [
+    {
+     "cert_number": "1221020322",
+     "issue_date": "2024-08-02",
+     "period_start": "2024-08-01",
+     "period_end": "2025-07-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】5時間00分【家事援助】5時間00分【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221020322",
+     "issue_date": "2025-07-17",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】5時間00分【家事援助】5時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221020322",
+     "issue_date": "2026-07-22",
+     "period_start": "2026-08-01",
+     "period_end": "2027-07-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】5時間00分【家事援助】5時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221020322",
+     "issue_date": "2025-07-17",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】5時間00分【家事援助】5時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "10001151",
+   "name": "鈴木 敏仁",
+   "gender": "男",
+   "birth_date": "1962-11-16",
+   "postal_code": "299-4402",
+   "address": "千葉県長生郡白子町古所 4715番地10",
+   "certs": [
+    {
+     "cert_number": "1242420280",
+     "issue_date": "2018-02-08",
+     "period_start": "2018-02-08",
+     "period_end": "2018-11-30",
+     "city": "白子町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】18時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242420280",
+     "issue_date": "2018-02-08",
+     "period_start": "2018-12-01",
+     "period_end": "2019-11-30",
+     "city": "白子町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】18時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242420280",
+     "issue_date": "2019-12-01",
+     "period_start": "2019-12-01",
+     "period_end": "2020-11-30",
+     "city": "白子町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】18時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242420280",
+     "issue_date": "2020-12-01",
+     "period_start": "2020-12-01",
+     "period_end": "2021-11-30",
+     "city": "白子町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】18時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242420280",
+     "issue_date": "2021-12-01",
+     "period_start": "2021-12-01",
+     "period_end": "2022-11-30",
+     "city": "白子町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】18時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242420280",
+     "issue_date": "2021-12-01",
+     "period_start": "2022-12-01",
+     "period_end": "2023-11-30",
+     "city": "白子町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】18時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242420280",
+     "issue_date": "2023-12-01",
+     "period_start": "2023-12-01",
+     "period_end": "2024-11-30",
+     "city": "白子町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】18時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242420280",
+     "issue_date": "2024-12-01",
+     "period_start": "2024-12-01",
+     "period_end": "2025-11-30",
+     "city": "白子町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】18時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242420280",
+     "issue_date": "2025-12-01",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "白子町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】18時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1242420280",
+     "issue_date": "2025-12-01",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "白子町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】18時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113113189",
+   "name": "玉澤 健一",
+   "gender": "男",
+   "birth_date": "1968-07-05",
+   "postal_code": "297-0001",
+   "address": "千葉県茂原市七渡 620番地9 メゾン新茂原102",
+   "certs": [
+    {
+     "cert_number": "1221001355",
+     "issue_date": "2022-06-01",
+     "period_start": "2022-05-01",
+     "period_end": "2023-04-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】10時間00分【家事援助】18時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221001355",
+     "issue_date": "2023-04-18",
+     "period_start": "2023-05-01",
+     "period_end": "2023-07-24",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】12時間30分【家事援助】18時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 12,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221001355",
+     "issue_date": "2023-07-25",
+     "period_start": "2023-07-25",
+     "period_end": "2024-04-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【家事援助】18時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221001355",
+     "issue_date": "2024-04-18",
+     "period_start": "2024-05-01",
+     "period_end": "2025-04-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【家事援助】18時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221001355",
+     "issue_date": "2025-05-01",
+     "period_start": "2025-05-01",
+     "period_end": "2026-04-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【家事援助】18時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221001355",
+     "issue_date": "2026-04-22",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【家事援助】18時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221001355",
+     "issue_date": "2026-04-22",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【家事援助】18時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 18,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "428000037",
+   "name": "都坂 広視",
+   "gender": "男",
+   "birth_date": "1968-10-02",
+   "postal_code": "297-0016",
+   "address": "千葉県茂原市木崎 2043番地16 ビーライン木崎 201",
+   "certs": [
+    {
+     "cert_number": "1221021783",
+     "issue_date": "2025-03-03",
+     "period_start": "2025-03-01",
+     "period_end": "2025-04-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】22時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221021783",
+     "issue_date": "2025-03-03",
+     "period_start": "2025-05-01",
+     "period_end": "2026-02-28",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【家事援助】22時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221021783",
+     "issue_date": "2026-01-23",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【家事援助】22時間30分【通院身体】4時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 4,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221021783",
+     "issue_date": "2026-01-23",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【家事援助】22時間30分【通院身体】4時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 22,
+       "minutes": 30
+      },
+      "通院身体": {
+       "hours": 4,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "428000071",
+   "name": "中村 友海",
+   "gender": "女",
+   "birth_date": "1999-01-13",
+   "postal_code": "297-0001",
+   "address": "千葉県茂原市七渡 1001番地2",
+   "certs": [
+    {
+     "cert_number": "1221010539",
+     "issue_date": "2023-11-02",
+     "period_start": "2023-11-01",
+     "period_end": "2024-01-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】30時間00分【家事援助】15時間00分【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221010539",
+     "issue_date": "2024-01-16",
+     "period_start": "2024-02-01",
+     "period_end": "2025-01-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】30時間00分【家事援助】15時間00分【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221010539",
+     "issue_date": "2025-01-16",
+     "period_start": "2025-02-01",
+     "period_end": "2025-03-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】30時間00分【家事援助】15時間00分【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221010539",
+     "issue_date": "2025-05-14",
+     "period_start": "2025-04-01",
+     "period_end": "2026-01-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】50時間00分【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221010539",
+     "issue_date": "2026-02-06",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】50時間00分【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221010539",
+     "issue_date": "2026-02-06",
+     "period_start": "2026-02-01",
+     "period_end": "2027-01-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】50時間00分【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "12999999",
+   "name": "新田 佑奈",
+   "gender": "女",
+   "birth_date": "1998-10-01",
+   "postal_code": "297-0074",
+   "address": "千葉県茂原市小林 ２９９６番地 プリムヴェール 104号",
+   "certs": [
+    {
+     "cert_number": "1221007519",
+     "issue_date": "2014-07-01",
+     "period_start": "2014-07-01",
+     "period_end": "2015-06-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】20時間00分【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221007519",
+     "issue_date": "2015-07-14",
+     "period_start": "2015-07-01",
+     "period_end": "2016-06-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【家事援助】40時間00分【利用者負担上限月額】4,600【上限額管理事業所】リンクスヘルパーステーション",
+     "src": "東郷居宅介護受給者証.pdf",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 40,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "リンクスヘルパーステーション"
+    },
+    {
+     "cert_number": "1221007519",
+     "issue_date": "2016-07-14",
+     "period_start": "2016-07-01",
+     "period_end": "2016-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【身体介護】40時間00分【家事援助】40時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221010216",
+     "issue_date": "2016-10-26",
+     "period_start": "2016-10-01",
+     "period_end": "2017-03-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】40時間00分【家事援助】40時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221010216",
+     "issue_date": "2017-04-26",
+     "period_start": "2017-04-01",
+     "period_end": "2018-03-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【家事援助】37時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 37,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221010216",
+     "issue_date": "2018-04-04",
+     "period_start": "2018-04-01",
+     "period_end": "2019-03-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【家事援助】37時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 37,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221010216",
+     "issue_date": "2019-03-15",
+     "period_start": "2019-04-01",
+     "period_end": "2019-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【家事援助】37時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 37,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221010216",
+     "issue_date": "2019-10-10",
+     "period_start": "2019-10-01",
+     "period_end": "2020-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【家事援助】37時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 37,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221010216",
+     "issue_date": "2019-10-10",
+     "period_start": "2020-10-01",
+     "period_end": "2020-11-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】30時間00分【家事援助】37時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 37,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221010216",
+     "issue_date": "2019-10-10",
+     "period_start": "2020-12-01",
+     "period_end": "2021-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間30分【家事援助】42時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 42,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221010216",
+     "issue_date": "2021-09-14",
+     "period_start": "2021-10-01",
+     "period_end": "2022-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間30分【家事援助】42時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 42,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221010216",
+     "issue_date": "2022-11-01",
+     "period_start": "2022-10-01",
+     "period_end": "2023-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【家事援助】38時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 38,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221010216",
+     "issue_date": "2023-09-08",
+     "period_start": "2023-10-01",
+     "period_end": "2024-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【家事援助】38時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 38,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221010216",
+     "issue_date": "2024-08-13",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【家事援助】38時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 38,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221010216",
+     "issue_date": "2025-10-07",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【家事援助】38時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 38,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221010216",
+     "issue_date": "2025-10-07",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【家事援助】38時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 38,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113003261",
+   "name": "林 麻美",
+   "gender": "女",
+   "birth_date": "1964-06-09",
+   "postal_code": "297-0075",
+   "address": "千葉県茂原市押日 532",
+   "certs": [
+    {
+     "cert_number": "1221013293",
+     "issue_date": "2019-09-03",
+     "period_start": "2019-08-01",
+     "period_end": "2020-08-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】20時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221013293",
+     "issue_date": "2019-09-03",
+     "period_start": "2020-09-01",
+     "period_end": "2021-08-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】25時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221013293",
+     "issue_date": "2021-10-13",
+     "period_start": "2021-09-01",
+     "period_end": "2022-08-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】25時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221013293",
+     "issue_date": "2022-10-20",
+     "period_start": "2022-09-01",
+     "period_end": "2023-08-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】25時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221013293",
+     "issue_date": "2023-10-17",
+     "period_start": "2023-09-01",
+     "period_end": "2024-08-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】25時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221013293",
+     "issue_date": "2024-09-05",
+     "period_start": "2024-09-01",
+     "period_end": "2025-08-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】25時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221013293",
+     "issue_date": "2025-09-30",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】25時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221013293",
+     "issue_date": "2025-09-30",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】25時間00分【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113113942",
+   "name": "船渡 圭介",
+   "gender": "男",
+   "birth_date": "1980-10-03",
+   "postal_code": "297-0029",
+   "address": "千葉県茂原市高師 291番地5 グランヴェール高師 202",
+   "certs": [
+    {
+     "cert_number": "1221014523",
+     "issue_date": "2022-07-06",
+     "period_start": "2022-07-01",
+     "period_end": "2023-06-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221014523",
+     "issue_date": "2023-05-15",
+     "period_start": "2023-07-01",
+     "period_end": "2024-06-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221014523",
+     "issue_date": "2024-06-27",
+     "period_start": "2024-07-01",
+     "period_end": "2025-06-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】１【身体介護】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分1",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221014523",
+     "issue_date": "2025-06-18",
+     "period_start": "2025-07-01",
+     "period_end": "2025-12-31",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】１【身体介護】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分1",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221014523",
+     "issue_date": "2026-01-05",
+     "period_start": "2026-01-01",
+     "period_end": "2026-06-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】１【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分1",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221014523",
+     "issue_date": "2026-06-29",
+     "period_start": "2026-07-01",
+     "period_end": "2027-06-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】１【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分1",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221014523",
+     "issue_date": "2026-01-05",
+     "period_start": "2026-01-01",
+     "period_end": "2026-06-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】１【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分1",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113001458",
+   "name": "御園 春美",
+   "gender": "女",
+   "birth_date": "1968-03-25",
+   "postal_code": "299-4345",
+   "address": "千葉県長生郡長生村本郷 7128-6",
+   "certs": [
+    {
+     "cert_number": "1242310128",
+     "issue_date": "2018-11-13",
+     "period_start": "2018-05-01",
+     "period_end": "2019-04-30",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】25時間00分【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242310128",
+     "issue_date": "2019-05-01",
+     "period_start": "2019-05-01",
+     "period_end": "2019-05-31",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】25時間00分【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242310128",
+     "issue_date": "2019-07-01",
+     "period_start": "2019-06-01",
+     "period_end": "2020-04-30",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】25時間00分【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242310128",
+     "issue_date": "2020-07-01",
+     "period_start": "2020-05-01",
+     "period_end": "2021-04-30",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】25時間00分【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242310128",
+     "issue_date": null,
+     "period_start": "2021-05-01",
+     "period_end": "2022-04-30",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】25時間00分【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242310128",
+     "issue_date": "2022-05-01",
+     "period_start": "2022-05-01",
+     "period_end": "2022-06-30",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】25時間00分【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242310128",
+     "issue_date": "2022-07-01",
+     "period_start": "2022-07-01",
+     "period_end": "2023-04-30",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】25時間00分【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242310128",
+     "issue_date": "2023-07-01",
+     "period_start": "2023-05-01",
+     "period_end": "2024-04-30",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】25時間00分【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242310128",
+     "issue_date": "2024-05-01",
+     "period_start": "2024-05-01",
+     "period_end": "2024-06-30",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】25時間00分【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242310128",
+     "issue_date": "2024-05-01",
+     "period_start": "2024-07-01",
+     "period_end": "2024-07-31",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】25時間00分【家事援助】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242310128",
+     "issue_date": "2024-08-01",
+     "period_start": "2024-08-01",
+     "period_end": "2025-04-30",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】25時間00分【家事援助】15時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242310128",
+     "issue_date": "2025-05-01",
+     "period_start": "2025-05-01",
+     "period_end": "2025-06-30",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】25時間00分【家事援助】15時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242310128",
+     "issue_date": "2025-07-01",
+     "period_start": "2025-07-01",
+     "period_end": "2026-04-30",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】25時間00分【家事援助】15時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242310128",
+     "issue_date": null,
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】25時間00分【家事援助】15時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1242310128",
+     "issue_date": null,
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】25時間00分【家事援助】15時間00分【通院身体】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113003091",
+   "name": "宮﨑 利夫",
+   "gender": "男",
+   "birth_date": "1964-10-03",
+   "postal_code": "299-4421",
+   "address": "千葉県長生郡睦沢町長楽寺 526-3",
+   "certs": [
+    {
+     "cert_number": "1242231007",
+     "issue_date": null,
+     "period_start": "2019-08-01",
+     "period_end": "2020-07-31",
+     "city": "睦沢町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242231007",
+     "issue_date": "2020-08-01",
+     "period_start": "2020-08-01",
+     "period_end": "2021-06-30",
+     "city": "睦沢町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242231007",
+     "issue_date": null,
+     "period_start": "2021-07-01",
+     "period_end": "2021-07-31",
+     "city": "睦沢町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242231007",
+     "issue_date": "2021-08-01",
+     "period_start": "2021-08-01",
+     "period_end": "2022-06-30",
+     "city": "睦沢町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242231007",
+     "issue_date": null,
+     "period_start": "2022-07-01",
+     "period_end": "2022-07-31",
+     "city": "睦沢町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242231007",
+     "issue_date": "2022-08-01",
+     "period_start": "2022-08-01",
+     "period_end": "2023-06-19",
+     "city": "睦沢町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】5時間00分【家事援助】12時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 12,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1242231007",
+     "issue_date": "2023-07-01",
+     "period_start": "2023-06-20",
+     "period_end": "2023-07-31",
+     "city": "睦沢町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】12時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 12,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1242231007",
+     "issue_date": "2023-08-01",
+     "period_start": "2023-08-01",
+     "period_end": "2024-07-31",
+     "city": "睦沢町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】12時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 12,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1242231007",
+     "issue_date": "2024-08-01",
+     "period_start": "2024-08-01",
+     "period_end": "2025-07-31",
+     "city": "睦沢町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】12時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 12,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1242231007",
+     "issue_date": "2025-08-01",
+     "period_start": "2025-08-01",
+     "period_end": "2026-06-30",
+     "city": "睦沢町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】12時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 12,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1242231007",
+     "issue_date": "2026-07-01",
+     "period_start": "2026-07-01",
+     "period_end": "2026-07-31",
+     "city": "睦沢町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】12時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 12,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1242231007",
+     "issue_date": "2025-08-01",
+     "period_start": "2025-08-01",
+     "period_end": "2026-06-30",
+     "city": "睦沢町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】12時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 12,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113006623",
+   "name": "矢崎 瞬",
+   "gender": "男",
+   "birth_date": "1986-10-08",
+   "postal_code": "299-4103",
+   "address": "千葉県茂原市千沢752番地11",
+   "certs": [
+    {
+     "cert_number": "1221002320",
+     "issue_date": "2020-08-27",
+     "period_start": "2020-09-01",
+     "period_end": "2021-02-28",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】17時間30分【家事援助】17時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 17,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 17,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221002320",
+     "issue_date": "2021-03-02",
+     "period_start": "2021-03-01",
+     "period_end": "2022-02-28",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】17時間30分【家事援助】17時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 17,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 17,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221002320",
+     "issue_date": "2022-03-02",
+     "period_start": "2022-03-01",
+     "period_end": "2023-02-28",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】17時間30分【家事援助】17時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 17,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 17,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221002320",
+     "issue_date": "2023-03-07",
+     "period_start": "2023-03-01",
+     "period_end": "2024-02-29",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】17時間30分【家事援助】17時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 17,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 17,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221002320",
+     "issue_date": "2024-02-13",
+     "period_start": "2024-03-01",
+     "period_end": "2025-02-28",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】17時間30分【家事援助】17時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 17,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 17,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221002320",
+     "issue_date": "2025-03-03",
+     "period_start": "2025-03-01",
+     "period_end": "2026-02-28",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】17時間30分【家事援助】17時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 17,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 17,
+       "minutes": 30
+      }
+     }
+    },
+    {
+     "cert_number": "1221002320",
+     "issue_date": "2026-01-29",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】17時間30分【家事援助】17時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 17,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 17,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221002320",
+     "issue_date": "2026-01-29",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】17時間30分【家事援助】17時間30分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 17,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 17,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113113957",
+   "name": "鎗田 喜文",
+   "gender": "男",
+   "birth_date": "1964-10-17",
+   "postal_code": "297-0057",
+   "address": "千葉県茂原市中善寺 503",
+   "certs": [
+    {
+     "cert_number": "1221017013",
+     "issue_date": "2022-10-12",
+     "period_start": "2022-10-01",
+     "period_end": "2023-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221017013",
+     "issue_date": "2023-09-15",
+     "period_start": "2023-10-01",
+     "period_end": "2024-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221017013",
+     "issue_date": "2024-08-13",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221017013",
+     "issue_date": "2025-10-07",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221017013",
+     "issue_date": "2025-10-07",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "茂原市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113114170",
+   "name": "米倉 里江",
+   "gender": "女",
+   "birth_date": "1972-03-06",
+   "postal_code": "297-0101",
+   "address": "千葉県長生郡長南町岩川 748-21",
+   "certs": [
+    {
+     "cert_number": "1242700127",
+     "issue_date": "2022-12-09",
+     "period_start": "2022-12-09",
+     "period_end": "2023-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700127",
+     "issue_date": "2023-07-01",
+     "period_start": "2023-07-01",
+     "period_end": "2023-10-31",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】10時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700127",
+     "issue_date": "2023-11-01",
+     "period_start": "2023-11-01",
+     "period_end": "2024-10-31",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700127",
+     "issue_date": "2024-11-01",
+     "period_start": "2024-11-01",
+     "period_end": "2025-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700127",
+     "issue_date": "2025-07-01",
+     "period_start": "2025-07-01",
+     "period_end": "2025-10-31",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700127",
+     "issue_date": "2025-11-01",
+     "period_start": "2025-11-01",
+     "period_end": "2026-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700127",
+     "issue_date": "2025-11-01",
+     "period_start": "2026-07-01",
+     "period_end": "2027-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1242700127",
+     "issue_date": "2025-11-01",
+     "period_start": "2025-11-01",
+     "period_end": "2026-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "東郷居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  }
+ ],
+ "stats": {
+  "pdf_files": 1,
+  "kihon_rows": 21,
+  "birth_date_missing": 0,
+  "clients": 21,
+  "certs_total": 159,
+  "current_certs": 21,
+  "multi_current": 0
+ },
+ "warnings": []
+}
