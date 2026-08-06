@@ -109,7 +109,26 @@ async function main(){
   // 2) マスタ読込
   const base=readCsv(path.join(USER_DIR,"基本情報_______.CSV"));
   const kaigo=readCsv(path.join(USER_DIR,"介護保険1.CSV"));
-  const baseByNum=new Map(); for(const r of base.rows) baseByNum.set((r[base.idx["利用者番号"]]||"").trim(), r);
+  // ⚠ **利用者番号は一意とは限らない**。ほのぼの側で採番されなかった人は
+  //   2147483647 (int の最大値) というゴミ値を共有する。
+  //   茂原の基本情報一覧表: 佐藤喜美子(生1936/01/26) と 山口あき(生1933/10/27) が
+  //   どちらも 2147483647。番号だけで引くと**後勝ち**になり、稼働データの佐藤さんの
+  //   実績が山口さんに付いて 茂原が 116/116 → 115 に落ちた。
+  //   → 番号が重複するものは baseByNum から外し、氏名 (+生年月日) で引かせる。
+  const baseByNum=new Map();
+  {
+    const dup=new Set();
+    for(const r of base.rows){
+      const n=(r[base.idx["利用者番号"]]||"").trim();
+      if(baseByNum.has(n)) dup.add(n); else baseByNum.set(n,r);
+    }
+    for(const n of dup){
+      baseByNum.delete(n);
+      const names=base.rows.filter(r=>(r[base.idx["利用者番号"]]||"").trim()===n)
+        .map(r=>(r[base.idx["利用者名"]]||"").trim());
+      console.log(`  ⚠ 利用者番号 ${n} が ${names.length} 人で重複 (${names.join(" / ")}) → 番号引きを無効化し氏名で解決します`);
+    }
+  }
   // ⚠ **同じ人が事業者エントリごとに違う利用者番号を持つ**。稼働データと基本情報一覧表で
   //   番号が食い違うことがあるので氏名でも引けるようにする
   //   (中央 西協子 = 稼働 621000094 / 基本情報 621000095、太田綏枝 = 2113114166 / 621000099)。
@@ -132,6 +151,7 @@ async function main(){
   const certFallback=[];
   {
     const rowsByNum=new Map();
+    const rowsByNumNames=new Map(); // 番号 → その番号に現れた氏名の集合
     for(const r of kaigo.rows){
       const n=(r[kaigo.idx["利用者番号"]]||"").trim();
       if(!rowsByNum.has(n)) rowsByNum.set(n,[]);
@@ -144,8 +164,18 @@ async function main(){
       const pick=(covering.length?covering:rows).sort((a,b)=>(b._start||"").localeCompare(a._start||""))[0];
       if(!covering.length && rows.length) certFallback.push(`${n}: 対象月に有効な認定なし → ${pick._start}〜${pick._end} で代替`);
       kaigoByNum.set(n,pick);
+      rowsByNumNames.set(n,new Set(rows.map(r=>normNmBase(r[kaigo.idx["利用者名"]]||""))));
       const nk=normNmBase(pick[kaigo.idx["利用者名"]]||"");
       if(nk){ if(!kaigoByName.has(nk)) kaigoByName.set(nk,[]); kaigoByName.get(nk).push(pick); }
+    }
+    // 介護保険1.CSV も **同じ利用者番号を複数人が共有する**ことがある
+    //   (茂原 2147483647 = 佐藤喜美子 / 山口あき、711000062 = 大橋美和子 / 鈴木不二男)。
+    //   番号で引くと後勝ちになり、**別人の被保険者番号・認定が上書きされる**。
+    //   実害: 佐藤喜美子の被保番が山口あきの 0000349999 に化けて茂原が 116/116 → 115。
+    for(const [n,names] of rowsByNumNames){
+      if(names.size<2) continue;
+      kaigoByNum.delete(n);
+      console.log(`  ⚠ 介護保険1.CSV の利用者番号 ${n} が ${names.size} 人で重複 → 番号引きを無効化し氏名で解決します`);
     }
   }
 
