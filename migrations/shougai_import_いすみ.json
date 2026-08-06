@@ -1,0 +1,6921 @@
+{
+ "office": "リンクスヘルパーステーションいすみ",
+ "area": "いすみ",
+ "clients": [
+  {
+   "user_number": "425000032",
+   "name": "赤堀 莉奈",
+   "gender": "女",
+   "birth_date": "1993-08-14",
+   "postal_code": "299-4501",
+   "address": "千葉県いすみ市岬町椎木997-1 太東ﾕｰﾊｲﾑ201",
+   "certs": [
+    {
+     "cert_number": "1223881762",
+     "issue_date": "2023-11-17",
+     "period_start": "2024-04-17",
+     "period_end": "2024-11-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881762",
+     "issue_date": "2024-12-01",
+     "period_start": "2024-12-01",
+     "period_end": "2025-11-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881762",
+     "issue_date": "2025-12-01",
+     "period_start": "2025-12-01",
+     "period_end": "2026-01-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881762",
+     "issue_date": "2025-12-01",
+     "period_start": "2026-02-01",
+     "period_end": "2026-11-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223881762",
+     "issue_date": "2025-12-01",
+     "period_start": "2026-02-01",
+     "period_end": "2026-11-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "425000065",
+   "name": "池田 百合絵",
+   "gender": "女",
+   "birth_date": "1989-12-05",
+   "postal_code": "299-4508",
+   "address": "千葉県いすみ市岬町榎沢557-6",
+   "certs": [
+    {
+     "cert_number": "1223820307",
+     "issue_date": "2024-01-01",
+     "period_start": "2024-01-01",
+     "period_end": "2024-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223820307",
+     "issue_date": "2025-01-01",
+     "period_start": "2025-01-01",
+     "period_end": "2025-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223820307",
+     "issue_date": "2026-01-01",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223820307",
+     "issue_date": "2026-01-01",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "130",
+   "name": "市川 洋介",
+   "gender": "男",
+   "birth_date": "1981-12-11",
+   "postal_code": "299-4622",
+   "address": "千葉県いすみ市岬町押日2534-3 Mﾊｲﾂ1-103号",
+   "certs": [
+    {
+     "cert_number": "2238005074",
+     "issue_date": "2019-03-27",
+     "period_start": "2020-03-01",
+     "period_end": "2021-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【家事援助】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2238005074",
+     "issue_date": "2021-03-10",
+     "period_start": "2021-03-01",
+     "period_end": "2022-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【家事援助】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2238005074",
+     "issue_date": "2022-02-24",
+     "period_start": "2022-03-01",
+     "period_end": "2023-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【家事援助】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2238005074",
+     "issue_date": "2023-03-01",
+     "period_start": "2023-03-01",
+     "period_end": "2024-02-29",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【家事援助】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2238005074",
+     "issue_date": "2024-02-01",
+     "period_start": "2024-03-01",
+     "period_end": "2025-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【家事援助】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2238005074",
+     "issue_date": "2025-03-01",
+     "period_start": "2025-03-01",
+     "period_end": "2025-09-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【家事援助】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2238005074",
+     "issue_date": "2025-10-01",
+     "period_start": "2025-10-01",
+     "period_end": "2026-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】7時間30分【家事援助】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 7,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2238005074",
+     "issue_date": "2026-03-01",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】7時間30分【家事援助】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 7,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2238005074",
+     "issue_date": "2026-03-01",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】7時間30分【家事援助】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 7,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "425000112",
+   "name": "猪原 希",
+   "gender": "女",
+   "birth_date": "1987-06-02",
+   "postal_code": "298-0003",
+   "address": "千葉県いすみ市深堀1733-1",
+   "certs": [
+    {
+     "cert_number": "1223882232",
+     "issue_date": "2025-08-01",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223882232",
+     "issue_date": "2025-08-01",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113112384",
+   "name": "植木 裕子",
+   "gender": "女",
+   "birth_date": "1970-11-02",
+   "postal_code": "299-4501",
+   "address": "千葉県いすみ市岬町椎木340-43",
+   "certs": [
+    {
+     "cert_number": "1223880095",
+     "issue_date": "2021-07-01",
+     "period_start": "2021-07-01",
+     "period_end": "2022-06-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223880095",
+     "issue_date": "2022-07-01",
+     "period_start": "2022-07-01",
+     "period_end": "2023-06-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223880095",
+     "issue_date": "2023-07-01",
+     "period_start": "2023-07-01",
+     "period_end": "2024-06-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】37,200",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 37200,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223880095",
+     "issue_date": "2024-07-01",
+     "period_start": "2024-07-01",
+     "period_end": "2025-06-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【加算】特別地域加算【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223880095",
+     "issue_date": "2025-07-01",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223880095",
+     "issue_date": "2026-07-01",
+     "period_start": "2026-07-01",
+     "period_end": "2027-06-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】37,200",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "一般１(一般)",
+     "payment_limit": 37200,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223880095",
+     "issue_date": "2025-07-01",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2000119872",
+   "name": "枝川 幸男",
+   "gender": "男",
+   "birth_date": "1966-12-16",
+   "postal_code": "299-4501",
+   "address": "千葉県いすみ市岬町椎木1959-4 大和ﾊｲﾂ101号",
+   "certs": [
+    {
+     "cert_number": "2238005165",
+     "issue_date": "2020-03-04",
+     "period_start": "2020-03-01",
+     "period_end": "2021-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】40時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2238005165",
+     "issue_date": "2021-03-10",
+     "period_start": "2021-03-01",
+     "period_end": "2022-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】40時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2238005165",
+     "issue_date": "2022-03-01",
+     "period_start": "2022-03-01",
+     "period_end": "2023-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】40時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2238005165",
+     "issue_date": "2022-03-01",
+     "period_start": "2023-03-01",
+     "period_end": "2024-02-29",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】40時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2238005165",
+     "issue_date": "2024-03-01",
+     "period_start": "2024-03-01",
+     "period_end": "2025-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】40時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2238005165",
+     "issue_date": "2024-03-01",
+     "period_start": "2024-03-01",
+     "period_end": "2025-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】40時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 40,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "425000105",
+   "name": "大沼 絵莉子",
+   "gender": "女",
+   "birth_date": "1985-11-22",
+   "postal_code": "298-0004",
+   "address": "千葉県いすみ市大原10505-1 IMﾋﾙｽﾞｲｽﾐ202",
+   "certs": [
+    {
+     "cert_number": "1223882026",
+     "issue_date": "2024-12-23",
+     "period_start": "2025-06-01",
+     "period_end": "2025-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】15時間00分【家事援助】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223882026",
+     "issue_date": "2024-12-23",
+     "period_start": "2025-06-01",
+     "period_end": "2025-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】15時間00分【家事援助】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2147483647",
+   "name": "尾崎 昌代",
+   "gender": "女",
+   "birth_date": "1981-05-08",
+   "postal_code": "298-0004",
+   "address": "千葉県いすみ市大原8993-2",
+   "certs": [
+    {
+     "cert_number": "1223820067",
+     "issue_date": "2023-10-23",
+     "period_start": "2023-10-23",
+     "period_end": "2024-10-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】25時間00分【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223820067",
+     "issue_date": "2024-11-01",
+     "period_start": "2024-11-01",
+     "period_end": "2024-11-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】25時間00分【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223820067",
+     "issue_date": "2024-11-01",
+     "period_start": "2024-12-01",
+     "period_end": "2025-10-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】25時間00分【家事援助】20時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223820067",
+     "issue_date": "2025-11-01",
+     "period_start": "2025-11-01",
+     "period_end": "2026-05-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】25時間00分【家事援助】20時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223820067",
+     "issue_date": "2025-11-01",
+     "period_start": "2026-06-01",
+     "period_end": "2026-10-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】25時間00分【家事援助】20時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223820067",
+     "issue_date": "2025-11-01",
+     "period_start": "2026-06-01",
+     "period_end": "2026-10-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】25時間00分【家事援助】20時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113113094",
+   "name": "小澤 敏明",
+   "gender": "男",
+   "birth_date": "1979-08-06",
+   "postal_code": "299-4503",
+   "address": "千葉県いすみ市岬町和泉 3711-2",
+   "certs": [
+    {
+     "cert_number": "1223881325",
+     "issue_date": "2022-04-01",
+     "period_start": "2022-04-01",
+     "period_end": "2023-03-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881325",
+     "issue_date": "2023-04-01",
+     "period_start": "2023-04-01",
+     "period_end": "2024-03-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881325",
+     "issue_date": "2024-04-01",
+     "period_start": "2024-04-01",
+     "period_end": "2025-03-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881325",
+     "issue_date": "2025-04-01",
+     "period_start": "2025-04-01",
+     "period_end": "2026-03-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881325",
+     "issue_date": "2026-04-01",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223881325",
+     "issue_date": "2026-04-01",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2140000209",
+   "name": "小野 久美子",
+   "gender": "女",
+   "birth_date": "1975-05-01",
+   "postal_code": "298-0004",
+   "address": "千葉県いすみ市大原8048-10",
+   "certs": [
+    {
+     "cert_number": "1223820042",
+     "issue_date": "2022-09-01",
+     "period_start": "2022-09-01",
+     "period_end": "2023-08-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】40時間00分【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 40,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223820042",
+     "issue_date": "2023-09-01",
+     "period_start": "2023-09-01",
+     "period_end": "2024-08-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223820042",
+     "issue_date": "2024-09-01",
+     "period_start": "2024-09-01",
+     "period_end": "2025-08-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223820042",
+     "issue_date": "2025-09-01",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【家事援助】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223820042",
+     "issue_date": "2025-09-01",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】45時間00分【家事援助】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113006725",
+   "name": "鎌田 節子",
+   "gender": "女",
+   "birth_date": "1957-03-24",
+   "postal_code": "299-4612",
+   "address": "千葉県いすみ市岬町江場土 497-1",
+   "certs": [
+    {
+     "cert_number": "1223841147",
+     "issue_date": "2020-09-18",
+     "period_start": "2020-10-01",
+     "period_end": "2021-08-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223841147",
+     "issue_date": "2021-09-01",
+     "period_start": "2021-09-01",
+     "period_end": "2022-08-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223841147",
+     "issue_date": "2022-09-01",
+     "period_start": "2022-09-01",
+     "period_end": "2023-08-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223841147",
+     "issue_date": "2023-09-01",
+     "period_start": "2023-09-01",
+     "period_end": "2024-08-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】35時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 35,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223841147",
+     "issue_date": "2024-09-01",
+     "period_start": "2024-09-01",
+     "period_end": "2025-08-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】35時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 35,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223841147",
+     "issue_date": "2025-09-01",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】35時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 35,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223841147",
+     "issue_date": "2025-09-01",
+     "period_start": "2025-09-01",
+     "period_end": "2026-08-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】35時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 35,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2000119877",
+   "name": "君塚 弘弥",
+   "gender": "男",
+   "birth_date": "2000-06-21",
+   "postal_code": "299-5102",
+   "address": "千葉県夷隅郡御宿町久保230番地",
+   "certs": [
+    {
+     "cert_number": "1244301246",
+     "issue_date": "2019-12-04",
+     "period_start": "2019-12-01",
+     "period_end": "2020-11-30",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】25時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244301246",
+     "issue_date": "2020-12-01",
+     "period_start": "2020-12-01",
+     "period_end": "2021-11-30",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】25時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244301246",
+     "issue_date": "2021-12-01",
+     "period_start": "2021-12-01",
+     "period_end": "2022-11-30",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】25時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244301246",
+     "issue_date": "2022-12-01",
+     "period_start": "2022-12-01",
+     "period_end": "2023-01-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244301246",
+     "issue_date": "2023-02-01",
+     "period_start": "2023-02-01",
+     "period_end": "2023-05-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244301246",
+     "issue_date": "2023-06-30",
+     "period_start": "2023-06-01",
+     "period_end": "2024-05-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1244301246",
+     "issue_date": "2023-06-30",
+     "period_start": "2023-06-01",
+     "period_end": "2024-05-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "337",
+   "name": "君塚 美千子",
+   "gender": "女",
+   "birth_date": "1978-05-02",
+   "postal_code": "299-5102",
+   "address": "千葉県夷隅郡御宿町久保 230",
+   "certs": [
+    {
+     "cert_number": "1244300776",
+     "issue_date": "2019-09-04",
+     "period_start": "2019-09-01",
+     "period_end": "2020-08-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】20時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300776",
+     "issue_date": "2020-09-01",
+     "period_start": "2020-09-01",
+     "period_end": "2021-08-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】16時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】リンクスヘルパーステーションいすみ（居宅介護）リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 16,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "リンクスヘルパーステーションいすみ（居宅介護）リンクスヘルパーステーションいすみ（居宅介護）"
+    },
+    {
+     "cert_number": "1244300776",
+     "issue_date": "2023-09-15",
+     "period_start": "2023-09-15",
+     "period_end": "2023-12-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】20時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "リンクスヘルパーステーションいすみ（居宅介護）"
+    },
+    {
+     "cert_number": "1244300776",
+     "issue_date": "2024-01-01",
+     "period_start": "2024-03-01",
+     "period_end": "2024-12-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】30時間00分【家事援助】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300776",
+     "issue_date": "2025-01-01",
+     "period_start": "2025-01-01",
+     "period_end": "2025-12-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】30時間00分【家事援助】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300776",
+     "issue_date": "2026-01-01",
+     "period_start": "2026-01-01",
+     "period_end": "2026-09-30",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】30時間00分【家事援助】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1244300776",
+     "issue_date": "2026-01-01",
+     "period_start": "2026-01-01",
+     "period_end": "2026-09-30",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】30時間00分【家事援助】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "425000055",
+   "name": "小林 愛",
+   "gender": "女",
+   "birth_date": "1989-08-16",
+   "postal_code": "299-4623",
+   "address": "千葉県いすみ市岬町中滝1527",
+   "certs": [
+    {
+     "cert_number": "1223800986",
+     "issue_date": "2024-03-11",
+     "period_start": "2024-03-11",
+     "period_end": "2024-10-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】4時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 4,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223800986",
+     "issue_date": "2024-11-01",
+     "period_start": "2024-11-01",
+     "period_end": "2025-10-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】4時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 4,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223800986",
+     "issue_date": "2025-11-01",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】4時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 4,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223800986",
+     "issue_date": "2025-11-01",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】4時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 4,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "425000101",
+   "name": "菰田 明子",
+   "gender": "女",
+   "birth_date": "1980-04-27",
+   "postal_code": "298-0001",
+   "address": "千葉県いすみ市若山2432",
+   "certs": [
+    {
+     "cert_number": "1223820661",
+     "issue_date": "2025-03-01",
+     "period_start": "2025-03-01",
+     "period_end": "2026-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223820661",
+     "issue_date": "2026-03-01",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223820661",
+     "issue_date": "2026-03-01",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "425000122",
+   "name": "齋藤 めぐみ",
+   "gender": "女",
+   "birth_date": "1972-10-14",
+   "postal_code": "298-0006",
+   "address": "千葉県いすみ市大原最上台21-1 ﾁｪﾘｰﾊｲﾂC号",
+   "certs": [
+    {
+     "cert_number": "1223880434",
+     "issue_date": "2025-11-17",
+     "period_start": "2025-11-17",
+     "period_end": "2025-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】7時間30分【家事援助】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 7,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223880434",
+     "issue_date": "2026-01-01",
+     "period_start": "2026-01-01",
+     "period_end": "2026-01-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】10時間00分【家事援助】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223880434",
+     "issue_date": "2026-01-01",
+     "period_start": "2026-02-01",
+     "period_end": "2026-06-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】15時間00分【家事援助】24時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 24,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223880434",
+     "issue_date": "2026-01-01",
+     "period_start": "2026-07-01",
+     "period_end": "2026-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】20時間00分【家事援助】24時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 24,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223880434",
+     "issue_date": "2026-01-01",
+     "period_start": "2026-02-01",
+     "period_end": "2026-06-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】15時間00分【家事援助】24時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 24,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "425000099",
+   "name": "坂間 勇希",
+   "gender": "男",
+   "birth_date": "1984-06-16",
+   "postal_code": "298-0111",
+   "address": "千葉県いすみ市万木982-2",
+   "certs": [
+    {
+     "cert_number": "1223881218",
+     "issue_date": "2024-11-01",
+     "period_start": "2024-11-01",
+     "period_end": "2025-10-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223881218",
+     "issue_date": "2024-11-01",
+     "period_start": "2024-11-01",
+     "period_end": "2025-10-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "425000042",
+   "name": "下元 廉子",
+   "gender": "女",
+   "birth_date": "1972-07-13",
+   "postal_code": "299-4503",
+   "address": "千葉県いすみ市岬町和泉4236-2 ｱｸｱ和泉3",
+   "certs": [
+    {
+     "cert_number": "1223881754",
+     "issue_date": "2023-11-17",
+     "period_start": "2024-06-03",
+     "period_end": "2024-11-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881754",
+     "issue_date": "2024-12-01",
+     "period_start": "2024-12-01",
+     "period_end": "2025-11-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881754",
+     "issue_date": "2025-12-01",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223881754",
+     "issue_date": "2025-12-01",
+     "period_start": "2025-12-01",
+     "period_end": "2026-11-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "425000078",
+   "name": "杉浦 栄子",
+   "gender": "女",
+   "birth_date": "1961-02-23",
+   "postal_code": "299-5103",
+   "address": "千葉県夷隅郡御宿町新町68番地6",
+   "certs": [
+    {
+     "cert_number": "1244301154",
+     "issue_date": "2024-09-01",
+     "period_start": "2023-11-01",
+     "period_end": "2024-10-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244301154",
+     "issue_date": "2024-11-01",
+     "period_start": "2024-11-01",
+     "period_end": "2025-10-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】20時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】くつろぎ処やよい",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "くつろぎ処やよい"
+    },
+    {
+     "cert_number": "1244301154",
+     "issue_date": "2025-11-01",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】20時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】くつろぎ処やよい",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "くつろぎ処やよい"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1244301154",
+     "issue_date": "2025-11-01",
+     "period_start": "2025-11-01",
+     "period_end": "2026-10-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】20時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】くつろぎ処やよい",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "くつろぎ処やよい"
+    }
+   ]
+  },
+  {
+   "user_number": "2113115333",
+   "name": "鈴木 雄",
+   "gender": "男",
+   "birth_date": "1998-12-09",
+   "postal_code": "298-0002",
+   "address": "千葉県いすみ市日在906-1",
+   "certs": [
+    {
+     "cert_number": "2238005082",
+     "issue_date": "2023-01-01",
+     "period_start": "2023-08-01",
+     "period_end": "2023-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】80時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 80,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2238005082",
+     "issue_date": "2024-01-01",
+     "period_start": "2024-01-01",
+     "period_end": "2024-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】80時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 80,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2238005082",
+     "issue_date": "2025-01-01",
+     "period_start": "2025-01-01",
+     "period_end": "2025-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】80時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 80,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "2238005082",
+     "issue_date": "2026-12-31",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】80時間00分【通院身体】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 80,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "2238005082",
+     "issue_date": "2026-12-31",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】80時間00分【通院身体】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 80,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "@高田茜",
+   "name": "高田 茜",
+   "gender": "女",
+   "birth_date": "1978-02-24",
+   "postal_code": "299-5103",
+   "address": "千葉県夷隅郡御宿町新町120番地1",
+   "certs": [
+    {
+     "cert_number": "1244300859",
+     "issue_date": "2022-07-01",
+     "period_start": "2022-07-01",
+     "period_end": "2023-06-30",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300859",
+     "issue_date": "2023-07-06",
+     "period_start": "2023-07-01",
+     "period_end": "2024-06-30",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1244300859",
+     "issue_date": "2023-07-06",
+     "period_start": "2023-07-01",
+     "period_end": "2024-06-30",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "425000157",
+   "name": "高梨 正幸",
+   "gender": "男",
+   "birth_date": "1970-12-30",
+   "postal_code": "298-0224",
+   "address": "千葉県夷隅郡大多喜町堀之内526",
+   "certs": [
+    {
+     "cert_number": "1244101745",
+     "issue_date": "2026-06-18",
+     "period_start": "2026-06-01",
+     "period_end": "2026-06-30",
+     "city": "大多喜町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】１【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分1",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244101745",
+     "issue_date": "2026-07-29",
+     "period_start": "2026-07-01",
+     "period_end": "2026-12-31",
+     "city": "大多喜町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】１【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分1",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1244101745",
+     "issue_date": "2026-06-18",
+     "period_start": "2026-06-01",
+     "period_end": "2026-06-30",
+     "city": "大多喜町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】１【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分1",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "442",
+   "name": "滝口 淳夫",
+   "gender": "男",
+   "birth_date": "1996-12-24",
+   "postal_code": "299-5101",
+   "address": "千葉県夷隅郡御宿町高山田 1279",
+   "certs": [
+    {
+     "cert_number": "1244300800",
+     "issue_date": "2020-04-01",
+     "period_start": "2020-04-01",
+     "period_end": "2021-03-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】42時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 42,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300800",
+     "issue_date": "2021-04-01",
+     "period_start": "2021-04-01",
+     "period_end": "2022-03-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】42時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 42,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300800",
+     "issue_date": "2022-04-01",
+     "period_start": "2022-04-01",
+     "period_end": "2023-03-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】42時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 42,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300800",
+     "issue_date": "2023-04-01",
+     "period_start": "2023-04-01",
+     "period_end": "2024-03-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】42時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 42,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300800",
+     "issue_date": "2024-04-01",
+     "period_start": "2024-04-01",
+     "period_end": "2025-03-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】42時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 42,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300800",
+     "issue_date": "2025-04-01",
+     "period_start": "2025-04-01",
+     "period_end": "2026-03-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】42時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 42,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300800",
+     "issue_date": "2025-11-01",
+     "period_start": "2025-11-01",
+     "period_end": "2026-03-31",
+     "city": "御宿町",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "【障害支援区分】６【重度訪問介護区分６該当】60時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "重度訪問介護区分６該当": {
+       "hours": 60,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300800",
+     "issue_date": "2020-04-01",
+     "period_start": "2020-04-01",
+     "period_end": "2021-03-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】42時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ重度受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 42,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300800",
+     "issue_date": "2021-04-01",
+     "period_start": "2021-04-01",
+     "period_end": "2022-03-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】42時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ重度受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 42,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300800",
+     "issue_date": "2022-04-01",
+     "period_start": "2022-04-01",
+     "period_end": "2023-03-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】42時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ重度受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 42,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300800",
+     "issue_date": "2023-04-01",
+     "period_start": "2023-04-01",
+     "period_end": "2024-03-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】42時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ重度受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 42,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300800",
+     "issue_date": "2024-04-01",
+     "period_start": "2024-04-01",
+     "period_end": "2025-03-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】42時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ重度受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 42,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300800",
+     "issue_date": "2025-04-01",
+     "period_start": "2025-04-01",
+     "period_end": "2026-03-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】42時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ重度受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 42,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300800",
+     "issue_date": "2025-11-01",
+     "period_start": "2025-11-01",
+     "period_end": "2026-03-31",
+     "city": "御宿町",
+     "jigyou": "重度訪問介護",
+     "service": "重度訪問介護",
+     "shikyuryo_raw": "【障害支援区分】６【重度訪問介護区分６該当】60時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ重度受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "重度訪問介護区分６該当": {
+       "hours": 60,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1244300800",
+     "issue_date": "2025-04-01",
+     "period_start": "2025-04-01",
+     "period_end": "2026-03-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】42時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 42,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113111276",
+   "name": "田中 康夫",
+   "gender": "男",
+   "birth_date": "1977-09-09",
+   "postal_code": "299-4341",
+   "address": "千葉県長生郡長生村宮成 2025",
+   "certs": [
+    {
+     "cert_number": "1242310200",
+     "issue_date": "2021-07-01",
+     "period_start": "2021-05-01",
+     "period_end": "2022-04-30",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242310200",
+     "issue_date": "2022-05-01",
+     "period_start": "2022-05-01",
+     "period_end": "2023-04-30",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242310200",
+     "issue_date": "2023-05-01",
+     "period_start": "2023-05-01",
+     "period_end": "2024-04-30",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242310200",
+     "issue_date": "2024-05-01",
+     "period_start": "2024-05-01",
+     "period_end": "2025-04-30",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242310200",
+     "issue_date": "2025-05-01",
+     "period_start": "2025-05-01",
+     "period_end": "2026-03-31",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242310200",
+     "issue_date": "2026-04-01",
+     "period_start": "2026-04-01",
+     "period_end": "2026-06-30",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】48時間00分【家事援助】45時間00分【通院身体】6時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 48,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 6,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1242310200",
+     "issue_date": "2026-04-01",
+     "period_start": "2026-04-01",
+     "period_end": "2026-06-30",
+     "city": "長生村",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】48時間00分【家事援助】45時間00分【通院身体】6時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 48,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 6,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113111238",
+   "name": "千葉 敬子",
+   "gender": "女",
+   "birth_date": "1958-11-30",
+   "postal_code": "298-0003",
+   "address": "千葉県いすみ市深堀 1864-2 西宮ﾏﾘｰﾝﾊｲﾂ203号",
+   "certs": [
+    {
+     "cert_number": "1223881044",
+     "issue_date": "2021-04-16",
+     "period_start": "2021-06-01",
+     "period_end": "2022-04-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【加算】特別地域加算【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881044",
+     "issue_date": "2022-05-01",
+     "period_start": "2022-05-01",
+     "period_end": "2023-04-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【加算】特別地域加算【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881044",
+     "issue_date": "2023-05-01",
+     "period_start": "2023-05-01",
+     "period_end": "2024-04-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】15時間00分【加算】特別地域加算【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881044",
+     "issue_date": "2024-05-01",
+     "period_start": "2024-05-01",
+     "period_end": "2025-04-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【加算】特別地域加算【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223881044",
+     "issue_date": "2024-05-01",
+     "period_start": "2024-05-01",
+     "period_end": "2025-04-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【加算】特別地域加算【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113114752",
+   "name": "永井 篤",
+   "gender": "男",
+   "birth_date": "1963-05-18",
+   "postal_code": "298-0015",
+   "address": "千葉県いすみ市釈迦谷 6-4",
+   "certs": [
+    {
+     "cert_number": "1223841584",
+     "issue_date": "2023-03-01",
+     "period_start": "2023-04-01",
+     "period_end": "2024-03-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223841584",
+     "issue_date": "2024-03-01",
+     "period_start": "2024-03-01",
+     "period_end": "2025-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223841584",
+     "issue_date": "2025-03-01",
+     "period_start": "2025-03-01",
+     "period_end": "2026-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223841584",
+     "issue_date": "2026-03-01",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223841584",
+     "issue_date": "2026-03-01",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113114753",
+   "name": "永井 和仁",
+   "gender": "男",
+   "birth_date": "1968-05-28",
+   "postal_code": "298-0015",
+   "address": "千葉県いすみ市釈迦谷 6-4",
+   "certs": [
+    {
+     "cert_number": "1223841576",
+     "issue_date": "2023-03-01",
+     "period_start": "2023-04-01",
+     "period_end": "2024-02-29",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223841576",
+     "issue_date": "2024-03-01",
+     "period_start": "2024-03-01",
+     "period_end": "2025-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223841576",
+     "issue_date": "2025-03-01",
+     "period_start": "2025-03-01",
+     "period_end": "2026-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223841576",
+     "issue_date": "2026-03-01",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223841576",
+     "issue_date": "2026-03-01",
+     "period_start": "2026-03-01",
+     "period_end": "2027-02-28",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "@中村杏里",
+   "name": "中村 杏里",
+   "gender": "女",
+   "birth_date": "1989-01-20",
+   "postal_code": "298-0001",
+   "address": "千葉県いすみ市若山 672",
+   "certs": [
+    {
+     "cert_number": "1223880806",
+     "issue_date": "2021-10-01",
+     "period_start": "2022-09-01",
+     "period_end": "2022-09-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【加算】特別地域加算【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223880806",
+     "issue_date": "2022-10-01",
+     "period_start": "2022-10-01",
+     "period_end": "2023-09-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【加算】特別地域加算【所得区分】生活保護【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "生活保護",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223880806",
+     "issue_date": "2023-10-01",
+     "period_start": "2023-10-01",
+     "period_end": "2024-09-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223880806",
+     "issue_date": "2023-10-01",
+     "period_start": "2023-10-01",
+     "period_end": "2024-09-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "425000154",
+   "name": "西山 美央",
+   "gender": "女",
+   "birth_date": "2013-09-11",
+   "postal_code": "298-0212",
+   "address": "千葉県夷隅郡大多喜町猿稲170-5",
+   "certs": [
+    {
+     "cert_number": "1244101380",
+     "issue_date": "2026-05-01",
+     "period_start": "2026-05-01",
+     "period_end": "2026-06-30",
+     "city": "大多喜町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】25時間30分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】ニチイケアセンター城見ヶ丘",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 30
+      }
+     },
+     "jogen_kanri_office": "ニチイケアセンター城見ヶ丘"
+    },
+    {
+     "cert_number": "1244101380",
+     "issue_date": "2026-05-01",
+     "period_start": "2026-07-01",
+     "period_end": "2027-06-30",
+     "city": "大多喜町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】25時間30分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】ニチイケアセンター城見ヶ丘",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 30
+      }
+     },
+     "jogen_kanri_office": "ニチイケアセンター城見ヶ丘"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1244101380",
+     "issue_date": "2026-05-01",
+     "period_start": "2026-05-01",
+     "period_end": "2026-06-30",
+     "city": "大多喜町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】25時間30分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】4,600【上限額管理事業所】ニチイケアセンター城見ヶ丘",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "一般１(一般)",
+     "payment_limit": 4600,
+     "quantities": {
+      "身体介護": {
+       "hours": 25,
+       "minutes": 30
+      }
+     },
+     "jogen_kanri_office": "ニチイケアセンター城見ヶ丘"
+    }
+   ]
+  },
+  {
+   "user_number": "2113115072",
+   "name": "野村 正夫",
+   "gender": "男",
+   "birth_date": "1974-07-12",
+   "postal_code": "298-0003",
+   "address": "千葉県いすみ市深堀823-3 岩﨑ｱﾊﾟｰﾄC3号",
+   "certs": [
+    {
+     "cert_number": "1223881606",
+     "issue_date": "2023-06-01",
+     "period_start": "2023-06-01",
+     "period_end": "2024-03-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881606",
+     "issue_date": "2024-04-01",
+     "period_start": "2024-04-01",
+     "period_end": "2024-07-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881606",
+     "issue_date": "2024-08-01",
+     "period_start": "2024-08-01",
+     "period_end": "2025-07-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881606",
+     "issue_date": "2025-08-01",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223881606",
+     "issue_date": "2025-08-01",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "110",
+   "name": "羽賀 正明",
+   "gender": "男",
+   "birth_date": "1964-04-04",
+   "postal_code": "299-5102",
+   "address": "千葉県夷隅郡御宿町久保 389-6 矢田団地180号",
+   "certs": [
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2023-02-01",
+     "period_start": "2023-02-01",
+     "period_end": "2023-09-30",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】25時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2023-11-14",
+     "period_start": "2023-10-01",
+     "period_end": "2024-09-30",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】25時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2024-10-01",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】25時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2025-10-01",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】28時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 28,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2019-10-01",
+     "period_start": "2019-10-01",
+     "period_end": "2020-09-30",
+     "city": "御宿町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2020-10-01",
+     "period_start": "2020-10-01",
+     "period_end": "2021-09-30",
+     "city": "御宿町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2021-10-01",
+     "period_start": "2021-10-01",
+     "period_end": "2022-09-30",
+     "city": "御宿町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2022-10-01",
+     "period_start": "2022-10-01",
+     "period_end": "2023-09-30",
+     "city": "御宿町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2023-11-14",
+     "period_start": "2023-10-01",
+     "period_end": "2024-09-30",
+     "city": "御宿町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2024-10-01",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "御宿町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2025-10-01",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "御宿町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】40時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2023-02-01",
+     "period_start": "2023-02-01",
+     "period_end": "2023-09-30",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【家事援助】25時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2023-11-14",
+     "period_start": "2023-10-01",
+     "period_end": "2024-09-30",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】25時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2024-10-01",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】25時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 25,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2025-10-01",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】28時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 28,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2019-10-01",
+     "period_start": "2019-10-01",
+     "period_end": "2020-09-30",
+     "city": "御宿町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2020-10-01",
+     "period_start": "2020-10-01",
+     "period_end": "2021-09-30",
+     "city": "御宿町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（同行援護）",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2021-10-01",
+     "period_start": "2021-10-01",
+     "period_end": "2022-09-30",
+     "city": "御宿町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2022-10-01",
+     "period_start": "2022-10-01",
+     "period_end": "2023-09-30",
+     "city": "御宿町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2023-11-14",
+     "period_start": "2023-10-01",
+     "period_end": "2024-09-30",
+     "city": "御宿町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2024-10-01",
+     "period_start": "2024-10-01",
+     "period_end": "2025-09-30",
+     "city": "御宿町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 30,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2025-10-01",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "御宿町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】40時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2025-10-01",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】28時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 28,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244300024",
+     "issue_date": "2025-10-01",
+     "period_start": "2025-10-01",
+     "period_end": "2026-09-30",
+     "city": "御宿町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】40時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 40,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ]
+  },
+  {
+   "user_number": "2113112575",
+   "name": "坂東 宏修",
+   "gender": "男",
+   "birth_date": "1943-03-21",
+   "postal_code": "298-0022",
+   "address": "千葉県いすみ市佐室826-2",
+   "certs": [
+    {
+     "cert_number": "1223882034",
+     "issue_date": "2025-01-01",
+     "period_start": "2025-01-01",
+     "period_end": "2025-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】15時間00分【家事援助】20時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223882034",
+     "issue_date": "2026-01-01",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】15時間00分【家事援助】20時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223882034",
+     "issue_date": "2026-01-01",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】15時間00分【家事援助】20時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113114648",
+   "name": "福本 昭夫",
+   "gender": "男",
+   "birth_date": "1958-07-06",
+   "postal_code": "299-4623",
+   "address": "千葉県いすみ市岬町中滝2440-5",
+   "certs": [
+    {
+     "cert_number": "1223881648",
+     "issue_date": "2023-04-21",
+     "period_start": "2023-04-21",
+     "period_end": "2024-04-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881648",
+     "issue_date": "2024-05-01",
+     "period_start": "2024-05-01",
+     "period_end": "2025-04-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】20時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881648",
+     "issue_date": "2025-05-01",
+     "period_start": "2025-05-01",
+     "period_end": "2026-04-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881648",
+     "issue_date": "2026-05-01",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881648",
+     "issue_date": "2023-04-21",
+     "period_start": "2023-04-21",
+     "period_end": "2024-04-30",
+     "city": "いすみ市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1223881648",
+     "issue_date": "2024-05-01",
+     "period_start": "2024-10-01",
+     "period_end": "2025-04-30",
+     "city": "いすみ市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 5,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1223881648",
+     "issue_date": "2025-05-01",
+     "period_start": "2025-05-01",
+     "period_end": "2026-04-30",
+     "city": "いすみ市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】20時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 20,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1223881648",
+     "issue_date": "2023-04-21",
+     "period_start": "2023-04-21",
+     "period_end": "2024-04-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881648",
+     "issue_date": "2024-05-01",
+     "period_start": "2024-05-01",
+     "period_end": "2025-04-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】20時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881648",
+     "issue_date": "2025-05-01",
+     "period_start": "2025-05-01",
+     "period_end": "2026-04-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（同行援護）",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881648",
+     "issue_date": "2026-05-01",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223881648",
+     "issue_date": "2023-04-21",
+     "period_start": "2023-04-21",
+     "period_end": "2024-04-30",
+     "city": "いすみ市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1223881648",
+     "issue_date": "2024-05-01",
+     "period_start": "2024-10-01",
+     "period_end": "2025-04-30",
+     "city": "いすみ市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 5,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1223881648",
+     "issue_date": "2025-05-01",
+     "period_start": "2025-05-01",
+     "period_end": "2026-04-30",
+     "city": "いすみ市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】20時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 20,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223881648",
+     "issue_date": "2026-05-01",
+     "period_start": "2026-05-01",
+     "period_end": "2027-04-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】30時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 30,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "425000115",
+   "name": "堀越 真生",
+   "gender": "女",
+   "birth_date": "1986-02-18",
+   "postal_code": "298-0217",
+   "address": "千葉県夷隅郡大多喜町田丁33-2",
+   "certs": [
+    {
+     "cert_number": "1244102057",
+     "issue_date": "2025-08-12",
+     "period_start": "2025-08-18",
+     "period_end": "2026-07-31",
+     "city": "大多喜町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1244102057",
+     "issue_date": "2025-08-12",
+     "period_start": "2025-08-18",
+     "period_end": "2026-07-31",
+     "city": "大多喜町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "191",
+   "name": "松﨑 あゆみ",
+   "gender": "女",
+   "birth_date": "1994-07-21",
+   "postal_code": "299-4501",
+   "address": "千葉県いすみ市岬町椎木 2380-2",
+   "certs": [
+    {
+     "cert_number": "1223820588",
+     "issue_date": "2020-07-20",
+     "period_start": "2020-07-01",
+     "period_end": "2021-06-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223820588",
+     "issue_date": "2021-07-01",
+     "period_start": "2021-07-01",
+     "period_end": "2022-06-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223820588",
+     "issue_date": "2022-07-01",
+     "period_start": "2022-07-01",
+     "period_end": "2023-06-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223820588",
+     "issue_date": "2023-07-01",
+     "period_start": "2023-07-01",
+     "period_end": "2024-06-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223820588",
+     "issue_date": "2024-07-01",
+     "period_start": "2024-07-01",
+     "period_end": "2025-06-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223820588",
+     "issue_date": "2025-07-01",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223820588",
+     "issue_date": "2025-07-01",
+     "period_start": "2026-07-01",
+     "period_end": "2027-06-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223820588",
+     "issue_date": "2025-07-01",
+     "period_start": "2025-07-01",
+     "period_end": "2026-06-30",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "166",
+   "name": "松村 徳枝",
+   "gender": "女",
+   "birth_date": "1955-02-24",
+   "postal_code": "298-0002",
+   "address": "千葉県いすみ市日在 1458-1",
+   "certs": [
+    {
+     "cert_number": "1223800812",
+     "issue_date": "2020-04-10",
+     "period_start": "2020-04-01",
+     "period_end": "2021-03-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223800812",
+     "issue_date": "2021-04-01",
+     "period_start": "2021-04-01",
+     "period_end": "2022-03-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223800812",
+     "issue_date": "2022-04-01",
+     "period_start": "2022-04-01",
+     "period_end": "2023-03-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223800812",
+     "issue_date": "2023-05-01",
+     "period_start": "2023-04-01",
+     "period_end": "2024-03-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223800812",
+     "issue_date": "2024-04-01",
+     "period_start": "2024-04-01",
+     "period_end": "2025-03-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223800812",
+     "issue_date": "2025-04-01",
+     "period_start": "2025-04-01",
+     "period_end": "2026-03-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223800812",
+     "issue_date": "2026-04-01",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223800812",
+     "issue_date": "2026-04-01",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "47",
+   "name": "三上 香絃",
+   "gender": "男",
+   "birth_date": "1996-07-26",
+   "postal_code": "299-4306",
+   "address": "千葉県長生郡一宮町東野7-6",
+   "certs": [
+    {
+     "cert_number": "1242101002",
+     "issue_date": "2020-07-21",
+     "period_start": "2020-08-01",
+     "period_end": "2021-07-31",
+     "city": "一宮町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】50時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242101002",
+     "issue_date": "2021-08-06",
+     "period_start": "2021-08-01",
+     "period_end": "2022-07-31",
+     "city": "一宮町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242101002",
+     "issue_date": "2022-07-21",
+     "period_start": "2022-08-01",
+     "period_end": "2023-07-31",
+     "city": "一宮町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242101002",
+     "issue_date": "2023-08-01",
+     "period_start": "2023-08-01",
+     "period_end": "2024-07-31",
+     "city": "一宮町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242101002",
+     "issue_date": "2024-08-01",
+     "period_start": "2024-08-01",
+     "period_end": "2025-07-31",
+     "city": "一宮町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242101002",
+     "issue_date": "2024-08-01",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "一宮町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1242101002",
+     "issue_date": "2024-08-01",
+     "period_start": "2025-08-01",
+     "period_end": "2026-07-31",
+     "city": "一宮町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】50時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "132",
+   "name": "宮本 菜々",
+   "gender": "女",
+   "birth_date": "2000-08-22",
+   "postal_code": "298-0232",
+   "address": "千葉県夷隅郡大多喜町小内25番地1",
+   "certs": [
+    {
+     "cert_number": "1244101794",
+     "issue_date": "2019-03-29",
+     "period_start": "2020-07-15",
+     "period_end": "2021-03-31",
+     "city": "大多喜町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】４【身体介護】20時間00分【家事援助】20時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244101794",
+     "issue_date": "2019-03-29",
+     "period_start": "2023-04-01",
+     "period_end": "2024-03-31",
+     "city": "大多喜町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】20時間00分【家事援助】20時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244101794",
+     "issue_date": "2019-03-29",
+     "period_start": "2024-04-01",
+     "period_end": "2025-03-31",
+     "city": "大多喜町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】20時間00分【家事援助】20時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244101794",
+     "issue_date": "2025-04-01",
+     "period_start": "2025-04-01",
+     "period_end": "2025-08-31",
+     "city": "大多喜町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】20時間00分【家事援助】20時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244101794",
+     "issue_date": "2025-04-01",
+     "period_start": "2025-09-01",
+     "period_end": "2026-03-31",
+     "city": "大多喜町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】24時間00分【家事援助】20時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 24,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1244101794",
+     "issue_date": "2026-04-01",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "大多喜町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】34時間30分【家事援助】10時間30分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 34,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 30
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1244101794",
+     "issue_date": "2026-04-01",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "大多喜町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】34時間30分【家事援助】10時間30分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 34,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 10,
+       "minutes": 30
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "425000124",
+   "name": "村杉 一平",
+   "gender": "男",
+   "birth_date": "1985-09-13",
+   "postal_code": "298-0002",
+   "address": "千葉県いすみ市日在18",
+   "certs": [
+    {
+     "cert_number": "1223882257",
+     "issue_date": "2025-12-19",
+     "period_start": "2025-12-19",
+     "period_end": "2026-08-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223882257",
+     "issue_date": "2025-12-19",
+     "period_start": "2025-12-19",
+     "period_end": "2026-08-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "425000126",
+   "name": "村田 夏子",
+   "gender": "女",
+   "birth_date": "1979-05-20",
+   "postal_code": "299-5103",
+   "address": "千葉県夷隅郡御宿町新町276番地",
+   "certs": [
+    {
+     "cert_number": "1244301857",
+     "issue_date": "2026-01-01",
+     "period_start": "2026-01-01",
+     "period_end": "2026-02-28",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】45時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "リンクスヘルパーステーションいすみ（居宅介護）"
+    },
+    {
+     "cert_number": "1244301857",
+     "issue_date": "2026-04-01",
+     "period_start": "2026-03-01",
+     "period_end": "2026-11-30",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】リンクスヘルパーステーションいすみ（居宅介護）リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "リンクスヘルパーステーションいすみ（居宅介護）リンクスヘルパーステーションいすみ（居宅介護）"
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1244301857",
+     "issue_date": "2026-04-01",
+     "period_start": "2026-03-01",
+     "period_end": "2026-11-30",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】15時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】リンクスヘルパーステーションいすみ（居宅介護）リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "身体介護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "リンクスヘルパーステーションいすみ（居宅介護）リンクスヘルパーステーションいすみ（居宅介護）"
+    }
+   ]
+  },
+  {
+   "user_number": "53",
+   "name": "本芳 佳津美",
+   "gender": "女",
+   "birth_date": "1959-02-08",
+   "postal_code": "297-0122",
+   "address": "千葉県長生郡長南町坂本 2794",
+   "certs": [
+    {
+     "cert_number": "1242700325",
+     "issue_date": "2014-06-01",
+     "period_start": "2014-06-01",
+     "period_end": "2015-05-31",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】30時間00分【家事援助】20時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700325",
+     "issue_date": "2015-06-01",
+     "period_start": "2015-06-01",
+     "period_end": "2016-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】30時間00分【家事援助】20時間00分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 30,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700325",
+     "issue_date": "2016-07-01",
+     "period_start": "2016-07-01",
+     "period_end": "2017-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】45時間00分【家事援助】20時間00分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700325",
+     "issue_date": "2017-07-01",
+     "period_start": "2017-07-01",
+     "period_end": "2018-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】45時間00分【家事援助】20時間00分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700325",
+     "issue_date": "2018-07-01",
+     "period_start": "2018-07-01",
+     "period_end": "2019-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】45時間00分【家事援助】20時間00分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700325",
+     "issue_date": "2019-07-02",
+     "period_start": "2019-07-01",
+     "period_end": "2020-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】45時間00分【家事援助】20時間00分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700325",
+     "issue_date": "2020-07-01",
+     "period_start": "2020-07-01",
+     "period_end": "2021-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】45時間00分【家事援助】20時間00分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700325",
+     "issue_date": "2021-07-01",
+     "period_start": "2021-07-01",
+     "period_end": "2022-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】45時間00分【家事援助】20時間00分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700325",
+     "issue_date": "2022-07-01",
+     "period_start": "2022-07-01",
+     "period_end": "2023-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】45時間00分【家事援助】20時間00分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700325",
+     "issue_date": "2023-07-01",
+     "period_start": "2023-07-01",
+     "period_end": "2024-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】45時間00分【家事援助】20時間00分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700325",
+     "issue_date": "2024-07-01",
+     "period_start": "2024-07-01",
+     "period_end": "2024-07-31",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】45時間00分【家事援助】20時間00分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 45,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 20,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700325",
+     "issue_date": "2024-08-01",
+     "period_start": "2024-08-01",
+     "period_end": "2025-07-31",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】16時間00分【通院身体】5時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 16,
+       "minutes": 0
+      },
+      "通院身体": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700325",
+     "issue_date": "2025-08-01",
+     "period_start": "2025-08-01",
+     "period_end": "2026-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】16時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 16,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700325",
+     "issue_date": "2026-07-01",
+     "period_start": "2026-07-01",
+     "period_end": "2027-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】16時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 16,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1242700325",
+     "issue_date": "2025-08-01",
+     "period_start": "2025-08-01",
+     "period_end": "2026-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】16時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 16,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "2113006696",
+   "name": "吉井 義弥",
+   "gender": "男",
+   "birth_date": "1960-04-15",
+   "postal_code": "297-0153",
+   "address": "千葉県長生郡長南町山内1412-1",
+   "certs": [
+    {
+     "cert_number": "1242700797",
+     "issue_date": "2020-01-06",
+     "period_start": "2019-12-01",
+     "period_end": "2020-11-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】47時間00分【家事援助】47時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 47,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 47,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700797",
+     "issue_date": "2020-11-19",
+     "period_start": "2020-12-01",
+     "period_end": "2021-02-08",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】47時間00分【家事援助】47時間00分【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 47,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 47,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700797",
+     "issue_date": "2021-02-09",
+     "period_start": "2021-02-09",
+     "period_end": "2021-02-28",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【身体介護】80時間00分【家事援助】90時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 80,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 90,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700797",
+     "issue_date": "2021-02-09",
+     "period_start": "2021-03-01",
+     "period_end": "2021-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】90時間00分【家事援助】90時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 90,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700797",
+     "issue_date": "2021-07-01",
+     "period_start": "2021-07-01",
+     "period_end": "2021-11-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】90時間00分【家事援助】90時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 90,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700797",
+     "issue_date": "2021-12-01",
+     "period_start": "2021-12-01",
+     "period_end": "2022-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】90時間00分【家事援助】90時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 90,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700797",
+     "issue_date": "2021-12-01",
+     "period_start": "2022-07-01",
+     "period_end": "2022-11-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】90時間00分【家事援助】90時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 90,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700797",
+     "issue_date": "2022-12-01",
+     "period_start": "2022-12-01",
+     "period_end": "2023-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】90時間00分【家事援助】90時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 90,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700797",
+     "issue_date": "2022-12-01",
+     "period_start": "2023-07-01",
+     "period_end": "2023-11-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】90時間00分【家事援助】90時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 90,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700797",
+     "issue_date": "2023-12-01",
+     "period_start": "2023-12-01",
+     "period_end": "2024-03-31",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】５【身体介護】90時間00分【家事援助】90時間00分【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分5",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 90,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700797",
+     "issue_date": "2024-04-01",
+     "period_start": "2024-04-01",
+     "period_end": "2024-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】90時間00分【家事援助】90時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 90,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700797",
+     "issue_date": "2024-04-01",
+     "period_start": "2024-07-01",
+     "period_end": "2025-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】90時間00分【家事援助】90時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 90,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700797",
+     "issue_date": "2025-07-01",
+     "period_start": "2025-04-01",
+     "period_end": "2025-06-30",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】90時間00分【家事援助】90時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 90,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1242700797",
+     "issue_date": "2025-07-01",
+     "period_start": "2025-07-01",
+     "period_end": "2026-03-31",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】90時間00分【家事援助】90時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 90,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1242700797",
+     "issue_date": "2025-07-01",
+     "period_start": "2025-07-01",
+     "period_end": "2026-03-31",
+     "city": "長南町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】６【身体介護】90時間00分【家事援助】90時間00分【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分6",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 90,
+       "minutes": 0
+      },
+      "家事援助": {
+       "hours": 90,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "322",
+   "name": "吉田 光浩",
+   "gender": "男",
+   "birth_date": "1971-07-15",
+   "postal_code": "299-5206",
+   "address": "千葉県勝浦市佐野 283番地の2",
+   "certs": [
+    {
+     "cert_number": "1221801374",
+     "issue_date": "2012-11-29",
+     "period_start": "2020-04-01",
+     "period_end": "2021-03-31",
+     "city": "勝浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221801374",
+     "issue_date": "2012-11-29",
+     "period_start": "2021-04-01",
+     "period_end": "2022-03-31",
+     "city": "勝浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221801374",
+     "issue_date": "2012-11-29",
+     "period_start": "2022-04-01",
+     "period_end": "2023-03-31",
+     "city": "勝浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】３【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221801374",
+     "issue_date": "2012-11-29",
+     "period_start": "2023-04-01",
+     "period_end": "2024-03-31",
+     "city": "勝浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221801374",
+     "issue_date": "2012-11-29",
+     "period_start": "2024-04-01",
+     "period_end": "2025-03-31",
+     "city": "勝浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221801374",
+     "issue_date": "2012-11-29",
+     "period_start": "2025-04-01",
+     "period_end": "2026-03-31",
+     "city": "勝浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1221801374",
+     "issue_date": "2012-11-29",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "勝浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221801374",
+     "issue_date": "2012-11-29",
+     "period_start": "2026-04-01",
+     "period_end": "2027-03-31",
+     "city": "勝浦市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "425000127",
+   "name": "吉野 翔",
+   "gender": "男",
+   "birth_date": "1983-08-17",
+   "postal_code": "299-5102",
+   "address": "千葉県夷隅郡御宿町久保264番地2",
+   "certs": [
+    {
+     "cert_number": "1244301659",
+     "issue_date": "2026-01-01",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1244301659",
+     "issue_date": "2026-01-01",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "御宿町",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】10時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 10,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "363",
+   "name": "渡邉 信子",
+   "gender": "女",
+   "birth_date": "1956-08-04",
+   "postal_code": "298-0004",
+   "address": "千葉県いすみ市大原 3041-1",
+   "certs": [
+    {
+     "cert_number": "1223880251",
+     "issue_date": "2020-01-22",
+     "period_start": "2020-01-01",
+     "period_end": "2020-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223880251",
+     "issue_date": "2020-12-28",
+     "period_start": "2021-01-01",
+     "period_end": "2021-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223880251",
+     "issue_date": "2022-01-05",
+     "period_start": "2022-01-01",
+     "period_end": "2022-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223880251",
+     "issue_date": "2023-01-01",
+     "period_start": "2023-01-01",
+     "period_end": "2023-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223880251",
+     "issue_date": "2024-01-01",
+     "period_start": "2024-01-01",
+     "period_end": "2024-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223880251",
+     "issue_date": "2025-01-01",
+     "period_start": "2025-01-01",
+     "period_end": "2025-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】2時間30分【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 2,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    },
+    {
+     "cert_number": "1223880251",
+     "issue_date": "2026-01-01",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】2時間30分【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 2,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223880251",
+     "issue_date": "2026-01-01",
+     "period_start": "2026-01-01",
+     "period_end": "2026-12-31",
+     "city": "いすみ市",
+     "jigyou": "身体障害者居宅介護事業",
+     "service": "居宅介護",
+     "shikyuryo_raw": "【障害支援区分】２【身体介護】2時間30分【家事援助】5時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ居宅介護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "身体介護": {
+       "hours": 2,
+       "minutes": 30
+      },
+      "家事援助": {
+       "hours": 5,
+       "minutes": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "user_number": "425000117",
+   "name": "石垣 信義",
+   "gender": "男",
+   "birth_date": "1949-05-25",
+   "postal_code": "299-5264",
+   "address": "千葉県勝浦市中島590番地10 東急スカイタワーI 1402号",
+   "certs": [
+    {
+     "cert_number": "1221803099",
+     "issue_date": "2025-10-09",
+     "period_start": "2025-10-09",
+     "period_end": "2026-10-31",
+     "city": "勝浦市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】15時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "同行援護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1221803099",
+     "issue_date": "2025-10-09",
+     "period_start": "2025-10-09",
+     "period_end": "2026-10-31",
+     "city": "勝浦市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】15時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "同行援護": {
+       "hours": 15,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ]
+  },
+  {
+   "user_number": "81",
+   "name": "古茶 みつ子",
+   "gender": "女",
+   "birth_date": "1960-07-18",
+   "postal_code": "298-0265",
+   "address": "千葉県夷隅郡大多喜町小田代 974番地",
+   "certs": [
+    {
+     "cert_number": "1244100770",
+     "issue_date": "2018-03-09",
+     "period_start": "2020-03-01",
+     "period_end": "2021-02-28",
+     "city": "大多喜町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】50時間00分【加算】特別地域加算【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "同行援護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "リンクスヘルパーステーションいすみ（居宅介護）",
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244100770",
+     "issue_date": "2018-03-09",
+     "period_start": "2021-03-01",
+     "period_end": "2022-02-28",
+     "city": "大多喜町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】50時間00分【加算】特別地域加算【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "同行援護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "リンクスヘルパーステーションいすみ（居宅介護）",
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244100770",
+     "issue_date": "2022-04-06",
+     "period_start": "2022-03-01",
+     "period_end": "2022-05-31",
+     "city": "大多喜町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】２【同行援護】50時間00分【加算】特別地域加算【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分2",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "同行援護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "リンクスヘルパーステーションいすみ（居宅介護）",
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244100770",
+     "issue_date": "2022-04-06",
+     "period_start": "2022-06-01",
+     "period_end": "2023-02-28",
+     "city": "大多喜町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】50時間00分【加算】特別地域加算【所得区分】一般２【利用者負担上限月額】37,200【上限額管理事業所】リンクスヘルパーステーションいすみ（居宅介護）",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "同行援護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "リンクスヘルパーステーションいすみ（居宅介護）",
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244100770",
+     "issue_date": "2022-04-06",
+     "period_start": "2023-03-01",
+     "period_end": "2024-02-29",
+     "city": "大多喜町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】50時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】9,300【上限額管理事業所】リンクスヘルパーステーションいすみ（同行援護）",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 9300,
+     "quantities": {
+      "同行援護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "リンクスヘルパーステーションいすみ（同行援護）",
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244100770",
+     "issue_date": "2022-04-06",
+     "period_start": "2024-03-01",
+     "period_end": "2025-02-28",
+     "city": "大多喜町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】50時間00分【加算】特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300【上限額管理事業所】リンクスヘルパーステーションいすみ（同行援護）",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "同行援護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "jogen_kanri_office": "リンクスヘルパーステーションいすみ（同行援護）",
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244100770",
+     "issue_date": "2022-04-06",
+     "period_start": "2025-03-01",
+     "period_end": "2025-05-31",
+     "city": "大多喜町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】50時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0リンクスヘルパーステーションいすみ（同行援護）",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244100770",
+     "issue_date": "2022-04-06",
+     "period_start": "2025-06-01",
+     "period_end": "2026-05-31",
+     "city": "大多喜町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】50時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1244100770",
+     "issue_date": "2022-04-06",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "大多喜町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】50時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1244100770",
+     "issue_date": "2022-04-06",
+     "period_start": "2026-06-01",
+     "period_end": "2027-05-31",
+     "city": "大多喜町",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】４【同行援護】50時間00分【加算】特別地域加算【所得区分】低所得１【利用者負担上限月額】0",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分4",
+     "income_category": "低所得１",
+     "payment_limit": 0,
+     "quantities": {
+      "同行援護": {
+       "hours": 50,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ]
+  },
+  {
+   "user_number": "2113007067",
+   "name": "元吉 信之",
+   "gender": "男",
+   "birth_date": "1962-11-19",
+   "postal_code": "298-0006",
+   "address": "千葉県いすみ市大原最上台 2-11 海光ホーム103号",
+   "certs": [
+    {
+     "cert_number": "1223880632",
+     "issue_date": "2020-06-26",
+     "period_start": "2020-06-01",
+     "period_end": "2021-05-31",
+     "city": "いすみ市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】３【同行援護】20時間00分【加算】盲ろう者, 特別地域加算【所得区分】一般１(一般)【利用者負担上限月額】9,300",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "一般１(一般)",
+     "payment_limit": 9300,
+     "quantities": {
+      "同行援護": {
+       "hours": 20,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    },
+    {
+     "cert_number": "1223880632",
+     "issue_date": "2025-06-01",
+     "period_start": "2025-06-01",
+     "period_end": "2026-05-31",
+     "city": "いすみ市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】３【同行援護】20時間00分【加算】特別地域加算【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "同行援護": {
+       "hours": 20,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ],
+   "current_certs": [
+    {
+     "cert_number": "1223880632",
+     "issue_date": "2025-06-01",
+     "period_start": "2025-06-01",
+     "period_end": "2026-05-31",
+     "city": "いすみ市",
+     "jigyou": "同行援護",
+     "service": "同行援護",
+     "shikyuryo_raw": "【H30/4以降支給決定】【障害支援区分】３【同行援護】20時間00分【加算】特別地域加算【所得区分】一般２【利用者負担上限月額】37,200",
+     "src": "いすみ同行援護受給者証.pdf",
+     "support_level": "区分3",
+     "income_category": "一般２",
+     "payment_limit": 37200,
+     "quantities": {
+      "同行援護": {
+       "hours": 20,
+       "minutes": 0
+      }
+     },
+     "flag_h30_after": true
+    }
+   ]
+  }
+ ],
+ "stats": {
+  "pdf_files": 3,
+  "kihon_rows": 48,
+  "birth_date_missing": 0,
+  "clients": 48,
+  "certs_total": 248,
+  "current_certs": 49,
+  "multi_current": 1
+ },
+ "warnings": [
+  "このファイルから新しい利用者が 1 人も増えなかった: 利用者データ/いすみ/いすみ重度受給者証.pdf",
+  "現在有効な受給者証なし: 枝川 幸男 (2000119872) → 最新 2025-02-28 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 大沼 絵莉子 (425000105) → 最新 2025-12-31 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 君塚 弘弥 (2000119877) → 最新 2024-05-31 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 坂間 勇希 (425000099) → 最新 2025-10-31 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 高田 茜 (@高田茜) → 最新 2024-06-30 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 滝口 淳夫 (442) → 最新 2026-03-31 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 千葉 敬子 (2113111238) → 最新 2025-04-30 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 中村 杏里 (@中村杏里) → 最新 2024-09-30 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 吉井 義弥 (2113006696) → 最新 2026-03-31 を採用 (期限切れ)",
+  "現在有効な受給者証なし: 元吉 信之 (2113007067) → 最新 2026-05-31 を採用 (期限切れ)"
+ ]
+}

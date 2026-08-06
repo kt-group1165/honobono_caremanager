@@ -450,7 +450,15 @@ async function main() {
         console.warn(`  ⚠️ ${c.name}: ほのぼの番号なし → user_number=${clientRow.user_number} を採番`);
       }
       let { error } = await sb.from("clients").insert(clientRow);
-      if (error && error.code === "23505" && /^\d{1,5}$/.test(clientRow.user_number)) {
+      // ほのぼの側で採番されなかった人は **2147483647 (int の最大値)** を共有する。
+      //   1〜5 桁のリナンバー救済が効かず 23505 で失敗していた
+      //   (いすみ 尾崎昌代 が茂原の佐藤喜美子と同じ 2147483647)。
+      //   ゴミ番号は事業所を付けて一意化する (人が見て由来が分かる形にする)。
+      if (error && error.code === "23505" && /^(2147483647|9{7,})$/.test(clientRow.user_number)) {
+        const renum = `${clientRow.user_number}-${OFFICE_LABEL}-${blankSeq++}`;
+        console.warn(`  ⚠️ ${c.name}: user_number=${clientRow.user_number} は採番漏れのゴミ値で衝突 → ${renum} にリナンバー`);
+        ({ error } = await sb.from("clients").insert({ ...clientRow, user_number: renum }));
+      } else if (error && error.code === "23505" && /^\d{1,5}$/.test(clientRow.user_number)) {
         const renum = String(100000 + Number(clientRow.user_number));
         console.warn(`  ⚠️ ${c.name}: user_number=${clientRow.user_number} が unique 衝突 → ${renum} にリナンバー`);
         ({ error } = await sb.from("clients").insert({ ...clientRow, user_number: renum }));
