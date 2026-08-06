@@ -551,6 +551,25 @@ async function main() {
       });
     }
   }
+  // ⚠ **重度訪問介護の内部コードは拠点によって体系が違う**。
+  //   やわた・五井 : 021003 (他サービスと同じ 021 系)
+  //   おゆみ野・中央・花見川 : **010108〜010270** (サービス名が「重度15％ 8.0」形式)
+  //   後者を /^021/ で弾いていたため **重訪が丸ごと取り込まれていなかった**
+  //   (おゆみ野 303行11名 / 中央 106行3名 / 花見川 53行1名。
+  //    おゆみ野の J121 で「ほのぼのだけ 12名・種類12が114明細」として出ていた)。
+  //   → サービス名が「重度」「重訪」で始まる行は 021003 に正規化して取り込む。
+  //      (日次通算の juhoByDay が 021003 前提で組まれているため)
+  let juhoRenamed = 0;
+  for (const r of all) {
+    if (/^021/.test(r.code)) continue;
+    if (!/^(重度|重訪)/.test(r.svcName ?? "")) continue;
+    r._origCode = r.code;
+    r.code = "021003";
+    juhoRenamed++;
+  }
+  if (juhoRenamed) {
+    console.log(`重訪の内部コード (010xxx) を 021003 に正規化: ${juhoRenamed}行`);
+  }
   const target = all.filter((r) => /^021/.test(r.code));
   console.log(`CSV: ${files.length}ファイル / 全${all.length}行 / 障害021対象 ${target.length}行`);
   const uniqNums = [...new Set(target.map((r) => r.clientNum))];
