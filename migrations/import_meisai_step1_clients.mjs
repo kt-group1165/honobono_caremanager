@@ -26,7 +26,7 @@
 //     migrations/_meisai_step1_created_ids.json に記録する。
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { findMeisaiFiles } from "./_meisai_files.mjs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -73,7 +73,19 @@ const zen2han=(s)=>(s||"").replace(/[０-９]/g,(c)=>String.fromCharCode(c.charC
 const isoDate=(s)=>{ s=(s||"").trim(); const m=/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec(s); return m?`${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`:null; };
 // 氏名の正規化 (末尾の (中央)(支) 等と敬称を落とす)。基本情報/稼働データの突合用
 const normNmBase=(s)=>(s||"").normalize("NFKC").replace(/[\s　]/g,"").replace(/[（(][^）)]*[）)]\s*$/,"").replace(/様$/,"");
-const careLevel=(s)=>zen2han((s||"").trim()); // 要介護１→要介護1
+const careLevel=(s)=>zen2han((s||"").trim()).replace(/^要介護度/,"要介護").replace(/^要支援度/,"要支援");
+// 要介護１→要介護1 / 一覧CSV は「要介護度５」表記なので「度」を落とす
+
+// 区分支給限度基準額 (単位)。介護保険1.CSV が無い人を一覧CSV から補完するときに使う。
+//   一覧CSV には限度額の列が無いため要介護度から引く。
+//   ⚠ 実データで裏取り済: 茂原/四街道の 介護保険1.CSV の
+//     「区分支給限度基準額（居宅ｻｰﾋﾞｽ区分）」のうち **2026-06 に有効な認定 990 件**と
+//     全区分一致 (履歴には改定前の旧額 16692/19480/26750… も混ざるので対象月で絞ること)。
+const SHIKYU_GENDO={
+  "要支援1":5032, "要支援2":10531,
+  "要介護1":16765, "要介護2":19705, "要介護3":27048, "要介護4":30938, "要介護5":36217,
+  "事業対象者":5032,
+};
 const num=(s)=>{ const v=(s||"").trim(); return v===""?null:v; };
 
 async function main(){
@@ -137,6 +149,53 @@ async function main(){
     }
   }
 
+  // 2b) 介護請求(明細付)_一覧.CSV からの**補完**
+  //   ── なぜ要るか ──────────────────────────────────────────────────
+  //   利用者マスタ 3 種 (基本情報 / 介護保険1 / 公費1) は ほのぼの側の絞込みが
+  //   既定「利用中」なので、**月末・月途中で利用終了した人が丸ごと落ちる**。
+  //   稼働データと 介護請求(明細付)_一覧 には出るため「片側だけ欠ける」形になり、
+  //   その人の明細書がまるごと出ずに**請求漏れ**になる。
+  //   実証: 四街道 白石史子(18,427円)・永野温子(14,618円) — 利用終了 R8/6/30。
+  //   同じ形が 7 拠点 20 名で発生していた (山武5/ちはら台5/花見川4/袖ケ浦4/中央2/四街道2)。
+  //
+  //   一覧CSV は請求実績なので終了者も必ず載り、しかも氏名・フリガナ・生年月日・
+  //   被保番・保険者番号・要介護度・認定期間・住所・電話・計画事業所まで揃っている。
+  //   → **マスタに無い人だけ**ここから合成する (マスタがあればマスタ優先)。
+  //   ⚠ 一覧CSV に無い人もいる (茂原は基本情報169/169 に対し一覧128) ので、
+  //     一覧CSV 単独に切り替えてはいけない。あくまで補完。
+  const listFallback=new Map(); // 利用者番号 -> {base行相当, kaigo行相当}
+  {
+    let listPath=null;
+    try { listPath=findBillingCsvForFallback(path.join(KAIGO,"サービス実績データ",AREA_DIR,"202606")); } catch { /* 無ければ補完しない */ }
+    if(listPath){
+      const L=readCsv(listPath);
+      const gi=(n)=>L.idx[n];
+      for(const r of L.rows){
+        const n=(r[gi("利用者番号")]||"").trim();
+        if(!n || (r[gi("提供年月")]||"").replace("/","-")!=="2026-06") continue;
+        if(baseByNum.has(n) && kaigoByNum.has(n)) continue; // マスタにあるならそちらが正
+        if(listFallback.has(n)) continue;
+        listFallback.set(n,{
+          name:(r[gi("利用者名")]||"").trim(),
+          furigana:(r[gi("フリガナ")]||"").trim()||null,
+          gender:(r[gi("性別")]||"").trim()||null,
+          birth:isoDate(r[gi("生年月日")]),
+          postal:(r[gi("郵便番号")]||"").trim()||null,
+          address:(r[gi("所在地")]||"").trim()||null,
+          phone:(r[gi("電話番号")]||"").trim()||null,
+          insured:(r[gi("被保険者番号")]||"").trim()||null,
+          insurer:(r[gi("保険者番号")]||"").trim()||null,
+          careLevel:(r[gi("要介護状態区分")]||"").trim()||null,
+          certStart:isoDate(r[gi("認定有効期間開始日")]),
+          certEnd:isoDate(r[gi("認定有効期間終了日")]),
+          careOfficeName:(r[gi("居宅サービス計画事業所名称")]||"").trim()||null,
+        });
+      }
+      if(listFallback.size) console.log(`一覧CSV 補完候補: ${listFallback.size}名 (マスタに無い分)
+`);
+    }
+  }
+
   // 3) office
   const {data:offs,error:oe}=await sb.from("offices").select("id,name").eq("business_number",OFFICE_BUSINESS_NUMBER);
   if(oe) throw new Error(oe.message);
@@ -182,12 +241,14 @@ async function main(){
         console.log(`  ↔ ${n}: 介護保険も番号違いを氏名で解決 (CSVの番号 ${(k[kaigo.idx["利用者番号"]]||"").trim()})`);
       }
     }
-    if(!b){ issues.push(`${n}: 基本情報に無い`); continue; }
-    const name=(b[base.idx["利用者名"]]||"").trim();
+    const fb=listFallback.get(n)||null;
+    if(!b && !fb){ issues.push(`${n}: 基本情報にも一覧CSVにも無い`); continue; }
+    if(!b) console.log(`  ⊕ ${n} ${fb.name}: 基本情報に無い → 介護請求(明細付)_一覧.CSV から補完`);
+    const name=b?(b[base.idx["利用者名"]]||"").trim():fb.name;
     const ex=existing.get(n);
     let unOverride=null; // user_number 衝突時のリナンバー値 (マッピングは元番号nで繋ぐ)
     let reuseId=null, renumberFrom=null;
-    const bdEarly=isoDate(b[base.idx["生年月日"]]);
+    const bdEarly=b?isoDate(b[base.idx["生年月日"]]):fb.birth;
     if(ex){
       // 氏名一致 or **利用者番号+生年月日が一致**なら同一人物。
       //   後者は異体字 (青/靑・高/髙・崎/﨑・斎/齋) で氏名照合が外れるケースを拾う
@@ -203,7 +264,7 @@ async function main(){
       // 別人衝突 (2147483647等のゴミ番号を複数人が共有): user_numberをリナンバーして新規作成
       else { unOverride=`${n}-${TAG||OFFICE_BUSINESS_NUMBER}`; conflicts.push(`${n}: 既存"${ex.name}"(参照${refs})と別人"${name}"衝突 → user_number=${unOverride} で新規作成`); }
     }
-    const bd=isoDate(b[base.idx["生年月日"]]);
+    const bd=b?isoDate(b[base.idx["生年月日"]]):fb.birth;
     if(!bd) issues.push(`${n} ${name}: 生年月日欠落`);
     // 番号では見つからなかったが**氏名+生年月日が一致する既存 client** があれば再利用する
     //   (障害の受給者証取込でリナンバーされた同一人物。作り直すと二重登録になる)
@@ -214,12 +275,17 @@ async function main(){
         renumberFrom=String(hit.user_number)!==n?String(hit.user_number):null;
       }
     }
-    const client={
+    const client=b?{
       user_number:unOverride??n, name, tenant_id:TENANT, status:"active", is_provisional:false,
       furigana:num(b[base.idx["フリガナ"]]), gender:num(b[base.idx["性別"]]), birth_date:bd,
       postal_code:num(b[base.idx["郵便番号"]]), address:num(b[base.idx["住所"]]),
       phone:num(b[base.idx["電話番号"]]), mobile:num(b[base.idx["携帯番号"]]),
       blood_type:(()=>{ const bt=zen2han((b[base.idx["血液型"]]||"").trim()).toUpperCase(); return /^(A|B|O|AB)$/.test(bt)?bt:null; })(),
+    }:{
+      // 一覧CSV 補完 (血液型・携帯は一覧CSVに無いので null)
+      user_number:unOverride??n, name, tenant_id:TENANT, status:"active", is_provisional:false,
+      furigana:fb.furigana, gender:fb.gender, birth_date:bd,
+      postal_code:fb.postal, address:fb.address, phone:fb.phone, mobile:null, blood_type:null,
     };
     let ins=null;
     if(k){
@@ -251,6 +317,27 @@ async function main(){
         service_restriction:num(k[kaigo.idx["サービス限定"]]),
         notes:IMPORT_MARK,
       };
+    } else if(fb && fb.insured && fb.certStart){
+      // 介護保険1.CSV に無い → 一覧CSV の認定で補完。
+      //   区分支給限度基準額は一覧CSV に無いので**要介護度から標準額を引く**
+      //   (告示の区分支給限度基準額。単位数なので地域区分に依らない)。
+      const cl=careLevel(fb.careLevel);
+      console.log(`  ⊕ ${n} ${name}: 介護保険1に無い → 一覧CSV の認定 (${cl} ${fb.certStart}〜${fb.certEnd}) で補完`);
+      client.insured_number=fb.insured; client.insurer_number=fb.insurer;
+      client.care_level=cl||null;
+      client.certification_start_date=fb.certStart; client.certification_end_date=fb.certEnd;
+      client.care_manager_org=fb.careOfficeName;
+      ins={
+        tenant_id:TENANT, effective_date:fb.certStart||"2000-04-01",
+        insured_number:fb.insured, insurer_number:fb.insurer,
+        care_level:cl||null, certification_status:"認定済み", record_status:"認定済み",
+        certification_start_date:fb.certStart, certification_end_date:fb.certEnd,
+        service_limit_amount:SHIKYU_GENDO[cl]??null,
+        service_limit_period_start:fb.certStart, service_limit_period_end:fb.certEnd,
+        care_office_name:fb.careOfficeName,
+        notes:IMPORT_MARK,
+      };
+      if(SHIKYU_GENDO[cl]==null) issues.push(`${n} ${name}: 補完したが要介護度 "${fb.careLevel}" の限度額が引けない`);
     } else {
       issues.push(`${n} ${name}: 介護保険1に無い(保険情報なし→請求不可)`);
     }
@@ -334,3 +421,18 @@ async function main(){
   console.log(`  マッピング → ${MAP_FILE} (${Object.keys(mapping).length}名)`);
 }
 main().catch(e=>{console.error("ERROR:",e.message);process.exit(1);});
+
+// 介護請求(明細付)_一覧.CSV を対象月フォルダ配下から再帰で探す (_meisai_files.mjs と同じ流儀)
+function findBillingCsvForFallback(dir){
+  const stack=[dir]; 
+  while(stack.length){
+    const d=stack.pop();
+    let ents; try { ents=readdirSync(d,{withFileTypes:true}); } catch { continue; }
+    for(const e of ents){
+      const p2=path.join(d,e.name);
+      if(e.isDirectory()) stack.push(p2);
+      else if(e.name==="介護請求(明細付)_一覧.CSV") return p2;
+    }
+  }
+  return null;
+}
