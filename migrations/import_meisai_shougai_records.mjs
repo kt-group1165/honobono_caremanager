@@ -613,8 +613,15 @@ async function main() {
   //     前回 sweep 方式にした際、この利用者で確認したと書かれているのにキーは
   //     code 込みのままで、sweep が同一コード内でしか働いていなかった。
   //     → キーを 利用者×日 にして、コードをまたいで時間重複を判定する。
+  //   ⚠ **重度訪問介護 (021003) はこの検出から外す**。
+  //     重訪は日次通算で「1人目 = 和集合 / 2人目 = 重なり」を自前で積むので、
+  //     ここで重なった行を切り出して _twoPerson を立ててしまうと
+  //     日次通算に渡る行が減り overlapMin が 0 になって **・2人 が 1 件も出ない**。
+  //     実証: おゆみ野 鈴木拓也 — 重なりのある日が 13 日あるのに DB には
+  //     1 人目 22 日分しか入らず、ほのぼのの 121272/121282 ×13 が丸ごと欠けていた。
   const byClientDay = new Map();
   for (const r of target) {
+    if (r.code === "021003") continue;
     const k = `${r.clientNum}|${r.date}`;
     if (!byClientDay.has(k)) byClientDay.set(k, []);
     byClientDay.get(k).push(r);
@@ -713,13 +720,22 @@ async function main() {
   //   まとめて段を解決する。同一日に時間帯が重なる訪問は 2 人派遣なので、
   //   1人目 = 和集合(union)の時間 / 2人目 = 重なった時間 として別々に積む。
   //   結果はその日の**先頭行**にだけ載せ、残りの行は skip する (二重計上防止)。
+  //
+  //   ⚠ 集約キーに **利用者番号を使ってはいけない**。ほのぼのは 2 人派遣の 2 人目を
+  //     「〇〇（2人目」という**別利用者**として登録することがあり、番号が別になる
+  //     (おゆみ野 鈴木拓也 = 1000059089 と 2113112579)。番号でまとめると別人扱いになり
+  //     重なりが検出されず **・2人 が 1 件も出ない**。
+  //     → 氏名 (末尾の「（2人目」等を落として正規化) + 日付 でまとめる。
   const juhoConvByRow = new Map(); // target の row 参照 -> { convs:[...] }
   const juhoSkip = new Set();
   {
+    // 「鈴木　拓也（2人目」→「鈴木拓也」。括弧以降と空白を落とす
+    const juhoNameKey = (n) =>
+      (n || "").normalize("NFKC").replace(/[（(].*$/, "").replace(/[\s　]/g, "");
     const byUserDay = new Map();
     for (const r of target) {
       if (r.code !== "021003") continue;
-      const k = `${r.clientNum}|${r.date}`;
+      const k = `${juhoNameKey(r.clientName)}|${r.date}`;
       if (!byUserDay.has(k)) byUserDay.set(k, []);
       byUserDay.get(k).push(r);
     }
