@@ -28,6 +28,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { findMeisaiFiles } from "./_meisai_files.mjs";
+import { resolveUserDir, findKihonCsv, findUserCsv } from "./_user_data_dir.mjs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -38,13 +39,19 @@ const OFFICE_BUSINESS_NUMBER = process.env.OFFICE_BN || "1271500942";
 const AREA_DIR = process.env.AREA_DIR || "茂原"; // サービス実績データ配下
 const USER_SUB = process.env.USER_SUB || "茂原";         // 利用者データ配下
 const TAG = process.env.TAG || "";                        // 大網は "大網" 等 (mark/マッピング分離用)
-const IMPORT_MARK = `[MEISAI-STEP1 2026-06${TAG ? " " + TAG : ""}]`;
+// 対象月。既定は 2026-06 (これまでの検証対象)。TARGET_MONTH=2026-07 で切替。
+//   ⚠ marker にも入るので、月をまたいで冪等削除が混ざらない。
+const TARGET_MONTH = process.env.TARGET_MONTH || "2026-06";
+const YM = TARGET_MONTH.replace("-", "");                 // 202606
+const IMPORT_MARK = `[MEISAI-STEP1 ${TARGET_MONTH}${TAG ? " " + TAG : ""}]`;
 const MAP_FILE = `migrations/_meisai_num_to_client${TAG ? "_" + TAG : ""}.json`;
 const CREATED_FILE = `migrations/_meisai_step1_created_ids${TAG ? "_" + TAG : ""}.json`;
 const DELETED_FILE = `migrations/_meisai_step1_deleted${TAG ? "_" + TAG : ""}.json`;
 const KAIGO = fileURLToPath(new URL("../", import.meta.url));
-const USER_DIR = path.join(KAIGO, "利用者データ", USER_SUB);
-const MEISAI_DIR = path.join(KAIGO, "サービス実績データ", AREA_DIR, "202606");
+// 利用者データは **月フォルダ優先 / 無ければフラット** (_user_data_dir.mjs)。
+//   利用者データ/<拠点>/202607/… があればそちら、無ければ 利用者データ/<拠点>/…
+const { dir: USER_DIR, scoped: USER_DIR_SCOPED } = resolveUserDir(KAIGO, USER_SUB, TARGET_MONTH);
+const MEISAI_DIR = path.join(KAIGO, "サービス実績データ", AREA_DIR, YM);
 
 function loadEnv(){ const t=readFileSync(path.join(KAIGO,".env.local"),"utf8"); const e={}; for(const l of t.split(/\r?\n/)){const m=/^([A-Z0-9_]+)=(.*)$/.exec(l.trim()); if(m)e[m[1]]=m[2].replace(/^["']|["']$/g,"");} return e; }
 const env=loadEnv();
@@ -107,8 +114,13 @@ async function main(){
   console.log(`対象利用者(MEISAI①介護): ${targetNums.size}名\n`);
 
   // 2) マスタ読込
-  const base=readCsv(path.join(USER_DIR,"基本情報_______.CSV"));
-  const kaigo=readCsv(path.join(USER_DIR,"介護保険1.CSV"));
+  console.log(`利用者データ: ${path.relative(KAIGO, USER_DIR)}${USER_DIR_SCOPED ? " (月フォルダ)" : ""}`);
+  const kihonPath=findKihonCsv(USER_DIR);
+  if(!kihonPath){ console.error(`✗ ${USER_DIR} に 基本情報*.CSV がありません`); process.exit(1); }
+  const kaigoPath=findUserCsv(USER_DIR,"介護保険1");
+  if(!kaigoPath){ console.error(`✗ ${USER_DIR} に 介護保険1*.CSV がありません`); process.exit(1); }
+  const base=readCsv(kihonPath);
+  const kaigo=readCsv(kaigoPath);
   // ⚠ **利用者番号は一意とは限らない**。ほのぼの側で採番されなかった人は
   //   2147483647 (int の最大値) というゴミ値を共有する。
   //   茂原の基本情報一覧表: 佐藤喜美子(生1936/01/26) と 山口あき(生1933/10/27) が
@@ -145,7 +157,9 @@ async function main(){
   //     全履歴を出力してもらうと 2026-07 開始の証を拾って 6 月請求がズレる
   //     (高品で 認定期間 20260701-20290630 を出してしまい伝送と不一致になった)。
   //   対象月にかかる行が複数あれば開始日が新しい方。1 つも無ければ最新で代替し警告する。
-  const MONTH_START="2026-06-01", MONTH_END="2026-06-30";
+  // 対象月の月初/月末 (TARGET_MONTH から算出)
+  const MONTH_START=`${TARGET_MONTH}-01`;
+  const MONTH_END=(()=>{const[y,m]=TARGET_MONTH.split("-").map(Number);return `${TARGET_MONTH}-${String(new Date(y,m,0).getDate()).padStart(2,"0")}`;})();
   const kaigoByNum=new Map();
   const kaigoByName=new Map(); // 番号違い救済 (基本情報と同じ理由)
   const certFallback=[];
