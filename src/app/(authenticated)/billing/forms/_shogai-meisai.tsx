@@ -15,6 +15,7 @@
 import React from "react";
 import type { ShogaiSeikyuRow } from "@/lib/shogai-seikyu/aggregate";
 import { decisionCode, type ShogaiDensouVisit } from "@/lib/shogai-densou/build";
+import { DECISION_CODES, type ShogaiContract } from "@/lib/shogai-densou/contracts";
 
 // サービス種類コード (障害福祉サービス)
 const SERVICE_TYPE_CODES: Record<string, string> = {
@@ -1281,14 +1282,22 @@ export function ShogaiFutanIchiranPrintSheet({
 /* ═══════════════════════════════════════════════════════════════════════════
    5. ShogaiKeiyakuHoukokuPrintSheet — 契約内容(サービス提供)報告書
    ──────────────────────────────────────────────────────────────────────────
-   受給者証の契約支給量を市町村へ報告する書類 (MORE 請求管理「契約内容報告書」相当)。
-   利用者 1 名 = 1 枚。契約情報は受給者証 (contract_amount_text 等) から呼出側が渡す。
+   受給者証の事業者記入欄に記載した契約内容を市町村へ報告する書類
+   (MORE 請求管理「契約内容報告書」相当)。利用者 1 名 = 1 枚。
+
+   ⚠ 契約支給量は **決定サービスコードごとに 1 行**ある (身体介護 / 家事援助 /
+     通院等介助 … を別々に契約する)。以前は受給者証の contract_amount_text
+     (自由記述 1 欄) を印字していたが、576 件中 33 件しか埋まっておらず
+     ほぼ白紙で出ていた。shogai_contracts (664 件・構造化済) を明細表として印字する。
    ═══════════════════════════════════════════════════════════════════════ */
 export interface ShogaiKeiyakuEntry {
   row: ShogaiSeikyuRow;
-  contractAmountText: string | null;
-  contractStartDate: string | null;
-  contractEntryNumber: string | null;
+  /** 対象月に有効な自事業所の契約 (決定サービスコードごと) */
+  contracts: ShogaiContract[];
+  /** 受給者証の holder (支給決定者) カナ。無ければ null */
+  holderNameKana: string | null;
+  /** 旧・自由記述の契約支給量。contracts が空のときだけ補助的に出す */
+  legacyAmountText: string | null;
 }
 export function ShogaiKeiyakuHoukokuPrintSheet({
   entry,
@@ -1355,20 +1364,56 @@ export function ShogaiKeiyakuHoukokuPrintSheet({
             <td style={th}>支給決定障害者等氏名</td>
             <td style={td}>{r.user_name}</td>
           </tr>
+          {entry.holderNameKana && (
+            <tr>
+              <td style={th}>フリガナ</td>
+              <td style={td}>{entry.holderNameKana}</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      {/* 契約内容は決定サービスコードごとに 1 行。受給者証の事業者記入欄と同じ並び */}
+      <table style={{ borderCollapse: "collapse", width: "100%", marginTop: "4mm" }}>
+        <thead>
           <tr>
-            <td style={th}>契約日</td>
-            <td style={td}>{entry.contractStartDate ?? ""}</td>
+            <th style={{ ...th, width: "auto", textAlign: "center" }}>サービス種別</th>
+            <th style={{ ...th, width: "28mm", textAlign: "center" }}>契約支給量</th>
+            <th style={{ ...th, width: "30mm", textAlign: "center" }}>契約日</th>
+            <th style={{ ...th, width: "30mm", textAlign: "center" }}>契約終了日</th>
+            <th style={{ ...th, width: "22mm", textAlign: "center" }}>記入欄番号</th>
           </tr>
-          <tr>
-            <td style={th}>契約支給量</td>
-            <td style={{ ...td, whiteSpace: "pre-wrap", minHeight: "20mm" }}>
-              {entry.contractAmountText ?? ""}
-            </td>
-          </tr>
-          <tr>
-            <td style={th}>事業者記入欄（整理番号）</td>
-            <td style={{ ...td, fontFamily: '"MS Gothic",monospace' }}>{entry.contractEntryNumber ?? ""}</td>
-          </tr>
+        </thead>
+        <tbody>
+          {entry.contracts.length === 0 ? (
+            <tr>
+              <td style={{ ...td, textAlign: "center" }} colSpan={5}>
+                {entry.legacyAmountText ?? "（契約支給量が未登録です）"}
+              </td>
+            </tr>
+          ) : (
+            entry.contracts.map((c) => (
+              <tr key={c.id}>
+                <td style={td}>
+                  {DECISION_CODES[c.decision_code] ?? c.decision_code}
+                </td>
+                <td style={{ ...td, textAlign: "right", fontFamily: '"MS Gothic",monospace' }}>
+                  {c.amount_unit === "回"
+                    ? `${c.amount_x100 / 100}回`
+                    : `${Math.floor(c.amount_x100 / 100)}時間${String(Math.round(c.amount_x100 % 100)).padStart(2, "0")}分`}
+                </td>
+                <td style={{ ...td, textAlign: "center", fontFamily: '"MS Gothic",monospace' }}>
+                  {c.start_date ?? ""}
+                </td>
+                <td style={{ ...td, textAlign: "center", fontFamily: '"MS Gothic",monospace' }}>
+                  {c.end_date ?? ""}
+                </td>
+                <td style={{ ...td, textAlign: "center", fontFamily: '"MS Gothic",monospace' }}>
+                  {c.entry_number ?? ""}
+                </td>
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
       <div style={{ marginTop: "6mm", fontSize: "8pt", color: "#000" }}>

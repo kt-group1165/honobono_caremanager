@@ -48,7 +48,11 @@ import {
   type ShogaiReSeikyuReasons,
 } from "@/lib/shogai-seikyu/re-seikyu-shogai";
 import { validInMonth } from "@/lib/service-code-valid";
-import { loadContractsForMonth, loadServiceStartDates } from "@/lib/shogai-densou/contracts";
+import {
+  loadContractsForMonth,
+  loadServiceStartDates,
+  type ShogaiContract,
+} from "@/lib/shogai-densou/contracts";
 import {
   kindFromServiceName,
   loadShogaiCodeMaps,
@@ -671,20 +675,29 @@ export function ShogaiSeikyuContent({
           }
         }
       }
+      // 契約支給量は shogai_contracts (決定サービスコードごと・対象月に有効なもの) が正。
+      // 受給者証の contract_amount_text は 576 件中 33 件しか埋まっておらず、
+      // これだけで印字すると ほぼ白紙になる (2026-08-19 に差し替え)。
+      const contractsByClient = currentOffice
+        ? await loadContractsForMonth(supabase, currentOffice.id, ids, year, month)
+        : new Map<string, ShogaiContract[]>();
+
       const entries: ShogaiKeiyakuEntry[] = targets.map((r) => {
         const c = byClient.get(r.user_id);
         return {
           row: r,
-          contractAmountText: c?.text ?? null,
-          contractStartDate: c?.start ?? null,
-          contractEntryNumber: c?.entry ?? null,
+          contracts: contractsByClient.get(r.user_id) ?? [],
+          holderNameKana: c?.holder ?? null,
+          legacyAmountText: c?.text ?? null,
         };
       });
       setKeiyakuEntries(entries);
-      const missing = entries.filter((e) => !e.contractAmountText).length;
+      const missing = entries.filter(
+        (e) => e.contracts.length === 0 && !e.legacyAmountText,
+      ).length;
       if (missing > 0) {
         toast.warning(
-          `契約支給量が未入力の利用者が ${missing} 名います (受給者証ページで入力してください)`,
+          `契約支給量が未登録の利用者が ${missing} 名います — 受給者証ページの「契約支給量 (事業者記入欄)」で登録してください`,
         );
       }
     } catch (e) {
