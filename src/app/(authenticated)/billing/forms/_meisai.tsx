@@ -2,6 +2,27 @@
 
 import React from "react";
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
+import { splitSougouCode } from "@/lib/kokuho-densou/build-sougou";
+
+// 総合事業 (様式第二の三) の サービス種類コード → 名称。
+// 独自サービス (A2/A3) と現行相当 (A1/A5) を載せる。未知のコードは「訪問型サービス」。
+const SOUGOU_KIND_NAMES: Record<string, string> = {
+  A1: "訪問型サービス（みなし）",
+  A2: "訪問型サービス（独自）",
+  A3: "訪問型サービス（独自／定率）",
+  A4: "訪問型サービス（独自／定額）",
+  A5: "通所型サービス（みなし）",
+  A6: "通所型サービス（独自）",
+  A7: "通所型サービス（独自／定率）",
+  A8: "通所型サービス（独自／定額）",
+  A9: "その他の生活支援サービス（配食／定率）",
+  AA: "その他の生活支援サービス（配食／定額）",
+  AB: "その他の生活支援サービス（見守り／定率）",
+  AC: "その他の生活支援サービス（見守り／定額）",
+  AD: "その他の生活支援サービス（その他／定率）",
+  AE: "その他の生活支援サービス（その他／定額）",
+  AF: "介護予防ケアマネジメント",
+};
 
 const F = '"MS Mincho","ＭＳ 明朝","游明朝",serif';
 const B = "1px solid #333";
@@ -687,6 +708,7 @@ export function MeisaiPrintSheet({
   month,
   kanriTaishougaiUnits,
   planUnits: planUnitsProp,
+  variant = "kaigo",
 }: {
   row: UserSeikyuRow;
   officeName: string | null;
@@ -697,6 +719,13 @@ export function MeisaiPrintSheet({
   reiwa: number;
   month: number;
   /**
+   * 様式の切替。
+   *   "kaigo"  (既定) = 様式第二   居宅サービス・地域密着型サービス介護給付費明細書 (7131)
+   *   "sougou"        = 様式第二の三 介護予防・日常生活支援総合事業費請求明細書 (71R1)
+   * 桝の構成は共通で、標題・⑤状態区分・⑦計画・⑩請求額の呼称・サービス種類コードが変わる。
+   */
+  variant?: "kaigo" | "sougou";
+  /**
    * ⑥限度額管理対象外単位数 (初回加算・緊急時訪問介護加算等の告示対象外 + 処遇改善)。
    * 指定時は ⑤限度額管理対象単位数 = 総単位数 − この値 で計算する。
    * 未指定時は従来値 (⑤=row.baseUnits / ⑥=row.addonUnits) — 既存呼出互換。
@@ -705,6 +734,25 @@ export function MeisaiPrintSheet({
   /** ④計画単位数 (kaigo_monthly_plan_units 等の計画値)。未指定時は従来値 (総単位数) */
   planUnits?: number;
 }) {
+  const isSougou = variant === "sougou";
+  // ①サービス種類コード／②名称。
+  //   介護給付 (様式第二) は訪問介護固定 (11)。
+  //   総合事業 (様式第二の三) はサービスコード先頭 2 桁 (A2/A3 等) を明細から取る。
+  const svcKind = isSougou
+    ? (() => {
+        for (const d of row.details) {
+          const k = d.service_code
+            ? splitSougouCode(d.service_code)?.kind
+            : null;
+          if (k) return k;
+        }
+        return "A2";
+      })()
+    : "11";
+  const svcKindName = isSougou
+    ? SOUGOU_KIND_NAMES[svcKind] ?? "訪問型サービス"
+    : "訪問介護";
+
   // 給付率 = 100 - 利用者負担割合(%)。copay_rate は分数 (0.1/0.2/0.3) で保持されている
   // (aggregate.ts: raw>=1 は /10 済み)。したがって給付率 = round((1 - copay_rate) * 100)。
   // 公費単独 (被保険者番号 H = 生保 10割公費) は保険給付なし → 保険給付率は空欄、
@@ -830,12 +878,20 @@ export function MeisaiPrintSheet({
               letterSpacing: "1pt",
             }}
           >
-            居宅サービス・地域密着型サービス介護給付費明細書
+            {isSougou
+              ? "介護予防・日常生活支援総合事業費請求明細書"
+              : "居宅サービス・地域密着型サービス介護給付費明細書"}
           </div>
           <div style={{ fontSize: "6.5pt", marginTop: "0.5mm" }}>
-            （訪問介護・訪問入浴介護・訪問看護・訪問リハ・居宅療養管理指導・通所介護・通所リハ・福祉用具貸与・
-            <br />
-            夜間対応型訪問介護・認知症対応型通所介護・小規模多機能型居宅介護）
+            {isSougou ? (
+              "（予防サービス費・生活支援サービス費）"
+            ) : (
+              <>
+                （訪問介護・訪問入浴介護・訪問看護・訪問リハ・居宅療養管理指導・通所介護・通所リハ・福祉用具貸与・
+                <br />
+                夜間対応型訪問介護・認知症対応型通所介護・小規模多機能型居宅介護）
+              </>
+            )}
           </div>
         </div>
         <div
@@ -846,7 +902,7 @@ export function MeisaiPrintSheet({
             fontWeight: "bold",
           }}
         >
-          様式第二
+          {isSougou ? "様式第二の三" : "様式第二"}
         </div>
       </div>
 
@@ -1098,12 +1154,22 @@ export function MeisaiPrintSheet({
             <Lb>
               <Circle n="⑤" />
               <br />
-              要介護
-              <br />
-              状態区分
+              {isSougou ? (
+                <>
+                  事業対象者
+                  <br />
+                  要支援状態区分
+                </>
+              ) : (
+                <>
+                  要介護
+                  <br />
+                  状態区分
+                </>
+              )}
             </Lb>
             <Vc style={{ fontSize: "7.5pt" }}>
-              経過的要介護・要介護{" "}
+              {isSougou ? "事業対象者・要支援" : "経過的要介護・要介護"}{" "}
               <span style={{ fontWeight: "bold", fontSize: "9pt" }}>
                 {row.care_level ?? ""}
               </span>
@@ -1151,10 +1217,14 @@ export function MeisaiPrintSheet({
               style={{ writingMode: "vertical-rl", letterSpacing: "1pt" }}
             >
               <Circle n="⑦" />
-              <span style={{ marginTop: "1mm" }}>居宅サービス計画</span>
+              <span style={{ marginTop: "1mm" }}>
+                {isSougou ? "介護予防サービス・支援計画" : "居宅サービス計画"}
+              </span>
             </Lb>
             <Lb colSpan={4} style={{ textAlign: "left", fontSize: "7.5pt" }}>
-              1. 居宅介護支援事業者作成　　2. 被保険者自己作成
+              {isSougou
+                ? "1. 地域包括支援センター作成　　2. 被保険者自己作成"
+                : "1. 居宅介護支援事業者作成　　2. 被保険者自己作成"}
             </Lb>
           </tr>
           <tr>
@@ -1359,9 +1429,9 @@ export function MeisaiPrintSheet({
                   fontWeight: "bold",
                 }}
               >
-                11
+                {svcKind}
               </span>{" "}
-              訪問介護
+              {svcKindName}
             </AggVc>
             <AggVc style={{ textAlign: "center" }} />
             <AggVc style={{ textAlign: "left", verticalAlign: "bottom" }}>
@@ -1457,9 +1527,9 @@ export function MeisaiPrintSheet({
               <span style={{ fontSize: "7pt" }}>合計</span>
             </AggVc>
           </tr>
-          {/* ⑩ 保険請求額 */}
+          {/* ⑩ 保険請求額 (総合事業は「事業費請求額」— 7113 の呼称に合わせる) */}
           <tr>
-            <AggLb>⑩保険請求額</AggLb>
+            <AggLb>{isSougou ? "⑩事業費請求額" : "⑩保険請求額"}</AggLb>
             <AggVc style={{ fontWeight: "bold" }}>
               {row.insuranceAmount.toLocaleString()}
             </AggVc>
@@ -1556,13 +1626,22 @@ export function MeisaiPrintSheet({
             <Lb>軽減額</Lb>
             <Lb>備考</Lb>
           </tr>
-          {[
-            { code: "11", label: "訪問介護" },
-            { code: "15", label: "通所介護" },
-            { code: "71", label: "夜間対応型訪問介護" },
-            { code: "72", label: "認知症対応型通所介護" },
-            { code: "73", label: "小規模多機能型居宅介護" },
-          ].map((s) => (
+          {(isSougou
+            ? [
+                { code: "A2", label: "訪問型サービス（独自）" },
+                { code: "A3", label: "訪問型サービス（独自／定率）" },
+                { code: "A6", label: "通所型サービス（独自）" },
+                { code: "A7", label: "通所型サービス（独自／定率）" },
+                { code: "AF", label: "介護予防ケアマネジメント" },
+              ]
+            : [
+                { code: "11", label: "訪問介護" },
+                { code: "15", label: "通所介護" },
+                { code: "71", label: "夜間対応型訪問介護" },
+                { code: "72", label: "認知症対応型通所介護" },
+                { code: "73", label: "小規模多機能型居宅介護" },
+              ]
+          ).map((s) => (
             <tr key={s.code}>
               <Vc style={{ ...CT, fontFamily: '"MS Gothic",monospace' }}>
                 {s.code}

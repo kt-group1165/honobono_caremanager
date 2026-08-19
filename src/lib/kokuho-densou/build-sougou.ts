@@ -47,6 +47,7 @@
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
 import type { SougouSeikyuRow } from "@/lib/visit-seikyu/aggregate-sougou";
 import type { DensouBuildOptions, DensouBuildResult } from "@/lib/kokuho-densou/build";
+import { compareByInsurer, formatRecordLikeHonobono } from "@/lib/kokuho-densou/honobono-format";
 
 /** 総合事業の伝送行 = SougouSeikyuRow (住所地特例 optional 拡張込み) + 再請求時の元提供月 */
 export type SougouDensouRow = SougouSeikyuRow & { ym?: string };
@@ -83,7 +84,7 @@ const genderCode = (g: string | null) =>
  * 自治体プレフィックス (CB_/K_/IH_/MB_/IC_/CS_ 等、英大文字+_) を除去し、
  * 残り 6 桁 (A2 + 4桁) を分解する (伝送はprefix無しの公式コードで出す)。
  */
-function splitSougouCode(
+export function splitSougouCode(
   code: string,
 ): { kind: string; item: string } | null {
   // "MB_A21111" → "A21111" / "IC_A31031" → "A31031" (任意の自治体prefixを除去)
@@ -94,8 +95,42 @@ function splitSougouCode(
 }
 
 /**
+ * 総合事業の事業所番号ごとに行をまとめる。
+ *
+ * ── なぜ要るか ────────────────────────────────────────────────────────
+ *   総合事業は**市町村ごとの指定**なので、事業所番号は「事業所 × 保険者」で決まる。
+ *   1 事業所が複数市町村の総合事業を持ち、一部の市町村だけ別番号になることがある。
+ *     いすみ: 122184/124412 → 1278600398 (介護と同じ) / 122382 → 12A8600011
+ *   コントロールレコードは 1 ファイル 1 事業所番号なので、**番号ごとにファイルを分ける**
+ *   (ほのぼのも KK260804 / KK260805 と分けて出している)。
+ *
+ * @param byInsurer 保険者番号 → 総合事業の事業所番号 (office_sougou_numbers)
+ * @param fallback  上記に無い保険者で使う番号 (= 介護の事業所番号)
+ * @returns 事業所番号 → その番号で請求する行
+ */
+export function groupSougouRowsByOfficeNumber<T extends { insurer_number?: string | null }>(
+  rows: T[],
+  fallback: string,
+  byInsurer?: Record<string, string> | Map<string, string>,
+): Map<string, T[]> {
+  const lookup = (ins: string): string | undefined =>
+    byInsurer instanceof Map ? byInsurer.get(ins) : byInsurer?.[ins];
+  const out = new Map<string, T[]>();
+  for (const r of rows) {
+    const ins = (r.insurer_number ?? "").trim();
+    const num = (lookup(ins) ?? "").trim() || fallback;
+    if (!out.has(num)) out.set(num, []);
+    out.get(num)!.push(r);
+  }
+  return out;
+}
+
+/**
  * 総合事業費 (明細書 71R1 / 請求書 7113) の伝送ファイルを生成する。
  * rows は system='総合事業' の SougouSeikyuRow (aggregateSougouSeikyu の出力)。
+ *
+ * ⚠ 事業所番号が保険者で分かれる場合は、呼出側で groupSougouRowsByOfficeNumber() を使い
+ *   番号ごとに本関数を呼ぶこと (1 ファイル = 1 事業所番号)。
  */
 export function buildSougouDensou(
   inputRows: SougouDensouRow[],
@@ -115,6 +150,8 @@ export function buildSougouDensou(
     );
     return false;
   });
+  // 明細書の並び順を ほのぼの に合わせる (保険者番号+被保険者番号 の昇順)。build.ts と同じ。
+  rows.sort(compareByInsurer);
   const ym = `${opts.year}${String(opts.month).padStart(2, "0")}`;
   const office = (opts.officeNumber ?? "").trim();
   if (!/^\d{10}$/.test(office)) {
@@ -174,7 +211,9 @@ export function buildSougouDensou(
       office,
       "2", // 保険・公費等区分コード (2:公費請求)
       hobetsu, // 法別番号
-      SEIKYU_JOHO_KUBUN,
+      // ⚠ 法別81 (原爆) だけ請求情報区分コードが "0" (build.ts の 7111 と同じ)。
+      //   ほのぼの実伝送 やわた KK260802 で確認。
+      hobetsu === "81" ? "0" : SEIKYU_JOHO_KUBUN,
       String(hRows.length),
       String(hRows.reduce((s, r) => s + r.totalUnits, 0)),
       String(hRows.reduce((s, r) => s + r.totalAmount, 0)),
@@ -277,7 +316,9 @@ export function buildSougouDensou(
       //    1:居宅介護支援事業所作成 / 2:自己作成 のみ記載の旧版のため値 3 は取込チェックで要確認)。
       //    careOfficeNumber 未解決で "1"/"3" 固定にすると項20空欄=必須欠落で返戻するため、
       //    番号が無ければ "2" (自己作成) で出す (build.ts:269-273 の 7131 と同ロジック)。
-      r.careOfficeNumber ? "3" : "2", // 19
+      //    ⚠ 実伝送では 1 と 3 が混在する (274件中 1が113 / 3が161)。同じ計画作成事業所でも
+      //      利用者で割れるため名称からは導出できない → 一覧CSV から取り込んだ値を優先する。
+      r.careOfficeNumber ? (r.planCreatorKubun ?? "3") : "2", // 19
       r.careOfficeNumber ?? "", // 20 事業所番号 (居宅介護支援事業所。区分2のときは空)
       "", // 21 開始年月日 (7131 と同じ理由で未実装 — build.ts の項21 コメント参照)
       "", // 22 中止年月日
@@ -346,6 +387,8 @@ export function buildSougouDensou(
         warnings.push(`${r.user_name}: 総合事業 加算 (${r.addonLabel ?? "処遇改善"}) のサービスコードが不明です`);
       }
     }
+    // 明細行の並びを ほのぼの に合わせる = **サービスコード昇順** (build.ts と同じ)
+    detailLines.sort((a, b) => `${a.kind}${a.item}`.localeCompare(`${b.kind}${b.item}`));
     for (const d of detailLines) {
       // 項10 日数・回数 / 項11 公費1対象日数・回数 は「数字2桁」(_if_form2.txt L7666-7669) —
       // 100 回以上は桁溢れで取込エラー/切り捨ての恐れがあるため warning で明示する
@@ -440,7 +483,8 @@ export function buildSougouDensou(
     ["1", String(recNo++), "0", String(dataParts.length), "71R", "0", "0", office, "0", "7", shinsaYm, "1"].join(","),
   );
   for (const parts of dataParts) {
-    lines.push(["2", String(recNo++), ...parts].join(","));
+    // ほのぼの実伝送と同じ書式 (引用符・未使用項目の 0 埋め) に整える。値は変えない。
+    lines.push(["2", String(recNo++), ...formatRecordLikeHonobono(parts)].join(","));
   }
   lines.push(["3", String(recNo++)].join(","));
 
@@ -450,7 +494,9 @@ export function buildSougouDensou(
     // 交換情報は同一ファイル名を使わず送付元で識別できる名称とする — 同 L13460-13463)。
     // 旧 `S{YYYYMM}` は build-kyotaku.ts の計画費請求ファイルと衝突するため
     // 総合事業は `SG` 始まり (SG+YYYYMM = 8文字。介護給付は J、給付管理は K、計画費は S)
-    fileName: `SG${ym}.CSV`,
+    // 事業所番号が保険者で分かれて複数ファイルになる場合は枝番を付ける
+    // (SG+YYMM+連番 = 7 文字。8 桁以内に収める)
+    fileName: opts.fileSeq ? `SG${ym.slice(2)}${opts.fileSeq}.CSV` : `SG${ym}.CSV`,
     dataRecordCount: dataParts.length,
     warnings,
   };

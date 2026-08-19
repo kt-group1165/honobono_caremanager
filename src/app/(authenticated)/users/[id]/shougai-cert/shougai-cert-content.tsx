@@ -77,7 +77,13 @@ const SHIKYURYO_ITEMS = [
   { key: "juudo_houmon_houkatsu", label: "重度訪問介護包括支援", kind: "time" },
   { key: "juudo_houmon_kubun6", label: "重度訪問介護区分6該当", kind: "time" },
   { key: "juudo_houmon_sonota", label: "重度訪問介護その他", kind: "time" },
+  // 重度訪問介護の加算移動介護 (決定サービスコード 120901)。受給者証に別枠で載る
+  { key: "idou", label: "移動介護 (重訪加算)", kind: "time" },
 ] as const;
+// ⚠ キーを増やしたら migrations/_shikyuryo_keys.mjs の対応表も直すこと
+//   (取込スクリプトは .mjs なのでこの定義を import できない)。
+//   DB に入れるのは **ローマ字キー**。日本語は表示ラベルだけに使う
+//   (全角「６」等の表記ゆれで引けなくなった前例あり → fix_shikyuryo_details_keys.mjs)。
 
 // SQL 未適用 (42703) 時に payload から除外し、UI からも隠す列
 const EXT_KEYS = [

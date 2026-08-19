@@ -251,6 +251,14 @@ export interface UserSeikyuRow {
   /** 担当居宅介護支援事業所名 (client_insurance_records.care_office_name) */
   careOfficeName: string | null;
   /**
+   * 居宅サービス計画作成区分コード (明細書 基本情報 項19)。
+   *   1 = 居宅介護支援事業所作成 / 2 = 被保険者(自己)作成 / 3 = 介護予防支援事業所・地域包括支援センター作成
+   * **利用者ごとに違い、計画作成事業所の名称からは導出できない** (実伝送で「包括」名でも
+   * 区分1 が 12 件あった)。ほのぼの 一覧CSV の「居宅サービス計画作成者区分」を取り込んだ値。
+   * null なら builder が従来どおり careOfficeNumber の有無から既定値を決める。
+   */
+  planCreatorKubun: string | null;
+  /**
    * 当該事業所のサービス提供開始年月日 (明細書 基本情報 項21)。
    * 月途中に利用を開始した人だけ設定される。**初回訪問日ではなく契約日**なので
    * 実績からは導けず、ほのぼのの「介護請求(明細付)_一覧」から取り込んだ値を使う。
@@ -368,9 +376,10 @@ export async function aggregateMonthlyVisitSeikyu(
     p.catch(() => schedColumnProbeCache.delete(col));
     return p;
   };
-  const [hasOfficeCol, hasKinkyuCol] = await Promise.all([
+  const [hasOfficeCol, hasKinkyuCol, hasSystemCol] = await Promise.all([
     opts.officeId ? probeColumn("office_id") : Promise.resolve(false),
     probeColumn("kinkyu_houmon"),
+    probeColumn("system"),
   ]);
   if (opts.officeId && !hasOfficeCol) {
     console.warn(
@@ -385,11 +394,21 @@ export async function aggregateMonthlyVisitSeikyu(
     service_type: string;
     visit_date: string;
     kinkyu_houmon?: boolean | null;
+    /**
+     * 制度区分。**登録時に選んだ事実**で、サービス名からの推測より優先する。
+     * 障害の居宅介護は介護保険と同じコード体系 (111111 等) を使うため、
+     * 名前だけでは原理的に判定できない (2026-08-07 実データで確認:
+     * 26 名が同じ月の訪問を日単位で介護と障害に振り分けていた)。
+     * null は未設定 = 従来どおりサービス名から判定する。
+     */
+    system?: string | null;
   }
   const PAGE = 1000;
   const schedules: ScheduleRow[] = [];
   const selectCols =
-    "user_id, service_type, visit_date" + (hasKinkyuCol ? ", kinkyu_houmon" : "");
+    "user_id, service_type, visit_date" +
+    (hasKinkyuCol ? ", kinkyu_houmon" : "") +
+    (hasSystemCol ? ", system" : "");
   let offset = 0;
   while (true) {
     let q = supabase
@@ -1047,6 +1066,8 @@ export async function aggregateMonthlyVisitSeikyu(
   //       自事業所の行を優先し、無ければ office_id NULL の旧行 (事業所を持たなかった頃の
   //       データ) にフォールバックする。office_id 列が無い DB (42703) では全行を使う。
   const planUnitsByClient = new Map<string, number>();
+  /** 居宅サービス計画作成区分コード (明細書 項19)。1=居宅介護支援 / 2=自己 / 3=介護予防支援・包括 */
+  const planCreatorByClient = new Map<string, string>();
   {
     let planTableMissing = false;
     let officeColMissing = false;
@@ -1061,7 +1082,7 @@ export async function aggregateMonthlyVisitSeikyu(
             .in("client_id", chunk)
         : await supabase
             .from("kaigo_monthly_plan_units")
-            .select("client_id, planned_units, office_id")
+            .select("client_id, planned_units, office_id, plan_creator_kubun")
             .eq("target_month", `${monthStr}-01`)
             .in("client_id", chunk);
       if (error) {
@@ -1081,8 +1102,16 @@ export async function aggregateMonthlyVisitSeikyu(
         client_id: string;
         planned_units: number | null;
         office_id?: string | null;
+        plan_creator_kubun?: string | null;
       }[];
       for (const r of rows) {
+        // 居宅サービス計画作成区分 (項19)。利用者ごとに違い事業所名からは導出できないので、
+        // ほのぼの 一覧CSV から取り込んだ値をそのまま使う (未設定なら builder 側の既定)。
+        if (r.plan_creator_kubun && (!opts.officeId || r.office_id === opts.officeId || r.office_id == null)) {
+          if (!planCreatorByClient.has(r.client_id) || r.office_id === opts.officeId) {
+            planCreatorByClient.set(r.client_id, r.plan_creator_kubun);
+          }
+        }
         // 0 は「未設定」扱い (認定限度額フォールバックへ)
         if (r.planned_units == null || r.planned_units <= 0) continue;
         if (officeColMissing || !opts.officeId) {
@@ -1121,7 +1150,9 @@ export async function aggregateMonthlyVisitSeikyu(
   // 総合事業に該当する実績シフト (別ストリームで集計する)
   const sougouSchedules: { user_id: string; service_type: string; visit_date: string }[] = [];
   for (const s of schedules) {
-    const system = unitByNorm.get(toHankakuDigits(s.service_type))?.system;
+    // 制度は **登録された事実 (s.system) を最優先**。未設定のときだけサービス名から推測する。
+    //   障害の居宅介護は介護保険と同じコード体系なので名前では判定できない。
+    const system = s.system ?? unitByNorm.get(toHankakuDigits(s.service_type))?.system;
     if (system === "障害") continue;
     if (system === "総合事業") {
       sougouSchedules.push({
@@ -1152,6 +1183,15 @@ export async function aggregateMonthlyVisitSeikyu(
         month: opts.month,
         unitPrice,
         effectiveFormulaCodes,
+        // 計画単位数 (71R1 集計10 項9)。**介護給付の実績が無い利用者だけ**渡す。
+        //   総合事業のみの利用者は計画≠実績の月に「計画=実績」で出てしまい不一致になる
+        //   (四街道 2026-06 田丸秀雄: ほのぼの計画880 / 実績660)。
+        //   併用者に同じ値を両ストリームへ渡すと二重計上になるので byUser にいる人は除く。
+        planUnitsByClient: new Map(
+          [...planUnitsByClient].filter(([cid]) => !byUser.has(cid)),
+        ),
+        // 計画作成区分は両ストリームで同じ値を使ってよい (二重計上にならない属性値)
+        planCreatorByClient,
       },
     );
     sougouRows = sr;
@@ -1912,6 +1952,7 @@ export async function aggregateMonthlyVisitSeikyu(
       careOfficeName:
         cert?.care_office_name?.trim() ||
         (cert?.care_office_id ? officeNameById.get(cert.care_office_id) ?? null : null),
+      planCreatorKubun: planCreatorByClient.get(userId) ?? null,
       // 対象月に開始した人だけ出す (前月以前からの継続利用者は空欄が正)
       serviceStartDate:
         cert?.service_start_date && cert.service_start_date.slice(0, 7) === monthStr

@@ -18,6 +18,17 @@ import Encoding from "encoding-japanese";
 import { getShogaiHomonUnitPrice } from "@/lib/shogai-seikyu/unit-price";
 import { isAddonRecord, isSessionSubRecord } from "@/lib/shogai-seikyu/record-markers";
 import {
+  kindFromServiceName,
+  loadShogaiCodeMaps,
+  shogaiCodeFromTime,
+} from "@/lib/shogai-seikyu/code-from-time";
+import {
+  isJuhoTierCode,
+  loadJuhoTierByClient,
+  loadJuhoTierMaps,
+  remapJuhoCode,
+} from "@/lib/shogai-seikyu/juho-tier";
+import {
   aggregateMonthlyShogaiSeikyu,
   type ShogaiSeikyuRow,
 } from "@/lib/shogai-seikyu/aggregate";
@@ -28,12 +39,15 @@ import {
   type ShogaiDensouKanriLine,
 } from "@/lib/shogai-densou/build";
 import { validInMonth } from "@/lib/service-code-valid";
+import { loadContractsForMonth, loadServiceStartDates } from "@/lib/shogai-densou/contracts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ─── 対象 ─────────────────────────────────────────────────────────────────────
-const YEAR = 2026;
-const MONTH = 6;
+// TARGET_MONTH=2026-07 で対象月を切替 (既定は 2026-06)。DENSOU_DIR も同じ月を指すこと。
+const TARGET_MONTH = process.env.TARGET_MONTH || "2026-06";
+const YEAR = Number(TARGET_MONTH.slice(0, 4));
+const MONTH = Number(TARGET_MONTH.slice(5, 7));
 // 事業所は env で切替 (既定 = リンクスヘルパーステーション(茂原))。
 //   OFFICE_ID       … offices.id
 //   SHOGAI_BN       … 障害の事業所番号 (介護とは別番号。伝送の制御レコードに出る)
@@ -47,6 +61,12 @@ const DENSOU_BASE = process.env.DENSOU_DIR
   ? join(__dirname, "..", "伝送データ", ...process.env.DENSOU_DIR.split("/"))
   : join(__dirname, "..", "伝送データ", "茂原", "訪問介護", "障害", "202606");
 const HONOBONO_DIR = join(DENSOU_BASE, "ほのぼのから");
+/**
+ * 同じ提供年月を後の請求サイクルで出し直した分 (過誤取下げ → 再請求 / 月遅れ)。
+ * 当初請求と同じフォルダには置けない (KJ が 2 つになり突合が壊れる) ので別フォルダにする。
+ * 例: 茂原 2026-06 は 7/10 に当初請求 (KJ260701)、狩野さんだけ 8/10 に再請求 (KJ260803)。
+ */
+const RECLAIM_DIR = join(DENSOU_BASE, "ほのぼのから_再請求");
 const OUT_DIR = join(DENSOU_BASE, "新システム");
 
 // ─── env ──────────────────────────────────────────────────────────────────────
@@ -141,6 +161,7 @@ async function loadMonthVisits(
       start_time: string | null;
       end_time: string | null;
       notes: string | null;
+      system?: string | null;
     }
     const schedRows: SchedRow[] = [];
     let soff = 0;
@@ -148,7 +169,7 @@ async function loadMonthVisits(
     while (true) {
       const { data, error } = await sb
         .from("kaigo_visit_schedule")
-        .select("user_id, service_type, visit_date, start_time, end_time, notes")
+        .select("user_id, service_type, visit_date, start_time, end_time, notes, system")
         .eq("status", "completed")
         .gte("visit_date", from)
         .lte("visit_date", to)
@@ -161,7 +182,7 @@ async function loadMonthVisits(
         break;
       }
       const rows = (data ?? []) as SchedRow[];
-      schedRows.push(...rows);
+      schedRows.push(...rows.filter((s) => s.system !== "介護"));
       if (rows.length < PAGE) break;
       soff += PAGE;
     }
@@ -169,7 +190,7 @@ async function loadMonthVisits(
       const names = Array.from(
         new Set(schedRows.map((s) => (s.service_type ?? "").trim()).filter(Boolean)),
       );
-      const nameMap = new Map<string, { code: string; category: string | null }>();
+      const nameMap = new Map<string, { code: string; category: string | null; name: string }>();
       for (let i = 0; i < names.length; i += 50) {
         const chunk = names.slice(i, i + 50);
         const { data, error } = await validInMonth(
@@ -191,9 +212,19 @@ async function loadMonthVisits(
           service_category: string | null;
         }[]) {
           const k = c.service_name.trim();
-          if (!nameMap.has(k)) nameMap.set(k, { code: c.service_code, category: c.service_category });
+          if (!nameMap.has(k))
+            nameMap.set(k, {
+              code: c.service_code,
+              category: c.service_category,
+              name: c.service_name,
+            });
         }
       }
+      // 名前で引けない障害行は時刻からコードを引く (アプリ側と同じ関数)
+      const needTimeResolve = schedRows.some(
+        (s) => s.system === "障害" && !nameMap.has((s.service_type ?? "").trim()),
+      );
+      const timeMaps = needTimeResolve ? await loadShogaiCodeMaps(sb, y, m) : null;
       const diffMinutes = (s: string | null, e: string | null): number | null => {
         if (!s || !e) return null;
         const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
@@ -204,7 +235,27 @@ async function loadMonthVisits(
       for (const s of schedRows) {
         const name = (s.service_type ?? "").trim();
         const mm = nameMap.get(name);
-        if (!mm) continue;
+        let code: string;
+        let category: string | null;
+        let label: string;
+        if (mm) {
+          code = mm.code;
+          category = mm.category;
+          label = name;
+        } else if (s.system === "障害" && timeMaps) {
+          const kind = kindFromServiceName(name);
+          const hit = kind
+            ? shogaiCodeFromTime(timeMaps, kind, s.start_time, s.end_time, {
+                minutes: diffMinutes(s.start_time, s.end_time) ?? undefined,
+              })
+            : null;
+          if (!hit) continue;
+          code = hit.code;
+          category = null;
+          label = hit.name;
+        } else {
+          continue;
+        }
         schedRaw.push({
           client: s.user_id,
           visit: {
@@ -212,9 +263,9 @@ async function loadMonthVisits(
             startTime: s.start_time,
             endTime: s.end_time,
             durationMinutes: diffMinutes(s.start_time, s.end_time),
-            category: mm.category,
-            serviceCode: mm.code,
-            serviceName: name,
+            category,
+            serviceCode: code,
+            serviceName: label,
             isAddon: isAddonRecord(s.notes),
             isSessionSub: isSessionSubRecord(s.notes),
           },
@@ -226,6 +277,36 @@ async function loadMonthVisits(
   const keyOf = (r: RawVisit) => `${r.client}__${r.visit.serviceCode ?? ""}__${r.visit.date}`;
   const schedKeys = new Set(schedRaw.map(keyOf));
   const merged = [...recRows.filter((r) => !schedKeys.has(keyOf(r))), ...schedRaw];
+
+  // 重度訪問介護の段 (Ⅰ/Ⅱ/Ⅲ) を支給決定から決め直す (集計 aggregate.ts と同じロジック)。
+  // シフトのサービス名は全件「重訪Ⅱ…」で段の情報を持っていないため名前からは読まない。
+  {
+    const tierMaps = await loadJuhoTierMaps(sb, y, m);
+    if (merged.some((r) => isJuhoTierCode(tierMaps, r.visit.serviceCode))) {
+      const ids = Array.from(
+        new Set(
+          merged.filter((r) => isJuhoTierCode(tierMaps, r.visit.serviceCode)).map((r) => r.client),
+        ),
+      );
+      const { tierByClient, warnings } = await loadJuhoTierByClient(sb, ids, y, m, { officeId });
+      for (const w of warnings) console.warn("  [重訪] " + w);
+      for (let i = merged.length - 1; i >= 0; i--) {
+        const v = merged[i].visit;
+        if (!isJuhoTierCode(tierMaps, v.serviceCode)) continue;
+        const tier = tierByClient.get(merged[i].client);
+        const hit = tier ? remapJuhoCode(tierMaps, v.serviceCode!, tier) : null;
+        if (!hit) {
+          console.warn(
+            `  [重訪] 段が決まらないため除外: client=${merged[i].client} code=${v.serviceCode}`,
+          );
+          merged.splice(i, 1);
+          continue;
+        }
+        v.serviceCode = hit.code;
+        v.serviceName = hit.name;
+      }
+    }
+  }
 
   const juhoCodes = Array.from(
     new Set(
@@ -339,7 +420,10 @@ function parseContent(content: string): ParsedFile {
   let end: string[] = [];
   const rows: DensouRow[] = [];
   for (const line of lines) {
-    const c = line.split(",");
+    // ⚠ 引用符を外してから比較する。ほのぼのも当方も一部の項目を "J121" のように括るため、
+    //   外さないとレコード種別の判定に失敗し「新に無し」で全件不一致になる
+    //   (2026-08-07: 当方の出力を ほのぼの書式に合わせた直後、17 拠点が一斉に 0 一致になった)。
+    const c = line.split(",").map((s) => s.replace(/^"|"$/g, ""));
     if (c[0] === "1") control = c;
     else if (c[0] === "3") end = c;
     else if (c[0] === "2") rows.push({ seq: c[1], cols: c.slice(2) });
@@ -530,6 +614,10 @@ async function main() {
 
   // 契約支給量
   const ids = rows.map((r) => r.user_id);
+  // 契約情報 (shogai_contracts)。あればこれが最優先で J121-05 になる
+  const contractsByClient = await loadContractsForMonth(supabase, OFFICE_ID, ids, YEAR, MONTH);
+  // サービス利用開始年月日 (J121-02 項8)。契約日とは別物
+  const startByClient = await loadServiceStartDates(supabase, OFFICE_ID, ids);
   const contractByClient = new Map<string, { text: string | null; start: string | null; entry: string | null; holder: string | null; shikyuryo: Record<string, { hours?: number; minutes?: number; count?: number; units?: number }> | null }>();
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50);
@@ -590,6 +678,9 @@ async function main() {
     return {
       row: r,
       visits: visitsByClient.get(r.user_id) ?? [],
+      // 契約情報 (shogai_contracts)。あればこれが最優先で J121-05 になる
+      contracts: contractsByClient.get(r.user_id) ?? [],
+      serviceStartByType: startByClient.get(r.user_id),
       contractAmountText: contract?.text ?? null,
       contractStartDate: contract?.start ?? null,
       contractEntryNumber: contract?.entry ?? null,
@@ -639,24 +730,96 @@ async function main() {
   // ほのぼの側のファイル名は**処理年月**なので事業所ごとに違う (姉ムは月遅れで KJ260802)。
   //   接頭辞で拾う。同じ接頭辞が複数あるときは提供年月が揃っていない置き方なので中断する。
   const EMPTY_DENSOU = { control: [] as string[], end: [] as string[], rows: [] as DensouRow[] };
-  const pickDensou = (prefix: string, required: boolean) => {
-    const hits = existsSync(HONOBONO_DIR)
-      ? readdirSync(HONOBONO_DIR).filter((f) => f.toUpperCase().startsWith(prefix) && /\.CSV$/i.test(f)).sort()
+  /**
+   * 過誤申立で取り下げた当初請求の受給者証番号。
+   * `ほのぼのから_再請求/_過誤取下げ.json` に `{"withdrawn":["1242311080"],"reason":"…"}`。
+   * 再請求で番号が変わるケースは自動判別できないので、ここに書いてある分だけ捨てる。
+   */
+  const WITHDRAWN = new Set<string>();
+  /** 再請求で明細を差し替えたか (請求書サマリの ★DIFF を「当然」と説明するため) */
+  let reclaimApplied = false;
+  {
+    const f = join(RECLAIM_DIR, "_過誤取下げ.json");
+    if (existsSync(f)) {
+      const j = JSON.parse(readFileSync(f, "utf8")) as { withdrawn?: string[]; reason?: string };
+      for (const n of j.withdrawn ?? []) WITHDRAWN.add(String(n).trim());
+      console.log(`  過誤取下げ: ${[...WITHDRAWN].join(", ")}${j.reason ? ` (${j.reason})` : ""}`);
+    }
+  }
+  /** dir から prefix にマッチする伝送ファイルを 1 つだけ拾う (2 つ以上は置き方の誤り) */
+  const oneFile = (dir: string, prefix: string): string | null => {
+    const hits = existsSync(dir)
+      ? readdirSync(dir)
+          .filter((f) => f.toUpperCase().startsWith(prefix) && /\.CSV$/i.test(f))
+          // densou-explain.mts が同じ場所に書く注釈CSV (…_解説.csv) は伝送ファイルではない
+          .filter((f) => !/_解説\.csv$/i.test(f))
+          .sort()
       : [];
     if (hits.length > 1) {
-      console.error(`FATAL: ${HONOBONO_DIR} に ${prefix}*.CSV が ${hits.length} 個あります (${hits.join(", ")})。`);
+      console.error(`FATAL: ${dir} に ${prefix}*.CSV が ${hits.length} 個あります (${hits.join(", ")})。`);
       console.error(`  提供年月ごとにフォルダを分けてください (月遅れ請求を混ぜると突合が壊れます)`);
+      console.error(`  同じ提供年月の出し直しは ほのぼのから_再請求/ に置いてください`);
       process.exit(1);
     }
-    if (hits.length === 0) {
+    return hits[0] ? join(dir, hits[0]) : null;
+  };
+  /**
+   * 受給者証番号。J121 / J611 / J411 の明細レコードだけが持つ (cols[5])。
+   * ⚠ 種別で絞らないと J111 (請求書サマリ) の cols[5] = 合計金額を受給者証番号として
+   *   拾ってしまう (30157 を「3 人目の受給者」と数えて当初請求の J111 行を破棄した)。
+   */
+  const unq = (s: string | undefined) => (s ?? "").replace(/^"|"$/g, "").trim();
+  const beneOf = (r: DensouRow) => {
+    const kind = unq(r.cols[0]);
+    // ⚠ J411-01 だけ「作成区分」が 1 項多く、受給者証番号が cols[6] にずれる
+    //   (j411Summary が c[6] を見ているのと同じ)。cols[5] を見ると事業所番号を拾う。
+    if (kind === "J411" && unq(r.cols[1]) === "01") return unq(r.cols[6]);
+    return /^J(121|611|411)$/.test(kind) ? unq(r.cols[5]) : "";
+  };
+
+  const pickDensou = (prefix: string, required: boolean) => {
+    const file = oneFile(HONOBONO_DIR, prefix);
+    if (!file) {
       if (required) {
         console.error(`FATAL: ${HONOBONO_DIR} に ${prefix}*.CSV がありません`);
         process.exit(1);
       }
       return EMPTY_DENSOU;
     }
-    console.log(`  ほのぼの ${prefix}: ${hits[0]}`);
-    return parseDensou(join(HONOBONO_DIR, hits[0]));
+    console.log(`  ほのぼの ${prefix}: ${file.split(/[\\/]/).pop()}`);
+    const base = parseDensou(file);
+
+    // ── 再請求で上書き ──────────────────────────────────────────────────
+    // 過誤申立で当初請求は取り下げられ、再請求が「最終的に請求した内容」になる。
+    // よって **再請求に出てくる受給者は、当初請求の行を丸ごと捨てて置き換える**。
+    // ⚠ J111 (請求書サマリ) は市町村単位の合計なので受給者単位に置換できない。
+    //   合計の作り直しはしない (memory: 突合は明細 J121 で見るのが既定) — 警告だけ出す。
+    const rc = oneFile(RECLAIM_DIR, prefix);
+    if (!rc && WITHDRAWN.size === 0) return base;
+    const reclaim = rc ? parseDensou(rc) : EMPTY_DENSOU;
+    const targets = new Set(reclaim.rows.map(beneOf).filter(Boolean));
+    // 受給者証番号が変わった再請求 (18歳到達で 障害児→障害者 に切替 等) は
+    // 当初請求と再請求で **キーが違う**ので自動では結び付かない。取り下げ済みの
+    // 旧番号は _過誤取下げ.json に明示してもらう (請求の取下げは人が確認すべき事実)。
+    for (const w of WITHDRAWN) targets.add(w);
+    if (targets.size === 0) return base;
+    const kept = base.rows.filter((r) => {
+      const b = beneOf(r);
+      return !b || !targets.has(b);
+    });
+    const dropped = base.rows.length - kept.length;
+    const added = reclaim.rows.filter((r) => beneOf(r)).length;
+    if (dropped === 0 && added === 0) return base;
+    reclaimApplied = true;
+    console.log(
+      `  ほのぼの ${prefix}: ${rc ? `再請求 ${rc.split(/[\\/]/).pop()} で ` : "過誤取下げのみ "}` +
+      `受給者証 ${targets.size} 件を上書き (当初 ${dropped} 行を破棄 → 再請求 ${added} 行)`,
+    );
+    return {
+      control: base.control,
+      end: base.end,
+      rows: [...kept, ...reclaim.rows.filter((r) => beneOf(r))],
+    };
   };
   const hbJ11 = pickDensou("KJ", true);
   const hbJ61 = pickDensou("TJ", true);
@@ -686,6 +849,12 @@ async function main() {
 
   // J111 請求書 (市町村別)
   console.log("\n\n===== J111 請求書 (市町村別サマリ) =====");
+  if (reclaimApplied) {
+    console.log(
+      "  ※ この月は再請求で明細を差し替えている。ほのぼの側の請求書サマリは **当初請求のまま**なので、\n" +
+      "    差し替えた受給者を含む市町村は ★DIFF になって当然。判定は下の J121 明細で行うこと。",
+    );
+  }
   const nB = j111Basics(newJ11);
   const hB = j111Basics(hbJ11);
   const allMuni = new Set([...nB.keys(), ...hB.keys()]);

@@ -46,6 +46,9 @@ import {
   type KyufuKanriDailyActual,
   type KeikakuhiUser,
 } from "@/lib/kokuho-densou/build-kyotaku";
+import { MeisaiForm } from "../forms/_meisai";
+import { SeikyuForm } from "../forms/_seikyu";
+import { KyufuKanriPrintSheet } from "../forms/_kyufu-kanri";
 import {
   resolveCertsInMonth,
   resolveCertSegmentsForMonth,
@@ -87,6 +90,35 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+// ── 伝送と同時に出す帳票 ──────────────────────────────────────────────────────
+// これまで居宅の伝送画面は伝送ファイルしか出せず、給付管理票の紙が無かった。
+// 伝送ファイルを出したのと同じ集計で帳票を 1 印刷ジョブに流す (「PDF に保存」で PDF 化)。
+type PrintDocKey = "kyufu" | "meisai" | "seikyu";
+const PRINT_DOC_LABELS: { key: PrintDocKey; label: string; hint: string }[] = [
+  {
+    key: "kyufu",
+    label: "給付管理票",
+    hint: "様式第十一。利用者 1 名 = 1 枚 (伝送 8221/8222 と同じ集計)",
+  },
+  {
+    key: "meisai",
+    label: "明細書",
+    hint: "居宅介護支援介護給付費明細書 (様式第七)。1 枚に 2 名",
+  },
+  { key: "seikyu", label: "請求書", hint: "様式第一。事業所番号ごとに総括 1 枚" },
+];
+
+/** 印刷ジョブ (伝送ファイル保存の直後に立てる) */
+interface PrintJob {
+  docs: Set<PrintDocKey>;
+  /** 給付管理票 (様式第十一)。事業所番号 (43/46) ごとの利用者 */
+  kyufu: { officeNum: string; users: KyufuKanriUser[] }[];
+  /** 明細書 (様式第七) の対象。当月・再請求とも提供月ごとに出す */
+  meisai: { key: string; row: KyotakuSeikyuRow; origMonthKey: string }[];
+  /** 請求書 (様式第一)。事業所番号ごとに総括 1 枚 (当月の通常行のみ) */
+  seikyu: { officeNum: string; rows: KyotakuSeikyuRow[] }[];
+}
+
 // Shift_JIS でダウンロード (仕様: 伝送ファイルの文字コードはシフト JIS)
 function downloadSjis(r: { content: string; fileName: string }) {
   const sjis = Encoding.convert(Encoding.stringToCode(r.content), {
@@ -105,6 +137,7 @@ export function KyotakuKokuhoSeikyuContent() {
   const {
     year, month, monthKey, filteredRows, kanaMatches, loading, error,
     officeNumber, unitPrice, officeId, tenantId, onMonthChange,
+    officeName, officeAddress, officePhone, officePostal,
   } = useKyotakuSeikyuContext();
   const supabase = useMemo(() => createClient(), []);
 
@@ -112,6 +145,12 @@ export function KyotakuKokuhoSeikyuContent() {
   const [statusByClient, setStatusByClient] = useState<Map<string, BillingStatusRow>>(new Map());
   const [reRows, setReRows] = useState<KyotakuReSeikyuRow[]>([]);
   const [exporting, setExporting] = useState(false);
+  // 伝送ファイルと同時に出す帳票の選択 (既定 = 3 点すべて)
+  const [printDocs, setPrintDocs] = useState<Set<PrintDocKey>>(
+    () => new Set<PrintDocKey>(["kyufu", "meisai", "seikyu"]),
+  );
+  // 印刷実行中のジョブ (null = 画面表示)
+  const [printJob, setPrintJob] = useState<PrintJob | null>(null);
   // 介護予防支援(46)の事業所番号 (office_service_designations)。要支援者は43と別番号で請求
   const [yoboNumber, setYoboNumber] = useState<string | null>(null);
 
@@ -251,6 +290,25 @@ export function KyotakuKokuhoSeikyuContent() {
 
   const totalUnits = targets.reduce((s, d) => s + d.row.totalUnits, 0);
   const totalInsurance = targets.reduce((s, d) => s + d.row.insuranceAmount, 0);
+
+  const togglePrintDoc = (key: PrintDocKey) =>
+    setPrintDocs((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  // ── 帳票の印刷 (伝送ファイル出力の直後に呼ぶ) ──────────────────────────────
+  //    印刷 view を描画してから window.print()。ブラウザの「PDF に保存」で PDF になる。
+  const runPrintJob = (job: PrintJob) => {
+    if (job.docs.size === 0) return;
+    setPrintJob(job);
+    setTimeout(() => {
+      window.print();
+      setPrintJob(null);
+    }, 120);
+  };
 
   // ── 国保連伝送ファイル (給付管理票 8222 + 計画費請求 7111/8124 / Shift_JIS) ──
   //    ほのぼの (KK/KY) と同じ構成で出す:
@@ -593,6 +651,9 @@ export function KyotakuKokuhoSeikyuContent() {
               // 対象年月 (8222 項2)。全月を 1 ファイルに混在させるので利用者ごとに持つ
               ym: mKey.replace("-", ""),
               userName: u.user_name,
+              // カナ・保険者名は紙の給付管理票 (様式第十一) 用。伝送には出さない
+              userKana: u.user_name_kana,
+              insurerName: u.insurer_name,
               insurerNumber: u.insurer_number ?? "",
               insuredNumber: u.insured_number ?? "",
               birthDate: u.birth_date,
@@ -628,6 +689,9 @@ export function KyotakuKokuhoSeikyuContent() {
                 shiteiKubun: r.shitei_kubun ?? null,
                 plannedUnits: r.planned_units ?? 0,
                 label: `${r.service_type}${r.provider_name ? ` (${r.provider_name})` : ""}`,
+                // 紙の給付管理票 (様式第十一) の「事業所名 / サービス種類」欄用
+                serviceTypeName: r.service_type,
+                providerName: r.provider_name ?? null,
               })),
             }));
           const missingBenefit = users.length - kyufuUsers.length;
@@ -700,6 +764,30 @@ export function KyotakuKokuhoSeikyuContent() {
         `伝送ファイル ${files.length} 本を出力しました: ` +
           files.map((f) => `${f.fileName} (${f.label} ${f.count} 件)`).join(" / "),
       );
+
+      // ── 同時出力: 伝送と同じ集計で帳票を 1 印刷ジョブに流す ──
+      //    給付管理票は伝送 (8221/8222) に積んだ kyufuByOffice をそのまま使う。
+      //    明細書・請求書は 43 (要介護) / 46 (要支援) の事業所番号で分ける。
+      const seikyuTargets = exportTargets.filter((d) => !d.isReSeikyu);
+      const seikyuGroups: { officeNum: string; rows: KyotakuSeikyuRow[] }[] = [];
+      const kaigoSeikyu = seikyuTargets.filter((d) => !isYobo(d)).map((d) => d.row);
+      const yoboSeikyu = seikyuTargets.filter((d) => isYobo(d)).map((d) => d.row);
+      if (kaigoSeikyu.length > 0) {
+        seikyuGroups.push({ officeNum: officeNumber ?? "", rows: kaigoSeikyu });
+      }
+      if (yoboSeikyu.length > 0 && yoboNumber) {
+        seikyuGroups.push({ officeNum: yoboNumber, rows: yoboSeikyu });
+      }
+      runPrintJob({
+        docs: printDocs,
+        kyufu: [...kyufuByOffice.values()],
+        meisai: exportTargets.map((d) => ({
+          key: d.key,
+          row: d.row,
+          origMonthKey: d.origMonthKey,
+        })),
+        seikyu: seikyuGroups,
+      });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {
@@ -767,7 +855,9 @@ export function KyotakuKokuhoSeikyuContent() {
     checked.size === displayRows.length && displayRows.length > 0;
 
   return (
-    <div className="flex flex-1 min-h-0">
+    <>
+    {/* 印刷ジョブ実行中だけ画面を隠す (ジョブ外の Ctrl+P は従来どおり画面が印刷される) */}
+    <div className={`flex flex-1 min-h-0 ${printJob ? "print:hidden" : ""}`}>
       {/* ── 左: かな行フィルター ── */}
       <SeikyuKanaSidebar />
 
@@ -779,6 +869,28 @@ export function KyotakuKokuhoSeikyuContent() {
           <span className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 font-medium">国保請求分</span>
           <span className="text-xs text-gray-500">{displayRows.length} 件</span>
           <div className="ml-auto flex items-center gap-2">
+            {/* 伝送と同時に出す帳票 (印刷ダイアログの「PDF に保存」でそのまま PDF 化できる) */}
+            <div
+              title="伝送ファイルを出力した直後に、同じ集計で帳票を 1 回の印刷ジョブに流します。ブラウザの印刷 →「PDF に保存」で PDF になります"
+              className="flex items-center gap-2 border border-gray-400 rounded bg-white px-2 py-1"
+            >
+              <span className="text-xs text-gray-500">同時出力</span>
+              {PRINT_DOC_LABELS.map(({ key, label, hint }) => (
+                <label
+                  key={key}
+                  title={hint}
+                  className="flex items-center gap-1 text-gray-700 cursor-pointer select-none"
+                >
+                  <input
+                    type="checkbox"
+                    checked={printDocs.has(key)}
+                    onChange={() => togglePrintDoc(key)}
+                    className="accent-indigo-500"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
             {/* 審査結果取込 (返戻/支払決定/増減表) — 国保連からの通知ファイルを取り込む */}
             <ShinsaKekkaImport
               officeId={officeId}
@@ -999,11 +1111,139 @@ export function KyotakuKokuhoSeikyuContent() {
                 伝送通信ソフト取込用の正式形式 (給付管理票 8211/8221 + 計画費請求 7111/8121 / Shift_JIS)。
                 提供月ごとに 1 ファイルセットで出力し、未確定レセプトは除外されます。
                 初回は伝送ソフトの取込チェックで内容を確認してください。「確認用CSV」は Excel 閲覧用。
+                「同時出力」にチェックした帳票 (給付管理票 様式第十一 / 明細書 / 請求書) は、
+                伝送ファイルを出した直後に印刷ダイアログへ流します (「PDF に保存」で PDF 化)。
               </p>
             </div>
           </>
         )}
       </div>
     </div>
+
+    {/* ===== 印刷 view: 請求書 (様式第一 総括) — 事業所番号ごとに 1 枚。先頭に綴る ===== */}
+    {printJob?.docs.has("seikyu") &&
+      printJob.seikyu.map((g) => {
+        const hokenRows = g.rows.filter((r) => !r.kohiTandoku);
+        const tandokuRows = g.rows.filter((r) => r.kohiTandoku);
+        if (g.rows.length === 0) return null;
+        // 公費請求欄 (法別番号ごと)。居宅介護支援は 10 割給付なので利用者負担 0
+        const byHobetsu = new Map<string, KyotakuSeikyuRow[]>();
+        for (const r of hokenRows) {
+          if (!r.kohiHobetsu) continue;
+          const arr = byHobetsu.get(r.kohiHobetsu) ?? [];
+          arr.push(r);
+          byHobetsu.set(r.kohiHobetsu, arr);
+        }
+        return (
+          <div
+            key={`seikyu:${g.officeNum}`}
+            className="hidden print:block"
+            style={{ breakAfter: "page", pageBreakAfter: "always" }}
+          >
+            <SeikyuForm
+              providerNumber={g.officeNum}
+              officeName={officeName ?? ""}
+              officeAddress={officeAddress ?? ""}
+              officePhone={officePhone ?? ""}
+              postalCode={officePostal ?? ""}
+              billingMonth={monthKey}
+              totalCount={hokenRows.length}
+              totalUnits={hokenRows.reduce((s, r) => s + r.totalUnits, 0)}
+              totalAmount={hokenRows.reduce((s, r) => s + r.totalAmount, 0)}
+              insuranceAmount={hokenRows.reduce((s, r) => s + r.insuranceAmount, 0)}
+              userCopay={0}
+              kubunLabel={"居宅介護支援・\n介護予防支援"}
+              kohiSeg="kyotaku"
+              kohiRows={[...byHobetsu.entries()].map(([code, rs]) => ({
+                code,
+                count: rs.length,
+                units: rs.reduce((s, r) => s + r.totalUnits, 0),
+                cost: rs.reduce((s, r) => s + r.totalAmount, 0),
+                kohi: rs.reduce((s, r) => s + r.insuranceAmount, 0),
+              }))}
+              kohiTandoku={
+                tandokuRows.length > 0
+                  ? {
+                      count: tandokuRows.length,
+                      units: tandokuRows.reduce((s, r) => s + r.totalUnits, 0),
+                      cost: tandokuRows.reduce((s, r) => s + r.totalAmount, 0),
+                      kohi: tandokuRows.reduce((s, r) => s + r.totalAmount, 0),
+                    }
+                  : undefined
+              }
+            />
+          </div>
+        );
+      })}
+
+    {/* ===== 印刷 view: 居宅介護支援介護給付費明細書 — 利用者 1 名 = 1 枚 ===== */}
+    {printJob?.docs.has("meisai") &&
+      printJob.meisai.map((m) => {
+        const r = m.row;
+        return (
+          <div
+            key={`meisai:${m.key}`}
+            className="hidden print:block"
+            style={{ breakAfter: "page", pageBreakAfter: "always" }}
+          >
+            <MeisaiForm
+              providerNumber={
+                (r.care_level ?? "").startsWith("要支援")
+                  ? yoboNumber ?? officeNumber ?? ""
+                  : officeNumber ?? ""
+              }
+              officeName={officeName ?? ""}
+              officeAddress={officeAddress ?? ""}
+              officePhone={officePhone ?? ""}
+              postalCode={officePostal ?? ""}
+              insurerNumber={r.insurer_number ?? ""}
+              unitPrice={r.unitPrice}
+              billingMonth={m.origMonthKey}
+              person1={{
+                insuredNumber: r.insured_number ?? "",
+                userName: r.user_name,
+                userKana: r.user_name_kana ?? "",
+                birthDate: r.birth_date ?? "",
+                gender: r.gender ?? "",
+                careLevel: r.care_level ?? "",
+                certStart: r.certStart ?? "",
+                certEnd: r.certEnd ?? "",
+                lines: r.lines.map((l) => ({
+                  name: l.name,
+                  code: l.code,
+                  units: l.units,
+                  count: l.count,
+                  serviceUnits: l.units * l.count,
+                })),
+                totalServiceUnits: r.totalUnits,
+                // 公費単独 (H番号) は保険請求 0 円・全額 (10割) を公費請求
+                claimAmount: r.kohiTandoku ? r.totalAmount : r.insuranceAmount,
+                kohiFutanshaNumber: r.kohiFutansha,
+                kohiJukyushaNumber: r.kohiJukyusha,
+                kohiTandoku: r.kohiTandoku,
+                hasKohi: !!r.kohiHobetsu || r.kohiTandoku,
+              }}
+              person2={null}
+            />
+          </div>
+        );
+      })}
+
+    {/* ===== 印刷 view: 給付管理票 (様式第十一) — 利用者 1 名 = 1 枚 ===== */}
+    {printJob?.docs.has("kyufu") && (
+      <div className="hidden print:block">
+        {printJob.kyufu.flatMap((g) =>
+          g.users.map((u, i) => (
+            <KyufuKanriPrintSheet
+              key={`kyufu:${g.officeNum}:${u.ym ?? ""}:${u.insuredNumber}:${i}`}
+              user={u}
+              officeNumber={g.officeNum}
+              officeName={officeName}
+            />
+          )),
+        )}
+      </div>
+    )}
+    </>
   );
 }

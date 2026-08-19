@@ -18,7 +18,10 @@ const TENANT="kt-group";
 const AREA_DIR=process.env.AREA_DIR||"茂原";
 const USER_SUB=process.env.USER_SUB||"茂原";
 const TAG=process.env.TAG||"";
-const STEP1_MARK=`[MEISAI-STEP1 2026-06${TAG?" "+TAG:""}]`;
+// TARGET_MONTH=2026-07 で対象月を切替 (既定は 2026-06)。STEP1 のマーカーと揃える。
+const TARGET_MONTH=process.env.TARGET_MONTH||"2026-06";
+const YM=TARGET_MONTH.replace("-","");
+const STEP1_MARK=`[MEISAI-STEP1 ${TARGET_MONTH}${TAG?" "+TAG:""}]`;
 const KAIGO=fileURLToPath(new URL("../",import.meta.url));
 function loadEnv(){ const t=readFileSync(path.join(KAIGO,".env.local"),"utf8"); const e={}; for(const l of t.split(/\r?\n/)){const m=/^([A-Z0-9_]+)=(.*)$/.exec(l.trim()); if(m)e[m[1]]=m[2].replace(/^["']|["']$/g,"");} return e; }
 const env=loadEnv();
@@ -31,7 +34,7 @@ const norm=(s)=>(s||"").normalize("NFKC").replace(/[\s　＊*]/g,"");
 async function main(){
   console.log(`=== ケアマネ番号リンク ${EXECUTE?"【EXECUTE】":"【DRY RUN】"} ===\n`);
   // ① 明細CSV: 利用者番号→ケアマネ番号/名称
-  const mei=readCsv(findBillingCsv(path.join(KAIGO,"サービス実績データ",AREA_DIR,"202606")));
+  const mei=readCsv(findBillingCsv(path.join(KAIGO,"サービス実績データ",AREA_DIR,YM)));
   const gm=(n)=>mei.H.indexOf(n);
   const iNum=gm("利用者番号"),iCoNum=gm("居宅サービス計画事業所番号"),iCoName=gm("居宅サービス計画事業所名称");
   const byNum={};

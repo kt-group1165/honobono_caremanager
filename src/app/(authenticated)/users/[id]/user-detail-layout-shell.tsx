@@ -41,9 +41,11 @@ const CARE_PLAN_TABS: SubTab[] = [
   { label: "計画概要", href: "/care-plan" },
 ];
 
+// 「受給者証 (詳細)」(/disability) は中身が空のまま並存していた重複ページ。
+// 取込も請求も伝送も shougai_certifications 側なので /shougai-cert に一本化した
+// (2026-08-19)。名前が「障害支援区分」だと受給者証が入っていると気づけないので改称。
 const DISABILITY_TABS: SubTab[] = [
-  { label: "受給者証 (詳細)", href: "/disability" },
-  { label: "障害支援区分", href: "/shougai-cert" },
+  { label: "受給者証", href: "/shougai-cert" },
   { label: "地域生活支援", href: "/chiiki-cert" },
 ];
 

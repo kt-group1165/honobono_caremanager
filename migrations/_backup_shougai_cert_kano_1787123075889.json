@@ -1,0 +1,100 @@
+[
+  {
+    "id": "c0125097-938b-46a9-bbdc-dcbadec45f54",
+    "tenant_id": "kt-group",
+    "client_id": "b29d3c78-80fc-4bf0-a8b4-e7acb9937942",
+    "support_level": "非該当",
+    "primary_disability": null,
+    "certification_start_date": "2025-07-01",
+    "certification_end_date": "2026-06-30",
+    "beneficiary_number": "1242311080",
+    "insurer_municipality": "124230",
+    "service_types": [
+      "居宅介護"
+    ],
+    "copay_rate": 0.1,
+    "notes": "[ほのぼの取込 2026-07-17 茂原身障]\n事業種別: 身体障害者居宅介護事業【居宅介護】 長生村\n交付日: 2025-07-01 / 所得区分: 低所得１ / 上限月額: 4600円\n支給量: 身体介護20時間00分\n⚠️ 市町村番号 未解決: 長生村",
+    "created_at": "2026-07-17T04:33:47.256013+00:00",
+    "updated_at": "2026-07-17T04:33:47.256013+00:00",
+    "self_payment_limit": 4600,
+    "seiho_flag": false,
+    "soudan_office_name": null,
+    "soudan_manager_name": null,
+    "monthly_allocations": {},
+    "jogen_kanri_kubun": "自事業所",
+    "jogen_kanri_office_number": "1213100017",
+    "jogen_kanri_office_name": "リンクスヘルパーステーション",
+    "contract_amount_text": "身体20",
+    "contract_start_date": null,
+    "contract_entry_number": null,
+    "issue_date": "2025-07-01",
+    "is_applying": false,
+    "income_category": "低所得１",
+    "shafuku_genmen": false,
+    "reduced_payment_limit": null,
+    "municipality_defined_amount": null,
+    "household_multi_jogen": false,
+    "flag_rousha": false,
+    "flag_h30_after": false,
+    "flag_severe": false,
+    "flag_short_multi": false,
+    "flag_special_area": false,
+    "provider_entries": null,
+    "shikyuryo_details": {
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "holder_name_kana": "カノヨシユキ"
+  },
+  {
+    "id": "3e2aaf85-f4c8-4ada-b987-1b322f2e554d",
+    "tenant_id": "kt-group",
+    "client_id": "b29d3c78-80fc-4bf0-a8b4-e7acb9937942",
+    "support_level": "区分6",
+    "primary_disability": null,
+    "certification_start_date": "2026-04-01",
+    "certification_end_date": "2026-06-30",
+    "beneficiary_number": "1242313920",
+    "insurer_municipality": "124230",
+    "service_types": [
+      "居宅介護"
+    ],
+    "copay_rate": 0.1,
+    "notes": "[障害ほのぼの取込 2026-08 茂原]\n事業種別: 身体障害者居宅介護事業【居宅介護】 長生村\n交付日: 2026-04-01 / 所得区分: 低所得１ / 上限月額: 0円\n支給量: 身体介護20時間00分",
+    "created_at": "2026-08-07T01:31:28.335123+00:00",
+    "updated_at": "2026-08-07T01:31:28.335123+00:00",
+    "self_payment_limit": 0,
+    "seiho_flag": false,
+    "soudan_office_name": null,
+    "soudan_manager_name": null,
+    "monthly_allocations": {},
+    "jogen_kanri_kubun": "なし",
+    "jogen_kanri_office_number": null,
+    "jogen_kanri_office_name": null,
+    "contract_amount_text": null,
+    "contract_start_date": null,
+    "contract_entry_number": null,
+    "issue_date": "2026-04-01",
+    "is_applying": false,
+    "income_category": "低所得１",
+    "shafuku_genmen": false,
+    "reduced_payment_limit": null,
+    "municipality_defined_amount": null,
+    "household_multi_jogen": false,
+    "flag_rousha": false,
+    "flag_h30_after": false,
+    "flag_severe": false,
+    "flag_short_multi": false,
+    "flag_special_area": false,
+    "provider_entries": null,
+    "shikyuryo_details": {
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "holder_name_kana": null
+  }
+]

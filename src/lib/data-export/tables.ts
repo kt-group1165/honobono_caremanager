@@ -42,7 +42,8 @@ export const EXPORT_TABLE_GROUPS: ExportTableGroup[] = [
       { name: "client_office_assignments", label: "利用者×事業所 割当" },
       { name: "client_insurance_records", label: "介護保険情報" },
       { name: "client_kohi_records", label: "公費情報" },
-      { name: "client_disability_certifications", label: "障害者手帳" },
+      // client_disability_certifications は 0 件のまま並存していた重複テーブル。
+      // 受給者証は shougai_certifications に一本化 (2026-08-19)
       { name: "shougai_certifications", label: "障害支給決定 (受給者証)" },
       { name: "client_hospitalizations", label: "入退院情報" },
       { name: "client_memos", label: "利用者メモ" },

@@ -38,6 +38,13 @@ export function useSeikyuData() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [officeNumber, setOfficeNumber] = useState<string | null>(null);
+  /**
+   * 総合事業の事業所番号 (保険者番号 → 事業所番号)。
+   * 総合事業は**市町村ごとの指定**なので、同じ事業所でも市町村によって番号が違う
+   * (いすみ: 122184/124412 は介護と同じ 1278600398 / 122382 だけ 12A8600011)。
+   * ここに無い保険者は介護の business_number にフォールバックする。
+   */
+  const [sougouNumberByInsurer, setSougouNumberByInsurer] = useState<Record<string, string>>({});
   const [officeAddress, setOfficeAddress] = useState<string | null>(null);
   const [officePhone, setOfficePhone] = useState<string | null>(null);
   const [officePostal, setOfficePostal] = useState<string | null>(null);
@@ -58,7 +65,9 @@ export function useSeikyuData() {
       // 取得失敗時は単価 10.0 で誤集計しないよう、ここで集計を中断する
       const { data: officeRow, error: officeError } = await supabase
         .from("offices")
-        .select("unit_price, applied_formula_codes, business_number, address, phone, postal_code")
+        .select(
+          "unit_price, applied_formula_codes, business_number, sougou_business_number, address, phone, postal_code",
+        )
         .eq("id", currentOffice.id)
         .maybeSingle();
       if (officeError) {
@@ -69,11 +78,29 @@ export function useSeikyuData() {
       if (gen !== genRef.current) return; // 古い fetch は破棄
       const or = officeRow as {
         business_number?: string | null;
+        sougou_business_number?: string | null;
         address?: string | null;
         phone?: string | null;
         postal_code?: string | null;
       } | null;
       setOfficeNumber(or?.business_number ?? null);
+      // 総合事業の事業所番号 (保険者ごと)。テーブル未適用でも集計は止めない
+      {
+        const { data: sn, error: snErr } = await supabase
+          .from("office_sougou_numbers")
+          .select("insurer_number, business_number")
+          .eq("office_id", currentOffice.id);
+        if (snErr) {
+          // 未適用 (42P01/PGRST205) は無視。それ以外も警告に留めて介護の番号で続行する
+          setSougouNumberByInsurer({});
+        } else {
+          const m: Record<string, string> = {};
+          for (const r of (sn ?? []) as { insurer_number: string; business_number: string }[]) {
+            m[r.insurer_number] = r.business_number;
+          }
+          setSougouNumberByInsurer(m);
+        }
+      }
       setOfficeAddress(or?.address ?? null);
       setOfficePhone(or?.phone ?? null);
       setOfficePostal(or?.postal_code ?? null);
@@ -163,6 +190,7 @@ export function useSeikyuData() {
     error,
     officeName: currentOffice?.name ?? null,
     officeNumber,
+    sougouNumberByInsurer,
     officeAddress,
     officePhone,
     officePostal,

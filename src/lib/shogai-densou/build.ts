@@ -31,6 +31,8 @@
 
 import type { ShogaiSeikyuRow } from "@/lib/shogai-seikyu/aggregate";
 import { toDensouKana } from "@/lib/densou-kana";
+import { formatRecordLikeHonobono } from "@/lib/kokuho-densou/honobono-format";
+import { toDensouAmount, type ShogaiContract } from "@/lib/shogai-densou/contracts";
 
 // ─── 入力型 ──────────────────────────────────────────────────────────────────
 
@@ -69,7 +71,18 @@ export interface ShogaiDensouKanriLine {
 export interface ShogaiDensouUser {
   row: ShogaiSeikyuRow;
   visits: ShogaiDensouVisit[];
-  /** 受給者証 事業者記入欄 (契約支給量) */
+  /**
+   * 契約情報 (shogai_contracts)。**あればこれが最優先**。
+   * 決定サービスコードごとに 1 行で、そのまま J121-05 になる。
+   * 空配列/未指定なら下の受給者証由来の代替にフォールバックする (移行前の互換)。
+   */
+  contracts?: ShogaiContract[];
+  /**
+   * サービス利用開始年月日 (伝送 J121-02 項8)。サービス種類コード → 日付。
+   * 「一連の契約下で最初に提供した日」で、契約日とは別物 (契約変更で動かない)。
+   */
+  serviceStartByType?: Map<string, string>;
+  /** 受給者証 事業者記入欄 (契約支給量)。⚠ contracts が入るまでの暫定 */
   contractAmountText: string | null;
   contractStartDate: string | null; // YYYY-MM-DD
   contractEntryNumber: string | null;
@@ -82,6 +95,17 @@ export interface ShogaiDensouUser {
   > | null;
   /** 自事業所が上限管理者のときの関係事業所一覧 (それ以外は null) */
   jogenOfficeLines: ShogaiDensouKanriLine[] | null;
+}
+
+/**
+ * そのサービス種類 (11=居宅介護 / 12=重度訪問介護 / 15=同行援護) の契約開始日。
+ * 決定サービスコードの先頭 2 桁がサービス種類コードなので、それで束ねて最も古い開始日を返す。
+ * 契約が無ければ null (呼出側が従来の代替に落ちる)。
+ */
+function contractStartOfType(u: ShogaiDensouUser, typeCode: string): string | null {
+  const hit = (u.contracts ?? []).filter((c) => c.decision_code.slice(0, 2) === typeCode);
+  if (hit.length === 0) return null;
+  return hit.reduce((a, b) => (a.start_date <= b.start_date ? a : b)).start_date;
 }
 
 export interface ShogaiDensouOptions {
@@ -407,8 +431,9 @@ function wrapFile(
       "", // 予備 (設定しない)
     ].join(","),
   );
+  // ほのぼの実伝送と同じ書式 (引用符・未使用項目の 0 埋め) に整える。値は変えない。
   for (const parts of dataParts) {
-    lines.push(["2", String(recNo++), ...parts].join(","));
+    lines.push(["2", String(recNo++), ...formatRecordLikeHonobono(parts)].join(","));
   }
   lines.push(["3", String(recNo++)].join(","));
   return {
@@ -447,12 +472,13 @@ export function buildShogaiDensou(
   }
   const unitPrice5 = String(Math.round(opts.unitPrice * 1000)).padStart(5, "0");
 
-  const sorted = [...users].sort((a, b) =>
-    (a.row.user_name_kana ?? a.row.user_name).localeCompare(
-      b.row.user_name_kana ?? b.row.user_name,
-      "ja",
-    ),
-  );
+  // 並び順は ほのぼの実伝送に合わせて **市町村番号 + 受給者証番号 の昇順**。
+  // (氏名カナ順にしていたため利用者の並びが実伝送と揃わなかった。2026-08-07)
+  const sorted = [...users].sort((a, b) => {
+    const k = (u: (typeof users)[number]) =>
+      `${(u.row.municipality ?? "").trim()}|${(u.row.beneficiary_number ?? "").trim()}`;
+    return k(a).localeCompare(k(b));
+  });
 
   for (const u of sorted) {
     if (!u.row.municipality || !/^\d{6}$/.test(u.row.municipality)) {
@@ -617,14 +643,30 @@ export function buildShogaiDensou(
       seikyuParts.push([
         "J121", "02", ym, muni, office, jukyu,
         a.typeCode, // 7 サービス種類コード
-        dateNum(u.contractStartDate ?? typeFirstDate(a.typeCode)), // 8 開始年月日
+        // 8 開始年月日 = 「**一連とみなされる利用契約の下で最初にサービスを提供した日**」
+        //   (原典 サービス事業所編 P.18)。契約支給量を変更しても動かない。
+        //   ⚠ 当月の初回訪問日ではない (2026-08-07 に四街道7月で7名全員ずれていた)。
+        //   契約 (shogai_contracts) の開始日を採る。同じサービス種類に複数の決定コードが
+        //   ある場合は**最も古い契約開始日** (= 一連の契約の起点)。
+        //   契約が無ければ従来どおり当月の初回提供日で代替する。
+        //   優先順: ① 登録済の利用開始日 → ② 契約開始日 → ③ 当月の初回提供日 (最後の砦)
+        dateNum(
+          u.serviceStartByType?.get(a.typeCode) ??
+            contractStartOfType(u, a.typeCode) ??
+            u.contractStartDate ??
+            typeFirstDate(a.typeCode),
+        ),
         "", // 9 終了年月日
         String(typeDays(a.typeCode)), // 10 利用日数
         "", "", // 11-12 入院/外泊日数
       ]);
     }
 
-    // 明細情報レコード (03) — 11 項目 × サービスコード
+    // 明細情報レコード (03) — 11 項目 × サービスコード。
+    // ⚠ 本体と加算をいったん集めて **サービスコード昇順**で出す。
+    //   ほのぼの実伝送はコード昇順 (介護給付 7131-02 と同じ)。当方は本体→加算の順に
+    //   出していたため並びが一致しなかった (2026-08-07)。
+    const meisaiLines: [string, string, string, string][] = [];
     for (const d of r.details) {
       if (!d.service_code) {
         warnings.push(
@@ -632,14 +674,7 @@ export function buildShogaiDensou(
         );
         continue;
       }
-      seikyuParts.push([
-        "J121", "03", ym, muni, office, jukyu,
-        d.service_code, // 7 サービスコード
-        String(d.unit_per), // 8 単位数
-        String(d.count), // 9 回数
-        String(d.units), // 10 サービス単位数
-        "", // 11 摘要
-      ]);
+      meisaiLines.push([d.service_code, String(d.unit_per), String(d.count), String(d.units)]);
     }
     // 処遇改善加算等 (monthly_aggregate) — 月 1 回の加算行 (回数 1)。
     // 集計情報レコード (04) の給付単位数・総費用額は aggregate 側で加算込みのため
@@ -653,12 +688,17 @@ export function buildShogaiDensou(
           `${r.user_name}: 加算「${a.service_code}」の単位数 (${a.units.toLocaleString()}) が 5 桁 (99999) を超えています — J121 明細 (03) 項8/10 の桁溢れで取込エラーの可能性があるため実績を確認してください`,
         );
       }
+      meisaiLines.push([a.service_code, String(a.units), "1", String(a.units)]);
+    }
+    // サービスコード昇順で 03 レコードを出す (本体・加算を混ぜて並べ替える)
+    meisaiLines.sort((x, y) => x[0].localeCompare(y[0]));
+    for (const [code, unitPer, count, units] of meisaiLines) {
       seikyuParts.push([
         "J121", "03", ym, muni, office, jukyu,
-        a.service_code, // 7 サービスコード (115121 等)
-        String(a.units), // 8 単位数 (= 加算単位数)
-        "1", // 9 回数
-        String(a.units), // 10 サービス単位数
+        code, // 7 サービスコード
+        unitPer, // 8 単位数
+        count, // 9 回数
+        units, // 10 サービス単位数
         "", // 11 摘要
       ]);
     }
@@ -718,6 +758,33 @@ export function buildShogaiDensou(
       contractAmountsFromShikyuryo(u.shikyuryoDetails, CONTRACT_FALLBACK_CODES)?.keys() ?? [],
     );
     const codes = Array.from(new Set([...billedCodes, ...contractedCodes])).sort();
+
+    // ── 契約情報 (shogai_contracts) が入っていればそれをそのまま出す ────────
+    //   受給者証からの代替は「契約支給量 = 決定支給量」という誤った前提なので、
+    //   契約データがある利用者では一切使わない (実データで 4 倍ずれていた)。
+    if (u.contracts && u.contracts.length > 0) {
+      for (const c of u.contracts) {
+        seikyuParts.push([
+          "J121", "05", ym, muni, office, jukyu,
+          c.decision_code, // 7 決定サービスコード
+          toDensouAmount(c.amount_x100), // 8 契約支給量 (整数3+小数2)
+          dateNum(c.start_date), // 9 契約開始年月日
+          dateNum(c.end_date ?? ""), // 10 契約終了年月日 (継続中は空)
+          String(c.entry_number ?? 1), // 11 事業者記入欄番号 (前ゼロなし)
+        ]);
+      }
+      // 請求したのに契約が無いコードは返戻要因なので必ず通知する
+      const has = new Set(u.contracts.map((c) => c.decision_code));
+      for (const code of billedCodes) {
+        if (!has.has(code)) {
+          warnings.push(
+            `${r.user_name}: 決定コード ${code} で請求しているのに契約情報がありません — 受給者証ページの「契約情報」に追加してください (契約支給量審査で返戻になります)`,
+          );
+        }
+      }
+      continue; // 以降の代替ロジックは使わない
+    }
+
     if (aggs.some((a) => a.typeCode === "12")) {
       warnings.push(
         `${r.user_name}: 重度訪問介護の契約情報レコード (決定コード 121000/122000/123000) は未対応のため出力しません — 契約支給量審査は取込チェックで確認してください`,
@@ -1229,6 +1296,17 @@ export function buildShogaiDensou(
       ]);
     });
   }
+
+  // ── J11 のレコード配置を ほのぼの に合わせる ──────────────────────────
+  //   ほのぼのは **市町村ごとのブロック**: J111(01,02) → その市町村の J121 全件 →
+  //   次の市町村の J111 → … の順。当方は J111 を全市町村ぶん先に出していた。
+  //   市町村 (項4) で安定ソートし、同一市町村内では J111 を J121 より前に置くだけで
+  //   目的の並びになる (J121 は既に 市町村+受給者証番号 の昇順で積んである)。
+  seikyuParts.sort((a, b) => {
+    const c = (a[3] ?? "").localeCompare(b[3] ?? "");
+    if (c !== 0) return c;
+    return (a[0] === "J111" ? 0 : 1) - (b[0] === "J111" ? 0 : 1);
+  });
 
   return {
     seikyuFile: wrapFile(seikyuParts, "J11", office, processYm, `J11${yy}${mm}.CSV`),

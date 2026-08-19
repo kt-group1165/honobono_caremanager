@@ -15,7 +15,11 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const EXECUTE=process.argv.includes("--execute");
-const MONTH_FIRST="2026-06-01", TARGET_MONTH="2026-06";
+// TARGET_MONTH=2026-07 で対象月を切替 (既定は 2026-06)。
+// MONTH_FIRST はサービスコードの世代判定 (validInMonth) に使うので必ず同じ月にする。
+const TARGET_MONTH=process.env.TARGET_MONTH||"2026-06";
+const MONTH_FIRST=`${TARGET_MONTH}-01`;
+const YM=TARGET_MONTH.replace("-","");
 const OFFICE=process.env.OFFICE_ID||"e08c3706-ad59-4913-b4e2-67f2675422e9";
 const AREA_DIR=process.env.AREA_DIR||"茂原";
 const TAG=process.env.TAG||"";
@@ -26,10 +30,19 @@ const PREFIX={
   "122390":"OA_", "122374":"SM_", "124032":"KJ_", "122291":"SD_", // 大網白里/山武/九十九里/袖ケ浦(公式表投入済)
   "121012":"CB_","121020":"CB_","121038":"CB_","121046":"CB_","121053":"CB_","121061":"CB_", // 千葉市6区
   "122192":"IH_", "122069":"K_",                          // 市原市 / 木更津市
+  "122283":"YT_",                                         // 四街道市 (国保連統一CSVから投入済)
+  // いすみエリア (いすみ営業所の管轄)。**みなし現行相当コードのみ**で単位数は全国共通。
+  //   実伝送 KK260804 で検算済: A21111=1176 / A21211=2349 / A21321=3727 / 処遇改善266‰
+  //   いずれも MB_ と同値なので MB_ を流用する (大網エリアと同じ扱い)。
+  "122184":"MB_", "122382":"MB_", "124412":"MB_",
+  // 山武エリアの近隣市町村。実伝送 KK260803 で単位数が全国共通と一致 (同上)
+  "122135":"MB_", "122358":"MB_", "124099":"MB_",
+  "122168":"MB_",   // 八千代市 (花見川)。実伝送で全国共通単位数を確認
+  "124263":"MB_",   // 睦沢町 (東郷)。同上
 };
-const STEP1_MARK=`[MEISAI-STEP1 2026-06${TAG?" "+TAG:""}]`;
+const STEP1_MARK=`[MEISAI-STEP1 ${TARGET_MONTH}${TAG?" "+TAG:""}]`;
 const KAIGO=fileURLToPath(new URL("../",import.meta.url));
-const MEISAI=path.join(KAIGO,`サービス実績データ/${AREA_DIR}/202606`);
+const MEISAI=path.join(KAIGO,`サービス実績データ/${AREA_DIR}/${YM}`);
 function loadEnv(){ const t=readFileSync(path.join(KAIGO,".env.local"),"utf8"); const e={}; for(const l of t.split(/\r?\n/)){const m=/^([A-Z0-9_]+)=(.*)$/.exec(l.trim()); if(m)e[m[1]]=m[2].replace(/^["']|["']$/g,"");} return e; }
 const env=loadEnv();
 const sb=createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false}});
@@ -55,9 +68,16 @@ async function main(){
   }
   console.log(`総合実績行: ${rows.length}`);
 
-  // 利用者の保険者 (STEP1 insurance)
-  const ins=await fetchAll("client_insurance_records","client_id,insurer_number",q=>q.eq("notes",STEP1_MARK));
-  const insurerBy={}; for(const r of ins) insurerBy[r.client_id]=r.insurer_number;
+  // 利用者の保険者。STEP1 マーカー付きを優先し、無い利用者は認定レコード全体から補う。
+  // ⚠ マーカーだけに頼ると、TAG 無しで取り込まれた拠点 (茂原・姉ム・四街道) で
+  //   保険者が引けず総合事業が丸ごと未解決になる (2026-08-07 に 3 拠点で発生)。
+  const insurerBy={};
+  {
+    const all=await fetchAll("client_insurance_records","client_id,insurer_number,notes");
+    for(const r of all){ if(!r.insurer_number) continue;
+      if(r.notes===STEP1_MARK) insurerBy[r.client_id]=r.insurer_number;         // 当拠点・当月が最優先
+      else if(!(r.client_id in insurerBy)) insurerBy[r.client_id]=r.insurer_number; }
+  }
 
   // 総合コード名 (prefix付き, 対象月)
   const sc=await fetchAll("kaigo_service_codes","service_code,service_name,unit_type,valid_from,valid_until",q=>q.eq("system","総合事業").eq("calculation_type","基本"));
@@ -86,8 +106,13 @@ async function main(){
   if(payloads[0]) console.log("payloadサンプル:\n",JSON.stringify(payloads[0],null,1));
 
   if(!EXECUTE){ console.log("\n※ DRY RUN。--execute で 既存マーカー行削除→投入。"); return; }
-  // 冪等: 既存の総合取込行を削除してから入れ直す
-  const { error:delErr }=await sb.from("kaigo_visit_schedule").delete().eq("office_id",OFFICE).like("notes","[MEISAI総合取込%");
+  // 冪等: 既存の総合取込行を削除してから入れ直す。
+  // ⚠ **必ず対象月に絞る**。月スコープが無いと他の月の実績まで消える (visit_records と同じ罠)。
+  const [dy,dm]=TARGET_MONTH.split("-").map(Number);
+  const MONTH_LAST=`${TARGET_MONTH}-${String(new Date(dy,dm,0).getDate()).padStart(2,"0")}`;
+  const { error:delErr }=await sb.from("kaigo_visit_schedule").delete()
+    .eq("office_id",OFFICE).like("notes","[MEISAI総合取込%")
+    .gte("visit_date",MONTH_FIRST).lte("visit_date",MONTH_LAST);
   if(delErr){ console.error(`✗ 既存削除失敗: ${delErr.message}`); process.exit(1); }
   console.log("既存 総合取込行 削除完了");
   const CH=500; let done=0;

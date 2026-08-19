@@ -17,7 +17,10 @@ const AREA_DIR=process.env.AREA_DIR||"茂原";
 const TAG=process.env.TAG||"";
 // ⚠ マーカーに拠点を入れる。入れないと冪等削除が**全事業所の公費を消す**
 //   (2026-08-04: 四街道→さつきが丘→高品 と流すたびに前の事業所の公費が消えていた)
-const TENANT="kt-group", MARK=`[MEISAI公費 2026-06${TAG?" "+TAG:""}]`;
+// TARGET_MONTH=2026-07 で対象月を切替 (既定は 2026-06)。フォルダも同じ月を見る。
+const TARGET_MONTH=process.env.TARGET_MONTH||"2026-06";
+const YM=TARGET_MONTH.replace("-","");
+const TENANT="kt-group", MARK=`[MEISAI公費 ${TARGET_MONTH}${TAG?" "+TAG:""}]`;
 const KAIGO=fileURLToPath(new URL("../",import.meta.url));
 function loadEnv(){ const t=readFileSync(path.join(KAIGO,".env.local"),"utf8"); const e={}; for(const l of t.split(/\r?\n/)){const m=/^([A-Z0-9_]+)=(.*)$/.exec(l.trim()); if(m)e[m[1]]=m[2].replace(/^["']|["']$/g,"");} return e; }
 const env=loadEnv();
@@ -29,8 +32,8 @@ const numOr0=(s)=>{const v=parseInt((s||"").replace(/\..*$/,""),10);return Numbe
 async function main(){
   console.log(`=== 公費取込 ${EXECUTE?"【EXECUTE】":"【DRY RUN】"} ===\n`);
   // フォルダ構成が事業所ごとに違うので対象月配下を再帰で探す
-  const csv=findDataFile(path.join(KAIGO,"サービス実績データ",AREA_DIR,"202606"),"介護請求(明細付)_一覧.CSV");
-  if(!csv){ console.error(`✗ サービス実績データ/${AREA_DIR}/202606 配下に 介護請求(明細付)_一覧.CSV がありません`); process.exit(1); }
+  const csv=findDataFile(path.join(KAIGO,"サービス実績データ",AREA_DIR,YM),"介護請求(明細付)_一覧.CSV");
+  if(!csv){ console.error(`✗ サービス実績データ/${AREA_DIR}/${YM} 配下に 介護請求(明細付)_一覧.CSV がありません`); process.exit(1); }
   console.log(`  取込元: ${path.relative(KAIGO,csv)}`);
   const lines=sjis.decode(readFileSync(csv)).split(/\r?\n/).filter(l=>l);
   const H=parseLine(lines[0]).map(h=>h.replace(/^"|"$/g,"")); const gi=(n)=>H.indexOf(n);

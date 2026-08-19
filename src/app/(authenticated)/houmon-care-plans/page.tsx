@@ -1,11 +1,15 @@
-import { ClipboardList } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { UserSidebar } from "@/components/users/user-sidebar";
 import {
   HoumonCarePlansContent,
   type KaigoUser,
 } from "./houmon-care-plans-content";
-import type { HoumonCarePlanSummary } from "@/lib/houmon-care-plan/types";
+import { HoumonCarePlanOverview } from "./houmon-care-plan-overview";
+import {
+  HOUMON_CARE_PLAN_SUMMARY_COLUMNS,
+  type HoumonCarePlanSummary,
+} from "@/lib/houmon-care-plan/types";
+import { isSchemaV1Error } from "@/lib/houmon-care-plan/queries";
 
 export default async function HoumonCarePlansPage({
   searchParams,
@@ -16,6 +20,7 @@ export default async function HoumonCarePlansPage({
 
   let initialUser: KaigoUser | null = null;
   let initialPlans: HoumonCarePlanSummary[] = [];
+  let schemaOutdated = false;
 
   if (userId) {
     const supabase = await createClient();
@@ -27,7 +32,7 @@ export default async function HoumonCarePlansPage({
         .maybeSingle(),
       supabase
         .from("kaigo_houmon_care_plans")
-        .select("id, plan_date, valid_from, valid_until, author_name, status, created_at, updated_at")
+        .select(HOUMON_CARE_PLAN_SUMMARY_COLUMNS)
         .eq("user_id", userId)
         .order("plan_date", { ascending: false })
         .order("created_at", { ascending: false }),
@@ -36,10 +41,19 @@ export default async function HoumonCarePlansPage({
       console.error("houmon-care-plans: user fetch failed:", userRes.error.message);
     }
     if (plansRes.error) {
-      console.error("houmon-care-plans: plans fetch failed:", plansRes.error.message);
+      // v2 migration 未適用 (列が無い) の場合は UI に案内を出す。それ以外は log のみ。
+      if (isSchemaV1Error(plansRes.error)) {
+        schemaOutdated = true;
+        console.error(
+          "houmon-care-plans: v2 migration 未適用 (migrations/applied_archive/houmon_care_plans_v2.sql):",
+          plansRes.error.message,
+        );
+      } else {
+        console.error("houmon-care-plans: plans fetch failed:", plansRes.error.message);
+      }
     }
     initialUser = (userRes.data ?? null) as KaigoUser | null;
-    initialPlans = (plansRes.data ?? []) as HoumonCarePlanSummary[];
+    initialPlans = (plansRes.data ?? []) as unknown as HoumonCarePlanSummary[];
   }
 
   return (
@@ -51,15 +65,11 @@ export default async function HoumonCarePlansPage({
           userId={userId}
           initialUser={initialUser}
           initialPlans={initialPlans}
+          initialSchemaOutdated={schemaOutdated}
         />
       ) : (
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="rounded-lg border bg-white py-16 text-center shadow-sm">
-            <ClipboardList size={40} className="mx-auto mb-3 text-gray-300" />
-            <p className="text-sm text-gray-500">利用者を選択してください</p>
-            <p className="mt-1 text-xs text-gray-400">訪問介護モード専用機能です</p>
-          </div>
-        </div>
+        // 利用者 未選択時は自事業所の作成状況一覧 (未作成 / 期限切れ の洗い出し)
+        <HoumonCarePlanOverview />
       )}
     </div>
   );

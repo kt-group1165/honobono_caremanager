@@ -18,13 +18,16 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const EXECUTE = process.argv.includes("--execute");
-const TARGET_MONTH = "2026-06";       // 対象月 (処理月)
-const MONTH_FIRST = "2026-06-01";     // サービスコード世代判定用
+// TARGET_MONTH=2026-07 で対象月を切替 (既定は 2026-06)。
+// MONTH_FIRST はサービスコードの世代判定 (validInMonth) に使うので必ず同じ月にする。
+const TARGET_MONTH = process.env.TARGET_MONTH || "2026-06"; // 対象月 (処理月)
+const MONTH_FIRST = `${TARGET_MONTH}-01`;                   // サービスコード世代判定用
+const YM = TARGET_MONTH.replace("-", "");                   // 202606
 const OFFICE_BUSINESS_NUMBER = process.env.OFFICE_BN || "1271500942"; // リンクスヘルパーステーション (訪問介護)
 const AREA_DIR = process.env.AREA_DIR || "茂原";
 const TAG = process.env.TAG || "";
 const CSV_DIR = fileURLToPath(
-  new URL(`../サービス実績データ/${AREA_DIR}/202606/`, import.meta.url)
+  new URL(`../サービス実績データ/${AREA_DIR}/${YM}/`, import.meta.url)
 );
 
 // ---- env ----
@@ -325,8 +328,14 @@ async function main() {
     return;
   }
 
-  // 冪等: 既存の①介護取込行を削除してから入れ直す
-  const { error: delErr } = await sb.from("kaigo_visit_schedule").delete().eq("office_id", office.id).like("notes", "[MEISAI取込%");
+  // 冪等: 既存の①介護取込行を削除してから入れ直す。
+  // ⚠ **必ず対象月に絞る**。月スコープを付け忘れると 7 月を取り込んだ瞬間に
+  //   同じ事業所の 6 月の実績が丸ごと消える (2026-08-07 に四街道で実際に起きた)。
+  const [y, m] = TARGET_MONTH.split("-").map(Number);
+  const MONTH_LAST = `${TARGET_MONTH}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
+  const { error: delErr } = await sb.from("kaigo_visit_schedule").delete()
+    .eq("office_id", office.id).like("notes", "[MEISAI取込%")
+    .gte("visit_date", MONTH_FIRST).lte("visit_date", MONTH_LAST);
   if (delErr) { console.error(`✗ 既存削除失敗: ${delErr.message}`); process.exit(1); }
   console.log("既存 ①介護取込行 削除完了");
 

@@ -24,6 +24,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ID_IN_CHUNK, NAME_IN_CHUNK } from "@/lib/chunk-parallel";
 import { validInMonth } from "@/lib/service-code-valid";
+import {
+  kindFromServiceName,
+  loadShogaiCodeMaps,
+  shogaiCodeFromTime,
+} from "@/lib/shogai-seikyu/code-from-time";
+import {
+  isJuhoTierCode,
+  loadJuhoTierByClient,
+  loadJuhoTierMaps,
+  remapJuhoCode,
+} from "@/lib/shogai-seikyu/juho-tier";
 import { isBillableRecord } from "@/lib/shogai-seikyu/record-markers";
 
 export interface ShogaiSeikyuDetail {
@@ -151,6 +162,8 @@ export async function aggregateMonthlyShogaiSeikyu(
     duration_minutes?: number | null;
   }
   const records: Rec[] = [];
+  /** 1.5) のシフト取込で出た注意 (下の warnings へ合流させる) */
+  const schedWarnings: string[] = [];
   let offset = 0;
   while (true) {
     let q = supabase
@@ -190,6 +203,14 @@ export async function aggregateMonthlyShogaiSeikyu(
       start_time: string | null;
       end_time: string | null;
       notes: string | null;
+      /**
+       * 制度区分 (登録時に選んだ事実)。'障害' なら障害、'介護' なら介護に確定する。
+       * ⚠ 障害の居宅介護は介護保険と同じコード体系 (111111 等) を使うため、
+       *   サービス名だけでは判定できない。実データで 26 名が同じ月の訪問を
+       *   日単位で両制度に振り分けていた (2026-08-07)。
+       * null は未設定 = 従来どおり「障害マスタで名前が引けるか」で判定する。
+       */
+      system?: string | null;
     }
     const schedRows: SchedRow[] = [];
     let soff = 0;
@@ -197,7 +218,7 @@ export async function aggregateMonthlyShogaiSeikyu(
     while (true) {
       let sq = supabase
         .from("kaigo_visit_schedule")
-        .select("user_id, service_type, visit_date, start_time, end_time, notes")
+        .select("user_id, service_type, visit_date, start_time, end_time, notes, system")
         .in("status", schedStatuses)
         .gte("visit_date", from)
         .lte("visit_date", to);
@@ -212,7 +233,11 @@ export async function aggregateMonthlyShogaiSeikyu(
       const rows = (data ?? []) as SchedRow[];
       // 合算セッションの従属行は請求が代表行に集約済 (実績記録票用の記録専用行) →
       //   ここで拾うと同一 code×日 が二重計上になるので除外する
-      schedRows.push(...rows.filter((s) => isBillableRecord(s.notes)));
+      // system='介護' と明示された行は障害集計から外す (名前が障害マスタで引けても)。
+      // 未設定 (null) は従来どおり名前解決に委ねる。
+      schedRows.push(
+        ...rows.filter((s) => isBillableRecord(s.notes) && s.system !== "介護"),
+      );
       if (rows.length < PAGE) break;
       soff += PAGE;
     }
@@ -243,21 +268,69 @@ export async function aggregateMonthlyShogaiSeikyu(
         const n = Number(h) * 60 + Number(mi);
         return Number.isFinite(n) ? n : null;
       };
+      // system='障害' と明示されているのに名前が障害マスタで引けない行がある。
+      //   両制度を使う利用者は、シフトを **介護のサービス名**のまま登録して
+      //   その回だけ障害で請求することがある (秋山久子: 11 回すべて「身体介護２・夜」で
+      //   7 回が介護 / 4 回が障害)。障害のコードは所要時間と時間帯で一意に決まるので、
+      //   名前ではなく **時刻から引き直す**。
+      //   ⚠ これまで表面化しなかったのは、この分岐が「名前で引けたら障害」という
+      //     判定しか持たず、引けない行を黙って捨てていたため。捨てられた回は
+      //     障害請求から丸ごと落ちる (= 請求漏れ) が、介護側にも出ないので
+      //     合計だけ見ていると気づけなかった。
+      const needTimeResolve = schedRows.some(
+        (s) => s.system === "障害" && !nameMap.has((s.service_type ?? "").trim()),
+      );
+      const timeMaps = needTimeResolve
+        ? await loadShogaiCodeMaps(supabase, opts.year, opts.month)
+        : null;
+
       const schedRecs: Rec[] = [];
       for (const s of schedRows) {
         const name = (s.service_type ?? "").trim();
-        const m = nameMap.get(name);
-        if (!m) continue; // 障害コードに解決できない = 介護/総合 → スキップ
         const st = toMinOfDay(s.start_time);
         const en = toMinOfDay(s.end_time);
         const dur =
           st != null && en != null ? (en >= st ? en - st : en + 1440 - st) : null;
+
+        let code: string;
+        let units: number;
+        let category: string | null;
+        /** 明細に出す名前。時刻から引いた場合は **障害マスタの名前**を出す
+         *  (介護の名前のまま出すと、明細のコードと名称が食い違って読めない) */
+        let label = name;
+        const m = nameMap.get(name);
+        if (m) {
+          code = m.code;
+          units = m.units;
+          category = m.category;
+        } else if (s.system === "障害" && timeMaps) {
+          const kind = kindFromServiceName(name);
+          const hit = kind
+            ? shogaiCodeFromTime(timeMaps, kind, s.start_time, s.end_time, {
+                minutes: dur ?? undefined,
+              })
+            : null;
+          if (!hit) {
+            // 握りつぶさない。障害で請求すべき回が落ちると請求漏れになる
+            schedWarnings.push(
+              `${s.visit_date} ${(s.start_time ?? "").slice(0, 5)} 「${name}」: 障害のサービスコードを決められないため集計していません — シフトのサービス名か時刻を確認してください`,
+            );
+            continue;
+          }
+          code = hit.code;
+          units = hit.units;
+          category = null;
+          label = hit.name;
+        } else {
+          continue; // 障害コードに解決できない = 介護/総合 → スキップ
+        }
+
         schedRecs.push({
           client_id: s.user_id,
-          service_type: name,
-          service_category: m.category,
-          service_code: m.code,
-          unit_count: m.units,
+          service_type: label,
+          service_category: category,
+          service_code: code,
+          unit_count: units,
           service_date: s.visit_date,
           duration_minutes: dur,
         });
@@ -273,8 +346,60 @@ export async function aggregateMonthlyShogaiSeikyu(
     }
   }
 
+  // ── 1.6) 重度訪問介護の段 (サービス費Ⅰ/Ⅱ/Ⅲ) を支給決定から決め直す ──────
+  //   段は市町村の支給決定 (決定サービスコード 121000/122000/123000) で決まる。
+  //   シフトのサービス名は稼働データ取込の都合で **全件が「重訪Ⅱ…」**になっており
+  //   段の情報を持っていないので、名前からは読まない (詳細は juho-tier.ts)。
+  //   決められない利用者は既定値で埋めず請求から外して知らせる。
+  /** client_id → 段が決まらず除外した件数 (利用者名は後段で解決して warning にする) */
+  const juhoUnresolved = new Map<string, number>();
+  /** client_id → 読み替え先コードが無かった素の名前 */
+  const juhoNoCode = new Map<string, Set<string>>();
+  const juhoWarnings: string[] = [];
+  {
+    const maps = await loadJuhoTierMaps(supabase, opts.year, opts.month);
+    const hasJuho = records.some((r) => isJuhoTierCode(maps, r.service_code));
+    if (hasJuho) {
+      const ids = Array.from(
+        new Set(records.filter((r) => isJuhoTierCode(maps, r.service_code)).map((r) => r.client_id)),
+      );
+      const resolved = await loadJuhoTierByClient(supabase, ids, opts.year, opts.month, {
+        officeId: opts.officeId,
+      });
+      juhoWarnings.push(...resolved.warnings);
+      for (let i = records.length - 1; i >= 0; i--) {
+        const r = records[i];
+        const code = r.service_code;
+        if (!isJuhoTierCode(maps, code)) continue;
+        const tier = resolved.tierByClient.get(r.client_id);
+        if (!tier) {
+          juhoUnresolved.set(r.client_id, (juhoUnresolved.get(r.client_id) ?? 0) + 1);
+          records.splice(i, 1);
+          continue;
+        }
+        const hit = remapJuhoCode(maps, code!, tier);
+        if (!hit) {
+          // 例: 「・同行2」系はⅠしかマスタに無い。黙って別の段で出さない
+          const base = maps.byCode.get(code!)?.base ?? code!;
+          if (!juhoNoCode.has(r.client_id)) juhoNoCode.set(r.client_id, new Set());
+          juhoNoCode.get(r.client_id)!.add(`${base} (段${tier})`);
+          records.splice(i, 1);
+          continue;
+        }
+        r.service_code = hit.code;
+        r.service_type = hit.name;
+        r.unit_count = hit.units;
+      }
+      // ⚠ ここで「同一 client × code × 日」の重複排除をしてはいけない。
+      //   重訪は積み上げ型で、1 訪問が同じコードの行を何本も出す (川島さん 6/5 は
+      //   重訪Ⅰ日中８．０ が 1 日で 7 本)。念のためと思って排除を入れたら
+      //   56 回 → 8 回 に潰れて請求が 1/7 になった (2026-08-19)。
+    }
+  }
+
   if (records.length === 0) {
-    return { rows: [], month: monthStr, recordCount: 0, warnings: [] };
+    // schedWarnings は捨てない (全行が解決できなかったときこそ知らせたい)
+    return { rows: [], month: monthStr, recordCount: 0, warnings: [...schedWarnings, ...juhoWarnings] };
   }
 
   // 2) 利用者情報
@@ -846,6 +971,22 @@ export async function aggregateMonthlyShogaiSeikyu(
   //    複数あり市町村番号が異なる場合はレセプトの提出先が月内で変わる。
   //    現行の集計は最新 1 件の市町村に全実績を載せるので warning で知らせる。
   const warnings: string[] = [];
+  // 1.5) のシフト取込で決められなかった行 (請求漏れになる) を先頭で知らせる
+  warnings.push(...schedWarnings);
+  // 1.6) 重訪の段が決まらず請求から外した分。金額が変わるので必ず人が見ること
+  warnings.push(...juhoWarnings);
+  for (const [cid, n] of juhoUnresolved) {
+    const nm = clientById.get(cid)?.name ?? "(利用者不明)";
+    warnings.push(
+      `${nm}さん: 重度訪問介護 ${n} 件を請求から外しました — 対象月に有効な支給決定 (受給者証の重度訪問介護の区分) が登録されていないため、サービス費Ⅰ/Ⅱ/Ⅲ のどれで算定するか決められません`,
+    );
+  }
+  for (const [cid, bases] of juhoNoCode) {
+    const nm = clientById.get(cid)?.name ?? "(利用者不明)";
+    warnings.push(
+      `${nm}さん: 重度訪問介護 ${[...bases].join(" / ")} に対応するサービスコードが対象月のマスタにありません — 請求から外しました`,
+    );
+  }
   // 3.9) の加算行の解決警告 + 実績が無い利用者の加算行 (集計対象外) を知らせる
   warnings.push(...genericWarnings);
   for (const [cid, lines] of genericByClient) {
@@ -941,6 +1082,9 @@ export async function aggregateMonthlyShogaiSeikyu(
       doukou_shintai: { label: "同行援護 (身体あり)", kind: "time" },
       koudou: { label: "行動援護", kind: "time" },
       juudo_houkatsu: { label: "重度障害者等包括支援", kind: "units" },
+      // 重訪の加算移動介護 (120901)。実績側のバケットが無いので超過判定はしないが、
+      // キーとして受け付けないと「未知のキー」扱いになる
+      idou: { label: "移動介護 (重訪加算)", kind: "time" },
     };
     type ShikyuVal = { hours?: number; minutes?: number; count?: number; units?: number };
     const toMin = (v: ShikyuVal) => (v.hours ?? 0) * 60 + (v.minutes ?? 0);

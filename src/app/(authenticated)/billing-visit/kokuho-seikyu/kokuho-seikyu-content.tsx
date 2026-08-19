@@ -16,7 +16,12 @@
  *     (= 選択中の請求月の翌月) を使う — build.ts 参照。
  *
  * 機能 (従来どおり): チェックで出力対象を絞込 (未チェック時は全件)。
- * ※ 明細書・請求書の発行は「介護請求」画面へ移設済み。
+ *
+ * 帳票の同時出力 (2026-08-07):
+ *   ツールバーの「同時出力」チェック (明細書 / 請求書) を付けて伝送ボタンを押すと、
+ *   伝送ファイルを保存した直後に同じ対象行で帳票を 1 回の印刷ジョブに流す
+ *   (ブラウザの「PDF に保存」でそのまま PDF 化できる)。
+ *   明細書を含めた場合は「介護請求」画面と同じく issued_at を記録して発行済にする。
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -37,7 +42,7 @@ import {
   SeikyuMonthNav,
 } from "../_shared/seikyu-context";
 import { buildKokuhoDensou, type DensouRow } from "@/lib/kokuho-densou/build";
-import { buildSougouDensou, type SougouDensouRow } from "@/lib/kokuho-densou/build-sougou";
+import { buildSougouDensou, groupSougouRowsByOfficeNumber, type SougouDensouRow } from "@/lib/kokuho-densou/build-sougou";
 import {
   loadReSeikyuRows,
   type ReSeikyuReasons,
@@ -46,6 +51,14 @@ import {
 } from "@/lib/visit-seikyu/re-seikyu";
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
 import { ShinsaKekkaImport } from "@/components/kokuho-shinsa/shinsa-import";
+import { MeisaiPrintSheet } from "../../billing/forms/_meisai";
+import { SeikyuForm } from "../../billing/forms/_seikyu";
+import { SougouSeikyuForm } from "../../billing/forms/_sougou-seikyu";
+import {
+  buildSeikyuFormTotals,
+  meisaiKanriProps,
+} from "@/lib/visit-seikyu/seikyu-form-totals";
+import { markMeisaiIssued } from "@/lib/visit-seikyu/mark-issued";
 
 // 介護請求タブと同じグリッド列定義の流儀 (格子テーブル)
 // 対象 / 提供年月 / 保険者番号 / 被保険者番号 / 利用者名 / 要介護度 / 単位数 / 保険請求額 / 利用者負担 / 状態
@@ -73,6 +86,45 @@ interface DisplayRow {
 const isTableMissingError = (code: string | null | undefined) =>
   code === "42P01" || code === "PGRST205";
 
+// ── 伝送と同時に出す帳票 ──────────────────────────────────────────────────────
+// riyou-seikyu の「印刷する綴り」チェックと同じ流儀 (Set で持って 1 印刷ジョブに流す)。
+type PrintDocKey = "meisai" | "seikyu";
+const PRINT_DOC_LABELS: { key: PrintDocKey; label: string; hint: string }[] = [
+  {
+    key: "meisai",
+    label: "明細書",
+    hint: "利用者 1 名 = 1 枚。印刷すると発行済 (issued_at) を記録します",
+  },
+  { key: "seikyu", label: "請求書", hint: "事業所単位の総括 1 枚" },
+];
+
+/**
+ * 印刷ジョブ。伝送ファイルを保存した直後にこれを立てて帳票 view を描画し、
+ * window.print() を呼ぶ。制度 (介護給付 / 総合事業) で様式が変わる。
+ */
+interface PrintMeisaiTarget {
+  key: string;
+  row: UserSeikyuRow;
+  /** 提供月 'YYYY-MM' (再請求行は元提供月) */
+  origMonthKey: string;
+  /** 再請求理由 (発行済化で引き継ぐ)。当月通常行は null */
+  reasons: ReSeikyuReasons | null;
+  /** この行を請求する事業所番号 (総合事業は保険者ごとに別番号のことがある) */
+  providerNumber: string;
+}
+
+interface PrintJob {
+  system: "介護" | "総合事業";
+  docs: Set<PrintDocKey>;
+  /** 明細書の対象 (提供月ごとに様式の年月が変わるので月キーを持つ) */
+  meisaiRows: PrintMeisaiTarget[];
+  /**
+   * 請求書 (総括)。当月の通常行のみ (再請求は元提供月の別請求書)。
+   * 事業所番号ごとに 1 枚 — 総合事業は保険者 (市町村) で番号が分かれることがある。
+   */
+  seikyuGroups: { providerNumber: string; rows: UserSeikyuRow[] }[];
+}
+
 // Shift_JIS の Blob を作る (仕様: 伝送ファイルの文字コードはシフト JIS)
 function sjisBlob(content: string): Blob {
   const sjis = Encoding.convert(Encoding.stringToCode(content), {
@@ -85,7 +137,8 @@ function sjisBlob(content: string): Blob {
 export function KokuhoSeikyuContent() {
   const {
     year, month, onMonthChange, filteredRows, filteredSougouRows, kanaMatches, loading, error,
-    officeNumber, unitPrice, officeId, tenantId, appliedFormulaCodes,
+    officeNumber, sougouNumberByInsurer, unitPrice, officeId, tenantId, appliedFormulaCodes,
+    officeName, officeAddress, officePhone, officePostal,
   } = useSeikyuContext();
   const { businessType } = useBusinessType();
   const billingStatusTable = businessType === "訪問入浴" ? "bath_billing_status" : "kaigo_billing_status";
@@ -95,6 +148,12 @@ export function KokuhoSeikyuContent() {
   const [statusByClient, setStatusByClient] = useState<Map<string, BillingStatusRow>>(new Map());
   const [reRows, setReRows] = useState<ReSeikyuRow[]>([]);
   const [reSougouRows, setReSougouRows] = useState<ReSeikyuSougouRow[]>([]);
+  // 伝送ファイルと同時に出す帳票の選択 (既定 = 明細書 + 請求書 の両方)
+  const [printDocs, setPrintDocs] = useState<Set<PrintDocKey>>(
+    () => new Set<PrintDocKey>(["meisai", "seikyu"]),
+  );
+  // 印刷実行中のジョブ (null = 画面表示。非 null の間だけ帳票 view を描いて print する)
+  const [printJob, setPrintJob] = useState<PrintJob | null>(null);
 
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
 
@@ -234,6 +293,41 @@ export function KokuhoSeikyuContent() {
   const totalUser = targets.reduce((s, d) => s + d.row.userAmount, 0);
   const totalSelfPay = targets.reduce((s, d) => s + d.row.selfPayAmount, 0);
 
+  const togglePrintDoc = (key: PrintDocKey) =>
+    setPrintDocs((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  // ── 帳票の印刷 (伝送ファイル保存の直後に呼ぶ) ──────────────────────────────
+  //    明細書を含む場合は「介護請求」画面と同じく issued_at を記録して発行済にする。
+  //    保存に失敗しても紙は出せるように、記録の成否に関わらず印刷は実行する。
+  const runPrintJob = async (job: PrintJob) => {
+    if (job.docs.size === 0) return;
+    if (job.docs.has("meisai") && job.meisaiRows.length > 0 && officeId && tenantId) {
+      const res = await markMeisaiIssued(supabase, {
+        table: billingStatusTable,
+        officeId,
+        tenantId,
+        rows: job.meisaiRows.map((m) => ({
+          userId: m.row.user_id,
+          monthKey: m.origMonthKey,
+          reasons: m.reasons,
+        })),
+      });
+      if (res.error) toast.error(res.error);
+      else if (res.count > 0) loadStatus();
+    }
+    setPrintJob(job);
+    // print view の描画を 1 フレーム待ってから印刷ダイアログを開く
+    setTimeout(() => {
+      window.print();
+      setPrintJob(null);
+    }, 120);
+  };
+
   // 国保連伝送ファイル (正式インタフェース仕様: 7111 + 7131 / Shift_JIS)。
   // 提供月ごとに 1 ファイル。再請求分は元提供月のファイルとして出力する。
   const exportDensou = async () => {
@@ -290,6 +384,26 @@ export function KokuhoSeikyuContent() {
       `伝送ファイル ${files.length} 本を保存しました: ` +
         files.map((f) => `${f.fileName} (${f.label} ${f.count} 件)`).join(" / "),
     );
+
+    // 同時出力にチェックがあれば、同じ対象行で帳票を 1 印刷ジョブに流す
+    await runPrintJob({
+      system: "介護",
+      docs: printDocs,
+      meisaiRows: targets.map((d) => ({
+        key: d.key,
+        row: d.row,
+        origMonthKey: d.origMonthKey,
+        reasons: d.reasons,
+        providerNumber: officeNumber ?? "",
+      })),
+      // 様式第一 総括は当月の通常行のみ (再請求分は元提供月の別請求書)
+      seikyuGroups: [
+        {
+          providerNumber: officeNumber ?? "",
+          rows: targets.filter((d) => !d.isReSeikyu).map((d) => d.row),
+        },
+      ],
+    });
   };
 
   // ── 総合事業 伝送ファイル (明細書 71R1/様式第二の三 + 請求書 7113 / Shift_JIS) ──
@@ -315,22 +429,35 @@ export function KokuhoSeikyuContent() {
     for (const [mKey, group] of [...byMonth.entries()].sort()) {
       const [oy, om] = mKey.split("-").map((n) => Number(n));
       if (!oy || !om) continue;
-      const result = buildSougouDensou(group, {
-        officeNumber: officeNumber ?? "",
-        year: oy,
-        month: om,
-        unitPrice,
-        // 処理対象年月 (審査月) は「今回の提出バッチの請求月の翌月」(exportDensou と同じ)
-        seikyuYear: year,
-        seikyuMonth: month,
-      });
-      warnings.push(...result.warnings.map((w) => `[R${oy - 2018}/${om}] ${w}`));
-      files.push({
-        content: result.content,
-        fileName: result.fileName,
-        label: `R${oy - 2018}/${om} 提供分`,
-        count: result.dataRecordCount,
-      });
+      // 総合事業の事業所番号は**保険者(市町村)ごと**。同じ事業所でも市町村で番号が違う
+      // ことがある (いすみ: 122382 だけ別番号) ため、番号ごとに別ファイルにする。
+      const byOffice = groupSougouRowsByOfficeNumber(
+        group,
+        officeNumber ?? "",
+        sougouNumberByInsurer,
+      );
+      let seq = 0;
+      for (const [offNo, rowsForOffice] of byOffice) {
+        seq += 1;
+        const result = buildSougouDensou(rowsForOffice, {
+          officeNumber: offNo,
+          year: oy,
+          month: om,
+          unitPrice,
+          // 処理対象年月 (審査月) は「今回の提出バッチの請求月の翌月」(exportDensou と同じ)
+          seikyuYear: year,
+          seikyuMonth: month,
+          // 1 提供月で複数ファイルになるときだけ枝番 (2 本目以降)
+          fileSeq: byOffice.size > 1 ? seq : undefined,
+        });
+        warnings.push(...result.warnings.map((w) => `[R${oy - 2018}/${om}] ${w}`));
+        files.push({
+          content: result.content,
+          fileName: result.fileName,
+          label: `R${oy - 2018}/${om} 提供分${byOffice.size > 1 ? ` (${offNo})` : ""}`,
+          count: result.dataRecordCount,
+        });
+      }
     }
 
     if (warnings.length > 0) {
@@ -349,6 +476,44 @@ export function KokuhoSeikyuContent() {
       `総合事業 伝送ファイル ${files.length} 本を保存しました: ` +
         files.map((f) => `${f.fileName} (${f.label} ${f.count} レコード)`).join(" / "),
     );
+
+    // ── 帳票 (様式第二の三 明細書 / 総合事業費請求書) を同時出力 ──
+    //    明細書の事業所番号も保険者ごとに解決する (伝送ファイルの分割と同じ基準)。
+    const numberOfRow = (r: UserSeikyuRow) => {
+      const ins = (r.insurer_number ?? "").trim();
+      return (sougouNumberByInsurer?.[ins] ?? "").trim() || (officeNumber ?? "");
+    };
+    const meisaiRows: PrintMeisaiTarget[] = [
+      ...reSougouMatched.map((r) => ({
+        key: `sougou-re:${r.user_id}:${r.__origMonthKey}`,
+        row: r as UserSeikyuRow,
+        origMonthKey: r.__origMonthKey,
+        reasons: r.__reasons,
+        providerNumber: numberOfRow(r as UserSeikyuRow),
+      })),
+      ...sougouCurrentRows.map((r) => ({
+        key: `sougou-cur:${r.user_id}`,
+        row: r,
+        origMonthKey: monthKey,
+        reasons: null,
+        providerNumber: numberOfRow(r),
+      })),
+    ];
+    // 請求書は当月の通常行のみを事業所番号ごとに総括する
+    const seikyuByOffice = groupSougouRowsByOfficeNumber(
+      sougouCurrentRows,
+      officeNumber ?? "",
+      sougouNumberByInsurer,
+    );
+    await runPrintJob({
+      system: "総合事業",
+      docs: printDocs,
+      meisaiRows,
+      seikyuGroups: [...seikyuByOffice.entries()].map(([providerNumber, rows]) => ({
+        providerNumber,
+        rows,
+      })),
+    });
   };
 
   // 確認用 CSV (Excel で内容確認する用の明細一覧。伝送形式ではない)
@@ -444,7 +609,9 @@ export function KokuhoSeikyuContent() {
     checked.size === displayRows.length && displayRows.length > 0;
 
   return (
-    <div className="flex flex-1 min-h-0">
+    <>
+    {/* 印刷ジョブ実行中だけ画面を隠す (ジョブ外の Ctrl+P は従来どおり画面が印刷される) */}
+    <div className={`flex flex-1 min-h-0 ${printJob ? "print:hidden" : ""}`}>
       {/* ── 左: かな行フィルター ── */}
       <SeikyuKanaSidebar />
 
@@ -456,6 +623,28 @@ export function KokuhoSeikyuContent() {
           <span className="border border-gray-400 rounded bg-white px-2.5 py-1 text-gray-700 font-medium">国保請求分</span>
           <span className="text-xs text-gray-500">{displayRows.length} 件</span>
           <div className="ml-auto flex items-center gap-2">
+            {/* 伝送と同時に出す帳票 (印刷ダイアログの「PDF に保存」でそのまま PDF 化できる) */}
+            <div
+              title="伝送ファイルを保存した直後に、同じ対象行で帳票を 1 回の印刷ジョブに流します。ブラウザの印刷 →「PDF に保存」で PDF になります"
+              className="flex items-center gap-2 border border-gray-400 rounded bg-white px-2 py-1"
+            >
+              <span className="text-xs text-gray-500">同時出力</span>
+              {PRINT_DOC_LABELS.map(({ key, label, hint }) => (
+                <label
+                  key={key}
+                  title={hint}
+                  className="flex items-center gap-1 text-gray-700 cursor-pointer select-none"
+                >
+                  <input
+                    type="checkbox"
+                    checked={printDocs.has(key)}
+                    onChange={() => togglePrintDoc(key)}
+                    className="accent-indigo-500"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
             {/* 審査結果取込 (返戻/支払決定/増減表)。訪問入浴は bath_billing_status のため対象外 */}
             {billingStatusTable === "kaigo_billing_status" && (
               <ShinsaKekkaImport
@@ -679,12 +868,84 @@ export function KokuhoSeikyuContent() {
                 伝送通信ソフト取込用の正式形式 (7111 請求書 + 7131 様式第二 / Shift_JIS)。
                 再請求分は元提供月ごとに別ファイルで出力します (処理対象年月 = 今回請求月の翌月 = 審査月)。
                 初回は伝送ソフトの取込チェックで内容を確認してください。「確認用CSV」は Excel 閲覧用。
-                明細書・請求書の発行は「介護請求」画面で行います。
+                「同時出力」にチェックした帳票は、伝送ファイルを保存した直後に印刷ダイアログへ流します
+                (「PDF に保存」で PDF 化)。明細書を含めると発行済 (発行日) を記録します。
               </p>
             </div>
           </>
         )}
       </div>
     </div>
+
+    {/* ===== 印刷 view: 請求書 (総括) — 事業所番号ごとに 1 枚。明細書より前に綴る ===== */}
+    {printJob?.docs.has("seikyu") &&
+      printJob.seikyuGroups.map((g) => {
+        if (g.rows.length === 0) return null;
+        const totals = buildSeikyuFormTotals(g.rows);
+        return (
+          <div key={`seikyu:${g.providerNumber}`} className="hidden print:block">
+            {printJob.system === "総合事業" ? (
+              <SougouSeikyuForm
+                providerNumber={g.providerNumber}
+                officeName={officeName ?? ""}
+                officeAddress={officeAddress ?? ""}
+                officePhone={officePhone ?? ""}
+                postalCode={officePostal ?? ""}
+                billingMonth={monthKey}
+                totalCount={totals.totalCount}
+                totalUnits={totals.totalUnits}
+                totalAmount={totals.totalAmount}
+                jigyohiAmount={totals.insuranceAmount}
+                kohiRequestAmount={totals.kohiRequestAmount}
+                userCopay={totals.userCopay}
+                kohiRows={totals.kohiRows}
+              />
+            ) : (
+              <SeikyuForm
+                providerNumber={g.providerNumber}
+                officeName={officeName ?? ""}
+                officeAddress={officeAddress ?? ""}
+                officePhone={officePhone ?? ""}
+                postalCode={officePostal ?? ""}
+                billingMonth={monthKey}
+                totalCount={totals.totalCount}
+                totalUnits={totals.totalUnits}
+                totalAmount={totals.totalAmount}
+                insuranceAmount={totals.insuranceAmount}
+                userCopay={totals.userCopay}
+                kubunLabel={"居宅サービス・地域密着型\nサービス・介護予防サービス"}
+                kohiRequestAmount={totals.kohiRequestAmount}
+                kohiRows={totals.kohiRows}
+                kohiTandoku={totals.kohiTandoku}
+              />
+            )}
+          </div>
+        );
+      })}
+
+    {/* ===== 印刷 view: 明細書 — 利用者 1 名 = 1 枚 (再請求行は元提供月で出す) ===== */}
+    {printJob?.docs.has("meisai") && printJob.meisaiRows.length > 0 && (
+      <div className="hidden print:block">
+        {printJob.meisaiRows.map((m) => {
+          const [oy, om] = m.origMonthKey.split("-").map((n) => Number(n));
+          return (
+            <MeisaiPrintSheet
+              key={m.key}
+              row={m.row}
+              officeName={officeName}
+              officeNumber={m.providerNumber}
+              officeAddress={officeAddress}
+              officePhone={officePhone}
+              officePostal={officePostal}
+              reiwa={oy - 2018}
+              month={om}
+              variant={printJob.system === "総合事業" ? "sougou" : "kaigo"}
+              {...meisaiKanriProps(m.row)}
+            />
+          );
+        })}
+      </div>
+    )}
+    </>
   );
 }

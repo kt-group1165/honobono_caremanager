@@ -59,6 +59,10 @@ import {
   type ReSeikyuRow,
 } from "@/lib/visit-seikyu/re-seikyu";
 import {
+  buildSeikyuFormTotals,
+  meisaiKanriProps,
+} from "@/lib/visit-seikyu/seikyu-form-totals";
+import {
   buildKagoMoushitateCsv,
   loadKagoMoushitateRows,
   type KagoInfo,
@@ -611,64 +615,12 @@ export function KaigoSeikyuContent() {
     () => targetDisplayRows.filter((d) => !d.isReSeikyu).map((d) => d.row),
     [targetDisplayRows],
   );
-  // 公費単独 (被保険者番号 H = 生保 10割公費) は保険請求欄に記載しない。
-  // 公費請求欄の生保行に合算する (様式第一の公式記載例準拠)。
-  const hokenTargets = seikyuTargets.filter((r) => !r.kohiTandoku);
-  const tandokuTargets = seikyuTargets.filter((r) => r.kohiTandoku);
-  const targetUnits = hokenTargets.reduce((s, r) => s + r.totalUnits, 0);
-  const targetCost = hokenTargets.reduce((s, r) => s + r.totalAmount, 0);
-  const targetInsurance = hokenTargets.reduce((s, r) => s + r.insuranceAmount, 0);
-  const targetUser = hokenTargets.reduce((s, r) => s + r.userAmount, 0);
-  // 保険請求分の公費 (生保の振替分 + 保険優先公費の上限適用分) — 公費請求欄の再掲元。
-  // 法別番号ごとに集計する (法別21/54 等の部分公費は生保行に混ぜない)。
-  // 単位数・費用合計は公費対象分 (kohiUnits / kohiTargetCost。全量公費は総量と同値)。
-  // 複数公費の併用行 (kohi2Amount あり) は公費1・公費2 をそれぞれの法別の行に積む。
-  const targetKohi = hokenTargets.reduce(
-    (s, r) => s + (r.kohiAmount ?? 0) + (r.kohi2Amount ?? 0),
-    0,
+  // 総括の内訳 (保険請求分 / 公費請求テーブル / 公費単独) は国保請求タブの請求書と
+  // 同じ数字にするため lib/visit-seikyu/seikyu-form-totals.ts に集約している。
+  const seikyuTotals = useMemo(
+    () => buildSeikyuFormTotals(seikyuTargets),
+    [seikyuTargets],
   );
-  const seikyuKohiRows = (() => {
-    interface KohiEntry { units: number; cost: number; kohi: number }
-    const byHobetsu = new Map<string, KohiEntry[]>();
-    const push = (hobetsu: string, e: KohiEntry) => {
-      if (!byHobetsu.has(hobetsu)) byHobetsu.set(hobetsu, []);
-      byHobetsu.get(hobetsu)!.push(e);
-    };
-    for (const r of hokenTargets) {
-      if ((r.kohiAmount ?? 0) > 0) {
-        // 旧テキストのみの移行期データは生保扱い (aggregate と同基準)
-        push(r.kohiHobetsu ?? "12", {
-          units: r.kohiUnits ?? 0,
-          cost: r.kohiTargetCost ?? r.totalAmount,
-          kohi: r.kohiAmount ?? 0,
-        });
-      }
-      if (r.kohi2Hobetsu && (r.kohi2Amount ?? 0) > 0) {
-        push(r.kohi2Hobetsu, {
-          units: r.kohi2Units ?? 0,
-          cost: r.kohi2TargetCost ?? 0,
-          kohi: r.kohi2Amount ?? 0,
-        });
-      }
-    }
-    return Array.from(byHobetsu.entries()).map(([code, es]) => ({
-      code,
-      count: es.length,
-      units: es.reduce((s, e) => s + e.units, 0),
-      cost: es.reduce((s, e) => s + e.cost, 0),
-      kohi: es.reduce((s, e) => s + e.kohi, 0),
-    }));
-  })();
-  // 公費単独分の集計 (10割公費: 費用合計 = 公費請求額)
-  const seikyuKohiTandoku =
-    tandokuTargets.length > 0
-      ? {
-          count: tandokuTargets.length,
-          units: tandokuTargets.reduce((s, r) => s + r.totalUnits, 0),
-          cost: tandokuTargets.reduce((s, r) => s + r.totalAmount, 0),
-          kohi: tandokuTargets.reduce((s, r) => s + (r.kohiAmount ?? 0), 0),
-        }
-      : undefined;
 
   // ── 再請求行 (元提供月) の既存 kaigo_billing_status を取得 ──
   //    upsert で既存の kago / notes 等を上書き消去しないための事前読取。
@@ -1702,18 +1654,9 @@ export function KaigoSeikyuContent() {
         <div className="hidden print:block">
           {(meisaiPrintRows ?? targetDisplayRows).map((d) => {
             const [oy, om] = d.origMonthKey.split("-").map((n) => Number(n));
-            // 契約 C1: 様式第二の限度額欄。
-            //   kanriTaishougaiUnits = 処遇改善等%加算 + 初回 + 緊急時 (限度額管理対象外)
-            //   planUnits = ④計画単位数 (kaigo_monthly_plan_units があればそれ、
-            //               無ければ基準内 (管理対象) 単位数)
-            // _meisai.tsx 側の optional props (kanriTaishougaiUnits? / planUnits?) へ
-            // spread で渡す (props 追加は別エージェント担当)。
-            const kanriProps = {
-              kanriTaishougaiUnits: d.row.kanriTaishougaiUnits,
-              planUnits:
-                d.row.planUnits ??
-                d.row.baseUnits - (d.row.kanriTaishougaiUnits - d.row.addonUnits),
-            };
+            // 契約 C1: 様式第二の限度額欄 (④計画単位数 / ⑥限度額管理対象外単位数)。
+            // 国保請求タブの明細書と同じ値にするため共通ヘルパから作る。
+            const kanriProps = meisaiKanriProps(d.row);
             return (
               <MeisaiPrintSheet
                 key={d.key}
@@ -1743,15 +1686,15 @@ export function KaigoSeikyuContent() {
             officePhone={officePhone ?? ""}
             postalCode={officePostal ?? ""}
             billingMonth={monthKey}
-            totalCount={hokenTargets.length}
-            totalUnits={targetUnits}
-            totalAmount={targetCost}
-            insuranceAmount={targetInsurance}
-            userCopay={targetUser}
+            totalCount={seikyuTotals.totalCount}
+            totalUnits={seikyuTotals.totalUnits}
+            totalAmount={seikyuTotals.totalAmount}
+            insuranceAmount={seikyuTotals.insuranceAmount}
+            userCopay={seikyuTotals.userCopay}
             kubunLabel={"居宅サービス・地域密着型\nサービス・介護予防サービス"}
-            kohiRequestAmount={targetKohi}
-            kohiRows={seikyuKohiRows}
-            kohiTandoku={seikyuKohiTandoku}
+            kohiRequestAmount={seikyuTotals.kohiRequestAmount}
+            kohiRows={seikyuTotals.kohiRows}
+            kohiTandoku={seikyuTotals.kohiTandoku}
           />
         </div>
       )}

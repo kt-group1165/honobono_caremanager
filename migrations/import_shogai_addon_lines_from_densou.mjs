@@ -31,9 +31,11 @@ const EXECUTE = process.argv.includes("--execute");
 const OFFICE_ID = process.env.AD_OFFICE_ID;
 const KJ = process.env.AD_KJ;
 const LABEL = process.env.AD_LABEL || "";
-const MONTH = "2026-06-01";
+// TARGET_MONTH=2026-07 で対象月を切替 (既定は 2026-06)。
+const TARGET_MONTH = process.env.TARGET_MONTH || "2026-06";
+const MONTH = `${TARGET_MONTH}-01`;
 const TENANT = "kt-group";
-const MARK = `[伝送から加算取込 2026-06${LABEL ? " " + LABEL : ""}]`;
+const MARK = `[伝送から加算取込 ${TARGET_MONTH}${LABEL ? " " + LABEL : ""}]`;
 
 if (!OFFICE_ID || !KJ) {
   console.error("✗ AD_OFFICE_ID と AD_KJ を指定してください");
@@ -58,13 +60,24 @@ async function main() {
   console.log(`=== 障害 定額加算を伝送から投入 ${EXECUTE ? "【EXECUTE】" : "【DRY RUN】"} ${LABEL} ===\n`);
 
   // 1) 定額加算のマスタ (units>0 / formula 無し)
-  const { data: master, error: e0 } = await sb
-    .from("kaigo_service_codes")
-    .select("service_code, service_name, units, formula, calculation_type")
-    .eq("system", "障害")
-    .eq("calculation_type", "加算")
-    .eq("valid_from", "2026-06-01");
-  if (e0) throw new Error(e0.message);
+  // ⚠ 障害の加算コードは 11,431 件ある。**必ずページングする**。
+  //   PostgREST の既定上限 1000 で切れると、そこに載らなかったコード (116020 初回加算 等) が
+  //   「マスタに無い」扱いで静かに落ちる (2026-08-07 四街道の初回加算が 0 件になった原因)。
+  const master = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await sb
+      .from("kaigo_service_codes")
+      .select("service_code, service_name, units, formula, calculation_type")
+      .eq("system", "障害")
+      .eq("calculation_type", "加算")
+      // 世代管理: 対象月に有効な世代を引く (valid_from<=月初 かつ valid_until が無いか月初以降)
+      .lte("valid_from", MONTH)
+      .or(`valid_until.is.null,valid_until.gte.${MONTH}`)
+      .range(from, from + 999);
+    if (error) throw new Error(error.message);
+    master.push(...data);
+    if (data.length < 1000) break;
+  }
   const fixed = new Map();
   for (const m of master) {
     if (m.formula) continue;      // %加算 は aggregate が計算する

@@ -18,7 +18,10 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 const EXECUTE=process.argv.includes("--execute");
-const TENANT="kt-group", MONTH="2026-06-01";
+// TARGET_MONTH=2026-07 で対象月を切替 (既定は 2026-06)。フォルダも同じ月を見る。
+const TARGET_MONTH=process.env.TARGET_MONTH||"2026-06";
+const YM=TARGET_MONTH.replace("-","");
+const TENANT="kt-group", MONTH=`${TARGET_MONTH}-01`;
 const AREA_DIR=process.env.AREA_DIR||"茂原";
 const TAG=process.env.TAG||"";
 const OFFICE_ID=process.env.OFFICE_ID||"";
@@ -31,15 +34,28 @@ const sjis=new TextDecoder("shift_jis");
 
 async function main(){
   console.log(`=== 計画単位数(給付管理)投入 ${EXECUTE?"【EXECUTE】":"【DRY RUN】"} ===\n`);
-  const csv=findBillingCsv(path.join(KAIGO,"サービス実績データ",AREA_DIR,"202606"));
+  const csv=findBillingCsv(path.join(KAIGO,"サービス実績データ",AREA_DIR,YM));
   const lines=sjis.decode(readFileSync(csv)).split(/\r?\n/).filter(l=>l);
   const H=parseLine(lines[0]).map(h=>h.replace(/^"|"$/g,"")); const gi=(n)=>H.indexOf(n);
   const iMei=gi("明細書番号"),iNum=gi("利用者番号"),iType=gi("サービス種類コード"),iPlan=gi("計画単位数"),iKanri=gi("限度額管理対象単位数");
-  const plan={}; const seen=new Set();
+  // 種類11 (訪問介護) を正とし、**11 が無い利用者だけ総合事業 (A系) から拾う**。
+  // 総合事業の 71R1 集計10 も計画単位数を出すので、A系しか無い人 (総合事業のみの利用者) は
+  // ここで入れないと計画=実績になり、計画≠実績の月に不一致になる
+  // (四街道 2026-06 田丸秀雄: 計画880 / 実績660)。
+  // ⚠ table の一意キーは (client, month, office) で サービス種類を持たないため、
+  //   11 と A系 を両方持つ人が出たら 11 を優先する (介護給付側が主)。
+  const plan={}, planA={}; const seen=new Set();
   for(const ln of lines.slice(1)){ const c=parseLine(ln).map(x=>x.replace(/^"|"$/g,""));
-    if(c[iType]!=="11")continue; if(seen.has(c[iMei]))continue; seen.add(c[iMei]);
-    plan[c[iNum]]={planned:parseInt(c[iPlan]||"0",10),kanri:parseInt(c[iKanri]||"0",10)};
+    const type=c[iType]||"";
+    const isSougou=/^A/.test(type)||/^A/.test(c[gi("サービスコード")]||"");
+    if(type!=="11" && !isSougou) continue;
+    if(seen.has(c[iMei]))continue; seen.add(c[iMei]);
+    const v={planned:parseInt(c[iPlan]||"0",10),kanri:parseInt(c[iKanri]||"0",10)};
+    if(type==="11") plan[c[iNum]]=v; else planA[c[iNum]]=v;
   }
+  let fromSougou=0;
+  for(const [num,v] of Object.entries(planA)){ if(plan[num])continue; plan[num]=v; fromSougou++; }
+  if(fromSougou) console.log(`  総合事業のみの利用者から計画単位数を採用: ${fromSougou}名`);
   const clients=[]; for(let f=0;;f+=1000){const {data,error}=await sb.from("clients").select("id,user_number").range(f,f+999);if(error)throw error;clients.push(...data);if(data.length<1000)break;}
   const idByNum={}; for(const c of clients) idByNum[String(c.user_number)]=c.id;
   if(TAG){ const mp=JSON.parse(readFileSync(path.join(KAIGO,`migrations/_meisai_num_to_client_${TAG}.json`),"utf8")); for(const[k,v]of Object.entries(mp)) idByNum[String(k)]=v; }
@@ -53,7 +69,7 @@ async function main(){
     const cid=idByNum[num]; if(!cid){noClient++;continue;}
     const p=plan[num];
     if(p.planned<p.kanri) capped++;
-    const row={ tenant_id:TENANT, client_id:cid, target_month:MONTH, planned_units:p.planned, source:"honobono", notes:`[MEISAI計画単位数 2026-06${TAG?" "+TAG:""}]` };
+    const row={ tenant_id:TENANT, client_id:cid, target_month:MONTH, planned_units:p.planned, source:"honobono", notes:`[MEISAI計画単位数 ${TARGET_MONTH}${TAG?" "+TAG:""}]` };
     if(hasOffice) row.office_id=OFFICE_ID;
     payloads.push(row);
   }

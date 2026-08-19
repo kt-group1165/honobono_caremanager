@@ -210,13 +210,13 @@ async function main(){
   const listFallback=new Map(); // 利用者番号 -> {base行相当, kaigo行相当}
   {
     let listPath=null;
-    try { listPath=findBillingCsvForFallback(path.join(KAIGO,"サービス実績データ",AREA_DIR,"202606")); } catch { /* 無ければ補完しない */ }
+    try { listPath=findBillingCsvForFallback(path.join(KAIGO,"サービス実績データ",AREA_DIR,YM)); } catch { /* 無ければ補完しない */ }
     if(listPath){
       const L=readCsv(listPath);
       const gi=(n)=>L.idx[n];
       for(const r of L.rows){
         const n=(r[gi("利用者番号")]||"").trim();
-        if(!n || (r[gi("提供年月")]||"").replace("/","-")!=="2026-06") continue;
+        if(!n || (r[gi("提供年月")]||"").replace("/","-")!==TARGET_MONTH) continue;
         if(baseByNum.has(n) && kaigoByNum.has(n)) continue; // マスタにあるならそちらが正
         if(listFallback.has(n)) continue;
         listFallback.set(n,{

@@ -128,6 +128,22 @@ const SOUGOU_PREFIX_BY_INSURER: Record<string, string> = {
   "122374": "SM_", // 山武市
   "124032": "KJ_", // 九十九里町
   "122291": "SD_", // 袖ケ浦市 (姉崎)
+  // 四街道市: 国保連統一CSV (サービスコード/四街道市/20260601.csv) から全世代投入済
+  "122283": "YT_",
+  // いすみエリア: みなし現行相当のみで単位数が全国共通 (実伝送 KK260804 で検算済) なので
+  //   大網エリアと同様に MB_ を流用する。独自コードが出てきたら専用 prefix に切り替えること。
+  "122184": "MB_",
+  "122382": "MB_",
+  "124412": "MB_",
+  // 山武エリアの近隣市町村。実伝送 KK260803 で A21111=1176 / A21211=2349 / A21321=3727 /
+  //   処遇改善 625/2349=266‰ を確認。いずれも全国共通なので MB_ を流用。
+  "122135": "MB_",
+  "122358": "MB_",
+  "124099": "MB_",
+  // 八千代市 (花見川の利用者)。実伝送 KK260705 で A21111=1176 / 処遇改善 313=1176×266‰ を確認
+  "122168": "MB_",
+  // 睦沢町 (東郷の利用者)。実伝送 KK260704 で A21211=2349 / 処遇改善 625=2349×266‰ を確認
+  "124263": "MB_",
 };
 
 /**
@@ -159,6 +175,25 @@ const SOUGOU_UNITPRICE_BY_INSURER: Record<string, number> = {
   "121046": 11.05, // 千葉市若葉区
   "121053": 11.05, // 千葉市緑区
   "121061": 11.05, // 千葉市美浜区
+  // いすみエリア (その他地域)。実伝送 KK260804 の 7113 で 5,952単位→59,520円 = 10.00 で確定
+  "122184": 10.0,
+  "122382": 10.0,
+  "124412": 10.0,
+  // 木更津市 (6級地)。⚠ 未登録だと office.unit_price にフォールバックし、袖ケ浦 (10.70) の
+  //   単価で木更津市の利用者を請求してしまう (2026-08-07 に袖ケ浦で 4 名の過大請求を検出)。
+  //   袖ケ浦・木更津 双方の実伝送 71R1 集計10 で 1042 = 10.42 を確認。
+  "122069": 10.42,
+  // 山武エリア。実伝送 KK260803 の 71R1 集計10 で確定
+  "122135": 10.21, // 東金市 (7級地)
+  "122358": 10.0, // その他地域
+  "124099": 10.0, // その他地域
+  // 八千代市 (4級地)。実伝送 花見川 KK260705 の 71R1 集計10 で 1084 = 10.84 を確認
+  "122168": 10.84,
+  // 睦沢町 (7級地)。実伝送 東郷 KK260704 の 71R1 集計10 で 1021 = 10.21 を確認
+  "124263": 10.21,
+  // 四街道市 (5級地・上乗せ10%×人件費70% → 10.70)。
+  // 実伝送 KK260803 (7113) の 2786単位→29810円 = 10.70 で確定。
+  "122283": 10.7,
 };
 
 /** service_code から自治体prefix (CB_/K_/IH_) を取り出す。prefix 無し (旧共通コード) は ""。 */
@@ -184,6 +219,13 @@ export async function aggregateSougouSeikyu(
     unitPrice: number;
     /** 事業所の適用処遇改善コード (介護 116274 等 or 総合事業 CB_A26184 等) — 対象月世代解決済でなくてよい */
     effectiveFormulaCodes: string[];
+    /**
+     * 計画単位数 (kaigo_monthly_plan_units)。**総合事業だけを使う利用者のみ**を渡すこと。
+     * 併用者に渡すと介護給付ストリームと二重計上になる (呼び出し側で除外済)。
+     */
+    planUnitsByClient?: Map<string, number>;
+    /** 居宅サービス計画作成区分 (項19)。総合事業も 1/3 が混在するため取込値で出す */
+    planCreatorByClient?: Map<string, string>;
   },
 ): Promise<{
   rows: SougouSeikyuRow[];
@@ -263,6 +305,79 @@ export async function aggregateSougouSeikyu(
   /** 利用者の自治体prefixで基本コードを引く。prefix 違いにはフォールバックしない (誤請求防止)。 */
   const masterOf = (name: string, prefix: string): MasterEntry | undefined =>
     masterByPrefixNorm.get(prefix)?.get(toHankakuDigits(name));
+
+  // ── 1-b) 総合事業の定額加算 ────────────────────────────────────────────
+  //   A24001 (訪問型独自サービス初回加算 200単位/月) 等。稼働データには現れないため
+  //   提供表の加算エディタ (kaigo_visit_addon_lines / system='総合事業') から積む。
+  //   ⚠ 率で計算する処遇改善 (A2618x 等) はここでは扱わない (formula 側で計算済)。
+  const fixedAddonMaster = new Map<
+    string,
+    { units: number; unitType: string; code: string; name: string }
+  >();
+  const fixedAddonByClient = new Map<string, { addon_code: string; count: number }[]>();
+  {
+    // ⚠ 総合事業の加算コードは 1,003 件ある。**必ずページングする**。
+    //   PostgREST の既定上限 1000 で切れると、そこに載らなかったコードが
+    //   「マスタに無い」扱いで静かに落ちる (障害の初回加算 116020 と同じ罠)。
+    const mrows: unknown[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabase
+        .from("kaigo_service_codes")
+        .select("service_code, service_name, units, unit_type, formula, valid_from, valid_until")
+        .eq("system", "総合事業")
+        .eq("calculation_type", "加算")
+        .range(from, from + 999);
+      if (error) break;
+      mrows.push(...(data ?? []));
+      if ((data ?? []).length < 1000) break;
+    }
+    for (const r of (mrows ?? []) as {
+      service_code: string;
+      service_name: string;
+      units: number | null;
+      unit_type: string | null;
+      formula: unknown;
+      valid_from: string | null;
+      valid_until: string | null;
+    }[]) {
+      if (r.formula) continue; // %加算は率で計算する
+      if (!(r.units && r.units > 0)) continue;
+      const first = `${monthStr}-01`;
+      if (r.valid_from && r.valid_from > first) continue;
+      if (r.valid_until && r.valid_until < first) continue;
+      fixedAddonMaster.set(r.service_code, {
+        units: r.units,
+        unitType: r.unit_type ?? "1月につき",
+        code: r.service_code,
+        name: r.service_name,
+      });
+    }
+    if (opts.officeId) {
+      const { data: lrows, error: lerr } = await supabase
+        .from("kaigo_visit_addon_lines")
+        .select("client_id, addon_code, count")
+        .eq("office_id", opts.officeId)
+        // ⚠ kaigo_visit_addon_lines.target_month は **text の "YYYY-MM"**。
+        //   kaigo_monthly_plan_units (date の "YYYY-MM-01") と形式が違う。
+        //   -01 を付けて引くと 0 件になり加算が黙って落ちる (2026-08-07 に踏んだ)。
+        .eq("target_month", monthStr)
+        .eq("system", "総合事業");
+      // 列/テーブル未適用でも総合事業の集計は止めない (加算なしで続行)
+      if (!lerr) {
+        for (const r of (lrows ?? []) as {
+          client_id: string;
+          addon_code: string;
+          count: number | null;
+        }[]) {
+          if (!fixedAddonByClient.has(r.client_id)) fixedAddonByClient.set(r.client_id, []);
+          fixedAddonByClient.get(r.client_id)!.push({
+            addon_code: r.addon_code,
+            count: r.count ?? 1,
+          });
+        }
+      }
+    }
+  }
 
   // 2) 利用者情報 (clients + 対象月に有効な認定)
   //    住所地特例列 (jusho_tokurei / jusho_tokurei_insurer_number) は
@@ -608,6 +723,32 @@ export async function aggregateSougouSeikyu(
         is_monthly: isMonthly, // 71R1 明細02 項9 の 単位数/0 判定に使用
       });
     }
+    // 定額加算 (A24001 訪問型独自サービス初回加算 等)。稼働データには出ないので
+    // 提供表の加算エディタ (kaigo_visit_addon_lines / system='総合事業') から積む。
+    // ⚠ **限度額管理対象**に入り、処遇改善の母数にも算入される
+    //   (実伝送 花見川 1004033104: 限度対象 287→487 / 処遇改善 76→130 = 487×266‰)。
+    for (const line of fixedAddonByClient.get(userId) ?? []) {
+      const m = fixedAddonMaster.get(`${prefix}${line.addon_code}`);
+      if (!m) {
+        pushClientWarning(
+          userId,
+          `${userLabel}: 総合事業の加算コード ${line.addon_code} が ${prefix || "自治体prefix無し"} (保険者 ${insurerNum || "未設定"}) のマスタから引けません — この加算は請求に含まれていません`,
+        );
+        continue;
+      }
+      const cnt = line.count > 0 ? line.count : 1;
+      const units = m.units * cnt;
+      grossBaseUnits += units;
+      details.push({
+        service_type: m.name,
+        short_name: null,
+        service_code: m.code,
+        unit_per: m.units,
+        count: cnt,
+        units,
+        is_monthly: m.unitType.includes("月"),
+      });
+    }
     details.sort((a, b) => b.units - a.units);
 
     // ── 限度額管理 (aggregate.ts の区分支給限度基準と同方式) ──
@@ -711,8 +852,12 @@ export async function aggregateSougouSeikyu(
       details,
       grossBaseUnits,
       limitUnits,
-      // 計画単位数は介護給付側の運用 (月次情報タブ / 別表取込) のみ — 総合事業は未使用
-      planUnits: null,
+      // 計画単位数 (71R1 集計10 項9)。総合事業のみの利用者は月次情報タブ/別表取込の値を使う。
+      // 認定期間で分割した月 (segCount>1) は月内で計画が一意に決まらないので使わない。
+      planUnits:
+        seg.segCount > 1 ? null : opts.planUnitsByClient?.get(userId) ?? null,
+      // 居宅サービス計画作成区分 (項19)。総合事業も 1/3 が混在するので取込値を使う。
+      planCreatorKubun: opts.planCreatorByClient?.get(userId) ?? null,
       overUnits,
       // ケアマネ手割振り (kaigo_gendo_allocation) は総合事業側では使わない (上記コメント参照)
       overSource: "auto",

@@ -86,7 +86,7 @@ const NAV_HOME_CARE: NavEntry[] = [
   { name: "手順書", href: "/visit-procedures", icon: BookOpen },
   { name: "重要事項・契約書", href: "/user-contracts", icon: FileText },
   { name: "実績管理", href: "/visit-billing", icon: Calculator },
-  { name: "帳票作成", href: "/reports-visit", icon: FileText },
+  // 「帳票作成 (/reports-visit)」は訪問介護計画書の重複実装のため撤去 (2026-08-07)
   { name: "マスタ管理", href: "/master", icon: Settings },
   { name: "設定", href: "/settings", icon: UserCog },
 ];

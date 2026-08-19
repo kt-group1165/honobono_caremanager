@@ -48,6 +48,12 @@ import {
   type ShogaiReSeikyuReasons,
 } from "@/lib/shogai-seikyu/re-seikyu-shogai";
 import { validInMonth } from "@/lib/service-code-valid";
+import { loadContractsForMonth, loadServiceStartDates } from "@/lib/shogai-densou/contracts";
+import {
+  kindFromServiceName,
+  loadShogaiCodeMaps,
+  shogaiCodeFromTime,
+} from "@/lib/shogai-seikyu/code-from-time";
 import { getShogaiHomonUnitPrice } from "@/lib/shogai-seikyu/unit-price";
 import { isAddonRecord, isSessionSubRecord } from "@/lib/shogai-seikyu/record-markers";
 import {
@@ -110,6 +116,32 @@ interface ShogaiBillingStatusRow {
   henrei?: boolean;
   kago?: boolean;
 }
+
+// ── 伝送 (J11/J61/J41) と同時に出す帳票 ──────────────────────────────────────
+// 帳票そのものは従来から画面上のボタンで出せるが、伝送ボタンからも同じ対象で
+// 一括して出せるようにする (ブラウザの印刷 →「PDF に保存」でそのまま PDF 化)。
+type DensouPrintDocKey = "meisai" | "jisseki" | "seikyu";
+const DENSOU_PRINT_DOC_LABELS: {
+  key: DensouPrintDocKey;
+  label: string;
+  hint: string;
+}[] = [
+  {
+    key: "meisai",
+    label: "明細書",
+    hint: "介護給付費・訓練等給付費等明細書 (伝送 J11 に対応)。印刷すると発行済を記録します",
+  },
+  {
+    key: "jisseki",
+    label: "実績記録票",
+    hint: "サービス提供実績記録票 様式1 (伝送 J61 に対応)。重度訪問介護は様式3-1のため未対応",
+  },
+  {
+    key: "seikyu",
+    label: "請求書",
+    hint: "市町村別の総括請求書 (J111 相当) 1 枚",
+  },
+];
 
 // 一覧の 1 行 (当月通常行 or 過去月の再請求行)。再請求は元提供月で再集計済み
 interface DisplayRow {
@@ -209,6 +241,15 @@ export function ShogaiSeikyuContent({
   const [printMode, setPrintMode] = useState<
     "meisai" | "seikyu" | "riyou" | "jisseki" | "futan" | "keiyaku" | null
   >(null);
+  // 伝送ファイルと同時に出す帳票の選択 (既定 = 3 点すべて)。
+  // printMode は 1 種類しか持てないので、伝送からの複数同時出力はこちらで持つ。
+  const [densouPrintDocs, setDensouPrintDocs] = useState<Set<DensouPrintDocKey>>(
+    () => new Set<DensouPrintDocKey>(["meisai", "jisseki", "seikyu"]),
+  );
+  // 伝送からの印刷ジョブ実行中の帳票 (null = 通常表示)
+  const [densouPrinting, setDensouPrinting] = useState<Set<DensouPrintDocKey> | null>(
+    null,
+  );
   // 実績記録票 印刷用の月内提供実績 (client_id → visits)
   const [jissekiVisits, setJissekiVisits] = useState<
     Map<string, ShogaiDensouVisit[]>
@@ -845,6 +886,9 @@ export function ShogaiSeikyuContent({
         start_time: string | null;
         end_time: string | null;
         notes: string | null;
+        /** 制度区分 (登録時に選んだ事実)。null = 未設定 → 名前解決に委ねる。
+         *  aggregate.ts と同じ扱いにすること (片方だけ直すと請求と実績記録票がズレる) */
+        system?: string | null;
       }
       const schedRows: SchedRow[] = [];
       let soff = 0;
@@ -852,7 +896,7 @@ export function ShogaiSeikyuContent({
       while (true) {
         let sq = supabase
           .from("kaigo_visit_schedule")
-          .select("user_id, service_type, visit_date, start_time, end_time, notes")
+          .select("user_id, service_type, visit_date, start_time, end_time, notes, system")
           .eq("status", "completed")
           .gte("visit_date", from)
           .lte("visit_date", to);
@@ -870,7 +914,8 @@ export function ShogaiSeikyuContent({
           break;
         }
         const rows = (data ?? []) as SchedRow[];
-        schedRows.push(...rows);
+        // system='介護' と明示された行は障害の実績記録票に載せない (aggregate と同条件)
+        schedRows.push(...rows.filter((s) => s.system !== "介護"));
         if (rows.length < PAGE) break;
         soff += PAGE;
       }
@@ -880,7 +925,7 @@ export function ShogaiSeikyuContent({
             schedRows.map((s) => (s.service_type ?? "").trim()).filter(Boolean),
           ),
         );
-        const nameMap = new Map<string, { code: string; category: string | null }>();
+        const nameMap = new Map<string, { code: string; category: string | null; name: string }>();
         for (let i = 0; i < names.length; i += NAME_IN_CHUNK) {
           const chunk = names.slice(i, i + NAME_IN_CHUNK);
           const { data, error } = await validInMonth(
@@ -903,10 +948,22 @@ export function ShogaiSeikyuContent({
           }[]) {
             const k = c.service_name.trim();
             if (!nameMap.has(k)) {
-              nameMap.set(k, { code: c.service_code, category: c.service_category });
+              nameMap.set(k, {
+                code: c.service_code,
+                category: c.service_category,
+                name: c.service_name,
+              });
             }
           }
         }
+        // 名前で引けない障害行 (両制度を使う利用者が介護のサービス名のまま登録した回) は
+        // 時刻からコードを引く。aggregate.ts と同じ関数を使う (ズレを作らないため)
+        const needTimeResolve = schedRows.some(
+          (s) => s.system === "障害" && !nameMap.has((s.service_type ?? "").trim()),
+        );
+        const timeMaps = needTimeResolve
+          ? await loadShogaiCodeMaps(supabase, y, m)
+          : null;
         // "HH:MM(:SS)" 2 つから分数を計算 (0 時またぎは +24h 扱い)
         const diffMinutes = (s: string | null, e: string | null): number | null => {
           if (!s || !e) return null;
@@ -918,8 +975,28 @@ export function ShogaiSeikyuContent({
         };
         for (const s of schedRows) {
           const name = (s.service_type ?? "").trim();
-          const m = nameMap.get(name);
-          if (!m) continue; // 障害コードに解決できない = 介護/総合 → スキップ
+          const hitByName = nameMap.get(name);
+          let code: string;
+          let category: string | null;
+          let label: string;
+          if (hitByName) {
+            code = hitByName.code;
+            category = hitByName.category;
+            label = name;
+          } else if (s.system === "障害" && timeMaps) {
+            const kind = kindFromServiceName(name);
+            const hit = kind
+              ? shogaiCodeFromTime(timeMaps, kind, s.start_time, s.end_time, {
+                  minutes: diffMinutes(s.start_time, s.end_time) ?? undefined,
+                })
+              : null;
+            if (!hit) continue; // 集計側 (aggregate) が warning を出す
+            code = hit.code;
+            category = null;
+            label = hit.name; // 実績記録票にはマスタの障害サービス名を載せる
+          } else {
+            continue; // 障害コードに解決できない = 介護/総合 → スキップ
+          }
           schedRaw.push({
             client: s.user_id,
             visit: {
@@ -927,9 +1004,9 @@ export function ShogaiSeikyuContent({
               startTime: s.start_time,
               endTime: s.end_time,
               durationMinutes: diffMinutes(s.start_time, s.end_time),
-              category: m.category,
-              serviceCode: m.code,
-              serviceName: name,
+              category,
+              serviceCode: code,
+              serviceName: label,
               isAddon: isAddonRecord(s.notes),
               isSessionSub: isSessionSubRecord(s.notes),
             },
@@ -1019,6 +1096,63 @@ export function ShogaiSeikyuContent({
     }
   };
 
+  const toggleDensouPrintDoc = (key: DensouPrintDocKey) =>
+    setDensouPrintDocs((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  // ─── 伝送と同時に出す帳票の印刷 ────────────────────────────────────────────
+  //    実績記録票を含む場合は月内の提供実績を先に読む (printJisseki と同じ経路)。
+  //    明細書を含む場合は発行済 (issued_at) を記録する (printMeisai と同じ扱い)。
+  //    記録・読込に失敗しても紙は出せるよう、印刷そのものは止めない。
+  const runDensouPrint = async () => {
+    const docs = densouPrintDocs;
+    if (docs.size === 0 || targets.length === 0) return;
+
+    if (docs.has("jisseki")) {
+      try {
+        setJissekiVisits(await loadMonthVisits());
+      } catch (e) {
+        toast.error(
+          "実績記録票の作成に失敗: " + (e instanceof Error ? e.message : String(e)),
+        );
+      }
+    }
+    if (docs.has("meisai")) {
+      const now = new Date().toISOString();
+      const { error: e } = await supabase.from("shogai_billing_status").upsert(
+        targets.map((r) => {
+          const cur = statusByClient.get(r.user_id);
+          return {
+            client_id: r.user_id,
+            target_month: monthStr,
+            tenant_id: currentOffice?.tenant_id ?? "kt-group",
+            office_id: currentOffice?.id ?? null,
+            issued_at: now,
+            // 既存の伝送対象フラグ・備考は保持
+            densou_target: cur?.densou_target ?? false,
+            notes: cur?.notes ?? null,
+          };
+        }),
+        { onConflict: "client_id,target_month" },
+      );
+      if (e) {
+        if (!isMissingTable(e.code)) toast.error("発行状態の保存に失敗: " + e.message);
+      } else {
+        loadStatus();
+      }
+    }
+
+    setDensouPrinting(docs);
+    setTimeout(() => {
+      window.print();
+      setDensouPrinting(null);
+    }, 120);
+  };
+
   // ─── 電子請求受付システム向け 伝送ファイル (J11 / J61 / J41) ────────────────
   const [densouLoading, setDensouLoading] = useState(false);
 
@@ -1067,6 +1201,11 @@ export function ShogaiSeikyuContent({
         const visitsByClient = await loadMonthVisits(y, m);
         // 契約支給量 (契約情報レコード J121-05)
         const ids = monthRows.map((r) => r.user_id);
+        // 契約情報 (shogai_contracts)。あればこれが最優先で J121-05 になる
+        // ⚠ 対象月は引数の y/m (再請求では元提供月)。選択中の year/month ではない
+        const contractsByClient = await loadContractsForMonth(supabase, currentOffice?.id ?? "", ids, y, m);
+        // サービス利用開始年月日 (J121-02 項8)。契約日とは別物
+        const startByClient = await loadServiceStartDates(supabase, currentOffice?.id ?? "", ids);
         const contractByClient = new Map<
           string,
           { text: string | null; start: string | null; entry: string | null; holder: string | null; shikyuryo: Record<string, { hours?: number; minutes?: number; count?: number; units?: number }> | null }
@@ -1139,6 +1278,9 @@ export function ShogaiSeikyuContent({
           return {
             row: r,
             visits: visitsByClient.get(r.user_id) ?? [],
+            // 契約情報 (shogai_contracts)。あればこれが最優先で J121-05 になる
+            contracts: contractsByClient.get(r.user_id) ?? [],
+            serviceStartByType: startByClient.get(r.user_id),
             contractAmountText: contract?.text ?? null,
             contractStartDate: contract?.start ?? null,
             contractEntryNumber: contract?.entry ?? null,
@@ -1205,6 +1347,9 @@ export function ShogaiSeikyuContent({
           `伝送ファイルを ${results.length} 月分 (当月 + 再請求 ${reByMonth.size} 月) 出力しました`,
         );
       }
+
+      // ── 同時出力: チェックした帳票を 1 印刷ジョブに流す ──
+      await runDensouPrint();
     } catch (e) {
       alert(
         "伝送ファイルの生成に失敗しました: " +
@@ -1334,7 +1479,7 @@ export function ShogaiSeikyuContent({
         overlay で出すため、常時 print:hidden にはしない)。
         レイアウトは介護請求 (kaigo-seikyu) と統一:
         左=かな索引 / 中央=ツールバー+高密度グリッド+合計フッタ / 右=明細情報ペイン */}
-    <div className={`flex flex-1 min-h-0 ${printMode ? "print:hidden" : ""}`}>
+    <div className={`flex flex-1 min-h-0 ${printMode || densouPrinting ? "print:hidden" : ""}`}>
       {/* ── 左: 行カナ絞り込みサイドバー (介護請求と同一クラス) ── */}
       <div className="w-10 shrink-0 border-r border-gray-200 bg-gray-50 flex flex-col items-center py-1 gap-0.5 overflow-y-auto">
         <button
@@ -1462,6 +1607,28 @@ export function ShogaiSeikyuContent({
               >
                 <Send size={13} />伝送対象
               </button>
+              {/* 伝送と同時に出す帳票 (印刷ダイアログの「PDF に保存」でそのまま PDF 化できる) */}
+              <div
+                title="伝送ファイルを出力した直後に、同じ対象者で帳票を 1 回の印刷ジョブに流します。ブラウザの印刷 →「PDF に保存」で PDF になります"
+                className="flex items-center gap-2 border border-gray-400 rounded bg-white px-2 py-1"
+              >
+                <span className="text-xs text-gray-500">同時出力</span>
+                {DENSOU_PRINT_DOC_LABELS.map(({ key, label, hint }) => (
+                  <label
+                    key={key}
+                    title={hint}
+                    className="flex items-center gap-1 text-gray-700 cursor-pointer select-none"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={densouPrintDocs.has(key)}
+                      onChange={() => toggleDensouPrintDoc(key)}
+                      className="accent-indigo-500"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
               <div className="ml-auto flex items-center gap-2">
                 {densouCount > 0 && (
                   <span className="text-[11px] font-medium text-red-600">
@@ -1883,7 +2050,7 @@ export function ShogaiSeikyuContent({
     </div>
 
     {/* ===== 印刷 view: 明細書 (介護給付費・訓練等給付費等明細書) — 利用者 1 名 = 1 枚 ===== */}
-    {printMode === "meisai" && (
+    {(printMode === "meisai" || densouPrinting?.has("meisai")) && (
       <div className="hidden print:block">
         {targets.map((r) => (
           <ShogaiMeisaiPrintSheet
@@ -1899,7 +2066,7 @@ export function ShogaiSeikyuContent({
     )}
 
     {/* ===== 印刷 view: 請求書 (様式第一相当 — 事業所単位の総括 1 枚) ===== */}
-    {printMode === "seikyu" && (
+    {(printMode === "seikyu" || densouPrinting?.has("seikyu")) && (
       <div className="hidden print:block">
         <ShogaiSeikyushoPrintSheet
           groups={seikyuGroups}
@@ -1913,7 +2080,7 @@ export function ShogaiSeikyuContent({
 
     {/* ===== 印刷 view: サービス提供実績記録票 (様式1 居宅介護) — 利用者 1 名 = 1 枚 =====
         重度訪問介護 (12xxxx) は様式3-1 のため様式1 印刷から除外 (印刷様式は未実装。伝送 J611 は 0301 対応済) */}
-    {printMode === "jisseki" && (
+    {(printMode === "jisseki" || densouPrinting?.has("jisseki")) && (
       <div className="hidden print:block">
         {targets.map((r) => (
           <ShogaiJissekiKirokuhyoPrintSheet

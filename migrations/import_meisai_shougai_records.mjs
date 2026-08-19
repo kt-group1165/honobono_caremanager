@@ -28,14 +28,18 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const EXECUTE = process.argv.includes("--execute");
-const TARGET_MONTH = "2026-06";
-const MONTH_FIRST = "2026-06-01";
+// TARGET_MONTH=2026-07 で対象月を切替 (既定は 2026-06)。
+// MONTH_FIRST はサービスコードの世代判定 (validInMonth) に使うので必ず同じ月にする。
+const TARGET_MONTH = process.env.TARGET_MONTH || "2026-06";
+const MONTH_FIRST = `${TARGET_MONTH}-01`;
+const YM = TARGET_MONTH.replace("-", "");
 const AREA_DIR = process.env.AREA_DIR || "大網"; // 大網 稼働データは 介護 配下に同居
 const OFFICE_ID = process.env.OFFICE_ID || "269d77bc-5b61-4114-a2ea-e8dc2f220823"; // リンクスヘルパーステーション大網白里
 const OFFICE_BN = process.env.OFFICE_BN || "1275800892";
 const TENANT_ID = "kt-group";
 const MAP_TAG = process.env.MAP_TAG || "大網"; // _meisai_num_to_client_大網.json
-const CSV_DIR = fileURLToPath(new URL(`../サービス実績データ/${AREA_DIR}/202606/`, import.meta.url));
+// 月フォルダ配下を再帰で探す (障害の MEISAI が 介護/ に同居している拠点があるため)
+const CSV_DIR = fileURLToPath(new URL(`../サービス実績データ/${AREA_DIR}/${YM}/`, import.meta.url));
 
 // notes に埋め込む行種マーカー。**src/lib/shogai-seikyu/record-markers.ts と同一文字列**
 //   (TS 側から .mjs を import できないため二重定義。変更時は両方直すこと)
@@ -1011,9 +1015,14 @@ async function main() {
 
   if (!EXECUTE) { console.log("※ DRY RUN のため INSERT していません。--execute で本番投入。"); return; }
 
-  // 冪等: 既存の障害取込行を削除
+  // 冪等: 既存の障害取込行を削除。
+  // ⚠ **必ず対象月に絞る**。月スコープを忘れると翌月を取り込んだ瞬間に前月が全消しになる
+  //   (2026-08-07 に介護側で実際に起きた)。
+  const [dy, dm] = TARGET_MONTH.split("-").map(Number);
+  const MONTH_LAST = `${TARGET_MONTH}-${String(new Date(dy, dm, 0).getDate()).padStart(2, "0")}`;
   const { error: delErr } = await sb.from("kaigo_visit_schedule").delete()
-    .eq("office_id", office.id).like("notes", "[MEISAI障害取込%");
+    .eq("office_id", office.id).like("notes", "[MEISAI障害取込%")
+    .gte("visit_date", MONTH_FIRST).lte("visit_date", MONTH_LAST);
   if (delErr) { console.error(`✗ 既存削除失敗: ${delErr.message}`); process.exit(1); }
   console.log("既存 障害取込行 削除完了");
 

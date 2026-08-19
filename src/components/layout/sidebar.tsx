@@ -137,7 +137,8 @@ const NAV_HOME_CARE_SECTIONED: SectionSpec[] = [
       { name: "本部請求（集計）", href: "/billing-visit/honbu", icon: Building2 },
       { name: "請求統計", href: "/billing-visit/stats", icon: FileSpreadsheet },
       { name: "実績管理", href: "/visit-billing", icon: Calculator },
-      { name: "帳票作成", href: "/reports-visit", icon: FileText },
+      // 「帳票作成 (/reports-visit)」は訪問介護計画書の重複実装だったため撤去 (2026-08-07)。
+      // 計画書 = 日常業務「訪問介護計画書」/ 実施記録 = 「サービス実施記録」に集約。
     ],
   },
   {
@@ -148,7 +149,7 @@ const NAV_HOME_CARE_SECTIONED: SectionSpec[] = [
       // 障害請求は「請求」→ 障害請求タブ (/billing-visit/seikyu) へ統合したため
       // 独立メニューは一旦非表示 (2026-07-08)。ルート /billing-visit/shogai-seikyu は残置。
       // { name: "障害請求", href: "/billing-visit/shogai-seikyu", icon: Calculator },
-      // 受給者証・障害支援区分 は 利用者管理 → 障害福祉タブ (/users/[id]/disability, /shougai-cert) に集約
+      // 受給者証 は 利用者管理 → 障害福祉タブ (/users/[id]/shougai-cert) に集約
     ],
   },
   {

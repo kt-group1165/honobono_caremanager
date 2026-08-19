@@ -506,6 +506,9 @@ export async function aggregateBathVisitSeikyu(
         cert?.care_office_name?.trim() ||
         (cert?.care_office_id ? careNameById.get(cert.care_office_id) ?? null : null),
       serviceDays: new Set(recs.map((r) => r.visit_date)).size,
+      // 居宅サービス計画作成区分の取込 (一覧CSV) は訪問介護のみ。訪問入浴は従来どおり
+      // careOfficeNumber の有無から builder が既定値を決める。
+      planCreatorKubun: null,
       // 提供開始年月日は訪問介護の明細書だけが持つ項目 (総合事業・訪問入浴は対象外)
       serviceStartDate: null,
     });

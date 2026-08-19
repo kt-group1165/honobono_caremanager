@@ -1,0 +1,11270 @@
+[
+  {
+    "id": "000d2b91-0221-49d1-9a84-cd965b970424",
+    "before": {
+      "身体介護": {
+        "hours": 65,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 65,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "006bfba8-dc8d-4b3f-ae3e-a5cdf8ecfcdf",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "00a679e9-ead5-42e6-98b0-580872280730",
+    "before": {
+      "家事援助": {
+        "hours": 31,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 77,
+        "minutes": 30
+      },
+      "通院身体": {
+        "hours": 25,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 31,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 77,
+        "minutes": 30
+      },
+      "tsuuin_shintai": {
+        "hours": 25,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "00f1bffb-d53f-4ad1-ab48-339832e95beb",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0116ac02-24bd-4d0b-8b51-4f357d41f3d9",
+    "before": {
+      "同行援護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "024275e0-5d7d-43e6-9679-9a27183b8eae",
+    "before": {
+      "身体介護": {
+        "hours": 22,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 22,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "02e2058e-abd6-452e-a6da-bbf7d26d0dff",
+    "before": {
+      "身体介護": {
+        "hours": 32,
+        "minutes": 30
+      },
+      "通院身体": {
+        "hours": 3,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 32,
+        "minutes": 30
+      },
+      "tsuuin_shintai": {
+        "hours": 3,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0483256d-5012-4760-ab4f-7e26689e0878",
+    "before": {
+      "通院介助": {
+        "hours": 25,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "tsuuin": {
+        "hours": 25,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "05656c14-cbc5-4ee1-b12b-cf3820d6af19",
+    "before": {
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "05726dfc-0481-42b7-b17e-602bc709926b",
+    "before": {
+      "身体介護": {
+        "hours": 36,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 36,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "05cd44d5-aa7a-4182-9294-b965a17636a0",
+    "before": {
+      "身体介護": {
+        "hours": 25,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 25,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "05d1fc7a-0e03-42e6-90a1-7a47a8948d61",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "07223a67-be88-4517-b60f-d426139ac724",
+    "before": {
+      "家事援助": {
+        "hours": 18,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 18,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0725e4af-96d0-426b-9bab-6a42c3b60db2",
+    "before": {
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "077eca13-85a0-4477-abf7-7de174ffba58",
+    "before": {
+      "身体介護": {
+        "hours": 55,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 55,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "08039d26-6f96-4d1c-9eef-eb7cc8527c3b",
+    "before": {
+      "家事援助": {
+        "hours": 19,
+        "minutes": 0
+      },
+      "通院介助": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 19,
+        "minutes": 0
+      },
+      "tsuuin": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0829cfa7-a096-4caa-82b4-db47fbb2235a",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0851c0c6-cbc6-4335-abc3-1660151f96d9",
+    "before": {
+      "同行援護": {
+        "hours": 60,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 60,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "085c124f-a74b-4518-9ba5-faaba7c850dd",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "08d03de8-137e-4613-aba0-c0d8064a47e4",
+    "before": {
+      "重度訪問介護包括支援": {
+        "hours": 721,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "juudo_houmon_houkatsu": {
+        "hours": 721,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "08eda2c9-7350-4f88-9bbc-c5507c6ea939",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "08fa97b2-299f-42a5-935d-acff0ac73911",
+    "before": {
+      "家事援助": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 42,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 42,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0ab81435-c31b-4b51-ba2f-5729a01d4edf",
+    "before": {
+      "家事援助": {
+        "hours": 8,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 60,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 8,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 60,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0abb2a0e-0643-4aea-bc44-a2a5a663ce18",
+    "before": {
+      "家事援助": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 16,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 16,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0acbf8f8-78a4-46ac-a681-aa9f67af211a",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0b6eb46a-b1e8-4748-aa9b-0db815d172fd",
+    "before": {
+      "身体介護": {
+        "hours": 45,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 45,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0b9d211f-ec24-4bba-8ba2-d2569e6d8358",
+    "before": {
+      "家事援助": {
+        "hours": 35,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 35,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 35,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 35,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0bc0debf-6fdd-483b-a576-2b3ca11112dd",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0c290e5f-c608-43c0-9816-d10e9599d371",
+    "before": {
+      "家事援助": {
+        "hours": 38,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 75,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 38,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 75,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0c8581b3-a32a-451c-80dc-75a6cf2f2b72",
+    "before": {
+      "家事援助": {
+        "hours": 12,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 12,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0d0516fb-88de-4e7b-80cc-533f7c45a9bd",
+    "before": {
+      "身体介護": {
+        "hours": 62,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 62,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0d169cb7-447f-4a06-9818-a312c45c8b02",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0d3f61ce-578f-44de-af00-27282157a974",
+    "before": {
+      "身体介護": {
+        "hours": 217,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 217,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0d651dc9-5515-4df8-912b-09cf85e3a88b",
+    "before": {
+      "通院身体": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "tsuuin_shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0dc6591b-623f-42f6-a521-21ce5f14ffe5",
+    "before": {
+      "家事援助": {
+        "hours": 8,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 34,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 8,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 34,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0e001c23-ad1d-4747-bc27-2f88c74b3428",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0e6b1731-ca71-4a60-9fb5-65b5ee70c06d",
+    "before": {
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0e8e5216-4320-4dee-a911-03b1d1e58beb",
+    "before": {
+      "家事援助": {
+        "hours": 8,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 8,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0f2814b1-d516-4259-b49f-d1c04a6813b9",
+    "before": {
+      "身体介護": {
+        "hours": 25,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 25,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "0fd9aa7b-edd0-42c4-a228-17a4b9aacdbf",
+    "before": {
+      "家事援助": {
+        "hours": 45,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 225,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 45,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 225,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "10f35409-16f9-4ca1-b43a-2f349cc2f9e7",
+    "before": {
+      "身体介護": {
+        "hours": 40,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 16,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 40,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 16,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "10f9bd80-8f3d-4d8f-86ca-01bdab3a9064",
+    "before": {
+      "同行援護": {
+        "hours": 60,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 60,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "11076c78-9a59-4cdc-ab64-72eda47ac849",
+    "before": {
+      "行動援護": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "koudou": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "11325921-4da7-4db0-8723-8ceae59e0301",
+    "before": {
+      "家事援助": {
+        "hours": 42,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 25,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 42,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 25,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "1182f6e2-a39d-4546-9517-efaf7068a23d",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 40,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 40,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "11ce2d25-7feb-4b55-a935-47f9fbd7db58",
+    "before": {
+      "家事援助": {
+        "hours": 25,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 25,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "12c5d560-7172-4f55-9ecb-9829ebfd051b",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "134956e4-7abb-4e59-9e41-cc04c255cad5",
+    "before": {
+      "同行援護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "135a82c8-a490-49c2-855a-6f5a62039a6c",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "13b4af73-d983-418b-aadb-65f9ae3eb763",
+    "before": {
+      "家事援助": {
+        "hours": 6,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 6,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "14208e9f-b4b8-46fe-9dd4-8917869f2063",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "14897642-99ab-4681-88ed-cf13d8737c31",
+    "before": {
+      "家事援助": {
+        "hours": 22,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 22,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "14fa0d5d-119d-46c3-ad9e-60b3b509d0cd",
+    "before": {
+      "家事援助": {
+        "hours": 35,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 35,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "150aec50-d3c2-4ee7-895a-874c430885f0",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "15aadebd-b495-4351-950b-95538a47d50d",
+    "before": {
+      "身体介護": {
+        "hours": 40,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 40,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "15bef75f-7705-451c-8af3-58c5755978d2",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "18662545-011e-4a93-9e23-13b44019d8fb",
+    "before": {
+      "家事援助": {
+        "hours": 40,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 40,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "18d56495-e919-424c-8e29-b0ec9aabcab6",
+    "before": {
+      "身体介護": {
+        "hours": 27,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 27,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "19205ac7-e117-41e5-95b6-ade50933bcca",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "197aa35b-41d0-47bb-b0e4-5c326ee7fac8",
+    "before": {
+      "家事援助": {
+        "hours": 12,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 24,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 12,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 24,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "1a45e8c0-7326-48fc-9687-b82e231bc712",
+    "before": {
+      "家事援助": {
+        "hours": 0,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 9,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 0,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 9,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "1a58e2e3-45ef-4abe-8f28-059d8aaf932c",
+    "before": {
+      "身体介護": {
+        "hours": 81,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 16,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 81,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 16,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "1ae5a60c-46fd-4983-9dc8-924db0b57b0b",
+    "before": {
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "1b5a43fc-c256-41df-ac84-babfd77aa0e5",
+    "before": {
+      "家事援助": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "1badc56b-7ac0-46aa-8fe7-64821c2d4dc6",
+    "before": {
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "1bca8d8b-4f7e-420a-b717-2f6f4e93a7ef",
+    "before": {
+      "身体介護": {
+        "hours": 75,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 75,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "1bd8b245-b110-4a0e-8b72-4556292eb222",
+    "before": {
+      "身体介護": {
+        "hours": 120,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 32,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 120,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 32,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "1bdba2fa-1e25-40ce-97f4-839766d33b95",
+    "before": {
+      "家事援助": {
+        "hours": 31,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 31,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 31,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 31,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "1d132127-1a8c-4ef7-b8a0-59e603d07f69",
+    "before": {
+      "身体介護": {
+        "hours": 25,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 25,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "1e5b3867-3570-4bc0-a5ca-9f1a1e7d0d8c",
+    "before": {
+      "家事援助": {
+        "hours": 93,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 93,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 4,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 93,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 93,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 4,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "1e736aff-e2ab-4ec4-8467-e422876626c0",
+    "before": {
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "1f709be8-70d9-464f-8f9a-125115beeaf5",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 8,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 8,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "1fbace3b-1216-48d0-8e83-2af2ff541127",
+    "before": {
+      "身体介護": {
+        "hours": 80,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 80,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "20056483-5e30-4fc4-aa42-4144c1f4726f",
+    "before": {
+      "身体介護": {
+        "hours": 32,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 32,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "2126832d-edb5-4040-9e0c-5380acfb8a8c",
+    "before": {
+      "身体介護": {
+        "hours": 50,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 50,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "21416435-96db-433c-a4bb-7617d1678f2f",
+    "before": {
+      "身体介護": {
+        "hours": 15,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 15,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "218ff18e-d243-4f8c-8940-e68f346a899e",
+    "before": {
+      "家事援助": {
+        "hours": 2,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 60,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 2,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 60,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "229baff1-1b7e-4997-87a0-8f0acd184bbb",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 62,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 62,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "232d158f-eaae-482e-87f3-63f85696ff2b",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 2,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 2,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "234c5e41-24a7-43e1-9259-3fe7824cde6b",
+    "before": {
+      "家事援助": {
+        "hours": 22,
+        "minutes": 0
+      },
+      "通院介助": {
+        "hours": 13,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 22,
+        "minutes": 0
+      },
+      "tsuuin": {
+        "hours": 13,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "236d9e47-51a4-4e52-93e7-96b658311fbd",
+    "before": {
+      "家事援助": {
+        "hours": 21,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 21,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "23826060-5323-4991-b53d-131930e5c9b6",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "238f4f73-aca4-4276-864d-7ab7cbfcb699",
+    "before": {
+      "家事援助": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 2,
+        "minutes": 30
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 2,
+        "minutes": 30
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "250f9090-44c0-4cd1-95c3-8113eaf6e547",
+    "before": {
+      "通院介助": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "tsuuin": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "256bfd97-16ef-4473-85a4-48102fd4f226",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "25c6ea49-c243-49b8-b738-16f3a8bac64f",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "26129233-c23e-4d14-b9c6-50e58fc4a093",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "通院介助": {
+        "hours": 12,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "tsuuin": {
+        "hours": 12,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "26545ad8-e2aa-46d1-8006-a47e8d47e043",
+    "before": {
+      "家事援助": {
+        "hours": 18,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 18,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "2723363b-d35f-4268-ba56-4de3c02a9e8c",
+    "before": {
+      "家事援助": {
+        "hours": 31,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 31,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 31,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 31,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "27c3e2eb-22d8-48cf-b439-30fd338d9f91",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 24,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 24,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "27e429c8-9ac9-4040-b0b9-84a1a2bcaf3f",
+    "before": {
+      "身体介護": {
+        "hours": 37,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 37,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "2883a6a1-f156-4437-83c0-cc1adc881bd0",
+    "before": {
+      "通院身体": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "tsuuin_shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "28ca823e-3dd3-4091-8229-b7b269ae5515",
+    "before": {
+      "通院身体": {
+        "hours": 4,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "tsuuin_shintai": {
+        "hours": 4,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "28ce75ff-8f7a-4a0f-a627-26ac0e6fc65d",
+    "before": {
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "29666687-0b94-470f-9cb0-1a8a9821b951",
+    "before": {
+      "身体介護": {
+        "hours": 20,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 20,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "298a91cf-02d3-46b4-8a55-2ce9ae0f0a6c",
+    "before": {
+      "身体介護": {
+        "hours": 50,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 50,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "2a6ba9dc-4621-40e3-b223-6e1c484e4e52",
+    "before": {
+      "身体介護": {
+        "hours": 75,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 75,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "2b9a675b-d757-4633-8364-39300398efbc",
+    "before": {
+      "身体介護": {
+        "hours": 32,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 32,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "2bd7c719-3eaf-49f1-b485-8fe62eefc6bb",
+    "before": {
+      "家事援助": {
+        "hours": 24,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 24,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "2bd8332c-f9b3-4400-a466-193e00df6634",
+    "before": {
+      "家事援助": {
+        "hours": 18,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 18,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "2d53e19b-1903-452b-8bd2-71ebedec59a1",
+    "before": {
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "2e48005c-409f-4c03-9dc9-255d71920f5e",
+    "before": {
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "2eb05f1a-3119-420a-ba0c-728b042acf74",
+    "before": {
+      "身体介護": {
+        "hours": 96,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 96,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "2eb7bd05-10ef-4b7c-a29a-868c45b5c75d",
+    "before": {
+      "身体介護": {
+        "hours": 31,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 31,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "2fd9f471-168f-4438-8a28-24600eccab12",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "305eeae4-3fa2-4448-ae84-5bce73d2802d",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "307ec404-ce9c-4905-ae47-a1148f3d336a",
+    "before": {
+      "家事援助": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "30a831fd-84fa-4a7a-be2c-811818fcc2ea",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 45,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 45,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "310446a9-99fc-4071-a5fc-6e4c37e0e25e",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "3142fe75-52a9-4618-be22-e3e9067aa0ce",
+    "before": {
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "3260d380-010d-4143-85a0-606370f660be",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "32c38dea-118c-41f8-ab53-7e580c884801",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 105,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 105,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "33616a8e-42fe-407f-95bd-3757f92bd6c6",
+    "before": {
+      "身体介護": {
+        "hours": 82,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 82,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "3402dda1-3a90-4cbb-9561-00a95516b0c4",
+    "before": {
+      "身体介護": {
+        "hours": 62,
+        "minutes": 0
+      },
+      "通院介助": {
+        "hours": 12,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 62,
+        "minutes": 0
+      },
+      "tsuuin": {
+        "hours": 12,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "347ee623-b2b5-42a4-9659-1c77e9650f53",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 57,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 57,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "3547ae97-329b-474f-b322-53d4a4559b58",
+    "before": {
+      "身体介護": {
+        "hours": 120,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 120,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "35b48cfe-8463-4e89-a394-0dfd41e72a70",
+    "before": {
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "35fc8c04-62ce-4d98-8030-42022fa9a0a9",
+    "before": {
+      "身体介護": {
+        "hours": 83,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 83,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "360f943d-1d1e-419d-ac07-939234794cb6",
+    "before": {
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 9,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 9,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "37ce9418-7b5c-407c-bce5-d72085826811",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "385563a8-ec74-4d8f-b82f-6ece2caaacf9",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "386646cd-f753-41bf-8b13-40d3adc79786",
+    "before": {
+      "家事援助": {
+        "hours": 83,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 160,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 83,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 160,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "3887f596-d082-4d05-b477-334a97ad8e9a",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "38d96569-e1b2-47f3-81f7-c012e86d43d6",
+    "before": {
+      "家事援助": {
+        "hours": 19,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 19,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "3948c8f7-3c75-46a1-b24e-0bf137442f0f",
+    "before": {
+      "家事援助": {
+        "hours": 23,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 23,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 23,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 23,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "3963b286-48ab-4e7f-8c44-0685bd2ed4ed",
+    "before": {
+      "同行援護": {
+        "hours": 57,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 57,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "3a5e6a91-f7c0-475d-aa80-f034e5ddae9f",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "3af4d316-348a-4616-8c3c-394a86dceb4e",
+    "before": {
+      "家事援助": {
+        "hours": 16,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 16,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "3b746b7b-cf5f-4870-9372-997194d3509c",
+    "before": {
+      "身体介護": {
+        "hours": 52,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 52,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "3c18e3e2-3a8c-423b-a4d2-636c76d6d6e6",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 50,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 50,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "3c1caab3-1cae-4eaa-8709-264479eceff0",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "3c2724b9-73d3-4a2d-8086-a1669091c32c",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 3,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 8,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 3,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 8,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "3d99da1b-8496-432c-a68f-6094c5eba960",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "3e2aaf85-f4c8-4ada-b987-1b322f2e554d",
+    "before": {
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "3e671596-a0d6-49c5-9779-d20d3cb24dc3",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "3ea6304d-11b8-4e42-a198-83538eb82769",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "3f0aac14-6ff9-4646-ab32-f4c4647ddf60",
+    "before": {
+      "身体介護": {
+        "hours": 111,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 111,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "3f0b657d-f6d4-4ebb-966a-eae3d93c91f1",
+    "before": {
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "3f8020ad-e65d-47a6-bd43-7d135bb17acf",
+    "before": {
+      "家事援助": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 6,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 6,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "3f86f557-4ffe-47b3-b679-d15672637c29",
+    "before": {
+      "同行援護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "3fbb615e-3419-4f0e-9d2b-f909f1b91ce9",
+    "before": {
+      "身体介護": {
+        "hours": 45,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 45,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "40dfaac9-4c88-453e-ac30-e7a01bebc60b",
+    "before": {
+      "重度訪問介護区分６該当": {
+        "hours": 219,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "juudo_houmon_kubun6": {
+        "hours": 219,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "40fd0e19-71c9-4d34-bf31-24fe317d0e3e",
+    "before": {
+      "身体介護": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 9,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 9,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "4198944f-0cef-4f72-acdb-66532477f3a6",
+    "before": {
+      "家事援助": {
+        "hours": 12,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 12,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "41eb23c3-0319-49b3-9359-e3dbc6d519aa",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 3,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 3,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "42088663-ffb8-4200-99f2-4b675f55159f",
+    "before": {
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "421c47b4-85e6-4ec6-b239-05db109ac128",
+    "before": {
+      "家事援助": {
+        "hours": 22,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 22,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "4296d9ef-a891-40a0-934c-9c7da4d866e7",
+    "before": {
+      "身体介護": {
+        "hours": 45,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 45,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "4301a392-6092-4b3d-befb-453d1d26f84f",
+    "before": {
+      "身体介護": {
+        "hours": 2,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 2,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "436366fe-c020-4245-aea9-623b6167ca59",
+    "before": {
+      "身体介護": {
+        "hours": 16,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 16,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "438c1627-4a43-499a-b919-d90af927a00e",
+    "before": {
+      "家事援助": {
+        "hours": 46,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 139,
+        "minutes": 30
+      },
+      "通院身体": {
+        "hours": 12,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 46,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 139,
+        "minutes": 30
+      },
+      "tsuuin_shintai": {
+        "hours": 12,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "447a9b5d-4b5e-4668-b1c8-496ff76b79a3",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "45db5b64-53eb-40df-9f73-ef9d0df59ff6",
+    "before": {
+      "身体介護": {
+        "hours": 35,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 35,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "470b703b-147e-4fbd-9659-3063844ffd75",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "473f5fda-8428-4764-a9b7-d7b45a417927",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 22,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 22,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "47dd7a6f-a3f9-456e-b2f4-778bac63642c",
+    "before": {
+      "同行援護": {
+        "hours": 28,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 28,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "48b6c4a1-f0a2-49de-9cfd-5eefb3264b3a",
+    "before": {
+      "家事援助": {
+        "hours": 50,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 4,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 50,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 4,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "48f5ed6b-4fe0-440c-ad13-0650a11d701a",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 57,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 57,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "49fc8b15-ab12-48dc-8de2-3c9f6fb228ba",
+    "before": {
+      "家事援助": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "4a2441c7-8039-46b7-87f4-d733530d962f",
+    "before": {
+      "家事援助": {
+        "hours": 16,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 16,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "4a2d2109-f511-45b3-bc89-91204384ffb6",
+    "before": {
+      "身体介護": {
+        "hours": 36,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 36,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "4a5b3ddc-490b-473b-b8cc-08d616f6d2e1",
+    "before": {
+      "家事援助": {
+        "hours": 25,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 25,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "4a9c6388-510b-491e-ae7e-53a89de38b4e",
+    "before": {
+      "家事援助": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "4b1b71a8-4eb4-48f7-a349-7f847c3234a9",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "4b4ecccd-2083-4bf9-90a2-283052482036",
+    "before": {
+      "同行援護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "4b5883ef-9197-4271-85ce-42e73ecddbda",
+    "before": {
+      "身体介護": {
+        "hours": 150,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 150,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "4b7299fe-5a80-4c1c-ae0b-8b27876b15e2",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "4c834685-4188-4324-a174-30b63872c5af",
+    "before": {
+      "身体介護": {
+        "hours": 90,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 24,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 90,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 24,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "4d6fc82d-cbad-4295-881d-0ad48225870d",
+    "before": {
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "4e3c6bce-cdb5-48f8-948f-93e35d1cf565",
+    "before": {
+      "家事援助": {
+        "hours": 37,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 12,
+        "minutes": 30
+      },
+      "通院介助": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 37,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 12,
+        "minutes": 30
+      },
+      "tsuuin": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "4e540ce3-9130-4548-b917-90481b7ce8b6",
+    "before": {
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "4f29735b-6198-41d0-9c4b-98c39da3ffd8",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "4f929c7c-fc25-4455-9401-4df6afab9150",
+    "before": {
+      "家事援助": {
+        "hours": 12,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 152,
+        "minutes": 30
+      },
+      "通院身体": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 12,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 152,
+        "minutes": 30
+      },
+      "tsuuin_shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "4fbfda5a-e15e-4394-a44f-a497e36e8612",
+    "before": {
+      "同行援護": {
+        "hours": 45,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 45,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "4fd114b1-7db1-41b2-84a8-6126c8c7f909",
+    "before": {
+      "身体介護": {
+        "hours": 60,
+        "minutes": 0
+      },
+      "通院介助": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 60,
+        "minutes": 0
+      },
+      "tsuuin": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "507d9bd9-aa92-47d2-927b-6f244edcd4a8",
+    "before": {
+      "身体介護": {
+        "hours": 50,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 50,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "50f4b6a8-c13e-43fb-832d-4e74f9e3d964",
+    "before": {
+      "家事援助": {
+        "hours": 12,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 12,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "50fa9c53-eaaa-44e3-9242-7f1f15d69ab3",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 34,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 34,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "513df5cb-6676-4701-bea5-19949f16406d",
+    "before": {
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "51b2a8c4-e297-4ee3-b1d2-99524f61cf6c",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "51e31d4b-35ec-4f16-8fee-565867d3724c",
+    "before": {
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "520d18b3-25c0-4e9c-820c-bec41424e2b0",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "534f9b85-ccd3-4b3a-b6d4-e027eb9fb032",
+    "before": {
+      "家事援助": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "通院介助": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "tsuuin": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "546dc76a-9e90-4e77-9061-7aa3fadc3a31",
+    "before": {
+      "身体介護": {
+        "hours": 76,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 9,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 76,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 9,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "55163e27-44da-4dcd-a4c7-acfb6a0f5666",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "55b3eb59-f9ec-4eda-92b5-b368c3a25147",
+    "before": {
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "55c72ffb-33ab-4b81-b75a-8869b8bc2454",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "55d76be7-ad71-417b-8c65-1a10c6925332",
+    "before": {
+      "家事援助": {
+        "hours": 19,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 19,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 19,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 19,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "560bbf94-9786-4c2e-902b-258d1731571c",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "560e08a4-8fc7-411e-a2c4-9392b884ea43",
+    "before": {
+      "家事援助": {
+        "hours": 4,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 40,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 4,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 40,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "567963e5-5416-4661-b703-1da233eb1b08",
+    "before": {
+      "家事援助": {
+        "hours": 115,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 95,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 3,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 115,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 95,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 3,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "56dbcc19-a33a-475d-89ee-cf0d02559504",
+    "before": {
+      "身体介護": {
+        "hours": 120,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 120,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "573c74fb-1e8e-47b0-9fe5-4d8182da39c4",
+    "before": {
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "5798fa91-34e7-4bf3-884a-6e94ab904415",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 16,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 16,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "5891d3f3-e635-456a-a7bf-0c3a6e53a3cf",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "5896fd4d-35cd-44a2-a019-6b87e950d1c2",
+    "before": {
+      "家事援助": {
+        "hours": 55,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 65,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 55,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 65,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "58a639ac-4ffa-4189-90c0-b35e14b8454d",
+    "before": {
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "590e01d3-228c-489a-8508-34b6f863a2bf",
+    "before": {
+      "身体介護": {
+        "hours": 217,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 217,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "592b1a04-884c-4819-a464-fba3a747309d",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "5957cef9-9fc0-4b6d-b4ca-5c22ada8ad34",
+    "before": {
+      "重度訪問介護区分６該当": {
+        "hours": 453,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "juudo_houmon_kubun6": {
+        "hours": 453,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "5a9b0d24-3aea-4d83-9c86-5b515aa41a60",
+    "before": {
+      "身体介護": {
+        "hours": 85,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 6,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 85,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 6,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "5b3f2e65-8d17-41d1-b175-2e49e1ef71b5",
+    "before": {
+      "身体介護": {
+        "hours": 50,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 50,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "5bbc7589-1cc5-478f-a248-8fbe3d619e09",
+    "before": {
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "5bf7db70-6175-4bc6-9b30-11184c6ec776",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "5c1874b0-9aa4-4b67-98d4-b9beb4dac998",
+    "before": {
+      "家事援助": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "5c29d3c5-79fc-44d0-ad07-f326c71d2e79",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "5c33f678-a47e-4e31-a20c-71fb740cb1c8",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "5c3895b5-33c8-4d9d-a0ef-70558d760f35",
+    "before": {
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "5c72376c-b2d4-4f8f-b2f4-d85314656c89",
+    "before": {
+      "身体介護": {
+        "hours": 77,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 77,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "5d8c0040-e5fa-4414-91b2-ff77a9c6a57a",
+    "before": {
+      "身体介護": {
+        "hours": 67,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 67,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "5e3b725b-dc8a-4f55-a452-4c0f791fad9b",
+    "before": {
+      "身体介護": {
+        "hours": 18,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 18,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "5efa379d-01c7-4f10-98c4-c1da796a6a12",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "5f15a947-8e0e-47a8-80c0-0e37ed46a1cf",
+    "before": {
+      "家事援助": {
+        "hours": 60,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 105,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 13,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 60,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 105,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 13,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "5f85da00-2c59-4157-8374-befb6ac34f3c",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "5fd2f13e-69e4-4431-ba20-704b13b84cf6",
+    "before": {
+      "同行援護": {
+        "hours": 39,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 39,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "5fd50d0d-85e8-45e0-9fb1-cbf00d4e9865",
+    "before": {
+      "身体介護": {
+        "hours": 46,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 46,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "601b2dc0-1c8d-4cfd-a295-7648db723a7a",
+    "before": {
+      "家事援助": {
+        "hours": 14,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 45,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 14,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 45,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "60b40f63-4612-46c3-957e-f6b5fd936d4a",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "通院介助": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "tsuuin": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "60e26698-bd64-4378-bd1a-b2e2642ed745",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "6175bb1a-15cc-447d-bfdf-0717c3eb854c",
+    "before": {
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "61c1a443-f65d-4383-8240-54e0c2211198",
+    "before": {
+      "身体介護": {
+        "hours": 312,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 312,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "620fb31c-ebd5-44d7-ad26-bf3685c3616b",
+    "before": {
+      "家事援助": {
+        "hours": 17,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 17,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "6244e2d3-fed6-46ab-84e6-a3c8636c9aea",
+    "before": {
+      "家事援助": {
+        "hours": 45,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 188,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 45,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 188,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "62c09034-f9a5-4e60-843c-a82f16cb2e8f",
+    "before": {
+      "身体介護": {
+        "hours": 45,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 45,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "62fca217-2e80-446b-8ca2-0773df5c022d",
+    "before": {
+      "身体介護": {
+        "hours": 80,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 80,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "6304094f-f12f-40a7-9be7-c9d14e4949ab",
+    "before": {
+      "身体介護": {
+        "hours": 54,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 54,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "6346c95a-6713-44b5-ac54-65d6ccf8101d",
+    "before": {
+      "移動介護": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "重度訪問介護その他": {
+        "hours": 0,
+        "minutes": 30
+      },
+      "重度訪問介護区分６該当": {
+        "hours": 487,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "idou": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "juudo_houmon_sonota": {
+        "hours": 0,
+        "minutes": 30
+      },
+      "juudo_houmon_kubun6": {
+        "hours": 487,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "63b0cd87-fd87-4267-8d60-4b59ce8a846b",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 12,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 12,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "641829a8-ec36-4719-8f8d-f7ea136f4ba6",
+    "before": {
+      "身体介護": {
+        "hours": 46,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 46,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "64744001-27ed-48fa-b7f2-4c4de4693c9c",
+    "before": {
+      "家事援助": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 35,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 35,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "64b8cbdd-c8a8-496e-ae62-9e9222c810c3",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 16,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 16,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "6520e05c-51c0-401d-8a7d-88e9899647fc",
+    "before": {
+      "家事援助": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "65d0d324-7b4e-4277-8087-f12a9b681046",
+    "before": {
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "66418c14-fece-4756-b2c0-81781f976b04",
+    "before": {
+      "家事援助": {
+        "hours": 40,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 40,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "66e804f1-21bf-4252-87cd-09d7fb89d6c0",
+    "before": {
+      "身体介護": {
+        "hours": 216,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 9,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 216,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 9,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "676784c8-a5f6-4b83-9cdc-157385f4359c",
+    "before": {
+      "身体介護": {
+        "hours": 80,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 80,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "676b7c5e-5f03-48d1-9adc-359f2affe5d2",
+    "before": {
+      "身体介護": {
+        "hours": 181,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 181,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "6879fda4-8747-43b7-8481-8ee22d1bbe0c",
+    "before": {
+      "家事援助": {
+        "hours": 23,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 12,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 23,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 12,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "6a70bcf7-5ad9-4b98-8459-fbcabf1a8312",
+    "before": {
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "6aa2a61e-9520-434f-b3b7-9d8cebc33a24",
+    "before": {
+      "家事援助": {
+        "hours": 17,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 17,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "6c2ea116-d0c3-40b3-aa74-ae5c73d62ec7",
+    "before": {
+      "通院介助": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "tsuuin": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "6c6390c2-1423-4c21-b144-59a0002cccc0",
+    "before": {
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "6da0c7fb-eb46-44bd-b9fb-b275da2bf004",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "6da0d1bd-7356-4495-ad86-9d5324776299",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "6e8846fa-c72a-4201-a598-119675f3d8bd",
+    "before": {
+      "身体介護": {
+        "hours": 12,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 12,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 12,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 12,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "6f6cb868-6f2c-4ac6-8950-0fa264f4db56",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 16,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 16,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "6fdfe127-c039-4933-bb3f-3588b76017f5",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 71,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 71,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "7063f5c3-0517-4544-ab0c-a0617d32640a",
+    "before": {
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "708290bc-6f7a-491b-945d-82a3af6e46a4",
+    "before": {
+      "身体介護": {
+        "hours": 72,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 72,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "7093737d-41db-4c3e-af1c-08433d56f515",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "71b73434-b3f5-4a30-b459-e64c4d43baf5",
+    "before": {
+      "身体介護": {
+        "hours": 40,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 40,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "72743635-149f-42ac-935a-f62811e8ce3f",
+    "before": {
+      "家事援助": {
+        "hours": 45,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 48,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 6,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 45,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 48,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 6,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "72a4dd70-05cc-494f-9147-4d2a646410b6",
+    "before": {
+      "家事援助": {
+        "hours": 37,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 31,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 37,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 31,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "72fd502e-c324-47a7-8f89-7d5980e2a399",
+    "before": {
+      "身体介護": {
+        "hours": 132,
+        "minutes": 30
+      },
+      "通院身体": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 132,
+        "minutes": 30
+      },
+      "tsuuin_shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "72fe5555-ccc0-4eca-89ba-4cd61cd7888b",
+    "before": {
+      "家事援助": {
+        "hours": 45,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 180,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 14,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 45,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 180,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 14,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "73e35211-75f4-4fe5-bd08-f5cbc35d387a",
+    "before": {
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "741a52f9-6f3f-4086-8832-a28f151956ef",
+    "before": {
+      "同行援護": {
+        "hours": 57,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 57,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "7421fb52-168d-4f89-9de9-990432a5c61a",
+    "before": {
+      "家事援助": {
+        "hours": 22,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 22,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "74377aa2-5ab9-4376-9a5b-cc4ea44536d0",
+    "before": {
+      "家事援助": {
+        "hours": 25,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 25,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "745fc55e-86f6-4f04-82e8-d3878e433908",
+    "before": {
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "755d3909-4d6e-48f6-8a2b-813df993f30a",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "7609b18a-0e33-4cdd-b554-3cd92059734a",
+    "before": {
+      "家事援助": {
+        "hours": 90,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 90,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 90,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 90,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "761a2a18-4752-4bb5-ab83-5981f894612b",
+    "before": {
+      "身体介護": {
+        "hours": 16,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 16,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "763e7ea2-b855-4e4c-a5e7-8f0a0d2a0682",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "7652370a-9458-4789-b74b-29f9ab14c9e3",
+    "before": {
+      "身体介護": {
+        "hours": 83,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 83,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "770b5291-c990-4ef6-b9a8-6ef44aabb3da",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "7764428e-e543-44b0-8130-f8dc6baa80a0",
+    "before": {
+      "同行援護": {
+        "hours": 34,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 34,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "7897e482-e59a-4f4d-80cc-2ebf56d75e27",
+    "before": {
+      "通院身体": {
+        "hours": 25,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "tsuuin_shintai": {
+        "hours": 25,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "78a879ca-4420-4496-a345-2a1c6cf4c102",
+    "before": {
+      "同行援護": {
+        "hours": 72,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 72,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "7994bef7-2bb3-465b-bf3b-3dfa0b9bd916",
+    "before": {
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "79ccd104-f4cb-43a3-9d2c-5c8b3c52ea7e",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "79ee68ef-39b4-42f8-a077-e505eb5acb7e",
+    "before": {
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "7b0b9fec-a89b-436b-ac72-3c9e941b5112",
+    "before": {
+      "身体介護": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "7b4b74e7-47cb-4226-98a7-729b4cc9d413",
+    "before": {
+      "移動介護": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "重度訪問介護包括支援": {
+        "hours": 764,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "idou": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "juudo_houmon_houkatsu": {
+        "hours": 764,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "7b6723ad-783c-4164-9195-1b8a36f428e1",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "7be001d7-d121-4b7b-b3d5-ccd4b017dd0d",
+    "before": {
+      "身体介護": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "7c2d3e92-e0fd-4b29-a7e0-e48c2c91d0df",
+    "before": {
+      "身体介護": {
+        "hours": 380,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 380,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "7ccc69c2-b994-4acf-bc03-d2e480965eea",
+    "before": {
+      "身体介護": {
+        "hours": 40,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 40,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "7cf660b5-3d1d-494a-b8a6-df69da445ec7",
+    "before": {
+      "同行援護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "7d660f68-c65b-405c-a623-14a5e24f94f9",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "7dba211a-77b5-45f4-8f6c-255f2dbad33b",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 2,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 2,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "7df48bf1-f55c-4455-a837-59fca9f68f4b",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "7f41c200-e7ca-41ec-b081-366042cf27f5",
+    "before": {
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "7fb63afa-61e8-419a-a29c-d7ad6fa75f28",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "7fc5e6e9-facf-451e-93e4-e18c0cdf111b",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "806539a3-285e-49d5-a7f7-ddbb74bd8096",
+    "before": {
+      "身体介護": {
+        "hours": 33,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 33,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "8107344b-7c00-4919-b64a-af9f9944c2bd",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "81193f72-2bde-4769-8350-0bb2578d61d9",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 7,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 7,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "813e2636-491b-4483-8a52-b973e32211ed",
+    "before": {
+      "家事援助": {
+        "hours": 4,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 3,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 4,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 4,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 3,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 4,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "81c9526c-692b-404e-9d81-15130cb4b643",
+    "before": {
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "81d99e79-2411-4fcb-93e7-11a86ae74ac1",
+    "before": {
+      "家事援助": {
+        "hours": 31,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 96,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 31,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 96,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "825c7c5b-0cd9-4ff3-af99-2c8770fdfb48",
+    "before": {
+      "身体介護": {
+        "hours": 40,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 40,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "8273e252-6e34-4f44-a782-4b5db3e209ca",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "828ae2ce-9dbf-4bfe-bd29-4a0705f4896f",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "通院介助": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "tsuuin": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "82a445e1-c701-4f7a-bc5c-5dfdd42192ca",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "832cb6c5-2ce2-40c2-be46-4e01abda7d1c",
+    "before": {
+      "身体介護": {
+        "hours": 22,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 22,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "8411c131-4b46-4096-b7f9-edfa2a325ac5",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "84ab308b-afb5-432d-940a-9780d656792c",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 27,
+        "minutes": 30
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 27,
+        "minutes": 30
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "85be2e72-2e77-4458-804b-588bfab64bec",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "85dd6ffe-7b26-4e9d-b207-fdf521bed42c",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 135,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 135,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "86121af6-3888-4031-918c-dfd4a6609adc",
+    "before": {
+      "家事援助": {
+        "hours": 8,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 39,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 8,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 39,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "864300a3-75aa-499b-ab46-a0e51f62582f",
+    "before": {
+      "重度訪問介護包括支援": {
+        "hours": 700,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "juudo_houmon_houkatsu": {
+        "hours": 700,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "8670aae3-62a3-497a-9566-8e1bcd96bea9",
+    "before": {
+      "身体介護": {
+        "hours": 95,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 95,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "86bd4701-cc04-4f7d-80f5-a75ef8c1e3ae",
+    "before": {
+      "家事援助": {
+        "hours": 38,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 70,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 50,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 38,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 70,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 50,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "8747e505-f73e-4cef-9966-388157654d27",
+    "before": {
+      "身体介護": {
+        "hours": 40,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 40,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "88c703e1-db4a-4ada-be7a-2fe4f81c8ae8",
+    "before": {
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "88f0cefb-4ba5-48e4-a730-ada5f6be54c9",
+    "before": {
+      "身体介護": {
+        "hours": 37,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 37,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "89c5411d-3db9-4765-818c-3d6ebebab384",
+    "before": {
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "89ed007b-b8d3-490c-9ee1-95e7c4686c06",
+    "before": {
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "89efbfea-b789-4501-ad8a-e79ab89e8ccf",
+    "before": {
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "8adc0d82-5849-4cfb-9151-6b9fc5fcee94",
+    "before": {
+      "家事援助": {
+        "hours": 46,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 46,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "8c004427-7d82-4e1b-bdfc-aff23feaa207",
+    "before": {
+      "家事援助": {
+        "hours": 18,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 18,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "8c465a09-d55d-484c-9b96-fe05ea327b15",
+    "before": {
+      "家事援助": {
+        "hours": 45,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 50,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 12,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 45,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 50,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 12,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "8c6f53d5-f194-4a9b-a94b-3842f714e2a3",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "8cafc868-9888-4af6-8a87-9fafb6425147",
+    "before": {
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "8e2ee5c8-7e64-401d-9227-291200500724",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "8e3ccffb-8d0b-45aa-85c4-11f10033ebf5",
+    "before": {
+      "身体介護": {
+        "hours": 4,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 4,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "8f585717-8c34-45ab-afde-e901a6d1c837",
+    "before": {
+      "重度訪問介護区分６該当": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "juudo_houmon_kubun6": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "8f7bfa17-03af-4b75-be87-9b38d9b12876",
+    "before": {
+      "身体介護": {
+        "hours": 50,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 50,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "8fce2e1e-630e-4920-ab48-78ecec314431",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "909323a9-93fc-4dc2-aa9d-e1db2e54d4ad",
+    "before": {
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "912bc2cd-472d-406f-a602-399ccdfba935",
+    "before": {
+      "身体介護": {
+        "hours": 45,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 45,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "919a4999-878b-4dfa-b425-a952cb6d7f6f",
+    "before": {
+      "身体介護": {
+        "hours": 84,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 84,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "92078ae1-2954-4d09-8904-e9c70f168785",
+    "before": {
+      "身体介護": {
+        "hours": 60,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 60,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "922f98ca-b8d6-4afe-bca1-0bc9a7bb5564",
+    "before": {
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "924d5f95-f6a9-4eac-bc1b-8951df496183",
+    "before": {
+      "同行援護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "92607803-c1b5-44ca-b3b3-bfbc8013a191",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "9304c918-fb01-4eea-9ec5-c4c1ca9a8455",
+    "before": {
+      "家事援助": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "93327f40-1787-4d3b-8093-51570348c677",
+    "before": {
+      "家事援助": {
+        "hours": 19,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 34,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 19,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 34,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "937dd548-c393-4423-9255-110746cd8b60",
+    "before": {
+      "身体介護": {
+        "hours": 110,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 12,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 110,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 12,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "9496bde0-be63-4263-bdf9-fbe62d103c46",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "94ed9c9d-888d-4bd2-87d0-4381ef040b5f",
+    "before": {
+      "家事援助": {
+        "hours": 17,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 17,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 17,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 17,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "9578bf2b-a8cd-45d8-9e49-f30409be1bca",
+    "before": {
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "9579960e-a958-46e8-908b-681f7d4ecea3",
+    "before": {
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "958f36fa-ee35-47a6-b16e-8ab189929419",
+    "before": {
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "95c91e45-105e-4d51-bba4-11b656568257",
+    "before": {
+      "同行援護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "95d98700-d469-4b2d-8c4a-6d607d46652d",
+    "before": {
+      "身体介護": {
+        "hours": 155,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 155,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "966a0366-12dc-482d-af5d-f71248078d9e",
+    "before": {
+      "家事援助": {
+        "hours": 21,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 17,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 21,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 17,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "96706097-7c0d-4525-9213-0fc1d9635685",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "9772dc99-f67b-4f3e-859a-f7fbf7654ea5",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "996df249-a0bc-44fa-9a1d-7c8661f066f6",
+    "before": {
+      "家事援助": {
+        "hours": 115,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 95,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 115,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 95,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "9999976f-6e06-42b7-a234-30700ed162d1",
+    "before": {
+      "家事援助": {
+        "hours": 38,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 50,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 38,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 50,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "99bb5ceb-5018-4c04-b4ca-5ff37d55ad7b",
+    "before": {
+      "家事援助": {
+        "hours": 9,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 65,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 9,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 65,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "9b3ead2f-fea6-4cee-be5b-51d8b54b047e",
+    "before": {
+      "家事援助": {
+        "hours": 24,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 24,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "9bc7a26b-a658-4cb1-ad4f-02d1bd42126b",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "9bcb35a2-6e26-4cc3-9b15-3499cccd9427",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 9,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 9,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "9c3627cb-1775-42e6-896b-40f98c1e5c81",
+    "before": {
+      "同行援護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "9c390430-60f9-4f10-a604-28b5880ab620",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 28,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 28,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "9cf9d901-ae24-4179-aa9b-b74b9195367a",
+    "before": {
+      "家事援助": {
+        "hours": 28,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 4,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 4,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 28,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 4,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 4,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "9d1b74e6-ef04-4897-a92b-6154f26f0f22",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "9d26fc2a-488a-408f-a77a-83f1228de505",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 25,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 25,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "9d33f9af-aa7e-4e79-9aec-58654b7f8700",
+    "before": {
+      "家事援助": {
+        "hours": 12,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 12,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 12,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 12,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "9d4e4db7-83d4-4e96-bb02-d992d3d856a4",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "9d81c581-62a7-4e20-83d8-6d0d6195249d",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 6,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 6,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "9d92fd3c-6732-4bf7-a4ae-e78b829b164e",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 31,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 31,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "9eb75c2f-dd9e-4b1c-bf08-546b73e916e2",
+    "before": {
+      "身体介護": {
+        "hours": 50,
+        "minutes": 0
+      },
+      "通院介助": {
+        "hours": 28,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 50,
+        "minutes": 0
+      },
+      "tsuuin": {
+        "hours": 28,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "9f59321c-f0be-4a2c-b94f-ac2a940ece36",
+    "before": {
+      "身体介護": {
+        "hours": 60,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 60,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "9fa10105-3851-4533-b8d7-392a93f7fe0b",
+    "before": {
+      "身体介護": {
+        "hours": 69,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 69,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a065ac84-5efc-41f0-bbdc-8e3e82663aca",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a0778fff-d173-4c23-94b0-71b3b58d201e",
+    "before": {
+      "身体介護": {
+        "hours": 250,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 250,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "a0a8cd6d-afa8-488f-bbbd-9ed3899c3e72",
+    "before": {
+      "家事援助": {
+        "hours": 35,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 75,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 35,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 75,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a0aab63c-40be-44f2-b4c4-4ebc07026489",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a19e97f2-97a8-4ed9-9eb8-5379c34439bb",
+    "before": {
+      "身体介護": {
+        "hours": 76,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 14,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 76,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 14,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a2405fcd-5086-431c-8e57-047d6a3f549f",
+    "before": {
+      "同行援護": {
+        "hours": 57,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 57,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a2c509c9-ebac-4b72-8b60-9d22e1ac17cc",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a3c01b19-bd99-4260-87c2-0488dcc27577",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a3d257e0-bf3d-4f00-9caf-248550355816",
+    "before": {
+      "身体介護": {
+        "hours": 40,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 40,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a4963281-aa54-4f8a-901a-a36fac92f062",
+    "before": {
+      "身体介護": {
+        "hours": 75,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 6,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 75,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 6,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a4c176b0-8a96-47a0-9c32-b0a6bdc09dba",
+    "before": {
+      "同行援護": {
+        "hours": 56,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 56,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a4fbe63f-5944-48fb-b359-76b16de54904",
+    "before": {
+      "通院身体": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "tsuuin_shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a5aa2c9f-6a37-495d-a699-496bafceedc5",
+    "before": {
+      "家事援助": {
+        "hours": 45,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 45,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a6115362-b8ab-488e-a375-fcb4dffcba37",
+    "before": {
+      "身体介護": {
+        "hours": 124,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 124,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a67a9cac-b8e1-4617-8070-4ff7dfe1be92",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a6a47649-3f23-4c53-baa4-3cbb315c4489",
+    "before": {
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 9,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 9,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a72ba8bc-7840-4efc-9f14-eec80640e6ae",
+    "before": {
+      "家事援助": {
+        "hours": 12,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 12,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a73a23c3-6fe7-4be5-a925-72bc061440f6",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a77fd480-d619-4496-9e91-af0007d7ac28",
+    "before": {
+      "家事援助": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a7acc3b9-f294-4d51-92c2-60c628d6afb5",
+    "before": {
+      "家事援助": {
+        "hours": 9,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 50,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 9,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 50,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a8b9155f-947b-4fb3-bc90-64a6bd255641",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "a9a4bc11-3618-4e21-838c-4d5311317324",
+    "before": {
+      "通院介助": {
+        "hours": 24,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "tsuuin": {
+        "hours": 24,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "aa0c8782-b4a7-40f5-bddd-cd354f3c3b39",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "aa573d81-b760-4579-b69e-f736a5ee0101",
+    "before": {
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "aa5d0121-2dfc-486b-a7cf-0d018ef3ddf1",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "aaffd5fe-bb8b-462f-8f43-425ff8850a7a",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "ab19d3a7-233b-4217-a1c3-9d25e66de71d",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "ab237630-3510-4639-a6f9-f8196d1f245e",
+    "before": {
+      "身体介護": {
+        "hours": 100,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 100,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "ab3f6133-308c-4322-a1b8-57da3675f6da",
+    "before": {
+      "同行援護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "ac22069c-f9be-4ad4-b9f2-13737ce616b5",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "ac4d82a9-4d77-4ffe-aa09-de695bc70886",
+    "before": {
+      "家事援助": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 57,
+        "minutes": 30
+      },
+      "通院身体": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 57,
+        "minutes": 30
+      },
+      "tsuuin_shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "acad2b78-a8cb-42b1-9d14-99374c8e2150",
+    "before": {
+      "身体介護": {
+        "hours": 63,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 63,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "acfe4b24-c4d7-4b38-bada-96700516157c",
+    "before": {
+      "通院身体": {
+        "hours": 12,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "tsuuin_shintai": {
+        "hours": 12,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "ad9b1457-7e48-416e-b0e7-d0018a847314",
+    "before": {
+      "家事援助": {
+        "hours": 47,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 13,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 47,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 13,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "ada833da-98b1-4231-9864-f8ddbd53bb4e",
+    "before": {
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "aeb1029f-4a30-4bc1-a2f3-86ea6f48ecd0",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "aec117ee-a2f4-4ebb-9553-8bac5352ec4d",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "af71a61c-9d77-48a6-bf07-ce77a364d702",
+    "before": {
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "afca9da8-df1b-41d6-9ef5-9012c9a721aa",
+    "before": {
+      "家事援助": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 4,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 4,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b0daeaf7-dabf-4f9a-8041-ad46e2c30751",
+    "before": {
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b0e55abc-f9ab-4ff4-8c63-028ef21c8a5e",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 90,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 90,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b10b9412-578d-41b1-9861-16d22510e8cd",
+    "before": {
+      "身体介護": {
+        "hours": 25,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 25,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b18bff17-2939-4f0c-b945-424196530d4f",
+    "before": {
+      "同行援護": {
+        "hours": 40,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 40,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b1b73177-8bcc-46c3-b1a2-4e774eb09329",
+    "before": {
+      "身体介護": {
+        "hours": 32,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 32,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b233773d-36f9-4a22-a59f-e18b75c30e5d",
+    "before": {
+      "身体介護": {
+        "hours": 45,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 45,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b25039fc-8626-47cc-9b4b-3057fa52b380",
+    "before": {
+      "同行援護": {
+        "hours": 38,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 38,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b28ef578-b5f8-4391-aa46-42c57324a2e9",
+    "before": {
+      "同行援護": {
+        "hours": 70,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 70,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b35542c7-2d43-4f3a-9357-bb91ec66e24e",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b38977e0-773a-43d2-9c62-b3cf761f27ca",
+    "before": {
+      "身体介護": {
+        "hours": 107,
+        "minutes": 30
+      },
+      "通院身体": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 107,
+        "minutes": 30
+      },
+      "tsuuin_shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b439bad2-2fc4-4c3f-b70f-953e9a7dd1b7",
+    "before": {
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b46b7873-7595-4205-82ca-0634c07c844b",
+    "before": {
+      "乗降介助": {
+        "count": 16
+      },
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "jouko": {
+        "count": 16
+      },
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b500dbc9-cee6-453d-8a9f-d60054d9ff0c",
+    "before": {
+      "家事援助": {
+        "hours": 22,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 22,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "b5822041-5483-45ec-8d0c-80568218af63",
+    "before": {
+      "家事援助": {
+        "hours": 48,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 60,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 48,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 60,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b5be3d84-77f8-408b-8124-efa5a22f3129",
+    "before": {
+      "身体介護": {
+        "hours": 22,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 22,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "b6154ba2-d3d0-44f7-b7f8-9b348594f528",
+    "before": {
+      "身体介護": {
+        "hours": 31,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 31,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b672469a-470b-4ab3-a3b0-64fe289f622c",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 164,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 12,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 164,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 12,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b67b7b0a-5354-410f-b3b5-357a6ba08551",
+    "before": {
+      "身体介護": {
+        "hours": 67,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 67,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "b6a34068-4bbb-495d-a670-dc59f3ef39ff",
+    "before": {
+      "家事援助": {
+        "hours": 22,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 22,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "b6a4f4a6-2481-4197-bbaa-eee6c48172f1",
+    "before": {
+      "身体介護": {
+        "hours": 36,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 36,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b6b77dcc-e4bb-43bb-8ec5-02cce7d82a1a",
+    "before": {
+      "移動介護": {
+        "hours": 50,
+        "minutes": 0
+      },
+      "重度訪問介護包括支援": {
+        "hours": 717,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "idou": {
+        "hours": 50,
+        "minutes": 0
+      },
+      "juudo_houmon_houkatsu": {
+        "hours": 717,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b6bde9ce-4da5-4327-98fa-bed89c6cf56d",
+    "before": {
+      "身体介護": {
+        "hours": 18,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 12,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 18,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 12,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b7e714a5-1c1a-4622-91b1-656247a5cdf2",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "b7f4a291-1fa3-4195-87d3-6c2a30dfab9f",
+    "before": {
+      "身体介護": {
+        "hours": 25,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 25,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b8473dfd-9bd3-48a6-876c-9f7a94f6027f",
+    "before": {
+      "身体介護": {
+        "hours": 25,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 25,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b8cd2250-e296-4065-9df6-2da94912cae9",
+    "before": {
+      "身体介護": {
+        "hours": 40,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 40,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b8fc784b-0617-4e8b-8b84-8cf312243c52",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b8fd213f-a1f4-4373-89b7-c1dd7826ac76",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 40,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 40,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b9a6ec3e-3825-4ec6-9ef2-8092d82a92f3",
+    "before": {
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b9b18938-0ba3-4cde-8265-12e394ede786",
+    "before": {
+      "身体介護": {
+        "hours": 72,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 72,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b9bbfb15-9ce1-4edb-a877-c5393392ee7b",
+    "before": {
+      "同行援護": {
+        "hours": 45,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 45,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b9be12b5-668f-41cd-b01e-0d56c67ed862",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "b9cb03da-a5e6-4432-a3ad-487bbef96e98",
+    "before": {
+      "身体介護": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "b9eadd15-1d42-4f3b-9ac2-237d27ff1b84",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "ba156efe-1afa-4727-854b-cb76666260ce",
+    "before": {
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "ba465d25-2cb1-48e6-8bc9-f1af2a635e56",
+    "before": {
+      "同行援護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "bb5e6e5e-855d-456b-b357-7ca13ceb54fa",
+    "before": {
+      "家事援助": {
+        "hours": 42,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 144,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 42,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 144,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "bc4cce93-667a-474a-9b0e-f98cec51460a",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "bc9859ff-049a-439f-a5f0-9be917223cb9",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "bcba8eaf-d8a2-4c7d-979c-54757f4040ad",
+    "before": {
+      "家事援助": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "bce89255-ae5a-4f88-98ef-01f9e8771611",
+    "before": {
+      "家事援助": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "be8e7e40-2f7e-499f-b496-c86147ac9df5",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "beb4062f-69f7-4819-8911-d9539a92ee6a",
+    "before": {
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "bf0fb733-cc18-4bae-b319-0e7236e94930",
+    "before": {
+      "家事援助": {
+        "hours": 28,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 28,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "bf92f3ab-9bac-43da-9287-68c94d63654c",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "bfe84c28-de5e-4a5c-ba48-5c95a2e512a2",
+    "before": {
+      "家事援助": {
+        "hours": 17,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 17,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "c0b0e5de-6fc4-4621-b36e-11de32041132",
+    "before": {
+      "身体介護": {
+        "hours": 22,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 22,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "c0c85397-7b52-400f-8d73-e9f867fc56a5",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c1f111b2-c174-41a7-a6a8-c5e5908c6fe2",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c2625c49-529b-4401-8b2b-ee96d47051aa",
+    "before": {
+      "家事援助": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "c2927b95-4192-46e0-ad28-95321f7b62d2",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c2c549ac-4794-4ea8-a552-b38e9ac0fd8c",
+    "before": {
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c2e56baa-ff8f-41f0-b104-a064ff015d7f",
+    "before": {
+      "家事援助": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 23,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 23,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c321f57c-b8dc-43cd-9bc8-75e7acb71cec",
+    "before": {
+      "家事援助": {
+        "hours": 80,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 88,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 37,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 80,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 88,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 37,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c413e5e0-c478-4d88-8d57-4f788a203166",
+    "before": {
+      "乗降介助": {
+        "count": 6
+      },
+      "身体介護": {
+        "hours": 55,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "jouko": {
+        "count": 6
+      },
+      "shintai": {
+        "hours": 55,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c4ccd8da-6f5a-48a2-a4b1-177cfa4e304b",
+    "before": {
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 8,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 8,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c5248bb1-5153-4fcf-b718-f32a4aaeb840",
+    "before": {
+      "家事援助": {
+        "hours": 18,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 12,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 18,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 12,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c52cec79-0348-45ee-8b27-52d6d330db8f",
+    "before": {
+      "同行援護": {
+        "hours": 40,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 40,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c56b14a0-1974-4d38-84aa-e82766d8d932",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c658aba6-1a67-4b4b-940c-005a57992f6d",
+    "before": {
+      "身体介護": {
+        "hours": 62,
+        "minutes": 30
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 62,
+        "minutes": 30
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c6aed175-c52e-4398-bb3d-6850c94befd7",
+    "before": {
+      "身体介護": {
+        "hours": 25,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 25,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c724334b-940f-429c-962a-8d503b180de3",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c74ed616-c65d-441f-a4d1-dbe53640fe81",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c77054fc-33d7-44ca-b832-6dc0157f69c8",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c7f2bb94-f70c-487b-ad3e-fe37ca787b4a",
+    "before": {
+      "家事援助": {
+        "hours": 40,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 40,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c800764b-bda9-495d-84f5-086a62f2c0a8",
+    "before": {
+      "身体介護": {
+        "hours": 73,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 73,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c8a6beab-6abf-4885-b9a7-eba17aabf802",
+    "before": {
+      "身体介護": {
+        "hours": 12,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 12,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "c9296e11-cc94-49dd-a350-cd87c7f72736",
+    "before": {
+      "家事援助": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 8,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 8,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c998f943-3732-4d3b-85b1-6e2811443def",
+    "before": {
+      "身体介護": {
+        "hours": 94,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 94,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c99b21db-69c1-4eb2-bb86-44aeba1bfc92",
+    "before": {
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c9b44dcf-ef26-4b7c-a772-2ed624d61c42",
+    "before": {
+      "家事援助": {
+        "hours": 55,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 258,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 7,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 55,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 258,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 7,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "c9e2577d-2ebc-448d-9b75-cd4ba30bdca5",
+    "before": {
+      "身体介護": {
+        "hours": 54,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 54,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "ca8a6500-fb23-4ad9-abd3-f3ee854f6bdf",
+    "before": {
+      "家事援助": {
+        "hours": 27,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 27,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 14,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 27,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 27,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 14,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "cabe90b5-2f4d-40b6-b3a2-948d1e27f8ee",
+    "before": {
+      "身体介護": {
+        "hours": 78,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 78,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "cb674da0-f1b6-4a1f-993e-a6b834b9039a",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "通院介助": {
+        "hours": 6,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "tsuuin": {
+        "hours": 6,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "cd229056-5653-43ce-a170-730cd62c9225",
+    "before": {
+      "身体介護": {
+        "hours": 50,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 50,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "cdfd9829-47ac-47ec-9b6b-651784898bef",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 120,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 120,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "cf193951-e657-4c93-a155-0bf22ff2c6e1",
+    "before": {
+      "家事援助": {
+        "hours": 18,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 18,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 18,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 18,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "cf320942-7fe5-4690-b65a-cb9dfd0d421e",
+    "before": {
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d0228863-369a-488d-8328-64bc13ae0e3a",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d084df11-5ca6-4583-8e11-b9ef59921e9e",
+    "before": {
+      "家事援助": {
+        "hours": 38,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 38,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d11e978a-1338-4d1a-a63f-296ae49624f0",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "d12b7efd-91e5-4fcf-9c23-ddbcee3339cd",
+    "before": {
+      "家事援助": {
+        "hours": 31,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 18,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 31,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 18,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d15255a3-2671-4ae7-ad1c-08151c8dad18",
+    "before": {
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d16c346b-467e-4c4e-a172-9fc73f22b498",
+    "before": {
+      "同行援護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d17a8188-0055-4aff-a545-58a66b89b46d",
+    "before": {
+      "身体介護": {
+        "hours": 120,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 120,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d1961b17-8e8f-41b1-84dc-cd434977fb61",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d1c102c5-2335-4fd3-8328-c34ab49ac9b5",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 68,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 68,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d28a02d2-ece2-4a6d-b907-3d1953a15168",
+    "before": {
+      "身体介護": {
+        "hours": 43,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 43,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d2c83e6a-dbed-45d7-a949-f03e419c1a6d",
+    "before": {
+      "身体介護": {
+        "hours": 123,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 123,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d2eda3b0-b44d-4e23-ae39-f5acf7662b5b",
+    "before": {
+      "家事援助": {
+        "hours": 18,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 18,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d3157c1b-7b4b-4f02-9cdb-249c995e4a3c",
+    "before": {
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d3315b93-ab2b-4d5a-aa5d-e5344c1aed34",
+    "before": {
+      "同行援護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d3b6ccfe-8713-4131-99f2-7e51d3fcdb3c",
+    "before": {
+      "家事援助": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d4e4741e-69e4-4d06-884e-e156da74c634",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d514a7d3-7b0b-4675-bcda-86275de29bdd",
+    "before": {
+      "移動介護": {
+        "hours": 21,
+        "minutes": 0
+      },
+      "重度訪問介護包括支援": {
+        "hours": 744,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "idou": {
+        "hours": 21,
+        "minutes": 0
+      },
+      "juudo_houmon_houkatsu": {
+        "hours": 744,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d5ba54ae-1a62-4b0c-a90b-6022163f9a65",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 23,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 23,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d5fd1f75-0603-4d22-80e8-5c43c85e08da",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d7726966-5930-4cc7-8b41-f90aa3877403",
+    "before": {
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d828c1aa-1f8d-46cb-81ed-387cdca885b5",
+    "before": {
+      "家事援助": {
+        "hours": 1,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 45,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 1,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 45,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d850034e-f211-453d-a440-86f7caca3bc6",
+    "before": {
+      "家事援助": {
+        "hours": 8,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 8,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d8ab0cc6-9714-4c8c-bea6-6561bdb4da37",
+    "before": {
+      "家事援助": {
+        "hours": 12,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 50,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 12,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 50,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d8f7a2ce-6d44-4318-8f82-398e875682b0",
+    "before": {
+      "同行援護": {
+        "hours": 33,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 33,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d99b0963-47fd-49ab-b914-b4968bab6eb2",
+    "before": {
+      "家事援助": {
+        "hours": 35,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 31,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 35,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 31,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "d9a8467f-a52d-4d1a-a74a-26a0a43229df",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "da4079e5-1915-4dab-9fb4-734917a19ed6",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "daf9359f-986d-4481-b314-f4c1d52a244b",
+    "before": {
+      "家事援助": {
+        "hours": 60,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 130,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 9,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 60,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 130,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 9,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "dd1ddfd8-9476-46eb-a1a8-a7549917e467",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "ddae8205-74b7-4fd2-b007-8c92c777189f",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 2,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 2,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "ddecda83-7e0f-43b9-950f-8079da9ce314",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "de116a40-1ec0-401a-be36-6ea98cb2e1e6",
+    "before": {
+      "乗降介助": {
+        "count": 40
+      },
+      "家事援助": {
+        "hours": 35,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "通院身体": {
+        "hours": 28,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "jouko": {
+        "count": 40
+      },
+      "kaji": {
+        "hours": 35,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "tsuuin_shintai": {
+        "hours": 28,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "df4a854f-50e2-42ed-9ce0-04fbe30914d8",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 80,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 80,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "dfb86b9d-2360-4d65-90fc-8b0cdd7f5fa1",
+    "before": {
+      "家事援助": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 5,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 5,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 5,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "dfbe624e-8026-4f9a-9949-e4a8efb162dc",
+    "before": {
+      "身体介護": {
+        "hours": 50,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 50,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "e049be10-4fb4-48eb-92cd-ed5ce90feb14",
+    "before": {
+      "家事援助": {
+        "hours": 2,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 2,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 2,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 2,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "e084c042-e877-4321-bef6-c3ce76b3ee55",
+    "before": {
+      "家事援助": {
+        "hours": 28,
+        "minutes": 45
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 28,
+        "minutes": 45
+      }
+    }
+  },
+  {
+    "id": "e1a98f7e-970a-4faf-b251-b0ee29b309ec",
+    "before": {
+      "家事援助": {
+        "hours": 22,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 22,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "e1b7b371-2c1e-4fc7-969d-77d95fcafab6",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "e3022f3f-a1f7-4b8a-9558-2e202a6495ab",
+    "before": {
+      "身体介護": {
+        "hours": 70,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 12,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 70,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 12,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "e3f52a0e-63a7-494c-a245-b84e7526d2a7",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 45,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 45,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "e50e71a3-ed30-4475-a83c-a3fc1726a9f7",
+    "before": {
+      "身体介護": {
+        "hours": 25,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 25,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "e54f5e83-17f6-4c40-96a4-a424407ee75b",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 70,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 70,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "e5880025-d43f-4136-9491-ab3fe4ca3e12",
+    "before": {
+      "家事援助": {
+        "hours": 18,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 18,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "e633ea1d-1b0f-4e04-a6a3-ca160b771f9c",
+    "before": {
+      "身体介護": {
+        "hours": 42,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 42,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "e63b1fd9-5340-4411-8520-7ca5b73058d6",
+    "before": {
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 8,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 8,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "e6a05e88-84d2-4777-a3f2-e3b71d45f5ff",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "e71b32af-64e6-4325-9d0f-3fb7c53a98af",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "e7628e86-abfd-4780-a1b6-84e44afc06b8",
+    "before": {
+      "家事援助": {
+        "hours": 18,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 14,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 18,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 14,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "e80dae9f-d02c-42e5-85b1-e69e05230a94",
+    "before": {
+      "家事援助": {
+        "hours": 14,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 124,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 6,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 14,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 124,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 6,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "e8301559-514b-4716-a9d6-6fe8addfb0a1",
+    "before": {
+      "身体介護": {
+        "hours": 40,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 40,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "e90786f2-6d2d-4d85-8651-05b6a606275c",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 7,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 7,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "e958446d-7930-481e-ae31-b68cd083a543",
+    "before": {
+      "身体介護": {
+        "hours": 63,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 63,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "e97465f0-c380-4ec2-a3fd-e830260aadc3",
+    "before": {
+      "同行援護": {
+        "hours": 80,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 80,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "e9b22cef-da03-41c8-a315-7345ea8d4865",
+    "before": {
+      "身体介護": {
+        "hours": 42,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 42,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "e9c89e82-6f61-459b-966c-ef4d1f140149",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "ea48ccc5-4c50-4573-92d3-792bac5be0b2",
+    "before": {
+      "身体介護": {
+        "hours": 126,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 126,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "ebedb30a-b94e-4f12-8eda-4ba269cd5bf7",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "ec9c54e9-6f3f-4479-9f6a-99da27330856",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "通院介助": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "tsuuin": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "ed566c16-0e47-40b7-bd9d-b9fae4b7dfe5",
+    "before": {
+      "身体介護": {
+        "hours": 129,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 9,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 129,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 9,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "ed63ff50-7e47-4ad2-8c9d-275c2a9dd123",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 6,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 1,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 6,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 1,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "ed9b86ab-8eb8-406a-b1a5-4fd0ef1a0a42",
+    "before": {
+      "移動介護": {
+        "hours": 64,
+        "minutes": 0
+      },
+      "重度訪問介護区分６該当": {
+        "hours": 120,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "idou": {
+        "hours": 64,
+        "minutes": 0
+      },
+      "juudo_houmon_kubun6": {
+        "hours": 120,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "edc43a81-ce45-4ab6-81de-64059ea5a980",
+    "before": {
+      "家事援助": {
+        "hours": 52,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 31,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 52,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 31,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "ee1fe50a-d6b2-4f82-b178-6ac5b6b92d68",
+    "before": {
+      "身体介護": {
+        "hours": 55,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 55,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "efa0ca1d-f080-479e-830b-2ccee332e5b7",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "efb50c98-7a7d-4afc-963e-667abe371ce4",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "f0384206-3f8e-43ed-a5a7-fd8c33d2847f",
+    "before": {
+      "同行援護": {
+        "hours": 50,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "doukou": {
+        "hours": 50,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "f0a9951a-8e52-42d7-b98e-d695b3d798b8",
+    "before": {
+      "身体介護": {
+        "hours": 6,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 6,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "f0c6565a-85be-47ce-8b12-75cadb4ba7a1",
+    "before": {
+      "身体介護": {
+        "hours": 60,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 60,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "f0e4aa0b-9c08-4210-b9b9-3a2da3770489",
+    "before": {
+      "身体介護": {
+        "hours": 45,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 4,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 45,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 4,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "f15d031d-da55-47c1-b65f-9a29fe8e7198",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "通院介助": {
+        "hours": 4,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "tsuuin": {
+        "hours": 4,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "f1792343-3f88-43a2-8490-7d1eb5b5c2e6",
+    "before": {
+      "家事援助": {
+        "hours": 22,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 22,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "f1a9a7ac-233d-4a5c-b90f-3e65c498cb55",
+    "before": {
+      "家事援助": {
+        "hours": 20,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 20,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "f2a2c6bc-0c24-4d13-920b-25496b95fc84",
+    "before": {
+      "家事援助": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "通院介助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 30,
+        "minutes": 0
+      },
+      "tsuuin": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "f40e16c8-9c1b-4e75-947f-7945fb74ef44",
+    "before": {
+      "移動介護": {
+        "hours": 33,
+        "minutes": 0
+      },
+      "重度訪問介護区分６該当": {
+        "hours": 778,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "idou": {
+        "hours": 33,
+        "minutes": 0
+      },
+      "juudo_houmon_kubun6": {
+        "hours": 778,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "f4396587-8e66-4337-8460-9fbf02455c03",
+    "before": {
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "f441c035-31dd-4443-a4b2-437a4bcd689f",
+    "before": {
+      "重度訪問介護区分６該当": {
+        "hours": 387,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "juudo_houmon_kubun6": {
+        "hours": 387,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "f4a566b2-6be1-4bd0-a8ed-05cc25a0cbbe",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "f52824b6-85ed-4d71-9646-dd8cb7efec8c",
+    "before": {
+      "家事援助": {
+        "hours": 67,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 139,
+        "minutes": 30
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 67,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 139,
+        "minutes": 30
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "f72e16a0-c872-483e-8479-a9e19c2b3377",
+    "before": {
+      "家事援助": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 22,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "f7497e89-bc32-4ebc-8854-909b5bcf4bf6",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "f77dc589-6eb8-420b-a989-a844086d9d81",
+    "before": {
+      "家事援助": {
+        "hours": 37,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 37,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "f7cf8891-226f-4b02-9694-5e2890f443a4",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "f7d80ebf-4822-44e2-ac11-9c4fee0a2971",
+    "before": {
+      "身体介護": {
+        "hours": 17,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 17,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "f7fc63ee-0716-4fbf-9dfc-78f762a97f2a",
+    "before": {
+      "家事援助": {
+        "hours": 45,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 55,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 45,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 55,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "f81ce80c-b9e0-433d-98eb-3a94902090ec",
+    "before": {
+      "家事援助": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 25,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 15,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "f8c0aafb-01a4-4f7a-b82a-11edd055da38",
+    "before": {
+      "家事援助": {
+        "hours": 35,
+        "minutes": 0
+      },
+      "身体介護": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "通院身体": {
+        "hours": 13,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 35,
+        "minutes": 0
+      },
+      "shintai": {
+        "hours": 20,
+        "minutes": 0
+      },
+      "tsuuin_shintai": {
+        "hours": 13,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "f9534032-af79-4e0f-a324-6981eccb79e2",
+    "before": {
+      "身体介護": {
+        "hours": 92,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 92,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "f9d4e893-97d1-422d-898c-03daa9f20016",
+    "before": {
+      "家事援助": {
+        "hours": 10,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 10,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "fa829c32-716a-4922-8d92-ba076405b5c4",
+    "before": {
+      "身体介護": {
+        "hours": 30,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 30,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "fae2f86f-ba34-499d-a945-0680116795d9",
+    "before": {
+      "重度訪問介護区分６該当": {
+        "hours": 112,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "juudo_houmon_kubun6": {
+        "hours": 112,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "fbf6042f-b8f7-43a6-8173-ae22331a19bb",
+    "before": {
+      "身体介護": {
+        "hours": 62,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 62,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "fc6eab6e-fe56-40c9-8baa-7dd251ae8cb5",
+    "before": {
+      "重度訪問介護包括支援": {
+        "hours": 648,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "juudo_houmon_houkatsu": {
+        "hours": 648,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "fd2398de-776a-4fcf-bdf4-2baa7448dc8e",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "身体介護": {
+        "hours": 7,
+        "minutes": 30
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "shintai": {
+        "hours": 7,
+        "minutes": 30
+      }
+    }
+  },
+  {
+    "id": "fd290d56-ced0-4522-afc1-03d68fc8ccc6",
+    "before": {
+      "家事援助": {
+        "hours": 15,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 15,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "fdbf6d8a-66ac-49af-97f7-283d2a35c31a",
+    "before": {
+      "家事援助": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "通院身体": {
+        "hours": 6,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "kaji": {
+        "hours": 7,
+        "minutes": 30
+      },
+      "tsuuin_shintai": {
+        "hours": 6,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "fe6a8a41-e1da-416f-be3e-59dc2854ab5a",
+    "before": {
+      "身体介護": {
+        "hours": 36,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "shintai": {
+        "hours": 36,
+        "minutes": 0
+      }
+    }
+  },
+  {
+    "id": "fe89f06a-4e92-4af9-88bf-36e5cf5be410",
+    "before": {
+      "重度訪問介護区分６該当": {
+        "hours": 85,
+        "minutes": 0
+      }
+    },
+    "after": {
+      "juudo_houmon_kubun6": {
+        "hours": 85,
+        "minutes": 0
+      }
+    }
+  }
+]

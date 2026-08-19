@@ -21,15 +21,19 @@ import { buildKokuhoDensou, type DensouRow } from "@/lib/kokuho-densou/build";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ─── 対象 ─────────────────────────────────────────────────────────────────────
-const YEAR = 2026;
-const MONTH = 6;
+// TARGET_MONTH=2026-07 で対象月を切替 (既定は 2026-06)。
+// 既定の DENSOU_BASE も同じ月を見るので、通常は TARGET_MONTH だけ渡せばよい。
+const TARGET_MONTH = process.env.TARGET_MONTH || "2026-06";
+const YEAR = Number(TARGET_MONTH.slice(0, 4));
+const MONTH = Number(TARGET_MONTH.slice(5, 7));
+const YM = TARGET_MONTH.replace("-", "");
 const OFFICE_ID = process.env.OFFICE_ID || "269d77bc-5b61-4114-a2ea-e8dc2f220823"; // 大網
 const AREA_DIR = process.env.AREA_DIR || "大網";
 // DENSOU_DIR … 伝送データ/ 以下の相対パス。正規形は <拠点>/訪問介護/介護/<YYYYMM>。事業所ごとに
 //   フォルダ構成が揃っていないため、丸ごと指定できるようにしている (shogai 側と同じ)。
 const DENSOU_BASE = process.env.DENSOU_DIR
   ? join(__dirname, "..", "伝送データ", ...process.env.DENSOU_DIR.split("/"))
-  : join(__dirname, "..", "伝送データ", AREA_DIR, "訪問介護", "介護", "202606");
+  : join(__dirname, "..", "伝送データ", AREA_DIR, "訪問介護", "介護", YM);
 // ほのぼの実伝送の置き場も揃っていない (ほのぼのから / ほのぼの)
 const HONOBONO_DIR = join(DENSOU_BASE, process.env.HONOBONO_SUBDIR || "ほのぼのから");
 const OUT_DIR = join(DENSOU_BASE, "新システム");
@@ -107,7 +111,10 @@ function parseDensou(path: string): ParsedFile {
   return toParsed(text.split(/\r\n|\n/).filter((l) => l.length > 0), splitCsvLine);
 }
 function parseContent(content: string): ParsedFile {
-  return toParsed(content.split(/\r\n|\n/).filter((l) => l.length > 0), (l) => l.split(","));
+  // ⚠ 当方の出力も ほのぼの書式 (一部の項目を引用符で括る) になったので、
+  //   ほのぼの側と同じ splitCsvLine で読む。素の split(",") だと引用符が値に残り
+  //   レコード種別の判定に失敗する。
+  return toParsed(content.split(/\r\n|\n/).filter((l) => l.length > 0), splitCsvLine);
 }
 
 // ─── 突合ユーティリティ ──────────────────────────────────────────────────────

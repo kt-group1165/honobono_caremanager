@@ -22,8 +22,10 @@ import path from "node:path";
 const EXECUTE = process.argv.includes("--execute");
 const AREA_DIR = process.env.AREA_DIR || "茂原";
 const TAG = process.env.TAG || "";
-const STEP1_MARK = `[MEISAI-STEP1 2026-06${TAG ? " " + TAG : ""}]`;
-const TARGET_MONTH = "2026-06";
+// TARGET_MONTH=2026-07 で対象月を切替 (既定は 2026-06)。フォルダも同じ月を見る。
+const TARGET_MONTH = process.env.TARGET_MONTH || "2026-06";
+const YM = TARGET_MONTH.replace("-", "");
+const STEP1_MARK = `[MEISAI-STEP1 ${TARGET_MONTH}${TAG ? " " + TAG : ""}]`;
 const KAIGO = fileURLToPath(new URL("../", import.meta.url));
 
 function loadEnv() {
@@ -59,9 +61,9 @@ const isoDate = (s) => {
 async function main() {
   console.log(`=== サービス利用開始年月日 取込 ${EXECUTE ? "【EXECUTE】" : "【DRY RUN】"} ${AREA_DIR} ===\n`);
 
-  const csv = findDataFile(path.join(KAIGO, "サービス実績データ", AREA_DIR, "202606"), "介護請求(明細付)_一覧.CSV");
+  const csv = findDataFile(path.join(KAIGO, "サービス実績データ", AREA_DIR, YM), "介護請求(明細付)_一覧.CSV");
   if (!csv) {
-    console.error(`✗ サービス実績データ/${AREA_DIR}/202606 配下に 介護請求(明細付)_一覧.CSV がありません`);
+    console.error(`✗ サービス実績データ/${AREA_DIR}/${YM} 配下に 介護請求(明細付)_一覧.CSV がありません`);
     process.exit(1);
   }
   const lines = sjis.decode(readFileSync(csv)).split(/\r?\n/).filter((l) => l);

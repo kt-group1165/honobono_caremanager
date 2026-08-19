@@ -19,18 +19,21 @@ import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import Encoding from "encoding-japanese";
 import { aggregateMonthlyVisitSeikyu } from "@/lib/visit-seikyu/aggregate";
-import { buildSougouDensou, type SougouDensouRow } from "@/lib/kokuho-densou/build-sougou";
+import { buildSougouDensou, groupSougouRowsByOfficeNumber, type SougouDensouRow } from "@/lib/kokuho-densou/build-sougou";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ─── 対象 ─────────────────────────────────────────────────────────────────────
-const YEAR = 2026;
-const MONTH = 6;
+// TARGET_MONTH=2026-07 で対象月を切替 (既定は 2026-06)。
+const TARGET_MONTH = process.env.TARGET_MONTH || "2026-06";
+const YEAR = Number(TARGET_MONTH.slice(0, 4));
+const MONTH = Number(TARGET_MONTH.slice(5, 7));
+const YM = TARGET_MONTH.replace("-", "");
 const OFFICE_ID = process.env.OFFICE_ID || "269d77bc-5b61-4114-a2ea-e8dc2f220823"; // 大網
 const AREA_DIR = process.env.AREA_DIR || "大網";
 const DENSOU_BASE = process.env.DENSOU_DIR
   ? join(__dirname, "..", "伝送データ", ...process.env.DENSOU_DIR.split("/"))
-  : join(__dirname, "..", "伝送データ", AREA_DIR, "訪問介護", "介護", "202606");
+  : join(__dirname, "..", "伝送データ", AREA_DIR, "訪問介護", "介護", YM);
 const HONOBONO_DIR = join(DENSOU_BASE, "ほのぼのから");
 const OUT_DIR = join(DENSOU_BASE, "新システム");
 const HONOBONO_KK = process.env.KK_FILE || "KK260702.CSV";
@@ -102,7 +105,8 @@ function parseDensou(path: string): ParsedFile {
   return toParsed(text.split(/\r\n|\n/).filter((l) => l.length > 0), splitCsvLine);
 }
 function parseContent(content: string): ParsedFile {
-  return toParsed(content.split(/\r\n|\n/).filter((l) => l.length > 0), (l) => l.split(","));
+  // ⚠ 当方の出力も ほのぼの書式 (引用符付き) になったので同じパーサで読む (kaigo-densou-diff と同じ)
+  return toParsed(content.split(/\r\n|\n/).filter((l) => l.length > 0), splitCsvLine);
 }
 
 const unq = (s: string | undefined) => (s ?? "").replace(/^"|"$/g, "").trim();
@@ -119,11 +123,23 @@ async function main() {
 
   const { data: o, error: oe } = await sb
     .from("offices")
-    .select("name, business_number, unit_price, area_category, applied_formula_codes, tenant_id")
+    .select(
+      "name, business_number, sougou_business_number, unit_price, area_category, applied_formula_codes, tenant_id",
+    )
     .eq("id", OFFICE_ID)
     .maybeSingle();
   if (oe || !o) { console.error("事業所取得失敗:", oe?.message); process.exit(1); }
+  // 総合事業の事業所番号は**保険者(市町村)ごと**。office_sougou_numbers に無い保険者は
+  // 介護の番号にフォールバックする (ほのぼのも番号ごとにファイルを分けている)。
   const officeNumber = ((o.business_number ?? "") as string).trim();
+  const { data: snRows } = await sb
+    .from("office_sougou_numbers")
+    .select("insurer_number, business_number")
+    .eq("office_id", OFFICE_ID);
+  const sougouNumberByInsurer: Record<string, string> = {};
+  for (const r of (snRows ?? []) as { insurer_number: string; business_number: string }[]) {
+    sougouNumberByInsurer[r.insurer_number] = r.business_number;
+  }
   const unitPrice = (o.unit_price ?? 10) as number;
   const appliedFormulaCodes = (o.applied_formula_codes ?? []) as string[];
   const tenantId = (o.tenant_id ?? "kt-group") as string;
@@ -135,17 +151,39 @@ async function main() {
   const sougouRows = (agg.sougouRows ?? []) as SougouDensouRow[];
   console.log(`aggregate: 総合事業 rows=${sougouRows.length} (介護給付 rows=${agg.rows.length})`);
 
-  const res = buildSougouDensou(sougouRows, {
-    officeNumber, year: YEAR, month: MONTH, unitPrice, seikyuYear: YEAR, seikyuMonth: MONTH,
-  });
-  writeSjis(OUT_DIR, res.fileName, res.content);
-  console.log(`\n新システム出力: ${res.fileName} (dataRows=${res.dataRecordCount}) → ${OUT_DIR}`);
-  for (const w of res.warnings.slice(0, 8)) console.log("  ⚠", w);
+  // 事業所番号ごとにファイルを分けて出す (ほのぼのも分けている)。
+  const byOffice = groupSougouRowsByOfficeNumber(sougouRows, officeNumber, sougouNumberByInsurer);
+  const built: { officeNumber: string; res: ReturnType<typeof buildSougouDensou> }[] = [];
+  let seq = 0;
+  for (const [offNo, rowsForOffice] of byOffice) {
+    seq += 1;
+    const r = buildSougouDensou(rowsForOffice, {
+      officeNumber: offNo, year: YEAR, month: MONTH, unitPrice,
+      seikyuYear: YEAR, seikyuMonth: MONTH,
+      fileSeq: byOffice.size > 1 ? seq : undefined,
+    });
+    writeSjis(OUT_DIR, r.fileName, r.content);
+    console.log(`\n新システム出力: ${r.fileName} 事業所番号=${offNo} (dataRows=${r.dataRecordCount}) → ${OUT_DIR}`);
+    for (const w of r.warnings.slice(0, 8)) console.log("  ⚠", w);
+    built.push({ officeNumber: offNo, res: r });
+  }
 
-  const nw = parseContent(res.content);
   const hbPath = join(HONOBONO_DIR, HONOBONO_KK);
   if (!existsSync(hbPath)) { console.error(`ほのぼの側が見つかりません: ${hbPath}`); process.exit(1); }
   const hb = parseDensou(hbPath);
+  // ほのぼのファイルの事業所番号 (コントロール 項8) と同じ番号で作った方を比較対象にする
+  const hbOffice = unq(hb.control[7]);
+  const picked =
+    built.find((b) => b.officeNumber === hbOffice) ?? built[0] ?? null;
+  if (!picked) { console.error("総合事業の対象行がありません"); process.exit(1); }
+  if (built.length > 1) {
+    console.log(
+      `\n※ 事業所番号が ${built.length} つに分かれています。ほのぼの ${HONOBONO_KK} (${hbOffice}) と同じ ${picked.officeNumber} を比較します`,
+    );
+    console.log(`   他の番号は別の KK ファイルと突き合わせてください: ${built.filter((b) => b !== picked).map((b) => `${b.officeNumber}→${b.res.fileName}`).join(", ")}`);
+  }
+  const res = picked.res;
+  const nw = parseContent(res.content);
 
   // ── エンベロープ ──
   console.log("\n===== エンベロープ =====");

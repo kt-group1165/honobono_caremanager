@@ -18,6 +18,7 @@
  */
 
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
+import { compareByInsurer, formatRecordLikeHonobono } from "@/lib/kokuho-densou/honobono-format";
 
 /**
  * 伝送用の 1 行。月遅れ・返戻の再請求では利用者ごとに
@@ -61,6 +62,12 @@ export interface DensouBuildOptions {
    */
   seikyuYear?: number;
   seikyuMonth?: number; // 1-12
+  /**
+   * ファイル名の枝番 (総合事業のみ)。事業所番号が保険者で分かれて 1 提供月に複数ファイル
+   * 出る場合に付ける (2 本目以降に 1,2,… を渡す)。未指定なら枝番なし。
+   * 例) SG202606.CSV / SG26061.CSV — いずれも英字始まり 8 桁以内。
+   */
+  fileSeq?: number;
 }
 
 export interface DensouBuildResult {
@@ -111,6 +118,9 @@ export function buildKokuhoDensou(
     );
     return false;
   });
+  // 明細書の並び順を ほのぼの に合わせる (保険者番号+被保険者番号 の昇順)。
+  // 仕様に並び順の規定は無いが、実伝送と行単位で突き合わせられる状態を保つため。
+  rows.sort(compareByInsurer);
   // opts の年月 (= 処理対象年月 / 通常請求の提供年月)。
   // 行に ym があればそれを優先し、無ければこの opts 年月にフォールバック。
   const ym = `${opts.year}${String(opts.month).padStart(2, "0")}`;
@@ -214,7 +224,9 @@ export function buildKokuhoDensou(
       office,
       "2", // 保険・公費等区分コード (2:公費請求。共通編1.4 項番79)
       hobetsu, // 法別番号 (12=生活保護, 21=精神通院, 54=難病 等)
-      SEIKYU_JOHO_KUBUN,
+      // ⚠ 法別81 (原爆) だけ請求情報区分コードが "0"。ほのぼの実伝送 3/3 で例外なし
+      //   (7111 大網・市原 / 7113 やわた)。他の法別は通常どおり。
+      hobetsu === "81" ? "0" : SEIKYU_JOHO_KUBUN,
       String(es.length),
       String(es.reduce((s, e) => s + e.units, 0)),
       String(es.reduce((s, e) => s + e.cost, 0)),
@@ -312,7 +324,8 @@ export function buildKokuhoDensou(
       // 19 居宅サービス計画作成区分コード。1=居宅介護支援事業所作成(→項20必須), 2=被保険者(自己)作成(→項20空でも可)。
       // careOfficeNumber 未解決で "1" 固定にすると項20空欄=必須欠落で返戻するため、番号が無ければ "2" で出す
       // (該当利用者にケアマネがいる場合は warning(:171) が出るので、care_office_number を登録すれば "1" に戻る)。
-      r.careOfficeNumber ? "1" : "2", // 19
+      // 取込済の区分があればそれを使う (利用者ごとに違う)。無ければ従来の既定。
+      r.careOfficeNumber ? (r.planCreatorKubun ?? "1") : "2", // 19
       r.careOfficeNumber ?? "", // 20 事業所番号 (居宅介護支援事業所。区分2のときは空)
       // 21 開始年月日: 当該月に当事業所の提供を開始した利用者のみ設定する。
       //    ⚠ **初回訪問日ではなく契約日**。実証で 33 名中 初回訪問日と一致したのは
@@ -444,6 +457,9 @@ export function buildKokuhoDensou(
         warnings.push(`${r.user_name}: 加算 (${r.addonLabel ?? "処遇改善"}) のサービスコードが不明です`);
       }
     }
+    // 明細行の並びを ほのぼの に合わせる = **サービスコード昇順**。
+    // (実伝送 1,969 グループすべてこの順。当方は単位数の降順だった)
+    detailLines.sort((a, b) => a.code.localeCompare(b.code));
     for (const d of detailLines) {
       // 項10 日数・回数 / 項11 公費1対象日数・回数 は「数字2桁」(_if_form2.txt L7666-7669) —
       // 100 回以上は桁溢れで取込エラー/切り捨ての恐れがあるため warning で明示する
@@ -551,8 +567,9 @@ export function buildKokuhoDensou(
   lines.push(
     ["1", String(recNo++), "0", String(dataParts.length), "711", "0", "0", office, "0", "7", shinsaYm, "1"].join(","),
   );
+  // ほのぼの実伝送と同じ書式 (引用符・未使用項目の 0 埋め) に整える。値は変えない。
   for (const parts of dataParts) {
-    lines.push(["2", String(recNo++), ...parts].join(","));
+    lines.push(["2", String(recNo++), ...formatRecordLikeHonobono(parts)].join(","));
   }
   lines.push(["3", String(recNo++)].join(","));
 

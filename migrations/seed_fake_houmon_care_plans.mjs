@@ -5,8 +5,9 @@
  *
  * 各利用者に 1 件の plan (= draft) を INSERT。
  *   - サービス内容は ailment (= 主病) から適切に生成
- *   - long_term_goal / short_term_goal も主病に合わせる
- *   - 識別マーカー: services[*]._sample_marker = "fake-houmon-plan-2026-06"
+ *   - 長期目標 / 短期目標 (goals[]) も主病に合わせる
+ *   - schema は v2 (goals[] / weekly_services[])。migrations/applied_archive/houmon_care_plans_v2.sql 適用済が前提
+ *   - 識別マーカー: weekly_services[*]._sample_marker = "fake-houmon-plan-2026-06"
  *                  special_notes 末尾に "[fake テスト用-houmon-plan]"
  *
  * Usage:
@@ -54,6 +55,42 @@ const SAMPLE_MARKER = "fake-houmon-plan-2026-06";
 const NOTES_SUFFIX = "[fake テスト用-houmon-plan]";
 
 const EXECUTE = process.argv.includes("--execute");
+
+// テンプレートの旧形式 { kind, frequency, time_range, content } を
+// v2 の weekly_services 行 { days[], start_time, end_time, service_kind, content, notes } へ変換
+const DAY_MAP = { 月: "mon", 火: "tue", 水: "wed", 木: "thu", 金: "fri", 土: "sat", 日: "sun" };
+const DAY_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+
+function toWeeklyService(s) {
+  const freq = s.frequency ?? "";
+  let days = [];
+  if (/平日/.test(freq)) {
+    days = ["mon", "tue", "wed", "thu", "fri"];
+  } else if (/毎日|週7/.test(freq)) {
+    days = [...DAY_ORDER];
+  } else {
+    // "(月・水・金)" のような括弧内の曜日を拾う
+    const inParen = /[（(]([^）)]*)[）)]/.exec(freq);
+    const src = inParen ? inParen[1] : freq;
+    const picked = new Set();
+    for (const ch of src) if (DAY_MAP[ch]) picked.add(DAY_MAP[ch]);
+    days = DAY_ORDER.filter((d) => picked.has(d));
+  }
+  // "10:00-10:45" → 開始/終了 (0 埋めして HH:MM に揃える)
+  const pad = (t) => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(t.trim());
+    return m ? `${String(m[1]).padStart(2, "0")}:${m[2]}` : "";
+  };
+  const [rawStart = "", rawEnd = ""] = (s.time_range ?? "").split("-");
+  return {
+    days,
+    start_time: pad(rawStart),
+    end_time: pad(rawEnd),
+    service_kind: s.kind ?? "",
+    content: s.content ?? "",
+    notes: days.length === 0 && freq ? freq : "",
+  };
+}
 
 // ── ailment → サービス内容 + 目標 テンプレート ──
 const PLAN_TEMPLATES = {
@@ -202,15 +239,22 @@ async function main() {
   const userIds = clients.map((c) => c.id);
   const { data: existing, error: eErr } = await sb
     .from("kaigo_houmon_care_plans")
-    .select("user_id, services")
+    .select("user_id, weekly_services")
     .in("user_id", userIds);
   if (eErr) {
     console.error("❌ 既存 plan 取得失敗:", eErr.message);
+    if (/weekly_services/.test(eErr.message)) {
+      console.error("   → migrations/applied_archive/houmon_care_plans_v2.sql が未適用の可能性があります");
+    }
     process.exit(1);
   }
   const existingMarkedUsers = new Set(
     (existing ?? [])
-      .filter((p) => Array.isArray(p.services) && p.services.some((s) => s && s._sample_marker === SAMPLE_MARKER))
+      .filter(
+        (p) =>
+          Array.isArray(p.weekly_services) &&
+          p.weekly_services.some((s) => s && s._sample_marker === SAMPLE_MARKER),
+      )
       .map((p) => p.user_id),
   );
   const toInsert = clients.filter((c) => !existingMarkedUsers.has(c.id));
@@ -257,21 +301,34 @@ async function main() {
     const c = toInsert[idx];
     const ailment = pickAilment(c, idx);
     const tmpl = PLAN_TEMPLATES[ailment] ?? DEFAULT_TEMPLATE;
-    const services = tmpl.services.map((s) => ({ ...s, _sample_marker: SAMPLE_MARKER }));
+    const weeklyServices = tmpl.services.map((s) => ({
+      ...toWeeklyService(s),
+      _sample_marker: SAMPLE_MARKER,
+    }));
     const payload = {
       tenant_id: TENANT_ID,
       user_id: c.id,
       office_id: HELPER_OFFICE_ID,
+      plan_kind: "初回",
       plan_date: planDate,
+      initial_plan_date: planDate,
       valid_from: validFrom,
       valid_until: validUntil,
-      long_term_goal: tmpl.long_term_goal,
-      short_term_goal: tmpl.short_term_goal,
+      goals: [
+        {
+          needs: "",
+          long_term_goal: tmpl.long_term_goal,
+          long_term_period: `${validFrom}〜${validUntil}`,
+          short_term_goal: tmpl.short_term_goal,
+          short_term_period: `${validFrom}〜${validUntil}`,
+        },
+      ],
       user_situation: tmpl.user_situation,
       family_situation: tmpl.family_situation,
-      services,
+      weekly_services: weeklyServices,
       special_notes: `${tmpl.special_notes} ${NOTES_SUFFIX}`,
       author_name: "サービス提供責任者 (fake)",
+      explained_on: planDate,
       user_consent_date: planDate,
       user_consent_name: c.name,
       status: "draft",

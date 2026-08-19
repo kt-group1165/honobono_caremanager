@@ -34,6 +34,7 @@ import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { randomUUID } from "crypto";
+import { normalizeShikyuryo } from "./_shikyuryo_keys.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -289,7 +290,15 @@ async function main() {
       if (extApplied) {
         row.issue_date = e.issue_date ?? null;
         row.income_category = e.income_category ?? null;
-        row.shikyuryo_details = e.quantities ?? null;
+        // 受給者証 PDF の日本語キーのまま入れると画面・集計が読めない (574件の前例)。
+        // ローマ字キーに正規化してから保存する。未知キーは落とさず警告する。
+        {
+          const { details, unknown } = normalizeShikyuryo(e.quantities);
+          if (unknown.length) {
+            console.warn(`⚠️  支給量の未知キー (保存しません): ${unknown.join(", ")} — migrations/_shikyuryo_keys.mjs に追加してください`);
+          }
+          row.shikyuryo_details = details;
+        }
         row.flag_h30_after = !!e.flag_h30_after;
       }
       const { error } = await sb.from("shougai_certifications").insert(row);

@@ -143,6 +143,10 @@ export interface KyufuKanriLine {
   plannedUnits: number;
   /** warning 表示用ラベル (例: "訪問介護(○○事業所)")。伝送内容には使わない */
   label?: string;
+  /** サービス種類名 (紙の給付管理票 様式第十一 用)。伝送内容には使わない */
+  serviceTypeName?: string;
+  /** 提供事業所名 (紙の給付管理票 様式第十一 用)。伝送内容には使わない */
+  providerName?: string | null;
 }
 
 /**
@@ -183,7 +187,11 @@ export type KyufuKanriSakuseiKubun = "1" | "2" | "3";
 
 export interface KyufuKanriUser {
   userName: string;
+  /** 利用者カナ (紙の給付管理票 様式第十一 用)。伝送内容には使わない */
+  userKana?: string | null;
   insurerNumber: string;
+  /** 保険者名 (紙の給付管理票 様式第十一 用)。伝送内容には使わない */
+  insurerName?: string | null;
   insuredNumber: string;
   birthDate: string | null;
   gender: string | null;
