@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -33,6 +33,13 @@ import {
   type SelfUriageCache,
   type AllUriageCache,
 } from "@/lib/uriage/uriage-cache";
+
+/**
+ * 全事業所売上の自動再集計しきい値。
+ * これより新しいキャッシュがあれば「全事業所」タブを開いても再集計しない
+ * (48 事業所 × 請求エンジンなので、開くたびに回すと往復が重い)。
+ */
+const ALL_URIAGE_STALE_MS = 30 * 60 * 1000;
 
 // ---- Types ----
 
@@ -179,6 +186,10 @@ export default function DashboardPage() {
   const [allError, setAllError] = useState<string | null>(null);
   /** 表示中の全事業所売上がキャッシュ由来のときの集計時刻 */
   const [allCachedAt, setAllCachedAt] = useState<number | null>(null);
+  /** 集計中の二重起動を防ぐ (state だと同一 tick で見えない) */
+  const allRunningRef = useRef(false);
+  /** 自動集計を走らせた月 (同じ月で何度も自動起動しないため。失敗しても再試行はボタン) */
+  const allAutoRunRef = useRef<string | null>(null);
 
   const today = new Date();
   const todayStr = format(today, "yyyy-MM-dd");
@@ -415,29 +426,10 @@ export default function DashboardPage() {
     };
   }, [bizLoading, currentOfficeId, tenantId, businessType, uriageYear, uriageMonth, uriageReload]);
 
-  // 全事業所の集計は重いので、前回結果 (端末キャッシュ) があれば月切替と同時に即描画する。
-  // 再集計は「再集計」ボタンで明示的に行う。
-  useEffect(() => {
-    let cancelled = false;
-    // localStorage (= 外部ストア) の読取。SSR と食い違わないよう描画後に反映する
-    const load = async () => {
-      const cached = readUriageCache<AllUriageCache>(allUriageKey(uriageYear, uriageMonth));
-      if (cancelled) return;
-      if (cached) {
-        setAllUriage(cached.data);
-        setAllCachedAt(cached.at);
-      } else {
-        setAllCachedAt(null);
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [uriageYear, uriageMonth]);
-
-  // 全事業所の売上集計 (明示操作で起動)。事業所数 × 請求エンジンなので自動では走らせない
-  const runAllOffices = async () => {
+  // 全事業所の売上集計。事業所数 × 請求エンジンなので重い (下の useEffect / ボタンから起動)
+  const runAllOffices = useCallback(async () => {
+    if (allRunningRef.current) return; // 自動起動とボタンが重なっても 1 本だけ
+    allRunningRef.current = true;
     setAllLoading(true);
     setAllError(null);
     setAllProgress({ done: 0, total: 0 });
@@ -457,9 +449,41 @@ export default function DashboardPage() {
       console.error("all-offices uriage failed:", msg);
       setAllError(msg);
     } finally {
+      allRunningRef.current = false;
       setAllLoading(false);
     }
-  };
+  }, [uriageYear, uriageMonth]);
+
+  // 全事業所の集計は重いので、前回結果 (端末キャッシュ) があれば即描画する。
+  // その上で「全事業所」タブを開いている間だけ自動で集計する:
+  //   キャッシュ無し        → その場で集計 (スケルトン)
+  //   キャッシュが古い      → 前回値を出したまま裏で再集計 (金額なので集計時刻は必ず併記)
+  //   キャッシュが新しい    → 何もしない (再集計ボタンで明示的に更新)
+  // 「自事業所」タブでは走らせない。ダッシュボードを開くだけで 48 事業所ぶん往復させないため。
+  useEffect(() => {
+    let cancelled = false;
+    // localStorage (= 外部ストア) の読取。SSR と食い違わないよう描画後に反映する
+    const load = async () => {
+      const key = allUriageKey(uriageYear, uriageMonth);
+      const cached = readUriageCache<AllUriageCache>(key);
+      if (cancelled) return;
+      if (cached) {
+        setAllUriage(cached.data);
+        setAllCachedAt(cached.at);
+      } else {
+        setAllCachedAt(null);
+      }
+      if (scope !== "all") return;
+      if (cached && Date.now() - cached.at < ALL_URIAGE_STALE_MS) return;
+      if (allAutoRunRef.current === key) return; // この月は自動起動済 (失敗時の再試行はボタン)
+      allAutoRunRef.current = key;
+      await runAllOffices();
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [uriageYear, uriageMonth, scope, runAllOffices]);
 
   const dateLabel = format(today, "yyyy年M月d日（EEE）", { locale: ja });
 
@@ -623,8 +647,9 @@ export default function DashboardPage() {
         {scope === "all" && !allForMonth && !allLoading ? (
           <div className="flex flex-col items-center gap-3 px-5 py-10 text-center">
             <p className="text-sm text-gray-500">
-              全事業所（訪問介護・訪問看護・訪問入浴・居宅介護支援）の売上を
-              {uriageYear}年{uriageMonth}月分で集計します。
+              {allError
+                ? `${uriageYear}年${uriageMonth}月分の自動集計に失敗しました。`
+                : `全事業所（訪問介護・訪問看護・訪問入浴・居宅介護支援）の売上を${uriageYear}年${uriageMonth}月分で集計します。`}
               <br />
               <span className="text-xs text-gray-400">
                 事業所数ぶん請求エンジンを回すため 1 分ほどかかります
@@ -640,7 +665,7 @@ export default function DashboardPage() {
               onClick={runAllOffices}
               className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600"
             >
-              全事業所を集計
+              {allError ? "もう一度集計する" : "全事業所を集計"}
             </button>
           </div>
         ) : shownSkeleton ? (
