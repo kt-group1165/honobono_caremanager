@@ -234,6 +234,12 @@ export function ShogaiSeikyuContent({
   //   (自事業所管理 = 調整計算→保存が未実施 / 他事業所管理 = 結果票の入力が未実施)。
   const [jogenListOpen, setJogenListOpen] = useState(false);
   const [officeNumber, setOfficeNumber] = useState<string | null>(null);
+  /** 契約内容報告書 (様式第26号) の事業者欄。事業所マスタで未入力なら空欄で出す */
+  const [officeProfile, setOfficeProfile] = useState<{
+    postal: string | null;
+    address: string | null;
+    representative: string | null;
+  }>({ postal: null, address: null, representative: null });
   const [officeUnitPrice, setOfficeUnitPrice] = useState<number | undefined>(undefined);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   // かな行フィルタ (介護請求の左サイドバーと同じ。null = 全)
@@ -273,7 +279,7 @@ export function ShogaiSeikyuContent({
       if (currentOffice) {
         const { data: o, error: oe } = await supabase
           .from("offices")
-          .select("unit_price, area_category, business_number, shogai_business_number")
+          .select("unit_price, area_category, business_number, shogai_business_number, postal_code, address, representative_name")
           .eq("id", currentOffice.id)
           .maybeSingle();
         if (oe) throw new Error("事業所情報の取得に失敗: " + oe.message);
@@ -282,7 +288,15 @@ export function ShogaiSeikyuContent({
           area_category?: string | null;
           business_number?: string | null;
           shogai_business_number?: string | null;
+          postal_code?: string | null;
+          address?: string | null;
+          representative_name?: string | null;
         } | null;
+        setOfficeProfile({
+          postal: od?.postal_code ?? null,
+          address: od?.address ?? null,
+          representative: od?.representative_name ?? null,
+        });
         // ⚠ offices.unit_price は介護の地域区分単価。障害は人件費割合が違うため
         //   級地から障害用の単価を引く (7級地: 介護10.21 / 障害10.18)
         unitPrice = getShogaiHomonUnitPrice(od?.area_category ?? null);
@@ -682,11 +696,18 @@ export function ShogaiSeikyuContent({
         ? await loadContractsForMonth(supabase, currentOffice.id, ids, year, month)
         : new Map<string, ShogaiContract[]>();
 
+      // 対象月に契約終了日がある契約は「サービス提供を終了した報告」欄に回す
+      const mLast = `${monthStr}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
+      const mFirst = `${monthStr}-01`;
       const entries: ShogaiKeiyakuEntry[] = targets.map((r) => {
         const c = byClient.get(r.user_id);
+        const contracts = contractsByClient.get(r.user_id) ?? [];
         return {
           row: r,
-          contracts: contractsByClient.get(r.user_id) ?? [],
+          contracts,
+          endedIds: contracts
+            .filter((x) => x.end_date && x.end_date >= mFirst && x.end_date <= mLast)
+            .map((x) => x.id),
           holderNameKana: c?.holder ?? null,
           legacyAmountText: c?.text ?? null,
         };
@@ -2148,6 +2169,9 @@ export function ShogaiSeikyuContent({
             entry={e}
             officeName={currentOffice?.name ?? null}
             officeNumber={officeNumber}
+            officePostalCode={officeProfile.postal}
+            officeAddress={officeProfile.address}
+            officeRepresentative={officeProfile.representative}
             reiwa={year - 2018}
             month={month}
           />

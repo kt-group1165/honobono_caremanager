@@ -16,6 +16,7 @@ import React from "react";
 import type { ShogaiSeikyuRow } from "@/lib/shogai-seikyu/aggregate";
 import { decisionCode, type ShogaiDensouVisit } from "@/lib/shogai-densou/build";
 import { DECISION_CODES, type ShogaiContract } from "@/lib/shogai-densou/contracts";
+import { municipalityHead, municipalityName } from "@/lib/shogai-seikyu/municipalities";
 
 // サービス種類コード (障害福祉サービス)
 const SERVICE_TYPE_CODES: Record<string, string> = {
@@ -1294,131 +1295,340 @@ export interface ShogaiKeiyakuEntry {
   row: ShogaiSeikyuRow;
   /** 対象月に有効な自事業所の契約 (決定サービスコードごと) */
   contracts: ShogaiContract[];
+  /** contracts のうち、対象月に契約終了日がある分の id。「終了した報告」欄に回す */
+  endedIds: string[];
   /** 受給者証の holder (支給決定者) カナ。無ければ null */
   holderNameKana: string | null;
   /** 旧・自由記述の契約支給量。contracts が空のときだけ補助的に出す */
   legacyAmountText: string | null;
 }
+// ── 様式第26号 (契約内容報告書) の部品 ──────────────────────────────────────
+//    render 内で定義すると毎回別コンポーネント扱いになるため外に出す
+//    (react-hooks/static-components)
+const K26_BORDER = "0.4pt solid #000";
+const K26_NB = " ";
+
+/** 受給者証番号・事業者番号は 1 桁ずつ枠に入れる (様式どおり) */
+function K26DigitBoxes({ value, len }: { value: string | null; len: number }) {
+  const s = (value ?? "").replace(/\D/g, "").padEnd(len, " ").slice(0, len);
+  return (
+    <span style={{ display: "inline-flex" }}>
+      {Array.from({ length: len }, (_, i) => (
+        <span
+          key={i}
+          style={{
+            border: K26_BORDER,
+            borderLeftWidth: i === 0 ? undefined : 0,
+            width: "4.6mm",
+            height: "5.6mm",
+            lineHeight: "5.6mm",
+            textAlign: "center",
+            fontFamily: '"MS Gothic",monospace',
+            fontSize: "9.5pt",
+          }}
+        >
+          {s[i] === " " ? K26_NB : s[i]}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** 理由欄のチェックボックス 1 行 */
+function K26CheckRow({ checked, label }: { checked: boolean; label: string }) {
+  return (
+    <div style={{ fontSize: "8pt", whiteSpace: "nowrap" }}>
+      {checked ? "■" : "□"}
+      {label}
+    </div>
+  );
+}
+
 export function ShogaiKeiyakuHoukokuPrintSheet({
   entry,
   officeName,
   officeNumber,
+  officePostalCode,
+  officeAddress,
+  officeRepresentative,
   reiwa,
   month,
+  day,
 }: {
   entry: ShogaiKeiyakuEntry;
   officeName: string | null;
   officeNumber: string | null;
+  officePostalCode?: string | null;
+  officeAddress?: string | null;
+  officeRepresentative?: string | null;
   reiwa: number;
   month: number;
+  /** 提出日 (報告日)。未指定は当日 */
+  day?: number;
 }) {
   const { row: r } = entry;
+  // 罫線・文字サイズは 様式第26号 の実物 (千葉市) の座標に合わせている
+  const bd = K26_BORDER;
   const th: React.CSSProperties = {
-    border: "0.5pt solid #000",
-    padding: "1.5mm 2mm",
-    fontSize: "9pt",
+    border: bd,
+    padding: "0.8mm 1mm",
+    fontSize: "7.5pt",
     fontWeight: "normal",
-    textAlign: "left",
-    background: "#f5f5f5",
-    width: "40mm",
-    whiteSpace: "nowrap",
+    textAlign: "center",
+    lineHeight: 1.25,
   };
   const td: React.CSSProperties = {
-    border: "0.5pt solid #000",
-    padding: "1.5mm 2.5mm",
-    fontSize: "9.5pt",
+    border: bd,
+    padding: "1mm",
+    fontSize: "9pt",
+    verticalAlign: "middle",
   };
+  const NB = K26_NB;
+
+  /** 2026-04-01 → 「令和 8年 4月 1日」。空は空欄のまま */
+  const wareki = (iso: string | null | undefined) => {
+    if (!iso) return "";
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    if (!m) return iso;
+    const y = Number(m[1]) - 2018;
+    return `令和${String(y).padStart(2, NB)}年${String(Number(m[2])).padStart(2, NB)}月${String(Number(m[3])).padStart(2, NB)}日`;
+  };
+
+  /** 契約支給量は「10時間/月」形式。乗降介助だけ「n回/月」 */
+  const amountText = (c: ShogaiContract) => {
+    if (c.amount_unit === "回") return `${c.amount_x100 / 100}回/月`;
+    const h = Math.floor(c.amount_x100 / 100);
+    const mi = Math.round(c.amount_x100 % 100);
+    return mi === 0 ? `${h}時間/月` : `${h}時間${mi}分/月`;
+  };
+
+  /** 理由: reason に「変更」が入っていれば 2、それ以外は 1 (新規契約) */
+  const isHenkou = (c: ShogaiContract) => /変更/.test(c.reason ?? "");
+
+  // 契約締結・変更の報告 = 対象月に終了していない契約。様式どおり 5 行に空行を足す
+  const active = entry.contracts.filter((c) => !entry.endedIds.includes(c.id));
+  const startRows: (ShogaiContract | null)[] = [
+    ...active,
+    ...Array<ShogaiContract | null>(Math.max(0, 5 - active.length)).fill(null),
+  ].slice(0, 5);
+  // 終了の報告 = 対象月に契約終了日がある契約
+  const ended = entry.contracts.filter((c) => entry.endedIds.includes(c.id));
+  const endRows: (ShogaiContract | null)[] = [
+    ...ended,
+    ...Array<ShogaiContract | null>(Math.max(0, 4 - ended.length)).fill(null),
+  ].slice(0, 4);
+
   return (
     <div
       style={{
         pageBreakAfter: "always",
-        padding: "14mm",
+        padding: "8mm 10mm",
         fontFamily: '"MS Mincho","ＭＳ 明朝","游明朝",serif',
         color: "#000",
-        fontSize: "9.5pt",
-        lineHeight: 1.5,
+        fontSize: "9pt",
+        lineHeight: 1.4,
         width: "210mm",
         boxSizing: "border-box",
       }}
     >
-      <div style={{ textAlign: "center", fontSize: "13pt", fontWeight: "bold", letterSpacing: "2pt", marginBottom: "5mm" }}>
-        契約内容（サービス提供）報告書
+      {/* 市町村番号 (左上) と 様式番号 (右上) */}
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "7.5pt" }}>
+        <span>
+          {r.municipality ?? ""}
+          {municipalityName(r.municipality) ? ` ${municipalityName(r.municipality)}` : ""}
+        </span>
+        <span style={{ fontSize: "9pt" }}>（様式第26号）</span>
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5mm" }}>
-        <div style={{ paddingTop: "3mm", fontSize: "10pt" }}>
-          （提出先）支給決定市町村長　殿
-        </div>
-        <div style={{ fontSize: "9pt", textAlign: "right" }}>
-          令和{reiwa}年{month}月<br />
-          事業所番号：<span style={{ fontFamily: '"MS Gothic",monospace' }}>{officeNumber ?? ""}</span><br />
-          事業所名称：{officeName ?? ""}
-        </div>
+
+      <div style={{ fontSize: "8.5pt", lineHeight: 1.35, marginTop: "1mm" }}>
+        （居宅介護、重度訪問介護、同行援護、行動援護、短期入所、生活介護、重度障害者等包括支援、自立訓練、
+        <br />
+        就労移行支援、就労継続支援、地域移行支援、地域定着支援）契約内容（障害福祉サービス受給者証
+        <br />
+        地域相談支援受給者証記載事項）報告書
       </div>
+
+      <div style={{ textAlign: "right", marginTop: "2mm" }}>
+        令和{String(reiwa).padStart(2, NB)}年{String(month).padStart(2, NB)}月
+        {String(day ?? new Date().getDate()).padStart(2, NB)}日
+      </div>
+
+      {/* 提出先 (左) と 事業者 (右) */}
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "1mm", gap: "4mm" }}>
+        <div style={{ flex: "0 0 88mm", fontSize: "9pt", paddingTop: "2mm" }}>
+          {/* 市町村の郵便番号・住所・首長名はマスタを持っていないため空欄 (手書き前提)。
+              持つなら 市町村番号 → 住所/首長名 のマスタが要る */}
+          <div style={{ minHeight: "5mm" }}>{NB}</div>
+          <div style={{ minHeight: "5mm" }}>{NB}</div>
+          <div style={{ marginTop: "6mm" }}>
+            {municipalityHead(r.municipality) ?? "　　　　　　"}　様
+          </div>
+        </div>
+        <table style={{ borderCollapse: "collapse", flex: "1 1 auto" }}>
+          <tbody>
+            <tr>
+              <td style={{ ...th, width: "26mm" }}>事業者番号</td>
+              <td style={{ border: bd, padding: "1mm" }}>
+                <K26DigitBoxes value={officeNumber} len={10} />
+              </td>
+            </tr>
+            <tr>
+              <td style={{ ...th, width: "26mm", lineHeight: 1.6 }}>
+                事業者及び
+                <br />
+                その事業所
+                <br />
+                の名称
+                <br />
+                代　表　者
+              </td>
+              <td style={{ ...td, fontSize: "8.5pt", height: "22mm", verticalAlign: "top" }}>
+                <div>{officePostalCode ? `〒${officePostalCode}` : NB}</div>
+                <div>{officeAddress ?? NB}</div>
+                <div style={{ marginTop: "1mm" }}>{officeName ?? ""}</div>
+                <div>{officeRepresentative ?? NB}</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ marginTop: "3mm", fontSize: "8.5pt" }}>
+        下記のとおり当事業者との契約内容（障害福祉サービス受給者証・地域相談支援受給者証記載事項）について報告
+        <br />
+        します。
+      </div>
+      <div style={{ textAlign: "center", margin: "1.5mm 0" }}>記</div>
+
+      <div style={{ fontSize: "8.5pt" }}>報告対象者</div>
       <table style={{ borderCollapse: "collapse", width: "100%" }}>
         <tbody>
           <tr>
-            <td style={th}>受給者証番号</td>
-            <td style={{ ...td, fontFamily: '"MS Gothic",monospace' }}>{r.beneficiary_number ?? ""}</td>
+            <td style={{ ...th, width: "34mm" }}>
+              障害福祉サービス
+              <br />
+              受給者証番号
+            </td>
+            <td style={{ border: bd, padding: "1mm", width: "56mm" }}>
+              <K26DigitBoxes value={r.beneficiary_number} len={10} />
+            </td>
+            <td style={{ ...th, width: "28mm" }}>
+              地域相談支援
+              <br />
+              受給者証番号
+            </td>
+            <td style={{ border: bd, padding: "1mm" }}>
+              {/* 地域相談支援は当事業所の対象外。空欄で出す */}
+              <K26DigitBoxes value={null} len={10} />
+            </td>
           </tr>
           <tr>
-            <td style={th}>支給決定障害者等氏名</td>
-            <td style={td}>{r.user_name}</td>
+            <td style={th}>
+              支給(給付)決定障害者
+              <br />
+              （保護者）氏名
+            </td>
+            <td style={{ ...td, fontSize: "10pt" }}>{r.user_name}</td>
+            <td style={th}>
+              支給決定に係る
+              <br />
+              児童氏名
+            </td>
+            {/* 障害児の受給者証は 支給決定者=保護者 / 児童氏名=本人。
+                当方は保護者名を持っていないため児童欄は空にする */}
+            <td style={{ ...td, fontSize: "10pt" }}>{NB}</td>
           </tr>
-          {entry.holderNameKana && (
-            <tr>
-              <td style={th}>フリガナ</td>
-              <td style={td}>{entry.holderNameKana}</td>
-            </tr>
-          )}
         </tbody>
       </table>
 
-      {/* 契約内容は決定サービスコードごとに 1 行。受給者証の事業者記入欄と同じ並び */}
-      <table style={{ borderCollapse: "collapse", width: "100%", marginTop: "4mm" }}>
+      <div style={{ marginTop: "3mm", fontSize: "8.5pt" }}>
+        契約締結又は契約内容変更による契約支給量等の報告
+      </div>
+      <table style={{ borderCollapse: "collapse", width: "100%" }}>
         <thead>
           <tr>
-            <th style={{ ...th, width: "auto", textAlign: "center" }}>サービス種別</th>
-            <th style={{ ...th, width: "28mm", textAlign: "center" }}>契約支給量</th>
-            <th style={{ ...th, width: "30mm", textAlign: "center" }}>契約日</th>
-            <th style={{ ...th, width: "30mm", textAlign: "center" }}>契約終了日</th>
-            <th style={{ ...th, width: "22mm", textAlign: "center" }}>記入欄番号</th>
+            <th style={{ ...th, width: "22mm" }}>
+              受給者証の
+              <br />
+              事業者記入欄
+              <br />
+              の番号
+            </th>
+            <th style={{ ...th, width: "26mm" }}>サービス内容</th>
+            <th style={{ ...th, width: "26mm" }}>契約支給量</th>
+            <th style={{ ...th, width: "42mm" }}>
+              契約日
+              <br />
+              <span style={{ fontSize: "6pt" }}>(又は契約支給量を変更した日)</span>
+            </th>
+            <th style={th}>理　由</th>
           </tr>
         </thead>
         <tbody>
-          {entry.contracts.length === 0 ? (
-            <tr>
-              <td style={{ ...td, textAlign: "center" }} colSpan={5}>
-                {entry.legacyAmountText ?? "（契約支給量が未登録です）"}
+          {startRows.map((c, i) => (
+            <tr key={c?.id ?? `blank${i}`} style={{ height: "11mm" }}>
+              <td style={{ ...td, textAlign: "center", fontFamily: '"MS Gothic",monospace' }}>
+                {c?.entry_number ?? ""}
+              </td>
+              <td style={{ ...td, fontSize: "8.5pt", lineHeight: 1.2 }}>
+                {c ? (DECISION_CODES[c.decision_code] ?? c.decision_code) : ""}
+              </td>
+              <td style={{ ...td, fontSize: "8.5pt" }}>{c ? amountText(c) : ""}</td>
+              <td style={{ ...td, fontSize: "8.5pt" }}>{c ? wareki(c.start_date) : ""}</td>
+              <td style={{ ...td, padding: "0.5mm 2mm" }}>
+                <K26CheckRow checked={!!c && !isHenkou(c)} label="１新規契約" />
+                <K26CheckRow checked={!!c && isHenkou(c)} label="２契約の変更" />
               </td>
             </tr>
-          ) : (
-            entry.contracts.map((c) => (
-              <tr key={c.id}>
-                <td style={td}>
-                  {DECISION_CODES[c.decision_code] ?? c.decision_code}
-                </td>
-                <td style={{ ...td, textAlign: "right", fontFamily: '"MS Gothic",monospace' }}>
-                  {c.amount_unit === "回"
-                    ? `${c.amount_x100 / 100}回`
-                    : `${Math.floor(c.amount_x100 / 100)}時間${String(Math.round(c.amount_x100 % 100)).padStart(2, "0")}分`}
-                </td>
-                <td style={{ ...td, textAlign: "center", fontFamily: '"MS Gothic",monospace' }}>
-                  {c.start_date ?? ""}
-                </td>
-                <td style={{ ...td, textAlign: "center", fontFamily: '"MS Gothic",monospace' }}>
-                  {c.end_date ?? ""}
-                </td>
-                <td style={{ ...td, textAlign: "center", fontFamily: '"MS Gothic",monospace' }}>
-                  {c.entry_number ?? ""}
-                </td>
-              </tr>
-            ))
-          )}
+          ))}
         </tbody>
       </table>
-      <div style={{ marginTop: "6mm", fontSize: "8pt", color: "#000" }}>
-        上記のとおり、指定障害福祉サービスの提供に係る契約内容を報告します。
+
+      <div style={{ marginTop: "3mm", fontSize: "8.5pt" }}>
+        既契約の契約支給量によるサービス提供を終了した報告
       </div>
+      <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <thead>
+          <tr>
+            <th style={{ ...th, width: "22mm", fontSize: "6pt" }}>
+              サービス提供を終了する
+              <br />
+              事業者記入欄の番号
+            </th>
+            <th style={{ ...th, width: "30mm" }}>サービス提供終了日</th>
+            <th style={{ ...th, width: "34mm" }}>
+              提供終了月中の
+              <br />
+              終了日までの既提供量
+            </th>
+            <th style={th}>
+              既契約の契約支給量での
+              <br />
+              サービス提供を終了する理由
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {endRows.map((c, i) => (
+            <tr key={c?.id ?? `endblank${i}`} style={{ height: "11mm" }}>
+              <td style={{ ...td, textAlign: "center", fontFamily: '"MS Gothic",monospace' }}>
+                {c?.entry_number ?? ""}
+              </td>
+              <td style={{ ...td, fontSize: "8.5pt" }}>{c ? wareki(c.end_date) : ""}</td>
+              <td style={{ ...td, fontSize: "8.5pt" }}>
+                {/* 終了日までの既提供量。実績から自動では出せないので空欄 (手書き) */}
+                {c?.provided_before_end_x100 != null
+                  ? `${Math.floor(c.provided_before_end_x100 / 100)}時間`
+                  : ""}
+              </td>
+              <td style={{ ...td, padding: "0.5mm 2mm" }}>
+                <K26CheckRow checked={!!c && !isHenkou(c)} label="１契約の終了" />
+                <K26CheckRow checked={!!c && isHenkou(c)} label="２契約の変更" />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

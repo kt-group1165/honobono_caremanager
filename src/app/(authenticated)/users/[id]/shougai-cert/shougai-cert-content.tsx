@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { municipalityName } from "@/lib/shogai-seikyu/municipalities";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { Plus, Save, Trash2, X } from "lucide-react";
@@ -597,6 +598,11 @@ export function ShougaiCertContent({
           <FieldRow label="支給決定市町村">
             <span className="text-sm text-gray-900">
               {form.insurer_municipality || "—"}
+              {municipalityName(form.insurer_municipality) && (
+                <span className="ml-2 text-gray-600">
+                  {municipalityName(form.insurer_municipality)}
+                </span>
+              )}
             </span>
           </FieldRow>
           <FieldRow label="認定有効期間">
@@ -871,6 +877,11 @@ export function ShougaiCertContent({
               onChange={(e) => upd("insurer_municipality", e.target.value)}
               className={`${inputCls} w-full max-w-xs`}
             />
+            {/* 番号を打ち間違えたら名称が出ないので、その場で気づける */}
+            <span className="ml-2 text-sm text-gray-600">
+              {municipalityName(form.insurer_municipality) ??
+                (form.insurer_municipality ? "（未登録の市町村番号）" : "")}
+            </span>
           </FieldRow>
           <FieldRow label="認定開始日" required>
             <input
