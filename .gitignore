@@ -53,3 +53,11 @@ next-env.d.ts
 # ほのぼの実データ (実利用者の個人情報を含む — 絶対に commit しない)
 ケアプランほのぼの出力/
 ほのぼのデータ/
+
+# 伝送ファイルの注釈CSV (scripts/densou-explain.mts の生成物 / 92MB)
+#   元の伝送ファイルから何度でも作り直せるので repo には入れない
+*_解説.csv
+
+# 作業中のスクラッチ
+_dump.txt
+_goi_*.txt
