@@ -644,13 +644,17 @@ export function ShougaiCertContent({
                 : ""}
             </span>
           </FieldRow>
-          <FieldRow label="契約支給量 (記入欄)">
-            <span className="text-sm text-gray-900">
-              {form.contract_amount_text || "—"}
-              {form.contract_start_date ? ` / ${fmtDate(form.contract_start_date)}〜` : ""}
-              {form.contract_entry_number ? ` / 記入欄 ${form.contract_entry_number}` : ""}
-            </span>
-          </FieldRow>
+          {/* 契約支給量・事業者記入欄は下の「契約支給量 (事業者記入欄)」カード
+              (shogai_contracts) に集約した。ここの列は 0〜33 件しか埋まっておらず
+              伝送にも出ていない旧フィールドなので、値がある場合だけ参考表示する */}
+          {form.contract_amount_text && (
+            <FieldRow label="契約支給量 (旧・自由記述)">
+              <span className="text-sm text-gray-500">
+                {form.contract_amount_text}
+                <span className="ml-2 text-xs">※ 下の契約支給量カードが正</span>
+              </span>
+            </FieldRow>
+          )}
           {extAvailable && (
             <>
               <FieldRow label="交付年月日">
@@ -741,27 +745,30 @@ export function ShougaiCertContent({
                   </div>
                 </FieldRow>
               </div>
-              <div className="lg:col-span-2">
-                <FieldRow label="事業者記入欄">
-                  <div className="flex flex-wrap gap-2 text-sm">
-                    {(() => {
-                      const filled = normalizeProviderEntries(
-                        form.provider_entries,
-                      ).filter((e) => (e.value ?? "").trim());
-                      if (filled.length === 0)
-                        return <span className="text-gray-500">—</span>;
-                      return filled.map((e) => (
-                        <span
-                          key={e.no}
-                          className="rounded bg-gray-50 px-2 py-0.5 text-xs ring-1 ring-gray-200"
-                        >
-                          {e.label}: {e.value}
-                        </span>
-                      ));
-                    })()}
-                  </div>
-                </FieldRow>
-              </div>
+              {/* 事業者記入欄は下の「契約支給量 (事業者記入欄)」カード (shogai_contracts) が正。
+                  この自由記述 6 枠は 576 件すべて空で伝送にも出ていないため、
+                  値が入っている場合だけ残骸として見せる */}
+              {normalizeProviderEntries(form.provider_entries).some((e) =>
+                (e.value ?? "").trim(),
+              ) && (
+                <div className="lg:col-span-2">
+                  <FieldRow label="事業者記入欄 (旧・自由記述)">
+                    <div className="flex flex-wrap gap-2 text-sm">
+                      {normalizeProviderEntries(form.provider_entries)
+                        .filter((e) => (e.value ?? "").trim())
+                        .map((e) => (
+                          <span
+                            key={e.no}
+                            className="rounded bg-gray-50 px-2 py-0.5 text-xs text-gray-500 ring-1 ring-gray-200"
+                          >
+                            {e.label}: {e.value}
+                          </span>
+                        ))}
+                      <span className="text-xs text-gray-400">※ 下の契約支給量カードが正</span>
+                    </div>
+                  </FieldRow>
+                </div>
+              )}
             </>
           )}
           <div className="lg:col-span-2">

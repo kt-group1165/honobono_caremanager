@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { ShougaiCertification } from "@/types/database";
+import { ContractsSection } from "./contracts-section";
 import { ShougaiCertContent } from "./shougai-cert-content";
 
 /**
@@ -33,5 +34,12 @@ export default async function ShougaiCertPage({
 
   const initialRecords: ShougaiCertification[] = (data ?? []) as ShougaiCertification[];
 
-  return <ShougaiCertContent userId={userId} initialRecords={initialRecords} />;
+  return (
+    <div className="space-y-4">
+      <ShougaiCertContent userId={userId} initialRecords={initialRecords} />
+      {/* 契約支給量 (shogai_contracts) — 受給者証の事業者記入欄に転記する自事業所の契約分。
+          受給者証本体 (shougai_certifications) とは別テーブルなので独立して読み書きする */}
+      <ContractsSection userId={userId} />
+    </div>
+  );
 }
