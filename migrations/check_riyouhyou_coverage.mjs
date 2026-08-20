@@ -87,11 +87,25 @@ async function main() {
 
   const { data: offices, error } = await sb.from("offices").select("id, name, service_type");
   if (error) { console.error(`✗ 事業所取得失敗: ${error.message}`); process.exit(1); }
-  const byOfficeName = new Map(
-    (offices ?? [])
-      .filter((o) => o.service_type === "居宅介護支援")
-      .map((o) => [normOfficeName(o.name), o]),
-  );
+  const kyotakuOffices = (offices ?? []).filter((o) => o.service_type === "居宅介護支援");
+  const byOfficeName = new Map(kyotakuOffices.map((o) => [normOfficeName(o.name), o]));
+
+  /**
+   * PDF の事業所名から offices を引く。
+   * PDF 側には法人名や略称が前置されることがあり完全一致しない:
+   *   「株式会社ｻｰﾋﾞｽﾜﾝ　ﾑﾂﾐ居宅介護支援事業所」→ ムツミ居宅介護支援事業所
+   *   「ＫＴ袖ヶ浦ムツミ居宅支援センター」        → 袖ヶ浦ムツミ居宅支援センター
+   * 完全一致 → DB 名が PDF 名の末尾に一致 (最長優先) の順で当てる。
+   */
+  const resolveOffice = (printed) => {
+    const key = normOfficeName(printed);
+    const exact = byOfficeName.get(key);
+    if (exact) return exact;
+    const tail = kyotakuOffices
+      .filter((o) => key.endsWith(normOfficeName(o.name)))
+      .sort((a, b) => normOfficeName(b.name).length - normOfficeName(a.name).length);
+    return tail[0] ?? null;
+  };
 
   // PDF を全部読んで **印字された事業所名**でまとめる
   const groups = new Map(); // normOfficeName -> { label, rows[], cms:Set, files[] }
@@ -145,8 +159,8 @@ async function main() {
 
   let totalMissing = 0;
   for (const [key, g] of groups) {
-    const off = byOfficeName.get(key);
-    console.log(`── ${g.label} ──`);
+    const off = resolveOffice(g.label);
+    console.log(`── ${g.label}${off && normOfficeName(off.name) !== key ? ` → ${off.name}` : ""} ──`);
     console.log(`   担当ケアマネ ${g.cms.size} 名: ${[...g.cms].join(" / ")}`);
     if (!off) {
       console.log(`   ✗ offices に一致する居宅介護支援事業所が無い — 突合をスキップ\n`);
