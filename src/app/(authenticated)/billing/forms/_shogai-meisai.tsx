@@ -16,7 +16,11 @@ import React from "react";
 import type { ShogaiSeikyuRow } from "@/lib/shogai-seikyu/aggregate";
 import { decisionCode, type ShogaiDensouVisit } from "@/lib/shogai-densou/build";
 import { DECISION_CODES, type ShogaiContract } from "@/lib/shogai-densou/contracts";
-import { municipalityHead, municipalityName } from "@/lib/shogai-seikyu/municipalities";
+import {
+  municipality,
+  municipalityHead,
+  municipalityName,
+} from "@/lib/shogai-seikyu/municipalities";
 
 // サービス種類コード (障害福祉サービス)
 const SERVICE_TYPE_CODES: Record<string, string> = {
@@ -1363,9 +1367,7 @@ export function ShogaiKeiyakuHoukokuPrintSheet({
   officePostalCode,
   officeAddress,
   officeRepresentative,
-  reiwa,
-  month,
-  day,
+  reportDate,
 }: {
   entry: ShogaiKeiyakuEntry;
   officeName: string | null;
@@ -1373,11 +1375,10 @@ export function ShogaiKeiyakuHoukokuPrintSheet({
   officePostalCode?: string | null;
   officeAddress?: string | null;
   officeRepresentative?: string | null;
-  reiwa: number;
-  month: number;
-  /** 提出日 (報告日)。未指定は当日 */
-  day?: number;
+  /** 提出日 (報告日) YYYY-MM-DD。呼出側の既定は操作日 */
+  reportDate: string;
 }) {
+  const muni = municipality(entry.municipality);
   // 罫線・文字サイズは 様式第26号 の実物 (千葉市) の座標に合わせている
   const bd = K26_BORDER;
   const th: React.CSSProperties = {
@@ -1459,18 +1460,16 @@ export function ShogaiKeiyakuHoukokuPrintSheet({
         地域相談支援受給者証記載事項）報告書
       </div>
 
-      <div style={{ textAlign: "right", marginTop: "2mm" }}>
-        令和{String(reiwa).padStart(2, NB)}年{String(month).padStart(2, NB)}月
-        {String(day ?? new Date().getDate()).padStart(2, NB)}日
-      </div>
+      <div style={{ textAlign: "right", marginTop: "2mm" }}>{wareki(reportDate)}</div>
 
       {/* 提出先 (左) と 事業者 (右) */}
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: "1mm", gap: "4mm" }}>
         <div style={{ flex: "0 0 88mm", fontSize: "9pt", paddingTop: "2mm" }}>
-          {/* 市町村の郵便番号・住所・首長名はマスタを持っていないため空欄 (手書き前提)。
-              持つなら 市町村番号 → 住所/首長名 のマスタが要る */}
-          <div style={{ minHeight: "5mm" }}>{NB}</div>
-          <div style={{ minHeight: "5mm" }}>{NB}</div>
+          {/* 提出先。番号が対応表に無い市町村は空欄で出す (手書き) */}
+          <div style={{ minHeight: "5mm" }}>
+            {muni ? `〒${muni.postalCode}` : NB}
+          </div>
+          <div style={{ minHeight: "5mm" }}>{muni?.address ?? NB}</div>
           <div style={{ marginTop: "6mm" }}>
             {municipalityHead(entry.municipality) ?? "　　　　　　"}　様
           </div>

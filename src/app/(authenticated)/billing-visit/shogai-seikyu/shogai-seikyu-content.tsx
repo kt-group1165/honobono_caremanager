@@ -268,6 +268,10 @@ export function ShogaiSeikyuContent({
   // 契約内容報告書 印刷用の契約情報 (client_id → 受給者証の契約支給量)
   const [keiyakuEntries, setKeiyakuEntries] = useState<ShogaiKeiyakuEntry[]>([]);
   const [keiyakuLoading, setKeiyakuLoading] = useState(false);
+  /** 契約内容報告書の提出日。既定は操作日 (印刷ボタンの隣で変更できる) */
+  const [keiyakuReportDate, setKeiyakuReportDate] = useState(() =>
+    new Date().toLocaleDateString("sv-SE"),
+  );
 
   const monthStr = `${year}-${String(month).padStart(2, "0")}`;
 
@@ -1587,6 +1591,13 @@ export function ShogaiSeikyuContent({
               >
                 <Printer size={13} />請求書
               </button>
+              <input
+                type="date"
+                value={keiyakuReportDate}
+                onChange={(e) => setKeiyakuReportDate(e.target.value)}
+                title="契約内容報告書の提出日。既定は本日"
+                className="border border-gray-400 rounded bg-white px-1.5 py-1 text-gray-700"
+              />
               <button
                 type="button"
                 disabled={keiyakuLoading}
@@ -2179,8 +2190,7 @@ export function ShogaiSeikyuContent({
             officePostalCode={officeProfile.postal}
             officeAddress={officeProfile.address}
             officeRepresentative={officeProfile.representative}
-            reiwa={year - 2018}
-            month={month}
+            reportDate={keiyakuReportDate}
           />
         ))}
       </div>

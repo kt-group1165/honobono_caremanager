@@ -107,6 +107,8 @@ export function ContractsSection({ userId }: { userId: string }) {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
+  /** 提出日。既定は操作日。手で変えられる */
+  const [reportDate, setReportDate] = useState(() => new Date().toLocaleDateString("sv-SE"));
   const [printEntry, setPrintEntry] = useState<ShogaiKeiyakuEntry | null>(null);
   const [printOffice, setPrintOffice] = useState<{
     name: string | null;
@@ -360,6 +362,13 @@ export function ContractsSection({ userId }: { userId: string }) {
               title="報告対象年月。この月に契約日・終了日がある契約だけが報告書に出ます"
               className="rounded border border-gray-300 px-2 py-1 text-sm"
             />
+            <input
+              type="date"
+              value={reportDate}
+              onChange={(e) => setReportDate(e.target.value)}
+              title="提出日。既定は本日"
+              className="rounded border border-gray-300 px-2 py-1 text-sm"
+            />
             <button
               type="button"
               onClick={() => void printReport()}
@@ -393,8 +402,7 @@ export function ContractsSection({ userId }: { userId: string }) {
             officePostalCode={printOffice.postal}
             officeAddress={printOffice.address}
             officeRepresentative={printOffice.representative}
-            reiwa={Number(reportMonth.slice(0, 4)) - 2018}
-            month={Number(reportMonth.slice(5, 7))}
+            reportDate={reportDate}
           />
         </div>
       )}
