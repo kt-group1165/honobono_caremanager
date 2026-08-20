@@ -546,28 +546,12 @@ export function ShougaiCertContent({
                 </>
               )}
             </>
-          ) : (
-            <>
-              <button
-                onClick={handleCancel}
-                className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                <X size={14} /> キャンセル
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                <Save size={14} /> 保存
-              </button>
-            </>
-          )}
+          ) : null}
         </div>
       </div>
 
-      {/* ─── 本体: 表示モード or 編集モード ───────────────────────────── */}
-      {records.length === 0 && !editing ? (
+      {/* ─── 本体: 常に表示モード。編集はモーダルで重ねる ───────────────── */}
+      {records.length === 0 ? (
         <div className="py-12 text-center text-sm text-gray-500">
           障害支援区分の登録がありません。
           <button
@@ -577,8 +561,8 @@ export function ShougaiCertContent({
             新規登録する
           </button>
         </div>
-      ) : !editing && selectedId ? (
-        // 表示モード
+      ) : selectedId ? (
+        // 表示モード (編集中もモーダルの後ろに出したままにする)
         <div className="grid grid-cols-1 gap-y-1 lg:grid-cols-2 lg:gap-x-8">
           <FieldRow label="障害支援区分">
             <span className="text-sm font-semibold text-violet-700">
@@ -823,507 +807,557 @@ export function ShougaiCertContent({
             </FieldRow>
           </div>
         </div>
-      ) : (
-        // 編集モード
-        <div className="grid grid-cols-1 gap-y-1 lg:grid-cols-2 lg:gap-x-8">
-          <FieldRow label="障害支援区分" required>
-            <select
-              value={form.support_level}
-              onChange={(e) =>
-                upd("support_level", e.target.value as ShougaiSupportLevel)
-              }
-              className={`${inputCls} w-40`}
-            >
-              {SUPPORT_LEVELS.map((lv) => (
-                <option key={lv} value={lv}>
-                  {lv}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
-          <FieldRow label="主たる障害">
-            <select
-              value={form.primary_disability ?? ""}
-              onChange={(e) =>
-                upd(
-                  "primary_disability",
-                  e.target.value === ""
-                    ? null
-                    : (e.target.value as ShougaiPrimaryDisability),
-                )
-              }
-              className={`${inputCls} w-40`}
-            >
-              <option value="">未選択</option>
-              {PRIMARY_DISABILITIES.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
-          <FieldRow label="受給者証番号">
-            <input
-              type="text"
-              value={form.beneficiary_number ?? ""}
-              onChange={(e) => upd("beneficiary_number", e.target.value)}
-              className={`${inputCls} w-48`}
-            />
-          </FieldRow>
-          <FieldRow label="支給決定市町村">
-            <input
-              type="text"
-              value={form.insurer_municipality ?? ""}
-              onChange={(e) => upd("insurer_municipality", e.target.value)}
-              className={`${inputCls} w-full max-w-xs`}
-            />
-            {/* 番号を打ち間違えたら名称が出ないので、その場で気づける */}
-            <span className="ml-2 text-sm text-gray-600">
-              {municipalityName(form.insurer_municipality) ??
-                (form.insurer_municipality ? "（未登録の市町村番号）" : "")}
-            </span>
-          </FieldRow>
-          <FieldRow label="認定開始日" required>
-            <input
-              type="date"
-              value={form.certification_start_date ?? ""}
-              onChange={(e) => upd("certification_start_date", e.target.value)}
-              className={inputCls}
-            />
-          </FieldRow>
-          <FieldRow label="認定終了日" required>
-            <input
-              type="date"
-              value={form.certification_end_date ?? ""}
-              onChange={(e) => upd("certification_end_date", e.target.value)}
-              className={inputCls}
-            />
-          </FieldRow>
-          <FieldRow label="自己負担割合">
-            <div className="flex items-center gap-1">
-              <input
-                type="number"
-                min={0}
-                max={1}
-                step={0.1}
-                value={form.copay_rate ?? 0}
-                onChange={(e) =>
-                  upd("copay_rate", Number(e.target.value || 0))
-                }
-                className={`${inputCls} w-24 text-right`}
-              />
-              <span className="text-xs text-gray-500">
-                (= {((form.copay_rate ?? 0) * 100).toFixed(0)}%)
-              </span>
+      ) : null}
+
+      {/* ─── 新規・編集はモーダルで ───────────────────────────────────
+           以前は同じカードの中でインラインに切り替えていたが、項目が多く
+           (支給量 13 欄 + フラグ + 事業者記入欄) 縦に長いため、開いた瞬間に
+           一覧も下の契約支給量カードも画面外へ押し出されて迷子になっていた。
+           モーダルにして編集中は編集だけに集中できるようにする。 */}
+      {editing && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={handleCancel}
+        >
+          <div
+            className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-3">
+              <h3 className="text-sm font-semibold text-gray-800">
+                {isNew ? "受給者証の新規登録" : "受給者証の編集"}
+              </h3>
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="閉じる"
+              >
+                <X size={18} />
+              </button>
             </div>
-          </FieldRow>
-          <FieldRow label="自己負担月額上限 (円)">
-            <div className="space-y-0.5">
-              <input
-                type="number"
-                min={0}
-                value={form.self_payment_limit ?? ""}
-                onChange={(e) =>
-                  upd(
-                    "self_payment_limit",
-                    e.target.value === "" ? null : Number(e.target.value),
-                  )
-                }
-                placeholder="未設定"
-                className={`${inputCls} w-32 text-right`}
-              />
-              <p className="text-[10px] text-gray-400">
-                0 = 負担0円 (低所得区分等) / 空欄 = 未設定。請求計算は 0 でも上限として適用されます
-              </p>
-            </div>
-          </FieldRow>
-          <FieldRow label="生保受給">
-            <label className="inline-flex items-center gap-1 text-xs">
-              <input
-                type="checkbox"
-                checked={form.seiho_flag}
-                onChange={(e) => upd("seiho_flag", e.target.checked)}
-                className="accent-violet-600"
-              />
-              生保連携あり (自己負担 0 円扱い)
-            </label>
-          </FieldRow>
-          <FieldRow label="相談支援事業所">
-            <input
-              type="text"
-              value={form.soudan_office_name ?? ""}
-              onChange={(e) =>
-                upd("soudan_office_name", e.target.value || null)
-              }
-              className={`${inputCls} w-full`}
-            />
-          </FieldRow>
-          <FieldRow label="相談支援専門員">
-            <input
-              type="text"
-              value={form.soudan_manager_name ?? ""}
-              onChange={(e) =>
-                upd("soudan_manager_name", e.target.value || null)
-              }
-              className={`${inputCls} w-full`}
-            />
-          </FieldRow>
-          <FieldRow label="上限額管理">
-            <div className="space-y-1.5">
-              <div className="flex gap-1">
-                {(["なし", "自事業所", "他事業所"] as const).map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => upd("jogen_kanri_kubun", k)}
-                    className={`rounded border px-2 py-1 text-xs font-medium transition-colors ${
-                      form.jogen_kanri_kubun === k
-                        ? "border-violet-500 bg-violet-50 text-violet-700"
-                        : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-                    }`}
+
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <div className="grid grid-cols-1 gap-y-1 lg:grid-cols-2 lg:gap-x-8">
+                <FieldRow label="障害支援区分" required>
+                  <select
+                    value={form.support_level}
+                    onChange={(e) =>
+                      upd("support_level", e.target.value as ShougaiSupportLevel)
+                    }
+                    className={`${inputCls} w-40`}
                   >
-                    {k}
-                  </button>
-                ))}
-              </div>
-              {form.jogen_kanri_kubun === "他事業所" && (
-                <div className="grid grid-cols-2 gap-1.5">
-                  <input
-                    type="text"
-                    value={form.jogen_kanri_office_number ?? ""}
-                    onChange={(e) => upd("jogen_kanri_office_number", e.target.value || null)}
-                    placeholder="管理事業所番号 (10桁)"
-                    className={`${inputCls} w-full`}
-                  />
-                  <input
-                    type="text"
-                    value={form.jogen_kanri_office_name ?? ""}
-                    onChange={(e) => upd("jogen_kanri_office_name", e.target.value || null)}
-                    placeholder="管理事業所名"
-                    className={`${inputCls} w-full`}
-                  />
-                </div>
-              )}
-              <p className="text-[10px] text-gray-400">
-                月次の管理結果 (区分 1/2/3) は 請求業務 → 障害請求 の明細で入力します
-              </p>
-            </div>
-          </FieldRow>
-          <FieldRow label="契約支給量 (記入欄)">
-            <div className="space-y-1.5">
-              <input
-                type="text"
-                value={form.contract_amount_text ?? ""}
-                onChange={(e) => upd("contract_amount_text", e.target.value || null)}
-                placeholder="例: 身体介護 10時間/月"
-                className={`${inputCls} w-full`}
-              />
-              <div className="grid grid-cols-2 gap-1.5">
-                <input
-                  type="date"
-                  value={form.contract_start_date ?? ""}
-                  onChange={(e) => upd("contract_start_date", e.target.value || null)}
-                  className={`${inputCls} w-full`}
-                  title="契約開始日"
-                />
-                <input
-                  type="text"
-                  value={form.contract_entry_number ?? ""}
-                  onChange={(e) => upd("contract_entry_number", e.target.value || null)}
-                  placeholder="記入欄番号"
-                  className={`${inputCls} w-full`}
-                />
-              </div>
-              {holderAvailable && (
-                <div className="space-y-1 border-t border-gray-200 pt-1.5">
-                  <input
-                    type="text"
-                    value={form.holder_name_kana ?? ""}
-                    onChange={(e) => upd("holder_name_kana", e.target.value || null)}
-                    placeholder="支給決定者(保護者)カナ — 障害児のみ"
-                    className={`${inputCls} w-full`}
-                  />
-                  <p className="text-xs text-gray-500">
-                    <b>障害児のときだけ</b>保護者のカナを入れます。入れると明細書の
-                    支給決定者氏名カナが保護者・支給決定児童氏名カナが本人になります
-                    (成人は空のままで本人が出ます)。
-                  </p>
-                </div>
-              )}
-              <p className="text-xs text-amber-700">
-                受給者証の「事業者記入欄」= <b>当事業所との契約内容</b>を転記します。
-                上の支給量 (市町村の支給決定量) とは別で、他事業所と分け合う場合は
-                その一部になります。国保連伝送の契約情報レコード (契約支給量・契約開始日・
-                事業者記入欄番号) に出るため、<b>契約開始日が空だと受給者証の値で代替</b>され、
-                伝送時に警告が出ます。
-              </p>
-            </div>
-          </FieldRow>
-          {extAvailable && (
-            <>
-              <FieldRow label="交付年月日">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="date"
-                    value={form.issue_date ?? ""}
-                    onChange={(e) => upd("issue_date", e.target.value || null)}
-                    className={inputCls}
-                  />
-                  <label className="inline-flex items-center gap-1 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={form.is_applying}
-                      onChange={(e) => upd("is_applying", e.target.checked)}
-                      className="accent-violet-600"
-                    />
-                    申請中
-                  </label>
-                </div>
-              </FieldRow>
-              <FieldRow label="所得区分">
-                <select
-                  value={form.income_category ?? ""}
-                  onChange={(e) =>
-                    upd("income_category", e.target.value || null)
-                  }
-                  className={`${inputCls} w-40`}
-                >
-                  <option value="">未選択</option>
-                  {INCOME_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </FieldRow>
-              <FieldRow label="社福減免 / 軽減後上限月額 (円)">
-                <div className="space-y-1.5">
-                  <label className="inline-flex items-center gap-1 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={form.shafuku_genmen}
-                      onChange={(e) => upd("shafuku_genmen", e.target.checked)}
-                      className="accent-violet-600"
-                    />
-                    社会福祉法人減免
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={form.reduced_payment_limit ?? ""}
+                    {SUPPORT_LEVELS.map((lv) => (
+                      <option key={lv} value={lv}>
+                        {lv}
+                      </option>
+                    ))}
+                  </select>
+                </FieldRow>
+                <FieldRow label="主たる障害">
+                  <select
+                    value={form.primary_disability ?? ""}
                     onChange={(e) =>
                       upd(
-                        "reduced_payment_limit",
-                        e.target.value === "" ? null : Number(e.target.value),
+                        "primary_disability",
+                        e.target.value === ""
+                          ? null
+                          : (e.target.value as ShougaiPrimaryDisability),
                       )
                     }
-                    placeholder="軽減後上限月額"
-                    className={`${inputCls} w-32 text-right`}
-                  />
-                </div>
-              </FieldRow>
-              <FieldRow label="市町村が定める額 (円)">
-                <input
-                  type="number"
-                  min={0}
-                  value={form.municipality_defined_amount ?? ""}
-                  onChange={(e) =>
-                    upd(
-                      "municipality_defined_amount",
-                      e.target.value === "" ? null : Number(e.target.value),
-                    )
-                  }
-                  className={`${inputCls} w-32 text-right`}
-                />
-              </FieldRow>
-              <div className="lg:col-span-2">
-                <FieldRow label="該当区分・フラグ">
-                  <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-                    {(
-                      [
-                        ["household_multi_jogen", "同一世帯で複数上限管理"],
-                        ["flag_rousha", "聾者"],
-                        ["flag_h30_after", "H30.4以降支給決定"],
-                        ["flag_severe", "著しく重度の者"],
-                        ["flag_short_multi", "短時間複数訪問"],
-                        ["flag_special_area", "特別地域加算"],
-                      ] as const
-                    ).map(([key, label]) => (
-                      <label
-                        key={key}
-                        className="flex cursor-pointer items-center gap-1.5 rounded border border-gray-200 px-2 py-1.5 text-xs hover:bg-gray-50"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={form[key]}
-                          onChange={(e) => upd(key, e.target.checked)}
-                          className="accent-violet-600"
-                        />
-                        <span>{label}</span>
-                      </label>
+                    className={`${inputCls} w-40`}
+                  >
+                    <option value="">未選択</option>
+                    {PRIMARY_DISABILITIES.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
                     ))}
-                  </div>
-                  <p className="mt-1 text-[10px] text-amber-600">
-                    ※ 特別地域加算 を ON にすると請求に加算が反映されます
-                  </p>
+                  </select>
                 </FieldRow>
-              </div>
-              <div className="lg:col-span-2">
-                <FieldRow label="支給量 (時間/回/単位)">
-                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                    {SHIKYURYO_ITEMS.map((it) => {
-                      const v =
-                        (form.shikyuryo_details ?? {})[it.key] ?? {};
-                      return (
-                        <div
-                          key={it.key}
-                          className="flex items-center gap-1.5"
+                <FieldRow label="受給者証番号">
+                  <input
+                    type="text"
+                    value={form.beneficiary_number ?? ""}
+                    onChange={(e) => upd("beneficiary_number", e.target.value)}
+                    className={`${inputCls} w-48`}
+                  />
+                </FieldRow>
+                <FieldRow label="支給決定市町村">
+                  <input
+                    type="text"
+                    value={form.insurer_municipality ?? ""}
+                    onChange={(e) => upd("insurer_municipality", e.target.value)}
+                    className={`${inputCls} w-full max-w-xs`}
+                  />
+                  {/* 番号を打ち間違えたら名称が出ないので、その場で気づける */}
+                  <span className="ml-2 text-sm text-gray-600">
+                    {municipalityName(form.insurer_municipality) ??
+                      (form.insurer_municipality ? "（未登録の市町村番号）" : "")}
+                  </span>
+                </FieldRow>
+                <FieldRow label="認定開始日" required>
+                  <input
+                    type="date"
+                    value={form.certification_start_date ?? ""}
+                    onChange={(e) => upd("certification_start_date", e.target.value)}
+                    className={inputCls}
+                  />
+                </FieldRow>
+                <FieldRow label="認定終了日" required>
+                  <input
+                    type="date"
+                    value={form.certification_end_date ?? ""}
+                    onChange={(e) => upd("certification_end_date", e.target.value)}
+                    className={inputCls}
+                  />
+                </FieldRow>
+                <FieldRow label="自己負担割合">
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min={0}
+                      max={1}
+                      step={0.1}
+                      value={form.copay_rate ?? 0}
+                      onChange={(e) =>
+                        upd("copay_rate", Number(e.target.value || 0))
+                      }
+                      className={`${inputCls} w-24 text-right`}
+                    />
+                    <span className="text-xs text-gray-500">
+                      (= {((form.copay_rate ?? 0) * 100).toFixed(0)}%)
+                    </span>
+                  </div>
+                </FieldRow>
+                <FieldRow label="自己負担月額上限 (円)">
+                  <div className="space-y-0.5">
+                    <input
+                      type="number"
+                      min={0}
+                      value={form.self_payment_limit ?? ""}
+                      onChange={(e) =>
+                        upd(
+                          "self_payment_limit",
+                          e.target.value === "" ? null : Number(e.target.value),
+                        )
+                      }
+                      placeholder="未設定"
+                      className={`${inputCls} w-32 text-right`}
+                    />
+                    <p className="text-[10px] text-gray-400">
+                      0 = 負担0円 (低所得区分等) / 空欄 = 未設定。請求計算は 0 でも上限として適用されます
+                    </p>
+                  </div>
+                </FieldRow>
+                <FieldRow label="生保受給">
+                  <label className="inline-flex items-center gap-1 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={form.seiho_flag}
+                      onChange={(e) => upd("seiho_flag", e.target.checked)}
+                      className="accent-violet-600"
+                    />
+                    生保連携あり (自己負担 0 円扱い)
+                  </label>
+                </FieldRow>
+                <FieldRow label="相談支援事業所">
+                  <input
+                    type="text"
+                    value={form.soudan_office_name ?? ""}
+                    onChange={(e) =>
+                      upd("soudan_office_name", e.target.value || null)
+                    }
+                    className={`${inputCls} w-full`}
+                  />
+                </FieldRow>
+                <FieldRow label="相談支援専門員">
+                  <input
+                    type="text"
+                    value={form.soudan_manager_name ?? ""}
+                    onChange={(e) =>
+                      upd("soudan_manager_name", e.target.value || null)
+                    }
+                    className={`${inputCls} w-full`}
+                  />
+                </FieldRow>
+                <FieldRow label="上限額管理">
+                  <div className="space-y-1.5">
+                    <div className="flex gap-1">
+                      {(["なし", "自事業所", "他事業所"] as const).map((k) => (
+                        <button
+                          key={k}
+                          type="button"
+                          onClick={() => upd("jogen_kanri_kubun", k)}
+                          className={`rounded border px-2 py-1 text-xs font-medium transition-colors ${
+                            form.jogen_kanri_kubun === k
+                              ? "border-violet-500 bg-violet-50 text-violet-700"
+                              : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                          }`}
                         >
-                          <span className="min-w-[150px] text-xs text-gray-600">
-                            {it.label}
-                          </span>
-                          {it.kind === "time" ? (
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="number"
-                                min={0}
-                                value={v.hours ?? ""}
-                                onChange={(e) =>
-                                  updShikyuryo(it.key, "hours", e.target.value)
-                                }
-                                className={`${inputCls} w-16 text-right`}
-                              />
-                              <span className="text-xs text-gray-500">時間</span>
-                              <input
-                                type="number"
-                                min={0}
-                                max={59}
-                                value={v.minutes ?? ""}
-                                onChange={(e) =>
-                                  updShikyuryo(it.key, "minutes", e.target.value)
-                                }
-                                className={`${inputCls} w-16 text-right`}
-                              />
-                              <span className="text-xs text-gray-500">分</span>
-                            </div>
-                          ) : it.kind === "count" ? (
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="number"
-                                min={0}
-                                value={v.count ?? ""}
-                                onChange={(e) =>
-                                  updShikyuryo(it.key, "count", e.target.value)
-                                }
-                                className={`${inputCls} w-16 text-right`}
-                              />
-                              <span className="text-xs text-gray-500">回</span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="number"
-                                min={0}
-                                value={v.units ?? ""}
-                                onChange={(e) =>
-                                  updShikyuryo(it.key, "units", e.target.value)
-                                }
-                                className={`${inputCls} w-20 text-right`}
-                              />
-                              <span className="text-xs text-gray-500">単位</span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </FieldRow>
-              </div>
-              <div className="lg:col-span-2">
-                <FieldRow label="事業者記入欄 (予備1〜6)">
-                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                    {normalizeProviderEntries(form.provider_entries).map(
-                      (e, idx) => (
-                        <div key={e.no} className="flex items-center gap-1.5">
-                          <span className="min-w-[52px] text-xs text-gray-600">
-                            {e.label}
-                          </span>
-                          <input
-                            type="text"
-                            value={e.value}
-                            onChange={(ev) =>
-                              updProviderEntry(idx, ev.target.value)
-                            }
-                            className={`${inputCls} w-full`}
-                          />
-                        </div>
-                      ),
+                          {k}
+                        </button>
+                      ))}
+                    </div>
+                    {form.jogen_kanri_kubun === "他事業所" && (
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <input
+                          type="text"
+                          value={form.jogen_kanri_office_number ?? ""}
+                          onChange={(e) => upd("jogen_kanri_office_number", e.target.value || null)}
+                          placeholder="管理事業所番号 (10桁)"
+                          className={`${inputCls} w-full`}
+                        />
+                        <input
+                          type="text"
+                          value={form.jogen_kanri_office_name ?? ""}
+                          onChange={(e) => upd("jogen_kanri_office_name", e.target.value || null)}
+                          placeholder="管理事業所名"
+                          className={`${inputCls} w-full`}
+                        />
+                      </div>
                     )}
+                    <p className="text-[10px] text-gray-400">
+                      月次の管理結果 (区分 1/2/3) は 請求業務 → 障害請求 の明細で入力します
+                    </p>
                   </div>
                 </FieldRow>
-              </div>
-            </>
-          )}
-          <div className="lg:col-span-2">
-            <FieldRow label="月間支給量 (サービス種別ごと、単位数)">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {(["居宅介護", "重度訪問介護", "行動援護", "同行援護"] as const).map(
-                  (st) => (
-                    <div key={st} className="flex items-center gap-1">
-                      <span className="text-xs text-gray-600 min-w-[80px]">
-                        {st}
-                      </span>
+                <FieldRow label="契約支給量 (記入欄)">
+                  <div className="space-y-1.5">
+                    <input
+                      type="text"
+                      value={form.contract_amount_text ?? ""}
+                      onChange={(e) => upd("contract_amount_text", e.target.value || null)}
+                      placeholder="例: 身体介護 10時間/月"
+                      className={`${inputCls} w-full`}
+                    />
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <input
+                        type="date"
+                        value={form.contract_start_date ?? ""}
+                        onChange={(e) => upd("contract_start_date", e.target.value || null)}
+                        className={`${inputCls} w-full`}
+                        title="契約開始日"
+                      />
+                      <input
+                        type="text"
+                        value={form.contract_entry_number ?? ""}
+                        onChange={(e) => upd("contract_entry_number", e.target.value || null)}
+                        placeholder="記入欄番号"
+                        className={`${inputCls} w-full`}
+                      />
+                    </div>
+                    {holderAvailable && (
+                      <div className="space-y-1 border-t border-gray-200 pt-1.5">
+                        <input
+                          type="text"
+                          value={form.holder_name_kana ?? ""}
+                          onChange={(e) => upd("holder_name_kana", e.target.value || null)}
+                          placeholder="支給決定者(保護者)カナ — 障害児のみ"
+                          className={`${inputCls} w-full`}
+                        />
+                        <p className="text-xs text-gray-500">
+                          <b>障害児のときだけ</b>保護者のカナを入れます。入れると明細書の
+                          支給決定者氏名カナが保護者・支給決定児童氏名カナが本人になります
+                          (成人は空のままで本人が出ます)。
+                        </p>
+                      </div>
+                    )}
+                    <p className="text-xs text-amber-700">
+                      受給者証の「事業者記入欄」= <b>当事業所との契約内容</b>を転記します。
+                      上の支給量 (市町村の支給決定量) とは別で、他事業所と分け合う場合は
+                      その一部になります。国保連伝送の契約情報レコード (契約支給量・契約開始日・
+                      事業者記入欄番号) に出るため、<b>契約開始日が空だと受給者証の値で代替</b>され、
+                      伝送時に警告が出ます。
+                    </p>
+                  </div>
+                </FieldRow>
+                {extAvailable && (
+                  <>
+                    <FieldRow label="交付年月日">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="date"
+                          value={form.issue_date ?? ""}
+                          onChange={(e) => upd("issue_date", e.target.value || null)}
+                          className={inputCls}
+                        />
+                        <label className="inline-flex items-center gap-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={form.is_applying}
+                            onChange={(e) => upd("is_applying", e.target.checked)}
+                            className="accent-violet-600"
+                          />
+                          申請中
+                        </label>
+                      </div>
+                    </FieldRow>
+                    <FieldRow label="所得区分">
+                      <select
+                        value={form.income_category ?? ""}
+                        onChange={(e) =>
+                          upd("income_category", e.target.value || null)
+                        }
+                        className={`${inputCls} w-40`}
+                      >
+                        <option value="">未選択</option>
+                        {INCOME_CATEGORIES.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    </FieldRow>
+                    <FieldRow label="社福減免 / 軽減後上限月額 (円)">
+                      <div className="space-y-1.5">
+                        <label className="inline-flex items-center gap-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={form.shafuku_genmen}
+                            onChange={(e) => upd("shafuku_genmen", e.target.checked)}
+                            className="accent-violet-600"
+                          />
+                          社会福祉法人減免
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={form.reduced_payment_limit ?? ""}
+                          onChange={(e) =>
+                            upd(
+                              "reduced_payment_limit",
+                              e.target.value === "" ? null : Number(e.target.value),
+                            )
+                          }
+                          placeholder="軽減後上限月額"
+                          className={`${inputCls} w-32 text-right`}
+                        />
+                      </div>
+                    </FieldRow>
+                    <FieldRow label="市町村が定める額 (円)">
                       <input
                         type="number"
                         min={0}
-                        value={form.monthly_allocations?.[st] ?? 0}
-                        onChange={(e) => {
-                          const next = { ...(form.monthly_allocations ?? {}) };
-                          const n = Number(e.target.value || 0);
-                          if (n > 0) next[st] = n;
-                          else delete next[st];
-                          upd("monthly_allocations", next);
-                        }}
-                        className={`${inputCls} w-full text-right`}
+                        value={form.municipality_defined_amount ?? ""}
+                        onChange={(e) =>
+                          upd(
+                            "municipality_defined_amount",
+                            e.target.value === "" ? null : Number(e.target.value),
+                          )
+                        }
+                        className={`${inputCls} w-32 text-right`}
                       />
+                    </FieldRow>
+                    <div className="lg:col-span-2">
+                      <FieldRow label="該当区分・フラグ">
+                        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                          {(
+                            [
+                              ["household_multi_jogen", "同一世帯で複数上限管理"],
+                              ["flag_rousha", "聾者"],
+                              ["flag_h30_after", "H30.4以降支給決定"],
+                              ["flag_severe", "著しく重度の者"],
+                              ["flag_short_multi", "短時間複数訪問"],
+                              ["flag_special_area", "特別地域加算"],
+                            ] as const
+                          ).map(([key, label]) => (
+                            <label
+                              key={key}
+                              className="flex cursor-pointer items-center gap-1.5 rounded border border-gray-200 px-2 py-1.5 text-xs hover:bg-gray-50"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={form[key]}
+                                onChange={(e) => upd(key, e.target.checked)}
+                                className="accent-violet-600"
+                              />
+                              <span>{label}</span>
+                            </label>
+                          ))}
+                        </div>
+                        <p className="mt-1 text-[10px] text-amber-600">
+                          ※ 特別地域加算 を ON にすると請求に加算が反映されます
+                        </p>
+                      </FieldRow>
                     </div>
-                  ),
+                    <div className="lg:col-span-2">
+                      <FieldRow label="支給量 (時間/回/単位)">
+                        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                          {SHIKYURYO_ITEMS.map((it) => {
+                            const v =
+                              (form.shikyuryo_details ?? {})[it.key] ?? {};
+                            return (
+                              <div
+                                key={it.key}
+                                className="flex items-center gap-1.5"
+                              >
+                                <span className="min-w-[150px] text-xs text-gray-600">
+                                  {it.label}
+                                </span>
+                                {it.kind === "time" ? (
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={v.hours ?? ""}
+                                      onChange={(e) =>
+                                        updShikyuryo(it.key, "hours", e.target.value)
+                                      }
+                                      className={`${inputCls} w-16 text-right`}
+                                    />
+                                    <span className="text-xs text-gray-500">時間</span>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={59}
+                                      value={v.minutes ?? ""}
+                                      onChange={(e) =>
+                                        updShikyuryo(it.key, "minutes", e.target.value)
+                                      }
+                                      className={`${inputCls} w-16 text-right`}
+                                    />
+                                    <span className="text-xs text-gray-500">分</span>
+                                  </div>
+                                ) : it.kind === "count" ? (
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={v.count ?? ""}
+                                      onChange={(e) =>
+                                        updShikyuryo(it.key, "count", e.target.value)
+                                      }
+                                      className={`${inputCls} w-16 text-right`}
+                                    />
+                                    <span className="text-xs text-gray-500">回</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={v.units ?? ""}
+                                      onChange={(e) =>
+                                        updShikyuryo(it.key, "units", e.target.value)
+                                      }
+                                      className={`${inputCls} w-20 text-right`}
+                                    />
+                                    <span className="text-xs text-gray-500">単位</span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </FieldRow>
+                    </div>
+                    <div className="lg:col-span-2">
+                      <FieldRow label="事業者記入欄 (予備1〜6)">
+                        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                          {normalizeProviderEntries(form.provider_entries).map(
+                            (e, idx) => (
+                              <div key={e.no} className="flex items-center gap-1.5">
+                                <span className="min-w-[52px] text-xs text-gray-600">
+                                  {e.label}
+                                </span>
+                                <input
+                                  type="text"
+                                  value={e.value}
+                                  onChange={(ev) =>
+                                    updProviderEntry(idx, ev.target.value)
+                                  }
+                                  className={`${inputCls} w-full`}
+                                />
+                              </div>
+                            ),
+                          )}
+                        </div>
+                      </FieldRow>
+                    </div>
+                  </>
                 )}
+                <div className="lg:col-span-2">
+                  <FieldRow label="月間支給量 (サービス種別ごと、単位数)">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {(["居宅介護", "重度訪問介護", "行動援護", "同行援護"] as const).map(
+                        (st) => (
+                          <div key={st} className="flex items-center gap-1">
+                            <span className="text-xs text-gray-600 min-w-[80px]">
+                              {st}
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={form.monthly_allocations?.[st] ?? 0}
+                              onChange={(e) => {
+                                const next = { ...(form.monthly_allocations ?? {}) };
+                                const n = Number(e.target.value || 0);
+                                if (n > 0) next[st] = n;
+                                else delete next[st];
+                                upd("monthly_allocations", next);
+                              }}
+                              className={`${inputCls} w-full text-right`}
+                            />
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  </FieldRow>
+                </div>
+                <div className="lg:col-span-2">
+                  <FieldRow label="利用中サービス種別">
+                    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
+                      {SERVICE_TYPE_OPTIONS.map((st) => {
+                        const checked = form.service_types.includes(st);
+                        return (
+                          <label
+                            key={st}
+                            className="flex cursor-pointer items-center gap-1.5 rounded border border-gray-200 px-2 py-1.5 text-xs hover:bg-gray-50"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleServiceType(st)}
+                              className="accent-violet-600"
+                            />
+                            <span>{st}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </FieldRow>
+                </div>
+                <div className="lg:col-span-2">
+                  <FieldRow label="備考">
+                    <textarea
+                      value={form.notes ?? ""}
+                      onChange={(e) => upd("notes", e.target.value)}
+                      rows={3}
+                      className={`${inputCls} w-full`}
+                    />
+                  </FieldRow>
+                </div>
               </div>
-            </FieldRow>
-          </div>
-          <div className="lg:col-span-2">
-            <FieldRow label="利用中サービス種別">
-              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
-                {SERVICE_TYPE_OPTIONS.map((st) => {
-                  const checked = form.service_types.includes(st);
-                  return (
-                    <label
-                      key={st}
-                      className="flex cursor-pointer items-center gap-1.5 rounded border border-gray-200 px-2 py-1.5 text-xs hover:bg-gray-50"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleServiceType(st)}
-                        className="accent-violet-600"
-                      />
-                      <span>{st}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </FieldRow>
-          </div>
-          <div className="lg:col-span-2">
-            <FieldRow label="備考">
-              <textarea
-                value={form.notes ?? ""}
-                onChange={(e) => upd("notes", e.target.value)}
-                rows={3}
-                className={`${inputCls} w-full`}
-              />
-            </FieldRow>
+            </div>
+
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-gray-100 px-5 py-3">
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <X size={14} /> キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                <Save size={14} /> {saving ? "保存中…" : "保存"}
+              </button>
+            </div>
           </div>
         </div>
       )}
