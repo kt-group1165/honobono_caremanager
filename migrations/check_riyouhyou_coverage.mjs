@@ -174,14 +174,19 @@ async function main() {
     if (missing.length) {
       console.log(`   ★ 利用票にいるが当方に無い ${missing.length} 名 (取込漏れ / 月遅れ):`);
       for (const m of missing) {
-        // 氏名でなく **被保険者番号**で DB 全体を引き直す。
+        // 氏名でなく **保険者番号 + 被保険者番号**で DB 全体を引き直す。
         //   ・別事業所には居る → 事業所割当が抜けているだけ (対処が違う)
         //   ・別人の名前で出る → 被保番の取り違え。請求が別人に付くので最優先
+        //
+        // ⚠ 被保番だけで引いてはいけない。被保番は **保険者ごとに一意**なので、
+        //   保険者が違えば同じ番号の別人が普通に居る。被保番だけで引いて
+        //   「野口照恵の番号が伊東八重子に付いている」と誤検出した (2026-08-20)。
         let note = "";
-        if (m.insured) {
+        if (m.insured && m.insurer) {
           const { data: ins } = await sb
             .from("client_insurance_records")
             .select("client_id, clients(name)")
+            .eq("insurer_number", m.insurer)
             .eq("insured_number", m.insured);
           const names = [...new Set((ins ?? []).map((r) => r.clients?.name).filter(Boolean))];
           if (names.length) {
