@@ -54,8 +54,10 @@ export function normRiyouName(s) {
   // 先頭の状態印。閉じ括弧だけ / 開き括弧だけ の片側欠けもある
   //   「入）濱島ふじ子」= 入院。NFKC 後は 入) になる
   n = n.replace(/^[（(【[]?[^）)】\]]{0,3}[）)】\]]/, "");
-  // 末尾の連番・記号 (金子和子1 / 中村光子〇)
-  n = n.replace(/[0-9０-９〇○●※★☆]+$/, "");
+  // 末尾の連番・記号 (金子和子1 / 中村光子〇 / 山本節子*)
+  n = n.replace(/[0-9０-９〇○●※★☆*＊]+$/, "");
+  // 先頭の記号 (＊佐藤タキコ)。同姓同名の区別に付けられている
+  n = n.replace(/^[*＊〇○●※★☆]+/, "");
   return n;
 }
 
@@ -123,6 +125,35 @@ export function pickOfficeName(t) {
 }
 
 /**
+ * そのページの利用者に **実際のサービス利用があったか**を数える。
+ *
+ * 利用票にいて当方に無い人は 2 種類あり、扱いが正反対:
+ *   ・月遅れ   … 提供したが請求しなかった → **起票する**
+ *   ・利用なし … 入院等でまるまる利用が無い → **入れない** (請求も発生しない)
+ * 事業所報告の「月遅れ 件数」と突き合わせるとどちらか分かるが、人単位では
+ * 決まらない。利用票の **実績行に数字があるか**で判別できる (2026-08-20 検証)。
+ *   大網: 池田 予定72/実績76 = 月遅れ (報告の月遅れ 1 件と一致)
+ *         鶴・野口 予定あり/実績0 = 利用なし、渡邉 予定0/実績0 = 計画なし
+ *
+ * @param {{x:number,y:number,t:string}[]} words ページ内の語 (座標つき)
+ * @returns {{plan:number, actual:number}} 予定行 / 実績行に載っている数字の個数
+ */
+export function countPlanAndActual(words) {
+  const ysOf = (label) => (words ?? []).filter((w) => w.t === label).map((w) => Math.round(w.y));
+  const near = (y, ys) => ys.some((v) => Math.abs(y - v) <= 2);
+  const yPlan = ysOf("予定");
+  const yActual = ysOf("実績");
+  let plan = 0, actual = 0;
+  for (const w of words ?? []) {
+    if (!/^\d+$/.test(w.t)) continue;
+    const y = Math.round(w.y);
+    if (near(y, yPlan)) plan++;
+    if (near(y, yActual)) actual++;
+  }
+  return { plan, actual };
+}
+
+/**
  * 利用票 PDF 1 ファイルを読む。pdf は呼出側で fitz(PyMuPDF) 相当を使えないため、
  * テキスト抽出済みのページ配列を渡す設計にしている。
  * @param {string[]} pageTexts ページごとのテキスト
@@ -151,10 +182,12 @@ export function parseRiyouhyouPages(pageTexts, pageWords) {
     const month = ym ? `${2018 + Number(ym[1])}-${String(Number(ym[2])).padStart(2, "0")}` : null;
 
     const nums = pageWords?.[pi] ? pickInsuranceNumbers(pageWords[pi]) : { insurer: null, insured: null };
+    const use = pageWords?.[pi] ? countPlanAndActual(pageWords[pi]) : { plan: 0, actual: 0 };
     out.set(key, {
       name, nameKey: key, careLevel,
       insurer: nums.insurer, insured: nums.insured, month,
       officeName: pickOfficeName(t),
+      planCount: use.plan, actualCount: use.actual,
     });
   }
   return [...out.values()];

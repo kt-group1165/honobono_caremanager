@@ -186,7 +186,11 @@ async function main() {
     totalMissing += missing.length;
     console.log(`   利用票 ${byKey.size} 名 / 当方 ${mine.size} 名`);
     if (missing.length) {
-      console.log(`   ★ 利用票にいるが当方に無い ${missing.length} 名 (取込漏れ / 月遅れ):`);
+      // 実績がある = 提供したのに請求していない (月遅れ) / 実績なし = 入院等で利用なし
+      const late = missing.filter((m) => m.actualCount > 0);
+      const idle = missing.filter((m) => m.actualCount === 0);
+      console.log(`   ★ 利用票にいるが当方に無い ${missing.length} 名 ` +
+        `(実績あり=月遅れ ${late.length} / 実績なし=利用なし ${idle.length}):`);
       for (const m of missing) {
         // 氏名でなく **保険者番号 + 被保険者番号**で DB 全体を引き直す。
         //   ・別事業所には居る → 事業所割当が抜けているだけ (対処が違う)
@@ -209,8 +213,11 @@ async function main() {
               : `  ⚠ 同じ被保番が別人 [${names.join(" / ")}]`;
           }
         }
+        const use = m.actualCount > 0
+          ? `★月遅れ (予定${m.planCount}/実績${m.actualCount})`
+          : `利用なし (予定${m.planCount}/実績0)`;
         console.log(`       ${m.name}  ${m.careLevel ?? "要介護度不明"}  ` +
-          `保険者${m.insurer ?? "?"} 被保番${m.insured ?? "?"}${note}`);
+          `保険者${m.insurer ?? "?"} 被保番${m.insured ?? "?"}  ${use}${note}`);
       }
     }
     if (extra.length) {
