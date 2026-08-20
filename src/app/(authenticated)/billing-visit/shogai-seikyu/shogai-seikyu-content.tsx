@@ -703,8 +703,15 @@ export function ShogaiSeikyuContent({
         const c = byClient.get(r.user_id);
         const contracts = contractsByClient.get(r.user_id) ?? [];
         return {
-          row: r,
+          clientId: r.user_id,
+          userName: r.user_name,
+          beneficiaryNumber: r.beneficiary_number,
+          municipality: r.municipality,
           contracts,
+          // 「その月に起きた変更」の報告なので、契約日/終了日が対象月にある分だけ出す
+          startedIds: contracts
+            .filter((x) => x.start_date && x.start_date >= mFirst && x.start_date <= mLast)
+            .map((x) => x.id),
           endedIds: contracts
             .filter((x) => x.end_date && x.end_date >= mFirst && x.end_date <= mLast)
             .map((x) => x.id),
@@ -2165,7 +2172,7 @@ export function ShogaiSeikyuContent({
       <div className="hidden print:block">
         {keiyakuEntries.map((e) => (
           <ShogaiKeiyakuHoukokuPrintSheet
-            key={e.row.user_id}
+            key={e.clientId}
             entry={e}
             officeName={currentOffice?.name ?? null}
             officeNumber={officeNumber}

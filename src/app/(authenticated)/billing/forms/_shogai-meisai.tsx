@@ -1292,10 +1292,22 @@ export function ShogaiFutanIchiranPrintSheet({
      ほぼ白紙で出ていた。shogai_contracts (664 件・構造化済) を明細表として印字する。
    ═══════════════════════════════════════════════════════════════════════ */
 export interface ShogaiKeiyakuEntry {
-  row: ShogaiSeikyuRow;
+  /** 一覧の key 用 */
+  clientId: string;
+  userName: string;
+  beneficiaryNumber: string | null;
+  /** 支給決定市町村番号。提出先の宛名を引くのに使う */
+  municipality: string | null;
   /** 対象月に有効な自事業所の契約 (決定サービスコードごと) */
   contracts: ShogaiContract[];
-  /** contracts のうち、対象月に契約終了日がある分の id。「終了した報告」欄に回す */
+  /**
+   * 対象期間に **契約日 (start_date) がある** 契約の id。「契約締結又は契約内容変更」欄に出す。
+   * ⚠ この様式は「その月に起きた変更」の報告であって有効な契約の一覧ではない。
+   *   ほのぼのの実出力 (浅田真生子/茂原 2026-06) では、継続中の契約しか無い月は
+   *   締結欄が 5 行とも空で、終了した 2 件だけが下の欄に出ていた。
+   */
+  startedIds: string[];
+  /** 対象期間に契約終了日がある分の id。「サービス提供を終了した報告」欄に回す */
   endedIds: string[];
   /** 受給者証の holder (支給決定者) カナ。無ければ null */
   holderNameKana: string | null;
@@ -1366,7 +1378,6 @@ export function ShogaiKeiyakuHoukokuPrintSheet({
   /** 提出日 (報告日)。未指定は当日 */
   day?: number;
 }) {
-  const { row: r } = entry;
   // 罫線・文字サイズは 様式第26号 の実物 (千葉市) の座標に合わせている
   const bd = K26_BORDER;
   const th: React.CSSProperties = {
@@ -1405,11 +1416,11 @@ export function ShogaiKeiyakuHoukokuPrintSheet({
   /** 理由: reason に「変更」が入っていれば 2、それ以外は 1 (新規契約) */
   const isHenkou = (c: ShogaiContract) => /変更/.test(c.reason ?? "");
 
-  // 契約締結・変更の報告 = 対象月に終了していない契約。様式どおり 5 行に空行を足す
-  const active = entry.contracts.filter((c) => !entry.endedIds.includes(c.id));
+  // 契約締結・変更の報告 = 対象期間に契約日がある契約だけ。様式どおり 5 行に空行を足す
+  const started = entry.contracts.filter((c) => entry.startedIds.includes(c.id));
   const startRows: (ShogaiContract | null)[] = [
-    ...active,
-    ...Array<ShogaiContract | null>(Math.max(0, 5 - active.length)).fill(null),
+    ...started,
+    ...Array<ShogaiContract | null>(Math.max(0, 5 - started.length)).fill(null),
   ].slice(0, 5);
   // 終了の報告 = 対象月に契約終了日がある契約
   const ended = entry.contracts.filter((c) => entry.endedIds.includes(c.id));
@@ -1434,8 +1445,8 @@ export function ShogaiKeiyakuHoukokuPrintSheet({
       {/* 市町村番号 (左上) と 様式番号 (右上) */}
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: "7.5pt" }}>
         <span>
-          {r.municipality ?? ""}
-          {municipalityName(r.municipality) ? ` ${municipalityName(r.municipality)}` : ""}
+          {entry.municipality ?? ""}
+          {municipalityName(entry.municipality) ? ` ${municipalityName(entry.municipality)}` : ""}
         </span>
         <span style={{ fontSize: "9pt" }}>（様式第26号）</span>
       </div>
@@ -1461,7 +1472,7 @@ export function ShogaiKeiyakuHoukokuPrintSheet({
           <div style={{ minHeight: "5mm" }}>{NB}</div>
           <div style={{ minHeight: "5mm" }}>{NB}</div>
           <div style={{ marginTop: "6mm" }}>
-            {municipalityHead(r.municipality) ?? "　　　　　　"}　様
+            {municipalityHead(entry.municipality) ?? "　　　　　　"}　様
           </div>
         </div>
         <table style={{ borderCollapse: "collapse", flex: "1 1 auto" }}>
@@ -1510,7 +1521,7 @@ export function ShogaiKeiyakuHoukokuPrintSheet({
               受給者証番号
             </td>
             <td style={{ border: bd, padding: "1mm", width: "56mm" }}>
-              <K26DigitBoxes value={r.beneficiary_number} len={10} />
+              <K26DigitBoxes value={entry.beneficiaryNumber} len={10} />
             </td>
             <td style={{ ...th, width: "28mm" }}>
               地域相談支援
@@ -1528,7 +1539,7 @@ export function ShogaiKeiyakuHoukokuPrintSheet({
               <br />
               （保護者）氏名
             </td>
-            <td style={{ ...td, fontSize: "10pt" }}>{r.user_name}</td>
+            <td style={{ ...td, fontSize: "10pt" }}>{entry.userName}</td>
             <td style={th}>
               支給決定に係る
               <br />
@@ -1576,8 +1587,8 @@ export function ShogaiKeiyakuHoukokuPrintSheet({
               <td style={{ ...td, fontSize: "8.5pt" }}>{c ? amountText(c) : ""}</td>
               <td style={{ ...td, fontSize: "8.5pt" }}>{c ? wareki(c.start_date) : ""}</td>
               <td style={{ ...td, padding: "0.5mm 2mm" }}>
-                <K26CheckRow checked={!!c && !isHenkou(c)} label="１新規契約" />
-                <K26CheckRow checked={!!c && isHenkou(c)} label="２契約の変更" />
+                <K26CheckRow checked={!!c && !isHenkou(c)} label="１ 新 規 契 約" />
+                <K26CheckRow checked={!!c && isHenkou(c)} label="２ 契 約 の 変 更" />
               </td>
             </tr>
           ))}
@@ -1622,8 +1633,8 @@ export function ShogaiKeiyakuHoukokuPrintSheet({
                   : ""}
               </td>
               <td style={{ ...td, padding: "0.5mm 2mm" }}>
-                <K26CheckRow checked={!!c && !isHenkou(c)} label="１契約の終了" />
-                <K26CheckRow checked={!!c && isHenkou(c)} label="２契約の変更" />
+                <K26CheckRow checked={!!c && !isHenkou(c)} label="１ 契 約 の 終 了" />
+                <K26CheckRow checked={!!c && isHenkou(c)} label="２ 契 約 の 変 更" />
               </td>
             </tr>
           ))}

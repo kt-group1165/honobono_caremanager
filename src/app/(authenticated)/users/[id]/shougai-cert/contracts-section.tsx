@@ -26,9 +26,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Plus, Save, Trash2, X } from "lucide-react";
+import { Plus, Printer, Save, Trash2, X } from "lucide-react";
 import { useBusinessType } from "@/lib/business-type-context";
 import { DECISION_CODES, defaultUnitOf } from "@/lib/shogai-densou/contracts";
+import {
+  ShogaiKeiyakuHoukokuPrintSheet,
+  type ShogaiKeiyakuEntry,
+} from "@/app/(authenticated)/billing/forms/_shogai-meisai";
 
 interface Row {
   id: string;
@@ -97,6 +101,20 @@ export function ContractsSection({ userId }: { userId: string }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  /** 報告対象年月 (YYYY-MM)。様式は「その月に起きた契約の変更」を報告するもの */
+  const [reportMonth, setReportMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [printEntry, setPrintEntry] = useState<ShogaiKeiyakuEntry | null>(null);
+  const [printOffice, setPrintOffice] = useState<{
+    name: string | null;
+    number: string | null;
+    postal: string | null;
+    address: string | null;
+    representative: string | null;
+  }>({ name: null, number: null, postal: null, address: null, representative: null });
 
   // ⚠ 先頭で setState しないこと。effect から同期的に呼ぶと
   //   react-hooks/set-state-in-effect に引っかかる (初期値が loading=true なので不要)
@@ -222,6 +240,87 @@ export function ContractsSection({ userId }: { userId: string }) {
     await load();
   };
 
+  /**
+   * 契約内容報告書 (様式第26号) をこの利用者ぶん 1 枚だけ印刷する。
+   * 障害請求画面からも出せるが、契約を編集した直後にその場で出せるほうが自然なため
+   * ここにも置く。出す内容は同じコンポーネント (ShogaiKeiyakuHoukokuPrintSheet)。
+   */
+  const printReport = async () => {
+    if (rows.length === 0) {
+      toast.error("契約が登録されていないため報告書を出せません");
+      return;
+    }
+    setPrinting(true);
+    try {
+      const [certRes, clientRes, officeRes] = await Promise.all([
+        supabase
+          .from("shougai_certifications")
+          .select("beneficiary_number, insurer_municipality, holder_name_kana, certification_start_date")
+          .eq("client_id", userId)
+          .order("certification_start_date", { ascending: false, nullsFirst: false })
+          .limit(1),
+        supabase.from("clients").select("name").eq("id", userId).maybeSingle(),
+        currentOffice
+          ? supabase
+              .from("offices")
+              .select("name, shogai_business_number, business_number, postal_code, address, representative_name")
+              .eq("id", currentOffice.id)
+              .maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
+      ]);
+      if (certRes.error) throw new Error(`受給者証の取得に失敗: ${certRes.error.message}`);
+      if (clientRes.error) throw new Error(`利用者の取得に失敗: ${clientRes.error.message}`);
+      if (officeRes.error) throw new Error(`事業所の取得に失敗: ${officeRes.error.message}`);
+      const cert = (certRes.data ?? [])[0] as
+        | { beneficiary_number: string | null; insurer_municipality: string | null; holder_name_kana: string | null }
+        | undefined;
+      const off = officeRes.data as {
+        name?: string | null;
+        shogai_business_number?: string | null;
+        business_number?: string | null;
+        postal_code?: string | null;
+        address?: string | null;
+        representative_name?: string | null;
+      } | null;
+
+      // 自事業所の契約だけを報告する (他事業所ぶんは相手が出す)
+      const ym = reportMonth;
+      const [ry, rm] = ym.split("-").map(Number);
+      const first = `${ym}-01`;
+      const last = `${ym}-${String(new Date(ry, rm, 0).getDate()).padStart(2, "0")}`;
+      setPrintEntry({
+        clientId: userId,
+        userName: (clientRes.data as { name?: string } | null)?.name ?? "",
+        beneficiaryNumber: cert?.beneficiary_number ?? null,
+        municipality: cert?.insurer_municipality ?? null,
+        contracts: mine as unknown as ShogaiKeiyakuEntry["contracts"],
+        startedIds: mine
+          .filter((c) => c.start_date && c.start_date >= first && c.start_date <= last)
+          .map((c) => c.id),
+        endedIds: mine
+          .filter((c) => c.end_date && c.end_date >= first && c.end_date <= last)
+          .map((c) => c.id),
+        holderNameKana: cert?.holder_name_kana ?? null,
+        legacyAmountText: null,
+      });
+      setPrintOffice({
+        name: off?.name ?? currentOffice?.name ?? null,
+        number: (off?.shogai_business_number ?? off?.business_number ?? null) || null,
+        postal: off?.postal_code ?? null,
+        address: off?.address ?? null,
+        representative: off?.representative_name ?? null,
+      });
+      setTimeout(() => {
+        window.print();
+        setPrintEntry(null);
+      }, 120);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   const remove = async (r: Row) => {
     if (
       !confirm(
@@ -253,6 +352,24 @@ export function ContractsSection({ userId }: { userId: string }) {
           </p>
         </div>
         {editingId === null && (
+          <div className="flex items-center gap-2">
+            <input
+              type="month"
+              value={reportMonth}
+              onChange={(e) => setReportMonth(e.target.value)}
+              title="報告対象年月。この月に契約日・終了日がある契約だけが報告書に出ます"
+              className="rounded border border-gray-300 px-2 py-1 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => void printReport()}
+              disabled={printing || rows.length === 0}
+              title="この利用者の契約内容報告書 (様式第26号) を印刷します"
+              className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              <Printer className="h-4 w-4" />
+              契約報告書
+            </button>
           <button
             type="button"
             onClick={startNew}
@@ -262,8 +379,25 @@ export function ContractsSection({ userId }: { userId: string }) {
             <Plus className="h-4 w-4" />
             追加
           </button>
+          </div>
         )}
       </div>
+
+      {/* 印刷 view: 契約内容報告書 (様式第26号)。画面には出さず印刷時だけ出す */}
+      {printEntry && (
+        <div className="hidden print:block">
+          <ShogaiKeiyakuHoukokuPrintSheet
+            entry={printEntry}
+            officeName={printOffice.name}
+            officeNumber={printOffice.number}
+            officePostalCode={printOffice.postal}
+            officeAddress={printOffice.address}
+            officeRepresentative={printOffice.representative}
+            reiwa={Number(reportMonth.slice(0, 4)) - 2018}
+            month={Number(reportMonth.slice(5, 7))}
+          />
+        </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-gray-500">読み込み中…</p>
