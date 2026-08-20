@@ -472,14 +472,8 @@ export function ShougaiCertContent({
     });
   };
 
-  // 事業者記入欄の value 更新
-  const updProviderEntry = (idx: number, value: string) => {
-    setForm((f) => {
-      const entries = normalizeProviderEntries(f.provider_entries);
-      entries[idx] = { ...entries[idx], value };
-      return { ...f, provider_entries: entries };
-    });
-  };
+  // 事業者記入欄 (予備1〜6) の編集は廃止したため updProviderEntry も削除。
+  // 既存データの表示は normalizeProviderEntries で読むだけ。
 
   // 支給量内訳を表示用文字列に整形
   const fmtShikyuryo = (
@@ -896,6 +890,25 @@ export function ShougaiCertContent({
                       (form.insurer_municipality ? "（未登録の市町村番号）" : "")}
                   </span>
                 </FieldRow>
+                {/* 支給決定者カナは契約ではなく受給者証の属性なので、氏名・番号の並びに置く */}
+                {holderAvailable && (
+                  <FieldRow label="支給決定者カナ">
+                    <div className="space-y-1">
+                      <input
+                        type="text"
+                        value={form.holder_name_kana ?? ""}
+                        onChange={(e) => upd("holder_name_kana", e.target.value || null)}
+                        placeholder="保護者カナ — 障害児のみ"
+                        className={`${inputCls} w-full max-w-xs`}
+                      />
+                      <p className="text-xs text-gray-500">
+                        <b>障害児のときだけ</b>保護者のカナを入れます。入れると明細書の
+                        支給決定者氏名カナが保護者・支給決定児童氏名カナが本人になります
+                        (成人は空のままで本人が出ます)。
+                      </p>
+                    </div>
+                  </FieldRow>
+                )}
                 <FieldRow label="認定開始日" required>
                   <input
                     type="date"
@@ -1022,56 +1035,12 @@ export function ShougaiCertContent({
                     </p>
                   </div>
                 </FieldRow>
-                <FieldRow label="契約支給量 (記入欄)">
-                  <div className="space-y-1.5">
-                    <input
-                      type="text"
-                      value={form.contract_amount_text ?? ""}
-                      onChange={(e) => upd("contract_amount_text", e.target.value || null)}
-                      placeholder="例: 身体介護 10時間/月"
-                      className={`${inputCls} w-full`}
-                    />
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <input
-                        type="date"
-                        value={form.contract_start_date ?? ""}
-                        onChange={(e) => upd("contract_start_date", e.target.value || null)}
-                        className={`${inputCls} w-full`}
-                        title="契約開始日"
-                      />
-                      <input
-                        type="text"
-                        value={form.contract_entry_number ?? ""}
-                        onChange={(e) => upd("contract_entry_number", e.target.value || null)}
-                        placeholder="記入欄番号"
-                        className={`${inputCls} w-full`}
-                      />
-                    </div>
-                    {holderAvailable && (
-                      <div className="space-y-1 border-t border-gray-200 pt-1.5">
-                        <input
-                          type="text"
-                          value={form.holder_name_kana ?? ""}
-                          onChange={(e) => upd("holder_name_kana", e.target.value || null)}
-                          placeholder="支給決定者(保護者)カナ — 障害児のみ"
-                          className={`${inputCls} w-full`}
-                        />
-                        <p className="text-xs text-gray-500">
-                          <b>障害児のときだけ</b>保護者のカナを入れます。入れると明細書の
-                          支給決定者氏名カナが保護者・支給決定児童氏名カナが本人になります
-                          (成人は空のままで本人が出ます)。
-                        </p>
-                      </div>
-                    )}
-                    <p className="text-xs text-amber-700">
-                      受給者証の「事業者記入欄」= <b>当事業所との契約内容</b>を転記します。
-                      上の支給量 (市町村の支給決定量) とは別で、他事業所と分け合う場合は
-                      その一部になります。国保連伝送の契約情報レコード (契約支給量・契約開始日・
-                      事業者記入欄番号) に出るため、<b>契約開始日が空だと受給者証の値で代替</b>され、
-                      伝送時に警告が出ます。
-                    </p>
-                  </div>
-                </FieldRow>
+                {/* 契約支給量 (自由記述) / 契約開始日 / 記入欄番号 の入力欄は削除した。
+                    576 件中それぞれ 33 / 1 / 0 件しか埋まっておらず、しかも
+                    **伝送に出るのは shogai_contracts のほう**。同じものを入れる場所が
+                    2 つあると、空のほうに入れて伝送に出ない事故になる。
+                    契約は下の「契約支給量 (事業者記入欄)」カードに一本化。
+                    既存の 33 件は消さず、値がある人だけ表示モードで参照できるようにしてある。 */}
                 {extAvailable && (
                   <>
                     <FieldRow label="交付年月日">
@@ -1252,29 +1221,12 @@ export function ShougaiCertContent({
                         </div>
                       </FieldRow>
                     </div>
-                    <div className="lg:col-span-2">
-                      <FieldRow label="事業者記入欄 (予備1〜6)">
-                        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                          {normalizeProviderEntries(form.provider_entries).map(
-                            (e, idx) => (
-                              <div key={e.no} className="flex items-center gap-1.5">
-                                <span className="min-w-[52px] text-xs text-gray-600">
-                                  {e.label}
-                                </span>
-                                <input
-                                  type="text"
-                                  value={e.value}
-                                  onChange={(ev) =>
-                                    updProviderEntry(idx, ev.target.value)
-                                  }
-                                  className={`${inputCls} w-full`}
-                                />
-                              </div>
-                            ),
-                          )}
-                        </div>
-                      </FieldRow>
-                    </div>
+                    {/* 事業者記入欄 (予備1〜6) の入力欄は削除した。
+                        自由記述 6 枠は 576 件すべて空で、伝送にも出ていなかった。
+                        契約は下の「契約支給量 (事業者記入欄)」カード (shogai_contracts)
+                        に一本化する — 決定サービスコードごとに行を持てて期間もあり、
+                        伝送の契約情報レコード (J121-05) に出るのはそちらだけ。
+                        入れる場所が 2 つあると「空のほうに入れて伝送に出ない」事故になる。 */}
                   </>
                 )}
                 <div className="lg:col-span-2">
