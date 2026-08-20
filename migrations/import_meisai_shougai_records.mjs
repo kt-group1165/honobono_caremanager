@@ -24,6 +24,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { findMeisaiFiles } from "./_meisai_files.mjs";
+import { normClientName as normClientNameShared } from "./_meisai_name.mjs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -70,7 +71,8 @@ const normStaff = (s) => normBase(s).replace(/様$/, "");
 // 利用者名の照合用。稼働データは氏名の末尾に制度の目印を付けることがある
 //   (大網 「神田　祐介（支）」= 支援 の意。clients 側は「神田 祐介」)。
 //   末尾の (…) を落として突合する。中黒や敬称の揺れも吸収。
-const normClientName = (s) => normBase(s).replace(/[（(][^）)]*[）)]\s*$/, "").replace(/様$/, "");
+// 利用者名の正規化は _meisai_name.mjs に集約 (括弧なしの目印「移/障/支」を落とすため)
+const normClientName = normClientNameShared;
 
 // ---- SJIS CSV ----
 const sjis = new TextDecoder("shift_jis");
