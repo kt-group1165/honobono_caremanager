@@ -370,6 +370,18 @@ export async function fetchKyotakuClaimRows(
   supabase: SupabaseClient,
   monthKey: string, // 'YYYY-MM'
   officeId?: string | null, // 指定時は当事業所に割り当てられた利用者のみ (多事業所で他事業所が混ざるのを防ぐ)
+  opts?: {
+    /**
+     * kaigo_billing_status.kokuho_target=false の利用者を除く。
+     *
+     * ⚠ **売上と伝送で必要な集合が違う**。
+     *   売上   = その月に提供した全員 (月遅れも含む)         → false (既定)
+     *   伝送   = その月に国保連へ出す分だけ (月遅れは除く)   → true
+     *   既定を false にしているのは、ダッシュボードの売上から
+     *   月遅れが落ちると「提供したのに売上に出ない」ことになるため。
+     */
+    excludeNonKokuho?: boolean;
+  },
 ): Promise<KyotakuSeikyuRow[]> {
   const log = stageLogger(monthKey);
   log("開始");
@@ -425,9 +437,29 @@ export async function fetchKyotakuClaimRows(
       return acc;
     }),
   );
-  const claims: ClaimDbRow[] = claimChunks.flat();
+  let claims: ClaimDbRow[] = claimChunks.flat();
   log("レセプト取得", `${claims.length}件`);
   if (claims.length === 0) return [];
+
+  // 伝送のときだけ「今月は国保連に出さない」利用者を落とす (月遅れ・返戻・過誤)
+  if (opts?.excludeNonKokuho && officeId) {
+    const { data: st, error: stErr } = await supabase
+      .from("kaigo_billing_status")
+      .select("client_id")
+      .eq("office_id", officeId)
+      .eq("target_month", monthKey)
+      .eq("kokuho_target", false);
+    // table 未作成 (42P01 / PGRST205) は除外なしで続行 (従来動作)
+    if (stErr && stErr.code !== "42P01" && stErr.code !== "PGRST205") {
+      throw new Error(`請求対象外の取得に失敗: ${stErr.message}`);
+    }
+    const skip = new Set((st ?? []).map((x: { client_id: string }) => x.client_id));
+    if (skip.size) {
+      const before = claims.length;
+      claims = claims.filter((c) => !skip.has((c as { user_id: string }).user_id));
+      log("国保連対象外を除外", `${before - claims.length}件`);
+    }
+  }
 
   // 介護予防支援「委託」(包括が請求) は請求対象外 (0 単位の区分永続化行のため除外)
   const billable = claims.filter((c) => parseYoboShienKubun(c.notes) !== "itaku");
