@@ -48,6 +48,22 @@ const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_
   auth: { persistSession: false },
 });
 
+/**
+ * 伝送と **意図的に一致させない** ケース (_densou_intentional_diff.json)。
+ * ほのぼの側の算定漏れが確認できた利用者は当方を正しい値にしてあるので、
+ * 取込で伝送の値に戻してしまわないよう skip する。理由は必ず出力する。
+ */
+const INTENTIONAL = (() => {
+  const p = path.join(KAIGO, "migrations", "_densou_intentional_diff.json");
+  if (!existsSync(p)) return new Map();
+  const j = JSON.parse(readFileSync(p, "utf8"));
+  return new Map(
+    (j.entries ?? [])
+      .filter((x) => x.system === "居宅" && x.month === MONTH)
+      .map((x) => [x.insured_number, x]),
+  );
+})();
+
 /** 伝送データ/<拠点>/居宅/ 配下を再帰して KK*.CSV を集める */
 function findKkFiles() {
   const base = path.join(KAIGO, "伝送データ");
@@ -136,7 +152,10 @@ async function main() {
 
   const plans = [];
   const problems = [];
+  const kept = [];
   for (const b of bundle.values()) {
+    const keep = INTENTIONAL.get(b.insured);
+    if (keep) { kept.push(keep); continue; }
     const off = officeByBn.get(b.office);
     if (!off) { problems.push(`事業所番号 ${b.office}: offices に無い (被保番 ${b.insured})`); continue; }
 
@@ -207,7 +226,8 @@ async function main() {
 
   const adds = plans.filter((p) => !p.existing);
   const upds = plans.filter((p) => p.existing);
-  console.log(`  新規 ${adds.length} 名 / 是正 ${upds.length} 名 / 一致 ${bundle.size - plans.length - problems.length} 名\n`);
+  console.log(`  新規 ${adds.length} 名 / 是正 ${upds.length} 名 / ` +
+    `一致 ${bundle.size - plans.length - problems.length - kept.length} 名 / 意図的に据置 ${kept.length} 名\n`);
   for (const p of adds) {
     console.log(`  [新規] ${p.off.name} ${p.name}  ${p.claim.care_support_name} ` +
       `${p.claim.units}${p.claim.initial_addition ? `+初回${p.claim.initial_addition_units}` : ""}` +
@@ -216,6 +236,14 @@ async function main() {
   for (const p of upds) {
     console.log(`  [是正] ${p.off.name} ${p.name}  [${p.src}]`);
     for (const d of p.diffs) console.log(`           ${d}`);
+  }
+  if (kept.length) {
+    console.log(`\n  -- 意図的に伝送と揃えないもの ${kept.length} 件 (当方の値を保持) --`);
+    for (const k of kept) {
+      console.log(`     ${k.name} (${k.office}) 差 ${k.diff_amount?.toLocaleString() ?? "?"}円`);
+      console.log(`       ${k.reason}`);
+      if (k.action) console.log(`       → ${k.action}`);
+    }
   }
   if (problems.length) {
     console.log(`\n  -- 取り込めないもの ${problems.length} 件 --`);
