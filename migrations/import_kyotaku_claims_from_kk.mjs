@@ -166,6 +166,11 @@ async function main() {
       tokutei_kassan_type: null, tokutei_kassan_units: 0,
       medical_coop_kassan: false, medical_coop_kassan_units: 0,
       shoguu_kaizen_code: null, shoguu_kaizen_units: 0,
+      hospital_coordination: false, hospital_coordination_units: 0,
+      discharge_addition: false, discharge_addition_units: 0, discharge_type: "",
+      medical_coordination: false, medical_coordination_units: 0,
+      terminal_care: false, terminal_care_units: 0,
+      emergency_conference: false, emergency_conference_units: 0,
     };
     let unknown = null;
     for (const c of b.lines) {
@@ -184,6 +189,20 @@ async function main() {
         claim.tokutei_kassan_units = units;
       } else if (name.includes("処遇改善加算")) {
         claim.shoguu_kaizen_code = code; claim.shoguu_kaizen_units = units;
+      } else if (name.includes("入院時情報連携加算")) {
+        claim.hospital_coordination = true; claim.hospital_coordination_units = units;
+      } else if (name.includes("退院退所加算")) {
+        claim.discharge_addition = true; claim.discharge_addition_units = units;
+        claim.discharge_type = name.replace(/^.*退院退所加算/, "").trim();
+      } else if (name.includes("通院時情報連携加算")) {
+        claim.medical_coordination = true; claim.medical_coordination_units = units;
+      } else if (name.includes("ターミナルケアマネジメント加算")) {
+        claim.terminal_care = true; claim.terminal_care_units = units;
+      } else if (name.includes("緊急時カンファレンス加算")) {
+        claim.emergency_conference = true; claim.emergency_conference_units = units;
+      } else if (name.includes("特定事業所集中減算")) {
+        // 単位数がマイナス。基本部分とは別枠で保持する列が無いので、当面は止める
+        unknown = `${code} ${name} (減算に対応する列が無い)`; break;
       } else {
         unknown = `${code} ${name} (対応する列が未定義)`; break;
       }
