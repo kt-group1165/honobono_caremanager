@@ -199,13 +199,21 @@ async function main() {
       problems.push(`${off.name} 被保番 ${b.insured}: 基本コードか請求額が読めない`); continue;
     }
 
-    // 被保番 → client
+    // (保険者番号, 被保険者番号) → client
+    // ⚠ 被保険者番号は **保険者の中でしか一意でない**。番号だけで引くと別人に当たる。
+    //   例) 0000273649 = 遠山 弘美 (122283 八街市) と 加藤 三千代 (122259 市原市)
+    //   当方の実データで、番号だけだと 28 件が衝突し、保険者を足すと 20 件に減る。
     const { data: ins, error: e2 } = await sb.from("client_insurance_records")
-      .select("client_id, clients(name)").eq("insured_number", b.insured);
+      .select("client_id, clients(name)")
+      .eq("insured_number", b.insured).eq("insurer_number", b.insurer);
     if (e2) { console.error(`✗ ${e2.message}`); process.exit(1); }
     const cids = [...new Set((ins ?? []).map((r) => r.client_id))];
     if (cids.length !== 1) {
-      problems.push(`${off.name} 被保番 ${b.insured}: 当方の利用者が ${cids.length} 名 (特定できない)`); continue;
+      problems.push(
+        `${off.name} 保険者${b.insurer} 被保番 ${b.insured}: 当方の利用者が ${cids.length} 名 ` +
+          (cids.length ? "(重複レコードの解消が必要)" : "(当方に居ない)"),
+      );
+      continue;
     }
     const clientId = cids[0];
     const name = ins[0].clients?.name ?? "?";

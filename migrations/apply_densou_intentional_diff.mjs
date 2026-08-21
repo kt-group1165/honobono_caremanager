@@ -44,7 +44,8 @@ async function main() {
     if (!e.table || !e.set) { console.log(`  ⚠ ${e.name}: table / set が無く反映できない`); continue; }
 
     const { data: ins, error: e1 } = await sb.from("client_insurance_records")
-      .select("client_id, clients(name)").eq("insured_number", e.insured_number);
+      .select("client_id, clients(name)").eq("insured_number", e.insured_number)
+      .eq("insurer_number", e.insurer_number);
     if (e1) { console.error(`✗ ${e1.message}`); process.exit(1); }
     const cids = [...new Set((ins ?? []).map((r) => r.client_id))];
     if (cids.length !== 1) { console.log(`  ⚠ ${e.name}: 被保番 ${e.insured_number} の利用者が ${cids.length} 名`); continue; }
