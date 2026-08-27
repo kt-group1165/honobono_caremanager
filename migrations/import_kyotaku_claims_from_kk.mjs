@@ -146,6 +146,22 @@ function loadClientMaster() {
   return { byInsured, byUserNo };
 }
 
+/**
+ * 退院・退所加算のサービスコード → kaigo_care_support_claims.discharge_type。
+ * ⚠ 列にはアプリの内部値 (i_i / i_ro / ii_i / ii_ro / iii) が入る。
+ *   サービスコードの名称は「Ⅰ１」形式なので、そのまま入れると
+ *   claims-shared.ts の ADDON_CODE_TO_DISCHARGE_TYPE と噛み合わず画面が壊れる。
+ *   名称の 1/2 は イ/ロ にあたる。単位数では Ⅰ２ と Ⅱ１ がどちらも 600 で
+ *   区別できないため、**コードで引く**。
+ */
+const DISCHARGE_TYPE_BY_CODE = {
+  "436132": "i_i",    // 退院退所加算Ⅰ１ 450
+  "436143": "i_ro",   // 退院退所加算Ⅰ２ 600
+  "436144": "ii_i",   // 退院退所加算Ⅱ１ 600
+  "436145": "ii_ro",  // 退院退所加算Ⅱ２ 750
+  "436146": "iii",    // 退院退所加算Ⅲ   900
+};
+
 /** 国保連の要介護状態区分コード (11=要支援 / 12,13=要支援1,2 / 21..25=要介護1..5) */
 const CARE_LEVEL_BY_CODE = { "11": "要支援", "12": "要支援1", "13": "要支援2", "21": "要介護1", "22": "要介護2", "23": "要介護3", "24": "要介護4", "25": "要介護5" };
 const isoFromYmd = (s) => (/^\d{8}$/.test(s ?? "") ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : null);
@@ -254,8 +270,10 @@ async function main() {
       } else if (name.includes("入院時情報連携加算")) {
         claim.hospital_coordination = true; claim.hospital_coordination_units = units;
       } else if (name.includes("退院退所加算")) {
+        const t = DISCHARGE_TYPE_BY_CODE[code];
+        if (!t) { unknown = `${code} ${name} (DISCHARGE_TYPE_BY_CODE に無い)`; break; }
         claim.discharge_addition = true; claim.discharge_addition_units = units;
-        claim.discharge_type = name.replace(/^.*退院退所加算/, "").trim();
+        claim.discharge_type = t;
       } else if (name.includes("通院時情報連携加算")) {
         claim.medical_coordination = true; claim.medical_coordination_units = units;
       } else if (name.includes("ターミナルケアマネジメント加算")) {
@@ -371,12 +389,23 @@ async function main() {
   if (!EXECUTE) { console.log("\n※ DRY RUN。--execute で保存します。"); return; }
 
   for (const c of creates) {
-    const { data: made, error: eC } = await sb.from("clients")
-      .insert({ tenant_id: TENANT, name: c.name, user_number: c.userNumber,
-        birth_date: c.birth_date, address: c.address, phone: c.phone,
-        care_level: c.care_level })
-      .select("id").single();
-    if (eC) { console.error(`✗ ${c.name} の作成失敗: ${eC.message}`); process.exit(1); }
+    // 利用者番号で既に居ることがある (認定レコードが無い / 保険者・被保番が違うだけ)。
+    // その場合は新規作成せず、認定レコードと事業所割当だけ足す。
+    const { data: exist, error: eE } = await sb.from("clients")
+      .select("id, name").eq("tenant_id", TENANT).eq("user_number", c.userNumber);
+    if (eE) { console.error(`✗ ${c.name} の照会失敗: ${eE.message}`); process.exit(1); }
+    let made = (exist ?? [])[0] ?? null;
+    if (made) {
+      console.log(`  = ${c.name} は利用者番号 ${c.userNumber} で既に居る (${made.name}) — 認定と割当だけ足す`);
+    } else {
+      const ins0 = await sb.from("clients")
+        .insert({ tenant_id: TENANT, name: c.name, user_number: c.userNumber,
+          birth_date: c.birth_date, address: c.address, phone: c.phone,
+          care_level: c.care_level })
+        .select("id").single();
+      if (ins0.error) { console.error(`✗ ${c.name} の作成失敗: ${ins0.error.message}`); process.exit(1); }
+      made = ins0.data;
+    }
     const ins = await sb.from("client_insurance_records").insert({
       tenant_id: TENANT, client_id: made.id, insured_number: c.insured, insurer_number: c.insurer,
       care_level: c.care_level, certification_start_date: c.cert_start, certification_end_date: c.cert_end,
@@ -384,19 +413,28 @@ async function main() {
       notes: `[伝送取込 ${MONTH}] 月遅れで当初請求に居らず未登録だった`,
     });
     if (ins.error) { console.error(`✗ ${c.name} の認定作成失敗: ${ins.error.message}`); process.exit(1); }
-    const asg = await sb.from("client_office_assignments")
-      .insert({ tenant_id: TENANT, client_id: made.id, office_id: c.off.id });
-    if (asg.error) { console.error(`✗ ${c.name} の事業所割当失敗: ${asg.error.message}`); process.exit(1); }
-    console.log(`  + ${c.name} を作成 (${c.off.name})`);
+    const has = await sb.from("client_office_assignments")
+      .select("id").eq("client_id", made.id).eq("office_id", c.off.id);
+    if (has.error) { console.error(`✗ ${c.name} の割当照会失敗: ${has.error.message}`); process.exit(1); }
+    if (!(has.data ?? []).length) {
+      const asg = await sb.from("client_office_assignments")
+        .insert({ tenant_id: TENANT, client_id: made.id, office_id: c.off.id });
+      if (asg.error) { console.error(`✗ ${c.name} の事業所割当失敗: ${asg.error.message}`); process.exit(1); }
+    }
+    console.log(`  + ${c.name} (${c.off.name})`);
     for (const p of plans) if (!p.clientId && p.insured === c.insured && p.insurer === c.insurer) p.clientId = made.id;
   }
 
   for (const p of plans) {
     const row = { ...p.claim, user_id: p.clientId, billing_month: MONTH, tenant_id: TENANT, status: "confirmed",
       notes: `[伝送取込 ${MONTH}] ${p.src} の 8124 から取込` };
+    // 利用者を作らず既存を再利用したときは、その人に既にレセプトがあることがある
+    // (認定レコードの保険者・被保番が違って引けなかっただけ)。(user_id, billing_month)
+    // に UNIQUE があるので upsert で当てる。
     const q = p.existing
       ? await sb.from("kaigo_care_support_claims").update({ ...row, updated_at: new Date().toISOString() }).eq("id", p.existing.id)
-      : await sb.from("kaigo_care_support_claims").insert(row);
+      : await sb.from("kaigo_care_support_claims")
+          .upsert({ ...row, updated_at: new Date().toISOString() }, { onConflict: "user_id,billing_month" });
     if (q.error) { console.error(`✗ ${p.name}: ${q.error.message}`); process.exit(1); }
     console.log(`  ✓ ${p.name}`);
   }
