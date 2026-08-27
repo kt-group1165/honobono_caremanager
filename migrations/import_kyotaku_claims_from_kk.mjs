@@ -28,6 +28,14 @@ import { fileURLToPath } from "node:url";
 import iconv from "iconv-lite";
 
 const EXECUTE = process.argv.includes("--execute");
+/**
+ * --create-missing: 伝送に居るが当方に居ない利用者を **利用者マスタ CSV から**
+ *   作ってから取り込む。月遅れの人は当初請求に居ないので、当方に未登録のことがある。
+ *     木更津 2026-06: 岸 敏子 / 小塚 明 (どちらもマスタには居る)
+ *   氏名・住所はマスタ、認定と保険者は伝送を正とする。明示フラグにしてあるのは
+ *   利用者を勝手に増やさないため。
+ */
+const CREATE_MISSING = process.argv.includes("--create-missing");
 const MONTH = process.env.MONTH || "2026-06";
 const YM = MONTH.replace("-", "");
 const AREA = process.env.AREA || null;
@@ -107,8 +115,48 @@ const splitCsv = (line) => {
  */
 const F = { office: 3, provideYm: 5, insurer: 6, insured: 8, lineNo: 17, code: 18, units: 19, count: 20, sub: 21, totalUnits: 22, amount: 23 };
 
+/** 利用者データ/ 配下の 介護保険*.CSV と 基本情報*.CSV を読む (被保番 → 氏名・生年・住所) */
+function loadClientMaster() {
+  const base = path.join(KAIGO, "利用者データ");
+  const byInsured = new Map();   // 被保番 → { userNumber, name, careLevel }
+  const byUserNo = new Map();    // 利用者番号 → { name, birth, sex, zip, address, phone }
+  const walk = (d, depth) => {
+    if (depth > 3 || !existsSync(d)) return;
+    for (const n of readdirSync(d)) {
+      const p = path.join(d, n);
+      let st; try { st = statSync(p); } catch { continue; }
+      if (st.isDirectory()) { walk(p, depth + 1); continue; }
+      if (!/\.CSV$/i.test(n) || !st.size) continue;
+      const isKaigo = /^介護保険/.test(n);
+      const isBase = /^基本情報/.test(n);
+      if (!isKaigo && !isBase) continue;
+      for (const line of iconv.decode(readFileSync(p), "Shift_JIS").split(/\r?\n/)) {
+        const c = splitCsv(line).map((s) => s.trim());
+        if (isKaigo && c.length > 14 && /^\d{10}$|^[A-Z]\d{9}$/.test(c[4] ?? "")) {
+          // 同じ人が複数行 (更新申請) 出るので上書きで良い (氏名・利用者番号は同じ)
+          byInsured.set(c[4], { userNumber: c[0], name: c[1], careLevel: c[11] || null });
+        }
+        if (isBase && c.length > 14 && c[0] && c[3]) {
+          byUserNo.set(c[0], { name: c[3], sex: c[8] || null, birth: c[11] || null, zip: c[12] || null, address: c[13] || null, phone: c[14] || null });
+        }
+      }
+    }
+  };
+  walk(base, 0);
+  return { byInsured, byUserNo };
+}
+
+/** 国保連の要介護状態区分コード (11=要支援 / 12,13=要支援1,2 / 21..25=要介護1..5) */
+const CARE_LEVEL_BY_CODE = { "11": "要支援", "12": "要支援1", "13": "要支援2", "21": "要介護1", "22": "要介護2", "23": "要介護3", "24": "要介護4", "25": "要介護5" };
+const isoFromYmd = (s) => (/^\d{8}$/.test(s ?? "") ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : null);
+const isoFromSlash = (s) => {
+  const m = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec((s ?? "").trim());
+  return m ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` : null;
+};
+
 async function main() {
-  console.log(`=== 居宅レセプトを伝送から取込 ${MONTH} ${EXECUTE ? "【EXECUTE】" : "【DRY RUN】"} ===\n`);
+  console.log(`=== 居宅レセプトを伝送から取込 ${MONTH} ${EXECUTE ? "【EXECUTE】" : "【DRY RUN】"}` +
+    `${CREATE_MISSING ? " + 未登録利用者を作成" : ""} ===\n`);
 
   // サービスコード辞書 (名称で種別を判定するので推測が入らない)
   const codeName = new Map();
@@ -142,17 +190,31 @@ async function main() {
       const c = splitCsv(line);
       if (c[0] !== "2" || c[2] !== "8124") continue;
       if (c[F.provideYm] !== YM) continue;
+      // ⚠ 同じ (事業所, 被保番, 提供年月) が **複数の送信に出る**ことがある。
+      //   過誤取下げ → 再請求 で出し直した場合で、後の送信が当初請求を置き換える。
+      //     船橋 林八重子: KK260704 (7/10) 1832単位 19,858円 = 処遇改善なし
+      //                    KK260802 (8/10) 1870単位 20,270円 = 処遇改善を付けて再請求
+      //   行を寄せ集めると混ざるので、**新しいファイルのものだけ**を残す。
+      //   ファイル名 KK<YYMM><連番> は送信順に並ぶので辞書順で比較できる。
       const key = `${c[F.office]}|${c[F.insured]}`;
-      if (!bundle.has(key)) bundle.set(key, { office: c[F.office], insured: c[F.insured], insurer: c[F.insurer], lines: [], src: path.basename(f) });
-      bundle.get(key).lines.push(c);
+      const src = path.basename(f);
+      const cur = bundle.get(key);
+      if (!cur) { bundle.set(key, { office: c[F.office], insured: c[F.insured], insurer: c[F.insurer], lines: [c], src, replaced: null }); continue; }
+      if (src === cur.src) { cur.lines.push(c); continue; }
+      if (src > cur.src) { cur.lines = [c]; cur.replaced = cur.src; cur.src = src; }
+      // src < cur.src は古い送信なので捨てる
     }
   }
   console.log(`  KK ${files.length} ファイルから 提供年月 ${YM} の利用者 ${bundle.size} 名を検出\n`);
   if (!bundle.size) { console.log("※ 該当なし"); return; }
 
+  const master = loadClientMaster();
+  console.log(`  利用者マスタ CSV: 被保番 ${master.byInsured.size} 件 / 基本情報 ${master.byUserNo.size} 件`);
+
   const plans = [];
   const problems = [];
   const kept = [];
+  const creates = [];
   for (const b of bundle.values()) {
     const keep = INTENTIONAL.get(b.insured);
     if (keep) { kept.push(keep); continue; }
@@ -227,20 +289,41 @@ async function main() {
       .eq("insured_number", b.insured).eq("insurer_number", b.insurer);
     if (e2) { console.error(`✗ ${e2.message}`); process.exit(1); }
     const cids = [...new Set((ins ?? []).map((r) => r.client_id))];
-    if (cids.length !== 1) {
-      problems.push(
-        `${off.name} 保険者${b.insurer} 被保番 ${b.insured}: 当方の利用者が ${cids.length} 名 ` +
-          (cids.length ? "(重複レコードの解消が必要)" : "(当方に居ない)"),
-      );
+    if (cids.length > 1) {
+      problems.push(`${off.name} 保険者${b.insurer} 被保番 ${b.insured}: 当方の利用者が ${cids.length} 名 (重複レコードの解消が必要)`);
       continue;
     }
-    const clientId = cids[0];
-    const name = ins[0].clients?.name ?? "?";
+    let clientId = cids[0] ?? null;
+    let name = ins?.[0]?.clients?.name ?? null;
+    if (!clientId) {
+      const m = master.byInsured.get(b.insured);
+      if (!m) { problems.push(`${off.name} 保険者${b.insurer} 被保番 ${b.insured}: 当方にも利用者マスタ CSV にも居ない`); continue; }
+      const base = master.byUserNo.get(m.userNumber) ?? {};
+      const head = b.lines[0];
+      creates.push({
+        off, insured: b.insured, insurer: b.insurer,
+        userNumber: m.userNumber,
+        name: base.name || m.name,
+        birth_date: isoFromSlash(base.birth) ?? isoFromYmd(head[11]),
+        address: base.address || null, phone: base.phone || null,
+        care_level: CARE_LEVEL_BY_CODE[head[13]] ?? m.careLevel,
+        cert_start: isoFromYmd(head[14]), cert_end: isoFromYmd(head[15]),
+      });
+      if (!CREATE_MISSING) {
+        problems.push(`${off.name} 被保番 ${b.insured} (${base.name || m.name}): 当方に居ない — --create-missing で作成できます`);
+        continue;
+      }
+      clientId = null;                       // EXECUTE 時に作ってから claim を入れる
+      name = base.name || m.name;
+    }
 
-    const { data: cur, error: e3 } = await sb.from("kaigo_care_support_claims")
-      .select("*").eq("user_id", clientId).eq("billing_month", MONTH);
-    if (e3) { console.error(`✗ ${e3.message}`); process.exit(1); }
-    const existing = (cur ?? [])[0] ?? null;
+    let existing = null;
+    if (clientId) {
+      const { data: cur, error: e3 } = await sb.from("kaigo_care_support_claims")
+        .select("*").eq("user_id", clientId).eq("billing_month", MONTH);
+      if (e3) { console.error(`✗ ${e3.message}`); process.exit(1); }
+      existing = (cur ?? [])[0] ?? null;
+    }
 
     const diffs = [];
     for (const [k, v] of Object.entries(claim)) {
@@ -248,7 +331,7 @@ async function main() {
       if (existing && String(was ?? "") !== String(v ?? "")) diffs.push(`${k}: ${was ?? "(空)"} → ${v ?? "(空)"}`);
     }
     if (existing && !diffs.length) continue;                      // 一致 = 何もしない
-    plans.push({ off, name, clientId, claim, existing, diffs, src: b.src });
+    plans.push({ off, name, clientId, insured: b.insured, insurer: b.insurer, claim, existing, diffs, src: b.src, replaced: b.replaced });
   }
 
   const adds = plans.filter((p) => !p.existing);
@@ -258,11 +341,19 @@ async function main() {
   for (const p of adds) {
     console.log(`  [新規] ${p.off.name} ${p.name}  ${p.claim.care_support_name} ` +
       `${p.claim.units}${p.claim.initial_addition ? `+初回${p.claim.initial_addition_units}` : ""}` +
-      `+特定${p.claim.tokutei_kassan_units}+処遇${p.claim.shoguu_kaizen_units} = ${p.claim.total_amount.toLocaleString()}円  [${p.src}]`);
+      `+特定${p.claim.tokutei_kassan_units}+処遇${p.claim.shoguu_kaizen_units} = ${p.claim.total_amount.toLocaleString()}円  [${p.src}${p.replaced ? ` — ${p.replaced} を置き換え` : ""}]`);
   }
   for (const p of upds) {
-    console.log(`  [是正] ${p.off.name} ${p.name}  [${p.src}]`);
+    console.log(`  [是正] ${p.off.name} ${p.name}  [${p.src}${p.replaced ? ` — ${p.replaced} を置き換え (再請求)` : ""}]`);
     for (const d of p.diffs) console.log(`           ${d}`);
+  }
+  if (creates.length) {
+    console.log(`
+  -- 当方に居ない利用者 ${creates.length} 名${CREATE_MISSING ? " (作成します)" : " (--create-missing で作成)"} --`);
+    for (const c of creates) {
+      console.log(`     ${c.name} (${c.userNumber})  ${c.care_level}  保険者${c.insurer} 被保番${c.insured}`);
+      console.log(`       生年 ${c.birth_date ?? "?"} / 認定 ${c.cert_start}〜${c.cert_end} / ${c.address ?? "住所なし"}`);
+    }
   }
   if (kept.length) {
     console.log(`\n  -- 意図的に伝送と揃えないもの ${kept.length} 件 (当方の値を保持) --`);
@@ -278,6 +369,27 @@ async function main() {
   }
 
   if (!EXECUTE) { console.log("\n※ DRY RUN。--execute で保存します。"); return; }
+
+  for (const c of creates) {
+    const { data: made, error: eC } = await sb.from("clients")
+      .insert({ tenant_id: TENANT, name: c.name, user_number: c.userNumber,
+        birth_date: c.birth_date, address: c.address, phone: c.phone,
+        care_level: c.care_level })
+      .select("id").single();
+    if (eC) { console.error(`✗ ${c.name} の作成失敗: ${eC.message}`); process.exit(1); }
+    const ins = await sb.from("client_insurance_records").insert({
+      tenant_id: TENANT, client_id: made.id, insured_number: c.insured, insurer_number: c.insurer,
+      care_level: c.care_level, certification_start_date: c.cert_start, certification_end_date: c.cert_end,
+      certification_status: "認定済み", record_status: "認定済み",
+      notes: `[伝送取込 ${MONTH}] 月遅れで当初請求に居らず未登録だった`,
+    });
+    if (ins.error) { console.error(`✗ ${c.name} の認定作成失敗: ${ins.error.message}`); process.exit(1); }
+    const asg = await sb.from("client_office_assignments")
+      .insert({ tenant_id: TENANT, client_id: made.id, office_id: c.off.id });
+    if (asg.error) { console.error(`✗ ${c.name} の事業所割当失敗: ${asg.error.message}`); process.exit(1); }
+    console.log(`  + ${c.name} を作成 (${c.off.name})`);
+    for (const p of plans) if (!p.clientId && p.insured === c.insured && p.insurer === c.insurer) p.clientId = made.id;
+  }
 
   for (const p of plans) {
     const row = { ...p.claim, user_id: p.clientId, billing_month: MONTH, tenant_id: TENANT, status: "confirmed",
