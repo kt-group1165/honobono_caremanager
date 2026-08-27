@@ -231,6 +231,7 @@ async function main() {
   const problems = [];
   const kept = [];
   const creates = [];
+  const resolved = [];   // 割当チェック用: 伝送で解決できた全員 (一致した人も含む)
   for (const b of bundle.values()) {
     const keep = INTENTIONAL.get(b.insured);
     if (keep) { kept.push(keep); continue; }
@@ -348,6 +349,7 @@ async function main() {
       const was = existing ? existing[k] : undefined;
       if (existing && String(was ?? "") !== String(v ?? "")) diffs.push(`${k}: ${was ?? "(空)"} → ${v ?? "(空)"}`);
     }
+    if (clientId) resolved.push({ off, name, clientId });
     if (existing && !diffs.length) continue;                      // 一致 = 何もしない
     plans.push({ off, name, clientId, insured: b.insured, insurer: b.insurer, claim, existing, diffs, src: b.src, replaced: b.replaced });
   }
@@ -423,6 +425,21 @@ async function main() {
     }
     console.log(`  + ${c.name} (${c.off.name})`);
     for (const p of plans) if (!p.clientId && p.insured === c.insured && p.insurer === c.insurer) p.clientId = made.id;
+  }
+
+  // 伝送でその事業所が請求している以上、その事業所の利用者である。
+  // client は居るのに **その事業所への割当が無い**ことがあり、レセプトだけ入れても
+  // 事業所別の集計から漏れる (高品 菊地滉・前嶋明 / ムツミ 4名 など計 12 名)。
+  // 1 利用者が複数 office に紐づくのは設計どおりなので、足りなければ足す。
+  for (const p of resolved) {
+    const { data: has, error: eA } = await sb.from("client_office_assignments")
+      .select("id").eq("client_id", p.clientId).eq("office_id", p.off.id);
+    if (eA) { console.error(`✗ ${p.name} の割当照会失敗: ${eA.message}`); process.exit(1); }
+    if ((has ?? []).length) continue;
+    const { error: eI } = await sb.from("client_office_assignments")
+      .insert({ tenant_id: TENANT, client_id: p.clientId, office_id: p.off.id });
+    if (eI) { console.error(`✗ ${p.name} の割当追加失敗: ${eI.message}`); process.exit(1); }
+    console.log(`  ⊕ ${p.name} を ${p.off.name} に割当 (伝送で請求されているため)`);
   }
 
   for (const p of plans) {
