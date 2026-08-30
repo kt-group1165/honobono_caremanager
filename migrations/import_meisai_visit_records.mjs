@@ -12,6 +12,7 @@
 //   DRY RUN は read-only。利用者/職員/サービスコードの名寄せギャップを実数で出す。
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
+import { assertRefsExist } from "./_fk_guard.mjs";
 import { readFileSync, readdirSync } from "node:fs";
 import { findMeisaiFiles } from "./_meisai_files.mjs";
 import { fileURLToPath } from "node:url";
@@ -327,6 +328,10 @@ async function main() {
     console.log("※ DRY RUN のため INSERT していません。--execute で本番投入。");
     return;
   }
+
+  // ★ 削除の前に FK を検証する (削除だけ実行されてデータが消える事故を防ぐ)
+  await assertRefsExist(sb, payloadsFinal, [{ column: "user_id", table: "clients", label: "利用者" }, { column: "staff_id", table: "members", label: "職員" }],
+    { hint: `migrations/_meisai_num_to_client_${MAP_TAG}.json の client_id を確認` });
 
   // 冪等: 既存の①介護取込行を削除してから入れ直す。
   // ⚠ **必ず対象月に絞る**。月スコープを付け忘れると 7 月を取り込んだ瞬間に

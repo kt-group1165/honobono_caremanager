@@ -1115,6 +1115,45 @@ async function main() {
 
   if (!EXECUTE) { console.log("※ DRY RUN のため INSERT していません。--execute で本番投入。"); return; }
 
+  // ── ★ 削除の前に FK を検証する ────────────────────────────────────────
+  //   このスクリプトは「削除 → INSERT」の順なので、INSERT が落ちると
+  //   **削除だけ実行されてデータが消えたまま**になる。
+  //   2026-08-30 に花見川で実際に起きた: 名寄せ (_meisai_num_to_client_花見川.json)
+  //   の client_id が重複統合で消えていて (414000166 村上泉)、FK 違反で 0 件 INSERT。
+  //   → 参照先が実在することを **削除前に**確かめる。
+  {
+    const userIds = [...new Set(deduped.map((r) => r.user_id).filter(Boolean))];
+    const staffIds = [...new Set(deduped.map((r) => r.staff_id).filter(Boolean))];
+    const checkExists = async (table, ids) => {
+      const found = new Set();
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data, error } = await sb.from(table).select("id").in("id", ids.slice(i, i + 200));
+        if (error) { console.error(`✗ ${table} 検証失敗: ${error.message}`); process.exit(1); }
+        for (const r of data) found.add(r.id);
+      }
+      return ids.filter((id) => !found.has(id));
+    };
+    const missUsers = await checkExists("clients", userIds);
+    const missStaff = await checkExists("members", staffIds);
+    if (missUsers.length || missStaff.length) {
+      console.error("\n✗ 参照先が存在しないため **何も削除せずに中止**しました");
+      if (missUsers.length) {
+        console.error(`  clients に無い user_id ${missUsers.length} 件:`);
+        for (const id of missUsers.slice(0, 10)) {
+          const num = Object.entries(numToClient ?? {}).find(([, v]) => v === id)?.[0];
+          console.error(`    ${id}${num ? `  (名寄せ ${MAP_TAG}: 利用者番号 ${num})` : ""}`);
+        }
+        console.error(`  → migrations/_meisai_num_to_client_${MAP_TAG}.json の client_id が` +
+          ` 重複統合などで消えている可能性。現行の clients.id に張り替えること`);
+      }
+      if (missStaff.length) {
+        console.error(`  members に無い staff_id ${missStaff.length} 件: ${missStaff.slice(0, 5).join(", ")}`);
+      }
+      process.exit(1);
+    }
+    console.log(`FK 検証 OK (利用者 ${userIds.length} / 職員 ${staffIds.length})`);
+  }
+
   // 冪等: 既存の障害取込行を削除。
   // ⚠ **必ず対象月に絞る**。月スコープを忘れると翌月を取り込んだ瞬間に前月が全消しになる
   //   (2026-08-07 に介護側で実際に起きた)。

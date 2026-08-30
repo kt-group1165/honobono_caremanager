@@ -9,6 +9,7 @@
 //   node migrations/import_meisai_sougou_records.mjs --execute
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
+import { assertRefsExist } from "./_fk_guard.mjs";
 import { readFileSync } from "node:fs";
 import { findMeisaiFiles } from "./_meisai_files.mjs";
 import { fileURLToPath } from "node:url";
@@ -106,6 +107,10 @@ async function main(){
   if(payloads[0]) console.log("payloadサンプル:\n",JSON.stringify(payloads[0],null,1));
 
   if(!EXECUTE){ console.log("\n※ DRY RUN。--execute で 既存マーカー行削除→投入。"); return; }
+  // ★ 削除の前に FK を検証する (削除だけ実行されてデータが消える事故を防ぐ)
+  await assertRefsExist(sb, payloads, [{ column: "user_id", table: "clients", label: "利用者" }, { column: "staff_id", table: "members", label: "職員" }],
+    { hint: "名寄せ / 事前取込の id を確認" });
+
   // 冪等: 既存の総合取込行を削除してから入れ直す。
   // ⚠ **必ず対象月に絞る**。月スコープが無いと他の月の実績まで消える (visit_records と同じ罠)。
   const [dy,dm]=TARGET_MONTH.split("-").map(Number);

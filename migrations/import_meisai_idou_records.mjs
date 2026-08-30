@@ -14,6 +14,7 @@
 //     … --execute                                                # 本番 INSERT
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
+import { assertRefsExist } from "./_fk_guard.mjs";
 import { readFileSync } from "node:fs";
 import { findMeisaiFiles } from "./_meisai_files.mjs";
 import { normClientName as normClientNameShared } from "./_meisai_name.mjs";
@@ -202,6 +203,10 @@ async function main() {
   if (payloads[0]) console.log(`\nサンプル:\n`, JSON.stringify(payloads[0], null, 2));
 
   if (!EXECUTE) { console.log("\n※ DRY RUN。--execute で INSERT します。"); return; }
+
+  // ★ 削除の前に FK を検証する (削除だけ実行されてデータが消える事故を防ぐ)
+  await assertRefsExist(sb, payloads, [{ column: "client_id", table: "clients", label: "利用者" }],
+    { hint: "名寄せ / 事前取込の id を確認" });
 
   // 冪等: 同事業所・同月の取込行を削除してから入れ直す
   const { error: delErr } = await sb.from("kaigo_idou_shien_records").delete()
