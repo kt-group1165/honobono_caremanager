@@ -452,6 +452,95 @@ function juhoStepsForMinutes(steps, minutes, mode) {
   return out;
 }
 
+// ============================================================================
+// 重度訪問介護の日次通算 (2026-08-30 に実伝送から確定したルール)
+//
+//   1. その日の重訪を **訪問順に並べて時間を累計**する
+//      ⚠ 時刻が重なっても合算する。**2人派遣にしない**
+//        (やわた 宮原和世: 13:00-18:30 と 16:30-18:30 が重なるが、ほのぼのは
+//         121271 = 1人 で出している。当方は 121272 = ・2人 を出していた)
+//   2. 累計 0〜4.0h は基本段 (1.0/1.5/…/4.0)
+//   3. 4.0h 超は 30 分ごとの増分
+//   いずれも
+//      ・その時間が属する **時間帯** (早朝6-8 / 日中8-18 / 夜間18-22 / 深夜22-6)
+//      ・段 = **「累計終了時刻 以上 で最小の段」**
+//
+//   ⚠ 「以上」がポイント。終了 8.0 を「8.0 を超えたから 8.5」と読むと合わない。
+//     **8.0 ちょうどは 8.0 段**。
+//
+//   検算: やわた 宮原和世 2026-06 の 8 日分で 5 コードとも完全一致
+//     121221 日中8.0 48 / 129025 日中8.5 4 / 121231 日中12.0 4
+//     123221 夜間8.0 12 / 123231 夜間12.0 4
+//   詳細は docs/TJ_JISSEKI_STRUCTURE.md
+// ============================================================================
+
+/** 累計(分)の終了位置に対応する段の hours を返す */
+function juhoTierHoursForCumEnd(cumEndMin, tierHours) {
+  const h = cumEndMin / 60;
+  // 4.0h までは段が刻みそのもの (1.0 / 1.5 / … / 4.0)
+  if (h <= 4 + 1e-9) {
+    const exact = tierHours.find((t) => Math.abs(t - h) < 1e-9);
+    if (exact != null) return exact;
+  }
+  // 4.0h 超は「累計終了 以上 で最小の段」
+  return tierHours.find((t) => t > 4 + 1e-9 && t >= h - 1e-9) ?? null;
+}
+
+/**
+ * 1 日ぶんの重訪の訪問 (訪問順・時刻つき) から算定コード列を作る。
+ * @param visits [{s,e}] 分。開始時刻昇順
+ * @param stepsByZone zoneLabel -> [{hours, code, name, units}]
+ * @returns [{code,name,units,zone}] / 解決できなければ null
+ */
+function juhoConvsForDay(visits, stepsByZone) {
+  // ① 訪問順に、時間帯の境界で細切れにする
+  const segs = [];
+  for (const v of visits) {
+    let s = v.s;
+    while (s < v.e) {
+      const z = zoneOf(s);
+      // その時間帯の終わり (分)
+      const zEnd = z === "深" ? (s < 360 ? 360 : 1440) : z === "早" ? 480 : z === "日" ? 1080 : 1320;
+      const e = Math.min(v.e, zEnd);
+      if (e > s) segs.push({ zone: z, minutes: e - s });
+      s = e;
+    }
+  }
+  if (!segs.length) return null;
+
+  // ② 段の境界で切りながら累計する
+  const anyZone = Object.values(stepsByZone).find(Boolean);
+  if (!anyZone) return null;
+  const tierHours = [...new Set(anyZone.map((st) => st.hours))].sort((a, b) => a - b);
+  const tierEndsMin = tierHours.map((h) => h * 60);
+
+  const out = [];
+  let cum = 0;
+  for (const seg of segs) {
+    let left = seg.minutes;
+    while (left > 1e-9) {
+      // 次の段の終了累計。4h までは段そのもの、超えたら 30 分刻み
+      const next = cum < 240
+        ? tierEndsMin.find((m) => m > cum + 1e-9 && m <= 240)
+        : cum + 30;
+      const boundary = next ?? cum + 30;
+      const take = Math.min(left, boundary - cum);
+      const cumEnd = cum + take;
+      // 端数は 30 分に切り上げ (告示どおり)
+      const billedEnd = cumEnd < 240 ? cumEnd : Math.ceil(cumEnd / 30) * 30;
+      const th = juhoTierHoursForCumEnd(billedEnd, tierHours);
+      const steps = stepsByZone[seg.zone];
+      if (th != null && steps) {
+        const st = steps.find((x) => Math.abs(x.hours - th) < 1e-9);
+        if (st) out.push({ code: st.code, name: st.name, units: st.units, zone: seg.zone });
+      }
+      cum = cumEnd;
+      left -= take;
+    }
+  }
+  return out.length ? out : null;
+}
+
 // "HH:MM" → 当日分 (0時またぎは非対応。障害の訪問は同日内前提)
 function toMinOfDay(hm) {
   const m = /^(\d{1,2}):(\d{2})/.exec((hm || "").trim());
@@ -752,35 +841,44 @@ async function main() {
         .sort((a, b) => a.s - b.s);
       // 時間が取れない行は従来どおり算定時間の単純合計に倒す
       const totalMin = rows.reduce((sum, r) => sum + (santeiToMinutes(r.santei) ?? 0), 0);
-      let unionMin = 0, overlapMin = 0;
+      let convs = [];
+      let minutes = 0;
       if (withTime.length === rows.length && withTime.length > 0) {
-        const merged = [];
-        for (const x of withTime) {
-          const last = merged[merged.length - 1];
-          if (last && x.s <= last.e) last.e = Math.max(last.e, x.e);
-          else merged.push({ s: x.s, e: x.e });
+        // ★ 時刻が取れる = 確定ルールで時間帯ぶんかつ段を解決する。
+        //   重なっても **合算する** (2人派遣にしない)。
+        const stepsByZone = {};
+        for (const [z, label] of [["早", "早朝"], ["日", "日中"], ["夜", "夜間"], ["深", "深夜"]]) {
+          stepsByZone[z] = juhoStepsFor(maps, label, false);
         }
-        unionMin = merged.reduce((sum, m) => sum + (m.e - m.s), 0);
-        overlapMin = withTime.reduce((sum, x) => sum + (x.e - x.s), 0) - unionMin;
-      } else {
-        unionMin = totalMin;
-      }
-      const zoneLabel = zoneDigit(rows[0].santeiStart).zone;
-      const convs = [];
-      for (const [mins, two] of [[unionMin, false], [overlapMin, true]]) {
-        if (mins <= 0) continue;
-        const steps = juhoStepsFor(maps, zoneLabel, two);
-        if (!steps) {
-          convWarn.push(`重訪 段テーブル無し zone=${zoneLabel} ${two ? "2人" : "1人"} (${rows[0].clientName} ${rows[0].date})`);
-          missKeys.add(`重訪II|${zoneLabel}|${two ? "2人" : "1人"}`);
+        if (!Object.values(stepsByZone).some(Boolean)) {
+          convWarn.push(`重訪 段テーブル無し (${rows[0].clientName} ${rows[0].date})`);
+          missKeys.add("重訪II|全時間帯|1人");
           continue;
         }
-        for (const st of juhoStepsForMinutes(steps, mins, mode)) {
-          convs.push({ base: st.code, name: st.name, units: st.units, kind: "juho", zone: zoneLabel, twoPerson: two });
+        const resolved = juhoConvsForDay(withTime.map((x) => ({ s: x.s, e: x.e })), stepsByZone);
+        if (!resolved) continue;
+        convs = resolved.map((st) => ({
+          base: st.code, name: st.name, units: st.units, kind: "juho",
+          zone: st.zone, twoPerson: false,
+        }));
+        minutes = withTime.reduce((sum, x) => sum + (x.e - x.s), 0);
+      } else {
+        // 時刻が欠けている行がある場合だけ、従来の単一時間帯 fallback
+        const zoneLabel = zoneDigit(rows[0].santeiStart).zone;
+        const steps = juhoStepsFor(maps, zoneLabel, false);
+        if (!steps) {
+          convWarn.push(`重訪 段テーブル無し zone=${zoneLabel} (${rows[0].clientName} ${rows[0].date})`);
+          missKeys.add(`重訪II|${zoneLabel}|1人`);
+          continue;
         }
+        convs = juhoStepsForMinutes(steps, totalMin, mode).map((st) => ({
+          base: st.code, name: st.name, units: st.units, kind: "juho",
+          zone: zoneLabel, twoPerson: false,
+        }));
+        minutes = totalMin;
       }
       if (convs.length === 0) continue;
-      juhoConvByRow.set(rows[0], { minutes: unionMin + overlapMin, convs });
+      juhoConvByRow.set(rows[0], { minutes, convs });
       for (const r of rows.slice(1)) juhoSkip.add(r);
     }
     if (byUserDay.size) console.log(`重訪 日次通算: ${byUserDay.size} (利用者×日) → ${juhoConvByRow.size} 日分に集約`);
