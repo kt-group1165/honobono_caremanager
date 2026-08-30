@@ -22,11 +22,12 @@
 //     src/components/services/service-selector.tsx の parseServiceDurationMinutes と同一規約)
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { findMeisaiFiles } from "./_meisai_files.mjs";
 import { normClientName as normClientNameShared } from "./_meisai_name.mjs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import iconv from "iconv-lite";
 
 const EXECUTE = process.argv.includes("--execute");
 /**
@@ -630,6 +631,55 @@ async function fetchAll(table, cols, filter) {
 }
 
 // ============================================================================
+/**
+ * TJ (実績記録票) から **請求対象の提供区間**を読む。
+ *
+ * ⚠ MEISAI は給与用なので **休憩が含まれる**。
+ *   09:00-12:00 + 12:00-13:00(休憩) + 13:00-17:00 = 8.0h
+ *   請求できるのは提供時間だけなので TJ は 7.0h。
+ *   MEISAI の時刻で段を積むと休憩ぶんまで請求してしまう。
+ *   → TJ があるならそちらの区間で段を積む。
+ *
+ *   TJ の読み方 (docs/TJ_JISSEKI_STRUCTURE.md):
+ *     c[7] 受給者証番号 / c[10] **日** (c[9] は提供通番) /
+ *     c[15] 開始 HHMM / c[16] 終了 HHMM / c[12] サービスコード (重訪は空)
+ *
+ * @returns Map<`${受給者証番号}|${日}`, [{s,e}]> 分単位。TJ が無ければ空 Map
+ */
+function loadTjJuhoSpans(targetMonth) {
+  const ym = targetMonth.replace("-", "");
+  const root = fileURLToPath(new URL("../伝送データ/", import.meta.url));
+  const out = new Map();
+  let files = [];
+  try {
+    const walk = (d) => readdirSync(d, { withFileTypes: true })
+      .flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
+    files = walk(root).filter((f) => /TJ\d+\.CSV$/i.test(f) && f.includes(ym));
+  } catch { return out; }
+  const sp = (l) => l.split(",").map((x) => x.replace(/^"|"$/g, ""));
+  const toMin = (v) => {
+    const t = String(v ?? "").padStart(4, "0");
+    return /^\d{4}$/.test(t) ? Number(t.slice(0, 2)) * 60 + Number(t.slice(2)) : null;
+  };
+  for (const f of files) {
+    const recs = iconv.decode(readFileSync(f), "Shift_JIS").split(/\r?\n/)
+      .filter((l) => l.trim()).map(sp)
+      .filter((c) => c[0] === "2" && c[2] === "J611" && c[3] === "02" && !c[12]);
+    for (const c of recs) {
+      const day = Number(c[10]);
+      const s = toMin(c[15]);
+      let e = toMin(c[16]);
+      if (!c[7] || !Number.isInteger(day) || s == null || e == null) continue;
+      if (e <= s) e += 1440;                       // 0時またぎ
+      const k = `${c[7]}|${day}`;
+      if (!out.has(k)) out.set(k, []);
+      out.get(k).push({ s, e });
+    }
+  }
+  for (const arr of out.values()) arr.sort((a, b) => a.s - b.s);
+  return out;
+}
+
 async function main() {
   console.log(`=== MEISAI 障害取込 ${EXECUTE ? "【本番 EXECUTE】" : "【DRY RUN】"} 対象月=${TARGET_MONTH} 事業所=${AREA_DIR} ===\n`);
 
@@ -836,6 +886,26 @@ async function main() {
   //     → 氏名 (末尾の「（2人目」等を落として正規化) + 日付 でまとめる。
   const juhoConvByRow = new Map(); // target の row 参照 -> { convs:[...] }
   const juhoSkip = new Set();
+  // TJ の請求対象区間を 日|最初の開始|最後の終了 で引けるようにする。
+  // 同じキーに複数人が当たる場合は曖昧なので捨てる (MEISAI に倒す)。
+  let tjUsedDays = 0, tjMissDays = 0;
+  const tjByDaySpan = new Map();
+  {
+    const spansByJukyuDay = loadTjJuhoSpans(TARGET_MONTH);
+    const seen = new Map();
+    for (const [k, arr] of spansByJukyuDay) {
+      if (!arr.length) continue;
+      const day = Number(k.split("|")[1]);
+      const key = `${day}|${Math.min(...arr.map((x) => x.s))}|${Math.max(...arr.map((x) => x.e))}`;
+      seen.set(key, (seen.get(key) ?? 0) + 1);
+      tjByDaySpan.set(key, arr);
+    }
+    for (const [key, n] of seen) if (n > 1) tjByDaySpan.delete(key);
+    if (spansByJukyuDay.size) {
+      console.log(`TJ 実績記録票: ${spansByJukyuDay.size} (受給者×日) 読込 / ` +
+        `一意に引けるもの ${tjByDaySpan.size}`);
+    }
+  }
   {
     // 「鈴木　拓也（2人目」→「鈴木拓也」。括弧以降と空白を落とす
     const juhoNameKey = (n) =>
@@ -872,7 +942,25 @@ async function main() {
           missKeys.add("重訪II|全時間帯|1人");
           continue;
         }
-        const resolved = juhoConvsForDay(withTime.map((x) => ({ s: x.s, e: x.e })), stepsByZone);
+        // ★ TJ (実績記録票) にその日の **請求対象区間**があるならそちらを使う。
+        //   MEISAI は給与用なので休憩が含まれる。MEISAI の時刻で段を積むと
+        //   休憩ぶんまで請求してしまう (おゆみ野だけで 213 時間ぶん)。
+        //
+        //   TJ 側は受給者証番号で持っているが、この時点では client_id 解決が
+        //   まだなので **日 + 最初の開始 + 最後の終了**で突き合わせる。
+        //   ⚠ 開始時刻の集合では一致しない。休憩ぶん MEISAI のほうが行数が多いため
+        //     (MEISAI 09:00/12:00/13:00 に対し TJ は 09:00/13:00)。
+        //   ⚠ 同じキーに複数人が当たる日は **曖昧なので使わない** (MEISAI に倒す)。
+        //   TJ が無い月・拠点も従来どおり MEISAI の時刻で積む。
+        const day = Number(String(rows[0].date).slice(-2));
+        const minS = Math.min(...withTime.map((x) => x.s));
+        const maxE = Math.max(...withTime.map((x) => (x.e <= x.s ? x.e + 1440 : x.e)));
+        const tjSpans = tjByDaySpan.get(`${day}|${minS}|${maxE}`);
+        if (tjSpans?.length) tjUsedDays++; else tjMissDays++;
+        const spans = tjSpans?.length
+          ? tjSpans
+          : withTime.map((x) => ({ s: x.s, e: x.e }));
+        const resolved = juhoConvsForDay(spans, stepsByZone);
         if (!resolved) continue;
         convs = resolved.map((st) => ({
           base: st.code, name: st.name, units: st.units, kind: "juho",
@@ -898,7 +986,8 @@ async function main() {
       juhoConvByRow.set(rows[0], { minutes, convs });
       for (const r of rows.slice(1)) juhoSkip.add(r);
     }
-    if (byUserDay.size) console.log(`重訪 日次通算: ${byUserDay.size} (利用者×日) → ${juhoConvByRow.size} 日分に集約`);
+    if (byUserDay.size) console.log(`重訪 日次通算: ${byUserDay.size} (利用者×日) → ${juhoConvByRow.size} 日分に集約` +
+      (tjUsedDays + tjMissDays > 0 ? ` (TJ の請求区間を使用 ${tjUsedDays} / MEISAI の時刻 ${tjMissDays})` : ""));
   }
 
   for (const r of target) {
