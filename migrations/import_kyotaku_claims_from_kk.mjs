@@ -455,6 +455,14 @@ async function main() {
     const q = p.existing
       ? await sb.from("kaigo_care_support_claims").update({ ...row, updated_at: new Date().toISOString() }).eq("id", p.existing.id)
       : await sb.from("kaigo_care_support_claims")
+          // ⚠ **転居月は 1 人が 2 レセプトになる**が、この表は (user_id, billing_month) で
+          //   一意なので **後から来たほうで上書きされる**。
+          //   実例: 加藤綾子 2026-06
+          //     141143|0004595039 19,092円 (転居前)
+          //     122390|0202242821 22,227円 (転居後・初回加算あり)
+          //   合計 41,319 円が必要だが 1 件しか持てず 22,227 円だけになる。
+          //   伝送側 (cert-for-month.ts / build-kyotaku.ts) は保険者変更のセグメント分割に
+          //   対応済み。**レセプト表のキーを (利用者, 請求月, 保険者) に広げる**のが筋。
           .upsert({ ...row, updated_at: new Date().toISOString() }, { onConflict: "user_id,billing_month" });
     if (q.error) { console.error(`✗ ${p.name}: ${q.error.message}`); process.exit(1); }
     console.log(`  ✓ ${p.name}`);
