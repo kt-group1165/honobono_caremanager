@@ -908,8 +908,31 @@ export async function aggregateMonthlyShogaiSeikyu(
     const addonUnits = addons.reduce((s, a) => s + a.units, 0);
 
     const totalUnits = baseUnits + genericUnits + addonUnits;
-    // 整数演算: 総費用額 = floor(総単位数 × (単価×100) / 100) — float 誤差回避
-    const totalAmount = Math.floor((totalUnits * unitPrice100) / 100);
+    // ⚠ 費用額は **サービス種類ごとに単価を掛けて切り捨ててから合算**する。
+    //   まとめて掛けると 1 円ずれる (2026-08-30 さつきが丘 2000014908 で顕在化)。
+    //     種類11  1,282単位 × 10.90 = 13,973.8 → 13,973
+    //     種類15 13,194単位 × 10.90 = 143,814.6 → 143,814   合計 157,787  ← ほのぼの
+    //     まとめて 14,476 × 10.90 = 157,788.4 → 157,788      ← 誤り
+    //   伝送の J121 明細04 (種類別集計) も種類ごとに費用額を持つので、それと整合する。
+    const unitsByServiceType = new Map<string, number>();
+    const addToType = (code: string | null | undefined, name: string, units: number) => {
+      const tc = code?.slice(0, 2) ?? SERVICE_TYPE_CODES[name] ?? null;
+      if (!tc) return false;
+      unitsByServiceType.set(tc, (unitsByServiceType.get(tc) ?? 0) + units);
+      return true;
+    };
+    let unTyped = 0;
+    for (const d of details) {
+      if (!addToType(d.service_code, d.service_type, d.units)) unTyped += d.units;
+    }
+    for (const a of addons) {
+      if (!addToType(a.service_code, a.service_name, a.units)) unTyped += a.units;
+    }
+    // 種類が引けなかったぶんは従来どおりまとめて計算する (安全側)
+    const totalAmount =
+      Array.from(unitsByServiceType.values())
+        .reduce((s, u) => s + Math.floor((u * unitPrice100) / 100), 0) +
+      (unTyped > 0 ? Math.floor((unTyped * unitPrice100) / 100) : 0);
     const seiho = !!cert?.seiho_flag;
     // 負担上限月額: null = 未設定 / 0 = 負担0円 (低所得区分等)。生保は 0 円に正規化
     const limit: number | null = seiho ? 0 : (cert?.self_payment_limit ?? null);
