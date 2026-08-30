@@ -506,8 +506,10 @@ function juhoTierHoursForCumEnd(cumEndMin, tierHours) {
  * @param stepsByZone zoneLabel -> [{hours, code, name, units}]
  * @returns [{code,name,units,zone}] / 解決できなければ null
  */
-function juhoConvsForDay(visits, stepsByZone) {
+function juhoConvsForDay(visits, stepsByZone, stepsByZone2 = null) {
   // ① 訪問順に、時間帯の境界で細切れにする
+  //   v.n = その提供の人数 (TJ 由来。無ければ 1)。段は人数ぶん別のコード体系になる
+  //   (末尾 1 = 1人 / 末尾 2 = 2人)。
   const segs = [];
   for (const v of visits) {
     let s = v.s;
@@ -516,7 +518,7 @@ function juhoConvsForDay(visits, stepsByZone) {
       // その時間帯の終わり (分)
       const zEnd = z === "深" ? (s < 360 ? 360 : 1440) : z === "早" ? 480 : z === "日" ? 1080 : 1320;
       const e = Math.min(v.e, zEnd);
-      if (e > s) segs.push({ zone: z, minutes: e - s });
+      if (e > s) segs.push({ zone: z, minutes: e - s, two: (v.n ?? 1) >= 2 });
       s = e;
     }
   }
@@ -543,10 +545,10 @@ function juhoConvsForDay(visits, stepsByZone) {
       // 端数は 30 分に切り上げ (告示どおり)
       const billedEnd = cumEnd < 240 ? cumEnd : Math.ceil(cumEnd / 30) * 30;
       const th = juhoTierHoursForCumEnd(billedEnd, tierHours);
-      const steps = stepsByZone[seg.zone];
+      const steps = (seg.two && stepsByZone2) ? stepsByZone2[seg.zone] : stepsByZone[seg.zone];
       if (th != null && steps) {
         const st = steps.find((x) => Math.abs(x.hours - th) < 1e-9);
-        if (st) out.push({ code: st.code, name: st.name, units: st.units, zone: seg.zone });
+        if (st) out.push({ code: st.code, name: st.name, units: st.units, zone: seg.zone, two: !!seg.two });
       }
       cum = cumEnd;
       left -= take;
@@ -671,9 +673,15 @@ function loadTjJuhoSpans(targetMonth) {
       let e = toMin(c[16]);
       if (!c[7] || !Number.isInteger(day) || s == null || e == null) continue;
       if (e <= s) e += 1440;                       // 0時またぎ
+      // c[20] = 人数。ほのぼのが 2人派遣で請求している提供はここが 2 になる。
+      // 稼働データ (MEISAI) は給与用なので人数を確実に持たない。**TJ が正**。
+      const n = Number(c[20] || 1) || 1;
+      // c[9] = **提供通番**。同じ日でも通番が違えば **別の作業者のひとまとまり**。
+      // 重訪の段は通番ごとに 0 から積み直し、重なる 2 本目以降が「・2人」になる。
+      const seq = String(c[9] ?? "");
       const k = `${c[7]}|${day}`;
       if (!out.has(k)) out.set(k, []);
-      out.get(k).push({ s, e });
+      out.get(k).push({ s, e, n, seq });
     }
   }
   for (const arr of out.values()) arr.sort((a, b) => a.s - b.s);
@@ -889,27 +897,73 @@ async function main() {
   // TJ の請求対象区間を 日|最初の開始|最後の終了 で引けるようにする。
   // 同じキーに複数人が当たる場合は曖昧なので捨てる (MEISAI に倒す)。
   let tjUsedDays = 0, tjMissDays = 0;
-  const tjByDaySpan = new Map();
+  const tjMissNames = new Set();
+  const tjHaveNames = new Set();
+  const tjByDaySpan = new Map();     // `${氏名key}|${日}` → [{s,e}]  ★氏名で引く
+  const tjByEnvelope = new Map();    // `${日}|${最初の開始}|${最後の終了}` → [{s,e}]  (保険)
   {
     const spansByJukyuDay = loadTjJuhoSpans(TARGET_MONTH);
+
+    // ★ TJ は受給者証番号で持っている。**氏名に直して引く**。
+    //   以前は「日 + 最初の開始 + 最後の終了」で突き合わせていたが、
+    //   休憩が日の端に来る日・複数セッションの日は外枠がズレて当たらず、
+    //   おゆみ野 158 日中 55 日しか救えていなかった。
+    //   受給者証番号なら 1 対 1 で確実に引ける。
+    const nameByBeneficiary = new Map();
+    {
+      const asg = await fetchAll("client_office_assignments", "client_id",
+        (q) => q.eq("office_id", OFFICE_ID).order("client_id"));
+      const ids = [...new Set(asg.map((a) => a.client_id))];
+      for (let i = 0; i < ids.length; i += 200) {
+        const chunk = ids.slice(i, i + 200);
+        const { data: cls, error: eC } = await sb.from("clients").select("id,name").in("id", chunk);
+        if (eC) { console.error(`✗ clients 取得失敗: ${eC.message}`); process.exit(1); }
+        const { data: cts, error: eT } = await sb.from("shougai_certifications")
+          .select("client_id,beneficiary_number").in("client_id", chunk);
+        if (eT) { console.error(`✗ 受給者証取得失敗: ${eT.message}`); process.exit(1); }
+        const nameById = new Map((cls ?? []).map((c) => [c.id, c.name]));
+        for (const ct of cts ?? []) {
+          const nm = nameById.get(ct.client_id);
+          if (ct.beneficiary_number && nm) nameByBeneficiary.set(String(ct.beneficiary_number), nm);
+        }
+      }
+    }
+
+    const nameKey = (n) => (n || "").normalize("NFKC").replace(/[（(].*$/, "").replace(/[\s　]/g, "");
     const seen = new Map();
+    let named = 0;
     for (const [k, arr] of spansByJukyuDay) {
       if (!arr.length) continue;
-      const day = Number(k.split("|")[1]);
+      const [ben, dayStr] = k.split("|");
+      const day = Number(dayStr);
+      const nm = nameByBeneficiary.get(ben);
+      if (nm) { tjByDaySpan.set(`${nameKey(nm)}|${day}`, arr); named++; tjHaveNames.add(nameKey(nm)); }
+      else tjHaveNames.add(`?${ben}`);
       const key = `${day}|${Math.min(...arr.map((x) => x.s))}|${Math.max(...arr.map((x) => x.e))}`;
       seen.set(key, (seen.get(key) ?? 0) + 1);
-      tjByDaySpan.set(key, arr);
+      tjByEnvelope.set(key, arr);
     }
-    for (const [key, n] of seen) if (n > 1) tjByDaySpan.delete(key);
+    for (const [key, n] of seen) if (n > 1) tjByEnvelope.delete(key);
     if (spansByJukyuDay.size) {
       console.log(`TJ 実績記録票: ${spansByJukyuDay.size} (受給者×日) 読込 / ` +
-        `一意に引けるもの ${tjByDaySpan.size}`);
+        `氏名で引けるもの ${named} / 時刻の外枠で引けるもの ${tjByEnvelope.size}`);
     }
   }
   {
     // 「鈴木　拓也（2人目」→「鈴木拓也」。括弧以降と空白を落とす
     const juhoNameKey = (n) =>
       (n || "").normalize("NFKC").replace(/[（(].*$/, "").replace(/[\s　]/g, "");
+    // MEISAI の氏名末尾に付く制度の目印 (障=障害 / 支=支援 等) を落とした候補も試す。
+    // 一致した名前を返す。どれも当たらなければ undefined。
+    const tjLookup = (name, day) => {
+      const base = juhoNameKey(name);
+      for (const k of [base, base.replace(/[障支介総]$/, "")]) {
+        if (!k) continue;
+        const hit = tjByDaySpan.get(`${k}|${day}`);
+        if (hit?.length) return hit;
+      }
+      return undefined;
+    };
     const byUserDay = new Map();
     for (const r of target) {
       if (r.code !== "021003") continue;
@@ -934,8 +988,10 @@ async function main() {
         // ★ 時刻が取れる = 確定ルールで時間帯ぶんかつ段を解決する。
         //   重なっても **合算する** (2人派遣にしない)。
         const stepsByZone = {};
+        const stepsByZone2 = {};
         for (const [z, label] of [["早", "早朝"], ["日", "日中"], ["夜", "夜間"], ["深", "深夜"]]) {
           stepsByZone[z] = juhoStepsFor(maps, label, false);
+          stepsByZone2[z] = juhoStepsFor(maps, label, true);
         }
         if (!Object.values(stepsByZone).some(Boolean)) {
           convWarn.push(`重訪 段テーブル無し (${rows[0].clientName} ${rows[0].date})`);
@@ -955,16 +1011,48 @@ async function main() {
         const day = Number(String(rows[0].date).slice(-2));
         const minS = Math.min(...withTime.map((x) => x.s));
         const maxE = Math.max(...withTime.map((x) => (x.e <= x.s ? x.e + 1440 : x.e)));
-        const tjSpans = tjByDaySpan.get(`${day}|${minS}|${maxE}`);
-        if (tjSpans?.length) tjUsedDays++; else tjMissDays++;
+        // ★ 氏名で引く。引けないときだけ従来の外枠キーに落とす。
+        //   ⚠ MEISAI の氏名は **制度の目印が末尾に付く**ことがある
+        //     (「宇野純一障」「中島保人支」)。素の氏名も候補にする。
+        const tjSpans = tjLookup(rows[0].clientName, day)
+          ?? tjByEnvelope.get(`${day}|${minS}|${maxE}`);
+        if (tjSpans?.length) tjUsedDays++;
+        else { tjMissDays++; tjMissNames.add(`${juhoNameKey(rows[0].clientName)}`); }
         const spans = tjSpans?.length
           ? tjSpans
           : withTime.map((x) => ({ s: x.s, e: x.e }));
-        const resolved = juhoConvsForDay(spans, stepsByZone);
+        // ★ TJ から採れたときは **提供通番ごと**に段を積む。
+        //   通番 = 作業者ひとりぶんのひとまとまり。先に始まった通番と時間が重なる
+        //   2 本目以降は 2 人派遣なので「・2人」のコード体系を使う。
+        //   (五井 1221916057 6/9: 通番1 11:00-17:00 = 6.0h / 通番2 11:00-12:00 +
+        //    16:00-17:00 = 2.0h。ほのぼのは前者を 1人・後者を 2人 で請求している)
+        //   TJ が無くて MEISAI の時刻に倒したときは通番が無いので従来どおり 1 本で積む。
+        const resolved = (() => {
+          const bySeq = new Map();
+          for (const sp of spans) {
+            const k = sp.seq ?? "";
+            if (!bySeq.has(k)) bySeq.set(k, []);
+            bySeq.get(k).push(sp);
+          }
+          if (bySeq.size <= 1) return juhoConvsForDay(spans, stepsByZone, stepsByZone2);
+          const groups = [...bySeq.values()]
+            .map((g) => ({ g, s: Math.min(...g.map((x) => x.s)), e: Math.max(...g.map((x) => x.e)) }))
+            .sort((a, b) => a.s - b.s || a.e - b.e);
+          const out = [];
+          const taken = [];   // 既に確定した通番の区間 (重なり判定用)
+          for (const grp of groups) {
+            const two = taken.some((t) => grp.s < t.e && t.s < grp.e);
+            const marked = grp.g.map((x) => ({ ...x, n: two ? 2 : 1 }));
+            const r = juhoConvsForDay(marked, stepsByZone, stepsByZone2);
+            if (r) out.push(...r);
+            taken.push({ s: grp.s, e: grp.e });
+          }
+          return out.length ? out : null;
+        })();
         if (!resolved) continue;
         convs = resolved.map((st) => ({
           base: st.code, name: st.name, units: st.units, kind: "juho",
-          zone: st.zone, twoPerson: false,
+          zone: st.zone, twoPerson: !!st.two,
         }));
         minutes = withTime.reduce((sum, x) => sum + (x.e - x.s), 0);
       } else {
@@ -985,6 +1073,10 @@ async function main() {
       if (convs.length === 0) continue;
       juhoConvByRow.set(rows[0], { minutes, convs });
       for (const r of rows.slice(1)) juhoSkip.add(r);
+    }
+    if (tjMissNames.size) {
+      console.log(`  TJ で引けなかった利用者: ${[...tjMissNames].join(" / ")}`);
+      console.log(`  TJ 側に居る受給者: ${[...tjHaveNames].join(" / ")}`);
     }
     if (byUserDay.size) console.log(`重訪 日次通算: ${byUserDay.size} (利用者×日) → ${juhoConvByRow.size} 日分に集約` +
       (tjUsedDays + tjMissDays > 0 ? ` (TJ の請求区間を使用 ${tjUsedDays} / MEISAI の時刻 ${tjMissDays})` : ""));
