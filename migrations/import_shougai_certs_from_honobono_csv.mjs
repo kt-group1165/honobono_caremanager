@@ -302,10 +302,13 @@ async function main() {
       }
     }
     if (contractText) setIf("contract_amount_text", contractText, "契約支給量");
-    if (cs.length) {
-      setIf("contract_start_date", cs[0].date, "契約日");
-      setIf("contract_entry_number", cs[0].entryNo, "事業者記入欄番号");
-    }
+    if (cs.length) setIf("contract_entry_number", cs[0].entryNo, "事業者記入欄番号");
+    // ⚠ **contract_start_date は入れない**。
+    //   aggregate.ts の初回加算 (116020 等) は「contract_start_date の月 == 提供月」で
+    //   判定する。事業者記入欄の契約日は **その事業所と契約した日**であって
+    //   「当該サービスの提供開始日」ではないので、そのまま入れると初回加算が誤発生する。
+    //   2026-08-30 に茂原で 2 名 (磯野充幸 / 山田綾子) が 200単位 ずつ誤って付き、
+    //   33/33 だった突合が 31/33 に落ちた。契約日は別途 業務判断で入れる。
     if (d.length) updates.push({ id: row.id, name: row.clients?.name ?? r[C.name], jukyu, d, patch });
   }
 
