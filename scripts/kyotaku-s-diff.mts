@@ -55,7 +55,7 @@ async function main() {
   console.log(`=== 居宅 S突合 ${AREA_DIR} (${office.name} ${office.business_number}) ${MONTH_KEY} ===`);
 
   // 実アプリと同じローダ (事業所スコープ付き)
-  const rows = await fetchKyotakuClaimRows(sb, MONTH_KEY, OFFICE_ID);
+  const rows = await fetchKyotakuClaimRows(sb, MONTH_KEY, OFFICE_ID, { excludeNonKokuho: true });
   const draft = rows.filter((r) => r.claimStatus === "draft");
   const targets = rows.filter((r) => r.claimStatus !== "draft");
   console.log(`レセプト ${rows.length}件 (確定 ${targets.length} / 未確定 ${draft.length})`);
