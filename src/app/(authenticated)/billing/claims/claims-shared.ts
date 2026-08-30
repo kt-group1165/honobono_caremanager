@@ -502,8 +502,8 @@ export interface ClaimRow {
   id: string;
   user_id: string;
   billing_month: string;
-  care_support_code: string;
-  care_support_name: string;
+  care_support_code: string | null;
+  care_support_name: string | null;
   units: number;
   unit_price: number;
   total_amount: number;

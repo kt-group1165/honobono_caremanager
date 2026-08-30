@@ -44,8 +44,8 @@ export interface CertInfo {
 export interface ClaimRow {
   id: string;
   user_id: string;
-  care_support_code: string;
-  care_support_name: string;
+  care_support_code: string | null;
+  care_support_name: string | null;
   units: number;
   unit_price: number;
   total_amount: number;
@@ -362,7 +362,10 @@ export function BillingFormsContent({
     if (parseYoboShienKubun(claims[0].notes) === "itaku") return null;
     const c = claims[0];
     const addLines: { name: string; code: string; units: number; count: number }[] = [];
-    addLines.push({ name: c.care_support_name, code: c.care_support_code, units: c.units, count: 1 });
+    // 給付管理をしない月 (死亡等) は居宅介護支援費が立たず加算だけを請求する。
+    // そのときは基本行を出さない。
+    if (c.care_support_code)
+      addLines.push({ name: c.care_support_name ?? "", code: c.care_support_code, units: c.units, count: 1 });
     if (c.initial_addition && c.initial_addition_units > 0)
       addLines.push({ name: "初回加算", code: "434000", units: c.initial_addition_units, count: 1 });
     if (c.tokutei_kassan_units > 0)

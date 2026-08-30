@@ -174,8 +174,8 @@ export function setKyufuKanriKubunMarker(
 interface ClaimDbRow {
   id: string;
   user_id: string;
-  care_support_code: string;
-  care_support_name: string;
+  care_support_code: string | null;
+  care_support_name: string | null;
   units: number;
   unit_price: number;
   total_amount: number;
@@ -262,9 +262,11 @@ function buildClaimLines(c: ClaimDbRow): {
   lines: KyotakuMeisaiLine[];
   totalUnits: number;
 } {
-  const lines: KyotakuMeisaiLine[] = [
-    { name: c.care_support_name, code: c.care_support_code, units: c.units, count: 1 },
-  ];
+  // 給付管理をしない月 (死亡等) は居宅介護支援費が立たず加算だけを請求する。
+  // そのときは基本行を出さない。
+  const lines: KyotakuMeisaiLine[] = c.care_support_code
+    ? [{ name: c.care_support_name ?? "", code: c.care_support_code, units: c.units, count: 1 }]
+    : [];
   if (c.initial_addition && c.initial_addition_units > 0)
     lines.push({ name: "初回加算", code: "434001", units: c.initial_addition_units, count: 1 });
   if ((c.tokutei_kassan_units ?? 0) > 0)
@@ -560,8 +562,9 @@ export async function fetchKyotakuClaimRows(
       limitUnits: cert?.service_limit_amount ?? 0,
       claimId: c.id,
       claimStatus: c.status,
-      serviceCode: c.care_support_code,
-      serviceName: c.care_support_name,
+      // 給付管理をしない月 (死亡等) は基本コードが無い。空文字で表す (lines も空になる)
+      serviceCode: c.care_support_code ?? "",
+      serviceName: c.care_support_name ?? "",
       baseUnits: c.units,
       lines,
       totalUnits,
