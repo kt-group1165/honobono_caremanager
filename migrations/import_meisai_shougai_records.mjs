@@ -29,6 +29,19 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const EXECUTE = process.argv.includes("--execute");
+/**
+ * 重訪を MEISAI から取り込まない (TJ から入れる) モード。
+ *
+ * ⚠ MEISAI は **給与用**なので休憩が含まれる。
+ *   09:00-12:00 + 12:00-13:00(休憩) + 13:00-17:00 = 8.0h
+ *   請求できるのは提供時間だけなので、ほのぼのの実績記録票 (TJ) は 7.0h。
+ *   MEISAI から起こすと休憩ぶんまで請求してしまう (おゆみ野だけで 213時間ぶん)。
+ *
+ *   → 過去分は `--skip-juho` を付けて MEISAI からは入れず、
+ *     `import_juho_from_tj.mjs` で TJ から入れる。
+ *   詳細は docs/TJ_JISSEKI_STRUCTURE.md
+ */
+const SKIP_JUHO = process.argv.includes("--skip-juho");
 // TARGET_MONTH=2026-07 で対象月を切替 (既定は 2026-06)。
 // MONTH_FIRST はサービスコードの世代判定 (validInMonth) に使うので必ず同じ月にする。
 const TARGET_MONTH = process.env.TARGET_MONTH || "2026-06";
@@ -834,7 +847,11 @@ async function main() {
       if (!byUserDay.has(k)) byUserDay.set(k, []);
       byUserDay.get(k).push(r);
     }
-    for (const rows of byUserDay.values()) {
+    if (SKIP_JUHO && byUserDay.size) {
+      console.log(`重訪 ${byUserDay.size} (利用者×日) は **TJ から入れる**のでスキップ ` +
+        `(--skip-juho)。import_juho_from_tj.mjs を実行すること`);
+    }
+    for (const rows of (SKIP_JUHO ? [] : byUserDay.values())) {
       const withTime = rows
         .map((r) => ({ r, s: parseHM(r.santeiStart), e: parseHM(r.santeiEnd) }))
         .filter((x) => x.s != null && x.e != null && x.e > x.s)
