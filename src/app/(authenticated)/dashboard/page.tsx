@@ -12,6 +12,7 @@ import {
   FileText,
   CalendarClock,
   RefreshCw,
+  ArrowUpDown,
 } from "lucide-react";
 import { format, differenceInYears, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -40,6 +41,31 @@ import {
  * (48 事業所 × 請求エンジンなので、開くたびに回すと往復が重い)。
  */
 const ALL_URIAGE_STALE_MS = 30 * 60 * 1000;
+
+/** 事業所別テーブルの金額列 (順番は表示順。合計行もこの順で出す) */
+const OFFICE_AMOUNT_KEYS = [
+  "kaigo",
+  "sougou",
+  "shogai",
+  "chiiki",
+  "kyotaku",
+  "jihi",
+  "total",
+] as const;
+type OfficeAmountKey = (typeof OFFICE_AMOUNT_KEYS)[number];
+type OfficeSortKey = "officeName" | "serviceType" | OfficeAmountKey;
+
+const OFFICE_COLUMNS: { key: OfficeSortKey; label: string; numeric: boolean }[] = [
+  { key: "officeName", label: "事業所", numeric: false },
+  { key: "serviceType", label: "種別", numeric: false },
+  { key: "kaigo", label: "介護保険", numeric: true },
+  { key: "sougou", label: "総合事業", numeric: true },
+  { key: "shogai", label: "障害福祉", numeric: true },
+  { key: "chiiki", label: "地域生活支援", numeric: true },
+  { key: "kyotaku", label: "居宅支援費", numeric: true },
+  { key: "jihi", label: "自費", numeric: true },
+  { key: "total", label: "売上", numeric: true },
+];
 
 // ---- Types ----
 
@@ -178,6 +204,10 @@ export default function DashboardPage() {
 
   // 集計スコープ: 自事業所 (自動) / 全事業所 (重いのでボタンで明示起動)
   const [scope, setScope] = useState<"self" | "all">("self");
+  const [officeSort, setOfficeSort] = useState<{ key: OfficeSortKey; desc: boolean }>({
+    key: "total",
+    desc: true,
+  });
   /** 自事業所の売上を手動で集計し直すためのトリガ (キャッシュ表示中の「更新」ボタン) */
   const [uriageReload, setUriageReload] = useState(0);
   const [allUriage, setAllUriage] = useState<AllOfficesUriage | null>(null);
@@ -502,6 +532,32 @@ export default function DashboardPage() {
   /** 出せる値がまだ無い = スケルトン */
   const shownSkeleton = shownLoading && !shownUriage;
 
+  /**
+   * 事業所別テーブルの並び替え。既定は売上の大きい順。
+   * 金額列は降順から、文字列列は昇順から始める (同じ列をもう一度押すと反転)。
+   */
+  const sortedOffices = (() => {
+    const rows = allForMonth?.offices ?? [];
+    const { key, desc } = officeSort;
+    const sign = desc ? -1 : 1;
+    return [...rows].sort((a, b) => {
+      if (key === "officeName" || key === "serviceType") {
+        return sign * (a[key] ?? "").localeCompare(b[key] ?? "", "ja");
+      }
+      const d = (a.uriage[key] ?? 0) - (b.uriage[key] ?? 0);
+      // 金額が同じなら事業所名で安定させる
+      return d !== 0 ? sign * d : a.officeName.localeCompare(b.officeName, "ja");
+    });
+  })();
+
+  const toggleOfficeSort = (key: OfficeSortKey) => {
+    setOfficeSort((s) =>
+      s.key === key
+        ? { key, desc: !s.desc }
+        : { key, desc: key !== "officeName" && key !== "serviceType" },
+    );
+  };
+
   // 売上内訳の表示行 (0 円の制度は畳む。全部 0 のときは介護保険だけ残す)
   const uriageLines = (() => {
     if (!shownUriage) return [];
@@ -768,19 +824,37 @@ export default function DashboardPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500">
-                        <th className="px-3 py-2">事業所</th>
-                        <th className="px-3 py-2">種別</th>
-                        <th className="px-3 py-2 text-right">介護保険</th>
-                        <th className="px-3 py-2 text-right">総合事業</th>
-                        <th className="px-3 py-2 text-right">障害福祉</th>
-                        <th className="px-3 py-2 text-right">地域生活支援</th>
-                        <th className="px-3 py-2 text-right">居宅支援費</th>
-                        <th className="px-3 py-2 text-right">自費</th>
-                        <th className="px-3 py-2 text-right">売上</th>
+                        {OFFICE_COLUMNS.map((c) => (
+                          <th
+                            key={c.key}
+                            className={`px-3 py-2 ${c.numeric ? "text-right" : ""}`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => toggleOfficeSort(c.key)}
+                              className={`inline-flex items-center gap-0.5 hover:text-gray-700 ${
+                                c.numeric ? "flex-row-reverse" : ""
+                              } ${officeSort.key === c.key ? "text-gray-700" : ""}`}
+                              title={`${c.label}で並び替え`}
+                            >
+                              <span>{c.label}</span>
+                              <ArrowUpDown
+                                size={11}
+                                className={
+                                  officeSort.key === c.key
+                                    ? officeSort.desc
+                                      ? "text-emerald-600"
+                                      : "text-emerald-600 rotate-180"
+                                    : "text-gray-300"
+                                }
+                              />
+                            </button>
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                      {allForMonth.offices.map((o) => (
+                      {sortedOffices.map((o) => (
                         <tr key={o.officeId} className="hover:bg-gray-50/60 transition-colors">
                           <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">
                             {o.officeName}
@@ -812,8 +886,34 @@ export default function DashboardPage() {
                         </tr>
                       ))}
                     </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-gray-200 bg-gray-50/80 font-semibold text-gray-800">
+                        <td className="px-3 py-2 whitespace-nowrap">合計</td>
+                        <td className="px-3 py-2 text-xs font-normal text-gray-500 whitespace-nowrap">
+                          {sortedOffices.length} 事業所
+                        </td>
+                        {OFFICE_AMOUNT_KEYS.map((k) => {
+                          const sum = sortedOffices.reduce((s, o) => s + (o.uriage[k] ?? 0), 0);
+                          return (
+                            <td
+                              key={k}
+                              className={`px-3 py-2 text-right tabular-nums ${
+                                k === "total" ? "text-gray-900" : "text-gray-700"
+                              }`}
+                            >
+                              {sum ? sum.toLocaleString() : "—"}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
+                {allForMonth.errors.length > 0 && (
+                  <p className="mt-1 px-3 text-xs text-red-600">
+                    ※ 集計できなかった {allForMonth.errors.length} 事業所は合計に含まれていません
+                  </p>
+                )}
               </div>
             )}
 
