@@ -28,7 +28,7 @@
 //   --with-services  第2表 (サービス内容) も入れる
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import iconv from "iconv-lite";
@@ -89,23 +89,50 @@ async function main() {
   console.log(`=== ケアプラン取込 ${MONTH} ${EXECUTE ? "【EXECUTE】" : "【DRY RUN】"}` +
     `${WITH_SERVICES ? " + 第2表" : ""} ===\n`);
 
-  const t1 = readCsv("ケアプラン/全/CAREPLAN1.CSV");
+  // ⚠ 第1表には **2 種類の書式**がある。列数で見分ける。
+  //   13列版: 策定機関コード/事業所名/保険者/被保番/登録年月日/…/作成者
+  //   23列版: 法人名/施設名/事業所名/**利用者名**/保険者/被保番/作成日/作成者/
+  //           意向/審査会の意向/援助方針/**計画区分**/認定区分/初回作成日/…
+  //   23列版のほうが情報が多い (利用者名・計画区分・審査会の意向)。
+  //   計画区分 = 初回 / 初回紹介 なら **初回加算**が判定できる。
+  const t1 = readCsv(existsSync(path.join(KAIGO, "ケアプラン/全/CAREPLAN1_R5.CSV"))
+    ? "ケアプラン/全/CAREPLAN1_R5.CSV" : "ケアプラン/全/CAREPLAN1.CSV");
+  const wide = t1.head.length >= 23;      // 23列版か
+  const C = wide
+    ? { office: 2, insurer: 4, insured: 5, made: 6, author: 7, ikou: 8, houshin: 10, kubun: 11, certFrom: 15, certTo: 16 }
+    : { office: 1, insurer: 2, insured: 3, made: 7, author: 12, ikou: 9, houshin: 8, kubun: null, certFrom: 10, certTo: 11 };
+  console.log(`  第1表は ${t1.head.length} 列版`);
   const t2 = readCsv("ケアプラン/全/KAIGO1.CSV");
   console.log(`  第1表 ${t1.rows.length} 行 / 第2表 ${t2.rows.length} 行`);
 
   // (保険者, 被保番) → 対象月に有効な最新の第1表
-  const latest = new Map();
+  // 対象月に使う計画の選び方:
+  //   ① 対象月末までに作られたものの中で **最も新しい**もの (通常はこれ)
+  //   ② ①が無い人だけ、対象月より後で **最も古い**もので補う
+  // 単純に「今日まで」にすると、7・8 月に改訂された計画で 6 月の請求を作ってしまう。
+  // ②が要るのは請求はあるのに計画書の登録が遅れた人 (小池美乃里 2026/07/17 /
+  // 前嶋明 2026/07/30。どちらも 6 月に請求が立っている)。
+  const latest = new Map();     // ① 対象月末まで
+  const after = new Map();      // ② 対象月より後
   for (const r of t1.rows) {
-    if (r.length < 13) continue;
-    const key = `${r[2]}|${r[3]}`;
-    const made = iso(r[7]) ?? iso(r[4]);
-    if (!made || made > MONTH_END) continue;          // 対象月より後に作ったものは使わない
-    const cur = latest.get(key);
-    if (!cur || made > cur.made) {
-      latest.set(key, { made, reg: r[4], office: r[1], houshin: r[8], ikou: r[9],
-        certFrom: iso(r[10]), certTo: iso(r[11]), author: r[12] });
+    if (r.length <= C.certTo) continue;
+    const key = `${r[C.insurer]}|${r[C.insured]}`;
+    const made = iso(r[C.made]);
+    if (!made) continue;
+    const rec = { made, office: r[C.office], houshin: r[C.houshin], ikou: r[C.ikou],
+      certFrom: iso(r[C.certFrom]), certTo: iso(r[C.certTo]), author: r[C.author],
+      kubun: C.kubun == null ? null : r[C.kubun], late: made > MONTH_END };
+    if (made <= MONTH_END) {
+      const cur = latest.get(key);
+      if (!cur || made > cur.made) latest.set(key, rec);
+    } else {
+      const cur = after.get(key);
+      if (!cur || made < cur.made) after.set(key, rec);   // 後ろ側は最も古いもの
     }
   }
+  let lateCount = 0;
+  for (const [k, v] of after) if (!latest.has(k)) { latest.set(k, v); lateCount++; }
+  if (lateCount) console.log(`  うち ${lateCount} 名は対象月より後の計画で補完 (計画書の登録が遅れた人)`);
   console.log(`  対象月に有効な第1表 ${latest.size} 名\n`);
 
   // 第2表を (保険者, 被保番, 作成日) で束ねる
