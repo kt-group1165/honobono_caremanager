@@ -137,7 +137,7 @@ function loadClientMaster() {
           byInsured.set(c[4], { userNumber: c[0], name: c[1], careLevel: c[11] || null });
         }
         if (isBase && c.length > 14 && c[0] && c[3]) {
-          byUserNo.set(c[0], { name: c[3], sex: c[8] || null, birth: c[11] || null, zip: c[12] || null, address: c[13] || null, phone: c[14] || null });
+          byUserNo.set(c[0], { name: c[3], furigana: c[6] || null, sex: c[8] || null, birth: c[11] || null, zip: c[12] || null, address: c[13] || null, phone: c[14] || null });
         }
       }
     }
@@ -325,6 +325,9 @@ async function main() {
         name: base.name || m.name,
         birth_date: isoFromSlash(base.birth) ?? isoFromYmd(head[11]),
         address: base.address || null, phone: base.phone || null,
+        // ⚠ フリガナを入れ忘れると利用者一覧であいうえお順に並ばず「他」に落ちる
+        //   (船橋 坂田茂 が居宅サービス計画書の一覧で見つからない、で発覚)
+        furigana: base.furigana || null, gender: base.sex || null, postal_code: base.zip || null,
         care_level: CARE_LEVEL_BY_CODE[head[13]] ?? m.careLevel,
         cert_start: isoFromYmd(head[14]), cert_end: isoFromYmd(head[15]),
       });
@@ -403,6 +406,7 @@ async function main() {
       const ins0 = await sb.from("clients")
         .insert({ tenant_id: TENANT, name: c.name, user_number: c.userNumber,
           birth_date: c.birth_date, address: c.address, phone: c.phone,
+          furigana: c.furigana, gender: c.gender, postal_code: c.postal_code,
           care_level: c.care_level })
         .select("id").single();
       if (ins0.error) { console.error(`✗ ${c.name} の作成失敗: ${ins0.error.message}`); process.exit(1); }
