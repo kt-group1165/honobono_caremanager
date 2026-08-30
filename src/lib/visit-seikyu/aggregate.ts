@@ -376,10 +376,11 @@ export async function aggregateMonthlyVisitSeikyu(
     p.catch(() => schedColumnProbeCache.delete(col));
     return p;
   };
-  const [hasOfficeCol, hasKinkyuCol, hasSystemCol] = await Promise.all([
+  const [hasOfficeCol, hasKinkyuCol, hasSystemCol, hasBillableCol] = await Promise.all([
     opts.officeId ? probeColumn("office_id") : Promise.resolve(false),
     probeColumn("kinkyu_houmon"),
     probeColumn("system"),
+    probeColumn("billable"),
   ]);
   if (opts.officeId && !hasOfficeCol) {
     console.warn(
@@ -421,6 +422,9 @@ export async function aggregateMonthlyVisitSeikyu(
       // C5: 自事業所 + office_id 未設定 (移行期データ) のみ
       q = q.or(`office_id.eq.${opts.officeId},office_id.is.null`);
     }
+    // ⚠ 請求は billable=false の行を除く (休憩 等)。**給与計算は本列を見ない**。
+    //   列未適用なら従来どおり全行 (既定 true 相当)。
+    if (hasBillableCol) q = q.eq("billable", true);
     const { data, error } = await q
       .order("id", { ascending: true })
       .range(offset, offset + PAGE - 1);

@@ -215,6 +215,8 @@ export async function aggregateMonthlyShogaiSeikyu(
     const schedRows: SchedRow[] = [];
     let soff = 0;
     let schedOk = true;
+    // billable 列の有無 (migration 未適用の環境でも動かす)。null = 未判定
+    let schedHasBillable: boolean | null = null;
     while (true) {
       let sq = supabase
         .from("kaigo_visit_schedule")
@@ -223,13 +225,22 @@ export async function aggregateMonthlyShogaiSeikyu(
         .gte("visit_date", from)
         .lte("visit_date", to);
       if (opts.officeId) sq = sq.or(`office_id.eq.${opts.officeId},office_id.is.null`);
+      // ⚠ 請求は billable=false の行を除く (休憩 等)。**給与計算は本列を見ない**。
+      //   列未適用の環境では 42703 になるので、失敗したら付けずに引き直す。
+      if (schedHasBillable !== false) sq = sq.eq("billable", true);
       const { data, error } = await sq.order("id").range(soff, soff + PAGE - 1);
       if (error) {
+        // billable 列が未適用 (42703) なら列を外して同じ範囲を引き直す
+        if (schedHasBillable === null && /billable/.test(error.message)) {
+          schedHasBillable = false;
+          continue;
+        }
         // office_id 列未適用(42703) 等は schedule 連携をスキップ (握らず warn)
         console.warn("[shogai] シフト実績の取得に失敗 (schedule 連携スキップ):", error.message);
         schedOk = false;
         break;
       }
+      if (schedHasBillable === null) schedHasBillable = true;
       const rows = (data ?? []) as SchedRow[];
       // 合算セッションの従属行は請求が代表行に集約済 (実績記録票用の記録専用行) →
       //   ここで拾うと同一 code×日 が二重計上になるので除外する
