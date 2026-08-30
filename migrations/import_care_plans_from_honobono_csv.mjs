@@ -5,7 +5,10 @@
 //     0 策定機関コード 1 事業所名 2 保険者番号 3 被保険者番号 4 登録年月日
 //     5 修正区分 6 作成区分 7 作成日 8 総合的な援助の方針 9 利用者及び家族の意向
 //     10 認定有効開始 11 認定有効終了 12 作成者
-//   ケアプラン/全/KAIGO1.CSV      第2表 (78,532行/4,179名)
+//   ケアプラン/全/KAIGO1_H31.CSV  第2表 (261,211行/8,243名。H31/1/1〜R8/8/31)
+//     ※ 第2表は【ケアマネ】→ CSV → **計画書（2）A様式** から出す。
+//        「計画書（2）」ではない。処理期間を狭めると人が落ちる:
+//        2025/01〜 だけだと 4,233 名で、第1表にいる 1,562 名が第2表なしになった。
 //     0 保険者番号 1 被保険者番号 2 登録年月日 3 作成日 4 表示順
 //     5 解決すべき課題 6 長期目標 7 短期目標 8 サービス内容 10 サービス種別/担当者
 //     14 サービス事業者名 16 頻度 18 期間 22-27 各期間の開始/終了
@@ -35,6 +38,8 @@ import iconv from "iconv-lite";
 
 const EXECUTE = process.argv.includes("--execute");
 const WITH_SERVICES = process.argv.includes("--with-services");
+/** 第1表だけで作った既存プランに、同じ世代の第2表を後から流し込む */
+const BACKFILL = process.argv.includes("--backfill-services");
 const MONTH = process.env.MONTH || "2026-06";
 const MONTH_END = new Date(Number(MONTH.slice(0, 4)), Number(MONTH.slice(5, 7)), 0)
   .toISOString().slice(0, 10);
@@ -102,7 +107,8 @@ async function main() {
     ? { office: 2, insurer: 4, insured: 5, made: 6, author: 7, ikou: 8, houshin: 10, kubun: 11, certFrom: 15, certTo: 16 }
     : { office: 1, insurer: 2, insured: 3, made: 7, author: 12, ikou: 9, houshin: 8, kubun: null, certFrom: 10, certTo: 11 };
   console.log(`  第1表は ${t1.head.length} 列版`);
-  const t2 = readCsv("ケアプラン/全/KAIGO1.CSV");
+  const t2 = readCsv(existsSync(path.join(KAIGO, "ケアプラン/全/KAIGO1_H31.CSV"))
+    ? "ケアプラン/全/KAIGO1_H31.CSV" : "ケアプラン/全/KAIGO1.CSV");
   console.log(`  第1表 ${t1.rows.length} 行 / 第2表 ${t2.rows.length} 行`);
 
   // (保険者, 被保番) → 対象月に有効な最新の第1表
@@ -216,6 +222,47 @@ async function main() {
     for (const q of problems.slice(0, 10)) console.log(`     ${q}`);
   }
   console.log(`\n  新規プラン ${plans.length} 名 / サービス行 ${plans.reduce((s, p) => s + p.svc.length, 0)} 行`);
+
+  // ── 既存プランへの第2表バックフィル ───────────────────────────────────
+  //   第1表だけで作ったプランは中身が空 (サービスも目標も無い) なので、
+  //   同じ世代の第2表を後から流し込む。既にサービス行がある人は触らない。
+  let back = [];
+  if (BACKFILL) {
+    const keyByClient = new Map();
+    for (const [k, set] of clientByKey) for (const cid of set) {
+      if (set.size === 1) keyByClient.set(cid, k);
+    }
+    let existing = [], f2 = 0;
+    for (;;) {
+      const { data, error } = await sb.from("kaigo_care_plans")
+        .select("id, user_id, long_term_goals, short_term_goals")
+        .eq("status", "active").range(f2, f2 + 999);
+      if (error) { console.error(`✗ ${error.message}`); process.exit(1); }
+      existing = existing.concat(data);
+      if (data.length < 1000) break;
+      f2 += 1000;
+    }
+    let hasSvc = new Set(); f2 = 0;
+    for (;;) {
+      const { data, error } = await sb.from("kaigo_care_plan_services")
+        .select("care_plan_id").range(f2, f2 + 999);
+      if (error) { console.error(`✗ ${error.message}`); process.exit(1); }
+      for (const r of data) hasSvc.add(r.care_plan_id);
+      if (data.length < 1000) break;
+      f2 += 1000;
+    }
+    for (const pl of existing) {
+      if (hasSvc.has(pl.id)) continue;
+      const k = keyByClient.get(pl.user_id);
+      if (!k) continue;
+      const svc = services.get(k);
+      if (!svc || !svc.length) continue;
+      back.push({ id: pl.id, key: k, svc, plan: pl });
+    }
+    console.log(`  既存プランへの第2表バックフィル ${back.length} 名 / ` +
+      `${back.reduce((s, b) => s + b.svc.length, 0)} 行`);
+  }
+
   if (!EXECUTE) { console.log("\n※ DRY RUN。--execute で保存します。"); return; }
 
   for (const p of plans) {
@@ -234,7 +281,7 @@ async function main() {
         tenant_id: TENANT, care_plan_id: made.id,
         // service_type は NOT NULL。種別が空の行があるのでサービス内容で補う
         service_type: s.kind || s.content || "その他",
-        service_content: s.content || null,
+        service_content: s.content || s.kind || "（記載なし）",
         frequency: [s.freq, s.period].filter(Boolean).join(" ") || null,
         provider: s.provider || null,
         notes: s.issue ? `課題: ${s.issue}` : null,
@@ -244,7 +291,34 @@ async function main() {
     }
     console.log(`  ✓ ${p.name} (サービス ${WITH_SERVICES ? p.svc.length : 0} 行)`);
   }
-  console.log(`\n✓ ${plans.length} 名のケアプランを作成しました`);
+  let bn = 0, brows = 0;
+  for (const b of back) {
+    const rows = b.svc.slice().sort((a, c) => a.order - c.order).map((s) => ({
+      tenant_id: TENANT, care_plan_id: b.id,
+      service_type: s.kind || s.content || "その他",
+      service_content: s.content || s.kind || "（記載なし）",
+      frequency: [s.freq, s.period].filter(Boolean).join(" ") || null,
+      provider: s.provider || null,
+      notes: s.issue ? `課題: ${s.issue}` : null,
+    }));
+    const { error } = await sb.from("kaigo_care_plan_services").insert(rows);
+    if (error) { console.error(`✗ ${b.key} のサービス: ${error.message}`); process.exit(1); }
+    // 目標が空なら第2表から埋める
+    const longs = [...new Set(b.svc.map((s) => s.longGoal).filter(Boolean))].join("\n");
+    const shorts = [...new Set(b.svc.map((s) => s.shortGoal).filter(Boolean))].join("\n");
+    const patch = {};
+    if (!b.plan.long_term_goals && longs) patch.long_term_goals = longs;
+    if (!b.plan.short_term_goals && shorts) patch.short_term_goals = shorts;
+    if (Object.keys(patch).length) {
+      const { error: e2 } = await sb.from("kaigo_care_plans").update(patch).eq("id", b.id);
+      if (e2) { console.error(`✗ ${b.key} の目標: ${e2.message}`); process.exit(1); }
+    }
+    bn++; brows += rows.length;
+    if (bn % 200 === 0) console.log(`  … ${bn}/${back.length}`);
+  }
+
+  console.log(`\n✓ ${plans.length} 名のケアプランを作成しました` +
+    (BACKFILL ? ` / 既存 ${bn} 名に第2表 ${brows} 行を追加しました` : ""));
 }
 
 main().catch((e) => { console.error("ERROR:", e.message); process.exit(1); });
