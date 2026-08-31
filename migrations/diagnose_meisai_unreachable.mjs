@@ -2,6 +2,7 @@
 // MEISAI の「利用者に辿り着けない」を原因別に分ける — READ ONLY (書込なし)
 //
 //   MONTH=2026-06 node migrations/diagnose_meisai_unreachable.mjs
+//   MONTH=2026-06 AREA=山武 node migrations/diagnose_meisai_unreachable.mjs   # 1 拠点だけ全件
 //
 // `npm run check:billing-gap` が出す「利用者に辿り着けない 154 名」と
 // `propose_meisai_client_mapping.mjs` の「該当者が見つからない 151 件」は、
@@ -26,6 +27,8 @@ import path from "node:path";
 import { officesForArea } from "./_area_offices.mjs";
 
 const MONTH = process.env.MONTH || "2026-06";
+/** AREA=山武 でその拠点だけに絞る (既定は全拠点) */
+const AREA = process.env.AREA || "";
 const YYYYMM = MONTH.replace("-", "");
 const KAIGO = fileURLToPath(new URL("../", import.meta.url));
 
@@ -155,6 +158,7 @@ async function main() {
 
   const A = [], B = [], C = [];
   for (const m of meisai) {
+    if (AREA && m.area !== AREA) continue;
     if (mapped.has(m.num)) continue;
     const sameNum = byNumber.get(m.num) ?? [];
     const numberOk = sameNum.some((c) => sameName(c.name, m.name));
@@ -183,14 +187,14 @@ async function main() {
   console.log(`   → client_office_assignments を足せば解決する。ただし氏名だけで人を`);
   console.log(`     決めているので **人が確認してから**。`);
   if (A.length) console.log(`   拠点別: ${byArea(A)}`);
-  for (const x of A.slice(0, 25)) {
+  for (const x of A.slice(0, AREA ? 999 : 25)) {
     console.log(
       `     ${x.area} 番号${x.num}「${x.name}」(${x.rows}行)\n` +
         `        → 当方「${x.c.name}」(番号 ${x.c.user_number ?? "—"} / 生年月日 ${x.c.birth_date ?? "—"})` +
         `  いま所属: ${x.where.length ? x.where.join("・") : "(割当なし)"}`,
     );
   }
-  if (A.length > 25) console.log(`     … 他 ${A.length - 25} 件`);
+  if (A.length > (AREA ? 999 : 25)) console.log(`     … 他 ${A.length - 25} 件`);
 
   console.log(`\n△ B 同姓が複数いて決められない            ${B.length} 件`);
   if (B.length) console.log(`   拠点別: ${byArea(B)}`);
@@ -204,8 +208,65 @@ async function main() {
   console.log(`\n⬜ C 利用者自体が居ない                    ${C.length} 件`);
   console.log(`   → 利用者マスタの取込が要る。利用者データ/…_登録有/ が手元にある。`);
   if (C.length) console.log(`   拠点別: ${byArea(C)}`);
-  for (const x of C.slice(0, 20)) console.log(`     ${x.area} 番号${x.num}「${x.name}」(${x.rows}行)`);
-  if (C.length > 20) console.log(`     … 他 ${C.length - 20} 件`);
+  for (const x of C.slice(0, AREA ? 999 : 20)) console.log(`     ${x.area} 番号${x.num}「${x.name}」(${x.rows}行)`);
+  if (C.length > (AREA ? 999 : 20)) console.log(`     … 他 ${C.length - 20} 件`);
+
+  // ── C の人が 手元の利用者マスタ CSV に載っているか ───────────────────────
+  //   載っているなら **取込を回せば解決する**。載っていないなら ほのぼのから
+  //   出し直すしかない。ここを分けないと「取込すればよい」と誤解する。
+  const csvNames = new Map(); // 正規化した氏名 -> Set(フォルダ名)
+  walk(path.join(KAIGO, "利用者データ"), (fp) => {
+    const b = path.basename(fp);
+    if (!/\.csv$/i.test(b) || !b.includes("基本")) return;
+    const folder = path.relative(path.join(KAIGO, "利用者データ"), fp).split(path.sep)[0];
+    let text;
+    try {
+      text = new TextDecoder("shift_jis").decode(readFileSync(fp));
+    } catch {
+      return;
+    }
+    const lines2 = text.split(/\r?\n/).filter(Boolean);
+    if (lines2.length < 2) return;
+    const h = lines2[0].split(",").map((x) => x.replace(/^"|"$/g, "").trim());
+    const iName = h.indexOf("利用者名");
+    const iBirth = h.indexOf("生年月日");
+    if (iName < 0) return;
+    for (const line of lines2.slice(1)) {
+      const cols = line.split(",");
+      const nm = (cols[iName] ?? "").replace(/^"|"$/g, "").trim();
+      const k = normName(nm);
+      if (!k) continue;
+      if (!csvNames.has(k)) csvNames.set(k, { folders: new Set(), birth: "" });
+      const rec = csvNames.get(k);
+      rec.folders.add(folder);
+      // ⚠ **生年月日ではダミーを見分けられない。**「☆ＨＲＤ 研修」2017/03/29、
+      //   「中抜け」2025/03/01 のように、ほのぼののダミー登録にも日付が入っている。
+      //   見分けるなら 利用者番号 2147483647 や記号始まりの氏名で判定すること。
+      const b = iBirth >= 0 ? (cols[iBirth] ?? "").replace(/^"|"$/g, "").trim() : "";
+      if (b && !rec.birth) rec.birth = b;
+    }
+  });
+
+  const inCsv = [], notInCsv = [];
+  for (const x of C) {
+    const hit = csvNames.get(normName(x.name));
+    if (!hit) { notInCsv.push({ ...x, folders: [] }); continue; }
+    inCsv.push({ ...x, folders: [...hit.folders] });
+  }
+  console.log(`   ── C の内訳: 手元の利用者マスタ CSV に載っているか ──`);
+  console.log(`      OK 載っている ${inCsv.length} 件 → **取込を回せば解決する**`);
+  if (inCsv.length) console.log(`         拠点別: ${byArea(inCsv)}`);
+  for (const x of inCsv.slice(0, AREA ? 999 : 15)) {
+    console.log(`         ${x.area} 「${x.name}」(${x.rows}行) → CSV: ${x.folders.join(" / ")}`);
+  }
+  if (inCsv.length > (AREA ? 999 : 15)) console.log(`         … 他 ${inCsv.length - 15} 件`);
+  console.log(`         ⚠ ほのぼのは 研修・面談・中抜け・有給 等も **利用者として登録している**。`);
+  console.log(`            生年月日は入っているので日付では見分けられない。取り込む前に氏名を見ること`);
+  console.log(`            (利用者番号 2147483647 や記号始まりの氏名がダミー)`);
+  console.log(`      ⬜ どの CSV にも無い ${notInCsv.length} 件 → **ほのぼのから出し直すしかない**`);
+  if (notInCsv.length) console.log(`         拠点別: ${byArea(notInCsv)}`);
+  for (const x of notInCsv.slice(0, AREA ? 999 : 15)) console.log(`         ${x.area} 「${x.name}」(${x.rows}行)`);
+  if (notInCsv.length > (AREA ? 999 : 15)) console.log(`         … 他 ${notInCsv.length - 15} 件`);
 
   console.log(`\n合計 ${A.length + B.length + C.length} 件。**このスクリプトは何も書き換えていません。**`);
 }
