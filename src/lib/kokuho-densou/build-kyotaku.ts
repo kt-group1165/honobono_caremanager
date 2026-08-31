@@ -20,6 +20,8 @@
  *   8211 項15-17 の短期入所票件数は 対象年月が平成13年12月以前のみ)。
  */
 
+import { insurerNumberWarning } from "@/lib/insurer-number";
+
 // 要介護状態区分コード (被保険者証記載の標準コード)
 export const CARE_LEVEL_CODE: Record<string, string> = {
   事業対象者: "06",
@@ -491,6 +493,11 @@ export function buildKyufuKanriFile(
       const careCode = CARE_LEVEL_CODE[(t.careLevel ?? "").trim()] ?? "";
       const seg = t.period ? ` (${t.period.from}〜${t.period.to} の分割票)` : "";
       if (!t.insurerNumber) warnings.push(`${u.userName}: 保険者番号が未登録です${seg}`);
+      else {
+        // 検証数字が合わない番号は国保連で返戻になる。自動では直さず気づかせる
+        const w = insurerNumberWarning(t.insurerNumber, `${u.userName}${seg}`);
+        if (w) warnings.push(w);
+      }
       if (!t.insuredNumber) warnings.push(`${u.userName}: 被保険者番号が未登録です${seg}`);
       if (!careCode) warnings.push(`${u.userName}: 要介護度 ("${t.careLevel ?? "未設定"}") をコードに変換できません${seg}`);
       if (t.limitUnits <= 0) warnings.push(`${u.userName}: 区分支給限度基準額が未登録です${seg}`);
@@ -682,6 +689,10 @@ export function buildKeikakuhiFile(
     // 8121 の必須項目 (項5 証記載保険者番号 / 項7 被保険者番号 / 項10 生年月日) の未登録チェック
     // (給付管理票 buildKyufuKanriFile と同様。欠落のまま出すと取込チェックで返戻する)
     if (!u.insurerNumber?.trim()) warnings.push(`${u.userName}: 保険者番号が未登録です (計画費明細書 8121 項5 必須)`);
+    else {
+      const w = insurerNumberWarning(u.insurerNumber, `${u.userName} (計画費明細書 8121 項5)`);
+      if (w) warnings.push(w);
+    }
     if (!u.insuredNumber?.trim()) warnings.push(`${u.userName}: 被保険者番号が未登録です (計画費明細書 8121 項7 必須)`);
     if (!u.birthDate) warnings.push(`${u.userName}: 生年月日が未登録です (計画費明細書 8121 項10 必須)`);
     if (!careCode) warnings.push(`${u.userName}: 要介護度 ("${u.careLevel ?? "未設定"}") をコードに変換できません`);

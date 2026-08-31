@@ -19,6 +19,7 @@
 
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
 import { compareByInsurer, formatRecordLikeHonobono } from "@/lib/kokuho-densou/honobono-format";
+import { insurerNumberWarning } from "@/lib/insurer-number";
 
 /**
  * 伝送用の 1 行。月遅れ・返戻の再請求では利用者ごとに
@@ -109,7 +110,13 @@ export function buildKokuhoDensou(
   const rows = inputRows.filter((r) => {
     const hasInsurer = !!(r.insurer_number ?? "").trim();
     const hasInsured = !!(r.insured_number ?? "").trim();
-    if (hasInsurer && hasInsured) return true;
+    if (hasInsurer && hasInsured) {
+      // 番号は揃っているが検証数字が合わない = 返戻になる。除外はせず警告だけ出す
+      // (正しい番号は被保険者証を見ないと決められないため自動では直さない)
+      const w = insurerNumberWarning(r.insurer_number, r.user_name);
+      if (w) warnings.push(w);
+      return true;
+    }
     const miss = [!hasInsurer && "保険者番号", !hasInsured && "被保険者番号"]
       .filter(Boolean)
       .join("・");

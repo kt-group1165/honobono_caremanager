@@ -48,6 +48,7 @@ import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
 import type { SougouSeikyuRow } from "@/lib/visit-seikyu/aggregate-sougou";
 import type { DensouBuildOptions, DensouBuildResult } from "@/lib/kokuho-densou/build";
 import { compareByInsurer, formatRecordLikeHonobono } from "@/lib/kokuho-densou/honobono-format";
+import { insurerNumberWarning } from "@/lib/insurer-number";
 
 /** 総合事業の伝送行 = SougouSeikyuRow (住所地特例 optional 拡張込み) + 再請求時の元提供月 */
 export type SougouDensouRow = SougouSeikyuRow & { ym?: string };
@@ -231,6 +232,11 @@ export function buildSougouDensou(
     const insurer = insurerRaw ? insurerRaw.padStart(8, "0") : "";
     const insured = (r.insured_number ?? "").trim();
     if (!insurer) warnings.push(`${r.user_name}: 保険者番号が未登録です`);
+    else {
+      // 検証は **前0埋め前の素の番号** に対して行う (8桁に伸ばすと必ず桁数エラーになる)
+      const w = insurerNumberWarning(insurerRaw, r.user_name);
+      if (w) warnings.push(w);
+    }
     if (!insured) warnings.push(`${r.user_name}: 被保険者番号が未登録です`);
     const careLevelCode = CARE_LEVEL_CODE[(r.care_level ?? "").trim()] ?? "";
     if (!careLevelCode)
