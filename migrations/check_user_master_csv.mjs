@@ -321,6 +321,26 @@ async function main() {
   const allCsvNames = new Set();
   for (const r of report) for (const n of r.csvNames ?? []) allCsvNames.add(n);
 
+  // 全社まとめ出力 (利用登録＝無) にいるか。
+  // ⚠ これは代用にならない。**制度で中身が偏っている**ことを 2026-09-01 に実測した:
+  //     訪問介護の利用者 42〜95% が入る / 居宅の利用者 1〜10% しか入らない
+  //   (34 事業所すべてで同じ傾向。理由はほのぼの側の運用なので断定しないが、
+  //    「利用登録」が実質 居宅=ケアマネ 側の概念として使われているように見える)
+  const zensha = new Set();
+  {
+    const f = findCsv(path.join(DATA, "全社_R8-08"), "基本情報");
+    if (f) {
+      const rr = parseSjisCsv(f);
+      const j = colIndex(rr[0], "利用者名");
+      if (j >= 0) {
+        for (const x of rr.slice(1)) {
+          const v = (x[j] ?? "").replace(/[\s　]/g, "");
+          if (v) zensha.add(v);
+        }
+      }
+    }
+  }
+
   const seen = new Set();
   const short = [];
   for (const r of report) {
@@ -330,7 +350,10 @@ async function main() {
       const names = [...(byOffice.get(o.id) ?? [])];
       const miss = names.filter((n) => !allCsvNames.has(n));
       if (miss.length / names.length >= 0.2) {
-        short.push({ area: r.area, name: o.name, type: o.type, db: names.length, miss });
+        short.push({
+          area: r.area, name: o.name, type: o.type, db: names.length, miss,
+          inZensha: miss.filter((n) => zensha.has(n)).length,
+        });
       }
     }
   }
@@ -339,16 +362,24 @@ async function main() {
 
   console.log(`⚠ **全フォルダの CSV を合わせても** 載っていない利用者がいる事業所
 `);
-  console.log("   事業所                                  制度      DB   未収載   率");
+  console.log("   事業所                                  制度      DB   未収載  全社CSVで拾える");
   let total = 0;
+  let rescued = 0;
   for (const o of short.sort((a, b) => b.miss.length - a.miss.length)) {
     total += o.miss.length;
+    rescued += o.inZensha;
+    const pct = Math.round((o.inZensha / Math.max(1, o.miss.length)) * 100);
     console.log(`   ${o.name.padEnd(38, " ")}${o.type.padEnd(8, "　")}`
       + `${String(o.db).padStart(4)}  ${String(o.miss.length).padStart(5)}  `
-      + `${String(Math.round((o.miss.length / o.db) * 100)).padStart(3)}%`);
+      + `${String(o.inZensha).padStart(9)} = ${String(pct).padStart(3)}%`);
   }
   console.log(`
    実人数 ${total} 名 (事業所は重複排除済み)`);
+  console.log(`   うち 全社_R8-08 で拾えるのは ${rescued} 名 `
+    + `(${Math.round((rescued / Math.max(1, total)) * 100)}%) — **代用にならない**`);
+  console.log(`
+   ⚠ 全社_R8-08 は 利用登録＝無 で出したもので、中身が制度で偏っている。
+     訪問介護の利用者は 42〜95% 入るが、**居宅の利用者は 1〜10% しか入らない**。`);
   console.log(`
    ⚠ ほのぼのの利用者マスタ CSV は **事業所エントリごと**に出る。
      1 拠点に 居宅 と ヘルパーステーション があると、片方だけ出したときに
