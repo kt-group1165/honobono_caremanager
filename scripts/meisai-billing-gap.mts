@@ -160,6 +160,74 @@ function readMeisai(): Map<string, Worked> {
 }
 
 /**
+ * 介護請求(明細付)_一覧.CSV を読んで「その利用者が介護で請求されたか」を引けるようにする。
+ *
+ * ⚠ **これは取込が制度を判定するのに使っているのと同じ材料**。
+ *   import_meisai_visit_records.mjs は「一覧に (利用者番号 × コード) が有る」ものだけを
+ *   介護の実績として取り込む。だから一覧に無い人は **実績が DB に入らないのが正しい**。
+ *   ここを見ないと「取込漏れ」と誤って報告することになる。
+ *
+ * ⚠ **請求年月が空 = 未発行**。「月遅」フラグが立っていれば翌月請求されるので正常で、
+ *   その分は **翌月フォルダの一覧・MEISAI** に出る (四街道 友田 淑子で実証)。
+ *   立っていなければ本当に止まっている可能性がある。
+ *
+ * ⚠ 一覧CSV は **全項目が引用符付き**で、住所・事業所名にカンマが入りうる。
+ *   素朴な split(",") は使えない。
+ */
+interface BillingList {
+  /** `area|利用者番号` → 請求年月あり */
+  billed: Set<string>;
+  /** `area|利用者番号` → 明細はあるが未発行 (月遅フラグあり) */
+  heldLate: Set<string>;
+  /** `area|利用者番号` → 明細はあるが未発行で月遅フラグも無い */
+  heldStuck: Set<string>;
+  /** 一覧CSV が手元にある拠点 (無い拠点は判定できない) */
+  areas: Set<string>;
+}
+
+function splitCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = "", quoted = false;
+  for (const ch of line) {
+    if (ch === '"') quoted = !quoted;
+    else if (ch === "," && !quoted) { out.push(cur); cur = ""; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out.map((v) => v.trim());
+}
+
+function readBillingList(): BillingList {
+  const billed = new Set<string>();
+  const heldLate = new Set<string>();
+  const heldStuck = new Set<string>();
+  const areas = new Set<string>();
+  const base = join(KAIGO, "サービス実績データ");
+  const slash = `${MONTH.slice(0, 4)}/${MONTH.slice(5)}`;
+  walk(base, (p) => {
+    if (!basename(p).includes("一覧")) return;
+    const parts = p.slice(base.length + 1).split(sep);
+    const area = parts[0];
+    if (AREA && area !== AREA) return;
+    const lines = decodeSjis(p).split(/\r?\n/).filter((l) => l.trim());
+    if (lines.length < 2) return;
+    const header = splitCsvLine(lines[0]);
+    const gi = (n: string) => header.indexOf(n);
+    const iSupply = gi("提供年月"), iClaim = gi("請求年月"), iNum = gi("利用者番号"), iLate = gi("月遅");
+    if (iSupply < 0 || iNum < 0) return;
+    areas.add(area);
+    for (const line of lines.slice(1)) {
+      const c = splitCsvLine(line);
+      if (c[iSupply] !== slash) continue;               // 月はフォルダでなく行で決める
+      const key = `${area}|${c[iNum]}`;
+      if (c[iClaim]) { billed.add(key); continue; }
+      (c[iLate] ? heldLate : heldStuck).add(key);
+    }
+  });
+  return { billed, heldLate, heldStuck, areas };
+}
+
+/**
  * 伝送データを 1 回だけ走査して「番号 → その番号が請求された提供年月の集合」を作る。
  *
  * ⚠ **月はフォルダ名で決めてはいけない。行に書かれている提供年月で決める。**
@@ -233,6 +301,7 @@ async function main(): Promise<void> {
   console.log(`MEISAI: 利用者 ${worked.size} 件ぶん (拠点×制度×利用者番号)`);
 
   const densou = readDensouIndex();
+  const list = readBillingList();
   console.log(`伝送データ: ${densou.files} 本 / 拠点 ${densou.areas.size} / 番号 介護 ${densou.kaigo.size} 種類・障害 ${densou.shogai.size} 種類`);
   const ms = [...densou.months].sort();
   console.log(`伝送に出てくる提供年月: ${ms.length} 種類 (${ms[0] ?? "-"} 〜 ${ms[ms.length - 1] ?? "-"})`);
@@ -512,11 +581,34 @@ async function main(): Promise<void> {
   }
 
   if (notImported.length) {
-    console.log(`${EOL_}稼働はあるのに実績が DB に 1 件も無い (${notImported.length} 名) — 取込漏れ`);
-    notImported.sort((a, b) => b.amount - a.amount);
-    notImported.slice(0, 20).forEach((w) =>
-      console.log(`   ${w.area.padEnd(8)} ${w.system.padEnd(2)} ${w.clientName.padEnd(16)} ${String(w.rows).padStart(3)}回 ${yen(w.amount).padStart(12)}`));
-    if (notImported.length > 20) console.log(`   … 他 ${notImported.length - 20} 名`);
+    // ⚠ **「実績が DB に無い」= 取込漏れ ではない。**取込は一覧CSV に載っている
+    //   (= ほのぼのが介護で請求した) ものだけを介護の実績にするので、
+    //   請求していない人の実績が入らないのは設計どおり。分けて出さないと誤報になる。
+    const line = (w: Worked) =>
+      `   ${w.area.padEnd(8)} ${w.system.padEnd(2)} ${w.clientName.padEnd(16)} ${String(w.rows).padStart(3)}回 ${yen(w.amount).padStart(12)}`;
+    const bucket = { real: [] as Worked[], late: [] as Worked[], stuck: [] as Worked[], byDesign: [] as Worked[], unknown: [] as Worked[] };
+    for (const w of notImported) {
+      const key = `${w.area}|${w.clientNum}`;
+      if (!list.areas.has(w.area)) bucket.unknown.push(w);
+      else if (list.billed.has(key)) bucket.real.push(w);
+      else if (list.heldLate.has(key)) bucket.late.push(w);
+      else if (list.heldStuck.has(key)) bucket.stuck.push(w);
+      else bucket.byDesign.push(w);
+    }
+    const dump = (title: string, note: string, arr: Worked[], cap = 20) => {
+      if (!arr.length) return;
+      arr.sort((a, b) => b.amount - a.amount);
+      console.log(`${EOL_}  ── ${title} (${arr.length} 名) ──`);
+      console.log(`     ${note}`);
+      arr.slice(0, cap).forEach((w) => console.log(line(w)));
+      if (arr.length > cap) console.log(`   … 他 ${arr.length - cap} 名`);
+    };
+    console.log(`${EOL_}稼働はあるのに実績が DB に 1 件も無い (${notImported.length} 名)`);
+    dump("★★ 一覧では請求済みなのに DB に無い", "**本当の取込漏れ**。取込の再実行か対応表の追加で入るはず", bucket.real);
+    dump("未発行だが「月遅」= 翌月請求", "正常。翌月フォルダの 実績データ (MEISAI + 一覧) を出せば入る", bucket.late);
+    dump("未発行で「月遅」フラグも無い", "ほのぼの側で止まっている可能性。要確認", bucket.stuck);
+    dump("一覧に無い = ほのぼのが介護で請求していない", "障害・同行・移動支援・自費など。**取込が除外するのは設計どおり**", bucket.byDesign, 10);
+    dump("その拠点の一覧CSV が手元に無い", "判定できない。実績データを出してもらう", bucket.unknown, 10);
   }
   if (unresolved.length) {
     const byArea = new Map<string, { n: number; amount: number }>();
