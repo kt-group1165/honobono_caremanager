@@ -591,7 +591,9 @@ function setSpan(row, startMin, endMin) {
 //   単独行での時間帯またぎ増分(resolveBaseAddon 単独経路)との相互作用は
 //   実データ1件 (茂原 1221008558) からの類推であり未検証。2人体制の行
 //   (_twoPerson=true) は合算対象から除外し安全側でスキップする。
-const MERGE_GAP_MINUTES = 120;
+// 同日合算の間隔しきい値 (分)。MERGE_GAP_MINUTES=1 で「連続 (間隔 0) のみ合算」になる。
+// 2026-06 の実データでの隣接ペアの間隔: 0分 8件 / 60分 2件 / 90分 5件 / 110分 1件。
+const MERGE_GAP_MINUTES = Number(process.env.MERGE_GAP_MINUTES ?? 120);
 function buildDailySessions(rows) {
   // rows: 同一 clientNum×date×kind (021001/021002) の候補行 (_twoPerson=false のみ渡すこと)
   const withTimes = rows
