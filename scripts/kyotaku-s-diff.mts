@@ -13,7 +13,7 @@
  *   出力: 伝送データ/<AREA>/居宅/202606/新システム/S202606.CSV (SJIS) + diff レポート
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
@@ -116,7 +116,50 @@ async function main() {
     return groups;
   };
   const N = norm(join(outDir, f.fileName), YM);
-  const H = norm(join(BASE, "ほのぼのから", KK_FILE), YM);
+  // ── ほのぼの側は **提出バッチごとにファイルが分かれる** ──────────────────
+  //   6 月提供でも月遅れ請求は 8月10日送信の KK に入り、置き場所は
+  //   伝送データ/<拠点>/居宅/202607/ 直下 (ほのぼのから/ の外)。
+  //   1 ファイルしか読まないと月遅れが全部「当方だけ」に見える。
+  //   2026-06 は 14 拠点で 48 件がこれで、実際は**全件ほのぼのの KK に存在した**。
+  //   → 提供年月が対象月の 8124 を持つ KK を **拠点配下から全部**集める。
+  const kkPaths: string[] = [];
+  if (process.env.KK_FILE) {
+    kkPaths.push(join(BASE, "ほのぼのから", KK_FILE));
+  } else {
+    const areaRoot = join(__dirname, "..", "伝送データ", AREA_DIR, "居宅");
+    const walk = (d: string) => {
+      if (!existsSync(d)) return;
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        const q = join(d, e.name);
+        if (e.isDirectory()) walk(q);
+        else if (/^KK.*\.CSV$/i.test(e.name) && !e.name.includes("解説")) {
+          const txt = readFileSync(q, "latin1");
+          if (txt.split(/\r?\n/).some((l) => {
+            const c = l.split(",").map((x) => x.replace(/^"(.*)"$/, "$1"));
+            return c[0] === "2" && c[2] === "8124" && c[5] === YM;
+          })) kkPaths.push(q);
+        }
+      }
+    };
+    walk(areaRoot);
+  }
+  if (kkPaths.length === 0) { console.error(`FATAL: 提供年月 ${YM} の 8124 を持つ KK が ${AREA_DIR} に無い`); process.exit(1); }
+  console.log(`ほのぼの KK (${kkPaths.length} 本): ${kkPaths.map((q) => q.split(/[\/]/).slice(-2).join("/")).join(" , ")}`);
+  // 明細 (8124) は全ファイルから集める。請求書 (7111) は提出バッチ単位なので
+  // 当方の「月1本」とは形が違う → 複数バッチのときは byte 比較せず参考値だけ出す。
+  const H = new Map<string, string[]>();
+  for (const q of kkPaths) {
+    for (const [k, v] of norm(q, YM)) {
+      if (k.startsWith("7111") && kkPaths.length > 1) continue;
+      if (!H.has(k)) H.set(k, []);
+      H.get(k)!.push(...v);
+    }
+  }
+  for (const v of H.values()) v.sort();
+  if (kkPaths.length > 1) {
+    for (const k of [...N.keys()]) if (k.startsWith("7111")) N.delete(k);
+    console.log("  (請求書 7111 は ほのぼのが提出バッチごとに分けるため比較対象外。明細 8124 で判定する)");
+  }
   let match = 0; const diffs: string[] = [];
   for (const [k, nv] of N) {
     const hv = H.get(k);
