@@ -149,9 +149,11 @@ function loadMasterNumbers(): Map<string, string> {
     const bf = files.find((f) => f.startsWith("基本情報") && /\.csv$/i.test(f));
     const hf = files.find((f) => f.startsWith("介護保険") && /\.csv$/i.test(f));
     if (!bf || !hf) continue;
-    const b = decodeSjis(join(dir, a, bf)).split(/?
+    const b = decodeSjis(join(dir, a, bf)).split(/
+?
 /).filter((l) => l.trim()).map(splitCsvLine);
-    const h = decodeSjis(join(dir, a, hf)).split(/?
+    const h = decodeSjis(join(dir, a, hf)).split(/
+?
 /).filter((l) => l.trim()).map(splitCsvLine);
     const bi = { n: b[0].indexOf("利用者名"), no: b[0].indexOf("利用者番号"), bd: b[0].indexOf("生年月日") };
     const hi = { no: h[0].indexOf("利用者番号"), hs: h[0].indexOf("被保険者番号"), is: h[0].indexOf("保険者番号") };
@@ -614,10 +616,34 @@ async function main(): Promise<void> {
     }
   }
   if (noNumber.length) {
-    console.log(`${EOL_}被保険者番号 / 受給者証番号が当方に無い (${noNumber.length} 名) — この人たちは請求そのものができない`);
+    // ── 番号が無くても、ほのぼの側には番号があって請求されていることがある ──
+    //   マスタ CSV の 氏名+生年月日 から番号を引き直して伝送を照合する。
+    const master = loadMasterNumbers();
+    const nk = (x: string) => String(x ?? "").normalize("NFKC")
+      .replace(/[（(].*?[）)]/g, "").replace(/[\s　]/g, "");
+    const reallyMissing: Worked[] = [];
+    const actuallyBilled: { w: Worked; num: string }[] = [];
+    for (const w of noNumber) {
+      const cid = resolved.get(`${w.area}|${w.clientNum}`) ?? null;
+      const bd = cid ? (birthById.get(cid) ?? "") : "";
+      const num = master.get(`${nk(w.clientName)}|${bd}`);
+      if (num && (densou.kaigo.get(num)?.has(MONTH) || densou.shogai.get(num)?.has(MONTH))) {
+        actuallyBilled.push({ w, num });
+      } else reallyMissing.push(w);
+    }
+    if (actuallyBilled.length) {
+      console.log(`${EOL_}🔴 **番号が当方に無いだけで、ほのぼのは請求している** (${actuallyBilled.length} 名) — 本当の請求漏れ`);
+      console.log("   当方に被保番/受給者証番号が無いので請求が組み立てられていない。");
+      console.log("   ほのぼの側の二重登録 (「（派遣）」等の別エントリに認定が付いている) が典型。");
+      for (const { w, num } of actuallyBilled) {
+        console.log(`   ${w.area.padEnd(10)} ${w.system} ${w.clientName.padEnd(20)} ${String(w.rows).padStart(3)}回  番号 ${num}`);
+      }
+    }
+    if (!reallyMissing.length) return;
+    console.log(`${EOL_}被保険者番号 / 受給者証番号がどこにも無い (${reallyMissing.length} 名) — 請求できないのが正しい`);
     // 拠点に偏っていれば取込の問題、散っていれば個別の登録漏れ。まず内訳を出す
     const byArea = new Map<string, { n: number; amount: number }>();
-    for (const w of noNumber) {
+    for (const w of reallyMissing) {
       const a = byArea.get(w.area) ?? { n: 0, amount: 0 };
       a.n++; a.amount += w.amount; byArea.set(w.area, a);
     }
