@@ -96,7 +96,7 @@ async function fetchAll(table, cols) {
   const out = [];
   const PAGE = 1000;
   for (let from = 0; ; from += PAGE) {
-    const { data, error } = await sb.from(table).select(cols).range(from, from + PAGE - 1);
+    const { data, error } = await sb.from(table).select(cols).order("id").range(from, from + PAGE - 1);
     if (error) throw new Error(`${table}: ${error.message}`);
     out.push(...data);
     if (data.length < PAGE) break;

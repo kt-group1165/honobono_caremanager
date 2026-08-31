@@ -44,12 +44,22 @@ export interface Staff {
   created_at?: string;
 }
 
+// 2026-09-01 監査是正: 「サービス提供責任者」が選択肢に無く、人員基準
+//   (訪問介護は利用者 40 人に 1 人以上) を確認する手段が無かった。
+//   サ責は各帳票の author_name にテキストで名前を打つだけの状態だった。
+//   role 列に CHECK は無い (phase2_00_07_members_kaigo_columns.sql:61 で
+//   「role / qualifications / employment_type には CHECK を付けない」と明記) ので
+//   選択肢を足すだけで DB 変更は要らない。
+//   実データには「訪問介護員」「事務」等の自由入力も入っているため、
+//   既存値はそのまま保持される。
 const ROLES = [
   "介護福祉士",
+  "サービス提供責任者",
   "ケアマネージャー",
   "看護師",
   "准看護師",
   "ヘルパー",
+  "訪問介護員",
   "相談員",
   "管理者",
   "その他",
@@ -690,7 +700,13 @@ export function StaffContent({
                     className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     <option value="">選択してください</option>
-                    {ROLES.map((r) => (
+                    {/*
+                      2026-09-01: role は自由入力で登録されてきた経緯があり、実データに
+                      「事務」「営業職」「所長」等 ROLES に無い値が入っている。
+                      選択肢に無いと未選択に見えてしまい (required で送信も止まる)、
+                      うっかり別の職種で上書きされる。現在値は必ず選択肢に出す。
+                    */}
+                    {(ROLES.includes(form.role) || !form.role ? ROLES : [form.role, ...ROLES]).map((r) => (
                       <option key={r} value={r}>{r}</option>
                     ))}
                   </select>

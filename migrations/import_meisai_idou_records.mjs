@@ -65,7 +65,7 @@ function santeiToMinutes(s) {
 async function fetchAll(table, cols, filter) {
   const out = []; const PAGE = 1000;
   for (let from = 0; ; from += PAGE) {
-    let q = sb.from(table).select(cols).range(from, from + PAGE - 1);
+    let q = sb.from(table).select(cols).order("id").range(from, from + PAGE - 1);
     if (filter) q = filter(q);
     const { data, error } = await q;
     if (error) throw new Error(`${table}: ${error.message}`);

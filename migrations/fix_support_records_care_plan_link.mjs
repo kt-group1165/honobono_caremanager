@@ -30,7 +30,7 @@ const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_
 async function fetchAll(table, select, tweak) {
   const out = [];
   for (let from = 0; ; from += 1000) {
-    let q = sb.from(table).select(select).range(from, from + 999);
+    let q = sb.from(table).select(select).order("id").range(from, from + 999);
     if (tweak) q = tweak(q);
     const { data, error } = await q;
     if (error) { console.error(`✗ ${table}: ${error.message}`); process.exit(1); }

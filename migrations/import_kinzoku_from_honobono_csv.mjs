@@ -75,7 +75,7 @@ const isDummy = (name) =>
 async function fetchAll(table, select) {
   let out = [], from = 0;
   for (;;) {
-    const { data, error } = await sb.from(table).select(select).range(from, from + 999);
+    const { data, error } = await sb.from(table).select(select).order("id").range(from, from + 999);
     if (error) { console.error(`✗ ${table}: ${error.message}`); process.exit(1); }
     out = out.concat(data);
     if (data.length < 1000) break;
