@@ -146,7 +146,17 @@ const KIND_OF_021 = {
   //     parse は normalize("NFKC") してから種別判定するので "通院1" で持つ
   "021006": "通院2", // 通院介助 (身体を伴わない) → 117xxx  例「通院２早０．５・日１．０」
   "021008": "同援", // 同行援護 → 157xxx
+  //   「同行等身体(自立)」= 身体介護を伴う同行援護。コード体系は 021008 と同じ 157xxx。
+  //   実証 (いすみ 古茶みつ子 1244100770 / 2026-06):
+  //     10:20-16:20 (6.0h) ×2 → 157967 同援日６．０・区４ ×2
+  //     10:20-10:50 (0.5h)    → 157703 同援日０．５・区４
+  //     15:20-16:20 (1.0h)    → 157727 同援日１．０・区４   ← 伝送と完全一致
+  "021009": "同援", // 同行援護 (身体を伴う) → 157xxx
 };
+
+// 同行援護の内部コード。**どちらも障害支援区分でコードが変わる** (・区3 / ・区4)。
+// 021009 を入れ忘れると素の 157951 (1,027単位) が出て、正の 157967 (1,438単位) にならない。
+const DOUKOU_CODES = new Set(["021008", "021009"]);
 
 // 同行援護は障害支援区分でコードが変わる。
 //   ⚠ **「区4」は区分4以上**の意味 (実データ: 稲生大輝=区分6 に 157703「同援日０．５・区４」)。
@@ -1167,7 +1177,7 @@ async function main() {
       // 代表行以外は payload を出さない (二重計上防止。base+addon は代表行の1回だけ生成)。
       if (r !== session[0]) { rowConv.push({ skip: true }); continue; }
       if (!sessionResultCache.has(session)) sessionResultCache.set(session, convertSession(session, mode, maps,
-        (() => { const k = session[0].code === "021008"
+        (() => { const k = DOUKOU_CODES.has(session[0].code)
           ? doukouKubunMod(kubunByName.get(normClientName(session[0].clientName))) : null;
           return k ? [k] : []; })()));
       const resolved = sessionResultCache.get(session);
@@ -1187,7 +1197,7 @@ async function main() {
     }
     const minutes = santeiToMinutes(r.santei);
     if (minutes == null) { convWarn.push(`算定時間が解釈不能: "${r.santei}" (${r.clientName} ${r.date})`); rowConv.push(null); blockedNoDur++; continue; }
-    const kubun = r.code === "021008"
+    const kubun = DOUKOU_CODES.has(r.code)
       ? doukouKubunMod(kubunByName.get(normClientName(r.clientName)))
       : null;
     const conv = convertRow(r.code, minutes, r.santeiStart, r.santeiEnd, mode, maps, r._twoPerson, kubun ? [kubun] : []);
