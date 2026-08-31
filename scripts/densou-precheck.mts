@@ -108,6 +108,13 @@ async function main(): Promise<void> {
   const monthStart = `${MONTH}-01`;
   const monthEnd = `${MONTH}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
 
+  /** その証が対象月にかかっているか。**節をまたいで使うのでここで定義する** */
+  const covers = (c: { certification_start_date: string | null; certification_end_date: string | null }): boolean => {
+    if (c.certification_start_date && c.certification_start_date > monthEnd) return false;
+    if (c.certification_end_date && c.certification_end_date < monthStart) return false;
+    return true;
+  };
+
   const clients = await fetchAll<{ id: string; name: string }>("clients", "id, name");
   const nameOf = new Map(clients.map((c) => [c.id, c.name]));
 
@@ -143,8 +150,9 @@ async function main(): Promise<void> {
     client_id: string; insurer_municipality: string | null; beneficiary_number: string | null;
     certification_start_date: string | null; certification_end_date: string | null;
     jogen_kanri_kubun: string | null; jogen_kanri_office_name: string | null;
+    jogen_kanri_office_number: string | null;
   }>("shougai_certifications",
-    "id, client_id, insurer_municipality, beneficiary_number, certification_start_date, certification_end_date, jogen_kanri_kubun, jogen_kanri_office_name");
+    "id, client_id, insurer_municipality, beneficiary_number, certification_start_date, certification_end_date, jogen_kanri_kubun, jogen_kanri_office_name, jogen_kanri_office_number");
   const badCity = new Set<string>();
   for (const s of sho) {
     const n = (s.insurer_municipality ?? "").trim();
@@ -176,12 +184,16 @@ async function main(): Promise<void> {
   section("自事業所が上限管理者なのに当月の管理結果が未入力", [...new Set(missingOwn)],
     "自社で作る書類なので、作り忘れていないか確認すること");
 
+  // 伝送に載るのは **番号** のほう。名前だけ入っていても項目は空で出る
+  const noKanriNumber = sho
+    .filter((s2) => (s2.jogen_kanri_kubun ?? "").trim() === "他事業所")
+    .filter((s2) => covers(s2))
+    .filter((s2) => !(s2.jogen_kanri_office_number ?? "").trim())
+    .map((s2) => `${nameOf.get(s2.client_id) ?? "?"} — 管理事業所 ${s2.jogen_kanri_office_name ?? "(名称も未設定)"}`);
+  section("上限管理が他事業所なのに 事業所番号 が未設定", [...new Set(noKanriNumber)],
+    "伝送に載るのは番号のほう。名前だけでは項目が空で出て返戻になる");
+
   // ── 5. 実績があるのに対象月に有効な認定が無い ─────────────────────────
-  const covers = (c: { certification_start_date: string | null; certification_end_date: string | null }): boolean => {
-    if (c.certification_start_date && c.certification_start_date > monthEnd) return false;
-    if (c.certification_end_date && c.certification_end_date < monthStart) return false;
-    return true;
-  };
   const certOk = new Set(certs.filter(covers).map((c) => c.client_id));
   const shoOk = new Set(sho.filter((s) => covers(s)).map((s) => s.client_id));
 

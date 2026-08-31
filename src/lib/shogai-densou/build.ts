@@ -515,6 +515,15 @@ export function buildShogaiDensou(
         `${u.row.user_name}: 上限管理が他事業所 (${u.row.jogenKanriOfficeName ?? u.row.jogenKanriOfficeNumber ?? "番号未設定"}) ですが管理結果が未入力です — 利用者負担額 ${u.row.userAmount.toLocaleString()} 円を自事業所で算定しています。上限額管理結果票のとおり入力してください`,
       );
     }
+    // 他事業所が上限管理者なのに **事業所番号** が受給者証に入っていない。
+    // 名前だけ入っていても伝送に載るのは番号のほうなので、空のまま出てしまう。
+    // 2026-08-31 実測: 区分=他事業所 24 件すべて番号が空だった。
+    if (u.row.jogenKanriKubun === "他事業所" && !(u.row.jogenKanriOfficeNumber ?? "").trim()) {
+      warnings.push(
+        `${u.row.user_name}: 上限管理が他事業所 (${u.row.jogenKanriOfficeName ?? "名称も未設定"}) ですが` +
+          `**上限額管理事業所番号が未設定**です — このままだと項目が空で伝送され返戻になります。受給者証の記載を入力してください`,
+      );
+    }
     // J41↔J121 乖離: 上限管理結果の保存後に実績 (総費用額) が変わっていないか
     const selfLine = u.jogenOfficeLines?.find((l) => l.is_self);
     if (selfLine && selfLine.total_amount !== u.row.totalAmount) {
