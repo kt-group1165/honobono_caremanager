@@ -515,17 +515,63 @@ async function main() {
   }
 
   for (const c of creates) {
-    // 利用者番号で既に居ることがある (認定レコードが無い / 保険者・被保番が違うだけ)。
-    // その場合は新規作成せず、認定レコードと事業所割当だけ足す。
-    const { data: exist, error: eE } = await sb.from("clients")
-      .select("id, name").eq("tenant_id", TENANT).eq("user_number", c.userNumber);
-    if (eE) { console.error(`✗ ${c.name} の照会失敗: ${eE.message}`); process.exit(1); }
-    let made = (exist ?? [])[0] ?? null;
+    // ── 既存の利用者を探す ────────────────────────────────────────────
+    // ⚠ **利用者番号だけで引き当ててはいけない。**
+    //   ほのぼのの利用者番号は 1 人を指さない。未採番には 2147483647 が入り、
+    //   それ以外も使い回される。旧実装はここで user_number だけを見て、
+    //   見つかった client に氏名も確かめず認定を足していた。その結果:
+    //     佐藤 喜美子 (2147483647) に 3 人分の認定 + レセプト 39,750 円
+    //     鈴木 喜代子 (利番455) に 石井 洋子 の認定 + レセプト 23,300 円
+    //   2026-08-31 に是正。検出は check_cert_owner_mismatch.mjs。
+    //
+    //   ① (保険者番号, 被保険者番号) の対 … これが本来のキー
+    //   ② 氏名 + 生年月日               … 番号が null の既存 client を拾う
+    //   ③ 利用者番号 **かつ氏名が一致**   … 番号だけでは判断しない
+    const normNm = (s) => (s ?? "").normalize("NFKC").replace(/[（(][^）)]*[）)]?\s*$/g, "").replace(/[\s　]/g, "");
+    let made = null, how = "";
+    {
+      const { data: byCert, error: e1 } = await sb.from("client_insurance_records")
+        .select("client_id").eq("insurer_number", c.insurer).eq("insured_number", c.insured);
+      if (e1) { console.error(`✗ ${c.name} の照会失敗: ${e1.message}`); process.exit(1); }
+      const ids = [...new Set((byCert ?? []).map((r) => r.client_id))];
+      if (ids.length === 1) {
+        const { data: one } = await sb.from("clients").select("id, name").eq("id", ids[0]).maybeSingle();
+        if (one) { made = one; how = "(保険者,被保番) で一致"; }
+      } else if (ids.length > 1) {
+        console.error(`✗ ${c.name}: ${c.insurer}|${c.insured} が ${ids.length} 人に当たる。先に統合すること`);
+        process.exit(1);
+      }
+      if (!made) {
+        const { data: byPair } = await sb.from("clients")
+          .select("id, name").eq("insurer_number", c.insurer).eq("insured_number", c.insured).is("deleted_at", null);
+        if (byPair?.length === 1) { made = byPair[0]; how = "clients の (保険者,被保番) で一致"; }
+      }
+      if (!made && c.birth_date) {
+        const { data: byNB } = await sb.from("clients")
+          .select("id, name").eq("name", c.name).eq("birth_date", c.birth_date).is("deleted_at", null);
+        if (byNB?.length === 1) { made = byNB[0]; how = "氏名+生年月日で一致"; }
+      }
+      if (!made) {
+        const { data: byNum } = await sb.from("clients")
+          .select("id, name").eq("tenant_id", TENANT).eq("user_number", c.userNumber);
+        const hit = (byNum ?? []).find((x) => normNm(x.name) === normNm(c.name));
+        if (hit) { made = hit; how = "利用者番号+氏名で一致"; }
+        else if ((byNum ?? []).length) {
+          console.log(`  ⚠ ${c.name}: 利用者番号 ${c.userNumber} は別人 (${(byNum ?? []).map((x) => x.name).join("/")}) が使用中 → 新規作成する`);
+        }
+      }
+    }
     if (made) {
-      console.log(`  = ${c.name} は利用者番号 ${c.userNumber} で既に居る (${made.name}) — 認定と割当だけ足す`);
+      console.log(`  = ${c.name} は既に居る (${made.name} / ${how}) — 認定と割当だけ足す`);
     } else {
+      // ⚠ 利用者番号が別人に使われていたら、そのまま入れると衝突の温床になる。
+      //   (保険者-被保番) を足して一意にする。
+      const { data: taken } = await sb.from("clients")
+        .select("id").eq("tenant_id", TENANT).eq("user_number", c.userNumber);
+      const userNumber = taken?.length ? `${c.userNumber}-${c.insurer}${c.insured}` : c.userNumber;
+      if (taken?.length) console.log(`     利用者番号 ${c.userNumber} は使用中 → ${userNumber} で作成`);
       const ins0 = await sb.from("clients")
-        .insert({ tenant_id: TENANT, name: c.name, user_number: c.userNumber,
+        .insert({ tenant_id: TENANT, name: c.name, user_number: userNumber,
           birth_date: c.birth_date, address: c.address, phone: c.phone,
           furigana: c.furigana, gender: c.gender, postal_code: c.postal_code,
           care_level: c.care_level })
@@ -533,6 +579,12 @@ async function main() {
       if (ins0.error) { console.error(`✗ ${c.name} の作成失敗: ${ins0.error.message}`); process.exit(1); }
       made = ins0.data;
     }
+    // 既に同じ (保険者,被保番) の認定を持っていれば作らない (二重登録の防止)
+    const { data: already } = await sb.from("client_insurance_records")
+      .select("id").eq("client_id", made.id).eq("insurer_number", c.insurer).eq("insured_number", c.insured);
+    if (already?.length) {
+      console.log(`     認定 ${c.insurer}|${c.insured} は既にあるので作らない`);
+    } else {
     const ins = await sb.from("client_insurance_records").insert({
       tenant_id: TENANT, client_id: made.id, insured_number: c.insured, insurer_number: c.insurer,
       care_level: c.care_level, certification_start_date: c.cert_start, certification_end_date: c.cert_end,
@@ -540,6 +592,7 @@ async function main() {
       notes: `[伝送取込 ${MONTH}] 月遅れで当初請求に居らず未登録だった`,
     });
     if (ins.error) { console.error(`✗ ${c.name} の認定作成失敗: ${ins.error.message}`); process.exit(1); }
+    }
     const has = await sb.from("client_office_assignments")
       .select("id").eq("client_id", made.id).eq("office_id", c.off.id);
     if (has.error) { console.error(`✗ ${c.name} の割当照会失敗: ${has.error.message}`); process.exit(1); }
