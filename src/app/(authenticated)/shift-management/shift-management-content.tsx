@@ -728,6 +728,21 @@ export function ShiftManagementContent({
   const [showPageServiceSelector, setShowPageServiceSelector] = useState(false);
   // 選択中サービスの制度区分 (障害なら個別時間の重なり警告を出さない)
   const [pageEditServiceSystem, setPageEditServiceSystem] = useState<string | null>(null);
+  /**
+   * この予定の制度区分 (kaigo_visit_schedule.system)。**人が選ぶ値**。
+   *
+   * ⚠ サービス名からは決まらないものがある。実データ (2026-09-01) では
+   *   「身体介護１」「身体介護２」「身体介護１・夜」「身体介護２・夜」
+   *   「身体介護３」「身体介護６」の 6 種 **12,259 件 (全体の 33%)** が
+   *   介護と障害の両方で使われている。障害の居宅介護は介護保険と同じ
+   *   コード体系を使うため、名前だけでは切り分けられない。
+   *
+   *   insertVisitSchedules は **1 制度にしか無い名前だけ**を自動で補い、
+   *   決まらないものは未設定で残す (推測して外すと請求漏れになるため)。
+   *   未設定のままだと制度別の集計・実績記録票・経営分析から丸ごと落ちるので、
+   *   曖昧なサービスは画面で選ばせる。
+   */
+  const [pageEditSystem, setPageEditSystem] = useState<string | null>(null);
   // C3: kinkyu_houmon / staff2_*_time / additional_staff 列が DB に適用済みか (未適用なら UI 非表示)
   const [kinkyuSupported, setKinkyuSupported] = useState(false);
   const [staff2TimesSupported, setStaff2TimesSupported] = useState(false);
@@ -787,6 +802,7 @@ export function ShiftManagementContent({
       kinkyu_houmon: sched.kinkyu_houmon ?? false,
     });
     setPageEditAdditional(additionalRowsFromSchedule(sched));
+    setPageEditSystem(null);   // 下の単発 select で現在値を入れる
     // 制度区分 (介護/障害) を対象月世代で解決 (障害なら個別時間の重なり警告を抑止)
     setPageEditServiceSystem(null);
     if (sched.service_type && sched.visit_date) {
@@ -801,6 +817,7 @@ export function ShiftManagementContent({
     // (列未適用環境で 42703 になるため意図的に外している) ので、対応 DB では現在値を単発で引く。
     // additional_staff (3人目以降含む) は select に無いので、対応 DB では必ず引き直す。
     const extraCols = [
+      "system",   // 一覧の select に含まれないので、開いたときに現在値を引く
       ...(kinkyuSupported && sched.kinkyu_houmon === undefined ? ["kinkyu_houmon"] : []),
       ...(staff2TimesSupported ? ["staff2_start_time", "staff2_end_time", "staff3_start_time", "staff3_end_time"] : []),
       ...(additionalStaffSupported ? ["additional_staff", "staff_id_2", "staff_id_3"] : []),
@@ -814,6 +831,7 @@ export function ShiftManagementContent({
         .then(({ data, error }: { data: unknown; error: { message: string } | null }) => {
           if (error || !data) return;
           const row = data as {
+            system?: string | null;
             kinkyu_houmon?: boolean | null;
             staff_id_2?: string | null;
             staff_id_3?: string | null;
@@ -823,6 +841,7 @@ export function ShiftManagementContent({
             staff3_end_time?: string | null;
             additional_staff?: Array<{ staff_id: string; start_time: string | null; end_time: string | null }> | null;
           };
+          if (row.system !== undefined) setPageEditSystem(row.system ?? null);
           if (row.kinkyu_houmon !== undefined) {
             setPageEditForm((f) => ({ ...f, kinkyu_houmon: !!row.kinkyu_houmon }));
           }
@@ -864,6 +883,9 @@ export function ShiftManagementContent({
       // 具体的な service_name (例: 身体介護02) があればそれを、無ければ category (身体介護) を保存
       service_type: pageServiceType,
       staff_id: pageEditForm.staff_id || null,
+      // 制度区分。未選択のまま保存すると制度別の画面から落ちるので、
+      // 空文字ではなく null を入れて「未設定」と区別できるようにする。
+      system: pageEditSystem || null,
     };
     // C3: 緊急時訪問介護加算フラグ (列未適用環境では含めない)
     if (kinkyuSupported) updatePayload.kinkyu_houmon = pageEditForm.kinkyu_houmon;
@@ -1222,6 +1244,36 @@ export function ShiftManagementContent({
                 />
                 {kinkyuSupported && pageEditForm.kinkyu_houmon && (
                   <p className="mt-1 text-xs font-medium text-red-600">＋ 緊急時訪問介護加算</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  制度
+                  {!pageEditSystem && (
+                    <span className="ml-2 font-medium text-amber-600">未設定</span>
+                  )}
+                </label>
+                <div className="flex gap-2">
+                  {(["介護", "障害", "総合事業"] as const).map((sys) => (
+                    <button
+                      key={sys}
+                      type="button"
+                      onClick={() => setPageEditSystem(pageEditSystem === sys ? null : sys)}
+                      className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                        pageEditSystem === sys
+                          ? "border-blue-500 bg-blue-50 font-semibold text-blue-700"
+                          : "border-gray-300 bg-white text-gray-600 hover:border-blue-400"
+                      }`}
+                    >
+                      {sys}
+                    </button>
+                  ))}
+                </div>
+                {!pageEditSystem && (
+                  <p className="mt-1 text-xs text-amber-600">
+                    未設定のままだと制度別の集計・実績記録票から漏れます。
+                    「身体介護１」等は介護と障害の両方にあるため、名前からは決まりません。
+                  </p>
                 )}
               </div>
               <div>
