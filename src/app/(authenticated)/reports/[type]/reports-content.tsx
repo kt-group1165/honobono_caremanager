@@ -629,6 +629,18 @@ function buildDefaultContent(
         review_opinion: "",
         overall_policy: "",
         living_support_reason: "",
+        // 2026-09-01 監査是正: 運営基準減算 (所定単位数の 50%、2 月以上継続で 100%) の
+        //   要件③「居宅サービス計画の原案について利用者に説明し、文書で同意を得て、
+        //   交付する」を立証する欄が第1表に無かった。
+        //   訪問介護計画書 (kaigo_houmon_care_plans) が持つ型をそのまま移植する。
+        //   content は JSONB なので DB migration は不要。既存の帳票はキーが無い =
+        //   空欄で表示される (後方互換)。
+        explained_on: "",           // 説明した日
+        user_consent_date: "",      // 文書で同意を得た日
+        user_consent_name: "",      // 同意者 (利用者本人) の署名
+        consent_proxy_name: "",     // 代諾者の署名 (本人が署名できない場合)
+        consent_proxy_relation: "", // 代諾者の続柄
+        delivered_on: "",           // 交付した日
       };
     case "care-plan-2": {
       const planPeriod = plan ? `${fmtReiwa(plan.start_date)}〜${fmtReiwa(plan.end_date)}` : "";
@@ -3403,6 +3415,58 @@ function PrintCarePlan1({ c }: { c: Record<string, unknown> }) {
                 ));
               })()}
             </td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/*
+        説明・同意・交付欄 (2026-09-01 追加)
+
+        運営基準減算の 3 要件のうち③「計画原案の説明 → 文書同意 → 交付」を
+        立証する欄。ここが空欄のまま請求すると、実地指導で所定単位数の 50%
+        (2 月以上継続なら 100%) の返還を求められる。
+        ダブルクリックで編集できる (EditableTd に path を渡している)。
+      */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "4px" }}>
+        <tbody>
+          <tr>
+            <td colSpan={6} style={{ ...tdStyle, fontSize: "8.5pt", padding: "4px 6px" }}>
+              居宅サービス計画について説明を受け、内容に同意し、交付を受けました。
+            </td>
+          </tr>
+          <tr>
+            <td style={{ ...thStyle, width: "10%", fontSize: "8pt" }}>説明年月日</td>
+            <EditableTd path="explained_on" label="説明年月日" value={s("explained_on")}
+              style={{ ...tdStyle, width: "18%" }}>
+              {s("explained_on") ? fmtReiwa(s("explained_on")) : "　　年　　月　　日"}
+            </EditableTd>
+            <td style={{ ...thStyle, width: "10%", fontSize: "8pt" }}>同意年月日</td>
+            <EditableTd path="user_consent_date" label="同意年月日" value={s("user_consent_date")}
+              style={{ ...tdStyle, width: "18%" }}>
+              {s("user_consent_date") ? fmtReiwa(s("user_consent_date")) : "　　年　　月　　日"}
+            </EditableTd>
+            <td style={{ ...thStyle, width: "10%", fontSize: "8pt" }}>交付年月日</td>
+            <EditableTd path="delivered_on" label="交付年月日" value={s("delivered_on")}
+              style={{ ...tdStyle, width: "18%" }}>
+              {s("delivered_on") ? fmtReiwa(s("delivered_on")) : "　　年　　月　　日"}
+            </EditableTd>
+          </tr>
+          <tr>
+            <td style={{ ...thStyle, width: "10%", fontSize: "8pt" }}>利用者同意署名</td>
+            <EditableTd path="user_consent_name" label="利用者同意署名" value={s("user_consent_name")}
+              style={{ ...tdStyle, height: "28px" }}>
+              {s("user_consent_name") || <div style={lineStyle} />}
+            </EditableTd>
+            <td style={{ ...thStyle, width: "10%", fontSize: "8pt" }}>代諾者署名</td>
+            <EditableTd path="consent_proxy_name" label="代諾者署名" value={s("consent_proxy_name")}
+              style={tdStyle}>
+              {s("consent_proxy_name") || <div style={lineStyle} />}
+            </EditableTd>
+            <td style={{ ...thStyle, width: "10%", fontSize: "8pt" }}>続柄</td>
+            <EditableTd path="consent_proxy_relation" label="代諾者との続柄" value={s("consent_proxy_relation")}
+              style={tdStyle}>
+              {s("consent_proxy_relation") || <div style={lineStyle} />}
+            </EditableTd>
           </tr>
         </tbody>
       </table>
