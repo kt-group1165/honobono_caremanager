@@ -31,6 +31,13 @@ export interface VisitSchedule {
   start_time: string | null;
   end_time: string | null;
   service_type: string;
+  /**
+   * 制度区分 (介護 / 障害 / 総合事業)。集計・実績記録票・経営分析が制度を切る軸。
+   * ⚠ サービス名では決まらないものがある (「身体介護１」等は介護と障害の両方に
+   *   存在し、実データで 12,259 件 = 全体の 33%)。複写では **元の予定の値を引き継ぐ**。
+   *   一覧の select に含めない環境では undefined になる。
+   */
+  system?: string | null;
   status?: string; // scheduled=予定, completed=実績, cancelled, changed
   /** 緊急時訪問介護加算フラグ。migration kaigo_visit_schedule_kinkyu_office.sql 未適用環境では undefined */
   kinkyu_houmon?: boolean | null;

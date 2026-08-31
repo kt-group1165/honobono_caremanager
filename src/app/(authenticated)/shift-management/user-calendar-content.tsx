@@ -231,6 +231,8 @@ export function UserCalendar({
         end_time: sched.end_time,
         service_type: sched.service_type,
         status: "scheduled",
+        // 制度は元の予定から引き継ぐ (サービス名では決まらないものがあるため)
+        ...(sched.system !== undefined ? { system: sched.system ?? null } : {}),
         // C5: 発生元 office (列未適用は helper が strip)
         ...(currentOfficeId ? { office_id: currentOfficeId } : {}),
       }]);

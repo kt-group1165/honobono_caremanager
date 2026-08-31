@@ -710,6 +710,9 @@ export function MonthlyIndividualView({
       visit_date: dateStr,
       start_time: copyRow.start_time, end_time: copyRow.end_time,
       service_type: copyRow.service_type, status: "scheduled",
+      // 制度は元の予定から引き継ぐ。サービス名では決まらないものがあるため
+      // (「身体介護１」等は介護と障害の両方にある)。
+      ...(copyRow.system !== undefined ? { system: copyRow.system ?? null } : {}),
       // C5: 発生元 office (列未適用は helper が strip)
       ...(currentOfficeId ? { office_id: currentOfficeId } : {}),
     }], "id");

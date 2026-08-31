@@ -208,7 +208,7 @@ export default async function ShiftManagementPage({
     const [schedRes, availRows, allStaffRes, allSchedRows, provRes] = await Promise.all([
       supabase
         .from("kaigo_visit_schedule")
-        .select("id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, status, members!kaigo_visit_schedule_staff_id_fkey(name)")
+        .select("id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, system, status, members!kaigo_visit_schedule_staff_id_fkey(name)")
         .eq("user_id", selectedUserId)
         .gte("visit_date", monthFrom)
         .lte("visit_date", monthTo)

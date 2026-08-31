@@ -430,6 +430,9 @@ export function TimelineView({
       start_time: newStartTime,
       end_time: newEndTime,
       service_type: origSchedule.service_type,
+      // 制度は元の予定から引き継ぐ。サービス名では決まらないものがあるため
+      // (「身体介護１」等は介護と障害の両方にある)。
+      ...(origSchedule.system !== undefined ? { system: origSchedule.system ?? null } : {}),
     };
     copyData[rowField] = newRowId;
 
