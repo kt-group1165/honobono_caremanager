@@ -27,6 +27,7 @@ import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
 import { KeieiBunsekiKyotakuTab } from "./keiei-bunseki-tab";
 import { ShuchuGensanTab } from "./shuchu-gensan-tab";
+import { UneiKijunTab } from "./unei-kijun-tab";
 
 // kaigo_billing_status の 1 行 (月遅れ・返戻・過誤のいずれか true のみ取得)
 interface FlagRow {
@@ -122,7 +123,7 @@ export function StatsContent() {
   } = useBusinessType();
   const [fromMonth, setFromMonth] = useState(fiscalYearStart());
   const [toMonth, setToMonth] = useState(currentMonthKey());
-  const [tab, setTab] = useState<"flags" | "trend" | "conc" | "keiei">("flags");
+  const [tab, setTab] = useState<"flags" | "trend" | "conc" | "unei" | "keiei">("flags");
   const [loading, setLoading] = useState(true);
   const [flagRows, setFlagRows] = useState<FlagRow[]>([]);
   const [claimRows, setClaimRows] = useState<ClaimRow[]>([]);
@@ -391,6 +392,9 @@ export function StatsContent() {
             { key: "flags", label: `月遅れ・返戻者一覧 (${flagRows.length})` },
             { key: "trend", label: "月次推移" },
             { key: "conc", label: "集中減算" },
+            // 2026-09-01 追加: 運営基準減算 (所定単位数の 50%、2 月以上継続で 100%) の
+            //   3 要件を立証できない利用者を出す。請求額は変えない。
+            { key: "unei", label: "運営基準減算" },
             { key: "keiei", label: "経営分析" },
           ] as const
         ).map((t) => (
@@ -599,6 +603,10 @@ export function StatsContent() {
 
       {/* ── タブ 3: 集中減算 (特定事業所集中減算の判定。判定期間は前期/後期をタブ内で選択。
            遅延読込。タブ切替でアンマウントしない = 再取得防止) ── */}
+      <div className={tab === "unei" ? "" : "hidden"}>
+        <UneiKijunTab active={tab === "unei"} officeId={currentOfficeId} />
+      </div>
+
       <div className={tab === "conc" ? "" : "hidden"}>
         <ShuchuGensanTab active={tab === "conc"} officeId={currentOfficeId} />
       </div>
