@@ -1,0 +1,684 @@
+[
+  {
+    "keep": "57555521-6e61-4f31-9bd9-a53001bfc9d4",
+    "client": "吉原 安男",
+    "care_level": "要介護1",
+    "period": "2025-07-01〜2026-06-30",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "b80546d5-a011-412c-8589-9bfaca31df13",
+        "notes": "[MEISAI-STEP1 2026-06 姉む]"
+      },
+      {
+        "id": "0620cc30-d5e2-475a-9482-1d5e7f429b2d",
+        "notes": "[認定履歴取込 2026-08-04]"
+      },
+      {
+        "id": "5c3af3a3-8e7a-4b3b-b561-687ef90e3af2",
+        "notes": "[認定履歴取込 2026-08-04]"
+      }
+    ]
+  },
+  {
+    "keep": "09028b42-4897-4301-94b4-65249412ca37",
+    "client": "金子 清",
+    "care_level": "要介護1",
+    "period": "2024-02-01〜2027-01-31",
+    "merged": {
+      "limit_period_start": "2023-01-01",
+      "limit_period_end": "2024-01-31"
+    },
+    "dropped": [
+      {
+        "id": "0d019b9f-10fe-40c8-a7a7-bd5b158eecbd",
+        "notes": "[認定履歴取込 2026-08-04]"
+      }
+    ]
+  },
+  {
+    "keep": "09e9bd4f-ea64-40b4-bdc7-8e3ad5056cbe",
+    "client": "山中 英子",
+    "care_level": "要介護4",
+    "period": "2025-06-01〜2026-06-30",
+    "merged": {
+      "limit_period_start": "2025-06-01",
+      "limit_period_end": "2026-06-30"
+    },
+    "dropped": [
+      {
+        "id": "7f1458c7-c1ac-4738-a6a0-84815592d878",
+        "notes": "[認定履歴取込 2026-08-04]"
+      }
+    ]
+  },
+  {
+    "keep": "57dcfbfd-163d-4ff0-ad71-918c27c2ef83",
+    "client": "清水 敏子",
+    "care_level": "要介護3",
+    "period": "2026-04-01〜2029-03-31",
+    "merged": {
+      "limit_period_start": "2023-04-01",
+      "limit_period_end": "2026-03-31"
+    },
+    "dropped": [
+      {
+        "id": "0b03e8d5-a3f5-4579-808b-0f21da30183d",
+        "notes": "[認定履歴取込 2026-08-04]"
+      }
+    ]
+  },
+  {
+    "keep": "0c43bc3d-8770-4c89-8f51-c620c38cefc3",
+    "client": "長谷川 学進",
+    "care_level": "要介護4",
+    "period": "2025-06-17〜2026-06-30",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "d3853fe3-efc4-4d2d-9f22-3aa9acad897b",
+        "notes": "[MEISAI-STEP1 2026-06 姉む]"
+      }
+    ]
+  },
+  {
+    "keep": "e300ce1e-3e14-49d0-a87e-3bb4e9f41f7f",
+    "client": "三橋 二三",
+    "care_level": "要介護5",
+    "period": "2026-06-19〜2027-06-30",
+    "merged": {
+      "limit_period_start": "2024-05-01",
+      "limit_period_end": "2025-04-30"
+    },
+    "dropped": [
+      {
+        "id": "0eed9040-3dc4-4c66-8834-610cef43077d",
+        "notes": "[認定履歴取込 2026-08-04]"
+      }
+    ]
+  },
+  {
+    "keep": "dff3cac1-54e3-4414-a57a-2026b7fd9bb8",
+    "client": "平田 月美",
+    "care_level": "要支援1",
+    "period": "2024-07-01〜2026-06-30",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "92a59440-c268-45ee-ad94-cd8b4c1d1d45",
+        "notes": "[MEISAI-STEP1 2026-06 姉む]"
+      },
+      {
+        "id": "0fac6d15-b7ca-4f84-9c43-823a4537b883",
+        "notes": "[認定履歴取込 2026-08-04]"
+      }
+    ]
+  },
+  {
+    "keep": "868f7642-6a4e-4fd7-ac6e-744467c9c4e2",
+    "client": "青木 紀子",
+    "care_level": "要支援2",
+    "period": "2022-08-01〜2026-07-31",
+    "merged": {
+      "limit_period_start": "2019-08-01",
+      "limit_period_end": "2022-07-31"
+    },
+    "dropped": [
+      {
+        "id": "0fc28908-fc9c-4ea8-ae7a-25594b6cc8fb",
+        "notes": "[認定履歴取込 2026-08-04]"
+      }
+    ]
+  },
+  {
+    "keep": "141f71da-8853-483e-8ff4-fe32361fe47d",
+    "client": "佐立 守正",
+    "care_level": "要介護2",
+    "period": "2023-10-01〜2027-09-30",
+    "merged": {
+      "copay_rate": "1",
+      "care_office_id": "74a7533a-1aad-4dea-8452-258201c07ea0",
+      "limit_period_start": "2023-10-01",
+      "limit_period_end": "2027-09-30"
+    },
+    "dropped": [
+      {
+        "id": "7c146572-fbed-4aa8-9690-46370f91fc02",
+        "notes": null
+      }
+    ]
+  },
+  {
+    "keep": "1758564f-538f-46c4-8db7-5e310931e0df",
+    "client": "奈良 良子",
+    "care_level": "要介護2",
+    "period": "2024-07-01〜2027-06-30",
+    "merged": {
+      "copay_rate": "1",
+      "care_office_id": "74a7533a-1aad-4dea-8452-258201c07ea0",
+      "limit_period_start": "2024-07-01",
+      "limit_period_end": "2027-06-30"
+    },
+    "dropped": [
+      {
+        "id": "1e68d971-1aad-49d3-a660-d2d5ba0e0c85",
+        "notes": null
+      }
+    ]
+  },
+  {
+    "keep": "de345e1c-099b-4d49-8ab7-76c8f96fe998",
+    "client": "鈴木 幸子",
+    "care_level": "要介護2",
+    "period": "2026-02-01〜2027-01-31",
+    "merged": {
+      "limit_period_start": "2026-02-01",
+      "limit_period_end": "2027-01-31"
+    },
+    "dropped": [
+      {
+        "id": "198d34d9-3774-4533-a427-00ce6ce6e15a",
+        "notes": "[居宅STEP1 2026-06 袖ケ浦]"
+      }
+    ]
+  },
+  {
+    "keep": "1b11c65e-a22d-4bc1-841e-d7034f46b5ca",
+    "client": "市川 博義",
+    "care_level": "要介護2",
+    "period": "2026-06-17〜2027-06-30",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "c6e5e2e7-9d04-49c7-b7c3-05eab8d73d0d",
+        "notes": "[MEISAI-STEP1 2026-06 市原]"
+      }
+    ]
+  },
+  {
+    "keep": "9fe6ae02-7590-4193-9464-da5dfdcae0e6",
+    "client": "角 文枝",
+    "care_level": "要介護4",
+    "period": "2026-06-01〜2029-05-31",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "1e504ac2-04d4-4e1c-9918-2150085cc20d",
+        "notes": null
+      }
+    ]
+  },
+  {
+    "keep": "237c96c3-0595-4f5c-a89a-641d7b2f85ee",
+    "client": "青木 久雄",
+    "care_level": "要介護3",
+    "period": "2024-03-01〜2027-02-28",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "e07acc0d-3241-4618-baa6-6e66a032d37e",
+        "notes": null
+      }
+    ]
+  },
+  {
+    "keep": "25f01215-fb41-4db2-b063-bd25baf5c1aa",
+    "client": "村上 泉",
+    "care_level": "要介護1",
+    "period": "2026-01-09〜2027-01-31",
+    "merged": {
+      "limit_period_start": "2026-01-01",
+      "limit_period_end": "2027-01-31"
+    },
+    "dropped": [
+      {
+        "id": "e944e4ac-edaa-44e5-b0ec-1d097cf7bac3",
+        "notes": "[居宅STEP1 2026-06 花見川]"
+      }
+    ]
+  },
+  {
+    "keep": "bf948fd9-84bd-457a-982f-f2ec0d332c4b",
+    "client": "井口 恵子",
+    "care_level": "要介護3",
+    "period": "2025-12-01〜2028-11-30",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "26d32942-3f42-4b48-aa77-2671fc4fcd28",
+        "notes": "[MEISAI-STEP1 2026-06 K姉]"
+      }
+    ]
+  },
+  {
+    "keep": "2b473098-26a3-4f84-bcda-bb1c92d6a18f",
+    "client": "五木田 幸男",
+    "care_level": "要介護1",
+    "period": "2024-03-01〜2028-02-29",
+    "merged": {
+      "limit_period_start": "2021-03-01",
+      "limit_period_end": "2024-02-29"
+    },
+    "dropped": [
+      {
+        "id": "ff5f5d22-7e6d-4cfb-9b19-5e4cc4560498",
+        "notes": "[認定履歴取込 2026-08-04]"
+      }
+    ]
+  },
+  {
+    "keep": "dbce748f-63f9-4fb9-a45e-29bab371e0fb",
+    "client": "小野 佳",
+    "care_level": "要介護1",
+    "period": "2025-08-01〜2029-07-31",
+    "merged": {
+      "limit_period_start": "2024-07-01",
+      "limit_period_end": "2025-07-31"
+    },
+    "dropped": [
+      {
+        "id": "2c63c625-7376-42fd-b93f-1e6004ab3768",
+        "notes": "[認定履歴取込 2026-08-04]"
+      }
+    ]
+  },
+  {
+    "keep": "36b1ed20-8bb1-43e8-8c19-308f741815b8",
+    "client": "髙橋 總生",
+    "care_level": "要介護1",
+    "period": "2024-12-01〜2028-11-30",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "4a30f6c6-a7a5-41f3-aa85-2858ed6cd6fd",
+        "notes": null
+      }
+    ]
+  },
+  {
+    "keep": "3a6e2131-9321-404c-9949-daceb987397c",
+    "client": "栗原 守",
+    "care_level": "要介護1",
+    "period": "2022-08-01〜2026-07-31",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "5f42da06-f954-4c71-8eab-da9e9e1d0d51",
+        "notes": null
+      }
+    ]
+  },
+  {
+    "keep": "3ef84d61-f28b-4623-b915-a244224d7e3a",
+    "client": "山本 一枝",
+    "care_level": "要介護1",
+    "period": "2025-02-01〜2028-01-31",
+    "merged": {
+      "copay_rate": "1",
+      "care_office_id": "74a7533a-1aad-4dea-8452-258201c07ea0",
+      "limit_period_start": "2025-02-01",
+      "limit_period_end": "2028-01-31"
+    },
+    "dropped": [
+      {
+        "id": "585a3754-0a8d-4c9e-842a-2f0d6c11d072",
+        "notes": null
+      }
+    ]
+  },
+  {
+    "keep": "43d688bd-209a-4f2b-b05c-6e98982a4195",
+    "client": "高萩 典子",
+    "care_level": "要介護4",
+    "period": "2025-12-01〜2028-11-30",
+    "merged": {
+      "copay_rate": "1",
+      "care_office_id": "74a7533a-1aad-4dea-8452-258201c07ea0",
+      "limit_period_start": "2025-12-01",
+      "limit_period_end": "2028-11-30"
+    },
+    "dropped": [
+      {
+        "id": "4e6367d9-de48-446e-abbf-75e2cd89d218",
+        "notes": null
+      }
+    ]
+  },
+  {
+    "keep": "461277a2-a5ff-44e0-991b-c13381474e57",
+    "client": "杉谷 久",
+    "care_level": "要介護1",
+    "period": "2025-06-30〜2026-06-30",
+    "merged": {
+      "limit_period_start": "2025-06-01",
+      "limit_period_end": "2026-06-30"
+    },
+    "dropped": [
+      {
+        "id": "d12f69fe-3518-43cf-b60e-5b06cb0985e2",
+        "notes": "[認定履歴取込 2026-08-04]"
+      }
+    ]
+  },
+  {
+    "keep": "4a4c4035-554c-42d7-9524-fc7653847344",
+    "client": "市後 信子",
+    "care_level": "要支援2",
+    "period": "2026-02-01〜2029-01-31",
+    "merged": {
+      "limit_period_start": "2025-01-01",
+      "limit_period_end": "2026-01-31"
+    },
+    "dropped": [
+      {
+        "id": "ebe810fe-1067-44b6-9311-ceb7cc8d3ae7",
+        "notes": "[認定履歴取込 2026-08-04]"
+      }
+    ]
+  },
+  {
+    "keep": "d5acf5a8-254a-452a-83f1-63717ca84c88",
+    "client": "富士枝 明美",
+    "care_level": "要支援2",
+    "period": "2023-07-01〜2026-06-30",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "c465395e-161f-4977-9c22-7b7ca0230977",
+        "notes": "[MEISAI-STEP1 2026-06 姉む]"
+      },
+      {
+        "id": "51150aec-8b5b-4bb8-98ae-a500aed43c6e",
+        "notes": "[認定履歴取込 2026-08-04]"
+      },
+      {
+        "id": "e6e7057d-01a4-46b2-96b9-f82bed1c9e04",
+        "notes": "[認定履歴取込 2026-08-04]"
+      }
+    ]
+  },
+  {
+    "keep": "94c94d46-6af0-44ec-8219-7b1b28fc4d88",
+    "client": "小松 知惠子",
+    "care_level": "要介護2",
+    "period": "2024-09-01〜2028-08-31",
+    "merged": {
+      "copay_rate": "1",
+      "care_office_id": "74a7533a-1aad-4dea-8452-258201c07ea0",
+      "limit_period_start": "2024-09-01",
+      "limit_period_end": "2028-08-31"
+    },
+    "dropped": [
+      {
+        "id": "516d81e3-3ff5-4035-9c30-f4bb74275910",
+        "notes": null
+      }
+    ]
+  },
+  {
+    "keep": "65097062-dd64-45e3-aab1-887232606e86",
+    "client": "石川 英子",
+    "care_level": "要介護1",
+    "period": "2022-07-01〜2026-06-30",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "9040c700-f730-41b6-903c-d0157b44b09d",
+        "notes": "[MEISAI-STEP1 2026-06 姉む]"
+      },
+      {
+        "id": "51b29805-8b74-4bac-a224-40b218243cfe",
+        "notes": "[認定履歴取込 2026-08-04]"
+      },
+      {
+        "id": "873e9f36-1c25-4e31-9a5d-bacf88e8fd9e",
+        "notes": "[認定履歴取込 2026-08-04]"
+      },
+      {
+        "id": "f6ab88d8-c144-48b2-9b8e-57b75a4a39d0",
+        "notes": "[認定履歴取込 2026-08-04]"
+      }
+    ]
+  },
+  {
+    "keep": "5c0b063a-6370-4f33-9cd6-82b6b5baab46",
+    "client": "御山 真利子",
+    "care_level": "要介護2",
+    "period": "2023-12-01〜2026-11-30",
+    "merged": {
+      "limit_period_start": "2023-12-01",
+      "limit_period_end": "2026-11-30"
+    },
+    "dropped": [
+      {
+        "id": "afaa6b2f-c04e-4584-a2ff-623053ff1958",
+        "notes": "[居宅STEP1 2026-06 四街道]"
+      }
+    ]
+  },
+  {
+    "keep": "62567b8f-437c-47c9-ba72-64993fbfce54",
+    "client": "石井 美智男",
+    "care_level": "要介護5",
+    "period": "2023-07-01〜2026-06-30",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "bc9e37ec-54dc-4238-8eae-08d2cd8f69a9",
+        "notes": "[MEISAI-STEP1 2026-06 姉む]"
+      },
+      {
+        "id": "c78487a5-8473-4681-8729-b39916383c87",
+        "notes": "[認定履歴取込 2026-08-04]"
+      }
+    ]
+  },
+  {
+    "keep": "7a95437d-0bd0-4ebf-85f1-80a780d286da",
+    "client": "石原 照子",
+    "care_level": "要介護2",
+    "period": "2025-11-12〜2026-11-30",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "6736bcfc-1d2b-4603-a37f-ed32033b9661",
+        "notes": null
+      }
+    ]
+  },
+  {
+    "keep": "6b8aaac5-6d37-484a-a9b0-4196f297b6d6",
+    "client": "山内 雅代",
+    "care_level": "要介護1",
+    "period": "2026-04-09〜2027-04-30",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "f13a3e64-aeb2-4185-bad4-de429373a993",
+        "notes": "[居宅STEP1 2026-06 姉ム]"
+      }
+    ]
+  },
+  {
+    "keep": "6fe94d75-38d0-4760-a23f-8821d97e4f7a",
+    "client": "大和久 由美子",
+    "care_level": "要介護4",
+    "period": "2024-09-01〜2027-08-31",
+    "merged": {
+      "copay_rate": "1",
+      "care_office_id": "74a7533a-1aad-4dea-8452-258201c07ea0",
+      "limit_period_start": "2024-09-01",
+      "limit_period_end": "2027-08-31"
+    },
+    "dropped": [
+      {
+        "id": "a352379a-7704-413a-bb32-0c883f5e04d9",
+        "notes": null
+      }
+    ]
+  },
+  {
+    "keep": "722ad67f-bc4a-4152-b59c-78f2614201f9",
+    "client": "中村 睦子",
+    "care_level": "要介護5",
+    "period": "2024-08-01〜2028-07-31",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "94ba354c-f4e3-4133-b0bd-3ec1e2ad5dfd",
+        "notes": "[MEISAI-STEP1 2026-06 K姉]"
+      }
+    ]
+  },
+  {
+    "keep": "82018fd3-e013-42d6-ace5-7917954948a8",
+    "client": "田中 喜代子",
+    "care_level": "要介護1",
+    "period": "2026-01-01〜2029-12-31",
+    "merged": {
+      "limit_period_start": "2023-01-01",
+      "limit_period_end": "2025-12-31"
+    },
+    "dropped": [
+      {
+        "id": "d1a26d55-c7a4-456d-bb4c-6b8aef3de9a6",
+        "notes": "[認定履歴取込 2026-08-04]"
+      }
+    ]
+  },
+  {
+    "keep": "d36ccdb3-c90b-4003-8a44-acf1c531f2cc",
+    "client": "市川 幹子",
+    "care_level": "要介護4",
+    "period": "2025-07-17〜2026-07-31",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "ea752a51-2e7e-463b-830a-0237e60dc532",
+        "notes": "[MEISAI-STEP1 2026-06 K姉]"
+      },
+      {
+        "id": "89329f1a-89dc-4144-949d-547d5ebdef21",
+        "notes": "[MEISAI-STEP1 2026-06 市原]"
+      }
+    ]
+  },
+  {
+    "keep": "ae006936-ffbb-465b-91e7-d0a2f3a4d45a",
+    "client": "野村 國臣",
+    "care_level": "要介護3",
+    "period": "2025-07-01〜2029-06-30",
+    "merged": {
+      "copay_rate": "1",
+      "care_office_id": "74a7533a-1aad-4dea-8452-258201c07ea0",
+      "limit_period_start": "2025-07-01",
+      "limit_period_end": "2029-06-30"
+    },
+    "dropped": [
+      {
+        "id": "8a10ae70-fe14-4ef6-a86d-acc767e88a5e",
+        "notes": null
+      }
+    ]
+  },
+  {
+    "keep": "8ead442c-3a1a-47d9-8e49-290faad7a35d",
+    "client": "小田 成雄",
+    "care_level": "要介護2",
+    "period": "2025-12-01〜2029-11-30",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "af806fed-02f6-4e59-a326-1acee231bd7c",
+        "notes": "[MEISAI-STEP1 2026-06 市原]"
+      }
+    ]
+  },
+  {
+    "keep": "96d12b12-5b8f-4815-a81e-fd9c8ab7c71a",
+    "client": "大野 房子",
+    "care_level": "要介護4",
+    "period": "2023-03-01〜2027-02-28",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "bec201ce-54cf-44c9-adbe-3c9e3f9551a4",
+        "notes": "[MEISAI-STEP1 2026-06 市原]"
+      }
+    ]
+  },
+  {
+    "keep": "a136ee41-a124-45c9-9657-6b5623c385ff",
+    "client": "渡邉 公子",
+    "care_level": "要介護2",
+    "period": "2024-02-01〜2027-01-31",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "e937adff-ae69-4657-a24d-3af656ca5bf3",
+        "notes": null
+      }
+    ]
+  },
+  {
+    "keep": "dfc4acda-523c-4d32-8a79-f8530a98d95f",
+    "client": "新田 榮六",
+    "care_level": "要介護3",
+    "period": "2025-06-09〜2026-06-30",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "bf340f07-a3e7-4e21-a5fa-5a472e0ec55f",
+        "notes": "[MEISAI-STEP1 2026-06 姉む]"
+      },
+      {
+        "id": "caa87e3a-81cc-49e0-97ba-40e635265e9c",
+        "notes": "[認定履歴取込 2026-08-04]"
+      }
+    ]
+  },
+  {
+    "keep": "fa576920-661c-436f-a22b-ed657ab8f914",
+    "client": "TANAKA LINDA",
+    "care_level": "要介護2",
+    "period": "2024-03-01〜2027-02-28",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "c22c1107-7d01-4192-8b57-6c8c9be4db47",
+        "notes": null
+      }
+    ]
+  },
+  {
+    "keep": "c3b5caf6-35ee-4fe9-9d55-1abd927b60e2",
+    "client": "齋藤 祥江",
+    "care_level": "要介護5",
+    "period": "2025-11-01〜2029-10-31",
+    "merged": {},
+    "dropped": [
+      {
+        "id": "c862880e-d9bd-4f18-86af-ddff74e7c9e5",
+        "notes": "[MEISAI-STEP1 2026-06 K姉]"
+      }
+    ]
+  },
+  {
+    "keep": "f7b27770-e716-48ca-a554-a5ba3c3ee71b",
+    "client": "竹之下 千代",
+    "care_level": "要介護1",
+    "period": "2024-03-01〜2028-02-29",
+    "merged": {
+      "copay_rate": "1",
+      "care_office_id": "74a7533a-1aad-4dea-8452-258201c07ea0",
+      "limit_period_start": "2024-03-01",
+      "limit_period_end": "2028-02-29"
+    },
+    "dropped": [
+      {
+        "id": "f3f56c74-4404-4827-a951-bc3a64ec90e2",
+        "notes": null
+      }
+    ]
+  }
+]
