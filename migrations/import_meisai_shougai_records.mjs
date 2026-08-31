@@ -188,6 +188,31 @@ function quantizeHours(minutes, stepMin, mode) {
 // 境界 = 深夜<6:00 / 早朝6-8 / 日中8-18 / 夜間18-22 / 深夜22- (service-selector と同一)
 function parseHM(s) { const m = /^(\d{1,2}):(\d{2})/.exec((s || "").trim()); return m ? Number(m[1]) * 60 + Number(m[2]) : null; }
 function zoneOf(min) { if (min < 360 || min >= 1320) return "深"; if (min < 480) return "早"; if (min < 1080) return "日"; return "夜"; }
+// natural と同じ合計 step 数を保ったまま、各要素 1 以上・ずれ 2 step 以内の配分を
+// ずれの小さい順に列挙する (natural 自身は除く)。時間帯は最大 4 つなので全探索でよい。
+// ⚠ src/lib/shogai-seikyu/code-from-time.ts の nearbyAllocations と同じ規則にすること。
+function nearbyAllocations(natural, totalUnits) {
+  const n = natural.length;
+  if (n < 2 || totalUnits < n) return [];
+  const out = [];
+  const cur = [];
+  const walk = (i, left) => {
+    if (i === n - 1) {
+      if (left < 1 || Math.abs(left - natural[i]) > 2) return;
+      const a = [...cur, left];
+      const d = a.reduce((s, v, k) => s + Math.abs(v - natural[k]), 0);
+      if (d > 0) out.push({ a, d });
+      return;
+    }
+    const lo = Math.max(1, natural[i] - 2);
+    const hi = Math.min(natural[i] + 2, left - (n - 1 - i));
+    for (let v = lo; v <= hi; v++) { cur.push(v); walk(i + 1, left - v); cur.pop(); }
+  };
+  walk(0, totalUnits);
+  out.sort((x, y) => x.d - y.d);
+  return out.map((x) => x.a);
+}
+
 // 算定開始〜終了 を時間帯ごとの滞在(分)に clock 順で分解。
 // 0時またぎ(e<=s)・解釈不能は null (単一時間帯 fallback に回す)。
 function zoneSegments(startHM, endHM) {
@@ -353,6 +378,7 @@ function convertRow(code021, minutes, startHM, endHM, mode, maps, twoPerson, mod
   for (let i = 1; i < segs.length; i++) {
     if (segs[i].min > majorityMin) { majorityMin = segs[i].min; majorityZone = segs[i].zone; }
   }
+  // (nearbyAllocations は下の合成コード探索で使う。lib/shogai-seikyu/code-from-time.ts と同じ規則)
   // またぎ: 先行する時間帯は **四捨五入 (0.5 は切り上げ)**、末尾に残りを寄せる。
   //   2026-08-04 是正: 従来は先行を floor していたため step 未満の先頭区分が消えていた。
   //   ほのぼの実データで確定した配分規則 (3 例が同時に成立するのはこの規則だけ):
@@ -363,28 +389,51 @@ function convertRow(code021, minutes, startHM, endHM, mode, maps, twoPerson, mod
   //     茂原 林美紀   07:45-08:15 早15/日15 総1step → 早 round(0.5)=1, 日 0
   //         → 身体早０．５ (111195・単一)
   //   末尾が 0 step になったら単一時間帯として扱われる (nz の filter で落ちる)。
+  //   ⚠ **15 分未満の端数はその時間帯として数えない** (障害の最小単位が 15 分)。
+  //     やわた 杉浦天来 07:50-09:20 早10/日80 → 早は数えず **家事日１．５** (116119)
+  //     ほのぼのもそう出している。比率ではなく絶対 15 分が境目で、round/floor では
+  //     説明できない (早20分/step30 は数える = 森田汐音、早10分/step15 は数えない)。
+  const segs2 = segs.filter((s) => s.min >= 15);
+  if (segs2.length <= 1) return pickSingle(segs2[0]?.zone ?? majorityZone, totalHours);
   const stepsTotal = Math.round((totalHours * 60) / step);
   const alloc = [];
   let used = 0;
-  for (let i = 0; i < segs.length; i++) {
-    const n = i < segs.length - 1
-      ? Math.min(Math.round(segs[i].min / step), Math.max(0, stepsTotal - used))
+  for (let i = 0; i < segs2.length; i++) {
+    const n = i < segs2.length - 1
+      ? Math.min(Math.round(segs2[i].min / step), Math.max(0, stepsTotal - used))
       : Math.max(0, stepsTotal - used);
     used += n;
-    alloc.push({ zone: segs[i].zone, hours: n * (step / 60) });
+    alloc.push({ zone: segs2[i].zone, hours: n * (step / 60) });
   }
   const nz = alloc.filter((a) => a.hours > 1e-9);
   if (nz.length >= 2) {
     const key = `${kind}|` + nz.map((a) => `${a.zone}${a.hours.toFixed(2)}`).join("・") + `|${mk}`;
     const hit = compMap.get(key);
     if (hit) return { base: hit.code, name: hit.name, units: hit.units, kind: "composite", zone: nz.map((a) => a.zone).join("・"), hours: totalHours, key, twoPerson };
+    // 実在しない配分になったときは、**合計を保ったまま近い配分**を探す。
+    //   マスタの合成は下限が 0.5h で `家事日０．２５・夜…` が存在しない。素直に配分すると
+    //   引けず単一コードへ落ちて金額がずれていた。
+    //     いすみ 田中康夫 17:45-18:45  日15/夜45 → 日0.25・夜0.75 (無い)
+    //                                  → **日0.5・夜0.5** (116327) が ほのぼのと一致
+    //     やわた 柳澤玲子 17:40-19:10  日20/夜70 → 日0.25・夜1.25 (無い)
+    //                                  → **日0.5・夜1.0** (116331) が ほのぼのと一致
+    //   ⚠ 各帯 1 step 以上・ずれ 2 step 以内だけ。遠くまで探すと下の base+増 2 行立て
+    //     (茂原 1221008558 家事日3.0 + 家事夜増2.0) を壊す。
+    for (const cand of nearbyAllocations(alloc.map((a) => Math.round((a.hours * 60) / step)), stepsTotal)) {
+      const k2 = `${kind}|` + alloc.map((a, i) => `${a.zone}${(cand[i] * (step / 60)).toFixed(2)}`).join("・") + `|${mk}`;
+      const h2 = compMap.get(k2);
+      if (h2) {
+        return { base: h2.code, name: h2.name, units: h2.units, kind: "composite",
+          zone: alloc.map((a) => a.zone).join("・"), hours: totalHours, key: k2, twoPerson, shifted: key };
+      }
+    }
     // 合成コード不在 (2026-07-27 是正: 家事は総量1.5h程度までしか合成コードが無く、
     //   それを超える時間帯またぎは「開始時間帯の通常コード(その時間帯の生分数) +
     //   後続時間帯の増コード(その時間帯の生分数)」の2行立てで請求される — 茂原
     //   1221008558 の実例 (116131家事日3.0 + 116499家事夜増2.0) で確認 (詳細は
     //   resolveBaseAddon 参照)。ここでは行内の各セグメントの「生の滞在分数」を
     //   そのまま使う (alloc の floor+残余配分ではなく zoneSegments の実分数)。
-    const zoneMinutesOrdered = segs.map((s) => ({ zone: s.zone, minutes: s.min }));
+    const zoneMinutesOrdered = segs2.map((s) => ({ zone: s.zone, minutes: s.min }));
     const resolved = resolveBaseAddon(kind, zoneMinutesOrdered, step, mode, maps, twoPerson, mk);
     if (resolved && !resolved.missing) {
       return { ...resolved.base, addons: resolved.addons, fellBack: true, wantedKey: key };

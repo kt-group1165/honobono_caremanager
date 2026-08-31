@@ -197,6 +197,37 @@ export async function loadShogaiCodeMaps(
 }
 
 /**
+ * `natural` と同じ合計 step 数を保ったまま、各要素 1 以上・ずれ 2 step 以内の配分を
+ * ずれの小さい順に列挙する (natural 自身は含めない)。
+ * 時間帯は最大 4 つなので素朴な全探索でよい。
+ */
+export function nearbyAllocations(natural: number[], totalUnits: number): number[][] {
+  const n = natural.length;
+  if (n < 2 || totalUnits < n) return [];
+  const out: { a: number[]; d: number }[] = [];
+  const cur: number[] = [];
+  const walk = (i: number, left: number) => {
+    if (i === n - 1) {
+      if (left < 1 || Math.abs(left - natural[i]) > 2) return;
+      const a = [...cur, left];
+      const d = a.reduce((s, v, k) => s + Math.abs(v - natural[k]), 0);
+      if (d > 0) out.push({ a, d });
+      return;
+    }
+    const lo = Math.max(1, natural[i] - 2);
+    const hi = Math.min(natural[i] + 2, left - (n - 1 - i));
+    for (let v = lo; v <= hi; v++) {
+      cur.push(v);
+      walk(i + 1, left - v);
+      cur.pop();
+    }
+  };
+  walk(0, totalUnits);
+  out.sort((x, y) => x.d - y.d);
+  return out.map((x) => x.a);
+}
+
+/**
  * 1 訪問 → 障害コード。
  *
  * @param kind      サービス種別 (身体 / 家事 / 通院1 / 通院2 / 同援)
@@ -235,22 +266,41 @@ export function shogaiCodeFromTime(
   }
 
   // ② 時間帯またぎ — 各帯に量子化配分して合成コードを引く
-  //    先頭から floor(滞在/step) を割り当て、末尾に残りを寄せる (clock 順)
+  //    先行する帯は **四捨五入**、末尾に残りを寄せる (clock 順)。
+  //    ⚠ floor にすると step 未満の先頭区分が消える (姉ム 森田汐音 07:40-08:40 の
+  //      早20分が消えて 身体日１．０ になっていた)。取込 script 側と同じ規則。
   const totalUnits = Math.round(quantizeHours(minutes, step, mode) / (step / 60));
   const alloc: number[] = [];
   let used = 0;
   for (let i = 0; i < segs.length - 1; i++) {
-    const u = Math.floor(segs[i].min / step);
+    const u = Math.min(Math.round(segs[i].min / step), Math.max(0, totalUnits - used));
     alloc.push(u);
     used += u;
   }
   alloc.push(Math.max(totalUnits - used, 0));
-  const key =
+  const compMap = twoPerson ? maps.composite2 : maps.composite;
+  const keyOf = (a: number[]) =>
     `${kind}|` +
-    segs.map((sg, i) => `${sg.zone}${(alloc[i] * (step / 60)).toFixed(2)}`).join("・") +
+    segs.map((sg, i) => `${sg.zone}${(a[i] * (step / 60)).toFixed(2)}`).join("・") +
     `|${mk}`;
-  const comp = (twoPerson ? maps.composite2 : maps.composite).get(key);
+  const comp = compMap.get(keyOf(alloc));
   if (comp) return comp;
+
+  // ②-b 合成が **実在しない配分**になったときは、合計を保ったまま近い配分を探す。
+  //   マスタの合成は下限が 0.5h で `家事日０．２５・夜…` が存在しない。素直に配分すると
+  //   引けず単一コードへ落ちて金額がずれていた。
+  //     いすみ 田中康夫 17:45-18:45  日15/夜45 → 日0.25・夜0.75 (無い)
+  //                                  → **日0.5・夜0.5** (116327) が ほのぼのと一致
+  //     やわた 柳澤玲子 17:40-19:10  日20/夜70 → 日0.25・夜1.25 (無い)
+  //                                  → **日0.5・夜1.0** (116331) が ほのぼのと一致
+  //   ⚠ 探すのは **各帯 1 step 以上・ずれ 2 step 以内**だけ。遠くまで探すと
+  //     「合成が本当に無いので base+増 の 2 行で請求する」ケース (茂原 1221008558
+  //     家事日3.0 + 家事夜増2.0) を壊す。既に引けている行はここへ来ない。
+  const near = nearbyAllocations(alloc, totalUnits);
+  for (const cand of near) {
+    const hit = compMap.get(keyOf(cand));
+    if (hit) return hit;
+  }
 
   // ③ 合成コードが無いときは **算定開始の時間帯**の単一コードへ落とす
   //    (家事 0.25 セグメントや夜増などは合成が存在しない)
