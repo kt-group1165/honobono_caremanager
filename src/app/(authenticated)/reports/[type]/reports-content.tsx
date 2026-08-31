@@ -3820,10 +3820,19 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
         return { ...merged, planned, actual };
       })
     : [];
-  // 1 ページ 17 行・超えた分は次ページ (ほのぼのの出力と同じ)。
+  // 1 ページ 13 行・超えた分は次ページ。
   // 旧実装は 9 行固定で、10 行目以降が黙って消えていた。2026-06 の実データでは
   // 1,859 名中 731 名が 10 行以上・146 名が 17 行超 (最大 39 行) だった。
-  const PAGE_ROWS = 17;
+  //
+  // ⚠ 行数は「ほのぼのと同じ 17」ではなく実測で決める。
+  //    17 で出したら 1 ページ目が 15 行で切れ、16・17 行目と 予定合計/実績合計 が
+  //    overflow: hidden に飲まれた (2026-08-31 本番で確認)。ほのぼのは PDF 直生成で
+  //    ヘッダーが小さく 17 行入るが、こちらは HTML のヘッダーが厚く同じ数は入らない。
+  //    実測: 行に使える高さは ≒390px (見積もっていた 488px は過大)。
+  //    サービス内容が 2 行に折り返す行があるので 1 行あたり ≒26px 要る。
+  //    390 / 26 ≒ 15 行、そこから 予定合計/実績合計 の 2 行を引いて 14。
+  //    折り返しが増える利用者でも切れないよう 1 行余裕を見て 13 にする。
+  const PAGE_ROWS = 13;
   const pageCount = Math.max(1, Math.ceil(services.length / PAGE_ROWS));
   const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
   // 曜日は対象月 (report_month) の実カレンダーから計算 (旧: 1日=月曜固定の簡易巡回は誤り)
@@ -3839,13 +3848,16 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
   return (
     <>
     {Array.from({ length: pageCount }, (_, pageIndex) => {
-      // このページに載せる行だけ切り出し、様式の枠を埋めるため 17 行に padding する
+      // このページに載せる行だけ切り出し、様式の枠を埋めるため PAGE_ROWS 行に padding する
       const rows = Array.from(
         { length: PAGE_ROWS },
         (_, i) => services[pageIndex * PAGE_ROWS + i] ?? emptyServiceRow(),
       );
+      // ⚠ height + overflow: hidden にすると、収まらなかった行が **黙って消える**。
+      //   請求の根拠になる帳票でそれは許容できないので minHeight + visible にして、
+      //   はみ出したときは 1 枚多く出る (見て分かる) 方に倒している。
       return (
-    <div key={pageIndex} style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "7pt", color: "#000", width: "277mm", height: "190mm", overflow: "hidden", breakAfter: pageIndex < pageCount - 1 ? "page" : "auto" }}>
+    <div key={pageIndex} style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "7pt", color: "#000", width: "277mm", minHeight: "190mm", overflow: "visible", breakAfter: pageIndex < pageCount - 1 ? "page" : "auto" }}>
       {/* 表番号ラベル */}
       <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "7pt", marginBottom: "3px" }}>{tableNum}</div>
 
@@ -3912,10 +3924,10 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
 
       {/* サービス票テーブル — A4横の残り高さを使い切る */}
       {(() => {
-        // ヘッダー部≒140px, フッター≒25px, テーブルヘッダー≒35px, タイトル≒30px
-        // 残り ≒ 190mm(≒718px) - 230px ≒ 488px
-        // 物理行数 = サービス 17 行 × (予定/実績) + 予定合計/実績合計 の 2 行
-        const ROW_H = Math.floor(488 / (PAGE_ROWS * 2 + 2)); // ≒13px per row (ほのぼのの印字間隔と同じ)
+        // 190mm ≒ 718px。ヘッダー・タイトル・表ヘッダー・フッターで ≒328px 使うので
+        // 行に回せるのは ≒390px (本番の実レンダリングから逆算した実測値)。
+        // 物理行数 = サービス 13 行 × (予定/実績) + 予定合計/実績合計 の 2 行
+        const ROW_H = Math.floor(390 / (PAGE_ROWS * 2 + 2)); // ≒13px per row
         return (
           <>
           <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
