@@ -32,6 +32,8 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(fileURLToPath(new URL("../", import.meta.url)));
 const EXECUTE = process.argv.includes("--execute");
 const MONTH = process.env.MONTH || null;   // "YYYY-MM"
+/** 取込元 (notes) と system が食い違う行を調べるモード */
+const CONFLICTS = process.argv.includes("--conflicts");
 
 function loadEnv() {
   const p = path.join(ROOT, ".env.local");
@@ -89,6 +91,35 @@ async function fetchCodesByName(names) {
   return out;
 }
 
+/**
+ * notes の取込マーカーから制度を読む。**サービス名より優先する。**
+ *
+ * ── なぜ名前より強いか ──────────────────────────────────────────────────
+ *   障害の居宅介護は介護保険と **同じコード体系** を使う。当方のマスタには
+ *   「身体介護１」が 介護 としてしか登録されていないが、**実際には障害でも使う**。
+ *   名前で引くと障害の行を「介護」と記録してしまう。
+ *
+ *   取込 script は制度ごとに分かれていて、notes にどれが入れたかが残っている。
+ *   これは推測ではなく事実なので、こちらを優先する。
+ *
+ *   実測 (2026-09-01): 「身体介護１」等 6 種 12,259 件のうち、取込元と system が
+ *   食い違うのは 90 件だけだった。名前で埋めると この 90 件を取り違える。
+ */
+function systemFromNotes(notes) {
+  const s = String(notes ?? "");
+  // ⚠ **後から付いた是正マーカーのほうが強い。**
+  //   取込マーカーは「どの script が入れたか」でしかない。伝送 (TJ/KJ) を見て
+  //   人が判断し直した行には `[制度是正 …]` が付いている。取込元に戻してはいけない。
+  //   実例: 高品 田村ムラエ 7 行 `[制度是正 TJ非該当→介護]`。
+  //   021xxx を全部障害に入れていたのを、ほのぼのの実請求に合わせて介護へ直したもの。
+  //   ここで取込元 (障害) に戻すと **介護を 5,141 単位ぶん過少請求**に逆戻りする。
+  if (/\[制度是正/.test(s)) return null;
+  if (s.includes("MEISAI障害取込")) return "障害";
+  if (s.includes("MEISAI総合取込")) return "総合事業";
+  if (s.includes("MEISAI取込")) return "介護";
+  return null;
+}
+
 /** 全角数字・記号を半角に寄せる (service-name-normalize.ts と同じ規則) */
 function toHankakuDigits(s) {
   return String(s ?? "").replace(/[０-９．・（）]/g, (c) =>
@@ -107,6 +138,71 @@ function validIn(row, ym) {
   return true;
 }
 
+
+/**
+ * 取込元 (notes) と system が食い違う行を調べる。
+ *
+ *   node migrations/backfill_schedule_system.mjs --conflicts
+ *   node migrations/backfill_schedule_system.mjs --conflicts --execute
+ *
+ * ── 直すもの / 直さないもの ────────────────────────────────────────────
+ *   **障害取込 / 総合取込 なのに違う制度が付いている行だけ直す。**
+ *   その script がその行を入れたという事実なので、他の値になっているのは誤り。
+ *
+ *   **介護取込なのに「障害」が付いている行は直さない。**
+ *   これは伝送 (TJ) から起こした値である可能性が高く、
+ *   ほのぼの側が稼働を介護エントリに入れつつ請求は障害で出したケースがありうる。
+ *   ⚠ どちらが正かは人が伝送を見て判断する。**推測で上書きしない。**
+ */
+async function reportConflicts(rows) {
+  const rowsWithSrc = rows
+    .map((r) => ({ ...r, src: systemFromNotes(r.notes) }))
+    .filter((r) => r.src && r.system && r.src !== r.system);
+
+  console.log(`  取込元と system が食い違う行: ${rowsWithSrc.length} 件
+`);
+  if (!rowsWithSrc.length) { console.log("✓ 食い違いなし"); return; }
+
+  const g = new Map();
+  for (const r of rowsWithSrc) {
+    const k = `${r.src} 取込 → system=${r.system}`;
+    if (!g.has(k)) g.set(k, []);
+    g.get(k).push(r);
+  }
+  for (const [k, list] of [...g].sort((a, b) => b[1].length - a[1].length)) {
+    const fixable = !k.startsWith("介護");
+    console.log(`  ${fixable ? "🔴 直す  " : "・ 保留  "}${k.padEnd(28)}${String(list.length).padStart(5)} 件`
+      + `  ${[...new Set(list.map((r) => r.service_type))].slice(0, 3).join(" / ")}`);
+  }
+  const fix = rowsWithSrc.filter((r) => r.src !== "介護");
+  console.log(`
+  直す ${fix.length} 件 / 保留 ${rowsWithSrc.length - fix.length} 件`);
+  console.log(`
+  ⚠ 保留分 (介護取込なのに障害が付いている) は **伝送から起こした値**の可能性が高い。
+    ほのぼのが稼働を介護エントリに入れつつ請求は障害で出したケースがありうるので、
+    人が伝送 (TJ/KJ) を見て判断すること。推測で上書きしない。`);
+
+  if (!EXECUTE) { console.log("\n※ DRY RUN。--execute で「直す」分だけ反映します。"); return; }
+  if (!fix.length) return;
+
+  let done = 0;
+  for (const r of fix) {
+    const res = await fetch(`${SB_URL}/rest/v1/kaigo_visit_schedule?id=eq.${r.id}`, {
+      method: "PATCH",
+      headers: { ...H, "Content-Type": "application/json", Prefer: "return=representation" },
+      body: JSON.stringify({ system: r.src }),
+    });
+    const body = await res.text();
+    if (!res.ok || body.trim() === "[]") {
+      console.error(`✗ ${r.id}: ${res.status} ${body.slice(0, 160)}`);
+      process.exit(1);
+    }
+    done++;
+  }
+  console.log(`
+✓ ${done} 件を取込元の制度に直した`);
+}
+
 async function main() {
   console.log(`=== 制度区分 (system) の backfill ${EXECUTE ? "【実行】" : "【DRY RUN】"}`
     + `${MONTH ? ` 対象月 ${MONTH}` : " 全期間"} ===\n`);
@@ -121,7 +217,10 @@ async function main() {
       + `-${String(d.getUTCDate()).padStart(2, "0")}`;
     return `&visit_date=gte.${MONTH}-01&visit_date=lte.${last}`;
   })();
-  const rows = await all(`kaigo_visit_schedule?select=id,visit_date,service_type,system${range}&order=id.asc`);
+  const rows = await all(`kaigo_visit_schedule?select=id,visit_date,service_type,system,notes${range}&order=id.asc`);
+
+  if (CONFLICTS) { await reportConflicts(rows); return; }
+
   const target = rows.filter((r) => !r.system && r.service_type);
   console.log(`  対象期間の予定・実績 ${rows.length} 件 / うち system 未設定 ${target.length} 件`);
   if (!target.length) { console.log("\n✓ 埋めるものは無い"); return; }
@@ -156,7 +255,8 @@ async function main() {
   for (const r of target) {
     const ym = monthOf(r.visit_date);
     const { uniq } = mapByMonth.get(ym) ?? { uniq: new Map() };
-    const sys = uniq.get(toHankakuDigits(r.service_type));
+    // ① 取込マーカー (事実) → ② 1 制度にしか無い名前 (推測しない範囲)
+    const sys = systemFromNotes(r.notes) ?? uniq.get(toHankakuDigits(r.service_type));
     if (!sys) {
       undecided.set(r.service_type, (undecided.get(r.service_type) ?? 0) + 1);
       continue;
