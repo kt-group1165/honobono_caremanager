@@ -61,3 +61,8 @@ next-env.d.ts
 # 作業中のスクラッチ
 _dump.txt
 _goi_*.txt
+
+# 2026-09-01: Phase A2 バックアップ表のローカル書き出し (利用者 1,516 名の氏名・住所・
+#   被保番・生年月日を含む)。DB 側は RLS で塞いだので、こちらは commit しない。
+#   git に上げると漏洩先を変えただけになる。
+migrations/_backup_a2_export_*/
