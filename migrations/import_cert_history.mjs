@@ -149,17 +149,36 @@ const insuredNumbers = [...new Set(csvRows.map((r) => r.insured))];
 const clients = [];
 for (let i = 0; i < insuredNumbers.length; i += 100) {
   const { data, error } = await sb
-    .from("clients").select("id, name, insured_number, tenant_id")
+    .from("clients").select("id, name, insured_number, insurer_number, tenant_id")
     .in("insured_number", insuredNumbers.slice(i, i + 100));
   if (error) { console.error("clients 取得失敗:", error.message); process.exit(1); }
   clients.push(...(data ?? []));
 }
-const byInsured = new Map();
+// ⚠ **被保険者番号だけで引くと別人に当たる。**被保番は保険者の中でしか一意でない。
+//   2026-09-01 に実害を確認: 石井 洋子 に 122267 と 124222 の認定が両方付き、
+//   永野 勝利 (被保番 9999999999) には 3 保険者ぶんの他人の認定が入った。
+//   引き当ては **(保険者番号, 被保険者番号)** を第一キーにする。
+const byPair = new Map();      // "保険者|被保番" → clients[]
+const byInsured = new Map();   // 被保番 → clients[]  (保険者が未設定の client 用)
 for (const c of clients) {
+  if (c.insurer_number) {
+    const k = `${c.insurer_number}|${c.insured_number}`;
+    if (!byPair.has(k)) byPair.set(k, []);
+    byPair.get(k).push(c);
+  }
   if (!byInsured.has(c.insured_number)) byInsured.set(c.insured_number, []);
   byInsured.get(c.insured_number).push(c);
 }
-console.log(`clients 解決: ${byInsured.size} / ${insuredNumbers.length} 番号`);
+console.log(`clients 解決: ${byInsured.size} / ${insuredNumbers.length} 番号  ((保険者,被保番) の対 ${byPair.size})`);
+
+/** 氏名の正規化 — 表記ゆれが多いので緩めに合わせる */
+const normName = (s) => (s ?? "").normalize("NFKC").replace(/[\s　()（）]/g, "")
+  .replace(/[髙﨑齋齊濵邉邊冨廣德惠愼淸眞瀨]/g, (c) =>
+    ({ "髙": "高", "﨑": "崎", "齋": "斎", "齊": "斉", "濵": "浜", "邉": "辺", "邊": "辺",
+       "冨": "富", "廣": "広", "德": "徳", "惠": "恵", "愼": "慎", "淸": "清", "眞": "真", "瀨": "瀬" })[c] ?? c);
+
+/** プレースホルダの被保番 (1212121212 / 9999999999 等) は人を特定できない */
+const isPlaceholderInsured = (n) => /^(\d)\1{9}$/.test(n ?? "") || /^(?:12){5}$/.test(n ?? "");
 
 // ─── 3) 既存の認定行 ─────────────────────────────────────────────────────────
 const clientIds = clients.map((c) => c.id);
@@ -181,6 +200,8 @@ console.log(`既存の認定行: ${existing.length} 件\n`);
 
 // ─── 4) 計画 ─────────────────────────────────────────────────────────────────
 const inserts = [], conflicts = [], dupClient = new Set(), noClient = new Set();
+const placeholder = new Set();      // プレースホルダ被保番 (人を特定できない)
+const insurerMismatch = new Set();  // 被保番は当たるが保険者が違う = 別人
 /**
  * ⚠ **同じ認定を 1 回の実行で何行も INSERT しない**ための索引。
  *
@@ -202,8 +223,19 @@ const inserts = [], conflicts = [], dupClient = new Set(), noClient = new Set();
 const plannedByKey = new Map();
 const filledCount = (row) => Object.values(row).filter((v) => v != null && v !== "").length;
 for (const r of csvRows) {
-  const cs = byInsured.get(r.insured);
-  if (!cs || cs.length === 0) { noClient.add(r.insured); continue; }
+  // ① (保険者, 被保番) で引く ② 対で引けないときだけ 被保番 + **氏名一致** に落とす
+  if (isPlaceholderInsured(r.insured)) { placeholder.add(`${r.insured} ${r.name}`); continue; }
+  let cs = byPair.get(`${r.insurer}|${r.insured}`) ?? [];
+  if (cs.length === 0) {
+    // 保険者が違っても **氏名が一致すれば同一人物**。
+    //   転居 (千葉市の区またぎ 121012↔121053 等) で保険者番号が変わるため、
+    //   保険者違いを一律に弾くと本人の履歴が落ちる。逆に氏名まで違えば別人。
+    //   client 側の保険者が未設定のケースもここで拾う。
+    const cand = byInsured.get(r.insured) ?? [];
+    cs = cand.filter((c) => normName(c.name) === normName(r.name));
+    if (cand.length && cs.length === 0) { insurerMismatch.add(`${r.insurer}|${r.insured} ${r.name}`); continue; }
+  }
+  if (cs.length === 0) { noClient.add(r.insured); continue; }
   if (cs.length > 1) { dupClient.add(`${r.insured} ${r.name}`); continue; }
   const c = cs[0];
   const rows = existByClient.get(c.id) ?? [];
@@ -270,6 +302,10 @@ for (const c of conflicts.slice(0, 25))
 if (conflicts.length > 25) console.log(`  … 他 ${conflicts.length - 25} 件`);
 console.log(`\n被保険者番号が複数 clients に紐づく (skip): ${dupClient.size} 件`);
 console.log(`clients に居ない被保険者番号 (skip): ${noClient.size} 件`);
+console.log(`保険者が違う = 別人なので skip: ${insurerMismatch.size} 件`);
+for (const s of [...insurerMismatch].slice(0, 12)) console.log(`   ${s}`);
+console.log(`プレースホルダ被保番で人を特定できず skip: ${placeholder.size} 件`);
+for (const s of [...placeholder].slice(0, 12)) console.log(`   ${s}`);
 
 // 差分の内訳 (null 埋めなのか、値の食い違いなのか)
 const kinds = {};
