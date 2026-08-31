@@ -72,7 +72,7 @@ function collectKihonFiles(dir, out = []) {
 async function fetchAll(table, cols, filt) {
   const out = [];
   for (let f = 0; ; f += 1000) {
-    let q = sb.from(table).select(cols).order("id").range(f, f + 999);
+    let q = sb.from(table).select(cols).order("id").order("id").range(f, f + 999);
     if (filt) q = filt(q);
     const { data, error } = await q;
     if (error) throw new Error(`${table}: ${error.message}`);

@@ -121,7 +121,7 @@ async function fetchAll(table, buildQuery) {
   const all = [];
   let from = 0;
   while (true) {
-    const { data, error } = await buildQuery(sb.from(table)).order("id").range(from, from + PAGE - 1);
+    const { data, error } = await buildQuery(sb.from(table)).order("id").order("id").range(from, from + PAGE - 1);
     if (error) {
       console.error(`❌ ${table} fetch failed:`, error.message);
       process.exit(1);

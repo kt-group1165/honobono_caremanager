@@ -72,7 +72,7 @@ const toIso = (v) => {
 async function fetchAll(table, select, tweak) {
   const out = [];
   for (let from = 0; ; from += 1000) {
-    let q = sb.from(table).select(select).order("id").range(from, from + 999);
+    let q = sb.from(table).select(select).order("id").order("id").range(from, from + 999);
     if (tweak) q = tweak(q);
     const { data, error } = await q;
     if (error) { console.error(`✗ ${table}: ${error.message}`); process.exit(1); }

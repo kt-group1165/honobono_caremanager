@@ -649,6 +649,8 @@ function setSpan(row, startMin, endMin) {
 // 同日合算の間隔しきい値 (分)。MERGE_GAP_MINUTES=1 で「連続 (間隔 0) のみ合算」になる。
 // 2026-06 の実データでの隣接ペアの間隔: 0分 8件 / 60分 2件 / 90分 5件 / 110分 1件。
 const MERGE_GAP_MINUTES = Number(process.env.MERGE_GAP_MINUTES ?? 120);
+// 別職員どうしの合算しきい値 (分・以下)。同一職員より狭い (下の buildDailySessions 参照)。
+const MERGE_GAP_DIFF_STAFF_MINUTES = Number(process.env.MERGE_GAP_DIFF_STAFF_MINUTES ?? 60);
 function buildDailySessions(rows) {
   // rows: 同一 clientNum×date×kind (021001/021002) の候補行 (_twoPerson=false のみ渡すこと)
   const withTimes = rows
@@ -658,11 +660,21 @@ function buildDailySessions(rows) {
   const sessions = [];
   let cur = null;
   for (const it of withTimes) {
-    if (cur && it.s - cur.lastEnd < MERGE_GAP_MINUTES) {
+    // ⚠ 間隔だけでは説明できない。2026-06 全社の合算候補 11 組をほのぼのと突き合わせた結果:
+    //     茂原 鵜澤  gap  60  別職員   → 合算する   (家事日3.0 + 家事夜増2.0 で確認)
+    //     東郷 関    gap 110  同一職員 → 合算する   (KJ 111111×95 と一致)
+    //     おゆみ野 奥山 gap 90 別職員 → **合算しない** ×4 日 (KJ は 111115 と 111223 を別行)
+    //     残り 4 組は gap 0 (別職員の引き継ぎ) → 合算する
+    //   同一職員なら 2 時間ルールいっぱい、別職員は 60 分までとすると 11 組すべてに合う。
+    //   ⚠ 判別できる実例は東郷の 1 組だけなので、**経験則**として扱うこと。
+    const sameStaff = cur && cur.staffName != null && cur.staffName === (it.r.staffName ?? null);
+    const limit = sameStaff ? MERGE_GAP_MINUTES : MERGE_GAP_DIFF_STAFF_MINUTES;
+    if (cur && it.s - cur.lastEnd <= (sameStaff ? limit - 1 : limit)) {
       cur.members.push(it.r);
       cur.lastEnd = Math.max(cur.lastEnd, it.e);
+      cur.staffName = it.r.staffName ?? null;
     } else {
-      cur = { members: [it.r], lastEnd: it.e };
+      cur = { members: [it.r], lastEnd: it.e, staffName: it.r.staffName ?? null };
       sessions.push(cur);
     }
   }

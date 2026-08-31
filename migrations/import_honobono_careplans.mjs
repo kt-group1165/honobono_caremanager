@@ -66,7 +66,7 @@ async function fetchAll(table, select, filters = {}) {
   const all = [];
   let from = 0;
   while (true) {
-    let q = sb.from(table).select(select).order("id").range(from, from + 999);
+    let q = sb.from(table).select(select).order("id").order("id").range(from, from + 999);
     for (const [k, v] of Object.entries(filters)) q = q.eq(k, v);
     const { data, error } = await q;
     if (error) throw new Error(`${table}: ${error.message}`);

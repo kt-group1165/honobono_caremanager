@@ -49,7 +49,7 @@ const env=loadEnv();
 const sb=createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false}});
 const sjis=new TextDecoder("shift_jis");
 const normStaff=(s)=>(s||"").normalize("NFKC").replace(/[\s　]/g,"").replace(/様$/,"");
-async function fetchAll(t,cols,filt){const o=[];for(let f=0;;f+=1000){let q=sb.from(t).select(cols).order("id").range(f,f+999);if(filt)q=filt(q);const {data,error}=await q;if(error)throw new Error(`${t}:${error.message}`);o.push(...data);if(data.length<1000)break;}return o;}
+async function fetchAll(t,cols,filt){const o=[];for(let f=0;;f+=1000){let q=sb.from(t).select(cols).order("id").order("id").range(f,f+999);if(filt)q=filt(q);const {data,error}=await q;if(error)throw new Error(`${t}:${error.message}`);o.push(...data);if(data.length<1000)break;}return o;}
 
 async function main(){
   console.log(`=== STEP2-総合 実績取込 ${EXECUTE?"【EXECUTE】":"【DRY RUN】"} ===\n`);

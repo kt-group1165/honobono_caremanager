@@ -128,7 +128,7 @@ const C = {
 async function fetchAll(table, select, tweak) {
   let out = [], from = 0;
   for (;;) {
-    let q = sb.from(table).select(select).order("id").range(from, from + 999);
+    let q = sb.from(table).select(select).order("id").order("id").range(from, from + 999);
     if (tweak) q = tweak(q);
     const { data, error } = await q;
     if (error) { console.error(`✗ ${table}: ${error.message}`); process.exit(1); }
