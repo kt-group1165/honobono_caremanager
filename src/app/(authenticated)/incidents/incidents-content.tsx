@@ -216,7 +216,8 @@ export function IncidentsContent({ clients }: { clients: ClientLite[] }) {
       return;
     }
     setRows((data ?? []) as Row[]);
-  }, [supabase, officeId, year, conf.table, conf.dateKey]);
+    // conf は CONF[tab] の参照そのもの (モジュール定数) なので毎回同じ。conf 単位で依存させる
+  }, [supabase, officeId, year, conf]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- タブ/年/事業所の切替で読み直す
