@@ -24,7 +24,7 @@
  *   env: AREA=大網  … 特定拠点だけに絞る (既定 = 利用者データ/ 配下すべて)
  */
 
-import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, writeFileSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
@@ -90,10 +90,21 @@ const normLevel = (s) => {
 const COPAY_BY_RATE = { "90": "1", "80": "2", "70": "3" };
 
 // ─── 1) CSV を読む ───────────────────────────────────────────────────────────
-const areas = readdirSync(USER_ROOT).filter(
-  (a) => (!ONLY_AREA || a === ONLY_AREA) && existsSync(join(USER_ROOT, a, "介護保険1.CSV")),
-);
+// ⚠ **新しい CSV から読む。**同じ認定を複数の CSV が違う値で持っていることがある。
+//   INSERT は (client, 認定開始日) が既にあれば飛ばす「先勝ち」なので、読む順で値が決まる。
+//
+//   実例 (2026-09-01):
+//     利用者データ/山武/介護保険1.CSV      2026-07-14〜2029-12-31 要介護2  ← 認定結果が出る前
+//     利用者データ/全社_R8-08/介護保険1.CSV 2026-07-14〜2027-07-31 要介護3  ← 認定日 2026-08-20
+//   古いほうを先に読むと **要介護度が 1 区分低いまま**入り、そのまま請求すると過少になる。
+//   ファイルの更新日時が新しいものを先に読む。
+const areas = readdirSync(USER_ROOT)
+  .filter((a) => (!ONLY_AREA || a === ONLY_AREA) && existsSync(join(USER_ROOT, a, "介護保険1.CSV")))
+  .map((a) => ({ a, mtime: statSync(join(USER_ROOT, a, "介護保険1.CSV")).mtimeMs }))
+  .sort((x, y) => y.mtime - x.mtime)
+  .map((x) => x.a);
 if (areas.length === 0) { console.error("介護保険1.CSV が見つかりません"); process.exit(1); }
+console.log(`CSV は新しい順に読む: ${areas.slice(0, 4).join(" → ")}${areas.length > 4 ? " → …" : ""}`);
 
 const csvRows = [];
 const badLevel = [];
