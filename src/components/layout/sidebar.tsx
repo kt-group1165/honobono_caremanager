@@ -21,6 +21,7 @@ import {
   MessagesSquare,
   AlertTriangle,
   ShieldAlert,
+  ShieldCheck,
   Bell,
   Loader2,
   Building2,
@@ -131,6 +132,9 @@ const NAV_HOME_CARE_SECTIONED: SectionSpec[] = [
       // 2026-09-01 追加: 運営基準で作成・保存が義務で実地指導では必ず提出を
       //   求められるのに、DB にもアプリにも置き場が無かった (2026-08-31 監査)
       { name: "事故報告・苦情受付", href: "/incidents", icon: ShieldAlert },
+      // 2026-09-01 追加: 虐待防止 / BCP の 1% 減算の立証に直結する記録。
+      //   分野ごとに画面を分けると結局どれも埋まらないので 1 画面に統合した。
+      { name: "体制整備の記録", href: "/compliance", icon: ShieldCheck },
     ],
   },
   {
