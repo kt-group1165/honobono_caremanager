@@ -149,6 +149,34 @@ async function main() {
     }
   }
 
+  // ⚠ 画面 (support-records) は **計画期間ごと**に記録を出す。
+  //   care_plan_id が null だと「記録がありません」になって見えない。
+  //   記録日が入る計画を紐付ける。無ければその利用者の最新の計画に寄せる。
+  const plansByUser = new Map();
+  {
+    const ids = ok.map((p) => p.clientId);
+    for (let i = 0; i < ids.length; i += 100) {
+      const { data, error } = await sb.from("kaigo_care_plans")
+        .select("id, user_id, start_date, end_date").in("user_id", ids.slice(i, i + 100));
+      if (error) { console.error(`✗ 計画書の取得に失敗: ${error.message}`); process.exit(1); }
+      for (const r of data ?? []) {
+        if (!plansByUser.has(r.user_id)) plansByUser.set(r.user_id, []);
+        plansByUser.get(r.user_id).push(r);
+      }
+    }
+  }
+  const planFor = (uid, day) => {
+    const list = plansByUser.get(uid) ?? [];
+    if (!list.length) return null;
+    const hit = list.find((p) =>
+      (!p.start_date || p.start_date <= day) && (!p.end_date || p.end_date >= day));
+    if (hit) return hit.id;
+    // 期間に入るものが無ければ一番新しい計画に寄せる (見えなくなるよりよい)
+    return list.slice().sort((a, b) =>
+      String(b.start_date ?? "").localeCompare(String(a.start_date ?? "")))[0].id;
+  };
+  let noPlan = 0;
+
   const rows = [];
   let dup = 0;
   const unknownCats = new Set();
@@ -164,9 +192,12 @@ ${r.content}` : r.content;
       const key = `${p.clientId}|${r.record_date}|${content.slice(0, 80)}`;
       if (existing.has(key)) { dup++; continue; }
       existing.add(key);
+      const planId = planFor(p.clientId, r.record_date);
+      if (!planId) noPlan++;
       rows.push({
         tenant_id: TENANT, user_id: p.clientId,
         record_date: r.record_date,
+        care_plan_id: planId,
         category: cat ?? "その他",
         // 項目 (「モニタリング・8月分利用票交付」等) は content の頭に残す。
         // 専用の列が無いので落とさないためにこうする。
@@ -175,6 +206,10 @@ ${r.content}` : r.content;
     }
   }
   console.log(`\n  入れる ${rows.length} 件 / 既にある ${dup} 件`);
+  if (noPlan) {
+    console.log(`  ⚠ 計画書が無い ${noPlan} 件 — 画面は計画期間で絞るので見えない。`);
+    console.log(`     先に import_care_plans_from_honobono_csv.mjs で計画書を入れること。`);
+  }
   if (unknownCats.size) {
     console.log(`  ⚠ 許可値に無い種別を「その他」に寄せた: ${[...unknownCats].join(" / ")}`);
   }
