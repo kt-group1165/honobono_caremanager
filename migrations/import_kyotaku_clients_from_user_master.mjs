@@ -328,6 +328,24 @@ async function main() {
   }
   const idIndex = new Map(existing.map((c) => [c.id, c]));
 
+  // ── CSV 内で同じ利用者番号を何人が使っているか ──
+  //   複数なら user_number として使えない (次の取込で必ず取り違える)。
+  const numPersons = new Map();
+  for (const [pk, b] of baseByNum) {
+    if (!numPersons.has(b.num)) numPersons.set(b.num, new Set());
+    numPersons.get(b.num).add(pk);
+  }
+  const sharedNums = [...numPersons].filter(([, v]) => v.size > 1);
+  if (sharedNums.length) {
+    console.log(`
+  ⚠ CSV 内で同じ利用者番号を複数人が使っている ${sharedNums.length} 番号`);
+    console.log("     (この番号は user_number に使わず HN-<番号>-<連番> を付ける)");
+    for (const [n, v] of sharedNums.sort((a, b2) => b2[1].size - a[1].size).slice(0, 8)) {
+      console.log(`     ${String(v.size).padStart(3)} 人  利番${n}`);
+    }
+  }
+  let hnSeq = 0;
+
   const nameKey = (s) => (s ?? "").normalize("NFKC").replace(/[\s　]/g, "");
   const toCreate = [], reused = [], birthFix = [];
   const numMismatch = [];
