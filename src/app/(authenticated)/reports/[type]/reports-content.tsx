@@ -816,7 +816,9 @@ function buildDefaultContent(
       return {
         user_name: user.name,
         birth_date: user.birth_date ?? "",
-        cert_date: "",                                   // 認定年月日
+        // 認定年月日。空文字を決め打ちしていたので欄がずっと空だった (2026-08-31 是正)。
+        // 第1表 (care-plan-1) の certification_date と同じ出どころ。
+        cert_date: cert?.certification_date ? fmtReiwa(cert.certification_date) : "",
         cert_period: cert ? `${fmtReiwa(cert.start_date)}　〜　${fmtReiwa(cert.end_date)}` : "",
         care_level: cert?.care_level ?? "",
         plan_stage: "継続",                              // 初回・紹介・継続
