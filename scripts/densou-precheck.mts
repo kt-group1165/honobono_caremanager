@@ -136,8 +136,15 @@ async function main(): Promise<void> {
   section("被保険者番号が英数 10 桁でない", [...new Set(badInsured)]);
 
   // ── 3. 障害の市町村番号 ──────────────────────────────────────────────
-  const sho = await fetchAll<{ client_id: string; insurer_municipality: string | null; beneficiary_number: string | null }>(
-    "shougai_certifications", "id, client_id, insurer_municipality, beneficiary_number");
+  // ⚠ 使う列は必ず select に書くこと。書き忘れると値が undefined になり、
+  //   条件分岐が素通りして **チェックが黙って OK を返す**。実際 jogen_kanri_kubun を
+  //   select し忘れて「上限管理 OK」と出ていた (2026-08-31)。
+  const sho = await fetchAll<{
+    client_id: string; insurer_municipality: string | null; beneficiary_number: string | null;
+    certification_start_date: string | null; certification_end_date: string | null;
+    jogen_kanri_kubun: string | null; jogen_kanri_office_name: string | null;
+  }>("shougai_certifications",
+    "id, client_id, insurer_municipality, beneficiary_number, certification_start_date, certification_end_date, jogen_kanri_kubun, jogen_kanri_office_name");
   const badCity = new Set<string>();
   for (const s of sho) {
     const n = (s.insurer_municipality ?? "").trim();
@@ -152,16 +159,22 @@ async function main(): Promise<void> {
     "shogai_jogen_kanri_results", "id, client_id, target_month",
     (q) => (q as unknown as { eq: (a: string, b: string) => unknown }).eq("target_month", MONTH));
   const haveResult = new Set(results.map((r) => r.client_id));
+  // ⚠ 判定は **区分が「他事業所」** の行。最初は「区分が入っていれば」で見ていたが、
+  //   区分は 534 件が「なし」で、入っているのは 自事業所 17 / 他事業所 25 しかない。
+  //   過大請求になるのは **他事業所が管理者なのに結果が無い**ケースなので、そこを見る。
   const missingKanri: string[] = [];
+  const missingOwn: string[] = [];
   for (const s of sho) {
-    // 他事業所が上限管理者 = 管理事業所番号が入っていて、それが自社でない
-    const kubun = (s as unknown as { jogen_kanri_kubun?: string | null }).jogen_kanri_kubun;
-    if (!kubun) continue;
+    const kubun = (s.jogen_kanri_kubun ?? "").trim();
+    if (kubun !== "他事業所" && kubun !== "自事業所") continue;
     if (haveResult.has(s.client_id)) continue;
-    missingKanri.push(`${nameOf.get(s.client_id) ?? "?"} (上限管理区分 ${kubun})`);
+    const line = `${nameOf.get(s.client_id) ?? "?"} — 管理事業所 ${s.jogen_kanri_office_name ?? "(名称なし)"}`;
+    if (kubun === "他事業所") missingKanri.push(line); else missingOwn.push(line);
   }
   section("上限管理が他事業所なのに当月の管理結果が未入力", [...new Set(missingKanri)],
     "未入力だと自事業所で 1 割/上限額をそのまま請求する = 過大請求。管理結果票のとおり入力すること");
+  section("自事業所が上限管理者なのに当月の管理結果が未入力", [...new Set(missingOwn)],
+    "自社で作る書類なので、作り忘れていないか確認すること");
 
   // ── 5. 実績があるのに対象月に有効な認定が無い ─────────────────────────
   const covers = (c: { certification_start_date: string | null; certification_end_date: string | null }): boolean => {
@@ -170,7 +183,7 @@ async function main(): Promise<void> {
     return true;
   };
   const certOk = new Set(certs.filter(covers).map((c) => c.client_id));
-  const shoOk = new Set(sho.filter((s) => covers(s as never)).map((s) => s.client_id));
+  const shoOk = new Set(sho.filter((s) => covers(s)).map((s) => s.client_id));
 
   const worked = new Map<string, { kaigo: number; shogai: number; unknown: number }>();
   {
