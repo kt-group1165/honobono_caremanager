@@ -57,7 +57,13 @@ const REQUIRED: Record<string, { label: string; fields: [string, string][] }> = 
   },
   "care-plan-2": {
     label: "居宅サービス計画書 第2表",
-    fields: [["user_name", "利用者名"], ["creation_date", "作成年月日"]],
+    fields: [
+      ["user_name", "利用者名"],
+      ["creation_date", "作成年月日"],
+      // 本文は blocks[] (ニーズ → 長期目標 → 短期目標 → サービス)。
+      // 空配列も「空」と数えたいので isBlank が配列を扱えることが前提
+      ["blocks", "本文 (ニーズ・目標・サービス)"],
+    ],
   },
   "service-usage": {
     label: "サービス利用票・提供票 (第6表)",
@@ -71,6 +77,8 @@ const REQUIRED: Record<string, { label: string; fields: [string, string][] }> = 
       ["limit_period", "限度額適用期間"],
       ["support_office_name", "居宅介護支援事業所"],
       ["support_staff_name", "担当者"],
+      // 日別の予定・実績が載る行。空だと様式が白紙になる
+      ["services", "サービス行"],
       // ⚠ 作成年月日・届出年月日は **ほのぼのの利用票でも空欄で印字される**ので入れない
     ],
   },
@@ -131,8 +139,12 @@ const supabase = createClient(SB_URL, SB_KEY, {
 
 type Doc = { id: string; user_id: string; report_month: string | null; content: Record<string, unknown> | null };
 
-const isBlank = (v: unknown): boolean =>
-  v === undefined || v === null || String(v).trim() === "";
+/** 空判定。**空配列も空とみなす** (本文が 1 行も無い帳票を拾うため) */
+const isBlank = (v: unknown): boolean => {
+  if (v === undefined || v === null) return true;
+  if (Array.isArray(v)) return v.length === 0;
+  return String(v).trim() === "";
+};
 
 async function fetchDocs(reportType: string): Promise<Doc[]> {
   const out: Doc[] = [];
