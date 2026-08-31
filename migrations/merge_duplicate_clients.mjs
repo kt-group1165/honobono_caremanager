@@ -84,7 +84,9 @@ const REFS = [
   ["kaigo_bath_schedule", "client_id"],
   ["kaigo_bath_patterns", "client_id"],
   ["kaigo_service_records", "client_id"],
-  ["kaigo_report_documents", "client_id"],
+  // ⚠ この表の列は client_id ではなく **user_id**。誤ったまま置くと usableRefs が
+  //   静かに外し、統合しても帳票が移らない (2026-08-31 に発見)
+  ["kaigo_report_documents", "user_id"],
   ["kaigo_emergency_status", "client_id"],
   ["riyou_jippi_entries", "client_id"],
   ["riyou_seikyu_payments", "client_id"],
@@ -95,12 +97,21 @@ const REFS = [
 /** その表が存在し、その列を持つか (無ければ静かに外す) */
 async function usableRefs() {
   const ok = [];
+  const dropped = [];
   for (const [table, col] of REFS) {
     const { error } = await sb.from(table).select(col).limit(1);
     if (!error) ok.push([table, col]);
-    else if (!/does not exist|Could not find/i.test(error.message)) {
+    else if (/does not exist|Could not find/i.test(error.message)) {
+      // ⚠ 黙って外すと「参照ゼロ」に見えて統合の判断を誤る。必ず出す
+      dropped.push(`${table}.${col}`);
+    } else {
       console.error(`✗ ${table}.${col}: ${error.message}`); process.exit(1);
     }
+  }
+  if (dropped.length) {
+    console.log(`  ⚠ 表または列が無いので参照を見られない: ${dropped.length} 個`);
+    for (const d of dropped) console.log(`     ${d}`);
+    console.log("    (列名の誤りだと参照を見落として統合事故になる。中身を確認すること)");
   }
   return ok;
 }
@@ -133,12 +144,28 @@ async function main() {
     from += 1000;
   }
   const groups = new Map();
-  for (const r of all) {
-    if (!r.insured_number || !r.insurer_number) continue;
-    const k = `${r.insurer_number}|${r.insured_number}`;
+  const addPair = (insurer, insured, clientId) => {
+    if (!insured || !insurer) return;
+    const k = `${insurer}|${insured}`;
     if (!groups.has(k)) groups.set(k, new Set());
-    groups.get(k).add(r.client_id);
+    groups.get(k).add(clientId);
+  };
+  for (const r of all) addPair(r.insurer_number, r.insured_number, r.client_id);
+
+  // ⚠ 認定レコードだけを見ると、**認定を持たない重複が拾えない**。
+  //   古い取込で作られて参照ゼロのまま残っている client がこれに当たり、
+  //   2026-08-31 時点で 6 組が検出漏れになっていた (河連ユキ・堤威 等)。
+  //   clients 側の (保険者, 被保番) も突き合わせる。
+  let cAll = [], cFrom = 0;
+  for (;;) {
+    const { data, error } = await sb.from("clients")
+      .select("id, insurer_number, insured_number, deleted_at").range(cFrom, cFrom + 999);
+    if (error) { console.error(`✗ ${error.message}`); process.exit(1); }
+    cAll = cAll.concat(data);
+    if (data.length < 1000) break;
+    cFrom += 1000;
   }
+  for (const c of cAll) { if (!c.deleted_at) addPair(c.insurer_number, c.insured_number, c.id); }
   const dups = [...groups.entries()].filter(([, s]) => s.size > 1);
   const ids = [...new Set(dups.flatMap(([, s]) => [...s]))];
   const cl = new Map();
