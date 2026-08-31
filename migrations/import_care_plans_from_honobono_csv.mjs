@@ -55,6 +55,22 @@ function loadEnv() {
   }
   return e;
 }
+/**
+ * 第2表の 課題・長期目標・短期目標・期間 の列。
+ * care_plan_services_goals.sql を当てる前の DB では列が無いので、
+ * hasGoalCols が false のときは何も足さない (取込自体は通る)。
+ */
+let hasGoalCols = false;
+const goalCols = (s) => (!hasGoalCols ? {} : {
+  needs: s.issue || null,
+  long_term_goal: s.longGoal || null,
+  long_term_start: s.longStart, long_term_end: s.longEnd,
+  short_term_goal: s.shortGoal || null,
+  short_term_start: s.shortStart, short_term_end: s.shortEnd,
+  service_start: s.svcStart, service_end: s.svcEnd,
+  display_order: Number.isFinite(s.order) ? s.order : null,
+});
+
 const env = loadEnv();
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
@@ -93,6 +109,18 @@ const parseWareki = (s) => {
 async function main() {
   console.log(`=== ケアプラン取込 ${MONTH} ${EXECUTE ? "【EXECUTE】" : "【DRY RUN】"}` +
     `${WITH_SERVICES ? " + 第2表" : ""} ===\n`);
+
+  // 第2表の 課題・目標・期間 の列があるか (care_plan_services_goals.sql)
+  {
+    const probe = await sb.from("kaigo_care_plan_services").select("needs").limit(1);
+    hasGoalCols = !probe.error;
+    if (!hasGoalCols && !/needs/.test(probe.error.message)) {
+      console.error(`✗ 第2表の照会に失敗: ${probe.error.message}`); process.exit(1);
+    }
+    console.log(hasGoalCols
+      ? "  第2表: 課題・長期目標・短期目標・期間の列あり"
+      : "  ⚠ 第2表に課題・目標の列が無いのでサービス行だけ入れます (care_plan_services_goals.sql 未適用)");
+  }
 
   // ⚠ 第1表には **2 種類の書式**がある。列数で見分ける。
   //   13列版: 策定機関コード/事業所名/保険者/被保番/登録年月日/…/作成者
@@ -153,6 +181,11 @@ async function main() {
     services.get(key).push({
       order: Number(r[4] || 0), issue: r[5], longGoal: r[6], shortGoal: r[7],
       content: r[8], kind: r[10], provider: r[14], freq: r[16], period: r[18],
+      // 第2表は 課題 → 長期目標 → 短期目標 → サービス の入れ子。
+      // 期間まで持たないと帳票のブロックが組めない (22-27 が各期間の開始/終了)
+      longStart: iso(r[22]), longEnd: iso(r[23]),
+      shortStart: iso(r[24]), shortEnd: iso(r[25]),
+      svcStart: iso(r[26]), svcEnd: iso(r[27]),
     });
   }
 
@@ -285,6 +318,7 @@ async function main() {
         frequency: [s.freq, s.period].filter(Boolean).join(" ") || null,
         provider: s.provider || null,
         notes: s.issue ? `課題: ${s.issue}` : null,
+        ...goalCols(s),
       }));
       const { error: e2 } = await sb.from("kaigo_care_plan_services").insert(rows);
       if (e2) { console.error(`✗ ${p.name} のサービス: ${e2.message}`); process.exit(1); }
@@ -300,6 +334,7 @@ async function main() {
       frequency: [s.freq, s.period].filter(Boolean).join(" ") || null,
       provider: s.provider || null,
       notes: s.issue ? `課題: ${s.issue}` : null,
+      ...goalCols(s),
     }));
     const { error } = await sb.from("kaigo_care_plan_services").insert(rows);
     if (error) { console.error(`✗ ${b.key} のサービス: ${error.message}`); process.exit(1); }
