@@ -149,12 +149,8 @@ function loadMasterNumbers(): Map<string, string> {
     const bf = files.find((f) => f.startsWith("基本情報") && /\.csv$/i.test(f));
     const hf = files.find((f) => f.startsWith("介護保険") && /\.csv$/i.test(f));
     if (!bf || !hf) continue;
-    const b = decodeSjis(join(dir, a, bf)).split(/
-?
-/).filter((l) => l.trim()).map(splitCsvLine);
-    const h = decodeSjis(join(dir, a, hf)).split(/
-?
-/).filter((l) => l.trim()).map(splitCsvLine);
+    const b = decodeSjis(join(dir, a, bf)).split(/\r?\n/).filter((l) => l.trim()).map(splitCsvLine);
+    const h = decodeSjis(join(dir, a, hf)).split(/\r?\n/).filter((l) => l.trim()).map(splitCsvLine);
     const bi = { n: b[0].indexOf("利用者名"), no: b[0].indexOf("利用者番号"), bd: b[0].indexOf("生年月日") };
     const hi = { no: h[0].indexOf("利用者番号"), hs: h[0].indexOf("被保険者番号"), is: h[0].indexOf("保険者番号") };
     if (bi.n < 0 || bi.no < 0 || bi.bd < 0 || hi.no < 0 || hi.hs < 0) continue;
@@ -527,6 +523,20 @@ async function main(): Promise<void> {
           recCount.set(r.user_id, (recCount.get(r.user_id) ?? 0) + 1);
         }
         if (!data || data.length < PAGE) break;
+      }
+    }
+  }
+
+  // 番号が無い人を CSV で引き直すのに生年月日が要る (氏名だけだと別人を拾う)
+  const birthById = new Map<string, string>();
+  {
+    const ids = [...clientIds];
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data, error } = await supabase.from("clients")
+        .select("id, birth_date").in("id", ids.slice(i, i + 200)).order("id");
+      if (error) throw new Error(error.message);
+      for (const r of (data ?? []) as { id: string; birth_date: string | null }[]) {
+        if (r.birth_date) birthById.set(r.id, r.birth_date);
       }
     }
   }
