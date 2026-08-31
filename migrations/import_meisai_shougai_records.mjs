@@ -635,6 +635,38 @@ function convertSession(members, mode, maps, mods = []) {
     }
   }
   const zoneMinutesOrdered = zoneOrder.map((zone) => ({ zone, minutes: zoneMinutes.get(zone) }));
+  // ★ まず **合成コード**を試す。ほのぼのはヘルパーが交代しても 1 提供として 1 コードで出す。
+  //     おゆみ野 小田響眞 6/26  07:00-08:15 (新木) + 08:15-09:00 (湯浅) = 114分
+  //       → 111387 身体早１．０・日１．０ 1 件
+  //     当方は base+addon に分けて 111199 身体早1.0 + 111831 身体日増1.0 を出していた。
+  //   配分規則は convertRow のまたぎと同じ (先行は四捨五入・末尾に残りを寄せる)。
+  //   合成が無いときだけ従来どおり base+addon に落とす (家事は 1.5h 程度までしか合成が無い)。
+  if (zoneMinutesOrdered.length >= 2) {
+    const totalMin = members.reduce((s, r) => s + (santeiToMinutes(r.santei) ?? 0), 0);
+    const totalHours = quantizeHours(totalMin, step, mode);
+    const stepsTotal = Math.round((totalHours * 60) / step);
+    const alloc = [];
+    let used = 0;
+    for (let i = 0; i < zoneMinutesOrdered.length; i++) {
+      const n = i < zoneMinutesOrdered.length - 1
+        ? Math.min(Math.round(zoneMinutesOrdered[i].minutes / step), Math.max(0, stepsTotal - used))
+        : Math.max(0, stepsTotal - used);
+      used += n;
+      alloc.push({ zone: zoneMinutesOrdered[i].zone, hours: n * (step / 60) });
+    }
+    const nz = alloc.filter((a) => a.hours > 1e-9);
+    if (nz.length >= 2) {
+      const key = `${kind}|` + nz.map((a) => `${a.zone}${a.hours.toFixed(2)}`).join("・") + `|${mk}`;
+      const hit = maps.composite.get(key);
+      if (hit) {
+        return {
+          base: { base: hit.code, name: hit.name, units: hit.units, kind: "composite",
+            zone: nz.map((a) => a.zone).join("・"), hours: totalHours, key, twoPerson: false },
+          addons: [],
+        };
+      }
+    }
+  }
   return resolveBaseAddon(kind, zoneMinutesOrdered, step, mode, maps, false, mk);
 }
 
