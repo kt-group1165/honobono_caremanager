@@ -20,6 +20,7 @@ import {
   NotebookPen,
   MessagesSquare,
   AlertTriangle,
+  ShieldAlert,
   Bell,
   Loader2,
   Building2,
@@ -127,6 +128,9 @@ const NAV_HOME_CARE_SECTIONED: SectionSpec[] = [
       { name: "カンファレンス記録", href: "/care-conferences", icon: MessagesSquare },
       { name: "手順書", href: "/visit-procedures", icon: BookOpen },
       { name: "重要事項・契約書", href: "/user-contracts", icon: FileText },
+      // 2026-09-01 追加: 運営基準で作成・保存が義務で実地指導では必ず提出を
+      //   求められるのに、DB にもアプリにも置き場が無かった (2026-08-31 監査)
+      { name: "事故報告・苦情受付", href: "/incidents", icon: ShieldAlert },
     ],
   },
   {
