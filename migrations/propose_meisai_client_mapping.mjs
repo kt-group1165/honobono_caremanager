@@ -191,27 +191,41 @@ async function main() {
     return entry;
   };
 
-  const proposals = [], ambiguous = [], noMatch = [];
+  const proposals = [], ambiguous = [], noMatch = [], needsReview = [];
   for (const m of meisai) {
     const map = loadMap(m.area);
     if (map.json[m.num]) continue;                     // 既に対応が入っている → 触らない
 
     const sameNum = byNumber.get(m.num) ?? [];
-    // 番号で当たる人が MEISAI の氏名と同一人なら事故は起きていない
+    // ① 番号が **別人** に当たる → 放置すると稼働が別人の集計に入る
     const numberHitsOther = sameNum.length > 0 && !sameNum.some((c) => samePersonByNumber(c.name, m.name));
-    // 番号で当たる人が居ないなら、そもそも別人事故は起きない。番号違いの人だけを対象にする
-    if (!numberHitsOther) continue;
+    // ② 番号が **誰にも当たらない** → 取込がその人を引けず、実績が丸ごと入らない
+    //    (MEISAI の番号が DB の user_number と違うだけのことが多い。
+    //     氏名には「(同行)」「(身)」「(有)」のような区分の注記が付く)
+    const numberHitsNobody = sameNum.length === 0;
+    if (!numberHitsOther && !numberHitsNobody) continue;   // 番号で正しく引ける → 対応表は要らない
 
     const inArea = areaClients(m.area);
     const cands = clients.filter((c) => sameName(c.name, m.name) && inArea.has(c.id));
     if (cands.length === 1) {
+      // ⚠ **当方側の氏名に括弧注記が付いているものは自動で足さない。**
+      //   ほのぼのが同じ人を用途別に別レコードで持っていることがあり
+      //   (「鈴木 雅代（実）」と「鈴木 雅代（移）」)、寄せてよいか機械では決められない。
+      if (/[（(].*[)）]/.test(cands[0].name)) {
+        needsReview.push(`${m.area} 番号${m.num}「${m.name}」(${m.rows}行) → 当方「${cands[0].name}」(${cands[0].user_number})`);
+        continue;
+      }
       proposals.push({ area: m.area, num: m.num, name: m.name, rows: m.rows, cid: cands[0].id,
         cname: cands[0].name, cnum: cands[0].user_number,
+        kind: numberHitsOther ? "別人に当たっていた" : "誰にも当たらなかった",
         wrong: sameNum.map((c) => c.name).join("/") });
     } else if (cands.length > 1) {
       ambiguous.push(`${m.area} 番号${m.num}「${m.name}」→ 同名が ${cands.length} 人: ${cands.map((c) => `${c.name}(${c.user_number})`).join(", ")}`);
     } else {
-      noMatch.push(`${m.area} 番号${m.num}「${m.name}」(${m.rows}行) → 番号は「${sameNum.map((c) => c.name).join("/")}」に当たるが、同名でその拠点の利用者が見つからない`);
+      noMatch.push(`${m.area} 番号${m.num}「${m.name}」(${m.rows}行) → `
+        + (sameNum.length > 0
+          ? `番号は「${sameNum.map((c) => c.name).join("/")}」に当たるが、同名でその拠点の利用者が見つからない`
+          : "番号も氏名も当方に無い (未登録の疑い)"));
     }
   }
 
@@ -219,8 +233,12 @@ async function main() {
   console.log(`提案 ${proposals.length} 件 / 同名が複数で決められない ${ambiguous.length} / 該当者が見つからない ${noMatch.length}`);
   proposals.forEach((p) => console.log(
     `   ${p.area.padEnd(8)} 番号${String(p.num).padEnd(11)}「${p.name}」${String(p.rows).padStart(3)}行` +
-    `  → ${p.cname} (user_number ${p.cnum})   ※番号は別人「${p.wrong}」に当たっていた`));
+    `  → ${p.cname} (user_number ${p.cnum})   ※番号は${p.kind === "別人に当たっていた" ? `別人「${p.wrong}」に当たっていた` : "当方の誰にも当たらなかった"}`));
   if (ambiguous.length) { console.log("  決められない:"); ambiguous.forEach((a) => console.log("     " + a)); }
+  if (needsReview.length) {
+    console.log(`  ⚠ 当方側の氏名に括弧注記があるので自動では足さない ${needsReview.length} 件 — 同じ人か人が確かめること:`);
+    needsReview.forEach((a) => console.log("     " + a));
+  }
   if (noMatch.length) { console.log("  該当者なし:"); noMatch.slice(0, 10).forEach((a) => console.log("     " + a)); }
 
   if (!EXECUTE) { console.log("\nDRY RUN。--execute で JSON に追記する。"); return; }
