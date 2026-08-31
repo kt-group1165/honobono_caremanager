@@ -132,7 +132,7 @@ const isTestNumber = (u) => /^(\d)\1{6,}$/.test(u);
 async function fetchAll(table, select, tweak) {
   const out = [];
   for (let from = 0; ; from += 1000) {
-    let q = sb.from(table).select(select).order("id").order("id").range(from, from + 999);
+    let q = sb.from(table).select(select).order("id").range(from, from + 999);
     if (tweak) q = tweak(q);
     const { data, error } = await q;
     if (error) { console.error(`✗ ${table}: ${error.message}`); process.exit(1); }
@@ -179,6 +179,15 @@ async function main() {
   }
 
   // -- CSV -----------------------------------------------------------------
+  // 先に介護保険 CSV を読み、被保険者番号を持つ利用者番号を集める
+  const hokenPre = readCsv(CSV_HOKEN);
+  const hpHas = hokenPre.col("被保険者番号");
+  const hpNum = hokenPre.col("利用者番号");
+  const hokenHasCert = new Set(
+    hokenPre.rows.filter((r) => t(r[hpHas])).map((r) => t(r[hpNum])).filter(Boolean));
+  /** 被保番が無くて外した人 (黙って落とさず必ず出す) */
+  const noCert = [];
+
   const base = readCsv(CSV_BASE);
   const bc = base.col;
   const baseByNum = new Map();
@@ -187,6 +196,11 @@ async function main() {
     const u = t(c[bc("利用者番号")]); if (!u) continue;
     const name = t(c[bc("利用者名")]).replace(/\s+/g, " ");
     if (isDummy(name) || isTestNumber(u)) { dummy++; continue; }
+    // ⚠ **介護保険の被保険者番号が無い人は居宅の利用者ではない。**
+    //   スタッフ用ダミー (ﾓﾆ ﾀﾘﾝｸﾞ / 有給 休暇 / 研修 五井) がこれで落ちる。
+    //   名前の形で判定すると「＊小林 和子」「＊佐藤 タキコ」のような
+    //   **記号付きの本物**まで落ちる (2 名とも被保番あり)。
+    if (!hokenHasCert.has(u)) { noCert.push(`${u} ${name}`); continue; }
     if (!baseByNum.has(u)) baseByNum.set(u, {
       name,
       furigana: t(c[bc("フリガナ")]).replace(/\s+/g, " "),
@@ -234,6 +248,11 @@ async function main() {
     });
   }
   console.log(`  介護保険 ${hoken.rows.length} 行 → 認定を持つ利用者 ${certByNum.size} 名`);
+  if (noCert.length) {
+    console.log(`
+  被保険者番号が無いので除外 ${noCert.length} 名 (居宅の利用者ではない):`);
+    for (const x of noCert) console.log(`     ${x}`);
+  }
 
   // -- 既存 clients ---------------------------------------------------------
   // ⚠ **利用者番号だけで引いてはいけない**。ほのぼのは番号を使い回すので、
