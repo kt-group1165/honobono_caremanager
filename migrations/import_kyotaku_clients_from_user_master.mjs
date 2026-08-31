@@ -142,6 +142,20 @@ async function fetchAll(table, select, tweak) {
   return out;
 }
 
+/**
+ * その利用者の「今の支援事業所」= **認定開始日が最新の認定**の支援事業所名。
+ * ⚠ certByNum は 利用者番号 → 認定レコードの **配列**。1 件だけ取ると
+ *   前のケアマネ (他社) を掴むことがある。
+ */
+function latestSupportOffice(certs) {
+  if (!Array.isArray(certs) || !certs.length) return null;
+  let best = null;
+  for (const c of certs) {
+    if (!best || String(c.certification_start_date ?? "") > String(best.certification_start_date ?? "")) best = c;
+  }
+  return best?.care_office_name ?? null;
+}
+
 async function main() {
   console.log(`=== 居宅 利用者マスタ取込 (${OFFICE_NAME}) ${EXECUTE ? "【本番】" : "【DRY RUN】"} ===\n`);
   for (const p of [CSV_BASE, CSV_HOKEN]) {
@@ -356,7 +370,7 @@ async function main() {
     const plan = new Map();
     let noOff = 0;
     for (const u of baseByNum.keys()) {
-      const nm2 = certByNum.get(u)?.care_office_name;
+      const nm2 = latestSupportOffice(certByNum.get(u));
       const o = nm2 ? officeByNorm.get(normOfficeName(nm2)) : null;
       if (o) plan.set(o.name, (plan.get(o.name) ?? 0) + 1);
       else noOff++;
@@ -430,7 +444,7 @@ async function main() {
   /** その利用者の割当先 office (決まらなければ null = 他社ケアマネ) */
   const officeOf = (u) => {
     if (!BY_SUPPORT_OFFICE) return office;
-    const nm = certByNum.get(u)?.care_office_name;
+    const nm = latestSupportOffice(certByNum.get(u));
     return nm ? (officeByNorm.get(normOfficeName(nm)) ?? null) : null;
   };
   let noOffice = 0;
