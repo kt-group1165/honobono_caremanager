@@ -72,8 +72,32 @@ const REFS = [
   ["riyou_seikyu_payments", "client_id"], ["kaigo_care_support_claims", "user_id"],
 ];
 
-/** 事業所・施設らしい名前 */
+/** 事業所・施設らしい名前 (第一段。これに当たらなくても下のマスタ照合で拾う) */
 const OFFICE_RE = /居宅|センター|事業所|協議会|苑$|苑指定|ホーム|ステーション|法人|ケアプラン|ケアサービス|支援|病院|クリニック|の郷|園$|会$/;
+
+/**
+ * 事業所名の正規化。法人格の前置と記号・空白を落とす。
+ * 「株式会社ｻｰﾋﾞｽﾜﾝ　ﾑﾂﾐ居宅介護支援事業所」と「ムツミ居宅介護支援事業所」を
+ * 同じものとして扱えるようにする。
+ */
+const normOffice = (s) => (s ?? "").normalize("NFKC")
+  .replace(/[\s　･・()（）＊*]/g, "")
+  .replace(/^(株式会社|有限会社|医療法人社団|医療法人|社会福祉法人|一般社団法人|合同会社|㈱|㈲)/, "");
+
+/**
+ * 事業所マスタ (自社 offices / 他社 care_offices / 提供事業所) の名称を集める。
+ * ⚠ 正規表現だけでは「入道雲」「フォレスト」「ココケア」のような
+ *   事業所らしくない名前を拾えない。**実在する事業所名と突き合わせる**のが確実。
+ */
+async function loadOfficeNames() {
+  const out = new Set();
+  for (const [t, col] of [["offices", "name"], ["care_offices", "name"], ["kaigo_service_providers", "provider_name"]]) {
+    const probe = await sb.from(t).select(col).limit(1);
+    if (probe.error) { console.log(`  (${t} は見られないので飛ばす)`); continue; }
+    for (const r of await fetchAll(() => sb.from(t).select(col))) if (r[col]) out.add(normOffice(r[col]));
+  }
+  return out;
+}
 
 async function fetchAll(build) {
   const out = [];
@@ -94,10 +118,26 @@ async function main() {
     .select("id, name, user_number, birth_date, insured_number, created_at, deleted_at")))
     .filter((c) => !c.deleted_at);
 
-  // ①②④ を満たすもの
+  const officeNames = await loadOfficeNames();
+  console.log(`事業所マスタの名称 ${officeNames.size} 種`);
+  /** 事業所マスタに載っているか (完全一致 / 4 文字以上の包含) */
+  const isKnownOffice = (name) => {
+    const n = normOffice(name);
+    if (!n) return false;
+    for (const o of officeNames) {
+      if (!o) continue;
+      if (o === n) return true;
+      if (n.length >= 4 && o.includes(n)) return true;
+      if (o.length >= 4 && n.includes(o)) return true;
+    }
+    return false;
+  };
+
+  // ①②④ を満たすもの (④ は 名前のパターン **または** 事業所マスタに載っている)
   const cand = clients.filter((c) =>
-    !c.birth_date && !c.insured_number && OFFICE_RE.test(String(c.name ?? "")));
-  console.log(`clients ${clients.length} 名 / 生年月日も被保番も無く事業所らしい名前: ${cand.length} 名`);
+    !c.birth_date && !c.insured_number &&
+    (OFFICE_RE.test(String(c.name ?? "")) || isKnownOffice(c.name)));
+  console.log(`clients ${clients.length} 名 / 生年月日も被保番も無く事業所と判る名前: ${cand.length} 名`);
 
   // ③ 参照を全表で数える (1 件でもあれば残す)
   const candIds = new Set(cand.map((c) => c.id));
