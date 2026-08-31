@@ -983,6 +983,71 @@ async function main() {
     console.log(`障害支援区分マップ: ${kubunByName.size}名`);
   }
 
+  // 4b-0b) 氏名 → 契約 (支給決定) の決定サービスコード集合。
+  //   ★ 種別は **市町村の支給決定**が決める。MEISAI のサービス名で決めると
+  //     支給決定に無い種別で請求してしまう。
+  //       高品 安生美紀子   実績 021001 身体介護(自立)   契約 112000 (家事援助) のみ
+  //                         → ほのぼのは 116111 家事日０．５
+  //       五井 加藤みのり / 安藤由美子  実績 021007 通院等身体  契約 114000 (通院2) のみ
+  //                         → ほのぼのは 117xxx 通院２…
+  //   ⚠ client_id の解決はこの時点ではまだなので **氏名で引く** (kubunByName と同じ方式)。
+  const decisionsByName = new Map(); // 氏名key -> Set(decision_code)
+  {
+    const asg = await fetchAll("client_office_assignments", "client_id",
+      (q) => q.eq("office_id", OFFICE_ID).order("client_id"));
+    const ids = [...new Set(asg.map((a) => a.client_id))];
+    for (let i = 0; i < ids.length; i += 200) {
+      const chunk = ids.slice(i, i + 200);
+      const { data: cls } = await sb.from("clients").select("id,name").in("id", chunk);
+      const { data: cons } = await sb.from("shogai_contracts")
+        .select("client_id,decision_code,start_date,end_date").in("client_id", chunk);
+      const nameById = new Map((cls ?? []).map((c) => [c.id, c.name]));
+      for (const c of cons ?? []) {
+        // 対象月に有効な契約のみ
+        const ok = (!c.start_date || c.start_date <= `${TARGET_MONTH}-31`)
+          && (!c.end_date || c.end_date >= `${TARGET_MONTH}-01`);
+        if (!ok) continue;
+        const nm = normClientName(nameById.get(c.client_id) || "");
+        if (!nm || !c.decision_code) continue;
+        if (!decisionsByName.has(nm)) decisionsByName.set(nm, new Set());
+        decisionsByName.get(nm).add(String(c.decision_code));
+      }
+    }
+    console.log(`契約(支給決定)マップ: ${decisionsByName.size}名`);
+  }
+
+  // 実績の種別に対応する決定コードが契約に無く、居宅介護の決定コードが **ちょうど 1 つ**
+  // だけあるときは、その種別に寄せる。契約が 0 件 / 2 種類以上のときは触らない。
+  {
+    const DECISION_OF_KIND = { 身体: "111000", 家事: "112000", 通院1: "113000", 通院2: "114000" };
+    const KIND_OF_DECISION = Object.fromEntries(Object.entries(DECISION_OF_KIND).map(([k, v]) => [v, k]));
+    const CODE_OF_KIND = { 身体: "021001", 家事: "021002", 通院1: "021007", 通院2: "021006" };
+    const fixed = [];
+    for (const r of target) {
+      const kind = KIND_OF_021[r.code];
+      const want = DECISION_OF_KIND[kind];
+      if (!want) continue; // 重訪・同行援護は対象外
+      const have = decisionsByName.get(normClientName(r.clientName));
+      // TRACE_KIND=<氏名の一部> で その人の 契約 vs 実績種別 を 1 行ずつ出す
+      if (process.env.TRACE_KIND && (r.clientName || "").includes(process.env.TRACE_KIND)) {
+        console.log(`[kind] "${r.clientName}" key="${normClientName(r.clientName)}" code=${r.code} `
+          + `kind=${kind} want=${want} have=${have ? [...have].join(",") : "なし"}`);
+      }
+      if (!have || have.has(want)) continue;
+      const kyotaku = [...have].filter((d) => KIND_OF_DECISION[d]);
+      if (kyotaku.length !== 1) continue;
+      const to = CODE_OF_KIND[KIND_OF_DECISION[kyotaku[0]]];
+      if (!to || to === r.code) continue;
+      fixed.push(`${normClientName(r.clientName)} ${kind}→${KIND_OF_DECISION[kyotaku[0]]} (契約 ${kyotaku[0]})`);
+      r.code = to;
+    }
+    if (fixed.length) {
+      const uniq = [...new Set(fixed)];
+      console.log(`⚠ 契約に無い種別を支給決定に寄せました: ${fixed.length}行 / ${uniq.length}名`);
+      for (const f of uniq) console.log(`    ${f}`);
+    }
+  }
+
   // 4b) map をロードして変換
   const maps = await loadCodeMaps();
   console.log(`コード map: single=${maps.single.size} single2=${maps.single2.size} composite=${maps.composite.size} composite2=${maps.composite2.size} increment=${maps.increment.size} increment2=${maps.increment2.size} (居宅介護 身体/家事 + 同行援護 基本)`);
