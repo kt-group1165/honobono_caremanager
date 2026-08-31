@@ -18,8 +18,13 @@
  *     → 超過単位 × 単価 × 10割 を「超過自費 (selfPayAmount)」として分離する。
  *       ※ userAmount (法定の利用者負担) には含めない。利用請求側で
  *         請求額 = userAmount + selfPayAmount として合算する。
- *     ※ 処遇改善加算等 (%加算)・初回加算・緊急時訪問介護加算は区分支給限度基準の
- *        「対象外」なので超過判定の単位数には含めない (kanriTaishougaiUnits)。
+ *     ※ 区分支給限度基準の「対象外」は **処遇改善等の %加算・特別地域・小規模・
+ *        中山間** だけ。超過判定の単位数には含めない (kanriTaishougaiUnits)。
+ *        初回加算・緊急時訪問介護加算・生活機能向上連携加算は **管理対象** で、
+ *        超過判定に算入する (2026-07-17 ほのぼの KK 突合で確定。大網5名の初回加算
+ *        200単位を ほのぼのは限度額管理対象=項9 に計上していた)。
+ *        ⚠ 以前ここに「初回・緊急時は対象外」と書いてあり、その記述をコピーした
+ *          訪問入浴 (bath-seikyu) が実際に誤分類していた (2026-09-01 是正)。
  *   総単位数 = 基準内単位数 + 加算単位 (処遇改善等 = %加算)
  *   総額     = floor(総単位数 × round(単価×100) / 100)   ※ 整数演算 (1円ズレ防止)
  *   保険請求額 = floor(総額 × (10 − 負担割合×10) / 10)   ※ copay 0.1/0.2/0.3 → 1/2/3 の整数化
@@ -143,8 +148,9 @@ export interface UserSeikyuRow {
   /**
    * 基準超過単位数。優先順:
    *   1. ケアマネの手割振り (kaigo_gendo_allocation の自 office manual 行 = 利用票別表の確定値)
-   *   2. 機械判定 = 限度額管理対象の単位数
-   *      (= grossBaseUnits − 初回加算・緊急時訪問介護加算 (限度額管理対象外/告示)) − 基準値
+   *   2. 機械判定 = 限度額管理対象の単位数 (= grossBaseUnits − 管理対象外の実単位加算) − 基準値
+   *      ※ 現在「管理対象外の実単位加算」は該当なし (初回・緊急時・生活機能向上連携は
+   *        いずれも管理対象)。%加算は addonUnits 側で別管理。
    */
   overUnits: number;
   /** overUnits の由来: manual = ケアマネ割振り (利用票別表確定) / auto = 機械判定 */
@@ -161,8 +167,9 @@ export interface UserSeikyuRow {
   /** 処遇改善等 加算単位数 */
   addonUnits: number;
   /**
-   * 限度額管理対象外単位数 = 処遇改善等%加算 + 初回加算 + 緊急時訪問介護加算 (契約 C1)。
+   * 限度額管理対象外単位数 = 処遇改善等の %加算 (+ 管理対象外の実単位加算があれば)。
    * 様式第二 集計欄「⑥限度額管理対象外単位数」に対応する。
+   * ⚠ 初回加算・緊急時訪問介護加算は **含まない** (管理対象)。
    */
   kanriTaishougaiUnits: number;
   /** 加算の名称 (表示用) */
@@ -1466,11 +1473,17 @@ export async function aggregateMonthlyVisitSeikyu(
     // 同一建物減算の母数は所定単位数のみ (加算には掛けない) なので、月加算より前に確定する。
     const serviceBaseUnits = grossBaseUnits;
     // 実績単位の月次加算行 (初回 / 緊急時×回数 / 生活機能向上連携Ⅰ・Ⅱ)。
-    // grossBaseUnits (明細合計) には全て含めるが、区分支給限度基準の超過判定では
-    // 初回加算・緊急時訪問介護加算 = 限度額管理対象外 (告示) を除外する。
-    // 処遇改善等の%加算が対象外なのは従来どおり。
-    // 限度額管理対象外の加算単位数 (初回・緊急時)。超過判定から除外し、常に保険給付側に付く
-    let shokaiKinkyuUnits = 0;
+    // grossBaseUnits (明細合計) に含め、**超過判定にも算入する** (= 限度額管理対象)。
+    // 区分支給限度基準の対象外は 処遇改善等の %加算・特別地域・小規模・中山間 だけ。
+    // 限度額管理**対象外**の実単位加算の合計。
+    //   2026-07-17 の ほのぼの突合以降、初回・緊急時・生活機能向上連携はすべて
+    //   「管理対象」に確定したので、現状この値は常に 0 (pushMonthAddon の呼出は
+    //   4 箇所とも kanriTaishougai=false)。
+    //   将来ほんとうに対象外の実単位加算が出たときのためにフックだけ残している。
+    //   ⚠ 旧名 shokaiKinkyuUnits (= 初回・緊急時の単位) は**実態と逆の名前**で、
+    //     これを見た訪問入浴 (bath-seikyu) が初回加算を対象外に分類する誤りを
+    //     生んだ (2026-09-01 是正)。名前で嘘をつかないこと。
+    let taishougaiJissuuUnits = 0;
     // 分割時 (Phase 2): 初回・生活機能向上連携は、算定日 (santei_date) があれば
     // 呼出側がセグメントを特定して seg.monthAddonHere で指定する。算定日なしは
     // 従来どおり月末側セグメント (isLast) に計上する。緊急時は kinkyu_houmon 列があれば
@@ -1528,7 +1541,7 @@ export async function aggregateMonthlyVisitSeikyu(
         }
         const units = m.units * count;
         grossBaseUnits += units;
-        if (kanriTaishougai) shokaiKinkyuUnits += units;
+        if (kanriTaishougai) taishougaiJissuuUnits += units;
         const line: SeikyuDetailLine = {
           service_type: name,
           short_name: fixedLabel,
@@ -1593,7 +1606,7 @@ export async function aggregateMonthlyVisitSeikyu(
     // ── 提供表の加算エディタ由来の加算行 (月次4コード以外。2.6 で解決済) ──
     // 単位×回数 の固定単位加算 (認知症専門ケア・口腔連携強化 等)。
     // 限度額管理: 原則「管理対象」(告示の対象外 = 初回・緊急時・%加算系は
-    // この経路に来ない) なので shokaiKinkyuUnits には足さない = 超過判定に含める。
+    // この経路に来ない) なので taishougaiJissuuUnits には足さない = 超過判定に含める。
     // レセ分割時は算定日でセグメント判定 (呼出側で解決済。算定日なしは月末側 + warning)。
     // 公費按分は月次加算と同じ: 算定日あり = 公費期間の内外で全量/0、なし = 全量 + 注記。
     // addon_lines が空なら no-op = 従来と完全同値。
@@ -1701,14 +1714,14 @@ export async function aggregateMonthlyVisitSeikyu(
     // ※ 処遇改善加算等の%加算は区分支給限度基準の「対象外」なので、
     //    超過判定は %加算前の単位数で行う (加算単位は超過に数えない)。
     // ※ 初回加算・緊急時訪問介護加算も限度額管理対象外 (告示) のため超過判定から除外する
-    //    (shokaiKinkyuUnits)。除外分は常に保険給付側 (baseUnits) に残る。
+    //    (taishougaiJissuuUnits)。除外分は常に保険給付側 (baseUnits) に残る。
     // 分割時 (Phase 2): 計画単位数・ケアマネ手割振りは利用者×月の 1 値で
     // セグメントに配分できないため使わず、各セグメントの認定限度額で機械判定する
     // (該当データがある利用者は呼出側で warning)。分割なしは従来どおり。
     const planUnits =
       seg.segCount > 1 ? null : planUnitsByClient.get(userId) ?? null;
     const limitUnits = planUnits ?? limitAmount;
-    const managedUnits = grossBaseUnits - shokaiKinkyuUnits;
+    const managedUnits = grossBaseUnits - taishougaiJissuuUnits;
     // 超過単位の決定 (優先順):
     //   1. ケアマネの手割振り (利用票別表で確定した自 office の自費単位 = 真値)
     //   2. 機械判定 (管理対象単位 − 基準値)。別表未確定・テーブル未作成・officeId 無しはこちら
@@ -1726,7 +1739,7 @@ export async function aggregateMonthlyVisitSeikyu(
     // (超過自費分には掛けない = 自費請求は素の単位×単価×10割)
     const addonUnits = addonNum > 0 ? Math.round((baseUnits * addonNum) / addonDen) : 0;
     // 限度額管理対象外単位数 (契約 C1) = 処遇改善等%加算 + 初回・緊急時
-    const kanriTaishougaiUnits = addonUnits + shokaiKinkyuUnits;
+    const kanriTaishougaiUnits = addonUnits + taishougaiJissuuUnits;
     const totalUnits = baseUnits + addonUnits;
     // 金額は整数演算 (単価×100 を先に整数化) — float 直乗算の 1円ズレ防止
     const totalAmount = Math.floor((totalUnits * unitPrice100) / 100);
