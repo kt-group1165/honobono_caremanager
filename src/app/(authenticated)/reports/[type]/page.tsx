@@ -42,7 +42,8 @@ export default async function ReportTypePage({
     );
   }
 
-  const isCertLinked = ["care-plan-1", "care-plan-2", "care-plan-3", "yobo-care-plan"].includes(reportType);
+  // 主治医意見書は認定申請ごとに 1 通なので、計画書と同じく認定に紐づける
+  const isCertLinked = ["care-plan-1", "care-plan-2", "care-plan-3", "yobo-care-plan", "shujii-iken"].includes(reportType);
 
   let initialDocs: ReportDoc[] = [];
   let initialCertifications: Certification[] = [];

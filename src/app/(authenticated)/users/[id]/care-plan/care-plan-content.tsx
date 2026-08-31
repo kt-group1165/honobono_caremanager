@@ -893,6 +893,7 @@ export function CarePlanContent({ userId, initialPlans }: CarePlanContentProps) 
     { label: "第6表 (利用票・提供票)", href: `/reports/service-usage${userParam}`, icon: FileText, note: "受信実績の取込もここ" },
     { label: "第7表 (利用票別表)", href: `/reports/service-usage-detail${userParam}`, icon: FileText },
     { label: "モニタリング", href: `/monitoring${userParam}`, icon: Activity },
+    { label: "主治医意見書", href: `/reports/shujii-iken${userParam}`, icon: FileText, note: "医師の意見書を転記して保管" },
   ];
 
   return (

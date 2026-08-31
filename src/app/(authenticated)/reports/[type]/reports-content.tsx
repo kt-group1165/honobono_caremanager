@@ -103,6 +103,7 @@ type CarePlanService = {
 
 // REPORT_CONFIG は report-config.ts に移動 (server/client 両方から import するため)
 import { REPORT_CONFIG, type ReportConfig } from "./report-config";
+import { EditFormShujiiIken, PrintShujiiIken } from "./shujii-iken";
 export { REPORT_CONFIG };
 export type { ReportConfig };
 
@@ -4808,6 +4809,7 @@ export function PrintView({ reportType, content, config }: {
     case "support-progress":  return <PrintSupportProgress c={content} />;
     case "service-usage":        return <PrintServiceTicket c={content} title="サービス利用票・提供票" />;
     case "service-usage-detail": return <PrintServiceUsageDetail c={content} />;
+    case "shujii-iken":       return <PrintShujiiIken c={content} />;
     default: return <PrintGeneric c={content} title={config.titleJa} />;
   }
 }
@@ -4827,6 +4829,7 @@ function EditForm({ reportType, content, onChange, userId, reportMonth }: {
     case "support-progress":  return <EditFormSupportProgress content={content} onChange={onChange} />;
     case "service-usage":        return <EditFormServiceTicket content={content} onChange={onChange} reportMonth={reportMonth} />;
     case "service-usage-detail": return <EditFormUsageDetail content={content} onChange={onChange} userId={userId} reportMonth={reportMonth} />;
+    case "shujii-iken":       return <EditFormShujiiIken content={content} onChange={onChange} />;
     default: return <EditFormGeneric content={content} onChange={onChange} label="内容（JSON編集）" />;
   }
 }
@@ -5649,11 +5652,12 @@ const CARE_PLAN_TAB_TYPES = ["care-plan-1", "care-plan-2", "care-plan-3"];
  *   第5〜7表 は対象月を持つ別系統なので router.push で遷移する。
  *   混ぜて pushState すると __docsCache のキー前提が崩れる。
  */
-const KYOTAKU_FORM_TABS: { no: number; type: string | null; label: string }[] = [
+const KYOTAKU_FORM_TABS: { no: number; type?: string; href?: string; label: string }[] = [
   { no: 1, type: "care-plan-1", label: "居宅サービス計画書（第1表）" },
   { no: 2, type: "care-plan-2", label: "居宅サービス計画書（第2表）" },
   { no: 3, type: "care-plan-3", label: "週間サービス計画表（第3表）" },
-  { no: 4, type: null, label: "サービス担当者会議の要点（第4表）— 未実装" },
+  // 第4表は帳票フレームではなく専用画面 (/meeting-minutes) にある
+  { no: 4, href: "/meeting-minutes", label: "サービス担当者会議の要点（第4表）" },
   { no: 5, type: "support-progress", label: "居宅介護支援経過（第5表）" },
   { no: 6, type: "service-usage", label: "サービス利用票（第6表）" },
   { no: 7, type: "service-usage-detail", label: "サービス利用票別表（第7表）" },
@@ -5715,7 +5719,9 @@ export function ReportsContent({ userId, reportType: reportTypeProp, initialDocs
   }, [pathname]);
 
   const isCertLinked = useMemo(
-    () => ["care-plan-1", "care-plan-2", "care-plan-3", "yobo-care-plan"].includes(reportType),
+    // ⚠ page.tsx の isCertLinked と必ず同じにする。ずれると __docsCache のキーが
+    //   食い違って「帳票が無い」と判断され、空の帳票が自動生成される
+    () => ["care-plan-1", "care-plan-2", "care-plan-3", "yobo-care-plan", "shujii-iken"].includes(reportType),
     [reportType]
   );
 
@@ -6104,14 +6110,14 @@ export function ReportsContent({ userId, reportType: reportTypeProp, initialDocs
                       {KYOTAKU_FORM_TABS.map((t) => (
                         <button
                           key={t.no}
-                          onClick={() => t.type && t.type !== reportType && navigateTo(t.type)}
-                          disabled={!t.type}
+                          onClick={() => {
+                            if (t.href) { router.push(`${t.href}?user=${encodeURIComponent(userId)}`); return; }
+                            if (t.type && t.type !== reportType) navigateTo(t.type);
+                          }}
                           className={
-                            !t.type
-                              ? "rounded-md border border-dashed px-3 py-1 text-xs text-gray-300 cursor-not-allowed"
-                              : t.type === reportType
-                                ? "rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white"
-                                : "rounded-md border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+                            t.type === reportType
+                              ? "rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white"
+                              : "rounded-md border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
                           }
                           title={t.label}
                         >

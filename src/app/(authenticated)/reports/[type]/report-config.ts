@@ -14,4 +14,6 @@ export const REPORT_CONFIG: Record<string, ReportConfig> = {
   "support-progress":  { titleJa: "居宅介護支援経過（第5表）",          needsPeriod: true,  landscape: true },
   "service-usage":        { titleJa: "利用票・提供票",                    needsPeriod: true,  landscape: true },
   "service-usage-detail": { titleJa: "サービス利用票別表",                needsPeriod: true,  landscape: true },
+  // 主治医意見書は全国共通様式。医師が書いたものをケアマネが転記して保管する
+  "shujii-iken":       { titleJa: "主治医意見書",                        needsPeriod: false, landscape: false },
 };

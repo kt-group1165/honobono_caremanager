@@ -76,7 +76,8 @@ export function formatAmount(x100: number, unit: string): string {
 }
 
 /** 「32時間30分」「32.5」「32:30」など人の入力を x100 に正規化する */
-export function parseAmount(input: string, unit: string): number | null {
+// 単位 (時間/回) は表示のときだけ要る。パースは書式で判別できるので受け取らない
+export function parseAmount(input: string): number | null {
   const s = input.normalize("NFKC").trim();
   if (!s) return null;
   let m = /^(\d+)\s*時間\s*(\d+)?\s*分?$/.exec(s);
