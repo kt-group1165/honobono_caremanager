@@ -472,9 +472,24 @@ export function buildShogaiDensou(
   }
   const unitPrice5 = String(Math.round(opts.unitPrice * 1000)).padStart(5, "0");
 
+  // 受給者証番号が無い利用者は **伝送から除外**する。国保連は受給者証番号で受給者を
+  // 特定するので、空のまま出すと明細が返戻になる (最悪ファイルごと)。実績があるのに
+  // 証が無いのは「証の登録漏れ」か「そもそも障害の給付対象ではない (自費など)」の
+  // どちらかで、**どちらも請求してはいけない**。
+  // 2026-06 は 3 名 81 件が該当した (袖ケ浦 山口満里子 59 / 田口正秋 17 / 廣瀨英明 5)。
+  // 山口満里子は ほのぼのの受給者証一覧表にも載っておらず、ほのぼのも障害では
+  // 請求していない。`npm run check:densou` でも事前に洗える。
+  const billable = users.filter((u) => (u.row.beneficiary_number ?? "").trim());
+  for (const u of users) {
+    if ((u.row.beneficiary_number ?? "").trim()) continue;
+    warnings.push(
+      `${u.row.user_name}: 受給者証番号が未入力のため **伝送から除外**しました — 受給者証を登録してから作り直してください`,
+    );
+  }
+
   // 並び順は ほのぼの実伝送に合わせて **市町村番号 + 受給者証番号 の昇順**。
   // (氏名カナ順にしていたため利用者の並びが実伝送と揃わなかった。2026-08-07)
-  const sorted = [...users].sort((a, b) => {
+  const sorted = [...billable].sort((a, b) => {
     const k = (u: (typeof users)[number]) =>
       `${(u.row.municipality ?? "").trim()}|${(u.row.beneficiary_number ?? "").trim()}`;
     return k(a).localeCompare(k(b));
@@ -485,9 +500,6 @@ export function buildShogaiDensou(
       warnings.push(
         `${u.row.user_name}: 市町村番号が 6 桁ではありません ("${u.row.municipality ?? ""}") — 受給者証で確認してください`,
       );
-    }
-    if (!u.row.beneficiary_number) {
-      warnings.push(`${u.row.user_name}: 受給者証番号が未入力です`);
     }
     // 負担上限月額 未設定 (null)。0 円は有効値 (低所得区分等) なので警告しない
     if (u.row.self_payment_limit == null) {
