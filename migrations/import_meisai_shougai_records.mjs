@@ -698,7 +698,17 @@ function loadTjJuhoSpans(targetMonth, areaDir) {
       out.get(k).push({ s, e, n, seq, order, calc });
     }
   }
-  for (const arr of out.values()) arr.sort((a, b) => a.s - b.s);
+  // 算定時間 0 の系列は前日から 0:00 をまたいで続いている分。前日側に算入済みなので落とす。
+  //   (五井 1221916057: 6/12 に 16:00-0:00 を出し、6/13 は 0:00-16:00 で算定時間 0000)
+  // ⚠ 落とさないと翌日ぶんが丸ごと新しいはしごとして積まれ、深夜1.0〜4.0 や 早朝8.0 の段が
+  //   生えて過大請求になる (この人だけで 約 8,000 単位)。
+  for (const [k, arr] of out) {
+    const carried = new Set(arr.filter((x) => x.calc === "0000").map((x) => x.order));
+    const kept = carried.size ? arr.filter((x) => !carried.has(x.order)) : arr;
+    kept.sort((a, b) => a.s - b.s);
+    if (kept.length) out.set(k, kept);
+    else out.delete(k);
+  }
   return out;
 }
 

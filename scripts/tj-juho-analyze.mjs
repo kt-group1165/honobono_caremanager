@@ -85,7 +85,12 @@ function stepsForDay(provisions) {
     series.get(k).push(p);
   }
   const out = [];
-  for (const [k, ps] of series) out.push(...stepsForSeries(ps, k === "2" ? 2 : 1));
+  for (const [k, ps] of series) {
+    // 算定時間 0 の系列 = 前日から 0:00 をまたいで続いている分。前日側に算入済みなので積まない
+    //   (五井 1221916057: 6/12 に 16:00-0:00 を出し、6/13 は 0:00-16:00 で算定時間 0000)
+    if (ps.some((p) => p.calc === "0000")) continue;
+    out.push(...stepsForSeries(ps, k === "2" ? 2 : 1));
+  }
   return out;
 }
 
