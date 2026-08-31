@@ -5298,7 +5298,10 @@ function PreviewScaler({ paperWidth, paperMinHeight, paperPadding, children }: {
   paperWidth: string; paperMinHeight: string; paperPadding: string; children: React.ReactNode;
 }) {
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const paperRef = React.useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
+  // 実際に描画された高さ (transform 前)。複数ページの帳票で枠を伸ばすのに使う。
+  const [contentHeight, setContentHeight] = useState(0);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -5315,6 +5318,20 @@ function PreviewScaler({ paperWidth, paperMinHeight, paperPadding, children }: {
     return () => ro.disconnect();
   }, [paperWidth]);
 
+  // ⚠ 場所取り用の div を「用紙 1 枚ぶん」で固定すると、2 ページ以上の帳票が
+  //   外側の overflow: hidden に切られて **画面で 2 ページ目が見られない**。
+  //   利用票が 13 行を超えると必ず起きる (2026-08-31 に本番で確認)。
+  //   transform: scale は layout 高さを変えないので offsetHeight で実寸が取れる。
+  useEffect(() => {
+    const el = paperRef.current;
+    if (!el) return;
+    const update = () => setContentHeight(el.offsetHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const mmVal = parseFloat(paperWidth);
   const paperPx = mmVal * 3.78;
   const mmH = parseFloat(paperMinHeight);
@@ -5322,8 +5339,9 @@ function PreviewScaler({ paperWidth, paperMinHeight, paperPadding, children }: {
 
   return (
     <div ref={containerRef} className="no-print px-4 pb-4" style={{ overflow: "hidden" }}>
-      <div style={{ width: `${paperPx * scale}px`, height: `${paperHPx * scale}px`, margin: "0 auto" }}>
+      <div style={{ width: `${paperPx * scale}px`, height: `${Math.max(paperHPx, contentHeight) * scale}px`, margin: "0 auto" }}>
         <div
+          ref={paperRef}
           id="print-area"
           className="bg-white shadow"
           style={{
