@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { useBusinessType } from "@/lib/business-type-context";
 
-type Tab = "incident" | "complaint";
+type Tab = "incident" | "nearmiss" | "complaint";
 type Row = Record<string, unknown>;
 
 export interface ClientLite {
@@ -108,6 +108,28 @@ const COMPLAINT_FIELDS: Field[] = [
   { key: "notes", label: "備考", type: "textarea" },
 ];
 
+/**
+ * ヒヤリハットは **実害に至っていない**ので、事故報告書の
+ * 「傷害の程度 / 受診 / 家族への連絡 / 市町村への報告 / 損害賠償」は出さない。
+ * 発生状況・要因・再発防止策は事故とまったく同じ形で書く (分析を合わせて行うため)。
+ */
+const NEARMISS_FIELDS: Field[] = [
+  { key: "occurred_at", label: "発生日時", type: "datetime", inList: true },
+  { key: "client_id", label: "対象利用者", type: "client", inList: true },
+  {
+    key: "incident_type", label: "種別", type: "select", inList: true,
+    options: ["転倒", "転落", "誤薬", "誤嚥", "無断外出", "紛失・破損", "感染症", "その他"],
+  },
+  { key: "occurred_place", label: "発生場所", type: "text" },
+  { key: "discoverer_name", label: "気づいた職員", type: "text" },
+  { key: "description", label: "どんなことが起きかけたか", type: "textarea" },
+  { key: "immediate_action", label: "その場で取った対応", type: "textarea" },
+  { key: "cause_analysis", label: "要因", type: "textarea", warnIfEmpty: true },
+  { key: "prevention", label: "再発防止策", type: "textarea", warnIfEmpty: true },
+  { key: "reporter_name", label: "記入者", type: "text" },
+  { key: "notes", label: "備考", type: "textarea" },
+];
+
 const CONF = {
   incident: {
     table: "kaigo_incident_reports",
@@ -115,6 +137,17 @@ const CONF = {
     dateKey: "occurred_at",
     label: "事故報告書",
     icon: AlertTriangle,
+    kind: "事故",
+    sql: "migrations/incident_near_miss_v1.sql",
+  },
+  nearmiss: {
+    table: "kaigo_incident_reports",
+    fields: NEARMISS_FIELDS,
+    dateKey: "occurred_at",
+    label: "ヒヤリハット",
+    icon: AlertTriangle,
+    kind: "ヒヤリハット",
+    sql: "migrations/incident_near_miss_v1.sql",
   },
   complaint: {
     table: "kaigo_complaints",
@@ -122,10 +155,13 @@ const CONF = {
     dateKey: "received_at",
     label: "苦情受付簿",
     icon: MessageSquareWarning,
+    sql: "migrations/incident_and_complaint_v1.sql",
   },
 } as const;
 
-const isMissingTable = (code?: string) => code === "42P01" || code === "PGRST205";
+// 42P01/PGRST205 = テーブルが無い、42703/PGRST204 = 列が無い (report_kind 未適用)
+const isMissingSchema = (code?: string) =>
+  code === "42P01" || code === "PGRST205" || code === "42703" || code === "PGRST204";
 
 const toLocalInput = (v: unknown, type: Field["type"]): string => {
   if (typeof v !== "string" || !v) return "";
@@ -146,7 +182,7 @@ export function IncidentsContent({ clients }: { clients: ClientLite[] }) {
   const [year, setYear] = useState(() => String(new Date().getFullYear()));
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
-  const [tableMissing, setTableMissing] = useState(false);
+  const [missingSql, setMissingSql] = useState<string | null>(null);
   const [editing, setEditing] = useState<Row | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -156,20 +192,22 @@ export function IncidentsContent({ clients }: { clients: ClientLite[] }) {
   const load = useCallback(async () => {
     if (!officeId) return;
     setLoading(true);
-    setTableMissing(false);
+    setMissingSql(null);
     const from = `${year}-01-01T00:00:00`;
     const to = `${Number(year) + 1}-01-01T00:00:00`;
-    const { data, error } = await supabase
+    // 事故報告書とヒヤリハットは同じ台帳。report_kind で切り分ける
+    let q = supabase
       .from(conf.table)
       .select("*")
       .eq("office_id", officeId)
       .gte(conf.dateKey, from)
-      .lt(conf.dateKey, to)
-      .order(conf.dateKey, { ascending: false });
+      .lt(conf.dateKey, to);
+    if ("kind" in conf) q = q.eq("report_kind", conf.kind);
+    const { data, error } = await q.order(conf.dateKey, { ascending: false });
     setLoading(false);
     if (error) {
-      if (isMissingTable(error.code)) {
-        setTableMissing(true);
+      if (isMissingSchema(error.code)) {
+        setMissingSql(conf.sql);
         setRows([]);
         return;
       }
@@ -206,6 +244,8 @@ export function IncidentsContent({ clients }: { clients: ClientLite[] }) {
     }
     setSaving(true);
     const payload: Row = { ...editing, office_id: officeId, updated_at: new Date().toISOString() };
+    // 新規は開いているタブの種別で入れる (既存行の種別は付け替えないので触らない)
+    if ("kind" in conf && !editing.id) payload.report_kind = conf.kind;
     // 空文字は NULL にする (date/timestamp 列に "" を入れると 22007 で落ちる)
     for (const f of conf.fields) {
       if (payload[f.key] === "") payload[f.key] = null;
@@ -255,7 +295,7 @@ export function IncidentsContent({ clients }: { clients: ClientLite[] }) {
     <div className="flex-1 overflow-y-auto p-6">
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1 border-b border-gray-300">
-          {(["incident", "complaint"] as const).map((t) => {
+          {(["incident", "nearmiss", "complaint"] as const).map((t) => {
             const Icon = CONF[t].icon;
             return (
               <button
@@ -292,10 +332,10 @@ export function IncidentsContent({ clients }: { clients: ClientLite[] }) {
         </button>
       </div>
 
-      {tableMissing && (
+      {missingSql && (
         <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-          ⚠ テーブルが未作成です。
-          <code className="mx-1">migrations/incident_and_complaint_v1.sql</code>
+          ⚠ テーブルまたは列が未作成です。
+          <code className="mx-1">{missingSql}</code>
           を Supabase SQL Editor で適用してください。
         </div>
       )}
