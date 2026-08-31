@@ -121,6 +121,59 @@ interface Worked {
   system: "介護" | "障害" | "?";
 }
 
+
+/**
+ * 利用者マスタ CSV から 氏名+生年月日 → (保険者|被保番) を作る。
+ *
+ * ⚠ 当方に番号が無い人でも、**ほのぼの側には番号があって請求されている**ことがある。
+ *   高品 川畑たけ: 当方は「（派遣）」エントリ (認定なし) を持っていて、
+ *   認定は別エントリ (利番420000094) に付いていた。ほのぼのは 49,148 円を請求済み。
+ *
+ * ⚠ **氏名が CSV 内で一意なときだけ採る。**同姓同名は別人の番号を拾う。
+ *   括弧書き (（派遣）等) は ほのぼのの注記なので落として突き合わせる。
+ */
+function loadMasterNumbers(): Map<string, string> {
+  const byKey = new Map<string, string[]>();
+  const dir = join(KAIGO, "利用者データ");
+  let areas: string[] = [];
+  try { areas = readdirSync(dir); } catch { return new Map(); }
+  const nk = (x: string) => String(x ?? "").normalize("NFKC")
+    .replace(/[（(].*?[）)]/g, "").replace(/[\s　]/g, "");
+  const iso = (x: string) => {
+    const m = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec(String(x ?? "").trim());
+    return m ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` : "";
+  };
+  for (const a of areas) {
+    let files: string[] = [];
+    try { files = readdirSync(join(dir, a)); } catch { continue; }
+    const bf = files.find((f) => f.startsWith("基本情報") && /\.csv$/i.test(f));
+    const hf = files.find((f) => f.startsWith("介護保険") && /\.csv$/i.test(f));
+    if (!bf || !hf) continue;
+    const b = decodeSjis(join(dir, a, bf)).split(/?
+/).filter((l) => l.trim()).map(splitCsvLine);
+    const h = decodeSjis(join(dir, a, hf)).split(/?
+/).filter((l) => l.trim()).map(splitCsvLine);
+    const bi = { n: b[0].indexOf("利用者名"), no: b[0].indexOf("利用者番号"), bd: b[0].indexOf("生年月日") };
+    const hi = { no: h[0].indexOf("利用者番号"), hs: h[0].indexOf("被保険者番号"), is: h[0].indexOf("保険者番号") };
+    if (bi.n < 0 || bi.no < 0 || bi.bd < 0 || hi.no < 0 || hi.hs < 0) continue;
+    const numOf = new Map<string, string>();
+    for (const r of h.slice(1)) {
+      const n = (r[hi.no] ?? "").trim(); const v = (r[hi.hs] ?? "").trim();
+      if (n && v && !numOf.has(n)) numOf.set(n, v);
+    }
+    for (const r of b.slice(1)) {
+      const num = numOf.get((r[bi.no] ?? "").trim());
+      if (!num) continue;
+      const k = `${nk(r[bi.n])}|${iso(r[bi.bd])}`;
+      if (!byKey.has(k)) byKey.set(k, []);
+      if (!byKey.get(k)!.includes(num)) byKey.get(k)!.push(num);
+    }
+  }
+  const out = new Map<string, string>();
+  for (const [k, v] of byKey) if (v.length === 1) out.set(k, v[0]);   // 一意のときだけ
+  return out;
+}
+
 function readMeisai(): Map<string, Worked> {
   const out = new Map<string, Worked>();
   const base = join(KAIGO, "サービス実績データ");
