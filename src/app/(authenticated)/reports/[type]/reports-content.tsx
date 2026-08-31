@@ -738,7 +738,9 @@ function buildDefaultContent(
         limit_period: cert ? `${fmtReiwa(cert.start_date)}〜${fmtReiwa(cert.end_date)}` : "",
         creation_date: fmtReiwa(today),
         submission_date: "",
-        services: services.slice(0, 9).map((sv) => ({
+        // 9 件で切ると 10 件目以降のケアプランのサービスが黙って落ちる。
+        // 印刷が改ページ対応になったので全件入れる。
+        services: services.map((sv) => ({
           time: sv.frequency ?? "",
           content: sv.service_content,
           provider: sv.provider ?? "",
@@ -1760,10 +1762,9 @@ function EditFormServiceTicket({ content, onChange, reportMonth }: {
     onChange({ ...content, services: services.map((r, idx) => idx === i ? { ...r, [k]: v } : r) });
   // 行複写 (= 直下に同内容コピー挿入)。planned / actual 配列は新しい参照に複製する。
   const duplicateSvc = (i: number) => {
-    if (services.length >= 9) {
-      toast.error("サービスは最大9件までです");
-      return;
-    }
+    // 9 件上限は撤去。印刷が 9 行固定だった名残りで、実データは 9 件を普通に超える
+    // (2026-06 実績で 1,859 名中 731 名が 10 件以上・最大 39 件)。
+    // 印刷は 17 行/ページで改ページするので、ここで止める理由が無くなった。
     const src = services[i];
     if (!src) return;
     const copy: SvcRow = {
@@ -1866,7 +1867,7 @@ function EditFormServiceTicket({ content, onChange, reportMonth }: {
       <div>
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold text-gray-600">サービス一覧（最大9件）</span>
+            <span className="text-xs font-semibold text-gray-600">サービス一覧（印刷は17行ごとに改ページ）</span>
             {/* 予定・実績トグル (表示フィルタ) */}
             <div className="flex overflow-hidden rounded border text-[11px]">
               {([
@@ -2017,7 +2018,7 @@ function EditFormServiceTicket({ content, onChange, reportMonth }: {
               {services.length === 0 && (
                 <tr>
                   <td colSpan={38} className="border border-dashed border-gray-200 py-3 text-center text-gray-400">
-                    サービスを追加してください（最大9件）
+                    サービスを追加してください
                   </td>
                 </tr>
               )}
