@@ -343,19 +343,37 @@ async function main(): Promise<void> {
   // client_id → 番号。介護 (被保険者番号) と 障害 (受給者証番号) を分けて持つ
   const kaigoNo = new Map<string, string[]>();
   const shogaiNo = new Map<string, string[]>();
+  // 対象月に **保険の資格があるか**。自費運用か請求漏れかを切り分ける決め手になる
+  const hasKaigoCert = new Set<string>();
+  const hasShogaiCert = new Set<string>();
+  type CertRow = {
+    client_id: string; insured_number?: string | null;
+    certification_start_date: string | null; certification_end_date: string | null;
+  };
+  const [my2, mm2] = MONTH.split("-").map(Number);
+  const mEnd = `${MONTH}-${String(new Date(my2, mm2, 0).getDate()).padStart(2, "0")}`;
+  const coversMonth = (c: { certification_start_date: string | null; certification_end_date: string | null }) =>
+    !(c.certification_start_date && c.certification_start_date > mEnd)
+    && !(c.certification_end_date && c.certification_end_date < `${MONTH}-01`);
   const ids = [...clientIds];
   for (let i = 0; i < ids.length; i += 200) {
     const chunk = ids.slice(i, i + 200);
-    const certs = await fetchAll<{ client_id: string; insured_number: string | null }>(() =>
-      supabase.from("client_insurance_records").select("client_id, insured_number").in("client_id", chunk));
+    const certs = await fetchAll<CertRow>(() =>
+      supabase.from("client_insurance_records")
+        .select("client_id, insured_number, certification_start_date, certification_end_date")
+        .in("client_id", chunk));
     for (const c of certs) {
+      if (coversMonth(c)) hasKaigoCert.add(c.client_id);
       if (!c.insured_number) continue;
       if (!kaigoNo.has(c.client_id)) kaigoNo.set(c.client_id, []);
       kaigoNo.get(c.client_id)!.push(c.insured_number.trim());
     }
-    const sho = await fetchAll<{ client_id: string; beneficiary_number: string | null }>(() =>
-      supabase.from("shougai_certifications").select("client_id, beneficiary_number").in("client_id", chunk));
+    const sho = await fetchAll<CertRow & { beneficiary_number: string | null }>(() =>
+      supabase.from("shougai_certifications")
+        .select("client_id, beneficiary_number, certification_start_date, certification_end_date")
+        .in("client_id", chunk));
     for (const c of sho) {
+      if (coversMonth(c)) hasShogaiCert.add(c.client_id);
       if (!c.beneficiary_number) continue;
       if (!shogaiNo.has(c.client_id)) shogaiNo.set(c.client_id, []);
       shogaiNo.get(c.client_id)!.push(c.beneficiary_number.trim());
@@ -444,9 +462,22 @@ async function main(): Promise<void> {
       const crossed = never.filter((w) => w.otherSystemBilled);
       const pure = never.filter((w) => !w.otherSystemBilled);
       if (pure.length) {
-        console.log(`${EOL_}  ── ★★ どちらの制度でも請求が無い (${pure.length} 名) — ここが本命 ──`);
-        for (const w of pure) {
-          console.log(`   ${w.area.padEnd(8)} ${w.system.padEnd(2)} ${w.clientName.padEnd(16)} ${String(w.rows).padStart(3)}回 ${yen(w.amount).padStart(12)}  コード ${[...w.codes].join(",")}`);
+        // 対象月に保険の資格があるかで意味が変わる。
+        //   資格あり → 請求できたはずなのにしていない = **請求漏れの疑いが濃い**
+        //   資格なし → そもそも保険を使えない = 自費で当然
+        const withCert = pure.filter((w) => hasKaigoCert.has(resolved.get(`${w.area}|${w.system}|${w.clientNum}`) ?? "")
+          || hasShogaiCert.has(resolved.get(`${w.area}|${w.system}|${w.clientNum}`) ?? ""));
+        const withoutCert = pure.filter((w) => !withCert.includes(w));
+        const line = (w: Worked) =>
+          `   ${w.area.padEnd(8)} ${w.system.padEnd(2)} ${w.clientName.padEnd(16)} ${String(w.rows).padStart(3)}回 ${yen(w.amount).padStart(12)}  コード ${[...w.codes].join(",")}`;
+        if (withCert.length) {
+          console.log(`${EOL_}  ── ★★ 資格はあるのに一度も請求されていない (${withCert.length} 名) — ここが本命 ──`);
+          console.log("     対象月に有効な認定/受給者証がある。請求できたはずなのにしていない");
+          withCert.forEach((w) => console.log(line(w)));
+        }
+        if (withoutCert.length) {
+          console.log(`${EOL_}  ── 対象月に保険の資格が無い (${withoutCert.length} 名) — 自費で当然かもしれない ──`);
+          withoutCert.forEach((w) => console.log(line(w)));
         }
       }
       if (crossed.length) {
