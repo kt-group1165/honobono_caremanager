@@ -573,6 +573,16 @@ function toMinOfDay(hm) {
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 }
 
+// 行の算定時刻を差し替える (2人派遣の 和集合 / 重なり への組み替え用)。
+// 算定時間も一緒に書き換えないと santeiToMinutes が古い値を返して単位がずれる。
+function setSpan(row, startMin, endMin) {
+  const hm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  const dur = endMin - startMin;
+  row.santeiStart = hm(startMin);
+  row.santeiEnd = hm(endMin);
+  row.santei = `${String(Math.floor(dur / 60)).padStart(3, "0")}:${String(dur % 60).padStart(2, "0")}`;
+}
+
 // ---- 同日合算セッション (概ね2時間未満の間隔ルール) ----
 //   障害福祉サービス(居宅介護)の報酬告示上、同一日に同一区分(身体/家事)のサービスを
 //   複数回提供し、その間隔が概ね2時間未満のときは1回の提供とみなして所要時間を
@@ -770,7 +780,28 @@ async function main() {
   if (juhoRenamed) {
     console.log(`重訪の内部コード (010xxx) を 021003 に正規化: ${juhoRenamed}行`);
   }
-  const target = all.filter((r) => /^021/.test(r.code));
+  // ★ MEISAI に **完全重複行**が混じることがある。
+  //   (同一ファイル内で 利用者・日付・算定時刻・職員・サービス が全部同じ行が 2 本)
+  //   同じヘルパーが同じ時間に 2 回入ることはないので、これは出力側の重複。
+  //   放置すると下の 2人派遣 sweep が「時間が重なる = 2人派遣」と誤判定して
+  //   ・2人 コードが倍出る。
+  //     やわた 野村敦子 1221924572 (2026-06): 40 行が重複し、111112/111196/111216 を
+  //     計 40 件 = **16,323 単位の過大請求**になっていた。TJ の派遣順は全 116 行が空で、
+  //     ほのぼのは 2人派遣を 1 件も出していない。
+  const seenRow = new Set();
+  let dupDropped = 0;
+  const uniqueRows = [];
+  for (const r of all) {
+    // ⚠ 時刻が取れない行は対象外。重訪の MEISAI (おゆみ野重度訪問.CSV 等) は列構成が違って
+    //   算定時刻を持たず、キーが潰れて **正当な行まで落ちる** (実際に 105 行落ちた)。
+    if (!r.santeiStart || !r.santeiEnd) { uniqueRows.push(r); continue; }
+    const k = [r.file, r.clientName, r.date, r.santeiStart, r.santeiEnd, r.staffName, r.svcName].join("|");
+    if (seenRow.has(k)) { dupDropped++; continue; }
+    seenRow.add(k);
+    uniqueRows.push(r);
+  }
+  if (dupDropped) console.log(`⚠ MEISAI の完全重複行を ${dupDropped} 行 落としました (同一ファイル・同じ職員・同じ時刻)`);
+  const target = uniqueRows.filter((r) => /^021/.test(r.code));
   console.log(`CSV: ${files.length}ファイル / 全${all.length}行 / 障害021対象 ${target.length}行`);
   const uniqNums = [...new Set(target.map((r) => r.clientNum))];
   console.log(`障害利用者: ${uniqNums.length}名\n`);
@@ -848,6 +879,19 @@ async function main() {
         const ordered = [...members].sort((a, b) => (b.e - b.s) - (a.e - a.s) || a.i - b.i);
         ordered.forEach((it, idx) => { it.r._blockFirst = idx === 0; it.r._twoPerson = idx > 0; });
         secondRows += members.length - 1;
+        // ★ ほのぼのは 2人派遣を **1人目 = 和集合 / 2人目 = 重なり** に組み替えて請求する。
+        //   MEISAI は実際に各ヘルパーが入った時刻なので、そのままだと配分が違う。
+        //     やわた 前田健司 6/2  MEISAI  07:40-09:10 (1.5h) + 08:40-09:40 (1.0h)
+        //                          ほのぼの 07:40-09:40 (2.0h) + 08:40-09:10 (0.5h)
+        //     当方は 111367 (早0.5・日1.0) + 111116 (日1.0・2人) を出していたが、
+        //     正は 111371 (早0.5・日1.5) + 111112 (日0.5・2人)。6/1・6/9 でも同じ形。
+        //   ⚠ 3人以上のブロックは組み替え方が確認できていないので触らない。
+        if (members.length === 2) {
+          const [first, second] = ordered;
+          const uS = Math.min(first.s, second.s), uE = Math.max(first.e, second.e);
+          const oS = Math.max(first.s, second.s), oE = Math.min(first.e, second.e);
+          if (oE > oS) { setSpan(first.r, uS, uE); setSpan(second.r, oS, oE); }
+        }
       } else {
         members[0].r._twoPerson = false; members[0].r._blockFirst = true;
       }
