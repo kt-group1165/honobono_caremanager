@@ -234,7 +234,16 @@ async function main() {
     }
 
     const hit = byNum.get(u);
-    if (hit && (!b.birth_date || !hit.birth_date || hit.birth_date === b.birth_date)) {
+    // ⚠ **生年月日が片方でも空なら、利用者番号だけで再利用してはいけない。**
+    //   ほのぼのの利用者番号は 1 人を指さない (未採番は 2147483647。それ以外も
+    //   使い回される) ので、生年月日で確かめられないまま番号で拾うと別人に
+    //   なる。旧実装は `!b.birth_date || !hit.birth_date` を「一致」と同じ扱いに
+    //   していた。氏名が一致するなら同一人物とみてよい (2026-08-31 B が是正)。
+    //   同種の事故: 伝送取込が番号だけで拾い、1 人に 3 人分の認定と
+    //   レセプト 39,750 円が積み上がっていた。
+    const sameBirth = !!(hit && b.birth_date && hit.birth_date && hit.birth_date === b.birth_date);
+    const sameName = !!(hit && nameKey(hit.name) === nameKey(b.name));
+    if (hit && (sameBirth || sameName)) {
       reused.push({ ...b, csvNum: u, user_number: u, id: hit.id, dbName: hit.name });
       continue;
     }
