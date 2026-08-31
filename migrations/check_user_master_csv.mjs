@@ -24,6 +24,11 @@
 //     最頻値が拠点名にならないのが正常。だから機械的に ✗ とは判定せず、
 //     **DB 側の割当との重なり**も併せて出して人が判断できるようにする。
 //
+//   ⚠ **障害のみの利用者は介護の利用者マスタに出ない。**被覆が低くても欠落ではない。
+//     2026-09-01: 中央ヘルパーの「58 名不足」を調べたら 56 名が障害受給者証持ちで、
+//     実績も 障害 2,030 / 介護 71 だった。**出力漏れではなかった。**
+//     この script は 障害受給者証があり介護認定が無い人を「障害のみ」として除外する。
+//
 //   ⚠ 「一致率が低い = 必ず誤り」ではない。逆に「高い = 正しい」も言えない
 //     (古い出力かもしれない)。この script は **怪しい拠点を絞り込むだけ**。
 // ============================================================================
@@ -47,6 +52,9 @@ const NOT_OFFICE = new Set(["全居宅", "全社_R8-08", "障害全事業所"]);
 //     フォルダ名と事業所名が字面で繋がらないものが多いため明示する。
 //   ⚠ 「ケイ・ティ・サービス居宅介護支援事業所」は やわた と 五井 の**両方**を
 //     担当する 1 事業所。どちらのフォルダにも出るのが正しい。
+/** 「居宅全体」CSV は 居宅介護支援 の全事業所ぶんなので、名前ではなく service_type で解決する */
+const ALL_KYOTAKU = "__ALL_KYOTAKU__";
+
 const AREA_OFFICES = {
   "K姉":       ["ＫＴ在宅サポートセンター", "ＫＴ姉崎ヘルパーステーション"],
   "いすみ":     ["リンクス居宅介護支援事業所いすみ", "リンクスヘルパーステーションいすみ"],
@@ -70,6 +78,13 @@ const AREA_OFFICES = {
   "八千代":     ["ケアプランＨａｎａ八千代", "Ｈａｎａ八千代ヘルパーステーション"],
   "君津":       ["君津ムツミヘルパーステーション"],
   "船橋":       ["ケアプランＨａｎａ船橋", "Ｈａｎａ船橋ヘルパーステーション"],
+
+  // ── 2026-09-01 に「利用登録＝有」で出し直したぶん ────────────────────
+  //   未収載 1,352 名を埋めるために **事業所エントリごと**に出したもの。
+  //   ⚠ フォルダ名が拠点名ではなく **出力した事業所名**になっている。
+  "Hana中央_登録有": ["Ｈａｎａヘルパーステーション中央"],
+  "Hana高品_登録有": ["Ｈａｎａヘルパーステーション高品"],
+  "居宅全体_登録有": ALL_KYOTAKU,   // 居宅介護支援の全事業所 (下で解決する)
 };
 
 // ── env ────────────────────────────────────────────────────────────────────
@@ -168,16 +183,33 @@ function top(counter, n) {
 async function main() {
   const offices = await sbAll("offices?select=id,name,short_name,service_type");
   const assigns = await sbAll(
-    "client_office_assignments?select=office_id,clients(name,birth_date)");
+    "client_office_assignments?select=office_id,client_id,clients(name,birth_date)");
 
   // office_id → その事業所に割り当たっている利用者の 氏名(空白除去) の集合
   const byOffice = new Map();
+  /** 正規化氏名 → client_id (障害のみ判定に使う) */
+  const idByName = new Map();
   for (const a of assigns) {
     const nm = a.clients?.name;
     if (!nm) continue;
+    const key = nm.replace(/[\s　]/g, "");
     if (!byOffice.has(a.office_id)) byOffice.set(a.office_id, new Set());
-    byOffice.get(a.office_id).add(nm.replace(/[\s　]/g, ""));
+    byOffice.get(a.office_id).add(key);
+    if (a.client_id) idByName.set(key, a.client_id);
   }
+
+  // ── 障害のみの利用者を拾う ──
+  //   障害受給者証があり、介護保険の認定が無い人は **介護の利用者マスタに出ない**。
+  //   「CSV に無い」を欠落として数えると、障害中心の拠点が不当に低く出る。
+  const certIds = new Set((await sbAll("shougai_certifications?select=client_id&order=client_id.asc"))
+    .map((r) => r.client_id).filter(Boolean));
+  const insIds = new Set((await sbAll("client_insurance_records?select=client_id&order=client_id.asc"))
+    .map((r) => r.client_id).filter(Boolean));
+  /** その氏名が「障害のみ」か */
+  const isShogaiOnly = (name) => {
+    const id = idByName.get(name);
+    return !!id && certIds.has(id) && !insIds.has(id);
+  };
 
   const dirs = readdirSync(DATA).filter((d) => {
     if (NOT_OFFICE.has(d) || d.startsWith("_")) return false;
@@ -241,18 +273,27 @@ async function main() {
     const perOffice = [];
     const missingAll = new Set();
     let unresolved = [];
-    for (const nm of wantNames ?? []) {
+    // ALL_KYOTAKU は「居宅介護支援の全事業所」に展開する
+    const resolved = wantNames === ALL_KYOTAKU
+      ? offices.filter((o) => o.service_type === "居宅介護支援").map((o) => o.name)
+      : (wantNames ?? []);
+    for (const nm of resolved) {
       const o = offices.find((x) => x.name === nm);
       if (!o) { unresolved.push(nm); continue; }
       const names = [...(byOffice.get(o.id) ?? [])];
-      const miss = names.filter((n) => !csvNames.has(n));
+      const missRaw = names.filter((n) => !csvNames.has(n));
+      // 障害のみの人は介護マスタに出ないので欠落に数えない
+      const shogaiOnly = missRaw.filter(isShogaiOnly);
+      const miss = missRaw.filter((n) => !isShogaiOnly(n));
       // 福祉用具・訪問入浴・訪問看護 の利用者は 居宅/訪問介護 のマスタ出力には
       // 元々入らないことがあるので、判定からは外して参考表示にする
       const judged = o.service_type === "居宅介護支援" || o.service_type === "訪問介護";
       if (judged) for (const n of miss) missingAll.add(n);
       perOffice.push({
-        id: o.id, name: o.name, type: o.service_type ?? "-", db: names.length,
-        hit: names.length - miss.length, miss, judged,
+        id: o.id, name: o.name, type: o.service_type ?? "-",
+        // 分母からも障害のみを外す (出ないものを分母に入れると率が意味を失う)
+        db: names.length - shogaiOnly.length, shogaiOnly: shogaiOnly.length,
+        hit: names.length - shogaiOnly.length - miss.length, miss, judged,
       });
     }
 
@@ -298,7 +339,8 @@ async function main() {
       const pct = o.db ? Math.round((o.hit / o.db) * 100) : 0;
       const mark = !o.judged ? "  (参考)" : pct >= 80 ? "" : "  ←";
       console.log(`   ${o.type.padEnd(6, "　")} ${o.name}`);
-      console.log(`       DB ${String(o.db).padStart(4)} 名 → CSV に ${String(o.hit).padStart(4)} 名 = ${String(pct).padStart(3)}%${mark}`);
+      console.log(`       DB ${String(o.db).padStart(4)} 名 → CSV に ${String(o.hit).padStart(4)} 名 = ${String(pct).padStart(3)}%${mark}`
+        + (o.shogaiOnly ? `   (別に 障害のみ ${o.shogaiOnly} 名。介護マスタには出ない)` : ""));
     }
     if (r.dummies.length) {
       const s = r.dummies.slice(0, 6).map((d) => `${d.name}[${d.kind}]`).join(" / ");
@@ -347,7 +389,9 @@ async function main() {
     for (const o of r.perOffice ?? []) {
       if (!o.judged || seen.has(o.id) || o.db === 0) continue;
       seen.add(o.id);
-      const names = [...(byOffice.get(o.id) ?? [])];
+      // ここでも 障害のみ は除く (介護マスタに出ないものを欠落に数えない)
+      const names = [...(byOffice.get(o.id) ?? [])].filter((n) => !isShogaiOnly(n));
+      if (!names.length) continue;
       const miss = names.filter((n) => !allCsvNames.has(n));
       if (miss.length / names.length >= 0.2) {
         short.push({
