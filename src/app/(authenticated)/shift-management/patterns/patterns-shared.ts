@@ -23,6 +23,13 @@ export interface PatternDay {
   end_time: string;
   service_type: string;
   staff_id: string | null;
+  /**
+   * 制度区分 (介護 / 障害 / 総合事業)。展開して作る予定に引き継ぐ。
+   * ⚠ サービス名では決まらないものがある (「身体介護１」等は介護と障害の両方に
+   *   存在し、実データで全シフトの 33%)。未設定のまま展開すると、その予定は
+   *   制度別の集計・実績記録票から漏れる。
+   */
+  system?: string | null;
 }
 
 export interface VisitPattern {
@@ -41,6 +48,7 @@ export interface VisitPatternRow {
   end_time: string;
   service_type: string;
   staff_id: string | null;
+  system?: string | null;
 }
 
 function genId(): string {
@@ -67,6 +75,7 @@ export function rowsToPatterns(rows: VisitPatternRow[]): VisitPattern[] {
       end_time: row.end_time,
       service_type: row.service_type,
       staff_id: row.staff_id,
+      system: row.system ?? null,
     });
   }
   return [...grouped.values()];

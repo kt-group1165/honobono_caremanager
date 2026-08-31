@@ -88,6 +88,7 @@ function emptyDay(dow: number): PatternDay {
     end_time: "10:00",
     service_type: "", // ServiceSelector でコードマスタから選択させる
     staff_id: null,
+    system: null,
   };
 }
 
@@ -221,6 +222,9 @@ interface PatternCardProps {
 }
 
 function PatternCard({ pattern, staff, onChange, onDelete, saving, onSave }: PatternCardProps) {
+  // 日ごとに持つが、UI は 1 パターン 1 つ。全日が同じ値のときだけ選択中とみなす。
+  const systems = new Set(pattern.days.map((d) => d.system ?? null));
+  const patternSystem = systems.size === 1 ? [...systems][0] : null;
   const addDay = (dow: number) => {
     onChange({
       ...pattern,
@@ -254,6 +258,35 @@ function PatternCard({ pattern, staff, onChange, onDelete, saving, onSave }: Pat
           className="flex-1 rounded border px-2 py-1 text-sm font-medium text-gray-900 focus:border-blue-500 focus:outline-none"
           placeholder="パターン名"
         />
+        {/* 制度は 1 パターン 1 つ。日ごとに持たせるほど分かれることは実務上ほぼ無い。
+            サービス名では決まらないものがあるので (「身体介護１」等)、ここで選ばせる。 */}
+        <div className="flex items-center gap-1">
+          {(["介護", "障害", "総合事業"] as const).map((sys) => {
+            const active = patternSystem === sys;
+            return (
+              <button
+                key={sys}
+                type="button"
+                onClick={() =>
+                  onChange({
+                    ...pattern,
+                    days: pattern.days.map((d) => ({ ...d, system: active ? null : sys })),
+                  })
+                }
+                className={`rounded-md border px-2 py-1 text-xs transition-colors ${
+                  active
+                    ? "border-blue-500 bg-blue-50 font-semibold text-blue-700"
+                    : "border-gray-300 bg-white text-gray-500 hover:border-blue-400"
+                }`}
+              >
+                {sys}
+              </button>
+            );
+          })}
+          {!patternSystem && pattern.days.length > 0 && (
+            <span className="ml-1 text-xs font-medium text-amber-600">制度 未設定</span>
+          )}
+        </div>
         <button
           onClick={onSave}
           disabled={saving}
@@ -329,6 +362,9 @@ export function PatternsContent({ userId, initialPatterns, initialStaff }: Patte
         end_time: normalizeTime(d.end_time),
         service_type: d.service_type,
         status: "scheduled" as const,
+        // 制度をパターンから引き継ぐ。未設定なら insertVisitSchedules が
+        // 「1 制度にしか無い名前」だけ補い、決まらないものは未設定で残す。
+        system: d.system ?? null,
       }))
     );
     if (candidates.length === 0) {
@@ -466,6 +502,7 @@ export function PatternsContent({ userId, initialPatterns, initialStaff }: Patte
           end_time: d.end_time,
           service_type: d.service_type,
           staff_id: d.staff_id || null,
+          system: d.system ?? null,
         }));
         const { data: inserted, error } = await supabase
           .from("kaigo_visit_patterns")

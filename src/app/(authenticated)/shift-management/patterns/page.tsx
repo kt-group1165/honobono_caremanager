@@ -34,7 +34,7 @@ export default async function PatternsPage({
   if (userId) {
     const { data } = await supabase
       .from("kaigo_visit_patterns")
-      .select("id, user_id, pattern_name, day_of_week, start_time, end_time, service_type, staff_id")
+      .select("id, user_id, pattern_name, day_of_week, start_time, end_time, service_type, staff_id, system")
       .eq("user_id", userId)
       .order("pattern_name");
     initialPatterns = rowsToPatterns((data ?? []) as VisitPatternRow[]);
