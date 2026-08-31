@@ -138,7 +138,7 @@ async function main() {
         + "medical_coop_kassan_units, shoguu_kaizen_units, hospital_coordination_units, "
         + "discharge_addition_units, medical_coordination_units, terminal_care_units, "
         + "emergency_conference_units, clients(name)")
-      .eq("billing_month", MONTH).range(from, from + 999);
+      .eq("billing_month", MONTH).order("id").range(from, from + 999);
     if (error) { console.error(`✗ ${error.message}`); process.exit(1); }
     ours.push(...(data ?? []));
     if ((data ?? []).length < 1000) break;

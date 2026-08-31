@@ -326,7 +326,7 @@ export async function aggregateSougouSeikyu(
         .select("service_code, service_name, units, unit_type, formula, valid_from, valid_until")
         .eq("system", "総合事業")
         .eq("calculation_type", "加算")
-        .range(from, from + 999);
+        .order("id").range(from, from + 999);
       if (error) break;
       mrows.push(...(data ?? []));
       if ((data ?? []).length < 1000) break;

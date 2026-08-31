@@ -296,7 +296,7 @@ export function UserDetailLayoutShell({
             .from("clients")
             .select("user_number")
             .eq("tenant_id", tenantId)
-            .range(from, from + PAGE - 1);
+            .order("id").range(from, from + PAGE - 1);
           if (e) throw e;
           if (!rows || rows.length === 0) break;
           for (const row of rows as { user_number: string | null }[]) {

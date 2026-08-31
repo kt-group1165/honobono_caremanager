@@ -49,7 +49,7 @@ async function main(){
   const co=[]; for(let x=0;;x+=1000){const {data,error}=await sb.from("care_offices").select("id,office_number,name").range(x,x+999);if(error)throw error;co.push(...data);if(data.length<1000)break;}
   const coByNum=new Map(); for(const c of co) if(c.office_number) coByNum.set(String(c.office_number),c);
   // clients & 該当insurance
-  const clients=[]; for(let x=0;;x+=1000){const {data,error}=await sb.from("clients").select("id,user_number").range(x,x+999);if(error)throw error;clients.push(...data);if(data.length<1000)break;}
+  const clients=[]; for(let x=0;;x+=1000){const {data,error}=await sb.from("clients").select("id,user_number").order("id").range(x,x+999);if(error)throw error;clients.push(...data);if(data.length<1000)break;}
   const idByNum={}; for(const c of clients) idByNum[String(c.user_number)]=c.id;
   if(TAG){ const mp=JSON.parse(readFileSync(path.join(KAIGO,`migrations/_meisai_num_to_client_${TAG}.json`),"utf8")); for(const[k,v]of Object.entries(mp)) idByNum[String(k)]=v; }
 

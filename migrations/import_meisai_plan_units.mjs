@@ -56,7 +56,7 @@ async function main(){
   let fromSougou=0;
   for(const [num,v] of Object.entries(planA)){ if(plan[num])continue; plan[num]=v; fromSougou++; }
   if(fromSougou) console.log(`  総合事業のみの利用者から計画単位数を採用: ${fromSougou}名`);
-  const clients=[]; for(let f=0;;f+=1000){const {data,error}=await sb.from("clients").select("id,user_number").range(f,f+999);if(error)throw error;clients.push(...data);if(data.length<1000)break;}
+  const clients=[]; for(let f=0;;f+=1000){const {data,error}=await sb.from("clients").select("id,user_number").order("id").range(f,f+999);if(error)throw error;clients.push(...data);if(data.length<1000)break;}
   const idByNum={}; for(const c of clients) idByNum[String(c.user_number)]=c.id;
   if(TAG){ const mp=JSON.parse(readFileSync(path.join(KAIGO,`migrations/_meisai_num_to_client_${TAG}.json`),"utf8")); for(const[k,v]of Object.entries(mp)) idByNum[String(k)]=v; }
   if(!OFFICE_ID){ console.error("✗ OFFICE_ID が未指定です (計画単位数は事業所ごとの値)"); process.exit(1); }

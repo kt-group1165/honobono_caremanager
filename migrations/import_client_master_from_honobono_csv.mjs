@@ -142,7 +142,7 @@ async function main() {
   for (;;) {
     const { data, error } = await sb.from("client_insurance_records")
       .select("client_id, insurer_number, insured_number, care_level, certification_start_date, certification_end_date, clients(name, user_number)")
-      .range(from, from + 999);
+      .order("id").range(from, from + 999);
     if (error) { console.error(`✗ ${error.message}`); process.exit(1); }
     ins = ins.concat(data);
     if (data.length < 1000) break;

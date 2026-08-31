@@ -113,7 +113,7 @@ async function main() {
     const { data, error } = await sb
       .from("client_insurance_records")
       .select("id, insured_number, care_level, certification_start_date, certification_end_date, service_limit_period_end, notes, clients(name)")
-      .range(from, from + 999);
+      .order("id").range(from, from + 999);
     if (error) { console.error(`✗ 取得失敗: ${error.message}`); process.exit(1); }
     all = all.concat(data);
     if (data.length < 1000) break;

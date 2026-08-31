@@ -146,7 +146,7 @@ async function main() {
       .from("kaigo_service_codes")
       .select("service_code, service_name, short_name")
       .is("short_name", null)
-      .range(EXECUTE ? 0 : from, (EXECUTE ? 0 : from) + PAGE - 1);
+      .order("id").range(EXECUTE ? 0 : from, (EXECUTE ? 0 : from) + PAGE - 1);
     if (error) { console.error(error); process.exit(1); }
     if (!data || data.length === 0) break;
     let updatedThisPage = 0;

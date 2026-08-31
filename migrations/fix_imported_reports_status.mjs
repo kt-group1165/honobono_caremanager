@@ -51,7 +51,7 @@ async function fetchAll(tweak) {
   for (let from = 0; ; from += 1000) {
     const { data, error } = await tweak(
       sb.from("kaigo_report_documents").select("id, report_type, status, created_by, created_at"),
-    ).range(from, from + 999);
+    ).order("id").range(from, from + 999);
     if (error) { console.error(`✗ ${error.message}`); process.exit(1); }
     out.push(...(data ?? []));
     if ((data ?? []).length < 1000) break;

@@ -114,7 +114,7 @@ export default async function ShiftManagementPage({
         .select("client_id")
         .eq("office_id", officeId)
         .is("end_date", null)
-        .range(fromA, fromA + PAGE - 1);
+        .order("id").range(fromA, fromA + PAGE - 1);
       // SSR 失敗は client 側 SWR (useKaigoOfficeUsers) が自力再フェッチする。
       // silent にはしない (= log は残す)。
       if (assignsErr) {
@@ -222,7 +222,7 @@ export default async function ShiftManagementPage({
           .order("staff_id", { ascending: true })
           .order("available_date", { ascending: true })
           .order("start_time", { ascending: true })
-          .range(from, to),
+          .order("id").range(from, to),
       ),
       // 自事業所 (URL ?office=) のスタッフのみ。未指定時は空 → Client 側で再フェッチ。
       officeId

@@ -30,7 +30,7 @@ async function main() {
   const pdf = JSON.parse(readFileSync(path.join(KAIGO, UNITS_JSON), "utf8")); // {A2xxxx: units|null}
 
   // DB辞書: 全prefixの総合コードから 項目(prefix除去) -> {name,unit_type,calc,units} を集める
-  const all = []; for (let f = 0; ; f += 1000) { const { data, error } = await sb.from("kaigo_service_codes").select("service_code,service_name,service_category_name,unit_type,calculation_type,units,formula").eq("system", SYSTEM).range(f, f + 999); if (error) throw error; all.push(...data); if (data.length < 1000) break; }
+  const all = []; for (let f = 0; ; f += 1000) { const { data, error } = await sb.from("kaigo_service_codes").select("service_code,service_name,service_category_name,unit_type,calculation_type,units,formula").eq("system", SYSTEM).order("id").range(f, f + 999); if (error) throw error; all.push(...data); if (data.length < 1000) break; }
   const dict = {}; for (const r of all) { const bare = r.service_code.replace(/^[A-Z]+_/, ""); if (!dict[bare]) dict[bare] = r; }
 
   const payloads = []; const missing = [];

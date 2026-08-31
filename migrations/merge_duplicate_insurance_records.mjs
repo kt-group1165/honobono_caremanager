@@ -75,7 +75,7 @@ async function main() {
   } else {
     const all = [];
     for (let from = 0; ; from += 1000) {
-      const { data, error } = await sb.from("clients").select("id").range(from, from + 999);
+      const { data, error } = await sb.from("clients").select("id").order("id").range(from, from + 999);
       if (error) throw new Error(error.message);
       all.push(...data);
       if (data.length < 1000) break;

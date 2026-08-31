@@ -57,7 +57,7 @@ async function main(){
     if(!kohi[num]) kohi[num]={name:c[iName],futansha:f,jukyusha:(c[iJ1]||"").trim(),honnin:0};
     if(!seen.has(c[iMei])){ seen.add(c[iMei]); kohi[num].honnin += numOr0(c[iHon]); }
   }
-  const clients=[]; for(let x=0;;x+=1000){const {data,error}=await sb.from("clients").select("id,user_number").range(x,x+999);if(error)throw error;clients.push(...data);if(data.length<1000)break;}
+  const clients=[]; for(let x=0;;x+=1000){const {data,error}=await sb.from("clients").select("id,user_number").order("id").range(x,x+999);if(error)throw error;clients.push(...data);if(data.length<1000)break;}
   const idByNum={}; for(const c of clients) idByNum[String(c.user_number)]=c.id;
 
   const payloads=[];

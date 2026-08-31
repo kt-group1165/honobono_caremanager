@@ -37,7 +37,7 @@ async function fetchOfficeUsers(officeId: string): Promise<KaigoUser[]> {
       .select("client_id")
       .eq("office_id", officeId)
       .is("end_date", null)
-      .range(fromA, fromA + PAGE - 1);
+      .order("id").range(fromA, fromA + PAGE - 1);
     if (!assigns || assigns.length === 0) break;
     clientIdsAll.push(...(assigns as { client_id: string }[]).map((a) => a.client_id));
     if (assigns.length < PAGE) break;

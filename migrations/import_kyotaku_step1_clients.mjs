@@ -74,7 +74,7 @@ async function main() {
   // 既存突合キー = 被保番 + 保険者番号。被保番だけだと保険者をまたいで別人が同番号を
   //   共有し (例: 白子町0000023747 吉原芳夫 ≠ 睦沢町0000023747 中村光一)、別人紐付け事故になる。
   const byIns = new Map(), byNum = new Map();
-  for (let f = 0; ; f += 1000) { const { data, error } = await sb.from("clients").select("id,user_number,name,insured_number,insurer_number").range(f, f + 999); if (error) throw error; for (const c of data) { if (c.insured_number) byIns.set(`${c.insured_number}|${c.insurer_number || ""}`, c); byNum.set(String(c.user_number), c); } if (data.length < 1000) break; }
+  for (let f = 0; ; f += 1000) { const { data, error } = await sb.from("clients").select("id,user_number,name,insured_number,insurer_number").order("id").range(f, f + 999); if (error) throw error; for (const c of data) { if (c.insured_number) byIns.set(`${c.insured_number}|${c.insurer_number || ""}`, c); byNum.set(String(c.user_number), c); } if (data.length < 1000) break; }
 
   const reuse = [], toCreate = [];
   for (const k of kyotaku.values()) {

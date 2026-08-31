@@ -235,7 +235,7 @@ async function main() {
         .select("id, user_number, name, birth_date")
         .eq("tenant_id", TENANT_ID)
         .is("deleted_at", null)
-        .range(from, from + PAGE - 1);
+        .order("id").range(from, from + PAGE - 1);
       if (error) { console.error(`❌ 既存チェック失敗: ${error.message}`); process.exit(1); }
       for (const r of rows ?? []) {
         if (r.birth_date) existingByNameBirth.set(`${norm(r.name)}|${r.birth_date}`, r);

@@ -535,7 +535,7 @@ async function loadServiceNames(): Promise<Map<string, Map<string, string>>> {
       const { data, error } = await sb
         .from("kaigo_service_codes")
         .select("service_code, service_name, system")
-        .range(from, from + 999);
+        .order("id").range(from, from + 999);
       if (error) break;
       for (const r of (data ?? []) as { service_code: string; service_name: string; system: string }[]) {
         // 自治体prefix (MB_ 等) は伝送には出ないので外して登録。総合事業は介護側に寄せる

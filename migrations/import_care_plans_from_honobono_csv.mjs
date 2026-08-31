@@ -278,7 +278,7 @@ async function main() {
     let hasSvc = new Set(); f2 = 0;
     for (;;) {
       const { data, error } = await sb.from("kaigo_care_plan_services")
-        .select("care_plan_id").range(f2, f2 + 999);
+        .select("care_plan_id").order("id").range(f2, f2 + 999);
       if (error) { console.error(`✗ ${error.message}`); process.exit(1); }
       for (const r of data) hasSvc.add(r.care_plan_id);
       if (data.length < 1000) break;

@@ -44,7 +44,7 @@ async function main() {
   for (let from = 0; ; from += 1000) {
     const { data, error } = await sb.from("client_insurance_records")
       .select("id, client_id, insurer_number, insured_number, care_level, certification_start_date, certification_end_date")
-      .range(from, from + 999);
+      .order("id").range(from, from + 999);
     if (error) { console.error(`✗ ${error.message}`); process.exit(1); }
     all.push(...(data ?? []));
     if ((data ?? []).length < 1000) break;

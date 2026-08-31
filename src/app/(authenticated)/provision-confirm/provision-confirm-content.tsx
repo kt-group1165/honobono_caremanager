@@ -83,7 +83,7 @@ export function ProvisionConfirmContent({
           .select("client_id")
           .eq("office_id", currentOfficeId)
           .is("end_date", null)
-          .range(fromA, fromA + PAGE - 1);
+          .order("id").range(fromA, fromA + PAGE - 1);
         if (aErr) {
           toast.error("利用者情報の取得に失敗しました");
           setLoading(false);

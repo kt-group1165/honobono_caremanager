@@ -128,7 +128,7 @@ async function main() {
       .select("id, client_id, insurer_number, insured_number, copay_rate, benefit_rate," +
         " benefit_period_start, benefit_period_end, certification_start_date," +
         " certification_end_date, clients(name)")
-      .range(from, from + 999);
+      .order("id").range(from, from + 999);
     if (error) { console.error(`✗ ${error.message}`); process.exit(1); }
     mineRows = mineRows.concat(data);
     if (data.length < 1000) break;

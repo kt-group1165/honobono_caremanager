@@ -56,7 +56,7 @@ async function main(){
     addons[num][code].count += parseInt(c[iKaisu]||"1",10);
   }
   // 利用者番号→client_id
-  const clients=[]; for(let f=0;;f+=1000){const {data,error}=await sb.from("clients").select("id,user_number").range(f,f+999);if(error)throw error;clients.push(...data);if(data.length<1000)break;}
+  const clients=[]; for(let f=0;;f+=1000){const {data,error}=await sb.from("clients").select("id,user_number").order("id").range(f,f+999);if(error)throw error;clients.push(...data);if(data.length<1000)break;}
   const idByNum={}; for(const c of clients) idByNum[String(c.user_number)]=c.id;
   // TAG指定時: STEP1マッピングを overlay (ゴミ番号2147483647等の他事業所衝突を補正)
   if(TAG){ const mp=JSON.parse(readFileSync(path.join(KAIGO,`migrations/_meisai_num_to_client_${TAG}.json`),"utf8")); for(const[k,v]of Object.entries(mp)) idByNum[String(k)]=v; }

@@ -189,7 +189,7 @@ export function StatsContent() {
           .select("billing_month, units, insurance_amount, status, user_id")
           .gte("billing_month", fromMonth)
           .lte("billing_month", toMonth)
-          .range(from, from + PAGE - 1);
+          .order("id").range(from, from + PAGE - 1);
         if (error) {
           if (error.code !== "42P01" && error.code !== "PGRST205") {
             toast.error("請求データの取得に失敗: " + error.message);

@@ -252,7 +252,7 @@ async function main(){
   //   番号だけで探すと見つからず**同じ人をもう 1 件作ってしまう**。
   //   氏名+生年月日 で拾って再利用し、番号を本来の番号に戻す。
   const byNameBirth=new Map();
-  for(let from=0;;from+=1000){ const {data,error}=await sb.from("clients").select("id,user_number,name,birth_date").range(from,from+999); if(error)throw new Error(error.message);
+  for(let from=0;;from+=1000){ const {data,error}=await sb.from("clients").select("id,user_number,name,birth_date").order("id").range(from,from+999); if(error)throw new Error(error.message);
     for(const c of data){ if(c.user_number!=null) existing.set(String(c.user_number),c);
       if(c.birth_date) byNameBirth.set(`${(c.name||"").normalize("NFKC").replace(/[\s　]/g,"")}|${c.birth_date}`,c); }
     if(data.length<1000)break; }

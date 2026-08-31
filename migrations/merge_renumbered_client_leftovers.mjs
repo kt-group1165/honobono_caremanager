@@ -61,7 +61,7 @@ async function main() {
     const { data, error } = await sb
       .from("clients")
       .select("id, name, user_number, birth_date, insured_number, created_at")
-      .range(from, from + 999);
+      .order("id").range(from, from + 999);
     if (error) throw new Error(error.message);
     all.push(...data);
     if (data.length < 1000) break;

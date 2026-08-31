@@ -87,7 +87,7 @@ async function main() {
   // 被保険者番号 → client
   const clients = [];
   for (let x = 0; ; x += 1000) {
-    const { data, error } = await sb.from("clients").select("id,name,insured_number").range(x, x + 999);
+    const { data, error } = await sb.from("clients").select("id,name,insured_number").order("id").range(x, x + 999);
     if (error) throw new Error(error.message);
     clients.push(...data);
     if (data.length < 1000) break;
