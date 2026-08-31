@@ -73,7 +73,10 @@ const REFS = [
 ];
 
 /** 事業所・施設らしい名前 (第一段。これに当たらなくても下のマスタ照合で拾う) */
-const OFFICE_RE = /居宅|センター|事業所|協議会|苑$|苑指定|ホーム|ステーション|法人|ケアプラン|ケアサービス|支援|病院|クリニック|の郷|園$|会$/;
+const OFFICE_RE = /居宅|センター|事業所|協議会|苑$|苑指定|ホーム|ステーション|法人|ケアプラン|ケアサービス|支援|病院|クリニック|の郷|園$|会$|メディケア|アビタシオン|セントケア|介護相談|相談室|デイサービス|ケアマネ|訪問看護|ヘルパー/;
+
+/** 明らかに利用者でない名前 (テスト登録など)。完全一致で判定する */
+const NOT_A_PERSON = new Set(["テスト", "test", "サンプル", "ダミー"]);
 
 /**
  * 事業所名の正規化。法人格の前置と記号・空白を落とす。
@@ -136,7 +139,8 @@ async function main() {
   // ①②④ を満たすもの (④ は 名前のパターン **または** 事業所マスタに載っている)
   const cand = clients.filter((c) =>
     !c.birth_date && !c.insured_number &&
-    (OFFICE_RE.test(String(c.name ?? "")) || isKnownOffice(c.name)));
+    (OFFICE_RE.test(String(c.name ?? "")) || isKnownOffice(c.name) ||
+     NOT_A_PERSON.has(String(c.name ?? "").trim())));
   console.log(`clients ${clients.length} 名 / 生年月日も被保番も無く事業所と判る名前: ${cand.length} 名`);
 
   // ③ 参照を全表で数える (1 件でもあれば残す)
