@@ -135,6 +135,20 @@ function targetAreas() {
 
 // ── 1. PDF を読む ───────────────────────────────────────────────────────────
 /**
+ * ほのぼの側が誤った保険者番号で印字しているもの。**実物で確認済みのものだけ**書く。
+ *
+ *   保険者番号は [JIS の市区町村コード 5 桁][検証数字 1 桁] なので番号だけで検算できる。
+ *   "001220" は検証数字が合わず、先頭 5 桁 "00122" は都道府県コードとして存在しない。
+ *   木更津市の正しい保険者番号は "122069" (ほのぼの自身の新しい出力も 122069)。
+ *   2026-08-31 に確認。木更津ムツミ居宅の 3 名がこの番号で請求されている。
+ *
+ * ⚠ **読み替えるのは引き当てのときだけ。**当方の DB に 001220 を書き戻さない。
+ *   ほのぼの側を直して過誤申立 → 再請求するのが本筋で、これはその間の橋渡し。
+ */
+const INSURER_FIX = { "001220": "122069" };
+const fixInsurer = (n) => (n && INSURER_FIX[n]) || n;
+
+/**
  * @returns Map<string, {name, insurer, insured, careLevel, officeName, insurerName, staffName, rows, sources}>
  *          キーは 保険者番号|被保険者番号
  */
@@ -159,7 +173,7 @@ function readArea(dir) {
       const month = who?.month ?? null;
       if (month && month !== MONTH) { skipped.monthMismatch++; continue; }
 
-      const insurer = id.insurer ?? who?.insurer ?? null;
+      const insurer = fixInsurer(id.insurer ?? who?.insurer ?? null);
       const insured = id.insured ?? who?.insured ?? null;
       const name = id.name ?? who?.name ?? null;
       if (!insurer || !insured) {
@@ -237,6 +251,28 @@ async function resolveClients(people) {
     const chunk = ids.slice(i, i + CH);
     const rows = await fetchAll(() => sb.from("clients").select("id, name, deleted_at").in("id", chunk));
     for (const c of rows) nameById.set(c.id, { name: c.name, deleted: !!c.deleted_at });
+  }
+
+  // ── 被保番がプレースホルダの人だけ、氏名で引き当てる ──────────────────
+  //   ほのぼのには 被保番 "0000000000" のまま登録されている利用者が居る
+  //   (木更津 佐久間 歌子)。番号では絶対に当たらないので氏名で引くしかない。
+  //
+  //   ⚠ 氏名一致は本来いちばん弱い手がかりなので、条件を厳しくする:
+  //     ・PDF 側の被保番が **同じ数字の 10 桁** のときだけ
+  //     ・当方も **番号を持っていない** client に限る (番号がある人は別人)
+  //     ・氏名で **ちょうど 1 名**に決まるときだけ。2 名以上なら諦める
+  const needName = [...people.values()].filter(
+    (p) => /^(\d)\1{9}$/.test(p.insured ?? "") && !byPair.get(`${p.insurer}|${p.insured}`)?.size);
+  if (needName.length) {
+    const numberless = await fetchAll(() => sb.from("clients")
+      .select("id, name, insured_number, deleted_at").is("insured_number", null));
+    for (const p of needName) {
+      const hit = numberless.filter((c) => !c.deleted_at && normRiyouName(c.name) === p.nameKey);
+      if (hit.length !== 1) continue;
+      byPair.set(`${p.insurer}|${p.insured}`, new Set([hit[0].id]));
+      nameById.set(hit[0].id, { name: hit[0].name, deleted: false });
+      console.log(`   ℹ 被保番が ${p.insured} (プレースホルダ) のため氏名で引き当て: ${hit[0].name}`);
+    }
   }
   return { byPair, nameById };
 }
