@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback, createContext, useContext } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -3316,12 +3316,13 @@ function PrintCarePlan1({ c }: { c: Record<string, unknown> }) {
             <td style={{ ...thStyle, width: "18%", verticalAlign: "middle", height: "140px", lineHeight: "1.8", textAlign: "center", padding: "6px 4px" }}>
               利用者及び家族の<br />生活に対する<br />意向<span style={{ color: "red" }}>を踏まえた</span><br /><span style={{ color: "red" }}>課題分析の結果</span>
             </td>
-            <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "6px 8px", position: "relative" }}>
+            <EditableTd style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "6px 8px", position: "relative" }}
+              path="issue_analysis" label="利用者及び家族の生活に対する意向を踏まえた課題分析の結果" value={String(c["issue_analysis"] ?? "")} multiline>
               {s("issue_analysis")}
               <div style={{ position: "absolute", top: "4px", left: "8px", right: "8px", bottom: "4px", pointerEvents: "none", display: "flex", flexDirection: "column", justifyContent: "space-evenly" }}>
                 {Array.from({ length: 7 }).map((_, i) => <div key={i} style={lineStyle} />)}
               </div>
-            </td>
+            </EditableTd>
           </tr>
         </tbody>
       </table>
@@ -3333,12 +3334,13 @@ function PrintCarePlan1({ c }: { c: Record<string, unknown> }) {
             <td style={{ ...thStyle, width: "18%", verticalAlign: "middle", height: "70px", lineHeight: "1.8", textAlign: "center", padding: "6px 4px" }}>
               介護認定審査会の<br />意見及びサービス<br />の種類の指定
             </td>
-            <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "6px 8px", position: "relative" }}>
+            <EditableTd style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "6px 8px", position: "relative" }}
+              path="review_opinion" label="介護認定審査会の意見及びサービスの種類の指定" value={String(c["review_opinion"] ?? "")} multiline>
               {s("review_opinion")}
               <div style={{ position: "absolute", top: "4px", left: "8px", right: "8px", bottom: "4px", pointerEvents: "none", display: "flex", flexDirection: "column", justifyContent: "space-evenly" }}>
                 {Array.from({ length: 3 }).map((_, i) => <div key={i} style={lineStyle} />)}
               </div>
-            </td>
+            </EditableTd>
           </tr>
         </tbody>
       </table>
@@ -3350,12 +3352,13 @@ function PrintCarePlan1({ c }: { c: Record<string, unknown> }) {
             <td style={{ ...thStyle, width: "18%", verticalAlign: "middle", height: "160px", lineHeight: "1.8", textAlign: "center", padding: "6px 4px" }}>
               <br />総合的な援助の<br />方　　　　針
             </td>
-            <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "6px 8px", position: "relative" }}>
+            <EditableTd style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", padding: "6px 8px", position: "relative" }}
+              path="overall_policy" label="総合的な援助の方針" value={String(c["overall_policy"] ?? "")} multiline>
               {s("overall_policy")}
               <div style={{ position: "absolute", top: "4px", left: "8px", right: "8px", bottom: "4px", pointerEvents: "none", display: "flex", flexDirection: "column", justifyContent: "space-evenly" }}>
                 {Array.from({ length: 9 }).map((_, i) => <div key={i} style={lineStyle} />)}
               </div>
-            </td>
+            </EditableTd>
           </tr>
         </tbody>
       </table>
@@ -3395,6 +3398,133 @@ function PrintCarePlan1({ c }: { c: Record<string, unknown> }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// 印刷プレビューを直接編集する仕組み
+//
+//   プレビューは content (JSON) を描画しているだけで、編集フォームも同じ JSON を
+//   書き換えている。**表示と編集が同じデータを見ている**ので、セル側に
+//   「その値が content のどこか」を持たせればプレビューから直接直せる。
+//
+//   セル → PrintEditCtx にパスを渡す → 親がモーダルを出す → handleChange で保存
+//
+// ⚠ 印刷には出さない (モーダルもホバー枠も no-print)。
+// ⚠ タッチだとダブルクリックが出しにくいので、1 回目で枠が光り 2 回目で開く。
+// ---------------------------------------------------------------------------
+
+export interface PrintEditTarget {
+  /** content の中のパス。例: blocks[0].goals[1].services[2].content */
+  path: string;
+  label: string;
+  value: string;
+  multiline?: boolean;
+}
+
+const PrintEditCtx = createContext<((t: PrintEditTarget) => void) | null>(null);
+
+/** content の任意のパスに値を入れた **新しいオブジェクト**を返す (破壊しない) */
+export function setByPath(
+  root: Record<string, unknown>,
+  path: string,
+  value: unknown,
+): Record<string, unknown> {
+  const keys = path.replace(/\[(\d+)\]/g, ".$1").split(".").filter(Boolean);
+  const clone = (v: unknown): unknown => (Array.isArray(v) ? [...v] : { ...(v as object) });
+  const out = clone(root) as Record<string, unknown>;
+  let cur: Record<string, unknown> = out;
+  for (let i = 0; i < keys.length - 1; i++) {
+    const k = keys[i];
+    const next = (cur as Record<string, unknown>)[k];
+    // 途中が無いパスは作らない (壊れたパスで content を汚さないため)
+    if (next === null || typeof next !== "object") return root;
+    (cur as Record<string, unknown>)[k] = clone(next);
+    cur = (cur as Record<string, unknown>)[k] as Record<string, unknown>;
+  }
+  (cur as Record<string, unknown>)[keys[keys.length - 1]] = value;
+  return out;
+}
+
+/** プレビューのセルを直すモーダル。保存は既存の handleChange に乗せる */
+function PrintEditModal({
+  target, onClose, onSave,
+}: {
+  target: PrintEditTarget;
+  onClose: () => void;
+  onSave: (value: string) => void;
+}) {
+  const [v, setV] = useState(target.value ?? "");
+  // 別のセルを開き直したら中身を差し替える
+  const [prevPath, setPrevPath] = useState(target.path);
+  if (prevPath !== target.path) { setPrevPath(target.path); setV(target.value ?? ""); }
+  return (
+    <div
+      className="no-print fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-xl rounded-xl bg-white p-4 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-800">{target.label || "編集"}</h3>
+          <span className="text-[10px] text-gray-400">{target.path}</span>
+        </div>
+        {target.multiline ? (
+          <textarea
+            autoFocus
+            value={v}
+            onChange={(e) => setV(e.target.value)}
+            rows={6}
+            className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        ) : (
+          <input
+            autoFocus
+            value={v}
+            onChange={(e) => setV(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") onSave(v); }}
+            className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        )}
+        <div className="mt-3 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg border px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50">
+            キャンセル
+          </button>
+          <button onClick={() => onSave(v)} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
+            反映する
+          </button>
+        </div>
+        <p className="mt-2 text-[10px] text-gray-400">
+          反映しただけでは保存されません。上の「保存する」を押してください。
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** プレビューのセル。ダブルクリック (2 回クリック) で編集モーダルを開く */
+function EditableTd({
+  path, label, value, multiline, style, rowSpan, children,
+}: {
+  path?: string; label?: string; value?: string; multiline?: boolean;
+  style?: React.CSSProperties; rowSpan?: number; children?: React.ReactNode;
+}) {
+  const openEdit = useContext(PrintEditCtx);
+  const editable = !!openEdit && !!path;
+  return (
+    <td
+      rowSpan={rowSpan}
+      style={{ ...style, ...(editable ? { cursor: "text" } : null) }}
+      className={editable ? "editable-cell" : undefined}
+      title={editable ? "ダブルクリックで編集" : undefined}
+      onDoubleClick={editable
+        ? () => openEdit!({ path: path!, label: label ?? "", value: value ?? "", multiline })
+        : undefined}
+    >
+      {children}
+    </td>
+  );
+}
+
 function PrintCarePlan2({ c }: { c: Record<string, unknown> }) {
   const s = (k: string) => String(c[k] ?? "");
   const B = "1px solid #000";
@@ -3416,16 +3546,25 @@ function PrintCarePlan2({ c }: { c: Record<string, unknown> }) {
     ltGoalSpan?: number; ltGoal?: string; ltPeriod?: string;
     stGoalSpan?: number; stGoal?: string; stPeriod?: string;
     content: string; flag: string; type: string; provider: string; freq: string; period: string;
+    /** content の中の位置。ダブルクリック編集で使う (空行は undefined) */
+    bp?: string; gp?: string; sp?: string;
   };
   const flatRows: FlatRow[] = [];
-  for (const block of blocks) {
+  // blocks が content 直下に無い形 (旧 needs_blocks / 単一ブロック) では
+  // パスが引けないので編集させない
+  const blocksKey = Array.isArray(c.blocks) ? "blocks" : Array.isArray(c.needs_blocks) ? "needs_blocks" : null;
+  for (const [bi, block] of blocks.entries()) {
     let needsRowCount = 0;
     const goalRows: FlatRow[][] = [];
-    for (const goal of block.goals) {
+    const bp = blocksKey ? `${blocksKey}[${bi}]` : undefined;
+    for (const [gi, goal] of block.goals.entries()) {
       const svcs = goal.services.length > 0 ? goal.services : [{ content: "", insurance_flag: "", type: "", provider: "", frequency: "", period: "" }];
+      const gp = bp ? `${bp}.goals[${gi}]` : undefined;
+      const hasSvc = goal.services.length > 0;
       const gRows: FlatRow[] = svcs.map((sv, si) => ({
         ...(si === 0 ? { stGoalSpan: svcs.length, stGoal: goal.short_term_goal, stPeriod: goal.short_term_period } : {}),
         content: sv.content, flag: sv.insurance_flag, type: sv.type, provider: sv.provider, freq: sv.frequency, period: sv.period,
+        bp, gp, sp: gp && hasSvc ? `${gp}.services[${si}]` : undefined,
       }));
       needsRowCount += gRows.length;
       goalRows.push(gRows);
@@ -3508,17 +3647,22 @@ function PrintCarePlan2({ c }: { c: Record<string, unknown> }) {
         <tbody>
           {flatRows.map((row, i) => (
             <tr key={i} style={{ height: `${rowHeight}px` }}>
-              {row.needsSpan !== undefined && <td rowSpan={row.needsSpan} style={{ ...tdStyle, padding: "4px" }}>{row.needs || "　"}</td>}
-              {row.ltGoalSpan !== undefined && <td rowSpan={row.ltGoalSpan} style={{ ...tdStyle, padding: "4px" }}>{row.ltGoal || "　"}</td>}
-              {row.ltGoalSpan !== undefined && <td rowSpan={row.ltGoalSpan} style={{ ...tdStyle, fontSize: "7pt", padding: "3px" }}>{row.ltPeriod || "　"}</td>}
-              {row.stGoalSpan !== undefined && <td rowSpan={row.stGoalSpan} style={{ ...tdStyle, padding: "4px" }}>{row.stGoal || "　"}</td>}
-              {row.stGoalSpan !== undefined && <td rowSpan={row.stGoalSpan} style={{ ...tdStyle, fontSize: "7pt", padding: "3px" }}>{row.stPeriod || "　"}</td>}
-              <td style={{ ...tdStyle, padding: "3px 4px" }}>{row.content || "　"}</td>
-              <td style={{ ...tdStyle, textAlign: "center" }}>{row.flag || "　"}</td>
-              <td style={{ ...tdStyle, padding: "3px 4px" }}>{row.type || "　"}</td>
-              <td style={{ ...tdStyle, fontSize: "7pt", padding: "3px" }}>{row.provider || "　"}</td>
-              <td style={{ ...tdStyle, textAlign: "center" }}>{row.freq || "　"}</td>
-              <td style={{ ...tdStyle, fontSize: "7pt", padding: "3px" }}>{row.period || "　"}</td>
+              {row.needsSpan !== undefined && <EditableTd rowSpan={row.needsSpan} style={{ ...tdStyle, padding: "4px" }}
+                path={row.bp && `${row.bp}.needs`} label="生活全般の解決すべき課題（ニーズ）" value={row.needs} multiline>{row.needs || "　"}</EditableTd>}
+              {row.ltGoalSpan !== undefined && <EditableTd rowSpan={row.ltGoalSpan} style={{ ...tdStyle, padding: "4px" }}
+                path={row.bp && `${row.bp}.long_term_goal`} label="長期目標" value={row.ltGoal} multiline>{row.ltGoal || "　"}</EditableTd>}
+              {row.ltGoalSpan !== undefined && <EditableTd rowSpan={row.ltGoalSpan} style={{ ...tdStyle, fontSize: "7pt", padding: "3px" }}
+                path={row.bp && `${row.bp}.long_term_period`} label="長期目標（期間）" value={row.ltPeriod}>{row.ltPeriod || "　"}</EditableTd>}
+              {row.stGoalSpan !== undefined && <EditableTd rowSpan={row.stGoalSpan} style={{ ...tdStyle, padding: "4px" }}
+                path={row.gp && `${row.gp}.short_term_goal`} label="短期目標" value={row.stGoal} multiline>{row.stGoal || "　"}</EditableTd>}
+              {row.stGoalSpan !== undefined && <EditableTd rowSpan={row.stGoalSpan} style={{ ...tdStyle, fontSize: "7pt", padding: "3px" }}
+                path={row.gp && `${row.gp}.short_term_period`} label="短期目標（期間）" value={row.stPeriod}>{row.stPeriod || "　"}</EditableTd>}
+              <EditableTd style={{ ...tdStyle, padding: "3px 4px" }} path={row.sp && `${row.sp}.content`} label="サービス内容" value={row.content} multiline>{row.content || "　"}</EditableTd>
+              <EditableTd style={{ ...tdStyle, textAlign: "center" }} path={row.sp && `${row.sp}.insurance_flag`} label="※1 保険給付対象" value={row.flag}>{row.flag || "　"}</EditableTd>
+              <EditableTd style={{ ...tdStyle, padding: "3px 4px" }} path={row.sp && `${row.sp}.type`} label="サービス種別" value={row.type}>{row.type || "　"}</EditableTd>
+              <EditableTd style={{ ...tdStyle, fontSize: "7pt", padding: "3px" }} path={row.sp && `${row.sp}.provider`} label="※2 事業所" value={row.provider}>{row.provider || "　"}</EditableTd>
+              <EditableTd style={{ ...tdStyle, textAlign: "center" }} path={row.sp && `${row.sp}.frequency`} label="頻度" value={row.freq}>{row.freq || "　"}</EditableTd>
+              <EditableTd style={{ ...tdStyle, fontSize: "7pt", padding: "3px" }} path={row.sp && `${row.sp}.period`} label="期間" value={row.period}>{row.period || "　"}</EditableTd>
             </tr>
           ))}
         </tbody>
@@ -4692,7 +4836,10 @@ function EditForm({ reportType, content, onChange, userId, reportMonth }: {
 // ---------------------------------------------------------------------------
 
 const PRINT_STYLE_PORTRAIT = `
+/* ダブルクリックで直せるセルの目印。印刷には出さない */
+.editable-cell:hover { outline: 2px solid #93c5fd; outline-offset: -2px; background: #eff6ff !important; }
 @media print {
+  .editable-cell:hover { outline: none !important; background: #fff !important; }
   body * { visibility: hidden !important; }
   #print-area, #print-area * { visibility: visible !important; }
   #print-area { position: fixed !important; inset: 0 !important; width: 210mm !important; min-height: 297mm !important; padding: 8mm 10mm !important; font-size: 9pt !important; color: #000 !important; background: #fff !important; overflow: visible !important; }
@@ -4703,7 +4850,10 @@ const PRINT_STYLE_PORTRAIT = `
 }`;
 
 const PRINT_STYLE_LANDSCAPE = `
+/* ダブルクリックで直せるセルの目印。印刷には出さない */
+.editable-cell:hover { outline: 2px solid #93c5fd; outline-offset: -2px; background: #eff6ff !important; }
 @media print {
+  .editable-cell:hover { outline: none !important; background: #fff !important; }
   body * { visibility: hidden !important; }
   #print-area, #print-area * { visibility: visible !important; }
   #print-area { position: fixed !important; inset: 0 !important; width: 297mm !important; min-height: 210mm !important; padding: 6mm 8mm !important; font-size: 8pt !important; color: #000 !important; background: #fff !important; overflow: visible !important; }
@@ -5215,6 +5365,9 @@ function DocEditor({ doc, config, clientName, onSave, onStatusToggle, onDirtyCha
     try { await onStatusToggle(); } finally { setToggling(false); }
   };
 
+  // プレビューから直接編集するモーダル (null = 閉じている)
+  const [editTarget, setEditTarget] = useState<PrintEditTarget | null>(null);
+
   const handleOpenSend = () => {
     if (dirty) {
       toast.error("先に保存してから送付してください");
@@ -5279,8 +5432,22 @@ function DocEditor({ doc, config, clientName, onSave, onStatusToggle, onDirtyCha
         <Printer size={11} /> 印刷プレビュー（A4{isLandscape ? "横" : "縦"}）
       </div>
       <PreviewScaler paperWidth={paperWidth} paperMinHeight={paperMinHeight} paperPadding={paperPadding}>
-        <PrintView reportType={doc.report_type} content={content} config={config} />
+        {/* プレビューのセルをダブルクリックすると、その値だけを直すモーダルが出る */}
+        <PrintEditCtx.Provider value={setEditTarget}>
+          <PrintView reportType={doc.report_type} content={content} config={config} />
+        </PrintEditCtx.Provider>
       </PreviewScaler>
+
+      {editTarget && (
+        <PrintEditModal
+          target={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSave={(v) => {
+            handleChange(setByPath(content, editTarget.path, v));
+            setEditTarget(null);
+          }}
+        />
+      )}
 
       {showSendModal && clientName && currentOffice && (
         <SendDocumentModal
