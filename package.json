@@ -11,7 +11,8 @@
     "smoke:payroll": "tsx scripts/smoke-payroll.mts",
     "check:anon": "tsx scripts/anon-exposure-check.mts",
     "check:reports": "tsx scripts/reports-blank-check.mts",
-    "check:billing-gap": "tsx scripts/meisai-billing-gap.mts"
+    "check:billing-gap": "tsx scripts/meisai-billing-gap.mts",
+    "check:densou": "tsx scripts/densou-precheck.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
