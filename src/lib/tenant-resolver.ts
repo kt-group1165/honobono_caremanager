@@ -6,8 +6,18 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 //
 // 優先順位:
 //   (1) user_offices.is_primary=true の office の tenant_id（office_admin / member）
+//       ⚠ ただし **role-tenant は採らない**（下記）
 //   (2) (1) が無ければ group-type tenant（group_admin の本部、KT Group は 'kt-group'）
 //   (3) いずれも無ければ auth_user_admin_tenants() rpc の最初（最終 fallback）
+//
+// ⚠ role-tenant (tenants.tenant_type='role') を返してはいけない。
+//   'sales-hq'(統括営業本部) / 'fukuyogu-kanri'(福祉用具管理者) / 'honsha' は
+//   **視点を切り替えるための入れ物**であって、利用者データは 1 件も持たない。
+//   clients も kaigo_* も全部 group tenant ('kt-group') にぶら下がる。
+//
+//   実際に踏んだ: group_admin の所属 office が 統括営業本部 しか無いため
+//   スマホURL (kaigo_support_tokens) が tenant_id='sales-hq' で発行され、
+//   開くと「0名の利用者」になった (2026-08-31)。
 //
 // 戻り値:
 //   - 成功: tenant_id (TEXT)
@@ -34,7 +44,16 @@ export async function resolvePreferredTenantId(
     .limit(1)
     .maybeSingle();
   const officeTenant = (officeRow as { offices?: { tenant_id?: string } } | null)?.offices?.tenant_id;
-  if (officeTenant) return { ok: true, tenantId: officeTenant };
+  if (officeTenant) {
+    // role-tenant はデータを持たないので採らない。(2) の group tenant に落とす。
+    const { data: tRow } = await supabase
+      .from("tenants")
+      .select("tenant_type")
+      .eq("id", officeTenant)
+      .maybeSingle();
+    const tType = (tRow as { tenant_type?: string } | null)?.tenant_type;
+    if (tType !== "role") return { ok: true, tenantId: officeTenant };
+  }
 
   // (2) group-type tenant（RLS で自分が見えるもののみ返る）
   const { data: groupTenant } = await supabase
