@@ -467,8 +467,8 @@ async function main(): Promise<void> {
       }
     }
     if (never.length) {
-      const crossed = never.filter((w) => w.otherSystemBilled);
-      const pure = never.filter((w) => !w.otherSystemBilled);
+      // 制度またぎは別枠 (crossSystem) で出すので、ここに来るのは全部「本命」
+      const pure = never;
       if (pure.length) {
         // 対象月に保険の資格があるかで意味が変わる。
         //   資格あり → 請求できたはずなのにしていない = **請求漏れの疑いが濃い**
