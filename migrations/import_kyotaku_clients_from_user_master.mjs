@@ -147,6 +147,19 @@ async function fetchAll(table, select, tweak) {
  * ⚠ certByNum は 利用者番号 → 認定レコードの **配列**。1 件だけ取ると
  *   前のケアマネ (他社) を掴むことがある。
  */
+/**
+ * CSV 内で人を一意に指すキー。
+ *
+ * ⚠ **利用者番号だけでは一意にならない。**拠点ごとの CSV なら一意だが、
+ *   「居宅全体」のような全社出力では事業所をまたいで重複する。
+ *   実測 (2026-09-01): 利番 2147483647 (= ほのぼのの「番号なし」sentinel) を
+ *   **44 人**が共有。ほかに 26 番号が複数人。
+ *   番号で束ねると 44 人が 1 人に潰れ、全員の認定が 1 人にぶら下がる。
+ */
+function personKey(num, name, birth) {
+  return `${String(num ?? "").trim()}|${String(name ?? "").normalize("NFKC").replace(/[\s　]/g, "")}|${String(birth ?? "").trim()}`;
+}
+
 function latestSupportOffice(certs) {
   if (!Array.isArray(certs) || !certs.length) return null;
   let best = null;
@@ -197,8 +210,11 @@ async function main() {
   const hokenPre = readCsv(CSV_HOKEN);
   const hpHas = hokenPre.col("被保険者番号");
   const hpNum = hokenPre.col("利用者番号");
+  const hpName = hokenPre.col("利用者名");
+  const hpBirth = hokenPre.col("生年月日");
   const hokenHasCert = new Set(
-    hokenPre.rows.filter((r) => t(r[hpHas])).map((r) => t(r[hpNum])).filter(Boolean));
+    hokenPre.rows.filter((r) => t(r[hpHas]))
+      .map((r) => personKey(t(r[hpNum]), t(r[hpName]).replace(/\s+/g, " "), iso(r[hpBirth]))));
   /** 被保番が無くて外した人 (黙って落とさず必ず出す) */
   const noCert = [];
 
@@ -214,8 +230,10 @@ async function main() {
     //   スタッフ用ダミー (ﾓﾆ ﾀﾘﾝｸﾞ / 有給 休暇 / 研修 五井) がこれで落ちる。
     //   名前の形で判定すると「＊小林 和子」「＊佐藤 タキコ」のような
     //   **記号付きの本物**まで落ちる (2 名とも被保番あり)。
-    if (!hokenHasCert.has(u)) { noCert.push(`${u} ${name}`); continue; }
-    if (!baseByNum.has(u)) baseByNum.set(u, {
+    const pk = personKey(u, name, iso(c[bc("生年月日")]));
+    if (!hokenHasCert.has(pk)) { noCert.push(`${u} ${name}`); continue; }
+    if (!baseByNum.has(pk)) baseByNum.set(pk, {
+      num: u,
       name,
       furigana: t(c[bc("フリガナ")]).replace(/\s+/g, " "),
       birth_date: iso(c[bc("生年月日")]),
@@ -236,10 +254,12 @@ async function main() {
     const start = iso(c[hc("認定有効期間－開始日")]);
     const insured = t(c[hc("被保険者番号")]);
     if (!start || !insured) continue;
-    if (!certByNum.has(u)) certByNum.set(u, []);
+    // ⚠ 番号だけで束ねない。同じ番号を複数人が使う (上の personKey 参照)
+    const pk = personKey(u, t(c[hc("利用者名")]).replace(/\s+/g, " "), iso(c[hc("生年月日")]));
+    if (!certByNum.has(pk)) certByNum.set(pk, []);
     // ⚠ 列名は client_insurance_records の実スキーマに合わせる。
     //   user_id ではなく **client_id**、cert_* ではなく **certification_***。
-    certByNum.get(u).push({
+    certByNum.get(pk).push({
       insurer_number: t(c[hc("保険者番号")]),
       insurer_name: t(c[hc("保険者")]) || null,
       insured_number: insured,
@@ -311,17 +331,18 @@ async function main() {
   const nameKey = (s) => (s ?? "").normalize("NFKC").replace(/[\s　]/g, "");
   const toCreate = [], reused = [], birthFix = [];
   const numMismatch = [];
-  for (const [u, b] of baseByNum) {
+  for (const [pk, b] of baseByNum) {
+    const u = b.num;
     // ① (保険者, 被保番) で引く。これが当たれば利用者番号は見ない。
     //    被保番は保険者の中で一意なので、番号の使い回しに影響されない。
-    const certs = certByNum.get(u) ?? [];
+    const certs = certByNum.get(pk) ?? [];
     let byIns = null;
     for (const c of certs) {
       const id = byInsured.get(`${c.insurer_number}|${c.insured_number}`);
       if (id) { byIns = idIndex.get(id) ?? null; break; }
     }
     if (byIns) {
-      reused.push({ ...b, csvNum: u, user_number: byIns.user_number, id: byIns.id, dbName: byIns.name });
+      reused.push({ ...b, csvNum: pk, user_number: byIns.user_number, id: byIns.id, dbName: byIns.name });
       continue;
     }
 
@@ -336,7 +357,7 @@ async function main() {
     const sameBirth = !!(hit && b.birth_date && hit.birth_date && hit.birth_date === b.birth_date);
     const sameName = !!(hit && nameKey(hit.name) === nameKey(b.name));
     if (hit && (sameBirth || sameName)) {
-      reused.push({ ...b, csvNum: u, user_number: u, id: hit.id, dbName: hit.name });
+      reused.push({ ...b, csvNum: pk, user_number: u, id: hit.id, dbName: hit.name });
       continue;
     }
     // 同じ番号・同じ氏名で **生年月日だけ数日ずれる**なら、当方の入力ミス。
@@ -345,19 +366,25 @@ async function main() {
     // 保険者 121046 / 被保番 1000787265 が一致していて同一人物だった。
     if (hit && nameKey(hit.name) === nameKey(b.name) && b.birth_date && hit.birth_date
         && Math.abs(new Date(hit.birth_date) - new Date(b.birth_date)) < 40 * 864e5) {
-      reused.push({ ...b, csvNum: u, user_number: u, id: hit.id, dbName: hit.name });
+      reused.push({ ...b, csvNum: pk, user_number: u, id: hit.id, dbName: hit.name });
       birthFix.push({ id: hit.id, name: b.name, from: hit.birth_date, to: b.birth_date });
       continue;
     }
     if (hit) numMismatch.push(`${u}: ほのぼの「${b.name}」(${b.birth_date}) / 当方「${hit.name}」(${hit.birth_date})`);
     // 番号が別人に取られている、または未登録。氏名+生年月日で拾えれば再利用する
     const alt = byNameBirth.get(`${b.name.normalize("NFKC").replace(/[\s　]/g, "")}|${b.birth_date}`);
-    if (alt) reused.push({ ...b, csvNum: u, user_number: alt.user_number, id: alt.id, dbName: alt.name });
+    if (alt) reused.push({ ...b, csvNum: pk, user_number: alt.user_number, id: alt.id, dbName: alt.name });
     // ⚠ user_number は NOT NULL。番号が別人に取られている人には
     //   **衝突しない仮番号** `HN-<ほのぼのの番号>` を付ける。
     //   ほのぼのの番号を素直に入れると、次の取込で必ずどちらかを取り違える。
     //   本当の番号は notes に残しておく (後で人が直せるように)。
-    else toCreate.push({ ...b, csvNum: u, user_number: hit ? `HN-${u}` : u, numTaken: !!hit });
+    // ⚠ **CSV 内で複数人が使っている番号は user_number にしない。**
+    //   同じ `HN-2147483647` を 43 人に付けると衝突する。連番を足して一意にする。
+    else {
+      const shared = (numPersons.get(u)?.size ?? 0) > 1;
+      const un = (hit || shared) ? `HN-${u}${shared ? `-${++hnSeq}` : ""}` : u;
+      toCreate.push({ ...b, csvNum: pk, user_number: un, numTaken: !!hit || shared });
+    }
   }
   if (numMismatch.length) {
     console.log(`\n  ⚠ 利用者番号が別人に使われている ${numMismatch.length} 件 (番号では引かない)`);
@@ -369,8 +396,8 @@ async function main() {
   if (BY_SUPPORT_OFFICE) {
     const plan = new Map();
     let noOff = 0;
-    for (const u of baseByNum.keys()) {
-      const nm2 = latestSupportOffice(certByNum.get(u));
+    for (const pk2 of baseByNum.keys()) {
+      const nm2 = latestSupportOffice(certByNum.get(pk2));
       const o = nm2 ? officeByNorm.get(normOfficeName(nm2)) : null;
       if (o) plan.set(o.name, (plan.get(o.name) ?? 0) + 1);
       else noOff++;
