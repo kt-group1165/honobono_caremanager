@@ -59,6 +59,19 @@ export interface UriageBreakdown {
   kohi: number;
   /** 利用者負担 (法定分。自費は含まない) */
   userBurden: number;
+  /**
+   * ⚠ **システムが実績から計算した値ではない**売上。
+   * 事業所の売上報告書 (Excel) から写したもの (kaigo_office_reported_revenue)。
+   *
+   *   予防プラン (介護予防支援)  包括からの委託で国保連を通らないため請求データが無い
+   *   その他収入                  文書料・自費等。請求システムに乗らない
+   *
+   * total には **含める**が、どこまでがシステムの計算値かが分かるよう別に持つ。
+   * 画面では「報告書より」と分かるように出すこと。
+   */
+  reported: number;
+  /** reported の内訳 (category → 円) */
+  reportedBreakdown: Record<string, number>;
   /** 集計上の注意 (一部制度の取得に失敗した等)。金額には影響しない */
   warnings: string[];
 }
@@ -75,6 +88,8 @@ export const EMPTY_URIAGE: UriageBreakdown = {
   insurance: 0,
   kohi: 0,
   userBurden: 0,
+  reported: 0,
+  reportedBreakdown: {},
   warnings: [],
 };
 
@@ -226,9 +241,28 @@ export async function aggregateMonthlyUriage(
   jihi += jippi.total;
   warnings.push(...jippi.warnings);
 
+  // 当システムで請求データを持たないもの (予防プラン・その他収入) は
+  // 事業所の報告書から写した値を足す。⚠ 計算値ではないので別に持つ。
+  let reported = 0;
+  const reportedBreakdown: Record<string, number> = {};
+  {
+    const { data, error } = await supabase
+      .from("kaigo_office_reported_revenue")
+      .select("category, amount, source")
+      .eq("office_id", opts.officeId)
+      .eq("month", monthStr);
+    // 表が無い環境 (migration 未適用) は 0 のまま進む。握りつぶさず warning に残す
+    if (error) warnings.push(`報告書からの売上 (予防・その他) を取得できませんでした: ${error.message}`);
+    for (const r of data ?? []) {
+      const amt = Number(r.amount ?? 0);
+      reported += amt;
+      reportedBreakdown[r.category] = (reportedBreakdown[r.category] ?? 0) + amt;
+    }
+  }
+
   return {
     month: monthStr,
-    total: kaigo + sougou + shogai + chiiki + kyotaku + jihi,
+    total: kaigo + sougou + shogai + chiiki + kyotaku + jihi + reported,
     kaigo,
     sougou,
     shogai,
@@ -238,6 +272,8 @@ export async function aggregateMonthlyUriage(
     insurance,
     kohi,
     userBurden,
+    reported,
+    reportedBreakdown,
     warnings,
   };
 }
@@ -265,7 +301,7 @@ export interface AllOfficesUriage {
 
 /** UriageBreakdown の単純加算 (制度別・財源別ともに整数加算) */
 export function sumUriage(month: string, list: UriageBreakdown[]): UriageBreakdown {
-  const out: UriageBreakdown = { ...EMPTY_URIAGE, month, warnings: [] };
+  const out: UriageBreakdown = { ...EMPTY_URIAGE, month, warnings: [], reportedBreakdown: {} };
   for (const u of list) {
     out.total += u.total;
     out.kaigo += u.kaigo;
@@ -279,6 +315,10 @@ export function sumUriage(month: string, list: UriageBreakdown[]): UriageBreakdo
     out.insurance += u.insurance;
     out.kohi += u.kohi;
     out.userBurden += u.userBurden;
+    // ⚠ reported (報告書からの写し) も足し忘れると total にだけ乗って内訳が 0 になる
+    out.reported += u.reported;
+    for (const [k, v] of Object.entries(u.reportedBreakdown ?? {}))
+      out.reportedBreakdown[k] = (out.reportedBreakdown[k] ?? 0) + v;
     out.warnings.push(...u.warnings);
   }
   return out;

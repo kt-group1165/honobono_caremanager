@@ -5471,6 +5471,26 @@ const __certsCache = new Map<string, Certification[]>();
 
 // 居宅サービス計画書 第1〜3表: この 3 つは「第1表/第2表/第3表」タブで並べる
 const CARE_PLAN_TAB_TYPES = ["care-plan-1", "care-plan-2", "care-plan-3"];
+
+/**
+ * 居宅介護支援の様式一覧。**第1表から第7表まで一気に切り替えられる**ようにする。
+ *
+ * ⚠ 第4表 (サービス担当者会議の要点) は未実装なので押せない状態で出す。
+ *   様式の並びから抜くと「4 が無い」ことが分からなくなるため、抜かずに残す。
+ *
+ * ⚠ 第1〜3表 は cert-linked (認定に紐づく) で pushState の即時切替ができるが、
+ *   第5〜7表 は対象月を持つ別系統なので router.push で遷移する。
+ *   混ぜて pushState すると __docsCache のキー前提が崩れる。
+ */
+const KYOTAKU_FORM_TABS: { no: number; type: string | null; label: string }[] = [
+  { no: 1, type: "care-plan-1", label: "居宅サービス計画書（第1表）" },
+  { no: 2, type: "care-plan-2", label: "居宅サービス計画書（第2表）" },
+  { no: 3, type: "care-plan-3", label: "週間サービス計画表（第3表）" },
+  { no: 4, type: null, label: "サービス担当者会議の要点（第4表）— 未実装" },
+  { no: 5, type: "support-progress", label: "居宅介護支援経過（第5表）" },
+  { no: 6, type: "service-usage", label: "サービス利用票（第6表）" },
+  { no: 7, type: "service-usage-detail", label: "サービス利用票別表（第7表）" },
+];
 // 計画書ファミリ = 第1〜3表 + 介護予防サービス・支援計画書。
 // この 4 種の相互切替はクライアント完結 (window.history.pushState + localType) で行う。
 // 予防版を含めるのは、認定期間タブが要支援↔要介護を跨ぐときに server を経由せず
@@ -5912,20 +5932,23 @@ export function ReportsContent({ userId, reportType: reportTypeProp, initialDocs
                   {/* 居宅サービス計画書 (1〜3表) は 3 ボタン常時表示で直接遷移
                       (「次の表へ」を順に押さなくても任意の表へ飛べる)。
                       介護予防サービス・支援計画書 (yobo-care-plan) は単票なので出さない。 */}
-                  {CARE_PLAN_TAB_TYPES.includes(reportType) && (
+                  {KYOTAKU_FORM_TABS.some((t) => t.type === reportType) && (
                     <div className="mt-1.5 flex justify-center gap-1">
-                      {(["care-plan-1", "care-plan-2", "care-plan-3"] as const).map((t, ti) => (
+                      {KYOTAKU_FORM_TABS.map((t) => (
                         <button
-                          key={t}
-                          onClick={() => t !== reportType && navigateTo(t)}
+                          key={t.no}
+                          onClick={() => t.type && t.type !== reportType && navigateTo(t.type)}
+                          disabled={!t.type}
                           className={
-                            t === reportType
-                              ? "rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white"
-                              : "rounded-md border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+                            !t.type
+                              ? "rounded-md border border-dashed px-3 py-1 text-xs text-gray-300 cursor-not-allowed"
+                              : t.type === reportType
+                                ? "rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white"
+                                : "rounded-md border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
                           }
-                          title={REPORT_CONFIG[t]?.titleJa ?? ""}
+                          title={t.label}
                         >
-                          第{ti + 1}表
+                          第{t.no}表
                         </button>
                       ))}
                     </div>

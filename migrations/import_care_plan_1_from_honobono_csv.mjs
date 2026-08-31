@@ -120,6 +120,26 @@ async function main() {
     clientByKey.set(k, r.client_id);
   }
 
+  // ⚠ 第1表は **cert-linked**。certification_id を入れないと画面が見つけられず、
+  //   開くたびに空の第1表が自動生成される (実際に 11 件できていた)。
+  const certs2 = await fetchAll("client_insurance_records",
+    "id, client_id, certification_start_date, certification_end_date");
+  const certsByUser = new Map();
+  for (const c of certs2) {
+    if (!certsByUser.has(c.client_id)) certsByUser.set(c.client_id, []);
+    certsByUser.get(c.client_id).push(c);
+  }
+  const pickCert = (uid, day) => {
+    const list = certsByUser.get(uid) ?? [];
+    if (!list.length) return null;
+    const valid = list.filter((c) =>
+      (!c.certification_start_date || c.certification_start_date <= day) &&
+      (!c.certification_end_date || c.certification_end_date >= day));
+    const pool = valid.length ? valid : list;
+    return pool.slice().sort((a, b) =>
+      String(b.certification_start_date ?? "").localeCompare(String(a.certification_start_date ?? "")))[0]?.id ?? null;
+  };
+
   const plans = await fetchAll("kaigo_care_plans", "id, user_id, start_date");
   const planByUser = new Map();
   for (const p of plans) {
@@ -183,6 +203,7 @@ async function main() {
       title: `居宅サービス計画書(1)${a.v.made ? `（${a.v.made}）` : ""}`,
       report_month: a.v.made ? a.v.made.slice(0, 7) : null,
       care_plan_id: a.plan?.id ?? null,
+      certification_id: pickCert(a.uid, a.v.made || "9999-12-31"),
       status: "draft",
       content: {
         user_name: a.name,

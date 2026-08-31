@@ -50,6 +50,7 @@ const OFFICE_AMOUNT_KEYS = [
   "chiiki",
   "kyotaku",
   "jihi",
+  "reported",
   "total",
 ] as const;
 type OfficeAmountKey = (typeof OFFICE_AMOUNT_KEYS)[number];
@@ -64,6 +65,8 @@ const OFFICE_COLUMNS: { key: OfficeSortKey; label: string; numeric: boolean }[] 
   { key: "chiiki", label: "地域生活支援", numeric: true },
   { key: "kyotaku", label: "居宅支援費", numeric: true },
   { key: "jihi", label: "自費", numeric: true },
+  // 報告書 (Excel) から写した売上。システムの計算値ではないので列を分けて出す
+  { key: "reported", label: "予防・その他※", numeric: true },
   { key: "total", label: "売上", numeric: true },
 ];
 
@@ -568,6 +571,12 @@ export default function DashboardPage() {
       { key: "chiiki", label: "地域生活支援", value: shownUriage.chiiki, cls: "bg-violet-400" },
       { key: "kyotaku", label: "居宅介護支援費", value: shownUriage.kyotaku, cls: "bg-sky-400" },
       { key: "jihi", label: "自費", value: shownUriage.jihi, cls: "bg-amber-400" },
+      // ⚠ システムの計算値ではなく **事業所の報告書 (Excel) から写した**値。
+      //   予防プラン (包括からの委託で国保連を通らない) と その他収入。
+      {
+        key: "reported", label: "予防・その他 (報告書より)",
+        value: shownUriage.reported ?? 0, cls: "bg-gray-400",
+      },
     ];
     const nonZero = all.filter((l) => l.value !== 0);
     return nonZero.length > 0 ? nonZero : [all[0]];
@@ -880,6 +889,10 @@ export default function DashboardPage() {
                           <td className="px-3 py-2 text-right text-gray-600 tabular-nums">
                             {o.uriage.jihi ? o.uriage.jihi.toLocaleString() : "—"}
                           </td>
+                          {/* ⚠ 報告書 (Excel) から写した値。システムの計算値ではない */}
+                          <td className="px-3 py-2 text-right text-gray-500 tabular-nums italic">
+                            {o.uriage.reported ? o.uriage.reported.toLocaleString() : "—"}
+                          </td>
                           <td className="px-3 py-2 text-right font-semibold text-gray-800 tabular-nums">
                             {o.uriage.total.toLocaleString()}
                           </td>
@@ -909,6 +922,11 @@ export default function DashboardPage() {
                     </tfoot>
                   </table>
                 </div>
+                <p className="mt-1 px-3 text-xs text-gray-500">
+                  ※「予防・その他」は<strong>事業所の売上報告書 (Excel) から写した値</strong>で、
+                  システムが実績から計算したものではありません。介護予防支援は包括からの委託で
+                  国保連を通らないため請求データを持っていません。
+                </p>
                 {allForMonth.errors.length > 0 && (
                   <p className="mt-1 px-3 text-xs text-red-600">
                     ※ 集計できなかった {allForMonth.errors.length} 事業所は合計に含まれていません
