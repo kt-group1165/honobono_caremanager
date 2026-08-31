@@ -32,6 +32,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { officesForArea } from "./_area_offices.mjs";
 
 const EXECUTE = process.argv.includes("--execute");
 const KAIGO = fileURLToPath(new URL("../", import.meta.url));
@@ -153,14 +154,27 @@ async function main() {
     if (!officeClients.has(a.office_id)) officeClients.set(a.office_id, new Set());
     officeClients.get(a.office_id).add(a.client_id);
   }
-  /** 拠点フォルダ名 → その名前を含む事業所の client 集合 */
+  /**
+   * 拠点フォルダ名 → その拠点の事業所に割り当てられている client 集合。
+   *
+   * ⚠ **部分一致で引いてはいけない。**2026-09-01 に実測したところ
+   *   K姉 / 姉ム / 袖ケ浦 / 茂原 の 4 拠点は事業所名に拠点名の字が無く
+   *   (ＫＴ姉崎 / ムツミ / 袖ヶ浦(ヶ) / リンクス)、**1 件も当たっていなかった**。
+   *   その結果この 4 拠点は候補ゼロ → 「該当者が見つからない」に落ちて対応表が
+   *   作れず、check:billing-gap の「利用者に辿り着けない」が水増しされていた。
+   *   対応表は _area_offices.mjs に集約してある。
+   */
+  const unknownAreas = new Set();
   const clientsInArea = (area) => {
     const set = new Set();
-    const key = normName(area);
-    for (const o of offices) {
-      if (!normName(o.name).includes(key)) continue;
-      for (const cid of officeClients.get(o.id) ?? []) set.add(cid);
+    let hit = officesForArea(area, offices);
+    if (hit.length === 0) {
+      // 表に無い拠点は従来どおり部分一致で拾う (新しいフォルダが増えても止まらないように)
+      unknownAreas.add(area);
+      const key = normName(area);
+      hit = offices.filter((o) => normName(o.name).includes(key));
     }
+    for (const o of hit) for (const cid of officeClients.get(o.id) ?? []) set.add(cid);
     return set;
   };
   const areaCache = new Map();
@@ -230,6 +244,9 @@ async function main() {
   }
 
   console.log("");
+  if (unknownAreas.size > 0) {
+    console.log(`⚠ _area_offices.mjs に無い拠点 ${[...unknownAreas].join(" / ")} — 部分一致で拾っています。表に足してください`);
+  }
   console.log(`提案 ${proposals.length} 件 / 同名が複数で決められない ${ambiguous.length} / 該当者が見つからない ${noMatch.length}`);
   proposals.forEach((p) => console.log(
     `   ${p.area.padEnd(8)} 番号${String(p.num).padEnd(11)}「${p.name}」${String(p.rows).padStart(3)}行` +
