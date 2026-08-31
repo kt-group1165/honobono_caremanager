@@ -243,9 +243,23 @@ async function main(): Promise<void> {
 
   // 利用者番号 → client_id (取込と同じマッピングファイルを使う)
   const mapCache = new Map<string, Record<string, string>>();
+  // ⚠ 対応表のファイル名は **フォルダ名と一致しない**。取込は TAG で読むので
+  //   さつきが丘 の表は `_meisai_num_to_client_さつき.json` にある。
+  //   フォルダ名だけで探すと表が無いことになり、番号だけの引き当てに落ちて
+  //   別人に当たる (2026-09-01 是正。さつきが丘 3 名がこれで誤検出されていた)。
+  const existingTags = readdirSync(join(KAIGO, "migrations"))
+    .filter((f) => /^_meisai_num_to_client_.*\.json$/.test(f))
+    .map((f) => f.replace("_meisai_num_to_client_", "").replace(".json", ""));
   const loadMap = (area: string): Record<string, string> | null => {
     if (mapCache.has(area)) return mapCache.get(area)!;
-    const p = join(KAIGO, "migrations", `_meisai_num_to_client_${area}.json`);
+    let tag: string | undefined = existingTags.includes(area) ? area : undefined;
+    if (!tag) {
+      const cands = existingTags.filter((t) => area.startsWith(t) && t.length >= 2);
+      cands.sort((a, b) => b.length - a.length);
+      tag = cands[0];
+    }
+    if (!tag) return null;
+    const p = join(KAIGO, "migrations", `_meisai_num_to_client_${tag}.json`);
     if (!existsSync(p)) return null;
     const m = JSON.parse(readFileSync(p, "utf8")) as Record<string, string>;
     mapCache.set(area, m);
