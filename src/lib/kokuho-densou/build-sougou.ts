@@ -332,7 +332,12 @@ export function buildSougouDensou(
       //      利用者で割れるため名称からは導出できない → 一覧CSV から取り込んだ値を優先する。
       r.careOfficeNumber ? (r.planCreatorKubun ?? "3") : "2", // 19
       r.careOfficeNumber ?? "", // 20 事業所番号 (居宅介護支援事業所。区分2のときは空)
-      "", // 21 開始年月日 (7131 と同じ理由で未実装 — build.ts の項21 コメント参照)
+      // 21 開始年月日: 当該月に当事業所の提供を開始した利用者のみ設定する。
+      //    介護 (7131) と同じ規則。ほのぼのの「介護請求(明細付)_一覧」の
+      //    「サービス開始年月日」を取り込んだ値 (client_insurance_records.service_start_date)。
+      //    ⚠ **初回訪問日ではなく契約日**なので実績からは導けない (build.ts 項21 参照)。
+      //    総合事業だけ未実装のままだったので K姉 1000043386 等で不一致になっていた。
+      r.serviceStartDate ? r.serviceStartDate.replace(/-/g, "") : "", // 21 開始年月日
       "", // 22 中止年月日
       "", // 23 中止理由・入所前状況
       "", // 24 入所年月日
