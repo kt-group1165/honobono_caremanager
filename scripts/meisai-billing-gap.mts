@@ -34,6 +34,10 @@
  *   ⚠ 伝送データが手元に無い拠点は判定できないので「判定不能」として分けて出す。
  *     無いものを「請求漏れ」と言わない。
  *
+ *   請求が見当たらない人は **他の月に請求があるか**も併せて出す。意味がまるで違う。
+ *     他の月にはある → その月だけ抜けている = **取りこぼしの疑いが濃い**
+ *     どの月にも無い → もともと請求していない = 自費運用などの可能性が高い
+ *
  * ══ 利用者の引き当て (ここで一度しくじった) ══════════════════════════════════
  *   最初は取込の `_meisai_num_to_client_<拠点>.json` だけで引いていたが、
  *   **障害の取込はこのファイルを使っていない** (import_meisai_shougai_records.mjs は
@@ -147,32 +151,64 @@ function readMeisai(): Map<string, Worked> {
 }
 
 /**
- * 伝送データに出てくる番号を **制度ごとに** 集める。
- * 制度はフォルダで決まる: …/訪問介護/障害/… は障害、それ以外 (介護・居宅・訪問入浴) は介護。
+ * 伝送データを 1 回だけ走査して「番号 → その番号が請求された提供年月の集合」を作る。
+ *
+ * ⚠ **月はフォルダ名で決めてはいけない。行に書かれている提供年月で決める。**
+ *   月遅れ請求は翌月のフォルダに入る (例: 大網 池田 芳勝 の 202606 分は
+ *   202607 フォルダの KK260801 に入っている)。フォルダで数えると
+ *   「6 月だけ請求が無い」と誤判定する (2026-08-31 に実際に踏んだ)。
+ *
+ * 制度はフォルダで決まる: …/訪問介護/障害/… は障害、それ以外は介護。
  */
-function readDensouNumbers(): { kaigo: Set<string>; shogai: Set<string>; areas: Set<string>; files: number } {
-  const kaigo = new Set<string>();
-  const shogai = new Set<string>();
-  const areas = new Set<string>();
-  let files = 0;
+interface DensouIndex {
+  /** 制度 → 番号 → 提供年月 (YYYY-MM) の集合 */
+  kaigo: Map<string, Set<string>>;
+  shogai: Map<string, Set<string>>;
+  areas: Set<string>;
+  files: number;
+  months: Set<string>;
+}
+
+function readDensouIndex(): DensouIndex {
+  const idx: DensouIndex = {
+    kaigo: new Map(), shogai: new Map(), areas: new Set(), files: 0, months: new Set(),
+  };
   const base = join(KAIGO, "伝送データ");
-  if (!existsSync(base)) return { kaigo, shogai, areas, files };
+  if (!existsSync(base)) return idx;
   walk(base, (p) => {
     const name = basename(p);
     if (!/\.csv$/i.test(name)) return;
     if (/解説/.test(name)) return;
     // 当方が書き出したものは「ほのぼのが請求したか」の判定材料にならない
     if (p.includes(`${sep}新システム${sep}`)) return;
-    if (!p.includes(YYYYMM)) return;
-    files++;
+    idx.files++;
     const rel = p.slice(base.length + 1);
-    areas.add(rel.split(sep)[0]);
-    const text = decodeSjis(p);
-    const into = rel.includes(`${sep}障害${sep}`) ? shogai : kaigo;
-    // 引用符つき/なし どちらでも拾えるように 10 桁の英数字を機械的に集める
-    for (const m of text.matchAll(/[0-9A-Za-z]{10}/g)) into.add(m[0]);
+    idx.areas.add(rel.split(sep)[0]);
+    const into = rel.includes(`${sep}障害${sep}`) ? idx.shogai : idx.kaigo;
+    for (const line of decodeSjis(p).split(/\r?\n/)) {
+      if (!line) continue;
+      // 提供年月は 6 桁で、前後がカンマ (認定期間などの 8 桁日付とは区別される)
+      const ymMatches = [...line.matchAll(/,(20\d{4}),/g)].map((m) => m[1]);
+      if (ymMatches.length === 0) continue;
+      // ⚠ 6 桁の数字は単位数や金額でも出るので、**月として成立するものだけ**採る。
+      //   絞らないと 2097-48 のような値が混ざり、偶然 202606 と一致した行で
+      //   「請求済み」と誤判定しうる。
+      const months = [...new Set(ymMatches)]
+        .filter((y) => {
+          const yy = Number(y.slice(0, 4)), mm = Number(y.slice(4));
+          return yy >= 2015 && yy <= 2035 && mm >= 1 && mm <= 12;
+        })
+        .map((y) => `${y.slice(0, 4)}-${y.slice(4)}`);
+      if (months.length === 0) continue;
+      months.forEach((m) => idx.months.add(m));
+      for (const nm of line.matchAll(/[0-9A-Za-z]{10}/g)) {
+        let set = into.get(nm[0]);
+        if (!set) { set = new Set(); into.set(nm[0], set); }
+        months.forEach((m) => set!.add(m));
+      }
+    }
   });
-  return { kaigo, shogai, areas, files };
+  return idx;
 }
 
 async function fetchAll<T>(build: () => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
@@ -187,8 +223,10 @@ async function main(): Promise<void> {
   const worked = readMeisai();
   console.log(`MEISAI: 利用者 ${worked.size} 件ぶん (拠点×制度×利用者番号)`);
 
-  const densou = readDensouNumbers();
+  const densou = readDensouIndex();
   console.log(`伝送データ: ${densou.files} 本 / 拠点 ${densou.areas.size} / 番号 介護 ${densou.kaigo.size} 種類・障害 ${densou.shogai.size} 種類`);
+  const ms = [...densou.months].sort();
+  console.log(`伝送に出てくる提供年月: ${ms.length} 種類 (${ms[0] ?? "-"} 〜 ${ms[ms.length - 1] ?? "-"})`);
   if (densou.files === 0) {
     console.log("伝送データが 1 本も無いので判定できません。");
     process.exit(0);
@@ -285,7 +323,7 @@ async function main(): Promise<void> {
   }
 
   const notImported: Worked[] = [];
-  const notBilled: (Worked & { why: string })[] = [];
+  const notBilled: (Worked & { why: string; otherMonths: string[] })[] = [];
   const noNumber: Worked[] = [];
   let billed = 0;
   for (const [key, w] of worked) {
@@ -299,7 +337,11 @@ async function main(): Promise<void> {
     if (nums.length === 0) { noNumber.push(w); continue; }
     if (nums.some((n) => pool.has(n))) { billed++; continue; }
     if (!densou.areas.has(w.area)) continue;              // その拠点の伝送が手元に無い → 判定不能
-    notBilled.push({ ...w, why: `番号 ${nums.join("/")} が伝送に無い` });
+    // 他の月に請求があるか。あるならその月だけ抜けている = 取りこぼしの疑いが濃い
+    const otherMonths = [...new Set(nums.flatMap((n) => [...(pool.get(n) ?? [])]))]
+      .filter((m) => m !== MONTH)
+      .sort();
+    notBilled.push({ ...w, why: `番号 ${nums.join("/")} が伝送に無い`, otherMonths });
   }
 
   // ⚠ MEISAI の「金額」は **ヘルパーに払った賃金** (出どころが NEXT の賃金集計)。
@@ -313,8 +355,20 @@ async function main(): Promise<void> {
     console.log(`${EOL_}★ 稼働はあるのに伝送に 1 行も無い (${notBilled.length} 名) — 人が見て 自費/保険外/他事業所請求 でないか確かめること
    (金額は **ヘルパーに払った賃金**。請求額ではない)`);
     notBilled.sort((a, b) => b.amount - a.amount);
-    for (const w of notBilled) {
-      console.log(`   ${w.area.padEnd(8)} ${w.system.padEnd(2)} ${w.clientName.padEnd(16)} ${String(w.rows).padStart(3)}回 ${yen(w.amount).padStart(12)}  コード ${[...w.codes].join(",")}`);
+    // 「その月だけ抜けている」ほうが取りこぼしの疑いが濃いので先に出す
+    const onlyThisMonth = notBilled.filter((w) => w.otherMonths.length > 0);
+    const never = notBilled.filter((w) => w.otherMonths.length === 0);
+    if (onlyThisMonth.length) {
+      console.log(`${EOL_}  ── ★★ 他の月には請求がある = **その月だけ抜けている** (${onlyThisMonth.length} 名) ──`);
+      for (const w of onlyThisMonth) {
+        console.log(`   ${w.area.padEnd(8)} ${w.system.padEnd(2)} ${w.clientName.padEnd(16)} ${String(w.rows).padStart(3)}回 ${yen(w.amount).padStart(12)}  請求のある月: ${w.otherMonths.join(",")}`);
+      }
+    }
+    if (never.length) {
+      console.log(`${EOL_}  ── どの月にも請求が無い (${never.length} 名) — 自費運用などの可能性 ──`);
+      for (const w of never) {
+        console.log(`   ${w.area.padEnd(8)} ${w.system.padEnd(2)} ${w.clientName.padEnd(16)} ${String(w.rows).padStart(3)}回 ${yen(w.amount).padStart(12)}  コード ${[...w.codes].join(",")}`);
+      }
     }
   }
   if (noNumber.length) {
