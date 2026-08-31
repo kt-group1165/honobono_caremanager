@@ -458,6 +458,9 @@ export async function aggregateMonthlyShogaiSeikyu(
     "client_id, beneficiary_number, insurer_municipality, support_level, self_payment_limit, seiho_flag, jogen_kanri_kubun, jogen_kanri_office_number, jogen_kanri_office_name, certification_start_date, certification_end_date, contract_start_date";
   const CERT_EXT_COLS = `${CERT_BASE_COLS}, flag_special_area, shikyuryo_details`;
   let certCols = CERT_EXT_COLS;
+  // 3) 〜 3.9) で気づいたことを溜めて、後段の warnings に合流させる
+  //   (warnings 本体はもっと下で宣言されるため)
+  const certWarnings: string[] = [];
   const certByClient = new Map<string, Cert>();
   // 月途中の市町村変更検出用に全件も保持 (解決自体は従来どおり最新 1 件)
   const certsAllByClient = new Map<string, Cert[]>();
@@ -480,11 +483,42 @@ export async function aggregateMonthlyShogaiSeikyu(
     const { data, error } = resp;
     if (error) throw new Error(`受給者証取得失敗: ${error.message}`);
     for (const r of (data ?? []) as unknown as Cert[]) {
-      if (!certByClient.has(r.client_id)) certByClient.set(r.client_id, r);
       const list = certsAllByClient.get(r.client_id);
       if (list) list.push(r);
       else certsAllByClient.set(r.client_id, [r]);
     }
+  }
+
+  // 2026-08-31 監査での是正:
+  //   以前はここで「開始日が最新の 1 件」を無条件に採用していた (月フィルタ無し)。
+  //   受給者証番号・市町村番号・負担上限月額・障害支援区分・生保 が全部ここから引かれるので、
+  //   更新申請で未来日の証が登録されると、過去月の請求がその未来の証で作られる。
+  //   介護保険側で実際に事故になった形 (8/1 開始の認定を 6 月分に使い要介護度がずれた) と同じ。
+  //   → 対象月に有効な証を優先し、無ければ従来どおり最新を使って **警告を出す**。
+  const monthFirstDay = `${monthStr}-01`;
+  const monthLastDay = `${monthStr}-${String(daysInMonth).padStart(2, "0")}`;
+  const certValidInMonth = (c: Cert): boolean => {
+    const st = c.certification_start_date;
+    const en = c.certification_end_date;
+    if (st && st > monthLastDay) return false; // 対象月より後に始まる証
+    if (en && en < monthFirstDay) return false; // 対象月より前に切れた証
+    return true;
+  };
+  for (const [cid, list] of certsAllByClient) {
+    const hit = list.find(certValidInMonth);
+    if (hit) {
+      certByClient.set(cid, hit);
+      continue;
+    }
+    const latest = list[0];
+    if (!latest) continue;
+    certByClient.set(cid, latest);
+    const nm = clientById.get(cid)?.name ?? "(利用者不明)";
+    certWarnings.push(
+      `${nm}さん: 対象月 (${monthStr}) に有効な受給者証がないため最新の受給者証で集計しています` +
+        `${latest.certification_start_date ? ` (有効期間 ${latest.certification_start_date}〜${latest.certification_end_date ?? ""})` : ""}` +
+        ` — 受給者証番号・市町村番号・負担上限月額が対象月のものと違う可能性があります`,
+    );
   }
 
   // 3.5) 月次 上限額管理結果 (管理結果区分 1/3 は利用者負担を調整後額に置換)
@@ -552,6 +586,20 @@ export async function aggregateMonthlyShogaiSeikyu(
           opts.month,
         );
         if (error) throw new Error(`加算コード取得失敗: ${error.message}`);
+        // 2026-08-31 監査: `.not("formula","is",null)` で落ちた区分は
+        //   addonByTypeCode に入らないだけで **警告も出ず加算 0** になっていた
+        //   (= 過少請求が silent)。障害の処遇改善は 194 コード中 114 が formula 未設定
+        //   (行動援護・重度包括・同行援護の Ⅰイ/Ⅰロ 等)。解決できなかった区分を知らせる。
+        const resolvedCodes = new Set(
+          ((data ?? []) as { service_code: string }[]).map((r) => r.service_code),
+        );
+        for (const code of codes) {
+          if (!resolvedCodes.has(code)) {
+            certWarnings.push(
+              `事業所に登録された加算区分 ${code} は対象月 (${monthStr}) の障害マスタで加算率 (formula) が解決できず、加算 0 で計算しています — マスタに率が未設定の可能性があります (算定漏れ)`,
+            );
+          }
+        }
         for (const r of (data ?? []) as {
           service_code: string;
           service_name: string;
@@ -643,6 +691,18 @@ export async function aggregateMonthlyShogaiSeikyu(
   const anyShokaiMonth = Array.from(certByClient.values()).some(
     (c) => (c.contract_start_date ?? "").slice(0, 7) === monthStr,
   );
+  // 2026-08-31 監査: contract_start_date が **576 件すべて NULL** で、この判定は
+  //   常に false = 初回加算 (116020/126020/136020, 200単位/月) が一度も算定されない。
+  //   しかも警告が無いので「算定漏れ」に気づけない。
+  //   ⚠ shogai_contracts.start_date で代用してはいけない。あちらは受給者証の
+  //     支給決定期間であって「その事業所が初回に提供した月」ではないため、
+  //     流用すると初回加算の過大請求になる。データを入れるか加算エディタで手入力する。
+  if (certByClient.size > 0 && !Array.from(certByClient.values()).some((c) => c.contract_start_date)) {
+    certWarnings.push(
+      `初回加算の自動算定は受給者証の「契約 (提供開始) 日」を見ていますが、対象利用者の全員が未入力のため一度も算定されません` +
+        ` — 新規利用者がいる月は算定漏れになります。利用者管理の受給者証で契約日を登録するか、提供表の加算エディタから手入力してください`,
+    );
+  }
   if (anyShokaiMonth) {
     const { data, error } = await validInMonth(
       supabase
@@ -1005,6 +1065,8 @@ export async function aggregateMonthlyShogaiSeikyu(
   //    複数あり市町村番号が異なる場合はレセプトの提出先が月内で変わる。
   //    現行の集計は最新 1 件の市町村に全実績を載せるので warning で知らせる。
   const warnings: string[] = [];
+  // 3) の受給者証・加算区分・初回加算まわりで気づいたこと
+  warnings.push(...certWarnings);
   // 1.5) のシフト取込で決められなかった行 (請求漏れになる) を先頭で知らせる
   warnings.push(...schedWarnings);
   // 1.6) 重訪の段が決まらず請求から外した分。金額が変わるので必ず人が見ること
