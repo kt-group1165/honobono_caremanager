@@ -84,7 +84,9 @@ export async function aggregateBathVisitSeikyu(
   const { year, month } = opts;
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
   const { monthStart, monthEnd } = monthRange(year, month);
-  const unitPrice = opts.unitPrice ?? 10;
+  // 0 / 負値は「未設定」扱いで 10.00 円に倒す (visit-seikyu:1142 と同じ規律)。
+  //   `?? 10` だけだと 0 がそのまま単価になり、全利用者の請求額が 0 円になる。
+  const unitPrice = opts.unitPrice && opts.unitPrice > 0 ? opts.unitPrice : 10.0;
   const unitPrice100 = Math.round(unitPrice * 100);
   const warnings: string[] = [];
 
@@ -96,9 +98,13 @@ export async function aggregateBathVisitSeikyu(
   {
     let offset = 0;
     while (true) {
+      // scheme: 予定側 (:129) は「地域生活支援は介護保険請求の対象外」として除外しているのに
+      //   実績側は select にも条件にも入っていなかった (2026-08-31 監査)。
+      //   = 千葉市移動支援の入浴が国保連請求に混入して二重請求になる。
       let q = supabase
         .from("kaigo_bath_visit_records")
-        .select("client_id, visit_date, service_code, addon_shokai, addon_ninchi, addon_chuusankan")
+        .select("client_id, visit_date, service_code, addon_shokai, addon_ninchi, addon_chuusankan, scheme")
+        .eq("scheme", "介護保険")
         .gte("visit_date", monthStart)
         .lte("visit_date", monthEnd);
       q = opts.includeScheduled
@@ -227,10 +233,17 @@ export async function aggregateBathVisitSeikyu(
   const kohiRes = await resolveKohiForMonth(supabase, clientIds, year, month);
   const planByClient = new Map<string, number>();
   {
-    const { data, error } = await supabase
+    // 2026-08-31 監査での是正:
+    //   office_id / client_id で絞らず page-loop も無かった。
+    //   = 他事業所の計画単位数が限度額として当たり、かつ 1000 行キャップで
+    //     静かに欠落していた。対象利用者 + 自事業所に限定してページングする。
+    let q = supabase
       .from("bath_monthly_plan_units")
       .select("client_id, planned_units")
       .eq("target_month", `${monthKey}-01`);
+    if (opts.officeId) q = q.eq("office_id", opts.officeId);
+    if (clientIds.length > 0) q = q.in("client_id", clientIds);
+    const { data, error } = await q;
     if (error) {
       // テーブル未作成 (直 SQL=42P01 / PostgREST schema cache=PGRST205) は
       // 計画なし = 認定限度額フォールバックで続行。それ以外は握りつぶさず warning
@@ -242,7 +255,12 @@ export async function aggregateBathVisitSeikyu(
       }
     } else {
       for (const p of (data ?? []) as { client_id: string; planned_units: number | null }[]) {
-        if (p.planned_units != null) planByClient.set(p.client_id, p.planned_units);
+        // 0 は「未設定」扱い (認定限度額フォールバックへ)。visit-seikyu:1120 と同じ規律。
+        //   2026-08-31 監査まで `!= null` だけを見ており、UI から 0 が入ると
+        //   「限度額 0」= 全額が超過 → 自費 と解釈していた
+        //   (全身浴8回で 保険請求 2,000円 → 180円 / 自費 101,280円)。
+        if (p.planned_units == null || p.planned_units <= 0) continue;
+        planByClient.set(p.client_id, p.planned_units);
       }
     }
   }
@@ -288,13 +306,45 @@ export async function aggregateBathVisitSeikyu(
   let addonDen = 1;
   let addonCode: string | null = null;
   let addonLabel: string | null = null;
-  const formulaCodes = opts.appliedFormulaCodes ?? [];
+  //    解決順序 (visit-seikyu:968-1002 と同じ):
+  //      a. kaigo_office_addon_periods (期間指定) が対象月に有効ならそれを優先
+  //      b. 該当 0 件なら offices.applied_formula_codes にフォールバック
+  //
+  //    2026-08-31 監査まで b しか見ていなかった。加算設定 UI は periods にしか
+  //    書かないので、**設定しても入浴側は 0% のまま = 処遇改善が丸ごと請求漏れ**。
+  let formulaCodes = opts.appliedFormulaCodes ?? [];
+  if (opts.officeId) {
+    const { data: periodRows, error: periodError } = await supabase
+      .from("kaigo_office_addon_periods")
+      .select("formula_code, start_month, end_month")
+      .eq("office_id", opts.officeId);
+    if (periodError) {
+      if (periodError.code !== "42P01" && periodError.code !== "PGRST205") {
+        throw new Error(`加算期間取得失敗: ${periodError.message}`);
+      }
+    } else {
+      const inMonth = ((periodRows ?? []) as {
+        formula_code: string;
+        start_month: string | null;
+        end_month: string | null;
+      }[]).filter(
+        (r) =>
+          (r.start_month == null || r.start_month <= monthKey) &&
+          (r.end_month == null || r.end_month >= monthKey),
+      );
+      if (inMonth.length > 0) formulaCodes = inMonth.map((r) => r.formula_code);
+    }
+  }
   if (formulaCodes.length) {
-    const { data } = await validInMonth(
+    // error を捨てていた (visit 側は throw)。取得失敗を「加算なし」と誤認しないようにする。
+    const { data, error: formulaError } = await validInMonth(
       supabase.from("kaigo_service_codes").select("service_code, service_name, formula").in("service_code", formulaCodes).eq("system", "介護").not("formula", "is", null),
       year,
       month,
     );
+    if (formulaError) {
+      throw new Error(`処遇改善加算マスタの取得に失敗: ${formulaError.message}`);
+    }
     for (const r of (data ?? []) as { service_code: string; service_name: string; formula: { type?: string; numerator?: number; denominator?: number } | null }[]) {
       const f = r.formula;
       if (f?.type === "monthly_aggregate" && f.numerator && f.denominator) {
