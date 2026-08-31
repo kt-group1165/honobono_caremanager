@@ -39,9 +39,9 @@
       "insured_number": 1,
       "care_level": 1,
       "limit_amount": 1,
-      "limit_period": 21,
+      "limit_period": 4,
       "support_office_name": 4,
-      "support_staff_name": 10,
+      "support_staff_name": 9,
       "services": 1
     },
     "yobo-care-plan": {
@@ -58,7 +58,7 @@
   "totals": {
     "care-plan-1": 2954,
     "care-plan-2": 2557,
-    "service-usage": 2230,
+    "service-usage": 2244,
     "yobo-care-plan": 3
   }
 }

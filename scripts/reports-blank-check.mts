@@ -162,9 +162,63 @@ async function fetchDocs(reportType: string): Promise<Doc[]> {
   }
 }
 
+/**
+ * 「空で正しい」欄を除外するための例外。
+ *
+ * 認定の更新申請を出して結果待ちの間 (certification_status='申請中') は、要介護度も
+ * 区分支給限度基準額も **まだ存在しない**。ほのぼのの 介護保険 CSV でも空で出てくる。
+ * これを空欄として数えると更新申請のたびに FAIL し、基準値を上げて黙らせる方向に
+ * 力が働く。そうすると **本物の取込漏れが同じ欄で起きたときに気づけない**ので、
+ * 数える前に除外する。
+ *
+ * 実測 (2026-09-01): 要介護度が空の認定は全社 16 件。すべて申請中。
+ */
+const PENDING_EXEMPT: Record<string, Set<string>> = {
+  "service-usage": new Set(["care_level", "limit_amount"]),
+};
+
+type Cert = { client_id: string; certification_status: string | null; certification_start_date: string | null; certification_end_date: string | null };
+
+/** (利用者, 対象月) が「認定申請中」か */
+async function loadPendingCerts(): Promise<(userId: string, month: string | null) => boolean> {
+  const rows: Cert[] = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("client_insurance_records")
+      .select("client_id, certification_status, certification_start_date, certification_end_date")
+      .eq("certification_status", "申請中")
+      .order("id")
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    rows.push(...((data ?? []) as Cert[]));
+    if (!data || data.length < PAGE) break;
+  }
+  const byUser = new Map<string, Cert[]>();
+  for (const r of rows) {
+    if (!byUser.has(r.client_id)) byUser.set(r.client_id, []);
+    byUser.get(r.client_id)!.push(r);
+  }
+  console.log(`  (認定申請中 ${rows.length} 件 / 利用者 ${byUser.size} 名 — 要介護度が空でも数えません)`);
+  return (userId, month) => {
+    const list = byUser.get(userId);
+    if (!list || !month) return false;
+    // 対象月の月末で判定する (月途中に申請しても その月は申請中扱い)
+    const [y, m] = month.split("-").map(Number);
+    const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+    const first = `${month}-01`;
+    return list.some(
+      (c) =>
+        (!c.certification_start_date || c.certification_start_date <= last) &&
+        (!c.certification_end_date || c.certification_end_date >= first),
+    );
+  };
+}
+
 async function main(): Promise<void> {
   console.log("帳票の印字欄チェック — 様式に欄があるのに空のものを数える");
   if (UPDATE) console.log("--update: 基準値を実測で置き直します");
+  const isPending = await loadPendingCerts();
 
   let worse = 0, better = 0;
   const nextBlanks: Record<string, Record<string, number>> = {};
@@ -180,7 +234,10 @@ async function main(): Promise<void> {
     }
 
     for (const [field, label] of spec.fields) {
-      const blanks = docs.filter((d) => isBlank(d.content?.[field]));
+      const exempt = PENDING_EXEMPT[type]?.has(field) ?? false;
+      const blanks = docs.filter(
+        (d) => isBlank(d.content?.[field]) && !(exempt && isPending(d.user_id, d.report_month)),
+      );
       nextBlanks[type][field] = blanks.length;
       const base = baseline.blanks[type]?.[field];
       const mark = base === undefined ? "新規" : blanks.length > base ? "★ 増えた" : blanks.length < base ? "○ 減った" : "";
