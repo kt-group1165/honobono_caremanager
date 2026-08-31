@@ -21,10 +21,15 @@
  *     介護の稼働 → 被保険者番号 が 介護/居宅 の伝送に出てくるか
  *     障害の稼働 → 受給者証番号 が 障害 の伝送に出てくるか
  *
- *   ⚠ 制度をまたいで見てはいけない。両制度を持つ利用者は 59 名いて、
+ *   ⚠ 制度をまたいで一括で見てはいけない。両制度を持つ利用者は 59 名いて、
  *     「障害では請求されているが介護は未請求」が実在する
  *     (高品 加茂 照子: 介護 28 回が未請求なのに障害は請求済み)。
- *     一括で見ると請求漏れを見落とす。
+ *
+ *   ⚠ 逆に、**制度をフォルダで決めつけてもいけない**。MEISAI の 制度フォルダと
+ *     実際の制度は一致しないことがある (四街道 松戸 孝雄 は 介護 フォルダだが
+ *     コードは 021001/021002 = 自立支援で、障害の KJ260701 で請求済みだった)。
+ *     MEISAI のコードは ほのぼの内部コードなので機械的に制度を確定できない。
+ *     そこで **もう一方の制度での請求状況も併記**して、人が判断できるようにする。
  *
  *   ⚠ **MEISAI はヘルパーの勤務実績であって請求実績ではない。**
  *     自費サービス・保険外・他事業所が請求 のケースが正当に有りうるので、
@@ -46,7 +51,11 @@
  *
  *   引き当ては 2 段構えにする。
  *     1. `_meisai_num_to_client_<拠点>.json`
- *     2. clients.user_number 直引き
+ *     2. clients.user_number 直引き — ただし **氏名が一致したときだけ**
+ *
+ *   ⚠ 番号だけで引くと別人に当たる。MEISAI の「232」は DB では 泉水 さき の
+ *     user_number で、MEISAI 上の 松戸 孝雄 は「100232」だった。
+ *     氏名で裏を取らないと、ある人の稼働が別人のものとして集計される。
  *   そのうえで「取り込めているか」は **DB に実績が有るかを実際に数えて**判定する。
  *   取込の内部事情を推測しない。
  */
@@ -245,13 +254,15 @@ async function main(): Promise<void> {
 
   // clients.user_number → id (マッピングファイルで引けないぶんの受け皿)
   const byUserNumber = new Map<string, string[]>();
+  const clientName = new Map<string, string>();
   {
     const PAGE = 1000;
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await supabase
-        .from("clients").select("id, user_number").order("id").range(from, from + PAGE - 1);
+        .from("clients").select("id, user_number, name").order("id").range(from, from + PAGE - 1);
       if (error) throw new Error(error.message);
-      for (const c of (data ?? []) as { id: string; user_number: string | null }[]) {
+      for (const c of (data ?? []) as { id: string; user_number: string | null; name: string | null }[]) {
+        clientName.set(c.id, c.name ?? "");
         const n = (c.user_number ?? "").trim();
         if (!n) continue;
         if (!byUserNumber.has(n)) byUserNumber.set(n, []);
@@ -261,16 +272,55 @@ async function main(): Promise<void> {
     }
   }
 
+  /**
+   * 氏名の表記ゆれを畳む。全角/半角・空白・括弧書きに加えて、
+   * **姓によく出る異体字**を寄せる (髙/高・﨑/崎・澤/沢 など)。
+   * ⚠ 寄せるのは字形の異体だけ。読みが同じでも別字のもの (齊藤/斎藤 等) は寄せない。
+   */
+  const ITAIJI: Record<string, string> = {
+    "髙": "高", "﨑": "崎", "澤": "沢", "眞": "真", "濱": "浜",
+    "邊": "辺", "邉": "辺", "瀨": "瀬", "德": "徳", "曻": "昇",
+  };
+  const normName = (v: string): string =>
+    v.normalize("NFKC")
+      .replace(/[（(].*?[)）]/g, "")
+      .replace(/[\s　]/g, "")
+      .replace(/./g, (ch) => ITAIJI[ch] ?? ch)
+      .trim();
+
   const clientIds = new Set<string>();
   const resolved = new Map<string, string>();     // key -> client_id
   const unresolved: Worked[] = [];                // どちらの手でも利用者に辿り着けない
+  const nameConflict: string[] = [];              // 番号は当たるが氏名が違う (= 別人)
   for (const [key, w] of worked) {
     const m = loadMap(w.area);
-    const hits = byUserNumber.get(w.clientNum) ?? [];
-    const cid = m?.[w.clientNum] ?? (hits.length === 1 ? hits[0] : undefined);
+    let cid = m?.[w.clientNum];
+    if (!cid) {
+      // 番号だけで引くと別人に当たるので、**氏名が一致したときだけ**採用する
+      // MEISAI の氏名には制度の区別記号が付く (「宇野　純一　障」「稲葉　裕子　支」
+      // 「松崎　淑子　移」)。完全一致では別人扱いになるので前方一致で見る。
+      const sameName = (a: string, b: string): boolean => {
+        const x = normName(a), y = normName(b);
+        if (!x || !y) return false;
+        return x === y || x.startsWith(y) || y.startsWith(x);
+      };
+      const hits = (byUserNumber.get(w.clientNum) ?? []).filter(
+        (id) => sameName(clientName.get(id) ?? "", w.clientName),
+      );
+      if (hits.length === 1) cid = hits[0];
+      else if ((byUserNumber.get(w.clientNum) ?? []).length > 0) {
+        const other = (byUserNumber.get(w.clientNum) ?? []).map((id) => clientName.get(id) ?? "?");
+        nameConflict.push(`${w.area} 番号${w.clientNum} MEISAI「${w.clientName}」 vs 当方「${other.join("/")}」`);
+      }
+    }
     if (!cid) { unresolved.push(w); continue; }
     resolved.set(key, cid);
     clientIds.add(cid);
+  }
+  if (nameConflict.length) {
+    console.log(`${EOL_}⚠ 番号は当たるが氏名が違う ${nameConflict.length} 件 — 別人に紐づけないよう引き当てから外した:`);
+    [...new Set(nameConflict)].slice(0, 15).forEach((c) => console.log("   " + c));
+    if (nameConflict.length > 15) console.log(`   … 他 ${nameConflict.length - 15} 件`);
   }
 
   // client_id → 番号。介護 (被保険者番号) と 障害 (受給者証番号) を分けて持つ
@@ -323,7 +373,7 @@ async function main(): Promise<void> {
   }
 
   const notImported: Worked[] = [];
-  const notBilled: (Worked & { why: string; otherMonths: string[] })[] = [];
+  const notBilled: (Worked & { why: string; otherMonths: string[]; otherSystemBilled: boolean })[] = [];
   const noNumber: Worked[] = [];
   let billed = 0;
   for (const [key, w] of worked) {
@@ -341,7 +391,16 @@ async function main(): Promise<void> {
     const otherMonths = [...new Set(nums.flatMap((n) => [...(pool.get(n) ?? [])]))]
       .filter((m) => m !== MONTH)
       .sort();
-    notBilled.push({ ...w, why: `番号 ${nums.join("/")} が伝送に無い`, otherMonths });
+    // もう一方の制度で当月に請求されているか。
+    // ⚠ 番号がどちらの表に入っているかに依存させない。介護認定を持たず受給者証だけの
+    //   利用者が 介護 フォルダの MEISAI に出ることがあり (四街道 松戸 孝雄)、
+    //   制度別に引くと「どこにも請求が無い」と誤判定する。
+    //   **両方の番号を合わせて、両方の索引を見る。**
+    const allNums = [...new Set([...(kaigoNo.get(cid) ?? []), ...(shogaiNo.get(cid) ?? [])])];
+    const otherSystemBilled = allNums.some(
+      (n) => densou.kaigo.get(n)?.has(MONTH) || densou.shogai.get(n)?.has(MONTH),
+    );
+    notBilled.push({ ...w, why: `番号 ${nums.join("/")} が伝送に無い`, otherMonths, otherSystemBilled });
   }
 
   // ⚠ MEISAI の「金額」は **ヘルパーに払った賃金** (出どころが NEXT の賃金集計)。
@@ -365,9 +424,20 @@ async function main(): Promise<void> {
       }
     }
     if (never.length) {
-      console.log(`${EOL_}  ── どの月にも請求が無い (${never.length} 名) — 自費運用などの可能性 ──`);
-      for (const w of never) {
-        console.log(`   ${w.area.padEnd(8)} ${w.system.padEnd(2)} ${w.clientName.padEnd(16)} ${String(w.rows).padStart(3)}回 ${yen(w.amount).padStart(12)}  コード ${[...w.codes].join(",")}`);
+      const crossed = never.filter((w) => w.otherSystemBilled);
+      const pure = never.filter((w) => !w.otherSystemBilled);
+      if (pure.length) {
+        console.log(`${EOL_}  ── ★★ どちらの制度でも請求が無い (${pure.length} 名) — ここが本命 ──`);
+        for (const w of pure) {
+          console.log(`   ${w.area.padEnd(8)} ${w.system.padEnd(2)} ${w.clientName.padEnd(16)} ${String(w.rows).padStart(3)}回 ${yen(w.amount).padStart(12)}  コード ${[...w.codes].join(",")}`);
+        }
+      }
+      if (crossed.length) {
+        console.log(`${EOL_}  ── もう一方の制度では当月に請求がある (${crossed.length} 名) ──`);
+        console.log("     制度の振り分け違い (この稼働は実は別制度) かもしれないので、コードを見て判断すること");
+        for (const w of crossed) {
+          console.log(`   ${w.area.padEnd(8)} ${w.system.padEnd(2)} ${w.clientName.padEnd(16)} ${String(w.rows).padStart(3)}回 ${yen(w.amount).padStart(12)}  コード ${[...w.codes].join(",")}`);
+        }
       }
     }
   }
