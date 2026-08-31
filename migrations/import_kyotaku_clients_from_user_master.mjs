@@ -29,7 +29,7 @@
 //   **UPDATE しない**のは、伝送から取り込んだ正しい値を上書きしないため。
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -43,9 +43,51 @@ if (!OFFICE_NAME) {
   console.error("使い方: --office <拠点名> [--execute]");
   process.exit(1);
 }
-const DIR = path.join(ROOT, "利用者データ", OFFICE_NAME);
-const CSV_BASE = path.join(DIR, "基本情報_______.CSV");
-const CSV_HOKEN = path.join(DIR, "介護保険1.CSV");
+// --dir でフォルダ名を別に指定できる (--office と違う名前のフォルダに置かれるため)
+const DIR = path.join(ROOT, "利用者データ", argOf("--dir") ?? OFFICE_NAME);
+/** 接頭辞でファイルを探す。F の出力は 基本情報_居宅全体.CSV のように固定名でない */
+function findCsv(prefix, fallback) {
+  const fb = path.join(DIR, fallback);
+  if (existsSync(fb)) return fb;
+  let names = [];
+  try { names = readdirSync(DIR); } catch { return fb; }
+  const hit = names.find((n) => n.startsWith(prefix) && /\.csv$/i.test(n) && !n.startsWith("_"));
+  return hit ? path.join(DIR, hit) : fb;
+}
+const CSV_BASE = findCsv("基本情報", "基本情報_______.CSV");
+const CSV_HOKEN = findCsv("介護保険", "介護保険1.CSV");
+
+/**
+ * 利用者ごとに「支援事業所（正式名称）」で割当先を決めるモード。
+ * 「居宅全体」CSV は 16 事業所ぶんが 1 ファイルなので、--office では割り当てられない。
+ */
+const BY_SUPPORT_OFFICE = process.argv.includes("--by-support-office");
+
+/** ほのぼの表記 → offices.name。字面が繋がらないものだけ書く (user 確認済 2026-09-01) */
+const SUPPORT_OFFICE_ALIAS = {
+  "KT袖ヶ浦ムツミ居宅支援センター": "袖ヶ浦ムツミ居宅支援センター",
+  "サービスワンムツミ居宅介護支援事業所": "ムツミ居宅介護支援事業所",
+  "サービスワンムツミ居宅支援事業所": "ムツミ居宅介護支援事業所",
+  "ムツミ居宅支援事業所": "ムツミ居宅介護支援事業所",
+  "ケイティサービスケアプランHana": "ケアプランＨａｎａ",
+  "木更津ムツミ居宅支援センターk": "木更津ムツミ居宅支援センター",
+  "Hanaおゆみ野居宅": "Ｈａｎａ居宅支援センターおゆみ野",
+  "Hana四街道": "Ｈａｎａ居宅支援センター四街道",
+};
+
+/**
+ * 事業所名の正規化。NFKC で半角カナを寄せ、法人格・「予防」「(予)」・
+ * 括弧内の委託先を落とす。
+ * ⚠ **部分一致は使わない。**「リンクス居宅介護支援事業所」は
+ *   いすみ・大網白里 にも部分一致してしまう (実測で 3 候補)。完全一致のみ。
+ */
+function normOfficeName(x) {
+  return String(x ?? "").normalize("NFKC")
+    .replace(/株式会社|㈱|有限会社|\(株\)/g, "")
+    .replace(/[（(]?予防[）)]?|[（(]?予[）)]|【予防】|予\)/g, "")
+    .replace(/[（(][^）)]*[）)]?/g, "")
+    .replace(/[\s　*＊・,．.\-－ー]/g, "");
+}
 
 const env = {};
 for (const l of readFileSync(path.join(ROOT, ".env.local"), "utf8").split(/\r?\n/)) {
@@ -107,17 +149,34 @@ async function main() {
   }
 
   // -- 事業所 --------------------------------------------------------------
-  const { data: offs, error: e1 } = await sb.from("offices")
-    .select("id, name").eq("tenant_id", TENANT)
-    .eq("service_type", "居宅介護支援").ilike("name", `%${OFFICE_NAME}%`);
+  const { data: allKyotaku, error: e1 } = await sb.from("offices")
+    .select("id, name").eq("tenant_id", TENANT).eq("service_type", "居宅介護支援");
   if (e1) { console.error(`✗ ${e1.message}`); process.exit(1); }
-  if (offs?.length !== 1) {
-    console.error(`✗ 居宅事業所「${OFFICE_NAME}」が ${offs?.length ?? 0} 件。1 件に絞れない`);
-    for (const o of offs ?? []) console.error(`   ${o.name}`);
-    process.exit(1);
+
+  /** 正規化名 → office。--by-support-office のときだけ使う */
+  const officeByNorm = new Map();
+  let office = null;
+  if (BY_SUPPORT_OFFICE) {
+    for (const o of allKyotaku ?? []) {
+      if (o.name === "デモケアプラン事業所") continue;
+      officeByNorm.set(normOfficeName(o.name), o);
+    }
+    for (const [k, v] of Object.entries(SUPPORT_OFFICE_ALIAS)) {
+      const o = (allKyotaku ?? []).find((x) => x.name === v);
+      if (!o) { console.error(`✗ 対応表の「${v}」が offices に無い`); process.exit(1); }
+      officeByNorm.set(normOfficeName(k), o);
+    }
+    console.log(`  割当: 利用者ごとに「支援事業所（正式名称）」で決める (${officeByNorm.size} 名寄せ)`);
+  } else {
+    const offs = (allKyotaku ?? []).filter((o) => o.name.includes(OFFICE_NAME));
+    if (offs.length !== 1) {
+      console.error(`✗ 居宅事業所「${OFFICE_NAME}」が ${offs.length} 件。1 件に絞れない`);
+      for (const o of offs) console.error(`   ${o.name}`);
+      process.exit(1);
+    }
+    office = offs[0];
+    console.log(`  事業所: ${office.name}`);
   }
-  const office = offs[0];
-  console.log(`  事業所: ${office.name}`);
 
   // -- CSV -----------------------------------------------------------------
   const base = readCsv(CSV_BASE);
@@ -325,12 +384,34 @@ async function main() {
 
   // -- 事業所への割当 ------------------------------------------------------
   // ⚠ これが無いと「自事業所」タブに出ず、PDF 取込の引き当ても効かない
-  const asg = await fetchAll("client_office_assignments", "client_id",
-    (q) => q.eq("office_id", office.id));
-  const assigned = new Set(asg.map((a) => a.client_id));
-  const newAsg = allNums.map(idOf).filter((id) => !assigned.has(id))
-    .map((client_id) => ({ tenant_id: TENANT, client_id, office_id: office.id }));
-  if (newAsg.length) {
+  //   --by-support-office のときは 利用者ごとに割当先が違うので、
+  //   既存割当は (client_id, office_id) の対で見る。
+  const asg = await fetchAll("client_office_assignments", "client_id, office_id",
+    (q) => (BY_SUPPORT_OFFICE ? q : q.eq("office_id", office.id)));
+  const assigned = new Set(asg.map((a) => `${a.client_id}|${a.office_id}`));
+  /** その利用者の割当先 office (決まらなければ null = 他社ケアマネ) */
+  const officeOf = (u) => {
+    if (!BY_SUPPORT_OFFICE) return office;
+    const nm = certByNum.get(u)?.care_office_name;
+    return nm ? (officeByNorm.get(normOfficeName(nm)) ?? null) : null;
+  };
+  let noOffice = 0;
+  const newAsg = [];
+  for (const u of allNums) {
+    const id = idOf(u); const o = officeOf(u);
+    if (!o) { noOffice++; continue; }      // ⚠ 推測で寄せない。他社は割当てない
+    if (assigned.has(`${id}|${o.id}`)) continue;
+    newAsg.push({ tenant_id: TENANT, client_id: id, office_id: o.id });
+  }
+  if (BY_SUPPORT_OFFICE) {
+    const per = new Map();
+    for (const a of newAsg) per.set(a.office_id, (per.get(a.office_id) ?? 0) + 1);
+    for (const o of allKyotaku ?? []) {
+      if (per.get(o.id)) console.log(`     ${String(per.get(o.id)).padStart(5)}  ${o.name}`);
+    }
+    console.log(`     ${String(noOffice).padStart(5)}  (他社ケアマネ = 割当てない)`);
+  }
+  if (newAsg.length && EXECUTE) {
     for (let i = 0; i < newAsg.length; i += 200) {
       const { error } = await sb.from("client_office_assignments").insert(newAsg.slice(i, i + 200));
       if (error) { console.error(`✗ 割当失敗: ${error.message}`); process.exit(1); }
