@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "smoke": "tsx scripts/smoke.mts",
-    "smoke:payroll": "tsx scripts/smoke-payroll.mts"
+    "smoke:payroll": "tsx scripts/smoke-payroll.mts",
+    "check:anon": "tsx scripts/anon-exposure-check.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
