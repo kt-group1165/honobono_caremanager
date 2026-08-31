@@ -676,16 +676,26 @@ function loadTjJuhoSpans(targetMonth, areaDir) {
       const s = toMin(c[15]);
       let e = toMin(c[16]);
       if (!c[7] || !Number.isInteger(day) || s == null || e == null) continue;
+      // 終了 "0000" は **24:00**。おゆみ野 1221931882 6/5 の 09:00-12:30 + 13:30-0:00 は
+      // 算定時間 1400 (= 14.0h) で出ている。
+      // ⚠ 五井 1221916057 だけ 16:00-17:00 + 16:00-0:00 が 8.5h で出ており説明がつかない。
+      //   1 名だけなので 24:00 を採る (未解決。残件)。
       if (e <= s) e += 1440;                       // 0時またぎ
       // c[20] = 人数。ほのぼのが 2人派遣で請求している提供はここが 2 になる。
       // 稼働データ (MEISAI) は給与用なので人数を確実に持たない。**TJ が正**。
       const n = Number(c[20] || 1) || 1;
-      // c[9] = **提供通番**。同じ日でも通番が違えば **別の作業者のひとまとまり**。
-      // 重訪の段は通番ごとに 0 から積み直し、重なる 2 本目以降が「・2人」になる。
+      // c[9] = **提供通番**。同じ日でも通番が違えば別のひとまとまり。
       const seq = String(c[9] ?? "");
+      // c[11] = **派遣順**。'' = 単独 / '1','2' = 2人派遣の何人目か。
+      // ⚠ 2人派遣かどうかは **ここでしか判らない**。時刻の重なりで推測してはいけない
+      //   (やわた 宮原和世 6/6 は 13:00-18:30 と 16:30-18:30 が完全に重なるが c[11] は
+      //    空で、ほのぼのは 1 人として 7.5h を合算している = 算定時間 0750)。
+      const order = String(c[11] ?? "");
+      // c[17] = 算定時間。0:00 をまたいで前日から続く分は "0000" (= 前日に算入済み)。
+      const calc = String(c[17] ?? "");
       const k = `${c[7]}|${day}`;
       if (!out.has(k)) out.set(k, []);
-      out.get(k).push({ s, e, n, seq });
+      out.get(k).push({ s, e, n, seq, order, calc });
     }
   }
   for (const arr of out.values()) arr.sort((a, b) => a.s - b.s);
@@ -988,8 +998,18 @@ async function main() {
         `(--skip-juho)。import_juho_from_tj.mjs を実行すること`);
     }
     for (const rows of (SKIP_JUHO ? [] : byUserDay.values())) {
+      // ⚠ 終了が開始以前の行は **0 時またぎ** (17:00-00:00 の夜勤)。24 時間足して 1 本にする。
+      //   ここで落とすと withTime.length !== rows.length になり、下の「時刻が取れる」判定を
+      //   外れて **算定時間の単純合計**に倒れる。合計だけでは時間帯が判らないので
+      //   段が全部 日中 で出る (おゆみ野 稲葉裕子 6/5・12・19・26 が実際にそうなっていた。
+      //   ほのぼのは 夜間12.0×7 / 深夜16.0×3 等を出している)。
       const withTime = rows
-        .map((r) => ({ r, s: parseHM(r.santeiStart), e: parseHM(r.santeiEnd) }))
+        .map((r) => {
+          const s = parseHM(r.santeiStart);
+          let e = parseHM(r.santeiEnd);
+          if (s != null && e != null && e <= s) e += 1440;
+          return { r, s, e };
+        })
         .filter((x) => x.s != null && x.e != null && x.e > x.s)
         .sort((a, b) => a.s - b.s);
       // 時間が取れない行は従来どおり算定時間の単純合計に倒す
@@ -1040,48 +1060,41 @@ async function main() {
         }
         if (tjSpans?.length) tjUsedDays++;
         else { tjMissDays++; tjMissNames.add(`${juhoNameKey(rows[0].clientName)}`); }
+        // TRACE_JUHO=<氏名の一部> でその人の全日を 1 行ずつ出す (TJ が引けたかの確認用)
+        if (process.env.TRACE_JUHO && juhoNameKey(rows[0].clientName).includes(process.env.TRACE_JUHO)) {
+          console.log(`[trace] ${rows[0].date} tj=${tjSpans?.length ?? 0} meisai=${withTime.length} ` +
+            `spans=${(tjSpans ?? withTime).map((x) => `${x.s}-${x.e}`).join(" ")}`);
+        }
         const spans = tjSpans?.length
           ? tjSpans
           : withTime.map((x) => ({ s: x.s, e: x.e }));
         // ★ 重訪の 1 日は **原則ひとつの通算**。制度上「1日の所要時間を通算して算定」する。
-        //   ただし TJ の **提供通番**が時間的に重なっているときは 2 人が同時に入った
-        //   ということなので、重なるほうは別のはしごにして「・2人」のコード体系を使う。
+        //   系列を分けるのは **TJ の派遣順 c[11] が '1'/'2' のときだけ**。
+        //   '' は単独なので、同じ日の '' どうしは全部つないで 1 本のはしごにする。
         //
-        //     五井 1221916057 6/9   通番1 11:00-17:00 / 通番2 11:00-12:00+16:00-17:00
-        //       → 重なる    → 通番2 は 2 人ぶん (121272/121282/121442)
-        //     おゆみ野 1221113051   通番が重ならない日
-        //       → 重ならない → 全部つないで 1 本のはしご
+        //     やわた 宮原和世 6/6   13:00-18:30 と 16:30-18:30 (完全に重なる) / c[11] 空
+        //       → **1 人**として 7.5h を合算 (算定時間 0750)。2人派遣ではない
+        //     おゆみ野 2000038857   c[11]='1' 09:00-17:30 / c[11]='2' 14:30-15:30
+        //       → 2 人派遣。2人目は 121272 (・２人) で 1 段だけ
         //
-        //   ⚠ 通番ごとに必ず積み直すと、重ならない日で 1.0/1.5/2.0/2.5 の段が
-        //     人数ぶん増えて **倍額**になる (この人で 891,543 円 vs 正 492,680 円)。
-        //   TJ が無くて MEISAI の時刻に倒したときは通番が無いので 1 本で積む。
+        //   ⚠ 以前は「提供通番が時間的に重なる = 2人派遣」と推測していたが、これは誤り。
+        //     重なりは 1 人が中抜けして戻った日にも起きる。判定材料は c[11] だけ。
+        //   ⚠ 系列ごとに必ず積み直すと、単独の日で 1.0/1.5/2.0/2.5 の段が人数ぶん増えて
+        //     **倍額**になる (五井 1221916057 で 891,543 円 vs 正 492,680 円)。
+        //   TJ が無くて MEISAI の時刻に倒したときは派遣順が無いので 1 本で積む。
         const resolved = (() => {
-          const bySeq = new Map();
+          const byOrder = new Map();
           for (const sp of spans) {
-            const k = sp.seq ?? "";
-            if (!bySeq.has(k)) bySeq.set(k, []);
-            bySeq.get(k).push(sp);
+            const k = sp.order ?? "";
+            if (!byOrder.has(k)) byOrder.set(k, []);
+            byOrder.get(k).push(sp);
           }
-          if (bySeq.size <= 1) return juhoConvsForDay(spans, stepsByZone, stepsByZone2);
-          const groups = [...bySeq.values()]
-            .map((g) => ({ g, s: Math.min(...g.map((x) => x.s)), e: Math.max(...g.map((x) => x.e)) }))
-            .sort((a, b) => a.s - b.s || a.e - b.e);
-          const single = [];       // 1 人ぶん: つないで 1 本のはしごにする
-          const doubles = [];      // 2 人ぶん: 通番ごとに別のはしご
-          const taken = [];
-          for (const grp of groups) {
-            if (taken.some((t) => grp.s < t.e && t.s < grp.e)) { doubles.push(grp.g); continue; }
-            single.push(...grp.g);
-            taken.push({ s: grp.s, e: grp.e });
-          }
+          if (byOrder.size <= 1) return juhoConvsForDay(spans, stepsByZone, stepsByZone2);
           const out = [];
-          if (single.length) {
-            const r = juhoConvsForDay(single.map((x) => ({ ...x, n: 1 })).sort((a, b) => a.s - b.s),
-              stepsByZone, stepsByZone2);
-            if (r) out.push(...r);
-          }
-          for (const d of doubles) {
-            const r = juhoConvsForDay(d.map((x) => ({ ...x, n: 2 })).sort((a, b) => a.s - b.s),
+          for (const [k, g] of [...byOrder.entries()].sort((a, b) => String(a[0]).localeCompare(String(b[0])))) {
+            const two = k === "2";
+            const r = juhoConvsForDay(
+              g.map((x) => ({ ...x, n: two ? 2 : 1 })).sort((a, b) => a.s - b.s),
               stepsByZone, stepsByZone2);
             if (r) out.push(...r);
           }
