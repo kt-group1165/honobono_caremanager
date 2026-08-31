@@ -302,7 +302,10 @@ async function main(): Promise<void> {
       const sameName = (a: string, b: string): boolean => {
         const x = normName(a), y = normName(b);
         if (!x || !y) return false;
-        return x === y || x.startsWith(y) || y.startsWith(x);
+        if (x === y || x.startsWith(y) || y.startsWith(x)) return true;
+        // 名がカタカナと漢字で違うだけのことがある (「齊藤ﾕｳｷ」と「齊藤 優希」)。
+        // ここは **番号が一致している**前提なので、姓が同じなら同一人とみなす。
+        return x.slice(0, 2) === y.slice(0, 2);
       };
       const hits = (byUserNumber.get(w.clientNum) ?? []).filter(
         (id) => sameName(clientName.get(id) ?? "", w.clientName),
