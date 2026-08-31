@@ -193,7 +193,7 @@ async function main() {
   let ins = [], from = 0;
   for (;;) {
     const { data, error } = await sb.from("client_insurance_records")
-      .select("client_id, insurer_number, insured_number").range(from, from + 999);
+      .select("client_id, insurer_number, insured_number").order("id").range(from, from + 999);
     if (error) { console.error(`✗ ${error.message}`); process.exit(1); }
     ins = ins.concat(data);
     if (data.length < 1000) break;
@@ -211,7 +211,7 @@ async function main() {
   let have = new Set(); from = 0;
   for (;;) {
     const { data, error } = await sb.from("kaigo_care_plans")
-      .select("user_id").eq("status", "active").range(from, from + 999);
+      .select("user_id").eq("status", "active").order("id").range(from, from + 999);
     if (error) { console.error(`✗ ${error.message}`); process.exit(1); }
     for (const r of data) have.add(r.user_id);
     if (data.length < 1000) break;
@@ -223,7 +223,7 @@ async function main() {
   let claimUsers = new Set(); from = 0;
   for (;;) {
     const { data, error } = await sb.from("kaigo_care_support_claims")
-      .select("user_id").eq("billing_month", MONTH).range(from, from + 999);
+      .select("user_id").eq("billing_month", MONTH).order("id").range(from, from + 999);
     if (error) { console.error(`✗ ${error.message}`); process.exit(1); }
     for (const r of data) claimUsers.add(r.user_id);
     if (data.length < 1000) break;
@@ -269,7 +269,7 @@ async function main() {
     for (;;) {
       const { data, error } = await sb.from("kaigo_care_plans")
         .select("id, user_id, long_term_goals, short_term_goals")
-        .eq("status", "active").range(f2, f2 + 999);
+        .eq("status", "active").order("id").range(f2, f2 + 999);
       if (error) { console.error(`✗ ${error.message}`); process.exit(1); }
       existing = existing.concat(data);
       if (data.length < 1000) break;

@@ -194,7 +194,7 @@ async function main() {
   let all = [], from = 0;
   for (;;) {
     const { data, error } = await sb.from("client_insurance_records")
-      .select("client_id, insurer_number, insured_number").range(from, from + 999);
+      .select("client_id, insurer_number, insured_number").order("id").range(from, from + 999);
     if (error) { console.error(`✗ ${error.message}`); process.exit(1); }
     all = all.concat(data);
     if (data.length < 1000) break;
@@ -216,7 +216,7 @@ async function main() {
   let cAll = [], cFrom = 0;
   for (;;) {
     const { data, error } = await sb.from("clients")
-      .select("id, name, birth_date, insurer_number, insured_number, deleted_at").range(cFrom, cFrom + 999);
+      .select("id, name, birth_date, insurer_number, insured_number, deleted_at").order("id").range(cFrom, cFrom + 999);
     if (error) { console.error(`✗ ${error.message}`); process.exit(1); }
     cAll = cAll.concat(data);
     if (data.length < 1000) break;

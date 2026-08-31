@@ -459,7 +459,7 @@ function UserSidebarInner(props: UserSidebarProps) {
             .select("client_id")
             .eq("office_id", currentOfficeId)
             .is("end_date", null)
-            .range(from, from + PAGE - 1);
+            .order("id").range(from, from + PAGE - 1);
           if (!assigns || assigns.length === 0) break;
           assignsAll.push(...(assigns as { client_id: string }[]));
           if (assigns.length < PAGE) break;
@@ -500,7 +500,7 @@ function UserSidebarInner(props: UserSidebarProps) {
             .select("client_id")
             .eq("office_id", currentOfficeId)
             .is("end_date", null)
-            .range(from2, from2 + PAGE2 - 1);
+            .order("id").range(from2, from2 + PAGE2 - 1);
           if (!svc || svc.length === 0) break;
           svcAll.push(...(svc as { client_id: string }[]));
           if (svc.length < PAGE2) break;
@@ -590,7 +590,7 @@ function UserSidebarInner(props: UserSidebarProps) {
                 .from("client_office_assignments")
                 .select("client_id, end_date, home_care_categories")
                 .in("client_id", chunk)
-                .range(offset, offset + PAGE - 1);
+                .order("id").range(offset, offset + PAGE - 1);
               if (error) throw new Error(error.message);
               const rows = (data ?? []) as typeof acc;
               acc.push(...rows);
