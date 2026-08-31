@@ -6,6 +6,7 @@ import { resolvePreferredTenantId } from "@/lib/tenant-resolver";
 import { useBusinessType } from "@/lib/business-type-context";
 import { SendDocumentModal } from "@/components/shared/SendDocumentModal";
 import { toast } from "sonner";
+import { todayYmd } from "@/lib/date-jst";
 import {
   AlertTriangle,
   Save,
@@ -407,7 +408,7 @@ export function EmergencySheetsContent({
           client={{ id: userId, name: userInfo.name }}
           sourceOfficeId={currentOffice.id}
           documentType="emergency_sheet"
-          title={`緊急時シート ${new Date().toISOString().slice(0, 10)} ${userInfo.name} 様`}
+          title={`緊急時シート ${todayYmd()} ${userInfo.name} 様`}
           getHtmlSnapshot={() => document.getElementById("emergency-sheet-doc")?.outerHTML ?? ""}
           payload={{
             client_id: userId,

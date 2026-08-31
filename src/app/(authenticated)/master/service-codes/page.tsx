@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { ServiceCodesContent, type ServiceCode } from "./service-codes-content";
+import { todayYmd } from "@/lib/date-jst";
 
 type SystemValue = "介護" | "障害" | "総合事業" | "地域生活支援";
 
@@ -32,7 +33,7 @@ export default async function ServiceCodesPage({
   const supabase = await createClient();
 
   // 初期表示: 適用日=今日 で絞り、limit 2000 まで取得 (= 大半は 2000 件以内)
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayYmd();
   let query = supabase
     .from("kaigo_service_codes")
     .select("*", { count: "exact" })

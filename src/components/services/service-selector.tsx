@@ -13,6 +13,7 @@ import {
 } from "@/lib/shogai-time-bracket"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { todayYmd } from "@/lib/date-jst"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -371,7 +372,7 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
         // 有効期間: targetMonth 指定時は「対象月に有効な世代」(validInMonth)、
         //   未指定時は従来どおり今日時点で有効な世代 (valid_until=NULL は無期限有効)
         // 訪問介護(11) は 5,500 件超あり PostgREST 1000 行制限に切られるため page-loop
-        const today = new Date().toISOString().slice(0, 10)
+        const today = todayYmd()
         const PAGE = 1000
         const data: Record<string, unknown>[] = []
         for (let from = 0; ; from += PAGE) {

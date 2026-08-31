@@ -23,6 +23,7 @@ export type ServiceSystem = "介護" | "障害" | "総合事業" | "独自" | "�
 import type { ServiceCodeFormula } from "@/lib/service-code-calc";
 import { formulaToDescription } from "@/lib/service-code-calc";
 import { ServiceCodeImportDialog } from "./service-code-import-dialog";
+import { todayYmd } from "@/lib/date-jst";
 
 export interface ServiceCode {
   id: string;
@@ -276,7 +277,7 @@ export function ServiceCodesContent({
   const [searchText, setSearchText] = useState("");
   // 適用日フィルタ: default は本日 (= 「今有効」な行のみ表示。15K 行を全件描画すると遅いため)
   const [filterActiveAt, setFilterActiveAt] = useState<string>(() =>
-    new Date().toISOString().split("T")[0],
+    todayYmd(),
   );
 
   // 表示上限 (DOM 過負荷を避けるため。超える分は絞り込みを促す)
@@ -661,7 +662,7 @@ export function ServiceCodesContent({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `kaigo_service_codes_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `kaigo_service_codes_${todayYmd()}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1056,7 +1057,7 @@ export function ServiceCodesContent({
             />
             <button
               type="button"
-              onClick={() => setFilterActiveAt(new Date().toISOString().split("T")[0])}
+              onClick={() => setFilterActiveAt(todayYmd())}
               className="text-xs text-indigo-600 hover:underline"
               title="本日有効なコードのみ表示"
             >
