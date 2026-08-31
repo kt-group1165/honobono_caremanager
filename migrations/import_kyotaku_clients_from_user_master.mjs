@@ -413,7 +413,10 @@ async function main() {
       if (!byId.has(r.id)) byId.set(r.id, []);
       byId.get(r.id).push(`${r.name}(${r.birth_date ?? "生年不明"})`);
     }
-    const collide = [...byId].filter(([, v]) => v.length > 1);
+    // ⚠ 同じ client に 2 件当たっても、**氏名・生年月日が同じなら同一人物**。
+    //   ほのぼの側で 2 つの利用者番号に二重登録されているだけ (実測 2 名)。
+    //   止めるのは **別人**が同じ client に当たったときだけ。
+    const collide = [...byId].filter(([, v]) => new Set(v).size > 1);
     if (collide.length) {
       console.error(`
 🔴 中止: **別々の人が同じ利用者に引き当たっている** ${collide.length} 件`);
