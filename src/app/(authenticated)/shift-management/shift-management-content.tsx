@@ -232,18 +232,35 @@ function PatternImportModal({ onClose }: { onClose: () => void }) {
           .eq("status", "active")
           .eq("is_facility", false)
           .is("deleted_at", null)
+          // ⚠ order 無しで range を回すとページごとに並びが変わって行が抜ける。
+          //   エラーにならず「利用者が少し足りない」だけなので気づけない
+          .order("id")
           .range(fromU, fromU + PAGE - 1);
         if (!data || data.length === 0) break;
         usersAll.push(...data);
         if (data.length < PAGE) break;
         fromU += PAGE;
       }
-      const patRes = await supabase
-        .from("kaigo_visit_patterns")
-        .select("id, user_id, pattern_name, day_of_week, start_time, end_time, service_type, staff_id, clients(name)")
-        .order("user_id");
+      // ⚠ **ページングが無いと 1000 行で黙って切れる。**PostgREST の 1000 行は
+      //   ハードキャップで、2026-09-01 時点の kaigo_visit_patterns は 6,814 行。
+      //   = 5,814 件のパターンがシフト画面に出ていなかった。
+      //   order は一意に定まる id を最後に付ける (user_id だけだと同じ利用者の
+      //   並びが不定で、結局ページ境界でずれる)。
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-      const pats: VisitPattern[] = (patRes.data || []).map((r: any) => ({
+      const patAll: any[] = [];
+      for (let fromP = 0; ; fromP += PAGE) {
+        const { data } = await supabase
+          .from("kaigo_visit_patterns")
+          .select("id, user_id, pattern_name, day_of_week, start_time, end_time, service_type, staff_id, clients(name)")
+          .order("user_id")
+          .order("id")
+          .range(fromP, fromP + PAGE - 1);
+        if (!data || data.length === 0) break;
+        patAll.push(...data);
+        if (data.length < PAGE) break;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
+      const pats: VisitPattern[] = patAll.map((r: any) => ({
         ...r,
         user_name: r.clients?.name ?? null,
       }));
