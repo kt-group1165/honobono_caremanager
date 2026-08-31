@@ -74,6 +74,12 @@ type KaigoExpected = {
 type ShogaiExpected = {
   fingerprint?: Fingerprint;
   rows: number;
+  /** 総費用額の単位数合計。⚠ 2026-09-01 追加。それまで障害は **行数しか見ておらず**、
+   *  時間帯またぎの配分やコード解決を変えても素通りしていた (実際に見逃した)。 */
+  totalUnits?: number;
+  totalAmount?: number;
+  benefitAmount?: number;
+  userAmount?: number;
 };
 type SougouExpected = {
   fingerprint?: Fingerprint;
@@ -367,8 +373,30 @@ async function main(): Promise<void> {
       unitPrice,
     });
     const fpS = await fingerprintOf(expected.officeId, monthStr);
-    compare("集計値", { rows: result.rows.length }, { rows: exp.rows }, { got: fpS, expected: exp.fingerprint });
-    next.shogai[monthStr] = { fingerprint: fpS, rows: result.rows.length };
+    // 行数だけでなく **金額**も見る。障害は行数が変わらないまま単位数だけ動く
+    // (合成コードの配分・同日合算・制度振り分け) ので、行数だけでは回帰を捕まえられない。
+    const gotS = {
+      rows: result.rows.length,
+      totalUnits: result.rows.reduce((n, r) => n + r.totalUnits, 0),
+      totalAmount: result.rows.reduce((n, r) => n + r.totalAmount, 0),
+      benefitAmount: result.rows.reduce((n, r) => n + r.benefitAmount, 0),
+      userAmount: result.rows.reduce((n, r) => n + r.userAmount, 0),
+    };
+    // 期待値に金額がまだ無い月 (初回) は行数だけ比較する
+    const expS: Record<string, number> =
+      exp.totalUnits == null
+        ? { rows: exp.rows }
+        : {
+            rows: exp.rows,
+            totalUnits: exp.totalUnits,
+            totalAmount: exp.totalAmount ?? 0,
+            benefitAmount: exp.benefitAmount ?? 0,
+            userAmount: exp.userAmount ?? 0,
+          };
+    const gotCmp: Record<string, number> =
+      exp.totalUnits == null ? { rows: gotS.rows } : gotS;
+    compare("集計値", gotCmp, expS, { got: fpS, expected: exp.fingerprint });
+    next.shogai[monthStr] = { fingerprint: fpS, ...gotS };
     // 恒等式 (障害): 総費用額 = 介護給付費 + 利用者負担
     const bad = result.rows.filter(
       (r) => r.totalAmount !== r.benefitAmount + r.userAmount,

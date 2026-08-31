@@ -45,7 +45,11 @@
         "addonLines": 10,
         "monthAddons": 0
       },
-      "rows": 60
+      "rows": 60,
+      "totalUnits": 1063729,
+      "totalAmount": 11754177,
+      "benefitAmount": 11745791,
+      "userAmount": 8386
     }
   },
   "sougou": {
