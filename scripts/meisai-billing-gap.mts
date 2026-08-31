@@ -33,6 +33,18 @@
  *
  *   ⚠ 伝送データが手元に無い拠点は判定できないので「判定不能」として分けて出す。
  *     無いものを「請求漏れ」と言わない。
+ *
+ * ══ 利用者の引き当て (ここで一度しくじった) ══════════════════════════════════
+ *   最初は取込の `_meisai_num_to_client_<拠点>.json` だけで引いていたが、
+ *   **障害の取込はこのファイルを使っていない** (import_meisai_shougai_records.mjs は
+ *   受給者証ベース)。そのため「マッピングに無い = 取り込めていない」と誤って
+ *   621 名を挙げてしまった。実際には おゆみ野 稲葉 裕子 は 528 件入っていた。
+ *
+ *   引き当ては 2 段構えにする。
+ *     1. `_meisai_num_to_client_<拠点>.json`
+ *     2. clients.user_number 直引き
+ *   そのうえで「取り込めているか」は **DB に実績が有るかを実際に数えて**判定する。
+ *   取込の内部事情を推測しない。
  */
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { dirname, join, basename, sep } from "node:path";
@@ -193,15 +205,32 @@ async function main(): Promise<void> {
     return m;
   };
 
+  // clients.user_number → id (マッピングファイルで引けないぶんの受け皿)
+  const byUserNumber = new Map<string, string[]>();
+  {
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from("clients").select("id, user_number").order("id").range(from, from + PAGE - 1);
+      if (error) throw new Error(error.message);
+      for (const c of (data ?? []) as { id: string; user_number: string | null }[]) {
+        const n = (c.user_number ?? "").trim();
+        if (!n) continue;
+        if (!byUserNumber.has(n)) byUserNumber.set(n, []);
+        byUserNumber.get(n)!.push(c.id);
+      }
+      if (!data || data.length < PAGE) break;
+    }
+  }
+
   const clientIds = new Set<string>();
   const resolved = new Map<string, string>();     // key -> client_id
-  const unmapped: Worked[] = [];                  // ファイルはあるが番号が載っていない
-  const noMapFile: Worked[] = [];                 // その拠点のマッピングファイル自体が無い
+  const unresolved: Worked[] = [];                // どちらの手でも利用者に辿り着けない
   for (const [key, w] of worked) {
     const m = loadMap(w.area);
-    if (!m) { noMapFile.push(w); continue; }       // 拠点ごと未着手 or ファイル名がフォルダ名と違う
-    const cid = m[w.clientNum];
-    if (!cid) { unmapped.push(w); continue; }
+    const hits = byUserNumber.get(w.clientNum) ?? [];
+    const cid = m?.[w.clientNum] ?? (hits.length === 1 ? hits[0] : undefined);
+    if (!cid) { unresolved.push(w); continue; }
     resolved.set(key, cid);
     clientIds.add(cid);
   }
@@ -228,6 +257,34 @@ async function main(): Promise<void> {
     }
   }
 
+  // 各利用者の当月の実績件数を実測する (取込の内部事情を推測しない)
+  const recCount = new Map<string, number>();
+  {
+    const [my, mm] = MONTH.split("-").map(Number);
+    const from = `${MONTH}-01`;
+    const to = `${MONTH}-${String(new Date(my, mm, 0).getDate()).padStart(2, "0")}`;
+    const idList = [...clientIds];
+    // ⚠ PostgREST は 1 回で 1000 行しか返さない。limit を大きくしても効かないので
+    //   必ず range() で回しきる。ここを忘れると「実績が無い」と誤判定する
+    //   (最初の版で 1,411 名を取込漏れと誤って挙げた)。
+    const PAGE = 1000;
+    for (let i = 0; i < idList.length; i += 100) {
+      const chunk = idList.slice(i, i + 100);
+      for (let fromRow = 0; ; fromRow += PAGE) {
+        const { data, error } = await supabase
+          .from("kaigo_visit_schedule").select("user_id").in("user_id", chunk)
+          .gte("visit_date", from).lte("visit_date", to)
+          .order("id").range(fromRow, fromRow + PAGE - 1);
+        if (error) throw new Error(error.message);
+        for (const r of (data ?? []) as { user_id: string }[]) {
+          recCount.set(r.user_id, (recCount.get(r.user_id) ?? 0) + 1);
+        }
+        if (!data || data.length < PAGE) break;
+      }
+    }
+  }
+
+  const notImported: Worked[] = [];
   const notBilled: (Worked & { why: string })[] = [];
   const noNumber: Worked[] = [];
   let billed = 0;
@@ -238,6 +295,7 @@ async function main(): Promise<void> {
     const isShogai = w.system === "障害";
     const nums = (isShogai ? shogaiNo.get(cid) : kaigoNo.get(cid)) ?? [];
     const pool = isShogai ? densou.shogai : densou.kaigo;
+    if ((recCount.get(cid) ?? 0) === 0) notImported.push(w);   // 稼働はあるのに実績が DB に無い
     if (nums.length === 0) { noNumber.push(w); continue; }
     if (nums.some((n) => pool.has(n))) { billed++; continue; }
     if (!densou.areas.has(w.area)) continue;              // その拠点の伝送が手元に無い → 判定不能
@@ -249,7 +307,7 @@ async function main(): Promise<void> {
   const yen = (n: number) => n.toLocaleString() + "円";
   console.log("");
   console.log(`請求されている ${billed} / 請求が見当たらない ${notBilled.length} / 番号未登録 ${noNumber.length}`);
-  console.log(`取込に載っていない: 番号がマッピングに無い ${unmapped.length} / 拠点ごとマッピング未整備 ${noMapFile.length}`);
+  console.log(`実績が DB に入っていない ${notImported.length} / 利用者に辿り着けない ${unresolved.length}`);
 
   if (notBilled.length) {
     console.log(`${EOL_}★ 稼働はあるのに伝送に 1 行も無い (${notBilled.length} 名) — 人が見て 自費/保険外/他事業所請求 でないか確かめること
@@ -264,22 +322,22 @@ async function main(): Promise<void> {
     noNumber.slice(0, 20).forEach((w) => console.log(`   ${w.area.padEnd(8)} ${w.system.padEnd(2)} ${w.clientName.padEnd(16)} ${String(w.rows).padStart(3)}回 ${yen(w.amount).padStart(12)}`));
     if (noNumber.length > 20) console.log(`   … 他 ${noNumber.length - 20} 名`);
   }
-  if (noMapFile.length) {
+  if (notImported.length) {
+    console.log(`${EOL_}稼働はあるのに実績が DB に 1 件も無い (${notImported.length} 名) — 取込漏れ`);
+    notImported.sort((a, b) => b.amount - a.amount);
+    notImported.slice(0, 20).forEach((w) =>
+      console.log(`   ${w.area.padEnd(8)} ${w.system.padEnd(2)} ${w.clientName.padEnd(16)} ${String(w.rows).padStart(3)}回 ${yen(w.amount).padStart(12)}`));
+    if (notImported.length > 20) console.log(`   … 他 ${notImported.length - 20} 名`);
+  }
+  if (unresolved.length) {
     const byArea = new Map<string, { n: number; amount: number }>();
-    for (const w of noMapFile) {
+    for (const w of unresolved) {
       const a = byArea.get(w.area) ?? { n: 0, amount: 0 };
       a.n++; a.amount += w.amount; byArea.set(w.area, a);
     }
-    console.log(`${EOL_}拠点ごとマッピングが無い (${noMapFile.length} 名) — migrations/_meisai_num_to_client_<拠点>.json が無い`);
-    console.log("   ⚠ フォルダ名とファイル名が違うだけのこともある (例 さつきが丘 ↔ さつき)");
+    console.log(`${EOL_}利用者に辿り着けない (${unresolved.length} 名) — 取込マッピングにも clients.user_number にも無い`);
     [...byArea].sort((a, b) => b[1].amount - a[1].amount)
       .forEach(([a, v]) => console.log(`   ${a.padEnd(10)} ${String(v.n).padStart(4)} 名  ${yen(v.amount)}`));
-  }
-  if (unmapped.length) {
-    console.log(`${EOL_}番号がマッピングに無い (${unmapped.length} 名) — 実績がそもそも DB に入らない`);
-    unmapped.sort((a, b) => b.amount - a.amount);
-    unmapped.slice(0, 20).forEach((w) => console.log(`   ${w.area.padEnd(8)} ${w.system.padEnd(2)} ${w.clientName.padEnd(16)} 番号${w.clientNum} ${String(w.rows).padStart(3)}回 ${yen(w.amount).padStart(12)}`));
-    if (unmapped.length > 20) console.log(`   … 他 ${unmapped.length - 20} 名`);
   }
   console.log(`${EOL_}(この一覧は判断材料。MEISAI は勤務実績であって請求実績ではない)`);
 }
