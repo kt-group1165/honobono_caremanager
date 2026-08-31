@@ -1,0 +1,62 @@
+{
+  "_readme": [
+    "帳票の印字欄チェック (npm run check:reports) の基準値。",
+    "",
+    "■ 何を見ているか",
+    "  様式に印字欄があるのに content が空の件数。**増えたら FAIL**、減ったら報告だけ。",
+    "  ゼロにできない分 (元データがそもそも無い利用者) を基準値に含めてよい。",
+    "  0 を強制すると毎回落ちて読まれなくなるので、悪化だけを見る。",
+    "",
+    "■ 更新のしかた",
+    "  npm run check:reports -- --update     … 中身を読んでから commit する",
+    "  ⚠ 増えたまま --update すると穴を基準値に焼き付けることになる。",
+    "    増えた項目は **先に原因を潰してから** 更新すること。",
+    "",
+    "■ 対象項目",
+    "  scripts/reports-blank-check.mts の REQUIRED。印刷ビューに出ている欄だけ挙げる。"
+  ],
+  "blanks": {
+    "care-plan-1": {
+      "user_name": 0,
+      "birth_date": 2,
+      "address": 22,
+      "care_level": 0,
+      "cert_period": 2,
+      "certification_date": 61,
+      "creator_name": 35,
+      "office_name": 25,
+      "creation_date": 0
+    },
+    "care-plan-2": {
+      "user_name": 1,
+      "creation_date": 1
+    },
+    "service-usage": {
+      "user_name": 1,
+      "insurer_number": 1,
+      "insurer_name": 4,
+      "insured_number": 1,
+      "care_level": 1,
+      "limit_amount": 1,
+      "limit_period": 21,
+      "support_office_name": 4,
+      "support_staff_name": 10
+    },
+    "yobo-care-plan": {
+      "user_name": 0,
+      "birth_date": 0,
+      "cert_date": 0,
+      "cert_period": 0,
+      "care_level": 0,
+      "creator_name": 0,
+      "office_name": 0,
+      "creation_date": 0
+    }
+  },
+  "totals": {
+    "care-plan-1": 2960,
+    "care-plan-2": 8,
+    "service-usage": 2230,
+    "yobo-care-plan": 3
+  }
+}

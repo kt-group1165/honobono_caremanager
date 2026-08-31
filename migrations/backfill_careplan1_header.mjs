@@ -1,5 +1,6 @@
 // ============================================================================
-// 居宅サービス計画書 第1表 (care-plan-1) の **表題部だけ**を埋める。
+// 居宅サービス計画書 第1表 (care-plan-1) と 介護予防サービス・支援計画書
+// (yobo-care-plan) の **表題部だけ**を埋める。
 //
 //   node migrations/backfill_careplan1_header.mjs            # DRY RUN
 //   node migrations/backfill_careplan1_header.mjs --execute
@@ -37,6 +38,9 @@
 //   本文 (総合的な援助の方針・意向・課題分析) には一切触らない。
 //
 //   ⚠ 認定年月日は様式どおり和暦で入れる (画面・印刷とも和暦表示のため)。
+//
+//   ⚠ 認定年月日の **キー名が様式で違う**。第1表 = certification_date /
+//     介護予防 = cert_date。片方だけ埋めると もう一方がずっと空のままになる。
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
@@ -94,7 +98,7 @@ async function fetchAll(build) {
 }
 
 async function main() {
-  console.log("=== 第1表 (care-plan-1) の表題部 認定年月日・計画作成者・事業所名 を埋める ===");
+  console.log("=== 計画書 (第1表 / 介護予防) の表題部 認定年月日・計画作成者・事業所名 を埋める ===");
   console.log(EXECUTE ? "*** 本番実行 ***" : "*** DRY RUN (--execute で反映) ***");
   if (OVERWRITE) console.log("*** --overwrite: 既存の値も上書きする ***");
 
@@ -132,12 +136,22 @@ async function main() {
     .order("id"));
   const clientById = new Map(clients.map((c) => [c.id, c]));
 
-  const docs = await fetchAll(() => sb
-    .from("kaigo_report_documents")
-    .select("id, user_id, certification_id, content")
-    .eq("report_type", "care-plan-1")
-    .order("id"));
-  console.log(`第1表 ${docs.length} 件 / 認定 ${certs.length} 件`);
+  // 対象の様式と「認定年月日」のキー名 (様式で違う)
+  const TARGETS = [
+    { type: "care-plan-1", label: "第1表", certDateField: "certification_date" },
+    { type: "yobo-care-plan", label: "介護予防計画書", certDateField: "cert_date" },
+  ];
+  const docs = [];
+  for (const t of TARGETS) {
+    const rows = await fetchAll(() => sb
+      .from("kaigo_report_documents")
+      .select("id, user_id, certification_id, content")
+      .eq("report_type", t.type)
+      .order("id"));
+    console.log(`${t.label} ${rows.length} 件`);
+    docs.push(...rows.map((r) => ({ ...r, _target: t })));
+  }
+  console.log(`認定 ${certs.length} 件`);
 
   const plan = [];
   const stat = { 認定が引けない: 0, 変更なし: 0 };
@@ -172,7 +186,7 @@ async function main() {
       next[field] = value;
       changed.push(`${label}: ${cur ? `「${cur}」` : "空"} →「${value}」`);
     };
-    put("certification_date", fmtReiwa(cert.certification_date), "認定年月日");
+    put(d._target.certDateField, fmtReiwa(cert.certification_date), "認定年月日");
     put("creator_name", (cert.care_manager ?? "").trim(), "計画作成者");
     put("office_name", officeName ?? "", "事業所名");
     put("care_level", (cert.care_level ?? "").trim(), "要介護状態区分");
