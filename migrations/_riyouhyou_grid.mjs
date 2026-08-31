@@ -234,6 +234,22 @@ export function extractGrid(words) {
 //     y=80.0  x=41.9   「保険者」        → y+3.6 / x 130〜230 に 6 桁
 //     y=111.4 x=41.9   「被保険」        → y+4.0 / x  75〜230 に 10 桁
 //     y=122.3 x=229.7  「被保険者氏名」  → 同じ y 帯 / x>285 に氏名、その右に「様」
+//     y= 84.1 x=234.1  「保険者名」      → 同じ y 帯 / 右隣〜「事業者事業所名」の手前
+//     y= 96.9 x=395.4  「担当者名」      → 同じ y 帯 / 右隣〜「(専門員番号」の手前
+//     y= 84.1 x=395.4  「事業者事業所名」→ ラベルの **上** の行 (y-10 付近) の右隣
+//
+//   ⚠ ラベルの絶対 y は PDF ごとに違う (五井は 保険者名 が y=56、他拠点は y=84)。
+//     絶対座標で決め打ちせず **ラベルからの相対**で拾うこと。
+//   ⚠ 担当者名の右端を x 固定にすると「(専門員番号 13021064)」を巻き込む。
+//     x ではなく **括弧で切る** (氏名の後ろに必ず括弧書きが付く様式)。
+//   ⚠ 保険者名の右端も x 固定にすると「事業者事業所名」の値を巻き込む。
+//     「事業者事業所名」ラベルの x を上限にする。
+//   ⚠ 事業所名のラベルは「居宅介護支援 / 事業者事業所名」の 2 行組で、値は
+//     **1 行目と同じ y** に出る。同じ帯に事業所の電話番号も入るので番号は捨てる。
+//
+//   検算 (2026-08-31 / 12 PDF・2,016 ページ): 保険者名 読めず 0 / 事業所名 読めず 0 /
+//   担当者名 読めず 4 (= ほのぼの側で担当 CM 未設定のページ)。
+//   拾えた値に記号・数字の混入は 0。事業所名は 9 事業所に収まった。
 
 /** ラベル語を x 上限つきで探す */
 function findLabel(words, text, xMax) {
@@ -253,8 +269,30 @@ function joinBelow(words, label, dyMax, xMin, xMax) {
 }
 
 /**
- * 保険者番号・被保険者番号・氏名を座標で読む。
- * @returns {{insurer:string|null, insured:string|null, name:string|null, nameSuffix:string|null}}
+ * ラベルの右にある語を x 順に連結する。stops のいずれかで始まる語が出たら打ち切る。
+ * 右端を x で決め打ちすると隣の欄を巻き込むので、区切り文字で切るためのもの。
+ */
+function joinRightOf(words, label, { xMin = 40, xMax = Infinity, stops = [] } = {}) {
+  if (!label) return null;
+  const band = words
+    .filter((w) => Math.abs(w.y - label.y) <= 6 && w.x > label.x + xMin && w.x < xMax)
+    .sort((a, b) => a.x - b.x);
+  const parts = [];
+  for (const w of band) {
+    if (stops.some((st) => w.t.startsWith(st))) break;
+    parts.push(w.t);
+  }
+  const s = parts.join(" ").replace(/\s+/g, " ").trim();
+  return s || null;
+}
+
+/** 事業所の電話番号 (事業所名と同じ帯に出るので名前から外す) */
+const isPhone = (t) => /^0\d[\d-]{7,}$/.test(t);
+
+/**
+ * 保険者番号・被保険者番号・氏名・保険者名・事業所名・担当者名を座標で読む。
+ * @returns {{insurer:string|null, insured:string|null, name:string|null, nameSuffix:string|null,
+ *            insurerName:string|null, officeName:string|null, staffName:string|null}}
  */
 export function pickIdentity(words) {
   // ⚠ x 上限は 228。230 にすると右隣の「ﾌﾘｶﾞﾅ」(x=229.7) / 「保険者名」(x=234.1) を
@@ -278,12 +316,47 @@ export function pickIdentity(words) {
     const m = /^(.*?)[　]([^　]{1,2})$/.exec(raw);
     if (m) { name = m[1].trim(); nameSuffix = m[2]; } else { name = raw || null; }
   }
+  // 保険者名 … 「保険者名」ラベルの右。右端は「事業者事業所名」ラベルの手前まで。
+  const insurerNameLabel = findLabel(words, "保険者名", 260);
+  const officeLabel = findLabel(words, "事業者事業所名");
+  const insurerName = joinRightOf(words, insurerNameLabel, {
+    xMax: officeLabel ? officeLabel.x - 2 : (insurerNameLabel ? insurerNameLabel.x + 155 : Infinity),
+    stops: ["事業者", "居宅"],
+  });
+
+  // 事業所名 … 「事業者事業所名」ラベルの **上の行** の右隣。電話番号は落とす。
+  const officeName = (() => {
+    if (!officeLabel) return null;
+    const band = words
+      .filter((w) => w.y >= officeLabel.y - 16 && w.y <= officeLabel.y + 4
+        && w.x > officeLabel.x + 40 && w.x < officeLabel.x + 250)
+      .sort((a, b) => a.x - b.x);
+    const parts = [];
+    for (const w of band) {
+      if (/^(作成|令和|利用者)/.test(w.t)) break;
+      if (isPhone(w.t)) continue;
+      parts.push(w.t);
+    }
+    const s2 = parts.join("").trim();
+    return s2 || null;
+  })();
+
+  // 担当者名 … 「担当者名」ラベルの右。氏名の後ろの「(専門員番号 …)」で切る。
+  const staffName = joinRightOf(words, findLabel(words, "担当者名", 420), {
+    stops: ["(", "（"],
+  });
+
   // 書式を満たさないものは採用しない (拾い過ぎたゴミを黙って通さないため)
   return {
     insurer: /^\d{6}$/.test(insurer ?? "") ? insurer : null,
     insured: /^[0-9A-Za-z]{10}$/.test(insured ?? "") ? insured : null,
     name,
     nameSuffix,
+    // 市区町村名・氏名に数字・括弧は出ない。混ざったら列を取り違えているので捨てる
+    insurerName: insurerName && !/[0-9()（）]/.test(insurerName) ? insurerName : null,
+    staffName: staffName && !/[0-9()（）]/.test(staffName) ? staffName : null,
+    // 事業所名は「*ｹｲ・ﾃｨ・ｻｰﾋﾞｽ…」のように記号を含むので記号では弾かない
+    officeName,
   };
 }
 

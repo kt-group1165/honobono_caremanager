@@ -135,7 +135,7 @@ function targetAreas() {
 
 // ── 1. PDF を読む ───────────────────────────────────────────────────────────
 /**
- * @returns Map<string, {name, insurer, insured, careLevel, officeName, rows, sources}>
+ * @returns Map<string, {name, insurer, insured, careLevel, officeName, insurerName, staffName, rows, sources}>
  *          キーは 保険者番号|被保険者番号
  */
 function readArea(dir) {
@@ -173,11 +173,19 @@ function readArea(dir) {
           name: name ?? "", nameKey: name ? normRiyouName(name) : "",
           nameSuffix: id.nameSuffix ?? null,
           insurer, insured,
-          careLevel: who?.careLevel ?? null, officeName: who?.officeName ?? null,
+          careLevel: who?.careLevel ?? null,
+          // 表題部は座標で読む。本文テキスト版は氏名に区別記号が付く人で落ちる
+          // (「金子 和子1」「中村 光子 〇」等で事業所名が 12 件空になっていた)
+          officeName: id.officeName ?? who?.officeName ?? null,
+          insurerName: id.insurerName ?? null, staffName: id.staffName ?? null,
           rows: [], sources: [],
         });
       }
       const p = people.get(key);
+      // 2 ページ目以降しか読めなかったときのため、後から出てきた値でも埋める
+      if (!p.insurerName && id.insurerName) p.insurerName = id.insurerName;
+      if (!p.officeName && (id.officeName ?? who?.officeName)) p.officeName = id.officeName ?? who?.officeName;
+      if (!p.staffName && id.staffName) p.staffName = id.staffName;
       p.rows.push(...grid.rows);                       // 2 ページ目以降は行を継ぎ足す
       p.sources.push(`${path.basename(f)}#p${i + 1}`);
     }
@@ -283,12 +291,17 @@ function buildContent(prev, person, cert) {
     user_name: prev?.user_name || person.name,
     insurer_number: prev?.insurer_number || cert?.insurer_number || person.insurer || "",
     insured_number: prev?.insured_number || cert?.insured_number || person.insured || "",
-    insurer_name: prev?.insurer_name || cert?.insurer_name || "",
+    // 利用票に印字された保険者名を最優先。認定に入っていないことが多い (2026-08-31 時点で
+    // 認定 7,254 件中 3,278 件が NULL) ので、cert 頼みだと欄が空のままになる。
+    insurer_name: prev?.insurer_name || person.insurerName || cert?.insurer_name || "",
     care_level: careLevel,
     limit_amount: limit,
     limit_period: prev?.limit_period
       || (cert ? `${fmtReiwa(cert.certification_start_date)}〜${fmtReiwa(cert.certification_end_date)}` : ""),
     support_office_name: prev?.support_office_name || person.officeName || "",
+    support_staff_name: prev?.support_staff_name || person.staffName || "",
+    // 作成年月日・届出年月日は **ほのぼのの利用票でも空欄で印字される** (令和__年__月__日)。
+    // 埋める値がどこにも無いので空のままにする (2026-08-31 に PDF 実物で確認)。
     creation_date: prev?.creation_date || "",
     submission_date: prev?.submission_date || "",
     services: buildServices(person.rows),
