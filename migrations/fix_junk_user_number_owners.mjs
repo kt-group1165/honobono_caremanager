@@ -168,9 +168,24 @@ async function main() {
       continue;
     }
 
-    // 持ち主の client を用意する
+    // 持ち主の client を用意する。
+    // ⚠ (保険者, 被保番) だけで探すと、**番号が null の既存 client** を見落として
+    //   同じ人をもう 1 つ作ってしまう。実際 2026-08-31 に「狩野 絹代」で起きた
+    //   (A の高品マスタ取込が番号 null で作っていた)。氏名+生年月日でも探す。
     let { data: owner } = await sb.from("clients")
       .select("id, name").eq("insurer_number", own.insurer).eq("insured_number", own.insured).is("deleted_at", null).maybeSingle();
+    if (!owner) {
+      const kh0 = kihonByName.get(normNm(own.name));
+      const bd0 = kh0 ? iso(g(kh0.r, kh0.idx, "生年月日")) : null;
+      if (bd0) {
+        const { data: byNameBirth } = await sb.from("clients")
+          .select("id, name").eq("name", own.name).eq("birth_date", bd0).is("deleted_at", null);
+        if (byNameBirth?.length === 1) {
+          owner = byNameBirth[0];
+          console.log(`   氏名+生年月日で既存を見つけた (${owner.id.slice(0, 8)}) → 作らない`);
+        }
+      }
+    }
     if (!owner) {
       const kh = kihonByName.get(normNm(own.name));
       const newClient = {
