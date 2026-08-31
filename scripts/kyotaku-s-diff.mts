@@ -23,8 +23,8 @@ import { fetchKyotakuClaimRows } from "@/app/(authenticated)/billing/seikyu/_sei
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const YEAR = 2026;
-const MONTH = 6;
+// 対象月は env で指定する (MONTH=2026-07 等)。既定は 2026-06。
+const [YEAR, MONTH] = (process.env.MONTH ?? "2026-06").split("-").map(Number);
 const MONTH_KEY = `${YEAR}-${String(MONTH).padStart(2, "0")}`;
 const YM = `${YEAR}${String(MONTH).padStart(2, "0")}`;
 const OFFICE_ID = process.env.OFFICE_ID || "cb3190b6-4a74-4952-b0c9-76f913cbd1c8"; // 袖ヶ浦

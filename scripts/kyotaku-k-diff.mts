@@ -25,8 +25,8 @@ import { parseYoboShienKubun } from "@/app/(authenticated)/billing/claims/claims
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const YEAR = 2026;
-const MONTH = 6;
+// 対象月は env で指定する (MONTH=2026-07 等)。既定は 2026-06。
+const [YEAR, MONTH] = (process.env.MONTH ?? "2026-06").split("-").map(Number);
 const MONTH_KEY = `${YEAR}-${String(MONTH).padStart(2, "0")}`;
 const YM = `${YEAR}${String(MONTH).padStart(2, "0")}`;
 const OFFICE_ID = process.env.OFFICE_ID || "1b22d425-2ec4-4c2f-a002-c1c994e94507"; // おゆみ野
