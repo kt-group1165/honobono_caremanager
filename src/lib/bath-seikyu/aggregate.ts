@@ -61,7 +61,7 @@ const fmtMD = (iso: string) => {
 };
 
 // 回単位加算コード (種類12)
-const CODE_SHOKAI = "124113"; // 訪問入浴初回加算 200単位/月 (限度額管理対象外)
+const CODE_SHOKAI = "124113"; // 訪問入浴初回加算 200単位/月 (限度額管理**対象**)
 const CODE_NINCHI = { I: "126133", II: "126134" } as const; // 認知症専門ケア加算Ⅰ3/Ⅱ4 (/回)
 const CODE_CHUUSANKAN = "128110"; // 中山間地域等提供加算 = 所定単位 × 5%
 
@@ -454,22 +454,33 @@ export async function aggregateBathVisitSeikyu(
 
     const details = Array.from(detailMap.values());
     let grossBaseUnits = details.reduce((s, d) => s + d.units, 0);
-    // 限度額管理対象外(初回加算)。提供表経由の行もフラグ経由も同扱い
-    let shokaiUnits = detailMap.get(CODE_SHOKAI)?.units ?? 0;
+    // 限度額管理**対象外**の単位数。
+    //
+    // ★ 2026-09-01 監査是正: visit-seikyu と分類が逆だった。
+    //   visit 側は 2026-07-17 の ほのぼの KK 突合で確定している
+    //   (大網5名の初回加算200単位を ほのぼのは限度額管理対象=項9 に計上):
+    //     管理対象   … 基本サービス + 初回加算 + 緊急時 + 認知症専門ケア 等の実単位加算
+    //     管理対象外 … 処遇改善等の %加算 + 特別地域 + 小規模 + 中山間 (率加算のみ)
+    //   bath はこれが逆で、初回加算を対象外に、率加算 (中山間) を管理対象にしていた。
+    //   → 伝送 様式第二 の 項10 (限度額管理対象) ↔ 項11 (対象外) が誤配置になり、
+    //     超過判定の母数も間違う。visit と同じ分類に揃える。
+    let taishougaiUnits = Array.from(detailMap.values())
+      .filter((d) => d.service_code != null && d.service_code in RATE_ADDONS)
+      .reduce((sum, d) => sum + d.units, 0);
 
     // 記録フラグ由来の加算。同コードが既に行として存在する場合はスキップ (二重計上防止 —
     // 記録のチェックと提供表サービス追加のどちらで入れても 1 回だけ算定される)
-    const pushAddon = (code: string, count: number, taishougai: boolean) => {
+    const pushAddon = (code: string, count: number, kanriTaishougai: boolean) => {
       if (count <= 0 || detailMap.has(code)) return;
       const info = codeMap.get(code);
       if (!info) { warnings.push(`${name}: 加算コード${code}が対象月マスタに未一致`); return; }
       const units = info.units * count;
       grossBaseUnits += units;
-      if (taishougai) shokaiUnits += units;
+      if (kanriTaishougai) taishougaiUnits += units;
       details.push({ service_type: info.name, short_name: info.short, service_code: code, unit_per: info.units, count, units });
     };
-    // 初回加算: 月1回(いずれかの記録でON)。対象外
-    if (recs.some((r) => r.addon_shokai)) pushAddon(CODE_SHOKAI, 1, true);
+    // 初回加算: 月1回(いずれかの記録でON)。**限度額管理の対象** (visit と同じ / ほのぼの突合で確定)
+    if (recs.some((r) => r.addon_shokai)) pushAddon(CODE_SHOKAI, 1, false);
     // 認知症専門ケア: 記録(回)ごと。Ⅰ/Ⅱ別に集計
     const ninchiI = recs.filter((r) => r.addon_ninchi === "I").length;
     const ninchiII = recs.filter((r) => r.addon_ninchi === "II").length;
@@ -480,6 +491,8 @@ export async function aggregateBathVisitSeikyu(
       const cu = Math.round(serviceBaseUnits * 0.05);
       const info = codeMap.get(CODE_CHUUSANKAN);
       grossBaseUnits += cu;
+      // 中山間は率加算 = 限度額管理**対象外** (2026-09-01 是正。従来は管理対象に入れていた)
+      taishougaiUnits += cu;
       details.push({ service_type: info?.name ?? "訪問入浴中山間地域等提供加算", short_name: info?.short ?? null, service_code: CODE_CHUUSANKAN, unit_per: cu, count: 1, units: cu });
     }
 
@@ -488,12 +501,13 @@ export async function aggregateBathVisitSeikyu(
     // 区分支給限度基準の超過→全額自費
     const planUnits = planByClient.get(clientId) ?? null;
     const limitUnits = planUnits ?? limitAmount;
-    const managedUnits = grossBaseUnits - shokaiUnits;
+    const managedUnits = grossBaseUnits - taishougaiUnits;
     const autoOver = limitUnits != null ? Math.max(0, managedUnits - limitUnits) : 0;
     const overUnits = Math.min(autoOver, managedUnits);
     const baseUnits = grossBaseUnits - overUnits;
     const addonUnits = addonNum > 0 ? Math.round((baseUnits * addonNum) / addonDen) : 0;
-    const kanriTaishougaiUnits = addonUnits + shokaiUnits;
+    // 様式第二 集計「⑥限度額管理対象外単位数」= 処遇改善等の%加算 + 率加算 (特別地域/小規模/中山間)
+    const kanriTaishougaiUnits = addonUnits + taishougaiUnits;
     const totalUnits = baseUnits + addonUnits;
     const totalAmount = Math.floor((totalUnits * unitPrice100) / 100);
     const overAmount = Math.floor((overUnits * unitPrice100) / 100);
@@ -504,10 +518,41 @@ export async function aggregateBathVisitSeikyu(
     const isSeiho = kohiTandoku || kohi?.hobetsu === "12";
     const copayX10 = Math.min(10, Math.max(0, Math.round(copay * 10)));
     const insuranceAmount = kohiTandoku ? 0 : Math.floor((totalAmount * (10 - copayX10)) / 10);
-    const publicExpense = kohi ? kohiHobetsuLabel(kohi.hobetsu) : kohiTandoku ? "公費単独 (生活保護 10割)" : null;
-    if (kohi && !isSeiho) warnings.push(`${name}: 公費(${kohiHobetsuLabel(kohi.hobetsu)})は部分公費のため本人負担を残し公費振替しません(要確認)`);
-    const kohiAmount = kohiTandoku ? totalAmount : isSeiho ? totalAmount - insuranceAmount : null;
-    const userAmount = isSeiho ? 0 : totalAmount - insuranceAmount;
+    // 部分公費 (生保以外) は振替しないので、公費欄そのものを出さない。
+    //   ラベルだけ載せると伝送ビルダーが「法別番号あり」と見て 0 円の公費レコードを作る。
+    const publicExpense = isSeiho
+      ? (kohi ? kohiHobetsuLabel(kohi.hobetsu) : "公費単独 (生活保護 10割)")
+      : null;
+    if (kohi && !isSeiho) {
+      warnings.push(
+        `${name}: 公費(${kohiHobetsuLabel(kohi.hobetsu)})は部分公費のため、本人負担を残し公費振替しません。` +
+          `**この利用者は公費分の請求が出ません** — 手当てが要るか確認してください`,
+      );
+    }
+    //
+    // ★ 2026-09-01 監査是正 (2 件)
+    //
+    // ① 生保の本人負担上限月額 (honnin_futan) を一度も読んでいなかった。
+    //    介護券に本人支払額が設定されている利用者は、その額まで本人が負担し、
+    //    公費が負担するのは残りだけ。読まないと**その額のぶん公費請求が過大**になる。
+    //    visit-seikyu:1779 と同じく負値・小数は防御的に整数化する。
+    // ② 部分公費 (生保以外) は振替しない設計なのに publicExpense に法別ラベルを
+    //    載せていたため、伝送ビルダーが「法別番号あり = 公費欄あり」と判断して
+    //    **公費請求額 0 円の公費レコード**を出していた (内部矛盾したまま送信)。
+    //    振替しないなら公費欄そのものを出さない (ラベルを載せない) のが正しい。
+    const honninLimit = kohi ? Math.max(0, Math.floor(kohi.honninFutan ?? 0)) : 0;
+    const seihoUserAmount = isSeiho ? Math.min(honninLimit, totalAmount - insuranceAmount) : 0;
+    if (isSeiho && honninLimit > 0) {
+      warnings.push(
+        `${name}: 生保の本人負担上限月額 ${honninLimit.toLocaleString()} 円を適用しました (公費請求はその分減ります)`,
+      );
+    }
+    const kohiAmount = kohiTandoku
+      ? Math.max(0, totalAmount - seihoUserAmount)
+      : isSeiho
+        ? Math.max(0, totalAmount - insuranceAmount - seihoUserAmount)
+        : null;
+    const userAmount = isSeiho ? seihoUserAmount : totalAmount - insuranceAmount;
 
     rows.push({
       user_id: clientId,
