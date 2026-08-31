@@ -1,0 +1,65 @@
+[
+  {
+    "action": "created_client",
+    "id": "ce298275-46fe-4c5d-9fa0-7b5ddf0c650b",
+    "name": "狩野 絹代"
+  },
+  {
+    "action": "move_cert",
+    "id": "1067f544-688f-4e6a-81e9-b0bc34048743",
+    "from": "4b7d3674-9258-4fbc-8131-a6adb18775f1",
+    "to": "ce298275-46fe-4c5d-9fa0-7b5ddf0c650b"
+  },
+  {
+    "action": "delete_host_assignment",
+    "id": "9f48dc4d-b609-4599-8c74-f39d2d12eba8",
+    "client_id": "4b7d3674-9258-4fbc-8131-a6adb18775f1",
+    "office_id": "18dab72e-0445-49f1-a8fc-44637f9fd676"
+  },
+  {
+    "action": "created_client",
+    "id": "d58f046d-311c-4331-8208-4c8c2ffe3386",
+    "name": "齋藤 夫美雄"
+  },
+  {
+    "action": "move_cert",
+    "id": "bdd43ade-be13-4349-9f15-747b174c17a7",
+    "from": "4b7d3674-9258-4fbc-8131-a6adb18775f1",
+    "to": "d58f046d-311c-4331-8208-4c8c2ffe3386"
+  },
+  {
+    "action": "move_claim",
+    "id": "8af47a1f-1105-4fdd-8c2c-57f1fee481b4",
+    "from": "4b7d3674-9258-4fbc-8131-a6adb18775f1",
+    "to": "d58f046d-311c-4331-8208-4c8c2ffe3386"
+  },
+  {
+    "action": "delete_host_assignment",
+    "id": "4f0b9b68-308a-49d6-839e-ba126aa85ae6",
+    "client_id": "4b7d3674-9258-4fbc-8131-a6adb18775f1",
+    "office_id": "f1340c79-c324-4fac-be57-f587a96c3aaa"
+  },
+  {
+    "action": "created_client",
+    "id": "2c67ceb3-62af-4387-9743-28882242e009",
+    "name": "高橋 良雄"
+  },
+  {
+    "action": "move_cert",
+    "id": "2f39349f-3a77-4212-b6af-27a968c9aa4f",
+    "from": "4b7d3674-9258-4fbc-8131-a6adb18775f1",
+    "to": "2c67ceb3-62af-4387-9743-28882242e009"
+  },
+  {
+    "action": "move_claim",
+    "id": "fff47309-fb0f-45ec-9cf4-f0e28bdfd763",
+    "from": "4b7d3674-9258-4fbc-8131-a6adb18775f1",
+    "to": "2c67ceb3-62af-4387-9743-28882242e009"
+  },
+  {
+    "action": "delete_host_assignment",
+    "id": "ed650d6b-ec3b-4a9c-ba4d-333c5638968c",
+    "client_id": "4b7d3674-9258-4fbc-8131-a6adb18775f1",
+    "office_id": "6bfdc931-184d-4477-ab1a-0e9ee1d52e54"
+  }
+]
