@@ -38,7 +38,15 @@ const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_
   auth: { persistSession: false },
 });
 
-/** clients を参照する表と、その列名 */
+/**
+ * clients を参照する表と、その列名。
+ *
+ * ⚠ 列名は表ごとに **client_id と user_id が混在**している。誤って書くと
+ *   usableRefs が外してしまい、参照ゼロに見えて統合でデータが消える。
+ *   2026-08-31 に全 51 表を実データで確認し、12 表が user_id だったのを是正した
+ *   (kaigo_benefit_management は 5,878 行あり、見落とすと給付管理票が消えていた)。
+ *   表を足すときは必ず実物で列名を確かめること。
+ */
 const REFS = [
   ["client_insurance_records", "client_id"],
   ["client_office_assignments", "client_id"],
@@ -52,46 +60,49 @@ const REFS = [
   ["shogai_jogen_kanri_results", "client_id"],
   ["shogai_billing_status", "client_id"],
   ["chiiki_recipient_certs", "client_id"],
-  ["kaigo_visit_records", "client_id"],
-  ["kaigo_visit_schedule", "client_id"],
-  ["kaigo_visit_patterns", "client_id"],
+  ["kaigo_visit_records", "user_id"],
+  ["kaigo_visit_schedule", "user_id"],
+  ["kaigo_visit_patterns", "user_id"],
   ["kaigo_visit_addon_lines", "client_id"],
   ["kaigo_visit_month_addons", "client_id"],
-  ["kaigo_care_plans", "client_id"],
-  ["kaigo_care_plan_services", "client_id"],
-  ["kaigo_assessments", "client_id"],
-  ["kaigo_monitoring_sheets", "client_id"],
-  ["kaigo_support_records", "client_id"],
+  ["kaigo_care_plans", "user_id"],
+  // kaigo_care_plan_services は care_plan_id で親 (kaigo_care_plans) にぶら下がる。
+  //   利用者列を持たないので、親を移せば付いてくる
+  ["kaigo_assessments", "user_id"],
+  ["kaigo_monitoring_sheets", "user_id"],
+  ["kaigo_support_records", "user_id"],
   ["kaigo_care_conferences", "client_id"],
-  ["kaigo_adl_records", "client_id"],
-  ["kaigo_health_records", "client_id"],
-  ["kaigo_medical_history", "client_id"],
-  ["kaigo_medical_insurance", "client_id"],
-  ["kaigo_family_contacts", "client_id"],
-  ["kaigo_emergency_sheets", "client_id"],
-  ["kaigo_user_contracts", "client_id"],
+  ["kaigo_adl_records", "user_id"],
+  ["kaigo_health_records", "user_id"],
+  ["kaigo_medical_history", "user_id"],
+  ["kaigo_medical_insurance", "user_id"],
+  ["kaigo_family_contacts", "user_id"],
+  ["kaigo_emergency_sheets", "user_id"],
+  ["kaigo_user_contracts", "user_id"],
   ["kaigo_riyou_settings", "client_id"],
   ["kaigo_monthly_plan_units", "client_id"],
   ["kaigo_gendo_allocation", "client_id"],
-  ["kaigo_benefit_management", "client_id"],
-  ["kaigo_billing_records", "client_id"],
-  ["kaigo_billing_details", "client_id"],
-  ["kaigo_billing_addons", "client_id"],
+  ["kaigo_benefit_management", "user_id"],
+  ["kaigo_billing_records", "user_id"],
+  // kaigo_billing_details は billing_record_id で親 (kaigo_billing_records) にぶら下がる。
+  //   利用者列を持たないので、親を移せば付いてくる
+  // kaigo_billing_addons は office 単位で利用者に紐づかない
+  // signatures は DB の表ではなく **Storage のバケット名**。署名画像はバケットに置き、
+  //   パスを kaigo_visit_records.signature_image_path に持つ
   ["kaigo_billing_status", "client_id"],
-  ["kaigo_houmon_care_plans", "client_id"],
+  ["kaigo_houmon_care_plans", "user_id"],
   ["kaigo_idou_shien_records", "client_id"],
   ["kaigo_bath_visit_records", "client_id"],
   ["kaigo_bath_schedule", "client_id"],
   ["kaigo_bath_patterns", "client_id"],
-  ["kaigo_service_records", "client_id"],
+  ["kaigo_service_records", "user_id"],
   // ⚠ この表の列は client_id ではなく **user_id**。誤ったまま置くと usableRefs が
   //   静かに外し、統合しても帳票が移らない (2026-08-31 に発見)
   ["kaigo_report_documents", "user_id"],
-  ["kaigo_emergency_status", "client_id"],
+  ["kaigo_emergency_status", "user_id"],
   ["riyou_jippi_entries", "client_id"],
   ["riyou_seikyu_payments", "client_id"],
   ["kaigo_care_support_claims", "user_id"],
-  ["signatures", "client_id"],
 ];
 
 /** その表が存在し、その列を持つか (無ければ静かに外す) */
