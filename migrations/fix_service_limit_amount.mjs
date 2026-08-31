@@ -63,7 +63,6 @@ const STD = {
   "要支援1": 5032, "要支援2": 10531,
   "要介護1": 16765, "要介護2": 19705, "要介護3": 27048, "要介護4": 30938, "要介護5": 36217,
 };
-const CURRENT = new Set(Object.values(STD));
 const TIER_OF = Object.fromEntries(Object.entries(STD).map(([k, v]) => [v, k]));
 
 async function fetchAll(build) {

@@ -163,7 +163,7 @@ async function main() {
     }
   }
   writeFileSync(BACKUP, JSON.stringify(backup, null, 2), "utf8");
-  console.log(`\n消した ${ok} 件 / 失敗 ${ng} 件 / 帳票の付け替え ${docMoves.length} 件`);
+  console.log(`\n消した ${ok} 件 / 失敗 ${ng} 件 / 値を移した ${merged} 組 / 帳票の付け替え ${docMoves.length} 件`);
   console.log(`内容を ${path.basename(BACKUP)} に残しました`);
 }
 

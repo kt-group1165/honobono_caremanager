@@ -2,6 +2,8 @@
 // page.tsx (server) と各 client component から import する。
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getUnambiguousServiceSystemMap } from "@/lib/service-system-lookup";
+import { toHankakuDigits } from "@/lib/service-name-normalize";
 
 export interface KaigoUser {
   id: string;
@@ -331,6 +333,62 @@ function extractMissingScheduleColumn(message: string): string | null {
 }
 
 /**
+ * 制度区分 (system) が入っていない行に、サービス名から決まる制度を補う。
+ *
+ * ── なぜ INSERT の中でやるか ────────────────────────────────────────────
+ *   呼出側は 7 箇所ある。個別に足すと必ずどこかが漏れるので、**入口 1 箇所**で補う。
+ *
+ * ── なぜ推測しないか ────────────────────────────────────────────────────
+ *   `getUnambiguousServiceSystemMap` は **1 制度にしか無い名前だけ**を返す。
+ *   決まらない名前 (マスタに無い / 複数制度にある) は **未設定のまま残す**。
+ *   外れた側まで書くと、障害を「介護」と記録して請求漏れになる
+ *   (2026-08 に 238 件を是正した前例がある)。
+ *
+ * ⚠ 呼出側が明示的に system を渡していれば、それを優先してそのまま使う。
+ * ⚠ マスタ取得に失敗しても INSERT 自体は止めない (制度は後から backfill できる)。
+ *   ただし黙って捨てず console.error に残す。
+ */
+async function fillMissingSystem(
+  supabase: SupabaseClient,
+  rows: Record<string, unknown>[],
+): Promise<Record<string, unknown>[]> {
+  const need = rows.filter(
+    (r) => r.system == null && typeof r.service_type === "string" && r.service_type,
+  );
+  if (need.length === 0) return rows;
+
+  // サービスコードは世代管理なので、対象月に有効な世代で引く。
+  // 行が複数月にまたがることがあるので月ごとにまとめる。
+  const byMonth = new Map<string, string[]>();
+  for (const r of need) {
+    const d = typeof r.visit_date === "string" ? r.visit_date : "";
+    const key = /^\d{4}-\d{2}/.test(d) ? d.slice(0, 7) : "";
+    if (!byMonth.has(key)) byMonth.set(key, []);
+    byMonth.get(key)!.push(r.service_type as string);
+  }
+  const maps = new Map<string, Map<string, string>>();
+  for (const [key, names] of byMonth) {
+    try {
+      const [y, m] = key ? key.split("-").map(Number) : [];
+      maps.set(key, await getUnambiguousServiceSystemMap(
+        supabase, names, key ? { year: y, month: m } : undefined));
+    } catch (e) {
+      // 握りつぶさない。制度が付かないだけで INSERT は続ける。
+      console.error("制度区分の取得に失敗 (system は未設定のまま INSERT します):",
+        (e as Error).message);
+      maps.set(key, new Map());
+    }
+  }
+  return rows.map((r) => {
+    if (r.system != null || typeof r.service_type !== "string") return r;
+    const d = typeof r.visit_date === "string" ? r.visit_date : "";
+    const key = /^\d{4}-\d{2}/.test(d) ? d.slice(0, 7) : "";
+    const sys = maps.get(key)?.get(toHankakuDigits(r.service_type));
+    return sys ? { ...r, system: sys } : r;   // 決まらなければ触らない
+  });
+}
+
+/**
  * kaigo_visit_schedule への INSERT (単数/複数行)。
  * kinkyu_houmon / office_id 等が migration 未適用 (42703 / PGRST204) の場合、
  * 当該列を全行から strip して自動 retry する (最大 3 列まで)。
@@ -341,7 +399,7 @@ export async function insertVisitSchedules(
   rows: Record<string, unknown>[],
   select?: string,
 ): Promise<{ data: Record<string, unknown>[] | null; error: { message: string } | null; strippedColumns: string[] }> {
-  let payload = rows;
+  let payload = await fillMissingSystem(supabase, rows);
   const stripped: string[] = [];
   for (let attempt = 0; attempt < 4; attempt++) {
     const base = supabase.from("kaigo_visit_schedule").insert(payload);

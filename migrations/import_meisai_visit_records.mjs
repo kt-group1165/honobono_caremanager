@@ -301,6 +301,10 @@ async function main() {
       start_time: r.start,
       end_time: r.end,
       service_type: svc.name,
+      // 制度区分。**この script が走った時点で「介護」と確定する**ので推測しない。
+      // ⚠ 入れないと取込が既存の system を消す (取込は当月ぶんを消して入れ直すため、
+      //   単発の是正 script で付けても翌回の取込で失われる。2026-08-30 の 3,624 件が実際に消えた)。
+      system: "介護",
       status: "completed",
       office_id: office.id,
       notes: `[MEISAI取込 ${TARGET_MONTH} code=${r.code}]`,

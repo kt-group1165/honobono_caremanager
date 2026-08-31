@@ -419,7 +419,7 @@ async function main() {
       }
 
       const content = buildContent(prevContent, p, certs.get(clientId));
-      if (!EXECUTE) { prev ? total.updated++ : total.inserted++; continue; }
+      if (!EXECUTE) { if (prev) total.updated++; else total.inserted++; continue; }
 
       if (prev) {
         const { error } = await sb.from("kaigo_report_documents")

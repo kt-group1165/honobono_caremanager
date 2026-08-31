@@ -297,6 +297,8 @@ if (!EXECUTE) {
 // ─── 6) 実行 ─────────────────────────────────────────────────────────────────
 const done = [];
 for (let i = 0; i < inserts.length; i += 200) {
+  // _label は表示用に付けている列なので INSERT からは外す (分割代入で捨てる)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const chunk = inserts.slice(i, i + 200).map(({ _label, ...row }) => row);
   const { data, error } = await sb.from("client_insurance_records").insert(chunk).select("id");
   if (error) { console.error(`  ✗ chunk ${i}: ${error.message}`); continue; }

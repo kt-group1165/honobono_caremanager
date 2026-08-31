@@ -31,7 +31,7 @@
 //   ・変更前の値を migrations/_cert_owner_fix_backup.json に残す
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -74,7 +74,6 @@ function normNm(s) {
 }
 const iso = (s) => { const m = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec((s ?? "").trim()); return m ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` : null; };
 const careLevel = (s) => (s ?? "").trim().normalize("NFKC").replace(/^要介護度/, "要介護").replace(/^要支援度/, "要支援");
-const SHIKYU_GENDO = { "要支援1": 5032, "要支援2": 10531, "要介護1": 16765, "要介護2": 19705, "要介護3": 27048, "要介護4": 30938, "要介護5": 36217 };
 
 async function fetchAll(build) {
   const out = [];

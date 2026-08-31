@@ -57,7 +57,6 @@ const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_
 
 const ISHII = "3d451a20-dccd-426f-ae16-6382b6faa40c";   // 石井 洋子
 const SUZUKI = "e43d3f00-ea9e-42d5-ac15-0ee3dd0aeb64";  // 鈴木 喜代子
-const HONDA = "0db9e8a3";                                // 本多 ふじ江 (前方一致で引く)
 
 async function main() {
   console.log(`=== 利用者番号の使い回しで別人に付いたデータを戻す ${EXECUTE ? "【本番】" : "【DRY RUN】"} ===\n`);

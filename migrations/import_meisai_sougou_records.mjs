@@ -98,6 +98,9 @@ async function main(){
     const sids=memBy.get(normStaff(r.staff))||[];
     payloads.push({ user_id:cid, staff_id:sids.length===1?sids[0]:null, visit_date:r.date,
       start_time:r.start, end_time:r.end, service_type:info.name, status:"completed",
+      // 制度区分。この script が走った時点で「総合事業」と確定する (推測しない)。
+      // ⚠ 入れないと取込のたびに system が消える。
+      system:"総合事業",
       office_id:OFFICE, notes:`[MEISAI総合取込 ${TARGET_MONTH} code=${r.code}]` });
   }
   console.log(`取込可能: ${payloads.length} / skip(利用者未マップ):${skipNoClient} / skip(コード未解決):${skipNoCode}`);

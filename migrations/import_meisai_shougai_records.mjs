@@ -1,9 +1,15 @@
 // ============================================================================
 // ほのぼの「稼働データ」MEISAI CSV → kaigo_visit_schedule 障害実績取込
 //   取込元: apps/kaigo-app/サービス実績データ/大網/202606/MEISAI_*.csv
-//   取込先: kaigo_visit_schedule (status='completed' = 実績)。障害は system 列でなく
-//           service_type(=障害マスタの service_name 完全一致) で shogai-seikyu/aggregate.ts
-//           が拾う (kaigo_visit_schedule に system 列は無い)。
+//   取込先: kaigo_visit_schedule (status='completed' = 実績)。
+//           請求の集計は service_type(=障害マスタの service_name 完全一致) で
+//           shogai-seikyu/aggregate.ts が拾う。**system 列には依存していない。**
+//
+//   ⚠ 「kaigo_visit_schedule に system 列は無い」という以前の記載は誤り。列はある。
+//     この script は system='障害' も入れる。請求額は変わらないが、シフト画面・
+//     実績記録票・経営分析が制度で切れるようになる。
+//     取込は当月ぶんを消して入れ直すので、**ここで入れないと取込のたびに消える**
+//     (2026-08-30 に単発 script で付けた 3,624 件が実際に消えていた)。
 //
 //   対象 = 内部コード 021001(身体介護 自立) / 021002(家事援助 自立) の 障害福祉サービス行。
 //   これを 障害 居宅介護 の正式サービスコード (111xxxx = 身体介護 / 111 2xxx = 家事援助) に
@@ -1482,6 +1488,8 @@ async function main() {
           start_time: r.start || r.santeiStart || null,
           end_time: r.end || r.santeiEnd || null,
           service_type: repName,
+          // 制度区分。この script が走った時点で「障害」と確定する (推測しない)。
+          system: "障害",
           status: "completed", office_id: office.id, tenant_id: TENANT_ID,
           notes: `[MEISAI障害取込 ${TARGET_MONTH} ${MAP_TAG} ${MARK_SESSION_SUB} code=${r.code}]`,
         });
@@ -1515,6 +1523,9 @@ async function main() {
         start_time: startTime,
         end_time: endTime,
         service_type: c.name, // 障害マスタ名(公式6桁) 完全一致 (aggregate が名前で拾う)
+        // 制度区分。この script が走った時点で「障害」と確定する (推測しない)。
+        // ⚠ 入れないと取込のたびに system が消える。
+        system: "障害",
         status: "completed",
         office_id: office.id,
         tenant_id: TENANT_ID,
