@@ -1166,7 +1166,12 @@ export function buildShogaiDensou(
     //         19 派遣人数 / 35 備考 / 36 提供状況(1:入院 2:入院(長期)) /
     //         69 緊急時対応 / 70 初回 / 72 行動障害支援連携 / 80 同行支援 / 91 移動介護緊急時支援
     if (juhoVisits.length > 0) {
-      const visits = [...juhoVisits].sort((a, b) =>
+      // ⚠ 増(加算)行は実績記録票の明細にしない。様式1 (0101) 側では除外しているのに
+      //   ここに無く、**重訪の段が 1 段 1 行そのまま出ていた**
+      //   (おゆみ野 稲葉裕子 2026-06: 新 528 行 / ほのぼの 55 行。段 498 + 素 30)。
+      //   重訪は 1 日の通算を段に展開して取り込むので、段の 2 本目以降は請求単位であって
+      //   訪問ではない。
+      const visits = [...juhoVisits].filter((v) => !v.isAddon).sort((a, b) =>
         (a.date + (a.startTime ?? "")).localeCompare(b.date + (b.startTime ?? "")),
       );
       // 提供通番: 重訪は 1 日の所要時間を通算して算定するため、同一日の提供に
