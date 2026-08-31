@@ -14,9 +14,20 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 const EXECUTE=process.argv.includes("--execute");
 const AREA_DIR=process.env.AREA_DIR||"茂原";
-const TAG=process.env.TAG||"";
 // ⚠ マーカーに拠点を入れる。入れないと冪等削除が**全事業所の公費を消す**
 //   (2026-08-04: 四街道→さつきが丘→高品 と流すたびに前の事業所の公費が消えていた)
+//
+// 2026-08-31 監査での是正:
+//   上の警告をコメントで書いていただけで TAG は optional・既定が空文字だった。
+//   = 人が覚えている前提の防御。実際に無タグの `[MEISAI公費 2026-06]` が
+//   8 行残っていた (全員 法別12 生保)。--execute では TAG を必須にする。
+const TAG=process.env.TAG||"";
+if(EXECUTE && !TAG){
+  console.error("✗ TAG が未指定です。--execute には TAG=<拠点名> が必須。");
+  console.error("  例: TAG=高品 AREA_DIR=高品 TARGET_MONTH=2026-06 node migrations/import_meisai_kohi.mjs --execute");
+  console.error("  (TAG 無しだと冪等削除のマーカーが拠点を含まず、全事業所の公費を消します)");
+  process.exit(1);
+}
 // TARGET_MONTH=2026-07 で対象月を切替 (既定は 2026-06)。フォルダも同じ月を見る。
 const TARGET_MONTH=process.env.TARGET_MONTH||"2026-06";
 const YM=TARGET_MONTH.replace("-","");
@@ -60,8 +71,18 @@ async function main(){
   console.log(`\n投入対象: ${payloads.length}名`);
   if(!EXECUTE){ console.log("※ DRY RUN。--execute で投入(既存マーカー削除→再投入)。"); return; }
   // 冪等: 既存マーカー削除
-  const { error:delErr }=await sb.from("client_kohi_records").delete().eq("notes",MARK);
-  if(delErr){ console.error(`✗ 既存削除失敗: ${delErr.message}`); process.exit(1); }
+  //   マーカー一致に加えて **今回投入する client に限定** する (二重防御)。
+  //   万一マーカーが他拠点と衝突しても、今回対象外の利用者の公費は消えない。
+  const targetClientIds=[...new Set(payloads.map(p=>p.client_id))];
+  let deleted=0;
+  for(let i=0;i<targetClientIds.length;i+=200){
+    const chunk=targetClientIds.slice(i,i+200);
+    const { error:delErr, count }=await sb.from("client_kohi_records")
+      .delete({ count:"exact" }).eq("notes",MARK).in("client_id",chunk);
+    if(delErr){ console.error(`✗ 既存削除失敗: ${delErr.message}`); process.exit(1); }
+    deleted+=count??0;
+  }
+  console.log(`  既存マーカー削除: ${deleted}件`);
   const { error }=await sb.from("client_kohi_records").insert(payloads);
   if(error){ console.error(`✗ 投入失敗: ${error.message}`); process.exit(1); }
   console.log(`✓ 完了: ${payloads.length}名`);

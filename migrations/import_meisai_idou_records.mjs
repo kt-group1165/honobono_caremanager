@@ -209,8 +209,14 @@ async function main() {
     { hint: "名寄せ / 事前取込の id を確認" });
 
   // 冪等: 同事業所・同月の取込行を削除してから入れ直す
+  // 2026-08-31 監査での是正:
+  //   以前は `${MARKER.slice(0, 20)}%` で前方一致していたが、20 文字目で
+  //   `[MEISAI移動支援取込 2026-0` と **月の下 1 桁が切れて**いた。
+  //   = 2026-07 の取込で同一事業所の 2026-01〜09 が全消しになる。
+  //   月まで含む固定接頭辞で切る (MAP_TAG だけを曖昧一致に残す)。
+  const DEL_PREFIX = `[MEISAI移動支援取込 ${TARGET_MONTH}`;
   const { error: delErr } = await sb.from("kaigo_idou_shien_records").delete()
-    .eq("office_id", OFFICE_ID).like("notes", `${MARKER.slice(0, 20)}%`);
+    .eq("office_id", OFFICE_ID).like("notes", `${DEL_PREFIX}%`);
   if (delErr) { console.error("✗ 既存削除失敗:", delErr.message); process.exit(1); }
   let done = 0;
   for (let i = 0; i < payloads.length; i += 200) {

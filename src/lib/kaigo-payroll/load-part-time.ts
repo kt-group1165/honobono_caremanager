@@ -81,31 +81,55 @@ export async function loadPartTimePayroll(
   const end = `${endYear}-${String(endMonth).padStart(2, "0")}-01`;
 
   // 1) 当月の確定実績 (自事業所)
-  const { data: sch, error: se } = await supabase
-    .from("kaigo_visit_schedule")
-    .select(
-      "visit_date, service_type, staff_id, staff_id_2, staff_id_3, start_time, end_time, staff2_start_time, staff2_end_time, staff3_start_time, staff3_end_time",
-    )
-    .eq("office_id", officeId)
-    .eq("status", "completed")
-    .gte("visit_date", start)
-    .lt("visit_date", end);
-  if (se) throw new Error("実績の取得に失敗: " + se.message);
-  const schedules = (sch ?? []) as ScheduleRow[];
+  //
+  // ⚠ PostgREST は 1000 行がハードキャップ (.limit(10000) を付けても 1000 行しか
+  //   返らない)。2026-08-31 監査の実測で、2026-06 は 19 事業所中 18 が 1000 行超
+  //   (おゆみ野 4,659 / 茂原 3,375 / いすみ 2,865 …) = 合計 18,221 行が
+  //   給与計算から黙って落ちていた。必ず range でページングする。
+  //   (下の「扶養累計」ブロックは元から正しくページングしていた)
+  const PAGE = 1000;
+  const schedules: ScheduleRow[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data: page, error: se } = await supabase
+      .from("kaigo_visit_schedule")
+      .select(
+        "visit_date, service_type, staff_id, staff_id_2, staff_id_3, start_time, end_time, staff2_start_time, staff2_end_time, staff3_start_time, staff3_end_time",
+      )
+      .eq("office_id", officeId)
+      .eq("status", "completed")
+      .gte("visit_date", start)
+      .lt("visit_date", end)
+      .order("visit_date")
+      .range(from, from + PAGE - 1);
+    if (se) throw new Error("実績の取得に失敗: " + se.message);
+    const rows = (page ?? []) as ScheduleRow[];
+    schedules.push(...rows);
+    if (rows.length < PAGE) break;
+  }
 
   // 1b) 当月のキャンセル (キャンセル手当用)。担当職員ごとに件数を数える
-  const { data: canc } = await supabase
-    .from("kaigo_visit_schedule")
-    .select("staff_id, staff_id_2, staff_id_3")
-    .eq("office_id", officeId)
-    .eq("status", "cancelled")
-    .gte("visit_date", start)
-    .lt("visit_date", end);
-  const cancelled = (canc ?? []) as {
+  //     こちらも 1000 行 cap の対象 (キャンセルが多い月に件数が頭打ちになる)
+  type CancelRow = {
     staff_id: string | null;
     staff_id_2: string | null;
     staff_id_3: string | null;
-  }[];
+  };
+  const cancelled: CancelRow[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data: page, error: ce } = await supabase
+      .from("kaigo_visit_schedule")
+      .select("id, staff_id, staff_id_2, staff_id_3")
+      .eq("office_id", officeId)
+      .eq("status", "cancelled")
+      .gte("visit_date", start)
+      .lt("visit_date", end)
+      .order("id")
+      .range(from, from + PAGE - 1);
+    if (ce) throw new Error("キャンセル実績の取得に失敗: " + ce.message);
+    const rows = (page ?? []) as CancelRow[];
+    cancelled.push(...rows);
+    if (rows.length < PAGE) break;
+  }
 
   // 2) 関与職員 (実績 + キャンセル) → members でパート判定
   const staffIds = new Set<string>();
@@ -299,7 +323,6 @@ export async function loadPartTimePayroll(
     const ytdStart = `${year}-01-01`;
     // PostgREST は 1000 行 cap なので range でページング
     const ytdRows: ScheduleRow[] = [];
-    const PAGE = 1000;
     for (let from = 0; ; from += PAGE) {
       const { data: page, error: pe } = await supabase
         .from("kaigo_visit_schedule")

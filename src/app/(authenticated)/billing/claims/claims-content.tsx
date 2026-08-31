@@ -23,6 +23,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import {
+  calcTotals,
   type ClaimStatus,
   type TokuteiKassanType,
   type HospitalCoordType,
@@ -207,22 +208,6 @@ function calcReductionUnits(baseUnits: number, addings: Addings): number {
   const bcpRed = addings.bcp_not_prepared ? reductionUnitsOf(baseUnits, 1) : 0;
   const abuseRed = addings.abuse_prevention_not_implemented ? reductionUnitsOf(baseUnits, 1) : 0;
   return bcpRed + abuseRed;
-}
-
-function calcTotals(
-  baseUnits: number,
-  addUnits: number,
-  reductionUnits: number,
-  unitPrice: number,
-  shoguuPermil = 0, // 居宅介護支援 処遇改善加算 率 (‰。21 = 2.1%)。0 = 無し
-): { total_units: number; total_amount: number; insurance_amount: number; shoguu_units: number } {
-  // 処遇改善加算 = (居宅介護支援費 + 各種加算 − 減算) の総単位数 × 率 (round)。
-  //   ほのぼの実伝送(436191)で round(subtotal × 0.021) と一致確認済。
-  const subtotal = baseUnits + addUnits - reductionUnits;
-  const shoguu_units = shoguuPermil > 0 ? Math.round((subtotal * shoguuPermil) / 1000) : 0;
-  const total_units = subtotal + shoguu_units;
-  const total_amount = Math.floor(total_units * unitPrice);
-  return { total_units, total_amount, insurance_amount: total_amount, shoguu_units };
 }
 
 // 月途中の保険者変更 (転居) の表示用文言 ("保険者 1234→5678" / "被保険者番号 …→…")
@@ -1179,6 +1164,50 @@ export function ClaimsContent({
         };
       }
 
+      // 5b. 転居月の「1人2レセプト」を壊さないための安全弁 (2026-08-31 監査)
+      //
+      //   月途中で保険者が変わると 1 利用者に対して保険者ごとに 2 枚のレセプトが立つ
+      //   (DB の一意キーも care_support_claims_insurer.sql で
+      //    (user_id, billing_month, insurer_number) に拡張済)。
+      //   一方この一括生成は certMap から 1 利用者 1 保険者しか作れないので、
+      //   そのまま消して入れ直すと **2 枚目が消えて戻らない**。
+      //   実測 (2026-06/07) で該当 5 名・2 枚目の合計 107,474 円。
+      //   検出したら中止して、手で確認してもらう。
+      {
+        const existing: { user_id: string; insurer_number: string | null }[] = [];
+        for (const idChunk of chunkArray(officeClientIds, IN_CHUNK_SIZE)) {
+          const { data, error } = await supabase
+            .from("kaigo_care_support_claims")
+            .select("user_id, insurer_number")
+            .eq("billing_month", billingMonth)
+            .in("user_id", idChunk);
+          // insurer_number 列が無い DB (migration 未適用) では検出をスキップする
+          if (error) {
+            if (error.code === "42703") break;
+            throw error;
+          }
+          existing.push(...((data ?? []) as { user_id: string; insurer_number: string | null }[]));
+        }
+        const insurersByUser = new Map<string, Set<string>>();
+        for (const r of existing) {
+          const key = (r.insurer_number ?? "").trim();
+          if (!insurersByUser.has(r.user_id)) insurersByUser.set(r.user_id, new Set());
+          insurersByUser.get(r.user_id)!.add(key);
+        }
+        const split = [...insurersByUser.entries()].filter(([, set]) => set.size >= 2);
+        if (split.length > 0) {
+          const names = split
+            .map(([uid]) => users.find((u) => u.id === uid)?.name ?? uid)
+            .join("、");
+          toast.error(
+            `転居等で保険者が分かれたレセプトが ${split.length} 名あります (${names})。` +
+              "一括生成すると 2 枚目が失われるため中止しました。該当者を個別に確認してください。",
+            { duration: 12000 },
+          );
+          return;
+        }
+      }
+
       // 6. Delete existing claims for this month (当事業所の利用者のみ)
       //    billing_month だけで消すと他事業所のレセプトも削除してしまうため
       //    officeClientIds に限定する (多事業所での事故防止)。
@@ -1345,6 +1374,11 @@ export function ClaimsContent({
           abuse_reduction_pct: 0,
           status: "draft",
           notes: autoNotes,
+          // 2026-08-31 監査: 保険者/被保険者番号を入れていなかったため
+          //   一意キー (user_id, billing_month, insurer_number) が DEFAULT '' で
+          //   潰れ、転居月の 2 枚目を作れなかった。認定から引いて必ず入れる。
+          insurer_number: cert.insurer_number ?? null,
+          insured_number: cert.insured_number ?? null,
           created_at: now,
         });
       }

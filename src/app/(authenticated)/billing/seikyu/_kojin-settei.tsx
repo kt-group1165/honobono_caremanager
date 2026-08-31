@@ -33,6 +33,7 @@ import {
   HOSPITAL_COORD_UNITS,
   DISCHARGE_UNITS,
   reductionUnitsOf,
+  calcTotals,
   isYoboShienLevel,
   parseYoboShienKubun,
   isAddonActiveInMonth,
@@ -122,6 +123,9 @@ export function KyotakuKojinSetteiContent() {
     unitPrice: number | null;
     addonNames: string[];
     staffCount: number | null;
+    // 処遇改善加算 (居宅介護支援)。セル変更時の再計算に使うので表示以外にも要る
+    shoguuPermil: number;
+    shoguuCode: string | null;
   } | null>(null);
 
   const load = useCallback(async () => {
@@ -230,7 +234,7 @@ export function KyotakuKojinSetteiContent() {
         const [officeRes, addonsRes, staffRes] = await Promise.all([
           supabase
             .from("offices")
-            .select("tokutei_kassan_type, medical_cooperation_kassan, area_category, unit_price")
+            .select("tokutei_kassan_type, medical_cooperation_kassan, area_category, unit_price, care_support_shoguu_code, care_support_shoguu_permil")
             .eq("id", officeId)
             .maybeSingle(),
           supabase
@@ -263,6 +267,8 @@ export function KyotakuKojinSetteiContent() {
           unitPrice: officeRes.data?.unit_price != null ? Number(officeRes.data.unit_price) : null,
           addonNames: activeAddons.map((a) => a.addon_code),
           staffCount: staffRes.error ? null : staffRes.count ?? null,
+          shoguuPermil: Number(officeRes.data?.care_support_shoguu_permil ?? 0) || 0,
+          shoguuCode: (officeRes.data?.care_support_shoguu_code as string | null) ?? null,
         });
       } catch (e) {
         console.error("事業所単位加減算の取得に失敗:", e);
@@ -327,8 +333,27 @@ export function KyotakuKojinSetteiContent() {
         ? reductionUnitsOf(c.units, c.abuse_reduction_pct || 1)
         : 0) +
       uneiUnits;
-    const totalUnits = c.units + addUnits - reductionUnits;
-    const totalAmount = Math.floor(totalUnits * c.unit_price);
+    // 2026-08-31 監査での是正:
+    //   以前は `c.units + addUnits - reductionUnits` で total を組み、
+    //   **処遇改善加算を再計算していなかった** (payload にも入れていなかった)。
+    //   加算を 1 つ ON にすると DB の total_amount / 正しい額 / 伝送 8124 が
+    //   3 者とも食い違う状態になっていた。金額は必ず calcTotals を通す。
+    //
+    //   事業所設定 (率) が未読込のまま保存すると処遇改善 0 を書き込んでしまうので、
+    //   読み込めるまで保存させない。
+    if (!officePanel) {
+      toast.error("事業所設定を読み込み中です。少し待ってからもう一度お試しください。");
+      return;
+    }
+    // 予防支援 (46 始まり) には居宅介護支援の処遇改善は付かない
+    const shoguuPermil = String(c.care_support_code ?? "").startsWith("43")
+      ? officePanel.shoguuPermil
+      : 0;
+    const {
+      total_amount: totalAmount,
+      insurance_amount: insuranceAmount,
+      shoguu_units: shoguuUnits,
+    } = calcTotals(c.units, addUnits, reductionUnits, c.unit_price, shoguuPermil);
 
     const basePayload: Record<string, unknown> = {
       initial_addition: next.initial,
@@ -345,7 +370,10 @@ export function KyotakuKojinSetteiContent() {
       emergency_conference: next.emergency,
       emergency_conference_units: next.emergency ? 200 : 0,
       total_amount: totalAmount,
-      insurance_amount: totalAmount,
+      insurance_amount: insuranceAmount,
+      shoguu_kaizen_units: shoguuUnits,
+      shoguu_kaizen_code:
+        shoguuUnits > 0 ? (officePanel.shoguuCode ?? c.shoguu_kaizen_code ?? null) : null,
       updated_at: new Date().toISOString(),
     };
 

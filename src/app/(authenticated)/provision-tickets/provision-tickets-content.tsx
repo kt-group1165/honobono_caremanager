@@ -764,22 +764,34 @@ export function ProvisionTicketsContent({
       baseCols +
       (staff2TimesSupported ? staff2Cols : "") +
       (additionalStaffSupported ? addlCols : "");
-    let { data, error } = await supabase
-      .from("kaigo_visit_schedule")
-      .select(fullCols)
-      .eq("user_id", userId)
-      .gte("visit_date", from)
-      .lte("visit_date", to)
-      .order("start_time");
-    if (error && (error.code === "42703" || error.code === "PGRST200")) {
-      // 列未適用: 基本列のみで再取得
-      ({ data, error } = await supabase
+    // ★ 2026-08-31 監査での是正:
+    //   読込は office_id で絞らず、保存 (delete→再 insert) は自事業所ぶんだけ消して
+    //   **グリッド全体を currentOfficeId 付きで入れ直して**いた。
+    //   = 兼務利用者の提供票を開いて何も編集せず「保存」を押すだけで、
+    //     他事業所の訪問が自事業所の実績として付け替わった。
+    //     (実測: 2026-06 に 2 事業所以上のシフトを持つ利用者 51 名 / 3,555 行)
+    //   読込を保存と同じスコープに揃える = 画面に自事業所ぶんしか出さない。
+    const scoped = <T extends { eq: (c: string, v: string) => T }>(q: T): T =>
+      currentOfficeId ? q.eq("office_id", currentOfficeId) : q;
+
+    let { data, error } = await scoped(
+      supabase
         .from("kaigo_visit_schedule")
-        .select(baseCols)
+        .select(fullCols)
         .eq("user_id", userId)
         .gte("visit_date", from)
-        .lte("visit_date", to)
-        .order("start_time"));
+        .lte("visit_date", to),
+    ).order("start_time");
+    if (error && (error.code === "42703" || error.code === "PGRST200")) {
+      // 列未適用: 基本列のみで再取得
+      ({ data, error } = await scoped(
+        supabase
+          .from("kaigo_visit_schedule")
+          .select(baseCols)
+          .eq("user_id", userId)
+          .gte("visit_date", from)
+          .lte("visit_date", to),
+      ).order("start_time"));
     }
 
     if (error) {
@@ -874,7 +886,9 @@ export function ProvisionTicketsContent({
     setGrid(newGrid);
     setScheduleIds(newSchedIds);
     setLoading(false);
-  }, [userId, monthStr, daysCount, supabase, year, month, staff2TimesSupported, additionalStaffSupported, viewSystem]);
+    // currentOfficeId: 読込を自事業所スコープに絞るようにしたので (2026-08-31 監査)、
+    //   事業所を切り替えたら読み直す必要がある
+  }, [userId, monthStr, daysCount, supabase, year, month, staff2TimesSupported, additionalStaffSupported, viewSystem, currentOfficeId]);
 
   // initial render は server からの initialServiceRows/initialGrid を使用、月切替時のみ refetch。
   // ただし client-side の利用者切替 (serverPreloaded=false) で mount された場合は
@@ -1396,7 +1410,14 @@ export function ProvisionTicketsContent({
         .eq("user_id", userId)
         .gte("visit_date", from)
         .lte("visit_date", to);
-      if (currentOfficeId) delQ = delQ.eq("office_id", currentOfficeId);
+      // 2026-08-31 監査: currentOfficeId が未確定のまま保存すると office 条件が
+      //   外れて **全事業所ぶんを削除**していた。未確定なら保存させない。
+      if (!currentOfficeId) {
+        toast.error("事業所が未選択のため保存できません。事業所を選び直してください。");
+        setSaving(false);
+        return;
+      }
+      delQ = delQ.eq("office_id", currentOfficeId);
       const { error: delError } = await delQ;
       if (delError) throw delError;
 

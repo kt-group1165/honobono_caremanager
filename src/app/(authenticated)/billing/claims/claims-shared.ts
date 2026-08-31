@@ -448,6 +448,32 @@ export async function fetchKyotakuMasterForMonth(
 //             432473 Ⅰⅰ２・虐防・業未 = 1383 = 1411 − 14 − 14 (減算は各々独立に計算し加算)
 //   運営基準減算 (50%): 432229 Ⅰⅰ２・運 = 706 = round(1411×0.5)
 // ─────────────────────────────────────────────────────────────────────────
+/**
+ * 居宅介護支援の 総単位数 / 金額 を組み立てる唯一の関数。
+ *
+ * 処遇改善加算 = (居宅介護支援費 + 各種加算 − 減算) の総単位数 × 率 (round)。
+ *   ほのぼの実伝送(436191)で round(subtotal × 0.021) と一致確認済。
+ *
+ * ⚠ 2026-08-31 監査:
+ *   請求個人設定タブ (_kojin-settei.tsx) がこの関数を通さず
+ *   `c.units + addUnits - reductionUnits` で total を組んでいたため、
+ *   加算を 1 つ ON にすると処遇改善が再計算されず DB / 正解 / 伝送 の
+ *   3 者が食い違っていた。**金額を作る箇所は必ずここを通すこと。**
+ */
+export function calcTotals(
+  baseUnits: number,
+  addUnits: number,
+  reductionUnits: number,
+  unitPrice: number,
+  shoguuPermil = 0, // 居宅介護支援 処遇改善加算 率 (‰。21 = 2.1%)。0 = 無し
+): { total_units: number; total_amount: number; insurance_amount: number; shoguu_units: number } {
+  const subtotal = baseUnits + addUnits - reductionUnits;
+  const shoguu_units = shoguuPermil > 0 ? Math.round((subtotal * shoguuPermil) / 1000) : 0;
+  const total_units = subtotal + shoguu_units;
+  const total_amount = Math.floor(total_units * unitPrice);
+  return { total_units, total_amount, insurance_amount: total_amount, shoguu_units };
+}
+
 export function reductionUnitsOf(baseUnits: number, pct: number): number {
   if (pct <= 0) return 0;
   return baseUnits - Math.round((baseUnits * (100 - pct)) / 100);
