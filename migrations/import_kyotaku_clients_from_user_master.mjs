@@ -404,6 +404,27 @@ async function main() {
       toCreate.push({ ...b, csvNum: pk, user_number: un, numTaken: !!hit || shared });
     }
   }
+  // ── 安全弁: 別々の人が同じ client に当たっていないか ──
+  //   2026-09-01 に 44 人が 1 client に潰れ、全員の認定がそこにぶら下がった。
+  //   **取り込んで検査するまで分からなかった**ので、ここで止める。
+  {
+    const byId = new Map();
+    for (const r of reused) {
+      if (!byId.has(r.id)) byId.set(r.id, []);
+      byId.get(r.id).push(`${r.name}(${r.birth_date ?? "生年不明"})`);
+    }
+    const collide = [...byId].filter(([, v]) => v.length > 1);
+    if (collide.length) {
+      console.error(`
+🔴 中止: **別々の人が同じ利用者に引き当たっている** ${collide.length} 件`);
+      for (const [id, v] of collide.slice(0, 20)) console.error(`   ${id}  ← ${v.join(" / ")}`);
+      console.error(`
+   引き当てのキーが誤っている。取り込むと 1 人に複数人の認定が付く。
+   (2026-09-01 にこれで 131 件の別人認定を作り、巻き戻した)`);
+      process.exit(1);
+    }
+  }
+
   if (numMismatch.length) {
     console.log(`\n  ⚠ 利用者番号が別人に使われている ${numMismatch.length} 件 (番号では引かない)`);
     for (const m of numMismatch) console.log(`     ${m}`);
