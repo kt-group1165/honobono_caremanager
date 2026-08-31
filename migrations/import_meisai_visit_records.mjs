@@ -330,8 +330,11 @@ async function main() {
   }
 
   // ★ 削除の前に FK を検証する (削除だけ実行されてデータが消える事故を防ぐ)
-  await assertRefsExist(sb, payloadsFinal, [{ column: "user_id", table: "clients", label: "利用者" }, { column: "staff_id", table: "members", label: "職員" }],
-    { hint: `migrations/_meisai_num_to_client_${MAP_TAG}.json の client_id を確認` });
+  //   ⚠ ここで payloadsFinal (宣言は下) と MAP_TAG (この script の変数名は TAG) を
+  //     参照していて、--execute が **必ず TDZ エラーで落ちていた**。
+  //     DRY RUN は手前で return するので気づけない。2026-08-31 是正。
+  await assertRefsExist(sb, deduped, [{ column: "user_id", table: "clients", label: "利用者" }, { column: "staff_id", table: "members", label: "職員" }],
+    { hint: `migrations/_meisai_num_to_client${TAG ? "_" + TAG : ""}.json の client_id を確認` });
 
   // 冪等: 既存の①介護取込行を削除してから入れ直す。
   // ⚠ **必ず対象月に絞る**。月スコープを付け忘れると 7 月を取り込んだ瞬間に
