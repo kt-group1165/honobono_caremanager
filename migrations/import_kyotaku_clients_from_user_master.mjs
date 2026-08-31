@@ -178,10 +178,17 @@ async function main() {
 
   // -- 既存 clients ---------------------------------------------------------
   // ⚠ **利用者番号だけで引いてはいけない**。ほのぼのは番号を使い回すので、
-  //   短い番号 (11 等) が別人に付いていることがある。
-  //   実際に踏んだ: 飯塚 光子 の「11」が当方では 御園 政司 だった。
-  //   → 番号が一致しても **生年月日が違えば別人**として扱う。
-  //   氏名は表記ゆれ (「市川 幹子(実)」「井出・井手」) があるのでキーにしない。
+  //   短い番号 (11 / 674 等) が別人に付いていることがある。
+  //   実際に踏んだ: 「11」ほのぼの=飯塚 光子 / 当方=御園 政司
+  //                 「674」ほのぼの=児嶌 巴  / 当方=荻野 由紀子
+  //   初版はこれで **別人の認定を 11 件コピーした**
+  //   (fix_takashina_import_wrong_owner.mjs で剥がした)。
+  //
+  //   引き当ての優先順:
+  //     ① (保険者番号, 被保険者番号) の対      ← 最も確か。被保番は保険者内で一意
+  //     ② 利用者番号 かつ 生年月日が一致
+  //     ③ 氏名 + 生年月日
+  //   氏名だけは使わない (「市川 幹子(実)」「井出・井手」等の表記ゆれがある)。
   const existing = await fetchAll("clients", "id, user_number, name, birth_date",
     (q) => q.eq("tenant_id", TENANT));
   const byNum = new Map();
@@ -190,14 +197,45 @@ async function main() {
   for (const c of existing) {
     if (c.birth_date) byNameBirth.set(`${(c.name ?? "").normalize("NFKC").replace(/[\s　]/g, "")}|${c.birth_date}`, c);
   }
+  // ① (保険者, 被保番) → client。既存の認定から引く
+  const byInsured = new Map();
+  {
+    const ids = existing.map((c) => c.id);
+    for (let i = 0; i < ids.length; i += 200) {
+      const rows = await fetchAll("client_insurance_records",
+        "client_id, insurer_number, insured_number",
+        (q) => q.in("client_id", ids.slice(i, i + 200)));
+      for (const r of rows) {
+        if (!r.insurer_number || !r.insured_number) continue;
+        const k = `${r.insurer_number}|${r.insured_number}`;
+        // 同じ対が 2 人に付いていたら、それ自体が既存の壊れ。引き当てには使わない
+        if (byInsured.has(k) && byInsured.get(k) !== r.client_id) byInsured.set(k, null);
+        else if (!byInsured.has(k)) byInsured.set(k, r.client_id);
+      }
+    }
+  }
+  const idIndex = new Map(existing.map((c) => [c.id, c]));
 
   const nameKey = (s) => (s ?? "").normalize("NFKC").replace(/[\s　]/g, "");
   const toCreate = [], reused = [], birthFix = [];
   const numMismatch = [];
   for (const [u, b] of baseByNum) {
+    // ① (保険者, 被保番) で引く。これが当たれば利用者番号は見ない。
+    //    被保番は保険者の中で一意なので、番号の使い回しに影響されない。
+    const certs = certByNum.get(u) ?? [];
+    let byIns = null;
+    for (const c of certs) {
+      const id = byInsured.get(`${c.insurer_number}|${c.insured_number}`);
+      if (id) { byIns = idIndex.get(id) ?? null; break; }
+    }
+    if (byIns) {
+      reused.push({ ...b, csvNum: u, user_number: byIns.user_number, id: byIns.id, dbName: byIns.name });
+      continue;
+    }
+
     const hit = byNum.get(u);
     if (hit && (!b.birth_date || !hit.birth_date || hit.birth_date === b.birth_date)) {
-      reused.push({ ...b, user_number: u, id: hit.id, dbName: hit.name });
+      reused.push({ ...b, csvNum: u, user_number: u, id: hit.id, dbName: hit.name });
       continue;
     }
     // 同じ番号・同じ氏名で **生年月日だけ数日ずれる**なら、当方の入力ミス。
@@ -206,7 +244,7 @@ async function main() {
     // 保険者 121046 / 被保番 1000787265 が一致していて同一人物だった。
     if (hit && nameKey(hit.name) === nameKey(b.name) && b.birth_date && hit.birth_date
         && Math.abs(new Date(hit.birth_date) - new Date(b.birth_date)) < 40 * 864e5) {
-      reused.push({ ...b, user_number: u, id: hit.id, dbName: hit.name });
+      reused.push({ ...b, csvNum: u, user_number: u, id: hit.id, dbName: hit.name });
       birthFix.push({ id: hit.id, name: b.name, from: hit.birth_date, to: b.birth_date });
       continue;
     }
