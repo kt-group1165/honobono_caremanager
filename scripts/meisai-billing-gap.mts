@@ -408,34 +408,42 @@ async function main(): Promise<void> {
   }
 
   const notImported: Worked[] = [];
+  /** 別制度では請求されているが、この制度では請求が見当たらない (情報として出す) */
+  const crossSystem: Worked[] = [];
   const notBilled: (Worked & { why: string; otherMonths: string[]; otherSystemBilled: boolean })[] = [];
   const noNumber: Worked[] = [];
   let billed = 0;
   for (const [key, w] of worked) {
     const cid = resolved.get(key);
     if (!cid) continue;                                   // unmapped は別枠
-    // 制度ごとに、その制度の番号を その制度の伝送 と突き合わせる
-    const isShogai = w.system === "障害";
-    const nums = (isShogai ? shogaiNo.get(cid) : kaigoNo.get(cid)) ?? [];
-    const pool = isShogai ? densou.shogai : densou.kaigo;
-    if ((recCount.get(cid) ?? 0) === 0) notImported.push(w);   // 稼働はあるのに実績が DB に無い
-    if (nums.length === 0) { noNumber.push(w); continue; }
-    if (nums.some((n) => pool.has(n))) { billed++; continue; }
-    if (!densou.areas.has(w.area)) continue;              // その拠点の伝送が手元に無い → 判定不能
-    // 他の月に請求があるか。あるならその月だけ抜けている = 取りこぼしの疑いが濃い
-    const otherMonths = [...new Set(nums.flatMap((n) => [...(pool.get(n) ?? [])]))]
-      .filter((m) => m !== MONTH)
-      .sort();
-    // もう一方の制度で当月に請求されているか。
-    // ⚠ 番号がどちらの表に入っているかに依存させない。介護認定を持たず受給者証だけの
-    //   利用者が 介護 フォルダの MEISAI に出ることがあり (四街道 松戸 孝雄)、
-    //   制度別に引くと「どこにも請求が無い」と誤判定する。
-    //   **両方の番号を合わせて、両方の索引を見る。**
+    // ⚠ **番号は制度別に持たない。両制度を合わせて見る。**
+    //   介護認定を持たず受給者証だけの利用者が 介護 フォルダの MEISAI に出ることがあり
+    //   (四街道 松戸 孝雄)、制度別に引くと「番号が無い」「請求が無い」と誤判定する。
+    //   実際それで 251 名を「番号未登録」に挙げてしまっていた。
     const allNums = [...new Set([...(kaigoNo.get(cid) ?? []), ...(shogaiNo.get(cid) ?? [])])];
-    const otherSystemBilled = allNums.some(
-      (n) => densou.kaigo.get(n)?.has(MONTH) || densou.shogai.get(n)?.has(MONTH),
-    );
-    notBilled.push({ ...w, why: `番号 ${nums.join("/")} が伝送に無い`, otherMonths, otherSystemBilled });
+    if ((recCount.get(cid) ?? 0) === 0) notImported.push(w);   // 稼働はあるのに実績が DB に無い
+    if (allNums.length === 0) { noNumber.push(w); continue; }
+
+    /** その番号が **対象月ぶんとして** 請求されているか (月遅れでも提供年月で拾える) */
+    const billedIn = (n: string, m: string) =>
+      densou.kaigo.get(n)?.has(m) || densou.shogai.get(n)?.has(m);
+    if (allNums.some((n) => billedIn(n, MONTH))) {
+      billed++;
+      // 制度別に見ると片方だけ請求されていることがある (加茂 照子: 障害は請求済み・介護は未請求)。
+      // 数には入れず、気づけるように記録だけしておく。
+      const isShogai = w.system === "障害";
+      const pool = isShogai ? densou.shogai : densou.kaigo;
+      const own = (isShogai ? shogaiNo.get(cid) : kaigoNo.get(cid)) ?? [];
+      if (own.length > 0 && !own.some((n) => pool.get(n)?.has(MONTH))) crossSystem.push(w);
+      continue;
+    }
+    if (!densou.areas.has(w.area)) continue;              // その拠点の伝送が手元に無い → 判定不能
+
+    // 他の月には請求があるか。あるならその月だけ抜けている = 取りこぼしの疑いが濃い
+    const otherMonths = [...new Set(allNums.flatMap((n) => [
+      ...(densou.kaigo.get(n) ?? []), ...(densou.shogai.get(n) ?? []),
+    ]))].filter((m) => m !== MONTH).sort();
+    notBilled.push({ ...w, why: `番号 ${allNums.join("/")} が伝送に無い`, otherMonths, otherSystemBilled: false });
   }
 
   // ⚠ MEISAI の「金額」は **ヘルパーに払った賃金** (出どころが NEXT の賃金集計)。
@@ -480,20 +488,29 @@ async function main(): Promise<void> {
           withoutCert.forEach((w) => console.log(line(w)));
         }
       }
-      if (crossed.length) {
-        console.log(`${EOL_}  ── もう一方の制度では当月に請求がある (${crossed.length} 名) ──`);
-        console.log("     制度の振り分け違い (この稼働は実は別制度) かもしれないので、コードを見て判断すること");
-        for (const w of crossed) {
-          console.log(`   ${w.area.padEnd(8)} ${w.system.padEnd(2)} ${w.clientName.padEnd(16)} ${String(w.rows).padStart(3)}回 ${yen(w.amount).padStart(12)}  コード ${[...w.codes].join(",")}`);
-        }
-      }
+
     }
   }
   if (noNumber.length) {
-    console.log(`${EOL_}被保険者番号 / 受給者証番号が当方に無い (${noNumber.length} 名) — 登録漏れの疑い`);
-    noNumber.slice(0, 20).forEach((w) => console.log(`   ${w.area.padEnd(8)} ${w.system.padEnd(2)} ${w.clientName.padEnd(16)} ${String(w.rows).padStart(3)}回 ${yen(w.amount).padStart(12)}`));
-    if (noNumber.length > 20) console.log(`   … 他 ${noNumber.length - 20} 名`);
+    console.log(`${EOL_}被保険者番号 / 受給者証番号が当方に無い (${noNumber.length} 名) — この人たちは請求そのものができない`);
+    // 拠点に偏っていれば取込の問題、散っていれば個別の登録漏れ。まず内訳を出す
+    const byArea = new Map<string, { n: number; amount: number }>();
+    for (const w of noNumber) {
+      const a = byArea.get(w.area) ?? { n: 0, amount: 0 };
+      a.n++; a.amount += w.amount; byArea.set(w.area, a);
+    }
+    [...byArea].sort((a, b) => b[1].n - a[1].n)
+      .forEach(([a, v]) => console.log(`   ${a.padEnd(10)} ${String(v.n).padStart(4)} 名  ${yen(v.amount)}`));
+    console.log("   (金額はヘルパーに払った賃金)");
   }
+  if (crossSystem.length) {
+    console.log(`${EOL_}参考: 別制度では当月に請求があるが、この制度では見当たらない (${crossSystem.length} 名)`);
+    console.log("   稼働の制度フォルダと実際の制度が食い違っているだけかもしれない。コードを見て判断すること");
+    crossSystem.slice(0, 15).forEach((w) =>
+      console.log(`   ${w.area.padEnd(8)} ${w.system.padEnd(2)} ${w.clientName.padEnd(16)} ${String(w.rows).padStart(3)}回 ${yen(w.amount).padStart(12)}  コード ${[...w.codes].join(",")}`));
+    if (crossSystem.length > 15) console.log(`   … 他 ${crossSystem.length - 15} 名`);
+  }
+
   if (notImported.length) {
     console.log(`${EOL_}稼働はあるのに実績が DB に 1 件も無い (${notImported.length} 名) — 取込漏れ`);
     notImported.sort((a, b) => b.amount - a.amount);
