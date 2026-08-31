@@ -1,0 +1,36 @@
+[
+  {
+    "action": "created_client",
+    "id": "adf03caf-0537-4a97-8270-cac238c80e11",
+    "name": "今井 義春"
+  },
+  {
+    "action": "move_cert",
+    "id": "254504de-edfd-439a-b285-7f17f9d45558",
+    "from": "276be650-0788-4647-ad27-4562d3868de0",
+    "to": "adf03caf-0537-4a97-8270-cac238c80e11"
+  },
+  {
+    "action": "move_claim",
+    "id": "82fccd1d-c818-4636-a1b1-17a8eacceb1c",
+    "from": "276be650-0788-4647-ad27-4562d3868de0",
+    "to": "adf03caf-0537-4a97-8270-cac238c80e11"
+  },
+  {
+    "action": "created_client",
+    "id": "07937651-4857-49d1-b0d8-8422820b169a",
+    "name": "原田 智子"
+  },
+  {
+    "action": "move_cert",
+    "id": "a3e875b3-8731-44b3-b68f-0e2cdd5e8f95",
+    "from": "c508c702-59fd-43e7-9da5-99d29314411e",
+    "to": "07937651-4857-49d1-b0d8-8422820b169a"
+  },
+  {
+    "action": "move_claim",
+    "id": "1ef7ca75-b3db-499b-8afb-ab97f8a7aa74",
+    "from": "c508c702-59fd-43e7-9da5-99d29314411e",
+    "to": "07937651-4857-49d1-b0d8-8422820b169a"
+  }
+]
