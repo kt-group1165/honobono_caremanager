@@ -349,6 +349,25 @@ async function main() {
     console.log(`\n  ⚠ 利用者番号が別人に使われている ${numMismatch.length} 件 (番号では引かない)`);
     for (const m of numMismatch) console.log(`     ${m}`);
   }
+  // ── DRY RUN でも「どこに何人入るか」を出す ──
+  //   新規 client は id がまだ無いので、id ではなく **CSV の利用者番号**で数える。
+  //   これが無いと取込前に割当先が分からず、判断材料にならない。
+  if (BY_SUPPORT_OFFICE) {
+    const plan = new Map();
+    let noOff = 0;
+    for (const u of baseByNum.keys()) {
+      const nm2 = certByNum.get(u)?.care_office_name;
+      const o = nm2 ? officeByNorm.get(normOfficeName(nm2)) : null;
+      if (o) plan.set(o.name, (plan.get(o.name) ?? 0) + 1);
+      else noOff++;
+    }
+    console.log("\n  割当の予定 (CSV の支援事業所から):");
+    for (const [k, v] of [...plan].sort((a, b) => b[1] - a[1])) {
+      console.log(`     ${String(v).padStart(5)}  ${k}`);
+    }
+    console.log(`     ${String(noOff).padStart(5)}  (他社ケアマネ = 割当てない)`);
+  }
+
   console.log(`\n  既存を再利用 ${reused.length} 名 / 新規作成 ${toCreate.length} 名`);
   if (toCreate.length) {
     console.log(`  -- 新規 --`);
