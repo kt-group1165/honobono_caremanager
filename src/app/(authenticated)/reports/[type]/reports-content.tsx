@@ -5674,6 +5674,13 @@ function docsCacheKey(userId: string, reportType: string, certId: string | null)
   return `${userId}|${reportType}|${certId ?? "_"}`;
 }
 
+/** "2026-08" を n か月ずらす。12月またぎは Date に任せる */
+function shiftMonth(ym: string, n: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, m - 1 + n, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export function ReportsContent({ userId, reportType: reportTypeProp, initialDocs, initialCertifications }: ReportsContentProps) {
   // ──────────────────────────────────────────────────────────────
   // 第1〜3表 タブ即時切替: 表示中の帳票種別は localType (client state) が正。
@@ -6151,12 +6158,31 @@ export function ReportsContent({ userId, reportType: reportTypeProp, initialDocs
                       <label className="text-xs font-medium text-gray-600 flex items-center gap-1">
                         <CalendarDays size={12} /> 対象月
                       </label>
+                      {/* 前月・翌月は矢印で送れる。1 か月ずつ見ていくのが普通なので
+                          プルダウンを開かずに動かせるようにする。
+                          ⚠ monthOptions は **新しい順**なので、前月は index+1 */}
+                      <button
+                        onClick={() => setSelectedYearMonth(shiftMonth(selectedYearMonth, -1))}
+                        disabled={!monthOptions.includes(shiftMonth(selectedYearMonth, -1))}
+                        title="前の月"
+                        className="rounded-lg border px-2 py-1.5 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
                       <select value={selectedYearMonth} onChange={(e) => setSelectedYearMonth(e.target.value)}
                         className="rounded-lg border px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
                         {monthOptions.map((ym) => (
                           <option key={ym} value={ym}>{fmtJaYear(ym + "-01")}</option>
                         ))}
                       </select>
+                      <button
+                        onClick={() => setSelectedYearMonth(shiftMonth(selectedYearMonth, 1))}
+                        disabled={!monthOptions.includes(shiftMonth(selectedYearMonth, 1))}
+                        title="次の月"
+                        className="rounded-lg border px-2 py-1.5 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
                     </>
                   )}
                 </div>
