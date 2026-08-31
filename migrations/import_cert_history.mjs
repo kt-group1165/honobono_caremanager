@@ -181,6 +181,26 @@ console.log(`既存の認定行: ${existing.length} 件\n`);
 
 // ─── 4) 計画 ─────────────────────────────────────────────────────────────────
 const inserts = [], conflicts = [], dupClient = new Set(), noClient = new Set();
+/**
+ * ⚠ **同じ認定を 1 回の実行で何行も INSERT しない**ための索引。
+ *
+ *   同じ利用者マスタ CSV が複数の場所に置かれている:
+ *     利用者データ/全居宅/介護保険1_R8-06_全件.CSV
+ *     利用者データ/全社_R8-08/介護保険1.CSV
+ *     利用者データ/<拠点>/介護保険1.CSV
+ *   全部を読むので、1 人の同じ認定が csvRows に 3 回出てくる。
+ *
+ *   既存行との突き合わせ (`same`) は **実行前のスナップショット**しか見ないので、
+ *   この実行で足した行は弾けない。結果、同じ認定が CSV ファイルの数だけ入る。
+ *
+ *   2026-08-31 に実データで確認: 同じ内容の認定が 86 組 / 余分な行 164 件あり、
+ *   志村 道子 は 6 行すべてが「要介護4 / 30938 / 2026-06-01〜2027-05-31」だった。
+ *   dedupe_insurance_records.mjs で 54 行を片付けたが、**発生源はここ**。
+ *
+ *   同じ (client_id, 認定開始日) が来たら、**値が埋まっているほうを残す**。
+ */
+const plannedByKey = new Map();
+const filledCount = (row) => Object.values(row).filter((v) => v != null && v !== "").length;
 for (const r of csvRows) {
   const cs = byInsured.get(r.insured);
   if (!cs || cs.length === 0) { noClient.add(r.insured); continue; }
@@ -197,7 +217,7 @@ for (const r of csvRows) {
     if (diffs.length) conflicts.push({ insured: r.insured, name: r.name, area: r.area, id: same.id, start: r.certStart, diffs });
     continue;
   }
-  inserts.push({
+  const row = {
     _label: `${r.area} ${r.insured} ${r.name}`,
     tenant_id: c.tenant_id,
     client_id: c.id,
@@ -218,7 +238,19 @@ for (const r of csvRows) {
     care_manager: r.cmName,
     care_manager_org: r.officeName,
     notes: MARK,
-  });
+  };
+  // 同じ (利用者, 認定開始日) が既にこの実行で計画済みなら、値が多いほうを残す
+  const key = `${c.id}|${r.certStart}`;
+  const prev = plannedByKey.get(key);
+  if (prev) {
+    if (filledCount(row) > filledCount(prev)) {
+      inserts[inserts.indexOf(prev)] = row;
+      plannedByKey.set(key, row);
+    }
+    continue;
+  }
+  plannedByKey.set(key, row);
+  inserts.push(row);
 }
 
 // ─── 5) 表示 ─────────────────────────────────────────────────────────────────
