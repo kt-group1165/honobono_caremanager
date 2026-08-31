@@ -3819,7 +3819,11 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
         return { ...merged, planned, actual };
       })
     : [];
-  const rows = Array.from({ length: 9 }, (_, i) => services[i] ?? emptyServiceRow());
+  // 1 ページ 17 行・超えた分は次ページ (ほのぼのの出力と同じ)。
+  // 旧実装は 9 行固定で、10 行目以降が黙って消えていた。2026-06 の実データでは
+  // 1,859 名中 731 名が 10 行以上・146 名が 17 行超 (最大 39 行) だった。
+  const PAGE_ROWS = 17;
+  const pageCount = Math.max(1, Math.ceil(services.length / PAGE_ROWS));
   const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
   // 曜日は対象月 (report_month) の実カレンダーから計算 (旧: 1日=月曜固定の簡易巡回は誤り)
   const printYM = String(c.report_month ?? format(new Date(), "yyyy-MM"));
@@ -3832,7 +3836,15 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
   const PRINT_DOW_JA = ["日", "月", "火", "水", "木", "金", "土"];
 
   return (
-    <div style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "7pt", color: "#000", width: "277mm", height: "190mm", overflow: "hidden" }}>
+    <>
+    {Array.from({ length: pageCount }, (_, pageIndex) => {
+      // このページに載せる行だけ切り出し、様式の枠を埋めるため 17 行に padding する
+      const rows = Array.from(
+        { length: PAGE_ROWS },
+        (_, i) => services[pageIndex * PAGE_ROWS + i] ?? emptyServiceRow(),
+      );
+      return (
+    <div key={pageIndex} style={{ fontFamily: '"MS Mincho","游明朝","Hiragino Mincho ProN",serif', fontSize: "7pt", color: "#000", width: "277mm", height: "190mm", overflow: "hidden", breakAfter: pageIndex < pageCount - 1 ? "page" : "auto" }}>
       {/* 表番号ラベル */}
       <div style={{ border: B, display: "inline-block", padding: "1px 8px", fontSize: "7pt", marginBottom: "3px" }}>{tableNum}</div>
 
@@ -3841,6 +3853,7 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
         <span style={{ fontSize: "13pt", fontWeight: "bold", letterSpacing: "0.3em" }}>{title}</span>
         <span style={{ position: "absolute", left: 0, bottom: 0, fontSize: "9pt", fontWeight: "bold" }}>
           {fmtJaYear(printYM + "-01")}分
+          {pageCount > 1 && <span style={{ marginLeft: "6px", fontSize: "7pt", fontWeight: "normal" }}>({pageIndex + 1}/{pageCount}ページ)</span>}
         </span>
         <span style={{ position: "absolute", right: 0, bottom: 0, fontSize: "7pt" }}>
           予定済 {c.planned_confirmed === true ? "☑" : "☐"}　実績済 {c.actual_confirmed === true ? "☑" : "☐"}
@@ -3899,8 +3912,9 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
       {/* サービス票テーブル — A4横の残り高さを使い切る */}
       {(() => {
         // ヘッダー部≒140px, フッター≒25px, テーブルヘッダー≒35px, タイトル≒30px
-        // 残り ≒ 190mm(≒718px) - 230px ≒ 488px → 18行で割る
-        const ROW_H = Math.floor(488 / 18); // ≒27px per row
+        // 残り ≒ 190mm(≒718px) - 230px ≒ 488px
+        // 物理行数 = サービス 17 行 × (予定/実績) + 予定合計/実績合計 の 2 行
+        const ROW_H = Math.floor(488 / (PAGE_ROWS * 2 + 2)); // ≒13px per row (ほのぼのの印字間隔と同じ)
         return (
           <>
           <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
@@ -3983,7 +3997,10 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                   );
                 });
               })()}
-              {/* 予定合計/実績合計行: rental も 1日="1" を持つので、全行の回数を集計。単位列も合算。 */}
+              {/* 予定合計/実績合計行: rental も 1日="1" を持つので、全行の回数を集計。単位列も合算。
+                  ⚠ 集計はこのページの行ではなく **全サービス行** で行う。
+                     ページ分割したときにページごとの部分合計を出すと利用者単位の
+                     合計と食い違って読み間違えるため。 */}
               {(() => {
                 const printYM = String(c.report_month ?? format(new Date(), "yyyy-MM"));
                 const rowMonthlyUnits = (svc: SvcRow, kind: "planned" | "actual"): number => {
@@ -3991,19 +4008,19 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                   const count = svc[kind].filter(Boolean).length;
                   return (svc.units ?? 0) * count;
                 };
-                const plannedUnitsSum = rows.reduce((s, svc) => s + rowMonthlyUnits(svc, "planned"), 0);
-                const actualUnitsSum = rows.reduce((s, svc) => s + rowMonthlyUnits(svc, "actual"), 0);
+                const plannedUnitsSum = services.reduce((s, svc) => s + rowMonthlyUnits(svc, "planned"), 0);
+                const actualUnitsSum = services.reduce((s, svc) => s + rowMonthlyUnits(svc, "actual"), 0);
                 return (<>
                   <tr style={{ height: `${ROW_H}px` }}>
                     <td colSpan={4} style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>予定合計</td>
                     {DAYS.map((_, di) => {
-                      const count = rows.filter((svc) => svc.planned[di]).length;
+                      const count = services.filter((svc) => svc.planned[di]).length;
                       const dow = dowOf(di + 1);
                       const isWE = dow === 0 || dow === 6;
                       return <td key={di} style={{ ...(isWE ? thGreen : thStyle), color: "#1565c0", backgroundColor: isWE ? "#bbdefb" : "#e3f2fd", fontWeight: "bold", textAlign: "center", padding: "0" }}>{dow !== null && count > 0 ? count : ""}</td>;
                     })}
                     <td style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>
-                      {rows.reduce((sum, svc) => sum + svc.planned.filter(Boolean).length, 0) || ""}
+                      {services.reduce((sum, svc) => sum + svc.planned.filter(Boolean).length, 0) || ""}
                     </td>
                     <td style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>{plannedUnitsSum || ""}</td>
                   </tr>
@@ -4011,13 +4028,13 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                   <tr style={{ height: `${ROW_H}px` }}>
                     <td colSpan={4} style={{ ...thStyle, color: "#1b5e20", backgroundColor: "#e8f5e9" }}>実績合計</td>
                     {DAYS.map((_, di) => {
-                      const count = rows.filter((svc) => svc.actual[di]).length;
+                      const count = services.filter((svc) => svc.actual[di]).length;
                       const dow = dowOf(di + 1);
                       const isWE = dow === 0 || dow === 6;
                       return <td key={di} style={{ ...(isWE ? tdGreen : thStyle), color: "#1b5e20", backgroundColor: isWE ? "#a5d6a7" : "#e8f5e9", fontWeight: "bold", textAlign: "center", padding: "0" }}>{dow !== null && count > 0 ? count : ""}</td>;
                     })}
                     <td style={{ ...tdStyle, color: "#1b5e20", backgroundColor: "#e8f5e9", fontWeight: "bold", textAlign: "center" }}>
-                      {rows.reduce((sum, svc) => sum + svc.actual.filter(Boolean).length, 0) || ""}
+                      {services.reduce((sum, svc) => sum + svc.actual.filter(Boolean).length, 0) || ""}
                     </td>
                     <td style={{ ...tdStyle, color: "#1b5e20", backgroundColor: "#e8f5e9", fontWeight: "bold", textAlign: "center" }}>{actualUnitsSum || ""}</td>
                   </tr>
@@ -4041,6 +4058,9 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
         );
       })()}
     </div>
+      );
+    })}
+    </>
   );
 }
 
@@ -4859,7 +4879,10 @@ const PRINT_STYLE_LANDSCAPE = `
   .editable-cell:hover { outline: none !important; background: #fff !important; }
   body * { visibility: hidden !important; }
   #print-area, #print-area * { visibility: visible !important; }
-  #print-area { position: fixed !important; inset: 0 !important; width: 297mm !important; min-height: 210mm !important; padding: 6mm 8mm !important; font-size: 8pt !important; color: #000 !important; background: #fff !important; overflow: visible !important; }
+  /* ⚠ position: fixed だと 1 ページ目しか印刷されない (fixed は改ページで分割されない)。
+     利用票は 17 行を超えると 2 ページ目が出るので absolute + top/left にする。
+     inset: 0 は bottom/right を 0 に固定して高さが 1 ページに詰められるので使わない。 */
+  #print-area { position: absolute !important; top: 0 !important; left: 0 !important; width: 297mm !important; min-height: 210mm !important; padding: 6mm 8mm !important; font-size: 8pt !important; color: #000 !important; background: #fff !important; overflow: visible !important; }
   .no-print { display: none !important; }
   table { border-collapse: collapse !important; }
   td, th { border: 1px solid #000 !important; padding: 1px 2px !important; }
