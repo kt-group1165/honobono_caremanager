@@ -17,7 +17,7 @@
 //   node migrations/merge_duplicate_clients.mjs --execute
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -140,6 +140,52 @@ async function countRefs(refs, clientId) {
 
 const norm = (s) => (s ?? "").normalize("NFKC").replace(/[\s　()（）]|\(実\)/g, "");
 
+// ── 利用者マスタ CSV (Shift_JIS)。番号が食い違うペアの同定に使う ──────────
+const sjis = new TextDecoder("shift_jis");
+function parseLine(line) {
+  const out = []; let f = "", q = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (q) { if (c === '"') { if (line[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+    else if (c === '"') q = true;
+    else if (c === ",") { out.push(f); f = ""; }
+    else f += c;
+  }
+  out.push(f); return out;
+}
+/** (保険者|被保番) -> 利用者名。ほのぼのの利用者マスタから作る */
+function loadCsvPairNames() {
+  const base = path.join(KAIGO, "利用者データ");
+  const files = [];
+  const walk = (d, depth) => {
+    if (depth > 3) return;
+    let ents; try { ents = readdirSync(d); } catch { return; }
+    for (const n of ents) {
+      const p2 = path.join(d, n);
+      let st; try { st = statSync(p2); } catch { continue; }
+      if (st.isDirectory()) walk(p2, depth + 1);
+      else if (/^介護保険.*\.csv$/i.test(n)) files.push(p2);
+    }
+  };
+  walk(base, 0);
+  const map = new Map();
+  for (const f of files) {
+    const L = sjis.decode(readFileSync(f)).split(/\r?\n/).filter((x) => x !== "");
+    if (!L.length) continue;
+    const h = parseLine(L[0]).map((x) => x.trim());
+    const ix = {}; h.forEach((x, i) => { if (!(x in ix)) ix[x] = i; });
+    if (!("被保険者番号" in ix) || !("保険者番号" in ix) || !("利用者名" in ix)) continue;
+    for (const line of L.slice(1)) {
+      const r = parseLine(line);
+      const g2 = (k) => (ix[k] != null && ix[k] < r.length ? (r[ix[k]] ?? "").trim() : "");
+      const k = `${g2("保険者番号")}|${g2("被保険者番号")}`;
+      const nm = g2("利用者名");
+      if (nm && !map.has(k)) map.set(k, nm);
+    }
+  }
+  return map;
+}
+
 async function main() {
   console.log(`=== 利用者の重複統合 ${EXECUTE ? "【EXECUTE】" : "【DRY RUN】"} ===\n`);
   const refs = await usableRefs();
@@ -170,13 +216,71 @@ async function main() {
   let cAll = [], cFrom = 0;
   for (;;) {
     const { data, error } = await sb.from("clients")
-      .select("id, insurer_number, insured_number, deleted_at").range(cFrom, cFrom + 999);
+      .select("id, name, birth_date, insurer_number, insured_number, deleted_at").range(cFrom, cFrom + 999);
     if (error) { console.error(`✗ ${error.message}`); process.exit(1); }
     cAll = cAll.concat(data);
     if (data.length < 1000) break;
     cFrom += 1000;
   }
   for (const c of cAll) { if (!c.deleted_at) addPair(c.insurer_number, c.insured_number, c.id); }
+
+  // ⚠ (保険者, 被保番) が一致しないと同じキーにならないので、**番号が割れている
+  //   同一人物**は上のやり方では拾えない。2026-08-31 に実データで確認した割れ方:
+  //     ・被保番の桁落ち   "22717" と "0000022717" (木更津市で 4 組)
+  //     ・片方が null      古い取込が番号を入れずに作った (2 組)
+  //     ・仮番号と実番号   "8844225599" と "1000142636" 等 (3 組)
+  //   氏名 + 生年月日 でも束ねる。ただし **番号が矛盾しないものだけ**:
+  //     片方が空 / ゼロ埋めすると一致 … 同一人物とみて束ねる
+  //     どちらも実在の別番号           … 人が確かめる話なので束ねず一覧に出す
+  const csvPairNames = loadCsvPairNames();
+  const padNum = (s) => (/^\d+$/.test(String(s ?? "")) ? String(s).padStart(10, "0") : (s ?? null));
+  const nameBirth = new Map();
+  for (const c of cAll) {
+    if (c.deleted_at || !c.birth_date || !c.name) continue;
+    const k = `${norm(c.name)}|${c.birth_date}`;
+    if (!nameBirth.has(k)) nameBirth.set(k, []);
+    nameBirth.get(k).push(c);
+  }
+  const numberConflicts = [];
+  for (const [k, cs] of nameBirth) {
+    if (cs.length !== 2) continue;                       // 3 件以上は手当てが必要
+    const [a, b] = cs;
+    const ka = a.insurer_number && a.insured_number ? `${a.insurer_number}|${padNum(a.insured_number)}` : null;
+    const kb = b.insurer_number && b.insured_number ? `${b.insurer_number}|${padNum(b.insured_number)}` : null;
+    if (ka && kb && ka !== kb) {
+      // 番号が違っても **CSV で同じ氏名に紐づく**なら同一人物。実データの内訳:
+      //   ・番号が途中で変わった  内海 淳 H333010211 (〜2026/04/21) → 1000304436 (2026/04/22〜)
+      //   ・片方が当方だけの偽番号 山田 隆一 8844225599 / 鈴木 清子 4488822211 は CSV に無い
+      const na = csvPairNames.get(`${a.insurer_number}|${a.insured_number}`);
+      const nb2 = csvPairNames.get(`${b.insurer_number}|${b.insured_number}`);
+      const nmA = na ? norm(na) : null, nmB = nb2 ? norm(nb2) : null;
+      const target = norm(a.name);
+      const bothSame = nmA && nmB && nmA === nmB && nmA === target;   // 番号が変わっただけ
+      const oneFake = ((nmA === target && !nmB) || (nmB === target && !nmA)); // 片方が CSV に無い偽番号
+      if (!bothSame && !oneFake) {
+        numberConflicts.push(`${k} … ${a.insurer_number}|${a.insured_number} と ${b.insurer_number}|${b.insured_number} (CSV で同定できない。人が確かめる)`);
+        continue;
+      }
+      // CSV に載っているほうの番号をキーにする (偽番号や旧番号ではなく実番号に寄せる)
+      const realKey = nmB === target && !nmA ? `${b.insurer_number}|${padNum(b.insured_number)}`
+        : nmA === target && !nmB ? `${a.insurer_number}|${padNum(a.insured_number)}`
+        : ka;
+      if (!groups.has(realKey)) groups.set(realKey, new Set());
+      groups.get(realKey).add(a.id); groups.get(realKey).add(b.id);
+      console.log(`  ↔ ${k}: ${bothSame ? "番号が変わっただけ" : "片方が CSV に無い偽番号"} → 同一人物として統合する`);
+      continue;
+    }
+    const key = ka ?? kb ?? `name-birth:${k}`;
+    if (groups.get(key)?.has(a.id) && groups.get(key)?.has(b.id)) continue;   // 既に束ねている
+    if (!groups.has(key)) groups.set(key, new Set());
+    groups.get(key).add(a.id); groups.get(key).add(b.id);
+  }
+  if (numberConflicts.length) {
+    console.log(`  ⚠ 氏名+生年月日は同じだが被保険者番号が食い違う: ${numberConflicts.length} 組 (触らない)`);
+    for (const s of numberConflicts) console.log(`     ${s}`);
+    console.log("");
+  }
+
   const dups = [...groups.entries()].filter(([, s]) => s.size > 1);
   const ids = [...new Set(dups.flatMap(([, s]) => [...s]))];
   const cl = new Map();
