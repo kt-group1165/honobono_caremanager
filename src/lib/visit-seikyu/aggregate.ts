@@ -38,6 +38,7 @@ import {
   toHankakuDigits,
 } from "@/lib/service-name-normalize";
 import { validInMonth } from "@/lib/service-code-valid";
+import { limitAmountMismatchReason } from "@/lib/kubun-gendo";
 import { resolveKohisForMonth, kohiHobetsuLabel, type ResolvedKohi } from "@/lib/kohi";
 import {
   resolveCertForMonth,
@@ -446,6 +447,11 @@ export async function aggregateMonthlyVisitSeikyu(
     warnings.push(msg);
     if (!warningsByClient.has(clientId)) warningsByClient.set(clientId, []);
     warningsByClient.get(clientId)!.push(msg);
+  };
+  // 月内で認定が分割される (転居・区分変更) と同じ警告が何度も積まれるので重複を抑える
+  const pushClientWarningOnce = (clientId: string, msg: string) => {
+    if (warningsByClient.get(clientId)?.includes(msg)) return;
+    pushClientWarning(clientId, msg);
   };
 
   // 2) service_name → units / short_name のマスタ
@@ -1294,6 +1300,21 @@ export async function aggregateMonthlyVisitSeikyu(
       copayRaw == null || !Number.isFinite(copayRaw) || copayRaw <= 0 ? 0.1
       : copayRaw >= 1 ? Math.min(copayRaw / 10, 1)
       : copayRaw;
+    // 2026-08-31 監査: 未設定を**無警告で 1 割**にしていた (実測 11 名該当)。
+    //   実際が 2 割なら 10 万円の請求で 1 万円の過大保険請求になる。
+    //   既定値 (1割) は変えず、必ず気づけるように警告だけ出す。
+    if (copayRaw == null || !Number.isFinite(copayRaw) || copayRaw <= 0) {
+      pushClientWarningOnce(
+        userId,
+        `${userLabel}: 負担割合が未設定のため 1 割で計算しました — 2割/3割なら過大請求になります。負担割合証を確認してください`,
+      );
+    }
+    // 認定に登録された区分支給限度基準額が告示値と食い違っていないか
+    //   (実測で不一致 12 名 / 未登録 6 名。計画単位数が無い月に落ちると誤判定する)
+    {
+      const reason = limitAmountMismatchReason(cert?.care_level, cert?.service_limit_amount);
+      if (reason) pushClientWarningOnce(userId, `${userLabel}: ${reason}`);
+    }
     // 区分支給限度基準の基準値 (認定側):
     //   分割なし = 従来どおり月内認定の max (区分変更月対応。呼出側で計算済み)
     //   分割あり = 各セグメントの認定の限度額をそれぞれ満額適用
@@ -1406,6 +1427,14 @@ export async function aggregateMonthlyVisitSeikyu(
         pushClientWarning(
           userId,
           `${userLabel}: 「${svcType}」は単位数 0 の増分コード (身体介護9系等) です — 実績のサービス内容を確認してください`,
+        );
+      } else if (!master) {
+        // 2026-08-31 監査: 条件が `master &&` だったため、**マスタで引けない場合は
+        //   何も出ずに 0 単位で明細に載り、保険請求から静かに消えていた**。
+        //   (過去月を編集して対象月に存在しない世代の名称を選ぶと到達する)
+        pushClientWarning(
+          userId,
+          `${userLabel}: サービス「${svcType}」が対象月 (${monthStr}) のマスタで解決できず 0 単位で計上しました — このままでは保険請求から漏れます`,
         );
       }
       const units = unitPer * count;
@@ -2001,6 +2030,14 @@ export async function aggregateMonthlyVisitSeikyu(
       pushClientWarning(
         userId,
         `${userLabel}: 対象月 (${monthStr}) に有効な認定が見つからないため最新の認定情報で集計しています — 認定有効期間を確認してください`,
+      );
+    }
+    // 2026-08-31 監査: 認定が 1 件も無い利用者は上の 2 条件を素通りし、
+    //   1 割負担 / 限度額管理なし / 保険者番号なし で行が作られていた (実測 1 名)。
+    if (!cert) {
+      pushClientWarning(
+        userId,
+        `${userLabel}: 介護保険の認定レコードがありません — 1 割負担・限度額管理なし・保険者番号なしで計上されます。認定情報を登録してください`,
       );
     }
     // ── 提供表の加算エディタ由来で集計に載せない加算コードの warning (利用者×コードで 1 回) ──

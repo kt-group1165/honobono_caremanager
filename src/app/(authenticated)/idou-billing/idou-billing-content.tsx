@@ -80,9 +80,12 @@ export function IdouBillingContent() {
   const [idouRows, setIdouRows] = useState<IdouRow[]>([]);
   const [bathRows, setBathRows] = useState<BathRow[]>([]);
   const [codeInfo, setCodeInfo] = useState<Map<string, { name: string; unit: number }>>(new Map());
+  const [missingCodes, setMissingCodes] = useState<string[]>([]);
   // client_id → 受給者証情報 (番号 / 契約支給量 / 負担上限月額 / 生保フラグ)。
   // 地域生活支援受給者証 (chiiki_recipient_certs) を優先、無ければ障害福祉受給者証を流用
-  const [certs, setCerts] = useState<Map<string, { number: string; contract: string; limit: number; seiho: boolean }>>(new Map());
+  // limit: null = 負担上限額が未設定 (判定不能) / 0 = 非課税で本当に 0 円。
+  //   `?? 0` で潰すとこの 2 つが区別できず、未設定が「市へ全額請求」に倒れる (2026-08-31 監査)
+  const [certs, setCerts] = useState<Map<string, { number: string; contract: string; limit: number | null; seiho: boolean }>>(new Map());
   const [loading, setLoading] = useState(true);
 
   const [y, mo] = month.split("-").map(Number);
@@ -124,7 +127,10 @@ export function IdouBillingContent() {
       setBathRows(bath);
 
       // 受給者証: 障害福祉 (最新) を土台に、地域生活支援受給者証があれば上書き
-      const certMap = new Map<string, { number: string; contract: string; limit: number; seiho: boolean }>();
+      // 2026-08-31 監査: limit を `?? 0` で潰していたため「負担上限 未設定」と
+      //   「非課税で本当に 0」が区別できず、未設定が黙って「負担 0 円 = 市へ全額請求」に
+      //   倒れていた。null のまま持って警告で拾えるようにする。
+      const certMap = new Map<string, { number: string; contract: string; limit: number | null; seiho: boolean }>();
       for (const c of (certRes.data ?? []) as {
         client_id: string; beneficiary_number: string | null; self_payment_limit: number | null; seiho_flag: boolean | null;
       }[]) {
@@ -132,7 +138,7 @@ export function IdouBillingContent() {
           certMap.set(c.client_id, {
             number: c.beneficiary_number ?? "",
             contract: "",
-            limit: c.self_payment_limit ?? 0,
+            limit: c.self_payment_limit ?? null,
             seiho: c.seiho_flag ?? false,
           });
         }
@@ -144,7 +150,7 @@ export function IdouBillingContent() {
         certMap.set(c.client_id, {
           number: c.beneficiary_number ?? certMap.get(c.client_id)?.number ?? "",
           contract: c.shikyu_amount_text ?? "",
-          limit: c.self_payment_limit ?? 0,
+          limit: c.self_payment_limit ?? null,
           seiho: c.seiho_flag ?? false,
         });
       }
@@ -153,18 +159,26 @@ export function IdouBillingContent() {
       // コード → 名称・単位数 (マスタから、対象月世代)
       const codes = Array.from(new Set([...idou, ...bath].map((r) => r.service_code).filter(Boolean))) as string[];
       const info = new Map<string, { name: string; unit: number }>();
-      if (codes.length) {
-        const { data: cn } = await validInMonth(
+      // 2026-08-31 監査: `codes.slice(0, 300)` で**無言の打ち切り**だった。
+      //   301 件目以降はマスタが引けず 0 単位で明細に載る。チャンクして全部引く。
+      const CODE_CHUNK = 200;
+      for (let i = 0; i < codes.length; i += CODE_CHUNK) {
+        const chunk = codes.slice(i, i + CODE_CHUNK);
+        const { data: cn, error: cnErr } = await validInMonth(
           supabase.from("kaigo_service_codes").select("service_code, service_name, units")
             .eq("system", "地域生活支援").eq("municipality", DEFAULT_CHIIKI_MUNICIPALITY)
-            .in("service_code", codes.slice(0, 300)),
+            .in("service_code", chunk),
           y, mo,
         );
+        if (cnErr) throw new Error(`サービスコードマスタの取得に失敗: ${cnErr.message}`);
         for (const c of (cn ?? []) as { service_code: string; service_name: string; units: number }[]) {
           if (!info.has(c.service_code)) info.set(c.service_code, { name: c.service_name, unit: c.units });
         }
       }
       setCodeInfo(info);
+      // マスタに無いコードは 0 単位で計上されてしまうので拾っておく
+      //   (地域生活支援マスタは千葉市 703 件のみ。他市町村の記録はここに落ちる)
+      setMissingCodes(codes.filter((c) => !info.has(c)));
     } catch (e) {
       console.error("請求データ読込に失敗:", e instanceof Error ? e.message : e);
     } finally {
@@ -218,9 +232,19 @@ export function IdouBillingContent() {
   }, [idouRows, bathRows, codeInfo]);
 
   // 利用者の負担額 = 生保→0 / それ以外→ min(総費用×10%, 負担上限月額)。上限0(非課税)→0
+  // 判定不能 (受給者証なし / 上限未設定) は **金額を推測しない**。
+  //   0 にすると市へ全額請求、1割にすると利用者へ過大請求で、どちらも誤り。
+  //   金額は従来どおり 0 のままにして、下の警告と行の「⚠要確認」で必ず気づけるようにする。
+  const burdenUndeterminable = useCallback((clientId: string): boolean => {
+    const c = certs.get(clientId);
+    if (!c) return true;              // 受給者証が無い
+    if (c.seiho) return false;        // 生保は 0 円で正しい
+    return c.limit == null;           // 負担上限額が未設定
+  }, [certs]);
+
   const clientBurden = useCallback((clientId: string, cost: number): number => {
     const c = certs.get(clientId);
-    if (!c || c.seiho) return 0;
+    if (!c || c.seiho || c.limit == null) return 0;
     return Math.min(Math.floor(cost * 0.1), c.limit);
   }, [certs]);
 
@@ -287,8 +311,11 @@ export function IdouBillingContent() {
           <div className="flex flex-wrap gap-x-4 gap-y-1">
             {clientIdsWithData.map((cid) => {
               const c = certs.get(cid);
-              const label = !c || c.seiho ? (c?.seiho ? "生保=無料" : "受給者証未登録=無料")
-                : c.limit === 0 ? "非課税=無料" : `上限 ¥${c.limit.toLocaleString()}/月`;
+              const label = !c ? "⚠ 受給者証未登録"
+                : c.seiho ? "生保=無料"
+                : c.limit == null ? "⚠ 負担上限額 未設定"
+                : c.limit === 0 ? "非課税=無料"
+                : `上限 ¥${c.limit.toLocaleString()}/月`;
               return (
                 <span key={cid} className="text-xs">
                   <span className="text-gray-700">{clientName(cid)}</span>
@@ -296,6 +323,34 @@ export function IdouBillingContent() {
                 </span>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* 負担額が判定できない利用者 (= 市へ全額請求になってしまう) */}
+      {/*   print:hidden にしない — 請求書を印刷して気づかず提出するのを防ぐ */}
+      {!loading && clientIdsWithData.some(burdenUndeterminable) && (
+        <div className="mb-4 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+          ⚠ 受給者証が未登録、または負担上限額が未設定の利用者が{" "}
+          {clientIdsWithData.filter(burdenUndeterminable).length} 名います。
+          <span className="font-medium">
+            この利用者の負担額は 0 円として集計され、その分が市への請求に乗ります。
+          </span>
+          <div className="mt-1 text-xs">
+            該当: {clientIdsWithData.filter(burdenUndeterminable).map(clientName).join("、")}
+            {" — "}利用者管理 → 障害福祉タブの受給者証で 負担上限月額 を登録してください。
+          </div>
+        </div>
+      )}
+
+      {/* マスタに無いサービスコード (0 単位で計上されてしまう) */}
+      {!loading && missingCodes.length > 0 && (
+        <div className="mb-4 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+          ⚠ 地域生活支援マスタに無いサービスコードが {missingCodes.length} 件あり、
+          <span className="font-medium">0 単位で計上されています</span>（{missingCodes.join("、")}）。
+          <div className="mt-1 text-xs">
+            この画面のマスタは {DEFAULT_CHIIKI_MUNICIPALITY} のものです。
+            他市町村の記録はコードが引けないため、市町村ごとの単価表を登録してください。
           </div>
         </div>
       )}
