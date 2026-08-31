@@ -35,8 +35,8 @@
 //   ・単位数 … 利用票に印字されない (第7表 別表にある)。単位列は空のまま
 //   ・1 日 2 回以上 … content.services[].planned は boolean なので画面上は "1"。
 //     回数は planned_counts / actual_counts に別途持たせて捨てないでおく
-//   ・10 行目以降 … 印刷様式が 9 行までしか描かない (reports-content.tsx)。
-//     データは全行入れる。何名が 9 行を超えたかは最後に出す
+//   ・印刷は 1 ページ 13 行で改ページする (reports-content.tsx)。データは全行入れる。
+//     以前は 9 行固定で 10 行目以降が黙って消えていた (2026-08-31 に是正済)
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
 import { execFileSync } from "node:child_process";
@@ -439,7 +439,7 @@ async function main() {
   console.log(`  サービス行            ${total.rows} 行`);
   console.log(`  合計が合わない行      ${total.warnRows} 行  ← 0 でないとパーサを直す`);
   console.log(`  氏名が食い違う        ${total.nameMismatch} 名 ${ALLOW_NAME_MISMATCH ? "(取り込む)" : "(skip した。当方の認定の持ち主違いを疑う)"}`);
-  console.log(`  9 行を超える利用者    ${total.over9} 名 (印刷様式は 9 行までしか出ない)`);
+  console.log(`  9 行を超える利用者    ${total.over9} 名 (印刷は 13 行/ページで改ページ)`);
   console.log(`  読めずに落ちたページ  ${total.droppedPages} ページ ← 0 でないと取りこぼし`);
   console.log("");
   console.log(`  ${EXECUTE ? "INSERT" : "INSERT 予定"}          ${total.inserted} 件`);
