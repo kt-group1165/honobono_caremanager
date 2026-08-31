@@ -2073,6 +2073,10 @@ export function ShogaiSeikyuContent({
                 row={selected}
                 year={year}
                 month={month}
+                // 2026-09-01 監査是正: 上限額管理結果は**関係事業所ごとに決定額が違う**。
+                //   どの事業所の結果かを保存しないと、兼務利用者で全事業所が同じ額を
+                //   使ってしまい市への過大請求になる (実測 7 名該当)。
+                officeId={currentOffice?.id ?? null}
                 onSaved={load}
               />
 
@@ -2328,15 +2332,47 @@ function ShogaiPaymentSection({
 }
 
 // ─── 利用者負担上限額管理 (月次の管理結果入力) ────────────────────────────────
+/**
+ * 上限額管理結果の upsert。
+ *
+ * 2026-09-01 監査是正: 以前は (client_id, target_month) だけをキーにしていたため、
+ *   同じ利用者を当社の複数事業所で見ていると全事業所が同じ調整後負担額を使い、
+ *   差額が市への過大請求になっていた (実測 7 名該当)。office_id を含めて保存する。
+ *
+ * ⚠ migrations/shogai_jogen_kanri_office_scope.sql を適用するまで office_id 列は
+ *   存在しないので、42703 なら旧キーで保存し直す (deploy 順を問わないため)。
+ */
+async function upsertJogenKanri(
+  supabase: ReturnType<typeof createClient>,
+  officeId: string | null,
+  payload: Record<string, unknown>,
+): Promise<{ error: { message: string } | null }> {
+  if (officeId) {
+    const { error } = await supabase
+      .from("shogai_jogen_kanri_results")
+      .upsert({ ...payload, office_id: officeId }, { onConflict: "client_id,target_month,office_id" });
+    if (!error) return { error: null };
+    // 列も index も未適用の環境 (42703 / 42P10) では旧キーにフォールバック
+    if (error.code !== "42703" && error.code !== "42P10") return { error };
+  }
+  const { error } = await supabase
+    .from("shogai_jogen_kanri_results")
+    .upsert(payload, { onConflict: "client_id,target_month" });
+  return { error };
+}
+
 function JogenKanriSection({
   row,
   year,
   month,
+  officeId,
   onSaved,
 }: {
   row: ShogaiSeikyuRow;
   year: number;
   month: number;
+  /** 関係事業所 (この管理結果が適用される当社側の事業所)。null = 事業所未確定 */
+  officeId: string | null;
   onSaved: () => void;
 }) {
   const supabase = useMemo(() => createClient(), []);
@@ -2362,22 +2398,19 @@ function JogenKanriSection({
 
   // 自事業所が管理者の場合は調整計算 + 結果票作成 (別コンポーネント)
   if (row.jogenKanriKubun === "自事業所") {
-    return <JogenKanriSelfSection row={row} year={year} month={month} onSaved={onSaved} />;
+    return <JogenKanriSelfSection row={row} year={year} month={month} officeId={officeId} onSaved={onSaved} />;
   }
 
   const save = async () => {
     setSaving(true);
     const monthStr = `${year}-${String(month).padStart(2, "0")}`;
-    const { error } = await supabase.from("shogai_jogen_kanri_results").upsert(
-      {
-        client_id: row.user_id,
-        target_month: monthStr,
-        kanri_result: result ? parseInt(result, 10) : null,
-        kanri_result_amount: amount !== "" ? parseInt(amount, 10) : null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "client_id,target_month" },
-    );
+    const { error } = await upsertJogenKanri(supabase, officeId, {
+      client_id: row.user_id,
+      target_month: monthStr,
+      kanri_result: result ? parseInt(result, 10) : null,
+      kanri_result_amount: amount !== "" ? parseInt(amount, 10) : null,
+      updated_at: new Date().toISOString(),
+    });
     setSaving(false);
     if (error) {
       alert("上限管理結果の保存に失敗しました: " + error.message);
@@ -2465,11 +2498,14 @@ function JogenKanriSelfSection({
   row,
   year,
   month,
+  officeId,
   onSaved,
 }: {
   row: ShogaiSeikyuRow;
   year: number;
   month: number;
+  /** 関係事業所 (この管理結果が適用される当社側の事業所)。null = 事業所未確定 */
+  officeId: string | null;
   onSaved: () => void;
 }) {
   const supabase = useMemo(() => createClient(), []);
@@ -2685,17 +2721,14 @@ function JogenKanriSelfSection({
     }
     setSaving(true);
     const self = lines.find((l) => l.is_self);
-    const { error } = await supabase.from("shogai_jogen_kanri_results").upsert(
-      {
-        client_id: row.user_id,
-        target_month: monthStr,
-        kanri_result: result,
-        kanri_result_amount: self?.adjusted_amount ?? null,
-        office_lines: lines,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "client_id,target_month" },
-    );
+    const { error } = await upsertJogenKanri(supabase, officeId, {
+      client_id: row.user_id,
+      target_month: monthStr,
+      kanri_result: result,
+      kanri_result_amount: self?.adjusted_amount ?? null,
+      office_lines: lines,
+      updated_at: new Date().toISOString(),
+    });
     setSaving(false);
     if (error) {
       alert("保存に失敗しました: " + error.message);

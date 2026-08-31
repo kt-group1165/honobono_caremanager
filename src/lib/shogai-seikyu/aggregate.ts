@@ -522,22 +522,57 @@ export async function aggregateMonthlyShogaiSeikyu(
   }
 
   // 3.5) 月次 上限額管理結果 (管理結果区分 1/3 は利用者負担を調整後額に置換)
+  //
+  // 2026-09-01 監査是正:
+  //   上限額管理結果票は **関係事業所ごとに決定額が違う**のに、この表は
+  //   (client_id, target_month) だけをキーにしていた。同じ利用者を当社の複数事業所で
+  //   見ていると全事業所が同じ調整後負担額を使い、差額が市への過大請求になる
+  //   (実測 7 名該当: 前田健司 4拠点 / 中村雪枝 3拠点 ほか)。
+  //   office_id 一致を優先し、無ければ office_id NULL の行 (列追加前の既存データ) に
+  //   フォールバックする = 既存の挙動は変えない。
+  //   ⚠ migrations/shogai_jogen_kanri_office_scope.sql 未適用の環境では列が無いので
+  //     42703 なら従来どおり列なしで取り直す。
   interface KanriResult {
     client_id: string;
     kanri_result: number | null;
     kanri_result_amount: number | null;
+    office_id?: string | null;
   }
   const kanriByClient = new Map<string, KanriResult>();
+  let kanriHasOfficeCol = true;
   for (let i = 0; i < userIds.length; i += ID_IN_CHUNK) {
     const chunk = userIds.slice(i, i + ID_IN_CHUNK);
-    const { data, error } = await supabase
-      .from("shogai_jogen_kanri_results")
-      .select("client_id, kanri_result, kanri_result_amount")
-      .eq("target_month", monthStr)
-      .in("client_id", chunk);
-    if (error) throw new Error(`上限管理結果取得失敗: ${error.message}`);
-    for (const r of (data ?? []) as KanriResult[]) {
-      kanriByClient.set(r.client_id, r);
+    let rows: KanriResult[] = [];
+    if (kanriHasOfficeCol) {
+      const { data, error } = await supabase
+        .from("shogai_jogen_kanri_results")
+        .select("client_id, kanri_result, kanri_result_amount, office_id")
+        .eq("target_month", monthStr)
+        .in("client_id", chunk);
+      if (error) {
+        if (error.code !== "42703") throw new Error(`上限管理結果取得失敗: ${error.message}`);
+        kanriHasOfficeCol = false;
+      } else {
+        rows = (data ?? []) as KanriResult[];
+      }
+    }
+    if (!kanriHasOfficeCol) {
+      const { data, error } = await supabase
+        .from("shogai_jogen_kanri_results")
+        .select("client_id, kanri_result, kanri_result_amount")
+        .eq("target_month", monthStr)
+        .in("client_id", chunk);
+      if (error) throw new Error(`上限管理結果取得失敗: ${error.message}`);
+      rows = (data ?? []) as KanriResult[];
+    }
+    for (const r of rows) {
+      const prev = kanriByClient.get(r.client_id);
+      // 自事業所の行が最優先。次に office_id NULL (旧データ)。他事業所の行は使わない。
+      const isMine = !!opts.officeId && r.office_id === opts.officeId;
+      const isLegacy = r.office_id == null;
+      if (!isMine && !isLegacy) continue;
+      if (prev && prev.office_id === opts.officeId && !isMine) continue;
+      if (!prev || isMine) kanriByClient.set(r.client_id, r);
     }
   }
 
