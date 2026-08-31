@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   ShieldAlert,
   ShieldCheck,
+  Users2,
   Bell,
   Loader2,
   Building2,
@@ -135,6 +136,9 @@ const NAV_HOME_CARE_SECTIONED: SectionSpec[] = [
       // 2026-09-01 追加: 虐待防止 / BCP の 1% 減算の立証に直結する記録。
       //   分野ごとに画面を分けると結局どれも埋まらないので 1 画面に統合した。
       { name: "体制整備の記録", href: "/compliance", icon: ShieldCheck },
+      // 2026-09-01 追加: 実地指導で最初に提出を求められる帳票 (参考様式1)。
+      //   人員基準を常勤換算数で示す。
+      { name: "勤務形態一覧表", href: "/staff-schedule", icon: Users2 },
     ],
   },
   {
