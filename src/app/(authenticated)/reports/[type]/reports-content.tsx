@@ -1985,6 +1985,13 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth }: {
             </div>
           );
         })()}
+        {services.length > 0 && rowMode === "both" && (
+          <div className="mb-1 flex items-center gap-3 text-[10px] text-gray-500 px-1">
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-blue-100" />予定</span>
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-100" />実績</span>
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-red-100" />予実不一致</span>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="border-collapse text-[10px] w-full" style={{ minWidth: 1120, tableLayout: "fixed", overflow: "hidden" }}>
             <colgroup>
@@ -1999,10 +2006,10 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth }: {
             </colgroup>
             <thead>
               <tr className="bg-gray-100">
-                <th rowSpan={2} className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">時間帯</th>
-                <th rowSpan={2} className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">サービス内容</th>
-                <th rowSpan={2} className="border border-gray-300 px-1 py-0.5 whitespace-nowrap">サービス事業者</th>
-                <th rowSpan={2} className="border border-gray-300 px-1 py-0.5"></th>
+                <th rowSpan={2} className="sticky z-20 bg-gray-100 border border-gray-300 px-1 py-0.5 whitespace-nowrap" style={{ left: 0 }}>時間帯</th>
+                <th rowSpan={2} className="sticky z-20 bg-gray-100 border border-gray-300 px-1 py-0.5 whitespace-nowrap" style={{ left: 72 }}>サービス内容</th>
+                <th rowSpan={2} className="sticky z-20 bg-gray-100 border border-gray-300 px-1 py-0.5 whitespace-nowrap" style={{ left: 182 }}>サービス事業者</th>
+                <th rowSpan={2} className="sticky z-20 bg-gray-100 border border-gray-300 border-r-2 border-r-gray-400 px-1 py-0.5" style={{ left: 282 }}></th>
                 {DAYS.map((d) => {
                   const dow = dowOfDay(d);
                   return (
@@ -2107,7 +2114,7 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth }: {
                     {/* 予定 row */}
                     {showPlanned && (
                     <tr style={{ height: 18 }}>
-                      <td rowSpan={span} className="border border-gray-300 px-0.5 align-middle">
+                      <td rowSpan={span} className="sticky z-10 bg-blue-50 border border-gray-300 px-0.5 align-middle" style={{ left: 0 }}>
                         {/* 時間範囲を inline 自由入力 (= 例: 9:00〜10:00)。
                             既存セル値が「週3回(月水金)」等の頻度文字列でもそのまま表示・編集可。
                             rental 行 (= 福祉用具貸与) / addon 行 (= 加算。本体サービスの時間帯に従う)
@@ -2118,14 +2125,14 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth }: {
                           onChange={(e) => updateSvc(i, "time", e.target.value)}
                           placeholder={rental || isAddonRow(svc) ? "—" : "例: 9:00〜10:00"}
                           disabled={rental || isAddonRow(svc)}
-                          className="w-full text-[10px] px-1 py-0.5 rounded border border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent disabled:bg-gray-50 disabled:text-gray-400"
+                          className="w-full text-[10px] px-1 py-0.5 rounded border border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent disabled:bg-blue-100/50 disabled:text-gray-400"
                           title="例: 9:00〜10:00"
                         />
                       </td>
-                      <td rowSpan={span} className="border border-gray-300 px-0.5 align-middle">
+                      <td rowSpan={span} className="sticky z-10 bg-blue-50 border border-gray-300 px-0.5 align-middle" style={{ left: 72 }}>
                         <button
                           onClick={() => { setSelectorTarget(i); setSelectorOpen(true); }}
-                          className="w-full text-left text-[10px] px-1 py-0.5 rounded hover:bg-blue-50 transition-colors line-clamp-2 whitespace-normal break-words leading-tight"
+                          className="w-full text-left text-[10px] px-1 py-0.5 rounded hover:bg-blue-100 transition-colors line-clamp-2 whitespace-normal break-words leading-tight"
                           title={svc.content || "クリックしてサービスを選択"}
                         >
                           {svc.content || <span className="text-gray-400">選択...</span>}
@@ -2166,7 +2173,7 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth }: {
                           );
                         })()}
                       </td>
-                      <td rowSpan={span} className="border border-gray-300 px-0.5 align-middle">
+                      <td rowSpan={span} className="sticky z-10 bg-blue-50 border border-gray-300 px-0.5 align-middle" style={{ left: 182 }}>
                         {(() => {
                           // 行のサービス category が決まっていれば、それを提供できる事業所のみに絞る。
                           // 未選択 (svc.category 空) なら全表示。
@@ -2200,39 +2207,51 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth }: {
                           );
                         })()}
                       </td>
-                      <td className="border border-dashed border-gray-300 px-0.5 text-center whitespace-nowrap">
-                        <div className="flex items-center gap-0.5 justify-center">
-                          <span className="text-gray-500 text-[10px]">予定</span>
-                          {!rental && (<>
-                            <button onClick={() => fillAll(i, "planned")} title="全日" className="text-[8px] text-blue-500 hover:text-blue-700 px-0.5 rounded hover:bg-blue-50">全</button>
-                            <button onClick={() => fillWeekdays(i, "planned")} title="平日" className="text-[8px] text-blue-500 hover:text-blue-700 px-0.5 rounded hover:bg-blue-50">平</button>
-                            <button onClick={() => clearAll(i, "planned")} title="クリア" className="text-[8px] text-red-400 hover:text-red-600 px-0.5 rounded hover:bg-red-50">消</button>
-                          </>)}
-                          {rental && (
-                            <button onClick={() => clearAll(i, "planned")} title="クリア" className="text-[8px] text-red-400 hover:text-red-600 px-0.5 rounded hover:bg-red-50">消</button>
-                          )}
+                      <td className="sticky z-10 bg-blue-50 border border-dashed border-gray-300 border-r-2 border-r-gray-400 px-0.5 text-center whitespace-nowrap" style={{ left: 282 }}>
+                        <div className="flex flex-col items-center gap-0.5 justify-center py-0.5">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-bold text-blue-700">
+                            <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />予定
+                          </span>
+                          <div className="flex items-center gap-0.5">
+                            {!rental && (<>
+                              <button onClick={() => fillAll(i, "planned")} title="全日" className="text-[8px] text-blue-500 hover:text-blue-700 px-0.5 rounded hover:bg-blue-100">全</button>
+                              <button onClick={() => fillWeekdays(i, "planned")} title="平日" className="text-[8px] text-blue-500 hover:text-blue-700 px-0.5 rounded hover:bg-blue-100">平</button>
+                              <button onClick={() => clearAll(i, "planned")} title="クリア" className="text-[8px] text-red-400 hover:text-red-600 px-0.5 rounded hover:bg-red-50">消</button>
+                            </>)}
+                            {rental && (
+                              <button onClick={() => clearAll(i, "planned")} title="クリア" className="text-[8px] text-red-400 hover:text-red-600 px-0.5 rounded hover:bg-red-50">消</button>
+                            )}
+                          </div>
                         </div>
                       </td>
                       {DAYS.map((_, di) => {
                         const dow = dowOfDay(di + 1);
                         const inMonth = dow !== null;
+                        const isWeekend = dow === 0 || dow === 6;
+                        // 予実不一致 (この日だけ予定と実績のマークが食い違う)。両段表示中のみ判定意味がある。
+                        const mismatch = span === 2 && !rental && Boolean(svc.planned[di]) !== Boolean(svc.actual[di]);
+                        const bg = mismatch ? "bg-red-100" : isWeekend ? "bg-blue-100" : "bg-blue-50";
                         return (
                           <td
                             key={di}
                             onClick={inMonth ? () => toggleDay(i, "planned", di) : undefined}
                             className={
                               inMonth
-                                ? `border border-dashed border-gray-300 text-center cursor-pointer select-none hover:bg-blue-50 ${dow === 0 ? "bg-red-50/60" : dow === 6 ? "bg-blue-50/60" : ""}`
+                                ? `border border-dashed border-gray-300 text-center cursor-pointer select-none hover:bg-blue-200 ${bg}`
                                 : "border border-dashed border-gray-300 bg-gray-200 select-none"
                             }
                             style={{ height: 18, width: 18, minWidth: 18 }}
                           >
-                            {inMonth && svc.planned[di] ? <span className="text-blue-600 font-semibold">1</span> : null}
+                            {inMonth && svc.planned[di]
+                              ? <span className="text-blue-600 font-semibold">1</span>
+                              : inMonth && mismatch
+                                ? <span className="text-red-500 font-bold">×</span>
+                                : null}
                           </td>
                         );
                       })}
-                      <td className="border border-dashed border-gray-300 text-center text-blue-700 font-semibold">{plannedCount || ""}</td>
-                      <td className="border border-dashed border-gray-300 text-center text-[10px] font-semibold text-blue-700 bg-blue-50/40">
+                      <td className="border border-dashed border-gray-300 text-center text-blue-700 font-semibold bg-blue-50">{plannedCount || ""}</td>
+                      <td className="border border-dashed border-gray-300 text-center text-[10px] font-semibold text-blue-700 bg-blue-100">
                         {(() => {
                           const m = rental
                             ? rentalMonthlyUnits(svc, selectedYearMonth, "planned")
@@ -2253,52 +2272,63 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth }: {
                           読み取り専用のコンパクト表示でこの行に付ける */}
                       {!showPlanned && (
                         <>
-                          <td className="border border-gray-300 px-1 align-middle text-[10px] text-gray-700">{svc.time || "—"}</td>
-                          <td className="border border-gray-300 px-1 align-middle">
+                          <td className="sticky z-10 bg-emerald-50 border border-gray-300 px-1 align-middle text-[10px] text-gray-700" style={{ left: 0 }}>{svc.time || "—"}</td>
+                          <td className="sticky z-10 bg-emerald-50 border border-gray-300 px-1 align-middle" style={{ left: 72 }}>
                             <button
                               onClick={() => { setSelectorTarget(i); setSelectorOpen(true); }}
-                              className="w-full text-left text-[10px] px-1 py-0.5 rounded hover:bg-blue-50 transition-colors line-clamp-2 whitespace-normal break-words leading-tight"
+                              className="w-full text-left text-[10px] px-1 py-0.5 rounded hover:bg-emerald-100 transition-colors line-clamp-2 whitespace-normal break-words leading-tight"
                               title={svc.content || "クリックしてサービスを選択"}
                             >
                               {svc.content || <span className="text-gray-400">選択...</span>}
                             </button>
                           </td>
-                          <td className="border border-gray-300 px-1 align-middle text-[10px] text-gray-700 break-words">{svc.provider || "—"}</td>
+                          <td className="sticky z-10 bg-emerald-50 border border-gray-300 px-1 align-middle text-[10px] text-gray-700 break-words" style={{ left: 182 }}>{svc.provider || "—"}</td>
                         </>
                       )}
-                      <td className="border border-gray-300 px-0.5 text-center whitespace-nowrap">
-                        <div className="flex items-center gap-0.5 justify-center">
-                          <span className="text-gray-500 text-[10px]">実績</span>
-                          {!rental && (<>
-                            <button onClick={() => fillAll(i, "actual")} title="全日" className="text-[8px] text-green-600 hover:text-green-800 px-0.5 rounded hover:bg-green-50">全</button>
-                            <button onClick={() => fillWeekdays(i, "actual")} title="平日" className="text-[8px] text-green-600 hover:text-green-800 px-0.5 rounded hover:bg-green-50">平</button>
-                            <button onClick={() => clearAll(i, "actual")} title="クリア" className="text-[8px] text-red-400 hover:text-red-600 px-0.5 rounded hover:bg-red-50">消</button>
-                          </>)}
-                          {rental && (
-                            <button onClick={() => clearAll(i, "actual")} title="クリア" className="text-[8px] text-red-400 hover:text-red-600 px-0.5 rounded hover:bg-red-50">消</button>
-                          )}
+                      <td className="sticky z-10 bg-emerald-50 border border-gray-300 border-r-2 border-r-gray-400 px-0.5 text-center whitespace-nowrap" style={{ left: 282 }}>
+                        <div className="flex flex-col items-center gap-0.5 justify-center py-0.5">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />実績
+                          </span>
+                          <div className="flex items-center gap-0.5">
+                            {!rental && (<>
+                              <button onClick={() => fillAll(i, "actual")} title="全日" className="text-[8px] text-emerald-600 hover:text-emerald-800 px-0.5 rounded hover:bg-emerald-100">全</button>
+                              <button onClick={() => fillWeekdays(i, "actual")} title="平日" className="text-[8px] text-emerald-600 hover:text-emerald-800 px-0.5 rounded hover:bg-emerald-100">平</button>
+                              <button onClick={() => clearAll(i, "actual")} title="クリア" className="text-[8px] text-red-400 hover:text-red-600 px-0.5 rounded hover:bg-red-50">消</button>
+                            </>)}
+                            {rental && (
+                              <button onClick={() => clearAll(i, "actual")} title="クリア" className="text-[8px] text-red-400 hover:text-red-600 px-0.5 rounded hover:bg-red-50">消</button>
+                            )}
+                          </div>
                         </div>
                       </td>
                       {DAYS.map((_, di) => {
                         const dow = dowOfDay(di + 1);
                         const inMonth = dow !== null;
+                        const isWeekend = dow === 0 || dow === 6;
+                        const mismatch = span === 2 && !rental && Boolean(svc.planned[di]) !== Boolean(svc.actual[di]);
+                        const bg = mismatch ? "bg-red-100" : isWeekend ? "bg-emerald-100" : "bg-emerald-50";
                         return (
                           <td
                             key={di}
                             onClick={inMonth ? () => toggleDay(i, "actual", di) : undefined}
                             className={
                               inMonth
-                                ? `border border-gray-300 text-center cursor-pointer select-none hover:bg-green-50 ${dow === 0 ? "bg-red-50/60" : dow === 6 ? "bg-blue-50/60" : ""}`
+                                ? `border border-gray-300 text-center cursor-pointer select-none hover:bg-emerald-200 ${bg}`
                                 : "border border-gray-300 bg-gray-200 select-none"
                             }
                             style={{ height: 18, width: 18, minWidth: 18 }}
                           >
-                            {inMonth && svc.actual[di] ? <span className="text-green-700 font-semibold">1</span> : null}
+                            {inMonth && svc.actual[di]
+                              ? <span className="text-emerald-700 font-semibold">1</span>
+                              : inMonth && mismatch
+                                ? <span className="text-red-500 font-bold">×</span>
+                                : null}
                           </td>
                         );
                       })}
-                      <td className="border border-gray-300 text-center text-green-700 font-semibold">{actualCount || ""}</td>
-                      <td className="border border-gray-300 text-center text-[10px] font-semibold text-green-700 bg-green-50/40">
+                      <td className="border border-gray-300 text-center text-emerald-700 font-semibold bg-emerald-50">{actualCount || ""}</td>
+                      <td className="border border-gray-300 text-center text-[10px] font-semibold text-emerald-700 bg-emerald-100">
                         {(() => {
                           const m = rental
                             ? rentalMonthlyUnits(svc, selectedYearMonth, "actual")
@@ -2328,7 +2358,7 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth }: {
                 <>
                   {rowMode !== "actual" && (
                   <tr style={{ height: 18 }}>
-                    <td colSpan={4} className="border border-gray-300 bg-gray-100 px-1 text-center text-[10px] font-semibold text-blue-700">予定合計</td>
+                    <td colSpan={4} className="sticky z-10 border border-gray-300 border-r-2 border-r-gray-400 bg-blue-100 px-1 text-center text-[10px] font-semibold text-blue-700" style={{ left: 0 }}>予定合計</td>
                     {DAYS.map((_, di) => {
                       const count = services.filter((svc) => svc.planned[di]).length;
                       return (
@@ -2348,19 +2378,19 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth }: {
                   )}
                   {rowMode !== "planned" && (
                   <tr style={{ height: 18 }}>
-                    <td colSpan={4} className="border border-gray-300 bg-gray-100 px-1 text-center text-[10px] font-semibold text-green-700">実績合計</td>
+                    <td colSpan={4} className="sticky z-10 border border-gray-300 border-r-2 border-r-gray-400 bg-emerald-100 px-1 text-center text-[10px] font-semibold text-emerald-700" style={{ left: 0 }}>実績合計</td>
                     {DAYS.map((_, di) => {
                       const count = services.filter((svc) => svc.actual[di]).length;
                       return (
-                        <td key={di} className="border border-gray-300 text-center text-[10px] text-green-700 font-semibold bg-green-50" style={{ width: 18, minWidth: 18 }}>
+                        <td key={di} className="border border-gray-300 text-center text-[10px] text-emerald-700 font-semibold bg-emerald-50" style={{ width: 18, minWidth: 18 }}>
                           {count > 0 ? count : ""}
                         </td>
                       );
                     })}
-                    <td className="border border-gray-300 text-center text-[10px] text-green-700 font-semibold bg-green-50">
+                    <td className="border border-gray-300 text-center text-[10px] text-emerald-700 font-semibold bg-emerald-50">
                       {services.reduce((sum, svc) => sum + svc.actual.filter(Boolean).length, 0) || ""}
                     </td>
-                    <td className="border border-gray-300 text-center text-[10px] text-amber-700 font-semibold bg-green-50">
+                    <td className="border border-gray-300 text-center text-[10px] text-amber-700 font-semibold bg-emerald-50">
                       {actualUnitsSum || ""}
                     </td>
                     <td className="border border-gray-300" />
