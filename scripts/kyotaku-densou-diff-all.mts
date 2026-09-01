@@ -98,10 +98,15 @@ for (const j of jobs) {
     }
   };
   // 出力の締めに「一致」「不一致 n 件」が出る前提。拾えなければ生の末尾を出す。
+  //   ⚠ 2026-09-01 是正: kyotaku-s-diff.mts / kyotaku-k-diff.mts の実際の締め行は
+  //   「突合: new N / hono M → 一致 X / 差 Y」形式で、旧正規表現(不一致N件)は
+  //   一度もマッチしていなかった (毎回 "?" 表示になっていた)。実書式に合わせる。
   const verdict = (out: string, label: string) => {
     if (out.startsWith("__FAILED__")) return `${label} ✗ ${out.slice(11)}`;
-    const m = /不一致\s*(\d+)\s*件/.exec(out);
-    if (m) return `${label} ${m[1] === "0" ? "✓ 一致" : `★ 不一致 ${m[1]} 件`}`;
+    const m = /一致\s*(\d+)\s*\/\s*差\s*(\d+)/.exec(out);
+    if (m) return `${label} ${m[2] === "0" ? "✓ 一致" : `★ 一致${m[1]}/差${m[2]}`}`;
+    const m2 = /不一致\s*(\d+)\s*件/.exec(out);
+    if (m2) return `${label} ${m2[1] === "0" ? "✓ 一致" : `★ 不一致 ${m2[1]} 件`}`;
     if (/完全一致|差分なし|一致しました/.test(out)) return `${label} ✓ 一致`;
     const tail = out.split("\n").filter(Boolean).slice(-1)[0] ?? "";
     return `${label} ? ${tail.slice(0, 60)}`;
