@@ -1607,9 +1607,11 @@ function EditFormCarePlan3({ content, onChange }: {
  *     利用者負担額 (保険分・全額分) / 適用公費 / 差引利用者負担額 — 既存実装を流用
  *   - 頻度列 (週◯) は仕様どおり入れない
  */
-function EditFormServiceTicket({ content, onChange, reportMonth }: {
+function EditFormServiceTicket({ content, onChange, userId, reportMonth }: {
   content: Record<string, unknown>;
   onChange: (c: Record<string, unknown>) => void;
+  /** clients.id - 福祉用具貸与行の単位数自動算出 (order_items 突合) に使う。 */
+  userId?: string;
   /** doc.report_month (content.report_month 未設定の旧データ用フォールバック) */
   reportMonth?: string | null;
 }) {
@@ -2567,14 +2569,60 @@ function EditFormServiceTicket({ content, onChange, reportMonth }: {
             startTime={startTime}
             endTime={endTime}
             targetMonth={selectorTargetMonth}
-            onSelect={(svc) => {
+            onSelect={async (svc) => {
               if (selectorTarget !== null) {
-                // content と category を同時に書き換えるため、合成 patch を services 配列に当てる
                 const idx = selectorTarget;
+                const current = services[idx];
+                const nowRental = String(svc.category ?? "") === "17";
+                const wasRental = isRentalRow(current);
+
+                // 福祉用具貸与を選んだ かつ 単位数が未入力のとき、その利用者の対象月に
+                // 有効な貸与商品 (order_items) をこの種目カテゴリで探し、1件だけに
+                // 決まる場合だけ単位数 (円 ÷ 10) を自動で埋める。2件以上ある種目
+                // (例: 特殊寝台付属品を2点貸与) はどの行に対応するか機械的に決まらない
+                // ため、誤った金額を割り当てるリスクを避けて何もしない (手入力のまま)。
+                let autoUnits: number | null = null;
+                if (nowRental && userId && current.manual_units == null) {
+                  const equipCategory = svc.name.replace(/貸与.*$/, "");
+                  const monthStart = `${selectedYearMonth}-01`;
+                  const monthEnd = `${selectedYearMonth}-${String(daysInMonth).padStart(2, "0")}`;
+                  try {
+                    const { data: eqRows } = await supabase
+                      .from("equipment_master")
+                      .select("product_code")
+                      .eq("category", equipCategory);
+                    const codes = (eqRows ?? []).map((e: { product_code: string }) => e.product_code);
+                    if (codes.length > 0) {
+                      type OrderItemRow = {
+                        product_code: string; rental_price: number | null;
+                        rental_start_date: string | null; rental_end_date: string | null; cancelled_at: string | null;
+                      };
+                      const { data: orderRowsRaw } = await supabase
+                        .from("orders")
+                        .select("order_items(product_code, rental_price, rental_start_date, rental_end_date, cancelled_at)")
+                        .eq("client_id", userId);
+                      const orderRows = (orderRowsRaw ?? []) as unknown as { order_items: OrderItemRow[] }[];
+                      const matches = orderRows
+                        .flatMap((o) => o.order_items ?? [])
+                        .filter((it) =>
+                          codes.includes(it.product_code) &&
+                          it.cancelled_at == null &&
+                          it.rental_price != null &&
+                          it.rental_start_date != null && it.rental_start_date <= monthEnd &&
+                          (it.rental_end_date == null || it.rental_end_date >= monthStart)
+                        );
+                      if (matches.length === 1) {
+                        autoUnits = Math.round((matches[0].rental_price ?? 0) / 10);
+                      }
+                    }
+                  } catch (err) {
+                    console.warn("福祉用具の単位数自動算出に失敗:", err instanceof Error ? err.message : err);
+                  }
+                }
+
+                // content と category を同時に書き換えるため、合成 patch を services 配列に当てる
                 const next = services.map((r, k) => {
                   if (k !== idx) return r;
-                  const nowRental = String(svc.category ?? "") === "17";
-                  const wasRental = isRentalRow(r);
                   // 福祉用具貸与に切り替わった瞬間: 日付グリッドをクリアしたうえで
                   //   1日に "1" を自動付与 (利用票の慣習)。
                   // 福祉用具貸与以外に切り替わった瞬間: rental 用 fields を clear。
@@ -2590,6 +2638,7 @@ function EditFormServiceTicket({ content, onChange, reportMonth }: {
                     category: svc.category,
                     units: svc.units,
                     ...rentalSwitchOn,
+                    ...(autoUnits != null ? { manual_units: autoUnits } : {}),
                     ...(!nowRental && wasRental
                       ? { manual_units: null, rental_period_type: null, rental_days: null }
                       : {}),
@@ -4940,7 +4989,7 @@ function EditForm({ reportType, content, onChange, userId, reportMonth }: {
     case "care-plan-3":       return <EditFormCarePlan3 content={content} onChange={onChange} />;
     case "yobo-care-plan":    return <EditFormYoboCarePlan content={content} onChange={onChange} />;
     case "support-progress":  return <EditFormSupportProgress content={content} onChange={onChange} />;
-    case "service-usage":        return <EditFormServiceTicket content={content} onChange={onChange} reportMonth={reportMonth} />;
+    case "service-usage":        return <EditFormServiceTicket content={content} onChange={onChange} userId={userId} reportMonth={reportMonth} />;
     case "service-usage-detail": return <EditFormUsageDetail content={content} onChange={onChange} userId={userId} reportMonth={reportMonth} />;
     case "shujii-iken":       return <EditFormShujiiIken content={content} onChange={onChange} />;
     default: return <EditFormGeneric content={content} onChange={onChange} label="内容（JSON編集）" />;
