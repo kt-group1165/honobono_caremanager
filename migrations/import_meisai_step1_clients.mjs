@@ -460,9 +460,17 @@ async function main(){
     if(!count){ const {error}=await sb.from("client_office_assignments").insert({tenant_id:TENANT,client_id:r.id,office_id:office.id,start_date:"2026-06-01",home_care_categories:[]}); if(error) console.error(`✗ assignment(reuse) ${r.num}: ${error.message}`); }
   }
   writeFileSync(path.join(KAIGO,CREATED_FILE),JSON.stringify(log.created,null,1));
-  writeFileSync(path.join(KAIGO,MAP_FILE),JSON.stringify(mapping,null,1));
+  // ⚠ 上書きしない。MAP_FILE は他月・他scriptからも参照される共有の対応表なので、
+  //   今回の対象月に出てこない番号(=他月だけの利用者)の既存エントリを消してしまうと
+  //   その番号を後で再実行したときに解決できなくなる (実例: 高品 2026-08 STEP1 を
+  //   USER_SUB=Hana高品_登録有 で実行したら 2026-06 由来の 23 件が消えるところだった)。
+  //   既存ファイルとマージ (同じ番号は今回の解決を優先。衝突は無い前提=番号は人に固定)。
+  let existingMapping={};
+  try{ existingMapping=JSON.parse(readFileSync(path.join(KAIGO,MAP_FILE),"utf8")); }catch{}
+  const mergedMapping={...existingMapping,...mapping};
+  writeFileSync(path.join(KAIGO,MAP_FILE),JSON.stringify(mergedMapping,null,1));
   console.log(`✓ 完了: 作成${log.created.length} / 再利用${log.reused.length} / 削除${log.deleted.length}`);
-  console.log(`  マッピング → ${MAP_FILE} (${Object.keys(mapping).length}名)`);
+  console.log(`  マッピング → ${MAP_FILE} (今回${Object.keys(mapping).length}名 / 合計${Object.keys(mergedMapping).length}名)`);
 }
 main().catch(e=>{console.error("ERROR:",e.message);process.exit(1);});
 
