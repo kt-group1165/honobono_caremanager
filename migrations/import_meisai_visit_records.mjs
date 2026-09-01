@@ -158,11 +158,22 @@ async function main() {
   //   一覧CSV は**請求側の帳票**で、介護 + 総合事業しか含まない (障害・同行・移動支援は
   //   1 行も出ない)。ここに (利用者番号 × サービスコード) が有るものだけを介護とみなす。
   //   ⚠ 請求年月が空 = 未発行/月遅 で 6 月伝送に載らない分なので、それも除く。
+  // ⚠ 2026-09-02 是正: 高品2026-08で発覚した fail-open 事故の再発防止。
+  //   「一覧CSVが無い」場合と「一覧CSVはあるが確定請求(請求年月あり)の行が0件」
+  //   場合の**両方**を billingBlocked として扱い、①介護の取込を丸ごとブロックする。
+  //   従来は billedKeys.size===0 のとき下のフィルタ処理自体をスキップしていたため、
+  //   後者(月初でほのぼの側の請求がまだ発行されていないだけ)のケースで
+  //   突合なしの全行が無検証で「取込可能」になっていた(実質、前者と同じ危険な
+  //   fail-open状態なのに気付けなかった)。
   const billedKeys = new Set();
+  let billingBlocked = false;
+  let billingBlockedReason = "";
   {
     const listPath = findBillingList(CSV_DIR);
     if (!listPath) {
-      console.warn(`⚠ 介護請求(明細付)_一覧.CSV が無いため制度の突合をしません (障害の行が混ざる可能性)
+      billingBlocked = true;
+      billingBlockedReason = "介護請求(明細付)_一覧.CSV が見つからない";
+      console.warn(`⚠ ${billingBlockedReason} (障害の行が混ざる可能性)
 `);
     } else {
       // ⚠ 一覧CSV は **全項目が引用符付き**。readCsv() は引用符を外さない
@@ -183,7 +194,18 @@ async function main() {
       }
       console.log(`請求一覧: ${billedKeys.size} 組 (利用者×コード)${held ? ` / 未発行・月遅 ${held} 行は対象外` : ""}
 `);
+      if (billedKeys.size === 0) {
+        billingBlocked = true;
+        billingBlockedReason = held > 0
+          ? `一覧CSVはあるが確定請求(請求年月あり)の行が0件 (全${held}行が未発行/月遅。ほのぼの側でこの月の請求がまだ発行されていない可能性が高い)`
+          : "一覧CSVはあるが対象月の行が0件";
+      }
     }
+  }
+  if (billingBlocked) {
+    console.error(`✗ fail-closed: ${billingBlockedReason}`);
+    console.error(`  → ①介護の取込を今回はブロックします(0行扱い)。対処: 一覧CSVを取得する/`);
+    console.error(`    ほのぼの側の請求発行後(通常は翌月10日)に一覧CSVを再取得してから再実行してください。`);
   }
 
   // 2) 事業所解決
@@ -224,7 +246,11 @@ async function main() {
   }
 
   // 制度フィルタ: 請求一覧に無い (利用者×コード) は介護保険ではない
-  if (billedKeys.size) {
+  // ⚠ billingBlocked のときは filter をスキップせず target を丸ごと空にする (fail-closed)。
+  if (billingBlocked) {
+    console.log(`― fail-closedのため ①介護 ${target.length}行を全てブロック ―\n`);
+    target = [];
+  } else if (billedKeys.size) {
     const before = target.length;
     const dropped = new Map();
     target = target.filter((r) => {
