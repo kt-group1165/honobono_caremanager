@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { ChiikiCertSection } from "./chiiki-cert-section";
+import { ChiikiCertSection, loadChiikiCertData, type ChiikiCertData } from "./chiiki-cert-section";
 
 /**
  * 地域生活支援 (市町村事業) 受給者証 — 障害福祉タブのサブタブ。
@@ -29,11 +29,19 @@ export default async function ChiikiCertPage({
   const disabilityRecipientNumber =
     (data?.[0] as { beneficiary_number: string | null } | undefined)?.beneficiary_number ?? null;
 
+  let initialData: ChiikiCertData | null = null;
+  try {
+    initialData = await loadChiikiCertData(supabase, userId);
+  } catch {
+    initialData = null;
+  }
+
   return (
     <div className="space-y-4">
       <ChiikiCertSection
         userId={userId}
         disabilityRecipientNumber={disabilityRecipientNumber}
+        initialData={initialData}
       />
     </div>
   );

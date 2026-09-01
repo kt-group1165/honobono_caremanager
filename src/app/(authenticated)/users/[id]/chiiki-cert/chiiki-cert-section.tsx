@@ -10,7 +10,8 @@
  * 負担額) と idou-records (支給量超過警告の閾値) がこれを参照する。
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Save, IdCard } from "lucide-react";
@@ -18,7 +19,7 @@ import { Loader2, Save, IdCard } from "lucide-react";
 const inputCls =
   "rounded border border-gray-300 px-2 py-1 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500";
 
-type FormState = {
+export type FormState = {
   municipality: string;
   beneficiary_number: string;
   issue_date: string;   // 交付年月日
@@ -49,78 +50,86 @@ const BASE_CERT_COLS =
   "municipality, beneficiary_number, shikyu_amount_text, shikyu_minutes, self_payment_limit, seiho_flag";
 const EXT_CERT_COLS = `${BASE_CERT_COLS}, issue_date, valid_from, valid_until, notes`;
 
-export function ChiikiCertSection({
-  userId,
-  disabilityRecipientNumber,
-}: {
-  userId: string;
-  /** 障害福祉サービス受給者証の番号 (同番号のことが多いのでコピー補助に使う) */
-  disabilityRecipientNumber?: string | null;
-}) {
-  const supabase = useMemo(() => createClient(), []);
-  const [available, setAvailable] = useState(true); // chiiki_recipient_certs 未適用環境では非表示
-  // 拡張列 (交付日/支給決定期間終了/備考) が DB 未適用なら false → 保存対象から除外
-  const [extCols, setExtCols] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [muniOptions, setMuniOptions] = useState<string[]>(["千葉市"]);
-  const [f, setF] = useState<FormState>(EMPTY);
+export type ChiikiCertData = {
+  available: boolean;
+  extCols: boolean;
+  muniOptions: string[];
+  form: FormState;
+};
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    // 拡張列込みで取得。未適用(42703)なら基本列のみで再取得し extCols=false に
-    let hasExt = true;
-    let certRes = await supabase
+const EMPTY_DATA: ChiikiCertData = { available: true, extCols: true, muniOptions: ["千葉市"], form: EMPTY };
+
+/**
+ * 地域生活支援受給者証セクションのデータを取得。page.tsx (server) / content (client) の
+ * 両方から同じロジックで呼べるよう、supabase client を引数で受け取る形に切り出している。
+ */
+export async function loadChiikiCertData(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<ChiikiCertData> {
+  // 拡張列込みで取得。未適用(42703)なら基本列のみで再取得し extCols=false に
+  type CertRow = {
+    municipality: string | null;
+    beneficiary_number: string | null;
+    shikyu_amount_text: string | null;
+    shikyu_minutes: number | null;
+    self_payment_limit: number | null;
+    seiho_flag: boolean | null;
+    issue_date?: string | null;
+    valid_from?: string | null;
+    valid_until?: string | null;
+    notes?: string | null;
+  };
+  let hasExt = true;
+  let certRes = await supabase
+    .from("chiiki_recipient_certs")
+    .select(EXT_CERT_COLS)
+    .eq("client_id", userId)
+    .limit(1)
+    .returns<CertRow[]>();
+  if (certRes.error?.code === "42703") {
+    hasExt = false;
+    certRes = await supabase
       .from("chiiki_recipient_certs")
-      .select(EXT_CERT_COLS)
+      .select(BASE_CERT_COLS)
       .eq("client_id", userId)
-      .limit(1);
-    if (certRes.error?.code === "42703") {
-      hasExt = false;
-      certRes = await supabase
-        .from("chiiki_recipient_certs")
-        .select(BASE_CERT_COLS)
-        .eq("client_id", userId)
-        .limit(1);
+      .limit(1)
+      .returns<CertRow[]>();
+  }
+  if (certRes.error) {
+    // テーブル未適用 (migration 前) はセクションごと非表示
+    if (certRes.error.code === "42P01" || certRes.error.code === "PGRST205") {
+      return { ...EMPTY_DATA, available: false };
     }
-    const muniRes = await supabase
-      .from("kaigo_service_codes")
-      .select("municipality")
-      .eq("system", "地域生活支援")
-      .not("municipality", "is", null)
-      .limit(2000);
-    if (certRes.error) {
-      // テーブル未適用 (migration 前) はセクションごと非表示
-      if (certRes.error.code === "42P01" || certRes.error.code === "PGRST205") {
-        setAvailable(false);
-      } else {
-        toast.error("地域生活支援 受給者証の読込に失敗: " + certRes.error.message);
+    throw new Error("地域生活支援 受給者証の読込に失敗: " + certRes.error.message);
+  }
+  const muniRes = await supabase
+    .from("kaigo_service_codes")
+    .select("municipality")
+    .eq("system", "地域生活支援")
+    .not("municipality", "is", null)
+    .limit(2000);
+  const muniSet = new Set<string>(["千葉市"]);
+  for (const r of (muniRes.data ?? []) as { municipality: string | null }[]) {
+    if (r.municipality) muniSet.add(r.municipality);
+  }
+  const muniOptions = [...muniSet].sort();
+  const row = certRes.data?.[0] as
+    | {
+        municipality: string | null;
+        beneficiary_number: string | null;
+        shikyu_amount_text: string | null;
+        shikyu_minutes: number | null;
+        self_payment_limit: number | null;
+        seiho_flag: boolean | null;
+        issue_date?: string | null;
+        valid_from?: string | null;
+        valid_until?: string | null;
+        notes?: string | null;
       }
-      setLoading(false);
-      return;
-    }
-    setExtCols(hasExt);
-    const muniSet = new Set<string>(["千葉市"]);
-    for (const r of (muniRes.data ?? []) as { municipality: string | null }[]) {
-      if (r.municipality) muniSet.add(r.municipality);
-    }
-    setMuniOptions([...muniSet].sort());
-    const row = certRes.data?.[0] as
-      | {
-          municipality: string | null;
-          beneficiary_number: string | null;
-          shikyu_amount_text: string | null;
-          shikyu_minutes: number | null;
-          self_payment_limit: number | null;
-          seiho_flag: boolean | null;
-          issue_date?: string | null;
-          valid_from?: string | null;
-          valid_until?: string | null;
-          notes?: string | null;
-        }
-      | undefined;
-    if (row) {
-      setF({
+    | undefined;
+  const form: FormState = row
+    ? {
         municipality: row.municipality ?? "千葉市",
         beneficiary_number: row.beneficiary_number ?? "",
         issue_date: row.issue_date ?? "",
@@ -131,15 +140,56 @@ export function ChiikiCertSection({
         self_payment_limit: String(row.self_payment_limit ?? 0),
         seiho_flag: row.seiho_flag ?? false,
         notes: row.notes ?? "",
-      });
+      }
+    : EMPTY;
+  return { available: true, extCols: hasExt, muniOptions, form };
+}
+
+export function ChiikiCertSection({
+  userId,
+  disabilityRecipientNumber,
+  initialData = null,
+}: {
+  userId: string;
+  /** 障害福祉サービス受給者証の番号 (同番号のことが多いのでコピー補助に使う) */
+  disabilityRecipientNumber?: string | null;
+  initialData?: ChiikiCertData | null;
+}) {
+  const supabase = useMemo(() => createClient(), []);
+  const init = initialData ?? EMPTY_DATA;
+  const [available, setAvailable] = useState(init.available); // chiiki_recipient_certs 未適用環境では非表示
+  // 拡張列 (交付日/支給決定期間終了/備考) が DB 未適用なら false → 保存対象から除外
+  const [extCols, setExtCols] = useState(init.extCols);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [muniOptions, setMuniOptions] = useState<string[]>(init.muniOptions);
+  const [f, setF] = useState<FormState>(init.form);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await loadChiikiCertData(supabase, userId);
+      setAvailable(data.available);
+      setExtCols(data.extCols);
+      setMuniOptions(data.muniOptions);
+      setF(data.form);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "地域生活支援 受給者証の読込に失敗しました");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [supabase, userId]);
 
+  // 初回 mount は server から渡された initialData をそのまま使う。userId が (remount 無しで)
+  // 切り替わった場合は再取得する。
+  const isInitialMount = useRef(true);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount 時の fetch
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      if (initialData) return;
+    }
     load();
-  }, [load]);
+  }, [load, userId, initialData]);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setF((p) => ({ ...p, [k]: v }));
 
