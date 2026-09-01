@@ -13,6 +13,7 @@ import { OpendataSearch } from "../opendata-search";
 import {
   isMissingPartnerSchemaError,
   normalizeOfficeName,
+  searchOpendataOffices,
   upsertPartnerCompany,
   type OpendataOffice,
 } from "../partner-companies";
@@ -164,12 +165,22 @@ export function CareOfficesContent({ initialOffices }: { initialOffices: CareOff
 
       // 法人リンク: opendata 選択で法人情報がある場合のみ partner_companies に upsert
       // (テーブル未適用 = missingSchema の場合は連携スキップして登録続行)
+      // 候補を選ばず番号だけ手入力したケースも、番号が opendata に実在すれば同様に自動リンクする
+      // (2026-09-01: これが無いと partner_company_id 未リンクの care_offices が溜まり続けていた)
+      let corpInfo = createCorp;
+      if (!corpInfo && officeNumber) {
+        const { rows } = await searchOpendataOffices(supabase, officeNumber, {});
+        const hit = rows.find((r) => r.office_number === officeNumber);
+        if (hit && (hit.corp_number || hit.corp_name)) {
+          corpInfo = { corp_number: hit.corp_number, corp_name: hit.corp_name };
+        }
+      }
       let partnerCompanyId: string | null = null;
-      if (createCorp && (createCorp.corp_number || createCorp.corp_name)) {
+      if (corpInfo && (corpInfo.corp_number || corpInfo.corp_name)) {
         const corp = await upsertPartnerCompany(
           supabase,
-          createCorp.corp_number,
-          createCorp.corp_name,
+          corpInfo.corp_number,
+          corpInfo.corp_name,
         );
         if (corp.error) {
           console.error("partner_companies upsert failed:", corp.error);

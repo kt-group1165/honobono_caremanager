@@ -10,6 +10,7 @@
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
 import { findDataFile } from "./_meisai_files.mjs";
+import { linkPartnerCompany } from "./_partner_company_link.mjs";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -84,6 +85,7 @@ async function main(){
     }
     if(error){ console.error(`✗ care_office作成 ${n}: ${error.message}`); process.exit(1); }
     coByNum.set(String(data.office_number),data);
+    await linkPartnerCompany(sb, data.id, data.office_number);
   }
   // client_insurance_records.care_office_id を設定 (当該事業所の STEP1マーカー分)
   let ok=0;

@@ -30,6 +30,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync, readdirSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { linkPartnerCompany } from "./_partner_company_link.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..", "ケアプランほのぼの出力");
@@ -175,6 +176,7 @@ async function main() {
           .select("id, name, office_number").single();
         if (error) throw new Error(`care_offices insert: ${error.message}`);
         careOffice = co; _careOffices.push(co);
+        if (co.office_number) await linkPartnerCompany(sb, co.id, co.office_number);
         console.log(`   担当居宅(care_offices): ${co.name} (${co.id}) ★新規作成`);
       } else {
         console.log(`   担当居宅(care_offices): "${data.kyotaku_office?.name}" ★新規作成予定`);
