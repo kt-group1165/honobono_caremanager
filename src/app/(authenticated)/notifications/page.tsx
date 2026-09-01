@@ -2,7 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, CalendarClock, Check, ChevronRight, FileText, Loader2 } from "lucide-react";
+import {
+  Bell,
+  CalendarClock,
+  Check,
+  ChevronRight,
+  ClipboardList,
+  FileText,
+  Loader2,
+} from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -12,6 +20,10 @@ import {
   isCertAlertNotification,
   resolveCertClientId,
 } from "@/lib/cert-expiry-alert";
+import {
+  isHoumonPlanAlertNotification,
+  resolveHoumonPlanClientId,
+} from "@/lib/houmon-care-plan/plan-alert";
 import {
   getNotifications,
   markRead,
@@ -33,6 +45,10 @@ function isDocumentRow(n: NotificationRow): boolean {
 
 function isCertRow(n: NotificationRow): boolean {
   return isCertAlertNotification(n);
+}
+
+function isHoumonPlanRow(n: NotificationRow): boolean {
+  return isHoumonPlanAlertNotification(n);
 }
 
 export default function NotificationsPage() {
@@ -86,6 +102,23 @@ export default function NotificationsPage() {
     const officeQs = currentOfficeId ? `?office=${encodeURIComponent(currentOfficeId)}` : "";
     if (isDocumentRow(row)) {
       router.push(`/notifications/document/${row.ref_id}${officeQs}`);
+      return;
+    }
+    if (isHoumonPlanRow(row)) {
+      // 訪問介護計画書アラート → その利用者の計画書一覧へ
+      // (ref_id は 未作成=clients.id / 期限系=計画 id なので lib 側で解決する)
+      const clientId = await resolveHoumonPlanClientId(createClient(), row);
+      if (!clientId) {
+        console.error("訪問介護計画書通知の参照先が見つかりません:", row.ref_id);
+        return;
+      }
+      if (!row.read_at) {
+        await markRead(row.id);
+        setRows((prev) =>
+          prev.map((r) => (r.id === row.id ? { ...r, read_at: new Date().toISOString() } : r)),
+        );
+      }
+      router.push(`/houmon-care-plans?user=${encodeURIComponent(clientId)}`);
       return;
     }
     if (isCertRow(row)) {
@@ -206,7 +239,8 @@ function Row({
 }) {
   const isDoc = isDocumentRow(row);
   const isCert = isCertRow(row);
-  const clickable = isDoc || isCert;
+  const isPlan = isHoumonPlanRow(row);
+  const clickable = isDoc || isCert || isPlan;
   return (
     <li
       className={cn(
@@ -223,8 +257,21 @@ function Row({
         }
       }}
     >
-      <div className={cn("mt-0.5", isCert ? "text-amber-500" : "text-gray-400")}>
-        {isDoc ? <FileText size={18} /> : isCert ? <CalendarClock size={18} /> : <Bell size={18} />}
+      <div
+        className={cn(
+          "mt-0.5",
+          isCert ? "text-amber-500" : isPlan ? "text-emerald-500" : "text-gray-400",
+        )}
+      >
+        {isDoc ? (
+          <FileText size={18} />
+        ) : isCert ? (
+          <CalendarClock size={18} />
+        ) : isPlan ? (
+          <ClipboardList size={18} />
+        ) : (
+          <Bell size={18} />
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-gray-900 truncate">{row.title}</div>
@@ -238,7 +285,7 @@ function Row({
           )}
         </div>
       </div>
-      {(isDoc || isCert) && (
+      {clickable && (
         <button
           type="button"
           className="flex shrink-0 items-center gap-1 rounded-md border border-blue-300 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
@@ -247,7 +294,7 @@ function Row({
             onClick();
           }}
         >
-          {isDoc ? "内容を見る" : "利用者を開く"}
+          {isDoc ? "内容を見る" : isPlan ? "計画書を開く" : "利用者を開く"}
           <ChevronRight size={12} />
         </button>
       )}

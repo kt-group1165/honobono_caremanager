@@ -7,36 +7,18 @@
  *       運営指導では 訪問介護計画の未作成・期限切れが指摘対象になるため、
  *       利用者を 1 人ずつ開かないと分からない状態を解消する。
  *
- * 母集団: 自事業所 (client_office_assignments 経由) の active 利用者
- *         ← 直接 clients.office_id では引かない (CLAUDE.md §3.1)
+ * 判定と母集団の定義は lib/houmon-care-plan/plan-alert.ts に集約
+ * (= 通知アラートと同じ判定を使う)。
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
-import { ID_IN_CHUNK, mapChunksParallel } from "@/lib/chunk-parallel";
 import { ClipboardList, Loader2, Search, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { isSchemaV1Error } from "@/lib/houmon-care-plan/queries";
-import type { HoumonCarePlanStatus, HoumonPlanKind } from "@/lib/houmon-care-plan/types";
-
-interface ClientRow {
-  id: string;
-  name: string;
-  furigana: string | null;
-}
-
-interface PlanRow {
-  id: string;
-  user_id: string;
-  plan_kind: HoumonPlanKind;
-  plan_date: string;
-  valid_until: string | null;
-  status: HoumonCarePlanStatus;
-}
-
-type PlanState = "none" | "expired" | "soon" | "draft" | "ok";
+import { runHoumonPlanAlertScan, type PlanState, type PlanStateRow } from "@/lib/houmon-care-plan/plan-alert";
 
 const STATE_CONFIG: Record<PlanState, { label: string; cls: string }> = {
   none: { label: "未作成", cls: "bg-red-100 text-red-700" },
@@ -55,39 +37,6 @@ const FILTERS: { key: "all" | PlanState; label: string }[] = [
   { key: "ok", label: "有効" },
 ];
 
-interface Row {
-  client: ClientRow;
-  plan: PlanRow | null;
-  state: PlanState;
-}
-
-function todayStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function plusDaysStr(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-/**
- * 計画の状態を決める。
- *  - 計画が無い                → none
- *  - 期限 (valid_until) 経過   → expired
- *  - 30 日以内に期限到来       → soon
- *  - status が draft のまま    → draft
- *  - それ以外                  → ok (期限未設定も ok 扱い)
- */
-export function resolvePlanState(plan: PlanRow | null, today: string, limit: string): PlanState {
-  if (!plan) return "none";
-  if (plan.valid_until && plan.valid_until < today) return "expired";
-  if (plan.valid_until && plan.valid_until <= limit) return "soon";
-  if (plan.status === "draft") return "draft";
-  return "ok";
-}
-
 function fmt(date: string | null | undefined): string {
   if (!date) return "—";
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
@@ -96,73 +45,29 @@ function fmt(date: string | null | undefined): string {
 
 export function HoumonCarePlanOverview() {
   const supabase = useMemo(() => createClient(), []);
-  const { businessType, currentOfficeId, loading: btLoading } = useBusinessType();
-  const [rows, setRows] = useState<Row[]>([]);
+  const { businessType, currentOffice, currentOfficeId, loading: btLoading } = useBusinessType();
+  const [rows, setRows] = useState<PlanStateRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | PlanState>("all");
   const [query, setQuery] = useState("");
   const [schemaOutdated, setSchemaOutdated] = useState(false);
 
+  const tenantId = currentOffice?.tenant_id ?? null;
+
   const load = useCallback(async () => {
-    if (!currentOfficeId) {
+    if (!currentOfficeId || !tenantId) {
       setRows([]);
       setLoading(false);
       return;
     }
     setLoading(true);
     try {
-      // 自事業所の active 利用者 (junction を !inner 埋め込みで 1 往復)
-      const { data: clientData, error: cErr } = await supabase
-        .from("clients")
-        .select("id, name, furigana, client_office_assignments!inner(office_id)")
-        .eq("client_office_assignments.office_id", currentOfficeId)
-        .is("client_office_assignments.end_date", null)
-        .eq("status", "active")
-        .eq("is_facility", false)
-        .is("deleted_at", null)
-        .order("furigana", { ascending: true, nullsFirst: false })
-        .range(0, 9999);
-      if (cErr) throw cErr;
-      const clients = ((clientData ?? []) as unknown as ClientRow[]).map((c) => ({
-        id: c.id,
-        name: c.name,
-        furigana: c.furigana,
-      }));
-
-      // 計画書は id chunk 並列で取得 (URL 長 / 1000 行制限対策)
-      let plans: PlanRow[] = [];
-      if (clients.length > 0) {
-        const chunks = await mapChunksParallel(
-          clients.map((c) => c.id),
-          ID_IN_CHUNK,
-          async (ids) => {
-            const { data, error } = await supabase
-              .from("kaigo_houmon_care_plans")
-              .select("id, user_id, plan_kind, plan_date, valid_until, status")
-              .in("user_id", ids)
-              .order("plan_date", { ascending: false });
-            if (error) throw error;
-            return (data ?? []) as PlanRow[];
-          },
-        );
-        plans = chunks.flat();
-      }
-
-      // 利用者ごとに最新 1 件 (plan_date 降順で先に来たものを採用)
-      const latest = new Map<string, PlanRow>();
-      for (const p of plans) {
-        const cur = latest.get(p.user_id);
-        if (!cur || p.plan_date > cur.plan_date) latest.set(p.user_id, p);
-      }
-
-      const today = todayStr();
-      const limit = plusDaysStr(30);
-      setRows(
-        clients.map((c) => {
-          const plan = latest.get(c.id) ?? null;
-          return { client: c, plan, state: resolvePlanState(plan, today, limit) };
-        }),
-      );
+      // 判定 + 未通知分の通知作成 (cron が無いので画面読込時に回す)
+      const { rows: next } = await runHoumonPlanAlertScan(supabase, {
+        officeId: currentOfficeId,
+        tenantId,
+      });
+      setRows(next);
       setSchemaOutdated(false);
     } catch (err) {
       console.error("訪問介護計画書 作成状況の取得に失敗:", err);
@@ -177,7 +82,7 @@ export function HoumonCarePlanOverview() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, currentOfficeId]);
+  }, [supabase, currentOfficeId, tenantId]);
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- mount 時 / 事業所切替時の非同期取得 (HANDOVER §2) */
@@ -197,7 +102,7 @@ export function HoumonCarePlanOverview() {
     return rows.filter((r) => {
       if (filter !== "all" && r.state !== filter) return false;
       if (!q) return true;
-      return r.client.name.includes(q) || (r.client.furigana ?? "").includes(q);
+      return r.clientName.includes(q) || (r.furigana ?? "").includes(q);
     });
   }, [rows, filter, query]);
 
@@ -227,6 +132,7 @@ export function HoumonCarePlanOverview() {
           </h1>
           <p className="mt-1 text-xs sm:text-sm text-gray-500">
             自事業所の利用者ごとの作成状況です。行をクリックするとその利用者の計画書に移動します。
+            未作成・期限切れ・30日以内は通知にも積まれます。
           </p>
         </div>
 
@@ -302,23 +208,28 @@ export function HoumonCarePlanOverview() {
                 {visible.map((r) => {
                   const cfg = STATE_CONFIG[r.state];
                   return (
-                    <tr key={r.client.id} className="border-b border-gray-100 last:border-0 hover:bg-emerald-50/40">
+                    <tr
+                      key={r.clientId}
+                      className="border-b border-gray-100 last:border-0 hover:bg-emerald-50/40"
+                    >
                       <td className="px-3 py-2">
                         <Link
-                          href={`/houmon-care-plans?user=${encodeURIComponent(r.client.id)}`}
+                          href={`/houmon-care-plans?user=${encodeURIComponent(r.clientId)}`}
                           className="block truncate font-medium text-gray-900 hover:text-emerald-700 hover:underline"
-                          title={r.client.name}
+                          title={r.clientName}
                         >
-                          {r.client.name}
-                          {r.client.furigana ? (
+                          {r.clientName}
+                          {r.furigana ? (
                             <span className="ml-2 text-xs font-normal text-gray-400">
-                              {r.client.furigana}
+                              {r.furigana}
                             </span>
                           ) : null}
                         </Link>
                       </td>
                       <td className="px-3 py-2">
-                        <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] ${cfg.cls}`}>
+                        <span
+                          className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] ${cfg.cls}`}
+                        >
                           {cfg.label}
                         </span>
                       </td>
@@ -330,6 +241,9 @@ export function HoumonCarePlanOverview() {
                       </td>
                       <td className="whitespace-nowrap px-3 py-2 text-gray-600">
                         {fmt(r.plan?.valid_until)}
+                        {r.state === "soon" && r.daysLeft !== null ? (
+                          <span className="ml-1 text-[11px] text-amber-600">残{r.daysLeft}日</span>
+                        ) : null}
                       </td>
                     </tr>
                   );

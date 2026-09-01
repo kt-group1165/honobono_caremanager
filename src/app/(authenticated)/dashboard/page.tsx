@@ -19,6 +19,10 @@ import { ja } from "date-fns/locale";
 import { useBusinessType } from "@/lib/business-type-context";
 import { runCertExpiryScan, type CertExpiryAlert } from "@/lib/cert-expiry-alert";
 import {
+  runHoumonPlanAlertScan,
+  type HoumonPlanAlert,
+} from "@/lib/houmon-care-plan/plan-alert";
+import {
   aggregateMonthlyUriage,
   aggregateAllOfficesUriage,
   type UriageBreakdown,
@@ -168,6 +172,36 @@ function CertStageBadge({
   );
 }
 
+// ---- 訪問介護計画書 stage badge ----
+
+function PlanStageBadge({
+  stage,
+  daysLeft,
+}: {
+  stage: HoumonPlanAlert["stage"];
+  daysLeft: number | null;
+}) {
+  if (stage === "none") {
+    return (
+      <span className="inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 whitespace-nowrap">
+        未作成
+      </span>
+    );
+  }
+  if (stage === "expired") {
+    return (
+      <span className="inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 whitespace-nowrap">
+        期限切れ{daysLeft !== null ? ` (${-daysLeft}日経過)` : ""}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 whitespace-nowrap">
+      残{daysLeft ?? 0}日
+    </span>
+  );
+}
+
 // ---- Main Page ----
 
 export default function DashboardPage() {
@@ -188,9 +222,15 @@ export default function DashboardPage() {
   const { businessType, loading: bizLoading, currentOfficeId, currentOffice } = useBusinessType();
   const tenantId = currentOffice?.tenant_id ?? null;
   const isCareManagement = businessType === "居宅介護支援";
+  const isHomeCare = businessType === "訪問介護";
   const [certAlerts, setCertAlerts] = useState<CertExpiryAlert[]>([]);
   const [certLoading, setCertLoading] = useState(true);
   const [certError, setCertError] = useState<string | null>(null);
+
+  // 訪問介護計画書の 未作成 / 期限切れ アラート (訪問介護モードのみ)
+  const [planAlerts, setPlanAlerts] = useState<HoumonPlanAlert[]>([]);
+  const [planLoading, setPlanLoading] = useState(true);
+  const [planError, setPlanError] = useState<string | null>(null);
 
   // 売上 (予定+実績) と 請求額 (実績のみ) — 同じ集計エンジンを status 条件だけ変えて 2 本流す
   const [uriage, setUriage] = useState<UriageBreakdown | null>(null);
@@ -398,6 +438,38 @@ export default function DashboardPage() {
       cancelled = true;
     };
   }, [bizLoading, currentOfficeId, tenantId, isCareManagement]);
+
+  // 訪問介護計画書アラート: 訪問介護モードのみ判定 → 未通知分だけ notifications へ INSERT
+  useEffect(() => {
+    if (bizLoading) return;
+    let cancelled = false;
+    const run = async () => {
+      if (!isHomeCare || !currentOfficeId || !tenantId) {
+        setPlanAlerts([]);
+        setPlanLoading(false);
+        return;
+      }
+      setPlanLoading(true);
+      setPlanError(null);
+      try {
+        const { alerts } = await runHoumonPlanAlertScan(createClient(), {
+          officeId: currentOfficeId,
+          tenantId,
+        });
+        if (!cancelled) setPlanAlerts(alerts);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "訪問介護計画書アラートの生成に失敗しました";
+        console.error("houmon plan alert scan failed:", msg);
+        if (!cancelled) setPlanError(msg);
+      } finally {
+        if (!cancelled) setPlanLoading(false);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [bizLoading, isHomeCare, currentOfficeId, tenantId]);
 
   // 売上 (予定+実績) / 請求額 (実績のみ) の月次集計。
   // 請求集計エンジンをそのまま回すので重い → サマリーカードとは独立に遅延ロードする。
@@ -1038,6 +1110,104 @@ export default function DashboardPage() {
           </div>
         )}
       </section>
+
+      {/* 訪問介護計画書 未作成 / 期限切れ (訪問介護モードのみ) */}
+      {isHomeCare && (
+        <section className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <div className="flex items-center gap-2">
+              <ClipboardList size={18} className="text-emerald-500" />
+              <h2 className="font-semibold text-gray-700">訪問介護計画書 要対応</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              {!planLoading && !planError && (
+                <span
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                    planAlerts.some((a) => a.stage === "none" || a.stage === "expired")
+                      ? "bg-red-50 text-red-600"
+                      : "bg-amber-50 text-amber-600"
+                  }`}
+                >
+                  {planAlerts.length}名
+                </span>
+              )}
+              <Link
+                href="/houmon-care-plans"
+                className="text-xs text-blue-600 hover:underline whitespace-nowrap"
+              >
+                一覧を見る
+              </Link>
+            </div>
+          </div>
+
+          {planLoading ? (
+            <div className="space-y-3 p-5">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-8 animate-pulse rounded-lg bg-gray-100" />
+              ))}
+            </div>
+          ) : planError ? (
+            <div className="flex items-center gap-2 px-5 py-6 text-sm text-red-600">
+              <AlertTriangle size={16} />
+              <span>訪問介護計画書アラートの取得に失敗しました: {planError}</span>
+            </div>
+          ) : !currentOfficeId ? (
+            <p className="px-5 py-8 text-center text-sm text-gray-400">事業所を選択してください</p>
+          ) : planAlerts.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-gray-400">
+              未作成・期限切れ・30日以内の訪問介護計画書はありません
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500">
+                    <th className="px-4 py-3">氏名</th>
+                    <th className="px-4 py-3">状態</th>
+                    <th className="px-4 py-3">計画作成日</th>
+                    <th className="px-4 py-3">計画期間 満了日</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {planAlerts.slice(0, 20).map((a) => (
+                    <tr key={a.clientId} className="hover:bg-gray-50/60 transition-colors">
+                      <td className="px-4 py-3 font-medium">
+                        <Link
+                          href={`/houmon-care-plans?user=${encodeURIComponent(a.clientId)}`}
+                          className="text-blue-600 hover:underline"
+                        >
+                          {a.clientName}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3">
+                        <PlanStageBadge stage={a.stage} daysLeft={a.daysLeft} />
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                        {a.plan?.plan_date
+                          ? format(parseISO(a.plan.plan_date), "yyyy/M/d", { locale: ja })
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                        {a.plan?.valid_until
+                          ? format(parseISO(a.plan.valid_until), "yyyy/M/d", { locale: ja })
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {planAlerts.length > 20 && (
+                <p className="px-4 py-3 text-xs text-gray-500">
+                  ほか {planAlerts.length - 20} 名。
+                  <Link href="/houmon-care-plans" className="ml-1 text-blue-600 hover:underline">
+                    一覧で確認
+                  </Link>
+                </p>
+              )}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Tables section */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
