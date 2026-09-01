@@ -20,7 +20,7 @@
  * 保存先: migrations/compliance_records_v1.sql (kaigo_compliance_records)
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { ShieldCheck, Plus, Save, Trash2, Loader2, X } from "lucide-react";
@@ -41,7 +41,7 @@ const KINDS = ["委員会", "指針", "研修", "訓練", "担当者選任"] as 
 /** 減算に直結する分野 (未整備だと所定単位数の 1%) */
 const GENSAN_CATEGORIES = new Set(["虐待防止", "業務継続(BCP)"]);
 
-type Row = {
+export type Row = {
   id?: string;
   office_id?: string | null;
   category: string;
@@ -58,17 +58,27 @@ type Row = {
   notes?: string | null;
 };
 
-const isMissingTable = (code?: string) => code === "42P01" || code === "PGRST205";
+export const isMissingTable = (code?: string) => code === "42P01" || code === "PGRST205";
 
-export function ComplianceContent() {
+export function ComplianceContent({
+  initialOfficeId,
+  initialYear,
+  initialRows,
+  initialTableMissing,
+}: {
+  initialOfficeId: string | null;
+  initialYear: string;
+  initialRows: Row[];
+  initialTableMissing: boolean;
+}) {
   const supabase = useMemo(() => createClient(), []);
   const { currentOffice } = useBusinessType();
   const officeId = currentOffice?.id ?? null;
 
-  const [year, setYear] = useState(() => String(new Date().getFullYear()));
-  const [rows, setRows] = useState<Row[]>([]);
+  const [year, setYear] = useState(initialYear);
+  const [rows, setRows] = useState<Row[]>(initialRows);
   const [loading, setLoading] = useState(false);
-  const [tableMissing, setTableMissing] = useState(false);
+  const [tableMissing, setTableMissing] = useState(initialTableMissing);
   const [editing, setEditing] = useState<Row | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -97,10 +107,15 @@ export function ComplianceContent() {
     setRows((data ?? []) as Row[]);
   }, [supabase, officeId, year]);
 
+  // 初回 mount は server (?office= 付きなら) から渡された initial* をそのまま使う。
+  const isInitialMount = useRef(true);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- 年/事業所の切替で読み直す
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      if (initialOfficeId && initialOfficeId === officeId) return;
+    }
     load();
-  }, [load]);
+  }, [load, officeId, initialOfficeId]);
 
   /** 分野 × 種別 の件数 */
   const matrix = useMemo(() => {
