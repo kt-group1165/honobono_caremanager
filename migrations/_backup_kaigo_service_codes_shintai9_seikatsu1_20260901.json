@@ -1,0 +1,82 @@
+[
+  {
+    "id": "4115e157-f931-4d02-b758-b660da9a8529",
+    "service_code": "116711",
+    "service_name": "身体９生活１",
+    "units": 0,
+    "valid_from": "2026-06-01",
+    "system": "介護"
+  },
+  {
+    "id": "07ebe522-84f6-43f0-9be2-f3e511ae1078",
+    "service_code": "116712",
+    "service_name": "身体９生活１・夜",
+    "units": 0,
+    "valid_from": "2024-06-01",
+    "system": "介護"
+  },
+  {
+    "id": "8404806f-83cb-43ac-ac87-1126f2d52851",
+    "service_code": "116712",
+    "service_name": "身体９生活１・夜",
+    "units": 0,
+    "valid_from": "2026-06-01",
+    "system": "介護"
+  },
+  {
+    "id": "a35b2cc1-d3d6-4778-9962-a1025edc8558",
+    "service_code": "116713",
+    "service_name": "身体９生活１・深",
+    "units": 0,
+    "valid_from": "2024-06-01",
+    "system": "介護"
+  },
+  {
+    "id": "10761e76-ac2d-48dd-9a8a-7c88cae45430",
+    "service_code": "116713",
+    "service_name": "身体９生活１・深",
+    "units": 0,
+    "valid_from": "2026-06-01",
+    "system": "介護"
+  },
+  {
+    "id": "adb60f84-3ae0-4f21-90ec-b846dd0f202c",
+    "service_code": "116714",
+    "service_name": "身体９生活１・２人",
+    "units": 0,
+    "valid_from": "2026-06-01",
+    "system": "介護"
+  },
+  {
+    "id": "010f3fc5-e1d8-4027-9c50-7682f488a1b2",
+    "service_code": "116715",
+    "service_name": "身体９生活１・２人・夜",
+    "units": 0,
+    "valid_from": "2024-06-01",
+    "system": "介護"
+  },
+  {
+    "id": "b1a4cf96-9e51-43e3-9f54-e18e82c5fe2c",
+    "service_code": "116715",
+    "service_name": "身体９生活１・２人・夜",
+    "units": 0,
+    "valid_from": "2026-06-01",
+    "system": "介護"
+  },
+  {
+    "id": "a32176e1-033d-45df-8ec8-f9f5d8d116d9",
+    "service_code": "116716",
+    "service_name": "身体９生活１・２人・深",
+    "units": 0,
+    "valid_from": "2024-06-01",
+    "system": "介護"
+  },
+  {
+    "id": "dc67d439-156d-4f38-8059-36594eff1fe5",
+    "service_code": "116716",
+    "service_name": "身体９生活１・２人・深",
+    "units": 0,
+    "valid_from": "2026-06-01",
+    "system": "介護"
+  }
+]
