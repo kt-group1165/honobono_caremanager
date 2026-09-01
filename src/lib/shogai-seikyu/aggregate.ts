@@ -628,8 +628,28 @@ export async function aggregateMonthlyShogaiSeikyu(
         const resolvedCodes = new Set(
           ((data ?? []) as { service_code: string }[]).map((r) => r.service_code),
         );
-        for (const code of codes) {
-          if (!resolvedCodes.has(code)) {
+        const unresolvedCodes = codes.filter((c) => !resolvedCodes.has(c));
+        // 2026-09-02 是正: kaigo_office_addon_periods は障害と介護(訪問介護処遇改善加算)の
+        //   区分を同じ formula_code 空間で共有しており、116184/116274 のように**番号が
+        //   偶然一致する介護側コード**が登録されていると、system='障害' で見つからず
+        //   毎回「算定漏れ」の誤警告が出ていた(実際は介護側の値で障害には無関係、
+        //   加算0が正しい)。他のシステムに実在するコードは「未知の欠落」ではなく
+        //   「この事業所には無関係」なので警告を出さない。
+        let unknownElsewhere = new Set(unresolvedCodes);
+        if (unresolvedCodes.length > 0) {
+          const { data: otherSystemRows, error: otherErr } = await supabase
+            .from("kaigo_service_codes")
+            .select("service_code, system")
+            .in("service_code", unresolvedCodes)
+            .neq("system", "障害");
+          if (otherErr) throw new Error(`加算コード(他system)取得失敗: ${otherErr.message}`);
+          const foundElsewhere = new Set(
+            ((otherSystemRows ?? []) as { service_code: string }[]).map((r) => r.service_code),
+          );
+          unknownElsewhere = new Set(unresolvedCodes.filter((c) => !foundElsewhere.has(c)));
+        }
+        for (const code of unresolvedCodes) {
+          if (unknownElsewhere.has(code)) {
             certWarnings.push(
               `事業所に登録された加算区分 ${code} は対象月 (${monthStr}) の障害マスタで加算率 (formula) が解決できず、加算 0 で計算しています — マスタに率が未設定の可能性があります (算定漏れ)`,
             );
