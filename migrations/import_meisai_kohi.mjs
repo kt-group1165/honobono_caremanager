@@ -6,6 +6,14 @@
 //
 //   node migrations/import_meisai_kohi.mjs            # DRY RUN
 //   node migrations/import_meisai_kohi.mjs --execute
+//
+// ── 2026-09-01 修正: 本人負担は「行ごとの提供年月」で絞る ──
+//   従来は一覧CSV内の全行 (提供年月を問わない) の本人負担を明細書番号単位で
+//   合算していたため、月遅れ請求 (提供年月≠請求年月) が混ざっているクライアントは
+//   前月ぶんの本人負担まで加算されてしまっていた (114001と同根の原因)。
+//   実例: おゆみ野 山田俊男 — 5月ぶん3,254円 + 6月ぶん5,423円 = 8,677円で投入されて
+//   いたが、正しい6月ぶんは5,423円のみ (import_kyotaku_step1_clients.mjs 由来の
+//   別レコードと突合して確認)。TARGET_MONTH の提供年月に一致する行だけを対象にする。
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
@@ -48,15 +56,19 @@ async function main(){
   console.log(`  取込元: ${path.relative(KAIGO,csv)}`);
   const lines=sjis.decode(readFileSync(csv)).split(/\r?\n/).filter(l=>l);
   const H=parseLine(lines[0]).map(h=>h.replace(/^"|"$/g,"")); const gi=(n)=>H.indexOf(n);
-  const iNum=gi("利用者番号"),iName=gi("利用者名"),iF1=gi("公費1負担者番号"),iJ1=gi("公費1受給者番号"),iHon=gi("公費分本人負担"),iMei=gi("明細書番号");
-  // 利用者ごと (公費1負担者番号あり) を集約 (明細書ベースdedupe)
-  const kohi={}; const seen=new Set();
+  const iNum=gi("利用者番号"),iName=gi("利用者名"),iF1=gi("公費1負担者番号"),iJ1=gi("公費1受給者番号"),iHon=gi("公費分本人負担"),iMei=gi("明細書番号"),iTeikyo=gi("提供年月");
+  // 利用者ごと (公費1負担者番号あり) を集約 (明細書ベースdedupe)。
+  // ⚠ 提供年月が TARGET_MONTH と違う行 (月遅れ) は対象月の本人負担ではないので除外する。
+  const targetTeikyo=TARGET_MONTH.replace("-","/");
+  const kohi={}; const seen=new Set(); let skippedTsukiokure=0;
   for(const ln of lines.slice(1)){ const c=parseLine(ln).map(x=>x.replace(/^"|"$/g,""));
     const f=(c[iF1]||"").trim(); if(!f) continue;
+    if(iTeikyo>=0 && (c[iTeikyo]||"").trim()!==targetTeikyo){ skippedTsukiokure++; continue; }
     const num=c[iNum];
     if(!kohi[num]) kohi[num]={name:c[iName],futansha:f,jukyusha:(c[iJ1]||"").trim(),honnin:0};
     if(!seen.has(c[iMei])){ seen.add(c[iMei]); kohi[num].honnin += numOr0(c[iHon]); }
   }
+  if(skippedTsukiokure) console.log(`  月遅れ(提供年月≠${targetTeikyo})の行を除外: ${skippedTsukiokure}行`);
   const clients=[]; for(let x=0;;x+=1000){const {data,error}=await sb.from("clients").select("id,user_number").order("id").range(x,x+999);if(error)throw error;clients.push(...data);if(data.length<1000)break;}
   const idByNum={}; for(const c of clients) idByNum[String(c.user_number)]=c.id;
 
