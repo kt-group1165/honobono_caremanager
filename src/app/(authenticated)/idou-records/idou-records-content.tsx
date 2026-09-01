@@ -12,7 +12,8 @@
  * 請求: 国保連伝送ではなく千葉市へ様式12/13 + 実績記録票 (様式3-1) を直接提出。
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import {
@@ -29,11 +30,11 @@ import {
   ChevronLeft, ChevronRight, Plus, Loader2, X, Pencil, Trash2, Footprints, AlertTriangle, ArrowRight, CalendarClock,
 } from "lucide-react";
 
-type Client = { id: string; name: string; furigana: string | null; user_number: string | null };
-type Staff = { id: string; name: string };
+export type Client = { id: string; name: string; furigana: string | null; user_number: string | null };
+export type Staff = { id: string; name: string };
 
 // シフトカレンダー (kaigo_visit_schedule) 由来の予定。実績と (利用者,日付,開始) で突合する
-type PlanRow = {
+export type PlanRow = {
   id: string;
   user_id: string;
   visit_date: string;
@@ -43,7 +44,7 @@ type PlanRow = {
   staff_id: string | null;
 };
 
-type IdouRecord = {
+export type IdouRecord = {
   id: string;
   client_id: string;
   office_id: string | null;
@@ -112,23 +113,115 @@ const formFromPlan = (p: PlanRow): FormState => ({
   staff_ids: p.staff_id ? [p.staff_id] : [],
 });
 
-export function IdouRecordsContent() {
+export type IdouRecordsData = {
+  clients: Client[];
+  staff: Staff[];
+  records: IdouRecord[];
+  plans: PlanRow[];
+  shikyuMin: Map<string, number>;
+  certMuni: Map<string, string>;
+};
+
+const EMPTY_DATA: IdouRecordsData = {
+  clients: [], staff: [], records: [], plans: [], shikyuMin: new Map(), certMuni: new Map(),
+};
+
+/**
+ * 移動支援記録の当月データを取得。page.tsx (server) / content.tsx (client) の
+ * 両方から同じロジックで呼べるよう、supabase client を引数で受け取る形に切り出している。
+ */
+export async function loadIdouRecordsData(
+  supabase: SupabaseClient,
+  officeId: string,
+  month: string,
+): Promise<IdouRecordsData> {
+  const { data: assigns, error: aErr } = await supabase
+    .from("client_office_assignments")
+    .select("client_id")
+    .eq("office_id", officeId);
+  if (aErr) throw aErr;
+  const ids = Array.from(new Set((assigns ?? []).map((a: { client_id: string }) => a.client_id)));
+  const [y, mo] = month.split("-").map(Number);
+  const [clientsRes, staffRes, recordsRes, planRes, shikyuRes] = await Promise.all([
+    ids.length
+      ? supabase.from("clients").select("id, name, furigana, user_number").in("id", ids).is("deleted_at", null).order("furigana")
+      : Promise.resolve({ data: [], error: null }),
+    supabase.from("members").select("id, name").eq("status", "active").is("deleted_at", null).order("name"),
+    supabase
+      .from("kaigo_idou_shien_records")
+      .select("*")
+      .eq("office_id", officeId)
+      .gte("service_date", `${month}-01`)
+      .lte("service_date", `${month}-31`)
+      .order("service_date", { ascending: false }),
+    // シフトカレンダーの当月予定 (自事業所)。移動支援のものだけ後で残す
+    supabase
+      .from("kaigo_visit_schedule")
+      .select("id, user_id, visit_date, start_time, end_time, service_type, staff_id")
+      .eq("office_id", officeId)
+      .gte("visit_date", `${month}-01`)
+      .lte("visit_date", `${month}-31`)
+      .order("visit_date")
+      .order("start_time"),
+    // 地域生活支援受給者証 (支給量=警告閾値 / 市町村=登録有無・コード体系)
+    ids.length
+      ? supabase.from("chiiki_recipient_certs").select("client_id, shikyu_minutes, municipality").in("client_id", ids)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (clientsRes.error) throw clientsRes.error;
+  if (staffRes.error) throw staffRes.error;
+  if (recordsRes.error) throw recordsRes.error;
+  if (planRes.error) throw planRes.error;
+  const clients = (clientsRes.data ?? []) as Client[];
+  const staff = (staffRes.data ?? []) as Staff[];
+  const records = (recordsRes.data ?? []) as IdouRecord[];
+  const chiikiRows = (shikyuRes.data ?? []) as { client_id: string; shikyu_minutes: number | null; municipality: string | null }[];
+  const shikyuMin = new Map(
+    chiikiRows.filter((r) => r.shikyu_minutes != null).map((r) => [r.client_id, r.shikyu_minutes as number]),
+  );
+  const certMuni = new Map(chiikiRows.map((r) => [r.client_id, r.municipality ?? "千葉市"]));
+
+  // 予定を「移動支援 (地域生活支援給付)」に絞る (名称→制度区分 lookup)
+  const allPlans = (planRes.data ?? []) as PlanRow[];
+  let plans: PlanRow[] = [];
+  if (allPlans.length) {
+    const sysMap = await getServiceSystemMap(
+      supabase,
+      allPlans.map((p) => p.service_type),
+      { year: y, month: mo },
+    );
+    plans = allPlans.filter((p) => sysMap.get(toHankakuDigits(p.service_type)) === "地域生活支援");
+  }
+
+  return { clients, staff, records, plans, shikyuMin, certMuni };
+}
+
+export function IdouRecordsContent({
+  initialOfficeId = null,
+  initialMonth,
+  initialData = null,
+}: {
+  initialOfficeId?: string | null;
+  initialMonth?: string;
+  initialData?: IdouRecordsData | null;
+} = {}) {
   const supabase = useMemo(() => createClient(), []);
   const { currentOffice, currentOfficeId } = useBusinessType();
+  const init = initialData ?? EMPTY_DATA;
 
-  const [month, setMonth] = useState(() => {
+  const [month, setMonth] = useState(initialMonth ?? (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  });
-  const [clients, setClients] = useState<Client[]>([]);
-  const [staff, setStaff] = useState<Staff[]>([]);
-  const [records, setRecords] = useState<IdouRecord[]>([]);
-  const [plans, setPlans] = useState<PlanRow[]>([]);
+  })());
+  const [clients, setClients] = useState<Client[]>(init.clients);
+  const [staff, setStaff] = useState<Staff[]>(init.staff);
+  const [records, setRecords] = useState<IdouRecord[]>(init.records);
+  const [plans, setPlans] = useState<PlanRow[]>(init.plans);
   // client_id → 支給量(分/月)。受給者証未登録は標準25h
-  const [shikyuMin, setShikyuMin] = useState<Map<string, number>>(new Map());
+  const [shikyuMin, setShikyuMin] = useState<Map<string, number>>(init.shikyuMin);
   // client_id → 受給者証の市町村 (存在 = 受給者証登録済み)。未登録はサービス選択ブロック
-  const [certMuni, setCertMuni] = useState<Map<string, string>>(new Map());
-  const [loading, setLoading] = useState(true);
+  const [certMuni, setCertMuni] = useState<Map<string, string>>(init.certMuni);
+  const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<IdouRecord | "new" | null>(null);
   const [prefill, setPrefill] = useState<FormState | null>(null);
 
@@ -141,66 +234,13 @@ export function IdouRecordsContent() {
     if (!currentOfficeId) return;
     setLoading(true);
     try {
-      const { data: assigns, error: aErr } = await supabase
-        .from("client_office_assignments")
-        .select("client_id")
-        .eq("office_id", currentOfficeId);
-      if (aErr) throw aErr;
-      const ids = Array.from(new Set((assigns ?? []).map((a: { client_id: string }) => a.client_id)));
-      const [y, mo] = month.split("-").map(Number);
-      const [clientsRes, staffRes, recordsRes, planRes, shikyuRes] = await Promise.all([
-        ids.length
-          ? supabase.from("clients").select("id, name, furigana, user_number").in("id", ids).is("deleted_at", null).order("furigana")
-          : Promise.resolve({ data: [], error: null }),
-        supabase.from("members").select("id, name").eq("status", "active").is("deleted_at", null).order("name"),
-        supabase
-          .from("kaigo_idou_shien_records")
-          .select("*")
-          .eq("office_id", currentOfficeId)
-          .gte("service_date", `${month}-01`)
-          .lte("service_date", `${month}-31`)
-          .order("service_date", { ascending: false }),
-        // シフトカレンダーの当月予定 (自事業所)。移動支援のものだけ後で残す
-        supabase
-          .from("kaigo_visit_schedule")
-          .select("id, user_id, visit_date, start_time, end_time, service_type, staff_id")
-          .eq("office_id", currentOfficeId)
-          .gte("visit_date", `${month}-01`)
-          .lte("visit_date", `${month}-31`)
-          .order("visit_date")
-          .order("start_time"),
-        // 地域生活支援受給者証 (支給量=警告閾値 / 市町村=登録有無・コード体系)
-        ids.length
-          ? supabase.from("chiiki_recipient_certs").select("client_id, shikyu_minutes, municipality").in("client_id", ids)
-          : Promise.resolve({ data: [], error: null }),
-      ]);
-      if (clientsRes.error) throw clientsRes.error;
-      if (staffRes.error) throw staffRes.error;
-      if (recordsRes.error) throw recordsRes.error;
-      if (planRes.error) throw planRes.error;
-      setClients((clientsRes.data ?? []) as Client[]);
-      setStaff((staffRes.data ?? []) as Staff[]);
-      setRecords((recordsRes.data ?? []) as IdouRecord[]);
-      const chiikiRows = (shikyuRes.data ?? []) as { client_id: string; shikyu_minutes: number | null; municipality: string | null }[];
-      setShikyuMin(new Map(
-        chiikiRows.filter((r) => r.shikyu_minutes != null).map((r) => [r.client_id, r.shikyu_minutes as number]),
-      ));
-      setCertMuni(new Map(chiikiRows.map((r) => [r.client_id, r.municipality ?? "千葉市"])));
-
-      // 予定を「移動支援 (地域生活支援給付)」に絞る (名称→制度区分 lookup)
-      const allPlans = (planRes.data ?? []) as PlanRow[];
-      if (allPlans.length) {
-        const sysMap = await getServiceSystemMap(
-          supabase,
-          allPlans.map((p) => p.service_type),
-          { year: y, month: mo },
-        );
-        setPlans(
-          allPlans.filter((p) => sysMap.get(toHankakuDigits(p.service_type)) === "地域生活支援"),
-        );
-      } else {
-        setPlans([]);
-      }
+      const data = await loadIdouRecordsData(supabase, currentOfficeId, month);
+      setClients(data.clients);
+      setStaff(data.staff);
+      setRecords(data.records);
+      setPlans(data.plans);
+      setShikyuMin(data.shikyuMin);
+      setCertMuni(data.certMuni);
     } catch (e) {
       console.error("移動支援記録の読込に失敗:", e instanceof Error ? e.message : e);
     } finally {
@@ -208,10 +248,15 @@ export function IdouRecordsContent() {
     }
   }, [supabase, currentOfficeId, month]);
 
+  // 初回 mount は server (?office= 付きなら) から渡された initialData をそのまま使う。
+  const isInitialMount = useRef(true);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount/月変更時の async fetch
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      if (initialOfficeId && initialOfficeId === currentOfficeId) return;
+    }
     load();
-  }, [load]);
+  }, [load, currentOfficeId, initialOfficeId]);
 
   const moveMonth = (delta: number) => {
     const [y, m] = month.split("-").map(Number);
