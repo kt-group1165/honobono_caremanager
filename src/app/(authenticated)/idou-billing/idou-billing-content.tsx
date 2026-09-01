@@ -16,7 +16,8 @@
  * 制度定義: migrations/_if_idou_shien_chiba.txt
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { validInMonth } from "@/lib/service-code-valid";
@@ -25,7 +26,7 @@ import { ChevronLeft, ChevronRight, Loader2, Printer, Footprints } from "lucide-
 
 const UNIT_YEN = 10;
 
-type IdouRow = {
+export type IdouRow = {
   id: string;
   client_id: string;
   service_date: string;
@@ -41,7 +42,7 @@ type IdouRow = {
   addon_kinkyu: boolean;
   user_confirmed: boolean;
 };
-type BathRow = {
+export type BathRow = {
   id: string;
   client_id: string;
   visit_date: string;
@@ -51,7 +52,112 @@ type BathRow = {
   addon_shokai: boolean;
   staff_only: boolean;
 };
-type Client = { id: string; name: string };
+export type Client = { id: string; name: string };
+export type CertInfo = { number: string; contract: string; limit: number | null; seiho: boolean };
+export type CodeInfoEntry = { name: string; unit: number };
+
+export type IdouBillingData = {
+  clients: Client[];
+  idouRows: IdouRow[];
+  bathRows: BathRow[];
+  certs: Map<string, CertInfo>;
+  codeInfo: Map<string, CodeInfoEntry>;
+  missingCodes: string[];
+};
+
+/**
+ * 地域生活支援請求の当月データを取得。page.tsx (server) / content.tsx (client) の
+ * 両方から同じロジックで呼べるよう、supabase client を引数で受け取る形に切り出している。
+ */
+export async function loadIdouBillingData(
+  supabase: SupabaseClient,
+  officeId: string,
+  month: string,
+): Promise<IdouBillingData> {
+  const [y, mo] = month.split("-").map(Number);
+  const { data: assigns } = await supabase
+    .from("client_office_assignments").select("client_id").eq("office_id", officeId);
+  const ids = Array.from(new Set((assigns ?? []).map((a: { client_id: string }) => a.client_id)));
+  const [clientsRes, idouRes, bathRes, certRes, chiikiCertRes] = await Promise.all([
+    ids.length
+      ? supabase.from("clients").select("id, name").in("id", ids).is("deleted_at", null).order("furigana")
+      : Promise.resolve({ data: [], error: null }),
+    supabase.from("kaigo_idou_shien_records").select("*")
+      .eq("office_id", officeId).gte("service_date", `${month}-01`).lte("service_date", `${month}-31`)
+      .neq("status", "draft"),
+    supabase.from("kaigo_bath_visit_records").select("id, client_id, visit_date, start_time, end_time, service_code, addon_shokai, staff_only, scheme, status")
+      .eq("office_id", officeId).eq("scheme", "地域生活支援")
+      .gte("visit_date", `${month}-01`).lte("visit_date", `${month}-31`).neq("status", "draft"),
+    ids.length
+      ? supabase.from("shougai_certifications")
+          .select("client_id, beneficiary_number, self_payment_limit, seiho_flag, certification_start_date")
+          .in("client_id", ids)
+          .order("certification_start_date", { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
+    ids.length
+      ? supabase.from("chiiki_recipient_certs")
+          .select("client_id, beneficiary_number, shikyu_amount_text, self_payment_limit, seiho_flag")
+          .in("client_id", ids)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  const clients = (clientsRes.data ?? []) as Client[];
+  const idouRows = (idouRes.data ?? []) as IdouRow[];
+  const bathRows = (bathRes.data ?? []) as unknown as BathRow[];
+
+  // 受給者証: 障害福祉 (最新) を土台に、地域生活支援受給者証があれば上書き
+  // 2026-08-31 監査: limit を `?? 0` で潰していたため「負担上限 未設定」と
+  //   「非課税で本当に 0」が区別できず、未設定が黙って「負担 0 円 = 市へ全額請求」に
+  //   倒れていた。null のまま持って警告で拾えるようにする。
+  const certs = new Map<string, CertInfo>();
+  for (const c of (certRes.data ?? []) as {
+    client_id: string; beneficiary_number: string | null; self_payment_limit: number | null; seiho_flag: boolean | null;
+  }[]) {
+    if (!certs.has(c.client_id)) {
+      certs.set(c.client_id, {
+        number: c.beneficiary_number ?? "",
+        contract: "",
+        limit: c.self_payment_limit ?? null,
+        seiho: c.seiho_flag ?? false,
+      });
+    }
+  }
+  for (const c of (chiikiCertRes.data ?? []) as {
+    client_id: string; beneficiary_number: string | null; shikyu_amount_text: string | null;
+    self_payment_limit: number | null; seiho_flag: boolean | null;
+  }[]) {
+    certs.set(c.client_id, {
+      number: c.beneficiary_number ?? certs.get(c.client_id)?.number ?? "",
+      contract: c.shikyu_amount_text ?? "",
+      limit: c.self_payment_limit ?? null,
+      seiho: c.seiho_flag ?? false,
+    });
+  }
+
+  // コード → 名称・単位数 (マスタから、対象月世代)
+  const codes = Array.from(new Set([...idouRows, ...bathRows].map((r) => r.service_code).filter(Boolean))) as string[];
+  const codeInfo = new Map<string, CodeInfoEntry>();
+  // 2026-08-31 監査: `codes.slice(0, 300)` で**無言の打ち切り**だった。
+  //   301 件目以降はマスタが引けず 0 単位で明細に載る。チャンクして全部引く。
+  const CODE_CHUNK = 200;
+  for (let i = 0; i < codes.length; i += CODE_CHUNK) {
+    const chunk = codes.slice(i, i + CODE_CHUNK);
+    const { data: cn, error: cnErr } = await validInMonth(
+      supabase.from("kaigo_service_codes").select("service_code, service_name, units")
+        .eq("system", "地域生活支援").eq("municipality", DEFAULT_CHIIKI_MUNICIPALITY)
+        .in("service_code", chunk),
+      y, mo,
+    );
+    if (cnErr) throw new Error(`サービスコードマスタの取得に失敗: ${cnErr.message}`);
+    for (const c of (cn ?? []) as { service_code: string; service_name: string; units: number }[]) {
+      if (!codeInfo.has(c.service_code)) codeInfo.set(c.service_code, { name: c.service_name, unit: c.units });
+    }
+  }
+  // マスタに無いコードは 0 単位で計上されてしまうので拾っておく
+  //   (地域生活支援マスタは千葉市 703 件のみ。他市町村の記録はここに落ちる)
+  const missingCodes = codes.filter((c) => !codeInfo.has(c));
+
+  return { clients, idouRows, bathRows, certs, codeInfo, missingCodes };
+}
 
 const hm = (t: string | null) => (t ? t.slice(0, 5) : "");
 const dow = (d: string) => "日月火水木金土"[new Date(d + "T00:00:00").getDay()];
@@ -68,25 +174,41 @@ const minsBetween = (s: string | null, e: string | null) => {
 // 明細行 (コード単位に集計)
 type MeisaiLine = { code: string; name: string; unit: number; count: number; total: number };
 
-export function IdouBillingContent() {
+const EMPTY_DATA: IdouBillingData = {
+  clients: [], idouRows: [], bathRows: [], certs: new Map(), codeInfo: new Map(), missingCodes: [],
+};
+
+export function IdouBillingContent({
+  initialOfficeId = null,
+  initialMonth,
+  initialData = null,
+}: {
+  /** ?office= 付きの専用ルート (/idou-billing) から server fetch 済みで来た場合のみ指定。
+   *  billing-visit/seikyu タブ埋め込み (chiiki タブ) からは未指定で呼ばれ、従来どおり
+   *  client 側で currentOfficeId 確定後に全件取得する。 */
+  initialOfficeId?: string | null;
+  initialMonth?: string;
+  initialData?: IdouBillingData | null;
+}) {
   const supabase = useMemo(() => createClient(), []);
   const { currentOffice, currentOfficeId } = useBusinessType();
+  const init = initialData ?? EMPTY_DATA;
 
-  const [month, setMonth] = useState(() => {
+  const [month, setMonth] = useState(initialMonth ?? (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  });
-  const [clients, setClients] = useState<Client[]>([]);
-  const [idouRows, setIdouRows] = useState<IdouRow[]>([]);
-  const [bathRows, setBathRows] = useState<BathRow[]>([]);
-  const [codeInfo, setCodeInfo] = useState<Map<string, { name: string; unit: number }>>(new Map());
-  const [missingCodes, setMissingCodes] = useState<string[]>([]);
+  })());
+  const [clients, setClients] = useState<Client[]>(init.clients);
+  const [idouRows, setIdouRows] = useState<IdouRow[]>(init.idouRows);
+  const [bathRows, setBathRows] = useState<BathRow[]>(init.bathRows);
+  const [codeInfo, setCodeInfo] = useState<Map<string, CodeInfoEntry>>(init.codeInfo);
+  const [missingCodes, setMissingCodes] = useState<string[]>(init.missingCodes);
   // client_id → 受給者証情報 (番号 / 契約支給量 / 負担上限月額 / 生保フラグ)。
   // 地域生活支援受給者証 (chiiki_recipient_certs) を優先、無ければ障害福祉受給者証を流用
   // limit: null = 負担上限額が未設定 (判定不能) / 0 = 非課税で本当に 0 円。
   //   `?? 0` で潰すとこの 2 つが区別できず、未設定が「市へ全額請求」に倒れる (2026-08-31 監査)
-  const [certs, setCerts] = useState<Map<string, { number: string; contract: string; limit: number | null; seiho: boolean }>>(new Map());
-  const [loading, setLoading] = useState(true);
+  const [certs, setCerts] = useState<Map<string, CertInfo>>(init.certs);
+  const [loading, setLoading] = useState(false);
 
   const [y, mo] = month.split("-").map(Number);
   const clientName = useCallback((id: string) => clients.find((c) => c.id === id)?.name ?? "(不明)", [clients]);
@@ -95,101 +217,29 @@ export function IdouBillingContent() {
     if (!currentOfficeId) return;
     setLoading(true);
     try {
-      const { data: assigns } = await supabase
-        .from("client_office_assignments").select("client_id").eq("office_id", currentOfficeId);
-      const ids = Array.from(new Set((assigns ?? []).map((a: { client_id: string }) => a.client_id)));
-      const [clientsRes, idouRes, bathRes, certRes, chiikiCertRes] = await Promise.all([
-        ids.length
-          ? supabase.from("clients").select("id, name").in("id", ids).is("deleted_at", null).order("furigana")
-          : Promise.resolve({ data: [], error: null }),
-        supabase.from("kaigo_idou_shien_records").select("*")
-          .eq("office_id", currentOfficeId).gte("service_date", `${month}-01`).lte("service_date", `${month}-31`)
-          .neq("status", "draft"),
-        supabase.from("kaigo_bath_visit_records").select("id, client_id, visit_date, start_time, end_time, service_code, addon_shokai, staff_only, scheme, status")
-          .eq("office_id", currentOfficeId).eq("scheme", "地域生活支援")
-          .gte("visit_date", `${month}-01`).lte("visit_date", `${month}-31`).neq("status", "draft"),
-        ids.length
-          ? supabase.from("shougai_certifications")
-              .select("client_id, beneficiary_number, self_payment_limit, seiho_flag, certification_start_date")
-              .in("client_id", ids)
-              .order("certification_start_date", { ascending: false })
-          : Promise.resolve({ data: [], error: null }),
-        ids.length
-          ? supabase.from("chiiki_recipient_certs")
-              .select("client_id, beneficiary_number, shikyu_amount_text, self_payment_limit, seiho_flag")
-              .in("client_id", ids)
-          : Promise.resolve({ data: [], error: null }),
-      ]);
-      setClients((clientsRes.data ?? []) as Client[]);
-      const idou = (idouRes.data ?? []) as IdouRow[];
-      const bath = (bathRes.data ?? []) as unknown as BathRow[];
-      setIdouRows(idou);
-      setBathRows(bath);
-
-      // 受給者証: 障害福祉 (最新) を土台に、地域生活支援受給者証があれば上書き
-      // 2026-08-31 監査: limit を `?? 0` で潰していたため「負担上限 未設定」と
-      //   「非課税で本当に 0」が区別できず、未設定が黙って「負担 0 円 = 市へ全額請求」に
-      //   倒れていた。null のまま持って警告で拾えるようにする。
-      const certMap = new Map<string, { number: string; contract: string; limit: number | null; seiho: boolean }>();
-      for (const c of (certRes.data ?? []) as {
-        client_id: string; beneficiary_number: string | null; self_payment_limit: number | null; seiho_flag: boolean | null;
-      }[]) {
-        if (!certMap.has(c.client_id)) {
-          certMap.set(c.client_id, {
-            number: c.beneficiary_number ?? "",
-            contract: "",
-            limit: c.self_payment_limit ?? null,
-            seiho: c.seiho_flag ?? false,
-          });
-        }
-      }
-      for (const c of (chiikiCertRes.data ?? []) as {
-        client_id: string; beneficiary_number: string | null; shikyu_amount_text: string | null;
-        self_payment_limit: number | null; seiho_flag: boolean | null;
-      }[]) {
-        certMap.set(c.client_id, {
-          number: c.beneficiary_number ?? certMap.get(c.client_id)?.number ?? "",
-          contract: c.shikyu_amount_text ?? "",
-          limit: c.self_payment_limit ?? null,
-          seiho: c.seiho_flag ?? false,
-        });
-      }
-      setCerts(certMap);
-
-      // コード → 名称・単位数 (マスタから、対象月世代)
-      const codes = Array.from(new Set([...idou, ...bath].map((r) => r.service_code).filter(Boolean))) as string[];
-      const info = new Map<string, { name: string; unit: number }>();
-      // 2026-08-31 監査: `codes.slice(0, 300)` で**無言の打ち切り**だった。
-      //   301 件目以降はマスタが引けず 0 単位で明細に載る。チャンクして全部引く。
-      const CODE_CHUNK = 200;
-      for (let i = 0; i < codes.length; i += CODE_CHUNK) {
-        const chunk = codes.slice(i, i + CODE_CHUNK);
-        const { data: cn, error: cnErr } = await validInMonth(
-          supabase.from("kaigo_service_codes").select("service_code, service_name, units")
-            .eq("system", "地域生活支援").eq("municipality", DEFAULT_CHIIKI_MUNICIPALITY)
-            .in("service_code", chunk),
-          y, mo,
-        );
-        if (cnErr) throw new Error(`サービスコードマスタの取得に失敗: ${cnErr.message}`);
-        for (const c of (cn ?? []) as { service_code: string; service_name: string; units: number }[]) {
-          if (!info.has(c.service_code)) info.set(c.service_code, { name: c.service_name, unit: c.units });
-        }
-      }
-      setCodeInfo(info);
-      // マスタに無いコードは 0 単位で計上されてしまうので拾っておく
-      //   (地域生活支援マスタは千葉市 703 件のみ。他市町村の記録はここに落ちる)
-      setMissingCodes(codes.filter((c) => !info.has(c)));
+      const data = await loadIdouBillingData(supabase, currentOfficeId, month);
+      setClients(data.clients);
+      setIdouRows(data.idouRows);
+      setBathRows(data.bathRows);
+      setCerts(data.certs);
+      setCodeInfo(data.codeInfo);
+      setMissingCodes(data.missingCodes);
     } catch (e) {
       console.error("請求データ読込に失敗:", e instanceof Error ? e.message : e);
     } finally {
       setLoading(false);
     }
-  }, [supabase, currentOfficeId, month, y, mo]);
+  }, [supabase, currentOfficeId, month]);
 
+  // 初回 mount は server (?office= 付きなら) から渡された initialData をそのまま使う。
+  const isInitialMount = useRef(true);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount/月変更時の fetch
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      if (initialOfficeId && initialOfficeId === currentOfficeId) return;
+    }
     load();
-  }, [load]);
+  }, [load, currentOfficeId, initialOfficeId]);
 
   const moveMonth = (delta: number) => {
     const d = new Date(y, mo - 1 + delta, 1);
