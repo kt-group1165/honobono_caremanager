@@ -464,6 +464,11 @@ function isRentalRow(svc: SvcRow): boolean {
   return String(svc.category ?? "") === "17";
 }
 
+/** 行が「加算」(名称に加算を含む) か判定。加算は本体サービスの時間帯に従うため時間入力欄が不要。 */
+function isAddonRow(svc: SvcRow): boolean {
+  return svc.content.includes("加算");
+}
+
 /** yyyy-MM から月の日数を計算。Invalid な値は 30 にフォールバック (UI 表示安全側)。 */
 function daysInMonthOf(yearMonth: string): number {
   const m = /^(\d{4})-(\d{1,2})$/.exec(yearMonth);
@@ -2103,13 +2108,14 @@ function EditFormServiceTicket({ content, onChange, reportMonth }: {
                       <td rowSpan={span} className="border border-gray-300 px-0.5 align-middle">
                         {/* 時間範囲を inline 自由入力 (= 例: 9:00〜10:00)。
                             既存セル値が「週3回(月水金)」等の頻度文字列でもそのまま表示・編集可。
-                            rental 行 (= 福祉用具貸与) は時間帯不要なので入力不可。 */}
+                            rental 行 (= 福祉用具貸与) / addon 行 (= 加算。本体サービスの時間帯に従う)
+                            は時間帯不要なので入力不可。 */}
                         <input
                           type="text"
                           value={svc.time}
                           onChange={(e) => updateSvc(i, "time", e.target.value)}
-                          placeholder={rental ? "—" : "例: 9:00〜10:00"}
-                          disabled={rental}
+                          placeholder={rental || isAddonRow(svc) ? "—" : "例: 9:00〜10:00"}
+                          disabled={rental || isAddonRow(svc)}
                           className="w-full text-[10px] px-1 py-0.5 rounded border border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent disabled:bg-gray-50 disabled:text-gray-400"
                           title="例: 9:00〜10:00"
                         />
@@ -2117,7 +2123,7 @@ function EditFormServiceTicket({ content, onChange, reportMonth }: {
                       <td rowSpan={span} className="border border-gray-300 px-0.5 align-middle">
                         <button
                           onClick={() => { setSelectorTarget(i); setSelectorOpen(true); }}
-                          className="w-full text-left text-[10px] px-1 py-0.5 rounded hover:bg-blue-50 transition-colors truncate"
+                          className="w-full text-left text-[10px] px-1 py-0.5 rounded hover:bg-blue-50 transition-colors line-clamp-2 whitespace-normal break-words leading-tight"
                           title={svc.content || "クリックしてサービスを選択"}
                         >
                           {svc.content || <span className="text-gray-400">選択...</span>}
@@ -2249,7 +2255,7 @@ function EditFormServiceTicket({ content, onChange, reportMonth }: {
                           <td className="border border-gray-300 px-1 align-middle">
                             <button
                               onClick={() => { setSelectorTarget(i); setSelectorOpen(true); }}
-                              className="w-full text-left text-[10px] px-1 py-0.5 rounded hover:bg-blue-50 transition-colors truncate"
+                              className="w-full text-left text-[10px] px-1 py-0.5 rounded hover:bg-blue-50 transition-colors line-clamp-2 whitespace-normal break-words leading-tight"
                               title={svc.content || "クリックしてサービスを選択"}
                             >
                               {svc.content || <span className="text-gray-400">選択...</span>}
