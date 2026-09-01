@@ -208,6 +208,10 @@ interface ClaimDbRow {
   unei_kijun_gensan_units?: number | null;
   status: ClaimStatus;
   notes: string | null;
+  /** レセプト自身の保険者/被保険者番号 (care_support_claims_insurer.sql)。
+   *  転居月は 1 人が保険者ごとに 2 レセプトになるので、月末の認定では決まらない */
+  insurer_number?: string | null;
+  insured_number?: string | null;
   clients: {
     name: string | null;
     furigana: string | null;
@@ -535,9 +539,30 @@ export async function fetchKyotakuClaimRows(
     if (!careMgrByUser.has(p.user_id)) careMgrByUser.set(p.user_id, p.care_manager_number ?? null);
   }
 
+  // 保険者番号 → 保険者名。転居月の 2 枚目は「月末の認定」と保険者が違うので、
+  // その行の保険者名を認定 1 件から引けない。全認定から番号で引けるようにしておく。
+  const insurerNameByNumber = new Map<string, string>();
+  for (const [, certs] of certsInMonthRes) {
+    for (const r of certs) {
+      const n = (r.insurer_number ?? "").trim();
+      if (n && r.insurer_name && !insurerNameByNumber.has(n)) insurerNameByNumber.set(n, r.insurer_name);
+    }
+  }
+  for (const [, r] of certRes) {
+    const n = (r.insurer_number ?? "").trim();
+    if (n && r.insurer_name && !insurerNameByNumber.has(n)) insurerNameByNumber.set(n, r.insurer_name);
+  }
+
   // 3) 行の組み立て (ふりがな順)
   const rows: KyotakuSeikyuRow[] = billable.map((c) => {
     const cert = certMap.get(c.user_id);
+    // ⚠ **月末の認定で保険者を決めない。**転居月は 1 人が保険者ごとに 2 レセプトに
+    //   なるため、両方が新保険者名義で出て旧保険者への請求が消え、国保連で重複返戻になる。
+    //   2026-09-01 時点で現存 5 名 (天野昭代・佐藤喜美子・細田孝子・加藤綾子・秋元とし子)。
+    //   レセプト自身が番号を持っていればそれを使い、無い (旧 DB / 空) ときだけ認定に落とす。
+    const claimInsurer = (c.insurer_number ?? "").trim();
+    const certInsurer = (cert?.insurer_number ?? "").trim();
+    const useClaimInsurer = claimInsurer !== "" && claimInsurer !== certInsurer;
     const kohi = kohiRes.byClient.get(c.user_id) ?? null;
     const { lines, totalUnits } = buildClaimLines(c);
     // 公費単独 (みなし2号) = 被保険者番号が H 始まり
@@ -549,9 +574,11 @@ export async function fetchKyotakuClaimRows(
       gender: c.clients?.gender ?? null,
       birth_date: c.clients?.birth_date ?? null,
       phone: c.clients?.phone ?? null,
-      insurer_number: cert?.insurer_number ?? null,
-      insurer_name: cert?.insurer_name ?? null,
-      insured_number: cert?.insured_number ?? null,
+      insurer_number: claimInsurer || cert?.insurer_number || null,
+      insurer_name: useClaimInsurer
+        ? (insurerNameByNumber.get(claimInsurer) ?? null)   // 名前が引けなければ空。誤った名前は出さない
+        : (cert?.insurer_name ?? null),
+      insured_number: (c.insured_number ?? "").trim() || cert?.insured_number || null,
       care_level: cert?.care_level ?? null,
       certStart: cert?.certification_start_date ?? null,
       certEnd: cert?.certification_end_date ?? null,

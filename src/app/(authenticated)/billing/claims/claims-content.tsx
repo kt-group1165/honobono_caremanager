@@ -1247,6 +1247,9 @@ export function ClaimsContent({
             unit_price: officeUnitPrice,
             total_amount: 0,
             insurance_amount: 0,
+            // 一意キーは (user_id, billing_month, insurer_number)。空だと転居月に潰れる
+            insurer_number: cert.insurer_number ?? null,
+            insured_number: cert.insured_number ?? null,
             initial_addition: false,
             initial_addition_units: 0,
             hospital_coordination: false,
