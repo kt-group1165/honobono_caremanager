@@ -838,6 +838,58 @@ function loadTjJuhoSpans(targetMonth, areaDir) {
   return out;
 }
 
+/**
+ * TJ (実績記録票) から 身体介護・家事援助 (021001/021002) の提供区間を読む。
+ *
+ * ⚠ **なぜ要るか**: MEISAI の時刻 (派遣開始/終了・実時刻・算定開始/終了) は
+ *   3つとも常に一致しており、MEISAI 内で選び直しても直らない。実際に
+ *   おゆみ野で確認した実例 (2026-09-01):
+ *     MEISAI (賃金)   18:00-19:30
+ *     TJ     (伝送)   18:30-20:00   ← 国保連提出済みの正しい時刻
+ *   賃金側は現地入り〜片付けまでを含み、請求側は利用者への提供時間だけなので
+ *   ずれる。「同日合算(概ね2時間未満)」等の間隔計算は請求側の時刻で行うべきで、
+ *   MEISAI の時刻のままだと間隔を誤り、無くてよいはずの例外ルールを作りかねない。
+ *
+ * ⚠ 重訪 (loadTjJuhoSpans) と違って **1日に複数件あるときの対応付けは行わない**
+ *   (どの MEISAI 行がどの TJ 行に対応するか、時刻がずれている前提では機械的に
+ *   決められないため)。1日1件のときだけ安全に補正する。複数件の日は
+ *   件数だけ記録し、書き換えない。
+ */
+function loadTjBodySpans(targetMonth, areaDir) {
+  const ym = targetMonth.replace("-", "");
+  const root = fileURLToPath(new URL(`../伝送データ/${areaDir}/`, import.meta.url));
+  const out = new Map(); // `${受給者証番号}|${日}` → [{s,e}]
+  let files = [];
+  try {
+    const walk = (d) => readdirSync(d, { withFileTypes: true })
+      .flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
+    files = walk(root).filter((f) => /TJ\d+\.CSV$/i.test(f) && f.includes(ym));
+  } catch { return out; }
+  const sp = (l) => l.split(",").map((x) => x.replace(/^"|"$/g, ""));
+  const toMin = (v) => {
+    const t = String(v ?? "").padStart(4, "0");
+    return /^\d{4}$/.test(t) ? Number(t.slice(0, 2)) * 60 + Number(t.slice(2)) : null;
+  };
+  for (const f of files) {
+    const recs = iconv.decode(readFileSync(f), "Shift_JIS").split(/\r?\n/)
+      .filter((l) => l.trim()).map(sp)
+      // ⚠ c[12] (サービスコード) が **空でない** = 重訪以外 (身体/家事/通院/同行等)。
+      .filter((c) => c[0] === "2" && c[2] === "J611" && c[3] === "02" && !!c[12]);
+    for (const c of recs) {
+      const day = Number(c[10]);
+      const s = toMin(c[15]);
+      let e = toMin(c[16]);
+      if (!c[7] || !Number.isInteger(day) || s == null || e == null) continue;
+      if (e <= s) e += 1440;
+      const k = `${c[7]}|${day}`;
+      if (!out.has(k)) out.set(k, []);
+      out.get(k).push({ s, e });
+    }
+  }
+  for (const [k, arr] of out) arr.sort((a, b) => a.s - b.s);
+  return out;
+}
+
 async function main() {
   console.log(`=== MEISAI 障害取込 ${EXECUTE ? "【本番 EXECUTE】" : "【DRY RUN】"} 対象月=${TARGET_MONTH} 事業所=${AREA_DIR} ===\n`);
 
@@ -1004,6 +1056,96 @@ async function main() {
     }
   }
   if (threePlus) console.warn(`⚠ 3人以上の同時重複ブロックが ${threePlus} 件 — 2番目以降を全て ・2人 で計上 (・3人 コードは未対応。要確認)`);
+
+  // 4a.4) TJ (実績記録票) で 身体/家事 の時刻を検算・補正する (1日1件のときだけ)
+  //   MEISAI (賃金) と TJ (伝送=請求根拠) の時刻がずれることがある (詳細は loadTjBodySpans 参照)。
+  //   次段の同日合算は「間隔」で判定するため、ここで直しておかないと
+  //   請求の根拠にならない時刻で合算要否を誤る。
+  {
+    const tjBody = loadTjBodySpans(TARGET_MONTH, AREA_DIR);
+    if (tjBody.size) {
+      const asg = await fetchAll("client_office_assignments", "client_id",
+        (q) => q.eq("office_id", OFFICE_ID).order("client_id"));
+      const ids = [...new Set(asg.map((a) => a.client_id))];
+      const nameByBeneficiary2 = new Map();
+      for (let i = 0; i < ids.length; i += 200) {
+        const chunk = ids.slice(i, i + 200);
+        const { data: cls, error: eC } = await sb.from("clients").select("id,name").in("id", chunk);
+        if (eC) { console.error(`✗ clients 取得失敗: ${eC.message}`); process.exit(1); }
+        const { data: cts, error: eT } = await sb.from("shougai_certifications")
+          .select("client_id,beneficiary_number").in("client_id", chunk);
+        if (eT) { console.error(`✗ 受給者証取得失敗: ${eT.message}`); process.exit(1); }
+        const nameById = new Map((cls ?? []).map((c) => [c.id, c.name]));
+        for (const ct of cts ?? []) {
+          const nm = nameById.get(ct.client_id);
+          if (ct.beneficiary_number && nm) nameByBeneficiary2.set(String(ct.beneficiary_number), nm);
+        }
+      }
+      const nameKey2 = (n) => (n || "").normalize("NFKC").replace(/[（(].*$/, "").replace(/[\s　]/g, "");
+      const tjBodyByNameDay = new Map(); // `${氏名key}|${日}` -> [{s,e}]
+      for (const [k, arr] of tjBody) {
+        const [ben, dayStr] = k.split("|");
+        const nm = nameByBeneficiary2.get(ben);
+        if (nm) tjBodyByNameDay.set(`${nameKey2(nm)}|${Number(dayStr)}`, arr);
+      }
+
+      // MEISAI 側: 利用者 x 日 x 区分(身体/家事) でグループ化
+      const meisaiByNameDayKind = new Map();
+      for (const r of target) {
+        const kind = r.code === "021001" ? "身体" : r.code === "021002" ? "家事" : null;
+        if (!kind) continue;
+        const day = Number(String(r.date).slice(-2));
+        const k = `${nameKey2(r.clientName)}|${day}|${kind}`;
+        if (!meisaiByNameDayKind.has(k)) meisaiByNameDayKind.set(k, []);
+        meisaiByNameDayKind.get(k).push(r);
+      }
+
+      const fmtHm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+      let fixedCount = 0, countMismatch = 0, durMismatch = 0, matchedCount = 0;
+      const fixedSamples = [];
+      for (const [k, rows] of meisaiByNameDayKind) {
+        const [nameK, dayStr] = k.split("|");
+        const tjSpans = tjBodyByNameDay.get(`${nameK}|${dayStr}`);
+        if (!tjSpans?.length) continue;
+        matchedCount++;
+        if (rows.length !== tjSpans.length) {
+          // 件数が違う日は、どの MEISAI 行がどの TJ 行に対応するか
+          // 機械的に決められない (欠落/合算/職員違いの可能性)。触らず記録だけする。
+          countMismatch++;
+          continue;
+        }
+        // ⚠ 所要時間の多重集合が一致しない日は補正しない。
+        //   件数だけ合っていても中身が対応しているとは限らない
+        //   (久保田真紀 6/28 の実例: MEISAI {1.5h,1h} vs TJ {1h,0.5h} で
+        //    どの行も一致せず、単純な時刻ズレでは説明がつかなかった)。
+        const meisaiDurs = rows.map((r) => toMinOfDay(r.santeiEnd) - toMinOfDay(r.santeiStart)).sort((a, b) => a - b);
+        const tjDurs = tjSpans.map((s) => s.e - s.s).sort((a, b) => a - b);
+        if (!meisaiDurs.every((d, i) => Math.abs(d - tjDurs[i]) <= 5)) {
+          durMismatch++;
+          continue;
+        }
+        // 所要時間の集合が一致する日は、開始時刻の順序で 1 対 1 に対応付ける
+        // (同じ利用者・同じ日の訪問は、賃金側と請求側で並び順が入れ替わらない前提)。
+        const sorted = [...rows].sort((a, b) => toMinOfDay(a.santeiStart) - toMinOfDay(b.santeiStart));
+        for (let i = 0; i < sorted.length; i++) {
+          const r = sorted[i];
+          const meS = toMinOfDay(r.santeiStart), meE = toMinOfDay(r.santeiEnd);
+          const { s: tjS, e: tjE } = tjSpans[i];
+          if (meS === tjS && meE === tjE) continue; // 一致。何もしない
+          fixedCount++;
+          if (fixedSamples.length < 20) {
+            fixedSamples.push(`${r.clientName} ${r.date} MEISAI ${r.santeiStart}-${r.santeiEnd} → TJ ${fmtHm(tjS)}-${fmtHm(tjE)}`);
+          }
+          setSpan(r, tjS, tjE);
+        }
+      }
+      if (matchedCount) {
+        console.log(`TJ(身体/家事)で時刻を検算: 対象(氏名×日) ${matchedCount} / 補正 ${fixedCount}行 / ` +
+          `件数不一致(対応付け不能) ${countMismatch} / 所要時間不一致(対応付け不能) ${durMismatch}`);
+        for (const s of fixedSamples) console.log(`    ${s}`);
+      }
+    }
+  }
 
   // 4a.5) 同日合算セッション (概ね2時間未満の間隔ルール。要件 #1「家事夜増2.0」是正)
   //   2人派遣行 (_twoPerson=true) は合算対象から除外 (安全側。相互作用未検証のため)。
