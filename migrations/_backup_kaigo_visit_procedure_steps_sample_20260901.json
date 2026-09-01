@@ -1,0 +1,1778 @@
+[
+  {
+    "id": "1fdd7abf-8f4a-47a1-af34-02e8b5cf9393",
+    "service_id": "5c1aa63a-7b91-4829-b55d-2a41d5127738",
+    "step_no": 1,
+    "content": "訪問・手洗・挨拶",
+    "minutes": 5,
+    "detail": "訪問。手洗い、うがいを済ませ、ご本人様に挨拶。体調を確認する。"
+  },
+  {
+    "id": "0cb15533-1f68-457f-a8ed-4b89678d2925",
+    "service_id": "5c1aa63a-7b91-4829-b55d-2a41d5127738",
+    "step_no": 2,
+    "content": "服薬確認",
+    "minutes": 5,
+    "detail": "朝食後薬の飲み忘れが無いか確認する。飲み忘れがあった場合はその場で服薬して頂く。"
+  },
+  {
+    "id": "46224cfe-781a-4806-bc19-1044bb8a1ea3",
+    "service_id": "5c1aa63a-7b91-4829-b55d-2a41d5127738",
+    "step_no": 3,
+    "content": "通所(送り出し)",
+    "minutes": 15,
+    "detail": "通所の準備、荷物確認。\nご本人のペースに合わせ、玄関口まで歩行の見守り、通所スタッフへ引き継ぎ、送り出しを行う。"
+  },
+  {
+    "id": "014409c8-47f0-411d-83f5-b27ff6354da4",
+    "service_id": "5c1aa63a-7b91-4829-b55d-2a41d5127738",
+    "step_no": 4,
+    "content": "記録",
+    "minutes": 5,
+    "detail": "サービス終了時に記録票を記載する。"
+  },
+  {
+    "id": "dc002b21-bfef-40a2-9c67-6d4436cb0523",
+    "service_id": "5387dc82-e824-4a2b-ac20-5a602d840822",
+    "step_no": 1,
+    "content": "訪問・手洗・挨拶",
+    "minutes": 5,
+    "detail": "訪問。手洗い、うがいを済ませ、ご本人様に挨拶。体調を確認する。"
+  },
+  {
+    "id": "5a65436a-6af0-453a-8db2-fcf90e99b5e0",
+    "service_id": "5387dc82-e824-4a2b-ac20-5a602d840822",
+    "step_no": 2,
+    "content": "通所(迎え入れ)",
+    "minutes": 15,
+    "detail": "通所荷物の片づけ。\n通所スタッフから引き継ぎ、ご本人のペースに合わせ、居室まで歩行の見守り、迎え入れを行う。"
+  },
+  {
+    "id": "5105f41d-477a-4df7-8f16-59003e6b3afa",
+    "service_id": "5387dc82-e824-4a2b-ac20-5a602d840822",
+    "step_no": 3,
+    "content": "共に行う家事",
+    "minutes": 5,
+    "detail": "ご本人様と一緒に可燃ゴミをまとめる。"
+  },
+  {
+    "id": "cd79df56-a392-478c-9b65-a48d1d831faa",
+    "service_id": "5387dc82-e824-4a2b-ac20-5a602d840822",
+    "step_no": 4,
+    "content": "記録",
+    "minutes": 5,
+    "detail": "サービス終了時に記録票を記載する。"
+  },
+  {
+    "id": "b8c6269a-9a77-4861-9c15-789f69a9eb00",
+    "service_id": "f23ca619-7917-4514-87cd-7955d3c25c36",
+    "step_no": 1,
+    "content": "訪問・手洗・挨拶",
+    "minutes": 5,
+    "detail": "訪問。手洗い、うがいを済ませ、ご本人様に挨拶。体調を確認する。"
+  },
+  {
+    "id": "2b270282-bc41-4e05-99d3-4505664727f4",
+    "service_id": "f23ca619-7917-4514-87cd-7955d3c25c36",
+    "step_no": 2,
+    "content": "服薬確認",
+    "minutes": 5,
+    "detail": "朝食後薬の飲み忘れ確認。"
+  },
+  {
+    "id": "97a0d40c-734d-4918-aade-a623392d40d0",
+    "service_id": "f23ca619-7917-4514-87cd-7955d3c25c36",
+    "step_no": 3,
+    "content": "通所(送り出し)",
+    "minutes": 15,
+    "detail": "通所準備、玄関口まで歩行見守り、通所スタッフへ引き継ぎ。"
+  },
+  {
+    "id": "94023eb4-5cb1-4ce7-b95d-a079645e032a",
+    "service_id": "f23ca619-7917-4514-87cd-7955d3c25c36",
+    "step_no": 4,
+    "content": "記録",
+    "minutes": 5,
+    "detail": "サービス終了時に記録票を記載。"
+  },
+  {
+    "id": "9ac7d6f7-84c6-4715-ab31-aff905b38928",
+    "service_id": "41e27743-bd62-48fb-9576-ac8b47d081dd",
+    "step_no": 1,
+    "content": "訪問・手洗・挨拶",
+    "minutes": 5,
+    "detail": "訪問。手洗い、うがいを済ませ、ご本人様に挨拶。体調・血圧を確認する。"
+  },
+  {
+    "id": "248139a8-0f86-4e4c-9ad0-fd51f8d1b1d1",
+    "service_id": "41e27743-bd62-48fb-9576-ac8b47d081dd",
+    "step_no": 2,
+    "content": "入浴準備",
+    "minutes": 10,
+    "detail": "浴室の温度確認、着替え準備、シャワーチェア設置。"
+  },
+  {
+    "id": "784ab888-10e3-41ab-a161-29e357445dad",
+    "service_id": "41e27743-bd62-48fb-9576-ac8b47d081dd",
+    "step_no": 3,
+    "content": "入浴介助",
+    "minutes": 30,
+    "detail": "洗体・洗髪を介助。本人の希望する湯温で。\n適宜休憩を取り、入浴後の状態確認を行う。"
+  },
+  {
+    "id": "ca183e21-1aa3-4a22-b92c-46345ed525d8",
+    "service_id": "41e27743-bd62-48fb-9576-ac8b47d081dd",
+    "step_no": 4,
+    "content": "更衣・整容",
+    "minutes": 15,
+    "detail": "清拭、着替え介助、ドライヤー。"
+  },
+  {
+    "id": "26df2c9f-b8d3-4335-afee-95c45b4f7938",
+    "service_id": "41e27743-bd62-48fb-9576-ac8b47d081dd",
+    "step_no": 5,
+    "content": "水分補給・血圧測定",
+    "minutes": 10,
+    "detail": "お茶を提供、血圧を測定し記録。"
+  },
+  {
+    "id": "62c76520-c06b-4ddd-bda8-5c1fba1a508a",
+    "service_id": "41e27743-bd62-48fb-9576-ac8b47d081dd",
+    "step_no": 6,
+    "content": "片付け・記録",
+    "minutes": 10,
+    "detail": "浴室片付け、サービス記録票を記載。"
+  },
+  {
+    "id": "dd611c0e-ad89-4d58-86e1-373ee5ef8125",
+    "service_id": "5e20d45a-3cca-4697-ab10-909fb7fa574a",
+    "step_no": 1,
+    "content": "訪問・手洗・挨拶",
+    "minutes": 5,
+    "detail": "訪問。手洗い、うがいを済ませ、ご本人様に挨拶。"
+  },
+  {
+    "id": "ea74d177-8001-4828-be9c-39453440a404",
+    "service_id": "5e20d45a-3cca-4697-ab10-909fb7fa574a",
+    "step_no": 2,
+    "content": "清拭",
+    "minutes": 30,
+    "detail": "全身清拭。陰部洗浄含む。"
+  },
+  {
+    "id": "2c3a3472-50a5-43d4-9c33-43a392231675",
+    "service_id": "5e20d45a-3cca-4697-ab10-909fb7fa574a",
+    "step_no": 3,
+    "content": "着替え",
+    "minutes": 15,
+    "detail": "着替え介助。"
+  },
+  {
+    "id": "a31cf8ac-02c1-4d53-863d-b992b63d9eba",
+    "service_id": "5e20d45a-3cca-4697-ab10-909fb7fa574a",
+    "step_no": 4,
+    "content": "記録",
+    "minutes": 10,
+    "detail": "サービス記録票を記載。"
+  },
+  {
+    "id": "0469630a-4a1b-4b0a-957e-e0e8d56a9134",
+    "service_id": "95936053-1e48-4532-bbe0-f81fec0979d4",
+    "step_no": 1,
+    "content": "玄関で挨拶・声かけ",
+    "minutes": 1,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "64a1056c-2aa4-4c3d-909b-145c2110c0fd",
+    "service_id": "95936053-1e48-4532-bbe0-f81fec0979d4",
+    "step_no": 2,
+    "content": "手洗い・うがい",
+    "minutes": 2,
+    "detail": null
+  },
+  {
+    "id": "9238de64-846e-4118-aa3b-487e4c523849",
+    "service_id": "95936053-1e48-4532-bbe0-f81fec0979d4",
+    "step_no": 3,
+    "content": "本人の様子・体調確認",
+    "minutes": 3,
+    "detail": null
+  },
+  {
+    "id": "f8e9ee62-836a-430b-9a3f-b52f622f72e7",
+    "service_id": "95936053-1e48-4532-bbe0-f81fec0979d4",
+    "step_no": 4,
+    "content": "バイタル測定 (BP・P・SpO2)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "f4411532-9949-4f42-855b-70e1e137c46c",
+    "service_id": "95936053-1e48-4532-bbe0-f81fec0979d4",
+    "step_no": 5,
+    "content": "服薬介助 (降圧薬の確認と飲水サポート)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "d9d74265-78d0-49a9-a87a-ac3e86350ae5",
+    "service_id": "95936053-1e48-4532-bbe0-f81fec0979d4",
+    "step_no": 6,
+    "content": "記録記入・退室準備",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "a1179438-6036-45a0-9a77-9ee9c5d7299f",
+    "service_id": "99775eac-1e3c-419a-a783-99731e2bad9d",
+    "step_no": 1,
+    "content": "入浴前バイタル確認",
+    "minutes": 5,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "02a5d66a-3abc-4c55-ae43-b5a30a07c8d7",
+    "service_id": "99775eac-1e3c-419a-a783-99731e2bad9d",
+    "step_no": 2,
+    "content": "脱衣場暖房 ON、湯温確認 (40-41度)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "102f3903-cd5b-4e69-8f6b-a00c4d868b6c",
+    "service_id": "99775eac-1e3c-419a-a783-99731e2bad9d",
+    "step_no": 3,
+    "content": "脱衣介助 (本人ペース)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "def8e241-14af-48a8-a6de-5bd8f2f31806",
+    "service_id": "99775eac-1e3c-419a-a783-99731e2bad9d",
+    "step_no": 4,
+    "content": "洗体 (背中・足は介助)、洗髪",
+    "minutes": 20,
+    "detail": null
+  },
+  {
+    "id": "bb0f1564-c538-4c06-9f89-fffa3e5c9fa1",
+    "service_id": "99775eac-1e3c-419a-a783-99731e2bad9d",
+    "step_no": 5,
+    "content": "湯船浴 (5分)、上がり湯",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "8ce33ea6-41e3-4ae5-ac68-76f2fd7f577b",
+    "service_id": "99775eac-1e3c-419a-a783-99731e2bad9d",
+    "step_no": 6,
+    "content": "着衣介助、水分補給",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "e282473e-d5c2-41a8-8f0b-71e5e9e3892b",
+    "service_id": "99775eac-1e3c-419a-a783-99731e2bad9d",
+    "step_no": 7,
+    "content": "入浴後バイタル確認・休憩",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "72fee01c-b4d1-4d20-b3ba-a5cdc0213e9b",
+    "service_id": "2820d11b-6da7-4833-b4d0-d1426df548e9",
+    "step_no": 1,
+    "content": "冷蔵庫食材の確認",
+    "minutes": 5,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "66b9f21d-e479-4ea3-a116-ddb7575e172a",
+    "service_id": "2820d11b-6da7-4833-b4d0-d1426df548e9",
+    "step_no": 2,
+    "content": "献立決定 (本人と相談)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "5b2015fd-b829-45f0-86e0-80c29c6d6bbd",
+    "service_id": "2820d11b-6da7-4833-b4d0-d1426df548e9",
+    "step_no": 3,
+    "content": "調理 (主菜・副菜・汁物)",
+    "minutes": 30,
+    "detail": null
+  },
+  {
+    "id": "215a0fa7-4118-4c59-bb21-fcc9ab4c63b5",
+    "service_id": "2820d11b-6da7-4833-b4d0-d1426df548e9",
+    "step_no": 4,
+    "content": "配膳・声かけ",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "ed581b82-913a-495a-b602-c404aabd8c09",
+    "service_id": "2820d11b-6da7-4833-b4d0-d1426df548e9",
+    "step_no": 5,
+    "content": "食事見守り・水分摂取確認",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "59684316-e46c-4c94-8b7d-96d4f600502e",
+    "service_id": "2820d11b-6da7-4833-b4d0-d1426df548e9",
+    "step_no": 6,
+    "content": "片付け・記録",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "15d2215f-be39-471e-9087-f354d0157049",
+    "service_id": "63bfe37f-2913-4e4c-b2ad-700f6e806daf",
+    "step_no": 1,
+    "content": "玄関で挨拶・声かけ",
+    "minutes": 1,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "e35a99f7-06b8-4629-9531-c2d137d79b32",
+    "service_id": "63bfe37f-2913-4e4c-b2ad-700f6e806daf",
+    "step_no": 2,
+    "content": "手洗い・うがい",
+    "minutes": 2,
+    "detail": null
+  },
+  {
+    "id": "7a7709cd-e0cd-4a69-ae0a-450c9b34800b",
+    "service_id": "63bfe37f-2913-4e4c-b2ad-700f6e806daf",
+    "step_no": 3,
+    "content": "本人の様子・体調確認",
+    "minutes": 3,
+    "detail": null
+  },
+  {
+    "id": "da0f15cd-d998-4d3f-9582-76eeacabab1e",
+    "service_id": "63bfe37f-2913-4e4c-b2ad-700f6e806daf",
+    "step_no": 4,
+    "content": "バイタル測定 (BP・P・SpO2)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "8f5c8c95-2fd7-4e31-a2ae-e6b8e6771791",
+    "service_id": "63bfe37f-2913-4e4c-b2ad-700f6e806daf",
+    "step_no": 5,
+    "content": "服薬介助 (降圧薬の確認と飲水サポート)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "0bef20b4-24d4-4e90-a763-be17ee3d9097",
+    "service_id": "63bfe37f-2913-4e4c-b2ad-700f6e806daf",
+    "step_no": 6,
+    "content": "記録記入・退室準備",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "9218d7c2-bd6e-4642-93c9-7f6f2b301ef2",
+    "service_id": "ec0c608e-99c0-4af6-a203-7c49ee162e7d",
+    "step_no": 1,
+    "content": "入浴前バイタル確認",
+    "minutes": 5,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "054ff1ed-1f4c-4c67-abbf-87efc0b3d113",
+    "service_id": "ec0c608e-99c0-4af6-a203-7c49ee162e7d",
+    "step_no": 2,
+    "content": "脱衣場暖房 ON、湯温確認 (40-41度)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "3eada072-66ff-44a4-acc6-39518df9e241",
+    "service_id": "ec0c608e-99c0-4af6-a203-7c49ee162e7d",
+    "step_no": 3,
+    "content": "脱衣介助 (本人ペース)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "4f857131-1fa0-4539-9382-d2410bec273e",
+    "service_id": "ec0c608e-99c0-4af6-a203-7c49ee162e7d",
+    "step_no": 4,
+    "content": "洗体 (背中・足は介助)、洗髪",
+    "minutes": 20,
+    "detail": null
+  },
+  {
+    "id": "55206f73-a9e0-43c6-86fd-50d0a402c12a",
+    "service_id": "ec0c608e-99c0-4af6-a203-7c49ee162e7d",
+    "step_no": 5,
+    "content": "湯船浴 (5分)、上がり湯",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "10cef2cb-b881-45f2-9d2a-0fb29aa0214e",
+    "service_id": "59c61f9c-847f-4869-9d0b-4c1a38236578",
+    "step_no": 2,
+    "content": "献立決定 (本人と相談)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "ad2063f0-6e69-4e4b-8665-5416748fad5a",
+    "service_id": "15b247d0-549c-491a-b217-e418e0ca914a",
+    "step_no": 1,
+    "content": "声かけ・挨拶・本人の希望確認",
+    "minutes": 3,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "499027f9-ab58-44a8-8a08-7449306fdc5c",
+    "service_id": "15b247d0-549c-491a-b217-e418e0ca914a",
+    "step_no": 6,
+    "content": "整容・洗面",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "c7363135-4ea8-4053-9cdd-c87a29bd4bee",
+    "service_id": "6df37d72-9f90-4ddb-a160-9e5cd84b2188",
+    "step_no": 3,
+    "content": "下肢可動域訓練",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "9b596c84-e174-4bd7-a9dc-ea1fab5df4e1",
+    "service_id": "5d751a3c-a2e5-479f-bb3e-0d9e574fae59",
+    "step_no": 2,
+    "content": "食事姿勢の調整 (車椅子・テーブル高)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "cd406616-c63b-4901-8e68-c64e15a889cc",
+    "service_id": "bc7ec073-b942-4543-99f5-f4aaf7cac504",
+    "step_no": 2,
+    "content": "手洗い・うがい",
+    "minutes": 2,
+    "detail": null
+  },
+  {
+    "id": "9cede7f7-3df9-4778-a3bb-615864a1ac53",
+    "service_id": "ad59706d-a4e2-4018-8fb5-9d751c352156",
+    "step_no": 5,
+    "content": "湯船浴 (5分)、上がり湯",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "b1d27686-a485-4013-a180-aafab76c9c26",
+    "service_id": "15600805-2dd0-4a91-ac62-fae58ec47a77",
+    "step_no": 2,
+    "content": "献立決定 (本人と相談)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "0f922095-89f6-41e0-a7cc-446e50c1fd16",
+    "service_id": "62483754-0216-4aed-990d-2ed60157d9e3",
+    "step_no": 1,
+    "content": "声かけ・挨拶 (本人を認識するまで丁寧に)",
+    "minutes": 3,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "642f37e9-e2e3-4a1b-8eff-b1d0faedb48e",
+    "service_id": "675fb5b4-7818-4895-945f-b1c2db03c454",
+    "step_no": 5,
+    "content": "着衣・整容",
+    "minutes": 15,
+    "detail": null
+  },
+  {
+    "id": "4d06fe88-5769-48d5-8077-c212287d5da0",
+    "service_id": "0b2bfeef-578c-4815-97d2-b6a6d6d52ec8",
+    "step_no": 3,
+    "content": "回想法を取り入れた会話",
+    "minutes": 15,
+    "detail": null
+  },
+  {
+    "id": "813b2d9f-c1e2-4f61-8d9d-495f0748eee3",
+    "service_id": "c197a1a8-b387-4dcf-bbc7-604da886f45e",
+    "step_no": 3,
+    "content": "本人の様子・体調確認",
+    "minutes": 3,
+    "detail": null
+  },
+  {
+    "id": "6b8bb344-ed54-49ca-b1c3-ca5da41560bd",
+    "service_id": "a1a430b4-c943-4c50-ad5d-c9632ee551de",
+    "step_no": 1,
+    "content": "入浴前バイタル確認",
+    "minutes": 5,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "91d87e23-8ede-41e7-b506-74f10dc629f7",
+    "service_id": "a1a430b4-c943-4c50-ad5d-c9632ee551de",
+    "step_no": 6,
+    "content": "着衣介助、水分補給",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "8747b245-4f74-4896-9d7e-ac6a2fa7d7c7",
+    "service_id": "7876a2c1-8e6e-4678-bb16-a1996c420c06",
+    "step_no": 3,
+    "content": "調理 (主菜・副菜・汁物)",
+    "minutes": 30,
+    "detail": null
+  },
+  {
+    "id": "0be5aac9-59ed-47f2-9a27-c3c55eea22fe",
+    "service_id": "83dcbd52-7cdb-48c4-b2f1-c46a565a154b",
+    "step_no": 2,
+    "content": "手洗い・うがい",
+    "minutes": 2,
+    "detail": null
+  },
+  {
+    "id": "1836e30b-ae33-41b8-8eb8-5181c3b39ee0",
+    "service_id": "edeb3bd2-e283-417c-b4bd-73ec46e7d8b2",
+    "step_no": 5,
+    "content": "湯船浴 (5分)、上がり湯",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "14667478-8dca-4b08-8a17-0a69ea13024d",
+    "service_id": "6b48293d-b451-4530-87b3-ace4a5f223f3",
+    "step_no": 2,
+    "content": "献立決定 (本人と相談)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "66117f8f-05fb-44e7-aac9-bd4882462bfd",
+    "service_id": "f4cd8f4e-f8ed-4a61-8ce0-4a09714d0129",
+    "step_no": 1,
+    "content": "玄関で挨拶・声かけ",
+    "minutes": 1,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "bbf9b989-f702-4e33-8045-74856c0f5a77",
+    "service_id": "f4cd8f4e-f8ed-4a61-8ce0-4a09714d0129",
+    "step_no": 6,
+    "content": "記録記入・退室準備",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "0857ca6d-1a42-481d-8b71-cfca0b86d038",
+    "service_id": "89f85aa2-a7ec-4552-81bb-6d49b5933497",
+    "step_no": 4,
+    "content": "洗体 (背中・足は介助)、洗髪",
+    "minutes": 20,
+    "detail": null
+  },
+  {
+    "id": "4d1b6b81-15f0-498c-baf8-810857c4ce87",
+    "service_id": "06a20a32-6ee7-4d73-904f-674494954359",
+    "step_no": 1,
+    "content": "冷蔵庫食材の確認",
+    "minutes": 5,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "bf9ee618-a6a7-49a7-8431-48a353ea05bb",
+    "service_id": "06a20a32-6ee7-4d73-904f-674494954359",
+    "step_no": 6,
+    "content": "片付け・記録",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "a0c29e42-1c54-422b-9264-6f50f154a38a",
+    "service_id": "d402baee-63a5-4990-8238-da4e02c356e4",
+    "step_no": 5,
+    "content": "服薬介助 (降圧薬の確認と飲水サポート)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "5b929dcd-0975-4ce2-b2ed-37994fdf2e58",
+    "service_id": "db0a01aa-6797-402a-bdd7-30d82281e3f1",
+    "step_no": 3,
+    "content": "脱衣介助 (本人ペース)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "f3c5031a-2f20-40f5-be75-01190034d376",
+    "service_id": "78906d9f-a4a6-4db3-83ec-269710032924",
+    "step_no": 5,
+    "content": "食事見守り・水分摂取確認",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "4341855a-9fd6-4236-a0c8-e12005cd7b3c",
+    "service_id": "87d47eb3-fb85-4dc8-bfda-a38c099f7e1b",
+    "step_no": 4,
+    "content": "バイタル測定 (BP・P・SpO2)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "ee6207a7-c31a-495e-9edd-f9d62fd86227",
+    "service_id": "ff8f31b4-163d-4f5e-b8a9-0e3cda5cb98e",
+    "step_no": 2,
+    "content": "脱衣場暖房 ON、湯温確認 (40-41度)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "d50d9d88-16b7-4f2c-9217-06e7a1e9c2a5",
+    "service_id": "ff8f31b4-163d-4f5e-b8a9-0e3cda5cb98e",
+    "step_no": 7,
+    "content": "入浴後バイタル確認・休憩",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "b2dfd7f4-6f12-4276-a441-d751b7499731",
+    "service_id": "402f423e-ae22-42c3-8c6f-9c1263d071a8",
+    "step_no": 4,
+    "content": "配膳・声かけ",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "31232b97-7c6a-4bce-a0cb-46b392356c92",
+    "service_id": "ec0c608e-99c0-4af6-a203-7c49ee162e7d",
+    "step_no": 6,
+    "content": "着衣介助、水分補給",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "86c8ba23-5807-4479-b406-3b84b7fa7a52",
+    "service_id": "59c61f9c-847f-4869-9d0b-4c1a38236578",
+    "step_no": 3,
+    "content": "調理 (主菜・副菜・汁物)",
+    "minutes": 30,
+    "detail": null
+  },
+  {
+    "id": "cf30376e-c53a-40e7-9fab-2a1c41f4f224",
+    "service_id": "15b247d0-549c-491a-b217-e418e0ca914a",
+    "step_no": 2,
+    "content": "起床介助 (左側介助、右側保護)",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "c5aaa476-d0f4-4ef6-b45c-040e9e78a059",
+    "service_id": "15b247d0-549c-491a-b217-e418e0ca914a",
+    "step_no": 7,
+    "content": "記録・声かけ",
+    "minutes": 7,
+    "detail": null
+  },
+  {
+    "id": "2e8f6cfd-fc19-403e-ba99-2a5889cfef4d",
+    "service_id": "6df37d72-9f90-4ddb-a160-9e5cd84b2188",
+    "step_no": 4,
+    "content": "立位保持訓練 (5分×2 セット)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "783fcdc5-4f18-494c-a2c7-10c8426c0d91",
+    "service_id": "5d751a3c-a2e5-479f-bb3e-0d9e574fae59",
+    "step_no": 3,
+    "content": "食事介助 (患側に注意、一口量に注意)",
+    "minutes": 30,
+    "detail": null
+  },
+  {
+    "id": "d082e8b1-0ae9-43b4-8988-e29ed5a23af7",
+    "service_id": "bc7ec073-b942-4543-99f5-f4aaf7cac504",
+    "step_no": 3,
+    "content": "本人の様子・体調確認",
+    "minutes": 3,
+    "detail": null
+  },
+  {
+    "id": "17784aaf-c216-45ca-8dea-24af22569a19",
+    "service_id": "ad59706d-a4e2-4018-8fb5-9d751c352156",
+    "step_no": 1,
+    "content": "入浴前バイタル確認",
+    "minutes": 5,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "67fc5196-54eb-43cc-aecd-a0934b242055",
+    "service_id": "ad59706d-a4e2-4018-8fb5-9d751c352156",
+    "step_no": 6,
+    "content": "着衣介助、水分補給",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "8be9e413-51d3-4604-b848-6f24d8d5175c",
+    "service_id": "15600805-2dd0-4a91-ac62-fae58ec47a77",
+    "step_no": 3,
+    "content": "調理 (主菜・副菜・汁物)",
+    "minutes": 30,
+    "detail": null
+  },
+  {
+    "id": "29f57ed9-69cd-4cd9-bfca-6ebed2316713",
+    "service_id": "62483754-0216-4aed-990d-2ed60157d9e3",
+    "step_no": 2,
+    "content": "起床介助、体位変換",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "73935062-eee3-40cc-9c7b-c042484e8219",
+    "service_id": "675fb5b4-7818-4895-945f-b1c2db03c454",
+    "step_no": 1,
+    "content": "入浴前の声かけ (5分前から段階的に)",
+    "minutes": 5,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "e69782c9-6ae0-4a8b-8ede-b6349c8f298b",
+    "service_id": "675fb5b4-7818-4895-945f-b1c2db03c454",
+    "step_no": 6,
+    "content": "水分補給・休憩・会話",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "6316861f-bd4a-49f4-9299-d461f5019068",
+    "service_id": "0b2bfeef-578c-4815-97d2-b6a6d6d52ec8",
+    "step_no": 4,
+    "content": "簡単な家事の声かけ (洗濯物畳みなど)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "49a9ef44-e276-4323-a36e-656c1ee61b57",
+    "service_id": "c197a1a8-b387-4dcf-bbc7-604da886f45e",
+    "step_no": 4,
+    "content": "バイタル測定 (BP・P・SpO2)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "91a16261-35d5-4588-8be6-ab9243737022",
+    "service_id": "a1a430b4-c943-4c50-ad5d-c9632ee551de",
+    "step_no": 2,
+    "content": "脱衣場暖房 ON、湯温確認 (40-41度)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "19130280-ea6e-46d6-91fe-99078ea717fa",
+    "service_id": "a1a430b4-c943-4c50-ad5d-c9632ee551de",
+    "step_no": 7,
+    "content": "入浴後バイタル確認・休憩",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "ed56273a-330b-48dd-a71a-c45d0b040472",
+    "service_id": "7876a2c1-8e6e-4678-bb16-a1996c420c06",
+    "step_no": 4,
+    "content": "配膳・声かけ",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "0796238f-2f66-4bd9-b05e-d7fb5a0d112b",
+    "service_id": "83dcbd52-7cdb-48c4-b2f1-c46a565a154b",
+    "step_no": 3,
+    "content": "本人の様子・体調確認",
+    "minutes": 3,
+    "detail": null
+  },
+  {
+    "id": "ef6cc26d-a9e8-4ac6-ba37-a47415f310ab",
+    "service_id": "edeb3bd2-e283-417c-b4bd-73ec46e7d8b2",
+    "step_no": 1,
+    "content": "入浴前バイタル確認",
+    "minutes": 5,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "9e7315da-ea11-46fc-a3f3-3990004d80cf",
+    "service_id": "edeb3bd2-e283-417c-b4bd-73ec46e7d8b2",
+    "step_no": 6,
+    "content": "着衣介助、水分補給",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "7a95bf59-7b89-4c3e-89d1-f9286b05cc56",
+    "service_id": "6b48293d-b451-4530-87b3-ace4a5f223f3",
+    "step_no": 3,
+    "content": "調理 (主菜・副菜・汁物)",
+    "minutes": 30,
+    "detail": null
+  },
+  {
+    "id": "e391f499-82e9-4481-b3a9-bd41823f9ae3",
+    "service_id": "f4cd8f4e-f8ed-4a61-8ce0-4a09714d0129",
+    "step_no": 2,
+    "content": "手洗い・うがい",
+    "minutes": 2,
+    "detail": null
+  },
+  {
+    "id": "071345f8-d93f-41b5-ab23-13794b28c05a",
+    "service_id": "89f85aa2-a7ec-4552-81bb-6d49b5933497",
+    "step_no": 5,
+    "content": "湯船浴 (5分)、上がり湯",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "e9d9eb41-93d3-4699-80bb-db8259bd6f1c",
+    "service_id": "06a20a32-6ee7-4d73-904f-674494954359",
+    "step_no": 2,
+    "content": "献立決定 (本人と相談)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "9554577f-59db-43a1-bac6-ad794bebe8bb",
+    "service_id": "d402baee-63a5-4990-8238-da4e02c356e4",
+    "step_no": 1,
+    "content": "玄関で挨拶・声かけ",
+    "minutes": 1,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "9b36d8b7-47ef-485d-ac94-b57e4bd9ee88",
+    "service_id": "d402baee-63a5-4990-8238-da4e02c356e4",
+    "step_no": 6,
+    "content": "記録記入・退室準備",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "c6299107-367c-42ca-9088-a513986252a5",
+    "service_id": "db0a01aa-6797-402a-bdd7-30d82281e3f1",
+    "step_no": 4,
+    "content": "洗体 (背中・足は介助)、洗髪",
+    "minutes": 20,
+    "detail": null
+  },
+  {
+    "id": "5229d44b-9fcc-40d0-a15a-ea4db6837d2f",
+    "service_id": "78906d9f-a4a6-4db3-83ec-269710032924",
+    "step_no": 1,
+    "content": "冷蔵庫食材の確認",
+    "minutes": 5,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "9b648ec8-fa07-43c8-b0aa-82800770c3b2",
+    "service_id": "78906d9f-a4a6-4db3-83ec-269710032924",
+    "step_no": 6,
+    "content": "片付け・記録",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "d4bf8a89-15e4-4ed6-9ac4-c2eddc676d23",
+    "service_id": "87d47eb3-fb85-4dc8-bfda-a38c099f7e1b",
+    "step_no": 5,
+    "content": "服薬介助 (降圧薬の確認と飲水サポート)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "20d3c0aa-b98b-484e-b3af-1734b23be30f",
+    "service_id": "ff8f31b4-163d-4f5e-b8a9-0e3cda5cb98e",
+    "step_no": 3,
+    "content": "脱衣介助 (本人ペース)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "3a7ce769-7d64-4360-bd1f-556aba675f0b",
+    "service_id": "402f423e-ae22-42c3-8c6f-9c1263d071a8",
+    "step_no": 5,
+    "content": "食事見守り・水分摂取確認",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "f1e8365f-f84b-4638-ba54-0c55b5aed44e",
+    "service_id": "ec0c608e-99c0-4af6-a203-7c49ee162e7d",
+    "step_no": 7,
+    "content": "入浴後バイタル確認・休憩",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "b325fc23-23d4-4886-bd1b-f4fdaa85ea5e",
+    "service_id": "59c61f9c-847f-4869-9d0b-4c1a38236578",
+    "step_no": 4,
+    "content": "配膳・声かけ",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "317006e8-45f7-4b08-83aa-8ffa39e4f8de",
+    "service_id": "15b247d0-549c-491a-b217-e418e0ca914a",
+    "step_no": 3,
+    "content": "車椅子移乗",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "8dc2fa94-68dd-44a6-822a-be20f741223d",
+    "service_id": "6df37d72-9f90-4ddb-a160-9e5cd84b2188",
+    "step_no": 5,
+    "content": "クールダウン・水分補給",
+    "minutes": 2,
+    "detail": null
+  },
+  {
+    "id": "386c19a7-ffbb-4b25-90fa-f651f77faec9",
+    "service_id": "5d751a3c-a2e5-479f-bb3e-0d9e574fae59",
+    "step_no": 4,
+    "content": "口腔ケア",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "76ba12d8-1084-4e7e-bf74-535465265fc3",
+    "service_id": "bc7ec073-b942-4543-99f5-f4aaf7cac504",
+    "step_no": 4,
+    "content": "バイタル測定 (BP・P・SpO2)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "b3450b49-4c6a-4c73-8211-4008ebc95431",
+    "service_id": "ad59706d-a4e2-4018-8fb5-9d751c352156",
+    "step_no": 2,
+    "content": "脱衣場暖房 ON、湯温確認 (40-41度)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "c2f08015-8c0c-4649-9bc2-b899947fe334",
+    "service_id": "ad59706d-a4e2-4018-8fb5-9d751c352156",
+    "step_no": 7,
+    "content": "入浴後バイタル確認・休憩",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "0a607660-aa6c-4bbf-bd38-c18fdab879c3",
+    "service_id": "15600805-2dd0-4a91-ac62-fae58ec47a77",
+    "step_no": 4,
+    "content": "配膳・声かけ",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "ba74b67a-7bdc-47a7-9bad-dbb63b35e9ad",
+    "service_id": "62483754-0216-4aed-990d-2ed60157d9e3",
+    "step_no": 3,
+    "content": "口腔ケア (本人と一緒に動作確認)",
+    "minutes": 7,
+    "detail": null
+  },
+  {
+    "id": "c27b7e90-6e8c-4f1e-b4d6-4ca3a58416b2",
+    "service_id": "675fb5b4-7818-4895-945f-b1c2db03c454",
+    "step_no": 2,
+    "content": "更衣・脱衣 (羞恥心への配慮)",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "605f5305-9509-4338-91fc-5b8650fe0bd5",
+    "service_id": "0b2bfeef-578c-4815-97d2-b6a6d6d52ec8",
+    "step_no": 5,
+    "content": "記録・退室準備",
+    "minutes": 2,
+    "detail": null
+  },
+  {
+    "id": "7392d52e-b5b6-4ed2-aa3b-17d8d5433c24",
+    "service_id": "c197a1a8-b387-4dcf-bbc7-604da886f45e",
+    "step_no": 5,
+    "content": "服薬介助 (降圧薬の確認と飲水サポート)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "fa41a106-0140-47e7-9895-cfae582c1936",
+    "service_id": "a1a430b4-c943-4c50-ad5d-c9632ee551de",
+    "step_no": 3,
+    "content": "脱衣介助 (本人ペース)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "71c197f7-4905-4e18-b807-79eb22b36cc4",
+    "service_id": "7876a2c1-8e6e-4678-bb16-a1996c420c06",
+    "step_no": 5,
+    "content": "食事見守り・水分摂取確認",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "b6768d2a-e9bb-4c07-ab71-a55da0067bdd",
+    "service_id": "83dcbd52-7cdb-48c4-b2f1-c46a565a154b",
+    "step_no": 4,
+    "content": "バイタル測定 (BP・P・SpO2)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "ece6c24a-c5bb-434a-a29a-5b63ac667b51",
+    "service_id": "edeb3bd2-e283-417c-b4bd-73ec46e7d8b2",
+    "step_no": 2,
+    "content": "脱衣場暖房 ON、湯温確認 (40-41度)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "276578d8-5a5a-4039-bf29-9d6ec0e813d4",
+    "service_id": "edeb3bd2-e283-417c-b4bd-73ec46e7d8b2",
+    "step_no": 7,
+    "content": "入浴後バイタル確認・休憩",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "af852fa9-28f1-4585-9f77-1cdd1da7fd7f",
+    "service_id": "6b48293d-b451-4530-87b3-ace4a5f223f3",
+    "step_no": 4,
+    "content": "配膳・声かけ",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "b3f51757-048e-4d9a-baef-65fc72120b00",
+    "service_id": "f4cd8f4e-f8ed-4a61-8ce0-4a09714d0129",
+    "step_no": 3,
+    "content": "本人の様子・体調確認",
+    "minutes": 3,
+    "detail": null
+  },
+  {
+    "id": "89d60071-5804-4df3-bf80-a631a6ef0658",
+    "service_id": "89f85aa2-a7ec-4552-81bb-6d49b5933497",
+    "step_no": 1,
+    "content": "入浴前バイタル確認",
+    "minutes": 5,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "6e42101c-c1dd-46af-9ffe-a3976cddb074",
+    "service_id": "89f85aa2-a7ec-4552-81bb-6d49b5933497",
+    "step_no": 6,
+    "content": "着衣介助、水分補給",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "3aab2be1-8709-4ab3-8ebd-84dabc729794",
+    "service_id": "06a20a32-6ee7-4d73-904f-674494954359",
+    "step_no": 3,
+    "content": "調理 (主菜・副菜・汁物)",
+    "minutes": 30,
+    "detail": null
+  },
+  {
+    "id": "caf00762-f0bf-457a-8f95-717da5a954ca",
+    "service_id": "d402baee-63a5-4990-8238-da4e02c356e4",
+    "step_no": 2,
+    "content": "手洗い・うがい",
+    "minutes": 2,
+    "detail": null
+  },
+  {
+    "id": "79756ba8-7d43-4d88-b36f-3ef0951b8fbd",
+    "service_id": "db0a01aa-6797-402a-bdd7-30d82281e3f1",
+    "step_no": 5,
+    "content": "湯船浴 (5分)、上がり湯",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "17f808a4-4ee4-4caa-8e69-0ab436edfbbd",
+    "service_id": "78906d9f-a4a6-4db3-83ec-269710032924",
+    "step_no": 2,
+    "content": "献立決定 (本人と相談)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "cc5b014c-0b15-430f-9635-861238e50a55",
+    "service_id": "87d47eb3-fb85-4dc8-bfda-a38c099f7e1b",
+    "step_no": 1,
+    "content": "玄関で挨拶・声かけ",
+    "minutes": 1,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "82180188-dde2-4f7e-80f9-d0a5efdcde28",
+    "service_id": "87d47eb3-fb85-4dc8-bfda-a38c099f7e1b",
+    "step_no": 6,
+    "content": "記録記入・退室準備",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "45aeb68f-937a-4044-909f-8531b442895e",
+    "service_id": "ff8f31b4-163d-4f5e-b8a9-0e3cda5cb98e",
+    "step_no": 4,
+    "content": "洗体 (背中・足は介助)、洗髪",
+    "minutes": 20,
+    "detail": null
+  },
+  {
+    "id": "4fa1c572-1698-472a-a349-234c6721ee6e",
+    "service_id": "402f423e-ae22-42c3-8c6f-9c1263d071a8",
+    "step_no": 1,
+    "content": "冷蔵庫食材の確認",
+    "minutes": 5,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "188d1107-560e-4051-bcd5-33860c29824c",
+    "service_id": "402f423e-ae22-42c3-8c6f-9c1263d071a8",
+    "step_no": 6,
+    "content": "片付け・記録",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "5fb6565f-0f91-4933-9ffd-a823fa6d258c",
+    "service_id": "59c61f9c-847f-4869-9d0b-4c1a38236578",
+    "step_no": 1,
+    "content": "冷蔵庫食材の確認",
+    "minutes": 5,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "4e45f04b-b412-49fe-80f3-519339feaedb",
+    "service_id": "59c61f9c-847f-4869-9d0b-4c1a38236578",
+    "step_no": 6,
+    "content": "片付け・記録",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "2deca70a-ee78-473b-bbd1-a91aaf9a1d57",
+    "service_id": "15b247d0-549c-491a-b217-e418e0ca914a",
+    "step_no": 5,
+    "content": "更衣介助 (脱健着患の原則)",
+    "minutes": 15,
+    "detail": null
+  },
+  {
+    "id": "4b2395bb-51b1-419d-988d-15fa3b306470",
+    "service_id": "6df37d72-9f90-4ddb-a160-9e5cd84b2188",
+    "step_no": 2,
+    "content": "上肢可動域訓練",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "6df3b791-e95b-45f5-ad09-dc61a654ec7d",
+    "service_id": "5d751a3c-a2e5-479f-bb3e-0d9e574fae59",
+    "step_no": 1,
+    "content": "食事準備 (トロミ剤の利用)",
+    "minutes": 10,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "bd015d07-c747-432c-9eb6-825e5398fa7f",
+    "service_id": "bc7ec073-b942-4543-99f5-f4aaf7cac504",
+    "step_no": 1,
+    "content": "玄関で挨拶・声かけ",
+    "minutes": 1,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "3dd6fa70-7e14-44ce-8bd2-10c7cebb2f59",
+    "service_id": "bc7ec073-b942-4543-99f5-f4aaf7cac504",
+    "step_no": 6,
+    "content": "記録記入・退室準備",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "77089d15-be7f-431f-9eb6-982652a6cbaa",
+    "service_id": "ad59706d-a4e2-4018-8fb5-9d751c352156",
+    "step_no": 4,
+    "content": "洗体 (背中・足は介助)、洗髪",
+    "minutes": 20,
+    "detail": null
+  },
+  {
+    "id": "cef99f76-1881-4820-91e8-48aa94f4c5ea",
+    "service_id": "15600805-2dd0-4a91-ac62-fae58ec47a77",
+    "step_no": 1,
+    "content": "冷蔵庫食材の確認",
+    "minutes": 5,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "8bc66017-5f58-4942-9dcb-a66493e3b12b",
+    "service_id": "15600805-2dd0-4a91-ac62-fae58ec47a77",
+    "step_no": 6,
+    "content": "片付け・記録",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "ef23c581-d770-4428-a4fc-55462167f9f1",
+    "service_id": "62483754-0216-4aed-990d-2ed60157d9e3",
+    "step_no": 5,
+    "content": "整容 (髪のとかし、声かけ)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "fe91f868-ae04-4b07-bf1c-dcec595d7360",
+    "service_id": "675fb5b4-7818-4895-945f-b1c2db03c454",
+    "step_no": 4,
+    "content": "入浴 (5分以内、温度に注意)",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "e7a47368-c399-4de9-a4e5-4ea76fb0e46f",
+    "service_id": "0b2bfeef-578c-4815-97d2-b6a6d6d52ec8",
+    "step_no": 2,
+    "content": "おやつの提供 (一緒に準備)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "7e54ff7f-7fec-411e-9479-310fb6edf3dd",
+    "service_id": "c197a1a8-b387-4dcf-bbc7-604da886f45e",
+    "step_no": 2,
+    "content": "手洗い・うがい",
+    "minutes": 2,
+    "detail": null
+  },
+  {
+    "id": "8afaf4c9-ba5f-40fb-86fe-7879adcc19c0",
+    "service_id": "a1a430b4-c943-4c50-ad5d-c9632ee551de",
+    "step_no": 5,
+    "content": "湯船浴 (5分)、上がり湯",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "425d43f2-6f67-4e46-a4f2-225cb8996c17",
+    "service_id": "7876a2c1-8e6e-4678-bb16-a1996c420c06",
+    "step_no": 2,
+    "content": "献立決定 (本人と相談)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "103d07a5-efcd-4566-8207-a62eb3212283",
+    "service_id": "83dcbd52-7cdb-48c4-b2f1-c46a565a154b",
+    "step_no": 1,
+    "content": "玄関で挨拶・声かけ",
+    "minutes": 1,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "f5982d68-4e24-426e-800c-2bdc52cf6182",
+    "service_id": "83dcbd52-7cdb-48c4-b2f1-c46a565a154b",
+    "step_no": 6,
+    "content": "記録記入・退室準備",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "871f9c88-1ebb-460d-ba21-30147c1bfc11",
+    "service_id": "edeb3bd2-e283-417c-b4bd-73ec46e7d8b2",
+    "step_no": 4,
+    "content": "洗体 (背中・足は介助)、洗髪",
+    "minutes": 20,
+    "detail": null
+  },
+  {
+    "id": "99c8759d-215a-4238-ada7-3a02cbb19358",
+    "service_id": "6b48293d-b451-4530-87b3-ace4a5f223f3",
+    "step_no": 1,
+    "content": "冷蔵庫食材の確認",
+    "minutes": 5,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "b63fc495-396e-4508-8dfc-fdabf19d9a67",
+    "service_id": "6b48293d-b451-4530-87b3-ace4a5f223f3",
+    "step_no": 6,
+    "content": "片付け・記録",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "b184f603-a8cf-414f-a2c3-c7975935f0ae",
+    "service_id": "f4cd8f4e-f8ed-4a61-8ce0-4a09714d0129",
+    "step_no": 5,
+    "content": "服薬介助 (降圧薬の確認と飲水サポート)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "b12da60f-319b-4395-8cdd-5d0fe4365b58",
+    "service_id": "89f85aa2-a7ec-4552-81bb-6d49b5933497",
+    "step_no": 3,
+    "content": "脱衣介助 (本人ペース)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "bdf230bd-e525-4d83-8dc9-d936c246203e",
+    "service_id": "06a20a32-6ee7-4d73-904f-674494954359",
+    "step_no": 5,
+    "content": "食事見守り・水分摂取確認",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "c690cc6b-c38b-457d-a486-ca6808662c97",
+    "service_id": "d402baee-63a5-4990-8238-da4e02c356e4",
+    "step_no": 4,
+    "content": "バイタル測定 (BP・P・SpO2)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "3f94b19d-a23a-4520-8353-77bcf593fb3a",
+    "service_id": "db0a01aa-6797-402a-bdd7-30d82281e3f1",
+    "step_no": 2,
+    "content": "脱衣場暖房 ON、湯温確認 (40-41度)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "bfafcf17-d047-492b-aae5-387d6d98c34b",
+    "service_id": "db0a01aa-6797-402a-bdd7-30d82281e3f1",
+    "step_no": 7,
+    "content": "入浴後バイタル確認・休憩",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "0cce43c1-4dcd-441a-92c0-9020f1abd65b",
+    "service_id": "78906d9f-a4a6-4db3-83ec-269710032924",
+    "step_no": 4,
+    "content": "配膳・声かけ",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "1b8fd657-3340-46bb-a052-49198eaf2662",
+    "service_id": "87d47eb3-fb85-4dc8-bfda-a38c099f7e1b",
+    "step_no": 3,
+    "content": "本人の様子・体調確認",
+    "minutes": 3,
+    "detail": null
+  },
+  {
+    "id": "a5593e08-c208-4d2e-9891-5cb2fa848cba",
+    "service_id": "ff8f31b4-163d-4f5e-b8a9-0e3cda5cb98e",
+    "step_no": 1,
+    "content": "入浴前バイタル確認",
+    "minutes": 5,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "271174a9-711c-4866-95f2-73c84ac171b9",
+    "service_id": "ff8f31b4-163d-4f5e-b8a9-0e3cda5cb98e",
+    "step_no": 6,
+    "content": "着衣介助、水分補給",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "740d5c8c-1e91-408d-a365-ba8b20a853a7",
+    "service_id": "402f423e-ae22-42c3-8c6f-9c1263d071a8",
+    "step_no": 3,
+    "content": "調理 (主菜・副菜・汁物)",
+    "minutes": 30,
+    "detail": null
+  },
+  {
+    "id": "1a5908e3-6cda-43e6-a21c-4596a8306a27",
+    "service_id": "59c61f9c-847f-4869-9d0b-4c1a38236578",
+    "step_no": 5,
+    "content": "食事見守り・水分摂取確認",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "fd0223fe-a7cf-4255-8a62-e74ec7140587",
+    "service_id": "15b247d0-549c-491a-b217-e418e0ca914a",
+    "step_no": 4,
+    "content": "口腔ケア (自助具使用)",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "7de259df-b632-4760-a1ec-a3ce6376bd57",
+    "service_id": "6df37d72-9f90-4ddb-a160-9e5cd84b2188",
+    "step_no": 1,
+    "content": "リハビリ準備 (タイマー・記録用紙)",
+    "minutes": 3,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "bea0d5e7-6bdf-4fe6-8d47-074eb9f28928",
+    "service_id": "5d751a3c-a2e5-479f-bb3e-0d9e574fae59",
+    "step_no": 5,
+    "content": "食後の体位調整・休憩",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "98848820-80fe-495a-8355-bac8bf839bf2",
+    "service_id": "bc7ec073-b942-4543-99f5-f4aaf7cac504",
+    "step_no": 5,
+    "content": "服薬介助 (降圧薬の確認と飲水サポート)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "8b84e327-be36-4fed-b66f-0dbd46e2d7da",
+    "service_id": "ad59706d-a4e2-4018-8fb5-9d751c352156",
+    "step_no": 3,
+    "content": "脱衣介助 (本人ペース)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "711d57b2-22c2-4ad7-b8a5-89ca5fe0a647",
+    "service_id": "15600805-2dd0-4a91-ac62-fae58ec47a77",
+    "step_no": 5,
+    "content": "食事見守り・水分摂取確認",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "e98d41be-fb87-4701-91dd-ed986a0e0e45",
+    "service_id": "62483754-0216-4aed-990d-2ed60157d9e3",
+    "step_no": 4,
+    "content": "更衣介助 (本人選択の声かけ)",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "e350127e-ab33-42b6-99a1-a49f9e8fcdb6",
+    "service_id": "675fb5b4-7818-4895-945f-b1c2db03c454",
+    "step_no": 3,
+    "content": "洗体・洗髪 (本人の好む方法を確認)",
+    "minutes": 25,
+    "detail": null
+  },
+  {
+    "id": "5bc6d0e8-3f13-4f3a-96ad-6f1983c8cd67",
+    "service_id": "0b2bfeef-578c-4815-97d2-b6a6d6d52ec8",
+    "step_no": 1,
+    "content": "本人の様子確認",
+    "minutes": 3,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "34159816-7f2f-4f92-b124-2d5d858f08a6",
+    "service_id": "c197a1a8-b387-4dcf-bbc7-604da886f45e",
+    "step_no": 1,
+    "content": "玄関で挨拶・声かけ",
+    "minutes": 1,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "f636a119-d1eb-423c-8156-344300aa5764",
+    "service_id": "c197a1a8-b387-4dcf-bbc7-604da886f45e",
+    "step_no": 6,
+    "content": "記録記入・退室準備",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "0fb90732-5a95-4f9d-aa4d-a717cbf5a005",
+    "service_id": "a1a430b4-c943-4c50-ad5d-c9632ee551de",
+    "step_no": 4,
+    "content": "洗体 (背中・足は介助)、洗髪",
+    "minutes": 20,
+    "detail": null
+  },
+  {
+    "id": "0e2d98d4-21e1-46af-81b6-c8f34f41f332",
+    "service_id": "7876a2c1-8e6e-4678-bb16-a1996c420c06",
+    "step_no": 1,
+    "content": "冷蔵庫食材の確認",
+    "minutes": 5,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "e06003d9-caae-4ea7-9bbd-674903670cd3",
+    "service_id": "7876a2c1-8e6e-4678-bb16-a1996c420c06",
+    "step_no": 6,
+    "content": "片付け・記録",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "d82ff33e-94ba-4c1c-a3bc-3709cfa7be6a",
+    "service_id": "83dcbd52-7cdb-48c4-b2f1-c46a565a154b",
+    "step_no": 5,
+    "content": "服薬介助 (降圧薬の確認と飲水サポート)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "41c627c4-66e3-4499-b63e-ca24ea507e58",
+    "service_id": "edeb3bd2-e283-417c-b4bd-73ec46e7d8b2",
+    "step_no": 3,
+    "content": "脱衣介助 (本人ペース)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "c3a8303a-5a31-4cb5-9134-2a6b8792918b",
+    "service_id": "6b48293d-b451-4530-87b3-ace4a5f223f3",
+    "step_no": 5,
+    "content": "食事見守り・水分摂取確認",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "87bad09a-9263-4726-af49-d4c8e7d042a0",
+    "service_id": "f4cd8f4e-f8ed-4a61-8ce0-4a09714d0129",
+    "step_no": 4,
+    "content": "バイタル測定 (BP・P・SpO2)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "fa369c51-ae51-4b57-ac56-647ac2f811f3",
+    "service_id": "89f85aa2-a7ec-4552-81bb-6d49b5933497",
+    "step_no": 2,
+    "content": "脱衣場暖房 ON、湯温確認 (40-41度)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "80e59405-1d55-4f70-bb64-313103930529",
+    "service_id": "89f85aa2-a7ec-4552-81bb-6d49b5933497",
+    "step_no": 7,
+    "content": "入浴後バイタル確認・休憩",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "0614f2ae-05ea-490b-a075-24b90377468b",
+    "service_id": "06a20a32-6ee7-4d73-904f-674494954359",
+    "step_no": 4,
+    "content": "配膳・声かけ",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "2915fd72-c348-47cb-a900-3beeb764ef6c",
+    "service_id": "d402baee-63a5-4990-8238-da4e02c356e4",
+    "step_no": 3,
+    "content": "本人の様子・体調確認",
+    "minutes": 3,
+    "detail": null
+  },
+  {
+    "id": "b13bb320-ee0f-46c5-9c36-163c23a67f5a",
+    "service_id": "db0a01aa-6797-402a-bdd7-30d82281e3f1",
+    "step_no": 1,
+    "content": "入浴前バイタル確認",
+    "minutes": 5,
+    "detail": "[fake テスト用-houmon]"
+  },
+  {
+    "id": "0fa0c23a-f678-4e85-89e2-99d9759715e7",
+    "service_id": "db0a01aa-6797-402a-bdd7-30d82281e3f1",
+    "step_no": 6,
+    "content": "着衣介助、水分補給",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "dca55ac4-5490-4388-a88c-0ecf755bab9a",
+    "service_id": "78906d9f-a4a6-4db3-83ec-269710032924",
+    "step_no": 3,
+    "content": "調理 (主菜・副菜・汁物)",
+    "minutes": 30,
+    "detail": null
+  },
+  {
+    "id": "be4c2f6d-46f0-4d0a-a5e0-975104f6545e",
+    "service_id": "87d47eb3-fb85-4dc8-bfda-a38c099f7e1b",
+    "step_no": 2,
+    "content": "手洗い・うがい",
+    "minutes": 2,
+    "detail": null
+  },
+  {
+    "id": "51ec8871-b021-4a7b-8aff-485a4fead145",
+    "service_id": "ff8f31b4-163d-4f5e-b8a9-0e3cda5cb98e",
+    "step_no": 5,
+    "content": "湯船浴 (5分)、上がり湯",
+    "minutes": 10,
+    "detail": null
+  },
+  {
+    "id": "85505701-feb7-4cd5-baaa-fdd3d409b581",
+    "service_id": "402f423e-ae22-42c3-8c6f-9c1263d071a8",
+    "step_no": 2,
+    "content": "献立決定 (本人と相談)",
+    "minutes": 5,
+    "detail": null
+  },
+  {
+    "id": "c11a04a1-b33f-4058-9693-b2bcaa1c1b57",
+    "service_id": "8ff23dd0-0344-44f7-b884-41a6ee7aed55",
+    "step_no": 1,
+    "content": "訪問・手洗・挨拶",
+    "minutes": 5,
+    "detail": "訪問。手洗い、うがいを済ませ、ご本人様に挨拶。体調を確認する。"
+  },
+  {
+    "id": "80db77a2-112e-4c47-ba18-783fcd6bd257",
+    "service_id": "8ff23dd0-0344-44f7-b884-41a6ee7aed55",
+    "step_no": 2,
+    "content": "排泄介助",
+    "minutes": 10,
+    "detail": "トイレ誘導、後始末、手洗い介助。"
+  },
+  {
+    "id": "623e11d8-c8c1-4fd7-8c42-979f998cde84",
+    "service_id": "8ff23dd0-0344-44f7-b884-41a6ee7aed55",
+    "step_no": 3,
+    "content": "朝食準備",
+    "minutes": 15,
+    "detail": "朝食を温めて配膳、お茶を準備。"
+  },
+  {
+    "id": "4acc57e9-ac81-495c-9197-4a1451c1c96e",
+    "service_id": "8ff23dd0-0344-44f7-b884-41a6ee7aed55",
+    "step_no": 4,
+    "content": "服薬確認",
+    "minutes": 5,
+    "detail": "朝食後薬を確認、飲み忘れがあればその場で服薬。"
+  },
+  {
+    "id": "fd258079-75c0-45d4-b2ee-74000581323b",
+    "service_id": "8ff23dd0-0344-44f7-b884-41a6ee7aed55",
+    "step_no": 5,
+    "content": "片付け・記録",
+    "minutes": 10,
+    "detail": "食器片付け、記録票を記載。"
+  },
+  {
+    "id": "d611656b-9e3d-4e5f-9bbc-064bfd4cbf20",
+    "service_id": "43d10ff5-023a-4687-a3e7-70ab8fbfa20a",
+    "step_no": 1,
+    "content": "訪問・手洗・挨拶",
+    "minutes": 5,
+    "detail": "訪問。手洗い、うがいを済ませ、ご本人様に挨拶。"
+  },
+  {
+    "id": "34e98656-400c-48ca-bcbf-0ff1b7e5b9e9",
+    "service_id": "43d10ff5-023a-4687-a3e7-70ab8fbfa20a",
+    "step_no": 2,
+    "content": "掃除",
+    "minutes": 30,
+    "detail": "リビング・廊下・トイレの掃除。\n床は掃除機+水拭き、トイレは便座・便器を中心に。"
+  },
+  {
+    "id": "11d754a7-e74e-479c-bb88-5b23550aeb9b",
+    "service_id": "43d10ff5-023a-4687-a3e7-70ab8fbfa20a",
+    "step_no": 3,
+    "content": "洗濯",
+    "minutes": 15,
+    "detail": "洗濯物を洗濯機にかけ、終了後干す。"
+  },
+  {
+    "id": "9977c86a-277a-4bbc-aeeb-9e8f6b605ca5",
+    "service_id": "43d10ff5-023a-4687-a3e7-70ab8fbfa20a",
+    "step_no": 4,
+    "content": "記録",
+    "minutes": 10,
+    "detail": "サービス記録票を記載。"
+  },
+  {
+    "id": "d9d49c59-c717-4c52-bd63-34f8b71d755c",
+    "service_id": "83b24417-71d3-4437-8d9e-d397895295f2",
+    "step_no": 1,
+    "content": "訪問・手洗・挨拶",
+    "minutes": 5,
+    "detail": "訪問。手洗い、うがいを済ませ、ご本人様に挨拶。体調・血圧を確認する。"
+  },
+  {
+    "id": "990c5d5a-724b-46ae-ac16-663a89cdbebf",
+    "service_id": "83b24417-71d3-4437-8d9e-d397895295f2",
+    "step_no": 2,
+    "content": "入浴準備",
+    "minutes": 10,
+    "detail": "浴室の温度確認、着替え準備、シャワーチェア設置。"
+  },
+  {
+    "id": "d27342e6-512d-4c03-b55a-ede4e52c8b7e",
+    "service_id": "83b24417-71d3-4437-8d9e-d397895295f2",
+    "step_no": 3,
+    "content": "入浴介助",
+    "minutes": 30,
+    "detail": "洗体・洗髪を介助。本人の希望する湯温で。\n適宜休憩を取り、入浴後の状態確認を行う。"
+  },
+  {
+    "id": "59579442-b1b0-401b-b4db-e3a44f570aaf",
+    "service_id": "83b24417-71d3-4437-8d9e-d397895295f2",
+    "step_no": 4,
+    "content": "更衣・整容",
+    "minutes": 15,
+    "detail": "清拭、着替え介助、ドライヤー。"
+  },
+  {
+    "id": "fad10ddb-333a-4da5-96d2-3a639252edd7",
+    "service_id": "83b24417-71d3-4437-8d9e-d397895295f2",
+    "step_no": 5,
+    "content": "水分補給・血圧測定",
+    "minutes": 10,
+    "detail": "お茶を提供、血圧を測定し記録。"
+  },
+  {
+    "id": "9896df68-b34f-4ab3-93e2-f90bb62ddbab",
+    "service_id": "83b24417-71d3-4437-8d9e-d397895295f2",
+    "step_no": 6,
+    "content": "片付け・記録",
+    "minutes": 10,
+    "detail": "浴室片付け、サービス記録票を記載。"
+  }
+]

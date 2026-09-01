@@ -1,0 +1,388 @@
+[
+  {
+    "id": "29bc5be7-15d5-4925-a196-f03654b511b9",
+    "tenant_id": "kt-group",
+    "office_id": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+    "client_name": "溝渕 幸子",
+    "plan_start_date": "2026-04-01",
+    "author_name": "斉藤悠希弥",
+    "creation_reason": "短期目標更新の為",
+    "special_notes": "ご本人様希望・他職種（医療）の提供時間により、サービス提供時間 変動あり。",
+    "weekly_schedule": {},
+    "created_at": "2026-05-28T08:39:43.922473+00:00",
+    "updated_at": "2026-05-28T08:39:43.922473+00:00",
+    "created_by": null,
+    "plan_end_date": "2027-03-31",
+    "client_id": null
+  },
+  {
+    "id": "3c4c62eb-0917-4180-ba6d-78be5c360744",
+    "tenant_id": "kt-group",
+    "office_id": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+    "client_name": "溝渕 幸子",
+    "plan_start_date": "2025-10-01",
+    "author_name": "斉藤悠希弥",
+    "creation_reason": "初回相談",
+    "special_notes": "初回サービス、本人ペースを優先しゆっくり馴染んで頂く",
+    "weekly_schedule": {},
+    "created_at": "2026-05-28T08:43:48.711197+00:00",
+    "updated_at": "2026-05-28T08:43:48.711197+00:00",
+    "created_by": null,
+    "plan_end_date": "2026-03-31",
+    "client_id": null
+  },
+  {
+    "id": "a9db3057-54d1-4a45-b9b0-15382e6c3431",
+    "tenant_id": "kt-group",
+    "office_id": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+    "client_name": "田中 太郎",
+    "plan_start_date": "2026-01-01",
+    "author_name": "山田 美咲",
+    "creation_reason": "入浴介助追加",
+    "special_notes": "入浴後の血圧確認を必ず実施",
+    "weekly_schedule": {},
+    "created_at": "2026-05-28T08:43:49.336491+00:00",
+    "updated_at": "2026-05-28T08:43:49.336491+00:00",
+    "created_by": null,
+    "plan_end_date": "2026-12-31",
+    "client_id": null
+  },
+  {
+    "id": "45842bde-82d3-40fa-b379-957cb4e1a8f7",
+    "tenant_id": "kt-group",
+    "office_id": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+    "client_name": "田中 太郎",
+    "plan_start_date": "2025-04-01",
+    "author_name": "山田 美咲",
+    "creation_reason": "初回",
+    "special_notes": null,
+    "weekly_schedule": {},
+    "created_at": "2026-05-28T08:43:49.610527+00:00",
+    "updated_at": "2026-05-28T08:43:49.610527+00:00",
+    "created_by": null,
+    "plan_end_date": "2025-12-31",
+    "client_id": null
+  },
+  {
+    "id": "73f12105-ef65-4ec2-ab42-31cade402480",
+    "tenant_id": "kt-group",
+    "office_id": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+    "client_name": "大塚 紀子",
+    "plan_start_date": "2026-05-31",
+    "author_name": "板垣 榛菜",
+    "creation_reason": "新規作成",
+    "special_notes": "高血圧 あり。[fake テスト用-houmon] sample-marker:fake-houmon-2026-06",
+    "weekly_schedule": {},
+    "created_at": "2026-06-19T10:20:41.34882+00:00",
+    "updated_at": "2026-06-19T10:20:41.34882+00:00",
+    "created_by": null,
+    "plan_end_date": "2026-08-30",
+    "client_id": null
+  },
+  {
+    "id": "ff1ea774-9461-42b1-bb52-125c08a810f3",
+    "tenant_id": "kt-group",
+    "office_id": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+    "client_name": "佐藤 花子",
+    "plan_start_date": "2026-06-01",
+    "author_name": "鈴木 健太",
+    "creation_reason": "区分変更（要介護2→要介護3）",
+    "special_notes": "要介護度上がったため、通所利用日に加え訪問日数を増加",
+    "weekly_schedule": {
+      "fri": [
+        {
+          "1": null,
+          "2": null,
+          "3": null,
+          "4": null,
+          "5": null
+        }
+      ],
+      "mon": [
+        {
+          "1": {
+            "start": "10:00"
+          },
+          "2": null,
+          "3": null,
+          "4": null,
+          "5": null
+        }
+      ],
+      "sat": [
+        {
+          "1": null,
+          "2": null,
+          "3": null,
+          "4": null,
+          "5": null
+        }
+      ],
+      "sun": [
+        {
+          "1": null,
+          "2": null,
+          "3": null,
+          "4": null,
+          "5": null
+        }
+      ],
+      "thu": [
+        {
+          "1": null,
+          "2": null,
+          "3": null,
+          "4": null,
+          "5": null
+        }
+      ],
+      "tue": [
+        {
+          "1": null,
+          "2": null,
+          "3": null,
+          "4": null,
+          "5": null
+        }
+      ],
+      "wed": [
+        {
+          "1": null,
+          "2": null,
+          "3": null,
+          "4": null,
+          "5": null
+        }
+      ]
+    },
+    "created_at": "2026-05-28T08:43:49.962991+00:00",
+    "updated_at": "2026-05-28T08:43:49.962991+00:00",
+    "created_by": null,
+    "plan_end_date": "2027-05-31",
+    "client_id": null
+  },
+  {
+    "id": "49c13c6f-384c-469c-8ff5-8a7fad336a78",
+    "tenant_id": "kt-group",
+    "office_id": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+    "client_name": "木村 弘一",
+    "plan_start_date": "2026-05-31",
+    "author_name": "内山 由理",
+    "creation_reason": "新規作成",
+    "special_notes": "糖尿病 あり。[fake テスト用-houmon] sample-marker:fake-houmon-2026-06",
+    "weekly_schedule": {},
+    "created_at": "2026-06-19T10:20:42.448021+00:00",
+    "updated_at": "2026-06-19T10:20:42.448021+00:00",
+    "created_by": null,
+    "plan_end_date": "2026-08-30",
+    "client_id": null
+  },
+  {
+    "id": "4527d43f-3b4d-469b-9945-1b38c79033ab",
+    "tenant_id": "kt-group",
+    "office_id": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+    "client_name": "清水 美智子",
+    "plan_start_date": "2026-05-31",
+    "author_name": "髙山 洋",
+    "creation_reason": "新規作成",
+    "special_notes": "脳梗塞後遺症 あり。[fake テスト用-houmon] sample-marker:fake-houmon-2026-06",
+    "weekly_schedule": {},
+    "created_at": "2026-06-19T10:20:43.485913+00:00",
+    "updated_at": "2026-06-19T10:20:43.485913+00:00",
+    "created_by": null,
+    "plan_end_date": "2026-08-30",
+    "client_id": null
+  },
+  {
+    "id": "ea794bf0-5aa5-49b3-a419-debc044806d4",
+    "tenant_id": "kt-group",
+    "office_id": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+    "client_name": "林 信夫",
+    "plan_start_date": "2026-05-31",
+    "author_name": "松本 みどり",
+    "creation_reason": "新規作成",
+    "special_notes": "膝関節症 あり。[fake テスト用-houmon] sample-marker:fake-houmon-2026-06",
+    "weekly_schedule": {},
+    "created_at": "2026-06-19T10:20:44.44728+00:00",
+    "updated_at": "2026-06-19T10:20:44.44728+00:00",
+    "created_by": null,
+    "plan_end_date": "2026-08-30",
+    "client_id": null
+  },
+  {
+    "id": "89db9ab7-56a7-4f2a-a0d2-1ab8089ddf85",
+    "tenant_id": "kt-group",
+    "office_id": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+    "client_name": "山下 静枝",
+    "plan_start_date": "2026-05-31",
+    "author_name": "長谷川 千春",
+    "creation_reason": "新規作成",
+    "special_notes": "認知症 あり。[fake テスト用-houmon] sample-marker:fake-houmon-2026-06",
+    "weekly_schedule": {},
+    "created_at": "2026-06-19T10:20:45.518282+00:00",
+    "updated_at": "2026-06-19T10:20:45.518282+00:00",
+    "created_by": null,
+    "plan_end_date": "2026-08-30",
+    "client_id": null
+  },
+  {
+    "id": "da637a37-3709-4eb4-afa4-5f5401e0783b",
+    "tenant_id": "kt-group",
+    "office_id": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+    "client_name": "森 隆一",
+    "plan_start_date": "2026-05-31",
+    "author_name": "重田 眞知子",
+    "creation_reason": "新規作成",
+    "special_notes": "心房細動 あり。[fake テスト用-houmon] sample-marker:fake-houmon-2026-06",
+    "weekly_schedule": {},
+    "created_at": "2026-06-19T10:20:46.451201+00:00",
+    "updated_at": "2026-06-19T10:20:46.451201+00:00",
+    "created_by": null,
+    "plan_end_date": "2026-08-30",
+    "client_id": null
+  },
+  {
+    "id": "5ecc6935-d311-44d5-9e8d-00fc3b289e47",
+    "tenant_id": "kt-group",
+    "office_id": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+    "client_name": "池田 千代美",
+    "plan_start_date": "2026-05-31",
+    "author_name": "小坂 悠子",
+    "creation_reason": "新規作成",
+    "special_notes": "パーキンソン病 あり。[fake テスト用-houmon] sample-marker:fake-houmon-2026-06",
+    "weekly_schedule": {},
+    "created_at": "2026-06-19T10:20:47.48239+00:00",
+    "updated_at": "2026-06-19T10:20:47.48239+00:00",
+    "created_by": null,
+    "plan_end_date": "2026-08-30",
+    "client_id": null
+  },
+  {
+    "id": "e0234aba-444b-4484-8fc3-90aa8e81a812",
+    "tenant_id": "kt-group",
+    "office_id": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+    "client_name": "阿部 正一",
+    "plan_start_date": "2026-05-31",
+    "author_name": "長谷部 佳代",
+    "creation_reason": "新規作成",
+    "special_notes": "COPD あり。[fake テスト用-houmon] sample-marker:fake-houmon-2026-06",
+    "weekly_schedule": {},
+    "created_at": "2026-06-19T10:20:48.534619+00:00",
+    "updated_at": "2026-06-19T10:20:48.534619+00:00",
+    "created_by": null,
+    "plan_end_date": "2026-08-30",
+    "client_id": null
+  },
+  {
+    "id": "588f0130-f45b-4682-a339-84fc7273e486",
+    "tenant_id": "kt-group",
+    "office_id": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+    "client_name": "橋本 とき子",
+    "plan_start_date": "2026-05-31",
+    "author_name": "惠良 洋子",
+    "creation_reason": "新規作成",
+    "special_notes": "リウマチ あり。[fake テスト用-houmon] sample-marker:fake-houmon-2026-06",
+    "weekly_schedule": {},
+    "created_at": "2026-06-19T10:20:49.757166+00:00",
+    "updated_at": "2026-06-19T10:20:49.757166+00:00",
+    "created_by": null,
+    "plan_end_date": "2026-08-30",
+    "client_id": null
+  },
+  {
+    "id": "14daa055-4993-44c2-8b00-d269959a5bf9",
+    "tenant_id": "kt-group",
+    "office_id": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+    "client_name": "後藤 雅樹",
+    "plan_start_date": "2026-05-31",
+    "author_name": "船木 治美",
+    "creation_reason": "新規作成",
+    "special_notes": "腰椎症 あり。[fake テスト用-houmon] sample-marker:fake-houmon-2026-06",
+    "weekly_schedule": {},
+    "created_at": "2026-06-19T10:20:50.813673+00:00",
+    "updated_at": "2026-06-19T10:20:50.813673+00:00",
+    "created_by": null,
+    "plan_end_date": "2026-08-30",
+    "client_id": null
+  },
+  {
+    "id": "c939c874-e96c-4355-afb9-3416684de2d7",
+    "tenant_id": "kt-group",
+    "office_id": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+    "client_name": "テスト",
+    "plan_start_date": "2026-06-24",
+    "author_name": null,
+    "creation_reason": "田中 太郎 から複製",
+    "special_notes": "入浴後の血圧確認を必ず実施",
+    "weekly_schedule": {
+      "fri": [
+        {
+          "1": null,
+          "2": null,
+          "3": null,
+          "4": null,
+          "5": null
+        }
+      ],
+      "mon": [
+        {
+          "1": null,
+          "2": null,
+          "3": null,
+          "4": null,
+          "5": null
+        }
+      ],
+      "sat": [
+        {
+          "1": null,
+          "2": null,
+          "3": null,
+          "4": null,
+          "5": null
+        }
+      ],
+      "sun": [
+        {
+          "1": null,
+          "2": null,
+          "3": null,
+          "4": null,
+          "5": null
+        }
+      ],
+      "thu": [
+        {
+          "1": null,
+          "2": null,
+          "3": null,
+          "4": null,
+          "5": null
+        }
+      ],
+      "tue": [
+        {
+          "1": null,
+          "2": null,
+          "3": null,
+          "4": null,
+          "5": null
+        }
+      ],
+      "wed": [
+        {
+          "1": null,
+          "2": null,
+          "3": null,
+          "4": null,
+          "5": null
+        }
+      ]
+    },
+    "created_at": "2026-06-24T00:13:22.247648+00:00",
+    "updated_at": "2026-06-24T00:13:22.247648+00:00",
+    "created_by": null,
+    "plan_end_date": null,
+    "client_id": null
+  }
+]

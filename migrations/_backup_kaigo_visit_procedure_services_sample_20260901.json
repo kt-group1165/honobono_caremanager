@@ -1,0 +1,306 @@
+[
+  {
+    "id": "5c1aa63a-7b91-4829-b55d-2a41d5127738",
+    "document_id": "29bc5be7-15d5-4925-a196-f03654b511b9",
+    "service_no": 1,
+    "service_kind": "身体1",
+    "special_notes": "ご本人様希望・他職種（医療）の提供時間により、サービス提供時間 変動あり",
+    "created_at": "2026-05-28T08:39:44.396363+00:00"
+  },
+  {
+    "id": "5387dc82-e824-4a2b-ac20-5a602d840822",
+    "document_id": "29bc5be7-15d5-4925-a196-f03654b511b9",
+    "service_no": 2,
+    "service_kind": "身体1",
+    "special_notes": "ご本人様希望・他職種（医療）の提供時間により、サービス提供時間 変動あり",
+    "created_at": "2026-05-28T08:39:44.86653+00:00"
+  },
+  {
+    "id": "f23ca619-7917-4514-87cd-7955d3c25c36",
+    "document_id": "3c4c62eb-0917-4180-ba6d-78be5c360744",
+    "service_no": 1,
+    "service_kind": "身体1",
+    "special_notes": "初回数回は同行訪問",
+    "created_at": "2026-05-28T08:43:49.009422+00:00"
+  },
+  {
+    "id": "41e27743-bd62-48fb-9576-ac8b47d081dd",
+    "document_id": "a9db3057-54d1-4a45-b9b0-15382e6c3431",
+    "service_no": 1,
+    "service_kind": "身体2",
+    "special_notes": "入浴時は転倒に注意",
+    "created_at": "2026-05-28T08:43:49.515539+00:00"
+  },
+  {
+    "id": "5e20d45a-3cca-4697-ab10-909fb7fa574a",
+    "document_id": "45842bde-82d3-40fa-b379-957cb4e1a8f7",
+    "service_no": 1,
+    "service_kind": "身体1",
+    "special_notes": null,
+    "created_at": "2026-05-28T08:43:49.783881+00:00"
+  },
+  {
+    "id": "95936053-1e48-4532-bbe0-f81fec0979d4",
+    "document_id": "73f12105-ef65-4ec2-ab42-31cade402480",
+    "service_no": 1,
+    "service_kind": "身体1",
+    "special_notes": "血圧測定の習慣化を支援。降圧薬の服薬確認は必須。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:41.405088+00:00"
+  },
+  {
+    "id": "99775eac-1e3c-419a-a783-99731e2bad9d",
+    "document_id": "73f12105-ef65-4ec2-ab42-31cade402480",
+    "service_no": 2,
+    "service_kind": "身体2",
+    "special_notes": "入浴前後の血圧変動に注意。脱衣場の温度差にも配慮。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:41.673744+00:00"
+  },
+  {
+    "id": "2820d11b-6da7-4833-b4d0-d1426df548e9",
+    "document_id": "73f12105-ef65-4ec2-ab42-31cade402480",
+    "service_no": 3,
+    "service_kind": "生活援助2",
+    "special_notes": "塩分制限の食事指導を意識。1日 6g 以下が目標。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:41.95333+00:00"
+  },
+  {
+    "id": "63bfe37f-2913-4e4c-b2ad-700f6e806daf",
+    "document_id": "49c13c6f-384c-469c-8ff5-8a7fad336a78",
+    "service_no": 1,
+    "service_kind": "身体1",
+    "special_notes": "血圧測定の習慣化を支援。降圧薬の服薬確認は必須。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:42.483754+00:00"
+  },
+  {
+    "id": "ec0c608e-99c0-4af6-a203-7c49ee162e7d",
+    "document_id": "49c13c6f-384c-469c-8ff5-8a7fad336a78",
+    "service_no": 2,
+    "service_kind": "身体2",
+    "special_notes": "入浴前後の血圧変動に注意。脱衣場の温度差にも配慮。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:42.699122+00:00"
+  },
+  {
+    "id": "59c61f9c-847f-4869-9d0b-4c1a38236578",
+    "document_id": "49c13c6f-384c-469c-8ff5-8a7fad336a78",
+    "service_no": 3,
+    "service_kind": "生活援助2",
+    "special_notes": "塩分制限の食事指導を意識。1日 6g 以下が目標。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:42.963012+00:00"
+  },
+  {
+    "id": "15b247d0-549c-491a-b217-e418e0ca914a",
+    "document_id": "4527d43f-3b4d-469b-9945-1b38c79033ab",
+    "service_no": 1,
+    "service_kind": "身体2",
+    "special_notes": "右麻痺あり、患側に気を付ける。リハビリ意欲を引き出す声かけ。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:43.516706+00:00"
+  },
+  {
+    "id": "6df37d72-9f90-4ddb-a160-9e5cd84b2188",
+    "document_id": "4527d43f-3b4d-469b-9945-1b38c79033ab",
+    "service_no": 2,
+    "service_kind": "身体1",
+    "special_notes": "リハビリの一環として、可能な動作は本人にやってもらう。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:43.783537+00:00"
+  },
+  {
+    "id": "5d751a3c-a2e5-479f-bb3e-0d9e574fae59",
+    "document_id": "4527d43f-3b4d-469b-9945-1b38c79033ab",
+    "service_no": 3,
+    "service_kind": "生活援助2",
+    "special_notes": "本人の食事姿勢に注意。誤嚥予防のためトロミ剤を活用。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:43.98212+00:00"
+  },
+  {
+    "id": "bc7ec073-b942-4543-99f5-f4aaf7cac504",
+    "document_id": "ea794bf0-5aa5-49b3-a419-debc044806d4",
+    "service_no": 1,
+    "service_kind": "身体1",
+    "special_notes": "血圧測定の習慣化を支援。降圧薬の服薬確認は必須。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:44.483163+00:00"
+  },
+  {
+    "id": "ad59706d-a4e2-4018-8fb5-9d751c352156",
+    "document_id": "ea794bf0-5aa5-49b3-a419-debc044806d4",
+    "service_no": 2,
+    "service_kind": "身体2",
+    "special_notes": "入浴前後の血圧変動に注意。脱衣場の温度差にも配慮。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:44.716+00:00"
+  },
+  {
+    "id": "15600805-2dd0-4a91-ac62-fae58ec47a77",
+    "document_id": "ea794bf0-5aa5-49b3-a419-debc044806d4",
+    "service_no": 3,
+    "service_kind": "生活援助2",
+    "special_notes": "塩分制限の食事指導を意識。1日 6g 以下が目標。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:44.978865+00:00"
+  },
+  {
+    "id": "62483754-0216-4aed-990d-2ed60157d9e3",
+    "document_id": "89db9ab7-56a7-4f2a-a0d2-1ab8089ddf85",
+    "service_no": 1,
+    "service_kind": "身体1",
+    "special_notes": "本人のペースに合わせ、急かさない。BPSD の予防のため穏やかに対応。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:45.550322+00:00"
+  },
+  {
+    "id": "675fb5b4-7818-4895-945f-b1c2db03c454",
+    "document_id": "89db9ab7-56a7-4f2a-a0d2-1ab8089ddf85",
+    "service_no": 2,
+    "service_kind": "身体2",
+    "special_notes": "入浴を嫌がる時は無理せず、別日に再調整も検討。家族と相談しながら。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:45.749157+00:00"
+  },
+  {
+    "id": "0b2bfeef-578c-4815-97d2-b6a6d6d52ec8",
+    "document_id": "89db9ab7-56a7-4f2a-a0d2-1ab8089ddf85",
+    "service_no": 3,
+    "service_kind": "生活援助1",
+    "special_notes": "本人と一緒に動くことで認知機能の維持を図る。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:45.984922+00:00"
+  },
+  {
+    "id": "c197a1a8-b387-4dcf-bbc7-604da886f45e",
+    "document_id": "da637a37-3709-4eb4-afa4-5f5401e0783b",
+    "service_no": 1,
+    "service_kind": "身体1",
+    "special_notes": "血圧測定の習慣化を支援。降圧薬の服薬確認は必須。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:46.482894+00:00"
+  },
+  {
+    "id": "a1a430b4-c943-4c50-ad5d-c9632ee551de",
+    "document_id": "da637a37-3709-4eb4-afa4-5f5401e0783b",
+    "service_no": 2,
+    "service_kind": "身体2",
+    "special_notes": "入浴前後の血圧変動に注意。脱衣場の温度差にも配慮。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:46.719876+00:00"
+  },
+  {
+    "id": "7876a2c1-8e6e-4678-bb16-a1996c420c06",
+    "document_id": "da637a37-3709-4eb4-afa4-5f5401e0783b",
+    "service_no": 3,
+    "service_kind": "生活援助2",
+    "special_notes": "塩分制限の食事指導を意識。1日 6g 以下が目標。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:46.984611+00:00"
+  },
+  {
+    "id": "83dcbd52-7cdb-48c4-b2f1-c46a565a154b",
+    "document_id": "5ecc6935-d311-44d5-9e8d-00fc3b289e47",
+    "service_no": 1,
+    "service_kind": "身体1",
+    "special_notes": "血圧測定の習慣化を支援。降圧薬の服薬確認は必須。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:47.521621+00:00"
+  },
+  {
+    "id": "edeb3bd2-e283-417c-b4bd-73ec46e7d8b2",
+    "document_id": "5ecc6935-d311-44d5-9e8d-00fc3b289e47",
+    "service_no": 2,
+    "service_kind": "身体2",
+    "special_notes": "入浴前後の血圧変動に注意。脱衣場の温度差にも配慮。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:47.749905+00:00"
+  },
+  {
+    "id": "6b48293d-b451-4530-87b3-ace4a5f223f3",
+    "document_id": "5ecc6935-d311-44d5-9e8d-00fc3b289e47",
+    "service_no": 3,
+    "service_kind": "生活援助2",
+    "special_notes": "塩分制限の食事指導を意識。1日 6g 以下が目標。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:48.030244+00:00"
+  },
+  {
+    "id": "f4cd8f4e-f8ed-4a61-8ce0-4a09714d0129",
+    "document_id": "e0234aba-444b-4484-8fc3-90aa8e81a812",
+    "service_no": 1,
+    "service_kind": "身体1",
+    "special_notes": "血圧測定の習慣化を支援。降圧薬の服薬確認は必須。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:48.564861+00:00"
+  },
+  {
+    "id": "89f85aa2-a7ec-4552-81bb-6d49b5933497",
+    "document_id": "e0234aba-444b-4484-8fc3-90aa8e81a812",
+    "service_no": 2,
+    "service_kind": "身体2",
+    "special_notes": "入浴前後の血圧変動に注意。脱衣場の温度差にも配慮。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:48.808504+00:00"
+  },
+  {
+    "id": "06a20a32-6ee7-4d73-904f-674494954359",
+    "document_id": "e0234aba-444b-4484-8fc3-90aa8e81a812",
+    "service_no": 3,
+    "service_kind": "生活援助2",
+    "special_notes": "塩分制限の食事指導を意識。1日 6g 以下が目標。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:49.285127+00:00"
+  },
+  {
+    "id": "d402baee-63a5-4990-8238-da4e02c356e4",
+    "document_id": "588f0130-f45b-4682-a339-84fc7273e486",
+    "service_no": 1,
+    "service_kind": "身体1",
+    "special_notes": "血圧測定の習慣化を支援。降圧薬の服薬確認は必須。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:49.802487+00:00"
+  },
+  {
+    "id": "db0a01aa-6797-402a-bdd7-30d82281e3f1",
+    "document_id": "588f0130-f45b-4682-a339-84fc7273e486",
+    "service_no": 2,
+    "service_kind": "身体2",
+    "special_notes": "入浴前後の血圧変動に注意。脱衣場の温度差にも配慮。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:50.03182+00:00"
+  },
+  {
+    "id": "78906d9f-a4a6-4db3-83ec-269710032924",
+    "document_id": "588f0130-f45b-4682-a339-84fc7273e486",
+    "service_no": 3,
+    "service_kind": "生活援助2",
+    "special_notes": "塩分制限の食事指導を意識。1日 6g 以下が目標。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:50.306379+00:00"
+  },
+  {
+    "id": "87d47eb3-fb85-4dc8-bfda-a38c099f7e1b",
+    "document_id": "14daa055-4993-44c2-8b00-d269959a5bf9",
+    "service_no": 1,
+    "service_kind": "身体1",
+    "special_notes": "血圧測定の習慣化を支援。降圧薬の服薬確認は必須。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:50.847973+00:00"
+  },
+  {
+    "id": "ff8f31b4-163d-4f5e-b8a9-0e3cda5cb98e",
+    "document_id": "14daa055-4993-44c2-8b00-d269959a5bf9",
+    "service_no": 2,
+    "service_kind": "身体2",
+    "special_notes": "入浴前後の血圧変動に注意。脱衣場の温度差にも配慮。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:51.116992+00:00"
+  },
+  {
+    "id": "402f423e-ae22-42c3-8c6f-9c1263d071a8",
+    "document_id": "14daa055-4993-44c2-8b00-d269959a5bf9",
+    "service_no": 3,
+    "service_kind": "生活援助2",
+    "special_notes": "塩分制限の食事指導を意識。1日 6g 以下が目標。 [fake テスト用-houmon]",
+    "created_at": "2026-06-19T10:20:51.443395+00:00"
+  },
+  {
+    "id": "8ff23dd0-0344-44f7-b884-41a6ee7aed55",
+    "document_id": "ff1ea774-9461-42b1-bb52-125c08a810f3",
+    "service_no": 1,
+    "service_kind": "身体1生活1",
+    "special_notes": "月水金は朝の身体介護+生活",
+    "created_at": "2026-06-22T08:08:55.53138+00:00"
+  },
+  {
+    "id": "43d10ff5-023a-4687-a3e7-70ab8fbfa20a",
+    "document_id": "ff1ea774-9461-42b1-bb52-125c08a810f3",
+    "service_no": 2,
+    "service_kind": "生活2",
+    "special_notes": "火木は生活援助のみ",
+    "created_at": "2026-06-22T08:08:55.951203+00:00"
+  },
+  {
+    "id": "83b24417-71d3-4437-8d9e-d397895295f2",
+    "document_id": "c939c874-e96c-4355-afb9-3416684de2d7",
+    "service_no": 1,
+    "service_kind": "身体2",
+    "special_notes": "入浴時は転倒に注意",
+    "created_at": "2026-06-24T00:13:22.404489+00:00"
+  }
+]
