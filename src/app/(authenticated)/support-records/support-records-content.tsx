@@ -229,7 +229,8 @@ export function SupportRecordsContent({
 
   const deleteUrl = async (id: string) => {
     if (!confirm("このURLを削除しますか？")) return;
-    await supabase.from("kaigo_support_tokens").delete().eq("id", id);
+    const { error } = await supabase.from("kaigo_support_tokens").delete().eq("id", id);
+    if (error) { toast.error("削除に失敗: " + error.message); return; }
     fetchUrls();
     toast.success("削除しました");
   };

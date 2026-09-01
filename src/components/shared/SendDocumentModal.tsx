@@ -298,7 +298,7 @@ export function SendDocumentModal({
           .select("id")
           .single();
         if (bsdErr || !bsd) throw bsdErr ?? new Error(`同梱書類 ${b.title} の作成失敗`);
-        await supabase.from("notifications").insert({
+        const { error: bntErr } = await supabase.from("notifications").insert({
           tenant_id: tenantId,
           office_id: selectedId,
           user_id: null,
@@ -308,6 +308,7 @@ export function SendDocumentModal({
           title: `${b.title} を受信`,
           body: `${sourceOfficeName || "送信元事業所"} から (同梱)`,
         });
+        if (bntErr) throw bntErr;
       }
 
       onSuccess();
