@@ -37,7 +37,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ID_IN_CHUNK, NAME_IN_CHUNK } from "@/lib/chunk-parallel";
+import { ID_IN_CHUNK, NAME_IN_CHUNK, mapChunksParallel } from "@/lib/chunk-parallel";
 import {
   serviceNameVariantsAll,
   toHankakuDigits,
@@ -866,8 +866,7 @@ export async function aggregateMonthlyVisitSeikyu(
     string,
     { name: string; furigana: string | null; birth: string | null; gender: string | null; userNumber: string | null }
   >();
-  for (let i = 0; i < userIds.length; i += ID_IN_CHUNK) {
-    const chunk = userIds.slice(i, i + ID_IN_CHUNK);
+  await mapChunksParallel(userIds, ID_IN_CHUNK, async (chunk) => {
     const { data, error } = await supabase
       .from("clients")
       .select("id, name, furigana, birth_date, gender, user_number")
@@ -876,7 +875,7 @@ export async function aggregateMonthlyVisitSeikyu(
     for (const c of (data ?? []) as { id: string; name: string; furigana: string | null; birth_date: string | null; gender: string | null; user_number: string | null }[]) {
       clientById.set(c.id, { name: c.name, furigana: c.furigana, birth: c.birth_date, gender: c.gender, userNumber: c.user_number });
     }
-  }
+  });
   const nameOf = (userId: string) => clientById.get(userId)?.name ?? userId;
 
   // 3.2) 同一建物減算区分 (client_office_assignments.same_building_tier)
@@ -884,30 +883,33 @@ export async function aggregateMonthlyVisitSeikyu(
   //     列未適用 (42703 / PGRST204) は空 Map = 減算なしでフォールバック。
   const sameBuildingTierByClient = new Map<string, SameBuildingTier>();
   if (opts.officeId) {
-    // .in() の URL 長対策で他の fetch と同じく 50 件ずつ chunk
-    for (let i = 0; i < userIds.length; i += ID_IN_CHUNK) {
-      const chunk = userIds.slice(i, i + ID_IN_CHUNK);
-      const { data, error } = await supabase
+    // .in() の URL 長対策で他の fetch と同じく chunk 分割 (並列)。
+    // 列未適用は全 chunk が同じエラーになるので、どれか 1 つでも列未適用なら
+    // 全体を減算なしにフォールバックする (break の代わり)。
+    const results = await mapChunksParallel(userIds, ID_IN_CHUNK, async (chunk) => {
+      return supabase
         .from("client_office_assignments")
         .select("client_id, same_building_tier")
-        .eq("office_id", opts.officeId)
+        .eq("office_id", opts.officeId!)
         .in("client_id", chunk)
         .not("same_building_tier", "is", null);
-      if (error) {
-        // 列未適用 (直 SQL=42703 / PostgREST schema cache=PGRST204) は減算なしで続行。
-        // それ以外は握りつぶさない。
-        if (error.code !== "42703" && error.code !== "PGRST204" && !isColumnMissing(error)) {
-          throw new Error(`同一建物減算区分取得失敗: ${error.message}`);
-        }
-        break; // 列未適用は以降の chunk も同じ結果 = 全体を減算なしにフォールバック
-      }
-      for (const r of (data ?? []) as {
-        client_id: string;
-        same_building_tier: string | null;
-      }[]) {
-        const t = r.same_building_tier;
-        if (t === "1" || t === "2" || t === "3") {
-          sameBuildingTierByClient.set(r.client_id, t);
+    });
+    const columnMissing = results.some(
+      ({ error }) =>
+        !!error &&
+        (error.code === "42703" || error.code === "PGRST204" || isColumnMissing(error)),
+    );
+    if (!columnMissing) {
+      for (const { data, error } of results) {
+        if (error) throw new Error(`同一建物減算区分取得失敗: ${error.message}`);
+        for (const r of (data ?? []) as {
+          client_id: string;
+          same_building_tier: string | null;
+        }[]) {
+          const t = r.same_building_tier;
+          if (t === "1" || t === "2" || t === "3") {
+            sameBuildingTierByClient.set(r.client_id, t);
+          }
         }
       }
     }
@@ -953,20 +955,21 @@ export async function aggregateMonthlyVisitSeikyu(
   //   - client_kohi_records あり環境: 「テキストあり・公費レコード未登録」warning のみ
   //   - client_kohi_records 未作成環境: 従来どおり公費扱いのフォールバック
   const publicExpenseTextByClient = new Map<string, string>();
-  for (let i = 0; i < userIds.length; i += ID_IN_CHUNK) {
-    const chunk = userIds.slice(i, i + ID_IN_CHUNK);
+  await mapChunksParallel(userIds, ID_IN_CHUNK, async (chunk) => {
     const { data, error } = await supabase
       .from("client_insurance_records")
       .select("client_id, public_expense, effective_date")
       .in("client_id", chunk)
       .order("effective_date", { ascending: false });
     if (error) throw new Error(`保険情報 (公費テキスト) 取得失敗: ${error.message}`);
+    // chunk は client_id で分割済み (1 client は 1 chunk にしか出ない) なので
+    // chunk 単位で「最新のみ」を採るのは直列時と同じ結果になる。
     for (const r of (data ?? []) as { client_id: string; public_expense: string | null }[]) {
       if (publicExpenseTextByClient.has(r.client_id)) continue; // 最新のみ
       const t = r.public_expense?.trim();
       if (t) publicExpenseTextByClient.set(r.client_id, t);
     }
-  }
+  });
 
   // 3.5) 公費 (生活保護等) — client_kohi_records から対象月に有効な公費を
   //     「全件・適用優先順」で解決する (複数公費の併用対応。2026-07。
