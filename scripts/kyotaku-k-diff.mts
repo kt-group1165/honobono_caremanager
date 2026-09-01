@@ -14,7 +14,7 @@
  *   出力: 伝送データ/<AREA>/居宅/202606/新システム/K202606.CSV (SJIS 上書き) + diff レポート
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
@@ -209,7 +209,41 @@ async function main() {
     return groups;
   };
   const N = norm(join(outDir, f.fileName), YM);
-  const H = norm(join(BASE, "ほのぼのから", KY_FILE), YM);
+  // ── ほのぼの側は提出バッチごとにファイルが分かれる (kyotaku-s-diff.mts と同じ理由) ──
+  //   KK と同様、月遅れ提出は 8月10日送信の KY に入り、置き場所は
+  //   伝送データ/<拠点>/居宅/202607/ 直下 (ほのぼのから/ の外) のこともある。
+  //   従来は KY_FILE 固定 1 本 (常に ほのぼのから/ 配下) しか見ておらず、
+  //   ①複数 KY バッチがある拠点は 1 本目しか比較しない ②202607 のように
+  //   ほのぼのから/ が無いフォルダ構成だと ENOENT で全滅していた。
+  //   → 拠点配下 (居宅/ 以下全体) を再帰で探索し、対象月の 8222 レコードを
+  //     含む KY を全部集めて突合する。KY_FILE 指定時はそれも候補に含める
+  //     (後方互換。単体実行で明示指定したい場合に対応)。
+  const kyPaths: string[] = [];
+  if (process.env.KY_FILE) kyPaths.push(join(BASE, "ほのぼのから", KY_FILE));
+  const areaRoot = join(__dirname, "..", "伝送データ", AREA_DIR, "居宅");
+  {
+    const walk = (d: string) => {
+      if (!existsSync(d)) return;
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        const q = join(d, e.name);
+        if (e.isDirectory()) walk(q);
+        else if (/^KY.*\.CSV$/i.test(e.name) && !e.name.includes("解説")) {
+          const txt = readFileSync(q, "latin1");
+          if (txt.split(/\r?\n/).some((l) => {
+            const c = l.split(",").map((x) => x.replace(/^"(.*)"$/, "$1"));
+            return c[0] === "2" && c[2] === "8222" && c[3] === YM;
+          })) kyPaths.push(q);
+        }
+      }
+    };
+    walk(areaRoot);
+  }
+  if (kyPaths.length === 0) { console.error(`✗ 対象月 ${YM} の 8222 を含む KY が見つかりません (${areaRoot})`); process.exit(1); }
+  console.log(`ほのぼの KY: ${[...new Set(kyPaths)].map((p) => p.split(/[\\/]/).pop()).join(", ")}`);
+  const H = new Map<string, string[]>();
+  for (const p of new Set(kyPaths)) {
+    for (const [k, v] of norm(p, YM)) H.set(k, v);
+  }
   let match = 0; const diffs: string[] = [];
   for (const [k, nv] of N) {
     const hv = H.get(k);

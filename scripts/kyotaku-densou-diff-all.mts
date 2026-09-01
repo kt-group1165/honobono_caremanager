@@ -106,10 +106,16 @@ for (const j of jobs) {
     const tail = out.split("\n").filter(Boolean).slice(-1)[0] ?? "";
     return `${label} ? ${tail.slice(0, 60)}`;
   };
-  if (KIND.includes("S")) line.push(verdict(run("scripts/kyotaku-s-diff.mts", { KK_FILE: j.kk.split(/[\\/]/).pop()! }), "S"));
+  // ⚠ 2026-09-01 是正: KK_FILE/KY_FILE を固定で渡すと、両スクリプトとも
+  //   「拠点配下を再帰探索して対象月の対象レコードを含むファイルを全部集める」
+  //   自動探索ロジックを迂回してしまい ①複数バッチ(月遅れ)拠点は1本しか見ない
+  //   ②202607 のように ほのぼのから/ が無いフォルダ構成だと ENOENT で全滅する、
+  //   という2つの不具合を生んでいた (両スクリプトの自動探索自体は正しく動く)。
+  //   → KK_FILE/KY_FILE は渡さず、各スクリプト自身の自動探索に任せる。
+  if (KIND.includes("S")) line.push(verdict(run("scripts/kyotaku-s-diff.mts", {}), "S"));
   if (KIND.includes("K")) {
     if (!j.ky) line.push("K — KY 無し");
-    else line.push(verdict(run("scripts/kyotaku-k-diff.mts", { KY_FILE: j.ky.split(/[\\/]/).pop()! }), "K"));
+    else line.push(verdict(run("scripts/kyotaku-k-diff.mts", {}), "K"));
   }
   console.log("  " + line.join("   "));
   results.push(line.join("   "));
