@@ -9,12 +9,11 @@ import {
   ClipboardList,
   AlertTriangle,
   TrendingUp,
-  FileText,
   CalendarClock,
   RefreshCw,
   ArrowUpDown,
 } from "lucide-react";
-import { format, differenceInYears, parseISO, startOfMonth, endOfMonth } from "date-fns";
+import { format, differenceInYears, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
 import { useBusinessType } from "@/lib/business-type-context";
 import { runCertExpiryScan, type CertExpiryAlert } from "@/lib/cert-expiry-alert";
@@ -78,7 +77,6 @@ const OFFICE_COLUMNS: { key: OfficeSortKey; label: string; numeric: boolean }[] 
 
 type SummaryStats = {
   activeUsers: number;
-  monthlyServiceCount: number;
   expiringCarePlans: number;
 };
 
@@ -89,14 +87,6 @@ type RecentUser = {
   care_level: string | null;
   status: string;
   created_at: string;
-};
-
-type RecentServiceRecord = {
-  id: string;
-  service_date: string;
-  user_name: string;
-  service_type: string | null;
-  content: string | null;
 };
 
 // ---- Helper ----
@@ -207,11 +197,9 @@ function PlanStageBadge({
 export default function DashboardPage() {
   const [stats, setStats] = useState<SummaryStats>({
     activeUsers: 0,
-    monthlyServiceCount: 0,
     expiringCarePlans: 0,
   });
   const [recentUsers, setRecentUsers] = useState<RecentUser[]>([]);
-  const [recentServiceRecords, setRecentServiceRecords] = useState<RecentServiceRecord[]>([]);
   /** サマリーカード (件数だけ。第 1 波が返った時点で出す) */
   const [loading, setLoading] = useState(true);
   /** 一覧テーブル (氏名解決の第 2 波が要るのでカードより遅い) */
@@ -266,8 +254,6 @@ export default function DashboardPage() {
 
   const today = new Date();
   const todayStr = format(today, "yyyy-MM-dd");
-  const monthStart = format(startOfMonth(today), "yyyy-MM-dd");
-  const monthEnd = format(endOfMonth(today), "yyyy-MM-dd");
   // Expiry warning: care plans ending within 30 days
   const warnEnd = format(
     new Date(today.getFullYear(), today.getMonth(), today.getDate() + 30),
@@ -287,10 +273,8 @@ export default function DashboardPage() {
         //   直列 await にしていたため往復回数ぶんそのまま待ち時間になっていた (2026-08-06)
         const [
           { count: activeUsers, error: e1 },
-          { count: monthlyServiceCount, error: e3 },
           { count: expiringCarePlans, error: e4 },
           { data: usersData, error: e5 },
-          { data: serviceData, error: e6 },
         ] = await Promise.all([
           // 1. Active user count（is_facility=false で法人/事業所エントリを除外）
           supabase
@@ -299,20 +283,14 @@ export default function DashboardPage() {
             .eq("status", "active")
             .eq("is_facility", false)
             .is("deleted_at", null),
-          // 2. This month's service record count
-          supabase
-            .from("kaigo_service_records")
-            .select("*", { count: "exact", head: true })
-            .gte("service_date", monthStart)
-            .lte("service_date", monthEnd),
-          // 3. Expiring care certifications within 30 days（client_insurance_records、新カラム名）
+          // 2. Expiring care certifications within 30 days（client_insurance_records、新カラム名）
           supabase
             .from("client_insurance_records")
             .select("*", { count: "exact", head: true })
             .eq("certification_status", "認定済み")
             .lte("certification_end_date", warnEnd)
             .gte("certification_end_date", todayStr),
-          // 4. Recently registered users (latest 8)（法人/事業所エントリを除外）
+          // 3. Recently registered users (latest 8)（法人/事業所エントリを除外）
           supabase
             .from("clients")
             .select("id, name, birth_date, status, created_at")
@@ -320,45 +298,29 @@ export default function DashboardPage() {
             .is("deleted_at", null)
             .order("created_at", { ascending: false })
             .limit(8),
-          // 5. Recent service records (latest 10)
-          supabase
-            .from("kaigo_service_records")
-            .select("id, service_date, service_type, content, user_id")
-            .order("service_date", { ascending: false })
-            .limit(10),
         ]);
-        const firstError = e1 ?? e3 ?? e4 ?? e5 ?? e6;
+        const firstError = e1 ?? e4 ?? e5;
         if (firstError) throw firstError;
 
         // カードは第 1 波で確定するので、氏名解決を待たずに先に出す
         setStats({
           activeUsers: activeUsers ?? 0,
-          monthlyServiceCount: monthlyServiceCount ?? 0,
           expiringCarePlans: expiringCarePlans ?? 0,
         });
         setLoading(false);
 
-        // ── 第 2 波: 第 1 波の id が要る参照 (介護度 / 利用者名) を並列に ──
+        // ── 第 2 波: 第 1 波の id が要る参照 (介護度) ──
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
         const userIds = (usersData ?? []).map((u: any) => u.id);
-        const serviceUserIds = [
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-          ...new Set((serviceData ?? []).map((s: any) => s.user_id).filter(Boolean)),
-        ];
-        const [certRes, serviceUsersRes] = await Promise.all([
-          // client_insurance_records、新カラム名（user_id → client_id, status → certification_status, start_date → certification_start_date）
-          userIds.length > 0
-            ? supabase
-                .from("client_insurance_records")
-                .select("client_id, care_level")
-                .in("client_id", userIds)
-                .eq("certification_status", "認定済み")
-                .order("certification_start_date", { ascending: false, nullsFirst: false })
-            : Promise.resolve({ data: null }),
-          serviceUserIds.length > 0
-            ? supabase.from("clients").select("id, name").in("id", serviceUserIds)
-            : Promise.resolve({ data: null }),
-        ]);
+        // client_insurance_records、新カラム名（user_id → client_id, status → certification_status, start_date → certification_start_date）
+        const certRes = userIds.length > 0
+          ? await supabase
+              .from("client_insurance_records")
+              .select("client_id, care_level")
+              .in("client_id", userIds)
+              .eq("certification_status", "認定済み")
+              .order("certification_start_date", { ascending: false, nullsFirst: false })
+          : { data: null };
 
         const certMap: Record<string, string> = {};
         if (certRes.data) {
@@ -372,24 +334,6 @@ export default function DashboardPage() {
           (usersData ?? []).map((u: any) => ({
             ...u,
             care_level: certMap[u.id] ?? null,
-          }))
-        );
-
-        const userNameMap: Record<string, string> = {};
-        if (serviceUsersRes.data) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-          serviceUsersRes.data.forEach((u: any) => {
-            userNameMap[u.id] = u.name;
-          });
-        }
-        setRecentServiceRecords(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
-          (serviceData ?? []).map((s: any) => ({
-            id: s.id,
-            service_date: s.service_date,
-            user_name: userNameMap[s.user_id] ?? "—",
-            service_type: s.service_type ?? null,
-            content: s.content ?? null,
           }))
         );
       } catch (err: unknown) {
@@ -681,7 +625,7 @@ export default function DashboardPage() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <SummaryCard
             title="利用者数"
             value={`${stats.activeUsers}名`}
@@ -704,13 +648,6 @@ export default function DashboardPage() {
               `${uriageYear}年${uriageMonth}月 予定+実績` +
               (shownRefreshing ? "（再集計中…）" : shownCachedAt ? `（${cachedAtLabel(shownCachedAt)}）` : "")
             }
-          />
-          <SummaryCard
-            title="今月のサービス件数"
-            value={`${stats.monthlyServiceCount}件`}
-            icon={<ClipboardList size={22} className="text-violet-600" />}
-            iconBg="bg-violet-50"
-            sub={format(today, "yyyy年M月", { locale: ja })}
           />
           <SummaryCard
             title="ケアプラン期限切れ"
@@ -1266,60 +1203,6 @@ export default function DashboardPage() {
                       </tr>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        {/* Recent service records */}
-        <section className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <div className="flex items-center gap-2">
-              <FileText size={18} className="text-violet-500" />
-              <h2 className="font-semibold text-gray-700">直近のサービス実績</h2>
-            </div>
-            <span className="rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-600">
-              直近10件
-            </span>
-          </div>
-
-          {listLoading ? (
-            <div className="space-y-3 p-5">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-8 animate-pulse rounded-lg bg-gray-100" />
-              ))}
-            </div>
-          ) : recentServiceRecords.length === 0 ? (
-            <p className="px-5 py-8 text-center text-sm text-gray-400">
-              サービス実績がありません
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500">
-                    <th className="px-4 py-3">日付</th>
-                    <th className="px-4 py-3">利用者名</th>
-                    <th className="px-4 py-3">サービス種別</th>
-                    <th className="px-4 py-3">内容</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {recentServiceRecords.map((s) => (
-                    <tr key={s.id} className="hover:bg-gray-50/60 transition-colors">
-                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
-                        {format(parseISO(s.service_date), "M/d", { locale: ja })}
-                      </td>
-                      <td className="px-4 py-3 font-medium text-gray-800">{s.user_name}</td>
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                        {s.service_type ?? <span className="text-gray-300">—</span>}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600 max-w-[180px] truncate">
-                        {s.content ?? <span className="text-gray-300">—</span>}
-                      </td>
-                    </tr>
-                  ))}
                 </tbody>
               </table>
             </div>

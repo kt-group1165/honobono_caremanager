@@ -34,7 +34,6 @@ import { useBusinessType } from "@/lib/business-type-context";
 import { useLocalStorage } from "@/lib/use-local-storage";
 import { getUnreadCount } from "@/lib/notifications";
 import pkg from "../../../package.json";
-import { SidebarLegacy } from "./sidebar-legacy";
 
 const APP_VERSION = pkg.version;
 
@@ -256,19 +255,10 @@ const BUSINESS_TYPE_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 export function Sidebar() {
-  // legacy layout に切替 flag (localStorage で永続化)
-  const [useLegacy, setUseLegacy] = useLocalStorage(
-    "sidebar-legacy",
-    false,
-    (raw) => raw === "true",
-  );
-  if (useLegacy) {
-    return <SidebarLegacy onSwitchLayout={() => setUseLegacy(false)} />;
-  }
-  return <SidebarV2 onSwitchLayout={() => setUseLegacy(true)} />;
+  return <SidebarV2 />;
 }
 
-function SidebarV2({ onSwitchLayout }: { onSwitchLayout: () => void }) {
+function SidebarV2() {
   const pathname = usePathname();
   const { businessType, currentOffice } = useBusinessType();
   const [collapsed, setCollapsed] = useLocalStorage(
@@ -433,13 +423,6 @@ function SidebarV2({ onSwitchLayout }: { onSwitchLayout: () => void }) {
                 🏢 {currentOffice.name || "(名称未設定)"}
               </div>
             )}
-            <button
-              type="button"
-              onClick={onSwitchLayout}
-              className="mt-2 w-full rounded border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-100"
-            >
-              旧レイアウトに戻す
-            </button>
           </div>
         )}
         {collapsed && (

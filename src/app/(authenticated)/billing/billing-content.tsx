@@ -7,7 +7,6 @@ import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
 import {
   Receipt,
-  Plus,
   Filter,
   RefreshCw,
   Loader2,
@@ -402,13 +401,6 @@ export function BillingContent({
             <Download size={14} />
             国保連伝送用
           </button>
-          <Link
-            href="/billing/create"
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={16} />
-            請求データ作成
-          </Link>
         </div>
       </div>
 
