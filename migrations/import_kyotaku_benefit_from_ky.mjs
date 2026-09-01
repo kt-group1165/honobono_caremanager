@@ -16,7 +16,8 @@ const EXECUTE = process.argv.includes("--execute");
 const KAIGO = fileURLToPath(new URL("../", import.meta.url));
 const OFFICE_ID = process.env.OFFICE_ID, TAG = process.env.TAG, KY = process.env.KY;
 if (!OFFICE_ID || !TAG || !KY) { console.error("OFFICE_ID / TAG / KY が必要"); process.exit(1); }
-const BILLING_MONTH = "2026-06", YM = "202606";
+const BILLING_MONTH = process.env.TARGET_MONTH || "2026-06";
+const YM = BILLING_MONTH.replace("-", "");
 
 function loadEnv() { const t = readFileSync(path.join(KAIGO, ".env.local"), "utf8"); const e = {}; for (const l of t.split(/\r?\n/)) { const m = /^([A-Z0-9_]+)=(.*)$/.exec(l.trim()); if (m) e[m[1]] = m[2].replace(/^["']|["']$/g, ""); } return e; }
 const env = loadEnv();
@@ -32,7 +33,7 @@ async function main() {
   // 名称補完: 事業所別請求額 (提供番号|種類 → serviceType名/provider名)
   const nameByKey = new Map();
   try {
-    const rows = sjis.decode(readFileSync(path.join(KAIGO, "サービス実績データ/全居宅/202606/全居宅事業所別請求額.CSV"))).split(/\r?\n/).filter((l) => l).map(pl);
+    const rows = sjis.decode(readFileSync(path.join(KAIGO, `サービス実績データ/全居宅/${YM}/訪問介護/介護/全居宅事業所別請求額.CSV`))).split(/\r?\n/).filter((l) => l).map(pl);
     const H = rows[0]; const gi = (n) => H.indexOf(n);
     const iProv = gi("事業所番号（提供事業所）"), iKind = gi("サービス種類コード（提供事業所）"), iKn = gi("事業種別名（提供事業所）"), iPn = gi("事業所名（提供事業所）");
     for (const c of rows.slice(1)) { const k = `${(c[iProv] || "").trim()}|${(c[iKind] || "").trim()}`; if (!nameByKey.has(k)) nameByKey.set(k, { serviceType: (c[iKn] || "").trim(), providerName: (c[iPn] || "").trim() }); }

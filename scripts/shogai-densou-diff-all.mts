@@ -17,6 +17,7 @@ import { createClient } from "@supabase/supabase-js";
 import Encoding from "encoding-japanese";
 
 const MONTH = process.env.MONTH ?? "202606";
+const TARGET_MONTH = `${MONTH.slice(0, 4)}-${MONTH.slice(4)}`;
 const ONLY = (process.env.AREAS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 // ⚠ URL.pathname は日本語パスを %E4%BB%8B… に URL エンコードするので使えない。
 //   fileURLToPath で戻す (伝送データ/ が全部日本語ディレクトリなので必ず踏む)
@@ -76,6 +77,10 @@ const results: string[] = [];
 for (const j of jobs) {
   let out = "";
   try {
+    // ⚠ 2026-09-01 是正: 子プロセス (shogai-densou-diff.mts) に TARGET_MONTH を
+    //   渡していなかったため、MONTH=202606 以外を指定しても子側は既定値 "2026-06" の
+    //   DB データで突合していた (DENSOU_DIR は「ほのぼの側」のファイル選択にしか効かない)。
+    //   2026-06 は既定値と一致するため気づかれずにいた。
     out = execFileSync(
       "npx",
       ["tsx", "scripts/shogai-densou-diff.mts"],
@@ -86,6 +91,7 @@ for (const j of jobs) {
         maxBuffer: 64 * 1024 * 1024,
         env: {
           ...process.env,
+          TARGET_MONTH,
           OFFICE_ID: j.officeId,
           SHOGAI_BN: j.bn,
           DENSOU_DIR: `${j.area}/訪問介護/障害/${MONTH}`,
