@@ -23,7 +23,8 @@
  *   何番が空いているかを知るには他事業所の行が見えている必要がある。
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Plus, Printer, Save, Trash2, X } from "lucide-react";
@@ -34,7 +35,7 @@ import {
   type ShogaiKeiyakuEntry,
 } from "@/app/(authenticated)/billing/forms/_shogai-meisai";
 
-interface Row {
+export interface Row {
   id: string;
   client_id: string;
   office_id: string | null;
@@ -91,13 +92,60 @@ function toX100(d: Draft, unit: "時間" | "日" | "回"): number | null {
   return h * 100 + m;
 }
 
-export function ContractsSection({ userId }: { userId: string }) {
+export type ContractsData = {
+  rows: Row[];
+  officeNames: Map<string, string>;
+  unavailable: boolean;
+};
+
+const EMPTY_DATA: ContractsData = { rows: [], officeNames: new Map(), unavailable: false };
+
+/**
+ * 契約支給量セクションのデータを取得。page.tsx (server) / content (client) の
+ * 両方から同じロジックで呼べるよう、supabase client を引数で受け取る形に切り出している。
+ */
+export async function loadContractsData(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<ContractsData> {
+  const { data, error } = await supabase
+    .from("shogai_contracts")
+    .select(
+      "id, client_id, office_id, decision_code, amount_x100, amount_unit, entry_number, start_date, end_date, reason, notes",
+    )
+    .eq("client_id", userId)
+    .order("start_date", { ascending: false, nullsFirst: false });
+  if (error) {
+    // migration 未適用 (42P01) はカードごと隠す。それ以外は握らず知らせる
+    if (error.code === "42P01" || error.code === "PGRST205") {
+      return { ...EMPTY_DATA, unavailable: true };
+    }
+    throw new Error(`契約支給量の取得に失敗: ${error.message}`);
+  }
+  const rows = (data ?? []) as Row[];
+  const ids = Array.from(new Set(rows.map((r) => r.office_id).filter(Boolean))) as string[];
+  let officeNames = new Map<string, string>();
+  if (ids.length) {
+    const { data: offs } = await supabase.from("offices").select("id, name").in("id", ids);
+    officeNames = new Map((offs ?? []).map((o: { id: string; name: string }) => [o.id, o.name]));
+  }
+  return { rows, officeNames, unavailable: false };
+}
+
+export function ContractsSection({
+  userId,
+  initialData = null,
+}: {
+  userId: string;
+  initialData?: ContractsData | null;
+}) {
   const supabase = createClient();
   const { currentOffice } = useBusinessType();
-  const [rows, setRows] = useState<Row[]>([]);
-  const [officeNames, setOfficeNames] = useState<Map<string, string>>(new Map());
-  const [loading, setLoading] = useState(true);
-  const [unavailable, setUnavailable] = useState(false);
+  const init = initialData ?? EMPTY_DATA;
+  const [rows, setRows] = useState<Row[]>(init.rows);
+  const [officeNames, setOfficeNames] = useState<Map<string, string>>(init.officeNames);
+  const [loading, setLoading] = useState(false);
+  const [unavailable, setUnavailable] = useState(init.unavailable);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
@@ -118,40 +166,29 @@ export function ContractsSection({ userId }: { userId: string }) {
     representative: string | null;
   }>({ name: null, number: null, postal: null, address: null, representative: null });
 
-  // ⚠ 先頭で setState しないこと。effect から同期的に呼ぶと
-  //   react-hooks/set-state-in-effect に引っかかる (初期値が loading=true なので不要)
   const load = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("shogai_contracts")
-      .select(
-        "id, client_id, office_id, decision_code, amount_x100, amount_unit, entry_number, start_date, end_date, reason, notes",
-      )
-      .eq("client_id", userId)
-      .order("start_date", { ascending: false, nullsFirst: false });
-    if (error) {
-      // migration 未適用 (42P01) はカードごと隠す。それ以外は握らず知らせる
-      if (error.code === "42P01" || error.code === "PGRST205") {
-        setUnavailable(true);
-      } else {
-        toast.error(`契約支給量の取得に失敗: ${error.message}`);
-      }
+    setLoading(true);
+    try {
+      const data = await loadContractsData(supabase, userId);
+      setRows(data.rows);
+      setOfficeNames(data.officeNames);
+      setUnavailable(data.unavailable);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "契約支給量の取得に失敗しました");
+    } finally {
       setLoading(false);
-      return;
     }
-    const list = (data ?? []) as Row[];
-    setRows(list);
-    const ids = Array.from(new Set(list.map((r) => r.office_id).filter(Boolean))) as string[];
-    if (ids.length) {
-      const { data: offs } = await supabase.from("offices").select("id, name").in("id", ids);
-      setOfficeNames(new Map((offs ?? []).map((o: { id: string; name: string }) => [o.id, o.name])));
-    }
-    setLoading(false);
   }, [supabase, userId]);
 
+  // 初回 mount は server から渡された initialData をそのまま使う。
+  const isInitialMount = useRef(true);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount 時の fetch
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      if (initialData) return;
+    }
     void load();
-  }, [load]);
+  }, [load, userId, initialData]);
 
   const mine = useMemo(
     () => rows.filter((r) => currentOffice && r.office_id === currentOffice.id),
