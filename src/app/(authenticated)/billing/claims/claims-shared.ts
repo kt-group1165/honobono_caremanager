@@ -302,31 +302,39 @@ export function parseTeigenFromName(
 
 /**
  * 事業所の逓減制設定。fte (常勤換算数) 未設定 or 列未適用 (migration
- * teigen_settings.sql) の場合は null → 従来動作 (警告のみ) にフォールバック。
+ * teigen_settings.sql / teigen_kanwa_effective_date.sql) の場合は null →
+ * 従来動作 (警告のみ) にフォールバック。
  */
 export type TeigenSettings = { fte: number; kanwa: boolean };
 
+/**
+ * @param targetMonth 請求対象年月 (YYYY-MM)。緩和要件 (teigen_kanwa_from) は
+ *   「対象月の1日 >= teigen_kanwa_from」で判定する。過去分のレセプトを再生成
+ *   しても、その月時点でまだ緩和要件に該当していなければ (Ⅰ) のまま判定される。
+ */
 export async function fetchTeigenSettings(
   supabase: SupabaseClient,
   officeId: string,
+  targetMonth: string,
 ): Promise<TeigenSettings | null> {
   const { data, error } = await supabase
     .from("offices")
-    .select("caremane_jokin_kansan, teigen_kanwa")
+    .select("caremane_jokin_kansan, teigen_kanwa_from")
     .eq("id", officeId)
     .maybeSingle();
   if (error) {
     // 列未適用 (42703 / PGRST204 等) は従来動作へフォールバック (握りつぶさず log)
     console.warn(
-      "逓減制設定の取得に失敗 (migrations/teigen_settings.sql 未適用?)。従来どおり警告のみ:",
+      "逓減制設定の取得に失敗 (migrations/teigen_kanwa_effective_date.sql 未適用?)。従来どおり警告のみ:",
       error.message,
     );
     return null;
   }
-  const row = data as { caremane_jokin_kansan?: number | string | null; teigen_kanwa?: boolean | null } | null;
+  const row = data as { caremane_jokin_kansan?: number | string | null; teigen_kanwa_from?: string | null } | null;
   const fte = Number(row?.caremane_jokin_kansan ?? 0);
   if (!Number.isFinite(fte) || fte <= 0) return null;
-  return { fte, kanwa: !!row?.teigen_kanwa };
+  const kanwa = !!row?.teigen_kanwa_from && `${targetMonth}-01` >= row.teigen_kanwa_from;
+  return { fte, kanwa };
 }
 
 export interface KyotakuMonthMaster {

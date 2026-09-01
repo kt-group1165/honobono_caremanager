@@ -89,8 +89,13 @@ export type OfficeSettings = {
   // 逓減制 (居宅介護支援)。migrations/teigen_settings.sql 適用前は列が無く undefined
   /** 介護支援専門員の常勤換算数 (NULL/0 = 逓減制の自動判定をしない) */
   caremane_jokin_kansan?: number | string | null;
-  /** 逓減制の緩和要件 (ICT活用・事務職員配置 = 居宅介護支援費(Ⅱ)体制) 該当 */
-  teigen_kanwa?: boolean | null;
+  /**
+   * 逓減制の緩和要件 (ケアプランデータ連携システムに登録・事務職員配置 =
+   * 居宅介護支援費(Ⅱ)体制) に該当し始めた月の初日 (YYYY-MM-DD)。
+   * NULL = 非該当 (Ⅰ体制・45件で逓減)。migrations/teigen_kanwa_effective_date.sql
+   * 適用前は列が無く undefined。
+   */
+  teigen_kanwa_from?: string | null;
 };
 
 // 旧区分 (A/B/C) → 新区分 (Ⅰ/Ⅱ/Ⅲ) のクライアント側変換は撤去済。
@@ -275,13 +280,13 @@ export function OfficeContent({
         .from("offices")
         .update({
           caremane_jokin_kansan: fte,
-          teigen_kanwa: !!form.teigen_kanwa,
+          teigen_kanwa_from: form.teigen_kanwa_from || null,
         })
         .eq("id", form.id);
       if (teigenErr) {
         setSaving(false);
         toast.warning(
-          "逓減制設定は保存できませんでした (migrations/teigen_settings.sql が未適用の可能性): " +
+          "逓減制設定は保存できませんでした (migrations/teigen_kanwa_effective_date.sql が未適用の可能性): " +
             teigenErr.message,
         );
         return;
@@ -456,41 +461,58 @@ export function OfficeContent({
       <div className="rounded-xl border bg-white p-6 shadow-sm space-y-4">
         <h2 className="text-sm font-bold text-gray-700 border-b pb-2">逓減制 (取扱件数)</h2>
         <p className="text-xs text-gray-500">
-          介護支援専門員 1 人 (常勤換算) あたりの取扱件数が 45 件以上 (緩和要件該当なら 50 件以上) で
+          介護支援専門員 1 人 (常勤換算) あたりの取扱件数が 45 件以上 (緩和要件に該当する事業所は 50 件以上) で
           居宅介護支援費(ⅱ)、60 件以上で (ⅲ) に逓減します。常勤換算数を設定すると、
           レセプト一括生成時に利用者ごとの基本サービスコードを自動判定します
           (未設定の場合は従来どおり件数警告のみ)。
         </p>
-        <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            介護支援専門員 常勤換算数
+          </label>
+          <input
+            type="number"
+            step="0.1"
+            min="0"
+            value={form.caremane_jokin_kansan ?? ""}
+            onChange={(e) => handleChange("caremane_jokin_kansan", e.target.value)}
+            className="w-full max-w-xs rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            placeholder="例: 2.5 (空欄 = 自動判定しない)"
+          />
+        </div>
+
+        <div className="rounded-lg border border-blue-100 bg-blue-50/40 p-4 space-y-3">
+          <div>
+            <p className="text-sm font-medium text-blue-800">緩和要件 (居宅介護支援費(Ⅱ)体制)</p>
+            <p className="text-xs text-gray-600 mt-1">
+              次の 2 つを<span className="font-medium">両方</span>満たすと、逓減の閾値が 45 件 → 50 件に緩和されます
+              (令和6年3月15日付 解釈通知)。
+            </p>
+            <ul className="text-xs text-gray-600 mt-2 list-disc list-inside space-y-1">
+              <li>
+                <span className="font-medium">ケアプランデータ連携システム</span>への登録・ソフト導入済み
+                <span className="text-gray-400">　(実際に使っているかは問われない。申請とインストールのみで足りる)</span>
+              </li>
+              <li>
+                <span className="font-medium">事務職員</span>を配置している
+                <span className="text-gray-400">　(勤務時間は問わない。常勤・専従である必要はない)</span>
+              </li>
+            </ul>
+          </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
-              介護支援専門員 常勤換算数
+              緩和要件に該当し始めた月
             </label>
             <input
-              type="number"
-              step="0.1"
-              min="0"
-              value={form.caremane_jokin_kansan ?? ""}
-              onChange={(e) => handleChange("caremane_jokin_kansan", e.target.value)}
-              className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="例: 2.5 (空欄 = 自動判定しない)"
+              type="month"
+              value={(form.teigen_kanwa_from ?? "").slice(0, 7)}
+              onChange={(e) => handleChange("teigen_kanwa_from", e.target.value ? `${e.target.value}-01` : "")}
+              className="w-full max-w-xs rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
-          </div>
-          <div className="flex items-end pb-1">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.teigen_kanwa ?? false}
-                onChange={(e) => handleChange("teigen_kanwa", e.target.checked)}
-                className="h-4 w-4 rounded accent-blue-600"
-              />
-              <span className="text-sm text-gray-700">
-                緩和要件 (ICT活用・事務職員配置) に該当
-                <span className="block text-xs text-gray-400">
-                  該当時は居宅介護支援費(Ⅱ) の体制で判定・請求します (閾値 50/60 件)
-                </span>
-              </span>
-            </label>
+            <p className="text-xs text-gray-400 mt-1">
+              空欄 = 該当なし (Ⅰ体制・45件で逓減)。設定した月以降のレセプト生成でのみ (Ⅱ体制・50件で逓減) が適用されます —
+              それより前の月を後から再生成しても (Ⅰ体制) のまま計算されます。
+            </p>
           </div>
         </div>
       </div>

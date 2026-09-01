@@ -1111,9 +1111,10 @@ export function ClaimsContent({
 
       // 5-g. 逓減制 (令和6年度〜): 事業所設定の「介護支援専門員 常勤換算数」が
       //     設定されていれば、取扱件数から利用者ごとの基本コード tier (ⅰ/ⅱ/ⅲ) を
-      //     自動判定する。未設定 or 列未適用 (migrations/teigen_settings.sql) の
-      //     場合は null → 従来どおり (Ⅰ)ⅰ 固定 + 請求画面の件数警告のみ。
-      const teigen = await fetchTeigenSettings(supabase, currentOffice.id);
+      //     自動判定する。未設定 or 列未適用 (migrations/teigen_kanwa_effective_date.sql)
+      //     の場合は null → 従来どおり (Ⅰ)ⅰ 固定 + 請求画面の件数警告のみ。
+      //     緩和要件 (teigen_kanwa_from) は billingMonth 時点で該当していたかを見る。
+      const teigen = await fetchTeigenSettings(supabase, currentOffice.id, billingMonth);
 
       // 5-h. tier の事前割当。
       //   取扱件数 = 要介護の給付管理利用者数 + 要支援 (委託除く) × 1/3

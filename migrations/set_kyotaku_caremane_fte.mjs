@@ -101,7 +101,7 @@ async function main() {
   }
 
   const { data: offices, error } = await sb.from("offices")
-    .select("id, name, caremane_jokin_kansan, teigen_kanwa").eq("service_type", "居宅介護支援");
+    .select("id, name, caremane_jokin_kansan, teigen_kanwa_from").eq("service_type", "居宅介護支援");
   if (error) { console.error(`✗ ${error.message}`); process.exit(1); }
   const byName = new Map((offices ?? []).map((o) => [o.name, o]));
 
@@ -141,7 +141,7 @@ async function main() {
     console.log(`  ✓ ${p.off.name}  常勤換算 ${p.fte}`);
   }
   console.log(`\n✓ ${plans.length} 事業所に設定しました`);
-  console.log("  ※ 緩和要件 (teigen_kanwa) は事実確認が要るので触っていません");
+  console.log("  ※ 緩和要件 (teigen_kanwa_from) は事実確認が要るので触っていません");
 }
 
 main().catch((e) => { console.error("ERROR:", e.message); process.exit(1); });
