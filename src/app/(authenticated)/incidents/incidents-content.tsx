@@ -16,7 +16,8 @@
  *   (RLS tenant scope + audit_log トリガ付き)
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
@@ -31,7 +32,7 @@ import {
 import { useBusinessType } from "@/lib/business-type-context";
 
 type Tab = "incident" | "nearmiss" | "complaint";
-type Row = Record<string, unknown>;
+export type Row = Record<string, unknown>;
 
 export interface ClientLite {
   id: string;
@@ -173,16 +174,59 @@ const toLocalInput = (v: unknown, type: Field["type"]): string => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
-export function IncidentsContent({ clients }: { clients: ClientLite[] }) {
+export type LoadIncidentRowsResult = { rows: Row[]; missingSql: string | null };
+
+export async function loadIncidentRows(
+  supabase: SupabaseClient,
+  officeId: string,
+  tab: Tab,
+  year: string,
+): Promise<LoadIncidentRowsResult> {
+  const conf = CONF[tab];
+  const from = `${year}-01-01T00:00:00`;
+  const to = `${Number(year) + 1}-01-01T00:00:00`;
+  // 事故報告書とヒヤリハットは同じ台帳。report_kind で切り分ける
+  let q = supabase
+    .from(conf.table)
+    .select("*")
+    .eq("office_id", officeId)
+    .gte(conf.dateKey, from)
+    .lt(conf.dateKey, to);
+  if ("kind" in conf) q = q.eq("report_kind", conf.kind);
+  const { data, error } = await q.order(conf.dateKey, { ascending: false });
+  if (error) {
+    if (isMissingSchema(error.code)) {
+      return { rows: [], missingSql: conf.sql };
+    }
+    throw new Error(`読み込みに失敗しました: ${error.message}`);
+  }
+  return { rows: (data ?? []) as Row[], missingSql: null };
+}
+
+export function IncidentsContent({
+  clients,
+  initialOfficeId = null,
+  initialTab = null,
+  initialYear = null,
+  initialRows = [],
+  initialMissingSql = null,
+}: {
+  clients: ClientLite[];
+  initialOfficeId?: string | null;
+  initialTab?: Tab | null;
+  initialYear?: string | null;
+  initialRows?: Row[];
+  initialMissingSql?: string | null;
+}) {
   const supabase = useMemo(() => createClient(), []);
   const { currentOffice } = useBusinessType();
   const officeId = currentOffice?.id ?? null;
 
-  const [tab, setTab] = useState<Tab>("incident");
-  const [year, setYear] = useState(() => String(new Date().getFullYear()));
-  const [rows, setRows] = useState<Row[]>([]);
+  const [tab, setTab] = useState<Tab>(initialTab ?? "incident");
+  const [year, setYear] = useState(() => initialYear ?? String(new Date().getFullYear()));
+  const [rows, setRows] = useState<Row[]>(initialRows);
   const [loading, setLoading] = useState(false);
-  const [missingSql, setMissingSql] = useState<string | null>(null);
+  const [missingSql, setMissingSql] = useState<string | null>(initialMissingSql);
   const [editing, setEditing] = useState<Row | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -193,36 +237,28 @@ export function IncidentsContent({ clients }: { clients: ClientLite[] }) {
     if (!officeId) return;
     setLoading(true);
     setMissingSql(null);
-    const from = `${year}-01-01T00:00:00`;
-    const to = `${Number(year) + 1}-01-01T00:00:00`;
-    // 事故報告書とヒヤリハットは同じ台帳。report_kind で切り分ける
-    let q = supabase
-      .from(conf.table)
-      .select("*")
-      .eq("office_id", officeId)
-      .gte(conf.dateKey, from)
-      .lt(conf.dateKey, to);
-    if ("kind" in conf) q = q.eq("report_kind", conf.kind);
-    const { data, error } = await q.order(conf.dateKey, { ascending: false });
-    setLoading(false);
-    if (error) {
-      if (isMissingSchema(error.code)) {
-        setMissingSql(conf.sql);
-        setRows([]);
+    try {
+      const result = await loadIncidentRows(supabase, officeId, tab, year);
+      setRows(result.rows);
+      setMissingSql(result.missingSql);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "読み込みに失敗しました");
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase, officeId, year, tab]);
+
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      if (initialOfficeId && initialOfficeId === officeId && initialTab === tab && initialYear === year) {
         return;
       }
-      toast.error(`読み込みに失敗しました: ${error.message}`);
-      setRows([]);
-      return;
     }
-    setRows((data ?? []) as Row[]);
-    // conf は CONF[tab] の参照そのもの (モジュール定数) なので毎回同じ。conf 単位で依存させる
-  }, [supabase, officeId, year, conf]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- タブ/年/事業所の切替で読み直す
     load();
-  }, [load]);
+  }, [load, initialOfficeId, initialTab, initialYear, officeId, tab, year]);
 
   const startNew = () => {
     const now = new Date();
