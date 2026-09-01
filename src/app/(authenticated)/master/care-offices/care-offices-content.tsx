@@ -8,7 +8,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Plus, Trash2, Search, Home, Loader2, Save, X, Pencil, Building2 } from "lucide-react";
+import { Plus, Trash2, Search, Home, Loader2, Save, X, Pencil, Building2, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { OpendataSearch } from "../opendata-search";
 import {
   isMissingPartnerSchemaError,
@@ -63,6 +63,40 @@ function friendlyError(err: { code?: string; message: string }, action: string):
   return `${action}に失敗しました: ${err.message}`;
 }
 
+type SortKey = "name" | "office_number" | "partner" | "created_at";
+
+/** クリックで並び替えを切り替えるテーブルヘッダー */
+function SortableHeader({
+  label,
+  sortKeyOf,
+  sortKey,
+  sortDir,
+  onClick,
+  className = "",
+}: {
+  label: string;
+  sortKeyOf: SortKey;
+  sortKey: SortKey;
+  sortDir: "asc" | "desc";
+  onClick: (key: SortKey) => void;
+  className?: string;
+}) {
+  const active = sortKey === sortKeyOf;
+  const Icon = active ? (sortDir === "asc" ? ChevronUp : ChevronDown) : ChevronsUpDown;
+  return (
+    <th className={`px-4 py-2.5 font-medium ${className}`}>
+      <button
+        type="button"
+        onClick={() => onClick(sortKeyOf)}
+        className={`flex items-center gap-1 hover:text-gray-900 ${active ? "text-gray-900" : ""}`}
+      >
+        {label}
+        <Icon size={14} className={active ? "text-blue-600" : "text-gray-400"} />
+      </button>
+    </th>
+  );
+}
+
 export function CareOfficesContent({ initialOffices }: { initialOffices: CareOffice[] }) {
   const supabase = createClient();
 
@@ -83,6 +117,22 @@ export function CareOfficesContent({ initialOffices }: { initialOffices: CareOff
   // 削除確認ダイアログ
   const [deleteTarget, setDeleteTarget] = useState<CareOffice | null>(null);
 
+  // 並び替え
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const toggleSort = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+  const sortValue = (o: CareOffice, key: SortKey): string => {
+    if (key === "partner") return o.partner_companies?.name ?? "";
+    return o[key] ?? "";
+  };
+
   const fetchOffices = useCallback(async () => {
     // partner_companies 未適用 DB では embed が失敗するため旧 select にフォールバック
     let res = await supabase.from("care_offices").select(SELECT_WITH_PARTNER).order("name");
@@ -99,11 +149,19 @@ export function CareOfficesContent({ initialOffices }: { initialOffices: CareOff
 
   const filtered = useMemo(() => {
     const q = search.trim();
-    if (!q) return offices;
-    return offices.filter(
-      (o) => o.name.includes(q) || (o.office_number ?? "").includes(q),
-    );
-  }, [offices, search]);
+    const base = !q
+      ? offices
+      : offices.filter((o) => o.name.includes(q) || (o.office_number ?? "").includes(q));
+    const sorted = [...base].sort((a, b) => {
+      const av = sortValue(a, sortKey);
+      const bv = sortValue(b, sortKey);
+      if (!av && bv) return 1; // 空値は常に末尾
+      if (av && !bv) return -1;
+      const cmp = av.localeCompare(bv, "ja");
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return sorted;
+  }, [offices, search, sortKey, sortDir]);
 
   // ── 新規追加 ────────────────────────────────────────────────────────────
 
@@ -398,10 +456,10 @@ export function CareOfficesContent({ initialOffices }: { initialOffices: CareOff
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-gray-50 text-left text-xs text-gray-600">
-              <th className="px-4 py-2.5 font-medium">事業所名</th>
-              <th className="w-40 px-4 py-2.5 font-medium">事業所番号</th>
-              <th className="w-48 px-4 py-2.5 font-medium">法人</th>
-              <th className="w-32 px-4 py-2.5 font-medium">登録日</th>
+              <SortableHeader label="事業所名" sortKeyOf="name" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <SortableHeader label="事業所番号" sortKeyOf="office_number" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} className="w-40" />
+              <SortableHeader label="法人" sortKeyOf="partner" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} className="w-48" />
+              <SortableHeader label="登録日" sortKeyOf="created_at" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} className="w-32" />
               <th className="w-24 px-4 py-2.5 text-center font-medium">操作</th>
             </tr>
           </thead>
