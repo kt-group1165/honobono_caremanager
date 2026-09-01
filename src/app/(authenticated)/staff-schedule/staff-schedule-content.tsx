@@ -22,13 +22,14 @@
  * 保存先: migrations/staff_schedule_hours_v1.sql
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Printer, Save, Users } from "lucide-react";
 import { useBusinessType } from "@/lib/business-type-context";
 
-type Member = {
+export type Member = {
   id: string;
   name: string;
   furigana: string | null;
@@ -40,114 +41,148 @@ type Member = {
   weekly_scheduled_hours?: number | null;
 };
 
-const isMissingCol = (code?: string) => code === "42703" || code === "42P01" || code === "PGRST205";
+export const isMissingCol = (code?: string) => code === "42703" || code === "42P01" || code === "PGRST205";
 
-export function StaffScheduleContent() {
+export type StaffScheduleData = {
+  members: Member[];
+  multiOffice: Set<string>;
+  fullTimeHours: number;
+  colMissing: boolean;
+};
+
+const EMPTY_DATA: StaffScheduleData = {
+  members: [], multiOffice: new Set(), fullTimeHours: 40, colMissing: false,
+};
+
+/** エラーメッセージ付きで throw する軽量ヘルパ (server 側は toast が無いため) */
+class LoadError extends Error {}
+
+/**
+ * 勤務形態一覧表の当事業所データを取得。page.tsx (server) / content.tsx (client) の
+ * 両方から同じロジックで呼べるよう、supabase client を引数で受け取る形に切り出している。
+ */
+export async function loadStaffScheduleData(
+  supabase: SupabaseClient,
+  officeId: string,
+): Promise<StaffScheduleData> {
+  // 1) 自事業所に紐づく職員 (member_offices 経由)
+  const { data: mo, error: moErr } = await supabase
+    .from("member_offices")
+    .select("member_id")
+    .eq("office_id", officeId);
+  if (moErr) throw new LoadError(`職員の取得に失敗しました: ${moErr.message}`);
+  const ids = Array.from(new Set(((mo ?? []) as { member_id: string }[]).map((r) => r.member_id)));
+  if (ids.length === 0) return EMPTY_DATA;
+
+  // 2) 兼務判定 = その職員が 2 事業所以上に紐づいているか
+  const { data: allMo } = await supabase
+    .from("member_offices")
+    .select("member_id, office_id")
+    .in("member_id", ids);
+  const cnt = new Map<string, number>();
+  for (const r of (allMo ?? []) as { member_id: string }[]) {
+    cnt.set(r.member_id, (cnt.get(r.member_id) ?? 0) + 1);
+  }
+  const multiOffice = new Set([...cnt.entries()].filter(([, n]) => n >= 2).map(([id]) => id));
+
+  // 3) 職員本体。weekly_scheduled_hours は migration 未適用だと 42703 になるので落として再取得
+  const base = "id, name, furigana, role, qualifications, employment_type, hire_date, status";
+  let rows: Member[] = [];
+  let colMissing = false;
+  const first = await supabase
+    .from("members")
+    .select(`${base}, weekly_scheduled_hours`)
+    .in("id", ids)
+    .is("deleted_at", null)
+    .order("furigana", { nullsFirst: false });
+  if (first.error) {
+    if (!isMissingCol(first.error.code)) throw new LoadError(`職員の取得に失敗しました: ${first.error.message}`);
+    colMissing = true;
+    const retry = await supabase
+      .from("members")
+      .select(base)
+      .in("id", ids)
+      .is("deleted_at", null)
+      .order("furigana", { nullsFirst: false });
+    if (retry.error) throw new LoadError(`職員の取得に失敗しました: ${retry.error.message}`);
+    rows = (retry.data ?? []) as Member[];
+  } else {
+    rows = (first.data ?? []) as Member[];
+  }
+  // 退職者は一覧から外す (現在の体制を示す帳票なので)
+  rows = rows.filter((m) => m.status !== "退職者");
+
+  // 4) 常勤の週所定時間 (列が無ければ 40)
+  let fullTimeHours = 40;
+  const off = await supabase
+    .from("offices")
+    .select("fulltime_weekly_hours")
+    .eq("id", officeId)
+    .maybeSingle();
+  if (!off.error) {
+    const v = (off.data as { fulltime_weekly_hours: number | null } | null)?.fulltime_weekly_hours;
+    fullTimeHours = v != null && v > 0 ? Number(v) : 40;
+  }
+
+  return { members: rows, multiOffice, fullTimeHours, colMissing };
+}
+
+export function StaffScheduleContent({
+  initialOfficeId = null,
+  initialData = null,
+}: {
+  initialOfficeId?: string | null;
+  initialData?: StaffScheduleData | null;
+} = {}) {
   const supabase = useMemo(() => createClient(), []);
   const { currentOffice } = useBusinessType();
   const officeId = currentOffice?.id ?? null;
   const officeName = currentOffice?.name ?? "";
+  const init = initialData ?? EMPTY_DATA;
 
-  const [members, setMembers] = useState<Member[]>([]);
-  const [multiOffice, setMultiOffice] = useState<Set<string>>(new Set());
-  const [fullTimeHours, setFullTimeHours] = useState<number>(40);
+  const [members, setMembers] = useState<Member[]>(init.members);
+  const [multiOffice, setMultiOffice] = useState<Set<string>>(init.multiOffice);
+  const [fullTimeHours, setFullTimeHours] = useState<number>(init.fullTimeHours);
   const [loading, setLoading] = useState(false);
-  const [colMissing, setColMissing] = useState(false);
-  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [colMissing, setColMissing] = useState(init.colMissing);
+  const [draft, setDraft] = useState<Record<string, string>>(
+    Object.fromEntries(
+      init.members.map((m) => [m.id, m.weekly_scheduled_hours != null ? String(m.weekly_scheduled_hours) : ""]),
+    ),
+  );
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     if (!officeId) return;
     setLoading(true);
     setColMissing(false);
-
-    // 1) 自事業所に紐づく職員 (member_offices 経由)
-    const { data: mo, error: moErr } = await supabase
-      .from("member_offices")
-      .select("member_id")
-      .eq("office_id", officeId);
-    if (moErr) {
+    try {
+      const data = await loadStaffScheduleData(supabase, officeId);
+      setMembers(data.members);
+      setMultiOffice(data.multiOffice);
+      setFullTimeHours(data.fullTimeHours);
+      setColMissing(data.colMissing);
+      setDraft(
+        Object.fromEntries(
+          data.members.map((m) => [m.id, m.weekly_scheduled_hours != null ? String(m.weekly_scheduled_hours) : ""]),
+        ),
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "職員の取得に失敗しました");
+    } finally {
       setLoading(false);
-      toast.error(`職員の取得に失敗しました: ${moErr.message}`);
-      return;
     }
-    const ids = Array.from(
-      new Set(((mo ?? []) as { member_id: string }[]).map((r) => r.member_id)),
-    );
-    if (ids.length === 0) {
-      setMembers([]);
-      setLoading(false);
-      return;
-    }
-
-    // 2) 兼務判定 = その職員が 2 事業所以上に紐づいているか
-    const { data: allMo } = await supabase
-      .from("member_offices")
-      .select("member_id, office_id")
-      .in("member_id", ids);
-    const cnt = new Map<string, number>();
-    for (const r of (allMo ?? []) as { member_id: string }[]) {
-      cnt.set(r.member_id, (cnt.get(r.member_id) ?? 0) + 1);
-    }
-    setMultiOffice(new Set([...cnt.entries()].filter(([, n]) => n >= 2).map(([id]) => id)));
-
-    // 3) 職員本体。weekly_scheduled_hours は migration 未適用だと 42703 になるので落として再取得
-    const base = "id, name, furigana, role, qualifications, employment_type, hire_date, status";
-    let rows: Member[] = [];
-    const first = await supabase
-      .from("members")
-      .select(`${base}, weekly_scheduled_hours`)
-      .in("id", ids)
-      .is("deleted_at", null)
-      .order("furigana", { nullsFirst: false });
-    if (first.error) {
-      if (!isMissingCol(first.error.code)) {
-        setLoading(false);
-        toast.error(`職員の取得に失敗しました: ${first.error.message}`);
-        return;
-      }
-      setColMissing(true);
-      const retry = await supabase
-        .from("members")
-        .select(base)
-        .in("id", ids)
-        .is("deleted_at", null)
-        .order("furigana", { nullsFirst: false });
-      if (retry.error) {
-        setLoading(false);
-        toast.error(`職員の取得に失敗しました: ${retry.error.message}`);
-        return;
-      }
-      rows = (retry.data ?? []) as Member[];
-    } else {
-      rows = (first.data ?? []) as Member[];
-    }
-    // 退職者は一覧から外す (現在の体制を示す帳票なので)
-    rows = rows.filter((m) => m.status !== "退職者");
-    setMembers(rows);
-    setDraft(
-      Object.fromEntries(
-        rows.map((m) => [m.id, m.weekly_scheduled_hours != null ? String(m.weekly_scheduled_hours) : ""]),
-      ),
-    );
-
-    // 4) 常勤の週所定時間 (列が無ければ 40)
-    const off = await supabase
-      .from("offices")
-      .select("fulltime_weekly_hours")
-      .eq("id", officeId)
-      .maybeSingle();
-    if (!off.error) {
-      const v = (off.data as { fulltime_weekly_hours: number | null } | null)?.fulltime_weekly_hours;
-      setFullTimeHours(v != null && v > 0 ? Number(v) : 40);
-    }
-    setLoading(false);
   }, [supabase, officeId]);
 
+  // 初回 mount は server (?office= 付きなら) から渡された initialData をそのまま使う。
+  const isInitialMount = useRef(true);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- 事業所切替で読み直す
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      if (initialOfficeId && initialOfficeId === officeId) return;
+    }
     load();
-  }, [load]);
+  }, [load, officeId, initialOfficeId]);
 
   const saveHours = async () => {
     if (colMissing) {
