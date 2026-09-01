@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { resolveChiikiBathCode } from "@/lib/idou-shien-code";
@@ -8,10 +8,10 @@ import {
   ChevronLeft, ChevronRight, Plus, Loader2, X, Pencil, Trash2, Droplets,
 } from "lucide-react";
 
-type Client = { id: string; name: string; furigana: string | null; user_number: string | null };
-type Staff = { id: string; name: string };
+export type Client = { id: string; name: string; furigana: string | null; user_number: string | null };
+export type Staff = { id: string; name: string };
 
-type BathRecord = {
+export type BathRecord = {
   id: string;
   client_id: string;
   office_id: string | null;
@@ -79,18 +79,27 @@ const emptyForm = (): FormState => ({
   status: "draft",
 });
 
-export function BathRecordsContent() {
+export function BathRecordsContent({
+  initialOfficeId,
+  initialMonth,
+  initialClients,
+  initialStaff,
+  initialRecords,
+}: {
+  initialOfficeId: string | null;
+  initialMonth: string;
+  initialClients: Client[];
+  initialStaff: Staff[];
+  initialRecords: BathRecord[];
+}) {
   const supabase = useMemo(() => createClient(), []);
   const { currentOffice, currentOfficeId } = useBusinessType();
 
-  const [month, setMonth] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  });
-  const [clients, setClients] = useState<Client[]>([]);
-  const [staff, setStaff] = useState<Staff[]>([]);
-  const [records, setRecords] = useState<BathRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [month, setMonth] = useState(initialMonth);
+  const [clients, setClients] = useState<Client[]>(initialClients);
+  const [staff, setStaff] = useState<Staff[]>(initialStaff);
+  const [records, setRecords] = useState<BathRecord[]>(initialRecords);
+  const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<BathRecord | "new" | null>(null);
 
   const clientName = useCallback(
@@ -136,10 +145,17 @@ export function BathRecordsContent() {
     }
   }, [supabase, currentOfficeId, month]);
 
+  // 初回 mount は server (?office= 付きなら) から渡された initial* をそのまま使う。
+  // ?office= が無い状態で来た (SSR 時点で事業所未確定) 場合は初回もそのまま load() へ
+  // フォールスルーし、事業所確定後の自力取得に任せる。
+  const isInitialMount = useRef(true);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount/月変更時の async fetch
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      if (initialOfficeId && initialOfficeId === currentOfficeId) return;
+    }
     load();
-  }, [load]);
+  }, [load, currentOfficeId, initialOfficeId]);
 
   const prevMonth = () => {
     const [y, m] = month.split("-").map(Number);
