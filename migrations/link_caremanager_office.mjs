@@ -10,6 +10,7 @@
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
 import { findDataFile } from "./_meisai_files.mjs";
+import { resolveUserDir, findUserCsv } from "./_user_data_dir.mjs";
 import { linkPartnerCompany } from "./_partner_company_link.mjs";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -51,7 +52,12 @@ async function main(){
     };
   }
   // ② 介護保険1.CSV: 利用者番号→支援事業所正式名称 (照合用)
-  const ins=readCsv(path.join(KAIGO,`利用者データ/${USER_SUB}/介護保険1.CSV`));
+  // ⚠ 出力元によってファイル名が揺れる (例 Hana高品_登録有 は「介護保険_Hana高品.CSV」)。
+  //   STEP1 (import_meisai_step1_clients.mjs) と同じ resolveUserDir/findUserCsv で解決する。
+  const { dir: userDir } = resolveUserDir(KAIGO, USER_SUB, TARGET_MONTH);
+  const kaigoInsPath = findUserCsv(userDir, "介護保険1");
+  if(!kaigoInsPath){ console.error(`✗ ${userDir} に 介護保険1*.CSV がありません`); process.exit(1); }
+  const ins=readCsv(kaigoInsPath);
   const gi=(n)=>ins.H.indexOf(n);
   const iiNum=gi("利用者番号"),iiName=gi("支援事業所（正式名称）");
   const insName={}; for(const r of ins.rows){ insName[r[iiNum]]=(r[iiName]||"").trim(); }
