@@ -634,7 +634,8 @@ async function main(): Promise<void> {
     const reallyMissing: Worked[] = [];
     const actuallyBilled: { w: Worked; num: string }[] = [];
     for (const w of noNumber) {
-      const cid = resolved.get(`${w.area}|${w.clientNum}`) ?? null;
+      // ⚠ worked のキーは `area|system|num`。system を落とすと全部 null になる
+      const cid = resolved.get(`${w.area}|${w.system}|${w.clientNum}`) ?? null;
       const bd = cid ? (birthById.get(cid) ?? "") : "";
       const num = master.get(`${nk(w.clientName)}|${bd}`);
       if (num && (densou.kaigo.get(num)?.has(MONTH) || densou.shogai.get(num)?.has(MONTH))) {
