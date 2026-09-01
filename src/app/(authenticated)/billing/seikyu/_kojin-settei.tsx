@@ -18,6 +18,17 @@
  * 初回加算候補: 過去2ヶ月 (前月・前々月) に居宅介護支援費レセプトが無い利用者を emerald
  *   ハイライトで候補提示 (訪問介護側 kaigo-seikyu-content.tsx の初回加算候補と同じ設計:
  *   表示のみで自動チェックはしない。判定に使うのは billing_month の有無のみ)。
+ * 緊急時等居宅カンファレンス加算候補: 対象月に kaigo_support_records.category='カンファレンス'
+ *   の支援経過がある利用者を emerald ハイライト (通常のサービス担当者会議とは別の CHECK 制約値)。
+ * ターミナルケアマネジメント加算候補: 対象月が死亡月 (clients.status='deceased' かつ
+ *   discharge_date が対象月内) で、死亡日前14日以内に category='訪問' の支援経過が2日
+ *   以上ある利用者を emerald ハイライト (告示要件どおり)。
+ *   ⚠ 死亡月の利用者は通常の利用者一覧 (status='active' 絞り込み) には出てこないため、
+ *   本タブでは死亡月に該当する deceased 利用者を別クエリで追加表示している。ただし
+ *   レセプト一括生成 (claims-content.tsx) 側は今も status='active' のみが対象なので、
+ *   死亡月のレセプトは status を deceased に切り替える**前**に生成しておく必要がある
+ *   (2026-09-02 時点、死亡ステータスの backfill 自体もまだ実施していない — 対象は
+ *   全社で数名の見込み。運用の詳細は WORKING_NOW.md 参照)。
  *
  * ※ 一括生成 (レセプト編集) では個別加算は全て OFF で生成される。
  *   利用者ごとの算定はこのタブで行う (旧「届出があれば全員自動算定」は廃止)。
@@ -57,6 +68,15 @@ import {
 const PAGE = 1000;
 // .in() の URI Too Long 回避用チャンク (_seikyu-context と同値)
 const IN_CHUNK = ID_IN_CHUNK;
+
+// YYYY-MM-DD から N 日前の YYYY-MM-DD を返す。
+// ⚠ toISOString() は JST で前日にずれる罠があるため、Date.UTC + UTC setter のみで組む。
+function subtractDaysIso(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - days);
+  return dt.toISOString().slice(0, 10);
+}
 
 // 状態 / フリガナ・利用者名 / 性別 / 電話 / 初回 / 退院退所 / 入院時 / 緊急時 / 運営基準 / ターミナル / 通院時 / メッセージ
 const GRID_COLS =
@@ -117,6 +137,11 @@ export function KyotakuKojinSetteiContent() {
   const [hospMap, setHospMap] = useState<Map<string, HospitalizationPeriod[]>>(new Map());
   // 初回加算候補: 過去2ヶ月に居宅介護支援費レセプトが無い利用者 (表示のみ・自動チェックはしない)
   const [shokaiCandidateIds, setShokaiCandidateIds] = useState<Set<string>>(new Set());
+  // 緊急時等居宅カンファレンス加算候補: 対象月に kaigo_support_records.category='カンファレンス' がある利用者
+  const [conferenceCandidateIds, setConferenceCandidateIds] = useState<Set<string>>(new Set());
+  // ターミナルケアマネジメント加算候補: 対象月が死亡月 (status=deceased かつ discharge_date が対象月内) で、
+  // 死亡日前14日以内に category='訪問' の支援経過が2件以上ある利用者
+  const [terminalCandidateIds, setTerminalCandidateIds] = useState<Set<string>>(new Set());
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   // notes 編集の draft (claim.id → text)。blur で保存
   const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
@@ -174,12 +199,36 @@ export function KyotakuKojinSetteiContent() {
           from += PAGE;
         }
       }
+      // 1b) 対象月が死亡月の利用者 (status=deceased かつ discharge_date が対象月内) も追加。
+      //     ターミナルケアマネジメント加算は死亡月に算定するため、通常の active 一覧だけだと
+      //     死亡直後で行自体が出てこない (レセプト編集も同じ status='active' 絞り込みのため、
+      //     死亡月のレセプトは backfill 前に生成しておく必要がある)。
+      const { from: mFromLoad, to: mToLoad } = monthRange(year, month);
+      const { data: deceasedData, error: dErr } = await supabase
+        .from("clients")
+        .select(
+          "id, name, furigana, gender, phone, mobile, discharge_date, client_office_assignments!inner(office_id)",
+        )
+        .eq("client_office_assignments.office_id", officeId)
+        .eq("status", "deceased")
+        .eq("is_facility", false)
+        .is("deleted_at", null)
+        .gte("discharge_date", mFromLoad)
+        .lte("discharge_date", mToLoad);
+      if (dErr) throw new Error(`死亡月利用者の取得に失敗: ${dErr.message}`);
+      const deceasedRows = (deceasedData ?? []) as unknown as (ClientRow & { discharge_date: string | null })[];
+      const existingIds = new Set(cls.map((c) => c.id));
+      for (const d of deceasedRows) {
+        if (!existingIds.has(d.id)) cls.push(d);
+      }
       setClients(cls);
       if (cls.length === 0) {
         setClaims([]);
         setCareLevelByClient(new Map());
         setHospMap(new Map());
         setShokaiCandidateIds(new Set());
+        setConferenceCandidateIds(new Set());
+        setTerminalCandidateIds(new Set());
         return;
       }
       const clientIds = cls.map((c) => c.id);
@@ -216,7 +265,7 @@ export function KyotakuKojinSetteiContent() {
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       };
       const prevMonths = [prevMonthKey(-1), prevMonthKey(-2)];
-      const [certRes, hm, priorClaimChunks] = await Promise.all([
+      const [certRes, hm, priorClaimChunks, confChunks] = await Promise.all([
         resolveCertForMonth(supabase, clientIds, year, month),
         getHospitalizationMap(supabase, clientIds),
         mapChunksParallel(clientIds, IN_CHUNK, async (chunk) => {
@@ -228,11 +277,53 @@ export function KyotakuKojinSetteiContent() {
           if (e) throw new Error(`初回加算候補の判定に失敗: ${e.message}`);
           return (data ?? []).map((row: { user_id: string }) => row.user_id);
         }),
+        // 緊急時等居宅カンファレンス加算候補: 対象月に category='カンファレンス' の支援経過があるか
+        // (通常のサービス担当者会議とは別の CHECK 制約値。当月内の record_date のみ対象)
+        mapChunksParallel(clientIds, IN_CHUNK, async (chunk) => {
+          const { data, error: e } = await supabase
+            .from("kaigo_support_records")
+            .select("user_id")
+            .eq("category", "カンファレンス")
+            .in("user_id", chunk)
+            .gte("record_date", mFromLoad)
+            .lte("record_date", mToLoad);
+          if (e) throw new Error(`カンファレンス記録の取得に失敗: ${e.message}`);
+          return (data ?? []).map((row: { user_id: string }) => row.user_id);
+        }),
       ]);
       setCareLevelByClient(
         new Map(cls.map((c) => [c.id, certRes.get(c.id)?.care_level ?? null])),
       );
       setHospMap(hm);
+      setConferenceCandidateIds(new Set(confChunks.flat()));
+
+      // ターミナルケアマネジメント加算候補: 死亡月の利用者のうち、死亡日前14日以内に
+      // category='訪問' の支援経過が2件以上あるもの (告示要件: 死亡日含め14日以内に2日以上訪問)
+      if (deceasedRows.length > 0) {
+        const dIds = deceasedRows.map((d) => d.id);
+        const { data: visitRows, error: vErr } = await supabase
+          .from("kaigo_support_records")
+          .select("user_id, record_date")
+          .eq("category", "訪問")
+          .in("user_id", dIds);
+        if (vErr) throw new Error(`訪問記録の取得に失敗: ${vErr.message}`);
+        const dischargeById = new Map(deceasedRows.map((d) => [d.id, d.discharge_date]));
+        const visitDaysByClient = new Map<string, Set<string>>();
+        for (const v of (visitRows ?? []) as { user_id: string; record_date: string | null }[]) {
+          const died = dischargeById.get(v.user_id);
+          if (!died || !v.record_date) continue;
+          const from14 = subtractDaysIso(died, 14);
+          if (v.record_date >= from14 && v.record_date <= died) {
+            if (!visitDaysByClient.has(v.user_id)) visitDaysByClient.set(v.user_id, new Set());
+            visitDaysByClient.get(v.user_id)!.add(v.record_date);
+          }
+        }
+        const terminalIds = new Set<string>();
+        for (const [id, days] of visitDaysByClient) if (days.size >= 2) terminalIds.add(id);
+        setTerminalCandidateIds(terminalIds);
+      } else {
+        setTerminalCandidateIds(new Set());
+      }
       const hadPriorClaim = new Set(priorClaimChunks.flat());
       setShokaiCandidateIds(new Set(clientIds.filter((id) => !hadPriorClaim.has(id))));
     } catch (e) {
@@ -598,6 +689,10 @@ export function KyotakuKojinSetteiContent() {
                 const hospCoordCandidate = hasAdmissionInMonth && !c?.hospital_coordination;
                 const shokaiCandidate =
                   !!c && !c.initial_addition && shokaiCandidateIds.has(r.client.id);
+                const conferenceCandidate =
+                  !!c && !c.emergency_conference && conferenceCandidateIds.has(r.client.id);
+                const terminalCandidate =
+                  !!c && !c.terminal_care && terminalCandidateIds.has(r.client.id);
                 const rowCls = !c
                   ? "bg-gray-100 text-gray-400"
                   : saving
@@ -721,8 +816,11 @@ export function KyotakuKojinSetteiContent() {
                         </select>
                       </div>
                     </div>
-                    {/* 緊急時等カンファ */}
-                    <div className="px-1 py-1 border-l border-gray-200 text-center">
+                    {/* 緊急時等カンファ (対象月にカンファレンス支援経過あり → 候補ハイライト) */}
+                    <div
+                      className={`px-1 py-1 border-l border-gray-200 text-center ${conferenceCandidate ? "bg-emerald-50" : ""}`}
+                      title={conferenceCandidate ? "対象月にカンファレンス支援経過あり → 緊急時等居宅カンファレンス加算の候補" : undefined}
+                    >
                       <input
                         type="checkbox"
                         checked={c?.emergency_conference ?? false}
@@ -742,8 +840,11 @@ export function KyotakuKojinSetteiContent() {
                         className="h-4 w-4 accent-red-600 cursor-pointer disabled:cursor-not-allowed"
                       />
                     </div>
-                    {/* ターミナル */}
-                    <div className="px-1 py-1 border-l border-gray-200 text-center">
+                    {/* ターミナル (死亡月+死亡前14日以内に訪問2件以上 → 候補ハイライト) */}
+                    <div
+                      className={`px-1 py-1 border-l border-gray-200 text-center ${terminalCandidate ? "bg-emerald-50" : ""}`}
+                      title={terminalCandidate ? "死亡月かつ死亡前14日以内に訪問の支援経過が2件以上 → ターミナルケアマネジメント加算の候補" : undefined}
+                    >
                       <input
                         type="checkbox"
                         checked={c?.terminal_care ?? false}
