@@ -6,7 +6,7 @@
  * 第1弾は時給×実働のみ。手当 (勤続/処遇改善/キャンセル 等) は第2弾で追加予定。
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -44,16 +44,26 @@ const CATEGORY_BADGE: Record<CategoryKey, string> = {
 /** 通常パートの社保加入ライン (週 20h)。月実働を週平均に換算して判定 */
 const WEEKLY_HOURS_THRESHOLD = 20;
 
-export function StaffPayrollContent() {
+export function StaffPayrollContent({
+  initialOfficeId = null,
+  initialYear,
+  initialMonth,
+  initialData = null,
+}: {
+  initialOfficeId?: string | null;
+  initialYear?: number;
+  initialMonth?: number;
+  initialData?: LoadPartTimeResult | null;
+} = {}) {
   const supabase = useMemo(() => createClient(), []);
   const { currentOffice } = useBusinessType();
   const officeId = currentOffice?.id ?? null;
 
   const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<LoadPartTimeResult | null>(null);
+  const [year, setYear] = useState(initialYear ?? now.getFullYear());
+  const [month, setMonth] = useState(initialMonth ?? now.getMonth() + 1);
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<LoadPartTimeResult | null>(initialData);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -72,10 +82,15 @@ export function StaffPayrollContent() {
     }
   }, [supabase, officeId, year, month]);
 
+  // 初回 mount は server (?office= 付きなら) から渡された initialData をそのまま使う。
+  const isInitialMount = useRef(true);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- 月/事業所変更時の fetch
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      if (initialOfficeId && initialOfficeId === officeId) return;
+    }
     load();
-  }, [load]);
+  }, [load, officeId, initialOfficeId]);
 
   const toggle = (id: string) =>
     setExpanded((prev) => {
