@@ -8,6 +8,12 @@
  *
  * 戻り値は **chunk 順** に並べて返すので、「chunk 内の DB order を保ったまま連結する」
  * 呼出側の前提 (per-client の並び順など) を壊さない。
+ *
+ * ⚠ worker 内で throw すると Promise.all が即 reject し、まだ実行中の他の chunk は
+ * 「投げっぱなし」でバックグラウンドに残る (calendar-app の staff_merge.ts で実測して
+ * 踏んだ罠)。**読み取り専用 (select) なら副作用が無いので問題ない**が、write を含む
+ * worker で「1件失敗したら残り全部を安全に打ち切りたい」場合は worker 内で throw せず、
+ * エラーを配列に集約して呼び出し後にまとめて判定・throw すること。
  */
 /**
  * UUID 列を `.in()` で渡す時の chunk サイズ。
