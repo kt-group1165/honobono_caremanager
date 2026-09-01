@@ -93,7 +93,14 @@ function extractPages(pdfPath) {
     "for i in range(d.page_count):",
     "    p = d[i]",
     "    texts.append(p.get_text())",
-    '    words.append([{"x": w[0], "y": w[1], "t": w[4]} for w in p.get_text("words")])',
+    // ⚠ 語の座標は **回転を適用してから** 返す。
+    //   CubePDF の「ページの向き = 自動」で出すと /Rotate 90 の縦用紙になり
+    //   (mediabox 595x842)、get_text("words") が回転前の座標を返す。そのままだと
+    //   pickInsuranceNumbers の「ラベル y の近くで 6桁/10桁の行」が当たらず、
+    //   **保険者番号・被保険者番号が全員 null → 引き当て 0 名**になる (2026-09-01 実測)。
+    //   rotation 0 の PDF では rotation_matrix は単位行列なので既存の取込に影響しない。
+    "    m = p.rotation_matrix",
+    '    words.append([{"x": (fitz.Point(w[0], w[1]) * m).x, "y": (fitz.Point(w[0], w[1]) * m).y, "t": w[4]} for w in p.get_text("words")])',
     'print(json.dumps({"texts": texts, "words": words}, ensure_ascii=False))',
   ].join("\n");
   // ⚠ Windows の python は既定 cp932 出力。UTF-8 を明示しないと氏名が壊れる
