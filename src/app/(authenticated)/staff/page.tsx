@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { StaffContent, type Staff } from "./staff-content";
+import { StaffContent, loadStaffData, type Staff } from "./staff-content";
 
 export default async function StaffPage({
   searchParams,
@@ -8,25 +8,31 @@ export default async function StaffPage({
 }) {
   const params = await searchParams;
   const officeId = params.office;
-  const supabase = await createClient();
-  // 自事業所 (URL ?office=) のスタッフだけに絞り込む。officeId 未指定時は
-  // BusinessTypeContext が初期化中なので空配列を返し、Client 側で再フェッチさせる。
-  // Phase 9-6: 既定では status='active' のみ取得 (退職者を非表示)。
-  // 退職者は client 側で「退職者を含める」toggle ON 時に再フェッチ。
-  // Phase 9 close: members.office_id DROP 済 → member_offices junction 経由で絞り込み
-  let q = supabase
-    .from("members")
-    .select("id, tenant_id, name, furigana, role, qualifications, email, phone, employment_type, salary_type, hire_date, status, created_at, member_offices!inner(office_id)")
-    .eq("status", "active")
-    .order("furigana", { nullsFirst: false });
-  if (officeId) q = q.eq("member_offices.office_id", officeId);
-  const { data } = await q;
-  // part_category / fuyou_annual_limit は migration 未適用でも SSR が壊れないよう
-  // ここでは取得せず null 埋め (mount 後の client 再フェッチが実値を持ってくる)
-  const initialStaff: Staff[] = (officeId ? (data ?? []) : []).map((s) => ({
-    ...(s as unknown as Omit<Staff, "part_category" | "fuyou_annual_limit">),
-    part_category: null,
-    fuyou_annual_limit: null,
-  }));
-  return <StaffContent initialStaff={initialStaff} />;
+  // officeId 未指定時は BusinessTypeContext が初期化中なので空配列を返し、
+  // Client 側で再フェッチさせる。Phase 9-6: 既定では status='active' のみ
+  // (退職者は client 側で「退職者を含める」toggle ON 時に再フェッチ)。
+  let initialStaff: Staff[] = [];
+  let initialPartColumnMissing = false;
+  // SSR fetch が実際に成功した場合だけ officeId を渡す。失敗時は null のままにして
+  // content 側の isInitialMount skip が働かないようにし、client 側で必ず再取得させる。
+  let loadedOfficeId: string | null = null;
+  if (officeId) {
+    const supabase = await createClient();
+    try {
+      const result = await loadStaffData(supabase, officeId, false);
+      initialStaff = result.staff;
+      initialPartColumnMissing = result.partColumnMissing;
+      loadedOfficeId = officeId;
+    } catch (e) {
+      // SSR で失敗しても client 側の fetchStaff が再取得するので致命的ではない
+      console.error("[staff/page] 職員データの取得に失敗:", e instanceof Error ? e.message : e);
+    }
+  }
+  return (
+    <StaffContent
+      initialOfficeId={loadedOfficeId}
+      initialStaff={initialStaff}
+      initialPartColumnMissing={initialPartColumnMissing}
+    />
+  );
 }

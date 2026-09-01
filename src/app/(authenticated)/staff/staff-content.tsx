@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
@@ -108,10 +109,54 @@ const EMPTY_FORM: StaffForm = {
   status: "active",
 };
 
+export type LoadStaffResult = { staff: Staff[]; partColumnMissing: boolean };
+
+/**
+ * 職員一覧を取得。page.tsx (server) / content.tsx (client) の両方から同じ
+ * ロジックで呼べるよう、supabase client と officeId/includeInactive を
+ * 引数で受け取る形に切り出している。part_category 列が migration 未適用
+ * (42703) の環境では旧列のみで再取得するフォールバックも共有する。
+ */
+export async function loadStaffData(
+  supabase: SupabaseClient,
+  officeId: string,
+  includeInactive: boolean,
+): Promise<LoadStaffResult> {
+  const buildQuery = (withPartCols: boolean) => {
+    const cols = withPartCols
+      ? "id, tenant_id, name, furigana, role, qualifications, email, phone, employment_type, part_category, fuyou_annual_limit, salary_type, hire_date, status, created_at, member_offices!inner(office_id)"
+      : "id, tenant_id, name, furigana, role, qualifications, email, phone, employment_type, salary_type, hire_date, status, created_at, member_offices!inner(office_id)";
+    let q = supabase
+      .from("members")
+      .select(cols)
+      .eq("member_offices.office_id", officeId)
+      .is("deleted_at", null);
+    if (!includeInactive) q = q.eq("status", "active");
+    return q.order("furigana", { nullsFirst: false });
+  };
+  let { data, error } = await buildQuery(true);
+  let partColumnMissing = false;
+  if (error?.code === "42703") {
+    partColumnMissing = true;
+    ({ data, error } = await buildQuery(false));
+  }
+  if (error) throw new Error(`職員データの取得に失敗しました: ${error.message}`);
+  const staff = ((data || []) as unknown as Staff[]).map((s) => ({
+    ...s,
+    part_category: s.part_category ?? null,
+    fuyou_annual_limit: s.fuyou_annual_limit ?? null,
+  }));
+  return { staff, partColumnMissing };
+}
+
 export function StaffContent({
+  initialOfficeId = null,
   initialStaff,
+  initialPartColumnMissing = false,
 }: {
+  initialOfficeId?: string | null;
   initialStaff: Staff[];
+  initialPartColumnMissing?: boolean;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const { currentOffice, currentOfficeId } = useBusinessType();
@@ -127,7 +172,7 @@ export function StaffContent({
   // Phase 9-6: 既定は active のみ表示。toggle ON で退職者も含めて再フェッチ。
   const [includeInactive, setIncludeInactive] = useState(false);
   // members_part_category.sql 未適用でも画面が壊れないように、列欠損 (42703) を検知して退避
-  const [partColumnMissing, setPartColumnMissing] = useState(false);
+  const [partColumnMissing, setPartColumnMissing] = useState(initialPartColumnMissing);
   // 招待発行 modal: form / 結果 / 進行状態
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [inviting, setInviting] = useState(false);
@@ -151,50 +196,30 @@ export function StaffContent({
       return;
     }
     setLoading(true);
-    // 自事業所 (currentOfficeId) に primary office として紐付く職員のみ取得
-    // (multi-office 兼務職員は user_offices を経由して見せたい場合に拡張する)
-    // Phase 9 close: members.office_id DROP 済 → member_offices junction 経由で絞り込み
-    const buildQuery = (withPartCols: boolean) => {
-      const cols = withPartCols
-        ? "id, tenant_id, name, furigana, role, qualifications, email, phone, employment_type, part_category, fuyou_annual_limit, salary_type, hire_date, status, created_at, member_offices!inner(office_id)"
-        : "id, tenant_id, name, furigana, role, qualifications, email, phone, employment_type, salary_type, hire_date, status, created_at, member_offices!inner(office_id)";
-      let q = supabase
-        .from("members")
-        .select(cols)
-        .eq("member_offices.office_id", currentOfficeId)
-        .is("deleted_at", null);
-      if (!includeInactive) q = q.eq("status", "active");
-      return q.order("furigana", { nullsFirst: false });
-    };
-    let { data, error } = await buildQuery(true);
-    if (error?.code === "42703") {
-      // part_category 列が未適用 (migration 前) → 旧列のみで再取得
-      setPartColumnMissing(true);
-      ({ data, error } = await buildQuery(false));
-    } else if (!error) {
-      setPartColumnMissing(false);
+    try {
+      const result = await loadStaffData(supabase, currentOfficeId, includeInactive);
+      setStaffList(result.staff);
+      setPartColumnMissing(result.partColumnMissing);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "職員データの取得に失敗しました");
+    } finally {
+      setLoading(false);
     }
-    if (error) {
-      toast.error("職員データの取得に失敗しました: " + error.message);
-    } else {
-      setStaffList(
-        ((data || []) as unknown as Staff[]).map((s) => ({
-          ...s,
-          part_category: s.part_category ?? null,
-          fuyou_annual_limit: s.fuyou_annual_limit ?? null,
-        })),
-      );
-    }
-    setLoading(false);
   }, [supabase, currentOfficeId, includeInactive]);
 
-  // 自事業所が変わったら / 退職者 toggle が変わったら 再フェッチ
+  // 自事業所が変わったら / 退職者 toggle が変わったら 再フェッチ。
+  // 初回 mount で SSR (?office= 付き) が既に同じ事業所を取得済みなら再フェッチをスキップする。
+  const isInitialMount = useRef(true);
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      if (initialOfficeId && initialOfficeId === currentOfficeId && !includeInactive) return;
+    }
     if (currentOfficeId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-time async fetch (HANDOVER §2)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 事業所/退職者toggle変更時の再fetch (HANDOVER §2)
       fetchStaff();
     }
-  }, [currentOfficeId, fetchStaff]);
+  }, [currentOfficeId, includeInactive, fetchStaff, initialOfficeId]);
 
   const openInviteDialog = () => {
     setInviteForm(EMPTY_INVITE_FORM);
