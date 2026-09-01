@@ -32,15 +32,24 @@ function parseLine(line){const o=[];let c="",q=false;for(let i=0;i<line.length;i
 const sjis=new TextDecoder("shift_jis");
 function readCsv(p){ const lines=sjis.decode(readFileSync(p)).split(/\r?\n/).filter(l=>l); const H=parseLine(lines[0]).map(h=>h.replace(/^"|"$/g,"")); return {H,rows:lines.slice(1).map(l=>parseLine(l).map(x=>x.replace(/^"|"$/g,"")))}; }
 const norm=(s)=>(s||"").normalize("NFKC").replace(/[\s　＊*]/g,"");
+const iso=(s)=>{ const m=/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec((s??"").trim()); return m?`${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`:null; };
 
 async function main(){
   console.log(`=== ケアマネ番号リンク ${EXECUTE?"【EXECUTE】":"【DRY RUN】"} ===\n`);
-  // ① 明細CSV: 利用者番号→ケアマネ番号/名称
+  // ① 明細CSV: 利用者番号→ケアマネ番号/名称 (+ 照合用の 保険者番号/被保険者番号/生年月日/氏名)
   const mei=readCsv(findBillingCsv(path.join(KAIGO,"サービス実績データ",AREA_DIR,YM)));
   const gm=(n)=>mei.H.indexOf(n);
   const iNum=gm("利用者番号"),iCoNum=gm("居宅サービス計画事業所番号"),iCoName=gm("居宅サービス計画事業所名称");
+  const iInsr=gm("保険者番号"),iInsd=gm("被保険者番号"),iBirth=gm("生年月日"),iName=gm("利用者名");
   const byNum={};
-  for(const r of mei.rows){ const n=r[iNum]; if(!byNum[n]) byNum[n]={num:(r[iCoNum]||"").trim(),name:(r[iCoName]||"").trim()}; }
+  for(const r of mei.rows){
+    const n=r[iNum];
+    if(!byNum[n]) byNum[n]={
+      num:(r[iCoNum]||"").trim(), name:(r[iCoName]||"").trim(),
+      insurer:(r[iInsr]||"").trim(), insured:(r[iInsd]||"").trim(),
+      birth:(r[iBirth]||"").trim(), clientName:(r[iName]||"").trim(),
+    };
+  }
   // ② 介護保険1.CSV: 利用者番号→支援事業所正式名称 (照合用)
   const ins=readCsv(path.join(KAIGO,`利用者データ/${USER_SUB}/介護保険1.CSV`));
   const gi=(n)=>ins.H.indexOf(n);
@@ -51,15 +60,43 @@ async function main(){
   const co=[]; for(let x=0;;x+=1000){const {data,error}=await sb.from("care_offices").select("id,office_number,name").range(x,x+999);if(error)throw error;co.push(...data);if(data.length<1000)break;}
   const coByNum=new Map(); for(const c of co) if(c.office_number) coByNum.set(String(c.office_number),c);
   // clients & 該当insurance
-  const clients=[]; for(let x=0;;x+=1000){const {data,error}=await sb.from("clients").select("id,user_number").order("id").range(x,x+999);if(error)throw error;clients.push(...data);if(data.length<1000)break;}
-  const idByNum={}; for(const c of clients) idByNum[String(c.user_number)]=c.id;
+  // ⚠ 2026-09-02: raw 利用者番号だけを clients.user_number に突き合わせると、
+  //   ほのぼの内での番号の使い回し (同じ番号が別の代で別人に再割当) で誤った
+  //   client にリンクする事故が実際に起きた (fix_client_deceased_status_from_master_csv.mjs
+  //   の事故。memory: feedback_client_number_reuse_bridge.md)。
+  //   import_kyotaku_clients_from_user_master.mjs と同じ設計に倣い、
+  //   (保険者番号,被保険者番号) を優先し、それで引けない場合のみ番号+生年月日/氏名の
+  //   裏取り付きフォールバックとする。
+  const clients=[]; for(let x=0;;x+=1000){const {data,error}=await sb.from("clients").select("id,user_number,name,birth_date").order("id").range(x,x+999);if(error)throw error;clients.push(...data);if(data.length<1000)break;}
+  const idByNum={}; const clientByNum=new Map();
+  for(const c of clients){ idByNum[String(c.user_number)]=c.id; clientByNum.set(String(c.user_number),c); }
   if(TAG){ const mp=JSON.parse(readFileSync(path.join(KAIGO,`migrations/_meisai_num_to_client_${TAG}.json`),"utf8")); for(const[k,v]of Object.entries(mp)) idByNum[String(k)]=v; }
+  const byInsured=new Map();
+  for(let x=0;;x+=1000){
+    const {data,error}=await sb.from("client_insurance_records").select("client_id,insurer_number,insured_number").range(x,x+999);
+    if(error)throw error;
+    for(const r of data) if(r.insurer_number && r.insured_number) byInsured.set(`${r.insurer_number}|${r.insured_number}`, r.client_id);
+    if(data.length<1000)break;
+  }
+  const nameKey=(s)=>(s??"").normalize("NFKC").replace(/[\s　]/g,"");
 
   const toCreate=new Map(); // office_number -> name (新規care_office)
-  const setLinks=[]; const mismatches=[]; let noPlan=0;
+  const setLinks=[]; const mismatches=[]; let noPlan=0; let numFallback=0; let numRejected=0;
   for(const num of Object.keys(byNum)){
-    const cid=idByNum[num]; if(!cid) continue;
     const co=byNum[num];
+    // ① (保険者,被保番) で引く。これが当たれば利用者番号は見ない (使い回しの影響を受けない)。
+    let cid = (co.insurer && co.insured) ? byInsured.get(`${co.insurer}|${co.insured}`) : undefined;
+    if(!cid){
+      // ② フォールバック: 番号で引いた上で、生年月日または氏名の一致を要求する。
+      const hit = clientByNum.get(num);
+      if(hit){
+        const sameBirth = !!(co.birth && hit.birth_date && hit.birth_date === iso(co.birth));
+        const sameName = !!(co.clientName && nameKey(hit.name) === nameKey(co.clientName));
+        if(sameBirth || sameName){ cid = hit.id; numFallback++; }
+        else { numRejected++; continue; } // 番号は一致するが裏取りが取れない → 別人の疑い、スキップ
+      }
+    }
+    if(!cid) continue;
     if(!co.num){ noPlan++; continue; } // 本人作成等でケアマネ番号なし
     // 照合: 明細名称 vs 保険名称
     const iN=insName[num];
@@ -68,6 +105,7 @@ async function main(){
     setLinks.push({num,cid,officeNum:co.num});
   }
   console.log(`ケアマネ番号あり利用者: ${setLinks.length} / 番号なし(本人作成等): ${noPlan}`);
+  console.log(`  内訳: (保険者,被保番)一致 ${setLinks.length - numFallback} / 番号+生年月日or氏名の裏取りフォールバック ${numFallback} / 番号一致だが裏取り不可でスキップ ${numRejected}`);
   console.log(`care_offices 新規作成予定: ${toCreate.size}件`);
   for(const [n,nm] of toCreate) console.log(`   + ${n} ${nm}`);
   console.log(`\n名称クロスチェック 不一致: ${mismatches.length}件`);

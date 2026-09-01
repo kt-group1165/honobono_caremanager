@@ -93,6 +93,14 @@ async function main() {
   console.log(`  基本情報 ${base.rows.length} 行 / 介護保険 ${hoken.rows.length} 行 / 公費 ${kohi.rows.length} 行`);
 
   // 基本情報: 利用者番号 → プロフィール
+  // ⚠ 2026-09-02時点、この profile Map はどこからも参照されていない (書き込み先が無い)。
+  //   将来これを配線して clients を UPDATE する用途に使うなら、キーの r[B.no] は
+  //   ほのぼの内で使い回されることがある生の利用者番号なので**そのまま client_id の
+  //   特定に使ってはいけない**。(保険者番号,被保険者番号) を優先し、それで引けない
+  //   場合のみ番号+生年月日/氏名の裏取り付きフォールバックにすること
+  //   (import_kyotaku_clients_from_user_master.mjs や修正後の link_caremanager_office.mjs
+  //   と同じ設計。実際にこの罠で無関係の利用者を deceased 扱いにする事故が起きている。
+  //   memory: feedback_client_number_reuse_bridge.md)。
   const B = { no: 0, name: 3, kana: 6, sex: 8, birth: 11, zip: 12, addr: 13, tel: 14, mobile: 15, died: 22 };
   const profile = new Map();
   let dummies = 0;
