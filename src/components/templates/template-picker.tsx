@@ -65,9 +65,16 @@ async function loadTemplates(opts: { anon: boolean; fetchUrl?: string; category:
       } else {
         client = createClient();
       }
-      const { data } = await client.from("kaigo_record_templates")
+      const { data, error } = await client.from("kaigo_record_templates")
         .select("id, category, label, content")
         .order("sort_order");
+      if (error) {
+        // 失敗をキャッシュに焼き付けると、次回セッション中ずっと定型文が
+        // 出なくなる (clearTemplateCache() が呼ばれるまで復旧しない)。
+        // 空配列は返すがキャッシュには入れず、次回呼び出しで再取得させる。
+        console.error("[TemplatePicker] 定型文の取得に失敗:", error.message);
+        return;
+      }
       templates = (data || []) as Template[];
     }
     __templatesCache.set(cacheKey, templates);

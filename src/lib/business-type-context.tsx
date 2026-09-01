@@ -84,11 +84,18 @@ export function BusinessTypeProvider({ children }: { children: ReactNode }) {
 
     const loadOffices = async () => {
       // 共通マスタ offices から、app_type='kaigo-app' の事業所のみ取得
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("offices")
         .select("id, name, service_type, business_number, is_active, tenant_id, applied_formula_codes, visit_procedure_mode")
         .eq("app_type", "kaigo-app")
         .order("name");
+      if (error) {
+        // このcontextは60ファイル超から参照される。事業所一覧が取れないと
+        // currentOfficeがnullのまま各画面が無言で機能不全になるため、せめて
+        // console.errorで気づけるようにする(UI全体のerror表示は影響範囲が
+        // 大きすぎるため今回は追加しない)。
+        console.error("[BusinessTypeProvider] 事業所一覧の取得に失敗:", error.message);
+      }
       const list = (data || []) as OfficeRow[];
       setOffices(list);
       return list;

@@ -338,7 +338,11 @@ export function UserDetailLayoutShell({
             .from("clients")
             .update(payload)
             .eq("id", rowId!);
-          if (!error) updated++;
+          if (error) {
+            errors.push(`更新失敗 (id: ${rowId}): ${error.message}`);
+          } else {
+            updated++;
+          }
         }
       }
 

@@ -172,11 +172,12 @@ export function HospitalizationsContent({
     setSaving(true);
     try {
       const status = form.discharge_date ? "discharged" : "admitted";
-      const { data: clientRow } = await supabase
+      const { data: clientRow, error: clientErr } = await supabase
         .from("clients")
         .select("tenant_id")
         .eq("id", userId)
         .single();
+      if (clientErr) throw clientErr;
       const payload = {
         tenant_id: clientRow?.tenant_id ?? "",
         client_id: userId,

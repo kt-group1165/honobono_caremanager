@@ -236,7 +236,10 @@ export async function listReceivedServiceRecords(
     .eq("target_office_id", targetOfficeId)
     .eq("document_type", "service_record_monthly")
     .order("sent_at", { ascending: false });
-  if (error) return [];
+  if (error) {
+    console.error("[ImportServiceRecordModal] 受信実績の取得に失敗:", error.message);
+    return [];
+  }
   const rows = ((shared ?? []) as SharedDocumentRow[]).filter((r) => {
     const ym =
       r.payload && typeof r.payload === "object" && "year_month" in r.payload

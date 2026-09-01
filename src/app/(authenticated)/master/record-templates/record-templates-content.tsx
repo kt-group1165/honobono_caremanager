@@ -44,7 +44,8 @@ export function RecordTemplatesContent({
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from("kaigo_record_templates").select("*").order("sort_order");
+    const { data, error } = await supabase.from("kaigo_record_templates").select("*").order("sort_order");
+    if (error) toast.error(`定型文の取得に失敗しました: ${error.message}`);
     setTemplates((data || []) as Template[]);
     setLoading(false);
   }, [supabase]);

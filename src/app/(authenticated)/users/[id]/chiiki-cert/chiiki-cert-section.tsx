@@ -258,9 +258,13 @@ export function ChiikiCertSection({
       .delete()
       .eq("client_id", userId)
       .neq("municipality", municipality);
-    if (e2) console.error("旧市町村行の削除に失敗:", e2.message);
     setSaving(false);
-    toast.success("地域生活支援 受給者証を保存しました");
+    if (e2) {
+      console.error("旧市町村行の削除に失敗:", e2.message);
+      toast.warning(`保存はできましたが、旧市町村の重複データの掃除に失敗しました: ${e2.message}`);
+    } else {
+      toast.success("地域生活支援 受給者証を保存しました");
+    }
     await checkExistingServices(municipality);
   };
 

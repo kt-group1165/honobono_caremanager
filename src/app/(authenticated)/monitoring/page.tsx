@@ -95,10 +95,15 @@ export default async function MonitoringPage({
         if (!insErr && newPlan) {
           plans = [newPlan as CarePlanSummary];
           const docId = (existingDocs[0] as { id: string }).id;
-          await supabase
+          const { error: linkErr } = await supabase
             .from("kaigo_report_documents")
             .update({ care_plan_id: (newPlan as { id: string }).id })
             .eq("id", docId);
+          if (linkErr) {
+            // 失敗しても新プラン自体は作成済みなのでページ表示は続行するが、
+            // 帳票がこのプランに紐付かないまま残るため見えるようにしておく。
+            console.error("[monitoring] care_plan_id のリンク更新に失敗:", linkErr.message);
+          }
         }
       }
     }

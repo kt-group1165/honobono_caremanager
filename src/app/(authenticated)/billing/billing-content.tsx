@@ -215,17 +215,19 @@ export function BillingContent({
         .select("business_number, area_category, unit_price")
         .eq("app_type", "kaigo-app");
       if (currentOfficeId) officeQ = officeQ.eq("id", currentOfficeId);
-      const { data: officeData } = await officeQ.limit(1).maybeSingle();
+      const { data: officeData, error: officeErr } = await officeQ.limit(1).maybeSingle();
+      if (officeErr) throw new Error(`事業所情報の取得に失敗しました: ${officeErr.message}`);
       const providerNumber = officeData?.business_number ?? "0000000000";
       const unitPrice = Number(officeData?.unit_price ?? 10);
       const areaCode = areaCategoryToCode(officeData?.area_category ?? "その他");
 
       // 2. 利用者情報（生年月日・性別） — clients から取得
       const userIds = [...new Set(confirmed.map((r) => r.user_id))];
-      const { data: usersData } = await supabase
+      const { data: usersData, error: usersErr } = await supabase
         .from("clients")
         .select("id, name, birth_date, gender")
         .in("id", userIds);
+      if (usersErr) throw new Error(`利用者情報の取得に失敗しました: ${usersErr.message}`);
       const userInfoMap = new Map<
         string,
         { name: string; birth_date: string | null; gender: string | null }
@@ -247,12 +249,13 @@ export function BillingContent({
       {
         let fromC = 0;
         while (true) {
-          const { data } = await supabase
+          const { data, error: certsErr } = await supabase
             .from("client_insurance_records")
             .select("client_id, care_level, insurer_number, insured_number, certification_start_date, certification_end_date")
             .in("client_id", userIds)
             .order("certification_date", { ascending: false })
             .range(fromC, fromC + PAGE_CERTS - 1);
+          if (certsErr) throw new Error(`認定情報の取得に失敗しました: ${certsErr.message}`);
           if (!data || data.length === 0) break;
           certs.push(...(data as CertRow[]));
           if (data.length < PAGE_CERTS) break;

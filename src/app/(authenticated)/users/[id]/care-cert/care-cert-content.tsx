@@ -539,11 +539,12 @@ export function CareCertContent({
       newEnd.setDate(newEnd.getDate() - 1);
 
       // 新規 INSERT には client_insurance_records.tenant_id が必要なので clients から取得
-      const { data: clientRow } = await supabase
+      const { data: clientRow, error: clientErr } = await supabase
         .from("clients")
         .select("tenant_id")
         .eq("id", userId)
         .single();
+      if (clientErr) throw clientErr;
       const payload = {
         tenant_id: clientRow?.tenant_id ?? "",
         client_id: userId,
