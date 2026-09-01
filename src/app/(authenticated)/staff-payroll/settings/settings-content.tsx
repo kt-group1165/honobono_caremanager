@@ -5,14 +5,15 @@
  * kaigo_wage_categories / kaigo_service_wage_mappings を CRUD する。
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import { ArrowLeft, Loader2, Plus, Trash2, Tag } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { toast } from "sonner";
 
-interface Category {
+export interface Category {
   id: string;
   name: string;
   hourly_rate: number;
@@ -20,26 +21,131 @@ interface Category {
   is_active: boolean;
 }
 
-const isMissing = (code?: string) =>
+export const isMissing = (code?: string) =>
   code === "42P01" || code === "PGRST205" || code === "42703";
 
-export function WageSettingsContent() {
+export type WageSettingsData = {
+  missing: boolean;
+  categories: Category[];
+  mappings: Map<string, string | null>;
+  serviceTypes: string[];
+  cancelUnitPrice: string;
+  allowanceMissing: boolean;
+  partStaff: { id: string; name: string; socialInsurance: boolean }[];
+};
+
+const EMPTY_DATA: WageSettingsData = {
+  missing: false, categories: [], mappings: new Map(), serviceTypes: [],
+  cancelUnitPrice: "0", allowanceMissing: false, partStaff: [],
+};
+
+/**
+ * パート給与設定の当事業所データを取得。page.tsx (server) / content.tsx (client) の
+ * 両方から同じロジックで呼べるよう、supabase client を引数で受け取る形に切り出している。
+ */
+export async function loadWageSettingsData(
+  supabase: SupabaseClient,
+  officeId: string,
+): Promise<WageSettingsData> {
+  const { data: cats, error: ce } = await supabase
+    .from("kaigo_wage_categories")
+    .select("id, name, hourly_rate, sort_order, is_active")
+    .eq("office_id", officeId)
+    .order("sort_order")
+    .order("name");
+  if (ce) {
+    if (isMissing(ce.code)) return { ...EMPTY_DATA, missing: true };
+    throw new Error(ce.message);
+  }
+  const categories = (cats ?? []) as Category[];
+
+  const { data: maps } = await supabase
+    .from("kaigo_service_wage_mappings")
+    .select("service_type, category_id")
+    .eq("office_id", officeId);
+  const mappings = new Map<string, string | null>();
+  for (const m of (maps ?? []) as { service_type: string; category_id: string | null }[]) {
+    mappings.set(m.service_type, m.category_id);
+  }
+
+  // 実績に出現する service_type (割当候補)
+  const { data: sch } = await supabase
+    .from("kaigo_visit_schedule")
+    .select("service_type")
+    .eq("office_id", officeId)
+    .limit(5000);
+  const set = new Set<string>();
+  for (const r of (sch ?? []) as { service_type: string | null }[]) {
+    if (r.service_type) set.add(r.service_type);
+  }
+  for (const k of mappings.keys()) set.add(k);
+  const serviceTypes = [...set].sort((a, b) => a.localeCompare(b, "ja"));
+
+  // ── 手当設定 (v2) ──
+  const { data: os, error: oe } = await supabase
+    .from("kaigo_payroll_office_settings")
+    .select("cancel_unit_price")
+    .eq("office_id", officeId)
+    .maybeSingle();
+  if (oe && isMissing(oe.code)) {
+    return {
+      missing: false, categories, mappings, serviceTypes,
+      cancelUnitPrice: "0", allowanceMissing: true, partStaff: [],
+    };
+  }
+  const cancelUnitPrice = String((os as { cancel_unit_price?: number } | null)?.cancel_unit_price ?? 0);
+
+  // 自事業所のパート職員
+  const { data: mem } = await supabase
+    .from("members")
+    .select("id, name, furigana, employment_type, member_offices!inner(office_id)")
+    .eq("employment_type", "パート")
+    .eq("member_offices.office_id", officeId)
+    .eq("status", "active")
+    .is("deleted_at", null);
+  const members = (mem ?? []) as { id: string; name: string }[];
+  const ids = members.map((m) => m.id);
+  const siMap = new Map<string, boolean>();
+  if (ids.length > 0) {
+    const { data: ss } = await supabase
+      .from("kaigo_payroll_staff_settings")
+      .select("member_id, social_insurance")
+      .in("member_id", ids);
+    for (const s of (ss ?? []) as { member_id: string; social_insurance: boolean }[]) {
+      siMap.set(s.member_id, s.social_insurance);
+    }
+  }
+  const partStaff = members
+    .map((m) => ({ id: m.id, name: m.name, socialInsurance: siMap.get(m.id) ?? false }))
+    .sort((a, b) => a.name.localeCompare(b.name, "ja"));
+
+  return { missing: false, categories, mappings, serviceTypes, cancelUnitPrice, allowanceMissing: false, partStaff };
+}
+
+export function WageSettingsContent({
+  initialOfficeId = null,
+  initialData = null,
+}: {
+  initialOfficeId?: string | null;
+  initialData?: WageSettingsData | null;
+} = {}) {
   const supabase = useMemo(() => createClient(), []);
   const { currentOffice } = useBusinessType();
   const officeId = currentOffice?.id ?? null;
+  const init = initialData ?? EMPTY_DATA;
 
-  const [loading, setLoading] = useState(true);
-  const [missing, setMissing] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [mappings, setMappings] = useState<Map<string, string | null>>(new Map());
-  const [serviceTypes, setServiceTypes] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [missing, setMissing] = useState(init.missing);
+  const [categories, setCategories] = useState<Category[]>(init.categories);
+  const [mappings, setMappings] = useState<Map<string, string | null>>(init.mappings);
+  const [serviceTypes, setServiceTypes] = useState<string[]>(init.serviceTypes);
 
   // 手当設定
-  const [cancelUnitPrice, setCancelUnitPrice] = useState<string>("0");
-  const [allowanceMissing, setAllowanceMissing] = useState(false);
+  const [cancelUnitPrice, setCancelUnitPrice] = useState<string>(init.cancelUnitPrice);
+  const [allowanceMissing, setAllowanceMissing] = useState(init.allowanceMissing);
   const [partStaff, setPartStaff] = useState<
     { id: string; name: string; socialInsurance: boolean }[]
-  >([]);
+  >(init.partStaff);
 
   // 新規類型フォーム
   const [newName, setNewName] = useState("");
@@ -49,94 +155,14 @@ export function WageSettingsContent() {
     if (!officeId) return;
     setLoading(true);
     try {
-      const { data: cats, error: ce } = await supabase
-        .from("kaigo_wage_categories")
-        .select("id, name, hourly_rate, sort_order, is_active")
-        .eq("office_id", officeId)
-        .order("sort_order")
-        .order("name");
-      if (ce) {
-        if (isMissing(ce.code)) {
-          setMissing(true);
-          setLoading(false);
-          return;
-        }
-        throw new Error(ce.message);
-      }
-      setMissing(false);
-      setCategories((cats ?? []) as Category[]);
-
-      const { data: maps } = await supabase
-        .from("kaigo_service_wage_mappings")
-        .select("service_type, category_id")
-        .eq("office_id", officeId);
-      const mm = new Map<string, string | null>();
-      for (const m of (maps ?? []) as {
-        service_type: string;
-        category_id: string | null;
-      }[]) {
-        mm.set(m.service_type, m.category_id);
-      }
-      setMappings(mm);
-
-      // 実績に出現する service_type (割当候補)
-      const { data: sch } = await supabase
-        .from("kaigo_visit_schedule")
-        .select("service_type")
-        .eq("office_id", officeId)
-        .limit(5000);
-      const set = new Set<string>();
-      for (const r of (sch ?? []) as { service_type: string | null }[]) {
-        if (r.service_type) set.add(r.service_type);
-      }
-      for (const k of mm.keys()) set.add(k);
-      setServiceTypes([...set].sort((a, b) => a.localeCompare(b, "ja")));
-
-      // ── 手当設定 (v2) ──
-      const { data: os, error: oe } = await supabase
-        .from("kaigo_payroll_office_settings")
-        .select("cancel_unit_price")
-        .eq("office_id", officeId)
-        .maybeSingle();
-      if (oe && isMissing(oe.code)) {
-        setAllowanceMissing(true);
-      } else {
-        setAllowanceMissing(false);
-        setCancelUnitPrice(String((os as { cancel_unit_price?: number } | null)?.cancel_unit_price ?? 0));
-
-        // 自事業所のパート職員
-        const { data: mem } = await supabase
-          .from("members")
-          .select("id, name, furigana, employment_type, member_offices!inner(office_id)")
-          .eq("employment_type", "パート")
-          .eq("member_offices.office_id", officeId)
-          .eq("status", "active")
-          .is("deleted_at", null);
-        const members = (mem ?? []) as { id: string; name: string }[];
-        const ids = members.map((m) => m.id);
-        const siMap = new Map<string, boolean>();
-        if (ids.length > 0) {
-          const { data: ss } = await supabase
-            .from("kaigo_payroll_staff_settings")
-            .select("member_id, social_insurance")
-            .in("member_id", ids);
-          for (const s of (ss ?? []) as {
-            member_id: string;
-            social_insurance: boolean;
-          }[]) {
-            siMap.set(s.member_id, s.social_insurance);
-          }
-        }
-        setPartStaff(
-          members
-            .map((m) => ({
-              id: m.id,
-              name: m.name,
-              socialInsurance: siMap.get(m.id) ?? false,
-            }))
-            .sort((a, b) => a.name.localeCompare(b.name, "ja")),
-        );
-      }
+      const data = await loadWageSettingsData(supabase, officeId);
+      setMissing(data.missing);
+      setCategories(data.categories);
+      setMappings(data.mappings);
+      setServiceTypes(data.serviceTypes);
+      setCancelUnitPrice(data.cancelUnitPrice);
+      setAllowanceMissing(data.allowanceMissing);
+      setPartStaff(data.partStaff);
     } catch (e) {
       toast.error("設定の取得に失敗: " + (e instanceof Error ? e.message : String(e)));
     } finally {
@@ -144,10 +170,15 @@ export function WageSettingsContent() {
     }
   }, [supabase, officeId]);
 
+  // 初回 mount は server (?office= 付きなら) から渡された initialData をそのまま使う。
+  const isInitialMount = useRef(true);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- 事業所変更時の fetch
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      if (initialOfficeId && initialOfficeId === officeId) return;
+    }
     load();
-  }, [load]);
+  }, [load, officeId, initialOfficeId]);
 
   const addCategory = async () => {
     if (!officeId) return;
