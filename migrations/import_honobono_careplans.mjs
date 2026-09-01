@@ -30,7 +30,6 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync, readdirSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { linkPartnerCompany } from "./_partner_company_link.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..", "ケアプランほのぼの出力");
@@ -171,13 +170,22 @@ async function main() {
       if (careOffice) {
         console.log(`   担当居宅(care_offices): ${careOffice.name} (${careOffice.id})`);
       } else if (EXECUTE) {
+        // resolveOrPlanCareOffice には resolveSelfOffice と同じ名前を渡しているため、
+        // ここで新規作成する care_offices 行は必ず「office (自事業所)」自身の影武者行になる
+        // (他社の担当居宅であればこの分岐に来る前に resolveOrPlanCareOffice が拾っている)。
+        // office_number は office.business_number をそのまま使ってよく、self_office_id も
+        // ここで直接張れる (2026-07-14 の一度きり backfill 以降どこからも張られていなかった)。
         const { data: co, error } = await sb.from("care_offices")
-          .insert({ tenant_id: TENANT_ID, name: data.kyotaku_office.name, office_number: office.business_number ?? null })
+          .insert({
+            tenant_id: TENANT_ID,
+            name: data.kyotaku_office.name,
+            office_number: office.business_number ?? null,
+            self_office_id: office.id,
+          })
           .select("id, name, office_number").single();
         if (error) throw new Error(`care_offices insert: ${error.message}`);
         careOffice = co; _careOffices.push(co);
-        if (co.office_number) await linkPartnerCompany(sb, co.id, co.office_number);
-        console.log(`   担当居宅(care_offices): ${co.name} (${co.id}) ★新規作成`);
+        console.log(`   担当居宅(care_offices): ${co.name} (${co.id}) ★新規作成 (self_office_id紐付済)`);
       } else {
         console.log(`   担当居宅(care_offices): "${data.kyotaku_office?.name}" ★新規作成予定`);
       }
