@@ -142,89 +142,96 @@ export function StatsContent() {
     if (!rangeValid || !isKyotaku || !currentOfficeId) return;
     setLoading(true);
 
-    // ── 1) 月遅れ・返戻・過誤の行 (kaigo_billing_status。現在の居宅 office に限定) ──
-    let flags: FlagRow[] = [];
-    {
-      const { data, error } = await supabase
-        .from("kaigo_billing_status")
-        .select(
-          "client_id, target_month, issued_at, kokuho_target, tsukiokure, henrei, kago, notes",
-        )
-        .eq("office_id", currentOfficeId)
-        .gte("target_month", fromMonth)
-        .lte("target_month", toMonth)
-        .or("tsukiokure.eq.true,henrei.eq.true,kago.eq.true")
-        .order("target_month");
-      if (error) {
-        // table 未作成 (migration 未適用) 時は 0 件として続行
-        if (error.code !== "42P01" && error.code !== "PGRST205") {
-          toast.error("請求状態の取得に失敗: " + error.message);
-        }
-      } else {
-        flags = (data ?? []) as FlagRow[];
-      }
-    }
-
-    // ── 2) 月次推移 (kaigo_care_support_claims。office_id 列が無いため
-    //      client_office_assignments 経由で自事業所の利用者に絞る — 監査M-2:
-    //      2つ目の居宅事業所を作った時に他事業所分を合算しないため) ──
-    let officeClientIds: Set<string> | null = null;
-    {
-      const { data, error } = await supabase
-        .from("client_office_assignments")
-        .select("client_id")
-        .eq("office_id", currentOfficeId);
-      if (error) {
-        console.error("client_office_assignments fetch failed:", error.message);
-      } else {
-        officeClientIds = new Set(((data ?? []) as { client_id: string }[]).map((a) => a.client_id));
-      }
-    }
-    let claims: ClaimRow[] = [];
-    {
-      const PAGE = 1000;
-      for (let from = 0; ; from += PAGE) {
+    // 1)〜3) は互いに依存しないので Promise.all の1波にまとめる (直列だと3往復分の
+    // レイテンシが積み上がる。feedback_dashboard_uriage_perf.md と同じ型)。
+    const [flags, claims, { nyukin, nyukinAvailable }] = await Promise.all([
+      // ── 1) 月遅れ・返戻・過誤の行 (kaigo_billing_status。現在の居宅 office に限定) ──
+      (async (): Promise<FlagRow[]> => {
         const { data, error } = await supabase
-          .from("kaigo_care_support_claims")
-          .select("billing_month, units, insurance_amount, status, user_id")
-          .gte("billing_month", fromMonth)
-          .lte("billing_month", toMonth)
-          .order("id").range(from, from + PAGE - 1);
+          .from("kaigo_billing_status")
+          .select(
+            "client_id, target_month, issued_at, kokuho_target, tsukiokure, henrei, kago, notes",
+          )
+          .eq("office_id", currentOfficeId)
+          .gte("target_month", fromMonth)
+          .lte("target_month", toMonth)
+          .or("tsukiokure.eq.true,henrei.eq.true,kago.eq.true")
+          .order("target_month");
+        if (error) {
+          // table 未作成 (migration 未適用) 時は 0 件として続行
+          if (error.code !== "42P01" && error.code !== "PGRST205") {
+            toast.error("請求状態の取得に失敗: " + error.message);
+          }
+          return [];
+        }
+        return (data ?? []) as FlagRow[];
+      })(),
+
+      // ── 2) 月次推移 (kaigo_care_support_claims。office_id 列が無いため
+      //      client_office_assignments 経由で自事業所の利用者に絞る — 監査M-2:
+      //      2つ目の居宅事業所を作った時に他事業所分を合算しないため)。
+      //      officeClientIds の取得と claims のページングは互いに依存しない
+      //      (claims 側は取得後に client 側で filter するだけ) ので並列化 ──
+      (async (): Promise<ClaimRow[]> => {
+        const [officeClientIdsRes, claimPages] = await Promise.all([
+          (async (): Promise<Set<string> | null> => {
+            const { data, error } = await supabase
+              .from("client_office_assignments")
+              .select("client_id")
+              .eq("office_id", currentOfficeId);
+            if (error) {
+              console.error("client_office_assignments fetch failed:", error.message);
+              return null;
+            }
+            return new Set(((data ?? []) as { client_id: string }[]).map((a) => a.client_id));
+          })(),
+          (async (): Promise<(ClaimRow & { user_id?: string })[]> => {
+            const PAGE = 1000;
+            const rows: (ClaimRow & { user_id?: string })[] = [];
+            for (let from = 0; ; from += PAGE) {
+              const { data, error } = await supabase
+                .from("kaigo_care_support_claims")
+                .select("billing_month, units, insurance_amount, status, user_id")
+                .gte("billing_month", fromMonth)
+                .lte("billing_month", toMonth)
+                .order("id").range(from, from + PAGE - 1);
+              if (error) {
+                if (error.code !== "42P01" && error.code !== "PGRST205") {
+                  toast.error("請求データの取得に失敗: " + error.message);
+                }
+                break;
+              }
+              rows.push(...((data ?? []) as (ClaimRow & { user_id?: string })[]));
+              if ((data ?? []).length < PAGE) break;
+            }
+            return rows;
+          })(),
+        ]);
+        // 割当が取れた場合のみ自事業所の利用者に限定 (取得失敗時は従来どおり全件)
+        return officeClientIdsRes
+          ? claimPages.filter((r) => !r.user_id || officeClientIdsRes.has(r.user_id))
+          : claimPages;
+      })(),
+
+      // ── 3) 入金状況 (kokuho_nyukin_records。table 未作成なら列ごと非表示) ──
+      (async (): Promise<{ nyukin: NyukinRow[]; nyukinAvailable: boolean }> => {
+        const { data, error } = await supabase
+          .from("kokuho_nyukin_records")
+          .select("target_month, seikyu_amount, kettei_amount, nyukin_date, status")
+          .eq("office_id", currentOfficeId)
+          .gte("target_month", fromMonth)
+          .lte("target_month", toMonth);
         if (error) {
           if (error.code !== "42P01" && error.code !== "PGRST205") {
-            toast.error("請求データの取得に失敗: " + error.message);
+            toast.error("入金状況の取得に失敗: " + error.message);
           }
-          break;
+          return { nyukin: [], nyukinAvailable: false };
         }
-        let rows = (data ?? []) as (ClaimRow & { user_id?: string })[];
-        // 割当が取れた場合のみ自事業所の利用者に限定 (取得失敗時は従来どおり全件)
-        if (officeClientIds) rows = rows.filter((r) => !r.user_id || officeClientIds.has(r.user_id));
-        claims = claims.concat(rows);
-        if ((data ?? []).length < PAGE) break;
-      }
-    }
+        return { nyukin: (data ?? []) as NyukinRow[], nyukinAvailable: true };
+      })(),
+    ]);
 
-    // ── 3) 入金状況 (kokuho_nyukin_records。table 未作成なら列ごと非表示) ──
-    let nyukin: NyukinRow[] = [];
-    let nyukinAvailable = false;
-    {
-      const { data, error } = await supabase
-        .from("kokuho_nyukin_records")
-        .select("target_month, seikyu_amount, kettei_amount, nyukin_date, status")
-        .eq("office_id", currentOfficeId)
-        .gte("target_month", fromMonth)
-        .lte("target_month", toMonth);
-      if (error) {
-        if (error.code !== "42P01" && error.code !== "PGRST205") {
-          toast.error("入金状況の取得に失敗: " + error.message);
-        }
-      } else {
-        nyukin = (data ?? []) as NyukinRow[];
-        nyukinAvailable = true;
-      }
-    }
-
-    // ── 4) 利用者名 (clients を client_id in で取得) ──
+    // ── 4) 利用者名 (clients を client_id in で取得。flags 依存なので上の波の後) ──
     const ids = [...new Set(flags.map((f) => f.client_id))];
     const names = new Map<string, string>();
     for (let i = 0; i < ids.length; i += ID_IN_CHUNK) {

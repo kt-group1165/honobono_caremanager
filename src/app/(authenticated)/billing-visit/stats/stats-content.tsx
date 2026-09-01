@@ -112,62 +112,13 @@ export function StatsContent() {
     if (!rangeValid) return;
     setLoading(true);
 
-    // ── 1) 月遅れ・返戻・過誤の行 (kaigo_billing_status) ──
-    // 状態行は事業所単位 (居宅介護支援の行も同居) のため訪問介護 office に限定する
-    let houmonOfficeIds: string[] = [];
-    {
-      const { data, error } = await supabase
-        .from("offices")
-        .select("id")
-        .eq("service_type", "訪問介護");
-      if (error) {
-        toast.error("事業所一覧の取得に失敗: " + error.message);
-      } else {
-        houmonOfficeIds = ((data ?? []) as { id: string }[]).map((o) => o.id);
-      }
-    }
-    let flags: FlagRow[] = [];
-    if (houmonOfficeIds.length > 0) {
-      const { data, error } = await supabase
-        .from("kaigo_billing_status")
-        .select(
-          "client_id, target_month, issued_at, kokuho_target, tsukiokure, henrei, kago, notes",
-        )
-        .in("office_id", houmonOfficeIds)
-        .gte("target_month", fromMonth)
-        .lte("target_month", toMonth)
-        .or("tsukiokure.eq.true,henrei.eq.true,kago.eq.true")
-        .order("target_month");
-      if (error) {
-        // table 未作成 (直 SQL=42P01 / PostgREST schema cache=PGRST205) 時は 0 件として続行
-        if (error.code !== "42P01" && error.code !== "PGRST205") {
-          toast.error("請求状態の取得に失敗: " + error.message);
-        }
-      } else {
-        flags = (data ?? []) as FlagRow[];
-      }
-    }
-
-    // ── 2) 月次推移 (riyou_seikyu_payments) — order 付き page-loop (1000 行上限対策)。
-    //      office_id 列が無いため client_office_assignments 経由で訪問介護 office の
-    //      利用者に絞る (監査M-1: 居宅/入浴等 他事業所の利用請求を合算しない) ──
-    let houmonClientIds: Set<string> | null = null;
-    if (houmonOfficeIds.length > 0) {
-      const { data, error } = await supabase
-        .from("client_office_assignments")
-        .select("client_id")
-        .in("office_id", houmonOfficeIds);
-      if (error) {
-        console.error("client_office_assignments fetch failed:", error.message);
-      } else {
-        houmonClientIds = new Set(((data ?? []) as { client_id: string }[]).map((a) => a.client_id));
-      }
-    }
-    const pays: PaymentRow[] = [];
-    {
+    // riyou_seikyu_payments のページングは houmonOfficeIds に依存しない (取得後に
+    // client 側で filter するだけ) ので、事業所一覧の取得と並列に開始する
+    // (feedback_dashboard_uriage_perf.md と同じ型: 直列待ちを減らす)。
+    const fetchPays = async (): Promise<PaymentRow[]> => {
       const PAGE = 1000;
-      let offset = 0;
-      while (true) {
+      const rows: PaymentRow[] = [];
+      for (let offset = 0; ; offset += PAGE) {
         const { data, error } = await supabase
           .from("riyou_seikyu_payments")
           .select("client_id, target_month, billed_amount, paid_amount")
@@ -182,13 +133,73 @@ export function StatsContent() {
           }
           break;
         }
-        const rows = (data ?? []) as PaymentRow[];
-        // 割当が取れた場合のみ絞る (取得失敗時は従来どおり全件)
-        pays.push(...(houmonClientIds ? rows.filter((r) => houmonClientIds.has(r.client_id)) : rows));
-        if (rows.length < PAGE) break;
-        offset += PAGE;
+        rows.push(...((data ?? []) as PaymentRow[]));
+        if ((data ?? []).length < PAGE) break;
       }
-    }
+      return rows;
+    };
+
+    // ── 0) 事業所一覧 (訪問介護)。1)②③がこれに依存する ──
+    const [officesResult, payPages] = await Promise.all([
+      (async (): Promise<string[]> => {
+        const { data, error } = await supabase
+          .from("offices")
+          .select("id")
+          .eq("service_type", "訪問介護");
+        if (error) {
+          toast.error("事業所一覧の取得に失敗: " + error.message);
+          return [];
+        }
+        return ((data ?? []) as { id: string }[]).map((o) => o.id);
+      })(),
+      fetchPays(),
+    ]);
+    const houmonOfficeIds = officesResult;
+
+    // ── 1) 月遅れ・返戻・過誤の行 (kaigo_billing_status。訪問介護 office に限定) ──
+    // ── 2) client_office_assignments 経由の訪問介護 office 利用者一覧 (監査M-1: 居宅/入浴等
+    //      他事業所の利用請求を合算しないための絞り込み用) ──
+    // 互いに依存しないので並列
+    const [flags, houmonClientIds] = await Promise.all([
+      (async (): Promise<FlagRow[]> => {
+        if (houmonOfficeIds.length === 0) return [];
+        const { data, error } = await supabase
+          .from("kaigo_billing_status")
+          .select(
+            "client_id, target_month, issued_at, kokuho_target, tsukiokure, henrei, kago, notes",
+          )
+          .in("office_id", houmonOfficeIds)
+          .gte("target_month", fromMonth)
+          .lte("target_month", toMonth)
+          .or("tsukiokure.eq.true,henrei.eq.true,kago.eq.true")
+          .order("target_month");
+        if (error) {
+          // table 未作成 (直 SQL=42P01 / PostgREST schema cache=PGRST205) 時は 0 件として続行
+          if (error.code !== "42P01" && error.code !== "PGRST205") {
+            toast.error("請求状態の取得に失敗: " + error.message);
+          }
+          return [];
+        }
+        return (data ?? []) as FlagRow[];
+      })(),
+      (async (): Promise<Set<string> | null> => {
+        if (houmonOfficeIds.length === 0) return null;
+        const { data, error } = await supabase
+          .from("client_office_assignments")
+          .select("client_id")
+          .in("office_id", houmonOfficeIds);
+        if (error) {
+          console.error("client_office_assignments fetch failed:", error.message);
+          return null;
+        }
+        return new Set(((data ?? []) as { client_id: string }[]).map((a) => a.client_id));
+      })(),
+    ]);
+
+    // 割当が取れた場合のみ絞る (取得失敗時は従来どおり全件)
+    const pays: PaymentRow[] = houmonClientIds
+      ? payPages.filter((r) => houmonClientIds.has(r.client_id))
+      : payPages;
 
     // ── 3) 利用者名 (clients を client_id in で取得) ──
     const ids = [...new Set(flags.map((f) => f.client_id))];

@@ -34,7 +34,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { ID_IN_CHUNK } from "@/lib/chunk-parallel";
+import { ID_IN_CHUNK, mapChunksParallel } from "@/lib/chunk-parallel";
 
 const PAGE = 1000;
 
@@ -127,70 +127,88 @@ export function UneiKijunTab({ active, officeId }: { active: boolean; officeId: 
         return;
       }
 
-      // 3) 支援経過 (通算の会議 + 当月の訪問/モニタリング)
-      const kaigiEver = new Set<string>();
-      const houmonInMonth = new Set<string>();
-      for (let i = 0; i < targetIds.length; i += ID_IN_CHUNK) {
-        const chunk = targetIds.slice(i, i + ID_IN_CHUNK);
-        for (let from = 0; ; from += PAGE) {
-          const { data, error: e } = await supabase
-            .from("kaigo_support_records")
-            .select("user_id, category, record_date")
-            .in("user_id", chunk)
-            .order("id")
-            .range(from, from + PAGE - 1);
-          if (e) throw new Error(`支援経過の取得に失敗: ${e.message}`);
-          const page = (data ?? []) as { user_id: string; category: string | null; record_date: string | null }[];
-          for (const r of page) {
-            if (r.category === "サービス担当者会議") kaigiEver.add(r.user_id);
-            const inMonth = !!r.record_date && r.record_date >= monthStart && r.record_date <= monthEnd;
-            if (inMonth && (r.category === "訪問" || r.category === "モニタリング")) {
-              houmonInMonth.add(r.user_id);
+      // 3)〜5) は targetIds が決まれば互いに独立に取得できる (別テーブル・別集計軸)。
+      // 直列ループを4本並べると往復が積み上がるので、chunkごとの並列化
+      // (mapChunksParallel) + 4本の Promise.all で1波にまとめる
+      // (feedback_dashboard_uriage_perf.md / feedback_chunk_serial_all_clients.md と同じ型)。
+      const [kaigiHoumon, monitoringUsers, consentUsers, nameById] = await Promise.all([
+        // 3) 支援経過 (通算の会議 + 当月の訪問/モニタリング)
+        (async () => {
+          const kaigiEver = new Set<string>();
+          const houmonInMonth = new Set<string>();
+          await mapChunksParallel(targetIds, ID_IN_CHUNK, async (chunk) => {
+            for (let from = 0; ; from += PAGE) {
+              const { data, error: e } = await supabase
+                .from("kaigo_support_records")
+                .select("user_id, category, record_date")
+                .in("user_id", chunk)
+                .order("id")
+                .range(from, from + PAGE - 1);
+              if (e) throw new Error(`支援経過の取得に失敗: ${e.message}`);
+              const page = (data ?? []) as { user_id: string; category: string | null; record_date: string | null }[];
+              for (const r of page) {
+                if (r.category === "サービス担当者会議") kaigiEver.add(r.user_id);
+                const inMonth = !!r.record_date && r.record_date >= monthStart && r.record_date <= monthEnd;
+                if (inMonth && (r.category === "訪問" || r.category === "モニタリング")) {
+                  houmonInMonth.add(r.user_id);
+                }
+              }
+              if (page.length < PAGE) break;
             }
-          }
-          if (page.length < PAGE) break;
-        }
-      }
+          });
+          return { kaigiEver, houmonInMonth };
+        })(),
 
-      // 3b) モニタリングシート (実データは 0 件だが、あれば ② の根拠に加える)
-      for (let i = 0; i < targetIds.length; i += ID_IN_CHUNK) {
-        const chunk = targetIds.slice(i, i + ID_IN_CHUNK);
-        const { data, error: e } = await supabase
-          .from("kaigo_monitoring_sheets")
-          .select("user_id, monitoring_date")
-          .in("user_id", chunk)
-          .gte("monitoring_date", monthStart)
-          .lte("monitoring_date", monthEnd);
-        if (e) {
-          if (!isMissingTable(e.code)) throw new Error(`モニタリングの取得に失敗: ${e.message}`);
-          break;
-        }
-        for (const r of (data ?? []) as { user_id: string }[]) houmonInMonth.add(r.user_id);
-      }
+        // 3b) モニタリングシート (実データは 0 件だが、あれば ② の根拠に加える)
+        (async () => {
+          const houmonInMonth = new Set<string>();
+          await mapChunksParallel(targetIds, ID_IN_CHUNK, async (chunk) => {
+            const { data, error: e } = await supabase
+              .from("kaigo_monitoring_sheets")
+              .select("user_id, monitoring_date")
+              .in("user_id", chunk)
+              .gte("monitoring_date", monthStart)
+              .lte("monitoring_date", monthEnd);
+            if (e) {
+              if (!isMissingTable(e.code)) throw new Error(`モニタリングの取得に失敗: ${e.message}`);
+              return;
+            }
+            for (const r of (data ?? []) as { user_id: string }[]) houmonInMonth.add(r.user_id);
+          });
+          return houmonInMonth;
+        })(),
 
-      // 4) 第1表の同意日 (content 全体を落とすと重いのでキーだけ select)
-      const consentUsers = new Set<string>();
-      for (let i = 0; i < targetIds.length; i += ID_IN_CHUNK) {
-        const chunk = targetIds.slice(i, i + ID_IN_CHUNK);
-        const { data, error: e } = await supabase
-          .from("kaigo_report_documents")
-          .select("user_id, consent:content->>user_consent_date")
-          .eq("report_type", "care-plan-1")
-          .in("user_id", chunk);
-        if (e) throw new Error(`第1表の取得に失敗: ${e.message}`);
-        for (const r of (data ?? []) as { user_id: string; consent: string | null }[]) {
-          if (r.consent && r.consent.trim()) consentUsers.add(r.user_id);
-        }
-      }
+        // 4) 第1表の同意日 (content 全体を落とすと重いのでキーだけ select)
+        (async () => {
+          const consentUsers = new Set<string>();
+          await mapChunksParallel(targetIds, ID_IN_CHUNK, async (chunk) => {
+            const { data, error: e } = await supabase
+              .from("kaigo_report_documents")
+              .select("user_id, consent:content->>user_consent_date")
+              .eq("report_type", "care-plan-1")
+              .in("user_id", chunk);
+            if (e) throw new Error(`第1表の取得に失敗: ${e.message}`);
+            for (const r of (data ?? []) as { user_id: string; consent: string | null }[]) {
+              if (r.consent && r.consent.trim()) consentUsers.add(r.user_id);
+            }
+          });
+          return consentUsers;
+        })(),
 
-      // 5) 氏名
-      const nameById = new Map<string, string>();
-      for (let i = 0; i < targetIds.length; i += ID_IN_CHUNK) {
-        const chunk = targetIds.slice(i, i + ID_IN_CHUNK);
-        const { data, error: e } = await supabase.from("clients").select("id, name").in("id", chunk);
-        if (e) throw new Error(`利用者名の取得に失敗: ${e.message}`);
-        for (const c of (data ?? []) as { id: string; name: string }[]) nameById.set(c.id, c.name);
-      }
+        // 5) 氏名
+        (async () => {
+          const nameById = new Map<string, string>();
+          await mapChunksParallel(targetIds, ID_IN_CHUNK, async (chunk) => {
+            const { data, error: e } = await supabase.from("clients").select("id, name").in("id", chunk);
+            if (e) throw new Error(`利用者名の取得に失敗: ${e.message}`);
+            for (const c of (data ?? []) as { id: string; name: string }[]) nameById.set(c.id, c.name);
+          });
+          return nameById;
+        })(),
+      ]);
+      const kaigiEver = kaigiHoumon.kaigiEver;
+      // 3) の訪問/モニタリングと 3b) のモニタリングシートを合算
+      const houmonInMonth = new Set<string>([...kaigiHoumon.houmonInMonth, ...monitoringUsers]);
 
       const built: Row[] = targetIds.map((id) => ({
         clientId: id,
