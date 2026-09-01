@@ -1,0 +1,217 @@
+{
+ "moves": [
+  {
+   "cert": {
+    "id": "65d0d324-7b4e-4277-8087-f12a9b681046",
+    "client_id": "93b4e136-48bf-4338-a1f2-8582aeb1f750",
+    "beneficiary_number": "2000075503",
+    "certification_start_date": "2023-09-01",
+    "certification_end_date": "2024-08-31"
+   },
+   "to": "922a78d4-d57b-4f1d-9b4f-5c70e8438e07"
+  },
+  {
+   "cert": {
+    "id": "f0a9951a-8e52-42d7-b98e-d695b3d798b8",
+    "client_id": "e5266ea9-7e2a-41ac-9841-549f85001c6e",
+    "beneficiary_number": "2000075503",
+    "certification_start_date": "2024-09-01",
+    "certification_end_date": "2025-08-31"
+   },
+   "to": "922a78d4-d57b-4f1d-9b4f-5c70e8438e07"
+  },
+  {
+   "cert": {
+    "id": "0d3f61ce-578f-44de-af00-27282157a974",
+    "client_id": "e1dd029a-5326-40ce-b1b7-374570554b87",
+    "beneficiary_number": "1222126235",
+    "certification_start_date": "2025-11-01",
+    "certification_end_date": "2026-10-31"
+   },
+   "to": "e06005a1-783c-45cd-ab3f-3ad06d175a53"
+  },
+  {
+   "cert": {
+    "id": "29666687-0b94-470f-9cb0-1a8a9821b951",
+    "client_id": "302c0b47-3bcb-4301-b7ec-0479836a301d",
+    "beneficiary_number": "2000100319",
+    "certification_start_date": "2019-07-01",
+    "certification_end_date": "2019-11-30"
+   },
+   "to": "a25725fb-ac5a-40b6-8c83-ba56b8ff15ea"
+  },
+  {
+   "cert": {
+    "id": "9c390430-60f9-4f10-a604-28b5880ab620",
+    "client_id": "04bff709-65e7-4d10-ab46-9441bf27e45f",
+    "beneficiary_number": "1222909861",
+    "certification_start_date": "2025-04-01",
+    "certification_end_date": "2025-06-30"
+   },
+   "to": "dde3c531-c6ff-4651-9735-45af3fd2c3eb"
+  },
+  {
+   "cert": {
+    "id": "3a5e6a91-f7c0-475d-aa80-f034e5ddae9f",
+    "client_id": "b5fc388a-98db-4889-b6da-6c4ef1c62e53",
+    "beneficiary_number": "1222907097",
+    "certification_start_date": "2026-01-01",
+    "certification_end_date": "2026-12-31"
+   },
+   "to": "2598d791-36eb-4390-a778-cda6f037b9ce"
+  }
+ ],
+ "dropCerts": [
+  {
+   "id": "8f7bfa17-03af-4b75-be87-9b38d9b12876",
+   "client_id": "ccf63e7d-da5c-413a-98ec-85d64c6a14eb",
+   "beneficiary_number": "2000075503",
+   "certification_start_date": "2025-09-01",
+   "certification_end_date": "2026-08-31"
+  }
+ ],
+ "dropClients": [
+  {
+   "id": "93b4e136-48bf-4338-a1f2-8582aeb1f750",
+   "name": "６５誉田",
+   "user_number": "@65誉田",
+   "birth_date": null
+  },
+  {
+   "id": "e5266ea9-7e2a-41ac-9841-549f85001c6e",
+   "name": "５誉田",
+   "user_number": "@5誉田",
+   "birth_date": null
+  },
+  {
+   "id": "ccf63e7d-da5c-413a-98ec-85d64c6a14eb",
+   "name": "田",
+   "user_number": "@田",
+   "birth_date": null
+  },
+  {
+   "id": "e1dd029a-5326-40ce-b1b7-374570554b87",
+   "name": "代",
+   "user_number": "@代",
+   "birth_date": null
+  },
+  {
+   "id": "302c0b47-3bcb-4301-b7ec-0479836a301d",
+   "name": "べるたす",
+   "user_number": "@べるたす",
+   "birth_date": null
+  },
+  {
+   "id": "04bff709-65e7-4d10-ab46-9441bf27e45f",
+   "name": "R2.11.2～身体28時間に変更している。",
+   "user_number": "@R2.11.2~身体28時間に変更している。",
+   "birth_date": null
+  },
+  {
+   "id": "b5fc388a-98db-4889-b6da-6c4ef1c62e53",
+   "name": "R3.3.1～家事１５時間追加している。",
+   "user_number": "@R3.3.1~家事15時間追加している。",
+   "birth_date": null
+  }
+ ],
+ "assignments": [
+  {
+   "tenant_id": "kt-group",
+   "client_id": "93b4e136-48bf-4338-a1f2-8582aeb1f750",
+   "office_id": "fd0179ae-6a20-4bf2-9ab0-37d61c744f64",
+   "created_at": "2026-08-05T14:42:56.59332+00:00",
+   "start_date": "2026-08-05",
+   "end_date": null,
+   "id": "4e9a2d06-9079-487a-b376-ad876fb6d33b",
+   "service_notes": null,
+   "updated_at": "2026-08-05T14:42:56.59332+00:00",
+   "home_care_categories": [],
+   "same_building_tier": null,
+   "preferred_staff": null
+  },
+  {
+   "tenant_id": "kt-group",
+   "client_id": "e5266ea9-7e2a-41ac-9841-549f85001c6e",
+   "office_id": "fd0179ae-6a20-4bf2-9ab0-37d61c744f64",
+   "created_at": "2026-08-05T14:42:56.679427+00:00",
+   "start_date": "2026-08-05",
+   "end_date": null,
+   "id": "8fac5cdc-513a-4fca-a61b-62104d01048a",
+   "service_notes": null,
+   "updated_at": "2026-08-05T14:42:56.679427+00:00",
+   "home_care_categories": [],
+   "same_building_tier": null,
+   "preferred_staff": null
+  },
+  {
+   "tenant_id": "kt-group",
+   "client_id": "ccf63e7d-da5c-413a-98ec-85d64c6a14eb",
+   "office_id": "fd0179ae-6a20-4bf2-9ab0-37d61c744f64",
+   "created_at": "2026-08-05T14:42:56.508612+00:00",
+   "start_date": "2026-08-05",
+   "end_date": null,
+   "id": "c7ba5e1c-35f3-472a-8fa2-28d8194241b2",
+   "service_notes": null,
+   "updated_at": "2026-08-05T14:42:56.508612+00:00",
+   "home_care_categories": [],
+   "same_building_tier": null,
+   "preferred_staff": null
+  },
+  {
+   "tenant_id": "kt-group",
+   "client_id": "e1dd029a-5326-40ce-b1b7-374570554b87",
+   "office_id": "0237ed1e-bf80-412e-955d-1102fb06e078",
+   "created_at": "2026-08-05T03:09:42.893752+00:00",
+   "start_date": "2026-08-05",
+   "end_date": null,
+   "id": "15c5c9c2-0952-4a75-bd0e-b8c066fe8ea2",
+   "service_notes": null,
+   "updated_at": "2026-08-05T03:09:42.893752+00:00",
+   "home_care_categories": [],
+   "same_building_tier": null,
+   "preferred_staff": null
+  },
+  {
+   "tenant_id": "kt-group",
+   "client_id": "302c0b47-3bcb-4301-b7ec-0479836a301d",
+   "office_id": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+   "created_at": "2026-08-05T15:07:27.742037+00:00",
+   "start_date": "2026-08-05",
+   "end_date": null,
+   "id": "b0203191-0007-4a16-a08e-56c951fe3f21",
+   "service_notes": null,
+   "updated_at": "2026-08-05T15:07:27.742037+00:00",
+   "home_care_categories": [],
+   "same_building_tier": null,
+   "preferred_staff": null
+  },
+  {
+   "tenant_id": "kt-group",
+   "client_id": "04bff709-65e7-4d10-ab46-9441bf27e45f",
+   "office_id": "b9a17be0-7fba-4376-b66e-b1aad414e4b2",
+   "created_at": "2026-08-06T15:20:19.604414+00:00",
+   "start_date": "2026-08-06",
+   "end_date": null,
+   "id": "18a30758-da6d-4f7b-b293-94c1579ee14e",
+   "service_notes": null,
+   "updated_at": "2026-08-06T15:20:19.604414+00:00",
+   "home_care_categories": [],
+   "same_building_tier": null,
+   "preferred_staff": null
+  },
+  {
+   "tenant_id": "kt-group",
+   "client_id": "b5fc388a-98db-4889-b6da-6c4ef1c62e53",
+   "office_id": "b9a17be0-7fba-4376-b66e-b1aad414e4b2",
+   "created_at": "2026-08-06T15:20:19.348111+00:00",
+   "start_date": "2026-08-06",
+   "end_date": null,
+   "id": "efb00fb9-3bd2-4874-b865-fad6583bb6d2",
+   "service_notes": null,
+   "updated_at": "2026-08-06T15:20:19.348111+00:00",
+   "home_care_categories": [],
+   "same_building_tier": null,
+   "preferred_staff": null
+  }
+ ]
+}
