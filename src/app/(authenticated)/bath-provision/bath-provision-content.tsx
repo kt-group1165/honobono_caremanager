@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { validInMonth, monthRange } from "@/lib/service-code-valid";
@@ -16,7 +17,7 @@ const BATH_ROWS = [
 ];
 const BASE_CODES = new Set(BATH_ROWS.map((r) => r.code));
 
-type Rec = {
+export type Rec = {
   id: string; // 未保存の新規セルは "tmp-<code>-<day>"
   visit_date: string;
   service_code: string | null;
@@ -30,20 +31,71 @@ type Row = { code: string; label: string; bath_type: "全身浴" | "部分浴"; 
 
 const WD = ["日", "月", "火", "水", "木", "金", "土"];
 
-export function BathProvisionContent({ userId, userName }: { userId: string; userName: string | null }) {
+export type LoadBathProvisionDataResult = {
+  records: Rec[];
+  unitByCode: Record<string, number>;
+  nameByCode: Record<string, string>;
+};
+
+export async function loadBathProvisionData(
+  supabase: SupabaseClient,
+  userId: string,
+  officeId: string,
+  y: number,
+  m: number,
+): Promise<LoadBathProvisionDataResult> {
+  const { monthStart, monthEnd } = monthRange(y, m);
+  const { data: recData, error: recErr } = await supabase
+    .from("kaigo_bath_visit_records")
+    .select("id, visit_date, service_code, planned, actual")
+    .eq("client_id", userId)
+    .eq("office_id", officeId)
+    .gte("visit_date", monthStart)
+    .lte("visit_date", monthEnd);
+  if (recErr) throw recErr;
+  const records = (recData ?? []) as Rec[];
+
+  const codes = Array.from(new Set([...BATH_ROWS.map((r) => r.code), ...records.map((r) => r.service_code).filter(Boolean) as string[]]));
+  const { data: uData } = await validInMonth(
+    supabase.from("kaigo_service_codes").select("service_code, service_name, units").in("service_code", codes).eq("system", "介護"),
+    y,
+    m,
+  );
+  const unitByCode: Record<string, number> = {};
+  const nameByCode: Record<string, string> = {};
+  for (const u of (uData ?? []) as { service_code: string; service_name: string; units: number }[]) {
+    if (unitByCode[u.service_code] == null) { unitByCode[u.service_code] = u.units; nameByCode[u.service_code] = u.service_name; }
+  }
+  return { records, unitByCode, nameByCode };
+}
+
+export function BathProvisionContent({
+  userId,
+  userName,
+  initialOfficeId = null,
+  initialMonth = null,
+  initialData = null,
+}: {
+  userId: string;
+  userName: string | null;
+  initialOfficeId?: string | null;
+  initialMonth?: string | null;
+  initialData?: LoadBathProvisionDataResult | null;
+}) {
   const supabase = useMemo(() => createClient(), []);
   const { currentOffice, currentOfficeId } = useBusinessType();
 
   const [month, setMonth] = useState(() => {
+    if (initialMonth) return initialMonth;
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
-  const [records, setRecords] = useState<Rec[]>([]); // 編集中 (ローカル作業コピー)
-  const [savedRecords, setSavedRecords] = useState<Rec[]>([]); // サーバ確定スナップショット
-  const [unitByCode, setUnitByCode] = useState<Record<string, number>>({});
-  const [nameByCode, setNameByCode] = useState<Record<string, string>>({});
+  const [records, setRecords] = useState<Rec[]>(initialData?.records ?? []); // 編集中 (ローカル作業コピー)
+  const [savedRecords, setSavedRecords] = useState<Rec[]>(initialData?.records ?? []); // サーバ確定スナップショット
+  const [unitByCode, setUnitByCode] = useState<Record<string, number>>(initialData?.unitByCode ?? {});
+  const [nameByCode, setNameByCode] = useState<Record<string, string>>(initialData?.nameByCode ?? {});
   const [extraCodes, setExtraCodes] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialData);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -78,35 +130,15 @@ export function BathProvisionContent({ userId, userName }: { userId: string; use
   );
 
   const load = useCallback(async () => {
+    if (!currentOfficeId) { setRecords([]); setSavedRecords([]); setDirty(false); return; }
     setLoading(true);
     try {
-      const { monthStart, monthEnd } = monthRange(y, m);
-      const recQ = supabase
-        .from("kaigo_bath_visit_records")
-        .select("id, visit_date, service_code, planned, actual")
-        .eq("client_id", userId)
-        .gte("visit_date", monthStart)
-        .lte("visit_date", monthEnd);
-      const { data: recData, error: recErr } = currentOfficeId ? await recQ.eq("office_id", currentOfficeId) : await recQ;
-      if (recErr) throw recErr;
-      const recs = (recData ?? []) as Rec[];
-      setRecords(recs);
-      setSavedRecords(recs);
+      const result = await loadBathProvisionData(supabase, userId, currentOfficeId, y, m);
+      setRecords(result.records);
+      setSavedRecords(result.records);
       setDirty(false);
-
-      const codes = Array.from(new Set([...BATH_ROWS.map((r) => r.code), ...recs.map((r) => r.service_code).filter(Boolean) as string[]]));
-      const { data: uData } = await validInMonth(
-        supabase.from("kaigo_service_codes").select("service_code, service_name, units").in("service_code", codes).eq("system", "介護"),
-        y,
-        m,
-      );
-      const um: Record<string, number> = {};
-      const nm: Record<string, string> = {};
-      for (const u of (uData ?? []) as { service_code: string; service_name: string; units: number }[]) {
-        if (um[u.service_code] == null) { um[u.service_code] = u.units; nm[u.service_code] = u.service_name; }
-      }
-      setUnitByCode(um);
-      setNameByCode(nm);
+      setUnitByCode(result.unitByCode);
+      setNameByCode(result.nameByCode);
     } catch (e) {
       console.error("提供表の読込に失敗:", e);
       alert("読込に失敗しました: " + (e instanceof Error ? e.message : String(e)));
@@ -115,10 +147,16 @@ export function BathProvisionContent({ userId, userName }: { userId: string; use
     }
   }, [supabase, userId, currentOfficeId, y, m]);
 
+  const isInitialMount = useRef(true);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount/月変更時の async fetch
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      if (initialData && initialOfficeId && initialOfficeId === currentOfficeId && initialMonth === month) {
+        return;
+      }
+    }
     load();
-  }, [load]);
+  }, [load, initialData, initialOfficeId, initialMonth, currentOfficeId, month]);
 
   // 表示行 = 固定4行 + (実績にあるコード + 追加コード) のうち非固定
   const displayRows = useMemo<Row[]>(() => {
