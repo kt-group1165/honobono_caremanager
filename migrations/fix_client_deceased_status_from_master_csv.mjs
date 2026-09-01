@@ -104,16 +104,35 @@ async function main() {
   }
   console.log(`  死亡日が入っている行: ${deathByNo.size}件 (ダミー除外 ${dummies}件)`);
 
-  // ② 介護保険1: 利用者番号 → (保険者番号, 被保険者番号) の橋渡し (全世代分から任意の1件でよい)
+  // ② 介護保険1: 利用者番号 → (保険者番号, 被保険者番号) の橋渡し。
+  //   ⚠ 2026-09-02 の事故で判明: 短い/古い形式の利用者番号 (4桁等) はほのぼの内で
+  //   複数の別人に使い回されていることがあり、その番号配下に**異なる(保険者,被保番)
+  //   ペアが複数存在**する。「最初に見つかった1件」を採用すると、死亡記録とは無関係な
+  //   別人 (現に生存し新規認定まで受けている実在利用者) を誤って死亡扱いにしてしまう
+  //   (実例: 利用者番号6180 = 死亡記録は「森範子」名義、当方DBの同ペア一致先は
+  //   「海保光子」で2023年に新規認定を受けている生存者だった)。
+  //   → 同じ利用者番号に複数の異なるペアがある場合は橋渡しせず除外する (安全側)。
   const H = { no: 0, insured: 18, insurer: 39 };
-  const bridgeByNo = new Map();
+  const pairsByNo = new Map();
   for (const r of hoken.rows) {
     if (r.length <= H.insurer) continue;
-    if (!bridgeByNo.has(r[H.no]) && r[H.insurer] && r[H.insured]) {
-      bridgeByNo.set(r[H.no], { insurer: r[H.insurer], insured: r[H.insured] });
+    if (!r[H.insurer] || !r[H.insured]) continue;
+    if (!pairsByNo.has(r[H.no])) pairsByNo.set(r[H.no], new Set());
+    pairsByNo.get(r[H.no]).add(`${r[H.insurer]}|${r[H.insured]}`);
+  }
+  const bridgeByNo = new Map();
+  const ambiguousNos = [];
+  for (const [no, pairs] of pairsByNo) {
+    if (pairs.size === 1) {
+      const [pair] = pairs;
+      const [insurer, insured] = pair.split("|");
+      bridgeByNo.set(no, { insurer, insured });
+    } else {
+      ambiguousNos.push(no);
     }
   }
-  console.log(`  介護保険1橋渡し: ${bridgeByNo.size}名`);
+  console.log(`  介護保険1橋渡し: ${bridgeByNo.size}名 (利用者番号の使い回しで橋渡し不可・除外: ${ambiguousNos.length}件)`);
+  if (ambiguousNos.length) console.log(`  使い回し疑いサンプル: ${ambiguousNos.slice(0, 10).join(" / ")}`);
 
   // ③ 当方の client_insurance_records から (保険者, 被保番) → client_id
   const insAll = await fetchAllInsurance();
