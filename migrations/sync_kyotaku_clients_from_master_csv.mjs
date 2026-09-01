@@ -56,6 +56,11 @@ const FORCE = process.argv.includes("--force-with-warnings");
 const MONTH = process.env.MONTH || "2026-06";
 const OFFICE_FILTER = process.env.OFFICE || "";
 const TENANT = "kt-group";
+// ほのぼのの「番号なし」センチネル。基本情報CSV内で 40 名前後が共有しているため、
+// これをキーに kihonByNum を引くと無関係な人の生年月日等を拾ってしまう (2026-09-01
+// 大網白里4名で実際に誤った生年月日が入りかけた)。この番号のときは基本情報を
+// 引かず、氏名・保険者情報だけで登録する (誤情報を入れるより空欄の方が安全)。
+const SENTINEL_USER_NUMBERS = new Set(["2147483647"]);
 const KAIGO = fileURLToPath(new URL("../", import.meta.url));
 const CREATED_FILE = path.join(KAIGO, "migrations/_kyotaku_sync_created.json");
 const IMPORT_MARK = `[KYOTAKU-SYNC ${MONTH}]`;
@@ -270,7 +275,7 @@ async function main() {
   for (const [n, c] of Object.entries(perOffice).sort((a, b) => b[1] - a[1])) console.log(`   ${String(c).padStart(4)}  ${n}`);
   console.log("\n― 新規作成の例 (先頭10) ―");
   for (const [k, v] of toCreate.slice(0, 10)) {
-    const kh = v.userNumber ? kihonByNum.get(v.userNumber) : null;
+    const kh = v.userNumber && !SENTINEL_USER_NUMBERS.has(v.userNumber) ? kihonByNum.get(v.userNumber) : null;
     console.log(`   ${String(v.name ?? "?").padEnd(10)} ${k} ${careLevel(g(v.r, v.idx, "要介護度")) || "?"} 生${kh ? iso(g(kh.r, kh.idx, "生年月日")) ?? "?" : "基本情報なし"} → ${v.office.name}`);
   }
 
@@ -282,10 +287,18 @@ async function main() {
   const existingNums = new Set((await fetchAll(() => sb.from("clients").select("user_number"))).map((c) => String(c.user_number)));
 
   for (const [key, v] of toCreate) {
-    const kh = v.userNumber ? kihonByNum.get(v.userNumber) : null;
+    const kh = v.userNumber && !SENTINEL_USER_NUMBERS.has(v.userNumber) ? kihonByNum.get(v.userNumber) : null;
     const cl = careLevel(g(v.r, v.idx, "要介護度"));
     let un = v.userNumber ?? key.replace("|", "-");
-    if (existingNums.has(un)) un = `${un}-${v.office.id.slice(0, 4)}`;
+    if (existingNums.has(un)) {
+      // ⚠ ほのぼのの「番号なし」センチネル (2147483647 等) を同一事業所内で
+      //   複数人が共有すると、事業所IDだけのsuffixでは足りず衝突する
+      //   (2026-09-01 大網白里で4名が事故った)。連番を足して必ず一意にする。
+      const base = `${un}-${v.office.id.slice(0, 4)}`;
+      un = base;
+      let seq = 2;
+      while (existingNums.has(un)) un = `${base}-${seq++}`;
+    }
     existingNums.add(un);
 
     const client = {
