@@ -14,6 +14,10 @@
  *   - フッタ = 列ごとの該当件数
  * 入退院連動: 対象月に入院記録 (client_hospitalizations) がある利用者の
  *   入院時情報連携・退院退所セルに 🏥 ヒント。入院記録が無いのに加算を選ぶと amber 注意。
+ *   対象月内に入院/退院した記録があり未チェックの場合は emerald ハイライトで候補提示。
+ * 初回加算候補: 過去2ヶ月 (前月・前々月) に居宅介護支援費レセプトが無い利用者を emerald
+ *   ハイライトで候補提示 (訪問介護側 kaigo-seikyu-content.tsx の初回加算候補と同じ設計:
+ *   表示のみで自動チェックはしない。判定に使うのは billing_month の有無のみ)。
  *
  * ※ 一括生成 (レセプト編集) では個別加算は全て OFF で生成される。
  *   利用者ごとの算定はこのタブで行う (旧「届出があれば全員自動算定」は廃止)。
@@ -111,6 +115,8 @@ export function KyotakuKojinSetteiContent() {
   const [claims, setClaims] = useState<ClaimRow[]>([]);
   const [careLevelByClient, setCareLevelByClient] = useState<Map<string, string | null>>(new Map());
   const [hospMap, setHospMap] = useState<Map<string, HospitalizationPeriod[]>>(new Map());
+  // 初回加算候補: 過去2ヶ月に居宅介護支援費レセプトが無い利用者 (表示のみ・自動チェックはしない)
+  const [shokaiCandidateIds, setShokaiCandidateIds] = useState<Set<string>>(new Set());
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   // notes 編集の draft (claim.id → text)。blur で保存
   const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
@@ -173,6 +179,7 @@ export function KyotakuKojinSetteiContent() {
         setClaims([]);
         setCareLevelByClient(new Map());
         setHospMap(new Map());
+        setShokaiCandidateIds(new Set());
         return;
       }
       const clientIds = cls.map((c) => c.id);
@@ -202,15 +209,32 @@ export function KyotakuKojinSetteiContent() {
 
       // 3) 対象月に有効な認定 (要介護度 — 要支援は個別加算 対象外の判定に使用)
       // 4) 入退院 (対象月ヒント + 加算矛盾注意用)
+      // 5) 初回加算候補 (過去2ヶ月 = 前々月・前月に居宅介護支援費レセプトが無い)
       //    互いに独立なので並列 (直列だと chunk 往復が積み上がる)
-      const [certRes, hm] = await Promise.all([
+      const prevMonthKey = (offset: number) => {
+        const d = new Date(year, month - 1 + offset, 1);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      };
+      const prevMonths = [prevMonthKey(-1), prevMonthKey(-2)];
+      const [certRes, hm, priorClaimChunks] = await Promise.all([
         resolveCertForMonth(supabase, clientIds, year, month),
         getHospitalizationMap(supabase, clientIds),
+        mapChunksParallel(clientIds, IN_CHUNK, async (chunk) => {
+          const { data, error: e } = await supabase
+            .from("kaigo_care_support_claims")
+            .select("user_id")
+            .in("billing_month", prevMonths)
+            .in("user_id", chunk);
+          if (e) throw new Error(`初回加算候補の判定に失敗: ${e.message}`);
+          return (data ?? []).map((row: { user_id: string }) => row.user_id);
+        }),
       ]);
       setCareLevelByClient(
         new Map(cls.map((c) => [c.id, certRes.get(c.id)?.care_level ?? null])),
       );
       setHospMap(hm);
+      const hadPriorClaim = new Set(priorClaimChunks.flat());
+      setShokaiCandidateIds(new Set(clientIds.filter((id) => !hadPriorClaim.has(id))));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setClients([]);
@@ -563,6 +587,17 @@ export function KyotakuKojinSetteiContent() {
                       .map((h) => `${h.hospital_name ?? "入院"} ${h.admission_date}〜${h.discharge_date ?? "入院中"}`)
                       .join(" / ")}`
                   : "対象月の入院記録なし";
+                // 対象月内に入院 / 退院した記録があるか (加算候補ハイライト用。hasHosp は月をまたぐ入院も含む広い判定なので分離)
+                const hasAdmissionInMonth = r.hospInMonth.some(
+                  (h) => h.admission_date >= mFrom && h.admission_date <= mTo,
+                );
+                const hasDischargeInMonth = r.hospInMonth.some(
+                  (h) => h.discharge_date != null && h.discharge_date >= mFrom && h.discharge_date <= mTo,
+                );
+                const dischargeCandidate = hasDischargeInMonth && !c?.discharge_addition;
+                const hospCoordCandidate = hasAdmissionInMonth && !c?.hospital_coordination;
+                const shokaiCandidate =
+                  !!c && !c.initial_addition && shokaiCandidateIds.has(r.client.id);
                 const rowCls = !c
                   ? "bg-gray-100 text-gray-400"
                   : saving
@@ -615,20 +650,31 @@ export function KyotakuKojinSetteiContent() {
                       <div className="truncate">{r.client.phone ?? ""}</div>
                       <div className="truncate text-gray-400">{r.client.mobile ?? ""}</div>
                     </div>
-                    {/* 初回加算 */}
-                    <div className="px-1 py-1 border-l border-gray-200 text-center">
-                      <input
-                        type="checkbox"
-                        checked={c?.initial_addition ?? false}
-                        disabled={locked || saving}
-                        onChange={(e) => applyPatch(r, { initial: e.target.checked })}
-                        className={chkCls}
-                      />
-                    </div>
-                    {/* 退院・退所加算 (入退院連動: 🏥 ヒント / 記録なし選択は amber) */}
+                    {/* 初回加算 (過去2ヶ月レセプトなし → 候補ハイライト。表示のみ・自動チェックはしない) */}
                     <div
-                      className={`px-1 py-0.5 border-l border-gray-200 ${hospMismatch && c?.discharge_addition ? "bg-amber-100" : ""}`}
-                      title={hospTitle}
+                      className={`px-1 py-1 border-l border-gray-200 text-center ${shokaiCandidate ? "bg-emerald-50" : ""}`}
+                      title={shokaiCandidate ? "過去2ヶ月に居宅介護支援費レセプトなし → 初回加算の候補" : undefined}
+                    >
+                      <div className="flex items-center justify-center gap-0.5">
+                        <input
+                          type="checkbox"
+                          checked={c?.initial_addition ?? false}
+                          disabled={locked || saving}
+                          onChange={(e) => applyPatch(r, { initial: e.target.checked })}
+                          className={chkCls}
+                        />
+                      </div>
+                    </div>
+                    {/* 退院・退所加算 (入退院連動: 🏥 ヒント / 記録なし選択は amber / 対象月退院は候補ハイライト) */}
+                    <div
+                      className={`px-1 py-0.5 border-l border-gray-200 ${
+                        hospMismatch && c?.discharge_addition
+                          ? "bg-amber-100"
+                          : dischargeCandidate
+                            ? "bg-emerald-50"
+                            : ""
+                      }`}
+                      title={dischargeCandidate ? `${hospTitle} → 退院・退所加算の候補` : hospTitle}
                     >
                       <div className="flex items-center gap-0.5">
                         {hasHosp && <span title={hospTitle}>🏥</span>}
@@ -644,10 +690,16 @@ export function KyotakuKojinSetteiContent() {
                         </select>
                       </div>
                     </div>
-                    {/* 入院時情報連携 */}
+                    {/* 入院時情報連携 (対象月入院は候補ハイライト) */}
                     <div
-                      className={`px-1 py-0.5 border-l border-gray-200 ${hospMismatch && c?.hospital_coordination ? "bg-amber-100" : ""}`}
-                      title={hospTitle}
+                      className={`px-1 py-0.5 border-l border-gray-200 ${
+                        hospMismatch && c?.hospital_coordination
+                          ? "bg-amber-100"
+                          : hospCoordCandidate
+                            ? "bg-emerald-50"
+                            : ""
+                      }`}
+                      title={hospCoordCandidate ? `${hospTitle} → 入院時情報連携加算の候補` : hospTitle}
                     >
                       <div className="flex items-center gap-0.5">
                         {hasHosp && <span title={hospTitle}>🏥</span>}
