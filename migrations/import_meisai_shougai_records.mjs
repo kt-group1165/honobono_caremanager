@@ -143,7 +143,12 @@ const ZONE_KANJI = { "日中": "日", "早朝": "早", "夜間": "夜", "深夜"
 
 // ほのぼの内部コード(021xxx) → マスタ名の種別。マスタ名の先頭がこの文字列になっている。
 //   021003 重度介護 は「重訪Ⅱ日中８．０」のような**積み上げ型**で請求モデルが違うため
-//   ここでは扱わない (別実装)。021005 行動援護 も同様に未対応。
+//   ここでは扱わない (別実装)。021005 行動援護 もこの表には無い (kind=null) が、
+//   その代わり下の「契約に無い種別を支給決定に寄せる」処理で拾う (NO_KIND_CODES)。
+//   マスタには 行動援護 専用の6桁コード体系 (131111〜131264) と 別の7桁コード体系
+//   (1311011〜1311054) の両方が存在するが、実際に 行動援護 で請求された伝送 (KJ) が
+//   1件も見つからず (2026-09-01 全拠点全月で確認)、どちらが正しいか検証できないため
+//   専用の変換器は実装しない。
 const KIND_OF_021 = {
   "021001": "身体", // 身体介護 → 111xxx
   "021002": "家事", // 家事援助 → 116xxx / 117xxx
@@ -1089,11 +1094,17 @@ async function main() {
     const DECISION_OF_KIND = { 身体: "111000", 家事: "112000", 通院1: "113000", 通院2: "114000" };
     const KIND_OF_DECISION = Object.fromEntries(Object.entries(DECISION_OF_KIND).map(([k, v]) => [v, k]));
     const CODE_OF_KIND = { 身体: "021001", 家事: "021002", 通院1: "021007", 通院2: "021006" };
+    // 021005 行動援護 は請求モデル未実装 (KIND_OF_021 に無い＝kind が取れない) だが、
+    //   ほのぼの実測 (五井 熊本晃 2026-06-13, MEISAI 1行のみ) で「行動援護」ラベルの
+    //   シフトも決定コード 111000 (身体) の 111111 として通常の身体行と同数 (×12) 請求
+    //   されており、伝送 (KJ) に 131 系コードが一度も出ないことを確認した。
+    //   → kind 不問で「支給決定が 1 種類だけなら寄せる」対象に含める。
+    const NO_KIND_CODES = new Set(["021005"]);
     const fixed = [];
     for (const r of target) {
       const kind = KIND_OF_021[r.code];
       const want = DECISION_OF_KIND[kind];
-      if (!want) continue; // 重訪・同行援護は対象外
+      if (!want && !NO_KIND_CODES.has(r.code)) continue; // 重訪・同行援護は対象外
       const have = decisionsByName.get(normClientName(r.clientName));
       // TRACE_KIND=<氏名の一部> で その人の 契約 vs 実績種別 を 1 行ずつ出す
       if (process.env.TRACE_KIND && (r.clientName || "").includes(process.env.TRACE_KIND)) {
@@ -1105,7 +1116,7 @@ async function main() {
       if (kyotaku.length !== 1) continue;
       const to = CODE_OF_KIND[KIND_OF_DECISION[kyotaku[0]]];
       if (!to || to === r.code) continue;
-      fixed.push(`${normClientName(r.clientName)} ${kind}→${KIND_OF_DECISION[kyotaku[0]]} (契約 ${kyotaku[0]})`);
+      fixed.push(`${normClientName(r.clientName)} ${kind ?? r.code}→${KIND_OF_DECISION[kyotaku[0]]} (契約 ${kyotaku[0]})`);
       r.code = to;
     }
     if (fixed.length) {
