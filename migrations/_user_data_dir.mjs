@@ -56,11 +56,19 @@ export function findKihonCsv(dir) {
 export function findUserCsv(dir, prefix) {
   let ents;
   try { ents = readdirSync(dir); } catch { return null; }
+  const pick = (p) => {
+    const hits = ents
+      .filter((f) => f.startsWith(p) && /\.CSV$/i.test(f))
+      .map((f) => path.join(dir, f))
+      .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
+    return hits[0] ?? null;
+  };
   const exact = ents.find((f) => f === `${prefix}.CSV`);
   if (exact) return path.join(dir, exact);
-  const hits = ents
-    .filter((f) => f.startsWith(prefix) && /\.CSV$/i.test(f))
-    .map((f) => path.join(dir, f))
-    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
-  return hits[0] ?? null;
+  const hit = pick(prefix);
+  if (hit) return hit;
+  // ⚠ 出力元によっては連番の "1" が付かず「介護保険_<拠点名>.CSV」のような名前になることがある
+  //   (Hana高品_登録有 で実例)。末尾の数字を落とした接頭辞でも探す。
+  const base = prefix.replace(/\d+$/, "");
+  return base !== prefix ? pick(base) : null;
 }
