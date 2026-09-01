@@ -33,6 +33,8 @@ import { VoiceInputButton } from "@/components/shared/VoiceInputButton";
 import { useBusinessType } from "@/lib/business-type-context";
 import { useSignedUrls } from "@/lib/use-signed-url";
 import { resolveVisitAddonLines } from "@/lib/visit-addons";
+import { getLatestDocumentForClient } from "@/lib/visit-procedure/queries";
+import type { VisitProcedureDocument } from "@/lib/visit-procedure/types";
 import { ja } from "date-fns/locale";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -120,6 +122,31 @@ interface CareData {
   detailed_report: string;
   user_condition: string;
   notes: string;
+  /**
+   * 手順書 (個別援助詳細計画) の実施確認。
+   * ほのぼの Ⅲ「詳細計画で作成したサービス実施内容に対して実行確認を記載」に相当。
+   * label / minutes は取込時点の snapshot (= 手順書を後で直しても記録は当時のまま)。
+   * 旧記録には存在しないので参照側は必ず optional 扱いにする。
+   */
+  procedure_checks?: ProcedureChecks;
+}
+
+interface ProcedureCheckItem {
+  /** `${service_no}-${step_no}` */
+  key: string;
+  service_kind: string;
+  content: string;
+  minutes: number;
+  done: boolean;
+  note: string;
+}
+
+interface ProcedureChecks {
+  /** 取込元の手順書 (kaigo_visit_procedure_documents.id) */
+  document_id: string | null;
+  /** 取込元の計画開始日 (表示用 snapshot) */
+  plan_start_date: string | null;
+  items: ProcedureCheckItem[];
 }
 
 const emptyCareData = (): CareData => ({
@@ -145,7 +172,33 @@ const emptyCareData = (): CareData => ({
   detailed_report: "",
   user_condition: "",
   notes: "",
+  procedure_checks: { document_id: null, plan_start_date: null, items: [] },
 });
+
+/** 手順書 document → 実施確認の項目リスト (label は取込時点の snapshot) */
+function buildProcedureChecks(doc: VisitProcedureDocument): ProcedureChecks {
+  const items: ProcedureCheckItem[] = [];
+  for (const svc of doc.services) {
+    // 区分も step も無い空枠は取り込まない
+    if (!svc.service_kind && svc.steps.length === 0) continue;
+    for (const st of svc.steps) {
+      if (!st.content.trim()) continue;
+      items.push({
+        key: `${svc.service_no}-${st.step_no}`,
+        service_kind: svc.service_kind || "",
+        content: st.content,
+        minutes: Number.isFinite(st.minutes) ? st.minutes : 0,
+        done: false,
+        note: "",
+      });
+    }
+  }
+  return {
+    document_id: doc.id ?? null,
+    plan_start_date: doc.plan_start_date ?? null,
+    items,
+  };
+}
 
 // Legacy FormData (kept for type compat)
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional placeholder / future use
@@ -259,6 +312,11 @@ function getActiveCareItems(record: VisitRecord): string[] {
   const crd = (record as any).care_record_data;  // eslint-disable-line @typescript-eslint/no-explicit-any
   if (crd && typeof crd === "object") {
     const items: string[] = [];
+    const pcItems = crd.procedure_checks?.items;
+    if (Array.isArray(pcItems) && pcItems.length > 0) {
+      const done = pcItems.filter((i: { done?: boolean }) => i?.done).length;
+      items.push(`手順 ${done}/${pcItems.length}`);
+    }
     if (crd.pre_check?.complexion || crd.pre_check?.condition) items.push("事前チェック");
     if (crd.vitals?.temperature || crd.vitals?.bp_sys || crd.vitals?.pulse || crd.vitals?.spo2) items.push("バイタル");
     if (crd.excretion?.done) items.push("排泄介助");
@@ -526,6 +584,37 @@ function CareRecordDetail({ record }: { record: VisitRecord }) {
           <div className="flex items-center gap-2">
             <span className="font-medium">{r.service_type}</span>
           </div>
+        </Section>
+      )}
+      {/* 手順書の実施確認 (旧記録には無いので存在チェック必須) */}
+      {(crd.procedure_checks?.items?.length ?? 0) > 0 && (
+        <Section
+          title={`手順書の実施確認 (${crd.procedure_checks.items.filter((i: { done: boolean }) => i.done).length}/${crd.procedure_checks.items.length})`}
+        >
+          <ul className="space-y-0.5">
+            {crd.procedure_checks.items.map(
+              (i: {
+                key: string;
+                service_kind: string;
+                content: string;
+                minutes: number;
+                done: boolean;
+                note: string;
+              }) => (
+                <li key={i.key} className="flex items-start gap-1.5">
+                  <span className={i.done ? "text-green-600" : "text-gray-300"}>
+                    {i.done ? "✓" : "□"}
+                  </span>
+                  <span className={i.done ? "" : "text-gray-400"}>
+                    {i.service_kind ? `[${i.service_kind}] ` : ""}
+                    {i.content}
+                    {i.minutes > 0 ? ` (${i.minutes}分)` : ""}
+                    {i.note ? <span className="ml-1 text-xs text-gray-500">— {i.note}</span> : null}
+                  </span>
+                </li>
+              ),
+            )}
+          </ul>
         </Section>
       )}
       {/* 事前チェック */}
@@ -1051,6 +1140,34 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
     })();
     return () => { cancelled = true; };
   }, [supabase, userId, month, currentOffice]);
+
+  // その利用者の最新の手順書 (= 実施記録の「手順書の実施確認」取込元)
+  const [procedureDoc, setProcedureDoc] = useState<VisitProcedureDocument | null>(null);
+  useEffect(() => {
+    const tenantId = currentOffice?.tenant_id;
+    if (!tenantId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- office 未確定時の derived reset
+      setProcedureDoc(null);
+      return;
+    }
+    let cancelled = false;
+    getLatestDocumentForClient(supabase, {
+      tenantId,
+      clientId: userId,
+      clientName: userName ?? null,
+    })
+      .then((doc) => {
+        if (!cancelled) setProcedureDoc(doc);
+      })
+      .catch((err) => {
+        // 手順書が引けなくても実施記録の入力は続けられるので warn に留める
+        console.warn("手順書の取得に失敗:", err instanceof Error ? err.message : err);
+        if (!cancelled) setProcedureDoc(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, userId, userName, currentOffice?.tenant_id]);
 
   // 月次加算 + サービス加算行 → 送付/印字用の加算行
   const addonItems = useMemo<MonthlyAddonItem[]>(() => {
@@ -1879,6 +1996,149 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
                   </div>
                 </div>
               </section>
+
+              {/* 0. 手順書の実施確認 (= ほのぼの「個別援助実施記録」の実行確認欄) */}
+              <FSectionBtn
+                id="procedure_checks"
+                label={`手順書の実施確認${
+                  formCare.procedure_checks?.items.length
+                    ? ` (${formCare.procedure_checks.items.filter((i) => i.done).length}/${formCare.procedure_checks.items.length})`
+                    : ""
+                }`}
+                openId={formSection}
+                setOpenId={setFormSection}
+              />
+              {isFormOpen("procedure_checks") && (
+                <div className="space-y-2 pl-1">
+                  {(formCare.procedure_checks?.items.length ?? 0) === 0 ? (
+                    <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 px-3 py-3 text-xs text-gray-600">
+                      {procedureDoc ? (
+                        <>
+                          <p>
+                            この利用者の手順書 (計画開始 {procedureDoc.plan_start_date}) から
+                            サービス手順を取り込んで、実施した項目にチェックできます。
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const built = buildProcedureChecks(procedureDoc);
+                              if (built.items.length === 0) {
+                                toast.error("手順書に手順 (ステップ) が登録されていません");
+                                return;
+                              }
+                              setFormCare((prev) => ({ ...prev, procedure_checks: built }));
+                              toast.success(`手順 ${built.items.length} 件を取り込みました`);
+                            }}
+                            className="mt-2 inline-flex items-center gap-1 rounded border border-blue-300 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                          >
+                            <ClipboardList size={12} />
+                            手順書から取り込む
+                          </button>
+                        </>
+                      ) : (
+                        <p>
+                          この利用者の手順書がまだありません。
+                          「手順書」メニューで作成すると、実施確認をここに取り込めます。
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] text-gray-500">
+                          手順書
+                          {formCare.procedure_checks?.plan_start_date
+                            ? ` (計画開始 ${formCare.procedure_checks.plan_start_date})`
+                            : ""}
+                          から取込。実施した手順にチェックしてください。
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!procedureDoc) return;
+                            if (!confirm("最新の手順書で取り直します。入力済みのチェック・メモは消えます。よろしいですか？")) return;
+                            setFormCare((prev) => ({
+                              ...prev,
+                              procedure_checks: buildProcedureChecks(procedureDoc),
+                            }));
+                          }}
+                          disabled={!procedureDoc}
+                          className="shrink-0 rounded border border-gray-300 px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          取り直す
+                        </button>
+                      </div>
+                      <ul className="space-y-1.5">
+                        {(formCare.procedure_checks?.items ?? []).map((item, idx) => (
+                          <li
+                            key={item.key}
+                            className="rounded border border-gray-200 bg-white px-2 py-1.5"
+                          >
+                            <div className="flex items-start gap-2">
+                              <input
+                                type="checkbox"
+                                checked={item.done}
+                                onChange={(e) => {
+                                  const done = e.target.checked;
+                                  setFormCare((prev) => {
+                                    const pc = prev.procedure_checks;
+                                    if (!pc) return prev;
+                                    return {
+                                      ...prev,
+                                      procedure_checks: {
+                                        ...pc,
+                                        items: pc.items.map((it, i) =>
+                                          i === idx ? { ...it, done } : it,
+                                        ),
+                                      },
+                                    };
+                                  });
+                                }}
+                                className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-x-2 text-xs">
+                                  {item.service_kind ? (
+                                    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">
+                                      {item.service_kind}
+                                    </span>
+                                  ) : null}
+                                  <span className="text-gray-800">{item.content}</span>
+                                  {item.minutes > 0 ? (
+                                    <span className="text-[10px] text-gray-400">{item.minutes}分</span>
+                                  ) : null}
+                                </div>
+                                <input
+                                  type="text"
+                                  value={item.note}
+                                  onChange={(e) => {
+                                    const note = e.target.value;
+                                    setFormCare((prev) => {
+                                      const pc = prev.procedure_checks;
+                                      if (!pc) return prev;
+                                      return {
+                                        ...prev,
+                                        procedure_checks: {
+                                          ...pc,
+                                          items: pc.items.map((it, i) =>
+                                            i === idx ? { ...it, note } : it,
+                                          ),
+                                        },
+                                      };
+                                    });
+                                  }}
+                                  placeholder="メモ (未実施の理由・状況など)"
+                                  className="mt-1 w-full rounded border border-gray-200 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* 1. 事前チェック */}
               <FSectionBtn id="pre_check" label="事前チェック" openId={formSection} setOpenId={setFormSection} />

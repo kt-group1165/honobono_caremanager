@@ -296,6 +296,40 @@ export async function saveDocument(
   return docId;
 }
 
+/**
+ * 「その利用者の最新の手順書」を 1 件引く (services + steps 込み)。
+ *
+ * 実施記録 (/visit-records) から手順の実施確認を取り込むために使う。
+ * standalone モードの手順書は client_id を持たないので、
+ * clientId で引けなければ client_name で引き直す。
+ */
+export async function getLatestDocumentForClient(
+  supabase: SupabaseClient,
+  opts: { tenantId: string; clientId?: string | null; clientName?: string | null },
+): Promise<VisitProcedureDocument | null> {
+  const pickLatestId = async (
+    column: "client_id" | "client_name",
+    value: string,
+  ): Promise<string | null> => {
+    const { data, error } = await supabase
+      .from("kaigo_visit_procedure_documents")
+      .select("id")
+      .eq("tenant_id", opts.tenantId)
+      .eq(column, value)
+      .order("plan_start_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (error) throw error;
+    return (data?.[0] as { id: string } | undefined)?.id ?? null;
+  };
+
+  let id: string | null = null;
+  if (opts.clientId) id = await pickLatestId("client_id", opts.clientId);
+  if (!id && opts.clientName) id = await pickLatestId("client_name", opts.clientName);
+  if (!id) return null;
+  return getDocument(supabase, id);
+}
+
 export async function deleteDocument(supabase: SupabaseClient, id: string): Promise<void> {
   // cascade で services / steps も削除される
   const { error } = await supabase
