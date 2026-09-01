@@ -179,6 +179,13 @@ async function main() {
   const { data: allKyotaku, error: e1 } = await sb.from("offices")
     .select("id, name").eq("tenant_id", TENANT).eq("service_type", "居宅介護支援");
   if (e1) { console.error(`✗ ${e1.message}`); process.exit(1); }
+  // ⚠ --office (非 BY_SUPPORT_OFFICE) は訪問介護事業所でも使えるよう、
+  //   service_type を絞らない全事業所から探す。BY_SUPPORT_OFFICE は
+  //   「支援事業所（正式名称）」= 居宅のケアマネ事業所名でしか一致しないので
+  //   allKyotaku のままでよい (訪問介護事業所名が紛れ込むと誤対応表になる)。
+  const { data: allOffices, error: e1b } = await sb.from("offices")
+    .select("id, name").eq("tenant_id", TENANT);
+  if (e1b) { console.error(`✗ ${e1b.message}`); process.exit(1); }
 
   /** 正規化名 → office。--by-support-office のときだけ使う */
   const officeByNorm = new Map();
@@ -195,9 +202,9 @@ async function main() {
     }
     console.log(`  割当: 利用者ごとに「支援事業所（正式名称）」で決める (${officeByNorm.size} 名寄せ)`);
   } else {
-    const offs = (allKyotaku ?? []).filter((o) => o.name.includes(OFFICE_NAME));
+    const offs = (allOffices ?? []).filter((o) => o.name.includes(OFFICE_NAME));
     if (offs.length !== 1) {
-      console.error(`✗ 居宅事業所「${OFFICE_NAME}」が ${offs.length} 件。1 件に絞れない`);
+      console.error(`✗ 事業所「${OFFICE_NAME}」が ${offs.length} 件。1 件に絞れない`);
       for (const o of offs) console.error(`   ${o.name}`);
       process.exit(1);
     }
