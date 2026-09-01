@@ -80,6 +80,37 @@ const samePersonByNumber = (a, b) => {
   return !!x && !!y && x.slice(0, 2) === y.slice(0, 2);
 };
 
+/**
+ * 括弧注記・末尾マーカーを落とした氏名。
+ *
+ * normName は **閉じ括弧のある注記**しか外せない。ほのぼのの氏名には
+ *   「清水　 日出男(障」   閉じていない
+ *   「石塚　恵　障」       括弧が無い
+ *   「風戸　清(精/通身有）」
+ * のような書き方が実在するので、**最初の括弧以降を全部落とし**、
+ * さらに末尾の 1〜2 文字のマーカーを剥がす。
+ *
+ * ⚠ これは **生年月日と併せて使うときだけ**の緩い判定。
+ *   名前だけで寄せると別人を巻き込む。
+ */
+const MARKS = ["移", "障", "実", "身", "有", "支", "家", "精", "同行", "派遣", "中央"];
+const bareName = (v) => {
+  let t = String(v ?? "").normalize("NFKC").replace(/[（(].*$/, "").replace(/[／/].*$/, "")
+    .replace(/[\s　]/g, "").replace(/./g, (ch) => ITAIJI[ch] ?? ch);
+  for (;;) {
+    const before = t;
+    for (const m of MARKS) if (t.endsWith(m) && t.length > m.length + 1) t = t.slice(0, -m.length);
+    if (t === before) break;
+  }
+  return t;
+};
+
+/** "1952/08/31" / "1952-8-31" → "1952-08-31" */
+const isoDate = (v) => {
+  const m = /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/.exec(String(v ?? "").trim());
+  return m ? `${m[1]}-${String(m[2]).padStart(2, "0")}-${String(m[3]).padStart(2, "0")}` : null;
+};
+
 function walk(dir, hit) {
   let entries;
   try { entries = readdirSync(dir); } catch { return; }
@@ -130,14 +161,45 @@ function readMeisai() {
   return [...rows.values()];
 }
 
+/**
+ * 利用者データ配下の 基本情報CSV から 利用者番号 → 生年月日 を作る。
+ *
+ * 括弧注記が違うだけの別エントリ (「中村 雪枝（中央）」と「中村 雪枝」) を
+ * **同一人物と断定する 2 つ目の材料**。氏名だけでは寄せない。
+ */
+function readDobByNumber() {
+  const dob = new Map();
+  const base = path.join(KAIGO, "利用者データ");
+  walk(base, (p) => {
+    if (!/\.csv$/i.test(p)) return;
+    let text;
+    try { text = new TextDecoder("shift_jis").decode(readFileSync(p)); } catch { return; }
+    const lines = text.split(/?
+/).filter((l) => l.trim());
+    if (lines.length < 2) return;
+    const unq = (v) => String(v ?? "").replace(/^"|"$/g, "").trim();
+    const h = lines[0].split(",").map(unq);
+    const iNum = h.indexOf("利用者番号"), iDob = h.indexOf("生年月日");
+    if (iNum < 0 || iDob < 0) return;
+    for (const line of lines.slice(1)) {
+      const c = line.split(",").map(unq);
+      const d = isoDate(c[iDob]);
+      if (c[iNum] && d && !dob.has(c[iNum])) dob.set(c[iNum], d);
+    }
+  });
+  return dob;
+}
+
 async function main() {
   console.log(`=== MEISAI 利用者番号 → client の対応を提案する (${MONTH}) ===`);
   console.log(EXECUTE ? "*** 本番実行 (JSON に追記) ***" : "*** DRY RUN (--execute で追記) ***");
 
   const meisai = readMeisai();
+  const dobByNum = readDobByNumber();
+  console.log(`基本情報CSV から 生年月日 ${dobByNum.size} 件`);
   console.log(`MEISAI: (拠点 × 利用者番号) ${meisai.length} 件`);
 
-  const clients = await fetchAll(() => sb.from("clients").select("id, name, user_number").order("id"));
+  const clients = await fetchAll(() => sb.from("clients").select("id, name, user_number, birth_date").order("id"));
   const byNumber = new Map();
   for (const c of clients) {
     const n = (c.user_number ?? "").trim();
@@ -221,21 +283,43 @@ async function main() {
 
     const inArea = areaClients(m.area);
     const cands = clients.filter((c) => sameName(c.name, m.name) && inArea.has(c.id));
+    const push = (c, kind) => proposals.push({ area: m.area, num: m.num, name: m.name, rows: m.rows,
+      cid: c.id, cname: c.name, cnum: c.user_number, kind, notInArea: !inArea.has(c.id),
+      wrong: sameNum.map((x) => x.name).join("/") });
+
+    // ① 氏名だけで決まる (従来の道)
+    if (cands.length === 1 && !/[（(].*[)）]/.test(cands[0].name)) {
+      push(cands[0], numberHitsOther ? "別人に当たっていた" : "誰にも当たらなかった");
+      continue;
+    }
+
+    // ② 氏名だけでは決められないとき、**生年月日で断定できるものだけ**拾う。
+    //   ほのぼのは同じ人を用途別に別番号で持つ (「中村 雪枝（中央）」と「中村 雪枝」)。
+    //   注記の付き方は不統一で、閉じ括弧が無い (「清水　 日出男(障」) ことも
+    //   括弧自体が無い (「石塚　恵　障」) こともあるので bareName で寄せ、
+    //   **基本情報CSV の生年月日**と一致する人がちょうど 1 人のときだけ同一人物とする。
+    //   ⚠ 拠点で絞らない。氏名(注記除く) + 生年月日が揃えば拠点をまたいでも同一人物でよい
+    //     (前田 健司 は K姉・ちはら台・やわた の 3 拠点に出る)。
+    const dob = dobByNum.get(m.num);
+    const byDob = dob
+      ? clients.filter((c) => c.birth_date === dob && bareName(c.name) === bareName(m.name))
+      : [];
+    if (byDob.length === 1) { push(byDob[0], `生年月日一致 ${dob}`); continue; }
+
     if (cands.length === 1) {
       // ⚠ **当方側の氏名に括弧注記が付いているものは自動で足さない。**
       //   ほのぼのが同じ人を用途別に別レコードで持っていることがあり
       //   (「鈴木 雅代（実）」と「鈴木 雅代（移）」)、寄せてよいか機械では決められない。
-      if (/[（(].*[)）]/.test(cands[0].name)) {
-        needsReview.push(`${m.area} 番号${m.num}「${m.name}」(${m.rows}行) → 当方「${cands[0].name}」(${cands[0].user_number})`);
-        continue;
-      }
-      proposals.push({ area: m.area, num: m.num, name: m.name, rows: m.rows, cid: cands[0].id,
-        cname: cands[0].name, cnum: cands[0].user_number,
-        kind: numberHitsOther ? "別人に当たっていた" : "誰にも当たらなかった",
-        wrong: sameNum.map((c) => c.name).join("/") });
-    } else if (cands.length > 1) {
+      //   生年月日でも決まらなかったのでここに来ている。
+      needsReview.push(`${m.area} 番号${m.num}「${m.name}」(${m.rows}行) → 当方「${cands[0].name}」(${cands[0].user_number})`
+        + (dob ? ` — 生年月日 CSV ${dob} / 当方 ${cands[0].birth_date ?? "空"}` : " — CSV に生年月日が無い"));
+      continue;
+    }
+    if (cands.length > 1) {
       ambiguous.push(`${m.area} 番号${m.num}「${m.name}」→ 同名が ${cands.length} 人: ${cands.map((c) => `${c.name}(${c.user_number})`).join(", ")}`);
-    } else {
+      continue;
+    }
+    {
       noMatch.push(`${m.area} 番号${m.num}「${m.name}」(${m.rows}行) → `
         + (sameNum.length > 0
           ? `番号は「${sameNum.map((c) => c.name).join("/")}」に当たるが、同名でその拠点の利用者が見つからない`
