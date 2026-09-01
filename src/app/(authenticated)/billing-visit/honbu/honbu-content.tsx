@@ -5,7 +5,7 @@
  * 金額は各事業所の請求タブと 1 円も違わない (aggregateHonbu は集計式に触れず整数加算のみ)。
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Building2, Loader2, Printer } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { MonthNav } from "@/app/(authenticated)/billing-visit/_shared/month-nav";
@@ -20,14 +20,18 @@ import {
 
 const yen = (n: number) => "¥" + Math.round(n).toLocaleString("ja-JP");
 
-export function HonbuContent() {
+export function HonbuContent({ initialYear, initialMonth, initialResult, initialError }: {
+  initialYear: number;
+  initialMonth: number;
+  initialResult: HonbuResult | null;
+  initialError: string | null;
+}) {
   const supabase = useMemo(() => createClient(), []);
-  const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [loading, setLoading] = useState(true);
-  const [result, setResult] = useState<HonbuResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [year, setYear] = useState(initialYear);
+  const [month, setMonth] = useState(initialMonth);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<HonbuResult | null>(initialResult);
+  const [error, setError] = useState<string | null>(initialError);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -43,8 +47,14 @@ export function HonbuContent() {
     }
   }, [supabase, year, month]);
 
+  // 初回 mount は server から渡された initialResult をそのまま使い、
+  // 月変更 (MonthNav 操作) のときだけ client fetch する。
+  const isInitialMount = useRef(true);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- 月変更時の fetch
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
     load();
   }, [load]);
 
