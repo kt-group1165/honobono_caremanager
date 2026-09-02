@@ -37,6 +37,26 @@
  *      (障害行は 総費用額 = 介護給付費 + 利用者負担)
  */
 
+/*
+ * ══ 事業所を増やすとき (2026-09-03 に複数事業所対応) ═══════════════════════
+ *   smoke-expected.json を次の形に書き換えて --update する。
+ *
+ *     { "_readme": [...],
+ *       "offices": [
+ *         { "officeId": "...", "officeLabel": "おゆみ野", "tenantId": "kt-group",
+ *           "kaigo": {...}, "shogai": {...}, "sougou": {...} },
+ *         { "officeId": "...", "officeLabel": "高品", "tenantId": "kt-group",
+ *           "kaigo": {}, "shogai": {}, "sougou": {} }        ← 月は --update が埋める
+ *       ] }
+ *
+ *   ⚠ 現在は 1 事業所 (おゆみ野) だけで、**全実績 40,379 件のうち 4,540 件
+ *     = 11.2% しか見ていない** (2026-09-03 実測)。
+ *   ⚠ 次に足すなら **高品**。2026-06/07/08 の 3 か月を持つ唯一の事業所
+ *     (1,469 / 1,560 / 762 件) で、事業所と月を同時に広げられる。
+ *     おゆみ野は 2026-06 しか無いので、月だけ足しても「未取込」になるだけ。
+ *   ⚠ 期待値を取るのは **取込・是正が動いていないとき**にすること。
+ *     データが動いている最中に --update すると、その瞬間の値が焼き付く。
+ */
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -87,8 +107,8 @@ type SougouExpected = {
   totalUnits: number;
   totalAmount: number;
 };
-interface ExpectedFile {
-  _readme: string[];
+/** 1 事業所ぶんの期待値 */
+interface OfficeExpected {
   officeId: string;
   officeLabel: string;
   tenantId: string;
@@ -96,10 +116,33 @@ interface ExpectedFile {
   shogai: Record<string, ShogaiExpected>;
   sougou: Record<string, SougouExpected>;
 }
+/**
+ * 期待値ファイル。**2 つの形を受ける**:
+ *   旧 (単一事業所): トップレベルに officeId/officeLabel/tenantId/kaigo/shogai/sougou
+ *   新 (複数事業所): offices: [ {同じ中身}, … ]
+ * 旧のまま読めるようにしてあるので、既存ファイルは 1 文字も変えずに動く
+ * (2026-09-03 の複数事業所化。出力が変わらないことを実行で確認済)。
+ */
+interface ExpectedFile extends Partial<OfficeExpected> {
+  _readme: string[];
+  offices?: OfficeExpected[];
+}
 
 const expected = JSON.parse(
   readFileSync(join(__dirname, "smoke-expected.json"), "utf8"),
 ) as ExpectedFile;
+
+/** 旧形式なら 1 件の配列に均す */
+const officeBlocks: OfficeExpected[] =
+  expected.offices ??
+  [{
+    officeId: expected.officeId!,
+    officeLabel: expected.officeLabel!,
+    tenantId: expected.tenantId!,
+    kaigo: expected.kaigo ?? {},
+    shogai: expected.shogai ?? {},
+    sougou: expected.sougou ?? {},
+  }];
 
 // ─── env (.env.local。キーはコードに置かない) ────────────────────────────────
 
@@ -290,12 +333,34 @@ const parseMonth = (m: string): { year: number; month: number } => {
 
 async function main(): Promise<void> {
   if (UPDATE) console.log("--update: 実測値で scripts/smoke-expected.json を書き直します");
-  // --update で書き出す新しい期待値 (通常実行でも組み立てておき、書くのは --update のときだけ)
+  // 事業所ごとの実測値 (--update で書き戻す)。officeBlocks と同じ並び。
+  const nextByOffice: {
+    kaigo: Record<string, KaigoExpected>;
+    shogai: Record<string, ShogaiExpected>;
+    sougou: Record<string, SougouExpected>;
+  }[] = [];
+
+  for (const block of officeBlocks) {
+    await runOffice(block, nextByOffice);
+  }
+  await finish(nextByOffice);
+}
+
+/** 1 事業所ぶんのチェック (旧実装の main 本体そのまま。出力文字列は変えない) */
+async function runOffice(
+  expected: OfficeExpected,
+  nextByOffice: {
+    kaigo: Record<string, KaigoExpected>;
+    shogai: Record<string, ShogaiExpected>;
+    sougou: Record<string, SougouExpected>;
+  }[],
+) {
   const next: {
     kaigo: Record<string, KaigoExpected>;
     shogai: Record<string, ShogaiExpected>;
     sougou: Record<string, SougouExpected>;
   } = { kaigo: {}, shogai: {}, sougou: {} };
+  nextByOffice.push(next);
   console.log(
     `実データ回帰スモーク — office=${expected.officeLabel} (${expected.officeId}) tenant=${expected.tenantId}`,
   );
@@ -429,18 +494,43 @@ async function main(): Promise<void> {
     next.sougou[monthStr] = { fingerprint: fpG, ...valsG };
     checkKaigoIdentity("総合事業", rows);
   }
+}
 
+/** 全事業所を回した後の書き出しと判定 */
+async function finish(
+  nextByOffice: {
+    kaigo: Record<string, KaigoExpected>;
+    shogai: Record<string, ShogaiExpected>;
+    sougou: Record<string, SougouExpected>;
+  }[],
+) {
   console.log("");
   if (UPDATE) {
     // 入力が 0 件の月は残しても毎回「未取込」になるだけなので対象から外す。
     // ただし黙って消さない — 本来あるはずの月なら取込のほうを疑う手がかりになる。
     const dropped: string[] = [];
-    for (const kind of ["kaigo", "shogai", "sougou"] as const) {
-      for (const [m, v] of Object.entries(next[kind])) {
-        if (v.fingerprint?.schedules === 0) { dropped.push(`${kind} ${m}`); delete next[kind][m]; }
+    nextByOffice.forEach((next, i) => {
+      for (const kind of ["kaigo", "shogai", "sougou"] as const) {
+        for (const [m, v] of Object.entries(next[kind])) {
+          if (v.fingerprint?.schedules === 0) {
+            dropped.push(
+              `${officeBlocks.length > 1 ? officeBlocks[i].officeLabel + " " : ""}${kind} ${m}`,
+            );
+            delete next[kind][m];
+          }
+        }
       }
-    }
-    const out = { ...expected, kaigo: next.kaigo, shogai: next.shogai, sougou: next.sougou };
+    });
+    // 読んだ形のまま書き戻す (旧形式のファイルは旧形式のまま = 差分を作らない)
+    const merged = officeBlocks.map((b, i) => ({
+      ...b,
+      kaigo: nextByOffice[i].kaigo,
+      shogai: nextByOffice[i].shogai,
+      sougou: nextByOffice[i].sougou,
+    }));
+    const out = expected.offices
+      ? { ...expected, offices: merged }
+      : { ...expected, kaigo: merged[0].kaigo, shogai: merged[0].shogai, sougou: merged[0].sougou };
     writeFileSync(join(__dirname, "smoke-expected.json"), JSON.stringify(out, null, 2) + EOL, "utf8");
     console.log("scripts/smoke-expected.json を実測値で更新しました。**中身を読んでから commit してください。**");
     if (dropped.length > 0) {
