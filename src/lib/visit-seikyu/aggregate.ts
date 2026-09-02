@@ -1724,6 +1724,20 @@ export async function aggregateMonthlyVisitSeikyu(
     const planUnits =
       seg.segCount > 1 ? null : planUnitsByClient.get(userId) ?? null;
     const limitUnits = planUnits ?? limitAmount;
+    // 計画単位数が認定の区分支給限度基準額を超えているときの警告 (2026-09-03 追加)。
+    //   基準値に planUnits を採ると超過判定が甘くなり、本来 10 割自費に振るべき分まで
+    //   保険請求に残る。伝送 (build.ts 項9 計画単位数) にもその値が出るため返戻の元になる。
+    // ※ Math.min() で切り詰めることは**しない**。区分変更等で計画が認定を上回るのが
+    //   正当なケースがありうるため、挙動は変えず警告のみ出す。
+    // ※ 2026-09-03 実測: 本番の計画行 3,161 件 (対象月に有効な認定があるもの) で該当 0 件。
+    //   現時点の実害ではなく、入力ミスに対する予防。
+    if (planUnits != null && limitAmount != null && planUnits > limitAmount) {
+      warnOncePerUser(
+        `planOverLimit:${userId}`,
+        userId,
+        `${userLabel}: 計画単位数 (${planUnits.toLocaleString()}単位) が認定の区分支給限度基準額 (${limitAmount.toLocaleString()}単位) を超えています — 超過自費の判定に計画単位数を使うため、超過が過小に計上されます。計画単位数と認定情報を確認してください`,
+      );
+    }
     const managedUnits = grossBaseUnits - taishougaiJissuuUnits;
     // 超過単位の決定 (優先順):
     //   1. ケアマネの手割振り (利用票別表で確定した自 office の自費単位 = 真値)
