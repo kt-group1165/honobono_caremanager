@@ -232,6 +232,47 @@ function ReceivedCarePlansPanel({
 
     setImportingId(g.groupKey);
     try {
+      // ── 認定 (certification_id) の解決 ──────────────────────────────────
+      // care-plan-1/2/3 は cert-linked な帳票で、reports 画面は
+      //   certification_id === 選択中の認定
+      // で絞り込む。**null のまま入れると画面に出ず、開くたびに空の帳票が
+      // 自動生成される** (2026-07-14 に第1表で発生した事故と同型。
+      // 2026-09-03 の実測でもこの経路由来の null 行が残っていた)。
+      // 取込元 (migration) と同じく「帳票の日付に有効な認定」を採り、
+      // 引けなければ画面の既定と同じ **最新の認定** に寄せる。
+      const { data: certRows, error: certError } = await supabase
+        .from("client_insurance_records")
+        .select("id, certification_start_date, certification_end_date")
+        .eq("client_id", clientId)
+        .order("certification_start_date", { ascending: false, nullsFirst: false });
+      if (certError) {
+        // 認定が引けないまま入れると上記の事故になるので、ここで止める
+        console.error("認定の取得に失敗:", certError.message);
+        toast.error(`認定情報を取得できないため取込を中止しました: ${certError.message}`);
+        return;
+      }
+      const certs = (certRows ?? []) as {
+        id: string;
+        certification_start_date: string | null;
+        certification_end_date: string | null;
+      }[];
+      /** 帳票の日付 (payload の作成日 → 送信日) に有効な認定。無ければ最新。 */
+      const resolveCertId = (t: ReceivedCarePlan): string | null => {
+        if (certs.length === 0) return null; // 認定が無い利用者は null で可 (画面側も絞らない)
+        const p = t.shared.payload as Record<string, unknown> | null;
+        const raw =
+          (typeof p?.creation_date === "string" && p.creation_date) ||
+          (typeof p?.plan_date === "string" && p.plan_date) ||
+          t.shared.sent_at;
+        const ref = String(raw).slice(0, 10).replace(/\//g, "-");
+        const hit = certs.find((c) => {
+          const st = c.certification_start_date ?? "";
+          const en = c.certification_end_date ?? "";
+          return (!st || st <= ref) && (!en || en >= ref);
+        });
+        return (hit ?? certs[0]).id;
+      };
+
       // 各帳票を順に INSERT、部分失敗を集計する (= 1 件 fail で全体停止しない)
       let successCount = 0;
       const failures: { label: string; message: string }[] = [];
@@ -248,6 +289,7 @@ function ReceivedCarePlansPanel({
         const { error } = await supabase.from("kaigo_report_documents").insert({
           user_id: clientId,
           report_type: t.shared.document_type,
+          certification_id: resolveCertId(t),
           title,
           report_month: null,
           content,
