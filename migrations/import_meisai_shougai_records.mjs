@@ -28,7 +28,7 @@
 //     src/components/services/service-selector.tsx の parseServiceDurationMinutes と同一規約)
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { findMeisaiFiles } from "./_meisai_files.mjs";
 import { normClientName as normClientNameShared } from "./_meisai_name.mjs";
 // 重訪の段の積み上げは _juho_ladder.mjs に一本化 (検証スクリプトと同じ実装を使う)
@@ -1378,6 +1378,14 @@ async function main() {
       const totalMin = rows.reduce((sum, r) => sum + (santeiToMinutes(r.santei) ?? 0), 0);
       let convs = [];
       let minutes = 0;
+      // 実績記録票 (J611) 用の提供スパン。**段 (=請求単位) ではなく実際の提供時刻**。
+      //   ほのぼのは TJ のスパン 1 本につき明細 1 行を出す (202606 実測 277 日 / 384 行)。
+      //   当方は 1 日 1 行しか出しておらず、2 本目以降が丸ごと欠けていた。
+      //   ここで採ったスパンを payload 構築側で
+      //     1 本目 → 通常行の start/end
+      //     2 本目以降 → 記録専用行 (MARK_SESSION_SUB。請求集計からは除外される)
+      //   に使う。⚠ 金額には影響しない (単位数は convs が持つ)。
+      let juhoSpans = null;
       const hospitalized = isHospitalizedByName(rows[0].clientName, rows[0].date);
       if (withTime.length === rows.length && withTime.length > 0) {
         // ★ 時刻が取れる = 確定ルールで時間帯ぶんかつ段を解決する。
@@ -1477,6 +1485,8 @@ async function main() {
           zone: st.zone, twoPerson: !!st.two,
         }));
         minutes = withTime.reduce((sum, x) => sum + (x.e - x.s), 0);
+        // 段の計算に使ったスパンをそのまま記録票用に持ち回る (TJ があれば TJ が正)
+        juhoSpans = spans.map((x) => ({ s: x.s, e: x.e })).sort((a, b) => a.s - b.s);
       } else {
         // 時刻が欠けている行がある場合だけ、従来の単一時間帯 fallback
         const zoneLabel = zoneDigit(rows[0].santeiStart).zone;
@@ -1493,7 +1503,7 @@ async function main() {
         minutes = totalMin;
       }
       if (convs.length === 0) continue;
-      juhoConvByRow.set(rows[0], { minutes, convs });
+      juhoConvByRow.set(rows[0], { minutes, convs, juhoSpans });
       for (const r of rows.slice(1)) juhoSkip.add(r);
     }
     if (tjSkipDays) {
@@ -1657,7 +1667,7 @@ async function main() {
   //   base 行 + addon 行を別々の kaigo_visit_schedule 行として INSERT する
   //   (aggregate.ts は service_type 名の一致でしか集計しないため、コードごとに
   //   1 occurrence = 1 行が必要)。
-  let blockedNoClient = 0, sessionSkipped = 0, recordOnlyRows = 0;
+  let blockedNoClient = 0, sessionSkipped = 0, recordOnlyRows = 0, juhoSpanRows = 0;
   const payloads = [];
   for (let i = 0; i < target.length; i++) {
     const r = target[i]; const rc = rowConv[i];
@@ -1696,8 +1706,14 @@ async function main() {
     //   上の記録専用行として実時刻で出す。以前はここでメンバー全体のスパン
     //   (例 14:00-20:00) に潰していたが、中断 (間に別区分の提供が挟まる) が消えて
     //   実績記録票の提供時刻・算定時間合計がほのぼのと食い違っていた。
-    const startTime = r.start || null;
-    const endTime = r.end || null;
+    // 重訪は **段の計算に使ったスパン (TJ が正)** を提供時刻とする。
+    //   ⚠ 以前は代表 MEISAI 行の時刻を使っていたので、コードは TJ 由来なのに時刻だけ
+    //     MEISAI 由来という食い違いが起きていた
+    //     (鈴木拓也 おゆみ野 6/15: 当方 08:00-09:30 / ほのぼの 08:00-15:30)。
+    const hm2 = (m) => `${String(Math.floor((m % 1440) / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+    const juhoSpans = rc.juhoSpans ?? null;
+    const startTime = juhoSpans?.length ? hm2(juhoSpans[0].s) : (r.start || null);
+    const endTime = juhoSpans?.length ? hm2(juhoSpans[0].e) : (r.end || null);
     const staffId = (memberByName.get(normStaff(r.staffName)) || []).length === 1
       ? memberByName.get(normStaff(r.staffName))[0]
       : null;
@@ -1723,15 +1739,53 @@ async function main() {
         notes: `[MEISAI障害取込 ${TARGET_MONTH} ${MAP_TAG}${ci > 0 ? ` ${MARK_ADDON}` : ""} code=${c.base}]`,
       });
     }
+
+    // 重訪: スパン 2 本目以降を **記録専用行** として足す。
+    //   ほのぼのは TJ のスパン 1 本 = 明細 1 行で出すが、当方は 1 日 1 行しか
+    //   出していなかった (鈴木拓也 おゆみ野 新 22 行 / ほ 44 行)。
+    //   ⚠ MARK_SESSION_SUB は aggregate.ts:250 の isBillableRecord で
+    //     **集計から除外される**ので、金額は 1 円も動かない。
+    //     単位数は上の convs 行 (通常 + 加算) が持ったままになる。
+    if (juhoSpans && juhoSpans.length > 1) {
+      for (const sp of juhoSpans.slice(1)) {
+        payloads.push({
+          user_id: cid,
+          staff_id: staffId,
+          visit_date: r.date,
+          start_time: hm2(sp.s),
+          end_time: hm2(sp.e),
+          service_type: rc.convs[0].name, // 記録票が内容コードを引けるように代表コード名
+          system: "障害",
+          status: "completed",
+          office_id: office.id,
+          tenant_id: TENANT_ID,
+          notes: `[MEISAI障害取込 ${TARGET_MONTH} ${MAP_TAG} ${MARK_SESSION_SUB} code=${rc.convs[0].base}]`,
+        });
+        juhoSpanRows++;
+      }
+    }
   }
   // 2人派遣は 4a で 長い方=基本 / 短い方=・2人 として全行残す (畳まない)。ここでの再 dedup は不要。
   const deduped = payloads;
+
+  // DUMP_PAYLOADS=<path> で INSERT payload 全件を JSON に落とす (検証用・DRY RUN でも動く)。
+  //   請求に効くのは isBillableRecord() が true の行だけなので、
+  //   「合算従属を除いた集合」が変わっていないかを差分で確認できる。
+  if (process.env.DUMP_PAYLOADS) {
+    const key = (p) => [p.user_id, p.visit_date, p.service_type, p.start_time, p.end_time,
+      (p.notes || "").includes(MARK_ADDON) ? "ADDON" : (p.notes || "").includes(MARK_SESSION_SUB) ? "SUB" : "BASE"].join("|");
+    const all = deduped.map(key).sort();
+    const billable = deduped.filter((p) => !(p.notes || "").includes(MARK_SESSION_SUB)).map(key).sort();
+    writeFileSync(process.env.DUMP_PAYLOADS, JSON.stringify({ all, billable }, null, 1));
+    console.log(`  DUMP_PAYLOADS: 全 ${all.length} 行 / 請求対象 ${billable.length} 行 → ${process.env.DUMP_PAYLOADS}`);
+  }
 
   console.log(`=== 取込可否サマリ (障害021 ${target.length}行) ===`);
   console.log(`  取込可能(=INSERT行): ${deduped.length}`);
   console.log(`  2人派遣: ${twoPersonVisits}件 (・2人 行 ${twoPersonCount} を基本行と別に計上=2倍請求)`);
   console.log(`  合算セッション: ${mergedSessionCount}件 (対象${mergedRowCount}行 → 請求は代表行に集約。2件目以降 ${sessionSkipped}行は記録専用行として ${recordOnlyRows} 行 INSERT)`);
   console.log(`  増addon行: ${addonCount}`);
+  console.log(`  重訪 スパン2本目以降の記録専用行: ${juhoSpanRows} (請求集計からは除外。実績記録票にだけ出る)`);
   console.log(`  ブロック(利用者未解決): ${blockedNoClient}`);
   console.log(`  ブロック(6桁コード未解決): ${blocked6}`);
   console.log(`  ブロック(算定時間不正): ${blockedNoDur}`);
