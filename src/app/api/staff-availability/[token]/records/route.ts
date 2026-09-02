@@ -149,13 +149,24 @@ export async function POST(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
+  // ⚠ status は **リクエストから受け取らない。**
+  //   ここは token だけで service_role 書込みができる経路なので、body の値をそのまま
+  //   status に入れると、職員のモバイル入力から `status: "submitted"` を送るだけで
+  //   確定フローを飛ばして提出済みにできてしまう (他の項目は全部型チェックしているのに
+  //   ここだけ素通しだった。2026-09-03)。
+  //   実際の呼出側 (staff-availability/[token]/page.tsx の 3 か所) はいずれも
+  //   "draft" しか送っておらず、モバイルから確定する設計意図は見当たらない。
+  //
+  //   新規は draft 固定。**更新では status に触れない** —
+  //   触れると、管理側で confirmed にした記録を職員が編集した瞬間に draft へ
+  //   黙って引き戻してしまう (逆向きの事故)。
   const payload: Record<string, unknown> = {
     user_id,
     visit_date,
     staff_id: ctx.staff_id,
     tenant_id: ctx.tenant_id,
-    status: typeof b.status === "string" ? b.status : "draft",
   };
+  if (!id) payload.status = "draft";
   if (b.service_type !== undefined) payload.service_type = b.service_type;
   if (b.schedule_id !== undefined) payload.schedule_id = b.schedule_id;
   if (b.start_time !== undefined) payload.start_time = b.start_time;
