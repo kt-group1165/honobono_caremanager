@@ -162,12 +162,19 @@ async function main() {
       rows2.push(...data);
     }
     const updates = [];
+    const overReported = []; // 実績 < 給付管理 = 給付管理票が実績より多く請求している
     let noMatch = 0, already = 0;
     for (const r of rows2) {
       const raw = byUser.get(r.user_id)?.get(`${(r.provider_number || "").trim()}|${(r.service_kind_code || "").trim()}`);
       if (raw == null) { noMatch++; continue; }
       const planned = r.planned_units ?? 0;
+      // ⚠ Math.max(0,…) は「実績 < 給付管理」を 0 に丸める。これは限度額超過の
+      //   **逆方向**で、給付管理票が実績より多い = 過大請求の疑いがある異常。
+      //   値としては over_limit を負にできないので丸めるが、**黙って通さない**。
+      //   (2026-09-03: 日暮みちい 福祉用具貸与 実績863 に対し 給付管理1726 が
+      //    この経路で無警告のまま残っていた)
       const cut = Math.max(0, raw - planned);
+      if (raw < planned) overReported.push({ id: r.id, user_id: r.user_id, raw, planned, prov: r.provider_number, kind: r.service_kind_code });
       if (r.actual_units === raw && (r.over_limit_units ?? 0) === cut) { already++; continue; }
       updates.push({ id: r.id, actual_units: raw, over_limit_units: cut, cut, planned, raw });
     }
@@ -178,6 +185,19 @@ async function main() {
     for (const u of withCut.slice(0, 10)) console.log(`   実績${u.raw} → 給付管理${u.planned} (自己負担 ${u.cut})`);
     if (withCut.length > 10) console.log(`   …他 ${withCut.length - 10} 行`);
     if (noMatch) console.log(`  ⚠ 実績CSVに対応が無い行 ${noMatch} (他事業所が給付管理している分などは対象外)`);
+
+    // ★ 限度額超過の **逆方向**。給付管理票が実績より多い = 過大請求の疑い。
+    //   over_limit は負にできないので 0 に丸めるが、丸めた事実をここで必ず出す。
+    if (overReported.length) {
+      console.log(`\n★ 実績より給付管理のほうが多い ${overReported.length} 行 — **過大請求の疑い。人が確認すること**`);
+      console.log(`   給付管理票は実績を超えて出せない。KY (伝送) と実績CSV のどちらが正しいか要確認。`);
+      for (const o of overReported.slice(0, 10))
+        console.log(`   user=${String(o.user_id).slice(0, 8)}.. 提供番号 ${o.prov} 種類 ${o.kind}  実績 ${o.raw} < 給付管理 ${o.planned} (差 ${o.planned - o.raw})`);
+      if (overReported.length > 10) console.log(`   …他 ${overReported.length - 10} 行`);
+      console.log(`   ⚠ over_limit_units は 0 のまま入ります (負にできないため)。データは直しません。`);
+    } else {
+      console.log(`  OK  実績より給付管理が多い行はありません`);
+    }
 
     if (!EXECUTE) { console.log("\n※ DRY RUN。--execute で UPDATE します (planned_units は変更しません)。"); return; }
     let n = 0;
