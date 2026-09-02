@@ -20,48 +20,135 @@
     "",
     "kohiAmount は 公費1 + 公費2 の合算 (kohiAmount + kohi2Amount)。"
   ],
-  "officeId": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
-  "officeLabel": "おゆみ野",
-  "tenantId": "kt-group",
-  "kaigo": {
-    "2026-06": {
-      "fingerprint": {
-        "schedules": 4540,
-        "addonLines": 10,
-        "monthAddons": 0
+  "offices": [
+    {
+      "officeId": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+      "officeLabel": "おゆみ野",
+      "tenantId": "kt-group",
+      "kaigo": {
+        "2026-06": {
+          "fingerprint": {
+            "schedules": 4540,
+            "addonLines": 8,
+            "monthAddons": 0
+          },
+          "rows": 108,
+          "totalUnits": 459121,
+          "totalAmount": 5073241,
+          "insuranceAmount": 4452421,
+          "kohiAmount": 65883,
+          "userAmount": 554937
+        }
       },
-      "rows": 108,
-      "totalUnits": 459121,
-      "totalAmount": 5073241,
-      "insuranceAmount": 4452421,
-      "kohiAmount": 65883,
-      "userAmount": 554937
-    }
-  },
-  "shogai": {
-    "2026-06": {
-      "fingerprint": {
-        "schedules": 4540,
-        "addonLines": 10,
-        "monthAddons": 0
+      "shogai": {
+        "2026-06": {
+          "fingerprint": {
+            "schedules": 4540,
+            "addonLines": 8,
+            "monthAddons": 0
+          },
+          "rows": 60,
+          "totalUnits": 1063729,
+          "totalAmount": 11754177,
+          "benefitAmount": 11745791,
+          "userAmount": 8386
+        }
       },
-      "rows": 60,
-      "totalUnits": 1063729,
-      "totalAmount": 11754177,
-      "benefitAmount": 11745791,
-      "userAmount": 8386
-    }
-  },
-  "sougou": {
-    "2026-06": {
-      "fingerprint": {
-        "schedules": 4540,
-        "addonLines": 10,
-        "monthAddons": 0
+      "sougou": {
+        "2026-06": {
+          "fingerprint": {
+            "schedules": 4540,
+            "addonLines": 8,
+            "monthAddons": 0
+          },
+          "rows": 21,
+          "totalUnits": 26615,
+          "totalAmount": 293702
+        }
+      }
+    },
+    {
+      "officeId": "a707b5a2-b21b-4c4e-8dac-298191e90b61",
+      "officeLabel": "高品",
+      "tenantId": "kt-group",
+      "kaigo": {
+        "2026-06": {
+          "fingerprint": {
+            "schedules": 1469,
+            "addonLines": 4,
+            "monthAddons": 0
+          },
+          "rows": 79,
+          "totalUnits": 304250,
+          "totalAmount": 3361925,
+          "insuranceAmount": 2987637,
+          "kohiAmount": 43678,
+          "userAmount": 330610
+        },
+        "2026-07": {
+          "fingerprint": {
+            "schedules": 1560,
+            "addonLines": 0,
+            "monthAddons": 0
+          },
+          "rows": 84,
+          "totalUnits": 338580,
+          "totalAmount": 3741271,
+          "insuranceAmount": 3317904,
+          "kohiAmount": 43220,
+          "userAmount": 380147
+        }
       },
-      "rows": 21,
-      "totalUnits": 26615,
-      "totalAmount": 293702
+      "shogai": {
+        "2026-06": {
+          "fingerprint": {
+            "schedules": 1469,
+            "addonLines": 4,
+            "monthAddons": 0
+          },
+          "rows": 37,
+          "totalUnits": 306212,
+          "totalAmount": 3383625,
+          "benefitAmount": 3356478,
+          "userAmount": 27147
+        },
+        "2026-07": {
+          "fingerprint": {
+            "schedules": 1560,
+            "addonLines": 0,
+            "monthAddons": 0
+          },
+          "rows": 36,
+          "totalUnits": 335862,
+          "totalAmount": 3711257,
+          "benefitAmount": 3667264,
+          "userAmount": 43993
+        },
+        "2026-08": {
+          "fingerprint": {
+            "schedules": 762,
+            "addonLines": 0,
+            "monthAddons": 0
+          },
+          "rows": 35,
+          "totalUnits": 318570,
+          "totalAmount": 3520184,
+          "benefitAmount": 3480079,
+          "userAmount": 40105
+        }
+      },
+      "sougou": {
+        "2026-06": {
+          "fingerprint": {
+            "schedules": 1469,
+            "addonLines": 4,
+            "monthAddons": 0
+          },
+          "rows": 15,
+          "totalUnits": 24731,
+          "totalAmount": 273269
+        }
+      }
     }
-  }
+  ]
 }
