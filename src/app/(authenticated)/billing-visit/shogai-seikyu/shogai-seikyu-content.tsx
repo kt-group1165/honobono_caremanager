@@ -1234,6 +1234,13 @@ export function ShogaiSeikyuContent({
       // ⚠ 介護の unit_price ではなく障害用の地域区分単価を使う
       const unitPrice = getShogaiHomonUnitPrice(areaCategory);
 
+      // 処理対象年月 (コントロールレコード) = 審査実行月 = 今回の提出分の翌月。
+      // 表示中の請求月 (year/month) の翌月で、**全ファイル共通** (再請求も提出は今)。
+      // 介護保険側 (_kokuho-seikyu.tsx) と同じ算出。
+      const shoriDate = new Date(year, month, 1); // 表示中の請求月の翌月 1 日
+      const shoriYear = shoriDate.getFullYear();
+      const shoriMonth = shoriDate.getMonth() + 1;
+
       // 対象月ぶんの users を組み立てて buildShogaiDensou を実行するヘルパ。
       // 当月分と、再請求の元提供月ぶんを「別々の月」で呼ぶことで、伝送ファイルを
       // 元提供月ごとに分けて出力する (介護 kokuho と同じ考え方)。
@@ -1360,6 +1367,14 @@ export function ShogaiSeikyuContent({
           month: m,
           unitPrice,
           areaCategory,
+          // 処理対象年月 = 国保連が審査を実行する月 = **今回の提出月の翌月**。
+          //   提供月 (y/m) の翌月ではない。再請求 (過去の提供月) のファイルも
+          //   提出は今なので当月分と同じ値になる。
+          //   ⚠ 指定しないと提供月+1 になり、月遅れ再請求でずれる。実測 2026-09-03:
+          //     202606 提供分の ほのぼの実伝送 9 件のうち 6 件が月遅れ (JJ2608) で、
+          //     当方は常に 202607 を出していた。
+          shoriYear: shoriYear,
+          shoriMonth: shoriMonth,
         });
       };
 

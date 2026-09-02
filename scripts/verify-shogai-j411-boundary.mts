@@ -159,5 +159,40 @@ console.log("\n【E】J411 を出さない条件");
   console.log("    ただし warning は出るので気づける (握り潰しではない)。");
 }
 
+// ── F. 処理対象年月の上書き (再請求) と 実伝送とのバイト一致 ────────────
+console.log("\n【F】処理対象年月の上書き + 実伝送 (おゆみ野 JJ260801) とのバイト一致");
+{
+  const OFF = "1210101760";
+  const realLines: ShogaiDensouKanriLine[] = [
+    kline({ office_number: OFF, office_name: "(自事業所)", total_amount: 2354, user_amount: 235, adjusted_amount: 235, is_self: true }),
+    kline({ office_number: "1210103428", office_name: "他社", total_amount: 235679, user_amount: 9300, adjusted_amount: 9065 }),
+  ];
+  const realRow = row({
+    user_name: "松崎 淑子", user_name_kana: "ﾏﾂｻﾞｷ ﾖｼｺ", beneficiary_number: "2000055810",
+    municipality: "121004", self_payment_limit: 9300,
+    totalUnits: 216, totalAmount: 2354, userAmount: 235, benefitAmount: 2119,
+    kanriResult: 3, kanriResultAmount: 235,
+  });
+  const base = { officeNumber: OFF, year: 2026, month: 6, unitPrice: 10.9, areaCategory: "その他" };
+
+  // 既定 (指定なし) は従来どおり 提供月+1
+  const def = buildShogaiDensou([user(realRow, realLines)], base);
+  const defCtrl = (def.jogenFile?.content ?? "").split(/\r?\n/)[0];
+  check("shori 未指定なら従来どおり 202607 (既定の挙動を変えない)", defCtrl.includes(",202607,"), true);
+
+  // 再請求 (提出は 8 月) を明示 → 実伝送とバイト一致するはず
+  const re = buildShogaiDensou([user(realRow, realLines)], { ...base, shoriYear: 2026, shoriMonth: 8 });
+  const ours = (re.jogenFile?.content ?? "").split(/\r?\n/).filter((l) => l.trim());
+  const theirs = [
+    `1,1,0,3,J41,0,${OFF},0,1,202608,`,
+    `2,2,"J411",01,202606,1,121004,${OFF},"2000055810","ﾏﾂｻﾞｷﾖｼｺ","",9300,3,238033,9535,9300`,
+    `2,3,"J411",02,202606,121004,${OFF},"2000055810",1,${OFF},2354,235,235`,
+    `2,4,"J411",02,202606,121004,${OFF},"2000055810",2,1210103428,235679,9300,9065`,
+    `3,5`,
+  ];
+  check("再請求指定で 実伝送 JJ260801 と全行バイト一致", ours, theirs);
+  console.log("  ・氏名カナ (項8) も ほのぼの と同じく設定される (J411対象16名は全員フリガナあり)");
+}
+
 console.log(`\n${failures === 0 ? "✅ 全ての検算が一致しました" : `❌ ${failures} 件の不一致`}`);
 process.exit(failures === 0 ? 0 : 1);

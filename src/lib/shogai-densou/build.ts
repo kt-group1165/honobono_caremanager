@@ -118,6 +118,17 @@ export interface ShogaiDensouOptions {
   unitPrice: number;
   /** 事業所マスタの地域区分 ("1級地"〜"7級地" / "その他") → 地域区分コード 01〜07/20 */
   areaCategory: string | null;
+  /**
+   * コントロールレコードの処理対象年月 (国保連が電算処理=審査を実行する年月)。
+   * **省略時は従来どおりサービス提供月の翌月**。
+   * 月遅れ・返戻の再請求で「提供月は 202606 だが提出は 8 月」という場合に
+   * shoriYear=2026 / shoriMonth=8 を明示指定する。
+   * (実測 2026-09-03: 202606 提供分の ほのぼの実伝送 9 ファイルのうち 6 件が
+   *  月遅れ提出 JJ2608 で、当方は常に 202607 を出していた)
+   * 介護保険側 (build-kyotaku.ts KyotakuDensouOptions) と同じ意味・同じ名前。
+   */
+  shoriYear?: number;
+  shoriMonth?: number;
 }
 
 export interface ShogaiDensouFile {
@@ -451,10 +462,15 @@ export function buildShogaiDensou(
 ): ShogaiDensouResult {
   const warnings: string[] = [];
   const ym = `${opts.year}${String(opts.month).padStart(2, "0")}`;
-  // 処理対象年月 = 国保連合会で電算処理する年月 (= 提供月の翌月)
+  // 処理対象年月 = 国保連合会で電算処理する年月。
+  //   既定は提供月の翌月。月遅れ・返戻の再請求では実際の提出月がこれとずれるので
+  //   opts.shoriYear/Month で上書きできる (省略時は従来どおり = 既存の当初請求は不変)。
   const py = opts.month === 12 ? opts.year + 1 : opts.year;
   const pm = opts.month === 12 ? 1 : opts.month + 1;
-  const processYm = `${py}${String(pm).padStart(2, "0")}`;
+  const processYm =
+    opts.shoriYear && opts.shoriMonth
+      ? `${opts.shoriYear}${String(opts.shoriMonth).padStart(2, "0")}`
+      : `${py}${String(pm).padStart(2, "0")}`;
   const yy = String(opts.year).slice(2);
   const mm = String(opts.month).padStart(2, "0");
 
@@ -1307,7 +1323,13 @@ export function buildShogaiDensou(
       "J411", "01", ym,
       "1", // 4 作成区分 (1:新規)
       muni, office, jukyu,
-      "", "", // 8-9 氏名カナ (任意)
+      // 8 支給決定者氏名カナ / 9 支給決定児童氏名カナ。
+      //   仕様上は任意だが **ほのぼの実伝送は設定している** (おゆみ野 JJ260801 の
+      //   松崎淑子 = "ﾏﾂｻﾞｷﾖｼｺ") ので合わせる。J121-01 の 項8/9 と同じ規則
+      //   (障害児は 項8=保護者・項9=児童 / 成人は 項8=本人・項9=空。空白は詰める)。
+      //   実測 2026-09-03: J411 の対象 (自事業所が上限管理者) 16 名は全員フリガナあり。
+      toDensouKana(u.holderNameKana ?? r.user_name_kana).replace(/[\s　]+/g, ""),
+      u.holderNameKana ? toDensouKana(r.user_name_kana).replace(/[\s　]+/g, "") : "",
       r.self_payment_limit != null ? String(r.self_payment_limit) : "", // 10 利用者負担上限月額 (未設定は空 + 警告済)
       String(r.kanriResult), // 11 管理結果
       String(sumTotal), String(sumUser), String(sumAdj), // 12-14 合計
