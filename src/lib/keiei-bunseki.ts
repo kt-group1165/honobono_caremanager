@@ -18,6 +18,7 @@ import { ID_IN_CHUNK, NAME_IN_CHUNK } from "@/lib/chunk-parallel";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { serviceNameVariantsAll, toHankakuDigits } from "@/lib/service-name-normalize";
 import { isValidInMonth } from "@/lib/service-code-valid";
+import { normalizeScheduleStaff } from "@/app/(authenticated)/shift-management/_shared";
 
 // ─── 月ユーティリティ ────────────────────────────────────────────────────────
 
@@ -265,6 +266,11 @@ export interface KeieiSchedRow {
   staff_id_3: string | null;
   start_time: string | null;
   end_time: string | null;
+  staff2_start_time: string | null;
+  staff2_end_time: string | null;
+  staff3_start_time: string | null;
+  staff3_end_time: string | null;
+  additional_staff: Array<{ staff_id: string; start_time: string | null; end_time: string | null }> | null;
   service_type: string | null;
   status: string | null;
 }
@@ -296,7 +302,7 @@ export async function fetchVisitMonthData(
     let q = supabase
       .from("kaigo_visit_schedule")
       .select(
-        "user_id, staff_id, staff_id_2, staff_id_3, start_time, end_time, service_type, status",
+        "user_id, staff_id, staff_id_2, staff_id_3, start_time, end_time, staff2_start_time, staff2_end_time, staff3_start_time, staff3_end_time, additional_staff, service_type, status",
       )
       .gte("visit_date", start)
       .lte("visit_date", end);
@@ -455,9 +461,16 @@ export function computeVisitAnalysis(
         unitsSum += units;
         unitsVisits += 1;
       }
-      // 職員稼働: 主担当 + 職員2/3 (追加職員の個別時間は本体時間で近似)
-      for (const sid of [s.staff_id, s.staff_id_2, s.staff_id_3]) {
-        if (sid) creditStaff(sid, ym, dur);
+      // 職員稼働: 主担当 + additional_staff (4人目以降を含む最大9名)。
+      // normalizeScheduleStaff は additional_staff があればそれを優先するので、
+      // 先頭2件が従来列 staff_id_2/3 にミラーされていても二重計上しない。
+      // 個別 start/end が null の職員は予定全体の時間 (dur) で近似する。
+      for (const st of normalizeScheduleStaff(s)) {
+        const stDur =
+          st.start_time != null && st.end_time != null
+            ? durationMinutes(st.start_time, st.end_time)
+            : dur;
+        creditStaff(st.staff_id, ym, stDur);
       }
     }
     byCategory["入浴"] += d.bathClientIds.length;

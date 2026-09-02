@@ -4,12 +4,18 @@
  * パート給与 (時給×実働) のデータ取得。集計の金額計算は純関数 calcPartTimePayroll に委譲。
  *
  * 実績源 = kaigo_visit_schedule status='completed' (請求集計と同じ)。office_id で自事業所に
- * 絞り、staff_id / staff_id_2 / staff_id_3 (2〜3人体制) それぞれの実働時間を、その職員が
+ * 絞り、主担当 + additional_staff (4人目以降を含む最大9名) それぞれの実働時間を、その職員が
  * パート (members.employment_type='パート') の場合のみ計上する。
+ *
+ * ⚠ additional_staff (jsonb) が入っている行は、先頭2件が従来列 staff_id_2/3 にも
+ *   後方互換ミラーされている (buildAdditionalStaffPayload 参照)。そのため staff_id_2/3 を
+ *   additional_staff と**両方**読むと2〜3人目が二重計上になる。normalizeScheduleStaff で
+ *   「additional_staff があればそれを優先、無ければ従来列から復元」という一本化した経路のみ使う。
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ID_IN_CHUNK } from "@/lib/chunk-parallel";
+import { normalizeScheduleStaff } from "@/app/(authenticated)/shift-management/_shared";
 import {
   calcPartTimePayroll,
   minutesBetween,
@@ -65,6 +71,7 @@ interface ScheduleRow {
   staff2_end_time: string | null;
   staff3_start_time: string | null;
   staff3_end_time: string | null;
+  additional_staff: Array<{ staff_id: string; start_time: string | null; end_time: string | null }> | null;
 }
 
 const isMissing = (code?: string) =>
@@ -93,7 +100,7 @@ export async function loadPartTimePayroll(
     const { data: page, error: se } = await supabase
       .from("kaigo_visit_schedule")
       .select(
-        "visit_date, service_type, staff_id, staff_id_2, staff_id_3, start_time, end_time, staff2_start_time, staff2_end_time, staff3_start_time, staff3_end_time",
+        "visit_date, service_type, staff_id, staff_id_2, staff_id_3, start_time, end_time, staff2_start_time, staff2_end_time, staff3_start_time, staff3_end_time, additional_staff",
       )
       .eq("office_id", officeId)
       .eq("status", "completed")
@@ -113,12 +120,27 @@ export async function loadPartTimePayroll(
     staff_id: string | null;
     staff_id_2: string | null;
     staff_id_3: string | null;
+    additional_staff: Array<{ staff_id: string; start_time: string | null; end_time: string | null }> | null;
+  };
+  // additional_staff があれば全職員 id (時刻は不要なキャンセル集計用)。無ければ従来列に倒す
+  const staffIdsOfRow = (r: {
+    staff_id: string | null;
+    staff_id_2: string | null;
+    staff_id_3: string | null;
+    additional_staff: Array<{ staff_id: string }> | null;
+  }): string[] => {
+    if (Array.isArray(r.additional_staff) && r.additional_staff.length > 0) {
+      return [r.staff_id, ...r.additional_staff.map((a) => a.staff_id)].filter(
+        (id): id is string => !!id,
+      );
+    }
+    return [r.staff_id, r.staff_id_2, r.staff_id_3].filter((id): id is string => !!id);
   };
   const cancelled: CancelRow[] = [];
   for (let from = 0; ; from += PAGE) {
     const { data: page, error: ce } = await supabase
       .from("kaigo_visit_schedule")
-      .select("id, staff_id, staff_id_2, staff_id_3")
+      .select("id, staff_id, staff_id_2, staff_id_3, additional_staff")
       .eq("office_id", officeId)
       .eq("status", "cancelled")
       .gte("visit_date", start)
@@ -133,16 +155,8 @@ export async function loadPartTimePayroll(
 
   // 2) 関与職員 (実績 + キャンセル) → members でパート判定
   const staffIds = new Set<string>();
-  for (const r of schedules) {
-    if (r.staff_id) staffIds.add(r.staff_id);
-    if (r.staff_id_2) staffIds.add(r.staff_id_2);
-    if (r.staff_id_3) staffIds.add(r.staff_id_3);
-  }
-  for (const r of cancelled) {
-    if (r.staff_id) staffIds.add(r.staff_id);
-    if (r.staff_id_2) staffIds.add(r.staff_id_2);
-    if (r.staff_id_3) staffIds.add(r.staff_id_3);
-  }
+  for (const r of schedules) for (const id of staffIdsOfRow(r)) staffIds.add(id);
+  for (const r of cancelled) for (const id of staffIdsOfRow(r)) staffIds.add(id);
   const memberById = new Map<
     string,
     { name: string; furigana: string | null; employment_type: string | null }
@@ -173,7 +187,7 @@ export async function loadPartTimePayroll(
   const isPart = (id: string | null): boolean =>
     !!id && memberById.get(id)?.employment_type === "パート";
 
-  // 3) パート職員ぶんの訪問を PartTimeVisit[] に展開 (主 + 2人目 + 3人目)
+  // 3) パート職員ぶんの訪問を PartTimeVisit[] に展開 (主 + 追加職員 全員、最大10名)
   const visits: PartTimeVisit[] = [];
   const partSet = new Set<string>();
   const pushVisit = (
@@ -195,19 +209,11 @@ export async function loadPartTimePayroll(
     });
   };
   for (const r of schedules) {
-    pushVisit(r.staff_id, r.start_time, r.end_time, r);
-    pushVisit(
-      r.staff_id_2,
-      r.staff2_start_time ?? r.start_time,
-      r.staff2_end_time ?? r.end_time,
-      r,
-    );
-    pushVisit(
-      r.staff_id_3,
-      r.staff3_start_time ?? r.start_time,
-      r.staff3_end_time ?? r.end_time,
-      r,
-    );
+    // normalizeScheduleStaff: additional_staff があればそれを優先 (先頭2件の従来列ミラーとの
+    // 二重計上を避ける)。個別 start/end が null の職員は予定全体の時刻を使う。
+    for (const s of normalizeScheduleStaff(r)) {
+      pushVisit(s.staff_id, s.start_time ?? r.start_time, s.end_time ?? r.end_time, r);
+    }
   }
 
   // 4) 類型・マッピング (未適用でも空で続行)
@@ -251,11 +257,7 @@ export async function loadPartTimePayroll(
     if (!staffRoster.has(id))
       staffRoster.set(id, { name: m.name, kana: m.furigana ?? undefined });
   };
-  for (const r of cancelled) {
-    addCancel(r.staff_id);
-    addCancel(r.staff_id_2);
-    addCancel(r.staff_id_3);
-  }
+  for (const r of cancelled) for (const id of staffIdsOfRow(r)) addCancel(id);
 
   // 6) 事業所のキャンセル単価 + 職員の社会保険 (v2 未適用でも第1弾どおり動く)
   let cancelUnitPrice = 0;
@@ -327,7 +329,7 @@ export async function loadPartTimePayroll(
       const { data: page, error: pe } = await supabase
         .from("kaigo_visit_schedule")
         .select(
-          "visit_date, service_type, staff_id, staff_id_2, staff_id_3, start_time, end_time, staff2_start_time, staff2_end_time, staff3_start_time, staff3_end_time",
+          "visit_date, service_type, staff_id, staff_id_2, staff_id_3, start_time, end_time, staff2_start_time, staff2_end_time, staff3_start_time, staff3_end_time, additional_staff",
         )
         .eq("office_id", officeId)
         .eq("status", "completed")
@@ -356,9 +358,9 @@ export async function loadPartTimePayroll(
       });
     };
     for (const r of ytdRows) {
-      pushYtd(r.staff_id, r.start_time, r.end_time, r);
-      pushYtd(r.staff_id_2, r.staff2_start_time ?? r.start_time, r.staff2_end_time ?? r.end_time, r);
-      pushYtd(r.staff_id_3, r.staff3_start_time ?? r.start_time, r.staff3_end_time ?? r.end_time, r);
+      for (const s of normalizeScheduleStaff(r)) {
+        pushYtd(s.staff_id, s.start_time ?? r.start_time, s.end_time ?? r.end_time, r);
+      }
     }
     const ytdResult = calcPartTimePayroll(ytdVisits, mappings, categories);
     const ytdPayByStaff = new Map(
