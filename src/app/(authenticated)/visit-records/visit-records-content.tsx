@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
@@ -226,7 +227,7 @@ const inputClass =
   "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
 // 訪問予定 (kaigo_visit_schedule) — 本画面では読取専用 (書込は shift-management 側の管轄)
-interface VisitSchedule {
+export interface VisitSchedule {
   id: string;
   user_id: string;
   staff_id: string | null;
@@ -373,7 +374,7 @@ interface MonthlyServiceRecordItem {
   duration_minutes: number | null;
 }
 /** 月次加算 (kaigo_visit_month_addons + kaigo_visit_addon_lines 由来) の送付行 */
-interface MonthlyAddonItem {
+export interface MonthlyAddonItem {
   name: string;   // 初回加算 / 緊急時訪問介護加算 / 生活機能向上連携加算Ⅰ・Ⅱ
   count: number;  // 当月回数
 }
@@ -1016,6 +1017,15 @@ export interface VisitRecordsContentProps {
   userCategory?: "kaigo" | "shougai" | "both" | null;
   initialRecords: VisitRecord[];
   initialStaff: KaigoStaff[];
+  /** 当月分を SSR 先読み。取得失敗/未算出時は null (client 側 fetch にフォールスルー) */
+  initialMonth?: string | null;
+  initialSchedules?: VisitSchedule[] | null;
+  initialProcedureDoc?: VisitProcedureDocument | null;
+  /** procedureDoc の SSR 先読みに使った tenant_id (resolvePreferredTenantId 由来) */
+  initialTenantId?: string | null;
+  /** ?office= 付きアクセス時のみ SSR 先読み。省略時は client 側 fetch にフォールスルー */
+  initialOfficeId?: string | null;
+  initialMonthAddons?: LoadMonthAddonsResult | null;
 }
 
 // form の制度区分初期値 (= 利用者カテゴリから決定)
@@ -1024,7 +1034,113 @@ function pickDefaultCategory(uc: "kaigo" | "shougai" | "both" | null | undefined
   return "kaigo"; // kaigo / both / undefined はデフォルト介護
 }
 
-export function VisitRecordsContent({ userId, userName, userCategory, initialRecords, initialStaff }: VisitRecordsContentProps) {
+/** 当該月の訪問予定 (kaigo_visit_schedule、読取専用)。fetchSchedules と同じロジック。 */
+export async function loadSchedules(
+  supabase: SupabaseClient,
+  userId: string,
+  month: string,
+): Promise<VisitSchedule[]> {
+  const [y, m] = month.split("-").map(Number);
+  if (!y || !m) return [];
+  const from = `${month}-01`;
+  const to = format(new Date(y, m, 1), "yyyy-MM-dd"); // 翌月 1 日 (排他)
+  const BASE_COLS =
+    "id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, status";
+  const runQuery = (cols: string) =>
+    supabase
+      .from("kaigo_visit_schedule")
+      .select(cols)
+      .eq("user_id", userId)
+      .gte("visit_date", from)
+      .lt("visit_date", to)
+      .order("visit_date")
+      .order("start_time");
+  // スマホ打刻列 (migrations/visit_clock.sql) を参考表示用に一緒に読む。
+  // 未適用環境 (42703) では列なし SELECT に fallback (打刻表示なしで従来通り)。
+  let res = await runQuery(BASE_COLS + ", clock_in_at, clock_out_at");
+  if (res.error && /clock_(in|out)_at/i.test(res.error.message)) {
+    res = await runQuery(BASE_COLS);
+  }
+  if (res.error) throw new Error(`訪問予定の取得に失敗しました: ${res.error.message}`);
+  return (res.data ?? []) as unknown as VisitSchedule[];
+}
+
+export interface LoadMonthAddonsResult {
+  monthAddons: { shokai: boolean; seikatsu_kino: string; kinkyu_count: number } | null;
+  serviceAddonItems: MonthlyAddonItem[];
+}
+
+/** 当月の月次加算 (office スコープ)。effect と同じマージロジック (kaigo_visit_month_addons + kaigo_visit_addon_lines)。 */
+export async function loadMonthAddons(
+  supabase: SupabaseClient,
+  userId: string,
+  officeId: string,
+  month: string,
+): Promise<LoadMonthAddonsResult> {
+  const [yStr, mStr] = month.split("-");
+  const [oldRes, lines] = await Promise.all([
+    supabase
+      .from("kaigo_visit_month_addons")
+      .select("shokai, seikatsu_kino, kinkyu_count")
+      .eq("client_id", userId)
+      .eq("target_month", month)
+      .eq("office_id", officeId)
+      .maybeSingle(),
+    // テーブル未作成 (42P01/PGRST205) は空 Map。その他は加算なしで継続 (console のみ)
+    resolveVisitAddonLines(supabase, [userId], Number(yStr), Number(mStr), officeId)
+      .then((map) => map.get(userId) ?? [])
+      .catch((e: unknown) => {
+        console.error("addon lines fetch failed:", e instanceof Error ? e.message : String(e));
+        return [];
+      }),
+  ]);
+  let flags: { shokai: boolean; seikatsu_kino: string; kinkyu_count: number } | null = null;
+  if (oldRes.error) {
+    // テーブル未作成 (42P01/PGRST205) は「加算なし」として継続
+    if (oldRes.error.code !== "42P01" && oldRes.error.code !== "PGRST205") {
+      console.error("month addons fetch failed:", oldRes.error.message);
+    }
+  } else if (oldRes.data) {
+    const d = oldRes.data as { shokai: boolean | null; seikatsu_kino: string | null; kinkyu_count: number | null };
+    flags = {
+      shokai: !!d.shokai,
+      seikatsu_kino: d.seikatsu_kino ?? "なし",
+      kinkyu_count: d.kinkyu_count ?? 0,
+    };
+  }
+  const generic: MonthlyAddonItem[] = [];
+  for (const l of lines) {
+    if (l.count <= 0) continue;
+    if (l.code === "114001" || l.code === "114000" || l.code === "114002" || l.code === "114003") {
+      if (!flags) flags = { shokai: false, seikatsu_kino: "なし", kinkyu_count: 0 };
+      if (l.code === "114001") {
+        flags.shokai = true;
+      } else if (l.code === "114000") {
+        flags.kinkyu_count = Math.max(flags.kinkyu_count, l.count);
+      } else {
+        const grade = l.code === "114002" ? "Ⅱ" : "Ⅰ";
+        if (flags.seikatsu_kino !== "Ⅱ") flags.seikatsu_kino = grade;
+      }
+    } else {
+      generic.push({ name: l.name, count: l.count });
+    }
+  }
+  return { monthAddons: flags, serviceAddonItems: generic };
+}
+
+export function VisitRecordsContent({
+  userId,
+  userName,
+  userCategory,
+  initialRecords,
+  initialStaff,
+  initialMonth = null,
+  initialSchedules = null,
+  initialProcedureDoc = null,
+  initialTenantId = null,
+  initialOfficeId = null,
+  initialMonthAddons = null,
+}: VisitRecordsContentProps) {
   const supabase = useMemo(() => createClient(), []);
   const { currentOffice } = useBusinessType();
 
@@ -1055,14 +1171,14 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [signTarget, setSignTarget] = useState<VisitRecord | null>(null);
   // 表示月 (予定一覧・記録一覧・月次実績送付の共通軸)
-  const [month, setMonth] = useState<string>(() => format(new Date(), "yyyy-MM"));
+  const [month, setMonth] = useState<string>(() => initialMonth ?? format(new Date(), "yyyy-MM"));
   const [showSendModal, setShowSendModal] = useState(false);
   // migration 未適用で INSERT から除外した列名 (amber バナー表示用)
   const [missingColumns, setMissingColumns] = useState<string[]>([]);
 
   // 当該月の訪問予定 (kaigo_visit_schedule — 読取のみ)
-  const [schedules, setSchedules] = useState<VisitSchedule[]>([]);
-  const [schedulesLoading, setSchedulesLoading] = useState(true);
+  const [schedules, setSchedules] = useState<VisitSchedule[]>(initialSchedules ?? []);
+  const [schedulesLoading, setSchedulesLoading] = useState(!initialSchedules);
 
   // 当月の月次加算 (office スコープ)。入力経路 2 系統を読んでマージする (集計 aggregate.ts と同規則):
   //   a. kaigo_visit_month_addons (旧 3固定フラグ。移行期データ)
@@ -1074,10 +1190,17 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
     shokai: boolean;
     seikatsu_kino: string;
     kinkyu_count: number;
-  } | null>(null);
+  } | null>(initialMonthAddons?.monthAddons ?? null);
   // 月次4コード以外の加算行 (名称×回数。単位はマスタ解決済 — resolveVisitAddonLines)
-  const [serviceAddonItems, setServiceAddonItems] = useState<MonthlyAddonItem[]>([]);
+  const [serviceAddonItems, setServiceAddonItems] = useState<MonthlyAddonItem[]>(initialMonthAddons?.serviceAddonItems ?? []);
+  const isInitialMountAddons = useRef(true);
   useEffect(() => {
+    if (isInitialMountAddons.current) {
+      isInitialMountAddons.current = false;
+      if (initialMonthAddons && initialOfficeId && initialOfficeId === currentOffice?.id && initialMonth === month) {
+        return;
+      }
+    }
     if (!currentOffice) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- office 未確定時の derived reset
       setMonthAddons(null);
@@ -1085,65 +1208,22 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
       return;
     }
     let cancelled = false;
-    (async () => {
-      const [yStr, mStr] = month.split("-");
-      const [oldRes, lines] = await Promise.all([
-        supabase
-          .from("kaigo_visit_month_addons")
-          .select("shokai, seikatsu_kino, kinkyu_count")
-          .eq("client_id", userId)
-          .eq("target_month", month)
-          .eq("office_id", currentOffice.id)
-          .maybeSingle(),
-        // テーブル未作成 (42P01/PGRST205) は空 Map。その他は加算なしで継続 (console のみ)
-        resolveVisitAddonLines(supabase, [userId], Number(yStr), Number(mStr), currentOffice.id)
-          .then((map) => map.get(userId) ?? [])
-          .catch((e: unknown) => {
-            console.error("addon lines fetch failed:", e instanceof Error ? e.message : String(e));
-            return [];
-          }),
-      ]);
+    loadMonthAddons(supabase, userId, currentOffice.id, month).then((result) => {
       if (cancelled) return;
-      let flags: { shokai: boolean; seikatsu_kino: string; kinkyu_count: number } | null = null;
-      if (oldRes.error) {
-        // テーブル未作成 (42P01/PGRST205) は「加算なし」として継続
-        if (oldRes.error.code !== "42P01" && oldRes.error.code !== "PGRST205") {
-          console.error("month addons fetch failed:", oldRes.error.message);
-        }
-      } else if (oldRes.data) {
-        const d = oldRes.data as { shokai: boolean | null; seikatsu_kino: string | null; kinkyu_count: number | null };
-        flags = {
-          shokai: !!d.shokai,
-          seikatsu_kino: d.seikatsu_kino ?? "なし",
-          kinkyu_count: d.kinkyu_count ?? 0,
-        };
-      }
-      const generic: MonthlyAddonItem[] = [];
-      for (const l of lines) {
-        if (l.count <= 0) continue;
-        if (l.code === "114001" || l.code === "114000" || l.code === "114002" || l.code === "114003") {
-          if (!flags) flags = { shokai: false, seikatsu_kino: "なし", kinkyu_count: 0 };
-          if (l.code === "114001") {
-            flags.shokai = true;
-          } else if (l.code === "114000") {
-            flags.kinkyu_count = Math.max(flags.kinkyu_count, l.count);
-          } else {
-            const grade = l.code === "114002" ? "Ⅱ" : "Ⅰ";
-            if (flags.seikatsu_kino !== "Ⅱ") flags.seikatsu_kino = grade;
-          }
-        } else {
-          generic.push({ name: l.name, count: l.count });
-        }
-      }
-      setMonthAddons(flags);
-      setServiceAddonItems(generic);
-    })();
+      setMonthAddons(result.monthAddons);
+      setServiceAddonItems(result.serviceAddonItems);
+    });
     return () => { cancelled = true; };
-  }, [supabase, userId, month, currentOffice]);
+  }, [supabase, userId, month, currentOffice, initialMonthAddons, initialOfficeId, initialMonth]);
 
   // その利用者の最新の手順書 (= 実施記録の「手順書の実施確認」取込元)
-  const [procedureDoc, setProcedureDoc] = useState<VisitProcedureDocument | null>(null);
+  const [procedureDoc, setProcedureDoc] = useState<VisitProcedureDocument | null>(initialProcedureDoc);
+  const isInitialMountProcedureDoc = useRef(true);
   useEffect(() => {
+    if (isInitialMountProcedureDoc.current) {
+      isInitialMountProcedureDoc.current = false;
+      if (initialTenantId && initialTenantId === currentOffice?.tenant_id) return;
+    }
     const tenantId = currentOffice?.tenant_id;
     if (!tenantId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- office 未確定時の derived reset
@@ -1167,7 +1247,7 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
     return () => {
       cancelled = true;
     };
-  }, [supabase, userId, userName, currentOffice?.tenant_id]);
+  }, [supabase, userId, userName, currentOffice?.tenant_id, initialTenantId]);
 
   // 月次加算 + サービス加算行 → 送付/印字用の加算行
   const addonItems = useMemo<MonthlyAddonItem[]>(() => {
@@ -1239,39 +1319,19 @@ export function VisitRecordsContent({ userId, userName, userCategory, initialRec
   // NOTE: loading の ON は月変更ハンドラ (changeMonth) 側で行う
   //       (effect 内の同期 setState を避ける — react-hooks/set-state-in-effect)
   const fetchSchedules = useCallback(async () => {
-    const [y, m] = month.split("-").map(Number);
-    if (!y || !m) return; // changeMonth で空値は弾いているため通常到達しない
-    const from = `${month}-01`;
-    const to = format(new Date(y, m, 1), "yyyy-MM-dd"); // 翌月 1 日 (排他)
-    const BASE_COLS =
-      "id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, status";
-    const runQuery = (cols: string) =>
-      supabase
-        .from("kaigo_visit_schedule")
-        .select(cols)
-        .eq("user_id", userId)
-        .gte("visit_date", from)
-        .lt("visit_date", to)
-        .order("visit_date")
-        .order("start_time");
-    // スマホ打刻列 (migrations/visit_clock.sql) を参考表示用に一緒に読む。
-    // 未適用環境 (42703) では列なし SELECT に fallback (打刻表示なしで従来通り)。
-    let res = await runQuery(BASE_COLS + ", clock_in_at, clock_out_at");
-    if (res.error && /clock_(in|out)_at/i.test(res.error.message)) {
-      console.warn("clock_in_at/clock_out_at 列が未適用のため打刻表示なしで再取得:", res.error.message);
-      res = await runQuery(BASE_COLS);
-    }
-    if (res.error) {
-      console.error("schedule fetch failed:", res.error.message);
-      toast.error("訪問予定の取得に失敗しました: " + res.error.message);
-    } else {
-      setSchedules((res.data ?? []) as unknown as VisitSchedule[]);
+    try {
+      const data = await loadSchedules(supabase, userId, month);
+      setSchedules(data);
+    } catch (e) {
+      console.error("schedule fetch failed:", e instanceof Error ? e.message : e);
+      toast.error("訪問予定の取得に失敗しました: " + (e instanceof Error ? e.message : String(e)));
     }
     setSchedulesLoading(false);
   }, [supabase, userId, month]);
 
-  // 同一 month の重複 fetch を防ぐ guard (mount 時 + month 変更時のみ実行)
-  const lastFetchedMonth = useRef<string | null>(null);
+  // 同一 month の重複 fetch を防ぐ guard (mount 時 + month 変更時のみ実行)。
+  // SSR (initialSchedules) が同じ month を先読み済みならこの mount では fetch しない。
+  const lastFetchedMonth = useRef<string | null>(initialSchedules && initialMonth === month ? month : null);
   useEffect(() => {
     if (lastFetchedMonth.current === month) return;
     lastFetchedMonth.current = month;
