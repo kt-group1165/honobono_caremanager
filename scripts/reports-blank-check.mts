@@ -220,7 +220,9 @@ async function main(): Promise<void> {
   if (UPDATE) console.log("--update: 基準値を実測で置き直します");
   const isPending = await loadPendingCerts();
 
-  let worse = 0, better = 0;
+  let worse = 0, better = 0, shrunk = 0;
+  /** これ未満の母数は「検査できていない」と表示する (yobo-care-plan は 3 件しかない) */
+  const SMALL_SAMPLE = 30;
   const nextBlanks: Record<string, Record<string, number>> = {};
   const nextTotals: Record<string, number> = {};
 
@@ -232,6 +234,25 @@ async function main(): Promise<void> {
     if (baseline.totals[type] !== undefined && baseline.totals[type] !== docs.length) {
       console.log(`  (件数が ${baseline.totals[type]} → ${docs.length} に変わっています)`);
     }
+    // ── 分母ガード (2026-09-03 追加) ────────────────────────────────
+    // 空欄チェックは「存在する帳票」しか見ないので、**帳票が消えても
+    // blanks=0 で黙って PASS する**。母数が基準の半分未満なら落とす。
+    // (取込のやり直し・削除・絞り込みミスで丸ごと消えたのを検知する)
+    const baseTotalForType = baseline.totals[type];
+    if (baseTotalForType !== undefined && baseTotalForType > 0 && docs.length < baseTotalForType / 2) {
+      console.log(
+        `  ★ 母数が半減 (${baseTotalForType} → ${docs.length} 件) — 帳票が消えていないか確認してください`,
+      );
+      shrunk++;
+    }
+    // 母数が極小な種別は、空欄が 0 でも「検査できていない」ことを明示する
+    // (例: yobo-care-plan は 3 件しかなく、基準値が全部 0 でも実質無検査)
+    if (docs.length > 0 && docs.length < SMALL_SAMPLE) {
+      console.log(`  ⚠ 母数 ${docs.length} 件は小さく、この種別は実質ほぼ未検査です`);
+    }
+    if (docs.length === 0) {
+      console.log("  ⚠ 帳票が 1 件もありません — この種別は検査できていません");
+    }
 
     for (const [field, label] of spec.fields) {
       const exempt = PENDING_EXEMPT[type]?.has(field) ?? false;
@@ -240,10 +261,32 @@ async function main(): Promise<void> {
       );
       nextBlanks[type][field] = blanks.length;
       const base = baseline.blanks[type]?.[field];
-      const mark = base === undefined ? "新規" : blanks.length > base ? "★ 増えた" : blanks.length < base ? "○ 減った" : "";
-      if (base !== undefined && blanks.length > base) worse++;
-      if (base !== undefined && blanks.length < base) better++;
-      const baseText = base === undefined ? "" : ` (基準 ${base})`;
+      const baseTotal = baseline.totals[type];
+      // ── 判定は「率」で行う (2026-09-03) ─────────────────────────────
+      // 絶対件数だけで見ると **母数が増えただけで FAIL** する。実際
+      // 第6表は 2,244→3,221 件に増えた結果 空 9→12 件になり、率では
+      // 0.40%→0.37% と改善しているのに落ちていた。
+      // FAIL が常態化すると --update で黙らせたくなり、その時に本物の穴も
+      // 一緒に焼き付く。だから偽陽性は消す。
+      // ⚠ ただし率だけにはしない。母数が減ると率は下がって見えるので、
+      //   母数の縮小は別途 §分母ガードで FAIL させる。
+      const rate = docs.length > 0 ? blanks.length / docs.length : 0;
+      const baseRate = base !== undefined && baseTotal ? base / baseTotal : undefined;
+      // 母数が動くと率も僅かに動くので、**1 件未満の差は「変化なし」**とみなす。
+      // (これが無いと 2/2954 → 2/2956 のような同数でも「減った」と出る)
+      const noise = 0.5 / Math.max(docs.length, 1);
+      const rateWorse = baseRate !== undefined && rate > baseRate + noise;
+      const rateBetter = baseRate !== undefined && rate < baseRate - noise;
+      const mark = base === undefined ? "新規" : rateWorse ? "★ 増えた" : rateBetter ? "○ 減った" : "";
+      if (rateWorse) worse++;
+      if (rateBetter) better++;
+      const pct = (r: number) => `${(r * 100).toFixed(2)}%`;
+      const baseText =
+        base === undefined
+          ? ""
+          : baseRate === undefined
+            ? ` (基準 ${base})`
+            : ` (基準 ${base} / ${pct(baseRate)} → 今回 ${pct(rate)})`;
       if (blanks.length === 0 && !mark) continue;      // ずっと 0 のものは出さない
       console.log(`  ${mark ? mark + " " : ""}${label} (${field}): 空 ${blanks.length} 件${baseText}`);
       if (LIST === type && blanks.length > 0) {
@@ -281,12 +324,17 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  if (worse > 0) {
-    console.log(`FAIL — ★ 空欄が増えた項目 ${worse} 件。`);
-    console.log("       取込か既定値のどちらかが欄を埋めていません。基準値を上げて黙らせないこと。");
+  if (worse > 0 || shrunk > 0) {
+    if (worse > 0) {
+      console.log(`FAIL — ★ 空欄の率が悪化した項目 ${worse} 件。`);
+      console.log("       取込か既定値のどちらかが欄を埋めていません。基準値を上げて黙らせないこと。");
+    }
+    if (shrunk > 0) {
+      console.log(`FAIL — ★ 母数が半減した帳票 ${shrunk} 種。帳票そのものが消えていないか確認してください。`);
+    }
     process.exit(1);
   }
-  console.log(better > 0 ? `PASS — 悪化なし (○ 減った ${better} 件)` : "PASS — 悪化なし");
+  console.log(better > 0 ? `PASS — 悪化なし (○ 率が下がった ${better} 件)` : "PASS — 悪化なし");
   process.exit(0);
 }
 
