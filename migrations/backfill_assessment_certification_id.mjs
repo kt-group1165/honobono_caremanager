@@ -1,12 +1,48 @@
+// █████████████████████████████████████████████████████████████████████████
+// ██  ⛔ 使用禁止。実行しないでください。                                  ██
+// ██  代わりに migrations/fix_assessment_cert_link.mjs を使うこと。        ██
+// █████████████████████████████████████████████████████████████████████████
+//
+// ── なぜ使ってはいけないか (2026-09-03 実測) ──────────────────────────────
+//   この script は「その user の **最新** の認定」を埋める。
+//   しかし生活アセスメントは **実施日が 88 日に分散**しているため、
+//   最新の認定を採ると **実施日と乖離した別の認定**に紐付く。
+//
+//   実測: 対象 113 件のうち **30 件 (27%)** で
+//         「最新の認定」と「実施日に有効な認定」の結果が食い違った。
+//         要介護度まで違う例がある:
+//           実施日 2026-04-28 → 最新=要介護5 (2026-05-01〜) / 正=要介護4 (2025-04-04〜)
+//           実施日 2026-01-26 → 最新=要介護3 (2026-03-01〜) / 正=要介護2 (2025-02-10〜)
+//
+//   正しい規則は fix_care_plan_cert_link.mjs と同じ「その日に有効な認定」。
+//   それを実装したのが **migrations/fix_assessment_cert_link.mjs**。
+//
+//   ⚠ ファイル名が素直なので「これを実行すればいい」と誤解されやすい。
+//     経緯を残すために削除せず、実行だけを止めてある。
+//
+// (以下は当初の説明。参考のため残す)
 // 既存 kaigo_assessments で certification_id = NULL の行に、
 // その user の最新 client_insurance_records.id を埋める。
 //
 // 経緯: 旧 enrich_houmonkaigo_sample_data.mjs が certification_id を未設定で投入していて、
 //       UI の /assessments page が cert filter で除外してしまっていた。
-//
-// Usage:
-//   node migrations/backfill_assessment_certification_id.mjs            # DRY RUN
-//   node migrations/backfill_assessment_certification_id.mjs --execute  # 本番
+
+console.error(
+  [
+    "",
+    "⛔ この script は使用禁止です (実行を中止しました)。",
+    "",
+    "   理由: 「その user の最新の認定」を埋める方式のため、実施日が分散している",
+    "         生活アセスメントでは実施日と乖離した認定に紐付きます。",
+    "         実測で 113 件中 30 件 (27%) が誤りでした。",
+    "",
+    "   代わりに次を使ってください:",
+    "     node migrations/fix_assessment_cert_link.mjs            # DRY RUN",
+    "     node migrations/fix_assessment_cert_link.mjs --execute",
+    "",
+  ].join("\n"),
+);
+process.exit(1);
 
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
