@@ -374,17 +374,20 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
         // 訪問介護(11) は 5,500 件超あり PostgREST 1000 行制限に切られるため page-loop
         const today = todayYmd()
         const PAGE = 1000
-        const data: Record<string, unknown>[] = []
-        for (let from = 0; ; from += PAGE) {
+        // 地域生活支援は市町村ごとにコード体系が別 → 市町村で絞る。市町村不明はブロック
+        if (system === "地域生活支援" && effectiveChiikiMuni == null) {
+          setServices([]) // finally で loading 解除
+          return
+        }
+        // 同じ絞り込みを「件数取得」と「各ページ取得」の両方で使うので builder 化する。
+        const buildQuery = (select: string, head: boolean) => {
           let query = supabase
             .from("kaigo_service_codes")
-            .select("service_code, service_name, short_name, units, service_category, service_category_name, calculation_type")
+            .select(select, head ? { count: "exact", head: true } : undefined)
             .eq("system", system)
             .eq("service_category", activeCategory)
-          // 地域生活支援は市町村ごとにコード体系が別 → 市町村で絞る。市町村不明はブロック
           if (system === "地域生活支援") {
-            if (effectiveChiikiMuni == null) { setServices([]); return } // finally で loading 解除
-            query = query.eq("municipality", effectiveChiikiMuni)
+            query = query.eq("municipality", effectiveChiikiMuni!)
           }
           if (tmYear !== undefined && tmMonth !== undefined) {
             query = validInMonth(query, tmYear, tmMonth)
@@ -393,13 +396,31 @@ function ServiceSelectorInner({ onClose, onSelect, system: initialSystem = "介�
               .lte("valid_from", today)
               .or(`valid_until.is.null,valid_until.gte.${today}`)
           }
-          const { data: page, error: fetchError } = await query
-            .order("service_code", { ascending: true })
-            .range(from, from + PAGE - 1)
-          if (cancelled) return
-          if (fetchError) throw fetchError
-          data.push(...((page ?? []) as Record<string, unknown>[]))
-          if (!page || page.length < PAGE) break
+          return query
+        }
+        // 直列 page-loop だと訪問介護(5,500件超)で 6 往復かかっていた。
+        // 先に件数だけ取り、必要な range を Promise.all で並列取得する。
+        const { count, error: countError } = await buildQuery("service_code", true)
+        if (cancelled) return
+        if (countError) throw countError
+        const total = count ?? 0
+        const ranges: [number, number][] = []
+        for (let from = 0; from < total; from += PAGE) ranges.push([from, from + PAGE - 1])
+        const pages = await Promise.all(
+          ranges.map(([from, to]) =>
+            buildQuery(
+              "service_code, service_name, short_name, units, service_category, service_category_name, calculation_type",
+              false,
+            )
+              .order("service_code", { ascending: true })
+              .range(from, to),
+          ),
+        )
+        if (cancelled) return
+        const data: Record<string, unknown>[] = []
+        for (const p of pages) {
+          if (p.error) throw p.error
+          data.push(...((p.data ?? []) as unknown as Record<string, unknown>[]))
         }
         setServices((data).map((d) => ({
           code: String(d.service_code ?? ""),

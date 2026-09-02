@@ -62,14 +62,22 @@ export function useSeikyuData() {
     setError(null);
     try {
       // 地域単価: offices.unit_price / 事業所番号: business_number (伝送用)
-      // 取得失敗時は単価 10.0 で誤集計しないよう、ここで集計を中断する
-      const { data: officeRow, error: officeError } = await supabase
-        .from("offices")
-        .select(
-          "unit_price, applied_formula_codes, business_number, sougou_business_number, address, phone, postal_code",
-        )
-        .eq("id", currentOffice.id)
-        .maybeSingle();
+      // 取得失敗時は単価 10.0 で誤集計しないよう、ここで集計を中断する。
+      // 総合事業の事業所番号 (office_sougou_numbers) は独立クエリなので並列で取る。
+      const [officeRes, sougouRes] = await Promise.all([
+        supabase
+          .from("offices")
+          .select(
+            "unit_price, applied_formula_codes, business_number, sougou_business_number, address, phone, postal_code",
+          )
+          .eq("id", currentOffice.id)
+          .maybeSingle(),
+        supabase
+          .from("office_sougou_numbers")
+          .select("insurer_number, business_number")
+          .eq("office_id", currentOffice.id),
+      ]);
+      const { data: officeRow, error: officeError } = officeRes;
       if (officeError) {
         throw new Error(
           `事業所情報 (地域単価・事業所番号) の取得に失敗したため集計を中断しました: ${officeError.message}`,
@@ -86,10 +94,7 @@ export function useSeikyuData() {
       setOfficeNumber(or?.business_number ?? null);
       // 総合事業の事業所番号 (保険者ごと)。テーブル未適用でも集計は止めない
       {
-        const { data: sn, error: snErr } = await supabase
-          .from("office_sougou_numbers")
-          .select("insurer_number, business_number")
-          .eq("office_id", currentOffice.id);
+        const { data: sn, error: snErr } = sougouRes;
         if (snErr) {
           // 未適用 (42P01/PGRST205) は無視。それ以外も警告に留めて介護の番号で続行する
           setSougouNumberByInsurer({});

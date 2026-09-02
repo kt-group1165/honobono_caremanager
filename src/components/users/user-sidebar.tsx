@@ -434,10 +434,15 @@ function UserSidebarInner(props: UserSidebarProps) {
     if (filterMode === "office" && currentOfficeId) {
       // 自事業所モード: !inner 埋め込みで assignments と JOIN し 1 往復で取得
       // (従来は assignments → clients の直列 2 往復)。
-      // service_category 列は migration 未適用環境があるため "*" で取得。
+      // ⚠ 2026-09-03: 以前は "*" (46列) を 9,000 件超取得していた。実際に使うのは
+      //   ClientRow の 5 列だけなので列指定に変更 (転送量削減)。
+      //   service_category は **本番 DB に列自体が存在しない** (42703 で確認済み) ため
+      //   明示指定するとクエリごと落ちる。"*" のときも undefined だったので
+      //   ServiceCategoryBadge が null を返す挙動は変わらない。列が追加されたら
+      //   ここと下の 2 箇所に service_category を足すこと。
       const { data, error } = await supabase
         .from("clients")
-        .select("*, client_office_assignments!inner(office_id)")
+        .select("id, name, furigana, status, care_level, client_office_assignments!inner(office_id)")
         .eq("client_office_assignments.office_id", currentOfficeId)
         .is("client_office_assignments.end_date", null)
         .eq("status", "active")
@@ -469,7 +474,7 @@ function UserSidebarInner(props: UserSidebarProps) {
         if (clientIds.length > 0) {
           const { data: cl } = await supabase
             .from("clients")
-            .select("*")
+            .select("id, name, furigana, status, care_level")
             .in("id", clientIds)
             .eq("status", "active")
             .eq("is_facility", false)
@@ -483,7 +488,7 @@ function UserSidebarInner(props: UserSidebarProps) {
       // 全利用者モード: clients と officeUserIds (チラつき防止用) を並列で取得
       const clientsPromise = supabase
         .from("clients")
-        .select("*")
+        .select("id, name, furigana, status, care_level")
         .eq("status", "active")
         .eq("is_facility", false)
         .is("deleted_at", null)
