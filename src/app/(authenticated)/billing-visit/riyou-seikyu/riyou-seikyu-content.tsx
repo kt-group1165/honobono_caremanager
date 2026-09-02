@@ -2542,24 +2542,36 @@ interface RiyouLine {
 }
 
 function splitUserAmount(row: UserSeikyuRow): RiyouLine[] {
+  // 按分の分母は **明細に出ている単位の合計** (明細計 + 加算)。totalUnits ではない。
+  //
+  //   ⚠ 2026-09-03 是正: 分母に row.totalUnits を使っていたが、
+  //     分子 (d.units) は **限度額超過分を含む全単位**、
+  //     分母 (totalUnits) は **保険内の単位だけ** で、スケールが食い違っていた。
+  //     結果、各明細が (明細計/totalUnits) 倍に膨らみ、最後の辻褄合わせで
+  //     最大行だけが大きく減らされていた (中央 西協子: 13,716/9,072 = 1.512 倍、
+  //     最大行から 4,644 円 減算)。合計は正しいが**内訳が誤っていた**。
+  //     訪問介護 550 行中 11 行 (2.0%) が該当し、差は全件 overUnits と完全一致。
+  //
+  //   これは「**超過分が全明細に按分で乗っている**」という pro-rata の仮定に立つ。
+  //   分母を明細計に上げるのと、分子を保険内ぶん (d.units × totalUnits/明細計) に
+  //   落とすのは同じ式に着地するので、どちらで考えても結果は変わらない。
+  //   ⚠ ケアマネが「どのサービスが超過か」を指定している場合は**そちらが正しい**。
+  //     現状 overUnits は集計レベルの値で明細行に紐づかないため pro-rata しか選べない。
+  //     将来 明細単位の割振りを持てるようになったら、そちらを優先すること。
+  const splitBase =
+    row.details.reduce((s, d) => s + d.units, 0) + (row.addonUnits > 0 ? row.addonUnits : 0);
   const lines: RiyouLine[] = row.details.map((d) => ({
     label: d.short_name ?? d.service_type,
     unitPer: d.unit_per,
     count: d.count,
-    amount:
-      row.totalUnits > 0
-        ? Math.floor((d.units * row.userAmount) / row.totalUnits)
-        : 0,
+    amount: splitBase > 0 ? Math.floor((d.units * row.userAmount) / splitBase) : 0,
   }));
   if (row.addonUnits > 0) {
     lines.push({
       label: row.addonLabel ?? "処遇改善加算",
       unitPer: null,
       count: 1,
-      amount:
-        row.totalUnits > 0
-          ? Math.floor((row.addonUnits * row.userAmount) / row.totalUnits)
-          : 0,
+      amount: splitBase > 0 ? Math.floor((row.addonUnits * row.userAmount) / splitBase) : 0,
     });
   }
   // floor の切捨て分を最大金額の行に加算して合計 = userAmount (法定負担) にする

@@ -516,6 +516,14 @@ export async function aggregateBathVisitSeikyu(
     const kohiTandoku = /^[Hh]/.test((cert?.insured_number ?? "").trim());
     const kohi = kohiRes.byClient.get(clientId) ?? null;
     const isSeiho = kohiTandoku || kohi?.hobetsu === "12";
+    // 国保連方式: 保険請求額 = 費用総額 × 給付率 (1円未満切捨)、利用者負担 = 差引。
+    //   端数は利用者負担側に乗る。**先に負担額を切捨てると 1 円ずれる。**
+    //   給付率も整数化: copay 0.1/0.2/0.3 → 1/2/3 で floor(総額 × (10−負担) / 10)
+    //   ⚠ visit-seikyu/aggregate.ts・aggregate-sougou.ts・bath-seikyu/aggregate.ts の
+    //     3 か所に同じ 2 行がある (2026-09-03 時点でバイト単位一致)。**片方だけ直さないこと。**
+    //   ⚠ 障害 (shogai-seikyu/aggregate.ts) は **逆向きで正しい**:
+    //     負担上限月額があるので利用者側を先に確定する必要があり、
+    //     userAmount = min(floor(総額/10), 上限) / benefitAmount = 総額 − userAmount。
     const copayX10 = Math.min(10, Math.max(0, Math.round(copay * 10)));
     const insuranceAmount = kohiTandoku ? 0 : Math.floor((totalAmount * (10 - copayX10)) / 10);
     // 部分公費 (生保以外) は振替しないので、公費欄そのものを出さない。
