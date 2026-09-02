@@ -193,7 +193,17 @@ export function buildKokuhoDensou(
   }
   const kohiEntries: KohiSummaryEntry[] = [];
   for (const r of rows) {
-    if ((r.kohiHobetsu || r.kohiTandoku) && (r.kohiAmount ?? 0) > 0) {
+    // ★ 条件は明細書 (7131 基本の hasKohi) と必ず一致させる。
+    //   公費請求額が 0 円 (本人負担上限月額 ≧ 保険給付後負担) でも明細書には公費欄が
+    //   出るので、ここで `kohiAmount > 0` を条件にすると
+    //   **明細の件数 > 請求書の件数** になり国保連で返戻になる。
+    //   実伝送で裏取り済み (姉ム KK260704.CSV 法別12):
+    //     明細 9 件 (うち請求額 0 が 1 件: 被保番1000149649 単位1114/請求0/本人1192)
+    //     請求書 件数 9 / 単位 53660 / 公費請求 56227 — ほのぼのは 0 円の 1 件も
+    //     件数・単位・費用に**含めている** (請求額だけ 0 で寄与しない)。
+    //   ※ 公費2 は明細側も `kohi2Amount > 0` で出しており両側が揃っているため
+    //     ここでは変えない (実伝送 1,775 件に公費2 の実例が 0 件で裏取りできない)。
+    if (r.kohiHobetsu || r.kohiTandoku) {
       kohiEntries.push({
         hobetsu: r.kohiHobetsu ?? "12",
         units: r.kohiUnits ?? r.totalUnits,
