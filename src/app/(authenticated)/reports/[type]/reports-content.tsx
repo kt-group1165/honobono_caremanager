@@ -905,16 +905,30 @@ function EditFormCarePlan1({ content, onChange, userId }: {
   const [hasAssessment, setHasAssessment] = useState<boolean | null>(null);
 
   useEffect(() => {
+    // ReportsContent が SSR 値を seed 済みならそれを使う (自前 fetch はしない)
+    const cachedAi = __aiSettingsCache.get(AI_SETTINGS_KEY);
+    if (cachedAi) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- cache hit の early return (mount 時 1 回)
+      setAiEnabled(cachedAi.enabled);
+      setAiApiKey(cachedAi.apiKey);
+      return;
+    }
     const checkAi = async () => {
-      const { data } = await supabaseForAi
+      const { data, error } = await supabaseForAi
         .from("offices")
         .select("ai_enabled, ai_api_key")
         .eq("app_type", "kaigo-app")
         .limit(1)
         .single();
+      if (error) {
+        console.error("AI 設定の取得に失敗:", error.message);
+        return;
+      }
       if (data) {
-        setAiEnabled(!!data.ai_enabled);
-        setAiApiKey(String(data.ai_api_key ?? ""));
+        const next = { enabled: !!data.ai_enabled, apiKey: String(data.ai_api_key ?? "") };
+        __aiSettingsCache.set(AI_SETTINGS_KEY, next);
+        setAiEnabled(next.enabled);
+        setAiApiKey(next.apiKey);
       }
     };
     checkAi();
@@ -925,6 +939,12 @@ function EditFormCarePlan1({ content, onChange, userId }: {
     if (!userId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (userId 切替時の derived reset)
       setHasAssessment(null);
+      return;
+    }
+    // ReportsContent が SSR 値を seed 済みならそれを使う (自前 fetch はしない)
+    const cached = __hasAssessmentCache.get(userId);
+    if (cached !== undefined) {
+      setHasAssessment(cached);
       return;
     }
     let cancelled = false;
@@ -940,7 +960,9 @@ function EditFormCarePlan1({ content, onChange, userId }: {
         setHasAssessment(false);
         return;
       }
-      setHasAssessment(Array.isArray(data) && data.length > 0);
+      const has = Array.isArray(data) && data.length > 0;
+      __hasAssessmentCache.set(userId, has);
+      setHasAssessment(has);
     })();
     return () => { cancelled = true; };
   }, [userId, supabaseForAi]);
@@ -1153,11 +1175,25 @@ function EditFormCarePlan2({ content, onChange, userId }: {
   const [hasAssessment, setHasAssessment] = useState<boolean | null>(null);
 
   useEffect(() => {
+    // ReportsContent が SSR 値を seed 済みならそれを使う (自前 fetch はしない)
+    const cachedAi = __aiSettingsCache.get(AI_SETTINGS_KEY);
+    if (cachedAi) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- cache hit の early return (mount 時 1 回)
+      setAiEnabled(cachedAi.enabled);
+      setAiApiKey(cachedAi.apiKey);
+      return;
+    }
     const checkAi = async () => {
-      const { data } = await supabaseForAi.from("offices").select("ai_enabled, ai_api_key").eq("app_type", "kaigo-app").limit(1).single();
+      const { data, error } = await supabaseForAi.from("offices").select("ai_enabled, ai_api_key").eq("app_type", "kaigo-app").limit(1).single();
+      if (error) {
+        console.error("AI 設定の取得に失敗:", error.message);
+        return;
+      }
       if (data) {
-        setAiEnabled(!!data.ai_enabled);
-        setAiApiKey(String(data.ai_api_key ?? ""));
+        const next = { enabled: !!data.ai_enabled, apiKey: String(data.ai_api_key ?? "") };
+        __aiSettingsCache.set(AI_SETTINGS_KEY, next);
+        setAiEnabled(next.enabled);
+        setAiApiKey(next.apiKey);
       }
     };
     checkAi();
@@ -1168,6 +1204,12 @@ function EditFormCarePlan2({ content, onChange, userId }: {
     if (!userId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (userId 切替時の derived reset)
       setHasAssessment(null);
+      return;
+    }
+    // ReportsContent が SSR 値を seed 済みならそれを使う (自前 fetch はしない)
+    const cached = __hasAssessmentCache.get(userId);
+    if (cached !== undefined) {
+      setHasAssessment(cached);
       return;
     }
     let cancelled = false;
@@ -1183,7 +1225,9 @@ function EditFormCarePlan2({ content, onChange, userId }: {
         setHasAssessment(false);
         return;
       }
-      setHasAssessment(Array.isArray(data) && data.length > 0);
+      const has = Array.isArray(data) && data.length > 0;
+      __hasAssessmentCache.set(userId, has);
+      setHasAssessment(has);
     })();
     return () => { cancelled = true; };
   }, [userId, supabaseForAi]);
@@ -5861,11 +5905,20 @@ function ReceivedRecordsPanel({
 // Main Content
 // ---------------------------------------------------------------------------
 
+export interface AiSettings {
+  enabled: boolean;
+  apiKey: string;
+}
+
 export interface ReportsContentProps {
   userId: string;
   reportType: string;
   initialDocs: ReportDoc[];
   initialCertifications: Certification[];
+  /** SSR 先読み。指定時は client 側の重複 fetch を skip する (未指定なら従来通り client fetch) */
+  initialClientName?: string | null;
+  initialAiSettings?: AiSettings | null;
+  initialHasAssessment?: boolean | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -5875,9 +5928,17 @@ export interface ReportsContentProps {
 //   - clientName: userId → name (簡易 1 列)
 //   - docs:       `${userId}|${reportType}|${certId ?? "_"}` → ReportDoc[]
 //   - certs:      userId → Certification[]
+//   - aiSettings: 自事業所の AI 設定 (user 非依存の単一値)。編集フォーム 2 種が
+//                 それぞれ同じ問い合わせをしていたので 1 箇所に集約した
+//   - hasAssessment: userId → アセスメント有無 (AI 生成ボタンの enabled 判定)
 const __clientNameCache = new Map<string, string | null>();
 const __docsCache = new Map<string, ReportDoc[]>();
 const __certsCache = new Map<string, Certification[]>();
+// aiSettings は user 非依存の単一値だが、他の cache と同じ Map で持つ
+// (module 変数の再代入は render 中に書けないため — react-hooks/globals)
+const AI_SETTINGS_KEY = "kaigo-app";
+const __aiSettingsCache = new Map<string, AiSettings>();
+const __hasAssessmentCache = new Map<string, boolean>();
 
 // 居宅サービス計画書 第1〜3表: この 3 つは「第1表/第2表/第3表」タブで並べる
 const CARE_PLAN_TAB_TYPES = ["care-plan-1", "care-plan-2", "care-plan-3"];
@@ -5921,7 +5982,15 @@ function shiftMonth(ym: string, n: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-export function ReportsContent({ userId, reportType: reportTypeProp, initialDocs, initialCertifications }: ReportsContentProps) {
+export function ReportsContent({
+  userId,
+  reportType: reportTypeProp,
+  initialDocs,
+  initialCertifications,
+  initialClientName = null,
+  initialAiSettings = null,
+  initialHasAssessment = null,
+}: ReportsContentProps) {
   // ──────────────────────────────────────────────────────────────
   // 第1〜3表 タブ即時切替: 表示中の帳票種別は localType (client state) が正。
   //   - タブクリック → window.history.pushState (URL 更新) + setLocalType。
@@ -5949,6 +6018,20 @@ export function ReportsContent({ userId, reportType: reportTypeProp, initialDocs
   const { currentOfficeId } = useBusinessType();
   const router = useRouter();
   const pathname = usePathname();
+
+  // SSR 先読み分を module-level cache に seed する。
+  // ⚠ effect ではなく render 中に行う: 子 (EditFormCarePlan1/2) の effect は
+  //   親の effect より先に走るため、effect で seed すると間に合わず子が自前 fetch する。
+  //   書き込みは「未設定のときだけ」なので再 render しても副作用は増えない。
+  if (initialClientName !== null && !__clientNameCache.has(userId)) {
+    __clientNameCache.set(userId, initialClientName);
+  }
+  if (initialAiSettings && !__aiSettingsCache.has(AI_SETTINGS_KEY)) {
+    __aiSettingsCache.set(AI_SETTINGS_KEY, initialAiSettings);
+  }
+  if (initialHasAssessment !== null && !__hasAssessmentCache.has(userId)) {
+    __hasAssessmentCache.set(userId, initialHasAssessment);
+  }
 
   // ブラウザ戻る/進む (popstate) で URL の type が変わったとき localType を同期する。
   // pushState した履歴 entry は Next router が同一 tree のまま restore する
@@ -6002,7 +6085,9 @@ export function ReportsContent({ userId, reportType: reportTypeProp, initialDocs
   const [selectedDoc, setSelectedDoc] = useState<ReportDoc | null>(() => initialDocsForSelected[0] ?? null);
   const [newLoading, setNewLoading] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [clientName, setClientName] = useState<string | null>(() => __clientNameCache.get(userId) ?? null);
+  const [clientName, setClientName] = useState<string | null>(
+    () => __clientNameCache.get(userId) ?? initialClientName,
+  );
 
   // ──────────────────────────────────────────────────────────────
   // 利用者 / 帳票種別 切替時: state を新 props で reset
