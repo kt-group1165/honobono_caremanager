@@ -1671,6 +1671,30 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth }: {
   const ymMonth = Number.isFinite(ymParts[1]) ? ymParts[1] : new Date().getMonth() + 1;
   const daysInMonth = daysInMonthOf(selectedYearMonth);
   // ServiceSelector へ渡す対象月 (再レンダリングでの無限 refetch 防止に memo)
+  // 集計サマリの金額用: 提供事業所名 → 地域区分。
+  //   ⚠ 2026-09-03 まで単価を 10 円固定にしていた (TODO のまま放置)。
+  //     訪問介護 22 事業所中 **21 (95.5%) が 10.21〜11.05** なので、
+  //     画面のサマリと印刷される別表 (beppyoUnitPrice を使う) が 2.1〜10.5% 食い違っていた。
+  //   引けない事業所が 1 つでもあれば **金額を出さない** (「単価未解決」と表示する)。
+  //     誤った金額を出し続けるより、出さないほうが安全。
+  const [officeAreaByName, setOfficeAreaByName] = useState<Map<string, string | null> | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data, error } = await supabase.from("offices").select("name, area_category").eq("is_active", true);
+      if (!alive) return;
+      if (error) {
+        console.error("offices fetch failed (集計サマリの単価):", error.message);
+        setOfficeAreaByName(new Map()); // 空 = 未解決扱い → 金額を出さない
+        return;
+      }
+      const m = new Map<string, string | null>();
+      for (const o of (data ?? []) as { name: string; area_category: string | null }[]) m.set(o.name, o.area_category);
+      setOfficeAreaByName(m);
+    })();
+    return () => { alive = false; };
+  }, [supabase]);
+
   const selectorTargetMonth = useMemo(
     () => ({ year: ymYear, month: ymMonth }),
     [ymYear, ymMonth],
@@ -2470,8 +2494,24 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth }: {
         const usedUnits = actualUnitsSum > 0 ? actualUnitsSum : plannedUnitsSum;
         const withinLimitUnits = limitUnits > 0 ? Math.min(usedUnits, limitUnits) : usedUnits;
         const overLimitUnits = limitUnits > 0 ? Math.max(0, usedUnits - limitUnits) : 0;
-        // 単価 = 10円/単位 (TODO: kaigo_service_codes.unit_price もしくは地域区分マスタから引く)
-        const unitPrice = 10;
+        // 単価は **提供事業所の地域区分 × サービス内容** で決まる。
+        //   ⚠ 2026-09-03 まで 10 円固定にしていた (TODO のまま放置)。訪問介護 22 事業所中
+        //     21 (95.5%) が 10.21〜11.05 なので、印刷される別表と 2.1〜10.5% 食い違っていた。
+        //   ★ **印刷される別表 (beppyoUnitPrice) と同じ挙動に揃える。**
+        //     別表も offices に無い提供事業所 (他社の通所・訪問看護 等) は 10.00 に落とす。
+        //     実測: kaigo_benefit_management 2026-06 の 5,878 行のうち offices で
+        //     引けるのは **180 行 (3.1%)** だけ。ここで「解決できなければ金額を出さない」に
+        //     すると **2,760 名中 2,722 名 (98.6%) で金額が消える**ので、その形は採らない。
+        //     画面と印刷が **同じ数字になる**ことを優先する。
+        const withinRatio = usedUnits > 0 ? withinLimitUnits / usedUnits : 0;
+        let costAcc = 0;
+        for (const svc of services) {
+          const u = rowMonthlyUnits(svc, actualUnitsSum > 0 ? "actual" : "planned");
+          if (u <= 0) continue;
+          const up = beppyoUnitPrice(officeAreaByName?.get((svc.provider ?? "").trim()) ?? null, svc.content ?? "");
+          costAcc += Math.floor((u * withinRatio * Math.round(up * 100)) / 100);
+        }
+        const unitPrice = 10; // 超過分の全額自費 (= 保険給付外) は地域単価の対象外なので 10 円
         // 利用者負担率 (= 1割/2割/3割)。content.copay_rate_pct は手入力 (デフォルト 10)
         const copayRate = (() => {
           const r = Number(content.copay_rate_pct ?? content.copay_rate ?? 10);
@@ -2479,7 +2519,7 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth }: {
           return r;
         })();
         // 保険分 (= 限度内のみが保険適用)、全額分 (= 限度超過分は自費)。丸めは国保連方式 (floor)
-        const insuranceTotalCost = Math.floor(withinLimitUnits * unitPrice);
+        const insuranceTotalCost = costAcc;
         const userCopayInsurance = Math.floor(insuranceTotalCost * copayRate / 100); // 利用者負担額 (保険分)
         const userFullPay = Math.floor(overLimitUnits * unitPrice); // 全額分 (= 限度超過)
         // 保険外利用料 / 公費 / 軽減 は手入力 (まずは手入力 OK)
