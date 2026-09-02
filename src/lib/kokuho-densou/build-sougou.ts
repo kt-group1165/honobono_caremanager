@@ -196,9 +196,14 @@ export function buildSougouDensou(
   ]);
 
   // 公費請求分 (法別番号ごと)
-  const kohiRows = rows.filter(
-    (r) => (r.kohiHobetsu || r.kohiTandoku) && (r.kohiAmount ?? 0) > 0,
-  );
+  // ★ 条件は明細書 (71R1 基本の hasKohi) と必ず一致させる。
+  //   公費請求額が 0 円 (本人負担上限 ≧ 保険給付後負担) でも明細書には公費欄が出るので、
+  //   ここで `kohiAmount > 0` を条件にすると **明細の件数 > 請求書の件数** になり
+  //   国保連で返戻になる。介護給付 (build.ts) で同じ穴を 2026-09-03 に是正しており、
+  //   総合事業にも同型が残っていた (scripts/sougou-densou-71r1-verify.mts で再現)。
+  //   実伝送での裏取り (介護 KK 159本): ほのぼのは請求額 0 円の 1 件も
+  //   件数・単位・費用に含めている (姉ム KK260704 法別12: 明細9件 == 請求書 件数9)。
+  const kohiRows = rows.filter((r) => r.kohiHobetsu || r.kohiTandoku);
   const byHobetsu = new Map<string, UserSeikyuRow[]>();
   for (const r of kohiRows) {
     const h = r.kohiHobetsu ?? "12";
