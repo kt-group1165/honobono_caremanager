@@ -284,5 +284,57 @@ console.log(`  ⚠ 保険者の異なる認定が重なっている利用者: ${
 for (const [uid, v] of overlapping) console.log(`     ${uid}: ${v} (先頭=採用される保険者)`);
 check("総合事業の実績がある保険者はすべて単価マップに登録されている", missing.length, 0);
 
+console.log("\n=== §7 単価は「保険者」で決まる — 事業所単位で持つと誤請求になることの実証 ===");
+// memory project_sougou_insurer_scoped_master の「事業所単位で持つと誤請求」を
+// 実データで裏付ける。**保険者の単価 ≠ 事業所の単価** の行が何行あるかを数える。
+{
+  const priceMap = Object.fromEntries(
+    [...mapBody.matchAll(/"(\d{6})":\s*([\d.]+)/g)].map((m) => [m[1], Number(m[2])]),
+  ) as Record<string, number>;
+  const offices = await rest("offices?select=id,name,unit_price&limit=200");
+  const officeById = new Map(offices.map((o) => [String(o.id), o]));
+  const schedFull: Record<string, unknown>[] = [];
+  for (let off = 0; ; off += 1000) {
+    const p = await rest(
+      "kaigo_visit_schedule?select=user_id,office_id,visit_date&system=eq.%E7%B7%8F%E5%90%88%E4%BA%8B%E6%A5%AD" +
+        `&status=eq.completed&order=id&offset=${off}&limit=1000`,
+    );
+    schedFull.push(...p);
+    if (p.length < 1000) break;
+  }
+  let diffRows = 0, mapped = 0, fellBack = 0;
+  const pricesByOffice = new Map<string, Set<number>>();
+  for (const s of schedFull) {
+    const day = String(s.visit_date);
+    const cs = (certsByClient.get(String(s.user_id)) ?? [])
+      .filter((c) => {
+        const st = String(c.certification_start_date ?? ""), en = String(c.certification_end_date ?? "");
+        return (!st || st <= day) && (!en || en >= day);
+      })
+      .sort((a, b) =>
+        String(b.certification_start_date ?? "").localeCompare(String(a.certification_start_date ?? "")));
+    const ins = String(cs[0]?.insurer_number ?? "").trim();
+    const off = officeById.get(String(s.office_id));
+    if (!ins || !off) continue;
+    const officePrice = Number(off.unit_price);
+    const insPrice = priceMap[ins];
+    if (insPrice === undefined) { fellBack++; continue; }
+    mapped++;
+    if (insPrice !== officePrice) diffRows++;
+    const k = String(off.name);
+    if (!pricesByOffice.has(k)) pricesByOffice.set(k, new Set());
+    pricesByOffice.get(k)!.add(insPrice);
+  }
+  console.log(`  総合事業の実績 (保険者・事業所が引けたもの): ${mapped + fellBack} 件 (分母)`);
+  console.log(`  単価マップ未登録 → office.unit_price にフォールバック: ${fellBack} 件`);
+  console.log(`  ★ 保険者の単価 ≠ 事業所の単価 (事業所単位で持つと誤請求になる行): ${diffRows} 件`);
+  const multi = [...pricesByOffice.entries()].filter(([, v]) => v.size > 1);
+  console.log(`  ★ 同一事業所で単価が複数種になる事業所: ${multi.length} / ${pricesByOffice.size} (分母)`);
+  for (const [name, set] of multi) console.log(`      ${name}: ${[...set].sort((a, b) => a - b).join(" / ")} 円`);
+  // 保険者スコープが必要であることの確認。0 になったら「事業所単位でも足りる」に変わったということ
+  check("保険者スコープが必要 (事業所単位では表現できない事業所がある)", multi.length > 0, true);
+  check("単価マップ未登録へのフォールバックは発生していない", fellBack, 0);
+}
+
 console.log(`\n=== 結果: PASS ${pass} / FAIL ${fail} ===`);
 if (fail > 0) process.exit(1);
