@@ -15,7 +15,8 @@
     "check:paging": "tsx scripts/paging-order-check.mts",
     "check:densou": "tsx scripts/densou-precheck.mts",
     "check:sougou": "tsx scripts/sougou-verify.mts",
-    "check:sougou-shoguu": "tsx scripts/sougou-shoguu-verify.mts"
+    "check:sougou-shoguu": "tsx scripts/sougou-shoguu-verify.mts",
+    "check:teigen": "tsx scripts/kyotaku-teigen-verify.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
