@@ -61,6 +61,13 @@ function loadEnv() {
  * hasGoalCols が false のときは何も足さない (取込自体は通る)。
  */
 let hasGoalCols = false;
+/**
+ * care_manager_name (2026-09-02 追加): CSV の「作成者」氏名をそのまま保存する。
+ * care_manager_number (公式ソース=居宅サービス計CSV) が引けない/未取込の間も、
+ * 後から名前ベースで正しいケアマネ番号を追跡できるようにするための列。
+ * 列が無い DB (migration未適用) では何も足さず取込自体は通す。
+ */
+let hasCmNameCol = false;
 const goalCols = (s) => (!hasGoalCols ? {} : {
   needs: s.issue || null,
   long_term_goal: s.longGoal || null,
@@ -120,6 +127,13 @@ async function main() {
     console.log(hasGoalCols
       ? "  第2表: 課題・長期目標・短期目標・期間の列あり"
       : "  ⚠ 第2表に課題・目標の列が無いのでサービス行だけ入れます (care_plan_services_goals.sql 未適用)");
+  }
+  {
+    const probe = await sb.from("kaigo_care_plans").select("care_manager_name").limit(1);
+    hasCmNameCol = !probe.error;
+    console.log(hasCmNameCol
+      ? "  care_manager_name 列あり: CSVの作成者氏名を保存します"
+      : "  ⚠ care_manager_name 列が無いので作成者氏名は保存しません (add_care_manager_name.sql 未適用)");
   }
 
   // ⚠ 第1表には **2 種類の書式**がある。列数で見分ける。
@@ -306,7 +320,8 @@ async function main() {
       start_date: p.l.made, end_date: null, status: "active",
       long_term_goals: longs || null, short_term_goals: shorts || null,
       // ⚠ created_by は uuid 列 (members への FK)。CSV の作成者は氏名なので入らない。
-      //   氏名は第2表の notes 側に残す。
+      //   氏名は care_manager_name に保存する (care_manager_number が未確定でも追跡可能にするため)。
+      ...(hasCmNameCol ? { care_manager_name: p.l.author || null } : {}),
     }).select("id").single();
     if (error) { console.error(`✗ ${p.name}: ${error.message}`); process.exit(1); }
     if (WITH_SERVICES && p.svc.length) {
