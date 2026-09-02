@@ -763,6 +763,16 @@ export function buildKeikakuhiFile(
     const meisai = u.lines && u.lines.length > 0 ? u.lines : [{ code: u.serviceCode, units: u.units, count: 1 }];
     const totalUnits = meisai.reduce((s, l) => s + l.units * l.count, 0);
     const amount = amountOf(u);
+    // ⚠ 項21 合計単位数 は Σ明細、項22 請求金額 と 7111 は u.units から計算する。
+    //   呼出側が両方を組み立てるため、食い違うと**票の中で基準がズレたまま静かに伝送される**。
+    //   現行の呼出側 (_seikyu-context.tsx buildClaimLines) は totalUnits を lines から
+    //   計算しているので一致するが、将来別経路が増えたときに黙らせないための検査。
+    //   (2026-09-03 scripts/keikakuhi-8124-verify.mts で実際に不整合を再現して追加)
+    if (totalUnits !== u.units) {
+      warnings.push(
+        `${u.userName}: 明細の合計単位数 (${totalUnits}) と請求単位数 (${u.units}) が一致しません — 8124 の 項21 は ${totalUnits} 単位、項22 請求金額は ${amount} 円 (${u.units} 単位ぶん) となり食い違います`,
+      );
+    }
     meisai.forEach((l, i) => {
       const isLast = i === meisai.length - 1;
       // ほのぼの様式: 最後の明細行は行番号99 (合計行を兼ねる) で 合計単位数・請求金額 を持つ
