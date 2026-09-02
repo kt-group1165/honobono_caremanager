@@ -33,6 +33,7 @@ import { findMeisaiFiles } from "./_meisai_files.mjs";
 import { normClientName as normClientNameShared } from "./_meisai_name.mjs";
 // 重訪の段の積み上げは _juho_ladder.mjs に一本化 (検証スクリプトと同じ実装を使う)
 import { zoneOf, juhoConvsForDay } from "./_juho_ladder.mjs";
+import { nearbyAllocations } from "../src/lib/shogai-seikyu/_nearby-allocations.mjs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import iconv from "iconv-lite";
@@ -195,30 +196,8 @@ function quantizeHours(minutes, stepMin, mode) {
 // 境界 = 深夜<6:00 / 早朝6-8 / 日中8-18 / 夜間18-22 / 深夜22- (service-selector と同一)
 function parseHM(s) { const m = /^(\d{1,2}):(\d{2})/.exec((s || "").trim()); return m ? Number(m[1]) * 60 + Number(m[2]) : null; }
 // zoneOf は _juho_ladder.mjs から import (二重定義を廃止)
-// natural と同じ合計 step 数を保ったまま、各要素 1 以上・ずれ 2 step 以内の配分を
-// ずれの小さい順に列挙する (natural 自身は除く)。時間帯は最大 4 つなので全探索でよい。
-// ⚠ src/lib/shogai-seikyu/code-from-time.ts の nearbyAllocations と同じ規則にすること。
-function nearbyAllocations(natural, totalUnits) {
-  const n = natural.length;
-  if (n < 2 || totalUnits < n) return [];
-  const out = [];
-  const cur = [];
-  const walk = (i, left) => {
-    if (i === n - 1) {
-      if (left < 1 || Math.abs(left - natural[i]) > 2) return;
-      const a = [...cur, left];
-      const d = a.reduce((s, v, k) => s + Math.abs(v - natural[k]), 0);
-      if (d > 0) out.push({ a, d });
-      return;
-    }
-    const lo = Math.max(1, natural[i] - 2);
-    const hi = Math.min(natural[i] + 2, left - (n - 1 - i));
-    for (let v = lo; v <= hi; v++) { cur.push(v); walk(i + 1, left - v); cur.pop(); }
-  };
-  walk(0, totalUnits);
-  out.sort((x, y) => x.d - y.d);
-  return out.map((x) => x.a);
-}
+// nearbyAllocations は src/lib/shogai-seikyu/_nearby-allocations.mjs から import。
+//   2026-09-03 まで逐語コピーだった (一致しているうちに切り出した)。
 
 // 算定開始〜終了 を時間帯ごとの滞在(分)に clock 順で分解。
 // 0時またぎ(e<=s)・解釈不能は null (単一時間帯 fallback に回す)。

@@ -28,6 +28,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { nearbyAllocations } from "./_nearby-allocations.mjs";
 
 /** 時間帯の境界。深夜 <6:00 / 早朝 6-8 / 日中 8-18 / 夜間 18-22 / 深夜 22- */
 export type Zone = "日" | "夜" | "深" | "早";
@@ -196,36 +197,7 @@ export async function loadShogaiCodeMaps(
   return maps;
 }
 
-/**
- * `natural` と同じ合計 step 数を保ったまま、各要素 1 以上・ずれ 2 step 以内の配分を
- * ずれの小さい順に列挙する (natural 自身は含めない)。
- * 時間帯は最大 4 つなので素朴な全探索でよい。
- */
-export function nearbyAllocations(natural: number[], totalUnits: number): number[][] {
-  const n = natural.length;
-  if (n < 2 || totalUnits < n) return [];
-  const out: { a: number[]; d: number }[] = [];
-  const cur: number[] = [];
-  const walk = (i: number, left: number) => {
-    if (i === n - 1) {
-      if (left < 1 || Math.abs(left - natural[i]) > 2) return;
-      const a = [...cur, left];
-      const d = a.reduce((s, v, k) => s + Math.abs(v - natural[k]), 0);
-      if (d > 0) out.push({ a, d });
-      return;
-    }
-    const lo = Math.max(1, natural[i] - 2);
-    const hi = Math.min(natural[i] + 2, left - (n - 1 - i));
-    for (let v = lo; v <= hi; v++) {
-      cur.push(v);
-      walk(i + 1, left - v);
-      cur.pop();
-    }
-  };
-  walk(0, totalUnits);
-  out.sort((x, y) => x.d - y.d);
-  return out.map((x) => x.a);
-}
+// nearbyAllocations は _nearby-allocations.mjs に切り出した (取込 .mjs と共有)。
 
 /**
  * 1 訪問 → 障害コード。
