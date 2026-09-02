@@ -29,6 +29,7 @@
 """
 import sys, json, re, unicodedata
 import pypdf
+import pdfplumber  # 相談内容欄の座標判定にだけ使う (consultation_boxes 参照)
 
 CHECK = "ü"          # Wingdings のチェック。選択された選択肢の左に置かれる
 CHECK_DX = (4, 22)   # ü から選択肢までの x 差の許容範囲
@@ -228,10 +229,62 @@ def user_name(text, items):
     return unicodedata.normalize("NFKC", v).strip() if v else None
 
 
-def parse_page(page):
+# 「■相談内容」枠の右端。実測 (2026-09-03 / 40 枚): 左カラムの語は x0<=290、
+# 右カラムの生活史は x0>=310 で、その間に語が 1 つも無い。
+CONSULT_X_RIGHT = 300
+CONSULT_LABELS = {"初回相談内容", "■相談内容", "（本人）", "（介護者・家族）"}
+
+
+def consultation_boxes(pl_page):
+    """「■相談内容」枠を **印字ラベルの y 区間** で切って (本人, 介護者・家族) を返す。
+
+    ⚠ 座標は **pdfplumber** で取る。pypdf の visitor が返す tm[5] は行位置と
+      一致せず、同じ枠の判定に使うと 40 枚すべてで別物になる (2026-09-03 実測)。
+      pdfplumber は既に parse_shougai_certs.py で使っている依存。
+
+    ⚠ ブロックを y 順に並べて left[0]=家族 / left[1]=本人 と **位置で決めてはいけない**。
+      片方の枠だけ記入された様式が実在し、ブロックが 1 個のときに
+      **本人の発言が家族欄に入る**。2026-09-03 に 40 枚を実測して 13 枚で発生していた
+      ((100)(101)(102)(103)(105)(108)(109)(11)(115)(118)(120)(124)(128))。
+
+    枠の座標は全 40 枚で 2 通りしか無く、ラベルは 3 点とも全枚に存在する:
+        「（本人）」        y=529.3 (36 枚) / 522.6 (4 枚)
+        「（介護者・家族）」 y=400.3 (36 枚) / 392.1 (4 枚)
+        枠の下端 (罫線)     y=311.8 (36 枚) / 305.8 (4 枚)
+    下端は pypdf では罫線が取れないので、直下の「介護保険」ラベル
+    (y=300.6 / 296.0) の少し上を使う。取れなければ y_fam-92 で打ち切る。
+    """
+    h = pl_page.height
+    left = [
+        (w["x0"], h - w["top"], w["text"])
+        for w in pl_page.extract_words()
+        if w["x0"] < CONSULT_X_RIGHT
+    ]
+    y_user = next((y for x, y, t in left if x < 62 and "本人" in t and 500 < y < 560), None)
+    y_fam = next((y for x, y, t in left if x < 62 and "介護者" in t), None)
+    if y_user is None or y_fam is None:
+        return None, None
+    y_ins = next((y for x, y, t in left if x < 80 and "介護保険" in t and y < y_fam), None)
+    y_bot = y_ins + 6 if y_ins is not None else y_fam - 92
+
+    def grab(lo, hi):
+        rows = {}
+        for x, y, t in left:
+            if lo < y < hi and t.strip() not in CONSULT_LABELS:
+                rows.setdefault(round(y / 2) * 2, []).append((x, t))
+        s = "".join("".join(t for _, t in sorted(v)) for _, v in sorted(rows.items(), reverse=True))
+        return s or None
+
+    return grab(y_fam, y_user), grab(y_bot, y_fam)
+
+
+def parse_page(page, pl_page=None):
     items = chunks_of(page)
     text = page.extract_text()
     kind = form_kind(text)
+    consult_user, consult_family = (
+        consultation_boxes(pl_page) if kind == "face_sheet" and pl_page is not None else (None, None)
+    )
     return {
         "kind": kind,
         "name": user_name(text, items),
@@ -240,6 +293,8 @@ def parse_page(page):
             {"x": round(b["x"], 1), "y": round(b["y_top"], 1), "text": b["text"]}
             for b in text_blocks(items)
         ],
+        "consultation_user": consult_user,
+        "consultation_family": consult_family,
         "raw_len": len(text),
     }
 
@@ -252,8 +307,23 @@ def main(paths):
         except Exception as e:  # 壊れた PDF は握りつぶさず記録する
             out.append({"file": p, "error": str(e)})
             continue
-        pages = [parse_page(pg) for pg in reader.pages]
-        out.append({"file": p, "pages": pages})
+        # 相談内容欄の座標だけ pdfplumber で取る (上の consultation_boxes 参照)。
+        # 開けなくても他の抽出は続ける — 握りつぶさず error に残す。
+        pl_pages, pl_err = [], None
+        try:
+            with pdfplumber.open(p) as pl:
+                pl_pages = list(pl.pages)
+                pages = [
+                    parse_page(pg, pl_pages[i] if i < len(pl_pages) else None)
+                    for i, pg in enumerate(reader.pages)
+                ]
+        except Exception as e:
+            pl_err = str(e)
+            pages = [parse_page(pg) for pg in reader.pages]
+        rec = {"file": p, "pages": pages}
+        if pl_err:
+            rec["consultation_error"] = pl_err
+        out.append(rec)
     json.dump(out, sys.stdout, ensure_ascii=False)
 
 

@@ -118,12 +118,16 @@ function fragmentOf(page) {
     // 生活史は右カラム (x≈309)。相談内容は **左端カラム (x≈49)**。
     // ⚠ x<200 で拾うと 住所(x≈143) や 相談経路(x≈114) を巻き込む。実際に踏んだ。
     const history = longest(B, (b) => b.x > 280 && b.x < 400 && b.text.length > 30);
-    const left = B.filter((b) => b.x < 60 && b.text.length > 20)
-      .sort((a, b) => b.y - a.y);
-    // 交互に描かれた 2 枠。y が大きいほうが「介護者・家族」、小さいほうが「本人」
-    // (阿部代始子の計画書(1) の記載と突き合わせて確認済み 2026-08-31)
-    const family = left[0]?.text ?? null;
-    const user = left[1]?.text ?? null;
+    // 相談内容は パーサが印字ラベルの y 区間で切って consultation_user /
+    // consultation_family として返す (_parse_seikatsu_assessment_pdf.py)。
+    //
+    // ⚠ 以前は左カラムのブロックを y 降順に並べて left[0]=家族 / left[1]=本人 と
+    //   **位置で**代入していた。片方の枠だけ記入された様式が実在するため、
+    //   ブロックが 1 個のときに **本人の発言が家族欄に入っていた**。
+    //   2026-09-03 に 40 枚を実測して 13 枚で発生 (うち 8 枚は家族欄の文章が丸ごと欠落)。
+    //   ⚠ 既に取り込んだ 113 件は誤ったまま。是正には元 PDF からの再取込が要る。
+    const user = page.consultation_user ?? null;
+    const family = page.consultation_family ?? null;
     // 相談経路 (紹介者) は x≈114 の 1 行
     const route = longest(B, (b) => b.x > 100 && b.x < 140 && b.text.length > 10);
     return {
