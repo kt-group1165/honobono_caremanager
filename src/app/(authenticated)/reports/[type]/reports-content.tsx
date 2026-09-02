@@ -3177,10 +3177,17 @@ function EditFormUsageDetail({ content, onChange, userId, reportMonth }: {
       if (idx !== i) return item;
       const next = { ...item, [k]: v };
       // 自動計算
+      // 割引後単位数: 割引がなければ単位数と同じ (割引契約は手入力で上書きする)
       next.discount_units = next.units;
-      next.service_units = next.units;
-      next.total_cost = Math.round(next.within_limit_units * next.unit_price);
-      next.insurance_claim = Math.round(next.total_cost * next.benefit_rate / 100);
+      // サービス単位/金額 = 単位数 × 回数。単位数だけを入れると回数 2 以上で過少になる
+      next.service_units = next.units * (next.count || 0);
+      // ⚠ 介護報酬の金額は **円未満切り捨て** (Math.round ではない)。
+      //   round だと端数 0.5 以上で 1 円多く出て、保険請求額が過大になる。
+      //   根拠: visit-seikyu/aggregate.ts と同じ計算をほのぼの実伝送と突合済
+      //   (2026-09-03 公費併用の検証 15/15 一致。floor が正)。
+      next.total_cost = Math.floor(next.within_limit_units * next.unit_price);
+      next.insurance_claim = Math.floor(next.total_cost * next.benefit_rate / 100);
+      // 端数は本人負担側に乗せる (国保連方式)
       next.user_copay = next.total_cost - next.insurance_claim;
       return next;
     });
