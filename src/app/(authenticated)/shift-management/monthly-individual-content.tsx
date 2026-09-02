@@ -70,6 +70,10 @@ import { removeCancelFeeJippi, syncCancelFeeJippi } from "@/lib/visit-cancel";
 
 export interface MonthlyIndividualInitialData {
   schedules: VisitSchedule[];
+  /** SSR で取得済みの入院期間 (利用者ビューのみ)。undefined = 未取得 (staffビュー等) */
+  hospPeriods?: HospitalizationPeriod[];
+  /** hospPeriods を取得した時点の entityId (entity 切替検知用) */
+  entityId?: string;
 }
 
 interface MonthlyIndividualViewProps {
@@ -255,12 +259,21 @@ export function MonthlyIndividualView({
   }, [schedules, systemMap, supabase, currentMonth]);
 
   // 入院期間 (🏥 バッジ用、利用者ビューのみ)。entity 切替で 1 回 fetch。
-  const [hospPeriods, setHospPeriods] = useState<HospitalizationPeriod[]>([]);
+  // SSR (initialData.hospPeriods) が同じ entityId 向けに既に取得済みなら初回だけスキップする。
+  const [hospPeriods, setHospPeriods] = useState<HospitalizationPeriod[]>(
+    initialData.entityId === entityId ? (initialData.hospPeriods ?? []) : [],
+  );
+  const hospInitialMount = useRef(true);
   useEffect(() => {
     if (entityType !== "user") {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- entity 切替に伴う derived reset
       setHospPeriods([]);
+      hospInitialMount.current = false;
       return;
+    }
+    if (hospInitialMount.current) {
+      hospInitialMount.current = false;
+      if (initialData.entityId === entityId) return;
     }
     let cancelled = false;
     getHospitalizationMap(supabase, [entityId])
@@ -271,7 +284,7 @@ export function MonthlyIndividualView({
         console.error("hospitalization fetch failed:", e);
       });
     return () => { cancelled = true; };
-  }, [supabase, entityType, entityId]);
+  }, [supabase, entityType, entityId, initialData.entityId, initialData.hospPeriods]);
 
   // server truth の status (pending が server 値に戻ったら pending から外す判定に使う)
   const serverStatusById = useMemo(() => {

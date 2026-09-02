@@ -16,6 +16,7 @@ import type { UserCalendarInitialData } from "./user-calendar-content";
 import type { StaffCalendarInitialData } from "./staff-calendar-content";
 import type { TimelineInitialData } from "./timeline-view-content";
 import type { MonthlyIndividualInitialData } from "./monthly-individual-content";
+import { getHospitalizationMap, type HospitalizationPeriod } from "@/lib/hospitalization";
 
 // Next.js 16: searchParams は Promise<...> で渡される (await 必須)。
 // node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/page.md 参照。
@@ -380,15 +381,21 @@ export default async function ShiftManagementPage({
     const entityId = tab === "user" ? selectedUserId : selectedStaffId;
     if (entityId) {
       const col = tab === "user" ? "user_id" : "staff_id";
-      const { data, error } = await supabase
-        .from("kaigo_visit_schedule")
-        .select("id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, status, clients(name), members!kaigo_visit_schedule_staff_id_fkey(name)")
-        .eq(col, entityId)
-        .gte("visit_date", monthFrom)
-        .lte("visit_date", monthTo)
-        .order("visit_date")
-        .order("start_time");
-      if (error) throw new Error(error.message);
+      // 入院期間 (🏥バッジ用、利用者ビューのみ) は独立クエリなので並列で取る。
+      const [schedRes, hospPeriods] = await Promise.all([
+        supabase
+          .from("kaigo_visit_schedule")
+          .select("id, user_id, staff_id, staff_id_2, staff_id_3, visit_date, start_time, end_time, service_type, status, clients(name), members!kaigo_visit_schedule_staff_id_fkey(name)")
+          .eq(col, entityId)
+          .gte("visit_date", monthFrom)
+          .lte("visit_date", monthTo)
+          .order("visit_date")
+          .order("start_time"),
+        tab === "user"
+          ? getHospitalizationMap(supabase, [entityId]).then((m) => m.get(entityId) ?? [])
+          : Promise.resolve<HospitalizationPeriod[]>([]),
+      ]);
+      if (schedRes.error) throw new Error(schedRes.error.message);
       type SchedRow = {
         id: string;
         user_id: string;
@@ -401,7 +408,7 @@ export default async function ShiftManagementPage({
         clients: { name: string } | null;
         members: { name: string } | null;
       };
-      const mapped: VisitSchedule[] = ((data ?? []) as unknown as SchedRow[]).map((r) => ({
+      const mapped: VisitSchedule[] = ((schedRes.data ?? []) as unknown as SchedRow[]).map((r) => ({
         id: r.id,
         user_id: r.user_id,
         staff_id: r.staff_id,
@@ -413,7 +420,7 @@ export default async function ShiftManagementPage({
         user_name: r.clients?.name ?? null,
         staff_name: r.members?.name ?? null,
       }));
-      initialMonthlyIndividualData = { schedules: mapped };
+      initialMonthlyIndividualData = { schedules: mapped, hospPeriods, entityId };
     }
   }
   } catch (e) {
