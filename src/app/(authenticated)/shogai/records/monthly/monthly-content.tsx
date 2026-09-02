@@ -10,7 +10,8 @@
  * 下部に 計画合計 / 提供合計 × (単位数・時間・区分別時間) を集計。
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
@@ -76,130 +77,191 @@ interface MergedRow {
   rec: RecRow | null;
 }
 
-export function ShogaiMonthlyContent() {
-  const supabase = useMemo(() => createClient(), []);
-  const { currentOffice, loading: btLoading } = useBusinessType();
-  const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
-  const [userId, setUserId] = useState<string>("");
-  const [plans, setPlans] = useState<PlanRow[]>([]);
-  const [recs, setRecs] = useState<RecRow[]>([]);
-  const [codeNames, setCodeNames] = useState<Map<string, string>>(new Map());
-  const [cert, setCert] = useState<{ beneficiary_number: string | null; contract_amount_text: string | null } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [busyKey, setBusyKey] = useState<string | null>(null);
-  const [printing, setPrinting] = useState(false);
+// server (@/lib/supabase/server) / browser (@/lib/supabase/client) どちらの client も
+// SupabaseClient なので、そのまま受ける (getHospitalizationMap 等と同じ型付け)。
+type SupabaseLike = SupabaseClient;
 
+// page.tsx (server) と ShogaiMonthlyContent (client、mount時 fetch) の両方から
+// 同じロジックを呼べるよう切り出し。受給者証を持つ利用者一覧 (officeId 非依存)。
+export async function loadShogaiUsers(
+  supabase: SupabaseLike,
+): Promise<{ id: string; name: string }[]> {
+  const { data, error } = await supabase
+    .from("shougai_certifications")
+    .select("client_id, clients(name)")
+    .order("client_id");
+  if (error) throw new Error("利用者取得失敗: " + error.message);
+  const seen = new Map<string, string>();
+  for (const r of (data ?? []) as unknown as { client_id: string; clients: { name: string } | null }[]) {
+    if (!seen.has(r.client_id)) seen.set(r.client_id, r.clients?.name ?? "(不明)");
+  }
+  return Array.from(seen, ([id, name]) => ({ id, name }));
+}
+
+export interface ShogaiMonthlyData {
+  plans: PlanRow[];
+  recs: RecRow[];
+  codeNames: [string, string][]; // Map は RSC 境界を跨げないので entries 配列で渡す
+  cert: { beneficiary_number: string | null; contract_amount_text: string | null } | null;
+}
+
+// 1 利用者 × 対象月の 計画/実績/コード名/受給者証 をまとめて取得。
+export async function loadShogaiMonthlyData(
+  supabase: SupabaseLike,
+  params: { userId: string; officeId: string | null; year: number; month: number },
+): Promise<ShogaiMonthlyData> {
+  const { userId, officeId, year, month } = params;
   const monthStr = `${year}-${String(month).padStart(2, "0")}`;
   const lastDay = new Date(year, month, 0).getDate();
   const from = `${monthStr}-01`;
   const to = `${monthStr}-${String(lastDay).padStart(2, "0")}`;
 
-  // 利用者 (受給者証を持つ利用者)
+  const { data: sched, error: e1 } = await supabase
+    .from("kaigo_visit_schedule")
+    .select("id, visit_date, start_time, end_time, service_type")
+    .eq("user_id", userId)
+    .gte("visit_date", from)
+    .lte("visit_date", to)
+    .order("visit_date")
+    .order("start_time");
+  if (e1) throw new Error("予定取得失敗: " + e1.message);
+  const allPlans = (sched ?? []) as PlanRow[];
+  const sysMap = await getServiceSystemMap(supabase, allPlans.map((p) => p.service_type), { year, month });
+  const plans = allPlans.filter((p) => isShogaiService(sysMap, p.service_type));
+
+  let recQ = supabase
+    .from("shogai_service_records")
+    .select(
+      "id, service_date, start_time, end_time, duration_minutes, service_type, service_category, service_code, unit_count, status",
+    )
+    .eq("client_id", userId)
+    .gte("service_date", from)
+    .lte("service_date", to)
+    .neq("status", "cancelled");
+  if (officeId) {
+    recQ = recQ.or(`office_id.eq.${officeId},office_id.is.null`);
+  }
+  const { data: rec, error: e2 } = await recQ.order("service_date").order("start_time");
+  if (e2) throw new Error("実績取得失敗: " + e2.message);
+  const recs = (rec ?? []) as RecRow[];
+
+  const codes = Array.from(new Set(recs.map((r) => r.service_code).filter(Boolean))) as string[];
+  let codeNames: [string, string][] = [];
+  if (codes.length > 0) {
+    const { data: cn } = await validInMonth(
+      supabase
+        .from("kaigo_service_codes")
+        .select("service_code, service_name")
+        .eq("system", "障害")
+        .in("service_code", codes.slice(0, 200)),
+      year,
+      month,
+    );
+    codeNames = ((cn ?? []) as { service_code: string; service_name: string }[]).map((c) => [c.service_code, c.service_name]);
+  }
+
+  const { data: certRow } = await supabase
+    .from("shougai_certifications")
+    .select("beneficiary_number, contract_amount_text, certification_start_date")
+    .eq("client_id", userId)
+    .order("certification_start_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const cert = (certRow as { beneficiary_number: string | null; contract_amount_text: string | null } | null) ?? null;
+
+  return { plans, recs, codeNames, cert };
+}
+
+export function ShogaiMonthlyContent({
+  initialUsers,
+  initialUserId,
+  initialOfficeId,
+  initialData,
+}: {
+  initialUsers?: { id: string; name: string }[];
+  initialUserId?: string;
+  /** initialData を取得した時点の officeId (entity/office 切替検知用) */
+  initialOfficeId?: string | null;
+  initialData?: ShogaiMonthlyData;
+} = {}) {
+  const supabase = useMemo(() => createClient(), []);
+  const { currentOffice, loading: btLoading } = useBusinessType();
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [users, setUsers] = useState<{ id: string; name: string }[]>(initialUsers ?? []);
+  const [userId, setUserId] = useState<string>(initialUserId ?? "");
+  const [plans, setPlans] = useState<PlanRow[]>(initialData?.plans ?? []);
+  const [recs, setRecs] = useState<RecRow[]>(initialData?.recs ?? []);
+  const [codeNames, setCodeNames] = useState<Map<string, string>>(
+    new Map(initialData?.codeNames ?? []),
+  );
+  const [cert, setCert] = useState<{ beneficiary_number: string | null; contract_amount_text: string | null } | null>(
+    initialData?.cert ?? null,
+  );
+  const [loading, setLoading] = useState(!initialData);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
+
+  // 対象月の範囲計算は loadShogaiMonthlyData 側に移した (year/month をそのまま渡す)
+
+  // 利用者 (受給者証を持つ利用者)。SSR (initialUsers) 済みなら初回だけスキップ。
+  const usersInitialMount = useRef(true);
   useEffect(() => {
+    if (usersInitialMount.current) {
+      usersInitialMount.current = false;
+      if (initialUsers) return;
+    }
     (async () => {
-      const { data, error } = await supabase
-        .from("shougai_certifications")
-        .select("client_id, clients(name)")
-        .order("client_id");
-      if (error) {
-        toast.error("利用者取得失敗: " + error.message);
-        return;
+      try {
+        const list = await loadShogaiUsers(supabase);
+        setUsers(list);
+        setUserId((prev) => prev || list[0]?.id || "");
+        // 受給者証登録者が 0 名のときは load() が走らないためここで解除
+        if (list.length === 0) setLoading(false);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "利用者取得失敗");
       }
-      const seen = new Map<string, string>();
-      for (const r of (data ?? []) as unknown as { client_id: string; clients: { name: string } | null }[]) {
-        if (!seen.has(r.client_id)) seen.set(r.client_id, r.clients?.name ?? "(不明)");
-      }
-      const list = Array.from(seen, ([id, name]) => ({ id, name }));
-      setUsers(list);
-      setUserId((prev) => prev || list[0]?.id || "");
-      // 受給者証登録者が 0 名のときは load() が走らないためここで解除
-      if (list.length === 0) setLoading(false);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 初回のみ判定は ref で行う
   }, [supabase]);
 
   const load = useCallback(async () => {
     if (!userId) return;
     setLoading(true);
     try {
-      // 計画 = カレンダー予定のうち障害サービスのもの
-      const { data: sched, error: e1 } = await supabase
-        .from("kaigo_visit_schedule")
-        .select("id, visit_date, start_time, end_time, service_type")
-        .eq("user_id", userId)
-        .gte("visit_date", from)
-        .lte("visit_date", to)
-        .order("visit_date")
-        .order("start_time");
-      if (e1) throw new Error("予定取得失敗: " + e1.message);
-      const allPlans = (sched ?? []) as PlanRow[];
-      const sysMap = await getServiceSystemMap(supabase, allPlans.map((p) => p.service_type), { year, month });
-      setPlans(allPlans.filter((p) => isShogaiService(sysMap, p.service_type)));
-
-      // 提供 = 障害実績 (自事業所スコープ。office_id 未設定の旧データは含める)
-      let recQ = supabase
-        .from("shogai_service_records")
-        .select(
-          "id, service_date, start_time, end_time, duration_minutes, service_type, service_category, service_code, unit_count, status",
-        )
-        .eq("client_id", userId)
-        .gte("service_date", from)
-        .lte("service_date", to)
-        .neq("status", "cancelled");
-      if (currentOffice) {
-        recQ = recQ.or(`office_id.eq.${currentOffice.id},office_id.is.null`);
-      }
-      const { data: rec, error: e2 } = await recQ
-        .order("service_date")
-        .order("start_time");
-      if (e2) throw new Error("実績取得失敗: " + e2.message);
-      const recRows = (rec ?? []) as RecRow[];
-      setRecs(recRows);
-
-      // サービスコード → 名称 (障害マスタ)
-      const codes = Array.from(new Set(recRows.map((r) => r.service_code).filter(Boolean))) as string[];
-      if (codes.length > 0) {
-        // 有効期間: 対象月に有効な世代のみ (改定跨ぎの同一コード複数世代ヒット防止)
-        const { data: cn } = await validInMonth(
-          supabase
-            .from("kaigo_service_codes")
-            .select("service_code, service_name")
-            .eq("system", "障害")
-            .in("service_code", codes.slice(0, 200)),
-          year,
-          month,
-        );
-        setCodeNames(
-          new Map(((cn ?? []) as { service_code: string; service_name: string }[]).map((c) => [c.service_code, c.service_name])),
-        );
-      } else {
-        setCodeNames(new Map());
-      }
-
-      // 受給者証 (実績記録票のヘッダ用: 受給者証番号 / 契約支給量)
-      const { data: certRow } = await supabase
-        .from("shougai_certifications")
-        .select("beneficiary_number, contract_amount_text, certification_start_date")
-        .eq("client_id", userId)
-        .order("certification_start_date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      setCert(
-        (certRow as { beneficiary_number: string | null; contract_amount_text: string | null } | null) ?? null,
-      );
+      const data = await loadShogaiMonthlyData(supabase, {
+        userId,
+        officeId: currentOffice?.id ?? null,
+        year,
+        month,
+      });
+      setPlans(data.plans);
+      setRecs(data.recs);
+      setCodeNames(new Map(data.codeNames));
+      setCert(data.cert);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [supabase, userId, from, to, year, month, currentOffice]);
+  }, [supabase, userId, year, month, currentOffice]);
 
+  // SSR (initialData) が今の userId/officeId 向けと一致するなら初回だけスキップ。
+  const loadInitialMount = useRef(true);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount/月・利用者変更時の fetch
+    if (loadInitialMount.current) {
+      loadInitialMount.current = false;
+      if (
+        initialData &&
+        initialUserId === userId &&
+        (initialOfficeId ?? null) === (currentOffice?.id ?? null)
+      ) {
+        return;
+      }
+    }
     load();
-  }, [load]);
+  }, [load, initialData, initialUserId, initialOfficeId, userId, currentOffice]);
 
   // (日付, 開始時刻) で 計画↔提供 を突合
   const rows: MergedRow[] = useMemo(() => {
