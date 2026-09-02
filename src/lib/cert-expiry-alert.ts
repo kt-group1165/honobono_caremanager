@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ID_IN_CHUNK, mapChunksParallel } from "./chunk-parallel";
+import { filterRecentlyActiveClients } from "./active-clients";
 
 /**
  * 認定更新の能動アラート (cert expiry alert)。
@@ -9,8 +10,11 @@ import { ID_IN_CHUNK, mapChunksParallel } from "./chunk-parallel";
  * INSERT する。cron が無い構成のため、ダッシュボード読込時に scan → sync を実行する。
  *
  * 判定仕様:
- *   - 対象: 自事業所 (client_office_assignments.end_date IS NULL) の
- *     active な利用者 (clients.status='active', is_facility=false)
+ *   - 対象: 自事業所 (client_office_assignments) の
+ *     active な利用者 (clients.status='active', is_facility=false) のうち
+ *     **直近に稼働がある人だけ** (2026-09-03 追加。active-clients.ts 参照)
+ *     ⚠ end_date IS NULL の条件は残してあるが **実データでは何も絞っていない**
+ *       (8,252 行すべて NULL)。実稼働フィルタが実質の母数を決める。
  *   - 「現在の認定」= certification_status='認定済み' かつ
  *     certification_start_date <= 今日 (または start 未入力) のうち start が最新の行
  *   - certification_end_date 未入力の行はアラート対象外 (期限が無い)
@@ -159,7 +163,18 @@ export async function scanCertExpiry(
   for (const rows of nameChunks) {
     for (const r of rows) nameById.set(r.id, r.name);
   }
-  const activeIds = Array.from(nameById.keys());
+  if (nameById.size === 0) return [];
+
+  // 2b) ⚠ 実稼働で絞る (2026-09-03 追加)
+  //   上の `.is("end_date", null)` は **何も絞っていない**。実測で
+  //   client_office_assignments.end_date は 8,252 行すべて NULL だった
+  //   (割当を閉じる運用が無い)。そのため母数に過去の利用者が残り続け、
+  //   認定の期限切れが 母数ベース 1,355 名 / 実稼働ベース 78 名 と 17 倍ずれていた。
+  //   全事業所のダッシュボードを開けば通知が 1,355 件に膨らんで本物が埋もれる。
+  //   → 直近に稼働がある利用者だけを対象にする (active-clients.ts 参照)。
+  const activeIds = Array.from(
+    await filterRecentlyActiveClients(supabase, Array.from(nameById.keys()), today),
+  );
   if (activeIds.length === 0) return [];
 
   // 3) 認定行を client ごとに収集 (chunk 並列 + chunk 内は page-loop)

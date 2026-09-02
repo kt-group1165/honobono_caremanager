@@ -18,6 +18,10 @@ import { ja } from "date-fns/locale";
 import { useBusinessType } from "@/lib/business-type-context";
 import { runCertExpiryScan, type CertExpiryAlert } from "@/lib/cert-expiry-alert";
 import {
+  runShogaiCertExpiryScan,
+  type ShogaiCertAlert,
+} from "@/lib/shogai-cert-expiry-alert";
+import {
   runHoumonPlanAlertScan,
   type HoumonPlanAlert,
 } from "@/lib/houmon-care-plan/plan-alert";
@@ -214,6 +218,9 @@ export default function DashboardPage() {
   const [certAlerts, setCertAlerts] = useState<CertExpiryAlert[]>([]);
   const [certLoading, setCertLoading] = useState(true);
   const [certError, setCertError] = useState<string | null>(null);
+  // 障害受給者証 (2026-09-03 新設。切れたまま請求すると返戻になる)
+  const [shogaiCertAlerts, setShogaiCertAlerts] = useState<ShogaiCertAlert[]>([]);
+  const [shogaiCertError, setShogaiCertError] = useState<string | null>(null);
 
   // 訪問介護計画書の 未作成 / 期限切れ アラート (訪問介護モードのみ)
   const [planAlerts, setPlanAlerts] = useState<HoumonPlanAlert[]>([]);
@@ -356,25 +363,40 @@ export default function DashboardPage() {
     const run = async () => {
       if (!currentOfficeId || !tenantId) {
         setCertAlerts([]);
+        setShogaiCertAlerts([]);
         setCertLoading(false);
         return;
       }
       setCertLoading(true);
       setCertError(null);
-      try {
-        const supabase = createClient();
-        const alerts = await runCertExpiryScan(supabase, {
-          officeId: currentOfficeId,
-          tenantId,
-          isCareManagement,
-        });
-        if (!cancelled) setCertAlerts(alerts);
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "認定更新アラートの生成に失敗しました";
-        console.error("cert expiry scan failed:", msg);
-        if (!cancelled) setCertError(msg);
-      } finally {
-        if (!cancelled) setCertLoading(false);
+      setShogaiCertError(null);
+      const supabase = createClient();
+      // ⚠ 介護保険の認定と障害受給者証は **別々に成否を扱う**。
+      //   片方が落ちても、もう片方のアラートは出す (返戻に直結するため)。
+      const [certRes, shogaiRes] = await Promise.allSettled([
+        runCertExpiryScan(supabase, { officeId: currentOfficeId, tenantId, isCareManagement }),
+        runShogaiCertExpiryScan(supabase, { officeId: currentOfficeId, tenantId }),
+      ]);
+      if (!cancelled) {
+        if (certRes.status === "fulfilled") setCertAlerts(certRes.value);
+        else {
+          const msg =
+            certRes.reason instanceof Error
+              ? certRes.reason.message
+              : "認定更新アラートの生成に失敗しました";
+          console.error("cert expiry scan failed:", msg);
+          setCertError(msg);
+        }
+        if (shogaiRes.status === "fulfilled") setShogaiCertAlerts(shogaiRes.value);
+        else {
+          const msg =
+            shogaiRes.reason instanceof Error
+              ? shogaiRes.reason.message
+              : "受給者証アラートの生成に失敗しました";
+          console.error("shogai cert expiry scan failed:", msg);
+          setShogaiCertError(msg);
+        }
+        setCertLoading(false);
       }
     };
     run();
@@ -1047,6 +1069,78 @@ export default function DashboardPage() {
           </div>
         )}
       </section>
+
+      {/* 障害受給者証の期限 (2026-09-03 新設)
+          ⚠ 該当が 0 名のときは節ごと出さない。障害を扱わない事業所で
+            「0名」のカードが常設されると、他のアラートの邪魔にしかならない。 */}
+      {(shogaiCertAlerts.length > 0 || shogaiCertError) && (
+        <section className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <div className="flex items-center gap-2">
+              <CalendarClock size={18} className="text-rose-500" />
+              <h2 className="font-semibold text-gray-700">障害受給者証の期限</h2>
+            </div>
+            {!shogaiCertError && (
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                  shogaiCertAlerts.some((a) => a.stage === "expired")
+                    ? "bg-red-50 text-red-600"
+                    : "bg-amber-50 text-amber-600"
+                }`}
+              >
+                {shogaiCertAlerts.length}名
+              </span>
+            )}
+          </div>
+          {shogaiCertError ? (
+            <div className="flex items-center gap-2 px-5 py-6 text-sm text-red-600">
+              <AlertTriangle size={16} />
+              <span>受給者証アラートの取得に失敗しました: {shogaiCertError}</span>
+            </div>
+          ) : (
+            <>
+              <p className="px-5 pt-3 text-xs text-gray-500">
+                ⚠ 受給者証が切れたまま請求すると返戻になります。
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500">
+                      <th className="px-4 py-3">氏名</th>
+                      <th className="px-4 py-3">障害支援区分</th>
+                      <th className="px-4 py-3">受給者証 満了日</th>
+                      <th className="px-4 py-3">残り</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {shogaiCertAlerts.map((a) => (
+                      <tr key={a.certId} className="hover:bg-gray-50/60 transition-colors">
+                        <td className="px-4 py-3 font-medium">
+                          <Link
+                            href={`/users/${a.clientId}${currentOfficeId ? `?office=${encodeURIComponent(currentOfficeId)}` : ""}`}
+                            className="text-blue-600 hover:underline"
+                          >
+                            {a.clientName}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {a.supportLevel ?? <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                          {format(parseISO(a.certEndDate), "yyyy/M/d", { locale: ja })}
+                        </td>
+                        <td className="px-4 py-3">
+                          <CertStageBadge stage={a.stage} daysLeft={a.daysLeft} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </section>
+      )}
 
       {/* 訪問介護計画書 未作成 / 期限切れ (訪問介護モードのみ) */}
       {isHomeCare && (

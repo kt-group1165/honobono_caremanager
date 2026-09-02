@@ -21,6 +21,10 @@ import {
   resolveCertClientId,
 } from "@/lib/cert-expiry-alert";
 import {
+  isShogaiCertAlertNotification,
+  resolveShogaiCertClientId,
+} from "@/lib/shogai-cert-expiry-alert";
+import {
   isHoumonPlanAlertNotification,
   resolveHoumonPlanClientId,
 } from "@/lib/houmon-care-plan/plan-alert";
@@ -49,6 +53,10 @@ function isCertRow(n: NotificationRow): boolean {
 
 function isHoumonPlanRow(n: NotificationRow): boolean {
   return isHoumonPlanAlertNotification(n);
+}
+
+function isShogaiCertRow(n: NotificationRow): boolean {
+  return isShogaiCertAlertNotification(n);
 }
 
 export default function NotificationsPage() {
@@ -137,6 +145,22 @@ export default function NotificationsPage() {
         );
       }
       router.push(`/users/${clientId}/care-cert${officeQs}`);
+      return;
+    }
+    if (isShogaiCertRow(row)) {
+      // 受給者証アラート → 利用者詳細へ (ref_id = shougai_certifications.id)
+      const clientId = await resolveShogaiCertClientId(createClient(), row.ref_id!);
+      if (!clientId) {
+        console.error("受給者証通知の参照先が見つかりません:", row.ref_id);
+        return;
+      }
+      if (!row.read_at) {
+        await markRead(row.id);
+        setRows((prev) =>
+          prev.map((r) => (r.id === row.id ? { ...r, read_at: new Date().toISOString() } : r)),
+        );
+      }
+      router.push(`/users/${clientId}${officeQs}`);
     }
   };
 
