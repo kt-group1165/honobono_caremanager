@@ -74,35 +74,50 @@ function fmtReiwa(d) {
   return `${y}年${mo}月${day}日`;
 }
 
+/**
+ * 印字される文字列の前後の空白を落とす。
+ *
+ * ⚠ ほのぼの由来の課題・目標には**前後にタブや空白**が付いていることがあり、
+ *    そのまま content に入れると第2表 → 訪問介護計画書 と流れて印刷まで届く
+ *    (帳票は whitespace-pre-wrap なのでタブをそのまま描く)。
+ *    2026-09-03 の実測で care-plan-2 20 件 / 文字列値 280,692 個中 末尾空白 338 個。
+ *
+ * ⚠ **文中のタブは落とさない** (trim は前後だけ)。文中のタブは ほのぼの側が意図して
+ *    入れた区切りで、消すと文章が繋がってしまう。置換処理を足さないこと。
+ */
+const t = (v) => (v == null ? "" : String(v).trim());
+
 /** reports-content.tsx の case "care-plan-2" をそのまま移植 */
 function buildContent(userName, plan, services) {
   const planPeriod = plan ? `${fmtReiwa(plan.start_date)}〜${fmtReiwa(plan.end_date)}` : "";
   const period = (a, b) => (a || b ? `${fmtReiwa(a ?? null)}〜${fmtReiwa(b ?? null)}` : planPeriod);
   const svcRow = (sv) => ({
-    content: sv.service_content,
+    content: t(sv.service_content),
     insurance_flag: "○",
-    type: sv.service_type,
-    provider: sv.provider ?? "",
-    frequency: sv.frequency ?? "",
+    type: t(sv.service_type),
+    provider: t(sv.provider),
+    frequency: t(sv.frequency),
     period: period(sv.service_start, sv.service_end),
   });
 
   const ordered = [...services].sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
-  const hasNesting = ordered.some((sv) => sv.needs || sv.long_term_goal || sv.short_term_goal);
+  // t() を通した後の値で判定する。空白だけの値を「入力あり」と数えると
+  // hasNesting=true なのに全ブロックが空、という食い違いが出る。
+  const hasNesting = ordered.some((sv) => t(sv.needs) || t(sv.long_term_goal) || t(sv.short_term_goal));
 
   const today = new Date().toISOString().slice(0, 10);
   if (hasNesting) {
     const blocks = [];
     for (const sv of ordered) {
-      const needs = sv.needs ?? "";
-      const lg = sv.long_term_goal ?? "";
+      const needs = t(sv.needs);
+      const lg = t(sv.long_term_goal);
       const lp = period(sv.long_term_start, sv.long_term_end);
       let block = blocks.find((b) => b.needs === needs && b.long_term_goal === lg);
       if (!block) {
         block = { needs, long_term_goal: lg, long_term_period: lp, goals: [] };
         blocks.push(block);
       }
-      const sg = sv.short_term_goal ?? "";
+      const sg = t(sv.short_term_goal);
       const sp = period(sv.short_term_start, sv.short_term_end);
       let goal = block.goals.find((g) => g.short_term_goal === sg);
       if (!goal) {
@@ -111,19 +126,19 @@ function buildContent(userName, plan, services) {
       }
       goal.services.push(svcRow(sv));
     }
-    return { user_name: userName, creation_date: fmtReiwa(plan?.start_date ?? today), blocks };
+    return { user_name: t(userName), creation_date: fmtReiwa(plan?.start_date ?? today), blocks };
   }
   return {
-    user_name: userName,
+    user_name: t(userName),
     creation_date: fmtReiwa(plan?.start_date ?? today),
     blocks: [
       {
-        needs: plan?.long_term_goals ?? "",
-        long_term_goal: plan?.long_term_goals ?? "",
+        needs: t(plan?.long_term_goals),
+        long_term_goal: t(plan?.long_term_goals),
         long_term_period: planPeriod,
         goals: [
           {
-            short_term_goal: plan?.short_term_goals ?? "",
+            short_term_goal: t(plan?.short_term_goals),
             short_term_period: planPeriod,
             services: ordered.map(svcRow),
           },

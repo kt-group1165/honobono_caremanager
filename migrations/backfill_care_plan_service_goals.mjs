@@ -73,7 +73,12 @@ async function main() {
   const byKeyGen = new Map();
   for (const line of lines.slice(1)) {
     if (!line.trim()) continue;
-    const r = line.split(",").map((x) => x.replace(/^"|"$/g, ""));
+    // ⚠ .trim() は必須。ほのぼのの CSV は課題・目標の**フィールド末尾にタブ**を
+    //    入れてくることがあり、囲みクォートを外すだけだと DB → 第2表 → 訪問介護計画書
+    //    と流れて印刷まで届く (pre-wrap がそのまま描く)。2026-09-03 に実測で 27 行を確認。
+    //    trim なので**文中のタブは落とさない**。文中のタブは ほのぼの側が意図して入れた
+    //    区切りで、消すと文章が繋がってしまうため触ってはいけない。
+    const r = line.split(",").map((x) => x.replace(/^"|"$/g, "").trim());
     const key = `${r[0]}|${r[1]}`;
     const made = iso(r[3]) ?? iso(r[2]) ?? "";
     if (!byKeyGen.has(key)) byKeyGen.set(key, new Map());
