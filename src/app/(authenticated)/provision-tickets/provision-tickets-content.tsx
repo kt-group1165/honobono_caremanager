@@ -104,6 +104,8 @@ interface VisitSchedule {
   staff3_end_time?: string | null;
   // 追加職員 (jsonb, 最大9名)。未適用 DB では undefined
   additional_staff?: Array<{ staff_id: string; start_time: string | null; end_time: string | null }> | null;
+  /** 制度区分 (介護/障害/総合事業)。保存で書き戻すため必ず読む (_shared.ts の VisitSchedule と同義) */
+  system?: string | null;
 }
 
 // A "row" in the provision ticket grid = unique combination of service + time.
@@ -120,6 +122,11 @@ export interface ServiceRow {
   // 追加職員 (主担当を除く、最大9名)。index0=職員2, index1=職員3, …
   // start/end は "HH:MM:SS" (個別時間) or null (本体と同じ)
   additional?: Array<{ staff_id: string; start_time: string | null; end_time: string | null }>;
+  // ★ 制度区分 (介護/障害/総合事業)。保存は delete→再 insert なので、読み込んだ値を
+  //   そのまま書き戻さないと **保存のたびに system が失われる**。
+  //   サービス名だけでは判定できない (障害の居宅介護は介護と同じ 111111 系コードを使う)
+  //   ため、DB に入っている値 (取込時に伝送/TJ で確定したもの) を正としてラウンドトリップする。
+  system?: string | null;
 }
 
 // Grid: rowKey -> day -> { planned: bool, actual: bool }
@@ -756,8 +763,9 @@ export function ProvisionTicketsContent({
 
     // staff2 列 (staff_id_2/staff2_start_time/staff2_end_time) + additional_staff は
     // 適用済み環境のみ select。未適用 (42703) の場合は無しで再取得する。
+    // ★ system は必ず読む (保存の delete→再 insert で書き戻すため。抜けると制度区分が消える)
     const baseCols =
-      "id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, members!kaigo_visit_schedule_staff_id_fkey(name)";
+      "id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, system, members!kaigo_visit_schedule_staff_id_fkey(name)";
     const staff2Cols = ", staff_id_2, staff_id_3, staff2_start_time, staff2_end_time, staff3_start_time, staff3_end_time";
     const addlCols = ", additional_staff";
     const fullCols =
@@ -818,6 +826,7 @@ export function ProvisionTicketsContent({
       staff3_start_time: r.staff3_start_time ?? null,
       staff3_end_time: r.staff3_end_time ?? null,
       additional_staff: r.additional_staff ?? null,
+      system: r.system ?? null,
     }));
 
     // 制度区分トグルに連動して行を絞る。
@@ -854,6 +863,8 @@ export function ProvisionTicketsContent({
           staff_id: s.staff_id ?? undefined,
           staff_name: s.staff_name ?? undefined,
           additional,
+          // 同じ rowKey (service_type+時間帯) の行は制度区分も同じ。先頭行の値を代表として持つ
+          system: s.system ?? null,
         });
       }
     }
@@ -1453,6 +1464,11 @@ export function ProvisionTicketsContent({
               end_time: row.end_time,
               service_type: row.service_type,
               status: cell.actual ? "completed" : "scheduled",
+              // ★ 制度区分を書き戻す。落とすと insertVisitSchedules の fillMissingSystem が
+              //   サービス名から引き直すが、**障害の居宅介護は介護と同じコード体系**のため
+              //   名前が曖昧な行は決まらず null のままになる (= 障害の請求漏れ)。
+              //   読み込んだ DB の値 (取込時に伝送/TJ で確定済み) を正としてラウンドトリップする。
+              ...(row.system ? { system: row.system } : {}),
               // C5: 発生元 office (列未適用 42703/PGRST204 は insertVisitSchedules が strip)
               ...(currentOfficeId ? { office_id: currentOfficeId } : {}),
               ...staff2Fields,
@@ -1565,10 +1581,15 @@ export function ProvisionTicketsContent({
 
   // ── formula 加算系コード (処遇改善加算等) を「自事業所の category」で絞る ──
   // currentOffice.service_type → category prefix (簡易 mapping)
+  // ⚠ 比較する文字列は **offices.service_type の実値** に合わせること。
+  //   実測 (2026-09-03): '居宅介護支援' / '訪問介護' / '訪問入浴' / '訪問看護' /
+  //   '福祉用具' / '本社' の 6 種類しか無い。'訪問入浴介護' のような
+  //   マスタに存在しない表記だと一致せず officeCategory=null になり、
+  //   フィルタが素通し (全サービス種別の処遇改善加算が候補に出る) になる。
   const officeCategory = useMemo(() => {
     const t = currentOffice?.service_type ?? "";
     if (t === "訪問介護") return "11";
-    if (t === "訪問入浴介護") return "12";
+    if (t === "訪問入浴") return "12";
     if (t === "訪問看護") return "13";
     if (t === "訪問リハビリテーション") return "14";
     if (t === "通所介護") return "15";
