@@ -181,12 +181,20 @@ const mkBilled = (name: string, insured: string, units: number) =>
   });
 const res5 = buildSougouDensou([mkBilled("甲", "0000000030", 1000), mkBilled("乙", "0000000031", 2000)], optsBase);
 const lines5 = res5.content.split("\r\n").filter(Boolean).map((l) => l.split(",").map((v) => v.replace(/"/g, "")));
-const rec7113 = lines5.find((c) => c.includes("7113"));
+const rec7113 = lines5.find((c) => c[2] === "7113");
 checkTrue("7113 請求書レコードが 1 本ある", !!rec7113);
-checkTrue("件数 2 が含まれる", (rec7113 ?? []).includes("2"));
-checkTrue("総単位 3000 が含まれる", (rec7113 ?? []).includes("3000"));
-checkTrue("費用合計 30000 が含まれる", (rec7113 ?? []).includes("30000"));
-checkTrue("事業費請求額 27000 (9割) が含まれる", (rec7113 ?? []).includes("27000"));
+// ⚠ includes() で値を探してはいけない (2026-09-03 に J の指摘で是正)。
+//   データレコードは index0 が必ず "2" (レコード種別) なので
+//   includes("2") は **件数が幾つでも通る**。同様に "3000" は単位数と
+//   利用者負担の両方に一致しうる。**項番の位置**で見る。
+//   レイアウト: [0]種別 [1]連番 [2]交換情報識別番号 … [8]件数 [9]単位数 [10]費用 [11]請求額
+const F = (i: number) => (rec7113 ?? [])[i];
+check("項: 件数 = 2", F(8), "2");
+check("項: 総単位数 = 3000", F(9), "3000");
+check("項: 費用合計 = 30000", F(10), "30000");
+check("項: 事業費請求額 = 27000 (9割)", F(11), "27000");
+// 位置で見ていることの担保: 値を変えたら落ちること (assertion が形骸化していない)
+check("恒等式: 費用 = 単位数 × 単価10.00", Number(F(10)), Number(F(9)) * 10);
 
 console.log("\n=== §6 単価マップの網羅性 (本番 DB を READ ONLY 参照) ===");
 // SOUGOU_UNITPRICE_BY_INSURER は非 export のため、ソースからキーを読む。
