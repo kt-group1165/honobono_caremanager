@@ -16,6 +16,7 @@
 import type { CSSProperties } from "react";
 import { ID_IN_CHUNK, NAME_IN_CHUNK } from "@/lib/chunk-parallel";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isAddonRecord } from "@/lib/shogai-seikyu/record-markers";
 import { serviceNameVariantsAll, toHankakuDigits } from "@/lib/service-name-normalize";
 import { isValidInMonth } from "@/lib/service-code-valid";
 import { normalizeScheduleStaff } from "@/app/(authenticated)/shift-management/_shared";
@@ -273,6 +274,8 @@ export interface KeieiSchedRow {
   additional_staff: Array<{ staff_id: string; start_time: string | null; end_time: string | null }> | null;
   service_type: string | null;
   status: string | null;
+  /** 行種マーカー。増(加算)行は訪問ではないので集計から除外する (fetch 直後に filter) */
+  notes: string | null;
 }
 
 export interface MonthVisitData {
@@ -302,7 +305,7 @@ export async function fetchVisitMonthData(
     let q = supabase
       .from("kaigo_visit_schedule")
       .select(
-        "user_id, staff_id, staff_id_2, staff_id_3, start_time, end_time, staff2_start_time, staff2_end_time, staff3_start_time, staff3_end_time, additional_staff, service_type, status",
+        "user_id, staff_id, staff_id_2, staff_id_3, start_time, end_time, staff2_start_time, staff2_end_time, staff3_start_time, staff3_end_time, additional_staff, service_type, status, notes",
       )
       .gte("visit_date", start)
       .lte("visit_date", end);
@@ -317,7 +320,9 @@ export async function fetchVisitMonthData(
       if (!isMissingSchemaError(qErr.code)) error = `予定/実績の取得に失敗: ${qErr.message}`;
       break;
     }
-    const rows = (data ?? []) as KeieiSchedRow[];
+    // 増(加算)行は請求単位であって訪問ではない (同一訪問と同じ start/end を持つ)。
+    //   除外しないと障害の訪問回数・時間を段の本数ぶん重複計上する。
+    const rows = ((data ?? []) as KeieiSchedRow[]).filter((r) => !isAddonRecord(r.notes));
     schedules.push(...rows);
     if (rows.length < PAGE) break;
   }

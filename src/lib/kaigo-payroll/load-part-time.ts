@@ -14,6 +14,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isAddonRecord } from "@/lib/shogai-seikyu/record-markers";
 import { ID_IN_CHUNK } from "@/lib/chunk-parallel";
 import { normalizeScheduleStaff } from "@/app/(authenticated)/shift-management/_shared";
 import {
@@ -72,6 +73,14 @@ interface ScheduleRow {
   staff3_start_time: string | null;
   staff3_end_time: string | null;
   additional_staff: Array<{ staff_id: string; start_time: string | null; end_time: string | null }> | null;
+  /**
+   * 行種マーカー。**増(加算)行を弾くために必要。**
+   *   障害の実績は 1 訪問を段 (請求単位) に展開して持つので、加算行は
+   *   同一訪問と同じ start/end を持つ。除外しないと同じ訪問を段の本数ぶん
+   *   時給の対象に数える (2026-06 実測でパート 2,247 行 / 12,199.5 時間の水増し。
+   *   1 人で +1,920 時間 = 1 ヶ月 720 時間を超える値が出ていた)。
+   */
+  notes: string | null;
 }
 
 const isMissing = (code?: string) =>
@@ -100,7 +109,7 @@ export async function loadPartTimePayroll(
     const { data: page, error: se } = await supabase
       .from("kaigo_visit_schedule")
       .select(
-        "visit_date, service_type, staff_id, staff_id_2, staff_id_3, start_time, end_time, staff2_start_time, staff2_end_time, staff3_start_time, staff3_end_time, additional_staff",
+        "visit_date, service_type, staff_id, staff_id_2, staff_id_3, start_time, end_time, staff2_start_time, staff2_end_time, staff3_start_time, staff3_end_time, additional_staff, notes",
       )
       .eq("office_id", officeId)
       .eq("status", "completed")
@@ -110,7 +119,8 @@ export async function loadPartTimePayroll(
       .range(from, from + PAGE - 1);
     if (se) throw new Error("実績の取得に失敗: " + se.message);
     const rows = (page ?? []) as ScheduleRow[];
-    schedules.push(...rows);
+    // 増(加算)行は請求単位であって訪問ではない。時給の対象に数えない
+    schedules.push(...rows.filter((r) => !isAddonRecord(r.notes)));
     if (rows.length < PAGE) break;
   }
 
@@ -121,6 +131,7 @@ export async function loadPartTimePayroll(
     staff_id_2: string | null;
     staff_id_3: string | null;
     additional_staff: Array<{ staff_id: string; start_time: string | null; end_time: string | null }> | null;
+    notes: string | null;
   };
   // additional_staff があれば全職員 id (時刻は不要なキャンセル集計用)。無ければ従来列に倒す
   const staffIdsOfRow = (r: {
@@ -140,7 +151,7 @@ export async function loadPartTimePayroll(
   for (let from = 0; ; from += PAGE) {
     const { data: page, error: ce } = await supabase
       .from("kaigo_visit_schedule")
-      .select("id, staff_id, staff_id_2, staff_id_3, additional_staff")
+      .select("id, staff_id, staff_id_2, staff_id_3, additional_staff, notes")
       .eq("office_id", officeId)
       .eq("status", "cancelled")
       .gte("visit_date", start)
@@ -149,7 +160,7 @@ export async function loadPartTimePayroll(
       .range(from, from + PAGE - 1);
     if (ce) throw new Error("キャンセル実績の取得に失敗: " + ce.message);
     const rows = (page ?? []) as CancelRow[];
-    cancelled.push(...rows);
+    cancelled.push(...rows.filter((r) => !isAddonRecord(r.notes))); // 加算行はキャンセル件数にも数えない
     if (rows.length < PAGE) break;
   }
 
@@ -329,7 +340,7 @@ export async function loadPartTimePayroll(
       const { data: page, error: pe } = await supabase
         .from("kaigo_visit_schedule")
         .select(
-          "visit_date, service_type, staff_id, staff_id_2, staff_id_3, start_time, end_time, staff2_start_time, staff2_end_time, staff3_start_time, staff3_end_time, additional_staff",
+          "visit_date, service_type, staff_id, staff_id_2, staff_id_3, start_time, end_time, staff2_start_time, staff2_end_time, staff3_start_time, staff3_end_time, additional_staff, notes",
         )
         .eq("office_id", officeId)
         .eq("status", "completed")
@@ -339,7 +350,7 @@ export async function loadPartTimePayroll(
         .range(from, from + PAGE - 1);
       if (pe) throw new Error("扶養累計の実績取得に失敗: " + pe.message);
       const rows = (page ?? []) as ScheduleRow[];
-      ytdRows.push(...rows);
+      ytdRows.push(...rows.filter((r) => !isAddonRecord(r.notes))); // 加算行は訪問ではない
       if (rows.length < PAGE) break;
     }
     const ytdVisits: PartTimeVisit[] = [];
