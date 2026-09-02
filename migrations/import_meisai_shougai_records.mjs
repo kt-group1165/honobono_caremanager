@@ -316,8 +316,15 @@ async function loadCodeMaps() {
   //     - 時間帯が **2 文字** (日中/夜間/深夜/早朝)。居宅介護は 1 文字 (日/夜/深/早)
   //     - **NFKC が「Ⅱ」を「II」に分解する**ので正規表現は `重訪(I{1,3})?` で書く
   //       (`重訪(Ⅰ|Ⅱ|Ⅲ)?` は NFKC 後の文字列にマッチせず解析成功 0 件になる)
-  //   入院等/90日減/同行 付きの派生 (1,792件) は KT Group 未算定のため対象外。
-  const juhoSteps = new Map(); // `${区分}|${時間帯}|${2人?1:0}` -> [{hours, code, units}] (時間昇順)
+  //   90日減/同行 付きの派生は KT Group 未算定のため対象外。
+  //   ⚠ 「入院等」は区分と時間帯の間に挿入される (例: 重訪Ⅰ入院等日中１．０) ため、
+  //     旧正規表現はここで丸ごとマッチ0件になっていた (修飾子ループに来る前に脱落)。
+  //     2026-09 に是正: 入院等の有無を軸に加えてマップキーに含める。
+  //     実測: 127301(入院等日中1.0)=214単位 / 121171(通常日中1.0)=214単位 と**単位数は同一**
+  //     (90日減を伴わない限り金額影響なし)。日次の入院判定は client_hospitalizations
+  //     テーブル(2026-09時点で全クライアント0件)を使うが、データが無い間は
+  //     hospitalized=false 固定で流れるため既存の出力は変化しない。
+  const juhoSteps = new Map(); // `${区分}|${時間帯}|${入院等?1:0}|${2人?1:0}` -> [{hours, code, units}] (時間昇順)
   {
     const rows2 = await fetchAll(
       "kaigo_service_codes",
@@ -329,19 +336,20 @@ async function loadCodeMaps() {
       if (seenCode.has(r.service_code)) continue;
       seenCode.add(r.service_code);
       const n = (r.service_name || "").normalize("NFKC");
-      const m = /^重訪(I{1,3})?(日中|夜間|深夜|早朝)([0-9]+\.[0-9]+)(.*)$/.exec(n);
+      const m = /^重訪(I{1,3})?(入院等)?(日中|夜間|深夜|早朝)([0-9]+\.[0-9]+)(.*)$/.exec(n);
       if (!m) continue;
-      const rest = m[4];
-      // 修飾子は ・2人 のみ許可 (入院等・90日減・同行 等は対象外)
+      const hosp = !!m[2];
+      const rest = m[5];
+      // 修飾子は ・2人 のみ許可 (90日減・同行 等は対象外)
       let two = false, skip = false;
       for (const p of rest.split("・").filter(Boolean)) {
         if (p === "2人") { two = true; continue; }
         skip = true; break;
       }
       if (skip) continue;
-      const key = `${m[1] || ""}|${m[2]}|${two ? 1 : 0}`;
+      const key = `${m[1] || ""}|${m[3]}|${hosp ? 1 : 0}|${two ? 1 : 0}`;
       if (!juhoSteps.has(key)) juhoSteps.set(key, []);
-      juhoSteps.get(key).push({ hours: Number(m[3]), code: r.service_code, name: r.service_name, units: r.units });
+      juhoSteps.get(key).push({ hours: Number(m[4]), code: r.service_code, name: r.service_name, units: r.units });
     }
     for (const arr of juhoSteps.values()) arr.sort((a, b) => a.hours - b.hours);
   }
@@ -516,8 +524,8 @@ function resolveBaseAddon(kind, zoneMinutesOrdered, step, mode, maps, twoPerson,
 // ⚠ 時間帯: 算定開始時刻の時間帯でコード系列を選ぶ。五井は全訪問が日中に収まっており
 //   時間帯またぎの実例が無いため未検証。
 // ⚠ 区分: マスタは 重訪Ⅰ/Ⅱ/Ⅲ。五井は全員 Ⅱ (区分6)。対応表未確定のため既定 Ⅱ。
-function juhoStepsFor(maps, zoneLabel, twoPerson, kubunRoman = "II") {
-  return maps.juhoSteps.get(`${kubunRoman}|${zoneLabel}|${twoPerson ? 1 : 0}`) ?? null;
+function juhoStepsFor(maps, zoneLabel, twoPerson, kubunRoman = "II", hospitalized = false) {
+  return maps.juhoSteps.get(`${kubunRoman}|${zoneLabel}|${hospitalized ? 1 : 0}|${twoPerson ? 1 : 0}`) ?? null;
 }
 
 // 通算分数 → 使う段の配列 (4h 超は 8.0h コードを繰り返す)
@@ -1352,6 +1360,40 @@ async function main() {
         `氏名で引けるもの ${named} / 時刻の外枠で引けるもの ${tjByEnvelope.size}`);
     }
   }
+  // 氏名逆引き用の clients を前倒しで取得 (入院判定に使うため、後段の resolvedClient 解決より前に要る)
+  const clients = await fetchAll("clients", "id,name,user_number");
+  const clientByName = new Map();
+  for (const c of clients) { const k = normClientName(c.name); if (!clientByName.has(k)) clientByName.set(k, []); clientByName.get(k).push(c.id); }
+
+  // ── 入院等判定 (client_hospitalizations) ──
+  //   2026-09時点で全クライアント0件 (誰の入院期間も未登録)。テーブルが空の間は
+  //   isHospitalizedOn が常に false を返すので、既存の出力(hospitalized=false 固定)は変わらない。
+  //   データが入り次第、このブロックを触らずに自動で 127xxx 系コードが出るようになる。
+  const hospPeriodsByClient = new Map(); // client_id -> [{admission_date, discharge_date}]
+  {
+    // ids で絞らず全件取得 (現状0件・将来も入院記録は稼働実績よりずっと少ない見込みのため
+    // .in() での URL 長超過を避ける)
+    const rows = await fetchAll(
+      "client_hospitalizations",
+      "client_id,admission_date,discharge_date",
+    ).catch(() => []); // テーブル未作成でも空扱いで続行
+    for (const r of rows) {
+      if (!hospPeriodsByClient.has(r.client_id)) hospPeriodsByClient.set(r.client_id, []);
+      hospPeriodsByClient.get(r.client_id).push(r);
+    }
+  }
+  // 氏名(MEISAI表記, 括弧・目印付き) + 日付(YYYY-MM-DD) → 入院中かどうか
+  const isHospitalizedByName = (clientName, dateStr) => {
+    const ids = clientByName.get(normClientName(clientName)) || [];
+    for (const id of ids) {
+      const periods = hospPeriodsByClient.get(id) || [];
+      for (const p of periods) {
+        if (dateStr >= p.admission_date && (p.discharge_date === null || dateStr < p.discharge_date)) return true;
+      }
+    }
+    return false;
+  };
+
   {
     // 「鈴木　拓也（2人目」→「鈴木拓也」。括弧以降と空白を落とす
     const juhoNameKey = (n) =>
@@ -1399,14 +1441,15 @@ async function main() {
       const totalMin = rows.reduce((sum, r) => sum + (santeiToMinutes(r.santei) ?? 0), 0);
       let convs = [];
       let minutes = 0;
+      const hospitalized = isHospitalizedByName(rows[0].clientName, rows[0].date);
       if (withTime.length === rows.length && withTime.length > 0) {
         // ★ 時刻が取れる = 確定ルールで時間帯ぶんかつ段を解決する。
         //   重なっても **合算する** (2人派遣にしない)。
         const stepsByZone = {};
         const stepsByZone2 = {};
         for (const [z, label] of [["早", "早朝"], ["日", "日中"], ["夜", "夜間"], ["深", "深夜"]]) {
-          stepsByZone[z] = juhoStepsFor(maps, label, false);
-          stepsByZone2[z] = juhoStepsFor(maps, label, true);
+          stepsByZone[z] = juhoStepsFor(maps, label, false, "II", hospitalized);
+          stepsByZone2[z] = juhoStepsFor(maps, label, true, "II", hospitalized);
         }
         if (!Object.values(stepsByZone).some(Boolean)) {
           convWarn.push(`重訪 段テーブル無し (${rows[0].clientName} ${rows[0].date})`);
@@ -1500,7 +1543,7 @@ async function main() {
       } else {
         // 時刻が欠けている行がある場合だけ、従来の単一時間帯 fallback
         const zoneLabel = zoneDigit(rows[0].santeiStart).zone;
-        const steps = juhoStepsFor(maps, zoneLabel, false);
+        const steps = juhoStepsFor(maps, zoneLabel, false, "II", hospitalized);
         if (!steps) {
           convWarn.push(`重訪 段テーブル無し zone=${zoneLabel} (${rows[0].clientName} ${rows[0].date})`);
           missKeys.add(`重訪II|${zoneLabel}|1人`);
@@ -1611,8 +1654,7 @@ async function main() {
     numToClient = JSON.parse(readFileSync(mapPath, "utf8"));
   } catch { console.warn(`⚠ マッピング ./_meisai_num_to_client_${MAP_TAG}.json 読込不可 — 氏名一致のみで解決`); }
 
-  // 氏名逆引き (mapping に無い分)
-  const clients = await fetchAll("clients", "id,name,user_number");
+  // 氏名逆引き (mapping に無い分)。clients/clientByName は入院判定のため前段(重訪ブロック)で取得済み
   const clientByUserNumber = new Map();
   for (const c of clients) {
     const k = String(c.user_number ?? "");
@@ -1620,8 +1662,6 @@ async function main() {
     if (!clientByUserNumber.has(k)) clientByUserNumber.set(k, []);
     clientByUserNumber.get(k).push(c.id);
   }
-  const clientByName = new Map();
-  for (const c of clients) { const k = normClientName(c.name); if (!clientByName.has(k)) clientByName.set(k, []); clientByName.get(k).push(c.id); }
   const nameByNum = {}; for (const r of target) nameByNum[r.clientNum] = r.clientName;
 
   const resolvedClient = new Map(); // clientNum -> client_id
