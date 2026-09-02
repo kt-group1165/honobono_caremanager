@@ -103,7 +103,125 @@ const REFS = [
   ["riyou_jippi_entries", "client_id"],
   ["riyou_seikyu_payments", "client_id"],
   ["kaigo_care_support_claims", "user_id"],
+  // ── 2026-09-03 追加: order-app 側の表。REFS が kaigo-app の表しか見ておらず
+  //    **12 表が丸ごと漏れていた** (care_plan_elements 10,098 行 / doc_tasks 4,227 行 等)。
+  //    孤立は当時 monitoring_records の 2 行だけだったが、これは統合した 19 組が
+  //    たまたま他の表に行を持っていなかっただけ。次の統合で壊れる状態だった。
+  ["orders", "client_id"],
+  ["care_plan_elements", "client_id"],
+  ["doc_tasks", "client_id"],
+  ["billing_unit_overrides", "client_id"],
+  ["billing_user_invoices", "client_id"],
+  ["billing_late_flags", "client_id"],
+  ["client_documents", "client_id"],
+  ["client_public_expenses", "client_id"],
+  ["client_rental_history", "client_id"],
+  ["monitoring_records", "client_id"],
+  ["renovation_projects", "client_id"],
+  ["shared_documents", "client_id"],
+  // events は calendar-app の訪問予定。client_id は実利用者を指す (タイトル「〇〇 様」と一致)
+  ["events", "client_id"],
+  // ── fail-closed 導入時に **空の表 12 個**が追加で見つかった (行が無いので
+  //    データ由来の検出では拾えず、列名の規則で初めて出た)。今は 0 行でも
+  //    使われ始めた瞬間に統合で孤立するので、先に入れておく。
+  ["shogai_seikyu_payments", "client_id"],
+  ["billing_rebill_flags", "client_id"],
+  ["kaigo_incident_reports", "client_id"],
+  ["shogai_service_use_plans", "client_id"],
+  ["invoices", "client_id"],
+  ["kokuho_shinsa_notice_rows", "client_id"],
+  ["shogai_monthly_summaries", "client_id"],
+  ["bath_billing_status", "client_id"],
+  ["service_meeting_notes", "client_id"],
+  ["kaigo_visit_procedure_documents", "client_id"],
+  ["kaigo_complaints", "client_id"],
+  ["bath_monthly_plan_units", "client_id"],
 ];
+
+/**
+ * **意図的に対象外**にする表と、その理由。
+ *   ここに書いていない表が利用者列を持っていたら、下の assertAllClassified が
+ *   **実行を止める**。リストを手で更新し続ける運用は必ず古くなるので、
+ *   「知らない表があったら止まる」ほうに倒す (fail-closed)。
+ */
+const EXCLUDED = new Map([
+  ["clients", "統合の主体そのもの。付け替え先ではない"],
+  ["v_order_margin", "order_items 由来の **ビュー**。実体が無く UPDATE できない (親を移せば追従する)"],
+  ["kaigo_care_plan_services", "care_plan_id で親 (kaigo_care_plans) にぶら下がる。利用者列を持たない"],
+  ["kaigo_billing_details", "billing_record_id で親 (kaigo_billing_records) にぶら下がる"],
+  ["monitoring_items", "monitoring_id で親 (monitoring_records) にぶら下がる"],
+  ["order_items", "order_id で親 (orders) にぶら下がる"],
+  ["billing_user_invoice_items", "invoice_id で親 (billing_user_invoices) にぶら下がる"],
+  ["renovation_project_steps", "project_id で親 (renovation_projects) にぶら下がる"],
+  // ── user_id が **認証ユーザー (auth.users)** であって利用者ではない表。
+  //    実データで確認済み: clients.id との一致が 0/N (passkey_credentials 4行・
+  //    trusted_devices 31行・user_groups 3行・auth_admin_passwords 5行・user_offices 40行)。
+  //    利用者統合で触ってはいけない。
+  ["passkey_credentials", "user_id は認証ユーザー。実データで clients と 0/4 一致"],
+  ["passkey_registration_grants", "同上 (passkey 登録の招待)"],
+  ["passkey_challenges", "同上 (認証チャレンジ)"],
+  ["trusted_devices", "user_id は認証ユーザー。実データで 0/5 一致"],
+  ["auth_admin_passwords", "user_id は認証ユーザー。実データで 0/5 一致"],
+  ["user_companies", "user_id は認証ユーザー (所属法人)"],
+  ["user_groups", "user_id は認証ユーザー。実データで 0/3 一致"],
+  ["user_offices", "user_id は認証ユーザー。実データで 0/5 一致"],
+  ["notifications", "user_id は認証ユーザー (通知の宛先)"],
+  ["kaigo_ai_usage_logs", "user_id は認証ユーザー (AI 利用ログ)"],
+]);
+
+/**
+ * ★ fail-closed: **利用者を指す列を持つ表が REFS にも EXCLUDED にも無ければ実行を止める。**
+ *
+ *   判定は 2 系統の OR で、片方だけでは漏れる:
+ *     (A) 列名が client_id / user_id     … 全行が孤立している表でも拾える
+ *     (B) 実データが clients.id に当たる … 変わった列名でも拾える
+ *   実際 (B) だけだと client_public_expenses (1 行しか無く、その 1 行が孤立) を
+ *   取りこぼした。両方要る。
+ *
+ *   表の一覧は information_schema が REST から見えないので **PostgREST の OpenAPI**
+ *   (GET /rest/v1/) から取る。
+ */
+async function assertAllClassified(clientIds) {
+  const res = await fetch(`${env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/`, {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+  });
+  if (!res.ok) {
+    console.error(`✗ 表一覧 (OpenAPI) を取得できません: ${res.status} — 分類を確認できないので中止します`);
+    process.exit(1);
+  }
+  const spec = await res.json();
+  const defs = spec.definitions ?? spec.components?.schemas ?? {};
+  const tables = Object.entries(defs).map(([t, d]) => ({ t, cols: Object.keys(d.properties ?? {}) }));
+
+  const unclassified = [];
+  for (const { t, cols } of tables) {
+    if (/^_backup/.test(t)) continue;          // 退避表は対象外 (名前で判別できる)
+    if (REFS.some(([rt]) => rt === t) || EXCLUDED.has(t)) continue;
+    // (A) 名前で判定
+    let hit = cols.find((c) => c === "client_id" || c === "user_id") ?? null;
+    // (B) 実データで判定
+    if (!hit) {
+      for (const c of cols.filter((c) => /_id$/.test(c) && !/^(id|tenant_id)$/.test(c))) {
+        const { data, error } = await sb.from(t).select(c).not(c, "is", null).limit(30);
+        if (error || !data?.length) continue;
+        const vals = data.map((r) => r[c]).filter(Boolean);
+        if (vals.length && vals.filter((v) => clientIds.has(v)).length / vals.length >= 0.5) { hit = c; break; }
+      }
+    }
+    if (hit) unclassified.push(`${t}.${hit}`);
+  }
+  if (unclassified.length) {
+    console.error(`
+✗ 未分類の表が ${unclassified.length} 個あります。REFS か EXCLUDED に分類してください:`);
+    for (const u of unclassified) console.error(`     ${u}`);
+    console.error("  (放置すると統合で参照が孤立します。EXCLUDED に入れるときは理由も書くこと)");
+    process.exit(1);
+  }
+  console.log(`  ✓ 利用者を指す表はすべて分類済み (REFS ${REFS.length} / EXCLUDED ${EXCLUDED.size} / 走査 ${tables.length} 表)`);
+}
 
 /** その表が存在し、その列を持つか (無ければ静かに外す) */
 async function usableRefs() {
@@ -188,6 +306,17 @@ function loadCsvPairNames() {
 
 async function main() {
   console.log(`=== 利用者の重複統合 ${EXECUTE ? "【EXECUTE】" : "【DRY RUN】"} ===\n`);
+  // ★ 分類漏れがあれば **ここで止まる** (fail-closed)。clients.id は判定に使うので先に取る
+  {
+    const idsForCheck = new Set();
+    for (let f = 0; ; f += 1000) {
+      const { data, error } = await sb.from("clients").select("id").order("id").range(f, f + 999);
+      if (error) { console.error(`✗ clients の取得に失敗: ${error.message}`); process.exit(1); }
+      for (const r of data) idsForCheck.add(r.id);
+      if (data.length < 1000) break;
+    }
+    await assertAllClassified(idsForCheck);
+  }
   const refs = await usableRefs();
   console.log(`  参照を調べる表 ${refs.length} 個\n`);
 
