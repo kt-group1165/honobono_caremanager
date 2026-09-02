@@ -661,15 +661,37 @@ async function main() {
   const selfIds = rows.filter((r) => r.jogenKanriKubun === "自事業所").map((r) => r.user_id);
   const linesByClient = new Map<string, ShogaiDensouKanriLine[]>();
   if (selfIds.length > 0) {
-    const { data, error } = await supabase
+    // ⚠ 1 利用者 1 か月に **事業所ごとの行**があり得る (shogai_jogen_kanri_office_scope.sql)。
+    //   office_id で絞らないと他事業所の関係事業所一覧を J411 に載せてしまう。
+    //   採用順は aggregate.ts (3.6) と同じ: 自事業所 → office_id NULL (旧データ)。
+    type KanriRow = { client_id: string; office_lines: ShogaiDensouKanriLine[]; office_id?: string | null };
+    const monthStr = `${YEAR}-${String(MONTH).padStart(2, "0")}`;
+    let kanriRows: KanriRow[] = [];
+    const withOffice = await supabase
       .from("shogai_jogen_kanri_results")
-      .select("client_id, office_lines")
-      .eq("target_month", `${YEAR}-${String(MONTH).padStart(2, "0")}`)
+      .select("client_id, office_lines, office_id")
+      .eq("target_month", monthStr)
       .in("client_id", selfIds);
-    if (error) throw new Error("上限管理結果取得失敗: " + error.message);
-    for (const k of (data ?? []) as { client_id: string; office_lines: ShogaiDensouKanriLine[] }[]) {
-      if (Array.isArray(k.office_lines) && k.office_lines.length > 0)
-        linesByClient.set(k.client_id, k.office_lines);
+    if (withOffice.error?.code === "42703") {
+      const legacy = await supabase
+        .from("shogai_jogen_kanri_results")
+        .select("client_id, office_lines")
+        .eq("target_month", monthStr)
+        .in("client_id", selfIds);
+      if (legacy.error) throw new Error("上限管理結果取得失敗: " + legacy.error.message);
+      kanriRows = (legacy.data ?? []) as KanriRow[];
+    } else if (withOffice.error) {
+      throw new Error("上限管理結果取得失敗: " + withOffice.error.message);
+    } else {
+      kanriRows = (withOffice.data ?? []) as KanriRow[];
+    }
+    for (const k of kanriRows) {
+      if (!Array.isArray(k.office_lines) || k.office_lines.length === 0) continue;
+      const isMine = k.office_id === OFFICE_ID;
+      const isLegacy = k.office_id == null;
+      if (!isMine && !isLegacy) continue;
+      if (linesByClient.has(k.client_id) && !isMine) continue;
+      linesByClient.set(k.client_id, k.office_lines);
     }
   }
 

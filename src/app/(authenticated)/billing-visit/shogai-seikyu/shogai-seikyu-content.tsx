@@ -1303,19 +1303,39 @@ export function ShogaiSeikyuContent({
           .map((r) => r.user_id);
         const linesByClient = new Map<string, ShogaiDensouKanriLine[]>();
         if (selfIds.length > 0) {
-          const { data, error } = await supabase
+          // ⚠ 1 利用者 1 か月に **事業所ごとの行**があり得る (shogai_jogen_kanri_office_scope.sql)。
+          //   office_id で絞らないと他事業所の関係事業所一覧を J411 に載せてしまう。
+          //   採用順は aggregate.ts (3.6) と同じ: 自事業所 → office_id NULL (旧データ)。
+          const selfOfficeId = currentOffice?.id ?? null;
+          type KanriRow = { client_id: string; office_lines: ShogaiDensouKanriLine[]; office_id?: string | null };
+          let kanriRows: KanriRow[] = [];
+          const withOffice = await supabase
             .from("shogai_jogen_kanri_results")
-            .select("client_id, office_lines")
+            .select("client_id, office_lines, office_id")
             .eq("target_month", mStr)
             .in("client_id", selfIds);
-          if (error) throw new Error("上限管理結果取得失敗: " + error.message);
-          for (const k of (data ?? []) as {
-            client_id: string;
-            office_lines: ShogaiDensouKanriLine[];
-          }[]) {
-            if (Array.isArray(k.office_lines) && k.office_lines.length > 0) {
-              linesByClient.set(k.client_id, k.office_lines);
-            }
+          if (withOffice.error?.code === "42703") {
+            // office_id 列が無い環境 (migration 未適用) は従来どおり
+            const legacy = await supabase
+              .from("shogai_jogen_kanri_results")
+              .select("client_id, office_lines")
+              .eq("target_month", mStr)
+              .in("client_id", selfIds);
+            if (legacy.error) throw new Error("上限管理結果取得失敗: " + legacy.error.message);
+            kanriRows = (legacy.data ?? []) as KanriRow[];
+          } else if (withOffice.error) {
+            throw new Error("上限管理結果取得失敗: " + withOffice.error.message);
+          } else {
+            kanriRows = (withOffice.data ?? []) as KanriRow[];
+          }
+          for (const k of kanriRows) {
+            if (!Array.isArray(k.office_lines) || k.office_lines.length === 0) continue;
+            const isMine = !!selfOfficeId && k.office_id === selfOfficeId;
+            const isLegacy = k.office_id == null;
+            if (!isMine && !isLegacy) continue;
+            // 自事業所の行が来たら旧データより優先して上書きする
+            if (linesByClient.has(k.client_id) && !isMine) continue;
+            linesByClient.set(k.client_id, k.office_lines);
           }
         }
         const users: ShogaiDensouUser[] = monthRows.map((r) => {
@@ -2342,6 +2362,47 @@ function ShogaiPaymentSection({
  * ⚠ migrations/shogai_jogen_kanri_office_scope.sql を適用するまで office_id 列は
  *   存在しないので、42703 なら旧キーで保存し直す (deploy 順を問わないため)。
  */
+/**
+ * 保存済みの上限管理結果を 1 件引く。
+ *
+ * ⚠ `.maybeSingle()` を使ってはいけない。shogai_jogen_kanri_office_scope.sql で
+ *   1 利用者 1 か月に **事業所ごとの行**を持てるようになったため、複数事業所が
+ *   関わる利用者では 2 行以上返って PGRST116 (406) になる。この画面は読込失敗時に
+ *   「保存済みの管理結果を保護するため編集 UI を出さない」設計なので、
+ *   406 になるとその利用者の上限額管理結果票が**作れなくなる**。
+ *
+ * 採用順は aggregate.ts (3.6) と同じ: 自事業所の行が最優先 → office_id NULL
+ * (列追加前の旧データ) → 他事業所の行は使わない。
+ */
+async function fetchJogenKanriRow<T extends Record<string, unknown>>(
+  supabase: ReturnType<typeof createClient>,
+  cols: string,
+  clientId: string,
+  targetMonth: string,
+  officeId: string | null,
+): Promise<{ data: T | null; error: { message: string } | null }> {
+  const withOffice = await supabase
+    .from("shogai_jogen_kanri_results")
+    .select(`${cols}, office_id`)
+    .eq("client_id", clientId)
+    .eq("target_month", targetMonth);
+  // office_id 列が無い環境 (migration 未適用) は従来どおり列なしで引く
+  if (withOffice.error?.code === "42703") {
+    const legacy = await supabase
+      .from("shogai_jogen_kanri_results")
+      .select(cols)
+      .eq("client_id", clientId)
+      .eq("target_month", targetMonth);
+    if (legacy.error) return { data: null, error: legacy.error };
+    return { data: ((legacy.data ?? [])[0] as T | undefined) ?? null, error: null };
+  }
+  if (withOffice.error) return { data: null, error: withOffice.error };
+  const rows = (withOffice.data ?? []) as (T & { office_id: string | null })[];
+  const mine = officeId ? rows.find((r) => r.office_id === officeId) : undefined;
+  const legacyRow = rows.find((r) => r.office_id == null);
+  return { data: (mine ?? legacyRow ?? null) as T | null, error: null };
+}
+
 async function upsertJogenKanri(
   supabase: ReturnType<typeof createClient>,
   officeId: string | null,
@@ -2564,12 +2625,13 @@ function JogenKanriSelfSection({
   const copyPrevMonth = async () => {
     const [py, pm] = month === 1 ? [year - 1, 12] : [year, month - 1];
     const prevKey = `${py}-${String(pm).padStart(2, "0")}`;
-    const { data, error } = await supabase
-      .from("shogai_jogen_kanri_results")
-      .select("office_lines")
-      .eq("client_id", row.user_id)
-      .eq("target_month", prevKey)
-      .maybeSingle();
+    const { data, error } = await fetchJogenKanriRow<{ office_lines: KanriOfficeLine[] | null }>(
+      supabase,
+      "office_lines",
+      row.user_id,
+      prevKey,
+      officeId,
+    );
     if (error) {
       toast.error("前月の上限管理データの取得に失敗: " + error.message);
       return;
@@ -2610,12 +2672,10 @@ function JogenKanriSelfSection({
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase
-        .from("shogai_jogen_kanri_results")
-        .select("office_lines, kanri_result")
-        .eq("client_id", row.user_id)
-        .eq("target_month", monthStr)
-        .maybeSingle();
+      const { data, error } = await fetchJogenKanriRow<{
+        office_lines: KanriOfficeLine[] | null;
+        kanri_result: number | null;
+      }>(supabase, "office_lines, kanri_result", row.user_id, monthStr, officeId);
       if (cancelled) return;
       if (error) {
         // 読込失敗時に空で初期化すると保存済みの管理結果を上書き消失させるため編集不可にする
@@ -2650,8 +2710,8 @@ function JogenKanriSelfSection({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 対象 (利用者×月) 切替時のみ再読込
-  }, [row.user_id, monthStr]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 対象 (利用者×月×事業所) 切替時のみ再読込
+  }, [row.user_id, monthStr, officeId]);
 
   const addLine = () => {
     if (!newName.trim()) {
