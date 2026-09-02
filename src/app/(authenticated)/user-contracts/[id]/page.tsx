@@ -301,12 +301,31 @@ export default async function ContractDetailPage({
   const contract = data as UserContract | null;
   if (!contract) notFound();
 
+  // ⚠ ここから下の fetch は **すべて契約書の印字欄に直結する**。
+  //   error を握りつぶすと、事業所名・住所・電話・管理者が空のまま契約書が出る。
+  //   実際に offices の取得で起きていた: `contract_overrides` 列が未作成 (42703) だと
+  //   事業所情報が丸ごと null になり、それが黙って印字されていた (2026-09-03 発見)。
+  //   行が無い (maybeSingle の null) のは正常なので、**error のときだけ**止める。
+  const fetchFailed = (where: string, e: { message: string } | null) =>
+    e ? (
+      <div className="p-6 text-sm text-red-600">
+        {where}の取得に失敗しました: {e.message}
+        <p className="mt-2 text-xs text-gray-500">
+          ⚠ 契約書に空欄のまま印字されるのを避けるため、表示を中止しました。
+        </p>
+      </div>
+    ) : null;
+
   // user 情報を取る
-  const { data: userRow } = await supabase
+  const { data: userRow, error: userErr } = await supabase
     .from("clients")
     .select("id, name, furigana")
     .eq("id", contract.user_id)
     .maybeSingle();
+  {
+    const bad = fetchFailed("利用者", userErr);
+    if (bad) return bad;
+  }
   const user = (userRow ?? null) as KaigoClientLite | null;
 
   // office 情報 + 法人 (companies) を join fetch
@@ -315,20 +334,28 @@ export default async function ContractDetailPage({
   let officeRow: OfficeLite | null = null;
   let companyRow: CompanyLite | null = null;
   if (contract.office_id) {
-    const { data: o } = await supabase
+    const { data: o, error: officeErr } = await supabase
       .from("offices")
       .select(
         "id, name, address, phone, fax, business_number, representative_name, manager_name, postal_code, company_id, contract_overrides",
       )
       .eq("id", contract.office_id)
       .maybeSingle();
+    {
+      const bad = fetchFailed("事業所", officeErr);
+      if (bad) return bad;
+    }
     officeRow = (o as OfficeLite | null) ?? null;
     if (officeRow?.company_id) {
-      const { data: co } = await supabase
+      const { data: co, error: companyErr } = await supabase
         .from("companies")
         .select("id, name, short_name, address, phone, fax, representative_name, postal_code")
         .eq("id", officeRow.company_id)
         .maybeSingle();
+      {
+        const bad = fetchFailed("法人", companyErr);
+        if (bad) return bad;
+      }
       companyRow = (co as CompanyLite | null) ?? null;
     }
   }
@@ -352,7 +379,11 @@ export default async function ContractDetailPage({
     } else {
       q = q.eq("is_active", true);
     }
-    const { data: tpl } = await q.maybeSingle();
+    const { data: tpl, error: tplErr } = await q.maybeSingle();
+    {
+      const bad = fetchFailed("契約書テンプレート", tplErr);
+      if (bad) return bad;
+    }
     if (tpl && (tpl as { content?: Record<string, string> }).content) {
       templateContent = (tpl as { content: Record<string, string> }).content;
     }
