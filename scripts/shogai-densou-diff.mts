@@ -526,12 +526,12 @@ function j121Meisai(p: ParsedFile) {
 // J611: 受給者別 サービス内容コード別 (回数/様式)
 function j611Summary(p: ParsedFile) {
   // basic 01: jukyu, yoshiki(col6). meisai 02: jukyu, yoshiki, tsuban(7), day(8), count(9), content(10)
-  const byJukyu = new Map<string, { yoshiki: Set<string>; days: Set<string>; meisaiCount: number; codeCount: Map<string, number> }>();
+  const byJukyu = new Map<string, { yoshiki: Set<string>; days: Set<string>; meisaiCount: number; codeCount: Map<string, number>; spans: string[] }>();
   for (const r of p.rows) {
     if (r.cols[0] !== "J611") continue;
     const c = r.cols;
     const jukyu = c[5];
-    if (!byJukyu.has(jukyu)) byJukyu.set(jukyu, { yoshiki: new Set(), days: new Set(), meisaiCount: 0, codeCount: new Map() });
+    if (!byJukyu.has(jukyu)) byJukyu.set(jukyu, { yoshiki: new Set(), days: new Set(), meisaiCount: 0, codeCount: new Map(), spans: [] });
     const e = byJukyu.get(jukyu)!;
     e.yoshiki.add(c[6]);
     if (c[1] === "02") {
@@ -539,8 +539,13 @@ function j611Summary(p: ParsedFile) {
       e.days.add(c[8]);
       const content = c[10] ?? "";
       e.codeCount.set(content, (e.codeCount.get(content) ?? 0) + 1);
+      // 提供時刻 (項9 日付 / 項14 開始 / 項15 終了)。J611_TIME=1 のときだけ比較に使う。
+      //   ⚠ 既定では見ていない = 行数とコード回数が合っていれば「一致」になる。
+      //     時刻がズレていても検出できないので、到達点の数字はその前提で読むこと。
+      e.spans.push(`${String(Number(c[8]) || 0).padStart(2, "0")} ${c[13] ?? ""}-${c[14] ?? ""}`);
     }
   }
+  for (const e of byJukyu.values()) e.spans.sort();
   return byJukyu;
 }
 
@@ -967,6 +972,15 @@ async function main() {
         const nv = n.codeCount.get(code) ?? 0;
         const hv = h.codeCount.get(code) ?? 0;
         if (nv !== hv) diffs.push(`内容コード ${code} 回数 新=${nv} ほ=${hv}`);
+      }
+      // J611_TIME=1 で **提供時刻まで**比較する (既定は行数とコード回数だけ)。
+      if (process.env.J611_TIME === "1" && n.spans.join("|") !== h.spans.join("|")) {
+        const hs = new Set(h.spans);
+        const ns = new Set(n.spans);
+        const onlyN = n.spans.filter((x) => !hs.has(x));
+        const onlyH = h.spans.filter((x) => !ns.has(x));
+        diffs.push(`提供時刻 不一致 (新のみ ${onlyN.length} / ほのみ ${onlyH.length})` +
+          (onlyN[0] ? ` 例 新[${onlyN[0]}] ほ[${onlyH[0] ?? "-"}]` : ""));
       }
     }
     if (diffs.length === 0) j611Match += 1;
