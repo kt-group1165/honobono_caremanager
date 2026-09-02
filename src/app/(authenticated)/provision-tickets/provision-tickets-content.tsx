@@ -113,6 +113,16 @@ interface VisitSchedule {
   cancel_fee?: number | null;
   cancelled_at?: string | null;
   cancel_reason?: string | null;
+  /**
+   * 取込マーカー ("[MEISAI取込 2026-06 茂原]" 等)。
+   * ⚠ **金額に直結する**。取込 script の削除スコープは
+   *   `office_id × like(notes,'[MEISAI取込%') × 月範囲` の 3 条件なので、
+   *   保存で notes を落とすと **その行が再取込の削除対象から外れ、
+   *   取込が新しい行を入れて実績が二重計上される**。
+   *   (2026-09-03 検証: 当時マーカー欠落は 6/40,381 行=手入力のみで重複は未発生。
+   *    書き戻さない限り提供表を保存するたびに欠落が増える構造だった)
+   */
+  notes?: string | null;
 }
 
 // A "row" in the provision ticket grid = unique combination of service + time.
@@ -149,6 +159,8 @@ export interface CellData {
   cancel_fee?: number | null;
   cancelled_at?: string | null;
   cancel_reason?: string | null;
+  /** 取込マーカー。落とすと再取込で重複する (上の VisitScheduleRow.notes 参照) */
+  notes?: string | null;
 }
 export type GridState = Record<string, Record<number, CellData>>;
 
@@ -787,9 +799,11 @@ export function ProvisionTicketsContent({
     //     system      制度区分。名前では判定できない行がある (障害の居宅介護は介護と同じコード体系)
     //     kinkyu_houmon / billable / cancel_fee / cancelled_at / cancel_reason
     //                 緊急時訪問介護加算・請求対象・キャンセル料 = いずれも金額に直結
+    //     notes       取込マーカー。落とすと再取込の削除スコープから外れ **実績が二重計上**
+    //                 される (2026-09-03 検証で構造を確認)
     //   42703 (列未適用) 時は下の fallback が baseCols だけで再取得するので、
     //   **この group は baseCols に混ぜない** (混ぜると fallback ごと失敗する)。
-    const stateCols = ", system, kinkyu_houmon, billable, cancel_fee, cancelled_at, cancel_reason";
+    const stateCols = ", system, kinkyu_houmon, billable, cancel_fee, cancelled_at, cancel_reason, notes";
     const fullCols =
       baseCols +
       stateCols +
@@ -855,6 +869,7 @@ export function ProvisionTicketsContent({
       cancel_fee: r.cancel_fee ?? null,
       cancelled_at: r.cancelled_at ?? null,
       cancel_reason: r.cancel_reason ?? null,
+      notes: r.notes ?? null,
     }));
 
     // 制度区分トグルに連動して行を絞る。
@@ -917,6 +932,7 @@ export function ProvisionTicketsContent({
         newGrid[key][day].cancel_fee = s.cancel_fee ?? null;
         newGrid[key][day].cancelled_at = s.cancelled_at ?? null;
         newGrid[key][day].cancel_reason = s.cancel_reason ?? null;
+        newGrid[key][day].notes = s.notes ?? null;
       }
 
       if (s.status === "scheduled" || s.status === "changed") {
@@ -1515,6 +1531,12 @@ export function ProvisionTicketsContent({
               ...(cell.cancel_fee != null ? { cancel_fee: cell.cancel_fee } : {}),
               ...(cell.cancelled_at != null ? { cancelled_at: cell.cancelled_at } : {}),
               ...(cell.cancel_reason != null ? { cancel_reason: cell.cancel_reason } : {}),
+              // ★ 取込マーカーを書き戻す。落とすと再取込の削除スコープ
+              //   (office_id × like(notes,'[MEISAI取込%') × 月範囲) から外れ、
+              //   取込が新しい行を入れて **実績が二重計上** される。
+              //   手編集した行にマーカーが残るが、取込を正とする運用なので
+              //   次の取込で上書きされるのが妥当 (重複させるより軽い)。
+              ...(cell.notes != null ? { notes: cell.notes } : {}),
               // C5: 発生元 office (列未適用 42703/PGRST204 は insertVisitSchedules が strip)
               ...(currentOfficeId ? { office_id: currentOfficeId } : {}),
               ...staff2Fields,
