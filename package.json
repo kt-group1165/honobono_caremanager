@@ -13,7 +13,8 @@
     "check:reports": "tsx scripts/reports-blank-check.mts",
     "check:billing-gap": "tsx scripts/meisai-billing-gap.mts",
     "check:paging": "tsx scripts/paging-order-check.mts",
-    "check:densou": "tsx scripts/densou-precheck.mts"
+    "check:densou": "tsx scripts/densou-precheck.mts",
+    "check:sougou": "tsx scripts/sougou-verify.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
