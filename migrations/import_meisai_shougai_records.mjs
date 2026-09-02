@@ -31,6 +31,8 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync, readdirSync } from "node:fs";
 import { findMeisaiFiles } from "./_meisai_files.mjs";
 import { normClientName as normClientNameShared } from "./_meisai_name.mjs";
+// 重訪の段の積み上げは _juho_ladder.mjs に一本化 (検証スクリプトと同じ実装を使う)
+import { zoneOf, juhoConvsForDay } from "./_juho_ladder.mjs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import iconv from "iconv-lite";
@@ -192,7 +194,7 @@ function quantizeHours(minutes, stepMin, mode) {
 // ---- 時間帯セグメント分解 ----
 // 境界 = 深夜<6:00 / 早朝6-8 / 日中8-18 / 夜間18-22 / 深夜22- (service-selector と同一)
 function parseHM(s) { const m = /^(\d{1,2}):(\d{2})/.exec((s || "").trim()); return m ? Number(m[1]) * 60 + Number(m[2]) : null; }
-function zoneOf(min) { if (min < 360 || min >= 1320) return "深"; if (min < 480) return "早"; if (min < 1080) return "日"; return "夜"; }
+// zoneOf は _juho_ladder.mjs から import (二重定義を廃止)
 // natural と同じ合計 step 数を保ったまま、各要素 1 以上・ずれ 2 step 以内の配分を
 // ずれの小さい順に列挙する (natural 自身は除く)。時間帯は最大 4 つなので全探索でよい。
 // ⚠ src/lib/shogai-seikyu/code-from-time.ts の nearbyAllocations と同じ規則にすること。
@@ -566,90 +568,9 @@ function juhoStepsForMinutes(steps, minutes, mode) {
 //   詳細は docs/TJ_JISSEKI_STRUCTURE.md
 // ============================================================================
 
-/**
- * 累計(分)の終了位置に対応する段の hours を返す。段の境界に乗っていなければ null。
- *
- * ⚠ 2026-09-03 是正: 4.0h 以下で完全一致が無いとき、旧実装は下の `t > 4` の行へ
- *   落ちて **8.0h の段を返していた**。マスタは全時間帯に 8.0h コードを持つので必ず
- *   誤発火する。時間帯 (早朝6-8/日中8-18/夜間18-22/深夜22-6) をまたぐ訪問で、
- *   またぎ地点の累計が 30 分刻みに乗らないと発生する。
- *   例) 07:30-08:30 (早30分+日30分): 早朝側の累計30分で 早朝8.0 が余計に立ち、
- *       日中1.0(202単位) だけのはずが +115単位 になっていた。
- *
- *   段の境界に乗らない累計 = **まだ段を1つ登り切っていない**ので、ここでは何も
- *   返さない (null)。累計は呼出側で継続し、境界に達した時点でその段が立つ。
- *
- * ⚠ 未決: 「1日の最後が段の途中で終わったとき、その端数を切り上げて課金するか」は
- *   制度解釈が要る (例: 80分の日を 1.0 のみ 202単位 とするか、1.0+1.5 の 301単位 と
- *   するか)。この関数は前者 (立てない) の挙動。判断が出るまで据え置き。
- *   → WORKING_NOW.md / claude-0a 宛て報告を参照。
- */
-function juhoTierHoursForCumEnd(cumEndMin, tierHours) {
-  const h = cumEndMin / 60;
-  // 4.0h までは段が刻みそのもの (1.0 / 1.5 / … / 4.0)。境界に乗らなければ段は立たない
-  if (h <= 4 + 1e-9) {
-    return tierHours.find((t) => Math.abs(t - h) < 1e-9) ?? null;
-  }
-  // 4.0h 超は「累計終了 以上 で最小の段」
-  return tierHours.find((t) => t > 4 + 1e-9 && t >= h - 1e-9) ?? null;
-}
+// juhoTierHoursForCumEnd は _juho_ladder.mjs から import (二重定義を廃止)
 
-/**
- * 1 日ぶんの重訪の訪問 (訪問順・時刻つき) から算定コード列を作る。
- * @param visits [{s,e}] 分。開始時刻昇順
- * @param stepsByZone zoneLabel -> [{hours, code, name, units}]
- * @returns [{code,name,units,zone}] / 解決できなければ null
- */
-function juhoConvsForDay(visits, stepsByZone, stepsByZone2 = null) {
-  // ① 訪問順に、時間帯の境界で細切れにする
-  //   v.n = その提供の人数 (TJ 由来。無ければ 1)。段は人数ぶん別のコード体系になる
-  //   (末尾 1 = 1人 / 末尾 2 = 2人)。
-  const segs = [];
-  for (const v of visits) {
-    let s = v.s;
-    while (s < v.e) {
-      const z = zoneOf(s);
-      // その時間帯の終わり (分)
-      const zEnd = z === "深" ? (s < 360 ? 360 : 1440) : z === "早" ? 480 : z === "日" ? 1080 : 1320;
-      const e = Math.min(v.e, zEnd);
-      if (e > s) segs.push({ zone: z, minutes: e - s, two: (v.n ?? 1) >= 2 });
-      s = e;
-    }
-  }
-  if (!segs.length) return null;
-
-  // ② 段の境界で切りながら累計する
-  const anyZone = Object.values(stepsByZone).find(Boolean);
-  if (!anyZone) return null;
-  const tierHours = [...new Set(anyZone.map((st) => st.hours))].sort((a, b) => a - b);
-  const tierEndsMin = tierHours.map((h) => h * 60);
-
-  const out = [];
-  let cum = 0;
-  for (const seg of segs) {
-    let left = seg.minutes;
-    while (left > 1e-9) {
-      // 次の段の終了累計。4h までは段そのもの、超えたら 30 分刻み
-      const next = cum < 240
-        ? tierEndsMin.find((m) => m > cum + 1e-9 && m <= 240)
-        : cum + 30;
-      const boundary = next ?? cum + 30;
-      const take = Math.min(left, boundary - cum);
-      const cumEnd = cum + take;
-      // 端数は 30 分に切り上げ (告示どおり)
-      const billedEnd = cumEnd < 240 ? cumEnd : Math.ceil(cumEnd / 30) * 30;
-      const th = juhoTierHoursForCumEnd(billedEnd, tierHours);
-      const steps = (seg.two && stepsByZone2) ? stepsByZone2[seg.zone] : stepsByZone[seg.zone];
-      if (th != null && steps) {
-        const st = steps.find((x) => Math.abs(x.hours - th) < 1e-9);
-        if (st) out.push({ code: st.code, name: st.name, units: st.units, zone: seg.zone, two: !!seg.two });
-      }
-      cum = cumEnd;
-      left -= take;
-    }
-  }
-  return out.length ? out : null;
-}
+// juhoConvsForDay は _juho_ladder.mjs から import (二重定義を廃止)
 
 // "HH:MM" → 当日分 (0時またぎは非対応。障害の訪問は同日内前提)
 function toMinOfDay(hm) {
