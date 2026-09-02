@@ -25,6 +25,7 @@ import {
 } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useSeikyuData } from "./use-seikyu-data";
+import type { SeikyuInitialData } from "./load-seikyu-data";
 import type { UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
 import type { ShogaiSeikyuRow } from "@/lib/shogai-seikyu/aggregate";
 
@@ -63,9 +64,16 @@ type SeikyuContextValue = ReturnType<typeof useSeikyuData> & {
 
 const SeikyuContext = createContext<SeikyuContextValue | null>(null);
 
-export function SeikyuProvider({ children }: { children: ReactNode }) {
+export function SeikyuProvider({
+  children,
+  initialData,
+}: {
+  children: ReactNode;
+  /** page.tsx (server) が ?office= 付きで先読みした集計結果 */
+  initialData?: SeikyuInitialData;
+}) {
   // 集計 hook は Provider で 1 回だけ呼ぶ (全タブが同じ結果を共有)
-  const data = useSeikyuData();
+  const data = useSeikyuData(initialData);
   const [kanaFilter, setKanaFilter] = useState<string | null>(null);
 
   const kanaMatches = useCallback(

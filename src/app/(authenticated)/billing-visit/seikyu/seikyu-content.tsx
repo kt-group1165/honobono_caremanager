@@ -18,6 +18,7 @@
 import { useState } from "react";
 import { useBusinessType } from "@/lib/business-type-context";
 import { SeikyuProvider } from "../_shared/seikyu-context";
+import type { SeikyuInitialData } from "../_shared/load-seikyu-data";
 import { MonthlyInfoContent } from "../_shared/monthly-info-content";
 import { ShogaiMonthlyInfoContent } from "../_shared/shogai-monthly-info-content";
 import { KaigoSeikyuContent } from "../kaigo-seikyu/kaigo-seikyu-content";
@@ -220,9 +221,9 @@ function SeikyuInner() {
   );
 }
 
-export function SeikyuContent() {
+export function SeikyuContent({ initialData }: { initialData?: SeikyuInitialData }) {
   return (
-    <SeikyuProvider>
+    <SeikyuProvider initialData={initialData}>
       <SeikyuInner />
     </SeikyuProvider>
   );
