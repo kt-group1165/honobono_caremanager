@@ -1,14 +1,19 @@
 /**
  * 移動支援 市町村別単価表の検証ハーネス (READ ONLY / DB 不要)
  *
- * src/lib/idou-shien-rates.ts の算定を、市から配布された単価表 PDF の全数値と突合する。
+ * migrations/_idou_rates.mjs の算定を、市から配布された単価表 PDF の全数値と突合する。
  * 単価表を追加・改定したら必ず回すこと。
  *
  *   npx tsx scripts/idou-shien-rates-check.mts
  *
  * 出典 PDF: サービスコード/移動支援/移動支援(茂原・睦沢).pdf / 移動支援(大多喜).pdf
+ *
+ * ⚠ import 先は **取込 script (import_meisai_idou_records.mjs) が実際に使っている
+ *   module** であること。2026-09-03 まで src/lib/idou-shien-rates.ts (どこからも
+ *   呼ばれていないコピー) を見ていて、**本番で使われる表とは別の表を検証していた**。
+ *   表を移すときはこの import も必ず追随させる。
  */
-import { calcIdouAmount, getIdouRates } from "@/lib/idou-shien-rates";
+import { calcIdouAmount, getIdouRates } from "../migrations/_idou_rates.mjs";
 
 let ng = 0;
 const check = (label: string, got: number | null | undefined, want: number) => {

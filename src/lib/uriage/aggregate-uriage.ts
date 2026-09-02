@@ -547,7 +547,7 @@ async function sumChiiki(
     //   **円建ての市町村 (茂原市・睦沢町) は units が無い**ので、取込時に notes へ書いた
     //   「NNNN円」から読む。単価表を持たない市町村は金額が入らないので件数だけ数える。
     //   ⚠ 体系差を吸収しているのは **取込 script**
-    //     (migrations/import_meisai_idou_records.mjs の RATES) だけで、
+    //     (migrations/_idou_rates.mjs) だけで、
     //     **画面側 (idou-records) は千葉市のコード表しか持たない**。
     //     他市町村は手動選択に落ちる (2026-09-03 に fail-closed 化)。
     const yenInNotes = /(\d+)円/.exec(r.notes ?? "");
@@ -558,7 +558,7 @@ async function sumChiiki(
   }
   if (noAmount > 0) {
     warnings.push(
-      `地域生活支援事業 ${noAmount} 件に金額が入っていません — 市町村の単価表が未登録の可能性があります (migrations/import_meisai_idou_records.mjs の RATES)`,
+      `地域生活支援事業 ${noAmount} 件に金額が入っていません — 市町村の単価表が未登録の可能性があります (migrations/_idou_rates.mjs)`,
     );
   }
 

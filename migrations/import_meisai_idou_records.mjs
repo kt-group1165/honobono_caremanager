@@ -5,7 +5,7 @@
 //   (010001「同行」は**同行訪問 = ヘルパーの同行手当**で請求対象外。取り込まない)
 //
 //   ⚠ 移動支援は**地域生活支援事業**で国保連に乗らない。市町村へ直接請求するため
-//     単価は市町村ごとに違う (src/lib/idou-shien-rates.ts)。
+//     単価は市町村ごとに違う (migrations/_idou_rates.mjs)。
 //     単価表が未登録の市町村は金額を入れずに warning を出す (推測で入れない)。
 //
 //   使い方:
@@ -18,6 +18,7 @@ import { assertRefsExist } from "./_fk_guard.mjs";
 import { readFileSync } from "node:fs";
 import { findMeisaiFiles } from "./_meisai_files.mjs";
 import { normClientName as normClientNameShared } from "./_meisai_name.mjs";
+import { calcIdouAmount } from "./_idou_rates.mjs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -136,53 +137,13 @@ async function main() {
 
   // ── 4) 単価解決 ──────────────────────────────────────────────────────────
   //
-  // ⚠ **この表は 2 か所にある** (2026-09-03 実測)。片方だけ直すと静かに食い違う。
-  //     ここ (取込 script)                → **実際に金額を入れているのはこちら**
-  //     src/lib/idou-shien-rates.ts       → app からは import されていない。
-  //                                          scripts/idou-shien-rates-check.mts が
-  //                                          PDF の全数値と突合するのに使っている
-  //   ⚠ ハーネスが検証しているのは **.ts 側**なので、ここを直してハーネスが緑でも
-  //     意味がない。**両方を同時に直すこと。**
-  //   画面側 (idou-records) は千葉市のコード体系しか持たず、他市町村は手動選択に
-  //   落ちる (2026-09-03 に fail-closed 化)。
+  // 単価表は **migrations/_idou_rates.mjs に一本化**した (2026-09-03)。
+  // それまでは同じ表がここと src/lib/idou-shien-rates.ts の 2 か所にあり、
+  // **ハーネスが検証しているのと本番で使われているのが別の表**だった。
+  // いまは検証ハーネス (scripts/idou-shien-rates-check.mts) も同じ module を見る。
   //
-  // 出典: サービスコード/移動支援/移動支援(茂原・睦沢).pdf / 移動支援(大多喜).pdf
-  //
-  // 【茂原市・睦沢町】共通。**円建て**。30 分刻みの基本額。
-  //   身体あり 30分未満 2,300 / 〜1h 4,000 / 〜1.5h 5,800 / 〜2h 6,550 / 〜2.5h 7,300 / 〜3h 8,050
-  //   3 時間以上は 8,050 円に 30 分増すごとに +700 円
-  //   加算: 早朝(6-8)・夜間(18-22) ×1.25 / 深夜(22-6) ×1.5
-  //
-  // 【大多喜町】**単位建て** (1 単位 = 10 円)。
-  //   ⚠ PDF の読み方に注意。「所要時間3時間以上の場合 916単位に…」の**本文 916 は誤植**で、
-  //     表の金額欄 **921 が 3.0h〜3.5h 未満の値**。「3時間以上すべて」の意味ではない。
-  //     (PDF 末尾の「※参考」行 3.5h = 1004 と 921+83 で繋がることで確認)
-  //     身体なしも同様で、本文 343 に対し **表の 345 が 1.5h〜2.0h 未満の値**。
-  //     → brackets の最後を 921 / 345 とし、そこから 30 分ごと +83 / +69 で伸ばすと
-  //       参考行 21 件すべてと一致する。
-  const MOBARA = { unit: "円", body: [2300, 4000, 5800, 6550, 7300, 8050], noBody: [800, 1500, 2250, 2950, 3650, 4350], stepBody: 700, stepNoBody: 700 };
-  const OTAKI = { unit: "単位", body: [256, 404, 587, 669, 754, 837, 921], noBody: [106, 197, 275, 345], stepBody: 83, stepNoBody: 69 };
-  const RATES = { 茂原市: MOBARA, 睦沢町: MOBARA, 大多喜町: OTAKI };
-  const bandOf = (hm) => {
-    const m = /^(\d{1,2}):(\d{2})/.exec((hm || "").trim());
-    const mm = m ? Number(m[1]) * 60 + Number(m[2]) : 720;
-    if (mm < 360 || mm >= 1320) return "深夜";
-    if (mm < 480) return "早朝";
-    if (mm < 1080) return "日中";
-    return "夜間";
-  };
-  const calc = (muni, minutes, startHM, withBody) => {
-    const r = RATES[(muni || "").trim()];
-    if (!r || minutes <= 0) return null;
-    const table = withBody ? r.body : r.noBody;
-    const step = withBody ? r.stepBody : r.stepNoBody;
-    const bracket = Math.max(1, Math.floor(minutes / 30) + 1);
-    const base = bracket <= table.length ? table[bracket - 1] : table[table.length - 1] + step * (bracket - table.length);
-    const band = bandOf(startHM);
-    const sur = band === "深夜" ? 0.5 : band === "日中" ? 0 : 0.25;
-    const v = Math.round(base * (1 + sur));
-    return { units: r.unit === "単位" ? v : null, yen: r.unit === "単位" ? v * 10 : v, band, sur };
-  };
+  // ⚠ 単価を改定したら  npx tsx scripts/idou-shien-rates-check.mts  を回すこと。
+  const calc = calcIdouAmount;
 
   // 5) plan 構築
   const payloads = [];
@@ -219,7 +180,7 @@ async function main() {
   console.log(`  市町村不明: ${noMuni.length}${noMuni.length ? " → " + [...new Set(noMuni)].join(", ") : ""}`);
   if (noRate.size) {
     console.log(`  ⚠ 単価表 未登録の市町村 (金額なしで取込): ${[...noRate].map(([k, v]) => `${k} ${v}件`).join(", ")}`);
-    console.log(`     → src/lib/idou-shien-rates.ts に単価表を追加してから再実行すると金額が入ります`);
+    console.log(`     → migrations/_idou_rates.mjs に単価表を追加してから再実行すると金額が入ります`);
   }
   const totalYen = payloads.reduce((s, p) => {
     const m = /(\d+)円/.exec(p.notes ?? ""); return s + (m ? Number(m[1]) : 0);
