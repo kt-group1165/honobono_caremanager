@@ -69,7 +69,7 @@ async function main() {
     const line = `${who} 被保番${r.insured_number} 開始${r.certification_start_date}`;
     // ほのぼので実物を見て確認した人だけ直す。推測で広げない
     if (!CONFIRMED.has((r.insured_number ?? "").trim())) { skipped.push(line + " — 未確認"); continue; }
-    plan.push({ id: r.id, line });
+    plan.push({ id: r.id, client_id: r.client_id, line });
   }
 
   console.log(`\n${WRONG} を持つ認定 ${(rows ?? []).length} 件 / 直す ${plan.length} 件`);
@@ -78,9 +78,42 @@ async function main() {
     console.log(`  ほのぼので確認していないので直さない ${skipped.length} 件:`);
     skipped.forEach((s) => console.log("     " + s));
   }
-  if (!plan.length) { console.log("対象なし"); return; }
 
-  if (!EXECUTE) { console.log("\nDRY RUN。--execute で反映する。"); return; }
+  // ── clients.insurer_number も直す (2026-09-03 追加) ────────────────────
+  //   当初はこの script が client_insurance_records しか直しておらず、
+  //   **clients 側に 001220 が残ったままだった**。clients.insurer_number は
+  //   請求画面 (billing/claims・billing/benefits) と order-app の伝送 builder
+  //   (lib/kokuho-densou/build.ts) が読むので、放置すると誤った番号が伝送に乗る。
+  //   対象は認定と同じく CONFIRMED の被保番を持つ利用者だけ。
+  const { data: cRows, error: cErr } = await sb
+    .from("clients")
+    .select("id, name, insurer_number, insured_number")
+    .eq("insurer_number", WRONG);
+  if (cErr) { console.error(cErr.message); process.exit(1); }
+  const cPlan = [], cSkipped = [];
+  for (const c of cRows ?? []) {
+    const line = `${c.name} 被保番${c.insured_number}`;
+    if (!CONFIRMED.has((c.insured_number ?? "").trim())) { cSkipped.push(line + " — 未確認"); continue; }
+    cPlan.push({ id: c.id, line });
+  }
+  console.log(`\n${WRONG} を持つ clients ${(cRows ?? []).length} 名 / 直す ${cPlan.length} 名`);
+  cPlan.forEach((p) => console.log("   " + p.line));
+  if (cSkipped.length) {
+    console.log(`  ほのぼので確認していないので直さない ${cSkipped.length} 名:`);
+    cSkipped.forEach((s) => console.log("     " + s));
+  }
+
+  if (!plan.length && !cPlan.length) { console.log("対象なし"); return; }
+
+  if (!EXECUTE) {
+    console.log("\nDRY RUN。--execute で反映する。");
+    console.log("  ⚠ 実行前に backup:");
+    console.log("     CREATE TABLE _backup_cir_001220_20260903 AS");
+    console.log(`       SELECT * FROM client_insurance_records WHERE insurer_number = '${WRONG}';`);
+    console.log("     CREATE TABLE _backup_clients_001220_20260903 AS");
+    console.log(`       SELECT * FROM clients WHERE insurer_number = '${WRONG}';`);
+    return;
+  }
 
   let ok = 0, ng = 0;
   for (const p of plan) {
@@ -88,11 +121,18 @@ async function main() {
       .from("client_insurance_records")
       .update({ insurer_number: RIGHT, insurer_name: "木更津市" })
       .eq("id", p.id);
-    if (e) { ng++; console.error(`  ✗ ${p.line}: ${e.message}`); continue; }
+    if (e) { ng++; console.error(`  ✗ 認定 ${p.line}: ${e.message}`); continue; }
     ok++;
   }
-  console.log(`\n反映 ${ok} 件 / 失敗 ${ng} 件`);
-  if (ng) process.exitCode = 1;
+  let cOk = 0, cNg = 0;
+  for (const p of cPlan) {
+    const { error: e } = await sb.from("clients").update({ insurer_number: RIGHT }).eq("id", p.id);
+    if (e) { cNg++; console.error(`  ✗ clients ${p.line}: ${e.message}`); continue; }
+    cOk++;
+  }
+  console.log(`\n反映  認定 ${ok} 件 / 失敗 ${ng} 件`);
+  console.log(`      clients ${cOk} 名 / 失敗 ${cNg} 名`);
+  if (ng || cNg) process.exitCode = 1;
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
