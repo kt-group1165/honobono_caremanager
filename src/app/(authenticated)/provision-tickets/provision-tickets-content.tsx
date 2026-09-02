@@ -106,6 +106,13 @@ interface VisitSchedule {
   additional_staff?: Array<{ staff_id: string; start_time: string | null; end_time: string | null }> | null;
   /** 制度区分 (介護/障害/総合事業)。保存で書き戻すため必ず読む (_shared.ts の VisitSchedule と同義) */
   system?: string | null;
+  // 訪問単位の状態列。保存 (delete→再 insert) で書き戻さないと既定値に戻る。
+  // kinkyu_houmon / billable / cancel_fee はいずれも金額に直結する。
+  kinkyu_houmon?: boolean | null;
+  billable?: boolean | null;
+  cancel_fee?: number | null;
+  cancelled_at?: string | null;
+  cancel_reason?: string | null;
 }
 
 // A "row" in the provision ticket grid = unique combination of service + time.
@@ -134,6 +141,14 @@ export interface CellData {
   planned: boolean; // has a scheduled record
   actual: boolean;  // has a completed record
   scheduleId?: string;
+  // ★ 訪問 (=セル) 単位の状態列。保存の delete→再 insert で書き戻すために読み込み時に退避する。
+  //   ServiceRow ではなくセルに持つ: キャンセルや緊急訪問は「その日のその訪問」の属性で、
+  //   同じサービス行の全日に広げてはいけない。
+  kinkyu_houmon?: boolean | null;
+  billable?: boolean | null;
+  cancel_fee?: number | null;
+  cancelled_at?: string | null;
+  cancel_reason?: string | null;
 }
 export type GridState = Record<string, Record<number, CellData>>;
 
@@ -763,13 +778,21 @@ export function ProvisionTicketsContent({
 
     // staff2 列 (staff_id_2/staff2_start_time/staff2_end_time) + additional_staff は
     // 適用済み環境のみ select。未適用 (42703) の場合は無しで再取得する。
-    // ★ system は必ず読む (保存の delete→再 insert で書き戻すため。抜けると制度区分が消える)
     const baseCols =
-      "id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, system, members!kaigo_visit_schedule_staff_id_fkey(name)";
+      "id, user_id, staff_id, visit_date, start_time, end_time, service_type, status, members!kaigo_visit_schedule_staff_id_fkey(name)";
     const staff2Cols = ", staff_id_2, staff_id_3, staff2_start_time, staff2_end_time, staff3_start_time, staff3_end_time";
     const addlCols = ", additional_staff";
+    // ★ 保存は delete→再 insert なので、**読まない列は保存のたびに既定値へ戻る**。
+    //   ここに挙げた列は書き戻し用に必ず読む (2026-09-03 是正):
+    //     system      制度区分。名前では判定できない行がある (障害の居宅介護は介護と同じコード体系)
+    //     kinkyu_houmon / billable / cancel_fee / cancelled_at / cancel_reason
+    //                 緊急時訪問介護加算・請求対象・キャンセル料 = いずれも金額に直結
+    //   42703 (列未適用) 時は下の fallback が baseCols だけで再取得するので、
+    //   **この group は baseCols に混ぜない** (混ぜると fallback ごと失敗する)。
+    const stateCols = ", system, kinkyu_houmon, billable, cancel_fee, cancelled_at, cancel_reason";
     const fullCols =
       baseCols +
+      stateCols +
       (staff2TimesSupported ? staff2Cols : "") +
       (additionalStaffSupported ? addlCols : "");
     // ★ 2026-08-31 監査での是正:
@@ -827,6 +850,11 @@ export function ProvisionTicketsContent({
       staff3_end_time: r.staff3_end_time ?? null,
       additional_staff: r.additional_staff ?? null,
       system: r.system ?? null,
+      kinkyu_houmon: r.kinkyu_houmon ?? null,
+      billable: r.billable ?? null,
+      cancel_fee: r.cancel_fee ?? null,
+      cancelled_at: r.cancelled_at ?? null,
+      cancel_reason: r.cancel_reason ?? null,
     }));
 
     // 制度区分トグルに連動して行を絞る。
@@ -880,6 +908,16 @@ export function ProvisionTicketsContent({
       const day = parseInt(s.visit_date.split("-")[2], 10);
       if (!newGrid[key]) newGrid[key] = {};
       if (!newGrid[key][day]) newGrid[key][day] = { planned: false, actual: false };
+
+      // 訪問単位の状態列を退避 (保存時に書き戻す)。同じセルに scheduled と completed の
+      // 2 行がある場合は completed (実績) を優先する。
+      if (s.status === "completed" || newGrid[key][day].kinkyu_houmon === undefined) {
+        newGrid[key][day].kinkyu_houmon = s.kinkyu_houmon ?? null;
+        newGrid[key][day].billable = s.billable ?? null;
+        newGrid[key][day].cancel_fee = s.cancel_fee ?? null;
+        newGrid[key][day].cancelled_at = s.cancelled_at ?? null;
+        newGrid[key][day].cancel_reason = s.cancel_reason ?? null;
+      }
 
       if (s.status === "scheduled" || s.status === "changed") {
         newGrid[key][day].planned = true;
@@ -1469,6 +1507,14 @@ export function ProvisionTicketsContent({
               //   名前が曖昧な行は決まらず null のままになる (= 障害の請求漏れ)。
               //   読み込んだ DB の値 (取込時に伝送/TJ で確定済み) を正としてラウンドトリップする。
               ...(row.system ? { system: row.system } : {}),
+              // ★ 訪問単位の状態列も書き戻す。落とすと既定値に戻り、
+              //   緊急時訪問介護加算・請求対象フラグ・キャンセル料が**金額ごと消える**。
+              //   読み込めていない (列未適用) 場合は undefined なので送らない。
+              ...(cell.kinkyu_houmon != null ? { kinkyu_houmon: cell.kinkyu_houmon } : {}),
+              ...(cell.billable != null ? { billable: cell.billable } : {}),
+              ...(cell.cancel_fee != null ? { cancel_fee: cell.cancel_fee } : {}),
+              ...(cell.cancelled_at != null ? { cancelled_at: cell.cancelled_at } : {}),
+              ...(cell.cancel_reason != null ? { cancel_reason: cell.cancel_reason } : {}),
               // C5: 発生元 office (列未適用 42703/PGRST204 は insertVisitSchedules が strip)
               ...(currentOfficeId ? { office_id: currentOfficeId } : {}),
               ...staff2Fields,
