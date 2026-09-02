@@ -633,14 +633,28 @@ export function buildKeikakuhiFile(
 
   const dataParts: string[][] = [];
 
-  const amountOf = (u: KeikakuhiUser) => Math.floor((u.units * unitPrice100) / 100);
+  /**
+   * その利用者の単位数。**明細 (lines) があればその合計を正とする**。
+   * 8124 の 項21 合計単位数 / 項22 請求金額 / 7111 の単位数・費用合計 を
+   * すべてここから導き、票の中で基準がズレないようにする。
+   * (以前は 項21 だけ Σ明細、項22 と 7111 は u.units で、呼出側が両方を
+   *  組み立てるため食い違うと静かに不整合な伝送になり得た。2026-09-03 是正。
+   *  実伝送 8124 5,697件すべてで 項22 == floor(項21 × 単価) が成立しており、
+   *  寄せる先は 項21 = Σ明細 が正しい)
+   * lines 省略時は従来どおり u.units (後方互換)。
+   */
+  const unitsOf = (u: KeikakuhiUser) =>
+    u.lines && u.lines.length > 0
+      ? u.lines.reduce((s, l) => s + l.units * l.count, 0)
+      : u.units;
+  const amountOf = (u: KeikakuhiUser) => Math.floor((unitsOf(u) * unitPrice100) / 100);
 
   // ── 公費単独 (被保険者番号 H = 生保 10割公費) は保険請求分レコードに含めない ──
   // (build.ts 訪問介護と同じ扱い。様式第一では保険請求欄に記載せず公費請求欄の生保行へ)
   const hokenUsers = users.filter((u) => !u.kohiTandoku);
   const tandokuUsers = users.filter((u) => !!u.kohiTandoku);
 
-  const totalUnits = hokenUsers.reduce((s, u) => s + u.units, 0);
+  const totalUnits = hokenUsers.reduce((s, u) => s + unitsOf(u), 0);
   // 計画費は 10 割給付 (利用者負担なし)
   const totalAmount = hokenUsers.reduce((s, u) => s + amountOf(u), 0);
 
@@ -682,7 +696,7 @@ export function buildKeikakuhiFile(
       hobetsu, // 法別番号 (12=生活保護 等)
       "02", // 請求情報区分コード (02:居宅介護支援・介護予防支援)
       String(hUsers.length), // 件数
-      String(hUsers.reduce((s, u) => s + u.units, 0)), // 単位数
+      String(hUsers.reduce((s, u) => s + unitsOf(u), 0)), // 単位数
       String(hUsers.reduce((s, u) => s + amountOf(u), 0)), // 費用合計
       "0", // 保険請求額 (公費単独は保険給付なし)
       String(hUsers.reduce((s, u) => s + amountOf(u), 0)), // 公費請求額 (10 割)
@@ -763,14 +777,14 @@ export function buildKeikakuhiFile(
     const meisai = u.lines && u.lines.length > 0 ? u.lines : [{ code: u.serviceCode, units: u.units, count: 1 }];
     const totalUnits = meisai.reduce((s, l) => s + l.units * l.count, 0);
     const amount = amountOf(u);
-    // ⚠ 項21 合計単位数 は Σ明細、項22 請求金額 と 7111 は u.units から計算する。
-    //   呼出側が両方を組み立てるため、食い違うと**票の中で基準がズレたまま静かに伝送される**。
-    //   現行の呼出側 (_seikyu-context.tsx buildClaimLines) は totalUnits を lines から
-    //   計算しているので一致するが、将来別経路が増えたときに黙らせないための検査。
-    //   (2026-09-03 scripts/keikakuhi-8124-verify.mts で実際に不整合を再現して追加)
+    // 項21 も 項22 も 7111 も unitsOf(u) (= 明細があればその合計) から導くので
+    // **出力の中で基準がズレることはない**。ここで見ているのは呼出側のデータ品質:
+    // u.units と明細の合計が食い違っていたら、どちらかの組み立てが誤っている。
+    // (2026-09-03 追加。当初は 項22 だけ u.units 基準で、食い違うと ¥3,252 ズレたまま
+    //  warning も出ない状態だった → unitsOf に一本化したうえでこの検査を残した)
     if (totalUnits !== u.units) {
       warnings.push(
-        `${u.userName}: 明細の合計単位数 (${totalUnits}) と請求単位数 (${u.units}) が一致しません — 8124 の 項21 は ${totalUnits} 単位、項22 請求金額は ${amount} 円 (${u.units} 単位ぶん) となり食い違います`,
+        `${u.userName}: 明細の合計単位数 (${totalUnits}) と請求単位数 (${u.units}) が一致しません — 伝送は明細の合計 ${totalUnits} 単位 (${amount} 円) で出力します。呼出側の組み立てを確認してください`,
       );
     }
     meisai.forEach((l, i) => {

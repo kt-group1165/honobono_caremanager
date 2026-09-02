@@ -30,7 +30,7 @@
  *   I 基本コード(432/433)が無いレセプト     1 件        ✅ 実在する (ターミナルのみ)
  *   E 項8/9 に公費番号があるレセプト        31 件
  *     → **31/31 すべて被保番が H 始まり (公費単独)**。併用で番号が入る実例は 0 件
- *        = 「公費併用は項8/9 が空」というコードの前提は実データでも正しい
+ *        = 「公費併用は項8/9 が空」というコードの前提は実データでも正しい (5-4: 疑って正しかった記録)
  *   単位数単価の実例                     1000/1021/1042/1070/1084/1105
  * ────────────────────────────────────────────────────────
  */
@@ -199,15 +199,16 @@ console.log("\n=== J. ★ u.units と Σlines が食い違うとき ===");
   console.log(`     Σ項20 = ${sum20} / 項21 = ${t21} / 項22 = ${t22}`);
   console.log(`     (u.units 1411 基準なら ${fromUnits} / Σlines 1711 基準なら ${fromLines})`);
   check(t21 === sum20, "項21 は Σ項20 と一致する", `${t21} / ${sum20}`);
-  const consistent = t22 === Math.floor((t21 * P100) / 100);
-  const warned = warnings.some((w) => w.includes("単位") && (w.includes("合計") || w.includes("一致")));
-  if (!consistent && !warned) {
-    console.log(`  ⚠ **項22 が 項21 と別基準で計算され、warning も出ない**`);
-    console.log(`     項21 ${t21} 単位 なのに 項22 は ${t22} 円 (= ${fromUnits === t22 ? "u.units" : "?"} 基準)`);
-    console.log(`     → 呼出側が u.units と lines を別々に組み立てるため、食い違うと静かに不整合になる`);
-  }
-  check(consistent || warned, "項22 が 項21 と同じ基準 か、食い違いに warning が出る",
-    consistent ? "一致" : (warned ? "warning あり" : "★ どちらでもない"));
+  // ★ 是正後: 項21・項22・7111 すべてを unitsOf(u) (= 明細の合計) から導くため、
+  //   呼出側が食い違う値を渡しても**出力の中では基準がズレない**。
+  check(t22 === Math.floor((t21 * P100) / 100), "★ 項22 は 項21 と同じ基準で計算される",
+    `${t22} == floor(${t21} × ${P100}/100) = ${Math.floor((t21 * P100) / 100)}`);
+  check(t22 === fromLines, "★ 明細の合計 (1711単位) 基準で出力される", `${t22} (u.units基準なら ${fromUnits})`);
+  const warned = warnings.some((w) => w.includes("一致しません"));
+  check(warned, "呼出側のデータ不整合として warning も出る", warned ? "出た" : "出ない");
+  // 7111 も同じ基準か
+  check(num(F(p.hoken!, 8)) === t21, "7111 単位数 も明細の合計基準", `${F(p.hoken!, 8)} / ${t21}`);
+  check(num(F(p.hoken!, 9)) === t22, "7111 費用合計 も明細の合計基準", `${F(p.hoken!, 9)} / ${t22}`);
 }
 
 console.log(`\n${fails.length === 0 ? "すべて PASS" : `★ ${fails.length} 件 FAIL`}`);
