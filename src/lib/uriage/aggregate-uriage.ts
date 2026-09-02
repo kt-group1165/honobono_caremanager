@@ -546,7 +546,10 @@ async function sumChiiki(
     // 単位建ての市町村 (千葉市・大多喜町) は units×10円。
     //   **円建ての市町村 (茂原市・睦沢町) は units が無い**ので、取込時に notes へ書いた
     //   「NNNN円」から読む。単価表を持たない市町村は金額が入らないので件数だけ数える。
-    //   (src/lib/idou-shien-rates.ts が市町村ごとの体系差を吸収している)
+    //   ⚠ 体系差を吸収しているのは **取込 script**
+    //     (migrations/import_meisai_idou_records.mjs の RATES) だけで、
+    //     **画面側 (idou-records) は千葉市のコード表しか持たない**。
+    //     他市町村は手動選択に落ちる (2026-09-03 に fail-closed 化)。
     const yenInNotes = /(\d+)円/.exec(r.notes ?? "");
     const yen = r.units != null ? r.units * CHIIKI_UNIT_YEN : yenInNotes ? Number(yenInNotes[1]) : 0;
     if (yen === 0) noAmount++;
@@ -555,7 +558,7 @@ async function sumChiiki(
   }
   if (noAmount > 0) {
     warnings.push(
-      `地域生活支援事業 ${noAmount} 件に金額が入っていません — 市町村の単価表が未登録の可能性があります (src/lib/idou-shien-rates.ts)`,
+      `地域生活支援事業 ${noAmount} 件に金額が入っていません — 市町村の単価表が未登録の可能性があります (migrations/import_meisai_idou_records.mjs の RATES)`,
     );
   }
 

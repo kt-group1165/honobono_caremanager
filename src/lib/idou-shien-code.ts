@@ -64,18 +64,40 @@ export type IdouResolveError =
   | { reason: "no_time" } // 時刻未入力
   | { reason: "invalid_range" } // 終了 <= 開始 等
   | { reason: "cross_band"; bands: IdouBand[] } // 時間帯跨ぎ → 複合コード (Phase 2)
-  | { reason: "over_max"; band: IdouBand; maxBrackets: number }; // 系列の上限区分超過
+  | { reason: "over_max"; band: IdouBand; maxBrackets: number } // 系列の上限区分超過
+  | { reason: "unsupported_municipality"; municipality: string | null }; // 千葉市以外
+
+/** この module が単価とコード体系を持っている市町村 */
+export const SUPPORTED_IDOU_MUNICIPALITY = "千葉市";
 
 /**
  * 実績開始/終了時刻と控除分から単一時間帯コードを解決する。
  * 日跨ぎ (終了 < 開始) は深夜帯 22:00→翌6:00 の範囲のみ許容する。
+ *
+ * ⚠ **municipality は必須**。この module の単位数 (BASE_UNITS_*) とコード系列
+ *   (23111 / 27111 / 23195 …) は **千葉市 R6.4.1 のコード表を焼き込んだもの**で、
+ *   他市町村には一切当てはまらない (移動支援は地域生活支援事業で、単価も体系も
+ *   市町村が条例・要綱で決める)。
+ *
+ *   2026-09-03 まで引数が無く、**呼出側が市町村を渡し忘れても動いてしまった**。
+ *   その結果、茂原市・いすみ市 等の利用者にも千葉市の単位数が付く経路があった
+ *   (受給者証テーブルが空だったため実害 0 件で済んでいた)。
+ *   千葉市以外は必ず `unsupported_municipality` を返し、**推測で単価を作らない**。
+ *   2 市目に対応するときは、この module を分岐させるのではなく
+ *   kaigo_service_codes (system=地域生活支援 / municipality=<市町村>) の
+ *   マスタ lookup に寄せること (複合時間帯側が既にその作りになっている)。
  */
 export function resolveIdouCode(
+  municipality: string | null | undefined,
   startTime: string,
   endTime: string,
   deductMinutes: number,
   withBodyCare: boolean,
 ): IdouCodeResult | IdouResolveError {
+  const muni = (municipality ?? "").trim();
+  if (muni !== SUPPORTED_IDOU_MUNICIPALITY) {
+    return { reason: "unsupported_municipality", municipality: muni || null };
+  }
   if (!startTime || !endTime) return { reason: "no_time" };
   const s = toMin(startTime);
   let e = toMin(endTime);

@@ -179,7 +179,14 @@ export async function loadIdouRecordsData(
   const shikyuMin = new Map(
     chiikiRows.filter((r) => r.shikyu_minutes != null).map((r) => [r.client_id, r.shikyu_minutes as number]),
   );
-  const certMuni = new Map(chiikiRows.map((r) => [r.client_id, r.municipality ?? "千葉市"]));
+  // ⚠ 市町村が空の受給者証は **千葉市で埋めない**。移動支援は市町村ごとに単価も
+  //   コード体系も違うので、空欄を既定値で埋めると別の市町村の単価が黙って付く。
+  //   map に入れなければ noCert 扱いになり、手動選択に落ちる (fail-closed)。
+  const certMuni = new Map(
+    chiikiRows
+      .filter((r) => (r.municipality ?? "").trim() !== "")
+      .map((r) => [r.client_id, (r.municipality as string).trim()]),
+  );
 
   // 予定を「移動支援 (地域生活支援給付)」に絞る (名称→制度区分 lookup)
   const allPlans = (planRes.data ?? []) as PlanRow[];
@@ -510,11 +517,15 @@ function IdouRecordForm({
 
   // 算定プレビュー (単一時間帯は同期解決)
   const cMin = calcMinutes(f.start_time ?? "", f.end_time ?? "", f.deduct_minutes);
+  // ⚠ muni を必ず渡す。この解決器は千葉市のコード表しか持っていないので、
+  //   他市町村では unsupported_municipality が返り、手動選択に落ちる (fail-closed)。
   const resolved = f.start_time && f.end_time
-    ? resolveIdouCode(f.start_time, f.end_time, f.deduct_minutes, f.with_body_care)
+    ? resolveIdouCode(muni, f.start_time, f.end_time, f.deduct_minutes, f.with_body_care)
     : null;
   const singleOk = resolved !== null && "code" in resolved;
   const isCrossBand = resolved !== null && "reason" in resolved && resolved.reason === "cross_band";
+  const isUnsupportedMuni =
+    resolved !== null && "reason" in resolved && resolved.reason === "unsupported_municipality";
 
   // 時刻/身体介護が変わったら手動選択は破棄 (整合性維持)
   const timeKey = `${f.start_time}|${f.end_time}|${f.deduct_minutes}|${f.with_body_care}`;
@@ -673,6 +684,11 @@ function IdouRecordForm({
                 </span>
               ) : resolved === null ? (
                 <span className="text-gray-400">実績時刻を入力するとコードを自動判定します</span>
+              ) : isUnsupportedMuni ? (
+                <span className="font-medium text-amber-600">
+                  {(resolved as { municipality: string | null }).municipality ?? "市町村未設定"}
+                  {" "}の単価表は未登録です — 自動判定できません。「コードを手動選択」で指定してください
+                </span>
               ) : isCrossBand && autoComposite === null ? (
                 <span className="text-gray-400">複合コードを照合中…</span>
               ) : isCrossBand ? (
