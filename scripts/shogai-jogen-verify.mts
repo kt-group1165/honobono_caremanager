@@ -211,6 +211,73 @@ console.log("\n=== §A-7 ★ 上限管理が他事業所なのに管理結果が
   );
 }
 
+console.log("\n=== §A-8 月途中の受給者証切替 — どちらの上限額を使うか ===");
+// 実例: 茂原 狩野佑佳。18歳到達で 障害児→障害者 に切替
+//   旧 1242311080 (非該当・上限 4,600円) → 新 1242313920 (区分6・低所得1・上限 0円) R8/4/1 有効
+//   ⚠ 実データは是正済 (旧証は削除され新証のみ) なので、境界は合成データで確認する。
+const certRow = (over: Row): Row => ({
+  client_id: CLIENT, beneficiary_number: "1242311080", insurer_municipality: "121012",
+  support_level: "区分3", self_payment_limit: 4600, seiho_flag: false,
+  jogen_kanri_kubun: "なし", jogen_kanri_office_number: null, jogen_kanri_office_name: null,
+  certification_start_date: "2025-04-01", certification_end_date: "2026-03-31",
+  contract_start_date: "2025-04-01", ...over,
+});
+{
+  // 対象月 2026-06 に有効なのは新証だけ → 上限 0 円
+  const d = baseData({ certs: [
+    certRow({ beneficiary_number: "1242313920", self_payment_limit: 0, certification_start_date: "2026-04-01", certification_end_date: "2027-03-31" }),
+    certRow({}),
+  ] });
+  (d.records[0] as Row).unit_count = 20000;
+  const r = await row0(d);
+  check("切替後の月は新証の上限 0 円を使う", r?.userAmount, 0);
+  check("受給者証番号も新証", r?.beneficiary_number, "1242313920");
+}
+{
+  // 月内で 2 証が重なる場合 → **開始日が新しい方**を採る (実装: start DESC の find)
+  const d = baseData({ certs: [
+    certRow({ beneficiary_number: "1242313920", self_payment_limit: 0, certification_start_date: "2026-06-15", certification_end_date: "2027-03-31" }),
+    certRow({ certification_end_date: "2026-06-30" }),
+  ] });
+  (d.records[0] as Row).unit_count = 20000;
+  const r = await row0(d);
+  check("月内で重なるときは開始が新しい証 (上限 0 円)", r?.userAmount, 0);
+  console.log("     ⚠ 月途中で上限額が変わる場合、当方は**新しい証で月全体を請求**する。" +
+    "\n       日割りはしない (障害の負担上限月額は月単位のため)。制度解釈は user 確認事項");
+}
+{
+  // 未来に始まる証は過去月に使わない (2026-08-31 の是正が効いているか)
+  const d = baseData({ certs: [
+    certRow({ beneficiary_number: "9999999999", self_payment_limit: 0, certification_start_date: "2026-08-01", certification_end_date: "2027-03-31" }),
+    certRow({ certification_end_date: "2026-12-31" }),
+  ] });
+  (d.records[0] as Row).unit_count = 20000;
+  const r = await row0(d);
+  check("未来開始の証は使わない (旧証の上限 4,600 円)", r?.userAmount, 4600);
+  check("受給者証番号も旧証のまま", r?.beneficiary_number, "1242311080");
+}
+{
+  // 対象月に有効な証が 1 つも無い → 最新を使い **警告**
+  const d = baseData({ certs: [certRow({ certification_end_date: "2026-03-31" })] });
+  (d.records[0] as Row).unit_count = 20000;
+  const res = await run(d);
+  check("有効な証が無い月は最新証で集計する", res.rows[0]?.userAmount, 4600);
+  check(
+    "★ その場合は警告を出す (黙って古い上限を使わない)",
+    res.warnings.some((w) => w.includes("有効な受給者証がない")),
+    true,
+  );
+}
+{
+  // 旧証が無期限 (end_date null) でも、新しい証があればそちらが優先される
+  const d = baseData({ certs: [
+    certRow({ beneficiary_number: "1242313920", self_payment_limit: 0, certification_start_date: "2026-04-01", certification_end_date: null }),
+    certRow({ certification_end_date: null }),
+  ] });
+  (d.records[0] as Row).unit_count = 20000;
+  check("旧証が無期限でも新証が優先", (await row0(d))?.userAmount, 0);
+}
+
 console.log("\n=== §B 本番データ: 他事業所管理で管理結果が未入力の件数 (READ ONLY) ===");
 const env = Object.fromEntries(
   readFileSync(fileURLToPath(new URL("../.env.local", import.meta.url)), "utf8")
@@ -282,6 +349,33 @@ if (otherClients.length === 0) {
     }
     console.log("    ⚠ 過大額は「管理結果票の調整後額との差」なので、票が来るまで確定できない");
   }
+}
+
+console.log("\n=== §C 本番データ: 月内に有効な証が複数ある利用者 (READ ONLY) ===");
+// 複数あっても **上限額が同じ**なら、どちらを採っても負担額は動かない。
+// 上限額が違う人がいて初めて「どちらの証を採るか」が金額に効く。
+{
+  const byClient = new Map<string, Row[]>();
+  for (const c of certs) {
+    if (!active.has(String(c.client_id))) continue;
+    const st = String(c.certification_start_date ?? ""), en = String(c.certification_end_date ?? "");
+    if ((st && st > MEND) || (en && en < `${MONTH}-01`)) continue;
+    const k = String(c.client_id);
+    if (!byClient.has(k)) byClient.set(k, []);
+    byClient.get(k)!.push(c);
+  }
+  const multi = [...byClient.entries()].filter(([, v]) => v.length > 1);
+  const diff = multi.filter(([, v]) => new Set(v.map((x) => x.self_payment_limit)).size > 1);
+  console.log(`  当月に有効な証が2件以上ある利用者: ${multi.length} 名 / 実績のある ${active.size} 名 (分母)`);
+  console.log(`  └ ★ そのうち上限額が異なる (どちらを採るかで負担が動く): ${diff.length} 名`);
+  if (diff.length) {
+    const names = await rest(`clients?select=id,name&id=in.(${diff.map(([c]) => c).join(",")})`);
+    for (const [c, v] of diff) {
+      const nm = names.find((n) => String(n.id) === c)?.name ?? c.slice(0, 8);
+      console.log(`      ${nm}: ${v.map((x) => `${x.self_payment_limit}円(${x.certification_start_date}〜${x.certification_end_date ?? "無期限"})`).join(" / ")}`);
+    }
+  }
+  check("月内に上限額の違う証が重なる利用者はいない (いれば要判断)", diff.length, 0);
 }
 
 console.log(`\n=== 結果: PASS ${pass} / FAIL ${fail} ===`);
