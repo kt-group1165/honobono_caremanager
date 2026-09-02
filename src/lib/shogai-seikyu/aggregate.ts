@@ -35,7 +35,7 @@ import {
   loadJuhoTierMaps,
   remapJuhoCode,
 } from "@/lib/shogai-seikyu/juho-tier";
-import { isBillableRecord } from "@/lib/shogai-seikyu/record-markers";
+import { isAddonRecord, isBillableRecord } from "@/lib/shogai-seikyu/record-markers";
 
 export interface ShogaiSeikyuDetail {
   /** サービス種別 (居宅介護 等) */
@@ -160,6 +160,14 @@ export async function aggregateMonthlyShogaiSeikyu(
     service_date?: string | null;
     /** 提供時間 (分)。支給量超過警告の実績時間集計に使用。null は 0 扱い */
     duration_minutes?: number | null;
+    /**
+     * 増(加算)コードの行か。**請求 (単位数) には要るが実際の訪問ではない。**
+     *   加算行は同一訪問と同じ start/end を持つので、支給量の実績時間に足すと
+     *   同じ訪問を段の本数ぶん数えてしまう (重訪は 1 日 10〜20 段あるので実測 ×10〜×20)。
+     *   2026-09-03 の実測では 12 件の超過警告のうち 10 件がこれによる誤検知で、
+     *   1 ヶ月 720 時間を超える「実績 3,225 時間」等が出ていた。
+     */
+    is_addon?: boolean;
   }
   const records: Rec[] = [];
   /** 1.5) のシフト取込で出た注意 (下の warnings へ合流させる) */
@@ -344,6 +352,7 @@ export async function aggregateMonthlyShogaiSeikyu(
           unit_count: units,
           service_date: s.visit_date,
           duration_minutes: dur,
+          is_addon: isAddonRecord(s.notes),
         });
       }
       if (schedRecs.length > 0) {
@@ -1199,7 +1208,13 @@ export async function aggregateMonthlyShogaiSeikyu(
       }
       if (tc === "12") return "juudo_houmon"; // 重訪は区分別に突合不可 → 合算バケット
       if (tc === "13") return "koudou";
-      if (tc === "14") return /身体/.test(name) ? "doukou_shintai" : "doukou";
+      // 同行援護は 2 体系ある。14 = 旧 7 桁 (1411011 同行援護 身体介護あり 30分未満)、
+      //   15 = 現行 6 桁 (155xxx 同援…)。**15 が漏れていて 2026-06 の 136 行 / 27 名が
+      //   黙って支給量判定の対象外になっていた** (2026-09-03 実測)。
+      //   ⚠ 14 も残す。マスタに 2026-06 有効な 14 が 92 コード実在する。
+      //   ⚠ 種類15 のマスタ名に「身体」は 0/491 なので実質 doukou に寄るが、
+      //     将来 身体あり の名称が来ても拾えるよう 14 と同じ判定を通す。
+      if (tc === "14" || tc === "15") return /身体/.test(name) ? "doukou_shintai" : "doukou";
       return null; // 短期入所・生活介護等は訪問系でないため対象外
     };
     interface ActualAgg {
@@ -1209,6 +1224,9 @@ export async function aggregateMonthlyShogaiSeikyu(
     }
     const actualsByUser = new Map<string, Map<string, ActualAgg>>();
     for (const r of records) {
+      // 増(加算)行は請求単位であって訪問ではない。実績時間・回数に数えない
+      //   (数えると同じ訪問を段の本数ぶん重複計上する。Rec.is_addon のコメント参照)
+      if (r.is_addon) continue;
       const bucket = bucketOf(r);
       if (!bucket) continue;
       let m = actualsByUser.get(r.client_id);
