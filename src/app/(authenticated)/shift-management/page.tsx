@@ -131,28 +131,36 @@ export default async function ShiftManagementPage({
     const uniqueClientIds = Array.from(new Set(clientIdsAll));
 
     if (uniqueClientIds.length > 0) {
-      let fromU = 0;
-      while (true) {
-        // .in() は内部 URL length 制限があるため、安全側で 500 件ずつ chunk
-        const chunk = uniqueClientIds.slice(fromU, fromU + 500);
-        if (chunk.length === 0) break;
-        const { data, error: clientsErr } = await supabase
-          .from("clients")
-          .select("id, name, name_kana:furigana, status")
-          .in("id", chunk)
-          .eq("status", "active")
-          .eq("is_facility", false)
-          .is("deleted_at", null)
-          .order("furigana", { nullsFirst: false });
-        if (clientsErr) {
-          console.error("[shift-management] clients fetch failed:", clientsErr.message);
-          break;
+      // ⚠ 2026-09-03 実測: .in() の chunk を 500 にすると Postgres の実行計画が
+      //   seq scan に落ちて1回7秒超かかることがある (400件超で非線形に悪化)。
+      //   150件chunk + 並列fetchに変更 (詳細: use-kaigo-office-users.ts のコメント参照)。
+      const CHUNK = 150;
+      const chunks: string[][] = [];
+      for (let i = 0; i < uniqueClientIds.length; i += CHUNK) chunks.push(uniqueClientIds.slice(i, i + CHUNK));
+      const results = await Promise.all(
+        chunks.map((chunk) =>
+          supabase
+            .from("clients")
+            .select("id, name, name_kana:furigana, status")
+            .in("id", chunk)
+            .eq("status", "active")
+            .eq("is_facility", false)
+            .is("deleted_at", null),
+        ),
+      );
+      for (const r of results) {
+        if (r.error) {
+          console.error("[shift-management] clients fetch failed:", r.error.message);
+          continue;
         }
-        if (data && data.length > 0) {
-          users.push(...(data as KaigoUser[]));
-        }
-        fromU += 500;
+        if (r.data && r.data.length > 0) users.push(...(r.data as KaigoUser[]));
       }
+      users.sort((a, b) => {
+        if (!a.name_kana && !b.name_kana) return 0;
+        if (!a.name_kana) return 1;
+        if (!b.name_kana) return -1;
+        return a.name_kana.localeCompare(b.name_kana, "ja");
+      });
     }
   } else {
     // officeId 未指定 (= context 初期化中): 全件 fallback (= 旧挙動)

@@ -95,23 +95,34 @@ export function ProvisionConfirmContent({
         fromA += PAGE;
       }
       const uniqueIds = Array.from(new Set(clientIdsAll));
-      for (let i = 0; i < uniqueIds.length; i += 500) {
-        const chunk = uniqueIds.slice(i, i + 500);
-        const { data, error: userError } = await supabase
-          .from("clients")
-          .select("id, name, name_kana:furigana, care_level, status")
-          .in("id", chunk)
-          .eq("status", "active")
-          .eq("is_facility", false)
-          .is("deleted_at", null)
-          .order("furigana");
-        if (userError) {
-          toast.error("利用者情報の取得に失敗しました");
-          setLoading(false);
-          return;
-        }
-        userData.push(...((data ?? []) as UserRow[]));
+      // ⚠ 2026-09-03: chunk=500 だと .in() がPostgresの実行計画の閾値を超えseq scanに
+      //   落ちて7秒超かかることがある。150件chunk+並列fetchに変更 (詳細: use-kaigo-office-users.ts)。
+      const CHUNK = 150;
+      const chunks: string[][] = [];
+      for (let i = 0; i < uniqueIds.length; i += CHUNK) chunks.push(uniqueIds.slice(i, i + CHUNK));
+      const results = await Promise.all(
+        chunks.map((chunk) =>
+          supabase
+            .from("clients")
+            .select("id, name, name_kana:furigana, care_level, status")
+            .in("id", chunk)
+            .eq("status", "active")
+            .eq("is_facility", false)
+            .is("deleted_at", null),
+        ),
+      );
+      if (results.some((r) => r.error)) {
+        toast.error("利用者情報の取得に失敗しました");
+        setLoading(false);
+        return;
       }
+      for (const r of results) userData.push(...((r.data ?? []) as UserRow[]));
+      userData.sort((a, b) => {
+        if (!a.name_kana && !b.name_kana) return 0;
+        if (!a.name_kana) return 1;
+        if (!b.name_kana) return -1;
+        return a.name_kana.localeCompare(b.name_kana, "ja");
+      });
     }
 
     if (userData.length === 0) {

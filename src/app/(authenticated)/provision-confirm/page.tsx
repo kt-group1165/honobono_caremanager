@@ -34,18 +34,30 @@ export default async function ProvisionConfirmPage({
       fromA += PAGE;
     }
     const uniqueIds = Array.from(new Set(clientIdsAll));
-    for (let i = 0; i < uniqueIds.length; i += 500) {
-      const chunk = uniqueIds.slice(i, i + 500);
-      const { data } = await supabase
-        .from("clients")
-        .select("id, name, name_kana:furigana, care_level, status")
-        .in("id", chunk)
-        .eq("status", "active")
-        .eq("is_facility", false)
-        .is("deleted_at", null)
-        .order("furigana");
-      userData.push(...((data ?? []) as UserRow[]));
-    }
+    // ⚠ 2026-09-03 実測: .in() の chunk を 500 にすると Postgres の実行計画が
+    //   seq scan に落ちて 1 回 7 秒超かかることがある (400 件超で非線形に悪化)。
+    //   150 件 chunk + 並列 fetch に変更 (詳細: use-kaigo-office-users.ts のコメント参照)。
+    const CHUNK = 150;
+    const chunks: string[][] = [];
+    for (let i = 0; i < uniqueIds.length; i += CHUNK) chunks.push(uniqueIds.slice(i, i + CHUNK));
+    const results = await Promise.all(
+      chunks.map((chunk) =>
+        supabase
+          .from("clients")
+          .select("id, name, name_kana:furigana, care_level, status")
+          .in("id", chunk)
+          .eq("status", "active")
+          .eq("is_facility", false)
+          .is("deleted_at", null),
+      ),
+    );
+    for (const r of results) userData.push(...((r.data ?? []) as UserRow[]));
+    userData.sort((a, b) => {
+      if (!a.name_kana && !b.name_kana) return 0;
+      if (!a.name_kana) return 1;
+      if (!b.name_kana) return -1;
+      return a.name_kana.localeCompare(b.name_kana, "ja");
+    });
   }
 
   let initialUsers: ProvisionUser[] = [];

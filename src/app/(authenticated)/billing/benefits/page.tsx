@@ -82,21 +82,26 @@ export default async function BenefitsPage({
   const userIds = Array.from(new Set(rowsAll.map((r) => r.user_id)));
 
   // 当月行の利用者の 名前 だけ取得 (active/非施設/未削除は従来どおり)
+  // ⚠ 2026-09-03 実測: .in() の chunk を 500 にすると Postgres の実行計画が
+  //   seq scan に落ちて1回7秒超かかることがある。150件chunk+並列fetchに変更
+  //   (詳細: use-kaigo-office-users.ts のコメント参照)。
   type UsersRow = { id: string; name: string };
-  const usersAll: UsersRow[] = [];
-  for (let i = 0; i < userIds.length; i += 500) {
-    const chunk = userIds.slice(i, i + 500);
-    const { data, error } = await supabase
-      .from("clients")
-      .select("id, name")
-      .in("id", chunk)
-      .eq("status", "active")
-      .eq("is_facility", false)
-      .is("deleted_at", null)
-      .order("name");
-    if (error) break;
-    usersAll.push(...((data ?? []) as UsersRow[]));
-  }
+  const CHUNK = 150;
+  const idChunks: string[][] = [];
+  for (let i = 0; i < userIds.length; i += CHUNK) idChunks.push(userIds.slice(i, i + CHUNK));
+  const usersResults = await Promise.all(
+    idChunks.map((chunk) =>
+      supabase
+        .from("clients")
+        .select("id, name")
+        .in("id", chunk)
+        .eq("status", "active")
+        .eq("is_facility", false)
+        .is("deleted_at", null),
+    ),
+  );
+  const usersAll: UsersRow[] = usersResults.flatMap((r) => (r.data ?? []) as UsersRow[]);
+  usersAll.sort((a, b) => a.name.localeCompare(b.name, "ja"));
 
   // 認定は「対象月に有効な 1 件」で解決 (対象は当月行の利用者のみ)
   const [cy, cm] = month.split("-").map(Number);
