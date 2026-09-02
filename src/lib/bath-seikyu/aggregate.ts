@@ -501,6 +501,18 @@ export async function aggregateBathVisitSeikyu(
     // 区分支給限度基準の超過→全額自費
     const planUnits = planByClient.get(clientId) ?? null;
     const limitUnits = planUnits ?? limitAmount;
+    // 計画単位数が認定の区分支給限度基準額を超えているときの警告 (2026-09-03 追加)。
+    //   visit-seikyu/aggregate.ts と同じ構造 (planUnits ?? limitAmount) なのに
+    //   こちらだけ警告が無く、非対称に穴が残っていた。
+    //   基準値に planUnits を採ると超過判定が甘くなり、本来 10 割自費に振るべき分まで
+    //   保険請求に残る (= 過大請求)。
+    // ※ Math.min() で切り詰めることは**しない**。区分変更等で計画が認定を上回るのが
+    //   正当なケースがありうるため、挙動は変えず警告のみ出す (visit 側と同じ判断)。
+    if (planUnits != null && limitAmount != null && planUnits > limitAmount) {
+      warnings.push(
+        `${name}: 計画単位数 (${planUnits.toLocaleString()}単位) が認定の区分支給限度基準額 (${limitAmount.toLocaleString()}単位) を超えています — 超過自費の判定に計画単位数を使うため、超過が過小に計上されます。計画単位数と認定情報を確認してください`,
+      );
+    }
     const managedUnits = grossBaseUnits - taishougaiUnits;
     const autoOver = limitUnits != null ? Math.max(0, managedUnits - limitUnits) : 0;
     const overUnits = Math.min(autoOver, managedUnits);
