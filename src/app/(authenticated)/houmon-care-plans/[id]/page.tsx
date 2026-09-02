@@ -191,7 +191,7 @@ export default function HoumonCarePlanPrintPage() {
                 利用者氏名
               </th>
               <td className="border border-gray-700 px-2 py-1">
-                {user?.name ?? "—"}
+                {user?.name || "—"}
                 {user?.furigana ? (
                   <span className="text-xs text-gray-500 ml-2">({user.furigana})</span>
                 ) : null}
@@ -199,7 +199,7 @@ export default function HoumonCarePlanPrintPage() {
               <th className="border border-gray-700 bg-gray-100 px-2 py-1 text-left w-1/6">
                 要介護度
               </th>
-              <td className="border border-gray-700 px-2 py-1">{user?.care_level ?? "—"}</td>
+              <td className="border border-gray-700 px-2 py-1">{user?.care_level || "—"}</td>
             </tr>
             <tr>
               <th className="border border-gray-700 bg-gray-100 px-2 py-1 text-left">生年月日</th>
@@ -217,12 +217,12 @@ export default function HoumonCarePlanPrintPage() {
             <tr>
               <th className="border border-gray-700 bg-gray-100 px-2 py-1 text-left">住所</th>
               <td className="border border-gray-700 px-2 py-1" colSpan={3}>
-                {user?.address ?? "—"}
+                {user?.address || "—"}
               </td>
             </tr>
             <tr>
               <th className="border border-gray-700 bg-gray-100 px-2 py-1 text-left">事業所</th>
-              <td className="border border-gray-700 px-2 py-1">{office?.name ?? "—"}</td>
+              <td className="border border-gray-700 px-2 py-1">{office?.name || "—"}</td>
               <th className="border border-gray-700 bg-gray-100 px-2 py-1 text-left">
                 サービス提供責任者
               </th>
