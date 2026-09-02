@@ -445,9 +445,33 @@ async function main(){
       if(uErr) console.error(`✗ clients update ${r.num}: ${uErr.message}`);
     }
     if(r.ins){
+      // ⚠ 2026-09-02是正: 削除条件が自分のマーカー(今回のTARGET_MONTH)限定だったため、
+      //   同一利用者を複数月でSTEP1実行すると、認定の実体(保険者/被保番/認定期間/
+      //   要介護度)が同じでも月ごとに別行として積み上がっていた(全社100グループ/287行の
+      //   重複が発生。dedup_step1_insurance_duplicates.mjsで実データ確認済み)。
+      //   まず自分のマーカー行を掃除した上で、**内容が同一の行が他月のマーカーで
+      //   既に存在するなら新規挿入しない**(STEP3/STEP9等が既に埋めたcare_office_id/
+      //   copay_rateを、内容の重複挿入で分散・喪失させないため)。
       await sb.from("client_insurance_records").delete().eq("client_id", r.id).eq("notes", IMPORT_MARK);
-      const { error:iErr } = await sb.from("client_insurance_records").insert({ ...r.ins, client_id: r.id });
-      if(iErr) console.error(`✗ insurance(reuse) ${r.num}: ${iErr.message}`);
+      // ⚠ PostgREST の .eq(col, null) は SQL的に常に0件になる (= NULL は真にならないため)。
+      //   NULLを含みうる列は .is() で組み立てる。
+      let sameQ = sb.from("client_insurance_records").select("id").eq("client_id", r.id);
+      for(const [col,val] of [
+        ["insurer_number", r.ins.insurer_number],
+        ["insured_number", r.ins.insured_number],
+        ["certification_start_date", r.ins.certification_start_date],
+        ["certification_end_date", r.ins.certification_end_date],
+        ["care_level", r.ins.care_level],
+      ]){
+        sameQ = (val===null||val===undefined) ? sameQ.is(col,null) : sameQ.eq(col,val);
+      }
+      const { data: sameContent } = await sameQ;
+      if(sameContent && sameContent.length){
+        console.log(`  ↔ ${r.num} ${r.name}: 同一内容の認定が既存(他月STEP1由来) → 重複挿入をskip`);
+      } else {
+        const { error:iErr } = await sb.from("client_insurance_records").insert({ ...r.ins, client_id: r.id });
+        if(iErr) console.error(`✗ insurance(reuse) ${r.num}: ${iErr.message}`);
+      }
     }
     // 障害取込でリナンバーされていた分は本来の利用者番号に戻す
     //   (同じ番号のゴミ行は 5a で削除済なので衝突しない)
