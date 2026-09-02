@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -45,6 +45,8 @@ const STATUS_COLORS: Record<CarePlan["status"], string> = {
 interface CarePlanContentProps {
   userId: string;
   initialPlans: CarePlan[];
+  /** page.tsx (server) が既に取得済みの保管中ケアプラン。無ければ従来どおり client fetch */
+  initialStoredPlans?: StoredCarePlan[];
 }
 
 type FormState = {
@@ -453,7 +455,7 @@ function ReceivedCarePlansPanel({
 
 // ─── 取込済ケアプラン (= 自事業所が保管しているケアプラン帳票) パネル ─────
 
-interface StoredCarePlan {
+export interface StoredCarePlan {
   id: string;
   report_type: string;
   title: string;
@@ -462,6 +464,44 @@ interface StoredCarePlan {
   source_office_name: string | null;
   received_at: string | null;
   html_snapshot: string | null;
+}
+
+// page.tsx (server) と StoredCarePlansPanel (client、削除後の再取得等) の両方から
+// 同じクエリ+整形ロジックを呼べるよう、supabase client を引数で受け取る形にする。
+export async function loadStoredCarePlans(
+  supabase: { from: (table: string) => any }, // eslint-disable-line @typescript-eslint/no-explicit-any -- server/browser 両クライアントで型が異なるため
+  clientId: string,
+): Promise<StoredCarePlan[]> {
+  const { data, error } = await supabase
+    .from("kaigo_report_documents")
+    .select("id, report_type, title, status, updated_at, content")
+    .eq("user_id", clientId)
+    .in("report_type", CARE_PLAN_REPORT_TYPES as unknown as string[])
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  const rows = (data ?? []) as Array<{
+    id: string;
+    report_type: string;
+    title: string;
+    status: "draft" | "completed";
+    updated_at: string;
+    content: unknown;
+  }>;
+  return rows.map<StoredCarePlan>((r) => {
+    const c = (r.content ?? {}) as Record<string, unknown>;
+    return {
+      id: r.id,
+      report_type: r.report_type,
+      title: r.title,
+      status: r.status,
+      updated_at: r.updated_at,
+      source_office_name:
+        typeof c.source_office_name === "string" ? c.source_office_name : null,
+      received_at: typeof c.received_at === "string" ? c.received_at : null,
+      html_snapshot:
+        typeof c.html_snapshot === "string" ? c.html_snapshot : null,
+    };
+  });
 }
 
 // 保管中も同じくグループ化 (送信元 + received_at ±5 分)
@@ -508,9 +548,16 @@ function groupStoredPlans(rows: StoredCarePlan[]): StoredCarePlanGroup[] {
   return groups.sort((a, b) => (a.latestUpdatedAt < b.latestUpdatedAt ? 1 : -1));
 }
 
-function StoredCarePlansPanel({ clientId }: { clientId: string }) {
+function StoredCarePlansPanel({
+  clientId,
+  initialItems,
+}: {
+  clientId: string;
+  /** page.tsx (server) が既に取得済みの場合の初期値。無ければ従来どおり client fetch */
+  initialItems?: StoredCarePlan[];
+}) {
   const supabase = useMemo(() => createClient(), []);
-  const [items, setItems] = useState<StoredCarePlan[]>([]);
+  const [items, setItems] = useState<StoredCarePlan[]>(initialItems ?? []);
   const [loading, setLoading] = useState(false);
   const [previewing, setPreviewing] = useState<StoredCarePlan | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -523,50 +570,24 @@ function StoredCarePlansPanel({ clientId }: { clientId: string }) {
     }
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("kaigo_report_documents")
-        .select("id, report_type, title, status, updated_at, content")
-        .eq("user_id", clientId)
-        .in("report_type", CARE_PLAN_REPORT_TYPES as unknown as string[])
-        .order("updated_at", { ascending: false });
-      if (error) {
-        toast.error("保管中ケアプランの取得に失敗しました");
-        return;
-      }
-      const rows = (data ?? []) as Array<{
-        id: string;
-        report_type: string;
-        title: string;
-        status: "draft" | "completed";
-        updated_at: string;
-        content: unknown;
-      }>;
-      setItems(
-        rows.map<StoredCarePlan>((r) => {
-          const c = (r.content ?? {}) as Record<string, unknown>;
-          return {
-            id: r.id,
-            report_type: r.report_type,
-            title: r.title,
-            status: r.status,
-            updated_at: r.updated_at,
-            source_office_name:
-              typeof c.source_office_name === "string" ? c.source_office_name : null,
-            received_at: typeof c.received_at === "string" ? c.received_at : null,
-            html_snapshot:
-              typeof c.html_snapshot === "string" ? c.html_snapshot : null,
-          };
-        }),
-      );
+      setItems(await loadStoredCarePlans(supabase, clientId));
+    } catch {
+      toast.error("保管中ケアプランの取得に失敗しました");
     } finally {
       setLoading(false);
     }
   }, [supabase, clientId]);
 
+  // 初回 mount で SSR (initialItems) が既に取得済みならスキップ (無駄fetch解消)。
+  // clientId はルートパラメータ由来で mount 中に変わらないため、判定は初回のみでよい。
+  const isInitialMount = useRef(true);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- HANDOVER §2 (mount-time async fetch)
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      if (initialItems) return;
+    }
     refresh();
-  }, [refresh]);
+  }, [refresh, initialItems]);
 
   const handleDeleteGroup = async (g: StoredCarePlanGroup) => {
     const labels = g.items
@@ -760,7 +781,7 @@ function planToForm(p: CarePlan): FormState {
   };
 }
 
-export function CarePlanContent({ userId, initialPlans }: CarePlanContentProps) {
+export function CarePlanContent({ userId, initialPlans, initialStoredPlans }: CarePlanContentProps) {
   const supabase = useMemo(() => createClient(), []);
   const { currentOfficeId, businessType } = useBusinessType();
   // 居宅介護支援以外 (訪問介護/通所介護等) は編集不可、受信ケアプランの閲覧のみ
@@ -902,7 +923,7 @@ export function CarePlanContent({ userId, initialPlans }: CarePlanContentProps) 
       <ReceivedCarePlansPanel clientId={userId} targetOfficeId={currentOfficeId} />
 
       {/* 取込済 = 自事業所が保管しているケアプラン帳票 — 全 mode で表示 */}
-      <StoredCarePlansPanel clientId={userId} />
+      <StoredCarePlansPanel clientId={userId} initialItems={initialStoredPlans} />
 
       {/* 以下は居宅介護支援 mode でのみ表示 (訪問介護等は閲覧 only) */}
       {!isCareManagerSide ? null : (
