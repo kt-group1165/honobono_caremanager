@@ -608,6 +608,18 @@ export async function aggregateSougouSeikyu(
           return r != null && r.num * appliedDen === appliedNum * r.den;
         });
         if (rateHit) {
+          // 2) ★ ここは **緩い経路**。suffix (コード番号対応) で引けず率だけで拾っている。
+          //   黙って通すと精密経路が壊れても気づけない
+          //   (memory feedback_silent_fallback_row_count: 全行揃ったときだけ精密経路は危険)。
+          //   ⚠ さらに悪いのは、この経路では **自治体独自率を検知できない**こと。
+          //     suffix 経路は「マスタの率 != 事業所設定の率」を warning にするが (上の 1)、
+          //     ここは事業所設定の率をそのまま採るので、市町村が独自率でも黙って通る。
+          //     コード付番が変わって suffix が外れた瞬間、静かに壊れて壊れたことも分からない。
+          //   金額は変えない (従来どおり事業所設定の率で算定) — ★ 見えるようにするだけ。
+          //   (2026-09-03 追加。実データでは fallback に到達していない = 現状は雑音にならない)
+          warnings.push(
+            `総合事業 処遇改善 (${cp}${rateHit.service_code}): 事業所の処遇改善コード (下4桁 ${appliedSuffix || "不明"}) と一致する自治体版コードが無く、**率一致のフォールバック**で引き当てました — 事業所設定の率 ${pctLabel(appliedNum, appliedDen)} で算定します。⚠ この経路では自治体独自率を検知できません (サービスコードの付番対応を確認してください)`,
+          );
           addonCandByPrefix.set(cp, {
             num: appliedNum,
             den: appliedDen,
