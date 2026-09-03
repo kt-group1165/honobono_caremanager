@@ -218,6 +218,20 @@ async function main() {
   console.log(`    (うち ${partial.length} 箇所は ★ 部分解析 — スプレッドを含むので`);
   console.log(`     「余分な列」は見えるが「足りない列」は見えない)`);
   console.log(`  ★ 未解析 (変数渡し・動的キー) ${sites.length - parsed.length} 箇所 — ここは見ていない\n`);
+
+  // 未解析の site を一覧する (手で当たるため)。表名で絞れる:
+  //   LIST_UNPARSED=1                        全部
+  //   LIST_UNPARSED=invoices,kokuho_nyukin…  その表だけ
+  const listArg = (process.env.LIST_UNPARSED ?? "").trim();
+  if (listArg) {
+    const filter = listArg === "1" ? null : new Set(listArg.split(",").map((s) => s.trim()));
+    const rows = sites.filter((s) => s.keys === null && (!filter || filter.has(s.table)));
+    console.log(`── 未解析の site ${rows.length} 件 ${filter ? `(${filter.size} 表に絞り込み)` : "(全部)"} ──`);
+    for (const s of rows.sort((a, b) => a.table.localeCompare(b.table) || a.file.localeCompare(b.file))) {
+      console.log(`  ${s.table.padEnd(34)} ${s.file}:${s.line}`);
+    }
+    console.log("");
+  }
   if (parsed.length === 0) {
     console.error("✗ 1 箇所も解析できていない = 検査が動いていない");
     process.exit(1);
