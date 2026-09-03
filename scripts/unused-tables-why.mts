@@ -80,6 +80,30 @@ await Promise.all(tables.map(async (t) => {
   counts.set(t, error ? null : (count ?? 0));
 }));
 const zero = tables.filter((t) => counts.get(t) === 0);
+
+// ⚠ 共起だけでは E は立証できない (2026-09-03 実測)。
+//   「相手に行がある」の中身が **seed script が一度に入れた行**だと、
+//   その処理が app から動いた証拠にならない。実際 3 件とも深掘りしたら:
+//     demo_logs      ← demo_loans 32行は seed_demo_units_caresupo.mjs が 2026-07-03 に一括投入
+//     kyotaku_monthly← records 401行のうち居宅は 1名/1か月/同日投入のテスト分だけ
+//     shogai_payments← 相手が 1 行しかない (「動いた」と言うには弱い)
+//   → **created_at が 2 日以上に散っているか**を足す。散っていれば人が使った跡。
+//
+//   ⚠ **それでも E は立証できない。**残る穴は「分岐」。40 行以内でも if の別の枝なら
+//     相手の行はその枝で入ったもので、こちらの枝が動いた証拠にならない。実例:
+//       payroll_kyotaku_attendance_monthly は records=401行/4日分散 で E に残るが、
+//       401 行の内訳は 本社366 / 福祉用具4 / 居宅31 で、月次を書くのは
+//       `isKyotaku && monthlyDirty` の枝だけ。居宅の 31 行は 1名・1か月・同日投入だった。
+//       → 実際は A/B。**E 候補は人が 1 件ずつ確認するためのもの**で、結論ではない。
+const spread = new Map<string, number | null>();
+await Promise.all(tables.map(async (t) => {
+  if ((counts.get(t) ?? 0) <= 0) return;
+  const { data, error } = await sb.from(t).select("created_at").limit(1000);
+  if (error) { spread.set(t, null); return; } // created_at が無い表
+  const days = new Set((data ?? []).map((r) => String((r as { created_at?: string }).created_at ?? "").slice(0, 10)));
+  days.delete("");
+  spread.set(t, days.size);
+}));
 console.log(`【分母】app が参照する table ${tables.length} 種 / ★ 0 行 ${zero.length} 種\n`);
 
 // ---------------------------------------------------------------- 分類する
@@ -109,16 +133,28 @@ for (const t of zero) {
         if (o.t === t) continue;
         if (Math.abs(o.line - mine.line) > NEAR) continue;
         const n = counts.get(o.t);
-        if (n != null && n > 0) live.push(`${o.t}=${n}行 (${Math.abs(o.line - mine.line)}行離れ)`);
+        if (n != null && n > 0) {
+          const d = spread.get(o.t);
+          const tag = d == null ? "作成日不明" : d <= 1 ? "★ 全行が同日 = seed の疑い" : `${d} 日に分散`;
+          live.push(`${o.t}=${n}行 (${Math.abs(o.line - mine.line)}行離れ / ${tag})`);
+        }
       }
     }
   }
   const uniq = [...new Set(live)];
-  if (uniq.length) {
+  // ★ 相手が 2 日以上に分散している場合だけ E とする。同日一括 = seed の疑いなので E? に落とす
+  const strong = uniq.some((l) => /日に分散/.test(l));
+  if (uniq.length && strong) {
     rows.push({
       t, cls: "E",
       why: "★ 同じ処理の中で書かれる別 table には行がある = その処理は動いている。この table だけ入っていない",
       ev: [...writers.slice(0, 2).map(([f]) => `書き込み: ${short(f)}`), `共起: ${uniq.slice(0, 4).join(" / ")}`],
+    });
+  } else if (uniq.length) {
+    rows.push({
+      t, cls: "E?",
+      why: "共起する table に行はあるが **全行が同日投入 = seed の疑い**。app から動いた証拠にならない",
+      ev: [...writers.slice(0, 2).map(([f]) => `書き込み: ${short(f)}`), `共起: ${uniq.slice(0, 3).join(" / ")}`],
     });
   } else {
     rows.push({
@@ -132,7 +168,7 @@ for (const t of zero) {
 const order: Cls[] = ["E", "E?", "AB", "CD"];
 const label: Record<Cls, string> = {
   E: "★ E 候補 — 処理は動いているのにこの table だけ 0 行",
-  "E?": "E?",
+  "E?": "E? — 共起はあるが相手が同日一括投入 (seed の疑い) で立証にならない",
   AB: "A/B — その処理自体が一度も動いていない (未運用)",
   CD: "C/D — app に書き込みが無い (別表に移った / 画面が無い)",
 };
