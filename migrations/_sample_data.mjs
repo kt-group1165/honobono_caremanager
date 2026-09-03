@@ -53,6 +53,12 @@ export const marker = (tag) => `[sample-${tag}]`;
 export const noteMarker = (tag) => `[sample-${tag}-20260903]`;
 /** user_number は実データが数値なので Z 始まりは衝突しない */
 export const userNumber = (tag, seq) => `Z${tag.toUpperCase()}${String(seq).padStart(3, "0")}`;
+/**
+ * 被保険者番号。★ clients と client_insurance_records の ★ 両方に同じ値を入れること。
+ * 集計は認定側から読むので、片方だけだと伝送から除外される (2026-09-03)。
+ */
+export const sampleInsuredNumber = (tag, seq) =>
+  `Z${tag}${String(seq).padStart(8, "0")}`.slice(0, 10);
 
 /** 実データで使われている値 (2026-09-03 実測)。推測しないこと */
 export const CARE_LEVELS = ["要支援1", "要支援2", "要介護1", "要介護2", "要介護3", "要介護4", "要介護5"];
@@ -98,7 +104,7 @@ export function sampleClient({ tag, seq, careLevel = "要介護2", copayIdx = 0,
     copay_rate,
     benefit_rate,
     insurer_number: insurerNumber,
-    insured_number: `Z${tag}${String(seq).padStart(8, "0")}`.slice(0, 10),
+    insured_number: sampleInsuredNumber(tag, seq), // ★ 認定側にも同じ値を入れること
     birth_date: "1940-01-01",
     status: "active",
     certification_start_date: "2026-04-01",
@@ -107,12 +113,32 @@ export function sampleClient({ tag, seq, careLevel = "要介護2", copayIdx = 0,
   };
 }
 
-/** 認定 1 世代分。care_level から限度額を告示値で埋める */
-export function sampleInsurance(clientId, { careLevel = "要介護2", copayIdx = 0, insurerNumber = "121012", extra = {} } = {}) {
+/**
+ * 認定 1 世代分。care_level から限度額を告示値で埋める。
+ *
+ * 🔴 `insuredNumber` を必ず渡すこと (2026-09-03 実測。K が発見)
+ *   集計は 被保険者番号を ★ 認定側から読む (aggregate.ts:1978 `cert?.insured_number`)。
+ *   clients 側にだけ入れても、認定側が空だと buildKokuhoDensou が
+ *   「被保険者番号が未登録」として ★ 伝送から丸ごと除外する。
+ *   → 段2 (伝送様式) が 0 行になり、何も検証できないまま「通った」ように見える。
+ *   ⚠ clients だけ見ると入っているように見えるので気づきにくい。
+ *     copay_rate と同じ「同じ名前の列が2つの表にあって片方だけ」の型。
+ *   ★ 省略時は sampleClient と同じ規則 (tag+seq) で自動生成する。
+ */
+export function sampleInsurance(clientId, { careLevel = "要介護2", copayIdx = 0, insurerNumber = "121012", tag = null, seq = null, insuredNumber = null, extra = {} } = {}) {
   const { cert: copay_rate, benefit_rate } = COPAY[copayIdx]; // ★ 認定は "1"/"2"/"3" (割単位)
+  const insured_number =
+    insuredNumber ?? (tag != null && seq != null ? sampleInsuredNumber(tag, seq) : null);
+  if (!insured_number) {
+    throw new Error(
+      "sampleInsurance: insuredNumber (または tag+seq) が必要です。" +
+        "認定側の被保険者番号が空だと伝送から除外され、段2 が 0 行になります",
+    );
+  }
   return {
     tenant_id: TENANT,
     client_id: clientId,
+    insured_number,
     effective_date: "2026-04-01",
     care_level: careLevel,
     certification_start_date: "2026-04-01",
