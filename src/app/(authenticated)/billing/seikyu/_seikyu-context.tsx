@@ -25,6 +25,7 @@ import {
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { MonthInputButton } from "@/components/ui/month-input-button";
 import { useBusinessType } from "@/lib/business-type-context";
 import { resolveKohiForMonth } from "@/lib/kohi";
 import {
@@ -931,6 +932,11 @@ export function SeikyuKanaSidebar() {
 // 月ナビ (billing-visit 版と同一クラス)
 //   square: 月次情報タブの「◀ 2026年 7月 ▶」四角ボタン型
 //   box:    介護請求タブの「(◀ R8/6 ▶)」枠ボックス型
+//
+// 年月の表示は ★ クリックで年月ピッカーが開く (2026-09-03)。
+//   ◀ ▶ だけだと遠い月へ行くのに何度も押す必要があるため。
+//   ⚠ ピッカーは ★ 新規に作らず 既存の MonthInputButton を使う。
+//     同じものを2つ持つと必ず食い違う (VERIFICATION_RULES 3-14)。
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function SeikyuMonthNav({ variant = "box" }: { variant?: "box" | "square" }) {
@@ -950,9 +956,18 @@ export function SeikyuMonthNav({ variant = "box" }: { variant?: "box" | "square"
         >
           ◀
         </button>
-        <span className="text-sm font-semibold text-gray-700">
-          {year}年 {month}月
-        </span>
+        <MonthInputButton
+          value={`${year}-${String(month).padStart(2, "0")}`}
+          onChange={(next) => {
+            const m = /^(\d{4})-(\d{2})$/.exec(next);
+            if (m) onMonthChange(parseInt(m[1], 10), parseInt(m[2], 10));
+          }}
+          formatLabel={(ym) => {
+            const m = /^(\d{4})-(\d{2})$/.exec(ym);
+            return m ? `${m[1]}年 ${parseInt(m[2], 10)}月` : ym;
+          }}
+          className="text-sm font-semibold text-gray-700"
+        />
         <button
           type="button"
           onClick={next}
@@ -968,9 +983,20 @@ export function SeikyuMonthNav({ variant = "box" }: { variant?: "box" | "square"
       <button type="button" onClick={prev} className="text-gray-500 hover:text-gray-800">
         <ChevronLeft size={14} />
       </button>
-      <span className="font-semibold text-gray-800 px-1.5">
-        R{year - 2018}/{month}
-      </span>
+      <MonthInputButton
+        value={`${year}-${String(month).padStart(2, "0")}`}
+        onChange={(next) => {
+          const m = /^(\d{4})-(\d{2})$/.exec(next);
+          if (m) onMonthChange(parseInt(m[1], 10), parseInt(m[2], 10));
+        }}
+        formatLabel={(ym) => {
+          const m = /^(\d{4})-(\d{2})$/.exec(ym);
+          return m ? `R${parseInt(m[1], 10) - 2018}/${parseInt(m[2], 10)}` : ym;
+        }}
+        // ⚠ 枠ボックスの中なので、MonthInputButton 既定の min-w-[6em] / py-1.5 を打ち消す
+        // (打ち消さないと 介護請求タブの「R8/6」が横に広がる)
+        className="font-semibold text-gray-800 px-1.5 py-0 min-w-0"
+      />
       <button type="button" onClick={next} className="text-gray-500 hover:text-gray-800">
         <ChevronRight size={14} />
       </button>
