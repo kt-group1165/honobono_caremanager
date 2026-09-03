@@ -159,6 +159,32 @@ export function sampleAssignment(clientId, officeId, extra = {}) {
   return { tenant_id: TENANT, client_id: clientId, office_id: officeId, start_date: "2026-04-01", ...extra };
 }
 
+/**
+ * 公費 1 件。**書き込み先は `client_kohi_records`**。
+ *
+ * 🔴 公費の表は ★ 2 つある (2026-09-03 実測)
+ *   client_kohi_records     356行 … ★ kaigo-app の集計・伝送はこちらを読む (lib/kohi.ts)
+ *   client_public_expenses    1行 … order-app の BillingTab / ClientsTab が読む (福祉用具)
+ *   ⚠ 両方に公費がある利用者は 0 名。**利用者の重なりが無いので今は食い違いようがない**
+ *
+ * ⚠ 以前この関数は `client_public_expenses` の列名で payload を組んでいた。
+ *   それを kaigo-app の伝送検証に使うと **黙って効かない** (集計が読まない表なので)。
+ *   ★ 「入れたのに公費が出ない」を「実装のバグ」と誤読しかねなかった。
+ */
+export const KOHI_TABLE = "client_kohi_records";
+
+export function sampleKohi(clientId, { hohei = "12", futansha = "12123519", jukyusha = "0000001", priority = 1, honninFutan = 0, extra = {} } = {}) {
+  return {
+    tenant_id: TENANT, client_id: clientId,
+    kohi_hobetsu: hohei, futansha_number: futansha, jukyusha_number: jukyusha,
+    start_date: "2026-04-01", end_date: "2027-03-31",
+    priority, honnin_futan: honninFutan,
+    notes: `[sample] ${MONTH}`,
+    ...extra,
+  };
+}
+
+/** @deprecated ★ order-app 側の表 (client_public_expenses) に書く。kaigo-app の伝送には効かない */
 export function samplePublicExpense(clientId, { hohei = "12", futansha = "12123519", jukyusha = "0000001", extra = {} } = {}) {
   return {
     tenant_id: TENANT, client_id: clientId,
@@ -203,7 +229,8 @@ export async function deleteByTag(tag, { dryRun = true, extraTables = [] } = {})
   // 子から順に。extraTables は各業務が自分の表を足す
   const tables = [
     ...extraTables,
-    "client_public_expenses",
+    "client_kohi_records",      // ★ kaigo-app の集計・伝送が読むほう
+    "client_public_expenses",   // order-app 側
     "client_office_assignments",
     "client_insurance_records",
   ];
