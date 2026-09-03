@@ -66,3 +66,4 @@ _goi_*.txt
 #   被保番・生年月日を含む)。DB 側は RLS で塞いだので、こちらは commit しない。
 #   git に上げると漏洩先を変えただけになる。
 migrations/_backup_a2_export_*/
+__pycache__/
