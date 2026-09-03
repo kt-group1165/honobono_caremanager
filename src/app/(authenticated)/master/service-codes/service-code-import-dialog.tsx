@@ -168,9 +168,15 @@ export function ServiceCodeImportDialog({
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // ⚠ `id` だけを見ると **部分適用を検知できない**。
+      //   実際に 2026-09-03 時点の本番は 表は在るのに file_name / inserted_count /
+      //   closed_count / skipped_count / reverted_at の 5 列が無く、
+      //   ここが緑のまま取込に進んで insert が PGRST204 で必ず失敗していた。
+      //   → **取込と取消で実際に使う列**を並べて確認する。
+      //   (不足分は migrations/service_code_import_batch_missing_columns.sql)
       const { error: e1 } = await supabase
         .from("kaigo_service_code_import_batches")
-        .select("id")
+        .select("id, file_name, inserted_count, closed_count, skipped_count, closed_rows, status, reverted_at")
         .limit(1);
       const { error: e2 } = await supabase
         .from("kaigo_service_codes")
