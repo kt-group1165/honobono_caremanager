@@ -77,6 +77,20 @@ function writeSjis(dir: string, fileName: string, content: string) {
 interface PRow { seq: string; cols: string[] } // cols = col2 以降 (cols[0]=識別番号 7111/7131)
 interface ParsedFile { control: string[]; rows: PRow[]; end: string[] }
 
+/** 行の中身から短いハッシュを作る (指紋用。暗号強度は不要) */
+function hashOf(lines: string[]): string {
+  let h = 0x811c9dc5;
+  for (const l of lines) {
+    for (let i = 0; i < l.length; i++) {
+      h ^= l.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    h ^= 10;
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
 function splitCsvLine(line: string): string[] {
   const out: string[] = [];
   let cur = "", inQ = false;
@@ -324,7 +338,17 @@ async function main() {
           officeId: OFFICE_ID,
           month: TARGET_MONTH,
           // 指紋 = 突合の「材料」。金額ではなく行数を見る
-          fingerprint: { newRows: nw.rows.length, honoRows: hb.rows.length },
+          // 指紋 = 突合の「材料」。
+          // ⚠ 行数だけでは **UPDATE 系のデータ是正が透明になる** (2026-09-03 に実際に踏んだ)。
+          //   認定の benefit_rate を 28 行 UPDATE しても行数は変わらず、
+          //   「指紋一致 + 悪化 = 計算が変わった」と誤って断定した。
+          //   → ほのぼの側 (真の外部入力) と当方の出力の **中身のハッシュ**も持つ。
+          fingerprint: {
+            newRows: nw.rows.length,
+            honoRows: hb.rows.length,
+            honoHash: hashOf(hb.rows.map((r) => r.cols.join(","))),
+            newHash: hashOf(nw.rows.map((r) => r.cols.join(","))),
+          },
           // 人単位 (項目を抜き出して比べる緩い層)
           person: { match, mismatch: mism.length, onlyNew: onlyNew.length, onlyHono: onlyHb.length, total: allIns.length },
           // 全項目 (行単位で比べる厳しい層)。★ 到達点を引用するならこちら (VERIFICATION_RULES 3-8)
