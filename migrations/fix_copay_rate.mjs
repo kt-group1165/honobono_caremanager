@@ -41,13 +41,23 @@ async function main(){
   console.log("給付率→copay分布:",JSON.stringify(byCopay));
   console.log("2割(copay=2)の被保番:", Object.entries(kyuBy).filter(([,g])=>copayOf(g)===2).map(([i])=>i).join(", "));
   if(!EXECUTE){ console.log("\n※ DRY RUN。--execute で copay_rate更新。"); return; }
-  let ok=0, nomatch=0;
+  let ok=0, nomatch=0, mismatch=0;
   for(const [ins,g] of Object.entries(kyuBy)){
     const cr=copayOf(g); if(cr==null)continue;
-    const {error,count}=await sb.from("client_insurance_records").update({copay_rate:String(cr)},{count:"exact"}).eq("insured_number",ins).eq("notes",STEP1_MARK);
+    // ⚠ 2026-09-03 追加: benefit_rate も同時に揃える。
+    //   これが無いと copay だけ直り 給付率列が古い値のまま残って矛盾する
+    //   (2026-09-03 の実測で 38 行。伝送で確認した結果 **負担割合のほうが正**)。
+    //   値は CSV の給付率そのもの (= 出どころ) を使う。100−負担割合×10 と
+    //   食い違ったら数えて出す (通常 0 のはず)。
+    const want=100-cr*10;
+    if(parseInt(g,10)!==want) mismatch++;
+    const {error,count}=await sb.from("client_insurance_records")
+      .update({copay_rate:String(cr), benefit_rate:String(want)},{count:"exact"})
+      .eq("insured_number",ins).eq("notes",STEP1_MARK);
     if(error){ console.error(`✗ ${ins}: ${error.message}`); process.exit(1); }
     if(count>0) ok++; else nomatch++;
   }
-  console.log(`✓ 完了: ${ok}名の copay_rate 設定 (marker不一致で未更新: ${nomatch})`);
+  console.log(`✓ 完了: ${ok}名の copay_rate + benefit_rate 設定 (marker不一致で未更新: ${nomatch})`);
+  if(mismatch) console.log(`  ⚠ CSV の給付率が 100−負担割合×10 と違う被保番: ${mismatch} 件`);
 }
 main().catch(e=>{console.error("ERROR:",e.message);process.exit(1);});

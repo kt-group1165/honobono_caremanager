@@ -283,7 +283,9 @@ async function main() {
         certification_start_date: "2025-04-01",
         certification_end_date: "2027-03-31",
         copay_rate: "1",
-        benefit_rate: "9",
+        // ⚠ benefit_rate は **パーセント**。"9" (割) だと本番の 90 と単位が食い違い、
+        //   矛盾検出 (check:benefit-densou) に 46 行の偽陽性を出す。2026-09-03 是正。
+        benefit_rate: "90",
         insurer_name: "千葉市",
         care_manager_org: "Ｈａｮｱ居宅支援センターおゆみ野",
         notes: `${NOTES_SUFFIX} 認定情報`,
