@@ -94,6 +94,24 @@ function collectTables(): string[] {
   return [...found].sort();
 }
 
+/**
+ * ★ PostgREST が公開している表を全部取る (= anon が到達しうる面の全体)。
+ * 取れなければ **落とす**。コード由来の分母に黙って戻ると、漏れたまま PASS するため。
+ */
+async function fetchOpenApiTables(): Promise<string[]> {
+  const r = await fetch(`${URL_}/rest/v1/`, { headers: svcH });
+  if (!r.ok) throw new Error(`OpenAPI の取得に失敗 (${r.status})。分母が作れないので中止する`);
+  const spec = (await r.json()) as { paths?: Record<string, unknown> };
+  const tables = Object.keys(spec.paths ?? {})
+    // ⚠ 先頭を [a-z] にしてはいけない。**_backup_* が分母から外れる**。
+    //   過去に anon から読めていたのはまさにその _backup_ 2 表で、
+    //   分母から外すと同じ見逃しをもう一度作ることになる。
+    .filter((k) => /^[/][a-z_][a-z0-9_]*$/.test(k))
+    .map((k) => k.slice(1));
+  if (tables.length === 0) throw new Error("OpenAPI に表が 1 つも無い = 検査が動いていない");
+  return tables.sort();
+}
+
 type Row = { table: string; readable: boolean; sample: string; writable: boolean | null };
 
 async function checkTable(t: string): Promise<Row | null> {
@@ -191,8 +209,16 @@ async function checkBuckets() {
 
 async function main() {
   console.log(`=== anon 露出チェック ${WRITE ? "【読み書き】" : "【読み取りのみ】"} ===\n`);
-  const tables = collectTables();
-  console.log(`  コードから集めたテーブル ${tables.length} 個を anon key で総当たり\n`);
+  const tables = await fetchOpenApiTables();
+  const fromCode = collectTables();
+  const notInCode = tables.filter((t) => !fromCode.includes(t));
+  const codeOnly = fromCode.filter((t) => !tables.includes(t));
+  console.log(`  ★ 分母 = PostgREST が公開している ${tables.length} 表 (OpenAPI)`);
+  console.log(`     コードが .from("...") で直接引くのは ${fromCode.length} 表`);
+  console.log(`     → コードに出ない ${notInCode.length} 表も検査する (旧方式では素通りしていた)`);
+  if (codeOnly.length > 0)
+    console.log(`     ⚠ コードにあって OpenAPI に無い ${codeOnly.length} 件は表ではない (Storage bucket 等): ${codeOnly.join(", ")}`);
+  console.log("");
 
   const queue = [...tables];
   const open: Row[] = [];
