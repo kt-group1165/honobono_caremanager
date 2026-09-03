@@ -3,6 +3,7 @@
   "version": "2.7.0",
   "private": true,
   "scripts": {
+    "check:unused-why": "tsx scripts/unused-tables-why.mts",
     "check:cert-overlap": "tsx scripts/check-cert-overlap.mts",
     "check:cert-tiebreak": "tsx scripts/check-cert-tiebreak.mts",
     "check:tiebreak-money": "tsx scripts/check-tiebreak-money-diff.mts",

@@ -1,0 +1,181 @@
+/**
+ * 0 行の table が **なぜ 0 行か** を実データで分類する (READ ONLY)。
+ *
+ *   npx tsx scripts/unused-tables-why.mts
+ *
+ * ── 考え方 ───────────────────────────────────────────────────────────────
+ *   unused-tables-check.mts は「数えて参照元を出す」まで。こちらは分類する。
+ *   ★ 分類の根拠は **推測ではなく共起** にする:
+ *
+ *     ある file が table A と B の両方に書く。A は行がある。B は 0 行。
+ *       → その処理は **動いている**。なのに B だけ入らない。★ E (書けていない)
+ *
+ *     書き込みが app のソースに 1 つも無い
+ *       → 画面から作れない。C (別表に移った) か D (画面が無い)
+ *
+ *     書き込みはあるが 共起する table も全部 0 行
+ *       → その処理自体が一度も動いていない。A/B (未運用) の可能性が高い
+ *
+ * ⚠ **列挙して、未分類が残ったら落とす** (規則 3-11)。手で保守する一覧にしない。
+ * ⚠ grep なので動的に組む `.from(variable)` は拾えない。0 行でも使われている可能性はある。
+ * ⚠ 「書き込みがある」と「画面から辿り着ける」は別 (規則 1-8)。導線は別途 grep する。
+ */
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+import { execFileSync } from "node:child_process";
+import { createClient } from "@supabase/supabase-js";
+
+const env: Record<string, string> = {};
+for (const l of readFileSync(new URL("../.env.local", import.meta.url), "utf8").split(/\r?\n/)) {
+  const m = /^([A-Z0-9_]+)=(.*)$/.exec(l.trim());
+  if (m) env[m[1]] = m[2].replace(/^["']|["']$/g, "");
+}
+const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+
+const APPS_ROOT = path.resolve(fileURLToPath(new URL("../../", import.meta.url)));
+const APPS = [
+  ["kaigo-app", "kaigo-app/src"], ["order-app", "order-app/app"], ["order-app", "order-app/lib"],
+  ["payroll-app", "payroll-app/src"], ["calendar-app", "calendar-app/app"], ["calendar-app", "calendar-app/lib"],
+] as const;
+
+// ---------------------------------------------------------------- ソースを読む
+const files = new Set<string>();
+for (const [, dir] of APPS) {
+  let out = "";
+  try {
+    out = execFileSync("grep", ["-rl", "--include=*.ts", "--include=*.tsx", '\.from("', path.join(APPS_ROOT, dir)],
+      { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  } catch { continue; }
+  for (const f of out.split("\n")) if (f.trim()) files.add(f.trim());
+}
+
+/** file → { reads, writes:Array<{t,line}> } */
+const perFile = new Map<string, { reads: Set<string>; writes: { t: string; line: number }[] }>();
+const allTables = new Set<string>();
+for (const f of files) {
+  let src = "";
+  try { src = readFileSync(f, "utf8"); } catch { continue; }
+  const reads = new Set<string>();
+  const writes: { t: string; line: number }[] = [];
+  for (const m of src.matchAll(/\.from\("([a-z_0-9]+)"\)([\s\S]{0,220})/g)) {
+    const t = m[1];
+    // ⚠ `supabase.storage.from("bucket")` は **table ではない**。除外しないと
+    //   backups / signatures が「0 行の table」に化ける (2026-09-03 実測で 2 件混入していた)。
+    if (/\.storage\s*$/.test(src.slice(Math.max(0, m.index - 60), m.index))) continue;
+    allTables.add(t);
+    // ⚠ チェーンは複数行になるので後続 220 文字を見る。select だけなら読み取り
+    if (/\.(insert|upsert)\s*\(/.test(m[2])) {
+      writes.push({ t, line: src.slice(0, m.index).split(String.fromCharCode(10)).length });
+    } else reads.add(t);
+  }
+  perFile.set(f, { reads, writes });
+}
+
+// ---------------------------------------------------------------- 行数を引く
+const tables = [...allTables].sort();
+const counts = new Map<string, number | null>();
+await Promise.all(tables.map(async (t) => {
+  const { count, error } = await sb.from(t).select("*", { count: "exact", head: true });
+  counts.set(t, error ? null : (count ?? 0));
+}));
+const zero = tables.filter((t) => counts.get(t) === 0);
+console.log(`【分母】app が参照する table ${tables.length} 種 / ★ 0 行 ${zero.length} 種\n`);
+
+// ---------------------------------------------------------------- 分類する
+const short = (f: string) => f.split(/[\/]/).slice(-3).join("/");
+type Cls = "E" | "E?" | "CD" | "AB";
+const rows: { t: string; cls: Cls; why: string; ev: string[] }[] = [];
+
+for (const t of zero) {
+  const writers = [...perFile.entries()].filter(([, v]) => v.writes.some((w) => w.t === t));
+  if (writers.length === 0) {
+    const readers = [...perFile.entries()].filter(([, v]) => v.reads.has(t));
+    rows.push({
+      t, cls: "CD",
+      why: "app に書き込み (insert/upsert) が無い — 画面からは作れない",
+      ev: readers.slice(0, 3).map(([f]) => `読むだけ: ${short(f)}`),
+    });
+    continue;
+  }
+  // 共起: **同じ処理**の中で書かれる他の table に行があるか。
+  //   ⚠ 「同じ file」だと弱すぎる (clients=9096行 と同居しているだけで E になる)。
+  //     近接行 (既定 NEAR 行以内) に絞って「同じハンドラ」を近似する。
+  const NEAR = 40;
+  const live: string[] = [];
+  for (const [, v] of writers) {
+    for (const mine of v.writes.filter((w) => w.t === t)) {
+      for (const o of v.writes) {
+        if (o.t === t) continue;
+        if (Math.abs(o.line - mine.line) > NEAR) continue;
+        const n = counts.get(o.t);
+        if (n != null && n > 0) live.push(`${o.t}=${n}行 (${Math.abs(o.line - mine.line)}行離れ)`);
+      }
+    }
+  }
+  const uniq = [...new Set(live)];
+  if (uniq.length) {
+    rows.push({
+      t, cls: "E",
+      why: "★ 同じ処理の中で書かれる別 table には行がある = その処理は動いている。この table だけ入っていない",
+      ev: [...writers.slice(0, 2).map(([f]) => `書き込み: ${short(f)}`), `共起: ${uniq.slice(0, 4).join(" / ")}`],
+    });
+  } else {
+    rows.push({
+      t, cls: "AB",
+      why: "書き込みはあるが同じ処理の共起 table も 0 行 = その処理自体が一度も動いていない",
+      ev: writers.slice(0, 3).map(([f]) => `書き込み: ${short(f)}`),
+    });
+  }
+}
+
+const order: Cls[] = ["E", "E?", "AB", "CD"];
+const label: Record<Cls, string> = {
+  E: "★ E 候補 — 処理は動いているのにこの table だけ 0 行",
+  "E?": "E?",
+  AB: "A/B — その処理自体が一度も動いていない (未運用)",
+  CD: "C/D — app に書き込みが無い (別表に移った / 画面が無い)",
+};
+for (const c of order) {
+  const g = rows.filter((r) => r.cls === c);
+  if (!g.length) continue;
+  console.log(`\n══ ${label[c]} — ${g.length} 種 ══`);
+  for (const r of g) {
+    console.log(`  ${r.t}`);
+    console.log(`      ${r.why}`);
+    for (const e of r.ev) console.log(`      ${e}`);
+  }
+}
+
+// ---------------------------------------------------------- ★ 逆側の軸
+//   「実装はあるがデータが無い」の裏返し = **データはあるのに app が読まない**。
+//   こちらのほうが規模が大きいことがある (2026-09-03: hs_* だけで 4 万行超)。
+//   分母は OpenAPI (GET /rest/v1/) — grep ではなく **DB に実在する表**。
+{
+  const res = await fetch(`${env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/`, {
+    headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
+  });
+  const j = (await res.json()) as { definitions?: Record<string, unknown> };
+  const exists = Object.keys(j.definitions ?? {});
+  const unref = exists.filter((t) => !allTables.has(t)).sort();
+  const withRows: { t: string; n: number }[] = [];
+  await Promise.all(unref.map(async (t) => {
+    const { count, error } = await sb.from(t).select("*", { count: "exact", head: true });
+    if (!error && (count ?? 0) > 0) withRows.push({ t, n: count ?? 0 });
+  }));
+  withRows.sort((a, b) => b.n - a.n);
+  console.log(`
+══ ★ 逆側 — DB に実在するが app が .from で参照しない — ${unref.length} 種 ══`);
+  console.log(`   うち **行がある** ${withRows.length} 種 (合計 ${withRows.reduce((a, r) => a + r.n, 0).toLocaleString()} 行)`);
+  for (const r of withRows) console.log(`     ${String(r.n).padStart(7)} 行  ${r.t}`);
+  console.log(`   ⚠ 「読まれていない」だけで、消してよいとは限らない (取込の中間表・監査ログ)。`);
+}
+
+// ★ 未分類が残ったら落とす (手で保守する一覧にしない)
+const unclassified = zero.filter((t) => !rows.some((r) => r.t === t));
+console.log(`\n合計 ${rows.length} / 0 行 ${zero.length}`);
+if (unclassified.length) {
+  console.error(`\n✗ 未分類が ${unclassified.length} 種: ${unclassified.join(", ")}`);
+  process.exit(1);
+}
+console.log("✓ 未分類なし");
