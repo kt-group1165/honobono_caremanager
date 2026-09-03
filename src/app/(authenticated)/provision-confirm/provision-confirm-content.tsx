@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
+import { monthStart, monthEnd } from "@/lib/report-month";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -133,12 +134,19 @@ export function ProvisionConfirmContent({
 
     // Try to fetch latest report documents for these users
     const userIds = userData.map((u) => u.id);
-    const { data: docData } = await supabase
+    const { data: docData, error: docError } = await supabase
       .from("kaigo_report_documents")
-      .select("id, user_id, period_start, period_end, status, document_type")
+      // ⚠ 列名が DB と違っていた (2026-09-03 是正)。
+      //   period_start / period_end / document_type は **存在しない**。
+      //   実際は report_month (YYYY-MM) と report_type。
+      //   ★ error を捨てていたので 42703 が `?? []` で空配列に化け、
+      //     **3,221 件あるのに全員「帳票なし」**と表示されていた。
+      .select("id, user_id, report_month, status, report_type")
       .in("user_id", userIds)
-      .in("document_type", ["service-usage", "provision-sheet"])
-      .order("period_start", { ascending: false });
+      .in("report_type", ["service-usage", "provision-sheet"])
+      .order("report_month", { ascending: false });
+    // ★ 握りつぶさない
+    if (docError) console.error("kaigo_report_documents fetch failed:", docError.message);
 
     // Map: latest doc per user
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime-typed value (CSV row / DB row / component prop widening)
@@ -156,8 +164,9 @@ export function ProvisionConfirmContent({
         user_name: u.name,
         user_name_kana: u.name_kana,
         care_level: u.care_level,
-        latest_period_start: doc?.period_start ?? null,
-        latest_period_end: doc?.period_end ?? null,
+        // 提供票は月単位。report_month (YYYY-MM) から 月初〜月末 を出す
+        latest_period_start: monthStart(doc?.report_month ?? null),
+        latest_period_end: monthEnd(doc?.report_month ?? null),
         document_id: doc?.id ?? null,
         document_status: doc?.status ?? null,
       };

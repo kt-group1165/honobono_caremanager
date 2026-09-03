@@ -42,6 +42,57 @@ const DIRS = [
   "payroll-app/src", "calendar-app/app", "calendar-app/lib",
 ];
 
+/**
+ * `.select("…")` の中身から **その table 自身の裸の列**だけを取り出す。
+ *
+ * ⚠ 埋め込み関係 `clients(name, gender, phone)` は **先に丸ごと落とす**。
+ *   先に "," で割ってから `(` を含むものを捨てると、
+ *   `" gender"` `" phone"` が **裸の列に見えて誤検出**する。
+ *   ★ 2026-09-03 に実際にこれで 3 table を誤検出し、
+ *     **リーダーが「居宅の請求画面が壊れている」と優先度 1 に指定するところまで進んだ**。
+ *   → 「対象外にした」と書いても、**書いた順序のせいで効いていないことがある**。
+ */
+export function extractCols(colsRaw: string): string[] {
+  let cols = colsRaw;
+  // 入れ子の埋め込みもあるので、内側から繰り返し落とす
+  for (let i = 0; i < 5; i++) cols = cols.replace(/[a-z_0-9]+\s*\([^()]*\)/g, "");
+  const out: string[] = [];
+  for (const raw of cols.split(",")) {
+    const c = raw.trim();
+    if (!c || c === "*" || c.includes("(") || c.includes(":")) continue;
+    if (!/^[a-z_][a-z_0-9]*$/.test(c)) continue;
+    out.push(c);
+  }
+  return out;
+}
+
+// ── ★ 除外が効いていることを、除外されるはずの入力で確かめる ────────────────
+//   (「対象外にした」と書くだけでは足りない。**落ちることを見る**)
+{
+  const cases: [string, string[]][] = [
+    ["*, clients(name, name_kana:furigana, gender, phone, mobile_phone:mobile)", []],
+    ["order_items(product_code, rental_price, rental_start_date)", []],
+    ["id, user_id, period_start, period_end, status, document_type",
+      ["id", "user_id", "period_start", "period_end", "status", "document_type"]],
+    ["id, office:offices(name), created_at", ["id", "created_at"]],
+    ["a, b(c(d, e)), f", ["a", "f"]],
+    ["*", []],
+  ];
+  let bad = 0;
+  for (const [input, want2] of cases) {
+    const got = extractCols(input);
+    if (JSON.stringify(got) !== JSON.stringify(want2)) {
+      bad++;
+      console.log(`🔴 自己検査 NG: ${JSON.stringify(input)}\n     得た=${JSON.stringify(got)} 期待=${JSON.stringify(want2)}`);
+    }
+  }
+  if (bad) {
+    console.log(`🔴 **列の取り出しが壊れている。結果は信用できないので中止する。**`);
+    process.exit(1);
+  }
+  console.log(`✅ 自己検査 ${cases.length} 件 — 埋め込み関係を裸の列と誤認しない`);
+}
+
 /** table → 列 → その列を書いている file の集合 */
 const want = new Map<string, Map<string, Set<string>>>();
 let files = 0;
@@ -56,14 +107,10 @@ for (const dir of DIRS) {
     const src = readFileSync(file, "utf8");
     // .from("t")…select("a, b, c")  — 間に .eq() 等が挟まらない直後のみを見る (誤対応を避ける)
     for (const m of src.matchAll(/\.from\("([a-z_0-9]+)"\)\s*\n?\s*\.select\(\s*"([^"]*)"/g)) {
-      const [, table, cols] = m;
+      const [, table, colsRaw] = m;
       if (!want.has(table)) want.set(table, new Map());
       const byCol = want.get(table)!;
-      for (const raw of cols.split(",")) {
-        const c = raw.trim();
-        // 埋め込み / エイリアス / ワイルドカード / count は対象外
-        if (!c || c === "*" || c.includes("(") || c.includes(":")) continue;
-        if (!/^[a-z_][a-z_0-9]*$/.test(c)) continue;
+      for (const c of extractCols(colsRaw)) {
         if (!byCol.has(c)) byCol.set(c, new Set());
         byCol.get(c)!.add(file.split(/[\\/]/).slice(-2).join("/"));
       }

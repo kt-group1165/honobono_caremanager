@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { ProvisionConfirmContent, type ProvisionUser } from "./provision-confirm-content";
+import { monthStart, monthEnd } from "@/lib/report-month";
 
 export default async function ProvisionConfirmPage({
   searchParams,
@@ -63,14 +64,21 @@ export default async function ProvisionConfirmPage({
   let initialUsers: ProvisionUser[] = [];
   if (userData.length > 0) {
     const userIds = userData.map((u) => u.id);
-    const { data: docData } = await supabase
+    const { data: docData, error: docError } = await supabase
       .from("kaigo_report_documents")
-      .select("id, user_id, period_start, period_end, status, document_type")
+      // ⚠ 列名が DB と違っていた (2026-09-03 是正)。
+      //   period_start / period_end / document_type は **存在しない**。
+      //   実際は report_month (YYYY-MM) と report_type。
+      //   ★ error を捨てていたので 42703 が `?? []` で空配列に化け、
+      //     **3,221 件あるのに全員「帳票なし」**と表示されていた。
+      .select("id, user_id, report_month, status, report_type")
       .in("user_id", userIds)
-      .in("document_type", ["service-usage", "provision-sheet"])
-      .order("period_start", { ascending: false });
+      .in("report_type", ["service-usage", "provision-sheet"])
+      .order("report_month", { ascending: false });
+    // ★ 握りつぶさない (握りつぶしていたのがこの不具合の原因)
+    if (docError) console.error("kaigo_report_documents fetch failed:", docError.message);
 
-    type Doc = { id: string; user_id: string; period_start: string | null; period_end: string | null; status: string | null };
+    type Doc = { id: string; user_id: string; report_month: string | null; status: string | null };
     const docByUser: Record<string, Doc> = {};
     for (const doc of (docData ?? []) as Doc[]) {
       if (!docByUser[doc.user_id]) {
@@ -85,8 +93,9 @@ export default async function ProvisionConfirmPage({
         user_name: u.name,
         user_name_kana: u.name_kana,
         care_level: u.care_level,
-        latest_period_start: doc?.period_start ?? null,
-        latest_period_end: doc?.period_end ?? null,
+        // 提供票は月単位。report_month (YYYY-MM) から 月初〜月末 を出す
+        latest_period_start: monthStart(doc?.report_month ?? null),
+        latest_period_end: monthEnd(doc?.report_month ?? null),
         document_id: doc?.id ?? null,
         document_status: doc?.status ?? null,
       };
