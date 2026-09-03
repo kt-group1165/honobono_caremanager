@@ -215,8 +215,8 @@ export function KeieiBunsekiTab({
         return [
           m.month,
           m.users,
-          m.newUsers,
-          m.endedUsers,
+          m.newUsers ?? "",
+          m.endedUsers ?? "",
           m.visits,
           m.bathVisits,
           fmtH(m.minutes),
@@ -341,11 +341,17 @@ export function KeieiBunsekiTab({
                 <tr key={m.month} className="hover:bg-blue-50">
                   <td className={`${tdCls} font-mono`}>{reiwaMonthLabel(m.month)}</td>
                   <td className={`${tdCls} text-right font-mono`}>{m.users.toLocaleString()}</td>
-                  <td className={`${tdCls} text-right font-mono ${m.newUsers > 0 ? "text-emerald-600" : "text-gray-400"}`}>
-                    {m.newUsers > 0 ? `+${m.newUsers}` : "0"}
+                  <td
+                    className={`${tdCls} text-right font-mono ${m.newUsers == null ? "text-gray-400" : m.newUsers > 0 ? "text-emerald-600" : "text-gray-400"}`}
+                    title={m.newUsersReason ?? undefined}
+                  >
+                    {m.newUsers == null ? "—" : m.newUsers > 0 ? `+${m.newUsers}` : "0"}
                   </td>
-                  <td className={`${tdCls} text-right font-mono ${m.endedUsers > 0 ? "text-red-600" : "text-gray-400"}`}>
-                    {m.endedUsers > 0 ? `-${m.endedUsers}` : "0"}
+                  <td
+                    className={`${tdCls} text-right font-mono ${m.endedUsers == null ? "text-gray-400" : m.endedUsers > 0 ? "text-red-600" : "text-gray-400"}`}
+                    title={m.newUsersReason ?? undefined}
+                  >
+                    {m.endedUsers == null ? "—" : m.endedUsers > 0 ? `-${m.endedUsers}` : "0"}
                   </td>
                   <td className={`${tdCls} text-right font-mono`}>{m.visits.toLocaleString()}</td>
                   <td className={`${tdCls} text-right font-mono`}>{m.cancelled.toLocaleString()}</td>

@@ -358,10 +358,23 @@ export interface VisitMonthlyMetrics {
   month: string;
   /** 実利用者数 (訪問系 非キャンセル + 入浴実績 のユニーク利用者) */
   users: number;
-  /** 前月に居なかった利用者数 (前月比の新規) */
-  newUsers: number;
-  /** 前月に居て当月居ない利用者数 (前月比の終了) */
-  endedUsers: number;
+  /**
+   * 前月に居なかった利用者数 (前月比の新規)。
+   * ★ 前月のデータが不足しているときは null (= 判定不能)。newUsersReason に理由が入る。
+   */
+  newUsers: number | null;
+  /** 前月に居て当月居ない利用者数 (前月比の終了)。★ 判定不能なら null */
+  endedUsers: number | null;
+  /**
+   * 新規/終了 を出せない理由。null なら出せている。
+   *
+   * ⚠ なぜ要るか (2026-09-03):
+   *   実績の取込量が月で大きく違う (2026-05:6行 / 06:36,723行 / 07:2,890行 / 08:762行)。
+   *   前月がほぼ空だと「当月のほぼ全員が新規」、当月がほぼ空だと「前月の大半が終了」と出る。
+   *   実測: 2026-06 は 新規 2,270/2,271名、2026-07 は 終了 2,075名。**誰も辞めていない。**
+   *   計算は正しいが **材料が無い**。誤った数字を出すより出さないほうが安全。
+   */
+  newUsersReason: string | null;
   /** 訪問回数 (kaigo_visit_schedule の非キャンセル行数) */
   visits: number;
   /** 入浴件数 (kaigo_bath_visit_records actual=true) */
@@ -480,10 +493,22 @@ export function computeVisitAnalysis(
     }
     byCategory["入浴"] += d.bathClientIds.length;
 
-    let newUsers = 0;
-    let endedUsers = 0;
-    for (const u of curSet) if (!prevSet.has(u)) newUsers += 1;
-    for (const u of prevSet) if (!curSet.has(u)) endedUsers += 1;
+    // 新規/終了 は 前月と当月の両方に十分な実績があるときだけ出す。
+    // 片方がほぼ空だと「全員が新規」「大半が終了」になり、実態と無関係な数字が出る。
+    let newUsers: number | null = 0;
+    let endedUsers: number | null = 0;
+    let newUsersReason: string | null = null;
+    const prevN = prevSet.size, curN = curSet.size;
+    if (prevN === 0) {
+      newUsers = endedUsers = null;
+      newUsersReason = "前月の実績が 0 件のため比較できません";
+    } else if (Math.min(prevN, curN) * 4 < Math.max(prevN, curN)) {
+      newUsers = endedUsers = null;
+      newUsersReason = `前月 ${prevN} 名 / 当月 ${curN} 名 と実績量が大きく違うため比較できません (取込量の差の可能性)`;
+    } else {
+      for (const u of curSet) if (!prevSet.has(u)) (newUsers as number) += 1;
+      for (const u of prevSet) if (!curSet.has(u)) (endedUsers as number) += 1;
+    }
 
     const denom = visits + cancelled;
     return {
@@ -491,6 +516,7 @@ export function computeVisitAnalysis(
       users: curSet.size,
       newUsers,
       endedUsers,
+      newUsersReason,
       visits,
       bathVisits: d.bathClientIds.length,
       minutes,
@@ -593,8 +619,12 @@ export interface KyotakuMonthlyMetrics {
   month: string;
   /** 給付管理ベースの担当利用者数 (kaigo_benefit_management のユニーク利用者) */
   kanriUsers: number;
-  newUsers: number;
-  endedUsers: number;
+  /** 前月比の新規。★ 前月のデータが不足しているときは null (判定不能) */
+  newUsers: number | null;
+  /** 前月比の終了。★ 判定不能なら null */
+  endedUsers: number | null;
+  /** 新規/終了 を出せない理由。null なら出せている (訪問系と同じ理由。上の注記参照) */
+  newUsersReason: string | null;
   /** 居宅介護支援費の請求件数 / 単位数 / 保険請求額 */
   claimCount: number;
   unitsSum: number;
@@ -641,16 +671,29 @@ export function computeKyotakuAnalysis(
       amountSum += c.insurance_amount;
     }
 
-    let newUsers = 0;
-    let endedUsers = 0;
-    for (const u of curSet) if (!prevSet.has(u)) newUsers += 1;
-    for (const u of prevSet) if (!curSet.has(u)) endedUsers += 1;
+    // 新規/終了 は 前月と当月の両方に十分な実績があるときだけ出す。
+    // 片方がほぼ空だと「全員が新規」「大半が終了」になり、実態と無関係な数字が出る。
+    let newUsers: number | null = 0;
+    let endedUsers: number | null = 0;
+    let newUsersReason: string | null = null;
+    const prevN = prevSet.size, curN = curSet.size;
+    if (prevN === 0) {
+      newUsers = endedUsers = null;
+      newUsersReason = "前月の実績が 0 件のため比較できません";
+    } else if (Math.min(prevN, curN) * 4 < Math.max(prevN, curN)) {
+      newUsers = endedUsers = null;
+      newUsersReason = `前月 ${prevN} 名 / 当月 ${curN} 名 と実績量が大きく違うため比較できません (取込量の差の可能性)`;
+    } else {
+      for (const u of curSet) if (!prevSet.has(u)) (newUsers as number) += 1;
+      for (const u of prevSet) if (!curSet.has(u)) (endedUsers as number) += 1;
+    }
 
     return {
       month: ym,
       kanriUsers: curSet.size,
       newUsers,
       endedUsers,
+      newUsersReason,
       claimCount,
       unitsSum,
       amountSum,

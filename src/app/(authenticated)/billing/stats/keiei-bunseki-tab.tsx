@@ -163,8 +163,8 @@ export function KeieiBunsekiKyotakuTab({
       monthly.map((m) => [
         m.month,
         m.kanriUsers,
-        m.newUsers,
-        m.endedUsers,
+        m.newUsers ?? "",
+        m.endedUsers ?? "",
         m.claimCount,
         m.unitsSum,
         m.amountSum,
@@ -263,11 +263,17 @@ export function KeieiBunsekiKyotakuTab({
                   >
                     {m.kanriUsers.toLocaleString()}
                   </td>
-                  <td className={`${tdCls} text-right font-mono ${m.newUsers > 0 ? "text-emerald-600" : "text-gray-400"}`}>
-                    {m.newUsers > 0 ? `+${m.newUsers}` : "0"}
+                  <td
+                    className={`${tdCls} text-right font-mono ${m.newUsers == null ? "text-gray-400" : m.newUsers > 0 ? "text-emerald-600" : "text-gray-400"}`}
+                    title={m.newUsersReason ?? undefined}
+                  >
+                    {m.newUsers == null ? "—" : m.newUsers > 0 ? `+${m.newUsers}` : "0"}
                   </td>
-                  <td className={`${tdCls} text-right font-mono ${m.endedUsers > 0 ? "text-red-600" : "text-gray-400"}`}>
-                    {m.endedUsers > 0 ? `-${m.endedUsers}` : "0"}
+                  <td
+                    className={`${tdCls} text-right font-mono ${m.endedUsers == null ? "text-gray-400" : m.endedUsers > 0 ? "text-red-600" : "text-gray-400"}`}
+                    title={m.newUsersReason ?? undefined}
+                  >
+                    {m.endedUsers == null ? "—" : m.endedUsers > 0 ? `-${m.endedUsers}` : "0"}
                   </td>
                   <td className={`${tdCls} text-right font-mono`}>
                     {m.claimCount.toLocaleString()}
