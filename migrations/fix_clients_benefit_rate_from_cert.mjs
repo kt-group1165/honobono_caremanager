@@ -99,7 +99,7 @@ const certCopayPct = (v) => {
 };
 
 const fix = [];
-const skipped = { tandoku: 0, noCert: [], certInconsistent: [], certPartial: 0, same: 0 };
+const skipped = { tandoku: 0, noCert: [], certInconsistent: [], certPartial: 0, same: 0, outOfRange: [] };
 
 for (const c of clients) {
   if (/^[Hh]/.test((c.insured_number ?? "").trim())) { skipped.tandoku++; continue; }
@@ -115,9 +115,22 @@ for (const c of clients) {
     continue;
   }
 
+  // ★ ① 正規化: 認定側は "9"/"8"/"7" の **割表記**が混在している (2,242 行)。
+  //   `clients.benefit_rate` は **percent 表記**で、請求 (BillingTab) は
+  //   `floor(費用 × benefit_rate / 100)` とそのまま % として読む。
+  //   割表記のまま書くと **9% 請求 = 保険が 1/10** になり返戻する。
+  const norm = cb > 0 && cb <= 10 ? cb * 10 : cb;
+
+  // ★ ② 出口ガード: 制度上ありえる値以外は **書かない**
+  const ALLOWED = [70, 80, 90, 100, 0];
+  if (!ALLOWED.includes(norm)) {
+    skipped.outOfRange.push(`${c.name}: 認定から導いた給付率 ${norm} が ${ALLOWED.join("/")} 以外 — 書かない`);
+    continue;
+  }
+
   const mine = c.benefit_rate == null ? null : parseInt(c.benefit_rate, 10);
-  if (mine === cb) { skipped.same++; continue; }
-  fix.push({ id: c.id, name: c.name, from: c.benefit_rate, to: String(cb), copay: c.copay_rate, certCopay: cert.copay_rate });
+  if (mine === norm) { skipped.same++; continue; }
+  fix.push({ id: c.id, name: c.name, from: c.benefit_rate, to: String(norm), copay: c.copay_rate, certCopay: cert.copay_rate, certBenefit: cert.benefit_rate });
 }
 
 // ★ そのうち「いま福祉用具の請求に出る人」が何名かも出す (影響範囲の見極め用)
@@ -148,13 +161,20 @@ console.log(`  公費単独 (触らない)   ${skipped.tandoku} 名`);
 console.log(`  ${MONTH} に有効な認定が無い  ${skipped.noCert.length} 名  ← ★ 材料が無いので触らない`);
 console.log(`  認定の給付率か負担割合が片方だけ ${skipped.certPartial} 名`);
 console.log(`  ★ 認定自体が不整合    ${skipped.certInconsistent.length} 名  ← 認定側の是正が先`);
+console.log(`  ★ 導いた給付率が 70/80/90/100/0 以外 ${skipped.outOfRange.length} 名  ← 出口ガードで書かない`);
+for (const s2 of skipped.outOfRange.slice(0, 10)) console.log(`     ⚠ ${s2}`);
 
 for (const s of skipped.certInconsistent.slice(0, 10)) console.log(`     ⚠ ${s}`);
 console.log();
-for (const f of fix.slice(0, 30)) {
-  console.log(`  ${f.name}: 給付率 ${f.from} → ${f.to}  (clients 負担割合 ${f.copay} / 認定 負担割合 ${f.certCopay})`);
+// ★ ④ 書き込む値を **全件** 出す (30 件で切らない。目視できないと承認できない)
+console.log(`
+── 書き込む値 (全 ${fix.length} 件) ──`);
+for (const f of fix) {
+  console.log(`  ${f.name}: 給付率 ${f.from} → ${f.to}  (clients 負担割合 ${f.copay} / 認定 負担割合 ${f.certCopay} 給付率 ${f.certBenefit})`);
 }
-if (fix.length > 30) console.log(`  … 他 ${fix.length - 30} 名`);
+const toDist = {};
+for (const f of fix) toDist[f.to] = (toDist[f.to] ?? 0) + 1;
+console.log(`  書き込む値の分布: ${JSON.stringify(toDist)}`);
 
 if (!EXECUTE) {
   console.log(`\n【DRY RUN】書き込んでいません。--execute で実行`);
@@ -177,7 +197,20 @@ for (const f of targets) {
 console.log(`\n  ${n} 名 更新`);
 
 // ★ 件数確認 (DB に聞き直す)
-const after = await all("clients", "id, benefit_rate", "id");
+const after = await all("clients", "id, name, benefit_rate", "id");
 const byId = new Map(after.map((c) => [c.id, c.benefit_rate]));
 const bad = targets.filter((f) => byId.get(f.id) !== f.to);
 console.log(`  ★ 件数確認: 想定と違う行 ${bad.length} 件 ${bad.length === 0 ? "✅" : "⚠"}`);
+
+// ★ ③ 実行後に clients.benefit_rate の分布を出す。
+//   「直したつもりが 9% 請求を作った」が最悪ケースなので、**割表記が 0 名のまま**かを見る。
+const dist = {};
+for (const c of after) dist[JSON.stringify(c.benefit_rate)] = (dist[JSON.stringify(c.benefit_rate)] ?? 0) + 1;
+console.log(`
+  ★ 実行後の clients.benefit_rate 分布: ${JSON.stringify(dist)}`);
+const wari = after.filter((c) => {
+  const v = c.benefit_rate == null ? null : parseInt(c.benefit_rate, 10);
+  return v != null && Number.isFinite(v) && v > 0 && v <= 10;
+});
+console.log(`  ★ 割表記 (1〜10) の利用者: ${wari.length} 名 ${wari.length === 0 ? "✅ 0 名のまま" : "🔴 **作り込んだ。直ちに戻すこと**"}`);
+if (wari.length) for (const w of wari.slice(0, 20)) console.log(`     🔴 ${w.id} = ${JSON.stringify(w.benefit_rate)}`);
