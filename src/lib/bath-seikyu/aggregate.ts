@@ -42,6 +42,7 @@ import {
   detectMidMonthChange,
 } from "@/lib/cert-for-month";
 import { resolveKohiForMonth, kohiHobetsuLabel } from "@/lib/kohi";
+import { isYoboLevel } from "@/lib/yobo-kubun";
 import type { MonthlySeikyuResult, UserSeikyuRow, SeikyuDetailLine } from "@/lib/visit-seikyu/aggregate";
 
 type BathRec = {
@@ -523,6 +524,28 @@ export async function aggregateBathVisitSeikyu(
     const totalUnits = baseUnits + addonUnits;
     const totalAmount = Math.floor((totalUnits * unitPrice100) / 100);
     const overAmount = Math.floor((overUnits * unitPrice100) / 100);
+
+    // ── 要支援なのに介護給付 (種類12) のコードで算定していないか ──────────
+    //   訪問入浴介護は **予防給付が現存する** (介護予防訪問入浴介護 = 種類62)。
+    //   要支援1・2 / 事業対象者 は 621111 系 (856単位) で算定するのが正しく、
+    //   種類12 の 121111 系 (1,266単位) は要介護者用。**1.48 倍の過大請求**になり
+    //   資格と種類が合わないため返戻する。
+    //   ⚠ 記録画面の resolveBathCode(bathType, staffOnly) は要介護度を見ずに
+    //     121111 系を返すので、**要支援の利用者を登録すると必ずこうなる**。
+    //   ここではコードを差し替えず (金額が動くため) **警告だけ**出す。
+    //   自動で 62 系へ倒すかは制度・運用の判断が要る (2026-09-03 サンプル検証で発見)。
+    if (isYoboLevel(cert?.care_level)) {
+      const kaigoKyufuCodes = [...new Set(
+        details.filter((d) => /^12/.test(String(d.service_code ?? ""))).map((d) => d.service_code),
+      )];
+      if (kaigoKyufuCodes.length > 0) {
+        warnings.push(
+          `${name}さん: 認定区分が ${cert?.care_level} (予防給付) なのに介護給付のコード ` +
+            `${kaigoKyufuCodes.join(",")} で算定しています — 介護予防訪問入浴介護 (種類62 / 621111 系) が正しく、` +
+            `このままでは過大請求かつ資格と種類が合わず返戻になります`,
+        );
+      }
+    }
 
     // 公費: 生保(法別12)/公費単独=全額振替。部分公費(他法別)=振替しない(保険+本人負担)
     const kohiTandoku = /^[Hh]/.test((cert?.insured_number ?? "").trim());
