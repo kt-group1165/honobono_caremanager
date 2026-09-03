@@ -67,8 +67,16 @@ if (DELETE) {
   if (!cl.length) { console.log("  対象なし ✅"); process.exit(0); }
   const ids = cl.map((c) => c.id);
   console.log(`  対象 clients: ${cl.map((c) => c.user_number).join(",")}`);
-  for (const t of ["riyou_jippi_entries", "kaigo_visit_schedule", "client_office_assignments"]) {
-    const { error, count } = await sb.from(t).delete({ count: "exact" }).in("client_id", ids);
+  // ⚠ 利用者を指す列名が表ごとに違う。
+  //   riyou_jippi_entries / client_office_assignments → client_id
+  //   ★ kaigo_visit_schedule                          → **user_id**
+  //   最初 client_id で全部消そうとして途中で落ち、サンプルが残った (2026-09-03)。
+  for (const [t, col] of [
+    ["riyou_jippi_entries", "client_id"],
+    ["kaigo_visit_schedule", "user_id"],
+    ["client_office_assignments", "client_id"],
+  ]) {
+    const { error, count } = await sb.from(t).delete({ count: "exact" }).in(col, ids);
     if (error) { console.error(`✗ ${t}: ${error.message}`); process.exit(1); }
     console.log(`  ${t.padEnd(28)} ${count} 行 削除`);
   }
