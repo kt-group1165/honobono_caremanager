@@ -145,6 +145,30 @@ for (const p of fragile.slice(0, 15)) {
 }
 if (fragile.length > 15) console.log(`    … 他 ${fragile.length - 15} 組`);
 
+// DETAIL=1 で「境界にいる利用者」を一覧する。
+// ⚠ 使い道: ほのぼのの実出力 (伝送 KJ) との突合が ✅一致 か ★不一致 かを引いて、
+//   **告示を調べずに「ほのぼのが 120 分ちょうどをどう扱ったか」を実データで決める**
+//   (3-5: 期待値は仕様書ではなく実出力から)。
+if (process.env.DETAIL) {
+  const byClient = new Map<string, { area: string; gaps: number[]; dates: string[]; same: number }>();
+  for (const p of fragile) {
+    const k = `${p.area}|${p.client}`;
+    if (!byClient.has(k)) byClient.set(k, { area: p.area, gaps: [], dates: [], same: 0 });
+    const v = byClient.get(k)!;
+    v.gaps.push(p.gap);
+    v.dates.push(p.date);
+    if (p.sameStaff) v.same++;
+  }
+  console.log(`\n=== 境界にいる利用者 (DETAIL=1): ${byClient.size} 名 ===`);
+  for (const [k, v] of [...byClient.entries()].sort((a, b) => b[1].gaps.length - a[1].gaps.length)) {
+    const [area, client] = k.split("|");
+    console.log(
+      `  ${area} ${client}: ${v.gaps.length} 組 (間隔 ${[...new Set(v.gaps)].sort((a, b) => a - b).join("/")} 分` +
+        ` / 同一職員 ${v.same}) ${v.dates.slice(0, 4).join(",")}${v.dates.length > 4 ? "…" : ""}`,
+    );
+  }
+}
+
 console.log("\n⚠ ここで出るのは **合算するかどうかの組数**まで。合算後の単位数の差は");
 console.log("   段の積み上げ (convertSession) を通さないと出ないため **未算出**。");
 console.log("⚠ 閾値 120/60 は実データ 11 組から類推した **経験則**で、告示・解釈通知の");

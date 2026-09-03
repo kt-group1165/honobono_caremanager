@@ -891,14 +891,13 @@ export function KyotakuKaigoSeikyuContent() {
           {!loading &&
             teigenApplied.ii.length + teigenApplied.iii.length === 0 &&
             rows.length >= 45 && (
-            <div className="border-b border-amber-300 bg-amber-50 px-3 py-2 shrink-0 flex items-start gap-2 text-xs text-amber-800">
-              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            <div
+              className="border-b border-amber-300 bg-amber-50 px-3 py-2 shrink-0 flex items-center gap-2 text-xs text-amber-800"
+              title={`当月の請求対象が ${rows.length} 件あります。ケアマネ1人 (常勤換算) あたり45件以上は逓減制 (居宅介護支援費ⅱ/ⅲ) の対象です — 事業所設定 → 逓減制 で「介護支援専門員 常勤換算数」を設定すると、レセプト一括生成時に基本サービスコードを自動判定します (ICT活用・事務職員配置の緩和要件あり)。`}
+            >
+              <AlertTriangle size={14} className="shrink-0" />
               <span>
-                当月の請求対象が {rows.length} 件あります。ケアマネ1人 (常勤換算) あたり
-                45件以上は<span className="font-semibold">逓減制 (居宅介護支援費ⅱ/ⅲ)</span> の対象です —
-                事業所設定 → 逓減制 で「介護支援専門員 常勤換算数」を設定すると、
-                レセプト一括生成時に基本サービスコードを自動判定します
-                (ICT活用・事務職員配置の緩和要件あり)。
+                請求対象 {rows.length} 件 — 逓減制 (ⅱ/ⅲ) の設定が未了の可能性があります
               </span>
             </div>
           )}
