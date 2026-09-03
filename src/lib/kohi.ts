@@ -125,6 +125,42 @@ interface KohiRow {
   end_date: string | null;
   priority: number | null;
   honnin_futan: number | null;
+  /** 取込の新しさの決め手 (下の compareKohi を参照) */
+  created_at: string | null;
+}
+
+/**
+ * 公費の適用優先順の比較子。**単数版・複数版の両方がこれを使う**
+ * (別々に書くと、片方だけ直したときにサービスによって公費が変わる)。
+ *
+ *   1. priority 最小 (NULL は 1 扱い = 手動指定があれば最優先)
+ *   2. 制度優先順位表 KOHI_HOBETSU_RANK (生保 12 は他法優先で最劣後)
+ *   3. ★ created_at 降順 — **後から取り込んだほうが新しい**
+ *   4. start_date 最新 (NULL は最古扱い)
+ *
+ * ⚠ **3 を足したのは 2026-09-03。それまでは 4 が最後の決め手だった。**
+ *   `null` を `""` に落とすので **start_date がある行が必ず勝つ**。
+ *   ところが取込ごとに start_date の有無が綺麗に分かれていて (実測):
+ *     [MEISAI公費] 232 行 start_date あり **0/232**  ← ほのぼのが請求に使う番号
+ *     [居宅STEP1]   70 行 あり 70/70 / [公費マスタ] 54 行 あり 54/54
+ *   つまり **ほのぼのの番号が構造的に必ず負け**、「最新を採る」つもりの規則が
+ *   **古いほうを採る規則**になっていた。神 花子 (高品) で
+ *   ほのぼのが使わない 12126010 を毎回選び、伝送が食い違っていた。
+ *   ★ 変更前後を実データで測って **動くのは 1 名だけ**、しかも ほのぼのと一致する方向、
+ *     と確認してから入れた (`scripts/kohi-tiebreak-check.mts`)。
+ *   ⚠ 「null = 制限なし = 最優先」も候補だったが、**null が新しいとは限らない**ので採らない。
+ *     created_at なら「後から取り込んだ = 新しい」で取込の実態と一致する。
+ */
+function compareKohi(a: KohiRow, b: KohiRow): number {
+  const pa = a.priority ?? 1;
+  const pb = b.priority ?? 1;
+  if (pa !== pb) return pa - pb;
+  const ra = kohiHobetsuRank((a.kohi_hobetsu ?? "").trim());
+  const rb = kohiHobetsuRank((b.kohi_hobetsu ?? "").trim());
+  if (ra !== rb) return ra - rb;
+  const ca = (b.created_at ?? "").localeCompare(a.created_at ?? "");
+  if (ca !== 0) return ca;
+  return (b.start_date ?? "").localeCompare(a.start_date ?? "");
 }
 
 /**
@@ -145,7 +181,7 @@ async function fetchKohiRowsByClient(
       const { data, error } = await supabase
         .from("client_kohi_records")
         .select(
-          "client_id, kohi_hobetsu, futansha_number, jukyusha_number, start_date, end_date, priority, honnin_futan",
+          "client_id, kohi_hobetsu, futansha_number, jukyusha_number, start_date, end_date, priority, honnin_futan, created_at",
         )
         .in("client_id", chunk)
         .order("client_id", { ascending: true })
@@ -235,13 +271,10 @@ export async function resolveKohiForMonth(
       byClient.set(clientId, null);
       continue;
     }
-    // priority 最小 → start_date 最新 (NULL は最古扱い) の 1 件を採用 (従来互換)
-    valid.sort((a, b) => {
-      const pa = a.priority ?? 1;
-      const pb = b.priority ?? 1;
-      if (pa !== pb) return pa - pb;
-      return (b.start_date ?? "").localeCompare(a.start_date ?? "");
-    });
+    // ★ 複数版と同じ compareKohi を使う (2026-09-03)。
+    //   以前は「priority → start_date 最新」だけで、制度優先順位も created_at も
+    //   見ていなかったため、**同じ利用者でもサービスによって公費1 が変わりうる**状態だった。
+    valid.sort(compareKohi);
     byClient.set(clientId, toResolvedKohi(valid[0]));
   }
   return { byClient, fallback: false };
@@ -291,15 +324,7 @@ export async function resolveKohisForMonth(
       byClient.set(clientId, []);
       continue;
     }
-    valid.sort((a, b) => {
-      const pa = a.priority ?? 1;
-      const pb = b.priority ?? 1;
-      if (pa !== pb) return pa - pb;
-      const ra = kohiHobetsuRank(a.kohi_hobetsu!.trim());
-      const rb = kohiHobetsuRank(b.kohi_hobetsu!.trim());
-      if (ra !== rb) return ra - rb;
-      return (b.start_date ?? "").localeCompare(a.start_date ?? "");
-    });
+    valid.sort(compareKohi);
     byClient.set(clientId, valid.map(toResolvedKohi));
   }
   return { byClient, fallback: false };
