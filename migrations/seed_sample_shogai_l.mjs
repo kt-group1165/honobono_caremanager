@@ -170,6 +170,26 @@ async function main() {
     },
   ];
 
+  // ── 時刻フォールバックを **わざと発火させる** サンプル ────────────────────
+  //   service_type を **マスタに無い名前**にすると nameMap で引けず、
+  //   shogaiCodeFromTime (時刻から6桁コードを引く経路) に落ちる。
+  //   同行援護は区分でコードが変わるので、区分あり / 区分が引けない の両方を作る。
+  SAMPLES.push({
+    no: "ZL006", name: "サンプル 同行フォールバック区分4", kubun: "区分4", limit: 0, seiho: false,
+    jogen: { kubun: "なし", num: null, nm: null },
+    note: "マスタに無い名前 → 時刻フォールバック。区分4 なので ・区4 のコードが付くべき",
+    visits: rep("同行援護（手入力）", 2, 20, "10:00", "11:00"),
+    skipExpect: true,
+  });
+  SAMPLES.push({
+    // ⚠ support_level は CHECK 制約付き。実在値は 区分1〜6 と「非該当」だけ (空文字は不可)
+    no: "ZL007", name: "サンプル 同行フォールバック区分なし", kubun: "非該当", limit: 0, seiho: false,
+    jogen: { kubun: "なし", num: null, nm: null },
+    note: "同上だが受給者証が「非該当」で区分が無い → **推測せず落として warning** が出るべき",
+    visits: rep("同行援護（手入力）", 2, 22, "10:00", "11:00"),
+    skipExpect: true,
+  });
+
   const juhoDays = [
     { d: `${MONTH}-01`, s: 9 * 60, e: 14 * 60 },
     { d: `${MONTH}-02`, s: 16 * 60, e: 22 * 60 },
@@ -194,6 +214,11 @@ async function main() {
 
   console.log("=== 手計算した期待単位数 ===");
   for (const s of SAMPLES) {
+    if (s.skipExpect) {
+      console.log(`  ${s.no} ${s.name}`);
+      console.log(`     (マスタに無い名前 = 時刻フォールバックの検証用。期待値は集計側で確認) [${s.note}]`);
+      continue;
+    }
     let sum = 0;
     const per = new Map();
     for (const v of s.visits) {

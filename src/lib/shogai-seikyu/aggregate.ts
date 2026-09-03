@@ -303,6 +303,38 @@ export async function aggregateMonthlyShogaiSeikyu(
         ? await loadShogaiCodeMaps(supabase, opts.year, opts.month)
         : null;
 
+      // 同行援護は **障害支援区分でコードが変わる** (同援日0.5 191単位 → ・区3 229単位 = +20%)。
+      //   取込 (import_meisai_shougai_records.mjs の doukouKubunMod) は区分を渡しているのに、
+      //   この時刻フォールバックは渡していなかった。発火すると区分の加算が落ちて
+      //   **20% の請求漏れ**になる。
+      //   ⚠ 2026-09-03 の実測では 同行援護 136 行すべてマスタ名で引けており **発火 0 件**。
+      //     いまは実害が無いが、名前がマスタから外れた瞬間に静かに減る形だった。
+      //   → 区分を渡す。渡せない (受給者証が引けない) ときは **推測せず落とす** (fail-closed)。
+      const doukouKubunByClient = new Map<string, string | null>();
+      if (needTimeResolve) {
+        const ids = Array.from(new Set(schedRows.map((s) => s.user_id).filter(Boolean)));
+        for (let i = 0; i < ids.length; i += ID_IN_CHUNK) {
+          const { data, error } = await supabase
+            .from("shougai_certifications")
+            .select("client_id, support_level, certification_start_date, certification_end_date")
+            .in("client_id", ids.slice(i, i + ID_IN_CHUNK));
+          if (error) throw new Error(`同行援護の障害支援区分の取得に失敗: ${error.message}`);
+          for (const c of (data ?? []) as {
+            client_id: string; support_level: string | null;
+            certification_start_date: string | null; certification_end_date: string | null;
+          }[]) {
+            const okFrom = !c.certification_start_date || c.certification_start_date <= to;
+            const okTo = !c.certification_end_date || c.certification_end_date >= from;
+            if (!okFrom || !okTo) continue;
+            const m = /区分\s*([1-6１-６])/.exec((c.support_level ?? "").normalize("NFKC"));
+            if (!m) continue;
+            const n = Number(m[1].normalize("NFKC"));
+            // 取込側 doukouKubunMod と同じ規則: 4以上→区4 / 3→区3 / それ以外→修飾子なし
+            doukouKubunByClient.set(c.client_id, n >= 4 ? "区4" : n === 3 ? "区3" : null);
+          }
+        }
+      }
+
       const schedRecs: Rec[] = [];
       for (const s of schedRows) {
         const name = (s.service_type ?? "").trim();
@@ -324,9 +356,23 @@ export async function aggregateMonthlyShogaiSeikyu(
           category = m.category;
         } else if (s.system === "障害" && timeMaps) {
           const kind = kindFromServiceName(name);
+          // 同行援護は区分でコードが変わる。区分が引けないなら **推測しない** (下で落とす)
+          let doukouMods: string[] | undefined;
+          if (kind === "同援") {
+            if (!doukouKubunByClient.has(s.user_id)) {
+              schedWarnings.push(
+                `${s.visit_date} ${(s.start_time ?? "").slice(0, 5)} 「${name}」: 同行援護ですが対象月に有効な受給者証の障害支援区分が引けないため集計していません` +
+                  ` — 区分3/区分4 でコードが変わる (単位数が最大 20% 違う) ので、推測せず落としています。受給者証を確認してください`,
+              );
+              continue;
+            }
+            const mod = doukouKubunByClient.get(s.user_id) ?? null;
+            doukouMods = mod ? [mod] : [];
+          }
           const hit = kind
             ? shogaiCodeFromTime(timeMaps, kind, s.start_time, s.end_time, {
                 minutes: dur ?? undefined,
+                ...(doukouMods ? { mods: doukouMods } : {}),
               })
             : null;
           if (!hit) {
