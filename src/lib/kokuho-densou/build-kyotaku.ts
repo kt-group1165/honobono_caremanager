@@ -717,7 +717,16 @@ export function buildKeikakuhiFile(
     if (!u.insuredNumber?.trim()) warnings.push(`${u.userName}: 被保険者番号が未登録です (計画費明細書 8121 項7 必須)`);
     if (!u.birthDate) warnings.push(`${u.userName}: 生年月日が未登録です (計画費明細書 8121 項10 必須)`);
     if (!careCode) warnings.push(`${u.userName}: 要介護度 ("${u.careLevel ?? "未設定"}") をコードに変換できません`);
-    if (!u.serviceCode) warnings.push(`${u.userName}: 居宅介護支援費のサービスコードが年度別単位数マスタにありません`);
+    // ⚠ 基本コードが無いレセプトは**正当に存在する**。月途中で亡くなると給付管理を
+    //   しないので居宅介護支援費 (432xxx) が立たず、ターミナルケアマネジメント加算だけを
+    //   請求する (実伝送 8124 5,697 件中 1 件が実在)。
+    //   そのケースまで「マスタにありません」と警告すると、データ不備と誤認させる。
+    //   明細行にコードが 1 本でもあれば請求書として成立しているので警告しない。
+    //   コードがどこにも無いレセプトだけが本当の異常。(2026-09-03 サンプル検証で判明)
+    const hasAnyCode = !!u.serviceCode || !!u.lines?.some((l) => (l.code ?? "").trim());
+    if (!hasAnyCode) {
+      warnings.push(`${u.userName}: サービスコードが 1 つもありません (居宅介護支援費・加算とも未設定)`);
+    }
     if (!u.requestDate) warnings.push(`${u.userName}: 計画作成依頼届出年月日が未登録のため空欄で出力します (H番号みなし2号等は空欄が正。要介護者で本来届出がある場合は登録してください)`);
     if (u.midMonthInsurerChange) {
       const mc = u.midMonthInsurerChange;
