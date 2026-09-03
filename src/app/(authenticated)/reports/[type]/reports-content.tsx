@@ -2882,6 +2882,9 @@ const BEPPYO_AREA_PRICE: Record<string, { p70: number; p55: number; p45: number 
 /** 提供事業所の地域区分 × サービス内容 → 1 単位単価 (円)。福祉用具は全国一律 10.00 */
 function beppyoUnitPrice(area: string | null | undefined, serviceType: string): number {
   const t = serviceType ?? "";
+  // ⚠ 福祉用具は地域区分に関わらず 10円/単位。
+  //   同じ事実を order-app の `lib/kokuho-densou/build.ts` FUKUYOGU_UNIT_PRICE = 10
+  //   も持っている。**片方だけ変えると 利用票別表 と 請求 が食い違う**ので必ず対で直す。
   if (t.includes("福祉用具")) return 10.0;
   const row = area ? BEPPYO_AREA_PRICE[area] : undefined;
   if (!row) return 10.0;
