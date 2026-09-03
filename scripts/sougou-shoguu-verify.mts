@@ -285,12 +285,34 @@ const noRate = shoguu.filter((c) => {
 console.log(`  うち率が引けない (formula も units も無い) コード: ${noRate.length} 件 → §A-3 の分岐`);
 
 // 事業所が実際に適用している処遇改善コード
+// 🔴 2026-09-03 是正: 適用コードの解決元は **2 か所**あり、優先されるのは期間指定のほう。
+//   offices.applied_formula_codes だけ見ると 22 事業所中 1 件しか設定が無いように見え、
+//   「suffix 一致は本番 0/1」という **誤った結論**を出していた (実際は 22/22 設定済み)。
+//   kaigo_office_addon_periods は世代で切り替わる: 116274 (〜2026-05) → 116184 (2026-06〜)。
+//   116184 は suffix 6184 で MB_A26184 と一致するので、**現行世代では suffix 一致が成立する**。
 const offices = await rest("offices?select=id,name,applied_formula_codes,service_type&limit=200");
-const withCodes = offices.filter((o) => Array.isArray(o.applied_formula_codes) && (o.applied_formula_codes as unknown[]).length);
-console.log(`  事業所: ${offices.length} 件 (分母) / applied_formula_codes 設定あり ${withCodes.length} 件`);
+const periods = await rest("kaigo_office_addon_periods?select=office_id,formula_code,start_month,end_month");
+const MONTH_KEY = process.env.MONTH ?? "2026-06";
+const activePeriodCodes = new Map<string, string[]>();
+for (const p of periods) {
+  const st = String(p.start_month ?? ""), en = String(p.end_month ?? "");
+  if ((st && st > MONTH_KEY) || (en && en < MONTH_KEY)) continue;
+  const k = String(p.office_id);
+  if (!activePeriodCodes.has(k)) activePeriodCodes.set(k, []);
+  activePeriodCodes.get(k)!.push(String(p.formula_code));
+}
+const codesOf = (o: Row): string[] => {
+  const fromPeriods = activePeriodCodes.get(String(o.id)) ?? [];
+  if (fromPeriods.length) return fromPeriods;                       // 期間指定が優先
+  return Array.isArray(o.applied_formula_codes) ? (o.applied_formula_codes as string[]) : [];
+};
+const withCodes = offices.filter((o) => codesOf(o).length > 0);
+console.log(`  事業所: ${offices.length} 件 (分母) / 適用コードあり ${withCodes.length} 件`);
+console.log(`    (内訳: 期間指定 ${offices.filter((o) => (activePeriodCodes.get(String(o.id)) ?? []).length).length} 件` +
+  ` / 列のみ ${offices.filter((o) => !(activePeriodCodes.get(String(o.id)) ?? []).length && Array.isArray(o.applied_formula_codes) && (o.applied_formula_codes as unknown[]).length).length} 件)`);
 const suffixes = new Set<string>();
 for (const o of withCodes) {
-  for (const c of o.applied_formula_codes as string[]) suffixes.add(String(c).replace(/[^0-9]/g, "").slice(-4));
+  for (const c of codesOf(o)) suffixes.add(String(c).replace(/[^0-9]/g, "").slice(-4));
 }
 console.log(`  事業所側 suffix の種類: ${[...suffixes].sort().join(", ") || "(なし)"}`);
 const shoguuSuffixes = new Set(shoguu.map((c) => String(c.service_code ?? "").replace(/[^0-9]/g, "").slice(-4)));
@@ -300,7 +322,7 @@ console.log(`  suffix 一致しない (率 fallback 行き): ${suffixes.size - m
 
 // fallback (率一致) が実際に成立するか = 加算が付くか付かない (0) かの分かれ目。
 // 事業所の適用コードの率を引いて、prefix ごとに率一致候補があるかを数える。
-const appliedCodes = [...new Set(withCodes.flatMap((o) => o.applied_formula_codes as string[]))];
+const appliedCodes = [...new Set(withCodes.flatMap((o) => codesOf(o)))];
 if (appliedCodes.length) {
   const fr = await rest(
     `kaigo_service_codes?select=service_code,system,formula&service_code=in.(${appliedCodes.join(",")})`,
