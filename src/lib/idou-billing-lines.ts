@@ -20,7 +20,12 @@ export type IdouLineSource = {
   addon_shokai: boolean;
   addon_kinkyu: boolean;
 };
-export type BathLineSource = { client_id: string; service_code: string | null };
+export type BathLineSource = {
+  client_id: string;
+  service_code: string | null;
+  /** 訪問入浴 (地域生活支援) の初回加算 041701 218単位・月1回 */
+  addon_shokai: boolean;
+};
 export type CodeInfoEntry = { name: string; unit: number };
 export type MeisaiLine = { code: string; name: string; unit: number; count: number; total: number };
 
@@ -29,6 +34,8 @@ export const IDOU_ADDON_CODES = {
   shokaiBody: "024701",
   shokaiNoBody: "027701",
   kinkyu: "024801",
+  /** 訪問入浴 (地域生活支援) の初回加算。移動支援とは別コード */
+  bathShokai: "041701",
 } as const;
 
 /** 緊急時対応加算の月間限度 (千葉市 R6.4.1) */
@@ -99,6 +106,16 @@ export function buildIdouMeisaiLines(
     }
   }
 
-  for (const b of bathRows) addByCode(b.client_id, b.service_code);
+  // 訪問入浴 (地域生活支援)。⚠ 移動支援と同じく **初回加算が 1 行も出ていなかった**
+  //   (041701 218単位・月1回)。bath-records の画面には「初回加算」チェックがある。
+  const bathShokai = new Set<string>();
+  for (const b of bathRows) {
+    addByCode(b.client_id, b.service_code);
+    if (b.addon_shokai) bathShokai.add(b.client_id);
+  }
+  for (const clientId of bathShokai) {
+    const info = codeInfo.get(IDOU_ADDON_CODES.bathShokai);
+    addLine(clientId, IDOU_ADDON_CODES.bathShokai, info?.name ?? IDOU_ADDON_CODES.bathShokai, info?.unit ?? 0);
+  }
   return map;
 }

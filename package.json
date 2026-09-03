@@ -3,6 +3,7 @@
   "version": "2.7.0",
   "private": true,
   "scripts": {
+    "check:idou-lines": "tsx scripts/check-idou-lines.mts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
