@@ -36,6 +36,7 @@ import { mapChunksParallel, ID_IN_CHUNK } from "@/lib/chunk-parallel";
 import {
   getUnitPriceByArea,
   parseYoboShienKubun,
+  yoboAddonCode,
   reductionUnitsOf,
   type ClaimStatus,
   type YoboShienKubun,
@@ -262,7 +263,12 @@ const DISCHARGE_UNITS_TO_CODE: Record<number, string> = {
   900: "436146",
 };
 
-function buildClaimLines(c: ClaimDbRow): {
+/**
+ * @param billingMonth "YYYY-MM" — 43→46 の加算コード読み替えが世代 (R8.6) で
+ *   変わるため必要。呼出元の query が `.eq("billing_month", monthKey)` で
+ *   絞っているので、行の提供月 = monthKey で一致する。
+ */
+function buildClaimLines(c: ClaimDbRow, billingMonth: string): {
   lines: KyotakuMeisaiLine[];
   totalUnits: number;
 } {
@@ -271,8 +277,16 @@ function buildClaimLines(c: ClaimDbRow): {
   const lines: KyotakuMeisaiLine[] = c.care_support_code
     ? [{ name: c.care_support_name ?? "", code: c.care_support_code, units: c.units, count: 1 }]
     : [];
+  // 介護予防支援 (46) のレセプトか。基本コードで判定し、基本コードが無い月
+  // (死亡等) は notes の予防区分マーカーで補う。43 系の加算コードをそのまま
+  // 載せるとサービス種類が食い違って返戻になるため、対応表で読み替える。
+  // (対応表は claims-shared.ts の YOBO_ADDON_CODES 1 か所だけ)
+  const isYoboClaim =
+    (c.care_support_code ?? "").startsWith("46") || parseYoboShienKubun(c.notes) !== null;
+  const addonCode = (kaigoCode: string) =>
+    (isYoboClaim ? yoboAddonCode(kaigoCode, billingMonth) : null) ?? kaigoCode;
   if (c.initial_addition && c.initial_addition_units > 0)
-    lines.push({ name: "初回加算", code: "434001", units: c.initial_addition_units, count: 1 });
+    lines.push({ name: "初回加算", code: addonCode("434001"), units: c.initial_addition_units, count: 1 });
   if ((c.tokutei_kassan_units ?? 0) > 0)
     lines.push({
       name: `特定事業所加算(${c.tokutei_kassan_type ?? ""})`,
@@ -564,7 +578,7 @@ export async function fetchKyotakuClaimRows(
     const certInsurer = (cert?.insurer_number ?? "").trim();
     const useClaimInsurer = claimInsurer !== "" && claimInsurer !== certInsurer;
     const kohi = kohiRes.byClient.get(c.user_id) ?? null;
-    const { lines, totalUnits } = buildClaimLines(c);
+    const { lines, totalUnits } = buildClaimLines(c, monthKey);
     // 公費単独 (みなし2号) = 被保険者番号が H 始まり
     const kohiTandoku = /^h/i.test((cert?.insured_number ?? "").trim());
     return {

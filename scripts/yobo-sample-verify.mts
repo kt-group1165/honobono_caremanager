@@ -23,8 +23,10 @@
  */
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { buildKeikakuhiFile, type KeikakuhiUser } from "@/lib/kokuho-densou/build-kyotaku";
+import { buildKeikakuhiFile, buildKyufuKanriFile, type KeikakuhiUser,
+  type KyufuKanriUser } from "@/lib/kokuho-densou/build-kyotaku";
 import { fetchKyotakuClaimRows } from "@/app/(authenticated)/billing/seikyu/_seikyu-context";
+import { yoboAddonCode } from "@/app/(authenticated)/billing/claims/claims-shared";
 
 const MONTH_KEY = "2026-12";
 const YEAR = 2026, MONTH = 12;
@@ -44,8 +46,8 @@ const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_
 const EXPECT: Record<string, { units: number; amount: number; codes: string[]; level: string; note: string }> = {
   ZP01: { units: 472, amount: 5215, codes: ["462121"], level: "要支援1", note: "区分Ⅱ 直接指定" },
   ZP02: { units: 442, amount: 4884, codes: ["462111"], level: "要支援2", note: "区分Ⅰ 包括" },
-  ZP04: { units: 772, amount: 8530, codes: ["462121", "434001"], level: "要支援1",
-    note: "★ 初回加算のコードが 43 系 (434001) で出る — 46 系 (464001) が正のはず" },
+  ZP04: { units: 772, amount: 8530, codes: ["462121", "464001"], level: "要支援1",
+    note: "初回加算が 46 系 (464001) に読み替わる (2026-12 = R8.6 世代)" },
   ZP05: { units: 1086, amount: 12000, codes: ["432111"], level: "要介護1", note: "要介護 (43 側)" },
   ZP06: { units: 1086, amount: 12000, codes: ["432111"], level: "要介護2",
     note: "★ 月途中の区分変更 (要支援2→要介護2) = 月末時点で採る" },
@@ -113,17 +115,26 @@ async function main() {
     check(diffs.length === 0, `${tag} ${exp.note}`,
       diffs.length ? diffs.join(" / ") : `${r.totalUnits}単位 ${amount}円 [${codes}]`);
   }
-  // ★ 初回加算のコード体系 — 期待値ではなく事実として報告する
+  // 初回加算のコード体系 (43 → 46 の読み替え)
   const zp04 = byTag.get("ZP04");
   const addon = zp04?.lines.find((l) => l.name === "初回加算");
-  if (addon) {
-    if (addon.code.startsWith("43")) {
-      note(`介護予防支援の初回加算に **居宅の 434001** が出ている (46 系は 464001 が実在)。` +
-        `buildClaimLines (_seikyu-context.tsx:275) が制度を見ずに 43 系を固定している`);
-    } else {
-      check(addon.code === "464001", "初回加算が 46 系", addon.code);
-    }
+  check(addon?.code === "464001", "予防の初回加算が 46 系に読み替わる",
+    `${addon?.code ?? "行が無い"} (43系 434001 のままなら返戻)`);
+  const zp05addon = byTag.get("ZP05")?.lines.find((l) => l.name === "初回加算");
+  check(!zp05addon, "要介護側は読み替えの対象外", zp05addon ? `${zp05addon.code}` : "初回加算なし (設定していない)");
+
+  // ★ 両方向の fixture (ルール 3-9)。DB を使わず純関数だけで確かめる
+  console.log("\n--- 43/46 対応表の両方向 (fixture) ---");
+  for (const [month, isYobo, want, why] of [
+    ["2026-12", true, "464001", "予防 R8.6 世代"],
+    ["2026-05", true, "461201", "予防 旧世代 (R6.6〜R8.5)"],
+    ["2026-12", false, null, "要介護 = 読み替えない"],
+  ] as [string, boolean, string | null, string][]) {
+    const got = isYobo ? yoboAddonCode("434001", month) : null;
+    check(got === want, `初回加算 ${month} ${why}`, `${got ?? "null"} (期待 ${want ?? "null"})`);
   }
+  check(yoboAddonCode("434003", "2026-12") === null,
+    "46 に相当コードが無い加算 (特定事業所Ⅱ) は null を返す", String(yoboAddonCode("434003", "2026-12")));
 
   // ── 段2: 伝送様式 ────────────────────────────────────
   console.log("\n=== 段2. 伝送様式 (43/46 パーティション + 8124/7111) ===");
@@ -205,6 +216,80 @@ async function main() {
 
   console.log(`\n  builder の警告 ${built.warnings.length} 件`);
   for (const w of built.warnings) console.log(`    - ${w}`);
+  check(built.warnings.length === 0, "予防の正常系で警告が出ない", `${built.warnings.length} 件`);
+
+  // ★ 制度混在の警告が実際に鳴るか (負のコントロール)。43 系コードを混ぜて確かめる
+  const mixedUser = toUser(yoboRows[0]);
+  const mixed = buildKeikakuhiFile(
+    [{ ...mixedUser, lines: [...(mixedUser.lines ?? []), { code: "434003", units: 421, count: 1 }] }],
+    opts,
+  );
+  check(mixed.warnings.some((w) => w.includes("別サービス種類")),
+    "46 のレセプトに 43 系コードを混ぜると警告が出る",
+    mixed.warnings.find((w) => w.includes("別サービス種類")) ?? "★ 鳴らない = 網が効いていない");
+
+  // ── 段3: 給付管理票 (8222) を予防で組む ────────────────────
+  console.log("\n=== 段3. 給付管理票 8222 (予防) ===");
+  const bm = await sb.from("kaigo_benefit_management")
+    .select("user_id, service_type, service_kind_code, provider_name, provider_number, planned_units")
+    .eq("billing_month", MONTH_KEY).in("user_id", [...tagById.keys()]);
+  if (bm.error) throw new Error(`給付管理の取得に失敗: ${bm.error.message}`);
+  const bmRows = (bm.data ?? []) as { user_id: string; service_type: string; service_kind_code: string | null;
+    provider_name: string | null; provider_number: string | null; planned_units: number | null }[];
+  check(bmRows.length === 3, "給付管理の投入", `${bmRows.length} 行 (3 行のはず)`);
+  const byUserBm = new Map<string, typeof bmRows>();
+  for (const r of bmRows) {
+    if (!byUserBm.has(r.user_id)) byUserBm.set(r.user_id, []);
+    byUserBm.get(r.user_id)!.push(r);
+  }
+  const kUsers: KyufuKanriUser[] = yoboRows
+    .filter((r) => byUserBm.has(r.user_id))
+    .map((r) => ({
+      userName: r.user_name, insurerNumber: r.insurer_number ?? "", insuredNumber: r.insured_number ?? "",
+      birthDate: r.birth_date, gender: r.gender, careLevel: r.care_level,
+      limitStart: r.limitPeriodStart ?? r.certStart, limitEnd: r.limitPeriodEnd ?? r.certEnd,
+      limitUnits: r.limitUnits,
+      lines: (byUserBm.get(r.user_id) ?? []).map((b) => ({
+        officeNumber: b.provider_number ?? "", serviceKindCode: b.service_kind_code ?? "",
+        plannedUnits: b.planned_units ?? 0, providerName: b.provider_name ?? undefined,
+      })),
+      careManagerNumber: r.careManagerNumber,
+    }));
+  check(kUsers.length === 2, "8222 の対象 (要支援で給付管理がある人)", `${kUsers.length} 名 (2 名のはず)`);
+  const kFile = buildKyufuKanriFile(kUsers, opts);
+  const kLines = kFile.content.split(/\r?\n/).filter((l) => l.trim()).map((l) => l.split(","));
+  const rec8222 = kLines.filter((c) => F(c, 1) === "8222");
+  console.log(`  生成: 8222 ${rec8222.length} 行 / ファイル名 ${kFile.fileName}`);
+  if (rec8222.length === 0) throw new Error("★ 給付管理票が 0 行。以降の検査は意味を持たない");
+  // 利用者ごとに 明細 + 終端99 / 項12 要介護度 / 項15 限度額 / 項20 の合計
+  for (const u of kUsers) {
+    const mine = rec8222.filter((c) => F(c, 9) === u.insuredNumber);
+    const term = mine.find((c) => F(c, 8) === "99");
+    const detail = mine.filter((c) => F(c, 8) !== "99");
+    const expUnits = u.lines.reduce((s, l) => s + l.plannedUnits, 0);
+    const diffs: string[] = [];
+    if (!term) diffs.push("終端行 (99) が無い");
+    if (detail.length !== u.lines.length) diffs.push(`明細 ${detail.length} 行 ≠ ${u.lines.length}`);
+    if (F(mine[0], 12) !== CARE_CODE[u.careLevel ?? ""]) diffs.push(`項12 要介護度 ${F(mine[0], 12)} ≠ ${CARE_CODE[u.careLevel ?? ""]}`);
+    if (F(mine[0], 4) !== YOBO_OFFICE_NUMBER) diffs.push(`項4 事業所番号 ${F(mine[0], 4)} ≠ ${YOBO_OFFICE_NUMBER}`);
+    const sum20 = detail.reduce((s, c) => s + num(F(c, 20)), 0);
+    if (sum20 !== expUnits) diffs.push(`Σ項20 ${sum20} ≠ ${expUnits}`);
+    if (term && num(F(term, 15)) !== u.limitUnits) diffs.push(`項15 限度額 ${F(term, 15)} ≠ ${u.limitUnits}`);
+    check(diffs.length === 0, `${u.userName} 8222`,
+      diffs.length ? diffs.join(" / ") : `要介護度${F(mine[0], 12)} 明細${detail.length}行 計${sum20}単位 限度額${term ? F(term, 15) : "?"}`);
+  }
+  // ★ 項16 居宅サービス計画作成区分コード — 予防は "3" (介護予防支援事業者作成) の可能性
+  const kubun16 = [...new Set(rec8222.map((c) => F(c, 16)))].filter((v) => v !== "");
+  if (kubun16.length === 1 && kubun16[0] === "1") {
+    note(`8222 項16 居宅サービス計画作成区分コードが **"1" 固定** (build-kyotaku.ts:544)。` +
+      `予防は "3" (介護予防支援事業者作成) の可能性がある。` +
+      `⚠ ★ 断定しない: 実伝送 KY 15本 8,992レコードは全て 項16="1" だが ` +
+      `要介護度コードは 21〜25 のみで **要支援は 1 件も無い** = ほのぼのの予防出力が手元に無い`);
+  } else {
+    check(false, "8222 項16 の値", kubun16.join("/"));
+  }
+  console.log(`\n  給付管理票の警告 ${kFile.warnings.length} 件`);
+  for (const w of kFile.warnings) console.log(`    - ${w}`);
 
   // ── 負のコントロール (ルール 3-9): 期待値をわざと外して落ちることを見る ──
   console.log("\n=== 負のコントロール (検査が動いていることの確認) ===");

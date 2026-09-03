@@ -111,9 +111,15 @@ const KAIGO_BASE = { 要介護1: ["432111", 1086], 要介護2: ["432111", 1086] 
 
 const CASES = [
   { tag: "ZP01", name: "予防サンプル01 要支援1 区分Ⅱ", level: "要支援1", kubun: "II",
-    memo: "居宅介護支援事業所が直接指定 (最多ケース)" },
+    // 給付管理票 (8222) も予防で組めるかを見る。予防のサービス種類コードは 6x 系
+    kyufu: [
+      { name: "介護予防通所リハビリテーション", number: "1279999066", kind: "66", units: 2268 },
+      { name: "介護予防福祉用具貸与", number: "1279999067", kind: "67", units: 300 },
+    ],
+    memo: "居宅介護支援事業所が直接指定 (最多ケース) + 給付管理2行" },
   { tag: "ZP02", name: "予防サンプル02 要支援2 区分Ⅰ", level: "要支援2", kubun: "I",
-    memo: "地域包括支援センターとして請求 (442単位)" },
+    kyufu: [{ name: "介護予防訪問看護", number: "1279999063", kind: "63", units: 4500 }],
+    memo: "地域包括支援センターとして請求 (442単位) + 給付管理1行" },
   { tag: "ZP03", name: "予防サンプル03 要支援2 委託", level: "要支援2", kubun: "itaku", zero: true,
     memo: "★ 包括が請求 = 伝送から除外されるべき 0 単位行" },
   { tag: "ZP04", name: "予防サンプル04 要支援1 初回加算", level: "要支援1", kubun: "II",
@@ -157,7 +163,7 @@ async function main() {
   await removeAll();
 
   const P100 = Math.round(office.unit_price * 100);
-  const clients = [], certs = [], assigns = [], plans = [], claims = [];
+  const clients = [], certs = [], assigns = [], plans = [], claims = [], kyufu = [];
   const summary = [];
 
   for (let i = 0; i < CASES.length; i++) {
@@ -229,6 +235,13 @@ async function main() {
       notes: noteParts.join("\n"),
     });
 
+    for (const k of c.kyufu ?? []) {
+      kyufu.push({ tenant_id: TENANT, user_id: clientId, billing_month: MONTH,
+        service_type: k.name, provider_name: k.name, provider_number: k.number,
+        service_kind_code: k.kind, planned_units: k.units, actual_units: k.units,
+        over_limit_units: 0, status: "confirmed" });
+    }
+
     summary.push({
       tag: c.tag, 要介護度: c.level, 区分: c.kubun ?? "(要介護)",
       コード: code, Σ単位: sum, 期待総額: total, memo: c.memo,
@@ -242,6 +255,7 @@ async function main() {
   console.log(`  client_office_assignments ${assigns.length}`);
   console.log(`  kaigo_care_plans          ${plans.length}`);
   console.log(`  kaigo_care_support_claims ${claims.length}`);
+  console.log(`  kaigo_benefit_management  ${kyufu.length}  (★ key は user_id)`);
 
   if (!EXECUTE) { console.log("\nDRY RUN のため何も書き込んでいません。"); return; }
 
@@ -256,6 +270,7 @@ async function main() {
   await ins("client_office_assignments", assigns);
   await ins("kaigo_care_plans", plans);
   await ins("kaigo_care_support_claims", claims);
+  await ins("kaigo_benefit_management", kyufu);
 
   const { count: n1, error: v1 } = await sb.from("clients").select("id", { count: "exact", head: true }).like("user_number", `${PREFIX}%`);
   if (v1) throw new Error(`件数確認に失敗: ${v1.message}`);

@@ -796,6 +796,24 @@ export function buildKeikakuhiFile(
         `${u.userName}: 明細の合計単位数 (${totalUnits}) と請求単位数 (${u.units}) が一致しません — 伝送は明細の合計 ${totalUnits} 単位 (${amount} 円) で出力します。呼出側の組み立てを確認してください`,
       );
     }
+    // ★ 制度の混在チェック。介護予防支援 (46) のレセプトに 居宅介護支援 (43) の
+    //   コードが混ざると、サービス種類が食い違って国保連で返戻になる。
+    //   加算ごとの対応表 (claims-shared.ts YOBO_ADDON_CODES) を通し忘れても、
+    //   ここで必ず気づけるようにしておく (加算が増えても効く汎用の網)。
+    //   ⚠ 予防で算定できない加算 (特定事業所・入院時情報連携・退院退所・通院時・
+    //     ターミナル・緊急時カンファ) は 46 に相当コードが無いので、
+    //     読み替えではなく **算定自体が誤り**。どちらもこの警告で出る。
+    //   (2026-09-03 サンプル検証で初回加算に 434001 が出ていたのを機に追加)
+    const kindOf = (code: string) => (code ?? "").trim().slice(0, 2);
+    const baseKind = kindOf(meisai[0]?.code ?? "");
+    if (baseKind === "46") {
+      const mixed = meisai.filter((l) => l.code && kindOf(l.code) !== "46");
+      if (mixed.length > 0) {
+        warnings.push(
+          `${u.userName}: 介護予防支援 (46) のレセプトに 別サービス種類のコードが混ざっています (${mixed.map((l) => l.code).join("、")}) — 返戻になります`,
+        );
+      }
+    }
     meisai.forEach((l, i) => {
       const isLast = i === meisai.length - 1;
       // ほのぼの様式: 最後の明細行は行番号99 (合計行を兼ねる) で 合計単位数・請求金額 を持つ

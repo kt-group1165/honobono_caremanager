@@ -532,6 +532,45 @@ export function isYoboShienLevel(level: string | null | undefined): boolean {
   return level === "要支援1" || level === "要支援2";
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// 居宅介護支援 (43) の加算コード → 介護予防支援 (46) の対応コード
+//
+// ⚠ **対応表はここ 1 か所だけに置く。**加算を足すときもここに足すこと
+//   (同じ事実を 2 か所に持つと必ず食い違う — VERIFICATION_RULES 3-14)。
+//
+// 予防のレセプト (基本コードが 46) に 43 系の加算コードを載せると
+// サービス種類が食い違って国保連で返戻になる。
+//
+// 実マスタ (kaigo_service_codes) で確認した値 (2026-09-03):
+//   434001 居宅支援初回加算        300単位  2024-06-01〜2026-05-31 / 2026-06-01〜
+//   461201 介護予防支援 初回加算   300単位  2024-06-01〜2026-05-31   ← 旧世代
+//   464001 介護予防支援初回加算    300単位  2026-06-01〜             ← R8.6 世代
+//   → 単位数は 43/46 とも同じ 300。**変わるのはコードだけ**
+//
+// ⚠ 46 に**相当コードが無い**加算 (特定事業所・入院時情報連携・退院退所・
+//   通院時情報連携・ターミナル・緊急時カンファ) は介護予防支援では算定できない。
+//   ここに載せない = 変換しない。混入は buildKeikakuhiFile 側の警告で気づく。
+// ⚠ 委託連携加算 (461202 / 466132) と 予防の処遇改善加算 (466191・466207-210) は
+//   マスタに在るが **未実装** (算定するかは業務判断 — DECISIONS_PENDING)。
+// ─────────────────────────────────────────────────────────────────────────
+/** R8.6 改定でコードが変わる境界 (この月以降が新世代) */
+const YOBO_CODE_GEN2_FROM = "2026-06";
+
+const YOBO_ADDON_CODES: { kaigo: string; yoboUntilGen1: string; yoboGen2: string; name: string }[] = [
+  { kaigo: "434001", yoboUntilGen1: "461201", yoboGen2: "464001", name: "初回加算" },
+];
+
+/**
+ * 43 系の加算コードを、介護予防支援 (46) の対応コードに読み替える。
+ * 対応が無ければ null (= 予防では算定できない加算)。
+ * @param billingMonth "YYYY-MM"
+ */
+export function yoboAddonCode(kaigoCode: string, billingMonth: string): string | null {
+  const e = YOBO_ADDON_CODES.find((x) => x.kaigo === kaigoCode);
+  if (!e) return null;
+  return billingMonth >= YOBO_CODE_GEN2_FROM ? e.yoboGen2 : e.yoboUntilGen1;
+}
+
 export interface ClaimRow {
   id: string;
   user_id: string;
