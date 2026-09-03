@@ -1,0 +1,231 @@
+{
+ "取得日時": "2026-09-03T01:21:57.349Z",
+ "件数": 28,
+ "説明": "fix_benefit_rate_from_copay.mjs --execute の直前の値。復元はこの benefit_rate を書き戻す",
+ "rows": [
+  {
+   "id": "00e39dc4-5e68-455a-866a-0b41b3edd3f4",
+   "client_id": "6a020a1b-974a-44ac-8c02-528123954c20",
+   "copay_rate": "3",
+   "benefit_rate": "90",
+   "certification_start_date": "2024-12-01",
+   "certification_end_date": "2028-11-30"
+  },
+  {
+   "id": "0d31452d-09ba-40ab-ab8c-c85704ab889d",
+   "client_id": "53257ac9-fff3-47d4-90b8-d262887c0a75",
+   "copay_rate": "3",
+   "benefit_rate": "90",
+   "certification_start_date": "2025-08-07",
+   "certification_end_date": "2026-08-31"
+  },
+  {
+   "id": "19a64d96-5c09-4bb8-a575-3b304809f557",
+   "client_id": "a68eaa62-5b8f-4ac0-958c-4517650dc539",
+   "copay_rate": "2",
+   "benefit_rate": "90",
+   "certification_start_date": "2025-11-01",
+   "certification_end_date": "2028-10-31"
+  },
+  {
+   "id": "1c1a6555-49f5-48b6-bafb-f87cab15ff03",
+   "client_id": "a68eaa62-5b8f-4ac0-958c-4517650dc539",
+   "copay_rate": "2",
+   "benefit_rate": "90",
+   "certification_start_date": "2025-11-01",
+   "certification_end_date": "2028-10-31"
+  },
+  {
+   "id": "1dd76987-95a5-4e63-8e3f-fc09c926b0cc",
+   "client_id": "dbba8574-090e-4898-b5f1-834d1d2b07ac",
+   "copay_rate": "3",
+   "benefit_rate": "90",
+   "certification_start_date": "2025-08-01",
+   "certification_end_date": "2029-07-31"
+  },
+  {
+   "id": "1de048bb-13f3-4ed0-a896-150263f96a63",
+   "client_id": "cf2b8993-4d3f-492f-a4af-bb2530ee5d00",
+   "copay_rate": "3",
+   "benefit_rate": "90",
+   "certification_start_date": "2025-07-01",
+   "certification_end_date": "2028-06-30"
+  },
+  {
+   "id": "2196c64b-5cb6-4c5a-8e5a-247a15010886",
+   "client_id": "ff03ba26-40c2-4d70-aeec-594edd06ca77",
+   "copay_rate": "3",
+   "benefit_rate": "90",
+   "certification_start_date": "2026-03-09",
+   "certification_end_date": "2027-03-31"
+  },
+  {
+   "id": "23203de4-ec53-47f4-b6fb-ef05587df722",
+   "client_id": "9645223b-6a2a-45e4-9c04-6d3798a62274",
+   "copay_rate": "3",
+   "benefit_rate": "90",
+   "certification_start_date": "2026-05-01",
+   "certification_end_date": "2029-04-30"
+  },
+  {
+   "id": "36b1ed20-8bb1-43e8-8c19-308f741815b8",
+   "client_id": "edd9b85c-2d6b-45b1-9e89-f2f22a4d6ab5",
+   "copay_rate": "2",
+   "benefit_rate": "90",
+   "certification_start_date": "2024-12-01",
+   "certification_end_date": "2028-11-30"
+  },
+  {
+   "id": "49ab2d05-b0d3-46c6-aa33-bfed808f3791",
+   "client_id": "b5c83d30-f89b-4974-951c-9d412aaf2c4a",
+   "copay_rate": "2",
+   "benefit_rate": "90",
+   "certification_start_date": "2025-08-01",
+   "certification_end_date": "2029-07-31"
+  },
+  {
+   "id": "4e982650-0a00-47af-8cc4-aff49558088c",
+   "client_id": "df229810-33c7-4f8a-aa87-678a931d2dff",
+   "copay_rate": "3",
+   "benefit_rate": "90",
+   "certification_start_date": "2025-02-01",
+   "certification_end_date": "2028-01-31"
+  },
+  {
+   "id": "5068eda9-32a4-4ec5-9a83-b26d0a9cf189",
+   "client_id": "74cfd7e2-bc89-419d-aa62-b0fdd8a73afe",
+   "copay_rate": "2",
+   "benefit_rate": "90",
+   "certification_start_date": "2024-12-01",
+   "certification_end_date": "2027-11-30"
+  },
+  {
+   "id": "507aa44d-64a9-4316-9c11-4da379120b2c",
+   "client_id": "cddc9e5b-2493-49f1-a296-d6d74a4df4bb",
+   "copay_rate": "2",
+   "benefit_rate": "90",
+   "certification_start_date": "2025-12-01",
+   "certification_end_date": "2026-11-30"
+  },
+  {
+   "id": "53aff264-9a96-4d9f-953f-13416e1e1f63",
+   "client_id": "8d51fd86-c34e-4d25-a1df-ed8a030c82f2",
+   "copay_rate": "2",
+   "benefit_rate": "90",
+   "certification_start_date": "2025-10-01",
+   "certification_end_date": "2028-09-30"
+  },
+  {
+   "id": "71facefa-9b79-4ad3-a963-b929ec3cf83c",
+   "client_id": "bec3a0c9-fb5e-49a4-b1da-9ea95d2dd763",
+   "copay_rate": "2",
+   "benefit_rate": "90",
+   "certification_start_date": "2026-03-01",
+   "certification_end_date": "2029-02-28"
+  },
+  {
+   "id": "757a6cbb-6b0b-43b1-88ee-19b8d834b009",
+   "client_id": "88200226-f9d9-40f0-afcc-de1e089c398e",
+   "copay_rate": "2",
+   "benefit_rate": "90",
+   "certification_start_date": "2026-04-01",
+   "certification_end_date": "2027-03-31"
+  },
+  {
+   "id": "7d04eb5e-fc03-444b-a7b8-c16be53adddd",
+   "client_id": "0eab33ac-dd0c-459a-8143-c54dadf6680e",
+   "copay_rate": "2",
+   "benefit_rate": "90",
+   "certification_start_date": "2026-02-01",
+   "certification_end_date": "2027-01-31"
+  },
+  {
+   "id": "91389437-8847-4044-899e-7eec9b2297bf",
+   "client_id": "88cd30e8-3b13-4503-bd27-b0a8cf717df3",
+   "copay_rate": "2",
+   "benefit_rate": "90",
+   "certification_start_date": "2025-10-01",
+   "certification_end_date": "2027-09-30"
+  },
+  {
+   "id": "93f8f54b-c218-4eea-8069-7fa9fde897de",
+   "client_id": "790fee68-1dc5-482c-9f23-58ed4c159d44",
+   "copay_rate": "2",
+   "benefit_rate": "90",
+   "certification_start_date": "2024-01-01",
+   "certification_end_date": "2026-12-31"
+  },
+  {
+   "id": "b99c66d5-f12d-47b8-840e-3459166824fe",
+   "client_id": "88cd30e8-3b13-4503-bd27-b0a8cf717df3",
+   "copay_rate": "2",
+   "benefit_rate": "90",
+   "certification_start_date": "2025-10-01",
+   "certification_end_date": "2027-09-30"
+  },
+  {
+   "id": "bd2b3c14-d4e9-4bdb-9c07-ce7fb8191272",
+   "client_id": "b407e705-bddf-490b-b9e3-0fb5f9f167e0",
+   "copay_rate": "2",
+   "benefit_rate": "90",
+   "certification_start_date": "2025-10-01",
+   "certification_end_date": "2028-09-30"
+  },
+  {
+   "id": "d0bf71d2-f5f3-4da7-b981-2c3f87f2a08b",
+   "client_id": "94a14f87-0631-4c7f-a233-bde46e4bd053",
+   "copay_rate": "3",
+   "benefit_rate": "90",
+   "certification_start_date": "2026-01-19",
+   "certification_end_date": "2027-01-31"
+  },
+  {
+   "id": "d108af57-ef2c-4696-b304-ab5b4d91ebbe",
+   "client_id": "fb102c9d-047b-40c8-be04-910251af14b7",
+   "copay_rate": "2",
+   "benefit_rate": "90",
+   "certification_start_date": "2026-03-17",
+   "certification_end_date": "2027-03-31"
+  },
+  {
+   "id": "d2cf994e-8c0e-415c-ae2e-c3daf41a156c",
+   "client_id": "4f4ff458-38aa-4698-a8a8-654d312a3638",
+   "copay_rate": "3",
+   "benefit_rate": "90",
+   "certification_start_date": "2025-08-01",
+   "certification_end_date": "2028-07-31"
+  },
+  {
+   "id": "df005ab2-1490-4472-b269-25b80475dec8",
+   "client_id": "37061249-d29e-44c3-941b-9e4246bf0d88",
+   "copay_rate": "2",
+   "benefit_rate": "90",
+   "certification_start_date": "2026-01-14",
+   "certification_end_date": "2027-01-31"
+  },
+  {
+   "id": "ea3eb490-24fd-4366-984d-850c753145ab",
+   "client_id": "6b92a54b-5ffc-4ea5-b1b1-e7592880d32e",
+   "copay_rate": "3",
+   "benefit_rate": "90",
+   "certification_start_date": "2026-06-01",
+   "certification_end_date": "2028-05-31"
+  },
+  {
+   "id": "f3a84cdf-3d9c-46f9-b82c-1afdf85174d0",
+   "client_id": "d754c658-b4e4-4aab-afa5-2a6af0987b4a",
+   "copay_rate": "2",
+   "benefit_rate": "90",
+   "certification_start_date": "2026-03-02",
+   "certification_end_date": "2026-09-30"
+  },
+  {
+   "id": "f80379de-d3a4-4533-8a07-fc4328fa13e6",
+   "client_id": "68122a40-07f5-4220-9151-6ae5f604e9a8",
+   "copay_rate": "2",
+   "benefit_rate": "90",
+   "certification_start_date": "2026-04-01",
+   "certification_end_date": "2029-03-31"
+  }
+ ]
+}
