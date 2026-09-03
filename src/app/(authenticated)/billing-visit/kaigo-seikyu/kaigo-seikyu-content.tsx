@@ -24,6 +24,8 @@
  * ※ 実績単位の加算: 明細ペインは表示専用 (編集はサービス提供表 (実績) 画面へ移設)。
  *    初回加算は過去 2 ヶ月に completed 実績が無い利用者に「候補」バッジを出す
  *    (自動付与はしない。付与もサービス提供表側で行う)。
+ *    ★ 窓に事業所全体で実績が 0 件なら「判定不能」を出す (候補は出さない)。
+ *    データ未取込を「新規」と読まないため — docs/SHOKAI_KASAN_AUTO.md
  *
  * ※ 区分支給限度基準の超過自費: 超過がある行に赤バッジ、明細ペインに内訳。
  *    超過分は保険請求から除外され selfPayAmount (全額自費) として利用請求へ
@@ -424,11 +426,21 @@ export function KaigoSeikyuContent() {
 
   // ── 初回加算の自動サジェスト: 過去 2 ヶ月に completed 実績が無ければ「候補」──
   //    (表示のみ。付与はサービス提供表 (実績) 画面で行う)
-  const [shokaiCandidate, setShokaiCandidate] = useState(false);
+  //
+  // ⚠ ★ 「その人に実績が無い」だけでは判定できない。
+  //   窓 (過去2ヶ月) に **事業所全体で 1 件も実績が無い** なら、それは
+  //   「新規の利用者」ではなく **その月のデータをまだ取り込んでいない** という意味。
+  //   実測 (2026-09-03): completed は 2026-04 が 0 件 / 2026-05 が 4 件 しか無く、
+  //   2026-06 を請求すると ★ ほぼ全利用者が「候補」になっていた (的中率 3.7%)。
+  //   → 分母を同時に数え、0 なら "unknown" (判定不能) にして候補を出さない。
+  //   「実績が無い = 新規」は否定推論であり、材料が無いときに外れた側を確定させる。
+  //   docs/SHOKAI_KASAN_AUTO.md
+  type ShokaiState = "candidate" | "no" | "unknown";
+  const [shokaiState, setShokaiState] = useState<ShokaiState>("unknown");
   useEffect(() => {
-    if (!selectedCurUserId) {
+    if (!selectedCurUserId || !officeId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- 選択解除時のリセット
-      setShokaiCandidate(false);
+      setShokaiState("unknown");
       return;
     }
     let cancelled = false;
@@ -438,26 +450,37 @@ export function KaigoSeikyuContent() {
       const toD = new Date(year, month - 1, 0);
       const fmt = (d: Date) =>
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      const { count, error: e } = await supabase
-        .from("kaigo_visit_schedule")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", selectedCurUserId)
-        .eq("status", "completed")
-        .gte("visit_date", fmt(fromD))
-        .lte("visit_date", fmt(toD));
+      const win = (q: ReturnType<typeof supabase.from>) =>
+        q
+          .select("id", { count: "exact", head: true })
+          .eq("status", "completed")
+          .gte("visit_date", fmt(fromD))
+          .lte("visit_date", fmt(toD));
+      const [mine, whole] = await Promise.all([
+        win(supabase.from("kaigo_visit_schedule")).eq("user_id", selectedCurUserId),
+        // ★ 分母: 同じ窓に事業所全体で実績があるか (1 件見つかれば十分)
+        win(supabase.from("kaigo_visit_schedule")).eq("office_id", officeId).limit(1),
+      ]);
       if (cancelled) return;
-      if (e) {
+      if (mine.error || whole.error) {
         // 候補判定の失敗は請求業務を止めない (console のみ)
-        console.error("初回加算候補の判定に失敗:", e.message);
-        setShokaiCandidate(false);
+        console.error(
+          "初回加算候補の判定に失敗:",
+          mine.error?.message ?? whole.error?.message,
+        );
+        setShokaiState("unknown");
         return;
       }
-      setShokaiCandidate((count ?? 0) === 0);
+      if ((whole.count ?? 0) === 0) {
+        setShokaiState("unknown"); // ★ 窓が空 = 判定できない
+        return;
+      }
+      setShokaiState((mine.count ?? 0) === 0 ? "candidate" : "no");
     })();
     return () => {
       cancelled = true;
     };
-  }, [supabase, selectedCurUserId, year, month]);
+  }, [supabase, selectedCurUserId, officeId, year, month]);
 
   // ── フラグ (月遅れ/返戻/過誤) の upsert ──
   const setFlag = async (
@@ -1422,12 +1445,20 @@ export function KaigoSeikyuContent() {
                           SQL未適用
                         </span>
                       )}
-                      {!addonTableMissing && shokaiCandidate && !addon?.shokai && (
+                      {!addonTableMissing && shokaiState === "candidate" && !addon?.shokai && (
                         <span
                           title="過去 2 ヶ月に完了実績が無いため初回加算の候補です (付与はサービス提供表 (実績) 画面で行います)"
                           className="rounded border border-amber-400 bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800"
                         >
                           初回加算 候補
+                        </span>
+                      )}
+                      {!addonTableMissing && shokaiState === "unknown" && !addon?.shokai && (
+                        <span
+                          title="過去 2 ヶ月 (前々月・前月) の実績が事業所全体で 0 件のため、初回加算の候補かどうか判定できません。その月の実績を取り込むと判定が効きます。"
+                          className="rounded border border-gray-300 bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-500"
+                        >
+                          初回加算 判定不能
                         </span>
                       )}
                       <Link

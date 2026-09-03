@@ -16,6 +16,8 @@
  *   入院時情報連携・退院退所セルに 🏥 ヒント。入院記録が無いのに加算を選ぶと amber 注意。
  *   対象月内に入院/退院した記録があり未チェックの場合は emerald ハイライトで候補提示。
  * 初回加算候補: 過去2ヶ月 (前月・前々月) に居宅介護支援費レセプトが無い利用者を emerald
+ *   ★ ただし その窓のレセプトが全社で 0 件なら「判定不能」を出して候補は出さない
+ *   (データ未取込を「新規」と読まないため — docs/SHOKAI_KASAN_AUTO.md)
  *   ハイライトで候補提示 (訪問介護側 kaigo-seikyu-content.tsx の初回加算候補と同じ設計:
  *   表示のみで自動チェックはしない。判定に使うのは billing_month の有無のみ)。
  * 緊急時等居宅カンファレンス加算候補: 対象月に kaigo_support_records.category='カンファレンス'
@@ -137,6 +139,10 @@ export function KyotakuKojinSetteiContent() {
   const [hospMap, setHospMap] = useState<Map<string, HospitalizationPeriod[]>>(new Map());
   // 初回加算候補: 過去2ヶ月に居宅介護支援費レセプトが無い利用者 (表示のみ・自動チェックはしない)
   const [shokaiCandidateIds, setShokaiCandidateIds] = useState<Set<string>>(new Set());
+  // ★ 過去2ヶ月のレセプトが **1 件も無い** = その月を取り込んでいない = 判定できない。
+  //   実測 (2026-09-03): 2026-04/05 は 0 件で、2026-06 を出すと 2,806 名 ★ 全員が
+  //   候補になっていた。docs/SHOKAI_KASAN_AUTO.md
+  const [shokaiUndecidable, setShokaiUndecidable] = useState(false);
   // 緊急時等居宅カンファレンス加算候補: 対象月に kaigo_support_records.category='カンファレンス' がある利用者
   const [conferenceCandidateIds, setConferenceCandidateIds] = useState<Set<string>>(new Set());
   // ターミナルケアマネジメント加算候補: 対象月が死亡月 (status=deceased かつ discharge_date が対象月内) で、
@@ -265,7 +271,7 @@ export function KyotakuKojinSetteiContent() {
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       };
       const prevMonths = [prevMonthKey(-1), prevMonthKey(-2)];
-      const [certRes, hm, priorClaimChunks, confChunks] = await Promise.all([
+      const [certRes, hm, priorClaimChunks, priorWindowRows, confChunks] = await Promise.all([
         resolveCertForMonth(supabase, clientIds, year, month),
         getHospitalizationMap(supabase, clientIds),
         mapChunksParallel(clientIds, IN_CHUNK, async (chunk) => {
@@ -277,6 +283,16 @@ export function KyotakuKojinSetteiContent() {
           if (e) throw new Error(`初回加算候補の判定に失敗: ${e.message}`);
           return (data ?? []).map((row: { user_id: string }) => row.user_id);
         }),
+        // ★ 分母: その窓のレセプトが全社で 1 件でもあるか (無ければ判定できない)
+        (async () => {
+          const { count, error: e } = await supabase
+            .from("kaigo_care_support_claims")
+            .select("id", { count: "exact", head: true })
+            .in("billing_month", prevMonths)
+            .limit(1);
+          if (e) throw new Error(`初回加算候補の分母取得に失敗: ${e.message}`);
+          return count ?? 0;
+        })(),
         // 緊急時等居宅カンファレンス加算候補: 対象月に category='カンファレンス' の支援経過があるか
         // (通常のサービス担当者会議とは別の CHECK 制約値。当月内の record_date のみ対象)
         mapChunksParallel(clientIds, IN_CHUNK, async (chunk) => {
@@ -325,7 +341,14 @@ export function KyotakuKojinSetteiContent() {
         setTerminalCandidateIds(new Set());
       }
       const hadPriorClaim = new Set(priorClaimChunks.flat());
-      setShokaiCandidateIds(new Set(clientIds.filter((id) => !hadPriorClaim.has(id))));
+      // ★ 窓が空なら「新規」ではなく「判定できない」。候補は 1 件も出さない。
+      const undecidable = priorWindowRows === 0;
+      setShokaiUndecidable(undecidable);
+      setShokaiCandidateIds(
+        undecidable
+          ? new Set()
+          : new Set(clientIds.filter((id) => !hadPriorClaim.has(id))),
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setClients([]);
@@ -649,7 +672,16 @@ export function KyotakuKojinSetteiContent() {
                 <div className="px-1 py-1 border-l border-sky-300 text-left">利用者名 / フリガナ</div>
                 <div className="px-1 py-1 border-l border-sky-300">性別</div>
                 <div className="px-1 py-1 border-l border-sky-300">電話</div>
-                <div className="px-1 py-1 border-l border-sky-300 text-blue-800">初回<br />加算</div>
+                <div
+                  className={`px-1 py-1 border-l border-sky-300 ${shokaiUndecidable ? "text-gray-400" : "text-blue-800"}`}
+                  title={
+                    shokaiUndecidable
+                      ? "★ 前々月・前月のレセプトが 1 件も無いため、初回加算の候補を判定できません (候補ハイライトは出していません)。その月を取り込むと判定が効きます。"
+                      : "過去2ヶ月にレセプトが無い利用者を候補としてハイライトします (自動チェックはしません)"
+                  }
+                >
+                  初回<br />加算{shokaiUndecidable && <span className="ml-0.5 text-[9px]">(判定不能)</span>}
+                </div>
                 <div className="px-1 py-1 border-l border-sky-300 text-blue-800">退院・退所<br />加算</div>
                 <div className="px-1 py-1 border-l border-sky-300 text-blue-800">入院時<br />情報連携</div>
                 <div className="px-1 py-1 border-l border-sky-300 text-blue-800">緊急時<br />カンファ</div>
