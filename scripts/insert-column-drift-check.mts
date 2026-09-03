@@ -77,10 +77,43 @@ function matchBrace(src: string, start: number): number {
   return -1;
 }
 
-/** object literal の**最上位**のキーを取る。読めない形なら null (= 未解析) */
-function topLevelKeys(obj: string): string[] | null {
-  const inner = obj.slice(1, -1);
-  if (inner.includes("...")) return null; // スプレッドがあると全体像が読めない
+/**
+ * object literal の中のコメントを落とす (文字列リテラルは保護する)。
+ *
+ * ⚠ これが無いと **object の中にコメントを 1 行書いただけでその site が未解析になる**。
+ *   実際に踏んだ: service-code-import-dialog.tsx の insert に説明コメントを足したら
+ *   その表の解析が丸ごと落ち、**検出済みだった 4 件が「0 件」に化けた**。
+ *   「直したら検出が消えた」= 沈黙パターン (2章) そのものなので、必ず落とす。
+ */
+function stripComments(s: string): string {
+  let out = "";
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '"' || ch === "'" || ch === "`") {
+      const q = ch;
+      out += ch; i++;
+      while (i < s.length && s[i] !== q) { if (s[i] === "\\") { out += s[i]; i++; } out += s[i]; i++; }
+      out += s[i] ?? "";
+      continue;
+    }
+    if (ch === "/" && s[i + 1] === "/") { while (i < s.length && s[i] !== "\n") i++; out += "\n"; continue; }
+    if (ch === "/" && s[i + 1] === "*") { const e = s.indexOf("*/", i + 2); i = e < 0 ? s.length : e + 1; continue; }
+    out += ch;
+  }
+  return out;
+}
+
+/**
+ * object literal の**最上位**のキーを取る。読めない形なら null (= 未解析)。
+ *
+ * ★ スプレッド (`...base`) を含んでいても **書いてあるキーは実際に送られる**ので、
+ *   そこだけ拾う (= 部分解析)。存在しない列を 1 つでも渡せば行ごと拒否されるため、
+ *   網羅していなくても「余分な列」の検出には十分効く。
+ *   ⚠ 逆に「足りない列」は分からない。完全性は主張しない。
+ */
+function topLevelKeys(obj: string): { keys: string[]; partial: boolean } | null {
+  const inner = stripComments(obj.slice(1, -1));
+  const partial = inner.includes("...");
   const keys: string[] = [];
   let depth = 0;
   let tokenStart = 0;
@@ -100,6 +133,7 @@ function topLevelKeys(obj: string): string[] | null {
   for (const raw of parts) {
     const p = raw.trim();
     if (!p) continue;
+    if (p.startsWith("...")) continue; // スプレッドは中身が読めないので飛ばす (部分解析)
     // ★ `key:` か shorthand (その部分がまるごと識別子) だけを認める。
     //   緩めると型引数のカンマを列名と誤認する。実例:
     //     content: baseContent as unknown as Record<string, unknown>,
@@ -113,10 +147,10 @@ function topLevelKeys(obj: string): string[] | null {
     if (p.startsWith("[")) return null;
     keys.push(key);
   }
-  return keys;
+  return { keys, partial };
 }
 
-type Site = { file: string; line: number; table: string; keys: string[] | null };
+type Site = { file: string; line: number; table: string; keys: string[] | null; partial: boolean };
 
 function collect(): Site[] {
   const sites: Site[] = [];
@@ -142,14 +176,16 @@ function collect(): Site[] {
           // 配列リテラル: 最初の要素だけ見る
           const arrEnd = matchBrace(src, argStart);
           const first = src.indexOf("{", argStart);
-          if (arrEnd < 0 || first < 0 || first > arrEnd) { sites.push({ file: rel, line, table, keys: null }); continue; }
+          if (arrEnd < 0 || first < 0 || first > arrEnd) { sites.push({ file: rel, line, table, keys: null, partial: false }); continue; }
           const objEnd = matchBrace(src, first);
-          sites.push({ file: rel, line, table, keys: objEnd < 0 ? null : topLevelKeys(src.slice(first, objEnd + 1)) });
+          const r = objEnd < 0 ? null : topLevelKeys(src.slice(first, objEnd + 1));
+          sites.push({ file: rel, line, table, keys: r?.keys ?? null, partial: r?.partial ?? false });
         } else if (src[argStart] === "{") {
           const objEnd = matchBrace(src, argStart);
-          sites.push({ file: rel, line, table, keys: objEnd < 0 ? null : topLevelKeys(src.slice(argStart, objEnd + 1)) });
+          const r = objEnd < 0 ? null : topLevelKeys(src.slice(argStart, objEnd + 1));
+          sites.push({ file: rel, line, table, keys: r?.keys ?? null, partial: r?.partial ?? false });
         } else {
-          sites.push({ file: rel, line, table, keys: null }); // 変数を渡している = 未解析
+          sites.push({ file: rel, line, table, keys: null, partial: false }); // 変数を渡している = 未解析
         }
       }
     }
@@ -177,8 +213,11 @@ async function main() {
   const tables = [...new Set(sites.map((s) => s.table))].sort();
   console.log(`【分母】insert/upsert の呼出 ${sites.length} 箇所 / ${tables.length} table`);
   const parsed = sites.filter((s) => s.keys !== null);
+  const partial = parsed.filter((s) => s.partial);
   console.log(`  うち **インラインのオブジェクトが読めた** ${parsed.length} 箇所`);
-  console.log(`  ★ 未解析 (変数渡し・スプレッド・動的キー) ${sites.length - parsed.length} 箇所 — ここは見ていない\n`);
+  console.log(`    (うち ${partial.length} 箇所は ★ 部分解析 — スプレッドを含むので`);
+  console.log(`     「余分な列」は見えるが「足りない列」は見えない)`);
+  console.log(`  ★ 未解析 (変数渡し・動的キー) ${sites.length - parsed.length} 箇所 — ここは見ていない\n`);
   if (parsed.length === 0) {
     console.error("✗ 1 箇所も解析できていない = 検査が動いていない");
     process.exit(1);
@@ -219,7 +258,8 @@ async function main() {
     console.log(`\n⚠ PostgREST は存在しない列が 1 つでもあると **行ごと拒否** (PGRST204) する。`);
     console.log(`  → その表は永久に 0 行になる。「0 行 = 未使用」と読まないこと。`);
   }
-  console.log(`\n⚠ 未解析 ${sites.length - parsed.length} 箇所は見ていない。**0 件でも「乖離なし」とは言えない。**`);
+  console.log(`\n⚠ 未解析 ${sites.length - parsed.length} 箇所 + 部分解析 ${partial.length} 箇所は完全には見ていない。
+  **0 件でも「乖離なし」とは言えない。**`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
