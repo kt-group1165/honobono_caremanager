@@ -23,6 +23,7 @@ import { useBusinessType } from "@/lib/business-type-context";
 import { validInMonth } from "@/lib/service-code-valid";
 import { DEFAULT_CHIIKI_MUNICIPALITY } from "@/lib/idou-shien-code";
 import { ChevronLeft, ChevronRight, Loader2, Printer, Footprints } from "lucide-react";
+import { buildIdouMeisaiLines } from "@/lib/idou-billing-lines";
 
 const UNIT_YEN = 10;
 
@@ -38,6 +39,8 @@ export type IdouRow = {
   staff_count: number;
   service_code: string | null;
   units: number | null;
+  /** 身体介護を伴うか。移動1 (024701) / 移動2 (027701) の出し分けと 緊急時対応加算の可否に使う */
+  with_body_care: boolean;
   addon_shokai: boolean;
   addon_kinkyu: boolean;
   user_confirmed: boolean;
@@ -246,40 +249,13 @@ export function IdouBillingContent({
     setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
   };
 
-  // 2人目従業者コード = base+1 (千葉市コード表は単独/・2人 が連番。単位は同額)
-  const secondPersonCode = (base: string): { code: string; name: string; unit: number } => {
-    const code = String(Number(base) + 1).padStart(6, "0");
-    const info = codeInfo.get(base);
-    return { code, name: (info?.name ?? base) + "・2人", unit: info?.unit ?? 0 };
-  };
 
-  // 利用者ごとに明細行を集計
-  const perClient = useMemo(() => {
-    const map = new Map<string, MeisaiLine[]>();
-    const addLine = (clientId: string, code: string, name: string, unit: number) => {
-      let lines = map.get(clientId);
-      if (!lines) { lines = []; map.set(clientId, lines); }
-      const ex = lines.find((l) => l.code === code);
-      if (ex) { ex.count += 1; ex.total += unit; }
-      else lines.push({ code, name, unit, count: 1, total: unit });
-    };
-    const addByCode = (clientId: string, code: string | null) => {
-      if (!code) return;
-      const info = codeInfo.get(code);
-      addLine(clientId, code, info?.name ?? code, info?.unit ?? 0);
-    };
-    for (const r of idouRows) {
-      addByCode(r.client_id, r.service_code);
-      // 2人目従業者は ・2人 コードで別行 (同単位)
-      if (r.staff_count === 2 && r.service_code) {
-        const s = secondPersonCode(r.service_code);
-        addLine(r.client_id, s.code, s.name, s.unit);
-      }
-    }
-    for (const b of bathRows) addByCode(b.client_id, b.service_code);
-    return map;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- secondPersonCode は codeInfo に依存
-  }, [idouRows, bathRows, codeInfo]);
+  // 利用者ごとに明細行を集計。**組み立ては src/lib/idou-billing-lines.ts に切り出してある**
+  //   (client component の中にあるとテストから呼べず、加算が 1 行も出ない不具合に気づけなかった)
+  const perClient = useMemo(
+    () => buildIdouMeisaiLines(idouRows, bathRows, codeInfo),
+    [idouRows, bathRows, codeInfo],
+  );
 
   // 利用者の負担額 = 生保→0 / それ以外→ min(総費用×10%, 負担上限月額)。上限0(非課税)→0
   // 判定不能 (受給者証なし / 上限未設定) は **金額を推測しない**。
