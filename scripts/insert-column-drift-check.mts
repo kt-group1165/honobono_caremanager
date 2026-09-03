@@ -167,7 +167,7 @@ function collect(): Site[] {
         // 同じチェーンの中の insert/upsert を探す (次の .from( までの範囲)
         const nextFrom = src.indexOf(".from(", m.index + 1);
         const scope = src.slice(m.index, nextFrom < 0 ? src.length : nextFrom);
-        const im = /\.(insert|upsert)\(\s*/.exec(scope);
+        const im = /\.(insert|upsert|update)\(\s*/.exec(scope);
         if (!im) continue;
         const argStart = m.index + im.index + im[0].length;
         const rel = path.relative(APPS_DIR, file).replace(/\\/g, "/");
@@ -211,7 +211,7 @@ async function columnExists(table: string, col: string): Promise<boolean> {
 async function main() {
   const sites = collect();
   const tables = [...new Set(sites.map((s) => s.table))].sort();
-  console.log(`【分母】insert/upsert の呼出 ${sites.length} 箇所 / ${tables.length} table`);
+  console.log(`【分母】insert/upsert/update の呼出 ${sites.length} 箇所 / ${tables.length} table`);
   const parsed = sites.filter((s) => s.keys !== null);
   const partial = parsed.filter((s) => s.partial);
   console.log(`  うち **インラインのオブジェクトが読めた** ${parsed.length} 箇所`);
@@ -236,6 +236,19 @@ async function main() {
     console.error("✗ 1 箇所も解析できていない = 検査が動いていない");
     process.exit(1);
   }
+
+  const byApp = new Map<string, { all: number; ok: number }>();
+  for (const s2 of sites) {
+    const app = s2.file.split("/")[0];
+    if (!byApp.has(app)) byApp.set(app, { all: 0, ok: 0 });
+    const e = byApp.get(app)!;
+    e.all++;
+    if (s2.keys !== null) e.ok++;
+  }
+  console.log("app 別 (解析できた / 全体):");
+  for (const [app, e] of [...byApp].sort((a, b) => b[1].all - a[1].all))
+    console.log(`  ${app.padEnd(16)} ${String(e.ok).padStart(4)} / ${String(e.all).padStart(4)}`);
+  console.log("");
 
   const colCache = new Map<string, Set<string> | null>();
   const findings: string[] = [];
@@ -265,9 +278,9 @@ async function main() {
     process.exit(1);
   }
   if (findings.length === 0) {
-    console.log("✅ insert/upsert で **存在しない列**を渡している箇所は見つからなかった");
+    console.log("✅ insert/upsert/update で **存在しない列**を渡している箇所は見つからなかった");
   } else {
-    console.log(`══ ★ 存在しない列を insert している ${findings.length} 件 ══`);
+    console.log(`══ ★ 存在しない列を insert/update している ${findings.length} 件 ══`);
     for (const f of findings) console.log(`  ★ ${f}`);
     console.log(`\n⚠ PostgREST は存在しない列が 1 つでもあると **行ごと拒否** (PGRST204) する。`);
     console.log(`  → その表は永久に 0 行になる。「0 行 = 未使用」と読まないこと。`);
