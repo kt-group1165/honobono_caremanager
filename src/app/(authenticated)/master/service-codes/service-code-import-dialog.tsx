@@ -419,6 +419,10 @@ export function ServiceCodeImportDialog({
           closed_count: plan.closes.length,
           skipped_count: plan.skips.length,
           closed_rows: plan.closes,
+          // ⚠ DB 既定値に頼らず明示する。実 DB は archive の SQL と食い違っており
+          //   (inserted_rows / 4列欠落)、status に DEFAULT 'applied' が付いている
+          //   保証が無い。型は "applied" | "reverted" なのでこの値で確定。
+          status: "applied",
           notes: batchMemo.trim() || null,
         });
       if (bErr) {
