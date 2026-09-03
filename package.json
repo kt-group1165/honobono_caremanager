@@ -26,6 +26,7 @@
     "check:teigen": "tsx scripts/kyotaku-teigen-verify.mts",
     "check:shogai-jogen": "tsx scripts/shogai-jogen-verify.mts",
     "check:tokutei": "tsx scripts/tokutei-kassan-verify.mts",
+    "check:invariant": "tsx scripts/invariant-check.mts",
     "check:densou-diff": "tsx scripts/densou-diff-check.mts"
   },
   "dependencies": {
