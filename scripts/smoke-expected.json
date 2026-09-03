@@ -81,9 +81,9 @@
           "rows": 79,
           "totalUnits": 304250,
           "totalAmount": 3361925,
-          "insuranceAmount": 2987637,
+          "insuranceAmount": 2982948,
           "kohiAmount": 43678,
-          "userAmount": 330610
+          "userAmount": 335299
         },
         "2026-07": {
           "fingerprint": {
@@ -94,9 +94,9 @@
           "rows": 84,
           "totalUnits": 338580,
           "totalAmount": 3741271,
-          "insuranceAmount": 3317904,
+          "insuranceAmount": 3306002,
           "kohiAmount": 43220,
-          "userAmount": 380147
+          "userAmount": 392049
         }
       },
       "shogai": {
