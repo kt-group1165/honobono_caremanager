@@ -6,6 +6,7 @@
     "check:cert-overlap": "tsx scripts/check-cert-overlap.mts",
     "check:cert-tiebreak": "tsx scripts/check-cert-tiebreak.mts",
     "check:copay-null": "tsx scripts/check-copay-null-exposure.mts",
+    "check:benefit-densou": "tsx scripts/check-benefit-vs-densou.mts",
     "check:idou-lines": "tsx scripts/check-idou-lines.mts",
     "dev": "next dev",
     "build": "next build",
