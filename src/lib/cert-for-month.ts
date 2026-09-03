@@ -185,6 +185,40 @@ export async function resolveCertForMonth(
   return pickCertForMonth(byClient, monthStart, monthEnd);
 }
 
+/**
+ * 同着 (certification_start_date と effective_date が同じ) の中から 1 件を決める。
+ *
+ *   ⚠ 2026-09-03 追加。**これが無いと採用行が実行ごとに変わりうる。**
+ *     DB の order は (start DESC, effective DESC) の 2 キーだけなので、
+ *     両方が同値の重複行の並びは **Postgres の物理順まかせ = 未定義**。
+ *     同じ月を 2 回請求すると別の行が採られ、金額が変わりうる。
+ *
+ *   採用規則: **入力済みの値を持つ行を優先する**。
+ *     取込の経路上、copay_rate が null なのは「負担割合 CSV が当たらなかった行」で、
+ *     値が入っている行のほうが後から是正されたもの。null を採ると
+ *     aggregate.ts:1310 が **既定 1 割**に倒すため、2割/3割の人が
+ *     **保険請求 10〜20% 過大**になる (後 貞雄で実測 11,078 vs 正 9,847 = 1,231円)。
+ */
+const certCompleteness = (r: DbRow): number =>
+  (r.copay_rate == null || r.copay_rate === "" ? 0 : 4) + // copay_rate は string 列。空文字も未入力
+  (r.care_level == null || r.care_level === "" ? 0 : 2) +
+  (r.service_limit_amount == null ? 0 : 1);
+
+/** 同着行のうち最も情報が揃っている 1 件 (同点なら元の並びの先頭 = 安定) */
+export function pickAmongTies(inMonth: DbRow[]): DbRow | undefined {
+  const head = inMonth[0];
+  if (!head) return undefined;
+  let best = head;
+  let bestScore = certCompleteness(head);
+  for (const r of inMonth) {
+    if (r.certification_start_date !== head.certification_start_date) break; // start DESC 順
+    if (r.effective_date !== head.effective_date) break;
+    const s = certCompleteness(r);
+    if (s > bestScore) { best = r; bestScore = s; }
+  }
+  return best;
+}
+
 /** 取得済みの認定行から「対象月の 1 件」を選ぶ (fetch なし) */
 function pickCertForMonth(
   byClient: Map<string, DbRow[]>,
@@ -196,7 +230,8 @@ function pickCertForMonth(
     // 1) 対象月に有効な認定 (start <= 月末 AND (end IS NULL OR end >= 月初))
     const inMonth = rows.filter((r) => isValidInMonth(r, monthStart, monthEnd));
     // rows は start_date DESC 順なので先頭が「対象月に有効な最新の認定」
-    const picked = inMonth[0] ?? rows[0];
+    //   ⚠ ただし同着は並びが未定義なので pickAmongTies で決定的に選ぶ
+    const picked = pickAmongTies(inMonth) ?? rows[0];
     if (!picked) continue;
     out.set(clientId, toCertForMonth(picked, inMonth.length === 0));
   }
@@ -235,14 +270,19 @@ function pickCertsInMonth(
   const out = new Map<string, CertForMonth[]>();
   for (const [clientId, rows] of byClient) {
     // rows は start DESC, effective DESC — 同一 start は先頭 (= 最新 effective) を採用
-    const seenStart = new Set<string>();
-    const inMonth: DbRow[] = [];
+    //   ⚠ 同一 start かつ同一 effective の重複は **DB の並びが未定義**なので、
+    //     先頭ではなく pickAmongTies (= 情報が揃っている行) で決定的に選ぶ
+    const byStart = new Map<string, DbRow[]>();
     for (const r of rows) {
       if (!isValidInMonth(r, monthStart, monthEnd)) continue;
       const start = r.certification_start_date!;
-      if (seenStart.has(start)) continue;
-      seenStart.add(start);
-      inMonth.push(r);
+      if (!byStart.has(start)) byStart.set(start, []);
+      byStart.get(start)!.push(r);
+    }
+    const inMonth: DbRow[] = [];
+    for (const group of byStart.values()) {
+      const picked = pickAmongTies(group); // group も start DESC, effective DESC 順のまま
+      if (picked) inMonth.push(picked);
     }
     if (inMonth.length === 0) continue;
     inMonth.reverse(); // start DESC → ASC (時系列順)

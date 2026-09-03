@@ -103,10 +103,17 @@ const nameOf = new Map((cl ?? []).map((c) => [c.id, c.name]));
 {
   let nullOnly = 0, realConflict = 0;
   for (const { l } of ambiguousList) {
+    // ⚠ 2026-09-03 是正: 最初 null を除いて比べ「null との差だけ」を無害に分類したが **誤り**。
+    //   copay_rate が null の行が採用されると aggregate.ts:1310 が **既定 1 割**に倒す。
+    //   実際は 2割/3割 の人なら **保険請求が 10〜20% 過大**になる (後 貞雄で実測 1,231円/月)。
+    //   → null と値の食い違いは「差が無い」のではなく **最も危険な競合**。
     const vals = (k: keyof Cert) => new Set(l.map((c) => c[k]).filter((v) => v !== null && v !== ""));
     const conflict = (["care_level", "benefit_rate", "service_limit_amount", "insurer_number", "insured_number", "copay_rate"] as (keyof Cert)[])
       .some((k) => vals(k).size > 1);
-    if (conflict) realConflict += 1; else nullOnly += 1;
+    const isNull = (v: unknown) => v === null || v === "";
+    const copayNullSplit =
+      l.some((c) => isNull(c.copay_rate)) && l.some((c) => !isNull(c.copay_rate) && Number(c.copay_rate) > 1);
+    if (conflict || copayNullSplit) realConflict += 1; else nullOnly += 1;
   }
   console.log(`
   ③ の内訳: **値どうしが食い違う ${realConflict} 名** / null と値の差だけ ${nullOnly} 名`);
@@ -114,10 +121,13 @@ const nameOf = new Map((cl ?? []).map((c) => [c.id, c.name]));
   const hot = ambiguousList.filter(({ cid, l }) => {
     if (!withActual.has(cid)) return false;
     const vals = (k: keyof Cert) => new Set(l.map((c) => c[k]).filter((v) => v !== null && v !== ""));
-    return (["care_level", "benefit_rate", "service_limit_amount", "insurer_number", "insured_number", "copay_rate"] as (keyof Cert)[])
+    const isNull = (v: unknown) => v === null || v === "";
+    const copayNullSplit =
+      l.some((c) => isNull(c.copay_rate)) && l.some((c) => !isNull(c.copay_rate) && Number(c.copay_rate) > 1);
+    return copayNullSplit || (["care_level", "benefit_rate", "service_limit_amount", "insurer_number", "insured_number", "copay_rate"] as (keyof Cert)[])
       .some((k) => vals(k).size > 1);
   });
-  console.log(`  ★★ 値が食い違い かつ 当月に動きがある: **${hot.length} 名** ← 金額が変わりうる本命`);
+  console.log(`  ★★ 値が食い違い かつ 当月に動きがある: **${hot.length} 名** ← 保険請求が 10〜20% 過大になりうる本命`);
   // 値が食い違う 5 名を名指しで出す (0 名が偽陰性でないかの確認)
   const conflictAll = ambiguousList.filter(({ l }) => {
     const vals = (k: keyof Cert) => new Set(l.map((c) => c[k]).filter((v) => v !== null && v !== ""));

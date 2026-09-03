@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "check:cert-overlap": "tsx scripts/check-cert-overlap.mts",
+    "check:cert-tiebreak": "tsx scripts/check-cert-tiebreak.mts",
     "check:idou-lines": "tsx scripts/check-idou-lines.mts",
     "dev": "next dev",
     "build": "next build",
