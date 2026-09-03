@@ -63,7 +63,7 @@
         "newRows": 352,
         "honoRows": 356,
         "honoHash": "46150c51",
-        "newHash": "c116dbef"
+        "newHash": "19fc635d"
       },
       "person": {
         "match": 79,
@@ -75,8 +75,8 @@
       "group": {
         "newGroups": 239,
         "honoGroups": 242,
-        "match": 236,
-        "diff": 6
+        "match": 238,
+        "diff": 4
       }
     }
   ]
