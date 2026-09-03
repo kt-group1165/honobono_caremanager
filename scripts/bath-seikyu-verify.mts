@@ -18,6 +18,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { aggregateBathVisitSeikyu } from "../src/lib/bath-seikyu/aggregate";
+import { buildKokuhoDensou } from "../src/lib/kokuho-densou/build";
 
 let pass = 0, fail = 0;
 const check = (label: string, actual: unknown, expected: unknown) => {
@@ -205,6 +206,44 @@ console.log("\n=== §A-7 処遇改善 (月次%) ===");
   // 適用コードが空 = 処遇改善 0 (今の3事業所の状態)
   const r = await row0(baseData(), { appliedFormulaCodes: [] });
   check("適用コードが空 → 処遇改善 0 単位", r?.addonUnits, 0);
+}
+
+console.log("\n=== §B 加算が **明細書 (7131-02)** にも出るか ===");
+// ⚠ ここまでの §A は **集計 (aggregate) の値**しか見ていない。
+//   加算が合計単位に入っていても **明細行として伝送に出ない**ことがありうる。
+//   移動支援で実際に起きた型 (memory feedback_addon_rows_leak_downstream:
+//   「加算行は notes にしか無く下流に漏れる」/「記録票には○が出るのに明細書に出ない」)。
+//   ★ 集計と伝送の両方を見ないと、この非対称は捕まらない。
+{
+  const d = baseData({
+    records: [
+      rec({ addon_shokai: true, addon_ninchi: "II", addon_chuusankan: true }),
+      rec({ visit_date: "2026-06-17" }),
+    ],
+  });
+  const r = await run(d, { appliedFormulaCodes: [] });
+  const built = buildKokuhoDensou(r.rows as never[], {
+    officeNumber: "1272401058", year: 2026, month: 6, unitPrice: 10,
+    seikyuYear: 2026, seikyuMonth: 7,
+  });
+  const lines = built.content.split(/\r?\n/).filter((l) => l.length > 0);
+  const col = (l: string, i: number) => (l.split(",")[i] ?? "").replace(/"/g, "").trim();
+  // 7131 の 4 列目: 01 = 明細ヘッダ / 02 = 明細行 (bath-sample-check.mts と同じ読み方)
+  const meisai = lines.filter((l) => col(l, 2) === "7131" && col(l, 3) === "02");
+  // ★ 長さの検査を先に置く (空配列に every/some は無意味 — 規律 2章⑪)
+  check("明細行が 1 行以上ある", meisai.length > 0, true);
+  const detailCodes = [...new Set((r.rows[0]?.details ?? []).map((x) => x.service_code))];
+  check("集計の明細が 4 種 (全身浴/初回/認知Ⅱ/中山間)", detailCodes.length, 4);
+  // 伝送の明細行はサービスコードを「種類2桁 + 項目4桁」に分けて持つ
+  // (memory feedback_... 2章⑩: 6桁の連番で grep すると別のものに当たる)
+  // ⚠ 先頭2列 (種別・連番) があるので 項7/項8 は col 8/9。
+  //   最初 col 6+7 で組んで "001210120000000001" (保険者+被保番) が出た。
+  //   ★ 値の桁数・書式が想定と違ったら、まず自分のオフセットを疑う (規律 2章)
+  const codesInDensou = new Set(meisai.map((l) => col(l, 8) + col(l, 9)));
+  console.log(`     集計の明細 ${detailCodes.join("/")} → 伝送 ${[...codesInDensou].join("/")}`);
+  for (const c of ["121111", "124113", "126134", "128110"]) {
+    check(`★ ${c} が明細書 (7131-02) に出る`, codesInDensou.has(c), true);
+  }
 }
 
 console.log(`\n=== 結果: PASS ${pass} / FAIL ${fail} ===`);
