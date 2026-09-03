@@ -22,7 +22,6 @@ export type AssessmentContextUser = {
   name: string;
   gender: string | null;
   birth_date: string | null;
-  notes: string | null;
 };
 
 export type AssessmentContextCert = {
@@ -67,7 +66,10 @@ export async function fetchAssessmentContext(
   const [userRes, certRes, assessRes, adlRes, historyRes, familyRes] = await Promise.all([
     supabase
       .from("clients")
-      .select("id, name, gender, birth_date, notes")
+      // ⚠ `clients` に `notes` 列は **無い** (2026-09-03 実測)。
+      //   書いていたため 42703 で **利用者情報が丸ごと null** になり、
+      //   AI に渡すアセスメント文脈から氏名・性別・生年月日まで落ちていた。
+      .select("id, name, gender, birth_date")
       .eq("id", userId)
       .maybeSingle(),
     supabase
@@ -295,7 +297,9 @@ export function buildAiUserInfo(
     medicalHistory: histStr,
     adlSummary,
     familySituation: famStr,
-    notes: user?.notes ?? "",
+    // ⚠ `clients` に `notes` 列は無いので常に空。
+    //   利用者の特記は アセスメント側 (assessmentSummary) に入っている。
+    notes: "",
     assessmentSummary,
     hasAssessment: !!assessment,
   };

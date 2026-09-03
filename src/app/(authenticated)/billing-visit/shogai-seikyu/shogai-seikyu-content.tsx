@@ -2618,15 +2618,20 @@ function JogenKanriSelfSection({
           .order("name"),
         supabase
           .from("kaigo_service_providers")
-          .select("provider_number, name")
-          .order("name"),
+          // ⚠ 列名は `provider_name`。`name` と書いていて 42703 になり、
+          //   `providers.data ?? []` で **他社事業所の候補が 1 件も出なかった**
+          //   (508 件が隠れていた。2026-09-03 是正)。
+          .select("provider_number, provider_name")
+          .order("provider_name"),
       ]);
       const opts: KanriOfficeOption[] = [];
       for (const o of (own.data ?? []) as { business_number: string | null; name: string }[]) {
         if (o.name) opts.push({ number: o.business_number ?? "", name: o.name });
       }
-      for (const p of (providers.data ?? []) as { provider_number: string | null; name: string }[]) {
-        if (p.name) opts.push({ number: p.provider_number ?? "", name: p.name });
+      // ★ error を握りつぶさない (握りつぶしていたのがこの不具合の原因)
+      if (providers.error) console.error("kaigo_service_providers fetch failed:", providers.error.message);
+      for (const p of (providers.data ?? []) as { provider_number: string | null; provider_name: string }[]) {
+        if (p.provider_name) opts.push({ number: p.provider_number ?? "", name: p.provider_name });
       }
       kanriOfficeOptionsCache = opts;
       if (!cancelled) setOfficeOptions(opts);
