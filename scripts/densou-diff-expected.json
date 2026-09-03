@@ -1,0 +1,68 @@
+{
+  "_readme": [
+    "伝送突合 (npm run check:densou-diff) の基準値。",
+    "",
+    "■ 更新のしかた",
+    "  npm run check:densou-diff -- --update   … 実測値で書き直す。中身を読んでから commit する。",
+    "",
+    "■ 指紋は何か",
+    "  突合の「材料」= 当方とほのぼのの行数。金額ではなく材料を見る。",
+    "  指紋 一致 + 結果 悪化 → ★ 計算が変わった = 回帰。FAIL。黙らせないこと",
+    "  指紋 不一致           → データが変わった = --update でよい",
+    "",
+    "■ person と group の違い (VERIFICATION_RULES 3-8)",
+    "  person 人単位。項目を抜き出して比べる緩い層。到達点として引用されてきたのはこちら",
+    "  group  全項目。行単位。★ 公費欄・要介護度・認定有効期間・担当居宅事業所番号まで見る",
+    "  両方を記録するのは、片方だけ良くなって片方が悪化するのを見逃さないため。",
+    "",
+    "■ 現在の差の中身 (2026-09-03 時点。回帰ではなく既知)",
+    "  ・担当居宅介護支援事業所番号が未登録 (check:densou が報告している穴)",
+    "  ・負担割合と給付率が矛盾する認定 36件 (DECISIONS_PENDING B-1u)"
+  ],
+  "results": [
+    {
+      "office": "おゆみ野",
+      "officeId": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+      "month": "2026-06",
+      "fingerprint": {
+        "newRows": 475,
+        "honoRows": 487
+      },
+      "person": {
+        "match": 107,
+        "mismatch": 1,
+        "onlyNew": 0,
+        "onlyHono": 3,
+        "total": 111
+      },
+      "group": {
+        "newGroups": 326,
+        "honoGroups": 335,
+        "match": 322,
+        "diff": 13
+      }
+    },
+    {
+      "office": "高品",
+      "officeId": "a707b5a2-b21b-4c4e-8dac-298191e90b61",
+      "month": "2026-06",
+      "fingerprint": {
+        "newRows": 352,
+        "honoRows": 356
+      },
+      "person": {
+        "match": 77,
+        "mismatch": 2,
+        "onlyNew": 0,
+        "onlyHono": 1,
+        "total": 80
+      },
+      "group": {
+        "newGroups": 239,
+        "honoGroups": 242,
+        "match": 219,
+        "diff": 23
+      }
+    }
+  ]
+}

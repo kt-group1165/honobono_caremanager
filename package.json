@@ -20,7 +20,8 @@
     "check:sougou-shoguu": "tsx scripts/sougou-shoguu-verify.mts",
     "check:teigen": "tsx scripts/kyotaku-teigen-verify.mts",
     "check:shogai-jogen": "tsx scripts/shogai-jogen-verify.mts",
-    "check:tokutei": "tsx scripts/tokutei-kassan-verify.mts"
+    "check:tokutei": "tsx scripts/tokutei-kassan-verify.mts",
+    "check:densou-diff": "tsx scripts/densou-diff-check.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",

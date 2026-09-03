@@ -309,6 +309,35 @@ async function main() {
   if (ldiff.length > 120) console.log(`  … 他 ${ldiff.length - 120} 行`);
   if (ldiff.length === 0) console.log("✅ 全項目一致");
 
+  // ── DIFF_JSON=<path> を渡すと、突合結果を機械可読で書き出す (既存の出力は変えない) ──
+  //
+  // なぜ要るか: この突合には基準値が無く、「差が既知のものか、今回のコード変更で
+  // 壊したのか」を誰も判定できなかった。smoke と同じ形 (入力の指紋 + 結果) で残す。
+  //   指紋 一致 + 結果 悪化 → ★ 回帰。FAIL させる
+  //   指紋 不一致           → データが変わった。基準値を更新してよい
+  if (process.env.DIFF_JSON) {
+    writeFileSync(
+      process.env.DIFF_JSON,
+      JSON.stringify(
+        {
+          office: AREA_DIR,
+          officeId: OFFICE_ID,
+          month: TARGET_MONTH,
+          // 指紋 = 突合の「材料」。金額ではなく行数を見る
+          fingerprint: { newRows: nw.rows.length, honoRows: hb.rows.length },
+          // 人単位 (項目を抜き出して比べる緩い層)
+          person: { match, mismatch: mism.length, onlyNew: onlyNew.length, onlyHono: onlyHb.length, total: allIns.length },
+          // 全項目 (行単位で比べる厳しい層)。★ 到達点を引用するならこちら (VERIFICATION_RULES 3-8)
+          group: { newGroups: NG.size, honoGroups: HG.size, match: lmatch, diff: ldiffHeads },
+        },
+        null,
+        2,
+      ) + "\n",
+      "utf8",
+    );
+    console.log(`\nDIFF_JSON → ${process.env.DIFF_JSON}`);
+  }
+
   console.log("\n########## 突合レポート end ##########");
 }
 main().catch((e) => { console.error(e); process.exit(1); });
