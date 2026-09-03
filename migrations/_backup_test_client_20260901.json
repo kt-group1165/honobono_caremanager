@@ -1,0 +1,1126 @@
+{
+  "client": [
+    {
+      "id": "ca9bfe78-87bc-4239-8004-0cfdef0e6180",
+      "user_number": "1",
+      "name": "test",
+      "furigana": "テスト",
+      "address": "富津市亀沢227番地1",
+      "postal_code": null,
+      "phone": null,
+      "mobile": null,
+      "benefit_rate": null,
+      "care_level": null,
+      "care_manager_org": null,
+      "care_manager": null,
+      "certification_end_date": null,
+      "created_at": "2026-05-03T13:10:05.260496+00:00",
+      "updated_at": "2026-07-16T03:59:39.211348+00:00",
+      "tenant_id": "kt-group",
+      "gender": null,
+      "office_id": "1bfc0d57-9ee0-4ae2-baa5-80edb776290a",
+      "insured_number": null,
+      "birth_date": null,
+      "certification_start_date": null,
+      "insurer_number": null,
+      "copay_rate": null,
+      "public_expense": null,
+      "is_facility": false,
+      "is_provisional": false,
+      "deleted_at": null,
+      "referrer_org": null,
+      "care_office_id": null,
+      "care_manager_id": null,
+      "blood_type": null,
+      "status": "active",
+      "emergency_contact_name": null,
+      "emergency_contact_phone": null,
+      "admission_date": null,
+      "discharge_date": null,
+      "email": null,
+      "bank_name": null,
+      "bank_branch": null,
+      "bank_account_type": null,
+      "bank_account_number": null,
+      "bank_account_holder": null,
+      "jusho_tokurei": false,
+      "jusho_tokurei_insurer_number": null,
+      "internal_number": 11043,
+      "deleted_by": null,
+      "delete_reason": null
+    }
+  ],
+  "assessments": [
+    {
+      "id": "866b83a1-b934-4376-aabd-24f5a98e83b8",
+      "user_id": "ca9bfe78-87bc-4239-8004-0cfdef0e6180",
+      "assessment_date": "2026-04-30",
+      "assessor_name": "山田 介護支援専門員",
+      "family_situation": null,
+      "informal_support": null,
+      "current_services": null,
+      "housing_type": null,
+      "housing_situation": null,
+      "housing_issues": null,
+      "health_condition": null,
+      "medical_visits": null,
+      "medications": null,
+      "mobility_status": null,
+      "mobility_notes": null,
+      "eating_status": null,
+      "eating_notes": null,
+      "toileting_status": null,
+      "toileting_notes": null,
+      "bathing_status": null,
+      "bathing_notes": null,
+      "dressing_status": null,
+      "dressing_notes": null,
+      "grooming_status": null,
+      "grooming_notes": null,
+      "communication_status": null,
+      "communication_notes": null,
+      "cognition_status": null,
+      "cognition_notes": null,
+      "cooking_status": null,
+      "cleaning_status": null,
+      "laundry_status": null,
+      "shopping_status": null,
+      "money_management_status": null,
+      "user_request": null,
+      "family_request": null,
+      "overall_summary": null,
+      "issues": null,
+      "daily_schedule": null,
+      "status": "completed",
+      "created_at": "2026-05-19T06:30:47.271428+00:00",
+      "updated_at": "2026-05-20T08:58:42.210755+00:00",
+      "certification_id": null,
+      "form_data": {
+        "health": {
+          "teeth": {
+            "status": [
+              "部分入れ歯 (上下)"
+            ]
+          },
+          "height": "152",
+          "weight": "48",
+          "pharmacy": {
+            "has": "有",
+            "tel": "0436-14-0000",
+            "name": "○○薬局"
+          },
+          "special_notes": "アレルギー: 鯖。常用薬: 降圧剤、糖尿病薬、骨粗鬆症薬。",
+          "medical_visits": [
+            {
+              "tel": "0436-11-0000",
+              "notes": "毎月第2火曜",
+              "doctor": "佐藤医師",
+              "facility": "市原内科クリニック",
+              "department": "内科",
+              "onset_date": "2010-04-01",
+              "visit_type": "通院",
+              "disease_name": "高血圧症",
+              "frequency_type": "定期",
+              "frequency_unit": "月",
+              "has_medication": "有",
+              "frequency_count": "1"
+            },
+            {
+              "tel": "0436-12-0000",
+              "notes": "ヒアルロン酸注射 (両膝)",
+              "doctor": "鈴木医師",
+              "facility": "市原整形外科",
+              "department": "整形外科",
+              "onset_date": "2018-06-01",
+              "visit_type": "通院",
+              "disease_name": "変形性膝関節症",
+              "frequency_type": "定期",
+              "frequency_unit": "月",
+              "has_medication": "有",
+              "frequency_count": "1"
+            },
+            {
+              "tel": "0436-11-0000",
+              "notes": "HbA1c 6.8% (安定)",
+              "doctor": "佐藤医師",
+              "facility": "市原内科クリニック",
+              "department": "内科",
+              "onset_date": "2021-03-01",
+              "visit_type": "通院",
+              "disease_name": "糖尿病",
+              "frequency_type": "定期",
+              "frequency_unit": "月",
+              "has_medication": "有",
+              "frequency_count": "1"
+            },
+            {
+              "tel": "0436-13-0000",
+              "notes": "経過良好",
+              "doctor": "田中医師",
+              "facility": "市原眼科",
+              "department": "眼科",
+              "onset_date": "2023-09-01",
+              "visit_type": "通院",
+              "disease_name": "白内障 (術後経過観察)",
+              "frequency_type": "定期",
+              "frequency_unit": "月",
+              "has_medication": "無",
+              "frequency_count": "1"
+            }
+          ],
+          "medical_history": "高血圧症 (60代より)、変形性膝関節症 (75歳〜)、軽度糖尿病 (78歳〜)、白内障手術 (右眼・80歳)。",
+          "emergency_hospital": {
+            "has": "有",
+            "tel": "0436-22-0000",
+            "facility": "市原中央病院"
+          },
+          "life_considerations": "減塩食。糖質制限 (1日 1400kcal 目安)。水分は1日 1.2L 以上。",
+          "home_visit_available": {
+            "has": "有",
+            "tel": "0436-11-0000",
+            "facility": "市原内科クリニック"
+          },
+          "disability_location_notes": "両膝に軽度の屈曲制限あり。"
+        },
+        "social": {
+          "notes": "外出機会が減りつつある。デイサービスでの社会的交流を継続したい。",
+          "money_shopping": {
+            "調理": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": true,
+              "service_exec": false
+            },
+            "買い物": {
+              "wish": true,
+              "needs_plan": true,
+              "family_exec": true,
+              "service_exec": true
+            },
+            "金銭管理": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": false,
+              "service_exec": false
+            },
+            "準備・後始末": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": false,
+              "service_exec": false
+            }
+          },
+          "phone_activity": {
+            "安否確認": {
+              "wish": true,
+              "needs_plan": true,
+              "family_exec": true,
+              "service_exec": true
+            },
+            "話し相手": {
+              "wish": true,
+              "needs_plan": false,
+              "family_exec": true,
+              "service_exec": true
+            },
+            "代読・代筆": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": true,
+              "service_exec": false
+            },
+            "余暇活動支援": {
+              "wish": true,
+              "needs_plan": true,
+              "family_exec": false,
+              "service_exec": true
+            },
+            "家族連絡の確保": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": false,
+              "service_exec": false
+            },
+            "移送・外出介助": {
+              "wish": true,
+              "needs_plan": true,
+              "family_exec": true,
+              "service_exec": true
+            },
+            "各種書類作成代行": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": true,
+              "service_exec": false
+            },
+            "社会活動への支援": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": false,
+              "service_exec": false
+            },
+            "定期的な相談・助言": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": true,
+              "service_exec": false
+            },
+            "緊急連絡手段の確保": {
+              "wish": true,
+              "needs_plan": true,
+              "family_exec": false,
+              "service_exec": false
+            }
+          },
+          "social_activity": {
+            "friends": {
+              "has": "あり",
+              "note": "昔の青果店仲間と電話で月数回。"
+            },
+            "neighborhood": {
+              "has": "あり",
+              "note": "近隣の鈴木さんと交流。挨拶程度の付合い数名。"
+            },
+            "family_relatives": {
+              "has": "あり",
+              "note": "週末家族訪問。月1で孫が来訪。"
+            }
+          },
+          "emergency_method": "緊急通報装置 (ボタン式)、長男携帯番号を冷蔵庫に掲示。",
+          "certification_items": {
+            "5-1": "1",
+            "5-2": "1",
+            "5-3": "1",
+            "5-4": "1"
+          }
+        },
+        "housing": {
+          "type": "1戸建て",
+          "notes": "玄関段差にスロープ設置を検討中。",
+          "tenure": "所有",
+          "toilet": {
+            "type": [
+              "洋式",
+              "ウォシュレット"
+            ],
+            "steps": "なし",
+            "handrail": "あり",
+            "type_other": ""
+          },
+          "bathroom": {
+            "steps": "あり",
+            "handrail": "あり",
+            "availability": "自宅にあり"
+          },
+          "mobility": {
+            "indoor": {
+              "other": "家具を支えに移動",
+              "devices": [
+                "伝い歩き"
+              ],
+              "device_use": "使用している"
+            },
+            "outdoor": {
+              "other": "",
+              "devices": [
+                "歩行器"
+              ],
+              "device_use": "使用している"
+            }
+          },
+          "equipment": {
+            "cooking": "IH",
+            "heating_other": "",
+            "heating_device": [
+              "エアコン",
+              "電気カーペット"
+            ]
+          },
+          "living_room": {
+            "floor": [
+              "畳"
+            ],
+            "bed_sub": [
+              "電動リクライニング"
+            ],
+            "cooling": "あり",
+            "heating": "あり",
+            "bed_type": [
+              "介護用ベッド"
+            ],
+            "elevator": "無",
+            "sunlight": "良",
+            "bed_other": "",
+            "floor_other": "",
+            "has_private": "あり"
+          },
+          "layout_notes": "築40年木造平屋。玄関から居室まで段差3箇所あり (5cm程度)。手すりは廊下のみ設置済。",
+          "tenure_other": ""
+        },
+        "summary": {
+          "notes": "ADL は概ね自立しているが、入浴・更衣・服薬に部分介助が必要。家族の協力体制は良好で、訪問介護 + 通所介護 + 居宅療養管理指導の組合せで在宅生活継続が可能。短期目標 (3ヶ月) は転倒予防と服薬の継続。長期目標 (1年) は現在の自立度の維持。",
+          "disaster_response": {
+            "notes": "災害時の一次避難先は市原市姉崎公民館。長男が迎えに行く。常用薬は1週間分を非常持ち出し袋に常備済。",
+            "needed": "有",
+            "contact": {
+              "fax": "",
+              "tel": "090-0000-0000",
+              "name": "テスト 太郎",
+              "email": "taro@example.com",
+              "relationship": "長男"
+            },
+            "individual_plan": "策定中"
+          },
+          "rights_protection": {
+            "notes": "判断能力は現状問題ないが、将来的に成年後見制度の情報提供を行う予定。",
+            "needed": "有"
+          }
+        },
+        "face_sheet": {
+          "consultant": {
+            "age": "52",
+            "tel": "043-000-0000",
+            "name": "テスト 花子",
+            "gender": "女",
+            "mobile": "090-1111-1111",
+            "address": "千葉県千葉市中央区中央2-2-2",
+            "relationship": "長女"
+          },
+          "life_history": "市原市で生まれ育つ。20歳で結婚し3人の子を育てる。長年自営業 (青果店) を営み、65歳で引退。趣味は園芸と将棋。",
+          "referral_route": "市役所介護保険課からの紹介",
+          "consultation_date": "2026-04-30",
+          "consultation_type": "訪問",
+          "emergency_contact": {
+            "age": "55",
+            "tel": "0436-00-0000",
+            "name": "テスト 太郎",
+            "gender": "男",
+            "mobile": "090-0000-0000",
+            "address": "千葉県市原市姉崎海岸1-1-1",
+            "relationship": "長男"
+          },
+          "certification_date": "2026-04-30",
+          "first_receptionist": "山田 介護支援専門員",
+          "certification_level": "申請中",
+          "certification_status": "済",
+          "high_cost_care_stage": "第2段階",
+          "welfare_service_cert": "無",
+          "first_assessment_date": "2026-04-30",
+          "insurance_copay_ratio": "1割",
+          "certification_expected": "",
+          "mental_disability_cert": {
+            "has": false,
+            "note": "",
+            "grade": "",
+            "issue_date": ""
+          },
+          "consultation_type_other": "",
+          "daily_life_independence": {
+            "physical": "A2",
+            "cognitive": "Ⅰ",
+            "physical_judge_date": "2026-04-30",
+            "cognitive_judge_date": "2026-04-30",
+            "physical_judge_organization": "市原市介護認定審査会",
+            "cognitive_judge_organization": "市原市介護認定審査会"
+          },
+          "disability_support_level": "",
+          "physical_disability_cert": {
+            "has": false,
+            "note": "",
+            "type": "",
+            "grade": "",
+            "issue_date": ""
+          },
+          "consultation_content_user": "最近、足腰が弱くなり一人での入浴が不安。週に何度かデイサービスに通いたい。",
+          "self_support_medical_cert": "無",
+          "consultation_content_family": "服薬の飲み忘れが時々あるので、声かけをしてもらえる訪問サービスを希望。",
+          "elderly_medical_copay_ratio": "1割",
+          "intellectual_disability_cert": {
+            "has": false,
+            "note": "",
+            "level": "",
+            "issue_date": ""
+          },
+          "plan_request_submission_date": "2026-04-30"
+        },
+        "basic_motion": {
+          "bathing": {
+            "洗身介助": {
+              "wish": true,
+              "needs_plan": true,
+              "family_exec": false,
+              "service_exec": true
+            },
+            "洗髪介助": {
+              "wish": true,
+              "needs_plan": true,
+              "family_exec": false,
+              "service_exec": true
+            },
+            "清拭・部分浴": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": false,
+              "service_exec": false
+            },
+            "準備・後始末": {
+              "wish": true,
+              "needs_plan": true,
+              "family_exec": false,
+              "service_exec": true
+            },
+            "移乗移動介助": {
+              "wish": true,
+              "needs_plan": true,
+              "family_exec": false,
+              "service_exec": true
+            },
+            "褥瘡・皮膚疾患の対応": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": false,
+              "service_exec": false
+            }
+          },
+          "basic_notes": "起居時に膝痛あり。ベッド柵を活用して自分で起き上がれるが時間がかかる。",
+          "rehab_needed": "あり",
+          "bathing_notes": "週2回デイサービスで入浴。家庭浴は転倒リスク高く中止中。",
+          "body_position": {
+            "起居介助": {
+              "wish": true,
+              "needs_plan": true,
+              "family_exec": false,
+              "service_exec": true
+            },
+            "体位変換介助": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": false,
+              "service_exec": false
+            }
+          },
+          "communication": {
+            "phone": "あり",
+            "visual_aid": [
+              "眼鏡"
+            ],
+            "comm_device": "なし",
+            "comm_device_note": "",
+            "language_disorder": "なし",
+            "language_disorder_note": ""
+          },
+          "bathing_wash_plan": [
+            "介助"
+          ],
+          "certification_items": {
+            "1-1": "1",
+            "1-2": "2",
+            "1-3": "1",
+            "1-4": "1",
+            "1-5": "1"
+          },
+          "communication_notes": "聴力は加齢性難聴あるが日常会話は問題なし。",
+          "bathing_wash_current": [
+            "介助"
+          ],
+          "bathing_transfer_plan": [
+            "シャワーチェア",
+            "手すり"
+          ],
+          "bathing_transfer_current": [
+            "手すり"
+          ]
+        },
+        "assessor_name": "山田 介護支援専門員",
+        "life_function": {
+          "meals": {
+            "摂取介助": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": false,
+              "service_exec": false
+            },
+            "移乗介助": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": false,
+              "service_exec": false
+            },
+            "移動介助": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": false,
+              "service_exec": false
+            }
+          },
+          "outing": {
+            "移送・外出介助": {
+              "wish": true,
+              "needs_plan": true,
+              "family_exec": true,
+              "service_exec": true
+            }
+          },
+          "main_food": {
+            "plan": [
+              "普通食"
+            ],
+            "current": [
+              "普通食"
+            ],
+            "plan_other": "",
+            "current_other": ""
+          },
+          "side_food": {
+            "plan": [
+              "普通食"
+            ],
+            "current": [
+              "普通食"
+            ],
+            "plan_other": "",
+            "current_other": ""
+          },
+          "toileting": {
+            "排便介助": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": false,
+              "service_exec": false
+            },
+            "排尿介助": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": false,
+              "service_exec": false
+            },
+            "整容介助": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": false,
+              "service_exec": false
+            },
+            "更衣介助": {
+              "wish": true,
+              "needs_plan": true,
+              "family_exec": false,
+              "service_exec": true
+            },
+            "洗面介助": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": false,
+              "service_exec": false
+            },
+            "口腔清潔介助": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": false,
+              "service_exec": false
+            },
+            "準備・後始末": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": false,
+              "service_exec": false
+            },
+            "移乗移動介助": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": false,
+              "service_exec": false
+            }
+          },
+          "meal_notes": "配食サービスを週5回利用。土日は長男夫婦が用意。",
+          "outing_notes": "通院は長男が送迎。デイサービスの送迎は事業所が対応。",
+          "toilet_notes": "夜間 2-3 回 起きる。ポータブルトイレ使用。",
+          "meal_situation": {
+            "place": [
+              "居間"
+            ],
+            "diet_type": {
+              "other": {
+                "on": false,
+                "note": ""
+              },
+              "general": false,
+              "diabetic": {
+                "on": true,
+                "kcal": "1400"
+              },
+              "anti_ulcer": false,
+              "hypertension": {
+                "on": true,
+                "grams": "6"
+              }
+            },
+            "place_other": "",
+            "chewing_issues": [],
+            "chewing_status": "問題なし",
+            "steps_to_dining": "なし"
+          },
+          "urination_plan": [
+            "自立"
+          ],
+          "defecation_plan": [
+            "自立"
+          ],
+          "toilet_awareness": {
+            "urination": "ある",
+            "defecation": "ある"
+          },
+          "urination_current": [
+            "自立"
+          ],
+          "defecation_current": [
+            "自立"
+          ],
+          "certification_items": {
+            "2-1": "1",
+            "2-2": "1",
+            "2-3": "2",
+            "2-4": "1"
+          },
+          "food_intake_support": {
+            "plan": [],
+            "current": []
+          }
+        },
+        "service_usage": {
+          "pension": {
+            "elderly": {
+              "note": "国民年金 + 厚生年金",
+              "checked": true
+            },
+            "survivor": {
+              "note": "夫の遺族年金",
+              "checked": true
+            },
+            "disability": {
+              "note": "",
+              "checked": false
+            }
+          },
+          "as_of_date": "2026-04-30",
+          "worker_comp": {
+            "note": "",
+            "checked": false
+          },
+          "guardian_name": "",
+          "home_services": {
+            "訪問介護": {
+              "unit": "週",
+              "used": true,
+              "count": "3"
+            },
+            "訪問看護": {
+              "unit": "",
+              "used": false,
+              "count": ""
+            },
+            "通所介護": {
+              "unit": "週",
+              "used": true,
+              "count": "2"
+            },
+            "福祉用具貸与": {
+              "unit": "月",
+              "used": true,
+              "count": "1"
+            },
+            "居宅療養管理指導": {
+              "unit": "月",
+              "used": true,
+              "count": "1"
+            },
+            "短期入所生活介護": {
+              "unit": "",
+              "used": false,
+              "count": ""
+            }
+          },
+          "other_systems": [
+            {
+              "note": "高額療養費制度 (申請済)",
+              "checked": true
+            },
+            {
+              "note": "",
+              "checked": false
+            },
+            {
+              "note": "",
+              "checked": false
+            }
+          ],
+          "other_services": {
+            "緊急通報装置": {
+              "used": true,
+              "count": "1"
+            },
+            "配食サービス": {
+              "used": true,
+              "count": "5"
+            }
+          },
+          "health_insurance": {
+            "国民健康保険": false,
+            "後期高齢者医療": true
+          },
+          "recent_admission": {
+            "tel": "0436-22-0000",
+            "type": "一般病棟",
+            "address": "千葉県市原市市原0-0-0",
+            "postal_code": "290-0000",
+            "facility_name": "市原中央病院"
+          },
+          "welfare_programs": {
+            "生活保護": false,
+            "高齢者福祉手当": true
+          },
+          "adult_guardianship": ""
+        },
+        "daily_schedule": {
+          "entries": [
+            {
+              "half": 0,
+              "hour": 6,
+              "life_rhythm": "起床",
+              "needs_support": "",
+              "family_support": "",
+              "service_support": "",
+              "user_activities": "起床・洗面"
+            },
+            {
+              "half": 0,
+              "hour": 7,
+              "life_rhythm": "朝食",
+              "needs_support": "服薬声かけ",
+              "family_support": "",
+              "service_support": "",
+              "user_activities": "朝食 (配食)"
+            },
+            {
+              "half": 0,
+              "hour": 8,
+              "life_rhythm": "服薬・新聞",
+              "needs_support": "",
+              "family_support": "",
+              "service_support": "",
+              "user_activities": "降圧剤・糖尿病薬服薬"
+            },
+            {
+              "half": 0,
+              "hour": 9,
+              "life_rhythm": "活動 (デイ送迎)",
+              "needs_support": "",
+              "family_support": "",
+              "service_support": "デイサービス送迎",
+              "user_activities": "火・木はデイサービス出発"
+            },
+            {
+              "half": 0,
+              "hour": 10,
+              "life_rhythm": "訪問介護 (月・水・金)",
+              "needs_support": "服薬管理・買い物",
+              "family_support": "",
+              "service_support": "訪問介護",
+              "user_activities": "服薬声かけ・清掃・買い物"
+            },
+            {
+              "half": 0,
+              "hour": 12,
+              "life_rhythm": "昼食",
+              "needs_support": "",
+              "family_support": "",
+              "service_support": "",
+              "user_activities": "昼食 (配食)"
+            },
+            {
+              "half": 0,
+              "hour": 13,
+              "life_rhythm": "休息",
+              "needs_support": "",
+              "family_support": "",
+              "service_support": "",
+              "user_activities": "昼寝 1時間"
+            },
+            {
+              "half": 0,
+              "hour": 14,
+              "life_rhythm": "趣味",
+              "needs_support": "",
+              "family_support": "",
+              "service_support": "",
+              "user_activities": "テレビ・園芸 (天気の良い日)"
+            },
+            {
+              "half": 0,
+              "hour": 16,
+              "life_rhythm": "デイ帰宅",
+              "needs_support": "",
+              "family_support": "",
+              "service_support": "デイ送迎",
+              "user_activities": "火・木デイから帰宅"
+            },
+            {
+              "half": 0,
+              "hour": 18,
+              "life_rhythm": "夕食",
+              "needs_support": "",
+              "family_support": "土日は長男夫婦が用意",
+              "service_support": "",
+              "user_activities": "夕食 (土日は家族と)"
+            },
+            {
+              "half": 0,
+              "hour": 19,
+              "life_rhythm": "服薬",
+              "needs_support": "",
+              "family_support": "",
+              "service_support": "",
+              "user_activities": "降圧剤服薬"
+            },
+            {
+              "half": 0,
+              "hour": 20,
+              "life_rhythm": "入浴 (デイ未利用日は清拭)",
+              "needs_support": "",
+              "family_support": "",
+              "service_support": "",
+              "user_activities": "テレビ視聴"
+            },
+            {
+              "half": 0,
+              "hour": 21,
+              "life_rhythm": "就寝準備",
+              "needs_support": "更衣声かけ",
+              "family_support": "",
+              "service_support": "",
+              "user_activities": "歯磨き・着替え"
+            },
+            {
+              "half": 0,
+              "hour": 22,
+              "life_rhythm": "就寝",
+              "needs_support": "",
+              "family_support": "",
+              "service_support": "",
+              "user_activities": "就寝"
+            },
+            {
+              "half": 0,
+              "hour": 1,
+              "life_rhythm": "夜間トイレ",
+              "needs_support": "転倒注意",
+              "family_support": "",
+              "service_support": "",
+              "user_activities": "ポータブルトイレ使用"
+            },
+            {
+              "half": 0,
+              "hour": 4,
+              "life_rhythm": "夜間トイレ",
+              "needs_support": "転倒注意",
+              "family_support": "",
+              "service_support": "",
+              "user_activities": "ポータブルトイレ使用"
+            }
+          ]
+        },
+        "doctor_opinion": {
+          "movement": {
+            "walk_aid": [
+              "歩行器",
+              "T字杖"
+            ],
+            "wheelchair": "用いていない",
+            "outdoor_walk": "介助があればしている"
+          },
+          "infection": {
+            "note": "",
+            "status": "無"
+          },
+          "nutrition": {
+            "notes": "BMI 20.8 (適正)。低栄養の兆候なし。",
+            "eating": "自立ないし何とか自分で食べられる",
+            "current_status": "良好"
+          },
+          "current_risks": {
+            "items": [
+              "転倒",
+              "脱水",
+              "低血糖"
+            ],
+            "other": "",
+            "response": "歩行器使用の徹底、夏期の水分摂取声かけ、糖尿病薬服用後の食事タイミング確認。"
+          },
+          "no_special_item": false,
+          "medical_necessity": {
+            "服薬管理": {
+              "high": true,
+              "checked": true
+            },
+            "血圧の管理": {
+              "high": false,
+              "checked": true
+            },
+            "血糖の管理": {
+              "high": false,
+              "checked": true
+            }
+          },
+          "observation_points": {
+            "膝関節痛": {
+              "note": "雨天時に痛み増強。",
+              "checked": true
+            },
+            "血圧変動": {
+              "note": "朝の降圧剤後に低血圧傾向。",
+              "checked": true
+            }
+          },
+          "improvement_outlook": "期待できる",
+          "no_special_observation": false,
+          "medical_necessity_other": ""
+        },
+        "family_support": {
+          "family_members": [
+            {
+              "name": "テスト 太郎",
+              "notes": "車で30分。週末ごとに買い物・通院同行。",
+              "living": "別",
+              "employment": "有",
+              "relationship": "長男",
+              "health_status": "健康",
+              "relationship_type": "長男",
+              "parent_member_index": -1,
+              "is_primary_caregiver": true
+            },
+            {
+              "name": "テスト 花子",
+              "notes": "電話で週3回安否確認。月1回訪問。",
+              "living": "別",
+              "employment": "有",
+              "relationship": "長女",
+              "health_status": "健康",
+              "relationship_type": "長女",
+              "parent_member_index": -1,
+              "is_primary_caregiver": false
+            }
+          ],
+          "needed_support": {
+            "notes": "鈴木さんに合鍵を預けている。長男の携帯番号を冷蔵庫に掲示済。",
+            "content": "緊急時対応 (転倒・体調急変)",
+            "provider": "長男・近隣鈴木さん"
+          },
+          "informal_support": [
+            {
+              "notes": "燃えるゴミの日のみ",
+              "content": "ゴミ出し補助",
+              "provider": "近隣住民 (鈴木さん)"
+            },
+            {
+              "notes": "本人も楽しみにしている",
+              "content": "月1回の声かけ訪問",
+              "provider": "民生委員"
+            }
+          ],
+          "family_care_situation": "長男夫婦が週末ごとに訪問。買い物・通院送迎は長男が担当。長女は電話で安否確認を週3回実施。",
+          "family_composition_diagram": "本人 (女性82歳) — 夫 (他界) ┬ 長男55歳 (別居・市原市) ┬ 孫2人\n                                          └ 長女52歳 (別居・千葉市)"
+        },
+        "medical_health": {
+          "notes": "服薬は朝・夕の2回。朝食後の降圧剤は本人忘れがちのため訪問介護員が声かけ。",
+          "treatments": {
+            "透析": false,
+            "経管栄養": false,
+            "酸素療法": false,
+            "カテーテル": false,
+            "点滴の管理": false,
+            "疼痛の看護": false,
+            "モニター測定": false,
+            "中心静脈栄養": false,
+            "ストーマの処置": false,
+            "レスピレーター": false,
+            "気管切開の処置": false,
+            "じょくそうの処置": false
+          },
+          "support_matrix": {
+            "測定・観察": {
+              "wish": true,
+              "needs_plan": true,
+              "family_exec": false,
+              "service_exec": true
+            },
+            "薬剤の使用": {
+              "wish": true,
+              "needs_plan": true,
+              "family_exec": false,
+              "service_exec": true
+            },
+            "薬剤の管理": {
+              "wish": true,
+              "needs_plan": true,
+              "family_exec": true,
+              "service_exec": true
+            },
+            "医療処置の管理": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": false,
+              "service_exec": false
+            },
+            "受診・検査介助": {
+              "wish": false,
+              "needs_plan": false,
+              "family_exec": true,
+              "service_exec": false
+            },
+            "リハビリテーション": {
+              "wish": true,
+              "needs_plan": true,
+              "family_exec": false,
+              "service_exec": true
+            }
+          },
+          "specific_contents_plan": [
+            "服薬管理",
+            "血圧・血糖測定",
+            "下肢筋力訓練"
+          ],
+          "specific_contents_current": [
+            "服薬管理",
+            "血圧測定 (デイサービスで実施)"
+          ]
+        },
+        "cognition_behavior": {
+          "notes": "認知症の進行兆候は現時点でなし。長谷川式 26点 (2026-04 実施)。",
+          "support_plan": "訪問介護員による服薬声かけ (週3回) + 居宅療養管理指導 (月1) で服薬管理体制を維持。",
+          "behavior_items": {
+            "4-1": "1",
+            "4-2": "1",
+            "4-3": "1",
+            "4-4": "1",
+            "4-5": "1"
+          },
+          "cognition_items": {
+            "3-1": "1",
+            "3-2": "1",
+            "3-3": "1",
+            "3-4": "1",
+            "3-5": "1"
+          },
+          "support_current": {
+            "family": "週末訪問時に薬の確認・冷蔵庫の食品確認",
+            "service": "訪問介護で服薬声かけ"
+          },
+          "support_wish_user": "今のところ困ったことはない。声かけがあれば安心。",
+          "family_observation": "短期記憶に時折物忘れあり (薬の飲み忘れなど)。日常生活の判断は問題なし。",
+          "support_wish_family": "服薬・食事の管理を継続してサポートしてほしい。"
+        }
+      },
+      "tenant_id": "kt-group",
+      "assessment_type": "kaigo"
+    }
+  ]
+}
