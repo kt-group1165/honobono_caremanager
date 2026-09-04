@@ -43,6 +43,14 @@ import {
 } from "../_shared/seikyu-context";
 import { useCrossOfficeSeikyu } from "../_shared/use-cross-office-seikyu";
 import { mergeSegmentRows, type UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
+import {
+  keigenActiveInMonth,
+  computeKeigenAmount,
+  computeMonthTotal,
+  computeCarry,
+  computeGrandTotal,
+  type KeigenSetting,
+} from "@/lib/riyou-seikyu-final-amount";
 import type { ShogaiSeikyuRow } from "@/lib/shogai-seikyu/aggregate";
 import { buildFbZengin, type FbTransferTarget } from "@/lib/fb-zengin";
 import {
@@ -268,29 +276,13 @@ const PRINT_DOC_LABELS: { key: PrintDocKey; label: string }[] = [
 
 // 請求個人設定 (軽減 / 医療費控除) — kaigo_riyou_settings (client_id UNIQUE)
 // ほのぼの「請求個人設定の軽減」相当
-interface RiyouSettingRow {
+// ⚠ 軽減が対象月に有効かの判定 (keigenActiveInMonth) と 軽減額の計算は
+//   src/lib/riyou-seikyu-final-amount.ts に切り出し済み (2026-09-04)。
+interface RiyouSettingRow extends KeigenSetting {
   client_id: string;
-  /** 軽減率 (% 表記。NULL = 軽減なし) */
-  keigen_rate: number | null;
-  keigen_start_date: string | null;
-  keigen_end_date: string | null;
   /** 医療費控除の対象者か */
   iryohi_taisho: boolean;
   notes: string | null;
-}
-
-// 軽減が対象月に有効か: 開始 <= 月末 かつ (終了 null or 終了 >= 月初)
-// (日付は YYYY-MM-DD の文字列比較で判定。"-31" は月末番兵として安全)
-function keigenActiveInMonth(
-  s: RiyouSettingRow | undefined,
-  monthKey: string,
-): boolean {
-  if (!s || s.keigen_rate == null || s.keigen_rate <= 0) return false;
-  const monthStart = `${monthKey}-01`;
-  const monthEnd = `${monthKey}-31`;
-  if (s.keigen_start_date && s.keigen_start_date > monthEnd) return false;
-  if (s.keigen_end_date && s.keigen_end_date < monthStart) return false;
-  return true;
 }
 
 // YYYY-MM-DD → R{Y}/{M}/{D} 表示 (order-app formatIssuedDateReiwa と同じ流儀)
@@ -489,10 +481,11 @@ export function RiyouSeikyuContent() {
   }, [loadPrevPayments]);
 
   // 繰越額 = 前月請求 − 前月入金 (正 = 未収繰越 / 負 = 過入金充当)。前月レコード無しは 0
+  // (computeCarry は riyou-seikyu-final-amount.ts の純関数)
   const carryover = useCallback(
     (userId: string) => {
       const p = prevPayments.get(userId);
-      return p ? p.billed_amount - p.paid_amount : 0;
+      return computeCarry(p?.billed_amount, p?.paid_amount);
     },
     [prevPayments],
   );
@@ -525,7 +518,7 @@ export function RiyouSeikyuContent() {
   const shogaiCarryover = useCallback(
     (userId: string) => {
       const p = prevShogaiPayments.get(userId);
-      return p ? p.billed_amount - p.paid_amount : 0;
+      return computeCarry(p?.billed_amount, p?.paid_amount);
     },
     [prevShogaiPayments],
   );
@@ -591,11 +584,11 @@ export function RiyouSeikyuContent() {
 
   // 軽減額 = round(負担額 × 軽減率 / 100)。対象月に有効な軽減のみ。
   // 対象は 法定負担 + 超過自費 (userPlusSelf) — 分離前の従来請求額を維持する
+  // (computeKeigenAmount / keigenActiveInMonth は riyou-seikyu-final-amount.ts の純関数)
   const keigenAmount = useCallback(
     (userId: string, userAmount: number) => {
       const s = settings.get(userId);
-      if (!keigenActiveInMonth(s, monthKey)) return 0;
-      return Math.round((userAmount * (s!.keigen_rate ?? 0)) / 100);
+      return computeKeigenAmount(userAmount, s?.keigen_rate ?? null, keigenActiveInMonth(s, monthKey));
     },
     [settings, monthKey],
   );
@@ -603,7 +596,7 @@ export function RiyouSeikyuContent() {
   // 行の請求額 = (法定負担 + 超過自費) − 軽減額 + 実費 (従来額と同じ)
   const rowBilled = useCallback(
     (r: UserSeikyuRow) =>
-      userPlusSelf(r) - keigenAmount(r.user_id, userPlusSelf(r)) + jippiTotal(r.user_id),
+      computeMonthTotal(userPlusSelf(r), keigenAmount(r.user_id, userPlusSelf(r)), jippiTotal(r.user_id)),
     [keigenAmount, jippiTotal],
   );
 
@@ -3221,13 +3214,13 @@ function RiyouSeikyuPrintSheet({
   const lines = splitUserAmount(row);
   const jippiSum = jippi.reduce((s, e) => s + e.amount, 0);
   // 当月請求額 = (法定負担 + 超過自費) − 軽減 + 実費
-  const monthTotal = userPlusSelf(row) - keigen + jippiSum;
   // 繰越額 = 前回請求 − 前回入金 (正 = 未収繰越 / 負 = 過入金充当)
-  const carry = prevPayment
-    ? prevPayment.billed_amount - prevPayment.paid_amount
-    : 0;
   // 今回御請求額 = 当月請求額 + 繰越額
-  const grandTotal = monthTotal + carry;
+  // (画面側 rowBilled/carryover と同じ純関数を呼ぶ。統合前に境界値12ケースで一致を確認済み
+  //  — scripts/riyou-seikyu-final-amount-diff.mts 2026-09-04)
+  const monthTotal = computeMonthTotal(userPlusSelf(row), keigen, jippiSum);
+  const carry = computeCarry(prevPayment?.billed_amount, prevPayment?.paid_amount);
+  const grandTotal = computeGrandTotal(monthTotal, carry);
 
   return (
     <div className="p-10 text-black relative" style={{ pageBreakAfter: "always" }}>
@@ -3409,10 +3402,13 @@ function RiyouSeikyuHouseholdPrintSheet({
   const issueDate = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
   const rep = rows[0]; // 代表者 = 先頭
   // 各利用者の (法定負担 + 超過自費) − 軽減 + 実費 = 明細 1 行、合計を世帯合算とする
+  // (computeMonthTotal/computeCarry/computeGrandTotal は riyou-seikyu-final-amount.ts の純関数。
+  //  画面側 rowBilled/carryover と同じ式であることを統合前に境界値12ケースで確認済み
+  //  — scripts/riyou-seikyu-final-amount-diff.mts 2026-09-04)
   const perUser = rows.map((r) => {
     const jippiSum = (jippiByUser.get(r.user_id) ?? []).reduce((s, e) => s + e.amount, 0);
     const keigen = keigenByUser.get(r.user_id) ?? 0;
-    return { row: r, jippiSum, keigen, subtotal: userPlusSelf(r) - keigen + jippiSum };
+    return { row: r, jippiSum, keigen, subtotal: computeMonthTotal(userPlusSelf(r), keigen, jippiSum) };
   });
   const monthTotal = perUser.reduce((s, u) => s + u.subtotal, 0);
   const hasKeigen = perUser.some((u) => u.keigen > 0);
@@ -3422,9 +3418,9 @@ function RiyouSeikyuHouseholdPrintSheet({
     .filter((p): p is PaymentRow => p != null);
   const prevBilled = prevList.reduce((s, p) => s + p.billed_amount, 0);
   const prevPaid = prevList.reduce((s, p) => s + p.paid_amount, 0);
-  const carry = prevBilled - prevPaid;
+  const carry = computeCarry(prevBilled, prevPaid);
   // 今回御請求額 = 当月請求額 + 繰越額
-  const grandTotal = monthTotal + carry;
+  const grandTotal = computeGrandTotal(monthTotal, carry);
   // うち医療費控除対象額 (対象者がいる場合のみ印字)
   const iryohiList = rows.filter((r) => iryohiByUser.has(r.user_id));
   const iryohiSum = iryohiList.reduce(
