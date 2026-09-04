@@ -174,8 +174,7 @@ function readDobByNumber() {
     if (!/\.csv$/i.test(p)) return;
     let text;
     try { text = new TextDecoder("shift_jis").decode(readFileSync(p)); } catch { return; }
-    const lines = text.split(/?
-/).filter((l) => l.trim());
+    const lines = text.split(/\r?\n/).filter((l) => l.trim());
     if (lines.length < 2) return;
     const unq = (v) => String(v ?? "").replace(/^"|"$/g, "").trim();
     const h = lines[0].split(",").map(unq);
