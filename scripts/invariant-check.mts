@@ -20,6 +20,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { aggregateMonthlyVisitSeikyu } from "@/lib/visit-seikyu/aggregate";
+import { aggregateMonthlyShogaiSeikyu } from "@/lib/shogai-seikyu/aggregate";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const env: Record<string, string> = {};
@@ -38,6 +39,7 @@ const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_
 const MONTHS = (process.env.MONTHS ?? "2026-06,2026-07").split(",").map((s) => s.trim());
 
 type Row = Awaited<ReturnType<typeof aggregateMonthlyVisitSeikyu>>["rows"][number];
+type SRow = Awaited<ReturnType<typeof aggregateMonthlyShogaiSeikyu>>["rows"][number];
 
 /** 破れを 1 件ずつ集める。★ 「バグ」とは書かない (不変条件が誤っている場合がある) */
 type Violation = { inv: string; office: string; month: string; user: string; detail: string };
@@ -112,6 +114,55 @@ function inv7(r: Row, ctx: { office: string; month: string }) {
     violations.push({ inv: "I7", ...ctx, user: r.user_name, detail: `コード未解決 ${miss.length} 行: ${miss.slice(0, 3).map((d) => d.service_type).join(" / ")}` });
 }
 
+/* ── 障害 (介護給付費) ───────────────────────────────────────────────── */
+
+/** S1 Σ明細 + 加算 = 総単位数 */
+function sInv1(r: SRow, ctx: { office: string; month: string }) {
+  bump("S1 Σ明細 + 加算 = 総単位数");
+  const sum = r.details.reduce((a, d) => a + (d.units ?? 0), 0) + r.addonUnits;
+  if (sum !== r.totalUnits)
+    violations.push({ inv: "S1", ...ctx, user: r.user_name, detail: `Σ明細+加算 ${sum} ≠ 総単位 ${r.totalUnits}` });
+}
+
+/** S2 総費用額 = floor(総単位 × 単価) */
+function sInv2(r: SRow, ctx: { office: string; month: string }) {
+  bump("S2 総費用額 = floor(総単位 × 単価)");
+  const expect = Math.floor((r.totalUnits * Math.round(r.unitPrice * 100)) / 100);
+  if (r.totalAmount !== expect)
+    violations.push({ inv: "S2", ...ctx, user: r.user_name, detail: `総費用 ${r.totalAmount} ≠ floor(${r.totalUnits} × ${r.unitPrice}) = ${expect}` });
+}
+
+/** S3 恒等式 総費用額 = 介護給付費 + 利用者負担 */
+function sInv3(r: SRow, ctx: { office: string; month: string }) {
+  bump("S3 恒等式 (総費用 = 給付費 + 利用者負担)");
+  if (r.benefitAmount + r.userAmount !== r.totalAmount)
+    violations.push({ inv: "S3", ...ctx, user: r.user_name, detail: `給付${r.benefitAmount}+利用者${r.userAmount} = ${r.benefitAmount + r.userAmount} ≠ 総費用 ${r.totalAmount}` });
+}
+
+/**
+ * S4 利用者負担 ≦ 負担上限月額
+ * ⚠ 上限管理が「他事業所」のときは他所で調整されるので対象外にする。
+ *   ここを見ないと「上限超え」に見える行が正常でも鳴る。
+ */
+function sInv4(r: SRow, ctx: { office: string; month: string }) {
+  if (r.self_payment_limit === null) return;
+  if (r.jogenKanriKubun === "他事業所") return;
+  bump("S4 利用者負担 ≦ 負担上限月額 (上限管理が他事業所の行は除く)");
+  if (r.userAmount > r.self_payment_limit)
+    violations.push({ inv: "S4", ...ctx, user: r.user_name, detail: `利用者負担 ${r.userAmount} > 上限 ${r.self_payment_limit} (上限管理=${r.jogenKanriKubun})` });
+}
+
+/** S5 明細・加算にサービスコードが付いている (無いと伝送に出せない) */
+function sInv5(r: SRow, ctx: { office: string; month: string }) {
+  bump("S5 障害 明細・加算にサービスコードが付いている");
+  const miss = r.details.filter((d) => !d.service_code);
+  if (miss.length)
+    violations.push({ inv: "S5", ...ctx, user: r.user_name, detail: `明細のコード未解決 ${miss.length} 行: ${miss.slice(0, 3).map((d) => d.service_type).join(" / ")}` });
+  const badAddon = r.addons.filter((a) => !/^\d{6}$/.test(a.service_code ?? ""));
+  if (badAddon.length)
+    violations.push({ inv: "S5", ...ctx, user: r.user_name, detail: `加算コードが6桁でない ${badAddon.length} 行: ${badAddon.slice(0, 3).map((a) => a.service_code).join(" / ")}` });
+}
+
 async function main() {
   const { data: offices, error } = await sb
     .from("offices")
@@ -125,6 +176,9 @@ async function main() {
   let rowCount = 0;
   let officesWithRows = 0;
   let lastRow: Row | null = null;
+  let lastShogaiRow: SRow | null = null;
+  let sougouRowCount = 0;
+  let shogaiRowCount = 0;
   for (const o of targets) {
     for (const m of MONTHS) {
       const [y, mo] = m.split("-").map(Number);
@@ -149,13 +203,35 @@ async function main() {
         if (r.details.length && r.overUnits > 0) lastRow = r;
         inv1(r, ctx); inv2(r, ctx); inv3(r, ctx); inv4(r, ctx); inv5(r, ctx); inv6(r, ctx); inv7(r, ctx);
       }
+      // 総合事業 — 行の型は介護と同じなので同じ条件を当てる
+      for (const r of res.sougouRows ?? []) {
+        rowCount++;
+        sougouRowCount++;
+        inv1(r, ctx); inv2(r, ctx); inv3(r, ctx); inv4(r, ctx); inv5(r, ctx); inv6(r, ctx); inv7(r, ctx);
+      }
+      // 障害
+      let sres;
+      try {
+        sres = await aggregateMonthlyShogaiSeikyu(sb, {
+          year: y, month: mo, officeId: o.id as string, tenantId: o.tenant_id as string,
+        });
+      } catch (e) {
+        console.log(`  ⚠ ${o.name} ${m}: 障害の集計に失敗 — ${e instanceof Error ? e.message : String(e)}`);
+        sres = null;
+      }
+      for (const r of sres?.rows ?? []) {
+        shogaiRowCount++;
+        if (r.details.length && r.addons.length) lastShogaiRow = r;
+        sInv1(r, ctx); sInv2(r, ctx); sInv3(r, ctx); sInv4(r, ctx); sInv5(r, ctx);
+      }
     }
   }
 
   // ★ 分母を必ず出す。0 行で「全部合格」を出さないため (規律 1-2)
-  console.log(`検査した行: ${rowCount} 行 / 実績のあった (事業所×月) ${officesWithRows} 組\n`);
-  if (rowCount === 0) {
-    console.log("★ FAIL 検査対象が 0 行です。合格ではありません。");
+  console.log(`検査した行: 介護+総合事業 ${rowCount} 行 (うち総合事業 ${sougouRowCount}) / 障害 ${shogaiRowCount} 行 / 実績のあった (事業所×月) ${officesWithRows} 組
+`);
+  if (rowCount === 0 || shogaiRowCount === 0) {
+    console.log(`★ FAIL 検査対象が 0 行の制度があります (介護+総合 ${rowCount} / 障害 ${shogaiRowCount})。合格ではありません。`);
     process.exit(1);
   }
   for (const [k, v] of Object.entries(checked)) console.log(`  ${k.padEnd(44)} ${v} 回`);
@@ -184,13 +260,30 @@ async function main() {
       if (violations.some((v, i) => i >= n && v.inv === tag)) fired.add(tag);
     }
     violations.length = before; // 実データの結果に影響させない
-    const missing = ["I1", "I2", "I3", "I4", "I5", "I6", "I7"].filter((t) => !fired.has(t));
+    // 障害側も同じように「わざと壊す」
+    const sProbe = lastShogaiRow;
+    if (!sProbe) throw new Error("障害の負のコントロール用の行がありません");
+    const sCases: [string, SRow][] = [
+      ["S1", { ...sProbe, totalUnits: sProbe.totalUnits + 1 }],
+      ["S2", { ...sProbe, totalAmount: sProbe.totalAmount + 1 }],
+      ["S3", { ...sProbe, userAmount: sProbe.userAmount + 1 }],
+      // ★ 上限管理が「他事業所」だと S4 は素通りするので、条件を満たす形に作り替える
+      ["S4", { ...sProbe, jogenKanriKubun: "なし", self_payment_limit: 0, userAmount: 1 }],
+      ["S5", { ...sProbe, details: [{ ...sProbe.details[0], service_code: null }] }],
+    ];
+    for (const [tag, bad] of sCases) {
+      const n = violations.length;
+      sInv1(bad, ctx); sInv2(bad, ctx); sInv3(bad, ctx); sInv4(bad, ctx); sInv5(bad, ctx);
+      if (violations.some((v, i) => i >= n && v.inv === tag)) fired.add(tag);
+    }
+    const ALL = ["I1", "I2", "I3", "I4", "I5", "I6", "I7", "S1", "S2", "S3", "S4", "S5"];
+    const missing = ALL.filter((t) => !fired.has(t));
     if (missing.length) {
       console.log(`★ FAIL 負のコントロールで鳴らなかった条件: ${missing.join(" / ")}`);
       console.log("   → その条件は ★ 効いていません。PASS を信用しないでください。");
       process.exit(1);
     }
-    console.log("負のコントロール: わざと壊すと 7 本すべてが鳴る (= 検査は効いている)");
+    console.log(`負のコントロール: わざと壊すと ${ALL.length} 本すべてが鳴る (= 検査は効いている)`);
     console.log("PASS — 破れなし");
     return;
   }
