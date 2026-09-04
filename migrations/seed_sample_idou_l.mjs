@@ -1,7 +1,7 @@
 // ============================================================================
 // 移動支援 (千葉市地域生活支援給付) サンプル投入 (担当 L / マーカー `l`)
 //
-//   SAMPLE_DATA_PROTOCOL.md に従う。対象月 2026-12 / user_number ZM### / [sample-l]
+//   SAMPLE_DATA_PROTOCOL.md に従う。対象月 2026-12 / user_number ZL### (tag l の共通空間 ZL に統一。旧 ZM は 2026-09-05 是正・未実行のため撤去不要) / [sample-l]
 //
 //   ⚠ chiiki_recipient_certs (地域生活支援の受給者証) が **本番 0 行**なので、
 //     これを作らないとコード解決がブロックされる (= fail-closed が効いている証拠)。
@@ -31,7 +31,7 @@ const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_
 const die = (msg) => { console.error(`✗ ${msg}`); process.exit(1); };
 
 async function removeAll() {
-  const { data: cl, error } = await sb.from("clients").select("id,user_number,name").like("user_number", "ZM%");
+  const { data: cl, error } = await sb.from("clients").select("id,user_number,name").like("user_number", "ZL%");
   if (error) die(`clients: ${error.message}`);
   const ids = (cl ?? []).map((c) => c.id);
   console.log(`撤去対象: ${ids.length} 名`);
@@ -53,9 +53,9 @@ async function removeAll() {
 }
 
 async function verify() {
-  const { data: cl } = await sb.from("clients").select("id").like("user_number", "ZM%");
+  const { data: cl } = await sb.from("clients").select("id").like("user_number", "ZL%");
   const ids = (cl ?? []).map((c) => c.id);
-  console.log(`\n=== 件数確認 ===\n  clients (ZM*): ${ids.length} 名`);
+  console.log(`\n=== 件数確認 ===\n  clients (ZL*): ${ids.length} 名`);
   if (!ids.length) return;
   for (const [t, col] of [["chiiki_recipient_certs", "client_id"], ["kaigo_idou_shien_records", "client_id"]]) {
     const { count } = await sb.from(t).select("*", { count: "exact", head: true }).in(col, ids);
@@ -67,7 +67,7 @@ async function main() {
   if (DELETE) { await removeAll(); return verify(); }
   console.log(`=== 移動支援サンプル ${EXECUTE ? "【EXECUTE】" : "【DRY RUN】"} 対象月 ${MONTH} ===\n`);
 
-  const { data: exist } = await sb.from("clients").select("id").like("user_number", "ZM%");
+  const { data: exist } = await sb.from("clients").select("id").like("user_number", "ZL%");
   if (exist?.length) die(`sample が既に ${exist.length} 名います。先に --delete してください`);
 
   const { data: off, error: eO } = await sb.from("offices").select("id,name").eq("name", OFFICE_NAME).maybeSingle();
@@ -79,7 +79,7 @@ async function main() {
   //   加算: 初回218 (月1回) / 緊急時109 (月2回・身体ありのみ)
   const SAMPLES = [
     {
-      no: "ZM001", name: "移動 身体あり 初回+緊急3回",
+      no: "ZL001", name: "移動 身体あり 初回+緊急3回",
       note: "初回は月1回・緊急時は月2回までに丸められるか (3回付けて2回になるべき)",
       records: [
         { d: "01", s: "10:00", e: "11:00", body: true, shokai: true, kinkyu: true },
@@ -89,7 +89,7 @@ async function main() {
       expect: "移動1日中2.0 441×3 = 1323 + 初回218 + 緊急109×2 = **1759**",
     },
     {
-      no: "ZM002", name: "移動 身体なし 初回+緊急",
+      no: "ZL002", name: "移動 身体なし 初回+緊急",
       note: "緊急時は身体介護ありのみ → 身体なしでは **付かない** はず",
       records: [
         { d: "02", s: "10:00", e: "10:30", body: false, shokai: true, kinkyu: true },
@@ -98,7 +98,7 @@ async function main() {
       expect: "移動2日中1.0 116×2 = 232 + 初回218 (027701) = **450** (緊急は付かない)",
     },
     {
-      no: "ZM003", name: "移動 深夜2人派遣",
+      no: "ZL003", name: "移動 深夜2人派遣",
       note: "深夜×1.5 と 2人目コード (同単位・別行)",
       records: [{ d: "03", s: "23:00", e: "23:30", body: false, shokai: false, kinkyu: false, staff: 2 }],
       expect: "移動2深夜0.5 round(116×1.5)=174 ×2行 (1人目+2人目) = **348**",
