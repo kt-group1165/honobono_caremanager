@@ -44,6 +44,18 @@ type SRow = Awaited<ReturnType<typeof aggregateMonthlyShogaiSeikyu>>["rows"][num
 
 /** 破れを 1 件ずつ集める。★ 「バグ」とは書かない (不変条件が誤っている場合がある) */
 type Violation = { inv: string; office: string; month: string; user: string; detail: string };
+/**
+ * ★ サンプルデータ由来かどうか。
+ *
+ * ⚠ この検査は DB 全体を読むので、★ 他セッションが投入中のサンプルを一緒に拾う。
+ *   2026-09-04 に実際に踏んだ: 単独では PASS するのに check:all の中では ★ FAIL した。
+ *   投入途中 (認定はあるが実績がまだ、等) の行が混ざっていたため。
+ *
+ * ★ サンプルの破れも隠さず出す。ただし ★ 合否は 実データだけで決める。
+ *   隠すと「サンプルで見つかるバグ」を捨てることになり、
+ *   合否に混ぜると ★ 他人の作業中に自分の検査が落ちる。
+ */
+const isSample = (v: Violation) => /\[sample-/.test(v.user) || /^Z[A-Z]\d/.test(v.user);
 const violations: Violation[] = [];
 const checked: Record<string, number> = {};
 const bump = (k: string) => { checked[k] = (checked[k] ?? 0) + 1; };
@@ -448,9 +460,22 @@ async function main() {
     console.log("PASS — 破れなし");
     return;
   }
+  const sampleV = violations.filter(isSample);
+  const realV = violations.filter((v) => !isSample(v));
+  if (sampleV.length) {
+    console.log(`⚠ ★ サンプル由来の破れ ${sampleV.length} 件 (★ 合否には入れない — 他セッションが投入中の可能性)`);
+    for (const v of sampleV.slice(0, 6)) console.log(`   ${v.inv} ${v.office} ${v.month} ${v.user}: ${v.detail}`);
+    if (sampleV.length > 6) console.log(`   … 他 ${sampleV.length - 6} 件`);
+    console.log("");
+  }
+  if (realV.length === 0) {
+    console.log(`PASS — 実データの破れなし (★ サンプル由来 ${sampleV.length} 件は上記のとおり別掲)`);
+    return;
+  }
   const byInv = new Map<string, Violation[]>();
-  for (const v of violations) { if (!byInv.has(v.inv)) byInv.set(v.inv, []); byInv.get(v.inv)!.push(v); }
-  console.log(`★ 破れ ${violations.length} 件\n`);
+  for (const v of realV) { if (!byInv.has(v.inv)) byInv.set(v.inv, []); byInv.get(v.inv)!.push(v); }
+  console.log(`★ 実データの破れ ${realV.length} 件
+`);
   for (const [inv, list] of [...byInv].sort()) {
     console.log(`── ${inv} — ${list.length} 件`);
     for (const v of list.slice(0, 8)) console.log(`   ${v.office} ${v.month} ${v.user}: ${v.detail}`);
