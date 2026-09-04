@@ -213,3 +213,6 @@ console.log(`\n══ 検査 ${n} 件 / NG ${ng} 件 ══`);
 console.log("⚠ この比較は共通スコープ (デモグラフィック・公費構造・欠損行処理) のみを対象にした。");
 console.log("  福祉用具固有 (TAISコード・貸与期間・半月按分) はこのビルダーの外 (集計層) の話で、");
 console.log("  ほのぼの福祉用具伝送が未入手のため、この比較結果をもって検証済みとは言えない。");
+// ⚠ 2026-09-05 是正: 他 3 本 (fukuyogu-densou-check.mts / billing-issue-check.mts /
+//   payroll-sample-check.mts) と同じ穴 — ng を数えるだけで exit code に反映していなかった。
+process.exitCode = ng > 0 ? 1 : 0;
