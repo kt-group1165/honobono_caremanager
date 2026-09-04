@@ -61,8 +61,12 @@ const stat = new Map<string, Stat>();
 let skipped = 0;
 for (const r of rows) {
   const name = String(r.service_type ?? "").normalize("NFKC");
-  // ★ 身体介護 の単独型だけ (身体N生活M は 生活の時間が別に効くので混ぜない)
-  const m = /^(身体介護0?\d)(?!.*生活)/.exec(name);
+  // ★ 身体介護の単独型 / 身体N生活M / 生活援助 を それぞれ 1 つの族として見る
+  //   ★ 名前の装飾 (・夜 / ・深 / ・2人 / ・虐防 等) は落とす。段の判定だけを見たいので
+  const m =
+    /^(身体介護0?\d)(?!.*生活)/.exec(name) ??
+    /^(身体\d生活\d)/.exec(name) ??
+    /^(生活援助\d)/.exec(name);
   if (!m) { skipped++; continue; }
   const s = toMin(r.start_time), e0 = toMin(r.end_time);
   if (s == null || e0 == null) { skipped++; continue; }
@@ -95,8 +99,26 @@ for (const [d, m2] of [...byDur].sort((a, b) => a[0] - b[0])) {
   console.log(`  ${String(d).padStart(3)}分 → ${[...m2].map(([k, c]) => `${k}(${c}件)`).join(" / ")}`);
 }
 if (amb === 0) console.log("  (なし)");
-else console.log(`\n  ★ ${amb} 通りの所要時間が 複数の段にまたがっています。`);
+else {
+  // ★ 「何通りあるか」より ★ 「何件が曖昧な帯にあるか」のほうが規模を表す
+  let ambRows = 0, totalRows = 0, minority = 0;
+  for (const [, m2] of byDur) {
+    const n = [...m2.values()].reduce((a, b) => a + b, 0);
+    totalRows += n;
+    if (m2.size >= 2) ambRows += n;
+    // ★ 少数側 = 所要時間だけで決める規則にしたとき ★ 実際に間違える件数
+    if (m2.size >= 2) minority += n - Math.max(...m2.values());
+  }
+  console.log(`\n  ★ ${amb} 通りの所要時間が 複数の段にまたがっています。`);
+  console.log(`  ★ その帯にある実績は ${ambRows} / ${totalRows} 件 = ${((ambRows / totalRows) * 100).toFixed(1)}%`);
+  console.log(`  ★ うち 少数側 (= 所要時間だけで決めると 実際に間違える件数) は ${minority} 件 = ${((minority / totalRows) * 100).toFixed(2)}%`);
+  console.log("  ⚠ ★ 見出しは 少数側の方です。「曖昧な帯に 94% がある」は");
+  console.log("     ★ 巨大な帯に 外れ値が 1 件混じるだけで そうなるので、規模を表しません。");
+}
 console.log("  ⚠ ★ 所要時間だけでは 段が決まらない、ということです。");
+console.log("     ★ 足りない入力は ★ 身体/生活の分単位の内訳 と ★ 2人派遣 の 2 つ。");
+console.log("     ★ 2人派遣は staff_id_2 が 0 件で、サービス名の文字列にしか無い");
+console.log("       (check:coverage-duration で実測: 名前に「2人」を含む行 1,125 / 39,613)。");
 console.log("     ★ ほのぼのを置き換えるとき、★ この差を埋める入力が別に要ります。");
 
 console.log(`\n⚠ 対象外 (身体N生活M・生活援助・その他) として飛ばした行: ${skipped}`);
