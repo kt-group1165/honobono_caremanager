@@ -163,6 +163,84 @@ function sInv5(r: SRow, ctx: { office: string; month: string }) {
     violations.push({ inv: "S5", ...ctx, user: r.user_name, detail: `加算コードが6桁でない ${badAddon.length} 行: ${badAddon.slice(0, 3).map((a) => a.service_code).join(" / ")}` });
 }
 
+/* ── 居宅介護支援 (居宅介護支援費) ─────────────────────────────────────── */
+
+/** レセプト 1 行 (kaigo_care_support_claims) */
+type KRow = Record<string, unknown>;
+const num = (v: unknown) => Number(v ?? 0);
+
+/** 加算の単位数の列 (合計に足すもの)。★ 足し忘れると総額が合わない */
+const K_ADDON_UNITS = [
+  "initial_addition_units", "hospital_coordination_units", "discharge_addition_units",
+  "medical_coordination_units", "tokutei_kassan_units", "medical_coop_kassan_units",
+  "terminal_care_units", "emergency_conference_units", "shoguu_kaizen_units",
+];
+/** フラグ ↔ 単位数 の対。★ 同じ事実を 2 列で持っているので必ずずれる型 */
+const K_FLAG_PAIRS: [string, string][] = [
+  ["initial_addition", "initial_addition_units"],
+  ["hospital_coordination", "hospital_coordination_units"],
+  ["discharge_addition", "discharge_addition_units"],
+  ["medical_coordination", "medical_coordination_units"],
+  ["medical_coop_kassan", "medical_coop_kassan_units"],
+  ["terminal_care", "terminal_care_units"],
+  ["emergency_conference", "emergency_conference_units"],
+  ["unei_kijun_gensan", "unei_kijun_gensan_units"],
+];
+
+/** K1 総額 = floor((基本単位 + Σ加算単位 − 運営基準減算) × 単価) */
+function kInv1(r: KRow, ctx: { office: string; month: string }) {
+  bump("K1 総額 = floor(Σ単位 × 単価)");
+  const sum = num(r.units) + K_ADDON_UNITS.reduce((a, k) => a + num(r[k]), 0) - num(r.unei_kijun_gensan_units);
+  const expect = Math.floor(sum * num(r.unit_price));
+  if (expect !== num(r.total_amount))
+    violations.push({ inv: "K1", ...ctx, user: String(r.insured_number ?? r.id), detail: `Σ単位 ${sum} × 単価 ${r.unit_price} = ${expect} ≠ 総額 ${r.total_amount}` });
+}
+
+/** K2 保険請求額 = 総額 (居宅介護支援費は 10割給付・利用者負担なし) */
+function kInv2(r: KRow, ctx: { office: string; month: string }) {
+  bump("K2 保険請求額 = 総額 (10割給付)");
+  if (num(r.insurance_amount) !== num(r.total_amount))
+    violations.push({ inv: "K2", ...ctx, user: String(r.insured_number ?? r.id), detail: `保険 ${r.insurance_amount} ≠ 総額 ${r.total_amount}` });
+}
+
+/** K3 フラグが立つ ⇔ 単位数 > 0 */
+function kInv3(r: KRow, ctx: { office: string; month: string }) {
+  bump("K3 加算フラグ ⇔ 単位数 > 0");
+  for (const [f, u] of K_FLAG_PAIRS) {
+    const on = r[f] === true;
+    const pos = num(r[u]) > 0;
+    if (on !== pos)
+      violations.push({ inv: "K3", ...ctx, user: String(r.insured_number ?? r.id), detail: `${f}=${on} なのに ${u}=${r[u]}` });
+  }
+  const tType = String(r.tokutei_kassan_type ?? "").trim();
+  if (!!tType !== (num(r.tokutei_kassan_units) > 0))
+    violations.push({ inv: "K3", ...ctx, user: String(r.insured_number ?? r.id), detail: `特定事業所加算 種別="${tType}" なのに 単位=${r.tokutei_kassan_units}` });
+}
+
+/**
+ * K4 基本コードと処遇改善コードの系統が揃っている (43=居宅 / 46=予防)
+ * ⚠ ★ 基本コードが null の行が実在する (2026-09-03 実測 1 件)。
+ *   月途中で亡くなると給付管理をしないので居宅介護支援費が立たず、
+ *   ターミナルケアマネジメント加算だけを請求する。★ これは正常なので除外する。
+ */
+function kInv4(r: KRow, ctx: { office: string; month: string }) {
+  const base = String(r.care_support_code ?? "");
+  const sho = String(r.shoguu_kaizen_code ?? "");
+  if (!base) return; // ★ 基本コードなしは正常 (上記)
+  bump("K4 基本コードと処遇改善コードの系統が一致 (43/46)");
+  if (!/^(43|46)/.test(base))
+    violations.push({ inv: "K4", ...ctx, user: String(r.insured_number ?? r.id), detail: `基本コード ${base} が 43/46 系でない` });
+  if (sho && base.slice(0, 2) !== sho.slice(0, 2))
+    violations.push({ inv: "K4", ...ctx, user: String(r.insured_number ?? r.id), detail: `基本 ${base} と処遇改善 ${sho} で系統が違う (43=居宅 / 46=予防 の混在は返戻要因)` });
+}
+
+/** K5 単価が入っている (0 だと総額が必ず 0 になる) */
+function kInv5(r: KRow, ctx: { office: string; month: string }) {
+  bump("K5 単価 > 0");
+  if (!(num(r.unit_price) > 0))
+    violations.push({ inv: "K5", ...ctx, user: String(r.insured_number ?? r.id), detail: `単価 ${r.unit_price}` });
+}
+
 async function main() {
   const { data: offices, error } = await sb
     .from("offices")
@@ -178,6 +256,10 @@ async function main() {
   let lastRow: Row | null = null;
   let lastShogaiRow: SRow | null = null;
   let sougouRowCount = 0;
+  let kyotakuRowCount = 0;
+  let lastKRow: KRow | null = null;
+  let noShoguu = 0;
+  let noBaseCode = 0;
   let shogaiRowCount = 0;
   for (const o of targets) {
     for (const m of MONTHS) {
@@ -228,14 +310,38 @@ async function main() {
     }
   }
 
+  // ── 居宅介護支援 (レセプトは集計ではなく table に入っている) ──
+  {
+    const rows: KRow[] = [];
+    for (let off = 0; ; off += 1000) {
+      const { data, error: e } = await sb
+        .from("kaigo_care_support_claims").select("*").order("id", { ascending: true }).range(off, off + 999);
+      if (e) throw new Error(`居宅レセプトの取得に失敗: ${e.message}`);
+      rows.push(...((data ?? []) as KRow[]));
+      if ((data ?? []).length < 1000) break;
+    }
+    for (const r of rows) {
+      kyotakuRowCount++;
+      if (String(r.care_support_code ?? "") && r.initial_addition === true) lastKRow = r;
+      if (!r.shoguu_kaizen_code) noShoguu++;
+      if (!r.care_support_code) noBaseCode++;
+      const ctx = { office: "居宅 (全事業所)", month: String(r.billing_month ?? "?") };
+      kInv1(r, ctx); kInv2(r, ctx); kInv3(r, ctx); kInv4(r, ctx); kInv5(r, ctx);
+    }
+  }
+
   // ★ 分母を必ず出す。0 行で「全部合格」を出さないため (規律 1-2)
-  console.log(`検査した行: 介護+総合事業 ${rowCount} 行 (うち総合事業 ${sougouRowCount}) / 障害 ${shogaiRowCount} 行 / 実績のあった (事業所×月) ${officesWithRows} 組
+  console.log(`検査した行: 介護+総合事業 ${rowCount} 行 (うち総合事業 ${sougouRowCount}) / 障害 ${shogaiRowCount} 行 / 居宅 ${kyotakuRowCount} 行 / 実績のあった (事業所×月) ${officesWithRows} 組
 `);
-  if (rowCount === 0 || shogaiRowCount === 0) {
-    console.log(`★ FAIL 検査対象が 0 行の制度があります (介護+総合 ${rowCount} / 障害 ${shogaiRowCount})。合格ではありません。`);
+  if (rowCount === 0 || shogaiRowCount === 0 || kyotakuRowCount === 0) {
+    console.log(`★ FAIL 検査対象が 0 行の制度があります (介護+総合 ${rowCount} / 障害 ${shogaiRowCount} / 居宅 ${kyotakuRowCount})。合格ではありません。`);
     process.exit(1);
   }
   for (const [k, v] of Object.entries(checked)) console.log(`  ${k.padEnd(44)} ${v} 回`);
+  console.log("");
+  console.log("── 観測 (合否ではない。数だけ出す)");
+  console.log(`   居宅で 処遇改善コードが無い行     ${noShoguu} 件  ★ 既知: ケアプランＨａｎａ船橋 の未算定`);
+  console.log(`   居宅で 基本コードが無い行         ${noBaseCode} 件  ★ 正常: ターミナルのみの請求`);
   console.log("");
 
   if (violations.length === 0) {
@@ -277,7 +383,21 @@ async function main() {
       sInv1(bad, ctx); sInv2(bad, ctx); sInv3(bad, ctx); sInv4(bad, ctx); sInv5(bad, ctx);
       if (violations.some((v, i) => i >= n && v.inv === tag)) fired.add(tag);
     }
-    const ALL = ["I1", "I2", "I3", "I4", "I5", "I6", "I7", "S1", "S2", "S3", "S4", "S5"];
+    const kProbe = lastKRow;
+    if (!kProbe) throw new Error("居宅の負のコントロール用の行がありません");
+    const kCases: [string, KRow][] = [
+      ["K1", { ...kProbe, total_amount: num(kProbe.total_amount) + 1 }],
+      ["K2", { ...kProbe, insurance_amount: num(kProbe.insurance_amount) + 1 }],
+      ["K3", { ...kProbe, initial_addition_units: 0 }],
+      ["K4", { ...kProbe, shoguu_kaizen_code: "466191" }],
+      ["K5", { ...kProbe, unit_price: 0 }],
+    ];
+    for (const [tag, bad] of kCases) {
+      const n = violations.length;
+      kInv1(bad, ctx); kInv2(bad, ctx); kInv3(bad, ctx); kInv4(bad, ctx); kInv5(bad, ctx);
+      if (violations.some((v, i) => i >= n && v.inv === tag)) fired.add(tag);
+    }
+    const ALL = ["I1", "I2", "I3", "I4", "I5", "I6", "I7", "S1", "S2", "S3", "S4", "S5", "K1", "K2", "K3", "K4", "K5"];
     const missing = ALL.filter((t) => !fired.has(t));
     if (missing.length) {
       console.log(`★ FAIL 負のコントロールで鳴らなかった条件: ${missing.join(" / ")}`);
