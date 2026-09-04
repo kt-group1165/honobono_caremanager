@@ -109,7 +109,63 @@ console.log(`【分母】app が参照する table ${tables.length} 種 / ★ 0 
 // ---------------------------------------------------------------- 分類する
 const short = (f: string) => f.split(/[\/]/).slice(-3).join("/");
 type Cls = "E" | "E?" | "CD" | "AB";
-const rows: { t: string; cls: Cls; why: string; ev: string[] }[] = [];
+
+/**
+ * ★ 人が 1 件ずつコードを読んで確定させた注記。
+ *
+ * 共起 (代理指標) には限界がある — 40 行以内でも if の別の枝なら、相手の行は
+ * その枝で入ったもので「こちらが動いた証拠」にならない (payroll_kyotaku_attendance_monthly
+ * で実証済み: 相手 401行/4日分散で E 判定されたが、居宅の枝は 1名・1か月・同日投入のテスト分
+ * だけで実際は A/B だった)。
+ *
+ * ★ F 類型 (材料が無いので意図的に止まっている。壊れていない) は共起では検出できないので、
+ * ここに人が確認した結果を書く。`cls` は自動分類を上書きする (自動判定の限界を反映)。
+ */
+const MANUAL_NOTES: Partial<Record<string, { cls: Cls; note: string }>> = {
+  chiiki_recipient_certs: {
+    cls: "AB",
+    note:
+      "★ F (材料が無く意図的に止まっている・壊れていない)。移動支援のコード解決が " +
+      "fail-closed でこの証を要求するが、本番に地域生活支援の受給者証が 1 件も登録されて " +
+      "いないため 0 行のまま。登録導線 (画面) はあるが使われていない。バグではない。",
+  },
+  client_hospitalizations: {
+    cls: "AB",
+    note:
+      "★ F (材料が無く意図的に止まっている)。障害の入院等 127xxx を出すには入院期間の " +
+      "登録が要るが、登録する画面/導線がそもそも無い (import_meisai_shougai_records.mjs が " +
+      "「未算定のため対象外」として除外している設計)。入れるなら登録導線が先。",
+  },
+  client_rental_history: {
+    cls: "AB",
+    note:
+      "★ 確認済み (2026-09-05)。order-app ClientsTab.tsx の手入力フォーム (追加/編集/削除・" +
+      "エラーは alert() で必ず表示) で書ける。同じ画面の実績計算は client_rental_history が " +
+      "無い利用者を order_items(status='rental_started') から自動補完する設計 " +
+      "(コード上「orderItemsから補完」と明記)。つまり通常は補完で足りるため手入力が " +
+      "不要 = 0 行は健全。E ではない。",
+  },
+  payroll_kyotaku_attendance_monthly: {
+    cls: "AB",
+    note:
+      "★ 確認済み (2026-09-04)。共起先 payroll_kyotaku_attendance_records=401行 は " +
+      "本社366/福祉用具4/居宅31 の内訳で、月次テーブルを書くのは isKyotaku && monthlyDirty " +
+      "の枝だけ。居宅の31行は1名(笠原道代)・1か月(2025-01)・全部2026-05-18投入のテストデータ " +
+      "だけで、居宅の出勤簿は一度も本番運用されていない。★ if の別の枝を共起が拾った誤検出の実例。",
+  },
+  kaigo_service_code_import_batches: {
+    cls: "AB",
+    note:
+      "★ 確認済み (2026-09-05)。★ 過去に本物の E バグだった — 表に file_name/" +
+      "closed_count/skipped_count/reverted_at 列が無く insert が PGRST204 で必ず失敗して " +
+      "いたことがコード内コメントに詳細に残っている (2026-09-03)。migrations/" +
+      "service_code_import_batch_missing_columns.sql で是正済みで、OpenAPI 確認でも " +
+      "必要な列は全部揃っている (RENAME 済み inserted_count 含む)。★ 直った後まだ誰も " +
+      "サービスコードの再取込を実行していないだけ。⚠ 該当 SQL ファイルの先頭コメントは " +
+      "まだ「未適用」のままなので applied_archive/ への移動含め更新が要る (別件・軽微)。",
+  },
+};
+const rows: { t: string; cls: Cls; why: string; ev: string[]; note?: string }[] = [];
 
 for (const t of zero) {
   const writers = [...perFile.entries()].filter(([, v]) => v.writes.some((w) => w.t === t));
@@ -165,6 +221,15 @@ for (const t of zero) {
   }
 }
 
+// ★ 人が確認した結果 (MANUAL_NOTES) で自動分類を上書きする。共起は代理指標に過ぎず、
+//   if の別の枝を区別できない限界があるため、確認済みのものは人の判断を優先する。
+for (const r of rows) {
+  const m = MANUAL_NOTES[r.t];
+  if (!m) continue;
+  r.cls = m.cls;
+  r.note = m.note;
+}
+
 const order: Cls[] = ["E", "E?", "AB", "CD"];
 const label: Record<Cls, string> = {
   E: "★ E 候補 — 処理は動いているのにこの table だけ 0 行",
@@ -180,6 +245,16 @@ for (const c of order) {
     console.log(`  ${r.t}`);
     console.log(`      ${r.why}`);
     for (const e of r.ev) console.log(`      ${e}`);
+    if (r.note) console.log(`      ${r.note}`);
+  }
+}
+
+// 未分類チェックの後で MANUAL_NOTES に載っているのに zero リストに無い名前が
+// あれば気づけるようにする (table 名の変更・削除に追随できていない証拠)
+{
+  const knownButMissing = Object.keys(MANUAL_NOTES).filter((t) => !rows.some((r) => r.t === t));
+  if (knownButMissing.length) {
+    console.log(`\n⚠ MANUAL_NOTES にあるが今回 0 行リストに無い (是正されたか名前が変わった): ${knownButMissing.join(", ")}`);
   }
 }
 
