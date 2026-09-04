@@ -47,10 +47,7 @@ import {
   SeikyuMonthNav,
 } from "./_seikyu-context";
 import {
-  HOSPITAL_COORD_UNITS,
-  DISCHARGE_UNITS,
-  reductionUnitsOf,
-  calcTotals,
+  computeKyotakuMatrixUpdate,
   isYoboShienLevel,
   parseYoboShienKubun,
   isAddonActiveInMonth,
@@ -435,85 +432,19 @@ export function KyotakuKojinSetteiContent() {
   const applyPatch = async (row: MatrixRow, patch: MatrixPatch) => {
     const c = row.claim;
     if (!c) return;
-    const next = {
-      initial: patch.initial ?? c.initial_addition,
-      discharge:
-        patch.discharge ??
-        ((c.discharge_type as DischargeType) ?? (c.discharge_addition ? "i_ro" : "none")),
-      hospitalization:
-        patch.hospitalization ??
-        ((c.hospital_coordination
-          ? c.hospital_coordination_units >= 250
-            ? "i"
-            : "ii"
-          : "none") as HospitalCoordType),
-      emergency: patch.emergency ?? (c.emergency_conference ?? false),
-      unei: patch.unei ?? (c.unei_kijun_gensan ?? false),
-      terminal: patch.terminal ?? (c.terminal_care ?? false),
-      outpatient: patch.outpatient ?? c.medical_coordination,
-    };
-
-    // 加算単位 (特定事業所・医療介護連携は事業所体制系 = claim の既存値を保持)
-    const addUnits =
-      (next.initial ? 300 : 0) +
-      (c.tokutei_kassan_units ?? 0) +
-      (c.medical_coop_kassan ? (c.medical_coop_kassan_units ?? 125) : 0) +
-      HOSPITAL_COORD_UNITS[next.hospitalization] +
-      DISCHARGE_UNITS[next.discharge] +
-      (next.outpatient ? 50 : 0) +
-      (next.terminal ? 400 : 0) +
-      (next.emergency ? 200 : 0);
-    // 減算 (round 方式。BCP/虐待は claim の既存値、運営基準はマトリクスから)
-    const uneiUnits = next.unei ? reductionUnitsOf(c.units, 50) : 0;
-    const reductionUnits =
-      (c.bcp_not_prepared ? reductionUnitsOf(c.units, c.bcp_reduction_pct || 1) : 0) +
-      (c.abuse_prevention_not_implemented
-        ? reductionUnitsOf(c.units, c.abuse_reduction_pct || 1)
-        : 0) +
-      uneiUnits;
-    // 2026-08-31 監査での是正:
-    //   以前は `c.units + addUnits - reductionUnits` で total を組み、
-    //   **処遇改善加算を再計算していなかった** (payload にも入れていなかった)。
-    //   加算を 1 つ ON にすると DB の total_amount / 正しい額 / 伝送 8124 が
-    //   3 者とも食い違う状態になっていた。金額は必ず calcTotals を通す。
-    //
-    //   事業所設定 (率) が未読込のまま保存すると処遇改善 0 を書き込んでしまうので、
-    //   読み込めるまで保存させない。
+    // 事業所設定 (率) が未読込のまま保存すると処遇改善 0 を書き込んでしまうので、
+    // 読み込めるまで保存させない。
     if (!officePanel) {
       toast.error("事業所設定を読み込み中です。少し待ってからもう一度お試しください。");
       return;
     }
-    // 予防支援 (46 始まり) には居宅介護支援の処遇改善は付かない
-    const shoguuPermil = String(c.care_support_code ?? "").startsWith("43")
-      ? officePanel.shoguuPermil
-      : 0;
-    const {
-      total_amount: totalAmount,
-      insurance_amount: insuranceAmount,
-      shoguu_units: shoguuUnits,
-    } = calcTotals(c.units, addUnits, reductionUnits, c.unit_price, shoguuPermil);
-
-    const basePayload: Record<string, unknown> = {
-      initial_addition: next.initial,
-      initial_addition_units: next.initial ? 300 : 0,
-      hospital_coordination: next.hospitalization !== "none",
-      hospital_coordination_units: HOSPITAL_COORD_UNITS[next.hospitalization],
-      discharge_addition: next.discharge !== "none",
-      discharge_addition_units: DISCHARGE_UNITS[next.discharge],
-      discharge_type: next.discharge === "none" ? null : next.discharge,
-      medical_coordination: next.outpatient,
-      medical_coordination_units: next.outpatient ? 50 : 0,
-      terminal_care: next.terminal,
-      terminal_care_units: next.terminal ? 400 : 0,
-      emergency_conference: next.emergency,
-      emergency_conference_units: next.emergency ? 200 : 0,
-      total_amount: totalAmount,
-      insurance_amount: insuranceAmount,
-      shoguu_kaizen_units: shoguuUnits,
-      shoguu_kaizen_code:
-        shoguuUnits > 0 ? (officePanel.shoguuCode ?? c.shoguu_kaizen_code ?? null) : null,
-      updated_at: new Date().toISOString(),
-    };
+    // 単位数組立・金額計算は claims-shared.ts の純関数を通す (2026-09-04 切り出し)。
+    const { payload: basePayload, uneiKijunGensan, uneiKijunGensanUnits, resolved: next } =
+      computeKyotakuMatrixUpdate(c, patch, {
+        shoguuPermil: officePanel.shoguuPermil,
+        shoguuCode: officePanel.shoguuCode,
+      });
+    (basePayload as Record<string, unknown>).updated_at = new Date().toISOString();
 
     setSavingIds((prev) => new Set(prev).add(c.id));
     try {
@@ -522,8 +453,8 @@ export function KyotakuKojinSetteiContent() {
         .from("kaigo_care_support_claims")
         .update({
           ...basePayload,
-          unei_kijun_gensan: next.unei,
-          unei_kijun_gensan_units: uneiUnits,
+          unei_kijun_gensan: uneiKijunGensan,
+          unei_kijun_gensan_units: uneiKijunGensanUnits,
         })
         .eq("id", c.id);
       if (e && (e.code === "PGRST204" || e.code === "42703")) {

@@ -488,6 +488,162 @@ export function reductionUnitsOf(baseUnits: number, pct: number): number {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// 請求個人設定マトリクス (_kojin-settei.tsx) の1セル変更 → DB payload の組立
+//
+// ⚠ 2026-09-04 に _kojin-settei.tsx (client component) の applyPatch から切り出した。
+//   client component の中にあると **ハーネスから呼べず、一度も検証されていなかった**。
+//   同じ型の事故は idou-billing-lines.ts (加算が1行も出ない不具合に気づけなかった) /
+//   idou-billing-summary.ts (efb7d96) で既に見つかっている。
+//   金額側にも同じ構造 (呼べない場所に計算ロジックがある) が残っていた、というのが
+//   この切り出しの動機。★ 挙動は 1 ミリも変えていない — 呼べる場所に移しただけ。
+// ─────────────────────────────────────────────────────────────────────────
+
+/** 個人設定マトリクスの1セル変更パッチ (居宅介護支援) */
+export interface KyotakuMatrixPatch {
+  initial?: boolean;
+  discharge?: DischargeType;
+  hospitalization?: HospitalCoordType;
+  emergency?: boolean;
+  unei?: boolean;
+  terminal?: boolean;
+  outpatient?: boolean;
+}
+
+/** applyPatch が使う claim の必要フィールドだけを取り出した型 */
+export type KyotakuMatrixClaimInput = Pick<
+  ClaimRow,
+  | "units"
+  | "unit_price"
+  | "care_support_code"
+  | "tokutei_kassan_units"
+  | "medical_coop_kassan"
+  | "medical_coop_kassan_units"
+  | "initial_addition"
+  | "discharge_type"
+  | "discharge_addition"
+  | "hospital_coordination"
+  | "hospital_coordination_units"
+  | "emergency_conference"
+  | "unei_kijun_gensan"
+  | "terminal_care"
+  | "medical_coordination"
+  | "bcp_not_prepared"
+  | "bcp_reduction_pct"
+  | "abuse_prevention_not_implemented"
+  | "abuse_reduction_pct"
+  | "shoguu_kaizen_code"
+>;
+
+/** 事業所設定 (処遇改善率・コード)。セル変更時の再計算に要るぶんだけ */
+export interface KyotakuMatrixOfficeSettings {
+  shoguuPermil: number;
+  shoguuCode: string | null;
+}
+
+export interface KyotakuMatrixResolved {
+  initial: boolean;
+  discharge: DischargeType;
+  hospitalization: HospitalCoordType;
+  emergency: boolean;
+  unei: boolean;
+  terminal: boolean;
+  outpatient: boolean;
+}
+
+export interface KyotakuMatrixUpdateResult {
+  /** kaigo_care_support_claims への UPDATE payload (updated_at・unei_* を除く) */
+  payload: Record<string, unknown>;
+  /** 運営基準減算列 (migration 適用後のみ存在) は呼出側で別途マージする */
+  uneiKijunGensan: boolean;
+  uneiKijunGensanUnits: number;
+  /** patch と既存値を解決した最終値 (入退院整合の警告など、呼出側の判定にも使う) */
+  resolved: KyotakuMatrixResolved;
+}
+
+/**
+ * 請求個人設定マトリクスの1セル変更 → 加算単位・減算単位・処遇改善込みの
+ * 総額/保険請求額と DB payload を組み立てる。★ 純関数。
+ *
+ * 金額の計算は必ず calcTotals を通す (2026-08-31 監査の教訓。上のコメント参照)。
+ */
+export function computeKyotakuMatrixUpdate(
+  claim: KyotakuMatrixClaimInput,
+  patch: KyotakuMatrixPatch,
+  officeSettings: KyotakuMatrixOfficeSettings,
+): KyotakuMatrixUpdateResult {
+  const c = claim;
+  const next = {
+    initial: patch.initial ?? c.initial_addition,
+    discharge:
+      patch.discharge ??
+      ((c.discharge_type as DischargeType) ?? (c.discharge_addition ? "i_ro" : "none")),
+    hospitalization:
+      patch.hospitalization ??
+      ((c.hospital_coordination
+        ? c.hospital_coordination_units >= 250
+          ? "i"
+          : "ii"
+        : "none") as HospitalCoordType),
+    emergency: patch.emergency ?? (c.emergency_conference ?? false),
+    unei: patch.unei ?? (c.unei_kijun_gensan ?? false),
+    terminal: patch.terminal ?? (c.terminal_care ?? false),
+    outpatient: patch.outpatient ?? c.medical_coordination,
+  };
+
+  // 加算単位 (特定事業所・医療介護連携は事業所体制系 = claim の既存値を保持)
+  const addUnits =
+    (next.initial ? 300 : 0) +
+    (c.tokutei_kassan_units ?? 0) +
+    (c.medical_coop_kassan ? (c.medical_coop_kassan_units ?? 125) : 0) +
+    HOSPITAL_COORD_UNITS[next.hospitalization] +
+    DISCHARGE_UNITS[next.discharge] +
+    (next.outpatient ? 50 : 0) +
+    (next.terminal ? 400 : 0) +
+    (next.emergency ? 200 : 0);
+  // 減算 (round 方式。BCP/虐待は claim の既存値、運営基準はマトリクスから)
+  const uneiUnits = next.unei ? reductionUnitsOf(c.units, 50) : 0;
+  const reductionUnits =
+    (c.bcp_not_prepared ? reductionUnitsOf(c.units, c.bcp_reduction_pct || 1) : 0) +
+    (c.abuse_prevention_not_implemented
+      ? reductionUnitsOf(c.units, c.abuse_reduction_pct || 1)
+      : 0) +
+    uneiUnits;
+
+  // 予防支援 (46 始まり) には居宅介護支援の処遇改善は付かない
+  const shoguuPermil = String(c.care_support_code ?? "").startsWith("43")
+    ? officeSettings.shoguuPermil
+    : 0;
+  const {
+    total_amount: totalAmount,
+    insurance_amount: insuranceAmount,
+    shoguu_units: shoguuUnits,
+  } = calcTotals(c.units, addUnits, reductionUnits, c.unit_price, shoguuPermil);
+
+  const payload: Record<string, unknown> = {
+    initial_addition: next.initial,
+    initial_addition_units: next.initial ? 300 : 0,
+    hospital_coordination: next.hospitalization !== "none",
+    hospital_coordination_units: HOSPITAL_COORD_UNITS[next.hospitalization],
+    discharge_addition: next.discharge !== "none",
+    discharge_addition_units: DISCHARGE_UNITS[next.discharge],
+    discharge_type: next.discharge === "none" ? null : next.discharge,
+    medical_coordination: next.outpatient,
+    medical_coordination_units: next.outpatient ? 50 : 0,
+    terminal_care: next.terminal,
+    terminal_care_units: next.terminal ? 400 : 0,
+    emergency_conference: next.emergency,
+    emergency_conference_units: next.emergency ? 200 : 0,
+    total_amount: totalAmount,
+    insurance_amount: insuranceAmount,
+    shoguu_kaizen_units: shoguuUnits,
+    shoguu_kaizen_code:
+      shoguuUnits > 0 ? (officeSettings.shoguuCode ?? c.shoguu_kaizen_code ?? null) : null,
+  };
+
+  return { payload, uneiKijunGensan: next.unei, uneiKijunGensanUnits: uneiUnits, resolved: next };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // 介護予防支援 (要支援1/2) の請求区分
 //   I     = 介護予防支援費(Ⅰ) — 地域包括支援センターとして請求
 //   II    = 介護予防支援費(Ⅱ) — 居宅介護支援事業者の直接指定 (既定)
