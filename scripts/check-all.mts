@@ -69,18 +69,12 @@ for (const n of NOT_COVERED) console.log(`   ${n}`);
 console.log("");
 if (failed.length) {
   // ★ 失敗したものの出力を末尾に再掲する。上に流れて見えなくなるため
+  const bar = "=".repeat(70);
   for (const f of failed) {
-    console.log(`
-${"=".repeat(70)}
-★ FAIL の再掲 — ${f.name}
-${"=".repeat(70)}`);
-    const lines = (f.out ?? "").split("
-");
-    console.log(lines.slice(-40).join("
-"));
+    console.log(`\n${bar}\n★ FAIL の再掲 — ${f.name}\n${bar}`);
+    console.log((f.out ?? "").split("\n").slice(-40).join("\n"));
   }
-  console.log(`
-★ FAIL ${failed.length} 件: ${failed.map((f) => f.name).join(" / ")}`);
+  console.log(`\n★ FAIL ${failed.length} 件: ${failed.map((f) => f.name).join(" / ")}`);
   process.exit(1);
 }
 console.log(`PASS — ${results.filter((r) => !r.skipped).length} 本${FAST ? " (★ --fast: 伝送突合を飛ばしています)" : ""}`);
