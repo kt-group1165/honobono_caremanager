@@ -8,7 +8,7 @@
  *   ② buildShogaiDensou の J121 明細書 (項12/15/16/17/22/25/26/27/28) と J411
  * を、手計算した期待値と突合する。
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
@@ -21,9 +21,27 @@ import {
 } from "@/lib/shogai-densou/build";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const man = JSON.parse(
-  readFileSync(join(__dirname, "..", "migrations", "_fake_jogen_test_manifest.json"), "utf8"),
-);
+const MANIFEST = join(__dirname, "..", "migrations", "_fake_jogen_test_manifest.json");
+// ⚠ ★ この harness は seed → verify → delete の 一巡が前提。
+//   delete が manifest を `_fake_jogen_test_manifest.deleted.json` にリネームするので、
+//   ★ 一巡した後に verify 単体を回すと manifest が無く ENOENT で crash していた
+//   (2026-09-05 に K が発見。★ 私が一巡後の状態のまま commit したのが原因)。
+//   → ★ crash ではなく 何をすればよいかを出して 正常終了する。
+//   ★ 「サンプルが無い状態で PASS を出す」ことはしない (exit 0 だが PASS とも言わない)。
+if (!existsSync(MANIFEST)) {
+  console.log("★ サンプル未投入のため スキップします (合格でも不合格でもありません)");
+  console.log(`   manifest が見つかりません: ${MANIFEST}`);
+  if (existsSync(`${MANIFEST.slice(0, -5)}.deleted.json`)) {
+    console.log("   ★ .deleted.json はあります = 一度 seed → verify → delete を回した後の状態です");
+  }
+  console.log("   回すには:");
+  console.log("     node migrations/seed_fake_jogen_kanri_test.mjs            # DRY RUN");
+  console.log("     node migrations/seed_fake_jogen_kanri_test.mjs --execute  # ★ DB 書換");
+  console.log("     npx tsx scripts/verify-jogen-kanri.mts");
+  console.log("     node migrations/delete_fake_jogen_kanri_test.mjs --execute");
+  process.exit(0);
+}
+const man = JSON.parse(readFileSync(MANIFEST, "utf8"));
 const YEAR = Number(man.month.slice(0, 4));
 const MONTH = Number(man.month.slice(5, 7));
 const UNIT_PRICE: number = man.unit_price;
