@@ -123,7 +123,10 @@ async function removeAll() {
   console.log(`  ${"clients".padEnd(28)} ${ids.length} 件`);
   console.log(`  ${"offices".padEnd(28)} ${officeIds.length} 件`);
 
-  if (!DELETE) { console.log("\n(--delete 指定時に実際に消します)"); return; }
+  // ⚠ 2026-09-04 是正: この関数は DELETE===true のときだけ呼ばれるため、
+  //   ここで見るべきは EXECUTE (旧 `if (!DELETE)` は常に false で無意味だった =
+  //   --delete 単体で即実行されていた)。
+  if (!EXECUTE) { console.log("\n【DRY RUN】--delete --execute で実際に削除します"); return; }
 
   for (const [t, col] of clientScoped) {
     if (ids.length === 0) continue;
