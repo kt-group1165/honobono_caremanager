@@ -233,3 +233,5 @@ await runOffice(2);
 
 console.log(`\n${"═".repeat(96)}`);
 console.log(ng === 0 ? "✅ 全項目 期待値と一致" : `❌ 不一致 ${ng} 件`);
+// ⚠ 2026-09-05 是正: ng を数えるだけで exit code に反映していなかった (B-2x と同型)。
+process.exitCode = ng > 0 ? 1 : 0;

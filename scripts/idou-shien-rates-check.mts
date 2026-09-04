@@ -67,3 +67,5 @@ console.log(`  ${getIdouRates("千葉市") === null ? "✅" : "✗ "} 千葉市 
 console.log(`  ${getIdouRates("一宮町") === null ? "✅" : "✗ "} 一宮町 (未登録) → ${getIdouRates("一宮町")}`);
 
 console.log(`\n不一致 ${ng} 件`);
+// ⚠ 2026-09-05 是正: ng を数えるだけで exit code に反映していなかった (B-2x と同型)。
+process.exitCode = ng > 0 ? 1 : 0;
