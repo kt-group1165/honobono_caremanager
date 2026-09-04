@@ -18,6 +18,7 @@
     "check:same-building": "tsx scripts/same-building-verify.mts",
     "check:seikatsu-enjo": "tsx scripts/seikatsu-enjo-limit-verify.mts",
     "check:shogai-time-bracket": "tsx scripts/shogai-time-bracket-verify.mts",
+    "check:shogai-doukou": "tsx scripts/shogai-doukou-verify.mts",
     "check:riyou-final-diff": "tsx scripts/riyou-seikyu-final-amount-diff.mts",
     "check:riyou-final": "tsx scripts/riyou-seikyu-final-amount-verify.mts",
     "dev": "next dev",
