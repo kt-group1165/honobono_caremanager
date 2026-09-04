@@ -21,6 +21,8 @@
  *   (訪問入浴の「号車」= team_id は集計が select していないので入れていない)。
  */
 
+import { writeFileSync } from "node:fs";
+
 type Factor = { name: string; why: string; values: string[] };
 
 /** 訪問介護 (介護保険) 明細書 7131 の出力を変える因子 */
@@ -194,7 +196,7 @@ console.log("");
 if (process.argv.includes("--json")) {
   const out = process.argv[process.argv.indexOf("--json") + 1];
   const rows = cases.map((c, i) => Object.fromEntries([["case", `M${String(i + 1).padStart(3, "0")}`], ...c.map((v, k) => [FACTORS[k].name, v] as const)]));
-  require("node:fs").writeFileSync(out, JSON.stringify(rows, null, 2) + "\n", "utf8");
+  writeFileSync(out, JSON.stringify(rows, null, 2) + "\n", "utf8");
   console.log(`→ ${out} に ${rows.length} ケースを書きました`);
 } else {
   const w = FACTORS.map((f) => Math.max(f.name.length, ...f.values.map((v) => v.length)));
