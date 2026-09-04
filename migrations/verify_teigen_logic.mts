@@ -26,7 +26,7 @@
  *   SKIP_INSERT=1 を付けると INSERT をスキップし判定結果の表示のみ行う。
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
@@ -60,7 +60,8 @@ function loadEnvFile(path: string) {
 const envKaigo = loadEnvFile(join(__dirname, "..", ".env.local"));
 const SB_URL = envKaigo.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SB_KEY = envKaigo.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(SB_URL, SB_KEY);
+// ★ 型を明示して `as any` を消す (ESLint baseline 0/0 を守るため)
+const supabase: SupabaseClient = createClient(SB_URL, SB_KEY);
 
 const TEST_OFFICE_BUSINESS_NUMBER = "9999999901";
 const MARKER = "[fake テスト用-teigen-20260903]";
@@ -107,7 +108,7 @@ async function loadOfficeUsersAndCerts(officeId: string, billingMonth: string) {
   const activeUserIds = new Set((planRows ?? []).map((p) => p.user_id as string));
 
   const [y, m] = billingMonth.split("-").map(Number);
-  const certForMonth = await resolveCertForMonth(supabase as any, Array.from(activeUserIds), y, m);
+  const certForMonth = await resolveCertForMonth(supabase, Array.from(activeUserIds), y, m);
   const certMap = new Map<string, { care_level: string }>();
   for (const [clientId, cert] of certForMonth) {
     if (!cert.care_level) continue;
@@ -158,7 +159,7 @@ function assignTiers(
 async function partA() {
   console.log("\n========== Part A: 現状の DB で fetchTeigenSettings を実行 ==========");
   const officeId = await getTestOfficeId();
-  const result = await fetchTeigenSettings(supabase as any, officeId, TEST_BILLING_MONTH_B);
+  const result = await fetchTeigenSettings(supabase, officeId, TEST_BILLING_MONTH_B);
   if (result === null) {
     console.log("❌ fetchTeigenSettings が null を返した (逓減制の自動判定が機能していない)");
     console.log("   → offices.teigen_kanwa_from 列が未適用 (migrations/teigen_kanwa_effective_date.sql) の可能性が高い。");
@@ -223,7 +224,7 @@ async function partB() {
   }
 
   // 基本コード解決 (KYOTAKU_TEIGEN_FALLBACK / kaigo_service_codes 実マスタ) の検証
-  const monthMaster = await fetchKyotakuMasterForMonth(supabase as any, TEST_BILLING_MONTH_B);
+  const monthMaster = await fetchKyotakuMasterForMonth(supabase, TEST_BILLING_MONTH_B);
   console.log(`   fetchKyotakuMasterForMonth.fromMaster=${monthMaster.fromMaster} (false ならフォールバック使用)`);
 
   const codeMismatches: string[] = [];
