@@ -234,5 +234,499 @@
         "diff": 5
       }
     }
-  ]
+  ],
+  "_shogai_readme": [
+    "障害 (J121 明細書 / J611 実績記録票) の基準値。★ 2026-09-04 追加。",
+    "",
+    "■ なぜ足したか",
+    "  回帰網が介護保険 7 拠点しか見ておらず、**障害が悪化しても検出できなかった**。",
+    "  2026-09-04 に引き継ぎ (SESSION_START) の数字と実測が食い違った:",
+    "      引き継ぎ 2026-09-01   J121 476/505   J611 473/505   完全一致 6 拠点",
+    "      同日の実測            J121 472/504   J611 474/503   完全一致 4 拠点",
+    "  ★ 分母 (505 → 504/503) まで動いていたので **悪化と断定できなかった**。",
+    "     この切り分けができないこと自体が問題で、拠点ごとの内訳を焼けば防げる。",
+    "",
+    "■ 判定 (★ ここが本体)",
+    "  分母 (total) が違う          → ○ データが変わった。--update でよい",
+    "  分母 同じ + 一致数 減った     → ★ 回帰。FAIL する。--update で黙らせないこと",
+    "  分母 同じ + 一致数 増えた     → ○ 改善",
+    "  分母 -1 / 拠点が消えた        → ★ 測れていない。FAIL する (VERIFICATION_RULES 1-2)",
+    "",
+    "  ⚠ 合計 (472/504 等) だけを見ない。**合計は分母が動くと意味を失う**。",
+    "     判定は必ず拠点ごとに行い、合計は参考表示に留める。",
+    "",
+    "■ 指紋",
+    "  honoRows / honoHash … ほのぼのから/ + ほのぼのから_再請求/ の KJ・TJ・JJ (★ 真の外部入力)",
+    "  newRows  / newHash  … 新システム/ に書き出した J11・J61・J41 (当方の出力)",
+    "  ⚠ …_解説.csv (densou-explain.mts の注釈) は指紋に入れない。伝送ファイルではないうえ",
+    "     更新が止まるので嘘の「変わっていない」を作る。",
+    "",
+    "■ 対象",
+    "  伝送データ/<拠点>/訪問介護/障害/202606/ほのぼのから に KJ がある **全拠点** (17)。",
+    "  介護保険側と違って拠点を選ばないのは、到達点が全拠点合計で語られているため。",
+    "  スキップ (KJ が無い) = 八千代 / 君津 / 山武 / 市原 / 船橋 の 5 拠点。",
+    "  ⚠ 山武・市原は障害の指定が無い (SESSION_START)。八千代・君津・船橋は未着手。",
+    "  実行 **約 2 分** (17 拠点)。介護保険 7 拠点と合わせて 約 4 分。",
+    "",
+    "■ この基準値が証明していないこと (VERIFICATION_RULES 3-1)",
+    "  ・「ほのぼのと一致している = 正しい」ではない。ほのぼの側の算定漏れは",
+    "    _densou_intentional_diff.json 側の管轄 (規律 3-2)",
+    "  ・J121 は受給者単位のサマリ + サービスコード別の単位数/回数まで見るが、",
+    "    ★ J411 (上限管理結果票) は見ていない",
+    "  ・J611 は既定で **提供時刻を比較しない** (J611_TIME=1 のときだけ)"
+  ],
+  "shogai": {
+    "month": "202606",
+    "skipped": [
+      "八千代: KJ ファイル無し",
+      "君津: KJ ファイル無し",
+      "山武: KJ ファイル無し",
+      "市原: KJ ファイル無し",
+      "船橋: KJ ファイル無し"
+    ],
+    "offices": [
+      {
+        "area": "K姉",
+        "officeId": "e7c3c270-3310-4e83-9d6a-79761070a2c3",
+        "bn": "1210600019",
+        "month": "202606",
+        "fingerprint": {
+          "honoRows": 415,
+          "honoHash": "85d96f7b:-",
+          "newRows": 415,
+          "newHash": "3a91dec0"
+        },
+        "j121": {
+          "match": 16,
+          "mismatch": 1,
+          "total": 17,
+          "onlyHono": 0,
+          "onlyNew": 0
+        },
+        "j611": {
+          "match": 17,
+          "mismatch": 0,
+          "total": 17,
+          "onlyHono": 0,
+          "onlyNew": 0
+        }
+      },
+      {
+        "area": "いすみ",
+        "officeId": "4015f747-4f75-4769-a1f2-dca3db6a24fc",
+        "bn": "1214900183",
+        "month": "202606",
+        "fingerprint": {
+          "honoRows": 853,
+          "honoHash": "2cf3fc4e:-",
+          "newRows": 853,
+          "newHash": "b28dff2a"
+        },
+        "j121": {
+          "match": 33,
+          "mismatch": 2,
+          "total": 35,
+          "onlyHono": 0,
+          "onlyNew": 0
+        },
+        "j611": {
+          "match": 34,
+          "mismatch": 1,
+          "total": 35,
+          "onlyHono": 0,
+          "onlyNew": 0
+        }
+      },
+      {
+        "area": "おゆみ野",
+        "officeId": "4f14d50c-76b5-4f44-ac41-ed6d01f53a30",
+        "bn": "1210101760",
+        "month": "202606",
+        "fingerprint": {
+          "honoRows": 1738,
+          "honoHash": "653e73e2:-",
+          "newRows": 1707,
+          "newHash": "abc659fc"
+        },
+        "j121": {
+          "match": 55,
+          "mismatch": 6,
+          "total": 61,
+          "onlyHono": 1,
+          "onlyNew": 1
+        },
+        "j611": {
+          "match": 52,
+          "mismatch": 8,
+          "total": 60,
+          "onlyHono": 0,
+          "onlyNew": 1
+        }
+      },
+      {
+        "area": "さつきが丘",
+        "officeId": "be3218e6-9b47-4093-ab7e-46f388242fcc",
+        "bn": "1210103394",
+        "month": "202606",
+        "fingerprint": {
+          "honoRows": 552,
+          "honoHash": "8b0a3f5c:-",
+          "newRows": 544,
+          "newHash": "94a48c98"
+        },
+        "j121": {
+          "match": 22,
+          "mismatch": 0,
+          "total": 22,
+          "onlyHono": 0,
+          "onlyNew": 0
+        },
+        "j611": {
+          "match": 22,
+          "mismatch": 0,
+          "total": 22,
+          "onlyHono": 0,
+          "onlyNew": 0
+        }
+      },
+      {
+        "area": "ちはら台",
+        "officeId": "fd0179ae-6a20-4bf2-9ab0-37d61c744f64",
+        "bn": "1210601116",
+        "month": "202606",
+        "fingerprint": {
+          "honoRows": 539,
+          "honoHash": "3208d1c1:-",
+          "newRows": 519,
+          "newHash": "e99c3612"
+        },
+        "j121": {
+          "match": 20,
+          "mismatch": 3,
+          "total": 23,
+          "onlyHono": 1,
+          "onlyNew": 0
+        },
+        "j611": {
+          "match": 21,
+          "mismatch": 2,
+          "total": 23,
+          "onlyHono": 1,
+          "onlyNew": 0
+        }
+      },
+      {
+        "area": "やわた",
+        "officeId": "bdeaa7d7-f267-4d80-abe2-f6b61217a34a",
+        "bn": "1210601702",
+        "month": "202606",
+        "fingerprint": {
+          "honoRows": 787,
+          "honoHash": "b8b3b16c:-",
+          "newRows": 770,
+          "newHash": "1178bc24"
+        },
+        "j121": {
+          "match": 27,
+          "mismatch": 2,
+          "total": 29,
+          "onlyHono": 0,
+          "onlyNew": 0
+        },
+        "j611": {
+          "match": 26,
+          "mismatch": 3,
+          "total": 29,
+          "onlyHono": 0,
+          "onlyNew": 0
+        }
+      },
+      {
+        "area": "中央",
+        "officeId": "0237ed1e-bf80-412e-955d-1102fb06e078",
+        "bn": "1210104566",
+        "month": "202606",
+        "fingerprint": {
+          "honoRows": 1687,
+          "honoHash": "ecc2608b:-",
+          "newRows": 1704,
+          "newHash": "9a3f64d2"
+        },
+        "j121": {
+          "match": 53,
+          "mismatch": 5,
+          "total": 58,
+          "onlyHono": 0,
+          "onlyNew": 1
+        },
+        "j611": {
+          "match": 57,
+          "mismatch": 1,
+          "total": 58,
+          "onlyHono": 0,
+          "onlyNew": 1
+        }
+      },
+      {
+        "area": "五井",
+        "officeId": "3f18eced-5f51-49b8-bfc1-afcfaa919035",
+        "bn": "1210600472",
+        "month": "202606",
+        "fingerprint": {
+          "honoRows": 812,
+          "honoHash": "1bb83ff3:-",
+          "newRows": 796,
+          "newHash": "867b418c"
+        },
+        "j121": {
+          "match": 27,
+          "mismatch": 1,
+          "total": 28,
+          "onlyHono": 0,
+          "onlyNew": 0
+        },
+        "j611": {
+          "match": 25,
+          "mismatch": 3,
+          "total": 28,
+          "onlyHono": 0,
+          "onlyNew": 0
+        }
+      },
+      {
+        "area": "四街道",
+        "officeId": "0276dadf-bd9b-4c9a-a623-4650284c53b2",
+        "bn": "1210106884",
+        "month": "202606",
+        "fingerprint": {
+          "honoRows": 211,
+          "honoHash": "dff4183d:-",
+          "newRows": 207,
+          "newHash": "2ba35bb7"
+        },
+        "j121": {
+          "match": 8,
+          "mismatch": 0,
+          "total": 8,
+          "onlyHono": 0,
+          "onlyNew": 0
+        },
+        "j611": {
+          "match": 8,
+          "mismatch": 0,
+          "total": 8,
+          "onlyHono": 0,
+          "onlyNew": 0
+        }
+      },
+      {
+        "area": "大網",
+        "officeId": "269d77bc-5b61-4114-a2ea-e8dc2f220823",
+        "bn": "1210700306",
+        "month": "202606",
+        "fingerprint": {
+          "honoRows": 620,
+          "honoHash": "4e43a1c0:-",
+          "newRows": 620,
+          "newHash": "cc5c15d6"
+        },
+        "j121": {
+          "match": 33,
+          "mismatch": 0,
+          "total": 33,
+          "onlyHono": 0,
+          "onlyNew": 0
+        },
+        "j611": {
+          "match": 33,
+          "mismatch": 0,
+          "total": 33,
+          "onlyHono": 0,
+          "onlyNew": 0
+        }
+      },
+      {
+        "area": "姉ム",
+        "officeId": "c212da55-7ac3-46ac-8e58-386ee65e7129",
+        "bn": "1210600043",
+        "month": "202606",
+        "fingerprint": {
+          "honoRows": 225,
+          "honoHash": "a2f9e57b:-",
+          "newRows": 225,
+          "newHash": "aef03fda"
+        },
+        "j121": {
+          "match": 12,
+          "mismatch": 0,
+          "total": 12,
+          "onlyHono": 0,
+          "onlyNew": 0
+        },
+        "j611": {
+          "match": 12,
+          "mismatch": 0,
+          "total": 12,
+          "onlyHono": 0,
+          "onlyNew": 0
+        }
+      },
+      {
+        "area": "木更津",
+        "officeId": "24596958-b434-466e-800b-842f66f84a8e",
+        "bn": "1211000318",
+        "month": "202606",
+        "fingerprint": {
+          "honoRows": 560,
+          "honoHash": "e4997d10:-",
+          "newRows": 551,
+          "newHash": "4da50053"
+        },
+        "j121": {
+          "match": 19,
+          "mismatch": 1,
+          "total": 20,
+          "onlyHono": 0,
+          "onlyNew": 0
+        },
+        "j611": {
+          "match": 19,
+          "mismatch": 1,
+          "total": 20,
+          "onlyHono": 0,
+          "onlyNew": 0
+        }
+      },
+      {
+        "area": "東郷",
+        "officeId": "66c8a6a4-857e-48bf-a718-6f0f521db8f3",
+        "bn": "1213100728",
+        "month": "202606",
+        "fingerprint": {
+          "honoRows": 661,
+          "honoHash": "5a875434:-",
+          "newRows": 644,
+          "newHash": "22f9965e"
+        },
+        "j121": {
+          "match": 21,
+          "mismatch": 1,
+          "total": 22,
+          "onlyHono": 0,
+          "onlyNew": 0
+        },
+        "j611": {
+          "match": 21,
+          "mismatch": 1,
+          "total": 22,
+          "onlyHono": 0,
+          "onlyNew": 0
+        }
+      },
+      {
+        "area": "花見川",
+        "officeId": "39ab7760-e23c-49ce-b17f-c5ccfa776d9c",
+        "bn": "1210101752",
+        "month": "202606",
+        "fingerprint": {
+          "honoRows": 665,
+          "honoHash": "06030ec8:-",
+          "newRows": 633,
+          "newHash": "fb1c2a1a"
+        },
+        "j121": {
+          "match": 33,
+          "mismatch": 1,
+          "total": 34,
+          "onlyHono": 0,
+          "onlyNew": 0
+        },
+        "j611": {
+          "match": 32,
+          "mismatch": 2,
+          "total": 34,
+          "onlyHono": 0,
+          "onlyNew": 0
+        }
+      },
+      {
+        "area": "茂原",
+        "officeId": "e08c3706-ad59-4913-b4e2-67f2675422e9",
+        "bn": "1213100017",
+        "month": "202606",
+        "fingerprint": {
+          "honoRows": 971,
+          "honoHash": "68e54c36:014e9594",
+          "newRows": 951,
+          "newHash": "378133c2"
+        },
+        "j121": {
+          "match": 32,
+          "mismatch": 1,
+          "total": 33,
+          "onlyHono": 0,
+          "onlyNew": 0
+        },
+        "j611": {
+          "match": 33,
+          "mismatch": 0,
+          "total": 33,
+          "onlyHono": 0,
+          "onlyNew": 0
+        }
+      },
+      {
+        "area": "袖ケ浦",
+        "officeId": "b9a17be0-7fba-4376-b66e-b1aad414e4b2",
+        "bn": "1210900435",
+        "month": "202606",
+        "fingerprint": {
+          "honoRows": 985,
+          "honoHash": "1206ca4e:-",
+          "newRows": 993,
+          "newHash": "2b3f834d"
+        },
+        "j121": {
+          "match": 27,
+          "mismatch": 4,
+          "total": 31,
+          "onlyHono": 0,
+          "onlyNew": 1
+        },
+        "j611": {
+          "match": 27,
+          "mismatch": 4,
+          "total": 31,
+          "onlyHono": 0,
+          "onlyNew": 1
+        }
+      },
+      {
+        "area": "高品",
+        "officeId": "a707b5a2-b21b-4c4e-8dac-298191e90b61",
+        "bn": "1210102263",
+        "month": "202606",
+        "fingerprint": {
+          "honoRows": 902,
+          "honoHash": "ae11c8f4:-",
+          "newRows": 861,
+          "newHash": "48c06977"
+        },
+        "j121": {
+          "match": 34,
+          "mismatch": 4,
+          "total": 38,
+          "onlyHono": 1,
+          "onlyNew": 0
+        },
+        "j611": {
+          "match": 35,
+          "mismatch": 3,
+          "total": 38,
+          "onlyHono": 1,
+          "onlyNew": 0
+        }
+      }
+    ]
+  }
 }

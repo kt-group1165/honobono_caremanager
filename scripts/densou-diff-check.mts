@@ -17,9 +17,21 @@
  *   group  = 全項目 (行単位で比べる厳しい層)。★ 公費欄・要介護度・認定期間まで見る
  *   両方を記録する。**片方だけ良くなって片方が悪化するのを見逃さないため。**
  *
+ * ■ 制度は 2 つ見る (2026-09-04 に障害を追加)
+ *   介護保険 7 拠点   kaigo-densou-diff.mts   person / group の 2 層
+ *   障害     全拠点   shogai-densou-diff-all.mts  J121 明細書 / J611 実績記録票
+ *
+ *   ★ 障害を足した理由 — 2026-09-04 に実際に困った:
+ *     引き継ぎ 2026-09-01   J121 476/505   J611 473/505   完全一致 6 拠点
+ *     同日の実測            J121 472/504   J611 474/503   完全一致 4 拠点
+ *     ★ **分母まで動いていた**ので「悪化した」と断定できなかった。
+ *     基準値に **分母** と **拠点ごとの内訳** を持たせれば、この切り分けができる。
+ *
  * ■ 使い方
  *   npm run check:densou-diff
  *   npm run check:densou-diff -- --update    基準値を実測で置き直す (中身を読んでから commit)
+ *   npm run check:densou-diff -- --only=kaigo    介護保険だけ (約 1分40秒)
+ *   npm run check:densou-diff -- --only=shogai   障害だけ
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
@@ -30,6 +42,19 @@ import { tmpdir } from "node:os";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const BASELINE = join(__dirname, "densou-diff-expected.json");
 const UPDATE = process.argv.includes("--update");
+const ONLY = (process.argv.find((a) => a.startsWith("--only="))?.split("=")[1] ?? "").trim();
+if (ONLY && ONLY !== "kaigo" && ONLY !== "shogai") {
+  console.error(`★ --only= は kaigo か shogai です (受け取った値: "${ONLY}")`);
+  process.exit(1);
+}
+const RUN_KAIGO = ONLY !== "shogai";
+const RUN_SHOGAI = ONLY !== "kaigo";
+/**
+ * 障害の対象月。★ 変えたら基準値も取り直すこと (--update)。
+ * 拠点は固定せず「伝送データ/<拠点>/訪問介護/障害/<月>/ほのぼのから に KJ がある全拠点」。
+ * 介護保険側と違って **拠点を選ばない**のは、到達点が全拠点合計で語られているため。
+ */
+const SHOGAI_MONTH = "202606";
 
 /**
  * 対象。**性質の違う拠点**を選ぶ (全 19 拠点は回さない — 時間がかかると誰も回さなくなる)。
@@ -66,6 +91,15 @@ type Result = {
   person: { match: number; mismatch: number; onlyNew: number; onlyHono: number; total: number };
   group: { newGroups: number; honoGroups: number; match: number; diff: number };
 };
+
+/** 障害の 1 層 (J121 / J611)。★ total が分母。-1 は「測れていない」 */
+type ShogaiSection = { match: number; mismatch: number; total: number; onlyHono: number; onlyNew: number };
+type ShogaiOffice = {
+  area: string; officeId: string; bn: string; month: string;
+  fingerprint: { honoRows: number; honoHash: string; newRows: number; newHash: string };
+  j121: ShogaiSection; j611: ShogaiSection;
+};
+type ShogaiBaseline = { month: string; skipped: string[]; offices: ShogaiOffice[] };
 
 const README = [
   "伝送突合 (npm run check:densou-diff) の基準値。",
@@ -134,10 +168,52 @@ const README = [
   "  7 拠点で **実行 約1分40秒**。",
 ];
 
+const SHOGAI_README = [
+  "障害 (J121 明細書 / J611 実績記録票) の基準値。★ 2026-09-04 追加。",
+  "",
+  "■ なぜ足したか",
+  "  回帰網が介護保険 7 拠点しか見ておらず、**障害が悪化しても検出できなかった**。",
+  "  2026-09-04 に引き継ぎ (SESSION_START) の数字と実測が食い違った:",
+  "      引き継ぎ 2026-09-01   J121 476/505   J611 473/505   完全一致 6 拠点",
+  "      同日の実測            J121 472/504   J611 474/503   完全一致 4 拠点",
+  "  ★ 分母 (505 → 504/503) まで動いていたので **悪化と断定できなかった**。",
+  "     この切り分けができないこと自体が問題で、拠点ごとの内訳を焼けば防げる。",
+  "",
+  "■ 判定 (★ ここが本体)",
+  "  分母 (total) が違う          → ○ データが変わった。--update でよい",
+  "  分母 同じ + 一致数 減った     → ★ 回帰。FAIL する。--update で黙らせないこと",
+  "  分母 同じ + 一致数 増えた     → ○ 改善",
+  "  分母 -1 / 拠点が消えた        → ★ 測れていない。FAIL する (VERIFICATION_RULES 1-2)",
+  "",
+  "  ⚠ 合計 (472/504 等) だけを見ない。**合計は分母が動くと意味を失う**。",
+  "     判定は必ず拠点ごとに行い、合計は参考表示に留める。",
+  "",
+  "■ 指紋",
+  "  honoRows / honoHash … ほのぼのから/ + ほのぼのから_再請求/ の KJ・TJ・JJ (★ 真の外部入力)",
+  "  newRows  / newHash  … 新システム/ に書き出した J11・J61・J41 (当方の出力)",
+  "  ⚠ …_解説.csv (densou-explain.mts の注釈) は指紋に入れない。伝送ファイルではないうえ",
+  "     更新が止まるので嘘の「変わっていない」を作る。",
+  "",
+  "■ 対象",
+  "  伝送データ/<拠点>/訪問介護/障害/202606/ほのぼのから に KJ がある **全拠点** (17)。",
+  "  介護保険側と違って拠点を選ばないのは、到達点が全拠点合計で語られているため。",
+  "  スキップ (KJ が無い) = 八千代 / 君津 / 山武 / 市原 / 船橋 の 5 拠点。",
+  "  ⚠ 山武・市原は障害の指定が無い (SESSION_START)。八千代・君津・船橋は未着手。",
+  "  実行 **約 2 分** (17 拠点)。介護保険 7 拠点と合わせて 約 4 分。",
+  "",
+  "■ この基準値が証明していないこと (VERIFICATION_RULES 3-1)",
+  "  ・「ほのぼのと一致している = 正しい」ではない。ほのぼの側の算定漏れは",
+  "    _densou_intentional_diff.json 側の管轄 (規律 3-2)",
+  "  ・J121 は受給者単位のサマリ + サービスコード別の単位数/回数まで見るが、",
+  "    ★ J411 (上限管理結果票) は見ていない",
+  "  ・J611 は既定で **提供時刻を比較しない** (J611_TIME=1 のときだけ)",
+];
+
 const tmp = mkdtempSync(join(tmpdir(), "densou-diff-"));
 const actual: Result[] = [];
+let shogaiActual: ShogaiBaseline | null = null;
 try {
-  for (const t of TARGETS) {
+  for (const t of RUN_KAIGO ? TARGETS : []) {
     const out = join(tmp, `${t.officeId}.json`);
     process.stdout.write(`  ${t.office} ${t.month} を突合中… `);
     try {
@@ -160,10 +236,47 @@ try {
     actual.push(r);
     console.log(`人単位 ${r.person.match}/${r.person.total} / 全項目 ${r.group.match}(差 ${r.group.diff})`);
   }
+
+  if (RUN_SHOGAI) {
+    const out = join(tmp, "shogai.json");
+    process.stdout.write(`  障害 ${SHOGAI_MONTH} 全拠点を突合中… `);
+    try {
+      execFileSync("npx", ["tsx", join(__dirname, "shogai-densou-diff-all.mts")], {
+        env: { ...process.env, MONTH: SHOGAI_MONTH, SHOGAI_DIFF_JSON: out },
+        stdio: ["ignore", "ignore", "pipe"], timeout: 1_800_000, shell: process.platform === "win32",
+      });
+    } catch (e) {
+      console.log("✗");
+      console.error("★ 障害の突合の実行に失敗", (e as { stderr?: Buffer }).stderr?.toString().slice(0, 600) ?? e);
+      process.exit(1);   // 1-2: 測れていないのに合格判定を出さない
+    }
+    if (!existsSync(out)) { console.log("✗"); console.error("★ 障害: SHOGAI_DIFF_JSON が書かれていない。測れていないので中止"); process.exit(1); }
+    shogaiActual = JSON.parse(readFileSync(out, "utf8")) as ShogaiBaseline;
+    // 1-2: 分母 0 (= 1 拠点も回っていない) で合格判定を出さない
+    if (shogaiActual.offices.length === 0) {
+      console.log("✗");
+      console.error(`★ 障害: 突合できた拠点が 0 件 (伝送データ/*/訪問介護/障害/${SHOGAI_MONTH}/ を確認)。測れていないので中止`);
+      process.exit(1);
+    }
+    const s = (k: "j121" | "j611") =>
+      shogaiActual!.offices.reduce((a, o) => a + Math.max(o[k].match, 0), 0) + "/" +
+      shogaiActual!.offices.reduce((a, o) => a + Math.max(o[k].total, 0), 0);
+    console.log(`${shogaiActual.offices.length} 拠点 J121 ${s("j121")} / J611 ${s("j611")}`);
+  }
 } finally { rmSync(tmp, { recursive: true, force: true }); }
 
 if (UPDATE) {
-  writeFileSync(BASELINE, JSON.stringify({ _readme: README, results: actual }, null, 2) + "\n", "utf8");
+  // --only で片方だけ回したときは、**回していない側の基準値をそのまま残す**。
+  // 上書きすると「見ていない制度の基準が消える」= 回帰網に穴が開く
+  const prev = existsSync(BASELINE)
+    ? (JSON.parse(readFileSync(BASELINE, "utf8")) as { results?: Result[]; shogai?: ShogaiBaseline })
+    : {};
+  writeFileSync(BASELINE, JSON.stringify({
+    _readme: README,
+    results: RUN_KAIGO ? actual : (prev.results ?? []),
+    _shogai_readme: SHOGAI_README,
+    shogai: RUN_SHOGAI ? shogaiActual : (prev.shogai ?? null),
+  }, null, 2) + "\n", "utf8");
   console.log(`\n基準値を更新しました → ${BASELINE}\n★ 中身を読んでから commit すること。悪化したまま --update すると穴を焼き付けます。`);
   process.exit(0);
 }
@@ -172,12 +285,13 @@ if (!existsSync(BASELINE)) {
   console.error("★ 基準値がありません。初回は --update で作ってください。");
   process.exit(1);
 }
-const base = (JSON.parse(readFileSync(BASELINE, "utf8")) as { results: Result[] }).results;
+const baseFile = JSON.parse(readFileSync(BASELINE, "utf8")) as { results: Result[]; shogai?: ShogaiBaseline | null };
+const base = baseFile.results;
 const key = (r: Result) => `${r.officeId}|${r.month}`;
 const baseMap = new Map(base.map((r) => [key(r), r]));
 
 let fail = 0, dataChanged = 0, ok = 0;
-console.log("");
+if (RUN_KAIGO) console.log("\n─── 介護保険 ───");
 for (const a of actual) {
   const b = baseMap.get(key(a));
   if (!b) { console.log(`  ○ ${a.office} ${a.month}: 基準値に無い (新規)。--update で足してください`); dataChanged++; continue; }
@@ -210,9 +324,83 @@ for (const a of actual) {
   }
 }
 
+// ═══ 障害 ═══════════════════════════════════════════════════════════════════
+// ★ ここが 2026-09-04 の宿題そのもの。「分母が変わった」と「一致数が下がった」を分ける。
+if (RUN_SHOGAI && shogaiActual) {
+  console.log("\n─── 障害 ───");
+  const sBase = baseFile.shogai;
+  if (!sBase) {
+    console.log("  ○ 障害の基準値がまだありません。--update で作ってください");
+    dataChanged++;
+  } else if (sBase.month !== shogaiActual.month) {
+    console.log(`  ○ 対象月が違う (基準 ${sBase.month} → 実測 ${shogaiActual.month})。--update で取り直してください`);
+    dataChanged++;
+  } else {
+    const bMap = new Map(sBase.offices.map((o) => [o.area, o]));
+    const aMap = new Map(shogaiActual.offices.map((o) => [o.area, o]));
+
+    // 1-2 / 2章⑧: 基準値にあった拠点が消えたのは「該当なし」ではなく **測れていない**
+    for (const o of sBase.offices) {
+      if (aMap.has(o.area)) continue;
+      console.log(`  ★ ${o.area}: 基準値にあるのに今回は突合できていない (伝送の置き場所 か 事業所番号を確認)`);
+      fail++;
+    }
+
+    /** 1 層ぶんの判定。★ 分母 (total) を先に見る */
+    const judge = (area: string, layer: "J121" | "J611", a: ShogaiSection, b: ShogaiSection): "fail" | "data" | "ok" => {
+      if (a.total < 0) { console.log(`  ★ ${area} ${layer}: 測れていない (突合が最後まで走っていない)`); return "fail"; }
+      if (a.total !== b.total) {
+        // ここに来るのは ほのぼの側の指紋が同じとき = **当方の受給者が増減した**
+        // (取込・是正・受給者証の追加)。★ 一致数の増減だけでは回帰と区別できない
+        console.log(`  ○ ${area} ${layer}: データが変わった — ★ 分母 ${b.total}→${a.total} (一致 ${b.match}→${a.match})`);
+        console.log(`      ほのぼの側は同じなので、当方の受給者が増減した (取込・是正)。悪化とは判定しない`);
+        return "data";
+      }
+      if (a.match < b.match) {
+        console.log(`  ★ ${area} ${layer}: ★ 回帰 — 分母は ${a.total} のまま 一致 ${b.match}→${a.match}`);
+        return "fail";
+      }
+      if (a.match > b.match) { console.log(`  ○ ${area} ${layer}: 改善 — 一致 ${b.match}→${a.match} / ${a.total}`); return "ok"; }
+      return "ok";
+    };
+
+    for (const a of shogaiActual.offices) {
+      const b = bMap.get(a.area);
+      if (!b) { console.log(`  ○ ${a.area}: 基準値に無い (新規)。--update で足してください`); dataChanged++; continue; }
+      // ほのぼの側 (真の外部入力) が変わっていれば、以降の増減は「データが変わった」
+      const honoSame = a.fingerprint.honoRows === b.fingerprint.honoRows && a.fingerprint.honoHash === b.fingerprint.honoHash;
+      if (!honoSame) {
+        console.log(`  ○ ${a.area}: ★ ほのぼの側のファイルが変わった (行 ${b.fingerprint.honoRows}→${a.fingerprint.honoRows}) — J121 ${a.j121.match}/${a.j121.total} J611 ${a.j611.match}/${a.j611.total}`);
+        dataChanged++; continue;
+      }
+      const v = [judge(a.area, "J121", a.j121, b.j121), judge(a.area, "J611", a.j611, b.j611)];
+      if (v.includes("fail")) {
+        const ourSame = a.fingerprint.newHash === b.fingerprint.newHash;
+        console.log(`     当方の出力: ${ourSame ? "変わっていない (= 突合そのものが非決定的な可能性)" : "★ 変わった (コード変更 か DB のデータ是正)"}`);
+        fail++;
+      } else if (v.includes("data")) dataChanged++;
+      else ok++;
+    }
+
+    // 合計は **参考**。分母が動くと意味を失うので、判定には使わない (上の拠点ごとが判定)
+    const sum = (os: ShogaiOffice[], k: "j121" | "j611", f: "match" | "total") =>
+      os.reduce((n, o) => n + Math.max(o[k][f], 0), 0);
+    const perfect = (os: ShogaiOffice[]) => os.filter((o) => o.j121.mismatch === 0 && o.j611.mismatch === 0 && o.j121.total > 0).length;
+    console.log(
+      `  (参考) J121 ${sum(shogaiActual.offices, "j121", "match")}/${sum(shogaiActual.offices, "j121", "total")}` +
+      `  J611 ${sum(shogaiActual.offices, "j611", "match")}/${sum(shogaiActual.offices, "j611", "total")}` +
+      `  完全一致 ${perfect(shogaiActual.offices)} 拠点  (基準 ` +
+      `J121 ${sum(sBase.offices, "j121", "match")}/${sum(sBase.offices, "j121", "total")}` +
+      ` J611 ${sum(sBase.offices, "j611", "match")}/${sum(sBase.offices, "j611", "total")}` +
+      ` 完全一致 ${perfect(sBase.offices)} 拠点)`,
+    );
+    console.log("  ⚠ 合計は分母が動くと意味を失う。判定は上の拠点ごとの行を見ること");
+  }
+}
+
 console.log("");
 if (fail) {
-  console.log(`FAIL — ★ ほのぼの側は同じなのに突合が悪化した事業所 ${fail} 件。`);
+  console.log(`FAIL — ★ 悪化 または 測れていない ${fail} 件 (ほのぼの側は同じ / 分母も同じ)。`);
   console.log("       切り分け:");
   console.log("         当方の出力が変わった  → git log でコード変更を見る。無ければ DB のデータ是正");
   console.log("         当方の出力も同じ      → ★ 突合そのものが非決定的 (同着で選択が不定 等)");
