@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { aggregateMonthlyVisitSeikyu } from "@/lib/visit-seikyu/aggregate";
 import { aggregateMonthlyShogaiSeikyu } from "@/lib/shogai-seikyu/aggregate";
+import { aggregateBathVisitSeikyu } from "@/lib/bath-seikyu/aggregate";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const env: Record<string, string> = {};
@@ -260,6 +261,7 @@ async function main() {
   let lastKRow: KRow | null = null;
   let noShoguu = 0;
   let noBaseCode = 0;
+  let bathRowCount = 0;
   let shogaiRowCount = 0;
   for (const o of targets) {
     for (const m of MONTHS) {
@@ -310,6 +312,38 @@ async function main() {
     }
   }
 
+  // ── 訪問入浴 ──
+  //   ★ 戻り値の型が 訪問介護 と同じ (MonthlySeikyuResult) なので I1-I7 をそのまま当てる。
+  //   ⚠ 2026-09-03 に「要支援の利用者に介護給付のコードが付く」バグが見つかった制度。
+  //     実データに要支援が居なかったのでサンプルでしか出なかった。
+  {
+    const { data: bathOffices, error: e } = await sb
+      .from("offices").select("id, name, tenant_id, unit_price, applied_formula_codes").order("name");
+    if (e) throw new Error(`offices 取得に失敗: ${e.message}`);
+    const bt = (bathOffices ?? []).filter((o) => /訪問入浴/.test(String(o.name)));
+    for (const o of bt) {
+      for (const m of MONTHS) {
+        const [y, mo] = m.split("-").map(Number);
+        let res;
+        try {
+          res = await aggregateBathVisitSeikyu(sb, {
+            officeId: o.id as string, tenantId: o.tenant_id as string, year: y, month: mo,
+            unitPrice: (o.unit_price as number) ?? undefined,
+            appliedFormulaCodes: (o.applied_formula_codes as string[]) ?? [],
+          });
+        } catch (err) {
+          console.log(`  ⚠ ${o.name} ${m}: 訪問入浴の集計に失敗 — ${err instanceof Error ? err.message : String(err)}`);
+          continue;
+        }
+        const ctx = { office: String(o.name), month: m };
+        for (const r of res.rows) {
+          bathRowCount++;
+          inv1(r, ctx); inv2(r, ctx); inv3(r, ctx); inv4(r, ctx); inv5(r, ctx); inv6(r, ctx); inv7(r, ctx);
+        }
+      }
+    }
+  }
+
   // ── 居宅介護支援 (レセプトは集計ではなく table に入っている) ──
   {
     const rows: KRow[] = [];
@@ -325,13 +359,13 @@ async function main() {
       if (String(r.care_support_code ?? "") && r.initial_addition === true) lastKRow = r;
       if (!r.shoguu_kaizen_code) noShoguu++;
       if (!r.care_support_code) noBaseCode++;
-      const ctx = { office: "居宅 (全事業所)", month: String(r.billing_month ?? "?") };
+      const ctx = { office: "居宅介護支援 (全事業所)", month: String(r.billing_month ?? "?") };
       kInv1(r, ctx); kInv2(r, ctx); kInv3(r, ctx); kInv4(r, ctx); kInv5(r, ctx);
     }
   }
 
   // ★ 分母を必ず出す。0 行で「全部合格」を出さないため (規律 1-2)
-  console.log(`検査した行: 介護+総合事業 ${rowCount} 行 (うち総合事業 ${sougouRowCount}) / 障害 ${shogaiRowCount} 行 / 居宅 ${kyotakuRowCount} 行 / 実績のあった (事業所×月) ${officesWithRows} 組
+  console.log(`検査した行: 介護+総合事業 ${rowCount} 行 (うち総合事業 ${sougouRowCount}) / 障害 ${shogaiRowCount} 行 / 居宅介護支援 ${kyotakuRowCount} 行 / ★ 訪問入浴 ${bathRowCount} 行 / 実績のあった (事業所×月) ${officesWithRows} 組
 `);
   if (rowCount === 0 || shogaiRowCount === 0 || kyotakuRowCount === 0) {
     console.log(`★ FAIL 検査対象が 0 行の制度があります (介護+総合 ${rowCount} / 障害 ${shogaiRowCount} / 居宅 ${kyotakuRowCount})。合格ではありません。`);
@@ -340,8 +374,14 @@ async function main() {
   for (const [k, v] of Object.entries(checked)) console.log(`  ${k.padEnd(44)} ${v} 回`);
   console.log("");
   console.log("── 観測 (合否ではない。数だけ出す)");
-  console.log(`   居宅で 処遇改善コードが無い行     ${noShoguu} 件  ★ 既知: ケアプランＨａｎａ船橋 の未算定`);
-  console.log(`   居宅で 基本コードが無い行         ${noBaseCode} 件  ★ 正常: ターミナルのみの請求`);
+  console.log(`   居宅介護支援で 処遇改善コードが無い行     ${noShoguu} 件  ★ 既知: ケアプランＨａｎａ船橋 の未算定`);
+  console.log(`   居宅介護支援で 基本コードが無い行         ${noBaseCode} 件  ★ 正常: ターミナルのみの請求`);
+  if (bathRowCount === 0) {
+    // ★ 0 行の理由を必ず添える。黙って 0 を出すと「検査した」と誤読される
+    console.log("   ★ 訪問入浴は 0 行 — 事業所は 5 件あるが kaigo_bath_schedule / _visit_records とも");
+    console.log("      ★ 実データが 1 行も無い (稼働前)。実データでは検証できず ★ サンプルでしか通せない。");
+    console.log("      2026-09-03 の「要支援に介護給付コードが付く」バグも ★ サンプルでしか出なかった。");
+  }
   console.log("");
 
   if (violations.length === 0) {
