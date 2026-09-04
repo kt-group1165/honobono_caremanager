@@ -1,9 +1,10 @@
 // ============================================================================
 // 訪問入浴介護 サンプルデータ (SAMPLE_DATA_PROTOCOL 準拠 / 担当マーカー = c)
 //
-//   node migrations/seed_sample_bath_c.mjs             # DRY RUN (既定)
-//   node migrations/seed_sample_bath_c.mjs --delete    # ★ 撤去 (先に確認すること)
-//   node migrations/seed_sample_bath_c.mjs --execute   # 投入
+//   node migrations/seed_sample_bath_c.mjs                       # DRY RUN (既定)
+//   node migrations/seed_sample_bath_c.mjs --execute             # 投入
+//   node migrations/seed_sample_bath_c.mjs --delete              # ★ 撤去の DRY RUN (何も消さない)
+//   node migrations/seed_sample_bath_c.mjs --delete --execute    # ★ 撤去を実行
 //
 // ── 前提 ────────────────────────────────────────────────────────────────
 //   対象月     **2026-12 のみ** (2026-06/07 は実データ突合に使う月。1 行も入れない)
@@ -111,7 +112,9 @@ async function doDelete() {
   console.log(`  対象 clients: ${existing.length} 名  ${existing.map((c) => c.user_number).join(",")}`);
   if (existing.length === 0) { console.log("  対象なし"); return; }
   const ids = existing.map((c) => c.id);
-  if (!EXECUTE && !DELETE) return;
+  // ⚠ 2026-09-04 是正: 旧実装は `--delete` 単体で即実行されていた (新規約と不一致で
+  //   dry-run のつもりで打つと消える事故の元)。--execute が無ければ何も消さない。
+  if (!EXECUTE) { console.log(`  【DRY RUN】--delete --execute で実際に削除します`); return; }
   // 子 → 親 の順に消す
   for (const [table, col] of [
     ["kaigo_bath_visit_records", "client_id"],

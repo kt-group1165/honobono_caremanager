@@ -47,6 +47,8 @@ async function removeAll() {
   console.log(`撤去対象の sample 利用者: ${ids.length} 名`);
   for (const c of cl ?? []) console.log(`   ${c.user_number} ${c.name}`);
   if (!ids.length) { console.log("(対象なし)"); return; }
+  // ⚠ 2026-09-04 是正: --delete 単体では消さない (--execute が要る)
+  if (!EXECUTE) { console.log("【DRY RUN】--delete --execute で実際に削除します"); return; }
   for (const [t, col] of [
     ["kaigo_visit_schedule", "user_id"],
     ["shogai_contracts", "client_id"],

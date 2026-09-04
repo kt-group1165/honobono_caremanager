@@ -67,6 +67,8 @@ if (DELETE) {
   if (!cl.length) { console.log("  対象なし ✅"); process.exit(0); }
   const ids = cl.map((c) => c.id);
   console.log(`  対象 clients: ${cl.map((c) => c.user_number).join(",")}`);
+  // ⚠ 2026-09-04 是正: --delete 単体では消さない (--execute が要る)
+  if (!EXECUTE) { console.log("【DRY RUN】--delete --execute で実際に削除します"); process.exit(0); }
   // ⚠ 利用者を指す列名が表ごとに違う。
   //   riyou_jippi_entries / client_office_assignments → client_id
   //   ★ kaigo_visit_schedule                          → **user_id**

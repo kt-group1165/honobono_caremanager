@@ -36,6 +36,8 @@ async function removeAll() {
   const ids = (cl ?? []).map((c) => c.id);
   console.log(`撤去対象: ${ids.length} 名`);
   if (!ids.length) return;
+  // ⚠ 2026-09-04 是正: --delete 単体では消さない (--execute が要る)
+  if (!EXECUTE) { console.log("【DRY RUN】--delete --execute で実際に削除します"); return; }
   for (const [t, col] of [
     ["kaigo_idou_shien_records", "client_id"],
     ["chiiki_recipient_certs", "client_id"],

@@ -110,6 +110,8 @@ async function doDelete() {
   console.log(`  対象 payroll_employees: ${emps.length} 名 ${emps.map((e) => e.employee_number).join(",")}`);
   if (emps.length === 0) { console.log("  対象なし"); return; }
   const ids = emps.map((e) => e.id);
+  // ⚠ 2026-09-04 是正: --delete 単体では消さない (--execute が要る)
+  if (!EXECUTE) { console.log("【DRY RUN】--delete --execute で実際に削除します"); return; }
   for (const t of ["payroll_kyotaku_attendance_records", "payroll_kyotaku_salary"]) {
     const { error, count } = await sb.from(t).delete({ count: "exact" }).in("employee_id", ids);
     if (error) { console.error(`  ✗ ${t}: ${error.message}`); process.exitCode = 1; return; }

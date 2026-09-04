@@ -80,6 +80,8 @@ async function doDelete() {
   console.log(`  対象 clients: ${cl.length} 名 ${cl.map((c) => c.user_number).join(",")}`);
   if (cl.length === 0) { console.log("  対象なし"); return; }
   const ids = cl.map((c) => c.id);
+  // ⚠ 2026-09-04 是正: --delete 単体では消さない (--execute が要る)
+  if (!EXECUTE) { console.log("【DRY RUN】--delete --execute で実際に削除します"); return; }
   // order_items は orders 経由。doc_tasks は trigger が作ったものも消す
   const { data: ords, error: oe } = await sb.from("orders").select("id").in("client_id", ids);
   if (oe) { console.error(`  ✗ orders 取得: ${oe.message}`); process.exitCode = 1; return; }
