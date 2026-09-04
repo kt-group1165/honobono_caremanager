@@ -200,10 +200,35 @@ export async function insertRows(table, rows, { dryRun = true } = {}) {
     console.log(`  [DRY] ${table} に ${rows.length} 行`);
     return rows.map((_, i) => `dry-${i}`);
   }
-  const { data, error } = await sb.from(table).insert(rows).select("id");
-  if (error) throw new Error(`${table} INSERT 失敗: ${error.message}`);
-  if (!data || data.length !== rows.length) throw new Error(`${table}: ${rows.length} 行送って ${data?.length ?? 0} 行しか返らない`);
-  return data.map((d) => d.id);
+  // 🔴 ★ 行ごとにキー集合が違うと PostgREST が壊れる (2026-09-04 実測。I が発見)
+  //   `.insert([複数行])` は **全行の和集合**で列を組み立て、
+  //   ★ 持っていない行には NULL を明示送信する。
+  //   → DB の DEFAULT が効かず ★ NOT NULL 違反で落ちる (jusho_tokurei で実際に踏んだ)
+  //   → 落ちずに通ってしまう列もあり、その場合は ★ 黙って NULL が入る (もっと悪い)
+  //
+  //   なのでキー集合ごとにグループ分けして別々に INSERT する。
+  //   ★ 返す id は 呼び出し側が渡した順に並べ直す (index で対応させる前提のため)。
+  const sig = (r) => Object.keys(r).sort().join("|");
+  const groups = new Map();
+  rows.forEach((r, i) => {
+    const k = sig(r);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push({ i, r });
+  });
+  if (groups.size > 1) {
+    console.log(`  ⚠ ${table}: 行ごとにキー集合が ${groups.size} 種類 → ★ 分けて INSERT します`);
+  }
+  const ids = new Array(rows.length);
+  for (const [, items] of groups) {
+    const { data, error } = await sb.from(table).insert(items.map((x) => x.r)).select("id");
+    if (error) throw new Error(`${table} INSERT 失敗: ${error.message}`);
+    if (!data || data.length !== items.length) {
+      throw new Error(`${table}: ${items.length} 行送って ${data?.length ?? 0} 行しか返らない`);
+    }
+    data.forEach((d, j) => { ids[items[j].i] = d.id; });
+  }
+  if (ids.some((v) => v === undefined)) throw new Error(`${table}: id が取れていない行があります`);
+  return ids;
 }
 
 /**
