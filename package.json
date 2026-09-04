@@ -9,6 +9,7 @@
     "check:tiebreak-money": "tsx scripts/check-tiebreak-money-diff.mts",
     "check:copay-null": "tsx scripts/check-copay-null-exposure.mts",
     "check:benefit-densou": "tsx scripts/check-benefit-vs-densou.mts",
+    "check:idou-summary": "tsx scripts/idou-summary-verify.mts",
     "check:idou-lines": "tsx scripts/check-idou-lines.mts",
     "dev": "next dev",
     "build": "next build",

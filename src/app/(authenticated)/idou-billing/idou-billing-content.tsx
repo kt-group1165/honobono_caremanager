@@ -17,6 +17,12 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  UNIT_YEN,
+  clientBurdenOf,
+  isBurdenUndeterminable,
+  summarizeIdouBilling,
+} from "@/lib/idou-billing-summary";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
@@ -25,7 +31,7 @@ import { DEFAULT_CHIIKI_MUNICIPALITY } from "@/lib/idou-shien-code";
 import { ChevronLeft, ChevronRight, Loader2, Printer, Footprints } from "lucide-react";
 import { buildIdouMeisaiLines } from "@/lib/idou-billing-lines";
 
-const UNIT_YEN = 10;
+
 
 export type IdouRow = {
   id: string;
@@ -257,22 +263,17 @@ export function IdouBillingContent({
     [idouRows, bathRows, codeInfo],
   );
 
-  // 利用者の負担額 = 生保→0 / それ以外→ min(総費用×10%, 負担上限月額)。上限0(非課税)→0
-  // 判定不能 (受給者証なし / 上限未設定) は **金額を推測しない**。
-  //   0 にすると市へ全額請求、1割にすると利用者へ過大請求で、どちらも誤り。
-  //   金額は従来どおり 0 のままにして、下の警告と行の「⚠要確認」で必ず気づけるようにする。
-  const burdenUndeterminable = useCallback((clientId: string): boolean => {
-    const c = certs.get(clientId);
-    if (!c) return true;              // 受給者証が無い
-    if (c.seiho) return false;        // 生保は 0 円で正しい
-    return c.limit == null;           // 負担上限額が未設定
-  }, [certs]);
+  // ★ 金額の規則は lib/idou-billing-summary.ts に置いた (client component からは
+  //   ハーネスで呼べないため)。ここは certs を渡すだけの薄い包み。
+  const burdenUndeterminable = useCallback(
+    (clientId: string): boolean => isBurdenUndeterminable(certs.get(clientId)),
+    [certs],
+  );
 
-  const clientBurden = useCallback((clientId: string, cost: number): number => {
-    const c = certs.get(clientId);
-    if (!c || c.seiho || c.limit == null) return 0;
-    return Math.min(Math.floor(cost * 0.1), c.limit);
-  }, [certs]);
+  const clientBurden = useCallback(
+    (clientId: string, cost: number): number => clientBurdenOf(certs.get(clientId), cost),
+    [certs],
+  );
 
   const clientIdsWithData = useMemo(
     () => Array.from(new Set([...idouRows, ...bathRows].map((r) => r.client_id))),
@@ -285,18 +286,14 @@ export function IdouBillingContent({
     [idouRows, bathRows],
   );
 
-  // 請求書 (事業所集計)
+  // 請求書 (事業所集計) — ★ 計算は lib/idou-billing-summary.ts
   const summary = useMemo(() => {
-    let totalUnits = 0;
-    let burden = 0;
+    const unitsByClient = new Map<string, number>();
     for (const [cid, lines] of perClient) {
-      const clientUnits = lines.reduce((s, l) => s + l.total, 0);
-      totalUnits += clientUnits;
-      burden += clientBurden(cid, clientUnits * UNIT_YEN);
+      unitsByClient.set(cid, lines.reduce((s, l) => s + l.total, 0));
     }
-    const totalCost = totalUnits * UNIT_YEN;
-    return { count: perClient.size, totalUnits, totalCost, burden, cityClaim: totalCost - burden };
-  }, [perClient, clientBurden]);
+    return summarizeIdouBilling(unitsByClient, certs);
+  }, [perClient, certs]);
 
   if (currentOffice && currentOffice.service_type !== "移動支援" && currentOffice.service_type !== "訪問入浴") {
     return (
