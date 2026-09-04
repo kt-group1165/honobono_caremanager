@@ -47,7 +47,7 @@ export const MONTH_END = "2026-12-31";
 export const TENANT = "kt-group";
 
 /** 担当セッションの記号 */
-export const TAGS = { j: "j", k: "k", l: "l", g: "g", c: "c", x: "x", h: "h" };
+export const TAGS = { j: "j", k: "k", l: "l", g: "g", c: "c", x: "x", h: "h", m: "m" };
 
 export const marker = (tag) => `[sample-${tag}]`;
 export const noteMarker = (tag) => `[sample-${tag}-20260903]`;
